@@ -182,7 +182,7 @@ const CPU_TEMP_STATES: Record<
 
 // ── Q9a receipts consent (2026-08-25) ─────────────────────────────────────────────────────────
 // `ReceiptsConsent` renders NOTHING in every shipped build: `receipts_gate()` is hard-false
-// (src-tauri/src/receipts.rs:23), so the component's own probe returns false and it bails at
+// (src-tauri/src/receipts.rs:28), so the component's own probe returns false and it bails at
 // `if (!gate || !consent) return null`. There is no build, flag, or localStorage key on the
 // owner's machine that reaches these pixels — which is exactly the gap the fixture exists for,
 // and why the merged Q9a lane shipped with its visual self-review still owed.
@@ -592,6 +592,59 @@ const DEBRIEF_STATES: Record<string, { session: unknown; priorities: unknown; re
 /** The props main.tsx hands the debrief card — null when the state is not a debrief one. */
 export const debriefProps = () => DEBRIEF_STATES[current] ?? null;
 
+// ── Q9b Tier 3 case evidence — the preview/consent screen (#258, 2026-08-29) ──────────────────
+// `CaseEvidenceConsent` has no route in any shipped build and will not have one before Stage 4:
+// nothing in src/ imports it (pinned by src/case-evidence-consent-guard.test.ts), and the gate it
+// will eventually sit behind — `case_evidence_gate()` in src-tauri/src/case_evidence_upload.rs —
+// is a hard-false constant with no caller anywhere in the crate. So this fixture is not a
+// convenience: it is the ONLY surface the screen can be looked at on, which is the same gap Q9a's
+// consent tile shipped through and had to come back for.
+//
+// The screen takes props instead of invoking, so there is no command branch to add below. What
+// these states vary is the SHAPE of the case and the failures around it — the six a user can
+// actually land in. The bytes themselves are not invented here and could not be: main.tsx looks
+// them up in src/case-preview-corpus.json, every entry of which is real output of the Rust
+// `case_preview()`. This file's usual "every number is invented" warning does not apply to that
+// payload, and it matters that it does not — a fabricated preview is precisely the thing the
+// screen exists to make impossible.
+type CaseFixtureState = {
+  /** Which corpus base to look the bytes up in. `null` renders the "nothing to send" refusal. */
+  base: "both" | "comment-only" | null;
+  /** Hand the screen text that is not JSON, reaching its refuse-to-send branch. */
+  unreadable?: boolean;
+  status?: "idle" | "working";
+  errorText?: string | null;
+};
+
+const CASE_STATES: Record<string, CaseFixtureState> = {
+  // Journey B (contract §1): one crash, the full case. All seven §2 removals live, and the comment
+  // carries a Windows path and an IP that the Rust redactor masked to `<path>` and `<ip>`. The
+  // review question is whether those masks plus the best-effort sentence read as honest to someone
+  // deciding whether to send their own words — not whether the sentence is technically true.
+  "case-both": { base: "both" },
+  // Journey A: the comment IS the case, so it carries no Remove control and the shape line says
+  // "comment only". A screen that offered to remove the only thing being sent would be offering to
+  // send nothing, which is the confusion §2B exists to prevent.
+  "case-comment-only": { base: "comment-only" },
+  // Neither a comment nor an incident — `case_payload_json` refuses this payload in Rust, so the
+  // screen must refuse it too rather than showing an empty form with a live Send button.
+  "case-empty": { base: null },
+  // The bytes cannot be parsed back. The screen has one honest move here and it is to refuse:
+  // anything it displayed would be a guess about what it was about to send.
+  "case-unreadable": { base: "both", unreadable: true },
+  // A host failure AFTER the user decided. The payload and the decision both survive it — a state
+  // that dumped the user back to an empty screen would cost them the reading they already did.
+  "case-error": {
+    base: "both",
+    errorText: "Compy could not reach the support store. Nothing was sent, and your case is still here.",
+  },
+  // Mid-send. The only thing the button may do twice is nothing.
+  "case-working": { base: "both", status: "working" },
+};
+
+/** The case fixture's shape — null when the current state is not a case one. */
+export const caseProps = () => CASE_STATES[current] ?? null;
+
 export const STATE_NAMES = [
   ...Object.keys(STATES),
   ...Object.keys(CPU_TEMP_STATES),
@@ -599,6 +652,7 @@ export const STATE_NAMES = [
   ...Object.keys(BLACKBOX_STATES),
   ...Object.keys(FIRSTWIN_STATES),
   ...Object.keys(DEBRIEF_STATES),
+  ...Object.keys(CASE_STATES),
 ];
 
 /** Which surface a state name belongs to — main.tsx mounts the bench or the CPU panel on this. */
@@ -616,6 +670,9 @@ export const isFirstWinState = (name: string = current) => name in FIRSTWIN_STAT
 /** And for the session debrief, which mounts in the Live room inside `.play-debrief-wrap`. */
 export const isDebriefState = (name: string = current) => name in DEBRIEF_STATES;
 
+/** And for the Tier 3 consent screen, which has no shipped host yet — see CASE_STATES above. */
+export const isCaseState = (name: string = current) => name in CASE_STATES;
+
 // The state is chosen by `?state=` on the URL so a capture run is a plain navigation — one page
 // load per shot, no leftover state from the previous one, and the URL in the address bar names the
 // state the screenshot shows.
@@ -629,7 +686,8 @@ function initialState(): string {
         RECEIPTS_STATES[q] ||
         BLACKBOX_STATES[q] ||
         FIRSTWIN_STATES[q] ||
-        DEBRIEF_STATES[q])
+        DEBRIEF_STATES[q] ||
+        CASE_STATES[q])
     ) {
       return q;
     }
@@ -657,7 +715,8 @@ export function setState(name: string): boolean {
     !RECEIPTS_STATES[name] &&
     !BLACKBOX_STATES[name] &&
     !FIRSTWIN_STATES[name] &&
-    !DEBRIEF_STATES[name]
+    !DEBRIEF_STATES[name] &&
+    !CASE_STATES[name]
   ) {
     return false;
   }
@@ -698,7 +757,7 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
   if (receipts) {
     switch (cmd) {
       case "get_receipts_gate":
-        // TRUE here, hard-FALSE in every build (receipts.rs:23). The banner carries that fact.
+        // TRUE here, hard-FALSE in every build (receipts.rs:28). The banner carries that fact.
         return Promise.resolve(true as T);
       case "get_receipts_consent":
         return Promise.resolve({ ...(receiptsConsent as ConsentState) } as T);

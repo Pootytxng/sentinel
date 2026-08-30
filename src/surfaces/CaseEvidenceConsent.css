@@ -1,0 +1,243 @@
+/* Q9b Tier 3 — case preview / consent screen (Stage 2, #258).
+
+   Instrument-theme tokens only; no new hexes, no font stacks of its own. The screen's job is to be
+   READ before a decision, so the layout is a reading column: one statement of what is being sent,
+   then the fields as plain rows, then the exact bytes behind an expander, then what happens to it.
+   DIR-1's failure mode is intimidation, and a wall of JSON is exactly that — so the bytes are one
+   click away rather than the first thing on screen, while every field they contain is on screen in
+   words from the start. */
+
+.cec {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 78ch;
+}
+
+.cec-title {
+  margin: 0;
+  color: var(--ix-text-1);
+  font-size: var(--type-section);
+  font-weight: var(--type-section-weight);
+  letter-spacing: 0.01em;
+}
+
+.cec-heading {
+  margin: 6px 0 0;
+  color: var(--ix-text-1);
+  font-size: var(--type-card);
+  font-weight: var(--type-card-weight);
+}
+
+.cec-shape {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: var(--type-body);
+  line-height: 1.55;
+  max-width: 62ch;
+}
+.cec-shape strong {
+  color: var(--ix-text-1);
+  font-weight: 650;
+}
+
+.cec-hint {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.55;
+  max-width: 62ch;
+}
+.cec-hint em {
+  font-style: normal;
+  color: var(--ix-text-1);
+}
+
+/* ── The fields, as rows ─────────────────────────────────────────────────────────────────────── */
+
+.cec-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ix-border);
+  border-radius: var(--ix-radius);
+  background: var(--ix-surface-2);
+  overflow: hidden;
+}
+
+.cec-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--ix-border);
+}
+.cec-row:last-child {
+  border-bottom: 0;
+}
+
+.cec-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cec-row-label {
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.4;
+}
+
+.cec-row-value {
+  color: var(--ix-text-1);
+  font-family: var(--ix-mono);
+  font-size: var(--type-label);
+  line-height: 1.5;
+  /* A comment is free text and can be long; it wraps rather than clipping, because a value the
+     user cannot finish reading is a value they cannot decide about. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.cec-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.cec-chip-label {
+  color: var(--ix-text-3);
+  font-family: inherit;
+  font-size: var(--type-label);
+}
+
+.cec-remove {
+  flex: 0 0 auto;
+  font-size: var(--type-label);
+  font-weight: 600;
+  color: var(--ix-text-1);
+  background: transparent;
+  border: 1px solid var(--ix-border);
+  border-radius: var(--ix-radius);
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.cec-remove:hover {
+  border-color: var(--ix-text-2);
+}
+
+/* ── The exact bytes ─────────────────────────────────────────────────────────────────────────── */
+
+.cec-exact {
+  border: 1px solid var(--ix-border);
+  border-radius: var(--ix-radius);
+  background: var(--ix-surface-2);
+  padding: 11px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cec-exact-summary {
+  color: var(--ix-text-1);
+  font-size: var(--type-label);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cec-payload {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ix-border);
+  border-radius: var(--ix-radius);
+  background: var(--ix-bg-1);
+  color: var(--ix-text-1);
+  font-family: var(--ix-mono);
+  font-size: var(--type-label);
+  line-height: 1.5;
+  /* The bytes are the payload: they scroll inside their own box rather than reflowing, so what is
+     on screen is what would be sent, line for line. */
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* ── What happens to it ──────────────────────────────────────────────────────────────────────── */
+
+.cec-facts {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.55;
+  max-width: 62ch;
+}
+.cec-facts code {
+  font-family: var(--ix-mono);
+  color: var(--ix-text-1);
+}
+
+.cec-empty {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.55;
+  border: 1px dashed var(--ix-border);
+  border-radius: var(--ix-radius);
+  padding: 16px 18px;
+  background: var(--ix-surface-2);
+  max-width: 62ch;
+}
+
+.cec-error {
+  margin: 0;
+  color: var(--ix-danger);
+  font-size: var(--type-label);
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+/* ── The consent ─────────────────────────────────────────────────────────────────────────────── */
+
+.cec-consent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  padding-top: 4px;
+}
+
+.cec-send {
+  font-size: var(--type-label);
+  font-weight: 600;
+  color: var(--ix-accent-ink);
+  background: var(--ix-accent);
+  border: 0;
+  border-radius: var(--ix-radius);
+  padding: 9px 16px;
+  cursor: pointer;
+}
+.cec-send:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.cec-consent-note {
+  color: var(--ix-text-3);
+}
+
+@media (max-width: 640px) {
+  .cec-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .cec-remove {
+    align-self: flex-start;
+  }
+}

@@ -97,17 +97,17 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **22 worktrees besides `main`; SIX carry commits not on main — do NOT delete or hard-reset those six
-  before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+- **23 worktrees besides `main`; SEVEN carry commits not on main — do NOT delete or hard-reset those
+  seven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
-  `lane/vision-pointer-guard-2026-08-24`. Rule D (#243) FAILS this bullet for naming a zero-carry branch:
-  **a landed lane's name leaves it in the train that lands it**, as #256's, #259's and #261's did — and a
-  lane run DETACHED never has a name to strip, since rule C credits it by path, the one shape rules A and
-  D deliberately do not read. That is how #261 ended the chain; `sentinel-recon-261`,
-  `sentinel-release-truth-256` and `sentinel-q9b-redactor-259` now sit spent at zero. `.claude/worktrees/`
+  `lane/vision-pointer-guard-2026-08-24`, and this train's DETACHED `sentinel-q9b-stage2-258` (#258).
+  Rule D (#243) FAILS this bullet for naming a zero-carry branch — **a landed lane's name leaves it in
+  the train that lands it**, as #256's, #259's and #261's did; a DETACHED lane has no name to strip,
+  since rule C credits it by path, the shape rules A and D do not read. `sentinel-recon-261`,
+  `sentinel-release-truth-256` and `sentinel-q9b-redactor-259` sit spent at zero. `.claude/worktrees/`
   holds SIX checkouts: two carriers above plus four spent — as are parked `sentinel-mission0-accent-landing`,
-  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233) and `sentinel-q9b-stage2` (#258,
-  stopped un-started). **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233) and `sentinel-q9b-stage2` (an
+  abandoned first #258 attempt). **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
 

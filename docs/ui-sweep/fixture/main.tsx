@@ -107,13 +107,26 @@ import { SessionDebrief } from "../../../src/surfaces/SessionDebrief";
 import { ConfirmProvider } from "../../../src/design/ConfirmDialog";
 import type { Priorities, Recommendation, SessionSummary } from "../../../src/types";
 import { BentoGrid, BentoTile } from "../../../src/design/bento";
+// Q9b Tier 3's case preview / consent screen (#258). Mounted here because there is nowhere else it
+// CAN be mounted: no src/ module imports it, and the gate it will sit behind is a hard-false
+// constant with no caller. The corpus beside it is the reason this page can show it honestly —
+// every payload string comes from the Rust `case_preview()`, so the preview a reviewer judges is
+// the preview a user would get, not a plausible-looking mock-up of one.
+import { CaseEvidenceConsent, type CaseRemovableUnit } from "../../../src/surfaces/CaseEvidenceConsent";
+import { corpusPreview, corpusRemovable } from "../../../src/case-preview-corpus";
+// No CSS import for it here, deliberately: CaseEvidenceConsent.tsx imports its own sheet, so Vite
+// pulls it in with the component. The hand-added sheets above exist only where the file that owns
+// the import is NOT rendered on this page (Settings.tsx, LabGround.tsx, Play.tsx) — adding one
+// here would put a sheet in the fixture entry that App.tsx's chain does not have.
 // Same module instance the bench's aliased `@tauri-apps/api/core` import resolves to (both land on
 // this directory's stub-core.ts), so this reads the state the bench is actually rendering.
 import {
+  caseProps,
   debriefProps,
   firstWinChanges,
   getState,
   isBlackboxState,
+  isCaseState,
   isCpuTempState,
   isDebriefState,
   isFirstWinState,
@@ -234,7 +247,9 @@ function FixtureBanner() {
                 ? "no change was applied and none can be rolled back — the ledger row below is invented"
                 : isDebriefState()
                   ? "the session below was never played and the offer is inert — pressing it changes nothing"
-                  : "Start / Conclude / Restore are blocked"}
+                  : isCaseState()
+                    ? "Tier 3 has NO send path in any build — case_evidence_gate() is hard-false, the screen below has no route in the app, and Send does nothing"
+                    : "Start / Conclude / Restore are blocked"}
       </span>
     </div>
   );
@@ -349,6 +364,39 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
               />
             </ConfirmProvider>
           </div>
+        </div>
+      </section>
+    ) : isCaseState() ? (
+      // The Lab room, and this one wrapper is an ESTIMATE rather than a replicated ancestry — the
+      // only mount on this page that is. The screen has no host in the shipped app yet (Stage 4+
+      // wires it), so there is no real ancestry to copy. The Lab room is the honest stand-in
+      // because journey B is entered from the crash station — `BlackBox`, a Lab station, which
+      // mounts in exactly this wrapper above — and `.v2-room[data-room="lab"]` is the DECLARING
+      // element for the --ix-* family this screen's stylesheet resolves from. If Stage 4 lands it
+      // somewhere else, the palette in these screenshots moves with it, and this comment is the
+      // note saying so out loud rather than a fidelity claim nobody could check.
+      //
+      // `onSend` logs and returns. It is not a stub for a send path: there is no send path to stub,
+      // in this page or in any build.
+      <section className="v2-room" data-room="lab">
+        <div className="v2-room-body">
+          <CaseEvidenceConsent
+            removable={
+              caseProps()!.base ? corpusRemovable(caseProps()!.base as "both" | "comment-only") : []
+            }
+            preview={(removed: CaseRemovableUnit[]) => {
+              const { base, unreadable } = caseProps()!;
+              if (!base) return null;
+              if (unreadable) return { shape: "comment + incident evidence", payload_json: "{ truncated" };
+              return corpusPreview(base, removed);
+            }}
+            status={caseProps()!.status ?? "idle"}
+            errorText={caseProps()!.errorText ?? null}
+            onSend={(removed) => {
+              // eslint-disable-next-line no-console
+              console.log("FIXTURE PREVIEW - consent given for:", removed, "(nothing was sent)");
+            }}
+          />
         </div>
       </section>
     ) : (

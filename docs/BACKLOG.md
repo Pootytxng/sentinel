@@ -331,31 +331,30 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   - [ ] **Q9b — build Tier 3 in-app feedback + crash reports.** Own module
     (`src-tauri/src/case_evidence_upload.rs`), never inside `support_evidence.rs`. Tier 3's gate is
     unchanged and applies in full: per-case consent, preview/redaction, named recipient, retention,
-    deletion receipt, no background queue, no inherited consent. **Destination decided (B_land, 2026-08-18):** D1 `compy_reports` on the
-    owner's Cloudflare account, reached through its own `functions/api/` endpoint — no email inbox
-    anywhere in the design. The consent screen names it: *"Compy's own store on compy.gg"*. Define
-    the schema in this change (retention column + a ticket id the deletion receipt can quote); the
-    database is empty on purpose. Residual: one `wrangler pages deploy` at ship time (B7).
-    **Contract WRITTEN 2026-08-29 (#247):** `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`
-    — 30-day retention ruled by the owner. **Stage 1 LANDED 2026-08-29 (#252), still dark** (§2
-    allowlist struct, Tier 3's own redactor, pure producers, one serializer, pure preview,
-    `hw_class.rs` tier-neutral per §4, `case_evidence_gate()` hard-false and uncalled). Guards:
-    `src/case-evidence-tier-separation-guard.test.ts` + the outbound guard's Tier 3 rows. Next
-    stage in sequence: Stage 2 (preview UI over the pure representation) — no command/HTTP/consent
-    until their own stages. **Its security precondition RAN 2026-08-29 (#258) and did NOT clear the
-    "redacted" claim:** one invisible character (U+200B and family) inside a username, address, key
-    or serial defeated every exact-match detector while rendering identically to the unmasked text.
-    Stage 2 stopped un-started rather than hide the repair inside it. **Stage 1 repair landed
-    2026-08-29 (#259):** the input boundary drops Cf/Default_Ignorable and folds full-width ASCII
-    before any detector runs; the preview serializes from the same struct as the wire, so key order
-    matches byte-for-byte; the serializer refuses a shapeless payload the preview would refuse to
-    show. Each is pinned by a seeded-negative guard and proven by defect injection. **Independently
-    reviewed (#260) six passes: **PASS**, its one gap found by sweeping
-    every code point against Unicode 16.0 not the list — `180B..180F`'s four Mongolian selectors — fixed and
-    injection-proven in the same lane. Residual, kept honest and each test-pinned: mixed-script
-    homoglyphs and U+2800 (a visible gap, not an invisible char) still defeat an exact match — what
-    §2A's "best-effort" covers, and the Stage 2 consent copy must say so. Stage 2 restarts (#258) from
-    the repaired `main` (`2efe6eef`).
+    deletion receipt, no background queue, no inherited consent. **Destination decided (B_land,
+    2026-08-18):** D1 `compy_reports` on the owner's Cloudflare account, reached through its own
+    `functions/api/` endpoint — no email inbox anywhere in the design. The consent screen names it:
+    *"Compy's own store on compy.gg"*. Define the schema in that change (retention column + a ticket
+    id the deletion receipt can quote); the database is empty on purpose. Residual: one
+    `wrangler pages deploy` at ship time (B7). **Contract WRITTEN 2026-08-29 (#247):**
+    `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` — 30-day retention ruled
+    by the owner. **Stage 1 LANDED 2026-08-29 (#252), still dark** (§2 allowlist struct, Tier 3's own
+    redactor, pure producers, one serializer, pure preview, `hw_class.rs` tier-neutral per §4,
+    `case_evidence_gate()` hard-false and uncalled). Guards:
+    `src/case-evidence-tier-separation-guard.test.ts` + the outbound guard's Tier 3 rows. **Its
+    security precondition FAILED first (#258)** — an invisible character (U+200B and family) inside a
+    username, address, key or serial defeated every exact-match detector while rendering identically;
+    Stage 2 stopped rather than hide the repair inside it. **Stage 1 repair landed 2026-08-29
+    (#259), independently reviewed six passes PASS (#260):** the input boundary drops
+    Cf/Default_Ignorable and folds full-width ASCII before any detector runs, the preview serializes
+    from the same struct as the wire so key order matches byte-for-byte, and the serializer refuses a
+    shapeless payload; the review's own find — `180B..180F`'s four Mongolian selectors — was fixed
+    in-lane. Residual, each test-pinned: mixed-script homoglyphs and U+2800 still defeat an exact
+    match, which is what §2A's "best-effort" covers and what the Stage 2 copy now says. **Stage 2
+    LANDED 2026-08-29 (#258):** `src/surfaces/CaseEvidenceConsent.tsx` — local preview/edit/
+    one-submission consent over Stage 1's canonical bytes, fixture-reachable only, with no command,
+    HTTP, queue or persistence anywhere in it. Next in sequence: **Stage 3** (the Tauri send command
+    and endpoint), its own separate proof boundary.
   - [x] **Q9c — CPU temp, no driver: SHIPPED 2026-08-18** (`CpuTempOffer.tsx`, self-review PASS).
     Full record verbatim in [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-29, byte cap).
 

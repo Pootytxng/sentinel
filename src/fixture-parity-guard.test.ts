@@ -452,6 +452,43 @@ describe("fixture preview: every import resolves to a file that exists", () => {
     });
   }
 
+  it("keeps the six Tier 3 case states, and keeps their bytes coming from Rust", () => {
+    // Q9b Stage 2 (#258). This screen is the one surface on this page with NO route in the shipped
+    // app at all — `case_evidence_gate()` is hard-false with no caller, and nothing in src/ imports
+    // the component. So the fixture is not a shortcut to a hard state here; it is the only place
+    // the screen exists, and a lost state is a state that will never be reviewed again.
+    const stub = read("docs/ui-sweep/fixture/stub-core.ts");
+    const entry = read(FIXTURE_ENTRY);
+    for (const state of [
+      "case-both", // journey B, all seven §2 removals live
+      "case-comment-only", // journey A, where the comment cannot be removed
+      "case-empty", // no case to send — the screen refuses
+      "case-unreadable", // bytes that will not parse — the screen refuses
+      "case-error", // a host failure that must not cost the user their reading
+      "case-working", // mid-send: the button may do nothing, twice
+    ]) {
+      expect(stub, `the fixture lost the ${state} state`).toContain(`"${state}"`);
+    }
+
+    // The payload must come from the committed Rust corpus. A fixture that hand-wrote a plausible
+    // JSON blob would review a preview no user could ever be shown — and it would look identical
+    // in a screenshot, which is what makes this worth pinning rather than trusting.
+    expect(entry, "the fixture stopped reading the Rust preview corpus").toContain(
+      "corpusPreview",
+    );
+    expect(
+      entry,
+      "the case branch must render the real component, not a local copy of it",
+    ).toContain("<CaseEvidenceConsent");
+
+    // And the banner has to carry the dark fact, the way it does for receipts and case intelligence.
+    // A screenshot of a consent screen with no such line is a screenshot that reads as a shipped
+    // feature.
+    const banner = entry.slice(entry.indexOf("function FixtureBanner"), entry.indexOf("ReactDOM.createRoot"));
+    expect(banner).toContain("isCaseState()");
+    expect(banner).toMatch(/case_evidence_gate\(\) is hard-false/);
+  });
+
   // ── Falsification ───────────────────────────────────────────────────────────────────────────
   // The exact shape of the 2026-08-25 defect, plus the two shapes a naive extractor gets wrong.
   it("fires on the deleted sheet, and not on the ones that survive", () => {
