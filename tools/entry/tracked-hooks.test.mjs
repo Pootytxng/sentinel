@@ -17,7 +17,15 @@
 // fixture here is deliberate — the REFUSE case must be provoked without breaking this checkout.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -186,5 +194,55 @@ describe("decision 5 — machine-local settings and state stay ignored", () => {
   it("keeps .claude/autopilot.json out of the repository", () => {
     expect(isIgnored(".claude/autopilot.json")).toBe(true);
     expect(trackedUnder(".claude/autopilot.json")).toEqual([]);
+  });
+});
+
+// A hook is a script AND, once a test imports it, a module. Node strips a leading `#!` line; the
+// bundler vitest transforms modules with does not, so the shebang reaches V8 verbatim and the whole
+// suite dies at import with a bare `SyntaxError: Invalid or unexpected token` — no file, no line.
+// That is how `project-write-assert.mjs` sat red on main from the day it was written (583c9452):
+// three tests across two files failed for a reason none of them named. Nothing is lost by dropping
+// it — `.claude/settings.json` runs every hook as `node "<path>"`, so the shebang was never read.
+describe("a hook a test imports is a module, and parses like one", () => {
+  const HOOKS_DIR = join(ROOT, ".claude", "hooks");
+  const TESTS_DIR = HERE;
+
+  // Anchored on the RELATIVE specifier a real import uses. A settings fixture inside a test spells
+  // the same folder as "${CLAUDE_PROJECT_DIR}/.claude/hooks/..." and is a string, not an import —
+  // matching it would put hooks vitest never parses under a rule they do not owe.
+  const IMPORT_PREFIX = "../../.claude/hooks/";
+
+  /** Hook basenames that some test in tools/entry imports — the ones vitest has to parse. */
+  const importedHooks = () => {
+    const names = new Set();
+    for (const f of readdirSync(TESTS_DIR).filter((n) => n.endsWith(".test.mjs"))) {
+      for (const line of readFileSync(join(TESTS_DIR, f), "utf8").split("\n")) {
+        const at = line.indexOf(IMPORT_PREFIX);
+        if (at === -1) continue;
+        const rest = line.slice(at + IMPORT_PREFIX.length);
+        const end = rest.indexOf(".mjs");
+        if (end !== -1) names.add(rest.slice(0, end + 4));
+      }
+    }
+    return [...names].sort();
+  };
+
+  it("carries no shebang — the line node hides and the transform does not", () => {
+    const imported = importedHooks();
+    expect(imported).toContain("project-write-assert.mjs");
+    for (const name of imported) {
+      const first = readFileSync(join(HOOKS_DIR, name), "utf8").split("\n")[0];
+      expect(`${name} starts: ${first.slice(0, 40)}`).not.toContain("#!");
+    }
+  });
+
+  it("is reached by a `node` command in settings, so the shebang buys nothing", () => {
+    const settings = JSON.parse(readFileSync(join(ROOT, ".claude", "settings.json"), "utf8"));
+    const commands = hookCommandsOf(settings).map((h) => h.command);
+    for (const name of importedHooks()) {
+      const mine = commands.filter((c) => c.includes(name));
+      expect(`${name}: ${mine.length} command(s)`).toBe(`${name}: 1 command(s)`);
+      expect(mine[0].startsWith("node ")).toBe(true);
+    }
   });
 });

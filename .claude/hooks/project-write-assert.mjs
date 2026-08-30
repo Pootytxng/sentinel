@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // PreToolUse(Write|Edit|NotebookEdit) — refuse PROJECT writes from an unverified session (#125 step 3).
 //
 // Spec: docs/superpowers/specs/2026-08-21-unverified-session-write-refusal.md §3b.

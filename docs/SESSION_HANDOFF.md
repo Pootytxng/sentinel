@@ -79,11 +79,9 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 2 (#258) is NEXT, and unblocked.** Its security precondition now has a PASS: the Stage 1
-repair landed (#259 / PR #260, merged `2efe6eef`) and the merged tree is byte-identical to the head
-the sixth independent review pass examined. The consent copy may say the comment is **screened** for
-username / IP / hostname / keys — only with **best-effort** attached, two residuals staying pinned as
-live. Restart from THIS main: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+**Q9b Stage 2 (#258) LANDED** — `cfc0d21a` / PR #263, the consent screen renders the payload itself.
+**Stage 3 is NEXT**: receiver + migration, local/staged ONLY, never deployed — deployment is Stage 7
+and owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -97,17 +95,19 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **24 worktrees besides `main`; SIX branches carry commits not on main — do NOT delete or
-  hard-reset those six before checking them**: `feat/user-feedback-lab-recovery` ·
+- **25 worktrees besides `main`; EIGHT branches carry commits not on main — do NOT delete or
+  hard-reset those eight before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. **No depth/SHA pinned**:
-  `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet
-  for naming a zero-carry branch — **a landed lane's name leaves it in the train that lands it** —
-  so #258 and #264 both ran DETACHED in `sentinel-q9b-stage2-258`: rule C credits a detached
-  carrier by path, the one name D never reads. Spent, at zero: `sentinel-recon-261`,
-  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, five of the SEVEN in `.claude/worktrees/`
-  (the other two are carriers above), parked `sentinel-mission0-accent-landing`,
-  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
+  `claude/css-margin-comments-240` · `claude/exciting-robinson-0ce4d5` (#266, whose checkout
+  `.claude/worktrees/exciting-robinson-0ce4d5` is named too — it detaches to push here). **No
+  depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
+  bullet for naming a zero-carry branch — **a landed lane's name leaves it in the train that lands
+  it** — and today every carrier has a branch, so nothing rides on rule C's path credit. Spent, at
+  zero: `sentinel-recon-261`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`,
+  `sentinel-q9b-stage2-258` (#258 and #264 both landed out of it), four of the SEVEN in
+  `.claude/worktrees/`, parked `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace`
+  (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
