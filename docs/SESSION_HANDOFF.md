@@ -14,8 +14,8 @@ debt, batch the next cut).
 | | |
 |---|---|
 | Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | Q9b Stage 1 (#252): `case_evidence_upload.rs` pure + dark (allowlist struct, own redactor, one serializer, preview; gate hard-false, uncalled) + tier-neutral `hw_class.rs` extraction; guards armed (`case-evidence-tier-separation-guard` + the outbound guard's Tier 3 rows). Before it: rule D (#243), the Q9b contract (#247/#248/#249) |
-| Self-review | not applicable — pure Rust + guards, zero UI; the prior PASS 12/12 at `230c1445` stands |
+| Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
+| Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
 
 ## The rule that came out of the walk — read this before touching Health
@@ -97,17 +97,17 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **23 worktrees besides `main`; SEVEN carry commits not on main — do NOT delete or hard-reset those
-  seven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
-  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
-  `lane/vision-pointer-guard-2026-08-24`, and this train's DETACHED `sentinel-q9b-stage2-258` (#258).
-  Rule D (#243) FAILS this bullet for naming a zero-carry branch — **a landed lane's name leaves it in
-  the train that lands it**, as #256's, #259's and #261's did; a DETACHED lane has no name to strip,
-  since rule C credits it by path, the shape rules A and D do not read. `sentinel-recon-261`,
-  `sentinel-release-truth-256` and `sentinel-q9b-redactor-259` sit spent at zero. `.claude/worktrees/`
-  holds SIX checkouts: two carriers above plus four spent — as are parked `sentinel-mission0-accent-landing`,
-  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233) and `sentinel-q9b-stage2` (an
-  abandoned first #258 attempt). **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`.
+- **23 worktrees besides `main`; SIX branches carry commits not on main — do NOT delete or
+  hard-reset those six before checking them**: `feat/user-feedback-lab-recovery` ·
+  `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. **No depth/SHA pinned**:
+  `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet
+  for naming a zero-carry branch — **a landed lane's name leaves it in the train that lands it** —
+  so this train runs DETACHED in `sentinel-q9b-stage2-258`, carrying only the commit you are
+  reading: rule C credits it by path, the one name D never reads. Spent, at zero: `sentinel-recon-261`,
+  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, four of the SIX in `.claude/worktrees/`
+  (the other two are carriers above), parked `sentinel-mission0-accent-landing`,
+  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
