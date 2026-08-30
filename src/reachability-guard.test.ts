@@ -51,6 +51,15 @@ const ALLOWED: Record<string, string> = {
   // idle contract. Wiring it into a room would be the bug, not the fix.
   "design/KeepaliveRoom.tsx": "read as source by keepalive-idle-guard.test.ts; importer-less by design",
 
+  // Q9b Tier 3's case preview / consent screen and the corpus that feeds it (Stage 2, #258).
+  // Importer-less BY CONTRACT, not by oversight: §11 gives Stage 2 the screen and nothing else —
+  // no send command, no runtime reachability — and `case_evidence_gate()` is a hard-false constant
+  // with no caller in the whole crate. Wiring either of these into a room is Stage 4's diff, after
+  // Stage 4's review. Reviewed at docs/ui-sweep/fixture (?state=case-both and its five siblings);
+  // src/case-evidence-consent-guard.test.ts fails the build if a src/ module ever imports them.
+  "surfaces/CaseEvidenceConsent.tsx": "Tier 3 Stage 2 — fixture-only by contract; Stage 4 wires a host",
+  "case-preview-corpus.ts": "generated Rust preview corpus for the fixture — deleted when Stage 4's command replaces it",
+
   // Test infrastructure, named in vitest.config.ts (setupFiles) rather than imported.
   "test/setup.ts": "vitest setupFiles entry — loaded by the runner, not by the app",
   "test/axe.ts": "the C-13 axe harness — imported by the a11y guards, never by the shipped app",

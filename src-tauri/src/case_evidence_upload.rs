@@ -1580,4 +1580,156 @@ mod tests {
         assert_eq!(back["cpu_family"], json!("ryzen\u{0} x3d"));
         assert!(text.contains("\\u0007"), "a control byte must be JSON-escaped, never raw: {text}");
     }
+    // ---- Stage 2 (#258): the preview corpus the consent UI renders ----
+
+    // WHY A COMMITTED CORPUS, rather than the obvious thing.
+    //
+    // Stage 2's screen must render "the exact serialized payload, never a reconstructed summary"
+    // (contract §3), and removing an optional field must re-render it. The obvious way to do that
+    // in a frontend with no backend command is a TypeScript serializer mirroring this module's —
+    // which is a SECOND implementation of the canonical bytes, in another language, free to drift
+    // the day someone adds a field. That is the exact failure §3 exists to prevent, and no guard
+    // written in TypeScript could prove the two agree on a payload nobody thought to test.
+    //
+    // So the frontend gets no serializer at all. Every removal state a user can reach is
+    // enumerated HERE, run through the real `case_preview`, and committed; the UI looks the bytes
+    // up. The corpus is the contract, this test is what keeps it true, and a drifted corpus fails
+    // in Rust where the authority lives.
+    //
+    // The enumeration is exhaustive on purpose — sampling leaves the untested combination as the
+    // one a user finds. Two bases cover all three §1 shapes: "both" collapses to "incident
+    // evidence only" when the comment is removed, and journey A's comment-only case cannot be
+    // reached from it because `incident_kind` is not removable (§2B: it defines the case).
+    //
+    // Regenerate:  COMPY_UPDATE_CASE_PREVIEW_CORPUS=1 cargo test case_preview_corpus
+
+    const CORPUS_PATH: &str = "../src/case-preview-corpus.json";
+
+    /// Pinned instead of `CARGO_PKG_VERSION`: binding the corpus to the crate version would break
+    /// this pin on every release cut, and a version bump is not a preview defect. It is the ONE
+    /// value in the corpus the real assembler did not produce, and it is irrelevant to what the
+    /// corpus proves — key order, omission of absent optionals, escaping, pretty-print shape.
+    const FIXTURE_VERSION: &str = "0.0.0-fixture";
+
+    /// The removable units of §2, in the order the consent screen lists them. The hardware block
+    /// is ONE unit: §2C makes its four fields removable "as one block", never individually.
+    const REMOVABLE_BOTH: [&str; 7] = [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "error_code",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version",
+    ];
+    /// Journey A: the comment IS the case, so it is not removable; only §2C context is.
+    const REMOVABLE_COMMENT: [&str; 3] = ["hardware", "windows_build", "gpu_driver_version"];
+
+    fn without(base: &CasePayload, removed: &[&str]) -> CasePayload {
+        let mut p = base.clone();
+        for unit in removed {
+            match *unit {
+                "user_comment" => p.user_comment = None,
+                "app_family" => p.app_family = None,
+                "module_family" => p.module_family = None,
+                "error_code" => p.error_code = None,
+                "hardware" => {
+                    p.gpu_vendor = None;
+                    p.gpu_model = None;
+                    p.cpu_family = None;
+                    p.ram_gb_bucket = None;
+                }
+                "windows_build" => p.windows_build = None,
+                "gpu_driver_version" => p.gpu_driver_version = None,
+                other => panic!("unknown removable unit {other}"),
+            }
+        }
+        p
+    }
+
+    /// The base a reviewer sees first. The comment carries a path and an IP **on purpose**: the
+    /// preview must show what SURVIVES redaction, and a reviewer judging the best-effort honesty
+    /// copy needs the masks on screen rather than described.
+    fn corpus_base(comment: Option<&str>, evidence: Option<&IncidentEvidence>) -> CasePayload {
+        let mut p = assemble_case(comment, evidence, Some(&full_hw()), Some("26100"), Some("24.10.1"))
+            .expect("corpus base assembles");
+        p.compy_version = FIXTURE_VERSION.into();
+        p
+    }
+
+    fn corpus_entries(base_name: &str, base: &CasePayload, units: &[&str]) -> Vec<Value> {
+        let mut out = Vec::new();
+        for mask in 0..(1u32 << units.len()) {
+            let removed: Vec<&str> =
+                units.iter().enumerate().filter(|(i, _)| mask & (1 << i) != 0).map(|(_, u)| *u).collect();
+            let payload = without(base, &removed);
+            let preview = case_preview(&payload).expect("no reachable removal set is shapeless");
+            out.push(json!({
+                "base": base_name,
+                "removed": removed,
+                "shape": preview.shape,
+                "payload_json": preview.payload_json,
+            }));
+        }
+        out
+    }
+
+    #[test]
+    fn case_preview_corpus_matches_what_this_module_produces() {
+        let comment = "it crashed while I was in C:\\Users\\kuya\\Games\\valorant, my ip is 192.168.1.14";
+        let mut entries =
+            corpus_entries("both", &corpus_base(Some(comment), Some(&full_evidence())), &REMOVABLE_BOTH);
+        entries.extend(corpus_entries("comment-only", &corpus_base(Some(comment), None), &REMOVABLE_COMMENT));
+
+        let corpus = json!({
+            "note": "GENERATED by case_preview_corpus_matches_what_this_module_produces in \
+                     src-tauri/src/case_evidence_upload.rs. Do not hand-edit: regenerate with \
+                     COMPY_UPDATE_CASE_PREVIEW_CORPUS=1 cargo test case_preview_corpus. Every \
+                     payload_json below is real output of case_preview(), which is why the Tier 3 \
+                     consent UI needs no serializer of its own.",
+            "fixture_compy_version": FIXTURE_VERSION,
+            "shapes": [shape_line(CaseKind::Comment), shape_line(CaseKind::Incident), shape_line(CaseKind::Both)],
+            "removable_units": { "both": REMOVABLE_BOTH, "comment-only": REMOVABLE_COMMENT },
+            "entries": entries,
+        });
+
+        let generated = serde_json::to_string_pretty(&corpus).expect("corpus serializes") + "\n";
+        if std::env::var_os("COMPY_UPDATE_CASE_PREVIEW_CORPUS").is_some() {
+            std::fs::write(CORPUS_PATH, &generated).expect("corpus writes");
+        }
+        let committed = std::fs::read_to_string(CORPUS_PATH)
+            .unwrap_or_else(|e| panic!("{CORPUS_PATH} is missing or unreadable ({e}) — regenerate it"));
+        assert_eq!(
+            committed.replace("\r\n", "\n"),
+            generated,
+            "the committed preview corpus no longer matches case_preview() — the Tier 3 consent UI \
+             would render bytes this module does not produce. Regenerate it, then LOOK at the diff: \
+             a changed field order or a new key is a contract change, not a snapshot refresh."
+        );
+    }
+
+    /// The corpus is only worth its bytes if a reachable state is really in it. This pins the
+    /// count from both directions — an empty or truncated corpus can no longer read as green.
+    #[test]
+    fn case_preview_corpus_covers_every_reachable_removal_state() {
+        let text = std::fs::read_to_string(CORPUS_PATH).expect("corpus is committed");
+        let corpus: Value = serde_json::from_str(&text).expect("corpus parses");
+        let entries = corpus["entries"].as_array().expect("entries is an array");
+        assert_eq!(entries.len(), 128 + 8, "2^7 removal sets for `both` plus 2^3 for `comment-only`");
+
+        let mut seen: Vec<String> = entries
+            .iter()
+            .map(|e| format!("{}|{}", e["base"].as_str().expect("base"), e["removed"]))
+            .collect();
+        seen.sort();
+        let before = seen.len();
+        seen.dedup();
+        assert_eq!(seen.len(), before, "a removal set appears twice — the enumeration is wrong");
+
+        // Every shape §1 names is really reachable in the corpus, and nothing else is.
+        let mut shapes: Vec<&str> = entries.iter().map(|e| e["shape"].as_str().expect("shape")).collect();
+        shapes.sort_unstable();
+        shapes.dedup();
+        assert_eq!(shapes, vec!["comment + incident evidence", "comment only", "incident evidence only"]);
+    }
 }
