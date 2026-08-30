@@ -1,11 +1,13 @@
 //! Tier-neutral pure hardware-class helpers — the §4 extraction the Q9b Tier 3 contract names
 //! (`docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §4, "Hardware-class
 //! alignment"). These three functions began life in `receipts.rs` (Tier 2) and moved here verbatim
-//! so Tier 3 (`case_evidence_upload.rs`) can share the exact same closed vocabularies without ever
-//! importing a tier module — alignment by construction instead of by parity test.
+//! so Tier 3 can share the exact same closed vocabularies without ever importing a tier module —
+//! alignment by construction instead of by parity test. Tier 3 is named by TIER and never by module
+//! path, here and below: the separation guard reads every byte of this file, comments included, so
+//! spelling that module's name in a comment would read as a reach into it (#266).
 //!
 //! THE RULE THIS MODULE LIVES UNDER: it imports NO tier module (`support_evidence`, `receipts`,
-//! `case_intelligence`, `case_evidence_upload`, `remote_rules`) and carries no consent, gate,
+//! `case_intelligence`, Tier 3, `remote_rules`) and carries no consent, gate,
 //! transport, or payload state — pure string/number classification only. Pinned by
 //! `src/case-evidence-tier-separation-guard.test.ts`.
 
@@ -187,7 +189,7 @@ mod tests {
         // function directly through `hw_context_from`, with no such refusal — narrowed here
         // after the 2026-08-29 security review (finding S4) caught this comment implying it
         // covered every caller. What actually reaches the wire from Group C is pinned by
-        // `adversarial_hardware_probe_strings_reach_the_wire_safely` in case_evidence_upload.rs.
+        // `adversarial_hardware_probe_strings_reach_the_wire_safely` in the Tier 3 module.
         assert_eq!(sanitize_token("ga\u{0}me"), "ga\u{0}me");
         assert_eq!(sanitize_token("a\u{7}b"), "a\u{7}b");
     }
