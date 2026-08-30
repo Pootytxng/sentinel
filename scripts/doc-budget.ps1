@@ -138,7 +138,16 @@ $sectionByteBudgets = @{
   # plus the A2/A3 not-a-defect finding moved out verbatim, leaving one consolidated pointer.
   # 13320 -> 11775, banking 256 of the 1545 bytes freed.
   "docs/BACKLOG.md::NEXT UP" = 11776
-  "docs/BACKLOG.md::Conformance queue" = 24064
+  # 24064 -> 23808 on 2026-08-29, banking 256 of the 584 bytes the Q9b Stage 1 repair (#259)
+  # freed. The queue FAILED at 23.8KB when the repair's record was filed, and the payment came
+  # from the archive as the law requires: Q9a's CLOSED visual-self-review record moved to
+  # docs/BACKLOG_ARCHIVE.md verbatim behind a pointer, 23.8KB -> 22.9KB. Freeing room inside a
+  # CAPPED section does not pay for itself, though - it raises what the caps still permit, so
+  # the file budget stops covering the arithmetic and doc-budget-guard.test.mjs fails instead
+  # (81039 vs 80896). Banking the freed room here is the half of the move that closes it; the
+  # remaining 328 bytes are deliberate, because this queue is where the next conformance
+  # finding lands and a zero-headroom cap would fail the session that files it.
+  "docs/BACKLOG.md::Conformance queue" = 23808
   "docs/BACKLOG.md::HQ STEERING LOG" = 4608
 }
 

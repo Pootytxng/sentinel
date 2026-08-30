@@ -3454,3 +3454,20 @@ purpose) and **A1's `©ompy` is in the comp too**, so it is the mark he approved
   default"; `Escape` put focus visibly back on the trigger. **Recorded for the next keyboard review:**
   synthetic DOM dispatch fails Chromium's `:focus-visible` heuristic and would have FALSE-FAILED the
   states item — real input events are required, not `dispatchEvent`.
+
+---
+
+## Q9a Tier 2 — visual self-review record (moved from `docs/BACKLOG.md` 2026-08-29, section byte cap)
+
+> Moved verbatim while landing #259 so the append-only Conformance queue could pay for the Q9b
+> Stage 1 repair record. Nothing was deleted or re-worded; the live row keeps the verdict and a
+> pointer here.
+
+    **Visual self-review DONE 2026-08-25 — PASS** (12/12 after one round-trip). It ran on the
+    fixture rig, not a build, because the surface is unreachable in every build; the rig itself had
+    been dead since #148 and was repaired first (`041cabbc`). Round 1 FAILed item 2: both failure
+    messages rendered in `receipts-hint`, the same calm grey as ordinary copy, so a refused consent
+    write read as a footnote. Fixed and guarded in `b20e59dc` — and the same defect turned out to
+    be in `Fix.tsx` (a refused apply) and `LicensePanel.tsx` (a failed activation), both fixed in
+    the same commit. A second round-trip gave the first-run card a measure (62ch) so its divider and
+    its Accept / No-thanks pair stop where the prose stops instead of stretching a full-width tile.

@@ -319,19 +319,13 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     public.** Guards updated to match, never weakened.
     Merged `8b2f0f64` (PR #218): disclosure UI + off switch, `EULA.md` §10, no CSP widening needed
     (the send is Rust-side). Receiver **deployed + empty** 2026-08-25 on the owner's yes.
-    **Visual self-review DONE 2026-08-25 — PASS** (12/12 after one round-trip). It ran on the
-    fixture rig, not a build, because the surface is unreachable in every build; the rig itself had
-    been dead since #148 and was repaired first (`041cabbc`). Round 1 FAILed item 2: both failure
-    messages rendered in `receipts-hint`, the same calm grey as ordinary copy, so a refused consent
-    write read as a footnote. Fixed and guarded in `b20e59dc` — and the same defect turned out to
-    be in `Fix.tsx` (a refused apply) and `LicensePanel.tsx` (a failed activation), both fixed in
-    the same commit. A second round-trip gave the first-run card a measure (62ch) so its divider and
-    its Accept / No-thanks pair stop where the prose stops instead of stretching a full-width tile.
+    **Visual self-review DONE 2026-08-25 — PASS** (12/12); the round-trip record moved verbatim to
+    [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on 2026-08-29 (section byte cap).
     **Ships by default, not pending** (2026-08-26): the 2026-08-07 decree makes the look the lane's
     to ship and the owner's to veto on sight, and he has the before/after. Only ARMING is his. Said
     honestly — the decree carves out what reaches other people's machines, so a consent screen is
     the closest case yet: first application, not settled precedent.
-    `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line
+    `receipts_gate()` at `src-tauri/src/receipts.rs:28` is the last line
     of it, not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
     needs a region check before any sharing ships there.
   - [ ] **Q9b — build Tier 3 in-app feedback + crash reports.** Own module
@@ -343,17 +337,27 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     the schema in this change (retention column + a ticket id the deletion receipt can quote); the
     database is empty on purpose. Residual: one `wrangler pages deploy` at ship time (B7).
     **Contract WRITTEN 2026-08-29 (#247):** `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`
-    — 30-day retention ruled by the owner. **Stage 1 LANDED 2026-08-29 (#252), still dark:** the §2
-    allowlist as a `deny_unknown_fields` struct, Tier 3's own redactor, pure producers, one
-    serializer, pure preview; `hw_class.rs` extracted tier-neutral (§4);
-    `case_evidence_gate()` hard-false, nothing calls it. Guards live:
+    — 30-day retention ruled by the owner. **Stage 1 LANDED 2026-08-29 (#252), still dark** (§2
+    allowlist struct, Tier 3's own redactor, pure producers, one serializer, pure preview,
+    `hw_class.rs` tier-neutral per §4, `case_evidence_gate()` hard-false and uncalled). Guards:
     `src/case-evidence-tier-separation-guard.test.ts` + the outbound guard's Tier 3 rows. Next
     stage in sequence: Stage 2 (preview UI over the pure representation) — no command/HTTP/consent
-    until their own stages. **Stage 2 precondition (reviewer note, 2026-08-29):** a `security`-skill
-    pass over the Tier 3 redactor before any UI claims "redacted".
-  - [x] **Q9c — CPU temp that feels native, no driver: SHIPPED 2026-08-18** (`CpuTempOffer.tsx`,
-    self-review PASS). Full record moved verbatim to
-    [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on 2026-08-29 (section byte cap).
+    until their own stages. **Its security precondition RAN 2026-08-29 (#258) and did NOT clear the
+    "redacted" claim:** one invisible character (U+200B and family) inside a username, address, key
+    or serial defeated every exact-match detector while rendering identically to the unmasked text.
+    Stage 2 stopped un-started rather than hide the repair inside it. **Stage 1 repair landed
+    2026-08-29 (#259):** the input boundary drops Cf/Default_Ignorable and folds full-width ASCII
+    before any detector runs; the preview serializes from the same struct as the wire, so key order
+    matches byte-for-byte; the serializer refuses a shapeless payload the preview would refuse to
+    show. Each is pinned by a seeded-negative guard and proven by defect injection. **Independently
+    reviewed (#260): PASS WITH FINDINGS**, one real gap found by sweeping every code point against
+    Unicode 16.0 rather than reading the list — `180B..180F`'s four Mongolian selectors — fixed and
+    injection-proven in the same lane. Residual, kept honest and each test-pinned: mixed-script
+    homoglyphs and U+2800 (a visible gap, not an invisible char) still defeat an exact match — what
+    §2A's "best-effort" covers, and the Stage 2 consent copy must say so. Stage 2 restarts (#258)
+    from the repaired `main`.
+  - [x] **Q9c — CPU temp, no driver: SHIPPED 2026-08-18** (`CpuTempOffer.tsx`, self-review PASS).
+    Full record verbatim in [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-29, byte cap).
 
 - [ ] **P1 stabilization — Q4 · Q5 · Q6 · Q7 all DELIVERED; ONE leg still open.** The delivery
   narrative for all four moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on

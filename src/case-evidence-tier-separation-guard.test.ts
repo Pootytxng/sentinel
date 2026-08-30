@@ -166,6 +166,64 @@ describe("case-evidence tier separation: Tier 3 shares nothing with the other tr
     expect(stripRustComments(readFileSync(join(RUST_ROOT, "lib.rs"), "utf8"))).toMatch(/\bmod\s+case_evidence_upload\s*;/);
   });
 
+  it("only the two proven functions turn a CasePayload into bytes (§3)", () => {
+    // Independent review of the S3 repair (#259/#260) named the residual honestly: refusing a
+    // shapeless payload inside case_payload_json is a gate you must WALK THROUGH, not a structural
+    // impossibility. CasePayload still derives Serialize unconditionally, so a future
+    // `serde_json::to_string(&payload)` written anywhere else in the module would serialize bytes
+    // the preview refuses to show — quietly, and past both tests that pin the current pair.
+    //
+    // The reviewer's alternative (a #[serde(remote = "Self")] proxy) enforces it in the type
+    // without duplicating the field list, and is the better fix WHEN a real send path exists. Until
+    // then this is the cheaper half of the same promise: exactly two call sites, named here.
+    //
+    // What it is NOT, stated so nobody has to rediscover it: a proof. Three review passes each
+    // found another spelling that reached serde_json without matching the previous pattern
+    // (`to_writer_pretty`, `use serde_json as sj`, `use serde_json::{self as sj}`), and CasePayload
+    // also derives Debug, which stringifies the whole thing by a route no pattern here looks at.
+    // This guard is a tripwire against a CARELESS edit; the type-level fix is what stops a
+    // determined one, and it lands with the send path in Stage 4.
+    // Split on the `mod tests` declaration specifically, not on any `#[cfg(test)]`: a future
+    // scattered `#[cfg(test)] fn helper()` would otherwise silently narrow what is scanned.
+    const halves = stripRustComments(tier3).split(/#\[cfg\(test\)\]\s*mod\s+tests\b/);
+    expect(halves.length, "the `#[cfg(test)] mod tests` boundary moved — this guard scans the wrong half").toBe(2);
+    const production = halves[0];
+    const ALLOWED = ["case_payload_json", "case_preview"];
+    const stray: string[] = [];
+    // The family, not a list of its members. The reviewer proved a member list is guessable-wrong:
+    // `to_writer_pretty` is a real serde_json entry point and was missing from the first version.
+    const call = /serde_json::to_[a-z_]+/g;
+    for (let m = call.exec(production); m !== null; m = call.exec(production)) {
+      const before = production.slice(0, m.index);
+      const fn = [...before.matchAll(/\bfn\s+([A-Za-z0-9_]+)/g)].pop();
+      stray.push(...(fn && ALLOWED.includes(fn[1]) ? [] : [`${m[0]} in fn ${fn ? fn[1] : "<none>"}`]));
+    }
+    // Two routes that serialize without ever writing `serde_json::to_`: importing the function by
+    // name (this file already does `use serde_json::Value`, so it is the file's own idiom), and
+    // driving a Serializer straight off the derived impl.
+    const byImport = production.match(/use\s+serde_json::(?:\{[^}]*\b)?to_[a-z_]+/);
+    const byWriter = production.match(/serde_json::Serializer\b/);
+    // Third route, found by the third review pass injecting it: alias the crate at import and the
+    // literal `serde_json::` never appears again, so all of the above go quiet at once. The fourth
+    // pass walked through the first version of this line with `use serde_json::{self as sj}` — the
+    // same rename in Rust's grouped-import spelling — and the fifth caught the overcorrection:
+    // matching any `as` inside a serde_json `use` also fires on `use serde_json::Value as Json`,
+    // an ordinary type rename that hides nothing and touches no serializer. Both crate-rename
+    // spellings, and only those.
+    const byAlias = production.match(
+      /use\s+serde_json\s+as\s+[A-Za-z0-9_]+|use\s+serde_json::\{[^}]*\bself\s+as\s+[A-Za-z0-9_]+/,
+    );
+    stray.push(...(byImport ? [`${byImport[0]} — imported by name, then callable bare`] : []));
+    stray.push(...(byWriter ? ["serde_json::Serializer — drives the derived impl directly"] : []));
+    stray.push(...(byAlias ? [`${byAlias[0]} — the crate under another name hides every check above`] : []));
+    // File-scoped, not type-scoped, on purpose: it fails closed. It cannot tell WHAT is being
+    // serialized, so the message says what it actually knows.
+    expect(stray, "an additional serde_json serialization route in this module's production half").toEqual([]);
+    // Not vacuous: both allowed call sites must actually be there, or this guard is guarding air.
+    expect(production).toMatch(/fn case_payload_json[\s\S]*?serde_json::to_string\b/);
+    expect(production).toMatch(/fn case_preview[\s\S]*?serde_json::to_string_pretty\b/);
+  });
+
   it("catches the shapes it was written for (positive controls)", () => {
     expect(referencesModule("use crate::receipts::build_receipt_payload;", "receipts")).toBe(true);
     expect(referencesModule("use crate::{receipts::build_receipt_payload, hw_class::x};", "receipts")).toBe(true);

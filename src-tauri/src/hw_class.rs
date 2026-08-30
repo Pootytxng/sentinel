@@ -180,7 +180,14 @@ mod tests {
         // and lowercases — but it does NOT remove INTERIOR control characters. A NUL or
         // other control byte embedded mid-token survives. This is not a path/username leak
         // (those are handled), but the token is not guaranteed control-char-clean. Reported,
-        // not fixed (TEST-ONLY). Tier 3's `family_token` adds that hardening on top.
+        // not fixed (TEST-ONLY).
+        //
+        // Tier 3's `family_token` adds that hardening on top **for Group B family tokens only**
+        // (`app_family` / `module_family`). Group C's `gpu_model` / `cpu_family` call this
+        // function directly through `hw_context_from`, with no such refusal — narrowed here
+        // after the 2026-08-29 security review (finding S4) caught this comment implying it
+        // covered every caller. What actually reaches the wire from Group C is pinned by
+        // `adversarial_hardware_probe_strings_reach_the_wire_safely` in case_evidence_upload.rs.
         assert_eq!(sanitize_token("ga\u{0}me"), "ga\u{0}me");
         assert_eq!(sanitize_token("a\u{7}b"), "a\u{7}b");
     }
