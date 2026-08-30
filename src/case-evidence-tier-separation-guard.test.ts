@@ -196,8 +196,12 @@ describe("case-evidence tier separation: Tier 3 shares nothing with the other tr
     // driving a Serializer straight off the derived impl.
     const byImport = production.match(/use\s+serde_json::(?:\{[^}]*\b)?to_[a-z_]+/);
     const byWriter = production.match(/serde_json::Serializer\b/);
+    // Third route, found by the third review pass injecting it: alias the crate at import and the
+    // literal `serde_json::` never appears again, so all of the above go quiet at once.
+    const byAlias = production.match(/use\s+serde_json\s+as\s+[A-Za-z0-9_]+/);
     stray.push(...(byImport ? [`${byImport[0]} — imported by name, then callable bare`] : []));
     stray.push(...(byWriter ? ["serde_json::Serializer — drives the derived impl directly"] : []));
+    stray.push(...(byAlias ? [`${byAlias[0]} — the crate under another name hides every check above`] : []));
     // File-scoped, not type-scoped, on purpose: it fails closed. It cannot tell WHAT is being
     // serialized, so the message says what it actually knows.
     expect(stray, "an additional serde_json serialization route in this module's production half").toEqual([]);
