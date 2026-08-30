@@ -99,8 +99,9 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   hard-reset those seven before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
-  `claude/css-margin-comments-240`. **No
-  depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
+  `claude/css-margin-comments-240` (#240/PR #268: `759e1778` pushed; next is a
+  fresh Codex review at this head, then the gate receipt, then merge/close on PASS).
+  **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
   bullet for naming a zero-carry branch — **a landed lane's name leaves it in the train that lands
   it** — and today every carrier has a branch, so nothing rides on rule C's path credit. Spent, at
   zero: `sentinel-recon-261`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`,
