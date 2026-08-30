@@ -205,10 +205,14 @@ describe("case-evidence tier separation: Tier 3 shares nothing with the other tr
     const byWriter = production.match(/serde_json::Serializer\b/);
     // Third route, found by the third review pass injecting it: alias the crate at import and the
     // literal `serde_json::` never appears again, so all of the above go quiet at once. The fourth
-    // pass then walked through the first version of THIS line with `use serde_json::{self as sj}`,
-    // which is the same rename in Rust's grouped-import spelling — so match the shape (a `use` that
-    // mentions the crate and renames something) rather than one spelling of it.
-    const byAlias = production.match(/use\s+serde_json\b[^;]*\bas\s+[A-Za-z0-9_]+/);
+    // pass walked through the first version of this line with `use serde_json::{self as sj}` — the
+    // same rename in Rust's grouped-import spelling — and the fifth caught the overcorrection:
+    // matching any `as` inside a serde_json `use` also fires on `use serde_json::Value as Json`,
+    // an ordinary type rename that hides nothing and touches no serializer. Both crate-rename
+    // spellings, and only those.
+    const byAlias = production.match(
+      /use\s+serde_json\s+as\s+[A-Za-z0-9_]+|use\s+serde_json::\{[^}]*\bself\s+as\s+[A-Za-z0-9_]+/,
+    );
     stray.push(...(byImport ? [`${byImport[0]} — imported by name, then callable bare`] : []));
     stray.push(...(byWriter ? ["serde_json::Serializer — drives the derived impl directly"] : []));
     stray.push(...(byAlias ? [`${byAlias[0]} — the crate under another name hides every check above`] : []));
