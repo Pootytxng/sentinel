@@ -103,8 +103,8 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. **No depth/SHA pinned**:
   `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet
   for naming a zero-carry branch — **a landed lane's name leaves it in the train that lands it** —
-  so this train runs DETACHED in `sentinel-q9b-stage2-258`, carrying only the commit you are
-  reading: rule C credits it by path, the one name D never reads. Spent, at zero: `sentinel-recon-261`,
+  so #258 and #264 both ran DETACHED in `sentinel-q9b-stage2-258`: rule C credits a detached
+  carrier by path, the one name D never reads. Spent, at zero: `sentinel-recon-261`,
   `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, four of the SIX in `.claude/worktrees/`
   (the other two are carriers above), parked `sentinel-mission0-accent-landing`,
   `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
