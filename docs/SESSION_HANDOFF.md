@@ -79,12 +79,11 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 2 is BLOCKED, not next.** Its security precondition did NOT clear the "redacted" claim
-(verdict on #258 — an invisible character walks a username, IP or serial past every detector), so
-Stage 2 stopped un-started and the repair runs in its own lane: **#259 / PR #260**,
-`claude/q9b-redactor-repair-259` — 13 guards, each proven by defect injection, independently reviewed
-(the review's own Unicode sweep found a 5th gap; fixed in-lane). **Merge #260, then restart Stage 2
-from the NEW origin/main** — contract §11, `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md`.
+**Q9b Stage 2 (#258) is NEXT, and unblocked.** Its security precondition now has a PASS: the Stage 1
+repair landed (#259 / PR #260, merged `2efe6eef`) and the merged tree is byte-identical to the head
+the sixth independent review pass examined. The consent copy may say the comment is **screened** for
+username / IP / hostname / keys — only with **best-effort** attached, two residuals staying pinned as
+live. Restart from THIS main: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -98,16 +97,17 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **21 worktrees besides `main`; SEVEN carry commits not on main — do NOT delete or hard-reset those
+- **22 worktrees besides `main`; SEVEN carry commits not on main — do NOT delete or hard-reset those
   seven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
-  `lane/vision-pointer-guard-2026-08-24` · `claude/q9b-redactor-repair-259`. Rule D (#243) FAILS this
-  bullet for naming a zero-carry branch — **a landed lane's name leaves this bullet in the train that
-  lands it**, as #256's did; its spent checkout stays at `sentinel-release-truth-256`, credited by
-  path, the one shape rules A and D deliberately do not read. `.claude/worktrees/` holds SIX checkouts:
-  two carriers above plus four spent at zero — as are parked `sentinel-mission0-accent-landing`,
-  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233) and `sentinel-q9b-stage2` (#258,
-  stopped un-started). **No depth/SHA pinned** — derive live: `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  `lane/vision-pointer-guard-2026-08-24`, plus `sentinel-recon-261` — detached ON PURPOSE (#261), so
+  the lane that strips a landed name never adds its own. Rule D (#243) FAILS this bullet for naming a
+  zero-carry branch: **a landed lane's name leaves it in the train that lands it**, as #256's and
+  #259's did; the spent `sentinel-release-truth-256` and `sentinel-q9b-redactor-259` stay credited by
+  path, the one shape rules A and D deliberately do not read. `.claude/worktrees/` holds SIX checkouts: two carriers above plus four
+  spent at zero — as are parked `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace`
+  (Mission 1 is ON main, #231/#233) and `sentinel-q9b-stage2` (#258, stopped un-started). **No depth/SHA
+  pinned** — derive live: `git worktree list` + `git rev-list --count origin/main..<ref>`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
