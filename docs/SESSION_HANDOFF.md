@@ -97,7 +97,7 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **23 worktrees besides `main`; SIX branches carry commits not on main — do NOT delete or
+- **24 worktrees besides `main`; SIX branches carry commits not on main — do NOT delete or
   hard-reset those six before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`. **No depth/SHA pinned**:
@@ -105,7 +105,7 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   for naming a zero-carry branch — **a landed lane's name leaves it in the train that lands it** —
   so #258 and #264 both ran DETACHED in `sentinel-q9b-stage2-258`: rule C credits a detached
   carrier by path, the one name D never reads. Spent, at zero: `sentinel-recon-261`,
-  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, four of the SIX in `.claude/worktrees/`
+  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, five of the SEVEN in `.claude/worktrees/`
   (the other two are carriers above), parked `sentinel-mission0-accent-landing`,
   `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
