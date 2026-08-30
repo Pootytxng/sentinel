@@ -368,6 +368,15 @@ describe("Tier 3 consent guard: the detectors fire", () => {
       "a stripper is how all three known bypasses of this guard worked. If comments must be " +
         "excluded again, that is a decision to re-argue, not a helper to re-add quietly.",
     ).not.toMatch(stripper);
+    // Name-checking alone is not enough, as an independent review pointed out: a differently
+    // named transform applied ONLY at the two production call sites would leave every seeded
+    // control below green, because those call `detect()` directly with literal strings. So the
+    // call sites are pinned too — the detectors receive the file, not an expression over it.
+    expect(guard, "detect() must be handed the file itself, unmodified").toMatch(/\bdetect\(tsx\)/);
+    expect(guard, "and the loader likewise").toMatch(/\bdetect\(loader\)/);
+    expect(guard, "the reads are plain, with nothing between the file and the scan").toMatch(
+      /const tsx = readFileSync\(TSX, "utf8"\);/,
+    );
     // And `flat` may collapse whitespace, nothing else: every other character has to survive it.
     const sample = 'a"//"b`${c}`d/*e*/f//g';
     expect(flat(sample)).toBe(sample);
