@@ -129,21 +129,13 @@ function mount(over: Record<string, unknown> = {}) {
 /** Replace a CSS block comment with a single space, never `""` — emptying it fuses the tokens on
  *  either side of an empty comment (`margin:0` immediately followed by `auto`, becoming `0auto`),
  *  hiding a real push from `leftMarginIsAuto` the same way #240 found inside `declarations()`
- *  itself. Declaration BODIES only — see `stripSelectorComments` for why selectors need the
- *  opposite substitution. */
+ *  itself. Declaration BODIES only — selectors keep their comments intact all the way to
+ *  `matches()` (see `allRules()`); no string substitution is CSS-safe for a selector, because a
+ *  comment can either fuse two tokens into a compound selector (`.a/**\/.b`) or sit strictly
+ *  inside one identifier and split it (`di/**\/v` is NOT `div`) — jsdom's real `matches()` already
+ *  parses both cases correctly, so the guard stops trying to re-implement CSS tokenization. */
 function stripBlockComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, " ");
-}
-
-/** Strip a CSS comment from a SELECTOR to nothing, never a space. Unlike a declaration value, two
- *  adjacent selector tokens with an EMPTY comment and no real whitespace between them stay a
- *  compound (same-element) selector (`.a` immediately followed by `.b` tokenizes as `.a.b`, not
- *  the descendant `.a .b`) — a comment is consumed during tokenization without producing a
- *  whitespace token. Substituting a space here would rewrite a real compound selector into a
- *  descendant one and make `matches()` miss the element a shipped auto-margin rule actually lands
- *  on (Codex review, PR #268). */
-function stripSelectorComments(selector: string): string {
-  return selector.replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 /** Every `selector { declarations }` rule in EVERY sheet the app ships.
@@ -180,9 +172,12 @@ function allRules(): { file: string; selector: string; body: string }[] {
         buf = "";
       } else if (ch === "}") {
         if (selector !== null) {
-          const sel = stripSelectorComments(selector).trim();
-          // Skip at-rule preludes (`@media …`, `@keyframes …`) — they are not element selectors.
-          if (sel && !sel.startsWith("@")) out.push({ file, selector: sel, body: stripBlockComments(buf) });
+          // The selector KEEPS its original comments — see `stripBlockComments`'s doc for why no
+          // substitution is safe here. `stripBlockComments(sel)` below classifies the at-rule
+          // prelude only; it is never what gets pushed or matched.
+          const sel = selector.trim();
+          if (sel && !stripBlockComments(sel).trim().startsWith("@"))
+            out.push({ file, selector: sel, body: stripBlockComments(buf) });
         }
         selector = null;
         buf = "";
@@ -206,20 +201,32 @@ function sheets(dir = "src"): string[] {
 /** One selector list -> its individual selectors, splitting on TOP-LEVEL commas only.
  *  `:is(a, b) .c` is ONE selector; a naive `.split(",")` shears it into two broken fragments,
  *  and a guard that then skips what it cannot parse goes blind exactly where the app's most
- *  complex selectors live (hud-rooms.css is full of them). */
+ *  complex selectors live (hud-rooms.css is full of them). Comments are skipped as ATOMIC spans,
+ *  same technique as `allRules()`'s walker — a comma, paren, or bracket inside a selector comment
+ *  must not split the list or shift the depth count (Codex review, PR #268). */
 function split(list: string): string[] {
   const out: string[] = [];
   let depth = 0;
   let buf = "";
-  for (const ch of list) {
+  let i = 0;
+  while (i < list.length) {
+    if (list[i] === "/" && list[i + 1] === "*") {
+      const end = list.indexOf("*/", i + 2);
+      const comment = end === -1 ? list.slice(i) : list.slice(i, end + 2);
+      buf += comment;
+      i += comment.length;
+      continue;
+    }
+    const ch = list[i];
     if (ch === "(" || ch === "[") depth++;
     else if (ch === ")" || ch === "]") depth--;
     if (ch === "," && depth === 0) {
       if (buf.trim()) out.push(buf.trim());
       buf = "";
-      continue;
+    } else {
+      buf += ch;
     }
-    buf += ch;
+    i++;
   }
   if (buf.trim()) out.push(buf.trim());
   return out;
@@ -244,8 +251,34 @@ describe("Live room — the face switch sits on the content grid (issue #236)", 
     expect(leftMarginIsAuto(body).auto).toBe(true);
   });
 
-  it("a comment between adjacent selector tokens stays a compound selector, not a descendant one — Codex review, PR #268", () => {
-    expect(stripSelectorComments(".mc-ov/**/.active")).toBe(".mc-ov.active");
+  it("a comment fused between adjacent selector tokens still matches as a compound selector — Codex review, PR #268", () => {
+    const el = document.createElement("div");
+    el.className = "mc-ov active";
+    expect(el.matches(".mc-ov/**/.active")).toBe(true);
+  });
+
+  it("a comment inside an identifier does not silently heal the selector into a shorter tag — Codex review, PR #268", () => {
+    const el = document.createElement("div");
+    expect(el.matches("di/**/v")).toBe(false);
+    expect(el.matches("div")).toBe(true);
+  });
+
+  it("real whitespace after a comment still produces a genuine descendant combinator — Codex review, PR #268", () => {
+    const parent = document.createElement("div");
+    parent.className = "mc-ov";
+    const child = document.createElement("span");
+    child.className = "active";
+    parent.appendChild(child);
+    expect(child.matches(".mc-ov/**/ .active")).toBe(true);
+    // Same class, no ancestor with the first class: a compound would still match here, but a real
+    // descendant combinator must not — proves the real space after the comment was not swallowed.
+    const lone = document.createElement("span");
+    lone.className = "active";
+    expect(lone.matches(".mc-ov/**/ .active")).toBe(false);
+  });
+
+  it("a comma inside a selector comment does not split the selector list — Codex review, PR #268", () => {
+    expect(split(".a/* one, two */.b, .c")).toEqual([".a/* one, two */.b", ".c"]);
   });
 
   it("a literal brace inside a stylesheet comment does not corrupt rule splitting (App.css:2159)", () => {
