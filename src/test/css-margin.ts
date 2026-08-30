@@ -60,6 +60,13 @@ type Decl = { prop: string; value: string; important: boolean };
  * must never split or rename a declaration, and a comment fused directly against a token must not
  * fuse that token with its neighbor once removed. Replacing with a single space (not "") satisfies
  * both: it destroys the comment's own punctuation while still separating what it stood between.
+ *
+ * NOT a CSS tokenizer: it has no notion of quoted strings or `url(...)`, so a `/*`-lookalike
+ * substring inside a `content: "..."` value or an unquoted `url()` is read as a real comment start
+ * (#240 review). Out of scope here — margin declarations never carry string/url values, and this
+ * is unreached by both current callers, which never emit such content in the rule bodies they hand
+ * in. A caller that starts feeding truly untrusted/arbitrary CSS through `declarations()` would
+ * need a real tokenizer, not a regex.
  */
 function stripComments(body: string): string {
   return body.replace(/\/\*[\s\S]*?\*\//g, " ");
