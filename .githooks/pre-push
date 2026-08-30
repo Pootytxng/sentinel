@@ -62,4 +62,23 @@ if [ -n "$refs" ] && ! printf '%s\n' "$refs" | grep -qv '^[^ ]* 0\{40\} '; then
   exit 0
 fi
 
+# ---------------------------------------------------------------------------------------------
+# A checkout old enough to predate scripts/verify-local.ps1 has no gate to run, and this hook must
+# say so rather than erroring out of powershell with a path nobody reads.
+#
+# The neighbouring failure is worse and is why this exists: git skips a core.hooksPath naming a
+# directory that does not exist with NO warning and NO error, so a stale worktree runs no hook at
+# all and looks identical to one that passed. Measured 2026-08-30 -- two worktrees
+# (feat/user-feedback-lab-recovery at 05990130, feat/lab-49-parity-port at 7e6cd4d7, both checked
+# out before 670d9b74 added .githooks) had been pushing with zero verification and nothing said so.
+# Repointing their hooksPath lands them here instead, so here has to fail CLOSED.
+# scripts/hookspath-fleet-guard.test.mjs is the detector for the silent half.
+# ---------------------------------------------------------------------------------------------
+if [ ! -f "$repo/scripts/verify-local.ps1" ]; then
+  echo "pre-push: $repo has no scripts/verify-local.ps1 — the gate cannot run here." >&2
+  echo "pre-push: this checkout predates the local gate (added 2026-08-11). Rebase it onto main," >&2
+  echo "pre-push: or push from a current worktree. Refusing to push unverified code." >&2
+  exit 1
+fi
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo/scripts/verify-local.ps1"
