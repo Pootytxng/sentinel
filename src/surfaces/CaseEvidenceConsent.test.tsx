@@ -206,6 +206,23 @@ describe("Tier 3 consent screen: the states a user can land in", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
+  it("stays coherent when a retry is in flight over a previous error", () => {
+    // `errorText` and `status` are independent props — the host owns the state machine, and a
+    // review asked what this screen says when both are set at once. It must not read as two
+    // contradictory claims, and above all it must not offer a second send during the first.
+    const onSend = vi.fn();
+    mount("both", { status: "working", errorText: "Compy could not reach the support store. Nothing was sent.", onSend });
+    expect(screen.getByTestId("case-consent-error").textContent).toContain("Nothing was sent");
+    expect(screen.getByTestId("case-consent-note").textContent).toBe("Sending this one case now.");
+    const send = screen.getByRole("button", { name: "Sending…" });
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(send);
+    expect(onSend).not.toHaveBeenCalled();
+    // The past tense of the error and the present tense of the note are what keep the pair honest:
+    // one says what happened, the other says what is happening. Neither denies the other.
+    expect(payloadText()).toBe(corpusPreview("both", []).payload_json);
+  });
+
   it("hands the exact removal set to the host, once", () => {
     const onSend = vi.fn();
     mount("both", { onSend });

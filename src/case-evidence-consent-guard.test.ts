@@ -38,11 +38,23 @@ const LOADER = join("src", "case-preview-corpus.ts");
 const CORPUS = join("src", "case-preview-corpus.json");
 const RUST = join("src-tauri", "src", "case_evidence_upload.rs");
 
-/** Comments out, newlines kept. A promise in a comment is documentation; only rendered copy counts. */
+/** Comments out, newlines kept. A promise in a comment is documentation; only rendered copy counts.
+ *
+ *  A comment is recognized only where it OWNS its line (optionally inside a JSX `{ }`). The earlier
+ *  form matched `//` anywhere outside a `:` and had no way to tell a comment from two characters
+ *  inside a string — so a single `const shim = "//";` blanked the rest of that line, and with it
+ *  EVERY detector below at once, however wide each one had been made. An independent review at
+ *  39f23847 demonstrated it on four working one-liners; they are seeded controls now.
+ *
+ *  Line-leading is the fail-SAFE reading. The case this function exists for — a comment that
+ *  describes the ban, which is the whole file — still strips, and the cost is that a trailing
+ *  comment counts as corpus. That can only ever produce a loud false positive, never a silent
+ *  miss, and the false positive's fix is to move the comment onto its own line.
+ */
 function stripComments(source: string): string {
   return source
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-    .replace(/(?<!:)\/\/[^\n]*/g, " ");
+    .replace(/^[ \t]*\{?[ \t]*\/\*[\s\S]*?\*\/\}?/gm, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/^[ \t]*\/\/[^\n]*/gm, " ");
 }
 
 /** JSX wraps a sentence across lines; the reader sees one line, so phrase pins must too. */
@@ -356,6 +368,9 @@ describe("Tier 3 consent guard: the detectors fire", () => {
       "endpoint literal": 'const CASE_ENDPOINT = "https://compy.gg/api/case";',
       "a serializer": "const body = JSON.stringify(payload);",
     };
+    expect(Object.keys(seeds).sort(), "every banned-capability detector needs its own control").toEqual(
+      BANNED.map((b) => b.id).sort(),
+    );
     for (const [id, seed] of Object.entries(seeds)) {
       expect(detect(seed), `the "${id}" detector did not fire on ${seed}`).toContain(id);
     }
@@ -387,23 +402,62 @@ describe("Tier 3 consent guard: the detectors fire", () => {
     }
   });
 
+  it("cannot be walked around by a string that merely looks like a comment", () => {
+    // The hole an independent review found at 39f23847, in the layer UPSTREAM of every detector:
+    // `stripComments` blanked from any `//` to end of line, with no idea whether that `//` sat
+    // inside a string. One throwaway `const shim = "//";` therefore hid the rest of its line from
+    // all six detectors simultaneously — the widened ones included. These four are its exact
+    // working demonstrations, and they are one line of real Stage 4 each.
+    const shimmed: Record<string, string[]> = {
+      "Tauri IPC": ['const shim = "//"; invoke("send_case", payload);'],
+      "network call": ['const shim = "//"; fetch(target, { method: "POST" });'],
+      persistence: ['const shim = "//"; localStorage.setItem("draft", text);'],
+      "background work": ['const shim = "//"; setTimeout(() => retry(), 3000);'],
+      "a serializer": ['const shim = "//"; const body = JSON.stringify(payload);'],
+    };
+    for (const [id, seeds] of Object.entries(shimmed)) {
+      for (const seed of seeds) {
+        expect(detect(seed), `the "${id}" detector was blinded by the comment shim: ${seed}`).toContain(id);
+      }
+    }
+    // The mirror still holds in both comment forms — a line that IS a comment is documentation.
+    expect(detect("  // this screen must never call fetch() or invoke()")).toEqual([]);
+    expect(detect("  /* never fetch() from here */")).toEqual([]);
+    expect(detect("  {/* and never invoke() from here either */}")).toEqual([]);
+  });
+
   it("catches each overclaim, and allows the honest form", () => {
-    const seeds = [
-      "Your comment has been redacted.",
-      "Personal details are scrubbed before sending.",
-      "The report is fully anonymised.",
-      "Your text is sanitized automatically.",
-      "Removal of personal data is guaranteed.",
-      "Usernames are completely removed.",
-      "The report cannot be traced back to you.",
-      "Nothing has left this PC.",
-      "Nothing leaves your machine.",
-      "Your case never leaves this computer.",
-    ];
-    for (const seed of seeds) expect(overclaims(seed), `no detector fired on: ${seed}`).not.toEqual([]);
+    // Keyed by detector id, and the keys are compared against the table below — so a detector that
+    // is deleted, renamed, or quietly made redundant with a neighbour fails HERE rather than going
+    // silent in the corpus check above. `not.toEqual([])` alone could not tell those apart.
+    const seeds: Record<string, string[]> = {
+      "bare 'redacted'": ["Your comment has been redacted."],
+      "bare 'scrubbed'": ["Personal details are scrubbed before sending."],
+      "bare 'anonymised'": ["The report is fully anonymised."],
+      "bare 'sanitised'": ["Your text is sanitized automatically."],
+      "'guaranteed'": ["Removal of personal data is guaranteed."],
+      "'completely removed'": ["Usernames are completely removed."],
+      "'cannot be traced'": ["The report cannot be traced back to you."],
+      "an absolute about what left the PC": ["Nothing has left this PC.", "Nothing leaves your machine."],
+      "'never leaves this PC'": ["Your case never leaves this computer."],
+    };
+    expect(Object.keys(seeds).sort(), "every overclaim detector needs its own control").toEqual(
+      OVERCLAIM.map((o) => o.id).sort(),
+    );
+    for (const [id, texts] of Object.entries(seeds)) {
+      for (const text of texts) {
+        expect(overclaims(text), `the "${id}" detector did not fire on: ${text}`).toContain(id);
+      }
+    }
     expect(
       overclaims("Compy screens it for usernames and IP addresses. That screening is best-effort, not a guarantee."),
       "the honest, qualified form must stay legal — a guard that bans it bans the truth too",
+    ).toEqual([]);
+    // And the sentence §3 REQUIRES: the user must be told nothing has gone yet, which is a
+    // statement about this send, not an absolute about the machine. Banning it would ban §3.
+    expect(
+      overclaims("Nothing has been sent yet. This is the last step, and it is yours."),
+      "the required 'nothing has been sent yet' line must stay legal",
     ).toEqual([]);
   });
 
