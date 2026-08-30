@@ -187,6 +187,13 @@ fn sensitive_literals() -> Vec<(String, &'static str)> {
 ///    is not `is_ascii_digit`, and `ｋｕｙａ` does not match `kuya`. The block maps to ASCII by
 ///    subtraction, so this is a fold and not a normalization library.
 ///
+/// **The known cosmetic cost, named rather than discovered later:** U+200D ZERO WIDTH JOINER sits
+/// in that range and has to — it is Cf and exactly as invisible as ZWSP — but it is also what welds
+/// an emoji sequence together, so a flag or a family emoji comes through this pass as its separate
+/// glyphs. Nothing identifying leaks and no character is corrupted; the comment simply renders less
+/// prettily than it was typed. Sequence-aware emoji parsing on a deliberately dependency-free
+/// security path is not worth that, so the cost is pinned by test rather than paid.
+///
 /// **The residual limit, stated rather than hidden:** mixed-script homoglyphs (Cyrillic `а` for
 /// Latin `a`) still defeat an exact match, and closing that needs a confusables table this module
 /// deliberately does not carry. That is exactly why §2A calls free-text redaction best-effort and
@@ -220,13 +227,19 @@ fn flatten_input(input: &str) -> String {
 /// `180B..=180F` range is covered. The sweep is the guard here, not a reading of this list: a
 /// hand-written table is only as good as the last exhaustive check against real Unicode data.
 ///
-/// **Documented residual, deliberately NOT stripped:** U+2800 BRAILLE PATTERN BLANK. It is
-/// category So and NOT Default_Ignorable — it carries a real advance width, so a renderer draws a
-/// GAP where it sits, and this pass exists to make a detector match what a reader SEES. A reader
-/// sees `ku ya`, the same as for U+00A0 and the other Zs spaces this pass also leaves alone.
-/// Stripping it would additionally corrupt legitimate braille text, where a blank cell is a
-/// character with meaning. Pinned by test, alongside the mixed-script homoglyph limit, so it can
-/// only ever change deliberately.
+/// **Documented residual, deliberately NOT stripped:** U+2800 BRAILLE PATTERN BLANK — and the
+/// second review pass corrected the REASON, which is worth keeping straight. It is not the same
+/// case as U+00A0 and the Zs spaces: those are `White_Space`, so `map_tokens` already breaks a
+/// token on them and the code agrees with what the reader sees. U+2800 is category So and NOT
+/// `White_Space`, so a value with one embedded stays ONE unrecognized token and escapes detection
+/// by exactly the mechanism ZWSP used. It is still left alone, for a different reason than the one
+/// written here before: ZWSP, ZWNJ, the bidi marks and the variation selectors ride in on an
+/// ordinary copy-paste out of a browser, a chat client or a PDF, which is what makes the promise
+/// "we screen your comment" fail INCIDENTALLY, to a user who did nothing wrong. U+2800 does not —
+/// inside a username or an address it arrives only by deliberate self-obfuscation, and stripping a
+/// character a renderer DRAWS would hand back text the user never typed. The reviewer recommended
+/// stripping it anyway as a cheap one-line arm; that disagreement is recorded here rather than
+/// settled quietly. Pinned by test with the homoglyph limit, so it can only change deliberately.
 fn is_invisible_format(c: char) -> bool {
     matches!(
         c as u32,
@@ -1362,6 +1375,19 @@ mod tests {
     }
 
     #[test]
+    fn a_zwj_emoji_sequence_splits_and_that_cost_is_named_not_hidden() {
+        // The honest bound on the test above: "ordinary text is not damaged" was only ever proven
+        // for a SINGLE emoji, and the second review pass caught the gap between that and how it
+        // reads. U+200D is the joiner that welds a sequence together and it MUST be stripped — it
+        // is Cf, as invisible as ZWSP, and leaving it in reopens the hole. The cost is that a
+        // compound emoji comes back as its parts. Cosmetic, never a leak, and now pinned.
+        let sequence = "\u{1F3F3}\u{FE0F}\u{200D}\u{1F308} nice";
+        let out = redact_comment_with(sequence, &[]);
+        assert_eq!(out, "\u{1F3F3}\u{1F308} nice", "the ZWJ cost changed shape — re-check the doc");
+        assert!(!out.contains('\u{200D}'), "the joiner survived — the invisible strip regressed");
+    }
+
+    #[test]
     fn full_width_forms_can_no_longer_hide_an_identity_literal_or_an_address() {
         let hostile_user = "ｋｕｙａ crashed the game";
         let legacy = legacy_flatten(hostile_user);
@@ -1415,16 +1441,17 @@ mod tests {
 
     #[test]
     fn the_braille_blank_is_a_visible_gap_and_stays_documented_as_one() {
-        // Second honesty pin, from the same review. U+2800 BRAILLE PATTERN BLANK is the other
-        // famous "invisible" character, and this pass deliberately leaves it alone: it is category
-        // So, NOT Default_Ignorable, and it carries a real advance width, so a renderer draws a GAP
-        // where it sits. This pass exists to make a detector match what a reader SEES, and a reader
-        // sees `ku ya` — the same reason U+00A0 and the other Zs spaces are left alone. Stripping
-        // it would also corrupt legitimate braille, where a blank cell is a character with meaning.
+        // Second honesty pin. The second review pass showed the first version of this comment was
+        // reasoning from the wrong property: U+2800 is NOT `White_Space`, so `map_tokens` does not
+        // break a token on it and a fused value escapes by the same mechanism ZWSP used — it is not
+        // the Zs-space case at all. What still separates it from the stripped set is HOW it arrives:
+        // the format characters ride in on an ordinary copy-paste and fail the promise incidentally,
+        // while U+2800 inside a username or an address is deliberate self-obfuscation, and stripping
+        // a character a renderer DRAWS hands back text the user never typed.
         //
-        // The consequence is real and belongs in the open: a username split by one is NOT masked.
-        // If that trade is ever revisited, THIS test is what must be updated deliberately, together
-        // with §2A and the Stage 2 consent copy.
+        // The consequence is real and belongs in the open: a username split by one is NOT masked,
+        // and the reviewer would have stripped it. If that trade is revisited, THIS test is what
+        // must be updated deliberately, together with §2A and the Stage 2 consent copy.
         assert!(!is_invisible_format('\u{2800}'), "U+2800 is now stripped — update §2A and the consent copy");
         let out = redact_comment_with("ku\u{2800}ya was here", &user_literals());
         assert!(!out.contains(MASK_USER), "U+2800 is now folded — this pin must be updated deliberately");

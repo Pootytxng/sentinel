@@ -176,16 +176,31 @@ describe("case-evidence tier separation: Tier 3 shares nothing with the other tr
     // The reviewer's alternative (a #[serde(remote = "Self")] proxy) enforces it in the type
     // without duplicating the field list, and is the better fix WHEN a real send path exists. Until
     // then this is the cheaper half of the same promise: exactly two call sites, named here.
-    const production = stripRustComments(tier3).split(/#\[cfg\(test\)\]/)[0];
+    // Split on the `mod tests` declaration specifically, not on any `#[cfg(test)]`: a future
+    // scattered `#[cfg(test)] fn helper()` would otherwise silently narrow what is scanned.
+    const halves = stripRustComments(tier3).split(/#\[cfg\(test\)\]\s*mod\s+tests\b/);
+    expect(halves.length, "the `#[cfg(test)] mod tests` boundary moved — this guard scans the wrong half").toBe(2);
+    const production = halves[0];
     const ALLOWED = ["case_payload_json", "case_preview"];
     const stray: string[] = [];
-    const call = /serde_json::to_(?:string|string_pretty|vec|vec_pretty|writer)\b/g;
+    // The family, not a list of its members. The reviewer proved a member list is guessable-wrong:
+    // `to_writer_pretty` is a real serde_json entry point and was missing from the first version.
+    const call = /serde_json::to_[a-z_]+/g;
     for (let m = call.exec(production); m !== null; m = call.exec(production)) {
       const before = production.slice(0, m.index);
       const fn = [...before.matchAll(/\bfn\s+([A-Za-z0-9_]+)/g)].pop();
       stray.push(...(fn && ALLOWED.includes(fn[1]) ? [] : [`${m[0]} in fn ${fn ? fn[1] : "<none>"}`]));
     }
-    expect(stray, "a third path from CasePayload to bytes — it bypasses the shapeless refusal").toEqual([]);
+    // Two routes that serialize without ever writing `serde_json::to_`: importing the function by
+    // name (this file already does `use serde_json::Value`, so it is the file's own idiom), and
+    // driving a Serializer straight off the derived impl.
+    const byImport = production.match(/use\s+serde_json::(?:\{[^}]*\b)?to_[a-z_]+/);
+    const byWriter = production.match(/serde_json::Serializer\b/);
+    stray.push(...(byImport ? [`${byImport[0]} — imported by name, then callable bare`] : []));
+    stray.push(...(byWriter ? ["serde_json::Serializer — drives the derived impl directly"] : []));
+    // File-scoped, not type-scoped, on purpose: it fails closed. It cannot tell WHAT is being
+    // serialized, so the message says what it actually knows.
+    expect(stray, "an additional serde_json serialization route in this module's production half").toEqual([]);
     // Not vacuous: both allowed call sites must actually be there, or this guard is guarding air.
     expect(production).toMatch(/fn case_payload_json[\s\S]*?serde_json::to_string\b/);
     expect(production).toMatch(/fn case_preview[\s\S]*?serde_json::to_string_pretty\b/);
