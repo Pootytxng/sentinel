@@ -95,13 +95,13 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **25 worktrees besides `main`; EIGHT branches carry commits not on main — do NOT delete or
-  hard-reset those eight before checking them**: `feat/user-feedback-lab-recovery` ·
+- **25 worktrees besides `main`; SEVEN branches carry commits not on main — do NOT delete or
+  hard-reset those seven before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
-  `claude/css-margin-comments-240` · `claude/exciting-robinson-0ce4d5` (#266, whose checkout
-  `.claude/worktrees/exciting-robinson-0ce4d5` is named too — it detaches to push here). **No
-  depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
+  `claude/css-margin-comments-240` (#240/PR #268: gate PASS, new tests now route through the real
+  parser, not isolated helpers — Codex CLI still hits ITS OWN usage limit, never fabricate a pass).
+  **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
   bullet for naming a zero-carry branch — **a landed lane's name leaves it in the train that lands
   it** — and today every carrier has a branch, so nothing rides on rule C's path credit. Spent, at
   zero: `sentinel-recon-261`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`,

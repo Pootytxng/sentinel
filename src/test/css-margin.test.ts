@@ -105,3 +105,48 @@ describe("leftMarginIsAuto — what the guards actually ask", () => {
     expect(leftMarginIsAuto("margin: auto 0").source).toBeNull();
   });
 });
+
+// bug→guard — #240. `declarations()` split on `;` and found the property with `indexOf(":")`
+// without stripping comments first. A CSS comment fused against or straddling a declaration was
+// read as part of the property name (or split the block on a `;`/`:` that was only comment text),
+// so a genuine `margin-left: auto` push silently vanished. FALSE NEGATIVE — the dangerous direction
+// for a guard meant to catch a real layout push. `declarations()` is comment-safe on its own now,
+// independent of what a caller does first.
+describe("declarations() is comment-aware — #240", () => {
+  it("does not drop a push hidden behind a leading, fused block comment", () => {
+    expect(leftMarginIsAuto("/* push right */margin-left: auto").auto).toBe(true);
+  });
+
+  it("does not let a comment's own `:` or `;` corrupt the declarations around it", () => {
+    // the comment's internal colon must not become the property/value split
+    expect(leftMarginIsAuto("/* x:y;z */ margin-left: auto").auto).toBe(true);
+    // the comment's internal semicolon must not become a declaration boundary
+    expect(leftMarginIsAuto("margin-right: 0; /* x:y;z */ margin-left: auto").auto).toBe(true);
+  });
+
+  it("does not misread a comment sitting between the property and its colon", () => {
+    expect(leftMarginIsAuto("margin-left/* c */: auto").auto).toBe(true);
+  });
+
+  it("removes a comment inside a shorthand without shifting which token is the left component", () => {
+    // positive control: once the comments are gone, `auto` really is the 4th (left) token
+    expect(leftMarginIsAuto("margin: 0 /*c*/ 0 /*c*/ 0 /*c*/ auto").auto).toBe(true);
+    // negative control: `auto` is the 2nd (right) token — removing the comments must not push it left
+    expect(leftMarginIsAuto("margin: 0 /*c*/ auto /*c*/ 0 /*c*/ 0").auto).toBe(false);
+  });
+
+  it("treats a removed comment as token separation, not fusion, between adjacent tokens", () => {
+    // zero surrounding whitespace: "0" and "auto" must not collapse into one token "0auto"
+    expect(leftMarginIsAuto("margin:0/**/auto").auto).toBe(true);
+  });
+
+  it("a comment-lookalike inside a quoted string is not read as a real comment start — PR #268 review", () => {
+    // an unterminated "comment" (no real */ ever appears) must not consume the real declaration
+    // that follows it, nor everything up to some unrelated later */ elsewhere in the block
+    expect(leftMarginIsAuto('content: "/*"; margin-left: auto').auto).toBe(true);
+    // a quoted string that itself contains a literal */ must not falsely CLOSE a real comment early
+    expect(leftMarginIsAuto('content: "/*"; margin-left: auto; --end: "*/"').auto).toBe(true);
+    // a genuine comment alongside an unrelated quoted string is still stripped correctly
+    expect(leftMarginIsAuto('content: "x"; /* real comment */ margin-left: auto').auto).toBe(true);
+  });
+});

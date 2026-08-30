@@ -55,9 +55,46 @@ export function marginInlineStart(value: string): string | null {
 
 type Decl = { prop: string; value: string; important: boolean };
 
+/**
+ * Strip CSS block comments before any `;`/`:` splitting sees them — a `:` or `;` inside a comment
+ * must never split or rename a declaration, and a comment fused directly against a token must not
+ * fuse that token with its neighbor once removed. Replacing with a single space (not "") satisfies
+ * both: it destroys the comment's own punctuation while still separating what it stood between.
+ *
+ * Quoted strings (`"..."` / `'...'`, `\"`/`\'` escapes respected) are skipped as ATOMIC spans
+ * first: a `content: "/*"` value sits next to real declarations in this codebase's own CSS
+ * (`dock.css`'s `content: "·"; margin-right: 8px;`), so a `/*`-lookalike inside a quoted string is
+ * one edit away from being read as a real comment start and swallowing everything after it —
+ * independent review, PR #268. `url(...)` stays out of scope: margin declarations never carry a
+ * `url()` value, and this codebase's own `url()` calls are quoted where they'd need to be.
+ */
+function stripComments(body: string): string {
+  let out = "";
+  let i = 0;
+  while (i < body.length) {
+    const ch = body[i];
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < body.length && body[j] !== ch) j += body[j] === "\\" ? 2 : 1;
+      out += body.slice(i, Math.min(j + 1, body.length));
+      i = j + 1;
+      continue;
+    }
+    if (ch === "/" && body[i + 1] === "*") {
+      const end = body.indexOf("*/", i + 2);
+      i = end === -1 ? body.length : end + 2;
+      out += " ";
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
 /** `a: 1; b: 2 !important` -> declarations, in source order, `!important` split off. */
 export function declarations(body: string): Decl[] {
-  return body
+  return stripComments(body)
     .split(";")
     .map((d) => d.trim())
     .filter(Boolean)
