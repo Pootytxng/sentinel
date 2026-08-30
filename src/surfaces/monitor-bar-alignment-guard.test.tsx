@@ -133,9 +133,34 @@ function mount(over: Record<string, unknown> = {}) {
  *  `matches()` (see `allRules()`); no string substitution is CSS-safe for a selector, because a
  *  comment can either fuse two tokens into a compound selector (`.a/**\/.b`) or sit strictly
  *  inside one identifier and split it (`di/**\/v` is NOT `div`) — jsdom's real `matches()` already
- *  parses both cases correctly, so the guard stops trying to re-implement CSS tokenization. */
+ *  parses both cases correctly, so the guard stops trying to re-implement CSS tokenization.
+ *
+ *  Quoted strings are skipped as ATOMIC spans first — same reasoning as `declarations()`'s own
+ *  `stripComments()` in `src/test/css-margin.ts`: this codebase ships `content: "…"` beside real
+ *  margin declarations (`dock.css`), so a `/*`-lookalike inside a quoted value must not be read as
+ *  a real comment start (independent review, PR #268). */
 function stripBlockComments(css: string): string {
-  return css.replace(/\/\*[\s\S]*?\*\//g, " ");
+  let out = "";
+  let i = 0;
+  while (i < css.length) {
+    const ch = css[i];
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < css.length && css[j] !== ch) j += css[j] === "\\" ? 2 : 1;
+      out += css.slice(i, Math.min(j + 1, css.length));
+      i = j + 1;
+      continue;
+    }
+    if (ch === "/" && css[i + 1] === "*") {
+      const end = css.indexOf("*/", i + 2);
+      i = end === -1 ? css.length : end + 2;
+      out += " ";
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
 }
 
 /** Every `selector { declarations }` rule in EVERY sheet the app ships.
@@ -146,11 +171,14 @@ function stripBlockComments(css: string): string {
  *  the route" blind spot this suite exists to close. Reachability is decided by `matches()` below,
  *  so a wide read costs nothing: a rule only fails if it actually lands on the face switch.
  *
- *  Walked char-by-char with block comments skipped as ATOMIC spans, never split on a brace inside
- *  one — a prose comment in App.css embeds a literal `{ "settled": false }`, and splitting on a
- *  comment-stripped whole-file string (the pre-review shape of this function) would corrupt every
- *  rule around it. Selector and body text keep their original comments until each is stripped
- *  with the substitution that side actually needs. */
+ *  Walked char-by-char with block comments AND quoted strings skipped as ATOMIC spans, never split
+ *  on a brace inside either — a prose comment in App.css embeds a literal `{ "settled": false }`
+ *  (a comment-stripped whole-file string, the pre-review shape of this function, corrupted every
+ *  rule around it), and this codebase ships real `content: "…"` values beside real declarations
+ *  (`dock.css`), so an unterminated `/*`-lookalike inside a quoted string must not be read as a
+ *  real comment start and consume the rest of the file (independent review, PR #268). Selector and
+ *  body text keep their original comments until each is stripped with the substitution that side
+ *  actually needs. */
 function allRules(): { file: string; selector: string; body: string }[] {
   const out: { file: string; selector: string; body: string }[] = [];
   for (const file of sheets()) {
@@ -159,6 +187,15 @@ function allRules(): { file: string; selector: string; body: string }[] {
     let buf = "";
     let selector: string | null = null;
     while (i < raw.length) {
+      if (raw[i] === '"' || raw[i] === "'") {
+        const quote = raw[i];
+        let j = i + 1;
+        while (j < raw.length && raw[j] !== quote) j += raw[j] === "\\" ? 2 : 1;
+        const str = raw.slice(i, Math.min(j + 1, raw.length));
+        buf += str;
+        i += str.length;
+        continue;
+      }
       if (raw[i] === "/" && raw[i + 1] === "*") {
         const end = raw.indexOf("*/", i + 2);
         const comment = end === -1 ? raw.slice(i) : raw.slice(i, end + 2);
@@ -248,6 +285,13 @@ function pushingRules() {
 describe("Live room — the face switch sits on the content grid (issue #236)", () => {
   it("a comment-fused margin push survives this guard's own comment stripping — #240", () => {
     const body = stripBlockComments("margin:0/**/auto");
+    expect(leftMarginIsAuto(body).auto).toBe(true);
+  });
+
+  it("a comment-lookalike inside a quoted string is not read as a real comment start — PR #268 review", () => {
+    // an unrelated */ inside a LATER quoted string must not falsely close a fake comment that
+    // started inside an earlier one, swallowing the real push declared between them
+    const body = stripBlockComments('content: "/*"; margin-left: auto; --end: "*/"');
     expect(leftMarginIsAuto(body).auto).toBe(true);
   });
 

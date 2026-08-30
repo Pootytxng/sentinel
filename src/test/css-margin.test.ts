@@ -110,9 +110,8 @@ describe("leftMarginIsAuto — what the guards actually ask", () => {
 // without stripping comments first. A CSS comment fused against or straddling a declaration was
 // read as part of the property name (or split the block on a `;`/`:` that was only comment text),
 // so a genuine `margin-left: auto` push silently vanished. FALSE NEGATIVE — the dangerous direction
-// for a guard meant to catch a real layout push. Both current callers strip comments before calling
-// in, so this was unreachable in production; the next caller to reuse this shared helper would not
-// have that protection unless `declarations()` is comment-safe on its own.
+// for a guard meant to catch a real layout push. `declarations()` is comment-safe on its own now,
+// independent of what a caller does first.
 describe("declarations() is comment-aware — #240", () => {
   it("does not drop a push hidden behind a leading, fused block comment", () => {
     expect(leftMarginIsAuto("/* push right */margin-left: auto").auto).toBe(true);
@@ -139,5 +138,15 @@ describe("declarations() is comment-aware — #240", () => {
   it("treats a removed comment as token separation, not fusion, between adjacent tokens", () => {
     // zero surrounding whitespace: "0" and "auto" must not collapse into one token "0auto"
     expect(leftMarginIsAuto("margin:0/**/auto").auto).toBe(true);
+  });
+
+  it("a comment-lookalike inside a quoted string is not read as a real comment start — PR #268 review", () => {
+    // an unterminated "comment" (no real */ ever appears) must not consume the real declaration
+    // that follows it, nor everything up to some unrelated later */ elsewhere in the block
+    expect(leftMarginIsAuto('content: "/*"; margin-left: auto').auto).toBe(true);
+    // a quoted string that itself contains a literal */ must not falsely CLOSE a real comment early
+    expect(leftMarginIsAuto('content: "/*"; margin-left: auto; --end: "*/"').auto).toBe(true);
+    // a genuine comment alongside an unrelated quoted string is still stripped correctly
+    expect(leftMarginIsAuto('content: "x"; /* real comment */ margin-left: auto').auto).toBe(true);
   });
 });
