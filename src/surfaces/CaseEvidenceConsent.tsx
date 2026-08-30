@@ -188,8 +188,8 @@ export function CaseEvidenceConsent({
       <section className="cec" data-testid="case-consent">
         <h2 className="cec-title">Send this case to Compy support</h2>
         <p className="cec-error" role="alert" data-testid="case-consent-unreadable">
-          Compy could not read the text it was about to send, so it will not send it. Nothing has
-          left this PC.
+          Compy could not read the text it was about to send, so it stopped before the send step
+          and there is nothing here for you to approve.
         </p>
       </section>
     );
@@ -311,12 +311,18 @@ export function CaseEvidenceConsent({
           type="button"
           className="cec-send"
           disabled={status === "working"}
+          aria-busy={status === "working"}
           onClick={() => onSend?.(removed)}
         >
           {status === "working" ? "Sending…" : "Send this one case"}
         </button>
-        <p className="cec-hint cec-consent-note">
-          Nothing has been sent yet. This is the last step, and it is yours.
+        {/* role="status" so the swap is announced without stealing focus. The idle sentence is
+            DIR-1 (c) — the user must be able to see that nothing has gone anywhere yet — and it
+            stops being true the moment a send starts, so it changes rather than sitting stale. */}
+        <p className="cec-hint cec-consent-note" role="status" data-testid="case-consent-note">
+          {status === "working"
+            ? "Sending this one case now."
+            : "Nothing has been sent yet. This is the last step, and it is yours."}
         </p>
       </div>
     </section>

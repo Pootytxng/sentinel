@@ -52,13 +52,21 @@ const flat = (source: string) => stripComments(source).replace(/\s+/g, " ");
 // Vocabulary deliberately wider than what Stage 2 would plausibly add: the failure being guarded
 // is not "someone writes fetch() in a consent screen", it is Stage 4 work landing here piecemeal
 // because this file was the convenient place to put it.
+// Three of these were widened 2026-08-30 after an independent review probed them for evasion
+// rather than for the shapes Stage 2 actually contains. Each was literal-substring-only, and the
+// evasions it named are the ones a piecemeal Stage 4 would arrive as, not exotic obfuscation:
+// `invoke` reached through a renamed destructure, a URL assembled from fragments, and
+// `JSON["stringify"]`. None was present in the file; a detector that CANNOT fail is still a hole,
+// because its silence is what the rest of this suite treats as evidence.
 const BANNED = [
-  { id: "Tauri IPC", re: /\binvoke\s*\(|@tauri-apps/ },
-  { id: "network call", re: /\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|navigator\s*\./ },
+  { id: "Tauri IPC", re: /\binvoke\b|@tauri-apps|__TAURI/ },
+  { id: "network call", re: /\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|navigator\s*\.|\bimport\s*\(/ },
   { id: "persistence", re: /localStorage|sessionStorage|indexedDB|document\s*\.\s*cookie/ },
   { id: "background work", re: /setTimeout|setInterval|requestIdleCallback|queueMicrotask|requestAnimationFrame/ },
-  { id: "endpoint literal", re: /https?:\/\// },
-  { id: "a serializer", re: /JSON\s*\.\s*stringify/ },
+  // `://` catches a scheme however it is assembled; the host arm is scoped to a QUOTED span so the
+  // consent copy naming compy.gg in prose (a §3 requirement) is not read as an endpoint constant.
+  { id: "endpoint literal", re: /:\/\/|["'`][^"'`\n]*\bcompy\.gg|\.workers\.dev\b|["'`]https?["'`]/ },
+  { id: "a serializer", re: /JSON\s*\.\s*stringify|JSON\s*\[\s*["'`]stringify|\bstringify\s*\(/ },
 ];
 
 function detect(source: string): string[] {
@@ -75,6 +83,14 @@ const OVERCLAIM = [
   { id: "'guaranteed'", re: /\bguaranteed\b/i },
   { id: "'completely removed'", re: /\bcompletely removed\b/i },
   { id: "'cannot be traced'", re: /\bcannot be traced\b/i },
+  // Added 2026-08-30 from an independent review. The unreadable state used to end "Nothing has
+  // left this PC." It was TRUE in that branch — the payload was never built, so nothing was
+  // attempted — and it is exactly the reassurance Stage 4 would carry onto a send that failed
+  // mid-flight, where it is not true and nobody would notice the difference. `outbound-claim-
+  // guard.test.ts` bans one tense and pronoun of this claim across the repo; here the claim is
+  // banned in any of them, because on THIS screen it is comfort rather than a description.
+  { id: "an absolute about what left the PC", re: /\bnothing\s+(?:has\s+|ever\s+)?(?:left|leaves)\s+(?:this|your|the)\s+(?:pc|machine|computer)\b/i },
+  { id: "'never leaves this PC'", re: /\bnever\s+(?:leaves?|left)\s+(?:this|your|the)\s+(?:pc|machine|computer)\b/i },
 ];
 
 function overclaims(source: string): string[] {
@@ -192,6 +208,17 @@ describe("Tier 3 consent screen: Stage 2 is a screen, and only a screen", () => 
     expect(body, "the user is told, before the button, that nothing has gone yet").toMatch(
       /Nothing has been sent yet/,
     );
+    // ...and that sentence is retracted the moment it stops being true. A reassurance that sits
+    // stale through a send is worse than none: it is the screen telling the user the opposite of
+    // what is happening. `role="status"` is what makes the swap reach a screen reader without
+    // yanking focus off the button the user just pressed.
+    expect(body, "the consent note must be a live region, or the swap is silent").toMatch(
+      /role="status"[\s\S]{0,120}data-testid="case-consent-note"/,
+    );
+    expect(body, "and it must actually change while a send is in flight").toMatch(
+      /status === "working"\s*\?\s*"Sending this one case now\."/,
+    );
+    expect(body, "the send control reports its own busy state").toMatch(/aria-busy=\{status === "working"\}/);
   });
 
   it("is unreachable from the shipped app — no src/ module imports it for value", () => {
@@ -336,6 +363,30 @@ describe("Tier 3 consent guard: the detectors fire", () => {
     expect(detect("// this screen must never call fetch() or invoke()")).toEqual([]);
   });
 
+  it("catches the evasions, not just the obvious spellings", () => {
+    // The shapes a review named as slipping past the literal-substring versions of these three
+    // detectors. Each is how the capability would plausibly ARRIVE here — renamed, split or
+    // computed — rather than written out the way the seeds above write it.
+    const evasions: Record<string, string[]> = {
+      "Tauri IPC": [
+        "const { invoke: ship } = window.__TAURI__; ship('send_case');",
+        "const ipc = w.__TAURI_INTERNALS__;",
+      ],
+      "network call": ["const net = await import('./sender');"],
+      "endpoint literal": [
+        'const base = "http" + "s://compy.gg";',
+        'const host = "compy.gg";',
+        'const scheme = "https";',
+      ],
+      "a serializer": ['const body = JSON["stringify"](payload);', "const body = stringify(payload);"],
+    };
+    for (const [id, seeds] of Object.entries(evasions)) {
+      for (const seed of seeds) {
+        expect(detect(seed), `the "${id}" detector did not fire on ${seed}`).toContain(id);
+      }
+    }
+  });
+
   it("catches each overclaim, and allows the honest form", () => {
     const seeds = [
       "Your comment has been redacted.",
@@ -345,6 +396,9 @@ describe("Tier 3 consent guard: the detectors fire", () => {
       "Removal of personal data is guaranteed.",
       "Usernames are completely removed.",
       "The report cannot be traced back to you.",
+      "Nothing has left this PC.",
+      "Nothing leaves your machine.",
+      "Your case never leaves this computer.",
     ];
     for (const seed of seeds) expect(overclaims(seed), `no detector fired on: ${seed}`).not.toEqual([]);
     expect(

@@ -183,7 +183,7 @@ describe("Tier 3 consent screen: the states a user can land in", () => {
     );
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("could not read");
-    expect(alert.textContent).toContain("Nothing has left this PC");
+    expect(alert.textContent).toContain("stopped before the send step");
     expect(screen.queryByRole("button", { name: /Send/ })).toBeNull();
   });
 
@@ -244,6 +244,25 @@ describe("Tier 3 consent screen: reachable by keyboard, named for a screen reade
       <CaseEvidenceConsent removable={BOTH} preview={() => ({ shape: "comment only", payload_json: "nope" })} />,
     );
     await expectNoAxeViolations(broken.container);
+  });
+
+  it("has no violations in the two states a real send passes through", async () => {
+    // Added 2026-08-30: the error and working states were behaviour-tested but never checked
+    // structurally, and both introduce live regions — the one place a screen is most likely to
+    // announce nothing at all, or announce it by stealing focus.
+    const failed = render(
+      <CaseEvidenceConsent
+        removable={BOTH}
+        preview={(removed) => corpusPreview("both", removed)}
+        errorText="Compy could not reach the support store. Nothing was sent."
+      />,
+    );
+    await expectNoAxeViolations(failed.container);
+    cleanup();
+    const working = render(
+      <CaseEvidenceConsent removable={BOTH} preview={(removed) => corpusPreview("both", removed)} status="working" />,
+    );
+    await expectNoAxeViolations(working.container);
   });
 
   it("uses real buttons, so Tab and Enter work without a keyboard handler of its own", () => {
