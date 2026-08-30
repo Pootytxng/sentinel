@@ -55,9 +55,19 @@ export function marginInlineStart(value: string): string | null {
 
 type Decl = { prop: string; value: string; important: boolean };
 
+/**
+ * Strip CSS block comments before any `;`/`:` splitting sees them — a `:` or `;` inside a comment
+ * must never split or rename a declaration, and a comment fused directly against a token must not
+ * fuse that token with its neighbor once removed. Replacing with a single space (not "") satisfies
+ * both: it destroys the comment's own punctuation while still separating what it stood between.
+ */
+function stripComments(body: string): string {
+  return body.replace(/\/\*[\s\S]*?\*\//g, " ");
+}
+
 /** `a: 1; b: 2 !important` -> declarations, in source order, `!important` split off. */
 export function declarations(body: string): Decl[] {
-  return body
+  return stripComments(body)
     .split(";")
     .map((d) => d.trim())
     .filter(Boolean)
