@@ -163,13 +163,11 @@ function stripBlockComments(css: string): string {
   return out;
 }
 
-/** Every `selector { declarations }` rule in EVERY sheet the app ships.
- *
- *  Not just the room's own sheet. The bar is a plain element in a cascade fed by `shell-v2.css`,
- *  `monitor-console.css` and every other sheet loaded beside them — a push can arrive from any of
- *  them, and a guard that only read `monitor-v2.css` would be the same "checked the nesting, not
- *  the route" blind spot this suite exists to close. Reachability is decided by `matches()` below,
- *  so a wide read costs nothing: a rule only fails if it actually lands on the face switch.
+/** Parse ONE stylesheet's raw text into its rules. Factored out of `allRules()` so a regression
+ *  test can feed synthetic CSS through the EXACT walker the guard runs on real sheets, not a copy
+ *  of it — a test that only calls `stripBlockComments()`, `split()` or `matches()` on a literal
+ *  stays green if this walker itself regresses (selector-stripping reintroduced, or the quoted-span
+ *  skip removed), because none of those callers touch the walker at all (Codex review, PR #268).
  *
  *  Walked char-by-char with block comments AND quoted strings skipped as ATOMIC spans, never split
  *  on a brace inside either — a prose comment in App.css embeds a literal `{ "settled": false }`
@@ -179,52 +177,60 @@ function stripBlockComments(css: string): string {
  *  real comment start and consume the rest of the file (independent review, PR #268). Selector and
  *  body text keep their original comments until each is stripped with the substitution that side
  *  actually needs. */
-function allRules(): { file: string; selector: string; body: string }[] {
+function rulesFromCss(raw: string, file: string): { file: string; selector: string; body: string }[] {
   const out: { file: string; selector: string; body: string }[] = [];
-  for (const file of sheets()) {
-    const raw = readFileSync(file, "utf8");
-    let i = 0;
-    let buf = "";
-    let selector: string | null = null;
-    while (i < raw.length) {
-      if (raw[i] === '"' || raw[i] === "'") {
-        const quote = raw[i];
-        let j = i + 1;
-        while (j < raw.length && raw[j] !== quote) j += raw[j] === "\\" ? 2 : 1;
-        const str = raw.slice(i, Math.min(j + 1, raw.length));
-        buf += str;
-        i += str.length;
-        continue;
-      }
-      if (raw[i] === "/" && raw[i + 1] === "*") {
-        const end = raw.indexOf("*/", i + 2);
-        const comment = end === -1 ? raw.slice(i) : raw.slice(i, end + 2);
-        buf += comment;
-        i += comment.length;
-        continue;
-      }
-      const ch = raw[i];
-      if (ch === "{") {
-        selector = buf;
-        buf = "";
-      } else if (ch === "}") {
-        if (selector !== null) {
-          // The selector KEEPS its original comments — see `stripBlockComments`'s doc for why no
-          // substitution is safe here. `stripBlockComments(sel)` below classifies the at-rule
-          // prelude only; it is never what gets pushed or matched.
-          const sel = selector.trim();
-          if (sel && !stripBlockComments(sel).trim().startsWith("@"))
-            out.push({ file, selector: sel, body: stripBlockComments(buf) });
-        }
-        selector = null;
-        buf = "";
-      } else {
-        buf += ch;
-      }
-      i++;
+  let i = 0;
+  let buf = "";
+  let selector: string | null = null;
+  while (i < raw.length) {
+    if (raw[i] === '"' || raw[i] === "'") {
+      const quote = raw[i];
+      let j = i + 1;
+      while (j < raw.length && raw[j] !== quote) j += raw[j] === "\\" ? 2 : 1;
+      const str = raw.slice(i, Math.min(j + 1, raw.length));
+      buf += str;
+      i += str.length;
+      continue;
     }
+    if (raw[i] === "/" && raw[i + 1] === "*") {
+      const end = raw.indexOf("*/", i + 2);
+      const comment = end === -1 ? raw.slice(i) : raw.slice(i, end + 2);
+      buf += comment;
+      i += comment.length;
+      continue;
+    }
+    const ch = raw[i];
+    if (ch === "{") {
+      selector = buf;
+      buf = "";
+    } else if (ch === "}") {
+      if (selector !== null) {
+        // The selector KEEPS its original comments — see `stripBlockComments`'s doc for why no
+        // substitution is safe here. `stripBlockComments(sel)` below classifies the at-rule
+        // prelude only; it is never what gets pushed or matched.
+        const sel = selector.trim();
+        if (sel && !stripBlockComments(sel).trim().startsWith("@"))
+          out.push({ file, selector: sel, body: stripBlockComments(buf) });
+      }
+      selector = null;
+      buf = "";
+    } else {
+      buf += ch;
+    }
+    i++;
   }
   return out;
+}
+
+/** Every `selector { declarations }` rule in EVERY sheet the app ships.
+ *
+ *  Not just the room's own sheet. The bar is a plain element in a cascade fed by `shell-v2.css`,
+ *  `monitor-console.css` and every other sheet loaded beside them — a push can arrive from any of
+ *  them, and a guard that only read `monitor-v2.css` would be the same "checked the nesting, not
+ *  the route" blind spot this suite exists to close. Reachability is decided by `matches()` below,
+ *  so a wide read costs nothing: a rule only fails if it actually lands on the face switch. */
+function allRules(): { file: string; selector: string; body: string }[] {
+  return sheets().flatMap((file) => rulesFromCss(readFileSync(file, "utf8"), file));
 }
 
 /** Every stylesheet under src/, recursively. */
@@ -323,6 +329,64 @@ describe("Live room — the face switch sits on the content grid (issue #236)", 
 
   it("a comma inside a selector comment does not split the selector list — Codex review, PR #268", () => {
     expect(split(".a/* one, two */.b, .c")).toEqual([".a/* one, two */.b", ".c"]);
+  });
+
+  // The six tests above prove `stripBlockComments()`, `split()` and native `matches()` each behave
+  // correctly IN ISOLATION. None of them calls the walker (`rulesFromCss`/`allRules()`) that a real
+  // guard run actually uses — reintroduce selector-stripping there, or drop its quoted-span skip,
+  // and every test above stays green while the guard itself goes blind again. These route synthetic
+  // CSS through `rulesFromCss`, the exact function the guard calls (Codex review, PR #268).
+  describe("the same defects, routed through the real parser (rulesFromCss), not re-implemented", () => {
+    it("a comment-fused compound selector survives the walker intact and still matches both classes", () => {
+      const [rule] = rulesFromCss(".a/**/.b { margin-left: auto }", "fixture.css");
+      expect(rule.selector).toBe(".a/**/.b");
+      const el = document.createElement("div");
+      el.className = "a b";
+      expect(el.matches(rule.selector)).toBe(true);
+    });
+
+    it("a comment splitting an identifier is not healed by the walker into a shorter tag", () => {
+      const [rule] = rulesFromCss("di/**/v { margin-left: auto }", "fixture.css");
+      expect(rule.selector).toBe("di/**/v");
+      expect(document.createElement("div").matches(rule.selector)).toBe(false);
+    });
+
+    it("real whitespace after a comment survives the walker as a genuine descendant combinator", () => {
+      const [rule] = rulesFromCss(".a/**/ .b { margin-left: auto }", "fixture.css");
+      expect(rule.selector).toBe(".a/**/ .b");
+      const parent = document.createElement("div");
+      parent.className = "a";
+      const child = document.createElement("span");
+      child.className = "b";
+      parent.appendChild(child);
+      expect(child.matches(rule.selector)).toBe(true);
+      expect(document.createElement("span").matches(rule.selector)).toBe(false);
+    });
+
+    it("a comma inside a selector comment does not split the rule the walker produces", () => {
+      const [rule] = rulesFromCss(".a/* one, two */.b, .c { margin-left: auto }", "fixture.css");
+      expect(split(rule.selector)).toEqual([".a/* one, two */.b", ".c"]);
+    });
+
+    it("a quoted comment-lookalike does not swallow the rule that follows it, or the one after that", () => {
+      const css = [
+        '.before { content: "/*"; }',
+        ".target { margin-left: auto; }",
+        '.decoy { --end: "*/"; }',
+        ".after { color: red; }",
+      ].join("\n");
+      const rules = rulesFromCss(css, "fixture.css");
+      expect(rules.map((r) => r.selector)).toEqual([".before", ".target", ".decoy", ".after"]);
+      const target = rules.find((r) => r.selector === ".target")!;
+      expect(leftMarginIsAuto(target.body).auto).toBe(true);
+    });
+
+    it("a literal brace inside a stylesheet comment does not corrupt rule splitting", () => {
+      const css = '.a { margin-left: auto; /* a stray { "settled": false } in prose */ }\n.b { color: red }';
+      const rules = rulesFromCss(css, "fixture.css");
+      expect(rules.map((r) => r.selector)).toEqual([".a", ".b"]);
+      expect(leftMarginIsAuto(rules[0].body).auto).toBe(true);
+    });
   });
 
   it("a literal brace inside a stylesheet comment does not corrupt rule splitting (App.css:2159)", () => {
