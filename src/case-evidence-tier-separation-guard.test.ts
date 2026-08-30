@@ -176,6 +176,13 @@ describe("case-evidence tier separation: Tier 3 shares nothing with the other tr
     // The reviewer's alternative (a #[serde(remote = "Self")] proxy) enforces it in the type
     // without duplicating the field list, and is the better fix WHEN a real send path exists. Until
     // then this is the cheaper half of the same promise: exactly two call sites, named here.
+    //
+    // What it is NOT, stated so nobody has to rediscover it: a proof. Three review passes each
+    // found another spelling that reached serde_json without matching the previous pattern
+    // (`to_writer_pretty`, `use serde_json as sj`, `use serde_json::{self as sj}`), and CasePayload
+    // also derives Debug, which stringifies the whole thing by a route no pattern here looks at.
+    // This guard is a tripwire against a CARELESS edit; the type-level fix is what stops a
+    // determined one, and it lands with the send path in Stage 4.
     // Split on the `mod tests` declaration specifically, not on any `#[cfg(test)]`: a future
     // scattered `#[cfg(test)] fn helper()` would otherwise silently narrow what is scanned.
     const halves = stripRustComments(tier3).split(/#\[cfg\(test\)\]\s*mod\s+tests\b/);
@@ -197,8 +204,11 @@ describe("case-evidence tier separation: Tier 3 shares nothing with the other tr
     const byImport = production.match(/use\s+serde_json::(?:\{[^}]*\b)?to_[a-z_]+/);
     const byWriter = production.match(/serde_json::Serializer\b/);
     // Third route, found by the third review pass injecting it: alias the crate at import and the
-    // literal `serde_json::` never appears again, so all of the above go quiet at once.
-    const byAlias = production.match(/use\s+serde_json\s+as\s+[A-Za-z0-9_]+/);
+    // literal `serde_json::` never appears again, so all of the above go quiet at once. The fourth
+    // pass then walked through the first version of THIS line with `use serde_json::{self as sj}`,
+    // which is the same rename in Rust's grouped-import spelling — so match the shape (a `use` that
+    // mentions the crate and renames something) rather than one spelling of it.
+    const byAlias = production.match(/use\s+serde_json\b[^;]*\bas\s+[A-Za-z0-9_]+/);
     stray.push(...(byImport ? [`${byImport[0]} — imported by name, then callable bare`] : []));
     stray.push(...(byWriter ? ["serde_json::Serializer — drives the derived impl directly"] : []));
     stray.push(...(byAlias ? [`${byAlias[0]} — the crate under another name hides every check above`] : []));
