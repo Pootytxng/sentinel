@@ -55,7 +55,7 @@ export type CaseEvidenceConsentProps = {
   removable: CaseRemovableUnit[];
   /**
    * The ONE authority on bytes. Returns null when the remaining case has no shape at all —
-   * `case_payload_json` refuses that payload too, so the screen must refuse to show one.
+   * the Rust payload builder refuses that payload too, so the screen must refuse to show one.
    */
   preview: (removed: CaseRemovableUnit[]) => CasePreviewText | null;
   /** Presentational only. There is no send state machine here, and no stage that allows one yet. */
@@ -133,9 +133,10 @@ function rowsFrom(payloadJson: string): Row[] | null {
   const rows: Row[] = [];
   let hardwareDone = false;
   for (const [key, raw] of Object.entries(parsed as Record<string, unknown>)) {
-    // `String`, never `JSON.stringify`: this file must hold no route that can turn a value back
-    // into JSON. Every §2 field is a string or a number, so a scalar cast is the whole job, and a
-    // guard can then pin the absence of a serializer here structurally.
+    // `String`, and no serializer of any kind: this file must hold no route that can turn a value
+    // back into JSON. Every §2 field is a string or a number, so a scalar cast is the whole job,
+    // and the guard can then pin the absence structurally — it reads this comment too, which is
+    // why the banned call is not spelled out here.
     const value = String(raw);
     if (HARDWARE_KEYS.includes(key)) {
       if (hardwareDone) continue;

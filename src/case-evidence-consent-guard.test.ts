@@ -38,56 +38,21 @@ const LOADER = join("src", "case-preview-corpus.ts");
 const CORPUS = join("src", "case-preview-corpus.json");
 const RUST = join("src-tauri", "src", "case_evidence_upload.rs");
 
-/** Comments out, newlines kept. A promise in a comment is documentation; only rendered copy counts.
+/** JSX wraps a sentence across lines; the reader sees one line, so phrase pins must too.
  *
- *  Two reviews have now broken this helper, both the same way: it had no model of "am I inside a
- *  string", so text that merely LOOKED like a comment blanked real code. First a `const shim =
- *  "//";` earlier on a line, then a line inside a multi-line template literal beginning `//`,
- *  whose `${...}` is executable. Both returned zero detections on a real `invoke()`.
+ *  NOTHING IS STRIPPED. Three independent reviews broke the comment-stripper that used to sit
+ *  here, each time the same way: it had to decide "is this a comment or is it inside a string",
+ *  it got that wrong, and real `invoke()` calls vanished from the detectors. A regex could not
+ *  answer it, and neither could a hand-written scanner — the third review defeated that one with
+ *  an escaped backtick and with a backtick used as ordinary punctuation in a comment.
  *
- *  So it is a scanner now, not two regexes. A comment is recognized only where it OWNS its line
- *  (optionally inside a JSX `{ }`) AND only outside a template literal. Everything else is corpus.
- *  Both directions of the remaining imprecision are fail-SAFE: an unbalanced backtick inside a
- *  trailing comment or a string leaves the scanner "inside a template" and simply stops stripping,
- *  which can only ever produce a loud false positive. A silent miss needs the opposite mistake,
- *  and there is no longer a path to it — the cases both reviews found are seeded controls below.
+ *  So the question is no longer asked. The detectors read every byte of the scanned files,
+ *  comments included, and a comment that names a banned capability is a FAILURE like any other —
+ *  the fix is to describe the thing without spelling it. That costs one comment in
+ *  CaseEvidenceConsent.tsx and buys the property that matters: there is no longer any input that
+ *  can hide code from this guard, because there is no longer anything that removes text.
  */
-function stripComments(source: string): string {
-  let out = "";
-  let i = 0;
-  let atLineStart = true; // nothing but whitespace, or a single JSX `{`, seen on this line yet
-  let inTemplate = false;
-  while (i < source.length) {
-    const c = source[i];
-    const two = source.slice(i, i + 2);
-    if (!inTemplate && atLineStart && two === "//") {
-      while (i < source.length && source[i] !== "\n") i += 1;
-      out += " ";
-      continue;
-    }
-    if (!inTemplate && atLineStart && two === "/*") {
-      const end = source.indexOf("*/", i + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      out += source.slice(i, stop).replace(/[^\n]/g, " ");
-      i = stop;
-      if (source[i] === "}") {
-        out += " ";
-        i += 1;
-      }
-      atLineStart = false;
-      continue;
-    }
-    if (c === "`") inTemplate = !inTemplate;
-    if (c === "\n") atLineStart = true;
-    else if (c !== " " && c !== "\t" && c !== "{") atLineStart = false;
-    out += c;
-    i += 1;
-  }
-  return out;
-}
-
-/** JSX wraps a sentence across lines; the reader sees one line, so phrase pins must too. */
-const flat = (source: string) => stripComments(source).replace(/\s+/g, " ");
+const flat = (source: string) => source.replace(/\s+/g, " ");
 
 // ── Detectors ──────────────────────────────────────────────────────────────────────────────────
 // Vocabulary deliberately wider than what Stage 2 would plausibly add: the failure being guarded
@@ -111,7 +76,7 @@ const BANNED = [
 ];
 
 function detect(source: string): string[] {
-  const body = stripComments(source);
+  const body = source;
   return BANNED.filter((d) => d.re.test(body)).map((d) => d.id);
 }
 
@@ -189,7 +154,7 @@ describe("Tier 3 consent screen: Stage 2 is a screen, and only a screen", () => 
     // reachable and ship the fixture with it).
     // Side-effect imports (`import "./x.css";`) have no `from` and are exactly the shape a
     // capability could arrive in unnoticed — the pattern reads both forms.
-    const specs = [...stripComments(tsx).matchAll(/\bimport\s+(?:[^;"]*?\bfrom\s+)?"([^"]+)"/g)]
+    const specs = [...tsx.matchAll(/\bimport\s+(?:[^;"]*?\bfrom\s+)?"([^"]+)"/g)]
       .map((m) => m[1])
       .sort();
     expect(specs).toEqual(["./CaseEvidenceConsent.css", "react"]);
@@ -268,7 +233,7 @@ describe("Tier 3 consent screen: Stage 2 is a screen, and only a screen", () => 
     const offenders: string[] = [];
     for (const file of walkSrc()) {
       if (file === TSX) continue;
-      const body = stripComments(readFileSync(file, "utf8"));
+      const body = readFileSync(file, "utf8");
       for (const stmt of body.match(/\bimport\b[^;]*?\bfrom\s+"[^"]+"/g) ?? []) {
         const spec = (stmt.match(/\bfrom\s+"([^"]+)"$/) ?? ["", ""])[1];
         // The corpus JSON is data the loader owns; the screen is the thing that must not ship.
@@ -292,7 +257,7 @@ describe("Tier 3 consent screen: Stage 2 is a screen, and only a screen", () => 
 describe("Tier 3 consent screen: Rust, corpus and screen agree on the contract", () => {
   // Comments out before parsing: the doc comments here legitimately QUOTE contract strings, and a
   // parser that reads them would grade the documentation instead of the code.
-  const tsx = stripComments(readFileSync(TSX, "utf8"));
+  const tsx = readFileSync(TSX, "utf8");
   const rust = readFileSync(RUST, "utf8");
   const corpus = JSON.parse(readFileSync(CORPUS, "utf8"));
 
@@ -388,6 +353,26 @@ describe("Tier 3 consent screen: Rust, corpus and screen agree on the contract",
 // shown to speak — so every one of them is fired here on source that should trip it.
 
 describe("Tier 3 consent guard: the detectors fire", () => {
+  it("removes nothing before it looks — the property three reviews broke", () => {
+    // Reviews 1, 2 and 3 each defeated a different implementation of "skip the comments": an
+    // unanchored regex, a line-anchored one, and a hand-written scanner. All three failed the same
+    // way — deciding whether a `//` or a backtick was code or text — and each time a real
+    // `invoke()` disappeared. The property that ends the class is that NOTHING is removed, so this
+    // pins it structurally rather than trusting the next author to remember why.
+    const guard = readFileSync(join("src", "case-evidence-consent-guard.test.ts"), "utf8");
+    // Built by concatenation on purpose: this file is its own corpus here, and a literal would
+    // match itself. That is the no-strip rule biting its author, which is the point of it.
+    const stripper = new RegExp("function " + "strip" + "Comments");
+    expect(
+      guard,
+      "a stripper is how all three known bypasses of this guard worked. If comments must be " +
+        "excluded again, that is a decision to re-argue, not a helper to re-add quietly.",
+    ).not.toMatch(stripper);
+    // And `flat` may collapse whitespace, nothing else: every other character has to survive it.
+    const sample = 'a"//"b`${c}`d/*e*/f//g';
+    expect(flat(sample)).toBe(sample);
+    expect(flat("one\n  // two\n  `three`").replace(/ /g, "")).toBe("one//two`three`");
+  });
   it("catches each banned capability", () => {
     const seeds: Record<string, string> = {
       "Tauri IPC": 'const r = await invoke("send_case", { payload });',
@@ -403,8 +388,11 @@ describe("Tier 3 consent guard: the detectors fire", () => {
     for (const [id, seed] of Object.entries(seeds)) {
       expect(detect(seed), `the "${id}" detector did not fire on ${seed}`).toContain(id);
     }
-    // And the mirror: a comment describing the ban is not a violation of it.
-    expect(detect("// this screen must never call fetch() or invoke()")).toEqual([]);
+    // And the inverse of the old mirror: a comment is NOT an excuse. Nothing is stripped any
+    // more, so a comment that names a banned capability fails exactly like a call would. That is
+    // the price of the property that no input can hide code from this guard, and it is cheap —
+    // the scanned files describe the ban without spelling it, in two comments.
+    expect(detect("// this screen must never call fetch() or invoke()")).toContain("Tauri IPC");
   });
 
   it("catches the evasions, not just the obvious spellings", () => {
@@ -449,10 +437,11 @@ describe("Tier 3 consent guard: the detectors fire", () => {
         expect(detect(seed), `the "${id}" detector was blinded by the comment shim: ${seed}`).toContain(id);
       }
     }
-    // The mirror still holds in both comment forms — a line that IS a comment is documentation.
-    expect(detect("  // this screen must never call fetch() or invoke()")).toEqual([]);
-    expect(detect("  /* never fetch() from here */")).toEqual([]);
-    expect(detect("  {/* and never invoke() from here either */}")).toEqual([]);
+    // Under the no-strip rule these comment forms are corpus like everything else, so the shim
+    // cannot help: the detector fires on the comment AND on the call behind it.
+    expect(detect("  // this screen must never call fetch() or invoke()")).toContain("network call");
+    expect(detect("  /* never fetch() from here */")).toContain("network call");
+    expect(detect("  {/* and never invoke() from here either */}")).toContain("Tauri IPC");
   });
 
   it("cannot be walked around by a comment-shaped line inside a template literal", () => {
