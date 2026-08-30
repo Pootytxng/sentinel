@@ -40,21 +40,50 @@ const RUST = join("src-tauri", "src", "case_evidence_upload.rs");
 
 /** Comments out, newlines kept. A promise in a comment is documentation; only rendered copy counts.
  *
- *  A comment is recognized only where it OWNS its line (optionally inside a JSX `{ }`). The earlier
- *  form matched `//` anywhere outside a `:` and had no way to tell a comment from two characters
- *  inside a string — so a single `const shim = "//";` blanked the rest of that line, and with it
- *  EVERY detector below at once, however wide each one had been made. An independent review at
- *  39f23847 demonstrated it on four working one-liners; they are seeded controls now.
+ *  Two reviews have now broken this helper, both the same way: it had no model of "am I inside a
+ *  string", so text that merely LOOKED like a comment blanked real code. First a `const shim =
+ *  "//";` earlier on a line, then a line inside a multi-line template literal beginning `//`,
+ *  whose `${...}` is executable. Both returned zero detections on a real `invoke()`.
  *
- *  Line-leading is the fail-SAFE reading. The case this function exists for — a comment that
- *  describes the ban, which is the whole file — still strips, and the cost is that a trailing
- *  comment counts as corpus. That can only ever produce a loud false positive, never a silent
- *  miss, and the false positive's fix is to move the comment onto its own line.
+ *  So it is a scanner now, not two regexes. A comment is recognized only where it OWNS its line
+ *  (optionally inside a JSX `{ }`) AND only outside a template literal. Everything else is corpus.
+ *  Both directions of the remaining imprecision are fail-SAFE: an unbalanced backtick inside a
+ *  trailing comment or a string leaves the scanner "inside a template" and simply stops stripping,
+ *  which can only ever produce a loud false positive. A silent miss needs the opposite mistake,
+ *  and there is no longer a path to it — the cases both reviews found are seeded controls below.
  */
 function stripComments(source: string): string {
-  return source
-    .replace(/^[ \t]*\{?[ \t]*\/\*[\s\S]*?\*\/\}?/gm, (m) => m.replace(/[^\n]/g, " "))
-    .replace(/^[ \t]*\/\/[^\n]*/gm, " ");
+  let out = "";
+  let i = 0;
+  let atLineStart = true; // nothing but whitespace, or a single JSX `{`, seen on this line yet
+  let inTemplate = false;
+  while (i < source.length) {
+    const c = source[i];
+    const two = source.slice(i, i + 2);
+    if (!inTemplate && atLineStart && two === "//") {
+      while (i < source.length && source[i] !== "\n") i += 1;
+      out += " ";
+      continue;
+    }
+    if (!inTemplate && atLineStart && two === "/*") {
+      const end = source.indexOf("*/", i + 2);
+      const stop = end === -1 ? source.length : end + 2;
+      out += source.slice(i, stop).replace(/[^\n]/g, " ");
+      i = stop;
+      if (source[i] === "}") {
+        out += " ";
+        i += 1;
+      }
+      atLineStart = false;
+      continue;
+    }
+    if (c === "`") inTemplate = !inTemplate;
+    if (c === "\n") atLineStart = true;
+    else if (c !== " " && c !== "\t" && c !== "{") atLineStart = false;
+    out += c;
+    i += 1;
+  }
+  return out;
 }
 
 /** JSX wraps a sentence across lines; the reader sees one line, so phrase pins must too. */
@@ -424,6 +453,29 @@ describe("Tier 3 consent guard: the detectors fire", () => {
     expect(detect("  // this screen must never call fetch() or invoke()")).toEqual([]);
     expect(detect("  /* never fetch() from here */")).toEqual([]);
     expect(detect("  {/* and never invoke() from here either */}")).toEqual([]);
+  });
+
+  it("cannot be walked around by a comment-shaped line inside a template literal", () => {
+    // The second review's finding, and the same class as the first: a physical line inside a
+    // multi-line template literal can BEGIN with `//` and still be executable, because a `${...}`
+    // on it is code. Line-leading recognition alone read those as comments and blanked them.
+    const templated: Record<string, string[]> = {
+      "Tauri IPC": [
+        "const s = `intro\n// note ${invoke(\"send_case\", payload)}\nmore`;",
+        "const s = `intro\n/* by design\n${invoke(\"send_case\", payload)}\nend */\nmore`;",
+      ],
+      "network call": ["const s = `intro\n// see ${fetch(target, { method: \"POST\" })}\nend`;"],
+    };
+    for (const [id, seeds] of Object.entries(templated)) {
+      for (const seed of seeds) {
+        expect(detect(seed), `the "${id}" detector was blinded inside a template: ${seed}`).toContain(id);
+      }
+    }
+    // And the copy side of the same hole: an overclaim parked on a comment-shaped template line.
+    expect(
+      overclaims("const NOTE = `Your case is ready.\n// Removal of personal data is guaranteed.\nThanks.`;"),
+      "an overclaim inside a template literal must still be read",
+    ).toContain("'guaranteed'");
   });
 
   it("catches each overclaim, and allows the honest form", () => {
