@@ -349,10 +349,13 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     2026-08-29 (#259):** the input boundary drops Cf/Default_Ignorable and folds full-width ASCII
     before any detector runs; the preview serializes from the same struct as the wire, so key order
     matches byte-for-byte; the serializer refuses a shapeless payload the preview would refuse to
-    show. Each is pinned by a seeded-negative guard and proven by defect injection. Residual, kept
-    honest: mixed-script homoglyphs still defeat an exact match — that is what §2A's "best-effort"
-    covers, and the Stage 2 consent copy must say so. Stage 2 restarts (#258) from the repaired
-    `main`.
+    show. Each is pinned by a seeded-negative guard and proven by defect injection. **Independently
+    reviewed (#260): PASS WITH FINDINGS**, one real gap found by sweeping every code point against
+    Unicode 16.0 rather than reading the list — `180B..180F`'s four Mongolian selectors — fixed and
+    injection-proven in the same lane. Residual, kept honest and each test-pinned: mixed-script
+    homoglyphs and U+2800 (a visible gap, not an invisible char) still defeat an exact match — what
+    §2A's "best-effort" covers, and the Stage 2 consent copy must say so. Stage 2 restarts (#258)
+    from the repaired `main`.
   - [x] **Q9c — CPU temp, no driver: SHIPPED 2026-08-18** (`CpuTempOffer.tsx`, self-review PASS).
     Full record verbatim in [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-29, byte cap).
 

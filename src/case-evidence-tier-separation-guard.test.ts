@@ -166,6 +166,31 @@ describe("case-evidence tier separation: Tier 3 shares nothing with the other tr
     expect(stripRustComments(readFileSync(join(RUST_ROOT, "lib.rs"), "utf8"))).toMatch(/\bmod\s+case_evidence_upload\s*;/);
   });
 
+  it("only the two proven functions turn a CasePayload into bytes (§3)", () => {
+    // Independent review of the S3 repair (#259/#260) named the residual honestly: refusing a
+    // shapeless payload inside case_payload_json is a gate you must WALK THROUGH, not a structural
+    // impossibility. CasePayload still derives Serialize unconditionally, so a future
+    // `serde_json::to_string(&payload)` written anywhere else in the module would serialize bytes
+    // the preview refuses to show — quietly, and past both tests that pin the current pair.
+    //
+    // The reviewer's alternative (a #[serde(remote = "Self")] proxy) enforces it in the type
+    // without duplicating the field list, and is the better fix WHEN a real send path exists. Until
+    // then this is the cheaper half of the same promise: exactly two call sites, named here.
+    const production = stripRustComments(tier3).split(/#\[cfg\(test\)\]/)[0];
+    const ALLOWED = ["case_payload_json", "case_preview"];
+    const stray: string[] = [];
+    const call = /serde_json::to_(?:string|string_pretty|vec|vec_pretty|writer)\b/g;
+    for (let m = call.exec(production); m !== null; m = call.exec(production)) {
+      const before = production.slice(0, m.index);
+      const fn = [...before.matchAll(/\bfn\s+([A-Za-z0-9_]+)/g)].pop();
+      stray.push(...(fn && ALLOWED.includes(fn[1]) ? [] : [`${m[0]} in fn ${fn ? fn[1] : "<none>"}`]));
+    }
+    expect(stray, "a third path from CasePayload to bytes — it bypasses the shapeless refusal").toEqual([]);
+    // Not vacuous: both allowed call sites must actually be there, or this guard is guarding air.
+    expect(production).toMatch(/fn case_payload_json[\s\S]*?serde_json::to_string\b/);
+    expect(production).toMatch(/fn case_preview[\s\S]*?serde_json::to_string_pretty\b/);
+  });
+
   it("catches the shapes it was written for (positive controls)", () => {
     expect(referencesModule("use crate::receipts::build_receipt_payload;", "receipts")).toBe(true);
     expect(referencesModule("use crate::{receipts::build_receipt_payload, hw_class::x};", "receipts")).toBe(true);

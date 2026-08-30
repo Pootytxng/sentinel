@@ -210,6 +210,23 @@ fn flatten_input(input: &str) -> String {
 /// API, and this module deliberately carries no dependency for a security-sensitive path, so the
 /// ranges are written out. Assigned as of Unicode 15.1; an unassigned code point inside a
 /// Default_Ignorable range is included on purpose, since a future assignment stays invisible.
+///
+/// **Independent review, 2026-08-29 (#259/#260):** the reviewer compiled these arms into a
+/// predicate and swept all of 0..0x10FFFF against Unicode 16.0. Category Cf came back complete,
+/// 0 missing. Default_Ignorable did NOT: `0x180E` was written as a single value, so the four
+/// MONGOLIAN FREE VARIATION SELECTORs beside it — `180B`, `180C`, `180D`, `180F`, category Mn,
+/// combining class 0, zero advance width — were dropped from neither pass. `ku\u{180B}ya` would
+/// have walked a username past `replace_ignore_case` exactly the way U+200B did. Now the whole
+/// `180B..=180F` range is covered. The sweep is the guard here, not a reading of this list: a
+/// hand-written table is only as good as the last exhaustive check against real Unicode data.
+///
+/// **Documented residual, deliberately NOT stripped:** U+2800 BRAILLE PATTERN BLANK. It is
+/// category So and NOT Default_Ignorable — it carries a real advance width, so a renderer draws a
+/// GAP where it sits, and this pass exists to make a detector match what a reader SEES. A reader
+/// sees `ku ya`, the same as for U+00A0 and the other Zs spaces this pass also leaves alone.
+/// Stripping it would additionally corrupt legitimate braille text, where a blank cell is a
+/// character with meaning. Pinned by test, alongside the mixed-script homoglyph limit, so it can
+/// only ever change deliberately.
 fn is_invisible_format(c: char) -> bool {
     matches!(
         c as u32,
@@ -219,7 +236,6 @@ fn is_invisible_format(c: char) -> bool {
             | 0x06DD                // ARABIC END OF AYAH
             | 0x070F                // SYRIAC ABBREVIATION MARK
             | 0x08E2                // ARABIC DISPUTED END OF AYAH
-            | 0x180E                // MONGOLIAN VOWEL SEPARATOR
             | 0x3164                // HANGUL FILLER
             | 0xFEFF                // ZERO WIDTH NO-BREAK SPACE / BOM
             | 0xFFA0                // HALFWIDTH HANGUL FILLER
@@ -227,6 +243,7 @@ fn is_invisible_format(c: char) -> bool {
             | 0x0890..=0x0891       // Arabic pound/piastre marks
             | 0x115F..=0x1160       // HANGUL CHOSEONG/JUNGSEONG FILLER
             | 0x17B4..=0x17B5       // KHMER VOWEL INHERENT AQ/AA
+            | 0x180B..=0x180F       // MONGOLIAN free variation selectors + vowel separator
             | 0x200B..=0x200F       // ZWSP, ZWNJ, ZWJ, LRM, RLM
             | 0x202A..=0x202E       // bidi embedding / override
             | 0x2060..=0x206F       // word joiner, invisible operators, bidi isolates, deprecated
@@ -721,8 +738,14 @@ pub(crate) enum CaseSerializeError {
     Encode(serde_json::Error),
 }
 
-/// THE serializer — the only path from a payload to bytes, for preview and (from Stage 4) for
-/// transport alike. §3's "the preview is the payload" guard pins both sources to this call.
+/// The wire serializer: the payload as the bytes transport would carry (from Stage 4).
+///
+/// It is not literally the only `serde_json` call on a `CasePayload` — `case_preview` runs
+/// `to_string_pretty` on the same struct rather than re-parsing this function's output, which is
+/// what makes the two byte-identical modulo whitespace instead of merely equivalent. What §3's
+/// "the preview is the payload" needs is that both paths refuse the same payloads and order the
+/// same keys, and both are pinned by test. A THIRD `serde_json` call on this type would break
+/// that quietly, so `src/case-evidence-tier-separation-guard.test.ts` fails the build on one.
 pub(crate) fn case_payload_json(payload: &CasePayload) -> Result<String, CaseSerializeError> {
     if case_kind(payload).is_none() {
         return Err(CaseSerializeError::Shapeless);
@@ -1315,7 +1338,8 @@ mod tests {
         // override, word joiner, a bidi isolate, BOM, a variation selector, and a tag character.
         for probe in [
             '\u{00AD}', '\u{200C}', '\u{200D}', '\u{200E}', '\u{202E}', '\u{2060}', '\u{2066}',
-            '\u{FEFF}', '\u{FE0F}', '\u{E0041}', '\u{034F}', '\u{180E}',
+            '\u{FEFF}', '\u{FE0F}', '\u{E0041}', '\u{034F}', '\u{180E}', '\u{180B}', '\u{180C}',
+            '\u{180D}', '\u{180F}',
         ] {
             assert!(is_invisible_format(probe), "U+{:04X} not classified invisible", probe as u32);
             let hostile = format!("ku{probe}ya was here");
@@ -1354,6 +1378,56 @@ mod tests {
         assert_eq!(mask_ips(&legacy_ip), legacy_ip, "seeded full-width ip must defeat the pre-fix masker");
         let out_ip = redact_comment_with(hostile_ip, &[]);
         assert!(out_ip.contains(MASK_IP), "full-width address not masked: {out_ip}");
+    }
+
+    #[test]
+    fn the_mongolian_selectors_beside_the_vowel_separator_are_covered_too() {
+        // Independent review of this repair (#259/#260) swept every code point 0..0x10FFFF against
+        // Unicode 16.0 and caught what reading the list did not: `0x180E` had been written as a
+        // single value, so the four MONGOLIAN FREE VARIATION SELECTORs beside it were dropped by
+        // NEITHER pass — category Mn, so `char::is_control()` says no, and absent from the table,
+        // so `is_invisible_format` said no. Zero advance width, combining class 0: the same
+        // token-splitting mechanism as U+200B, against every detector at once.
+        for probe in ['\u{180B}', '\u{180C}', '\u{180D}', '\u{180F}'] {
+            assert!(!probe.is_control(), "U+{:04X} is Cc after all — this test's premise is wrong", probe as u32);
+
+            let hostile_user = format!("ku{probe}ya was here");
+            let legacy = legacy_flatten(&hostile_user);
+            assert_eq!(
+                replace_ignore_case(&legacy, "kuya", MASK_USER),
+                legacy,
+                "U+{:04X} must defeat the pre-fix masker, or this proves nothing",
+                probe as u32
+            );
+            let out = redact_comment_with(&hostile_user, &user_literals());
+            assert!(out.contains(MASK_USER), "U+{:04X} hid the username: {out:?}", probe as u32);
+
+            let hostile_ip = format!("box at 192.16{probe}8.1.1 now");
+            let legacy_ip = legacy_flatten(&hostile_ip);
+            assert_eq!(mask_ips(&legacy_ip), legacy_ip, "U+{:04X} must defeat the pre-fix ip scan", probe as u32);
+            assert!(
+                redact_comment_with(&hostile_ip, &[]).contains(MASK_IP),
+                "U+{:04X} hid an address",
+                probe as u32
+            );
+        }
+    }
+
+    #[test]
+    fn the_braille_blank_is_a_visible_gap_and_stays_documented_as_one() {
+        // Second honesty pin, from the same review. U+2800 BRAILLE PATTERN BLANK is the other
+        // famous "invisible" character, and this pass deliberately leaves it alone: it is category
+        // So, NOT Default_Ignorable, and it carries a real advance width, so a renderer draws a GAP
+        // where it sits. This pass exists to make a detector match what a reader SEES, and a reader
+        // sees `ku ya` — the same reason U+00A0 and the other Zs spaces are left alone. Stripping
+        // it would also corrupt legitimate braille, where a blank cell is a character with meaning.
+        //
+        // The consequence is real and belongs in the open: a username split by one is NOT masked.
+        // If that trade is ever revisited, THIS test is what must be updated deliberately, together
+        // with §2A and the Stage 2 consent copy.
+        assert!(!is_invisible_format('\u{2800}'), "U+2800 is now stripped — update §2A and the consent copy");
+        let out = redact_comment_with("ku\u{2800}ya was here", &user_literals());
+        assert!(!out.contains(MASK_USER), "U+2800 is now folded — this pin must be updated deliberately");
     }
 
     #[test]
