@@ -143,7 +143,7 @@ pub(crate) fn redact_comment(raw: &str) -> String {
 
 /// The same pipeline with the identity literals injected, so tests never mutate process env.
 fn redact_comment_with(raw: &str, literals: &[(String, &'static str)]) -> String {
-    let flat = strip_controls(raw);
+    let flat = flatten_input(raw);
     let mut out = mask_paths(&flat);
     out = mask_ips(&out);
     out = mask_keys(&out);
@@ -168,16 +168,87 @@ fn sensitive_literals() -> Vec<(String, &'static str)> {
     out
 }
 
-fn strip_controls(input: &str) -> String {
+/// Everything that reaches a detector goes through here first, so that what the detectors match
+/// on is what a human actually SEES. Three passes, all of them about that one idea:
+///
+/// 1. **Control characters (Cc).** Newline/tab/return become a space so words don't fuse; every
+///    other control character is dropped. The wire carries no control characters at all.
+/// 2. **Invisible formatting (Cf + Default_Ignorable) — dropped outright.** This is the security
+///    review's blocking finding S1 (2026-08-29). `char::is_control()` is Cc ONLY, so a single
+///    U+200B ZERO WIDTH SPACE inside a username, hostname, IP octet, product key or serial used to
+///    defeat every exact-match detector below — `replace_ignore_case` searches for an unbroken
+///    substring, `is_ipv4` needs each octet to be <=3 ASCII digits, and the key/serial scanners
+///    need every character to be `is_ascii_alphanumeric()`. The comment then rendered identically
+///    to the un-obfuscated text while carrying the real value through unmasked. ZWSP is not
+///    exotic: it survives an ordinary copy out of a browser, a chat client or a PDF. Dropping
+///    (rather than spacing) is deliberate — the character is invisible, so the text either side of
+///    it already reads as one word, and fusing is what a reader sees.
+/// 3. **Full-width ASCII (U+FF01-U+FF5E) folded to ASCII.** Same class, visible variant: `１９２`
+///    is not `is_ascii_digit`, and `ｋｕｙａ` does not match `kuya`. The block maps to ASCII by
+///    subtraction, so this is a fold and not a normalization library.
+///
+/// **The residual limit, stated rather than hidden:** mixed-script homoglyphs (Cyrillic `а` for
+/// Latin `a`) still defeat an exact match, and closing that needs a confusables table this module
+/// deliberately does not carry. That is exactly why §2A calls free-text redaction best-effort and
+/// why the consent copy must say so — the preview shows what actually survived.
+fn flatten_input(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for c in input.chars() {
         if c == '\n' || c == '\r' || c == '\t' {
             out.push(' ');
-        } else if !c.is_control() {
-            out.push(c);
+        } else if c.is_control() || is_invisible_format(c) {
+            // Dropped. Controls other than the three above carry no reader-visible text either.
+        } else {
+            out.push(fold_full_width(c));
         }
     }
     out
+}
+
+/// Unicode category **Cf** (format) plus the non-Cf members of **Default_Ignorable_Code_Point** —
+/// characters a text renderer is entitled to draw as nothing. `std` exposes no general-category
+/// API, and this module deliberately carries no dependency for a security-sensitive path, so the
+/// ranges are written out. Assigned as of Unicode 15.1; an unassigned code point inside a
+/// Default_Ignorable range is included on purpose, since a future assignment stays invisible.
+fn is_invisible_format(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x00AD                      // SOFT HYPHEN
+            | 0x034F                // COMBINING GRAPHEME JOINER
+            | 0x061C                // ARABIC LETTER MARK
+            | 0x06DD                // ARABIC END OF AYAH
+            | 0x070F                // SYRIAC ABBREVIATION MARK
+            | 0x08E2                // ARABIC DISPUTED END OF AYAH
+            | 0x180E                // MONGOLIAN VOWEL SEPARATOR
+            | 0x3164                // HANGUL FILLER
+            | 0xFEFF                // ZERO WIDTH NO-BREAK SPACE / BOM
+            | 0xFFA0                // HALFWIDTH HANGUL FILLER
+            | 0x0600..=0x0605       // Arabic number signs
+            | 0x0890..=0x0891       // Arabic pound/piastre marks
+            | 0x115F..=0x1160       // HANGUL CHOSEONG/JUNGSEONG FILLER
+            | 0x17B4..=0x17B5       // KHMER VOWEL INHERENT AQ/AA
+            | 0x200B..=0x200F       // ZWSP, ZWNJ, ZWJ, LRM, RLM
+            | 0x202A..=0x202E       // bidi embedding / override
+            | 0x2060..=0x206F       // word joiner, invisible operators, bidi isolates, deprecated
+            | 0xFE00..=0xFE0F       // variation selectors
+            | 0xFFF0..=0xFFF8       // unassigned Default_Ignorable
+            | 0xFFF9..=0xFFFB       // interlinear annotation
+            | 0x110BD               // KAITHI NUMBER SIGN
+            | 0x110CD               // KAITHI NUMBER SIGN ABOVE
+            | 0x13430..=0x1343F     // Egyptian hieroglyph format controls
+            | 0x1BCA0..=0x1BCA3     // shorthand format controls
+            | 0x1D173..=0x1D17A     // musical format controls
+            | 0xE0000..=0xE0FFF     // language tag + tag characters + variation selectors suppl.
+    )
+}
+
+/// `Ａ` -> `A`, `１` -> `1`, `．` -> `.`. The FULLWIDTH FORMS block is a straight +0xFEE0 offset
+/// from printable ASCII, so the fold is subtraction rather than a normalization table.
+fn fold_full_width(c: char) -> char {
+    match c as u32 {
+        code @ 0xFF01..=0xFF5E => char::from_u32(code - 0xFEE0).unwrap_or(c),
+        _ => c,
+    }
 }
 
 fn replace_ignore_case(haystack: &str, needle: &str, mask: &str) -> String {
@@ -629,15 +700,46 @@ pub(crate) fn shape_line(kind: CaseKind) -> &'static str {
 // ONE canonical serializer + the pure preview representation (§3)
 // ---------------------------------------------------------------------------
 
-/// THE serializer — the only path from a payload to bytes, for preview and (from Stage 4) for
-/// transport alike. §3's "the preview is the payload" guard pins both sources to this call.
-pub(crate) fn case_payload_json(payload: &CasePayload) -> Result<String, serde_json::Error> {
-    serde_json::to_string(payload)
+/// Why the serializer can refuse. `Shapeless` is security review finding S3 (2026-08-29):
+/// `assemble_case` is the only assembler and it refuses a case with neither a comment nor an
+/// incident, but `CasePayload` also derives `Deserialize`, so a payload with both halves absent
+/// can still be built by deserializing one. That payload used to serialize real bytes while
+/// `case_preview` returned `None` — a state where the wire would carry something the preview
+/// refuses to show, which is precisely what §3 forbids.
+///
+/// The fix is here rather than in a validating `Deserialize`, and the reasoning is worth pinning:
+/// a `#[serde(try_from = "...")]` shadow struct would enforce the invariant in the type, but it
+/// would also put a SECOND copy of the fourteen-field list into the one file under standing
+/// security review, and two field lists that must be kept in sync is a fresh drift surface in
+/// exchange for closing a hole that is already closed here. Refusing at the serializer makes the
+/// divergence impossible instead: preview and wire now refuse the same payloads for the same
+/// reason.
+#[derive(Debug)]
+pub(crate) enum CaseSerializeError {
+    /// Neither a comment nor an incident — there is no case here to send.
+    Shapeless,
+    Encode(serde_json::Error),
 }
 
-/// What Stage 2's screen renders: the shape line and the payload bytes, pretty-printed. The
-/// pretty text is derived by re-parsing the CANONICAL serialization — same JSON, different
-/// whitespace — so preview-source and send-source cannot diverge (§3, pinned by test).
+/// THE serializer — the only path from a payload to bytes, for preview and (from Stage 4) for
+/// transport alike. §3's "the preview is the payload" guard pins both sources to this call.
+pub(crate) fn case_payload_json(payload: &CasePayload) -> Result<String, CaseSerializeError> {
+    if case_kind(payload).is_none() {
+        return Err(CaseSerializeError::Shapeless);
+    }
+    serde_json::to_string(payload).map_err(CaseSerializeError::Encode)
+}
+
+/// What Stage 2's screen renders: the shape line and the payload bytes, pretty-printed.
+///
+/// The pretty text is serialized from the SAME struct as the wire bytes, so the two agree on every
+/// key, every value, and — since security review finding S2 (2026-08-29) — key ORDER. It used to
+/// round-trip the canonical string through `serde_json::Value` first; `serde_json` is pinned
+/// without `preserve_order`, so `Value`'s map is a `BTreeMap` and that round trip silently
+/// re-sorted the preview alphabetically while the wire kept field-declaration order. The data was
+/// identical, so nothing leaked, but the doc comment here claimed the two differed only in
+/// whitespace, and that was not true. Now it is: strip the pretty text's insignificant whitespace
+/// and you get the canonical bytes back, byte for byte (§3, pinned by test).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CasePreview {
     pub(crate) shape: &'static str,
@@ -646,9 +748,7 @@ pub(crate) struct CasePreview {
 
 pub(crate) fn case_preview(payload: &CasePayload) -> Option<CasePreview> {
     let shape = shape_line(case_kind(payload)?);
-    let canonical = case_payload_json(payload).ok()?;
-    let value: Value = serde_json::from_str(&canonical).ok()?;
-    let pretty = serde_json::to_string_pretty(&value).ok()?;
+    let pretty = serde_json::to_string_pretty(payload).ok()?;
     Some(CasePreview { shape, payload_json: pretty })
 }
 
@@ -1130,5 +1230,253 @@ mod tests {
     #[test]
     fn the_gate_is_hard_false() {
         assert!(!case_evidence_gate(), "Tier 3 arming is Stage 9, a separate owner decision");
+    }
+
+    // ---- Security review 2026-08-29, finding S1: invisible characters (BLOCKING) ----
+    //
+    // Every test below carries a SEEDED NEGATIVE: `legacy_flatten` is the pre-fix input
+    // boundary, verbatim, and each case first proves that the hostile input really does walk
+    // straight past the detector under it. Without that half, a test asserting only that the
+    // mask appears would pass just as happily against an input that was never dangerous.
+
+    /// The input boundary exactly as it stood before the S1 fix: Cc only, nothing else.
+    fn legacy_flatten(input: &str) -> String {
+        let mut out = String::with_capacity(input.len());
+        for c in input.chars() {
+            if c == '\n' || c == '\r' || c == '\t' {
+                out.push(' ');
+            } else if !c.is_control() {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    fn user_literals() -> Vec<(String, &'static str)> {
+        vec![("kuya".to_string(), MASK_USER)]
+    }
+
+    #[test]
+    fn a_zero_width_space_can_no_longer_hide_an_identity_literal() {
+        let hostile = "ku\u{200B}ya crashed the game";
+
+        // NEGATIVE CONTROL: under the old boundary the username survives untouched.
+        let legacy = legacy_flatten(hostile);
+        assert_eq!(
+            replace_ignore_case(&legacy, "kuya", MASK_USER),
+            legacy,
+            "the seeded input must actually defeat the pre-fix masker, or this test proves nothing"
+        );
+
+        let out = redact_comment_with(hostile, &user_literals());
+        assert!(out.contains(MASK_USER), "identity literal not masked: {out}");
+        assert!(!out.contains("kuya"), "identity literal survived: {out}");
+        assert!(!out.contains('\u{200B}'), "the zero-width character reached the wire: {out:?}");
+    }
+
+    #[test]
+    fn a_zero_width_space_can_no_longer_hide_an_ip_address() {
+        let hostile = "crash at 192.168\u{200B}.1.1 today";
+
+        let legacy = legacy_flatten(hostile);
+        assert_eq!(mask_ips(&legacy), legacy, "seeded input must defeat the pre-fix ip masker");
+
+        let out = redact_comment_with(hostile, &[]);
+        assert!(out.contains(MASK_IP), "address not masked: {out}");
+        assert!(!out.contains("192.168"), "address survived: {out}");
+    }
+
+    #[test]
+    fn a_zero_width_space_can_no_longer_hide_a_product_key_or_a_serial() {
+        let key = "key ABCD-1234\u{200B}-EFGH on the sticker";
+        let serial = "serial 1A2B3C4D\u{200B}5E6F7G8H on the sticker";
+
+        let legacy_key = legacy_flatten(key);
+        assert_eq!(mask_keys(&legacy_key), legacy_key, "seeded key must defeat the pre-fix masker");
+        let legacy_serial = legacy_flatten(serial);
+        assert_eq!(
+            mask_serials(&legacy_serial),
+            legacy_serial,
+            "seeded serial must defeat the pre-fix masker"
+        );
+
+        let out_key = redact_comment_with(key, &[]);
+        assert!(out_key.contains(MASK_KEY), "key not masked: {out_key}");
+        assert!(!out_key.contains("ABCD"), "key survived: {out_key}");
+
+        let out_serial = redact_comment_with(serial, &[]);
+        assert!(out_serial.contains(MASK_SERIAL), "serial not masked: {out_serial}");
+        assert!(!out_serial.contains("1A2B"), "serial survived: {out_serial}");
+    }
+
+    #[test]
+    fn every_invisible_class_is_covered_not_just_the_zero_width_space() {
+        // One representative per family the fix claims: soft hyphen, ZWNJ, ZWJ, LRM, a bidi
+        // override, word joiner, a bidi isolate, BOM, a variation selector, and a tag character.
+        for probe in [
+            '\u{00AD}', '\u{200C}', '\u{200D}', '\u{200E}', '\u{202E}', '\u{2060}', '\u{2066}',
+            '\u{FEFF}', '\u{FE0F}', '\u{E0041}', '\u{034F}', '\u{180E}',
+        ] {
+            assert!(is_invisible_format(probe), "U+{:04X} not classified invisible", probe as u32);
+            let hostile = format!("ku{probe}ya was here");
+            let out = redact_comment_with(&hostile, &user_literals());
+            assert!(out.contains(MASK_USER), "U+{:04X} hid the username: {out:?}", probe as u32);
+            assert!(!out.contains(probe), "U+{:04X} reached the wire: {out:?}", probe as u32);
+        }
+    }
+
+    #[test]
+    fn ordinary_text_is_not_damaged_by_the_invisible_strip() {
+        // The fix must not become a second bug. Accented Latin, CJK, emoji and punctuation are
+        // none of them format characters, and a comment that contains no identity value at all
+        // must come through exactly as typed.
+        let plain = "Café crashed — 游戏崩溃了 🎮 after ~10 min, twice.";
+        for c in plain.chars() {
+            assert!(!is_invisible_format(c), "{c:?} wrongly classified as invisible");
+        }
+        assert_eq!(redact_comment_with(plain, &[]), plain, "ordinary prose was altered");
+    }
+
+    #[test]
+    fn full_width_forms_can_no_longer_hide_an_identity_literal_or_an_address() {
+        let hostile_user = "ｋｕｙａ crashed the game";
+        let legacy = legacy_flatten(hostile_user);
+        assert_eq!(
+            replace_ignore_case(&legacy, "kuya", MASK_USER),
+            legacy,
+            "seeded full-width name must defeat the pre-fix masker"
+        );
+        let out = redact_comment_with(hostile_user, &user_literals());
+        assert!(out.contains(MASK_USER), "full-width username not masked: {out}");
+
+        let hostile_ip = "box at １９２．１６８．１．１ now";
+        let legacy_ip = legacy_flatten(hostile_ip);
+        assert_eq!(mask_ips(&legacy_ip), legacy_ip, "seeded full-width ip must defeat the pre-fix masker");
+        let out_ip = redact_comment_with(hostile_ip, &[]);
+        assert!(out_ip.contains(MASK_IP), "full-width address not masked: {out_ip}");
+    }
+
+    #[test]
+    fn the_documented_residual_limit_is_real_and_stays_documented() {
+        // Honesty pin, not a defect: a mixed-script homoglyph still defeats an exact match, and
+        // §2A's "best-effort" wording plus the consent copy is what covers it. If a future change
+        // closes this, THIS test is the one that must be updated deliberately — a silently
+        // upgraded redaction claim is exactly what the honest-measurement law forbids.
+        let cyrillic_a = "kuy\u{0430} was here"; // U+0430 CYRILLIC SMALL LETTER A
+        let out = redact_comment_with(cyrillic_a, &user_literals());
+        assert!(
+            !out.contains(MASK_USER),
+            "a confusables table now exists — update §2A, the consent copy and this test together"
+        );
+    }
+
+    // ---- Security review 2026-08-29, finding S2: preview == wire, byte for byte ----
+
+    /// Remove JSON's insignificant whitespace, leaving string literals untouched. Small enough to
+    /// read, and self-tested below so it cannot quietly become the reason the parity test passes.
+    fn strip_json_whitespace(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut in_string = false;
+        let mut escaped = false;
+        for c in text.chars() {
+            if in_string {
+                out.push(c);
+                if escaped {
+                    escaped = false;
+                } else if c == '\\' {
+                    escaped = true;
+                } else if c == '"' {
+                    in_string = false;
+                }
+            } else if c == '"' {
+                in_string = true;
+                out.push(c);
+            } else if !c.is_whitespace() {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn the_whitespace_stripper_keeps_whitespace_inside_strings() {
+        assert_eq!(strip_json_whitespace("{\n  \"a\": \"x y\"\n}"), "{\"a\":\"x y\"}");
+        assert_eq!(strip_json_whitespace("{\"a\":\"he said \\\" ok\"}"), "{\"a\":\"he said \\\" ok\"}");
+        assert_eq!(strip_json_whitespace("{\"a\":\"back\\\\\"}"), "{\"a\":\"back\\\\\"}");
+    }
+
+    #[test]
+    fn the_preview_is_the_payload_byte_for_byte_including_key_order() {
+        let payload = full_payload();
+        let canonical = case_payload_json(&payload).expect("serializes");
+        let preview = case_preview(&payload).expect("previewable");
+
+        assert_eq!(
+            strip_json_whitespace(&preview.payload_json),
+            canonical,
+            "the preview must be the canonical bytes plus whitespace, and nothing else"
+        );
+
+        // NEGATIVE CONTROL: the pre-fix implementation round-tripped through serde_json::Value,
+        // whose map is a BTreeMap here (no `preserve_order` feature), so it re-sorted the keys
+        // alphabetically. If this assertion ever fails, `preserve_order` was switched on and the
+        // divergence S2 named is gone for a different reason — check before deleting this.
+        let value: Value = serde_json::from_str(&canonical).expect("parses");
+        let legacy_pretty = serde_json::to_string_pretty(&value).expect("pretty");
+        assert_ne!(
+            strip_json_whitespace(&legacy_pretty),
+            canonical,
+            "the seeded pre-fix preview must actually differ, or this test proves nothing"
+        );
+    }
+
+    // ---- Security review 2026-08-29, finding S3: no bytes the preview would refuse to show ----
+
+    #[test]
+    fn a_shapeless_payload_is_refused_by_the_serializer_and_the_preview_alike() {
+        // `assemble_case` cannot build this, but `Deserialize` can — that was the hole.
+        let shapeless: CasePayload =
+            serde_json::from_str(r#"{"schema_version":1,"compy_version":"9.9.9"}"#)
+                .expect("the wire shape still deserializes");
+        assert!(case_kind(&shapeless).is_none(), "the probe must really be shapeless");
+        assert!(
+            matches!(case_payload_json(&shapeless), Err(CaseSerializeError::Shapeless)),
+            "the serializer must refuse a payload the preview cannot show"
+        );
+        assert!(case_preview(&shapeless).is_none(), "the preview must refuse it too");
+
+        // And the refusal is specific to shapelessness — a real payload still serializes.
+        assert!(case_payload_json(&full_payload()).is_ok(), "a shaped payload must still serialize");
+    }
+
+    // ---- Security review 2026-08-29, finding S4: Group C hardware tokens, end to end ----
+
+    #[test]
+    fn adversarial_hardware_probe_strings_reach_the_wire_safely() {
+        // hw_class::sanitize_token is Group C's only scrub — `family_token`'s extra refusal is
+        // Group B only (the hw_class.rs comment now says so). This pins what actually arrives.
+        let hardware = json!({
+            "gpus": [{ "name": "C:\\Users\\kuya\\drivers\\Radeon\u{7} RX 9070 XT.EXE" }],
+            "cpu_arch": { "family_label": "  Ryzen\u{0} X3D  " },
+            "ram_total_bytes": 31_500_000_000u64,
+        });
+        let hw = hw_context_from(&hardware);
+        let payload = assemble_case(Some("hi"), None, Some(&hw), None, None).expect("assembles");
+        let text = case_payload_json(&payload).expect("serializes");
+
+        // The scrub's actual job — no path, no separator, no username — is done.
+        assert!(!text.contains("kuya"), "username leaked through a hardware token: {text}");
+        assert!(!text.to_lowercase().contains("users"), "path fragment leaked: {text}");
+        assert!(!text.contains("\\\\") && !text.contains(".exe"), "path shape leaked: {text}");
+
+        // Characterization, deliberately not a fix: an interior control character survives the
+        // token (serde escapes it, so the JSON stays valid and round-trips), and the token is not
+        // length-capped the way every Group A/B token is. Both are recorded on #259 as follow-up
+        // candidates rather than changed here, because contract §2 scopes Group C as Tier 2 parity
+        // and narrowing it is a contract decision, not a repair.
+        let back: Value = serde_json::from_str(&text).expect("the payload round-trips");
+        assert_eq!(back["gpu_model"], json!("radeon\u{7} rx 9070 xt"));
+        assert_eq!(back["cpu_family"], json!("ryzen\u{0} x3d"));
+        assert!(text.contains("\\u0007"), "a control byte must be JSON-escaped, never raw: {text}");
     }
 }
