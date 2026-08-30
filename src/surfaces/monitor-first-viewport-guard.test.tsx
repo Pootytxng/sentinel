@@ -118,11 +118,20 @@ function sheets(dir = "src"): string[] {
     .map((p) => join(dir, p));
 }
 
+/** Replace a CSS block comment with a single space, never `""` — emptying it fuses the tokens on
+ *  either side of an empty comment (`margin:0` immediately followed by `auto`, becoming `0auto`),
+ *  hiding a real push from `leftMarginIsAuto` the same way #240 found inside `declarations()`
+ *  itself. This guard reads raw stylesheet text before that helper ever sees it, so the same rule
+ *  applies here independently. */
+function stripBlockComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, " ");
+}
+
 /** Every `selector { declarations }` rule the app ships, comments stripped. */
 function allRules(): { file: string; selector: string; body: string }[] {
   const out: { file: string; selector: string; body: string }[] = [];
   for (const file of sheets()) {
-    const css = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const css = stripBlockComments(readFileSync(file, "utf8"));
     for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = m[1].trim();
       if (!selector || selector.startsWith("@")) continue;
@@ -188,6 +197,12 @@ const describeControl = (el: HTMLElement) =>
   `[${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 34)}]`;
 
 describe("Live room - first-viewport hierarchy (issue #236)", () => {
+  it("a comment-fused margin push survives this guard's own comment stripping — #240", () => {
+    const css = stripBlockComments(".x { margin:0/**/auto }");
+    const body = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)][0][2];
+    expect(leftMarginIsAuto(body).auto).toBe(true);
+  });
+
   it("A: no shipped rule strands the overlay cluster at the column's far edge", async () => {
     const { container } = mount();
     await openOverlay(container);
