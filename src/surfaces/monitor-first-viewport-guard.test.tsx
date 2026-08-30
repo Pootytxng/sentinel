@@ -121,21 +121,60 @@ function sheets(dir = "src"): string[] {
 /** Replace a CSS block comment with a single space, never `""` — emptying it fuses the tokens on
  *  either side of an empty comment (`margin:0` immediately followed by `auto`, becoming `0auto`),
  *  hiding a real push from `leftMarginIsAuto` the same way #240 found inside `declarations()`
- *  itself. This guard reads raw stylesheet text before that helper ever sees it, so the same rule
- *  applies here independently. */
+ *  itself. Declaration BODIES only — see `stripSelectorComments` for why selectors need the
+ *  opposite substitution. */
 function stripBlockComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, " ");
 }
 
-/** Every `selector { declarations }` rule the app ships, comments stripped. */
+/** Strip a CSS comment from a SELECTOR to nothing, never a space. Unlike a declaration value, two
+ *  adjacent selector tokens with an EMPTY comment and no real whitespace between them stay a
+ *  compound (same-element) selector (`.a` immediately followed by `.b` tokenizes as `.a.b`, not
+ *  the descendant `.a .b`) — a comment is consumed during tokenization without producing a
+ *  whitespace token. Substituting a space here would rewrite a real compound selector into a
+ *  descendant one and make `matches()` miss the element a shipped auto-margin rule actually lands
+ *  on (Codex review, PR #268). */
+function stripSelectorComments(selector: string): string {
+  return selector.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
+/** Every `selector { declarations }` rule the app ships.
+ *
+ *  Walked char-by-char with block comments skipped as ATOMIC spans, never split on a brace inside
+ *  one — a prose comment in App.css embeds a literal `{ "settled": false }`, and splitting on a
+ *  comment-stripped whole-file string (the pre-review shape of this function) would corrupt every
+ *  rule around it. Selector and body text keep their original comments until each is stripped
+ *  with the substitution that side actually needs. */
 function allRules(): { file: string; selector: string; body: string }[] {
   const out: { file: string; selector: string; body: string }[] = [];
   for (const file of sheets()) {
-    const css = stripBlockComments(readFileSync(file, "utf8"));
-    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = m[1].trim();
-      if (!selector || selector.startsWith("@")) continue;
-      out.push({ file, selector, body: m[2] });
+    const raw = readFileSync(file, "utf8");
+    let i = 0;
+    let buf = "";
+    let selector: string | null = null;
+    while (i < raw.length) {
+      if (raw[i] === "/" && raw[i + 1] === "*") {
+        const end = raw.indexOf("*/", i + 2);
+        const comment = end === -1 ? raw.slice(i) : raw.slice(i, end + 2);
+        buf += comment;
+        i += comment.length;
+        continue;
+      }
+      const ch = raw[i];
+      if (ch === "{") {
+        selector = buf;
+        buf = "";
+      } else if (ch === "}") {
+        if (selector !== null) {
+          const sel = stripSelectorComments(selector).trim();
+          if (sel && !sel.startsWith("@")) out.push({ file, selector: sel, body: stripBlockComments(buf) });
+        }
+        selector = null;
+        buf = "";
+      } else {
+        buf += ch;
+      }
+      i++;
     }
   }
   return out;
@@ -198,9 +237,19 @@ const describeControl = (el: HTMLElement) =>
 
 describe("Live room - first-viewport hierarchy (issue #236)", () => {
   it("a comment-fused margin push survives this guard's own comment stripping — #240", () => {
-    const css = stripBlockComments(".x { margin:0/**/auto }");
-    const body = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)][0][2];
+    const body = stripBlockComments("margin:0/**/auto");
     expect(leftMarginIsAuto(body).auto).toBe(true);
+  });
+
+  it("a comment between adjacent selector tokens stays a compound selector, not a descendant one — Codex review, PR #268", () => {
+    expect(stripSelectorComments(".mc-ov/**/.active")).toBe(".mc-ov.active");
+  });
+
+  it("a literal brace inside a stylesheet comment does not corrupt rule splitting (App.css:2159)", () => {
+    const [file] = sheets().filter((f) => f.endsWith("App.css"));
+    expect(file, "App.css must ship, or this proof is vacuous").toBeDefined();
+    const rules = allRules().filter((r) => r.file === file);
+    expect(rules.length).toBeGreaterThan(10);
   });
 
   it("A: no shipped rule strands the overlay cluster at the column's far edge", async () => {
