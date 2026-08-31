@@ -92,14 +92,101 @@ function stripComments(body: string): string {
   return out;
 }
 
+/**
+ * Split a comment-stripped block into declaration texts on TOP-LEVEL `;` only.
+ *
+ * `stripComments` above is quote-aware, and so is the `rulesFromCss` walker in both guards that
+ * consume this file. The split that sat between them was not, and that mismatch is exactly why it
+ * survived the #240 review: the hard part looked solved, so nobody re-read the easy part. This
+ * codebase ships `content: "…"` beside real margin declarations (`dock.css`), so a `;` inside a
+ * quoted value ended the declaration early and handed the rest of the string back as declarations
+ * that were never written. It failed BOTH ways —
+ *   `margin-left: auto; content: "; margin-left: 0;"`  lost a real push (the guard goes blind), and
+ *   `content: "; margin-left: auto;"; margin-right: 0`  invented one (the guard fails valid CSS,
+ * which is how a guard gets deleted — the same failure mode `marginShorthandLeft` above records for
+ * the old `auto`-anywhere regex).
+ *
+ * Parens are counted for the same reason with no quotes involved: an unquoted `url()` token may
+ * legally contain `;`, and `url(data:image/png;base64,…)` is ordinary shipped CSS. A stray `)`
+ * clamps the depth at 0 rather than driving it negative, which would silently disable every later
+ * split. Escapes consume the next character inside and outside strings, so `\;` is a character.
+ *
+ * One pass, no backtracking, bounded by `body.length`.
+ */
+function splitDeclarations(body: string): string[] {
+  const out: string[] = [];
+  let buf = "";
+  let depth = 0;
+  let i = 0;
+  while (i < body.length) {
+    const ch = body[i];
+    if (ch === "\\") {
+      buf += body.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < body.length && body[j] !== ch) j += body[j] === "\\" ? 2 : 1;
+      buf += body.slice(i, Math.min(j + 1, body.length));
+      i = j + 1;
+      continue;
+    }
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    else if (ch === ";" && depth === 0) {
+      out.push(buf);
+      buf = "";
+      i++;
+      continue;
+    }
+    buf += ch;
+    i++;
+  }
+  out.push(buf);
+  return out;
+}
+
+/**
+ * The property/value `:` — the FIRST one outside quotes and parens, or -1 when there is none.
+ *
+ * Fixing one delimiter does not prove the other, so this is not assumed from the split above. Once
+ * `;` splitting is correct no *valid* CSS reaches a different verdict through this function — a
+ * property name cannot contain a quote or a paren, so its `:` is already top-level — but a naive
+ * `indexOf(":")` still manufactures a declaration out of a fragment that is entirely protected
+ * text (`"k:v"` parses as property `"k`), and a parser that invents declarations is one edit away
+ * from inventing one the cascade below acts on.
+ */
+function topLevelColon(decl: string): number {
+  let depth = 0;
+  let i = 0;
+  while (i < decl.length) {
+    const ch = decl[i];
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < decl.length && decl[j] !== ch) j += decl[j] === "\\" ? 2 : 1;
+      i = j + 1;
+      continue;
+    }
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    else if (ch === ":" && depth === 0) return i;
+    i++;
+  }
+  return -1;
+}
+
 /** `a: 1; b: 2 !important` -> declarations, in source order, `!important` split off. */
 export function declarations(body: string): Decl[] {
-  return stripComments(body)
-    .split(";")
+  return splitDeclarations(stripComments(body))
     .map((d) => d.trim())
     .filter(Boolean)
     .map((d) => {
-      const i = d.indexOf(":");
+      const i = topLevelColon(d);
       if (i < 0) return null;
       const prop = d.slice(0, i).trim().toLowerCase();
       let value = d.slice(i + 1).trim();
