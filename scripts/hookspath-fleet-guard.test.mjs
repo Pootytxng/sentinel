@@ -63,7 +63,7 @@ import {
   REDIRECTING_GIT_VARS,
   scrubbedEnv,
 } from "./lib/hookspath-inspect.mjs";
-import { prePushContractViolations } from "./lib/prepush-hook-contract.mjs";
+import { prePushContractViolations, refusesWhenVerifierMissing, shellCode } from "./lib/prepush-hook-contract.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -382,6 +382,89 @@ describe("the pre-push contract", () => {
   it("is not satisfiable by a comment", () => {
     const commented = ["#!/bin/sh", "set -e", "# powershell.exe -File verify-local.ps1", "exit 0"].join("\n");
     expect(prePushContractViolations(commented).length).toBeGreaterThan(0);
+  });
+
+  // The three below are not invented cases. Independent review of this lane at dba3c79c EXECUTED
+  // each one against the contract as it stood and got zero violations back, which is the whole
+  // defect restated: a hook that runs no gate, certified as a gate. They are pinned here by the
+  // bug -> guard law so the hardening cannot be undone by a later simplification.
+  it("is not satisfiable by a TRAILING comment either (review seed 1)", () => {
+    // The whole-line stripper kept this line, so the substring search found the verifier's name
+    // inside a comment attached to `:`, a command whose entire behaviour is to succeed.
+    const seed = ["#!/bin/sh", "set -e", ": # verify-local.ps1"].join("\n");
+    expect(prePushContractViolations(seed)).toContainEqual(expect.stringMatching(/never invokes/));
+  });
+
+  it("rejects a verifier whose failure is swallowed (review seed 2)", () => {
+    // `set -e` cannot fire here: `cmd || :` is a pipeline that SUCCEEDED. Running the gate and
+    // ignoring its answer is indistinguishable from not running it.
+    const seed = ["#!/bin/sh", "set -e", 'powershell.exe -File "$repo/scripts/verify-local.ps1" || :'].join("\n");
+    expect(prePushContractViolations(seed)).toContainEqual(expect.stringMatching(/swallows a failure/));
+    const backgrounded = ["#!/bin/sh", "set -e", 'powershell.exe -File "$repo/verify-local.ps1" &'].join("\n");
+    expect(prePushContractViolations(backgrounded)).toContainEqual(expect.stringMatching(/backgrounds/));
+  });
+
+  it("rejects an UNREACHABLE refusal branch (review seed 3)", () => {
+    // Both halves of the old two-question test are true here and neither is connected to the other.
+    const seed = [
+      "#!/bin/sh",
+      "set -e",
+      "if [ ! -f verify-local.ps1 ]; then :; fi",
+      "if false; then exit 1; fi",
+      "exit 0",
+    ].join("\n");
+    expect(refusesWhenVerifierMissing(seed), "an exit 1 outside the branch is not a refusal").toBe(false);
+
+    const real = execFileSync("git", ["show", "HEAD:.githooks/pre-push"], { cwd: ROOT, encoding: "utf8" });
+    expect(refusesWhenVerifierMissing(real), "the real hook DOES refuse, inside the branch").toBe(true);
+  });
+
+  it("does not truncate code at a `#` that is not a comment", () => {
+    // The cost of tightening the stripper is the opposite failure: cutting real code at `$#` or
+    // `${#x}` would delete the verifier invocation and turn a green hook red — or worse, hide it.
+    expect(shellCode('echo "$# args" # tail').trim()).toBe('echo "$# args"');
+    expect(shellCode("run 'a # b' # tail").trim()).toBe("run 'a # b'");
+    expect(shellCode("sha#1").trim()).toBe("sha#1");
+  });
+});
+
+describe("git config can be injected through the ENVIRONMENT, not just a file", () => {
+  // Found by independent review at dba3c79c: the original scrub covered the variables that redirect
+  // WHICH repo, and missed the family that overrides WHAT ITS CONFIG SAYS. `GIT_CONFIG_COUNT` with
+  // a key/value pair is read by both commands this guard runs, so an injected core.hooksPath would
+  // have been certified while the checkout on disk stayed unwired.
+  it("strips every GIT_CONFIG* form, including the numbered ones", () => {
+    const dirty = {
+      PATH: process.env.PATH,
+      KEEP_ME: "1",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.hooksPath",
+      GIT_CONFIG_VALUE_0: ".githooks",
+      GIT_CONFIG_PARAMETERS: "'core.hooksPath=.githooks'",
+      GIT_CONFIG_GLOBAL: "C:/nowhere/.gitconfig",
+      git_config_nosystem: "1", // lower-case: Windows env keys are case-insensitive
+    };
+    const clean = scrubbedEnv(dirty);
+    expect(Object.keys(clean).filter((k) => /^git/i.test(k))).toEqual([]);
+    expect(clean.KEEP_ME).toBe("1");
+  });
+
+  it("an injected core.hooksPath cannot make an unwired worktree pass", () => {
+    const f = fixture("config-env-injection");
+    // Nothing is armed: no hooksPath is set anywhere, and no .githooks exists in the linked tree.
+    const saved = process.env.GIT_CONFIG_COUNT;
+    process.env.GIT_CONFIG_COUNT = "1";
+    process.env.GIT_CONFIG_KEY_0 = "core.hooksPath";
+    process.env.GIT_CONFIG_VALUE_0 = ".githooks";
+    try {
+      const v = inspectWorktree(f.linked, f.main);
+      expect(v.ok, "the environment must not be able to vouch for the disk").toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env.GIT_CONFIG_COUNT;
+      else process.env.GIT_CONFIG_COUNT = saved;
+      delete process.env.GIT_CONFIG_KEY_0;
+      delete process.env.GIT_CONFIG_VALUE_0;
+    }
   });
 });
 

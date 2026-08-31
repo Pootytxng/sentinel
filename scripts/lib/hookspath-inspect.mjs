@@ -53,10 +53,33 @@ export const REDIRECTING_GIT_VARS = [
   "GIT_QUARANTINE_PATH",
 ];
 
-/** process.env minus the redirecting variables. Case-insensitive: Windows env keys are. */
+/**
+ * The second family, and the one that actually mattered here. Independent review of this lane found
+ * the list above incomplete: git 2.55 lets the ENVIRONMENT override config files outright, via
+ * `GIT_CONFIG_COUNT` + `GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>`, via the pre-parsed
+ * `GIT_CONFIG_PARAMETERS`, and via the file selectors `GIT_CONFIG_GLOBAL`/`_SYSTEM`/`_NOSYSTEM`.
+ *
+ * That is a live fail-open, not a theoretical one: a `core.hooksPath=.githooks` injected through any
+ * of them is read by BOTH commands this file runs, so the inspection certifies a value that exists
+ * only inside its own process while the checkout on disk stays unwired. The numbered forms are
+ * dynamic, so this is a PREFIX rule -- `GIT_CONFIG_KEY_0`, `_KEY_1`, ... cannot be enumerated.
+ * Dropping the whole `GIT_CONFIG*` prefix also takes the ancient `GIT_CONFIG`, which is intended.
+ */
+export const GIT_CONFIG_ENV_PREFIX = "GIT_CONFIG";
+
+/**
+ * process.env minus everything that could change which repository is read or what config it reports.
+ * Case-insensitive throughout: Windows environment keys are.
+ */
 export function scrubbedEnv(env = process.env) {
   const drop = new Set(REDIRECTING_GIT_VARS.map((v) => v.toLowerCase()));
-  return Object.fromEntries(Object.entries(env).filter(([k]) => !drop.has(k.toLowerCase())));
+  const prefix = GIT_CONFIG_ENV_PREFIX.toLowerCase();
+  return Object.fromEntries(
+    Object.entries(env).filter(([k]) => {
+      const key = String(k).toLowerCase();
+      return !drop.has(key) && !key.startsWith(prefix);
+    }),
+  );
 }
 
 export function gitRaw(args, cwd) {

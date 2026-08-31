@@ -24,20 +24,60 @@
 // which is the only situation the branch was written for. That check lives in hookspath-inspect.mjs
 // because it needs to know about the checkout, not just the hook text.
 //
+// WHAT THIS FILE IS NOT: a sandbox. Every check below reads TEXT. Text cannot prove that a script
+// executes anything -- a sufficiently determined author defeats any static rule here, and pretending
+// otherwise would be the same overclaim this lane exists to delete. What it can do is catch the
+// accidents and the drift that actually happen: an empty file, a debugging `exit 0`, a hook that
+// names the verifier only in a comment, a refusal branch whose `exit 1` is unreachable. Each rule
+// below exists because a specific seeded hook defeated its predecessor; the residual limits are
+// stated at the bottom of this file rather than left for a reader to discover.
+//
 // Dependency-free, like both of its callers.
 
 /** The verifier every gate must actually run. */
 export const VERIFIER = "verify-local.ps1";
 
+/** VERIFIER as a regex-safe literal. `.` is the only metacharacter it contains. */
+const VERIFIER_RE = VERIFIER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /**
- * Strip `#` comment lines. Every assertion below is about EXECUTING shell, and this repo has been
- * bitten twice by a guard a comment could satisfy: PR #268's comment-stripper and the case-evidence
- * tier guard both let commented-out code count as the real thing.
+ * Drop a trailing `#` comment from ONE line, leaving quoted `#` alone.
+ *
+ * Whole-line stripping was not enough. Independent review of this lane (Codex, at dba3c79c) seeded
+ * `: # verify-local.ps1` -- a no-op command with the verifier's name in a trailing comment -- and the
+ * whole-line filter kept the line, so the substring search found the name and reported a hook that
+ * runs nothing as a valid gate. That is the same "a comment satisfied the guard" defect this file
+ * already cites twice, one column to the right.
+ *
+ * A `#` opens a comment only when it is unquoted AND starts a word (column zero, or after
+ * whitespace). That keeps `$#`, `${#x}` and `sha#1` intact, which a naive `indexOf("#")` would
+ * silently truncate -- and truncating real code would make this guard fail OPEN, not closed.
+ */
+function stripTrailingComment(line) {
+  let quote = null;
+  for (let i = 0; i < line.length; i += 1) {
+    const c = line[i];
+    if (quote) {
+      if (c === "\\" && quote === '"') i += 1; // \" inside "..." escapes; inside '...' nothing does
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "\\") i += 1;
+    else if (c === "'" || c === '"') quote = c;
+    else if (c === "#" && (i === 0 || /\s/.test(line[i - 1]))) return line.slice(0, i);
+  }
+  return line;
+}
+
+/**
+ * The EXECUTING shell only, comments removed. Every assertion below is about what runs, and this
+ * repo has now been bitten three times by a guard a comment could satisfy: PR #268's
+ * comment-stripper, the case-evidence tier guard, and this file's own first draft.
  */
 export const shellCode = (text) =>
   String(text ?? "")
     .split(/\r?\n/)
-    .filter((line) => !line.trimStart().startsWith("#"))
+    .map(stripTrailingComment)
     .join("\n");
 
 /**
@@ -77,15 +117,51 @@ export function prePushContractViolations(text) {
     }
   }
 
+  // Invoking the verifier and CARING what it answered are two different things. `set -e` stops on a
+  // failing command, but `cmd || :` is a command that succeeded, so `set -e` never fires and the
+  // push proceeds on a red gate. Seeded by independent review at dba3c79c as
+  // `powershell ... verify-local.ps1 || :`, which the previous contract accepted.
+  for (const line of body.split("\n")) {
+    if (!line.includes(VERIFIER)) continue;
+    if (/\|\|\s*(?::|true\b|exit\s+0\b)/.test(line)) {
+      out.push(`it runs ${VERIFIER} but swallows a failure with \`|| :\`/\`|| true\`, so a red gate still pushes`);
+    }
+    if (/(^|[^&])&\s*$/.test(line)) {
+      out.push(`it backgrounds ${VERIFIER} with \`&\`, so the push never waits for the gate's answer`);
+    }
+  }
+
   return out;
 }
 
 /**
  * Does this hook refuse outright when the verifier is missing? Only asked of a checkout that HAS
  * no verifier -- see the note at the top of this file about not demanding it everywhere.
+ *
+ * REACHABILITY, not just presence. The first version asked two independent questions -- "is there a
+ * `[ ! -f ...verify-local.ps1 ]` test?" and "is there an `exit 1` anywhere?" -- which the same
+ * review defeated with a hook where both were true and neither was connected:
+ *
+ *     if [ ! -f verify-local.ps1 ]; then :; fi
+ *     if false; then exit 1; fi
+ *
+ * So the refusal must now live INSIDE the branch that tests for the missing verifier. The block is
+ * taken from the test to the next `fi`, which is exact for a flat branch and CONSERVATIVE when a
+ * nested `if` closes first: the window shrinks, so the answer can only move to "does not refuse".
+ * That is the fail-closed direction, which is the only direction a guard may be wrong in.
  */
 export function refusesWhenVerifierMissing(text) {
   const body = shellCode(text);
-  const guarded = new RegExp(`\\[\\s*!\\s*-f[^\\]]*${VERIFIER.replace(".", "\\.")}[^\\]]*\\]`).test(body);
-  return guarded && /\bexit\s+1\b/.test(body);
+  const found = new RegExp(`\\[\\s*!\\s*-f[^\\]]*${VERIFIER_RE}[^\\]]*\\]`).exec(body);
+  if (!found) return false;
+  const after = body.slice(found.index + found[0].length);
+  const end = after.search(/(^|[\s;])fi\b/);
+  return /(^|[\s;])exit\s+[1-9][0-9]*\b/.test(end < 0 ? after : after.slice(0, end));
 }
+
+// RESIDUAL LIMITS, stated rather than implied. This is a text contract, so it cannot see: a verifier
+// invoked through a variable or alias; a `verify-local.ps1` that is itself a stub; a refusal reached
+// only under a condition that is never true at push time; or anything a subshell does. Closing those
+// needs the hook EXECUTED against a stubbed verifier, which the fixtures could do but the live fleet
+// must not -- running 27 real hooks to audit them would be the audit causing the damage. A green
+// result here means "nothing known-bad in the text", never "this push was verified".
