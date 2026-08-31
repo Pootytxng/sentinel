@@ -184,7 +184,13 @@ fn license_key_path() -> std::path::PathBuf {
 }
 
 fn read_stored_key() -> Option<String> {
-    std::fs::read_to_string(license_key_path())
+    read_stored_key_from(&license_key_path())
+}
+
+/// The read half, lifted to a path so the storage contract can be proven against a synthetic fixture
+/// instead of the owner's real key. Unreadable, empty and whitespace-only all mean "no license".
+fn read_stored_key_from(path: &std::path::Path) -> Option<String> {
+    std::fs::read_to_string(path)
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -211,10 +217,17 @@ pub(crate) fn get_license_status() -> LicenseStatus {
 /// the only side effect — no system change, no network. A blank key clears the stored license.
 #[tauri::command]
 pub(crate) fn set_license_key(key: String) -> Result<LicenseStatus, String> {
+    set_license_key_at(&license_key_path(), &key)
+}
+
+/// The body of [`set_license_key`], lifted to a path for the same reason as [`read_stored_key_from`].
+///
+/// A license key is a **signed plain-text token**, so it is stored as the exact trimmed bytes the user
+/// gave us — never re-serialized, never wrapped in JSON: changing a byte invalidates the signature.
+fn set_license_key_at(path: &std::path::Path, key: &str) -> Result<LicenseStatus, String> {
     let trimmed = key.trim();
-    let path = license_key_path();
     if trimmed.is_empty() {
-        let _ = std::fs::remove_file(&path); // clearing is fine whether or not it existed
+        let _ = std::fs::remove_file(path); // clearing is fine whether or not it existed
         let mut cleared = LicenseStatus::free("no license");
         cleared.armed = licensing_armed();
         return Ok(cleared);
@@ -225,10 +238,136 @@ pub(crate) fn set_license_key(key: String) -> Result<LicenseStatus, String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|_| "Couldn't save the license locally.".to_string())?;
     }
-    std::fs::write(&path, trimmed).map_err(|_| "Couldn't save the license locally.".to_string())?;
+    // Whole-file replacement: a save interrupted partway leaves the PREVIOUS valid token, not a
+    // truncated one that reads back as "license malformed" and silently drops a paying user to free.
+    // The error stays generic and carries no part of the token — not the key, not even its length.
+    crate::atomic_write::write_atomic(path, trimmed.as_bytes())
+        .map_err(|_| "Couldn't save the license locally.".to_string())?;
     let mut status = verify_license(trimmed, &LICENSE_SIGNING_PUBKEY_BYTES, Utc::now());
     status.armed = licensing_armed();
     Ok(status)
+}
+
+// ─── Storage-edge tests ───────────────────────────────────────────────────────────────────────────
+// Every token below is SYNTHETIC and signed by nothing. These prove how the key is STORED, never how
+// it is validated, and no test here reads, writes or names the owner's real `license.key`.
+#[cfg(test)]
+mod license_storage_tests {
+    use super::*;
+    use crate::atomic_write::{force_next_failure, FailPoint};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// A private directory per test — deliberately NOT `compy_data_dir()`.
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "compy-license-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A token of the right SHAPE (`<hex>.<hex>`) and no authority whatsoever: the production public
+    /// key is the all-zeros placeholder, so every one of these verifies as free.
+    fn token(marker: &str) -> String {
+        format!("{}.{}", "6b".repeat(24), marker.repeat(32))
+    }
+
+    #[test]
+    fn the_exact_trimmed_bytes_round_trip_and_are_never_wrapped_in_json() {
+        let path = scratch("roundtrip").join("license.key");
+        let key = token("a1");
+
+        let status = set_license_key_at(&path, &format!("  \n{key}\t ")).unwrap();
+        assert!(!status.valid, "the placeholder key can never validate a license");
+
+        let on_disk = std::fs::read(&path).unwrap();
+        assert_eq!(on_disk, key.as_bytes(), "the stored bytes are the token verbatim");
+        assert!(
+            !on_disk.starts_with(b"\""),
+            "a signed token re-serialized as JSON would no longer verify"
+        );
+        assert_eq!(read_stored_key_from(&path).as_deref(), Some(key.as_str()));
+    }
+
+    #[test]
+    fn a_failed_save_leaves_the_previous_license_readable_and_spills_no_copy_of_the_new_one() {
+        // Both named interruption points, because "the previous key survives" has to hold before the
+        // temp has any bytes AND after it has all of them.
+        for at in [FailPoint::AfterTempCreate, FailPoint::BeforeRename] {
+            let dir = scratch("failed-save");
+            let path = dir.join("license.key");
+            let old = token("a1");
+            let new = token("b2");
+            set_license_key_at(&path, &old).unwrap();
+
+            force_next_failure(at);
+            let err = set_license_key_at(&path, &new).unwrap_err();
+
+            assert_eq!(err, "Couldn't save the license locally.", "at {at:?}");
+            assert_eq!(
+                read_stored_key_from(&path).as_deref(),
+                Some(old.as_str()),
+                "the license that was already working must still be there, at {at:?}"
+            );
+            assert!(!err.contains(&new) && !err.contains(&old), "an error never carries a token");
+
+            // A leftover temp would be the rejected token sitting in plaintext beside the real one.
+            let left: Vec<_> = std::fs::read_dir(&dir)
+                .unwrap()
+                .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                .collect();
+            assert_eq!(left, vec!["license.key".to_string()], "at {at:?}");
+        }
+    }
+
+    #[test]
+    fn blank_input_still_clears_by_deleting_and_stays_harmless_when_nothing_is_stored() {
+        let path = scratch("clear").join("license.key");
+        set_license_key_at(&path, &token("a1")).unwrap();
+
+        let cleared = set_license_key_at(&path, "   \n\t  ").unwrap();
+        assert_eq!(cleared.reason, "no license");
+        assert!(!path.exists(), "clearing DELETES; it never writes empty bytes over the key");
+        assert_eq!(read_stored_key_from(&path), None);
+
+        // Clearing again, with nothing there, is still a clean success.
+        assert_eq!(set_license_key_at(&path, "").unwrap().reason, "no license");
+    }
+
+    #[test]
+    fn an_oversize_key_is_refused_before_anything_is_written() {
+        let path = scratch("oversize").join("license.key");
+        let good = token("a1");
+        set_license_key_at(&path, &good).unwrap();
+
+        let huge = "a".repeat(LICENSE_KEY_MAX_CHARS + 1);
+        let err = set_license_key_at(&path, &huge).unwrap_err();
+        assert_eq!(err, "That doesn't look like a Compy license key.");
+        assert_eq!(read_stored_key_from(&path).as_deref(), Some(good.as_str()));
+
+        // …and with nothing stored it creates nothing — no empty file, no temp.
+        let fresh_dir = scratch("oversize-fresh");
+        let fresh = fresh_dir.join("license.key");
+        assert!(set_license_key_at(&fresh, &huge).is_err());
+        assert_eq!(std::fs::read_dir(&fresh_dir).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_save_into_an_unusable_location_says_only_that_it_failed() {
+        let dir = scratch("blocked");
+        let blocker = dir.join("not-a-dir");
+        std::fs::write(&blocker, b"x").unwrap(); // a FILE where the parent directory would go
+        let key = token("c3");
+
+        let err = set_license_key_at(&blocker.join("license.key"), &key).unwrap_err();
+
+        assert_eq!(err, "Couldn't save the license locally.");
+        assert!(!err.contains(&key), "the user's key never appears in what they are shown");
+    }
 }
 
 // ─── Pure-core tests (the crypto is proven against a test keypair; production key stays placeholder) ──
