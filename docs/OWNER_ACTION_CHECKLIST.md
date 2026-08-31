@@ -90,15 +90,18 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. One dead branch I was denied permission to delete  ·  ⏳ NEW 2026-08-31
+### A_prune. Two dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31
 
-**The ask:** one command — `git push origin --delete lane/native-routing-271`. That lane landed as
-PR [#273](https://github.com/Pootytxng/sentinel/pull/273) (`e26108f7`) and merge-tree proves it holds
-nothing `main` lacks; deleting its leftover ref was **denied to this session**, and a denial is a
-stop, so I did not reach the same effect by another route. **Why it matters:** until the ref is gone
-its row and its handoff bullet have to keep saying "landed but still here", which is two live docs
-carrying a sentence that only exists because of a permission — small, but it is the kind of residue
-that makes the next session distrust the branch list. Nothing is broken while it waits.
+**The ask:** one command, both branches at once —
+`git push origin --delete lane/native-routing-271 lane/css-margin-separators-274`. Both lanes landed
+(PR [#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`, PR
+[#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`) and neither leftover ref holds
+anything `main` lacks. Deleting the first was **denied to this session**, and a denial is a stop —
+so I did not reach the same effect by another route, and I did not try the same thing again on the
+second branch either, because retrying a blocked effect on a fresh target is the same workaround
+wearing a different name. **Why it matters:** until the refs are gone, their rows and the handoff's
+branch list have to keep saying "landed but still here" — small residue, but it is exactly what
+makes the next session distrust the branch list. Nothing is broken while it waits.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
