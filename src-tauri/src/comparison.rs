@@ -475,6 +475,20 @@ mod comparison_persistence_tests {
     }
 
     #[test]
+    fn a_failed_result_save_leaves_the_previous_verdict_readable() {
+        // The armed store and the result store are two separate call sites; this pins the second,
+        // so converting only one of them back to `std::fs::write` still turns a test red.
+        let p = scratch("result-failed").join("compy_comparison_result.json");
+        save_result_to(&p, &result("improved")).expect("first");
+        crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::BeforeRename);
+        assert!(
+            save_result_to(&p, &result("regressed")).is_err(),
+            "the save did not go through the atomic write path"
+        );
+        assert_eq!(latest_result_from(&p).expect("result").verdict, "improved");
+    }
+
+    #[test]
     fn clearing_removes_the_result_and_stays_harmless_when_it_is_already_gone() {
         // Clearing deletes; it does not write. Pinned so a later "consistency" sweep cannot convert
         // it into a write of empty bytes, which would leave a file that parses as nothing but still
