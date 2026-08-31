@@ -549,10 +549,14 @@ describe("Live room - first-viewport hierarchy (issue #236)", () => {
     await openOverlay(container);
     // Pinned from the installed 73b629ed build. Demoting and grouping may change how these LOOK;
     // it may never change which of them exist, or the order Tab walks them.
+    // The two seg-btn entries read `button.` rather than `tab.` since #237: describeControl prints
+    // `role ?? tagName`, and the segmented switch no longer claims a role it never implemented.
+    // Same two elements, same census, same position — the contract this test guards is untouched,
+    // and narrativeControls still collects them because it has always matched plain `button`.
     expect(narrativeControls(container).map(describeControl)).toEqual([
       "button.mc-start[Start capture]",
-      "tab.seg-btn[Live]",
-      "tab.seg-btn[Sessions]",
+      "button.seg-btn[Live]",
+      "button.seg-btn[Sessions]",
       "button.kl-term[How capture works]",
       "button.mc-cap[Overlay on]",
       "button.mc-ov-corner[Overlay corner top left]",

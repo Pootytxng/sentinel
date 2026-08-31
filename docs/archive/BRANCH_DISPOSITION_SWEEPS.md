@@ -108,3 +108,14 @@ dropped in that commit:
   2026-08-26:** checkout retired, its work preserved under tag `preserve/checklist-disk-item-c5660e`
   — the four commits plus one more holding an uncommitted edit found there that stripped every
   comment out of `.codex/config.toml`, which is the record of why that lane is read-only.
+
+## The remaining-refs count, and its own history of going stale
+
+Moved here 2026-08-31 from `docs/BRANCH_DISPOSITIONS.md` to pay for the `lane/segmented-a11y-237`
+row. The live file keeps the LAW the episode taught — re-deriving the count is part of adding a row
+— and no longer carries the episode: that paragraph read **"nine"** long after it stopped being
+true, having been written before the `claude/exciting-robinson-0ce4d5`, `lane/native-routing-271`
+and `lane/css-margin-separators-274` rows existed. It was re-derived to twelve on 2026-08-31, then
+to fourteen the same day when `lane/fleet-guard-failclosed-276` and `lane/shell-ownership-278` were
+dispositioned. Three wrong values inside one file is the argument for the law: a count carried
+forward is not evidence, and `git ls-remote --heads origin` after a `--prune` fetch is.
