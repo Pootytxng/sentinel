@@ -124,7 +124,14 @@ Deny is reserved for the case where the checker has **positive knowledge** of a 
   `ask`.
 - Text analysis cannot see through an alias, a function, a shell variable's *value*, an interpreter
   body, or a binary that writes without naming a recognized verb. Those reach class 2 (`ask`) when a
-  recognized verb is present and are simply allowed when none is.
+  recognized verb is present and are simply allowed when none is. A variable in the **verb** position
+  (`& $cmd '…'`) is class 2 rather than allowed — independent review measured it filed as "names no
+  recognized mutation", which is the one thing an unreadable verb is not evidence of.
+- **Measured and accepted:** `node -e "require('fs').writeFileSync('README.md','x')"` is allowed. An
+  ABSOLUTE path inside an interpreter body is detected; a relative one is not, and closing that needs
+  the body evaluated. Anything with this much reach can also just call the interpreter — which is why
+  the off switch is deliberately not reachable from inside a command (`COMPY_SHELL_OWNERSHIP_OFF=1 rm
+  …` is refused; only the hook process's own environment turns it off).
 - Here-documents, `| cat`-style status laundering and backslash continuations are lexed
   conservatively; a form that defeats the lexer lands in class 2 or is allowed.
 - The guard covers the **tools this harness routes through hooks**. A process this session spawns

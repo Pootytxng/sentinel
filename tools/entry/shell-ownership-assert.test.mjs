@@ -328,6 +328,46 @@ describe("the PowerShell dialect, because guarding one shell is a hole at the ot
   });
 });
 
+// REGRESSION. Independent review executed a matrix against the SHIPPED hook and got these four
+// answers back. Two were writes into a sibling reported as `allow`; two were read-only commands
+// reported as refusals. Both directions are defects — the first lets the write through, the second
+// is the false-deny load that gets a guard deleted instead of fixed.
+describe("a target the verb hides, and a read the verb does not", () => {
+  const ps = (command, over = {}) => ask(command, { toolName: "PowerShell", ...over });
+
+  it("does not read a PowerShell SPLAT as a filename", () => {
+    // `@p` carries no `$`, so it is not `dynamic`, and it was resolved as a path: a file named `@p`
+    // in this session's own root, hence "nothing protected is reached" — while the real target sat
+    // in the hashtable. Splatting is ordinary PowerShell, so this is the accident case.
+    expect(ps(`$p = @{ Path = '${inSib("README.md")}' }; Remove-Item @p`).permission).not.toBe("allow");
+    // A splat naming nothing protected comes back `ask`, not `allow`, and that is the honest answer
+    // rather than a leftover: the hashtable is just as unreadable when its contents are harmless.
+    // `ask` is where every operand this checker cannot resolve already lands.
+    expect(ps(`$p = @{ Path = '${inRoot("README.md")}' }; Remove-Item @p`).permission).toBe("ask");
+  });
+
+  it("does not call a verb it cannot read `no recognized mutation`", () => {
+    // `& $cmd '…'` reached the fall-through and was filed as "names no recognized mutation", which
+    // is the one thing an unreadable verb is not evidence of. Unknown is not unprotected.
+    expect(ps(`$cmd = 'Remove-Item'; & $cmd '${inSib("README.md")}'`).permission).not.toBe("allow");
+    expect(ask(`c=rm; $c ${inSib("README.md")}`).permission).not.toBe("allow");
+  });
+
+  it("lets a LISTING read the refs, claim or no claim", () => {
+    // `git tag -l 'v*'` and `git show-ref --heads` were refused as mutations in an unverified
+    // session. Requiring every word after the verb to be a flag made the listing PATTERN look like
+    // a tag being created; `show-ref` was simply missing from the read-only set.
+    expect(ask("git tag -l 'v*'", { verify: UNCLAIMED }).permission).toBe("allow");
+    expect(ask("git branch --list 'lane/*'", { verify: UNCLAIMED }).permission).toBe("allow");
+    expect(ask("git show-ref --heads", { verify: UNCLAIMED }).permission).toBe("allow");
+    expect(ask("git branch", { verify: UNCLAIMED }).permission).toBe("allow");
+
+    // Without a listing flag the positional is a name being CREATED, and `-d` deletes: still writes.
+    expect(ask("git tag v1.0", { verify: UNCLAIMED }).permission).not.toBe("allow");
+    expect(ask("git branch -d old", { verify: UNCLAIMED }).permission).not.toBe("allow");
+  });
+});
+
 describe("the pieces, so a failure names itself", () => {
   it("removes a here-document BODY before anything reads it as a command", () => {
     const cmd = `cat > notes.md <<'EOF'\nrm -rf ${inSib("src")}\nEOF`;

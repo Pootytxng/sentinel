@@ -245,7 +245,7 @@ const GIT_READONLY = new Set([
   "cat-file", "blame", "describe", "for-each-ref", "symbolic-ref", "var", "shortlog", "name-rev",
   "merge-base", "check-ref-format", "check-ignore", "check-attr", "grep", "count-objects",
   "whatchanged", "annotate", "verify-commit", "verify-tag", "cherry", "range-diff", "diff-tree",
-  "diff-index", "help", "version", "bisect-log",
+  "diff-index", "help", "version", "bisect-log", "show-ref", "show-branch",
 ]);
 
 const GIT_SUB_READONLY = {
@@ -285,7 +285,15 @@ export function gitIsReadOnly(args) {
   const sub = after.find((a) => !a.startsWith("-")) ?? "";
 
   if (verb === "config") return after.some((a) => /^(--get(-all|-regexp|-color(bool)?)?|--list|-l)$/.test(a));
-  if (verb === "branch" || verb === "tag") return after.every((a) => LISTING_ONLY.test(a));
+  if (verb === "branch" || verb === "tag") {
+    // A listing flag makes the positional a PATTERN, not a name: `git tag -l 'v*'` reads tags, it
+    // does not create one. Requiring every word to be a flag called that a mutation and refused a
+    // read — the false-deny shape that gets a guard deleted rather than fixed. Without a listing
+    // flag a positional IS a name to create (`git tag v1.0`), so that stays a mutation.
+    const flags = after.filter((a) => a.startsWith("-"));
+    const listing = flags.length > 0 && flags.every((a) => LISTING_ONLY.test(a));
+    return listing || after.length === 0;
+  }
   if (GIT_SUB_READONLY[verb]) return GIT_SUB_READONLY[verb].has(sub);
   return false;
 }
@@ -385,8 +393,18 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
     const verb = words[head].value.replace(/\.exe$/i, "").toLowerCase();
     const rest = words.slice(head + 1);
     const operandsOf = (ws) => ws.filter((w) => !w.value.startsWith("-"));
+    /** The verb itself came out of a variable (`$cmd file`, `& $cmd file`), so which command runs is
+     *  not knowable from the text. Falling through would file it under "names no recognized
+     *  mutation", which is the one thing it demonstrably is not evidence of. */
+    const verbUnknown = words[head].dynamic;
 
     if (rest.some((w) => ENTRY_CLI.test(w.value.replace(/\\/g, "/")))) continue;
+
+    if (verbUnknown) {
+      for (const p of words.flatMap((w) => embeddedPaths(w.value))) at(p, verb, "embedded");
+      cannot(verb, "the command it runs is not knowable from the text", "opaque");
+      continue;
+    }
 
     /** Absolute paths spelled anywhere in this segment. Positive detection only: their presence is
      *  a fact, their absence proves nothing — which is why it never downgrades an `unresolved`. */
@@ -468,7 +486,12 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
       let anyUnresolved = false;
       for (const w of targets) {
         const value = mutator === "dd" ? w.value.slice(3) : w.value;
-        if (w.dynamic && !globBounded(w)) {
+        // PowerShell splatting (`$p = @{Path='…'}; Remove-Item @p`) hands the target over inside a
+        // hashtable this checker never sees. `@p` carries no `$`, so it is not `dynamic`, and
+        // resolving it as a path answered confidently about a file named `@p` in the session's own
+        // root — an ALLOW on a write into a sibling. Splatting is ordinary PowerShell, not evasion.
+        const splat = dialect === "powershell" && /^@[A-Za-z_@]/.test(value);
+        if (splat || (w.dynamic && !globBounded(w))) {
           anyUnresolved = true;
           cannot(verb, `the operand \`${value}\` is not knowable from the text`);
         } else at(expandHome(value, home), verb);
