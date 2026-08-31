@@ -95,10 +95,11 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **25 worktrees besides `main`; SIX branches carry commits not on main — do NOT delete or
-  hard-reset those six before checking them**: `feat/user-feedback-lab-recovery` ·
+- **25 worktrees besides `main`; SEVEN branches carry commits not on main — do NOT delete or
+  hard-reset those seven before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`.
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
+  `lane/native-routing-271` (this lane, #271 — leaves with the train that lands it).
   **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
   bullet for naming a zero-carry branch — **a landed lane's name leaves it in the train that lands
   it** — and today every carrier has a branch, so nothing rides on rule C's path credit. Spent, at
