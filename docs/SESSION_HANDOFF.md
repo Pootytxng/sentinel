@@ -95,11 +95,11 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **28 worktrees besides `main`; ELEVEN branches carry commits not on main — do NOT delete or hard-reset
-  those eleven before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+- **28 worktrees besides `main`; TEN branches carry commits not on main — do NOT delete or hard-reset
+  those ten before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
-  `lane/vision-pointer-guard-2026-08-24` · the three live lanes `lane/fleet-guard-failclosed-276` ·
-  `lane/shell-ownership-278` · `lane/segmented-a11y-237` · `lane/css-margin-separators-274` (#274) ·
+  `lane/vision-pointer-guard-2026-08-24` · the two live lanes `lane/fleet-guard-failclosed-276` and
+  `lane/shell-ownership-278` · `lane/css-margin-separators-274` (#274) ·
   `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 · `e26108f7`/PR #273)
   and are listed only because **pruning them was denied**. **No depth/SHA pinned**: `git worktree list`
   + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a zero-carry
