@@ -41,16 +41,34 @@ fn state_path() -> std::path::PathBuf {
 }
 
 fn load_state() -> DriftState {
-    std::fs::read_to_string(state_path())
+    load_state_from(&state_path())
+}
+
+/// Unchanged policy, lifted to a path so it can be proven without the real data root: missing or
+/// corrupt both mean "no prior state", never an error.
+fn load_state_from(path: &std::path::Path) -> DriftState {
+    std::fs::read_to_string(path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
 fn save_state(s: &DriftState) {
+    save_state_to(&state_path(), s);
+}
+
+/// Deliberately best-effort and returning nothing, unchanged: drift is a convenience, and a failed
+/// save must never surface as an error to the user. What DID change is that a failure now leaves the
+/// previous state file whole instead of a truncated one.
+///
+/// The directory is still created only AFTER serialization succeeds, exactly as before — a state
+/// that cannot be serialized must not leave a folder behind as its only trace.
+fn save_state_to(path: &std::path::Path, s: &DriftState) {
     if let Ok(json) = serde_json::to_string_pretty(s) {
-        let _ = std::fs::create_dir_all(crate::compy_data_dir());
-        let _ = std::fs::write(state_path(), json);
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = crate::atomic_write::write_atomic(path, json.as_bytes());
     }
 }
 
@@ -135,6 +153,85 @@ fn notices_from(s: &DriftState) -> Vec<DriftNotice> {
 /// disk state alone. Never runs checks (a timeline fetch must not probe the machine).
 pub(crate) fn active_drift_notices() -> Vec<DriftNotice> {
     notices_from(&load_state())
+}
+
+/// #281 — drift's best-effort save still swallows every failure and still returns nothing. Explicit
+/// temp paths only; nothing reads the real data root.
+#[cfg(test)]
+mod drift_persistence_tests {
+    use super::*;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "compy-drift-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn state(id: &str) -> DriftState {
+        let mut s = DriftState::default();
+        s.last_good.insert(id.into(), true);
+        s.noticed_at.insert(id.into(), "T0".into());
+        s
+    }
+
+    #[test]
+    fn missing_and_corrupt_both_read_as_no_prior_state_never_an_error() {
+        let dir = scratch("empty");
+        assert!(load_state_from(&dir.join("absent.json")).last_good.is_empty());
+
+        let p = dir.join("drift.json");
+        std::fs::write(&p, "{\"last_good\": {\"power-pro").unwrap();
+        assert!(
+            load_state_from(&p).last_good.is_empty(),
+            "a truncated drift file must read as no prior state"
+        );
+    }
+
+    #[test]
+    fn state_round_trips_and_replaces_the_previous_file_whole() {
+        let p = scratch("round").join("drift.json");
+        save_state_to(&p, &state("power-profile-and-a-much-longer-id"));
+        save_state_to(&p, &state("gpu"));
+        let got = load_state_from(&p);
+        assert_eq!(got.last_good.len(), 1);
+        assert_eq!(got.last_good.get("gpu"), Some(&true));
+    }
+
+    #[test]
+    fn save_swallows_a_failure_returning_nothing_and_leaving_the_previous_state() {
+        // Drift is a convenience: an unwritable state file must never become an error the user has
+        // to answer. What this lane changes is only that the previous file survives intact.
+        let p = scratch("failed").join("drift.json");
+        save_state_to(&p, &state("keep-me"));
+
+        // `save_state_to` returns nothing, so the proof is behavioural: with the write interrupted,
+        // the call is silent AND the previous state is still readable.
+        crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::BeforeRename);
+        save_state_to(&p, &state("clobber"));
+        assert_eq!(
+            load_state_from(&p).last_good.get("keep-me"),
+            Some(&true),
+            "the interrupted save reached the file — it is not going through the atomic path"
+        );
+        assert!(!load_state_from(&p).last_good.contains_key("clobber"));
+    }
+
+    #[test]
+    fn saving_into_an_unwritable_location_is_silent_and_leaves_no_file() {
+        // A path whose parent is an existing FILE cannot be created or written; the call must still
+        // return `()` without panicking.
+        let dir = scratch("blocked");
+        let blocker = dir.join("not-a-dir");
+        std::fs::write(&blocker, "x").unwrap();
+        save_state_to(&blocker.join("drift.json"), &state("anything"));
+        assert!(blocker.is_file(), "the blocking file was replaced");
+    }
 }
 
 #[cfg(test)]

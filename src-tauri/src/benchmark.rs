@@ -877,7 +877,14 @@ fn store_path() -> std::path::PathBuf {
 }
 
 fn load_store() -> BenchmarkStore {
-    std::fs::read_to_string(store_path())
+    load_store_from(&store_path())
+}
+
+/// Unchanged policy, lifted to a path so it can be proven without the real data root: unreadable or
+/// unparseable BOTH mean "no baseline yet", never an error. That is exactly why a half-written file
+/// used to be destructive — it reads back as an empty store.
+fn load_store_from(path: &std::path::Path) -> BenchmarkStore {
+    std::fs::read_to_string(path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
@@ -885,8 +892,14 @@ fn load_store() -> BenchmarkStore {
 
 fn save_store(store: &BenchmarkStore) -> Result<(), String> {
     std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
+    save_store_to(&store_path(), store)
+}
+
+fn save_store_to(path: &std::path::Path, store: &BenchmarkStore) -> Result<(), String> {
+    // Serialize BEFORE any file is opened: a store that cannot be serialized must not have cost the
+    // user the baseline that is already on disk. Same error mapping as before.
     let json = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
-    std::fs::write(store_path(), json).map_err(|e| e.to_string())
+    crate::atomic_write::write_atomic(path, json.as_bytes()).map_err(|e| e.to_string())
 }
 
 fn state_cache() -> &'static Mutex<BenchmarkState> {
@@ -977,6 +990,80 @@ pub(crate) fn clear_baseline() -> Result<(), String> {
     s.baseline_at = None;
     s.efficacy = None;
     save_store(&BenchmarkStore::default())
+}
+
+/// #281 — the store's missing/corrupt policy is UNCHANGED by the atomic-write lane. These run
+/// against explicit temp paths; none of them reads the real `%APPDATA%\Compy` data root.
+#[cfg(test)]
+mod benchmark_store_persistence_tests {
+    use super::*;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "compy-bench-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_missing_store_is_the_default_not_an_error() {
+        let got = load_store_from(&scratch("missing").join("benchmark.json"));
+        assert!(got.baseline.is_none(), "invented a baseline out of nothing");
+        assert!(got.baseline_at.is_none());
+    }
+
+    #[test]
+    fn a_truncated_store_is_the_default_not_an_error() {
+        // Exactly the shape an interrupted `fs::write` used to leave behind, and the reason that
+        // was destructive: the loader cannot tell "half a file" from "no file".
+        let p = scratch("truncated").join("benchmark.json");
+        std::fs::write(&p, "{\n  \"baseline\": {\n    \"runs\"").unwrap();
+        assert!(load_store_from(&p).baseline.is_none());
+    }
+
+    #[test]
+    fn a_saved_store_round_trips_and_replaces_the_previous_one_whole() {
+        let p = scratch("round").join("benchmark.json");
+        std::fs::write(&p, "{\"baseline\":null,\"baseline_at\":\"OLD-AND-LONGER\"}").unwrap();
+        let store = BenchmarkStore {
+            baseline: None,
+            baseline_at: Some("new".into()),
+        };
+        save_store_to(&p, &store).expect("save");
+        assert_eq!(load_store_from(&p).baseline_at.as_deref(), Some("new"));
+        // No tail of the longer previous file survived, and no temp was left next to it.
+        let leftovers: Vec<_> = std::fs::read_dir(p.parent().unwrap())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "temp left behind: {leftovers:?}");
+    }
+
+    #[test]
+    fn a_failed_save_leaves_the_previous_baseline_readable() {
+        let p = scratch("failed").join("benchmark.json");
+        let good = BenchmarkStore {
+            baseline: None,
+            baseline_at: Some("keep-me".into()),
+        };
+        save_store_to(&p, &good).expect("first save");
+
+        // Interrupt the replacement at the boundary the helper names, driving the REAL save so the
+        // test fails if this caller ever stops going through the atomic path.
+        crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::BeforeRename);
+        assert!(
+            save_store_to(&p, &BenchmarkStore::default()).is_err(),
+            "the save did not go through the atomic write path"
+        );
+        assert_eq!(load_store_from(&p).baseline_at.as_deref(), Some("keep-me"));
+    }
 }
 
 #[cfg(test)]
