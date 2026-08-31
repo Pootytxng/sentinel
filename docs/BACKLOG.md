@@ -353,8 +353,9 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     match, which is what §2A's "best-effort" covers and what the Stage 2 copy now says. **Stage 2
     LANDED 2026-08-29 (#258):** `src/surfaces/CaseEvidenceConsent.tsx` — local preview/edit/
     one-submission consent over Stage 1's canonical bytes, fixture-reachable only, with no command,
-    HTTP, queue or persistence anywhere in it. Next in sequence: **Stage 3** (the Tauri send command
-    and endpoint), its own separate proof boundary.
+    HTTP, queue or persistence anywhere in it. Next in sequence: **Stage 3 — receiver + migration,
+    local/staged ONLY, never deployed** (contract §11), its own separate proof boundary. The Tauri
+    send command is **Stage 4**, and deployment is Stage 7; §11 forbids collapsing them.
   - [x] **Q9c — CPU temp, no driver: SHIPPED 2026-08-18** (`CpuTempOffer.tsx`, self-review PASS).
     Full record verbatim in [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-29, byte cap).
 

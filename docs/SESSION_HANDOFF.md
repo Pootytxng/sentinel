@@ -95,7 +95,7 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **24 worktrees besides `main`; SIX branches carry commits not on main — do NOT delete or
+- **25 worktrees besides `main`; SIX branches carry commits not on main — do NOT delete or
   hard-reset those six before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24`.
