@@ -145,23 +145,73 @@ export function prePushContractViolations(text) {
  *     if [ ! -f verify-local.ps1 ]; then :; fi
  *     if false; then exit 1; fi
  *
- * So the refusal must now live INSIDE the branch that tests for the missing verifier. The block is
- * taken from the test to the next `fi`, which is exact for a flat branch and CONSERVATIVE when a
- * nested `if` closes first: the window shrinks, so the answer can only move to "does not refuse".
- * That is the fail-closed direction, which is the only direction a guard may be wrong in.
+ * So the refusal must live INSIDE the branch that tests for the missing verifier, at that branch's
+ * OWN level.
+ *
+ * The first attempt sliced to the next `fi` and claimed nesting could only make the answer stricter.
+ * That claim was wrong, and re-review caught it at a9c895f7 with the mirror image of the case I had
+ * reasoned about:
+ *
+ *     if missing; then if false; then exit 1; fi; fi
+ *
+ * Slicing to the FIRST `fi` captures the nested block, finds its unreachable `exit 1`, and answers
+ * "refuses" — fail-OPEN, the one direction a guard may never be wrong in. Depth is now counted for
+ * real: an `exit` only counts at depth 0, and the `fi` that takes depth below zero ends the branch.
+ * A refusal genuinely nested inside a further conditional still reads as "does not refuse", which is
+ * the conservative answer and is deliberate.
  */
+const OPENERS = new Set(["if", "case", "while", "until", "for"]);
+
 export function refusesWhenVerifierMissing(text) {
   const body = shellCode(text);
   const found = new RegExp(`\\[\\s*!\\s*-f[^\\]]*${VERIFIER_RE}[^\\]]*\\]`).exec(body);
   if (!found) return false;
-  const after = body.slice(found.index + found[0].length);
-  const end = after.search(/(^|[\s;])fi\b/);
-  return /(^|[\s;])exit\s+[1-9][0-9]*\b/.test(end < 0 ? after : after.slice(0, end));
+
+  // `elif` does not open a block and is not matched: \b before `if` cannot follow the `l`.
+  const scan = /\b(if|case|while|until|for|fi|esac|done)\b|(?:^|[\s;&|])exit\s+([0-9]+)\b/g;
+  let depth = 0;
+  let m;
+  while ((m = scan.exec(body.slice(found.index + found[0].length)))) {
+    if (m[1] === undefined) {
+      if (depth === 0 && Number(m[2]) > 0) return true; // a refusal at the branch's own level
+    } else if (OPENERS.has(m[1])) {
+      depth += 1;
+    } else if ((depth -= 1) < 0) {
+      return false; // this `fi` closed the branch, and nothing refused inside it
+    }
+  }
+  return false;
 }
 
-// RESIDUAL LIMITS, stated rather than implied. This is a text contract, so it cannot see: a verifier
-// invoked through a variable or alias; a `verify-local.ps1` that is itself a stub; a refusal reached
-// only under a condition that is never true at push time; or anything a subshell does. Closing those
-// needs the hook EXECUTED against a stubbed verifier, which the fixtures could do but the live fleet
-// must not -- running 27 real hooks to audit them would be the audit causing the damage. A green
-// result here means "nothing known-bad in the text", never "this push was verified".
+// THE THREAT MODEL, because it decides which of these gaps get closed and which do not.
+//
+// This guard defends against ACCIDENT AND DRIFT, not against an adversary. That is not resignation,
+// it is the only coherent reading: `git push --no-verify` skips the hook entirely, in six characters,
+// with no forgery required. Anyone willing to craft a hook that LOOKS armed while gating nothing --
+// a here-document wrapping the verifier's name, a `| cat` that discards its exit status, a comment
+// hidden after a `;` operator -- could have typed those six characters instead and saved themselves
+// the trouble. Hardening the text rules against that author buys nothing and costs a rule per round.
+//
+// What the fleet actually produces, and what this file is therefore built to catch, is the accident:
+// an empty or truncated file, a debugging `exit 0` somebody forgot, a checkout too old to have a
+// verifier, a hooksPath aimed at a directory that no longer exists. Two worktrees were pushing with
+// zero verification for weeks on exactly that last shape, silently, which is why this lane exists.
+// Every one of those is caught, and each was MEASURED against a seeded fixture rather than assumed.
+//
+// RESIDUAL LIMITS, stated rather than implied. This is a text contract. It cannot see a verifier
+// invoked through a variable or alias, a `verify-local.ps1` that is itself a stub, a refusal reached
+// only under a condition never true at push time, a here-document body, a backslash-continued line,
+// or anything a subshell does. Independent re-review (a9c895f7) enumerated those and they are
+// ACCEPTED, not overlooked -- see the threat model above. Closing them soundly needs the hook
+// EXECUTED against a stubbed verifier, which the fixtures could do and the live fleet must not:
+// running 28 real hooks in order to audit them would be the audit causing the damage.
+//
+// One gap in the same review is declined for a different and stronger reason. `HOME`,
+// `XDG_CONFIG_HOME`, `APPDATA` and `USERPROFILE` also select a config file that could carry
+// core.hooksPath, and hookspath-inspect.mjs deliberately does NOT scrub them: at push time git reads
+// the developer's real HOME, so a guard that hid it would be answering about a machine that does not
+// exist. The `GIT_CONFIG*` family IS scrubbed because it is an injected override this process may
+// have inherited, not ambient user identity. Fidelity and hygiene point opposite ways there, and
+// fidelity wins.
+//
+// A green result here means "nothing known-bad in the text", never "this push was verified".

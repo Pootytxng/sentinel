@@ -419,6 +419,19 @@ describe("the pre-push contract", () => {
     expect(refusesWhenVerifierMissing(real), "the real hook DOES refuse, inside the branch").toBe(true);
   });
 
+  it("an exit nested INSIDE the branch is not a refusal either (the fail-open direction)", () => {
+    // The mirror image of seed 3, and the one the first repair got wrong: slicing to the next `fi`
+    // captured the nested block and read its unreachable `exit 1` as a refusal. Fail-OPEN. Pinned
+    // here specifically because a future simplification back to slicing would look harmless and
+    // would silently re-certify a hook that never refuses.
+    const nested = ["#!/bin/sh", "set -e", "if [ ! -f verify-local.ps1 ]; then if false; then exit 1; fi; fi"].join("\n");
+    expect(refusesWhenVerifierMissing(nested)).toBe(false);
+
+    // ...while the flat branch the real hook uses still reads as a refusal.
+    const flat = ["#!/bin/sh", "set -e", "if [ ! -f verify-local.ps1 ]; then", "  exit 1", "fi"].join("\n");
+    expect(refusesWhenVerifierMissing(flat)).toBe(true);
+  });
+
   it("does not truncate code at a `#` that is not a comment", () => {
     // The cost of tightening the stripper is the opposite failure: cutting real code at `$#` or
     // `${#x}` would delete the verifier invocation and turn a green hook red — or worse, hide it.
@@ -451,7 +464,12 @@ describe("git config can be injected through the ENVIRONMENT, not just a file", 
 
   it("an injected core.hooksPath cannot make an unwired worktree pass", () => {
     const f = fixture("config-env-injection");
-    // Nothing is armed: no hooksPath is set anywhere, and no .githooks exists in the linked tree.
+    // The hook FILE is deliberately present and valid; ONLY the on-disk core.hooksPath is missing.
+    // Re-review caught the first version of this test not proving its own claim: with no hook file
+    // the worktree failed for "missing hook", so the test stayed green even if gitRaw() stopped
+    // scrubbing entirely. Arming the file makes the injected config the ONLY thing that could
+    // certify this worktree, so a green result here would mean the scrub had failed.
+    f.armWith(f.linked, GOOD_HOOK);
     const saved = process.env.GIT_CONFIG_COUNT;
     process.env.GIT_CONFIG_COUNT = "1";
     process.env.GIT_CONFIG_KEY_0 = "core.hooksPath";
@@ -459,6 +477,7 @@ describe("git config can be injected through the ENVIRONMENT, not just a file", 
     try {
       const v = inspectWorktree(f.linked, f.main);
       expect(v.ok, "the environment must not be able to vouch for the disk").toBe(false);
+      expect(v.reason, "and it must fail for the UNSET key, not for a missing file").toMatch(/core\.hooksPath/i);
     } finally {
       if (saved === undefined) delete process.env.GIT_CONFIG_COUNT;
       else process.env.GIT_CONFIG_COUNT = saved;
