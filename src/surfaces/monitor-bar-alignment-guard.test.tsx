@@ -435,31 +435,35 @@ describe("Live room — the face switch sits on the content grid (issue #236)", 
   for (const face of ["live", "sessions"] as const) {
     it(`no shipped rule gives the ${face} face's tab bar an automatic left margin`, () => {
       const { container } = mount();
-      if (face === "sessions") fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+      if (face === "sessions") fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
 
       const bar = container.querySelector(".mv2-bar");
       expect(bar, "the room must render its face-switch bar").not.toBeNull();
-      const tablist = bar!.querySelector('[role="tablist"]') as HTMLElement | null;
-      expect(tablist, "the face switch is the tablist inside that bar").not.toBeNull();
+      // Located by CLASS, not by role: this is a LAYOUT guard, and .seg-control is the element the
+      // margin rules below actually target. #237 changed the switch's role from tablist to group
+      // (it never implemented the tabs keyboard pattern); keying the locator to a role the CSS does
+      // not use would make this guard break on a semantics change it has no opinion about.
+      const seg = bar!.querySelector(".seg-control") as HTMLElement | null;
+      expect(seg, "the face switch is the segmented control inside that bar").not.toBeNull();
 
-      // The bar leads with its tab bar — a control the eye reads first cannot be preceded by
+      // The bar leads with its switch — a control the eye reads first cannot be preceded by
       // spacer children that would make the alignment accidental.
-      expect(bar!.firstElementChild, "the tablist leads the bar").toBe(tablist);
+      expect(bar!.firstElementChild, "the switch leads the bar").toBe(seg);
 
       const offenders: string[] = [];
       for (const rule of pushingRules()) {
         for (const sel of split(rule.selector)) {
           // A selector this jsdom build cannot parse must not silently pass as "no match".
-          let hitsTablist = false;
+          let hitsSeg = false;
           let hitsBar = false;
           try {
-            hitsTablist = tablist!.matches(sel);
+            hitsSeg = seg!.matches(sel);
             hitsBar = (bar as HTMLElement).matches(sel);
           } catch (e) {
             throw new Error(`unparseable selector in monitor-v2.css: ${sel} (${String(e)})`);
           }
-          if (hitsTablist || hitsBar)
-            offenders.push(`${rule.file}: ${sel} { ${rule.push.source} }  →  ${hitsTablist ? "the tablist" : "the bar"}`);
+          if (hitsSeg || hitsBar)
+            offenders.push(`${rule.file}: ${sel} { ${rule.push.source} }  →  ${hitsSeg ? "the switch" : "the bar"}`);
         }
       }
       expect(

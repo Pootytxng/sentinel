@@ -199,7 +199,7 @@ describe("MonitorV2 — RoomShell composition", () => {
   it("Sessions: renders ONE verdict (the pure helper's output) and ONE forward door to Blackbook", () => {
     useReduced();
     const { container } = mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
     const h1s = container.querySelectorAll(".v2-verdict h1");
     expect(h1s.length).toBe(1);
     // The h1 is the VERDICT ALONE (#211). It used to be eyebrow + headline, which made this
@@ -226,7 +226,7 @@ describe("MonitorV2 — RoomShell composition", () => {
   it("no measured-line header strip — header space is header-format text only (owner law 2026-07-10)", () => {
     useReduced();
     const { container } = mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
     expect(container.querySelector(".v2-measured")).toBeNull();
   });
 
@@ -236,7 +236,7 @@ describe("MonitorV2 — RoomShell composition", () => {
     // Start/Stop capture button on that screen). Sessions gained nothing and still has no slot.
     useReduced();
     const { container } = mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
     expect(container.querySelector(".v2-verdict-action")).toBeNull();
   });
 
@@ -248,11 +248,11 @@ describe("MonitorV2 — RoomShell composition", () => {
     useReduced();
     const { container } = mount();
     fireEvent.click(screen.getByText("stub-capture-on"));
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
     expect(container.querySelectorAll(".v2-door").length).toBe(0);
-    fireEvent.click(screen.getByRole("tab", { name: "Live" }));
+    fireEvent.click(screen.getByRole("button", { name: "Live" }));
     fireEvent.click(screen.getByText("stub-capture-off"));
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
     expect(container.querySelectorAll(".v2-door").length).toBe(1);
   });
 
@@ -305,7 +305,7 @@ describe("MonitorV2 — RoomShell composition", () => {
     const { container } = mount();
     fireEvent.click(screen.getByText("stub-capture-on")); // capture live → door closed
     expect(container.querySelectorAll(".v2-door").length).toBe(0);
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" })); // leave Live → poller unmounts
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" })); // leave Live → poller unmounts
     ipc.fpsActive = false; // the session ends off-screen (picked up by the 2s poll)
     await waitFor(() => expect(container.querySelectorAll(".v2-door").length).toBe(1), {
       timeout: 3000,
@@ -356,7 +356,7 @@ describe("MonitorV2 — the shell owns get_fps_status only where no face does", 
     useReduced();
     const { container } = mount();
     fireEvent.click(screen.getByText("stub-capture-on"));
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
     expect(container.querySelectorAll(".v2-door").length).toBe(0); // capture live, door closed
     expect(fpsCalls()).toBe(1); // immediate re-read on mount of the effect
     await settle(2000);
@@ -376,7 +376,7 @@ describe("MonitorV2 — the shell owns get_fps_status only where no face does", 
     useReduced();
     const { container } = mount();
     fireEvent.click(screen.getByText("stub-capture-on"));
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
 
     act(() => setHidden(true)); // alt-tab into the fullscreen game
     vi.mocked(invoke).mockClear();
@@ -396,22 +396,27 @@ describe("MonitorV2 — one face per segment (comprehensibility sweep, issue #18
     useReduced();
     mount();
     expect(screen.getByTestId("monitor-console")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Live" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Sessions" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Live" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sessions" })).toBeTruthy();
   });
 
   it("Sessions is one tab away and renders the full debrief", () => {
     useReduced();
     mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
     expect(screen.getByTestId("play-sessions")).toBeTruthy();
   });
 
   it("renders NO Basic/Advanced detail-level control — the mode fork is retired", () => {
     useReduced();
     mount();
-    expect(screen.queryByRole("tab", { name: "Basic" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Advanced" })).toBeNull();
+    // Checked against BOTH roles on purpose. #237 turned the segmented switch from role="tab" into
+    // a plain button, so a "tab"-only absence check would now pass while a resurrected Basic/
+    // Advanced switch sat on screen — the negative would have quietly stopped guarding anything.
+    for (const name of ["Basic", "Advanced"]) {
+      expect(screen.queryByRole("button", { name }), `a ${name} control came back`).toBeNull();
+      expect(screen.queryByRole("tab", { name }), `a ${name} tab came back`).toBeNull();
+    }
   });
 });
 
