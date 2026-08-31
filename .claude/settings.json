@@ -69,6 +69,17 @@
         ]
       },
       {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/shell-ownership-assert.mjs\"",
+            "timeout": 10,
+            "statusMessage": "compy-entry:shell-ownership"
+          }
+        ]
+      },
+      {
         "matcher": "Workflow",
         "hooks": [
           {

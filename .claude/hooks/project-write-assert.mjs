@@ -13,9 +13,12 @@
 //   1. IT DOES NOT REIMPLEMENT IDENTITY. `verifySession` from the sibling assert is the only judge
 //      of whether this session is verified. A second copy of those rules would be a copy that
 //      drifts, and a drifted identity rule is precisely a wrong root passing for a right one.
-//   2. IT ONLY GUARDS THE PROJECT. A write to the scratchpad, to %TEMP%, to anywhere outside the
-//      resolved session root is not a project write and is never refused. The gate exists to stop
-//      unverified changes to THIS repository, not to make an unverified session useless.
+//   2. IT GUARDS BY TARGET, NOT BY DISTANCE FROM THE ROOT (#278, revised). A write to the
+//      scratchpad, to %TEMP%, to an unrelated project is not a project write and is never refused.
+//      But "outside the session root" used to mean "outside protection", and it does not: a SIBLING
+//      worktree of this repository is another lane's checkout, and `~/.claude` is the owner's
+//      configuration. Both were allowed by the same line. `target-ownership.mjs` answers where a
+//      path lives; this file only decides what to do about it.
 //   3. THE REFUSAL CARRIES A RUNNABLE CURE. `node tools/entry/cli.mjs adopt --issue <n> --session
 //      <id>` with the id already filled in from the hook input, because a CLI run from Bash cannot
 //      know which conversation it belongs to and guessing is how the wrong conversation adopts a
@@ -60,6 +63,7 @@ import {
   samePath,
   verifySession,
 } from "./session-root-assert.mjs";
+import { ZONES, zoneOf } from "./target-ownership.mjs";
 
 /** The tools that change a file directly. `Bash` is the named hole — spec §3c, not an oversight. */
 export const GUARDED_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
@@ -111,12 +115,57 @@ const HEADER = "Blocked: this session is not verified for this folder, and this 
  * @param {number|null} f.knownIssue an issue number still on disk, for a LAPSED cure
  * @returns {{allow: boolean, reason?: string, code?: string, target?: string}}
  */
-export function decide({ toolName, toolInput, verdict, root, sessionId = null, cwd = null, knownIssue = null }) {
+export function decide({ toolName, toolInput, verdict, root, sessionId = null, cwd = null, knownIssue = null, zone = zoneOf }) {
   if (!GUARDED_TOOLS.has(String(toolName ?? ""))) return { allow: true, why: "not a write tool" };
 
   const target = targetOf(toolInput);
   if (!target) return { allow: true, why: "no target path in the tool input" };
-  if (!isInsideRoot(target, root, { cwd })) return { allow: true, why: "outside the project root", target };
+
+  // Outside the root is where the second hole was (#278). Ask which zone the target is in rather
+  // than reading distance-from-root as safety.
+  if (!isInsideRoot(target, root, { cwd })) {
+    const z = zone({ target, sessionRoot: root, cwd });
+    if (z.zone === ZONES.SIBLING) {
+      return {
+        allow: false,
+        permission: "deny",
+        code: "TARGET_NOT_OURS",
+        target,
+        reason:
+          `Blocked: ${z.abs} belongs to ${z.owner} — ${z.why} — and this session is working in ` +
+          `${root}. A claim covers one checkout, so another lane's files are not this lane's to ` +
+          `write, verified or not.\n\nMake the change in a session opened on ${z.owner}, or in ` +
+          `this one against a path it owns. Reaching it through the shell is refused for the same ` +
+          `reason, so switching tools is not the way round it.`,
+      };
+    }
+    if (z.zone === ZONES.GLOBAL) {
+      return {
+        allow: false,
+        permission: "ask",
+        code: "TARGET_OWNER_CONFIG",
+        target,
+        reason:
+          `${z.abs} is inside the owner's global configuration (${z.owner}). It sits outside every ` +
+          `repository guard and no repo claim covers it, so this exact operation and target need ` +
+          `explicit approval rather than inheriting this lane's claim.`,
+      };
+    }
+    if (z.zone === ZONES.UNKNOWN) {
+      return {
+        allow: false,
+        permission: "ask",
+        code: "TARGET_UNRESOLVED",
+        target,
+        reason:
+          `Where ${target} lands could not be worked out (${z.why}). An unresolved path is not ` +
+          `evidence that it is outside protection, so it takes the normal approval path instead of ` +
+          `being treated as outside by default.`,
+      };
+    }
+    return { allow: true, why: "outside the project root", target };
+  }
+
   if (verdict?.ok) return { allow: true, why: `verified (${verdict.mode})`, target };
 
   const code = verdict?.code ?? "UNKNOWN";
@@ -193,6 +242,7 @@ export function run({
   now = new Date(),
   verify = verifySession,
   issueLookup = knownIssueFor,
+  zone = zoneOf,
 } = {}) {
   const cwd = hookInput?.cwd ?? null;
   const resolved = resolveSessionRoot({ env, hookInput, cwd: cwd ?? process.cwd() });
@@ -205,17 +255,24 @@ export function run({
     sessionId: hookInput?.session_id ?? null,
     cwd,
     knownIssue: verdict?.ok ? null : issueLookup({ root: resolved.root, dir, verdict }),
+    zone,
   });
 }
 
-/** The deny wire format PreToolUse understands. An allow says nothing at all. */
+/**
+ * The wire format PreToolUse understands. An allow says nothing at all.
+ *
+ * `ask` joins `deny` here (#278). It is a ROUTING decision, not containment: under a permission mode
+ * that auto-approves it degrades to allow, which is exactly why it is reserved for ambiguity and a
+ * resolved violation still gets `deny`.
+ */
 export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) {
   if (decision.allow) return 0;
   write(
     `${JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
-        permissionDecision: "deny",
+        permissionDecision: decision.permission ?? "deny",
         permissionDecisionReason: decision.reason,
       },
     })}\n`,

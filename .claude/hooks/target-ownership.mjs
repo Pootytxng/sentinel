@@ -1,0 +1,242 @@
+// WHERE IS THIS PATH, AND WHOSE IS IT — the one question both write guards ask (#278).
+//
+// NOT WIRED, and never will be: this is a LIBRARY, not a hook. It has no stdin contract, no exit
+// code and no entrypoint, and `.claude/settings.json` names it nowhere. It sits in this folder
+// because both guards that import it must travel with the branch exactly as they do —
+// `tools/entry/tracked-hooks.test.mjs` pins that an unregistered file here is imported by a
+// registered one, so it cannot quietly become dead weight.
+//
+// Spec: docs/superpowers/specs/2026-08-31-target-ownership-across-tools.md §3.
+//
+// The defect this exists to close is that ownership was decided per TOOL. `Write` was guarded and
+// `Bash` was not, so `sed -i` reached what `Edit` could not; and "outside the session root" was read
+// as "outside protection", so a lane could write into a SIBLING worktree of the same repository —
+// the exact collision the one-writer rule exists to prevent. Both hooks now ask this module instead
+// of each carrying its own notion of where a path lives, because two notions is how they drift.
+//
+// FIVE ZONES, AND `unknown` IS NOT `unprotected`. A path shape the resolver cannot answer for is an
+// absence of evidence, not a finding of safety. It is reported as `unknown` and the callers route it
+// to explicit approval. Treating "I could not tell" as "allow" is the fail-open shape this whole
+// train keeps finding.
+//
+// IT NEVER RUNS GIT UNLESS IT HAS TO. The zone of a path inside the session root, or inside the
+// owner's global config, or under no checkout at all, is decided from the filesystem alone. `git` is
+// spawned only when the target sits inside SOME OTHER checkout and the question "is that a checkout
+// of this repository" is genuinely open. That matters because a PreToolUse hook on the shell runs
+// before every command, and a guard that costs two subprocesses per `ls` would be removed within a
+// day — which is the same outcome as not having one.
+//
+// Pure except for the injected seams: `exists`, `real`, `git`. Every branch is reachable from a test
+// without a repository, and the real-repository behaviour is proved separately against temp fixtures.
+
+import { execFileSync } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+
+export const ZONES = Object.freeze({
+  OWN: "own-claim",
+  SIBLING: "sibling-checkout",
+  GLOBAL: "protected-global",
+  UNPROTECTED: "unprotected",
+  UNKNOWN: "unknown",
+});
+
+/** Zones a write must be authorized for. `unknown` is here on purpose — see the header. */
+export const PROTECTED_ZONES = new Set([ZONES.OWN, ZONES.SIBLING, ZONES.GLOBAL, ZONES.UNKNOWN]);
+
+/**
+ * One comparable spelling: forward slashes, no trailing separator, lower case.
+ *
+ * Deliberately NOT the hooks' `canonicalizePath`, which rewrites `/` to `\` unconditionally and so
+ * turns `/tmp/x` into `\tmp\x`. That is survivable when both sides are mangled identically, and it
+ * is not survivable here, because this module compares a path against an ancestor it walked up with
+ * `node:path` on whichever OS the suite is running. Comparison is case-insensitive on both, which
+ * over-matches on Linux in the direction of MORE protection, never less.
+ */
+export function toComparable(p) {
+  const s = String(p ?? "").trim().replace(/\\/g, "/");
+  const trimmed = s.length > 1 ? s.replace(/\/+$/, "") : s;
+  return trimmed.toLowerCase();
+}
+
+/** Is `child` the same path as `parent`, or beneath it? A component boundary is required. */
+export function isWithin(child, parent) {
+  const c = toComparable(child);
+  const p = toComparable(parent);
+  if (!c || !p) return false;
+  return c === p || c.startsWith(`${p}/`);
+}
+
+/**
+ * Absolute form of a target, with `..` collapsed BEFORE anything compares it. A relative target
+ * resolves against the session cwd, which is the only place a shell or a tool call would have meant.
+ * @returns {string|null} null when there is nothing to resolve against.
+ */
+export function resolveAbsolute(target, cwd) {
+  const t = String(target ?? "").trim();
+  if (!t) return null;
+  if (isAbsolute(t)) return resolve(t);
+  // A bare Windows drive-relative form (`C:foo`) names a per-drive cwd this process does not have.
+  // It is unresolvable, not relative-to-here; saying so is the difference between an honest
+  // `unknown` and a confident wrong answer.
+  if (/^[A-Za-z]:(?![\\/])/.test(t)) return null;
+  if (!cwd) return null;
+  return resolve(cwd, t);
+}
+
+/**
+ * The deepest ancestor of `abs` that exists, plus the segments still missing.
+ *
+ * A file that does not exist yet still has a home: `…\sentinel-other\src\New.tsx` is a write into a
+ * sibling checkout before anyone creates it. Canonicalizing the ancestor with the real path is what
+ * makes a junction, a reparse point or a substituted drive collapse onto the folder it truly is,
+ * so `J:\lane\file` and `C:\Users\Kuya\code\sentinel-other\file` cannot get different answers.
+ */
+export function nearestExistingAncestor(abs, { exists = existsSync, real = realpathSync } = {}) {
+  let dir = abs;
+  const missing = [];
+  for (;;) {
+    if (exists(dir)) {
+      let canonical = dir;
+      try {
+        canonical = real(dir);
+      } catch {
+        /* a path that exists but cannot be realpath'd keeps its literal form */
+      }
+      return { base: canonical, missing: missing.reverse() };
+    }
+    const parent = dirname(dir);
+    if (!parent || parent === dir) return { base: null, missing: [] };
+    missing.push(dir.slice(parent.length).replace(/^[\\/]+/, ""));
+    dir = parent;
+  }
+}
+
+/** `abs`, with its deepest existing ancestor replaced by that ancestor's real path. */
+export function canonicalTarget(abs, deps = {}) {
+  const { base, missing } = nearestExistingAncestor(abs, deps);
+  if (!base) return abs;
+  return missing.length ? join(base, ...missing) : base;
+}
+
+/**
+ * Walk up for a `.git`. A LINKED worktree's `.git` is a file, not a directory, so the test is
+ * existence and nothing else — checking for a directory is how a tool ends up blind to exactly the
+ * checkouts this guard is about.
+ * @returns {string|null} the checkout root, or null if the path is under no checkout at all.
+ */
+export function checkoutRootOf(abs, { exists = existsSync } = {}) {
+  let dir = abs;
+  for (;;) {
+    try {
+      if (exists(join(dir, ".git"))) return dir;
+    } catch {
+      return null;
+    }
+    const parent = dirname(dir);
+    if (!parent || parent === dir) return null;
+    dir = parent;
+  }
+}
+
+const runGit = (cwd, args) => {
+  try {
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Repository identity for a checkout root: the common git dir (which every worktree of one
+ * repository shares) and the origin url (which every CLONE of one repository shares).
+ *
+ * Both, because `git worktree list` cannot see a separate clone — `tools/entry/checkouts.mjs` exists
+ * for that finding — and a sibling clone of this repo is as much someone else's checkout as a
+ * sibling worktree is.
+ */
+export function repoIdentity(root, { git = runGit } = {}) {
+  if (!root) return null;
+  const commonRaw = git(root, ["rev-parse", "--git-common-dir"]);
+  if (commonRaw === null) return null;
+  const common = isAbsolute(commonRaw) ? commonRaw : resolve(root, commonRaw);
+  return { commonDir: toComparable(common), origin: (git(root, ["remote", "get-url", "origin"]) || "").toLowerCase() || null };
+}
+
+/** Two checkout roots belong to one repository when they share a common git dir or an origin. */
+export function sameRepository(a, b) {
+  if (!a || !b) return false;
+  if (a.commonDir && b.commonDir && a.commonDir === b.commonDir) return true;
+  return Boolean(a.origin && b.origin && a.origin === b.origin);
+}
+
+/**
+ * The owner's configuration, which lives outside every repository and therefore outside every
+ * repository-shaped guard. `~/.claude` holds the settings and hooks that decide what agents may do
+ * on this machine; `~/.codex` is the same thing for the other tool, and is already recorded as
+ * sitting outside every guard.
+ */
+export function protectedGlobals({ home = homedir() } = {}) {
+  return [join(home, ".claude"), join(home, ".codex")];
+}
+
+/**
+ * @param {object} q
+ * @param {string} q.target        as written by the tool or the command
+ * @param {string} q.sessionRoot   the resolved session root
+ * @param {string|null} q.cwd      for a relative target
+ * @returns {{zone: string, abs: string|null, owner: string|null, why: string}}
+ */
+export function zoneOf({ target, sessionRoot, cwd = null, deps = {} } = {}) {
+  const { exists = existsSync, real = realpathSync, git = runGit, home = homedir() } = deps;
+
+  const raw = resolveAbsolute(target, cwd);
+  if (!raw) return { zone: ZONES.UNKNOWN, abs: null, owner: null, why: "the target could not be resolved to an absolute path" };
+
+  let abs;
+  try {
+    abs = canonicalTarget(raw, { exists, real });
+  } catch {
+    return { zone: ZONES.UNKNOWN, abs: raw, owner: null, why: "the target's real path could not be read" };
+  }
+
+  // The session root gets the same real-path treatment, or a junctioned root and a literal target
+  // compare unequal and every write reads as somebody else's.
+  let root = null;
+  if (sessionRoot) {
+    try {
+      root = canonicalTarget(resolve(sessionRoot), { exists, real });
+    } catch {
+      root = resolve(sessionRoot);
+    }
+  }
+
+  if (root && isWithin(abs, root)) return { zone: ZONES.OWN, abs, owner: root, why: "inside the session root" };
+
+  for (const g of protectedGlobals({ home })) {
+    if (isWithin(abs, g)) return { zone: ZONES.GLOBAL, abs, owner: g, why: "inside the owner's global configuration" };
+  }
+
+  let owner = null;
+  try {
+    owner = checkoutRootOf(abs, { exists });
+  } catch {
+    return { zone: ZONES.UNKNOWN, abs, owner: null, why: "the target's checkout could not be determined" };
+  }
+  if (!owner) return { zone: ZONES.UNPROTECTED, abs, owner: null, why: "under no checkout, and outside the session root" };
+  if (root && isWithin(owner, root)) return { zone: ZONES.OWN, abs, owner, why: "inside the session root" };
+
+  // Only now is git worth a subprocess: the target is inside SOME checkout that is not this one.
+  const mine = repoIdentity(root, { git });
+  const theirs = repoIdentity(owner, { git });
+  if (!theirs) return { zone: ZONES.UNKNOWN, abs, owner, why: "a checkout whose identity git would not report" };
+  if (!mine) {
+    // This session is not in a checkout at all, so "sibling" has no meaning — but the target IS in
+    // somebody's repository, and this session has no claim on it.
+    return { zone: ZONES.SIBLING, abs, owner, why: "a checkout, from a session that is in none" };
+  }
+  return sameRepository(mine, theirs)
+    ? { zone: ZONES.SIBLING, abs, owner, why: "another checkout of this repository" }
+    : { zone: ZONES.UNPROTECTED, abs, owner, why: "a checkout of an unrelated repository" };
+}

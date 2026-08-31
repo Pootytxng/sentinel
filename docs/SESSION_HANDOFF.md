@@ -20,18 +20,13 @@ debt, batch the next cut).
 
 ## The rule that came out of the walk — read this before touching Health
 
-**DIR-1a: offering help is conditional on evidence.** Asked a narrow question (Health's front door
-and its shortcut cards ask the same thing) the owner **rejected both options to say something
-larger**: every door on that screen was symptom-framed, and a front door built only out of symptoms
-tells a healthy PC's owner either that they are in the wrong place or that Compy found something.
-Compy also does optimisation, and *"i want more fps"* is a legitimate reason to be here. Shipped:
-the interview gained four **goal** answers under two labelled halves (`home-interview-data.ts`,
-`groupChoices`); Health picks the half from `somethingDetected` — a flagged readiness check **or** an
-incident the observer read out of Windows (`HomeConsole.tsx`). Guard
-`src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **A STANDING lens, not a
-closed row** — every new Health affordance must answer *"is this framing earned?"* first.
-**DIR-1b:** the attention state carries a one-line ROUTE to the room that acts on it (#180 §C
-untouched — the detail paragraph still does not render on Health).
+**DIR-1a: offering help is conditional on evidence** — a front door built only out of symptoms tells
+a healthy PC's owner they are in the wrong place. **A STANDING lens, not a closed row:** every new
+Health affordance must answer *"is this framing earned?"* first. Shipped `b21bc18b`, guard
+`src/surfaces/home-console-front-door-gate.test.tsx`. **Read it at `UI_VISION_BACKLOG.md` §"⭐ DIR-1a"
+— in full, never from here**; that row says in its own words that a paraphrase of it loses the point,
+and this file used to carry one. **DIR-1b:** the attention state carries a one-line ROUTE to the room
+that acts on it (#180 §C untouched — the detail paragraph still does not render on Health).
 
 **Rooms are `Health · Live · History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are
 persistence keys). **Read the rail from `src/design/homeRail.ts`, never from a doc.**
@@ -95,10 +90,14 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **26 worktrees besides `main`; EIGHT branches carry commits not on main — do NOT delete or
-  hard-reset those eight before checking them**: `feat/user-feedback-lab-recovery` ·
+- **27 worktrees besides `main`; TEN branches carry commits not on main — do NOT delete or
+  hard-reset those ten before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
+  `lane/fleet-guard-failclosed-276` (#276, PR #277 **open on purpose** — its proof boundary is a
+  second independent review and that reviewer's quota resets 2026-08-31 00:27) ·
+  `lane/shell-ownership-278` (#278, sidebar remediation Task 4 — **PR opened and deliberately left
+  open; landing it is what ARMS the shell guard, so that is an owner call**) ·
   `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED**
   (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are listed only because **pruning them was denied**.
   **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
