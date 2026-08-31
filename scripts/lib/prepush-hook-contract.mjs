@@ -81,6 +81,44 @@ export const shellCode = (text) =>
     .join("\n");
 
 /**
+ * The same text with every QUOTED span blanked to spaces, character for character, so offsets into
+ * it match offsets into shellCode() exactly.
+ *
+ * Two views are needed because the two questions disagree about quotes. Finding the verifier's
+ * INVOCATION must keep them -- the real hook writes `-File "$repo/scripts/verify-local.ps1"`, and
+ * blanking that would hide the very thing being looked for. Counting shell STRUCTURE must drop them:
+ * re-review at 77af56e4 showed `echo "will exit 1"` certifying a hook that only prints the words,
+ * and `echo "fi"` decrementing the block depth so an unreachable nested exit surfaced as reachable.
+ * A diagnostic message is not syntax.
+ */
+function blankQuoted(text) {
+  return String(text ?? "")
+    .split("\n")
+    .map((line) => {
+      let out = "";
+      let quote = null;
+      for (let i = 0; i < line.length; i += 1) {
+        const c = line[i];
+        if (quote) {
+          out += " ";
+          if (c === "\\" && quote === '"' && i + 1 < line.length) {
+            out += " ";
+            i += 1;
+          } else if (c === quote) quote = null;
+        } else if (c === "'" || c === '"') {
+          quote = c;
+          out += " ";
+        } else if (c === "\\" && i + 1 < line.length) {
+          out += "  ";
+          i += 1;
+        } else out += c;
+      }
+      return out;
+    })
+    .join("\n");
+}
+
+/**
  * Contract violations in a pre-push hook's text. Empty means it is a hook that can be trusted to
  * gate a push. Each string is written to be read by whoever has to fix it.
  */
@@ -167,11 +205,15 @@ export function refusesWhenVerifierMissing(text) {
   const found = new RegExp(`\\[\\s*!\\s*-f[^\\]]*${VERIFIER_RE}[^\\]]*\\]`).exec(body);
   if (!found) return false;
 
+  // Structure is counted over the BLANKED view, where a quoted `fi` or `exit 1` is just spaces.
+  // Same length as `body`, so the offset found above still points at the end of the guard test.
+  const region = blankQuoted(body).slice(found.index + found[0].length);
+
   // `elif` does not open a block and is not matched: \b before `if` cannot follow the `l`.
   const scan = /\b(if|case|while|until|for|fi|esac|done)\b|(?:^|[\s;&|])exit\s+([0-9]+)\b/g;
   let depth = 0;
   let m;
-  while ((m = scan.exec(body.slice(found.index + found[0].length)))) {
+  while ((m = scan.exec(region))) {
     if (m[1] === undefined) {
       if (depth === 0 && Number(m[2]) > 0) return true; // a refusal at the branch's own level
     } else if (OPENERS.has(m[1])) {

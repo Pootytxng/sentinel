@@ -432,6 +432,22 @@ describe("the pre-push contract", () => {
     expect(refusesWhenVerifierMissing(flat)).toBe(true);
   });
 
+  it("does not read a diagnostic MESSAGE as shell structure", () => {
+    // Round 3 of review found both of these certifying hooks that never refuse. They are the
+    // accident case, not the adversarial one: a hook that talks about exiting is ordinary, and a
+    // guard that counts the words inside `echo` is counting the wrong thing.
+    const talksAboutIt = 'if [ ! -f verify-local.ps1 ]; then echo "will exit 1"; fi; exit 0';
+    expect(refusesWhenVerifierMissing(talksAboutIt), "printing the words is not exiting").toBe(false);
+
+    const quotedFi = 'if [ ! -f verify-local.ps1 ]; then if false; then echo "fi"; exit 1; fi; fi';
+    expect(refusesWhenVerifierMissing(quotedFi), "a quoted `fi` must not close a block").toBe(false);
+
+    // The real hook's own refusal is three quoted echoes followed by a bare exit — proof the
+    // blanking did not go so far that a genuine refusal stopped counting.
+    const real = execFileSync("git", ["show", "HEAD:.githooks/pre-push"], { cwd: ROOT, encoding: "utf8" });
+    expect(refusesWhenVerifierMissing(real)).toBe(true);
+  });
+
   it("does not truncate code at a `#` that is not a comment", () => {
     // The cost of tightening the stripper is the opposite failure: cutting real code at `$#` or
     // `${#x}` would delete the verifier invocation and turn a green hook red — or worse, hide it.
