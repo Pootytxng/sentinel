@@ -175,7 +175,7 @@ describe("HUD room rollout: title-header law (h1 = the room title, never a statu
   it("Monitor: no HUD masthead in EITHER flag state — the four-room header replaced it, identically", () => {
     for (const flag of ["0", "1"]) {
       const c = mountWithFlag(ROOMS[0], flag);
-      fireEvent.click(within(c).getByRole("tab", { name: "Sessions" }));
+      fireEvent.click(within(c).getByRole("button", { name: "Sessions" }));
       expect(c.querySelector(".hud-masthead-eyebrow"), `flag ${flag}`).toBeNull();
       expect(c.querySelector(".hud-headline"), `flag ${flag}`).toBeNull();
       // The room's own eyebrow, and an h1 that is the measured verdict — never the bare title.
