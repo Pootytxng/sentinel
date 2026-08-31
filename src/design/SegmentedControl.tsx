@@ -11,6 +11,16 @@ import "./SegmentedControl.css";
 //
 // CONTRAST LAW (pinned, see SegmentedControl.css): the active label rides --ix-accent-ink on a FLAT
 // --ix-accent fill — exactly what theme-contrast.test.ts proves. Keep the fill flat (not a gradient).
+//
+// SEMANTICS (#237). This was `role="tablist"` + `role="tab"` + `aria-selected`, which promises the
+// ARIA tabs pattern: arrow/Home/End roving focus, one tab stop for the whole set, and a `tabpanel`
+// each tab controls. It delivered none of those, so assistive technology was told to expect a
+// keyboard contract that did not exist — worse than a plainer, honest one. It is now a labelled
+// GROUP of native buttons carrying `aria-pressed`: Tab reaches each button, Enter and Space activate
+// it for free, and the promise matches the behaviour. Tabs were not the answer, because the
+// consumers do not uniformly own panels — Blackbook's approved split Logbook deliberately exposes
+// Field Guide as a ROUTE, and a tab role would have lied about that too. Nothing visual changes:
+// the selected element is still found by attribute, and the pill still measures and glides.
 
 export type Segment = { id: string; label: string };
 
@@ -18,7 +28,7 @@ type Props = {
   segments: Segment[];
   value: string;
   onChange: (id: string) => void;
-  /** Accessible name for the tablist (e.g. "Optimize sections" / "Monitor sections"). */
+  /** Accessible name for the group (e.g. "Optimize sections" / "Monitor sections"). */
   "aria-label"?: string;
 };
 
@@ -30,7 +40,7 @@ export function SegmentedControl({ segments, value, onChange, "aria-label": aria
     ready: false,
   });
   const measurePill = () => {
-    const el = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    const el = ref.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
     // Reading offsetLeft/offsetWidth forces a synchronous reflow — skip it when the control is
     // hidden (offsetWidth 0, e.g. a keepalive'd surface toggling display:none on a tab switch): the
     // pill isn't visible anyway, and the reflow-on-hide was a measurable tab-switch hitch. It
@@ -52,8 +62,8 @@ export function SegmentedControl({ segments, value, onChange, "aria-label": aria
   }, []);
 
   return (
-    <div className="seg-control" role="tablist" aria-label={ariaLabel} ref={ref}>
-      {/* the gliding accent pill — sits behind the active tab's text, glides to the selection */}
+    <div className="seg-control" role="group" aria-label={ariaLabel} ref={ref}>
+      {/* the gliding accent pill — sits behind the pressed segment's text, glides to the selection */}
       <span
         className="seg-indicator"
         aria-hidden="true"
@@ -62,8 +72,8 @@ export function SegmentedControl({ segments, value, onChange, "aria-label": aria
       {segments.map((s) => (
         <button
           key={s.id}
-          role="tab"
-          aria-selected={value === s.id}
+          type="button"
+          aria-pressed={value === s.id}
           className={`seg-btn ${value === s.id ? "seg-btn-on" : ""}`}
           onClick={() => onChange(s.id)}
         >
