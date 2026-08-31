@@ -79,9 +79,9 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 2 (#258) LANDED** — `cfc0d21a` / PR #263, the consent screen renders the payload itself.
-**Stage 3 is NEXT**: receiver + migration, local/staged ONLY, never deployed — deployment is Stage 7
-and owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+**Q9b Stage 3 (#287) BUILT** — `scripts/lib/case-endpoint/`, local/staged ONLY and **not deployed**:
+proved against a `node:sqlite` D1 fixture, fenced by `scripts/case-endpoint-isolation.test.mjs`.
+**Stage 4 is NEXT**: the Tauri send command. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -95,18 +95,18 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides `main`; THIRTEEN branches carry commits not on main — do NOT delete or
-  hard-reset those thirteen before checking them**: `feat/user-feedback-lab-recovery` ·
+- **32 worktrees besides `main`; FOURTEEN branches carry commits not on main — do NOT delete or
+  hard-reset those fourteen before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` · the five live lanes
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` · the six live lanes
   `lane/fleet-guard-failclosed-276`, `lane/shell-ownership-278`, `lane/atomic-json-281` (#281),
-  `lane/license-atomic-284` (#284), `lane/remote-cache-design-286` (#286) · `lane/native-routing-271`
-  (#271) and `lane/css-margin-separators-274` (#274) — those two LANDED (PR #273 · PR #275) and stay
-  only because **pruning was denied**. Re-derive, never copy: `git worktree list` +
-  `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a zero-carry
-  branch — a landed lane's name leaves with its train — and every carrier has a branch, so rule C's
-  path credit is idle. Spent, at zero: `sentinel-recon-261`, `sentinel-release-truth-256`,
-  `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258`, `sentinel-q9b-stage2`, `sentinel-segmented-237`,
+  `lane/license-atomic-284` (#284), `lane/remote-cache-design-286` (#286), `lane/case-receiver-287`
+  (#287) · `lane/native-routing-271` (#271) and `lane/css-margin-separators-274` (#274) — those two
+  LANDED (PR #273 · PR #275) and stay only because **pruning was denied**. Re-derive, never copy:
+  `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet
+  for naming a zero-carry branch, and every carrier has a branch, so rule C's path credit is idle.
+  Spent, at zero: `sentinel-recon-261`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`,
+  `sentinel-q9b-stage2-258`, `sentinel-q9b-stage2`, `sentinel-segmented-237`,
   `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace`, four in `.claude/worktrees/`.
 
 ## Waiting on the owner — two arming gates, nothing else

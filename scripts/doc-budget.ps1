@@ -148,6 +148,17 @@ $sectionByteBudgets = @{
   # (81039 vs 80896). Banking the freed room here is the half of the move that closes it; the
   # remaining 328 bytes are deliberate, because this queue is where the next conformance
   # finding lands and a zero-headroom cap would fail the session that files it.
+  #
+  # HELD at 23808 on 2026-08-31, deliberately NOT ratcheted, while landing the Q9b Stage 3 record
+  # (#287). The queue FAILED at 24214 and was paid from the archive as always - Q9b Stage 1's
+  # invisible-character failure and its reviewed repair, plus Q9a's settled ships-by-default
+  # reasoning, moved to docs/BACKLOG_ARCHIVE.md verbatim behind two pointers, and the Stage 3
+  # record itself was written tighter. 24214 -> 23519. Nothing was banked because only 289 of the
+  # 695 bytes freed are new room: the other 406 paid the overflow. Ratcheting to 23552 would leave
+  # 33 bytes, which is the zero-headroom failure the paragraph above already ruled against. The
+  # one closed row this queue had was archived long ago, so the NEXT payment has no closed row to
+  # move - it will have to come from open-row narrative that has gone historical, the way this one
+  # did. Note that too, rather than reaching for the cap.
   "docs/BACKLOG.md::Conformance queue" = 23808
   "docs/BACKLOG.md::HQ STEERING LOG" = 4608
 }

@@ -3471,3 +3471,34 @@ purpose) and **A1's `©ompy` is in the comp too**, so it is the mark he approved
     be in `Fix.tsx` (a refused apply) and `LicensePanel.tsx` (a failed activation), both fixed in
     the same commit. A second round-trip gave the first-run card a measure (62ch) so its divider and
     its Accept / No-thanks pair stop where the prose stops instead of stretching a full-width tile.
+
+---
+
+## Q9b Stage 1 — the invisible-character failure and its repair (moved from `docs/BACKLOG.md` 2026-08-31, section byte cap)
+
+> Moved verbatim while landing #287 so the append-only Conformance queue could pay for the Q9b
+> Stage 3 record. Closed history: the failure was repaired, the repair was independently reviewed,
+> and both are superseded by Stages 2 and 3. Only the line wrap moved. The LIVE residual — mixed-script
+> homoglyphs and U+2800 still defeat an exact match — deliberately stayed in `docs/BACKLOG.md`,
+> because it describes the boundary as it ships today, not as it once failed.
+
+    **Its security precondition FAILED first (#258)** — an invisible character (U+200B and family)
+    inside a username, address, key or serial defeated every exact-match detector while rendering
+    identically; Stage 2 stopped rather than hide the repair inside it. **Stage 1 repair landed
+    2026-08-29 (#259), independently reviewed six passes PASS (#260):** the input boundary drops
+    Cf/Default_Ignorable and folds full-width ASCII before any detector runs, the preview serializes
+    from the same struct as the wire so key order matches byte-for-byte, and the serializer refuses a
+    shapeless payload; the review's own find — `180B..180F`'s four Mongolian selectors — was fixed
+    in-lane.
+
+---
+
+## Q9a Tier 2 — why the consent screen shipped without an owner sign-off (moved from `docs/BACKLOG.md` 2026-08-31, section byte cap)
+
+> Moved verbatim in the same payment. A settled reasoning record, not a status: the live row still
+> carries the status it produced (arming is owner territory, `receipts.rs:28`).
+
+    **Ships by default, not pending** (2026-08-26): the 2026-08-07 decree makes the look the lane's
+    to ship and the owner's to veto on sight, and he has the before/after. Only ARMING is his. Said
+    honestly — the decree carves out what reaches other people's machines, so a consent screen is
+    the closest case yet: first application, not settled precedent.
