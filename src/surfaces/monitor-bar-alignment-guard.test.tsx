@@ -387,6 +387,40 @@ describe("Live room — the face switch sits on the content grid (issue #236)", 
       expect(rules.map((r) => r.selector)).toEqual([".a", ".b"]);
       expect(leftMarginIsAuto(rules[0].body).auto).toBe(true);
     });
+
+    // #274 — the walker above was already quote-aware; the DECLARATION split inside
+    // `leftMarginIsAuto` was not, so a `;` in a quoted value manufactured declarations. Both
+    // directions reach this guard through the same route a real run takes: whole rule text ->
+    // rulesFromCss -> leftMarginIsAuto. Asserting it on a bare body would prove nothing about
+    // the route, which is the blind spot this whole describe block exists to close.
+    it("FALSE NEGATIVE control: a quoted `;` must not hide the push this guard exists to catch", () => {
+      const css = '.target { margin-left: auto; content: "; margin-left: 0;"; }';
+      const [rule] = rulesFromCss(css, "fixture.css");
+      expect(rule.selector).toBe(".target");
+      const verdict = leftMarginIsAuto(rule.body);
+      expect(verdict.auto).toBe(true);
+      expect(verdict.source).toBe("margin-left: auto");
+    });
+
+    it("FALSE POSITIVE control: a push that exists only inside a string must not fail valid CSS", () => {
+      const css = '.decoy { content: "; margin-left: auto;"; margin-right: 0; }';
+      const [rule] = rulesFromCss(css, "fixture.css");
+      expect(rule.selector).toBe(".decoy");
+      expect(leftMarginIsAuto(rule.body).auto).toBe(false);
+    });
+
+    it("NEGATIVE control: a plain, real `margin-left: auto` still trips the invariant", () => {
+      // the repair must not have been bought by making the guard quieter. This is the shape a
+      // genuine regression takes, with nothing clever in it.
+      const [rule] = rulesFromCss(".face-switch { margin-left: auto; }", "fixture.css");
+      expect(leftMarginIsAuto(rule.body).auto).toBe(true);
+    });
+
+    it("a semicolon inside an unquoted url() is not a declaration boundary on this route", () => {
+      const css = ".target { background: url(data:image/png;base64,iVBORw0KGgo=); margin-left: auto; }";
+      const [rule] = rulesFromCss(css, "fixture.css");
+      expect(leftMarginIsAuto(rule.body).auto).toBe(true);
+    });
   });
 
   it("a literal brace inside a stylesheet comment does not corrupt rule splitting (App.css:2159)", () => {

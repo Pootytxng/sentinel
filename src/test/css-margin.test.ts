@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { leftMarginIsAuto, marginShorthandLeft, marginInlineStart, valueTokens } from "./css-margin";
+import { declarations, leftMarginIsAuto, marginShorthandLeft, marginInlineStart, valueTokens } from "./css-margin";
 
 // bug→guard — the SECOND defect in issue #236's guards, caught in independent review.
 //
@@ -148,5 +148,100 @@ describe("declarations() is comment-aware — #240", () => {
     expect(leftMarginIsAuto('content: "/*"; margin-left: auto; --end: "*/"').auto).toBe(true);
     // a genuine comment alongside an unrelated quoted string is still stripped correctly
     expect(leftMarginIsAuto('content: "x"; /* real comment */ margin-left: auto').auto).toBe(true);
+  });
+});
+
+// bug→guard — the THIRD defect in the same reasoning, and the one the two above walked past.
+//
+// `stripComments()` is quote-aware. Both guards' `rulesFromCss` walkers are quote-aware. The split
+// that sat BETWEEN them was `.split(";")` and `indexOf(":")`, which are not. The mismatch survived
+// three independent reviews of PR #268 because the hard part looked solved, so nobody re-read the
+// easy part. These are the two shapes it got wrong, reproduced against the unchanged file before
+// the repair existed — one in each direction, which is what makes it a defect rather than a
+// preference: the guard both MISSED a real push and INVENTED one.
+describe("declarations() splits only OUTSIDE protected syntax — #274", () => {
+  it("a `;` inside a quoted value does not end the declaration and hide a real push", () => {
+    // FALSE NEGATIVE: `margin-left: auto` is really declared. The quoted text used to close the
+    // declaration early and hand back `margin-left: 0` as a later, winning declaration.
+    expect(leftMarginIsAuto('margin-left: auto; content: "; margin-left: 0;"').auto).toBe(true);
+  });
+
+  it("a `margin-left` written inside a quoted string is not read as a declaration", () => {
+    // FALSE POSITIVE: nothing here pushes anything. A guard that fails this rule fails valid CSS.
+    expect(leftMarginIsAuto('content: "; margin-left: auto;"; margin-right: 0').auto).toBe(false);
+  });
+
+  it("both quote kinds protect their contents", () => {
+    expect(leftMarginIsAuto("margin-left: auto; content: '; margin-left: 0;'").auto).toBe(true);
+    expect(leftMarginIsAuto("content: '; margin-left: auto;'; margin-right: 0").auto).toBe(false);
+    // and a quote of one kind inside the other is content, not a span boundary
+    expect(leftMarginIsAuto("content: '\"; margin-left: auto;'; margin-right: 0").auto).toBe(false);
+  });
+
+  it("an escaped quote does not end the string early and expose its contents", () => {
+    // the \" is a character; the string runs to the LAST quote, so the pretend declaration inside
+    // it is never seen. Read as ending at the escaped quote, `margin-left: auto` becomes real.
+    expect(leftMarginIsAuto('content: "a\\"; margin-left: auto;"; margin-right: 0').auto).toBe(false);
+    // the same block with a real push after the string still reports it
+    expect(leftMarginIsAuto('content: "a\\"b"; margin-left: auto').auto).toBe(true);
+  });
+
+  it("an escaped backslash ends its own escape, so the quote after it still closes the string", () => {
+    // `"a\\"` is a COMPLETE string whose content is one backslash — the second `\` is escaped by
+    // the first and does not escape the closing quote. What follows is a real declaration.
+    expect(leftMarginIsAuto('content: "a\\\\"; margin-left: auto').auto).toBe(true);
+  });
+
+  it("a `;` inside a parenthesized value is not a declaration boundary", () => {
+    // no quotes involved: an unquoted url() token may legally contain `;`, and data URIs that
+    // shape are ordinary shipped CSS.
+    const body = "background: url(data:image/png;base64,iVBORw0KGgo=); margin-left: auto";
+    expect(leftMarginIsAuto(body).auto).toBe(true);
+    const [first] = declarations(body);
+    expect(first.prop).toBe("background");
+    expect(first.value).toBe("url(data:image/png;base64,iVBORw0KGgo=)");
+  });
+
+  it("a margin-shaped fragment inside a parenthesized value cannot override a real push", () => {
+    // the constructed verdict-flipping case for the paren half: split naively, `margin-left:0)`
+    // becomes a later declaration and wins the cascade against the genuine auto before it.
+    expect(leftMarginIsAuto("margin-left: auto; background: url(a;margin-left:0)").auto).toBe(true);
+  });
+
+  it("an escaped `;` outside quotes is a character, not a separator", () => {
+    expect(leftMarginIsAuto("content: a\\;b; margin-left: auto").auto).toBe(true);
+    expect(declarations("content: a\\;b; margin-left: auto")).toHaveLength(2);
+  });
+
+  it("a stray `)` does not drive the depth negative and disable every later split", () => {
+    // clamping at 0 is what keeps one malformed value from silently switching the rest of the
+    // block into one unparsed declaration — which would read as "no push found" everywhere after.
+    expect(leftMarginIsAuto("width: calc(1px)); margin-left: auto").auto).toBe(true);
+  });
+
+  it("the property/value `:` is the first one outside protected syntax, not the first one", () => {
+    // fixing the `;` delimiter does not prove the `:` delimiter. A fragment that is entirely
+    // protected text is NOT a declaration; `indexOf(":")` used to manufacture property `"k` from it.
+    expect(declarations('"k:v"; margin-left: auto')).toEqual([
+      { prop: "margin-left", value: "auto", important: false },
+    ]);
+    expect(declarations("(a:b); margin-left: auto")).toEqual([
+      { prop: "margin-left", value: "auto", important: false },
+    ]);
+  });
+
+  it("an unterminated quote consumes the rest of the block rather than resyncing inside it", () => {
+    // malformed CSS must not be resynchronized into a push the author never wrote — the
+    // false-positive direction again, at the edge where the block itself is broken.
+    expect(leftMarginIsAuto('margin-right: 0; content: "; margin-left: auto').auto).toBe(false);
+  });
+
+  it("everything the earlier defects proved still holds — comments, shorthands, importance, order", () => {
+    expect(leftMarginIsAuto("margin:0/**/auto").auto).toBe(true);
+    expect(leftMarginIsAuto("margin: auto 0").auto).toBe(false);
+    expect(leftMarginIsAuto("margin: 0 auto 0 0").auto).toBe(false);
+    expect(leftMarginIsAuto("margin-left: auto; margin: 0").auto).toBe(false);
+    expect(leftMarginIsAuto("margin-left: auto !important; margin-left: 0").auto).toBe(true);
+    expect(leftMarginIsAuto("margin-left: var(--x)").auto).toBe(false);
   });
 });

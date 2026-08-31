@@ -62,39 +62,24 @@ Earlier sweeps (2026-08-04 · 2026-08-05 · 2026-08-12) moved to
 [`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md) on 2026-08-21 under
 TOKEN LAW §1 — every ref they dispositioned is long gone; this file keeps the CURRENT sweep only.
 
-**Swept again 2026-08-21 against `origin/main` @ `f8969e5f` (tree `37d1907`)** — issue
-[#126](https://github.com/Pootytxng/sentinel/issues/126)'s re-proof, run on all fifteen refs, not
-remembered from the rows. `git merge-tree --write-tree origin/main origin/<ref>` at that tree: three
-are no-ops (one of them the `PRESERVE` beta ref, which stays), twelve carry work. **Three retired —
-two `MERGED`, one `SUPERSEDED` on file-level evidence** — deleted from `origin` with their rows
-dropped in this commit:
+**The 2026-08-21 sweep** against `origin/main` @ `f8969e5f` (tree `37d1907`) re-proved all fifteen
+refs for [#126](https://github.com/Pootytxng/sentinel/issues/126) and retired three on evidence —
+two `MERGED`, one `SUPERSEDED` — pruned the same day. Its narrative moved to
+[`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md) on 2026-08-31 to pay
+for the row this file gained; **two live facts stay here** rather than travelling with it: the
+retired detached checkout's work is preserved under tag `preserve/checklist-disk-item-c5660e`, and
+**rule C of `scripts/handoff-worktree-truth.test.mjs` now fails on a branchless checkout** — the one
+shape an audit that reads `origin` refs is structurally blind to.
 
-- `claude/foreground-courtesy-handoff-82687b` — **MERGED**, no-op at this tree; landed as PR
-  [#101](https://github.com/Pootytxng/sentinel/pull/101) (2026-08-11). Its row still read CLAIMED.
-- `docs/design-foundation` — **MERGED**, no-op at this tree; landed as PR
-  [#107](https://github.com/Pootytxng/sentinel/pull/107) (2026-08-12). Its row still read CLAIMED.
-- `claude/checklist-disk-item-c5660e` — **SUPERSEDED** (not a no-op; content reached `main` by
-  another path, which is exactly what that disposition means). Both of its contributions are on the
-  trunk: **A_disk** is in `docs/OWNER_ACTION_CHECKLIST.md` and has since been *closed* (2026-08-11/12)
-  and archived (2026-08-18), and the duplicate `origin/docs/design-foundation` row it existed to drop
-  is dropped by this same commit. Nothing of it is left to land. **Correction 2026-08-26: this row
-  used to end "and no worktree held it", which was false for fifteen days.** `.claude/worktrees/merge-prs-tauri-visibility-c5660e` holds it detached at `defcf0ff`, four commits
-  `origin/main` cannot reach — 2026-08-11 edits to two docs since rewritten, so landing them is a
-  re-derivation. No guard saw it: an audit that reads `origin` refs is blind to a branchless
-  checkout. Rule C of `scripts/handoff-worktree-truth.test.mjs` now fails on that shape. **Disposed
-  2026-08-26:** checkout retired, its work preserved under tag `preserve/checklist-disk-item-c5660e`
-  — the four commits plus one more holding an uncommitted edit found there that stripped every
-  comment out of `.codex/config.toml`, which is the record of why that lane is read-only.
-
-**Nine non-`PRESERVE` refs remain, and not one of them is retirable by proof** — each needs either
+**Twelve non-`PRESERVE` refs remain, and not one of them is retirable by proof** — each needs either
 an owner product-scope call or the lane that owns it, so #126 is part-discharged, not done: what is
-left is a decision queue, not a cleanup queue. Re-derived 2026-08-26 from `git ls-remote --heads
-origin` (twelve refs besides `main`, three `PRESERVE`); the count read "eight" until then, written
-before the `vision-pointer` row existed. The two closed narratives it used to carry — #160's merge
-and prune, and the #193 "free desktop app" fix — moved to
-[`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md) on 2026-08-26. The
-live warning inside the second one is not archived with it: it is in the
-`claude/review-consolidation-structure-9d13f2` row below, where a lander would actually look.
+left is a decision queue, not a cleanup queue. Re-derived 2026-08-31 from `git ls-remote --heads
+origin` after a `--prune` fetch: fifteen refs besides `main`, three `PRESERVE`. The count read
+"nine" until then, written before the `exciting-robinson`, `native-routing-271` and
+`css-margin-separators-274` rows existed — **this paragraph is a count, so it goes stale every time
+the table below grows, and re-deriving it is part of adding a row.** Older closed narratives (#160's
+landing and prune, the #193 "free desktop app" fix) are in the archive too; the live warning out of
+the second is in the `claude/review-consolidation-structure-9d13f2` row below, where a lander looks.
 
 | ref | disposition | evidence |
 | --- | --- | --- |
@@ -112,6 +97,7 @@ live warning inside the second one is not archived with it: it is in the
 | `origin/lane/vision-pointer-guard-2026-08-24` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** A concurrently-running session's lane, worktree `C:\Users\Kuya\code\sentinel-vision-pointer`, three commits past `main` (`aa6e773a`, `be9902df`, `b698746a`) — the #215/#216 follow-through, the `docs/agents/` skill-config scaffold, and a BACKLOG re-derivation. **That branch already carries its own, fuller row for itself (in `aa6e773a`); when it lands, its text supersedes this one and this line goes.** Recorded here for exactly the reason the `cleanup-train` row above exists — an undispositioned ref turns the audit red for **every** push in the repo, so this one blocked the Q9a lane ([#217](https://github.com/Pootytxng/sentinel/issues/217)) rather than its own. Checked the way this doc says to check: `git fetch origin --prune` first, then `git ls-remote`, because a ref another lane already deleted lingers in a stale cache and looks identical to an undispositioned one. This one is live. |
 | `origin/claude/exciting-robinson-0ce4d5` | CLAIMED | This lane, worktree `C:\Users\Kuya\code\sentinel\.claude\worktrees\exciting-robinson-0ce4d5`, issue [#266](https://github.com/Pootytxng/sentinel/issues/266). PR [#267](https://github.com/Pootytxng/sentinel/pull/267) holds what needs review: `6760387a` deletes `stripRustComments` from `src/case-evidence-tier-separation-guard.test.ts` — six proven bypasses, each hiding executing Rust from the detectors — plus the four comment rewrites that buys. The shebang repair rode straight to `main` in this commit instead, because it was what had `main` red. Row goes when the PR lands. |
 | `origin/lane/native-routing-271` | CLAIMED | Sidebar remediation Task 1, issue [#271](https://github.com/Pootytxng/sentinel/issues/271), worktree `C:\Users\Kuya\code\sentinel-native-routing-271`. Documentation only — the Q9b stage correction in `BACKLOG.md` (contract §11: Stage 3 is the local receiver, Stage 4 is the send command), the `RELEASE_STATE.md` `source_main_commit` re-stamp that was failing `verify-release-state` for every push in the repo, and the carrier bullet. **LANDED** as PR [#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`; merge-tree against `origin/main` is a no-op, so nothing here is unlanded. **It reads `CLAIMED` and not `MERGED` only because the prune is BLOCKED** — deleting the ref was denied to this session on 2026-08-31, and a denial is a stop, not a licence to reach the same effect another way; `MERGED` would fail the audit while the ref is still on origin. Owner action, filed as `OWNER_ACTION_CHECKLIST.md` §A_prune: `git push origin --delete lane/native-routing-271`, then drop this row and the carrier bullet together. |
+| `origin/lane/css-margin-separators-274` | CLAIMED | This lane, worktree `C:\Users\Kuya\code\sentinel-css-separators`, issue [#274](https://github.com/Pootytxng/sentinel/issues/274) — sidebar remediation Task 2. Test-infrastructure only: `src/test/css-margin.ts` gains a quote- and paren-aware declaration tokenizer, because `stripComments()` and both guards' `rulesFromCss` walkers already skipped quoted spans while the `.split(";")` between them did not. That gap made the guard **blind to a real `margin-left: auto`** hidden behind a quoted `;` **and made it invent one** out of quoted text — both directions, reproduced against the unchanged file before the repair was written (12 failed / 90 passed reverted; 102/102 repaired). Its tests, plus four routed through each consumer's own `rulesFromCss`, ride with it. **No production stylesheet, no selector redesign, no general CSS-parser replacement** — the handoff's stated scope, and its stop condition was never approached. Row goes when the PR lands. |
 
 ## Standing rule
 
