@@ -448,6 +448,42 @@ describe("the pre-push contract", () => {
     expect(refusesWhenVerifierMissing(real)).toBe(true);
   });
 
+  it("reads a MULTI-LINE diagnostic as one string, not as three lines of code (review round 4)", () => {
+    // Round 4 of review, at f82514b5, executed this against the contract and got `true` back: the
+    // blanking reset its quote state at every newline, so a hook that only PRINTS the words "exit 1"
+    // was certified as one that refuses. Fail-OPEN, and the accident case rather than the
+    // adversarial one -- a multi-line message is the ordinary way to write a helpful diagnostic.
+    const multiline = ["if [ ! -f verify-local.ps1 ]; then", "  echo 'no verifier here", "exit 1", "'", "fi", "exit 0"].join("\n");
+    expect(refusesWhenVerifierMissing(multiline), "a quoted newline does not end the string").toBe(false);
+
+    const doubled = ["if [ ! -f verify-local.ps1 ]; then", '  echo "no verifier here', "exit 1", '"', "fi", "exit 0"].join("\n");
+    expect(refusesWhenVerifierMissing(doubled), "the same in double quotes").toBe(false);
+
+    // The other direction, which is what keeps the fix from being "blank everything": a genuine
+    // refusal that FOLLOWS a multi-line message still counts. This also proves the blanked view
+    // stayed the same length as the code -- if a newline were blanked away or an escape ate one, the
+    // offset of the guard test would shift and this slice would start in the wrong place.
+    const messageThenExit = [
+      "if [ ! -f verify-local.ps1 ]; then",
+      "  echo 'no verifier here",
+      "so this push cannot be checked",
+      "'",
+      "  exit 1",
+      "fi",
+    ].join("\n");
+    expect(refusesWhenVerifierMissing(messageThenExit), "a real exit after a real message").toBe(true);
+
+    // An unterminated quote blanks everything after it, so the answer is "does not refuse". That is
+    // the conservative direction, and the shell would refuse the file outright anyway.
+    expect(refusesWhenVerifierMissing("if [ ! -f verify-local.ps1 ]; then echo 'oops; exit 1; fi")).toBe(false);
+
+    // Same review measured `exit "1"` and `e\xit 1` as "does not refuse". Both really do exit, so
+    // both are false NEGATIVES, and that is the direction this guard is allowed to be wrong in.
+    // Pinned so a later loosening that flips either one to `true` has to be a deliberate edit here.
+    expect(refusesWhenVerifierMissing('if [ ! -f verify-local.ps1 ]; then exit "1"; fi')).toBe(false);
+    expect(refusesWhenVerifierMissing("if [ ! -f verify-local.ps1 ]; then e\\xit 1; fi")).toBe(false);
+  });
+
   it("does not truncate code at a `#` that is not a comment", () => {
     // The cost of tightening the stripper is the opposite failure: cutting real code at `$#` or
     // `${#x}` would delete the verifier invocation and turn a green hook red — or worse, hide it.

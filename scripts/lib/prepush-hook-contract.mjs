@@ -90,32 +90,47 @@ export const shellCode = (text) =>
  * re-review at 77af56e4 showed `echo "will exit 1"` certifying a hook that only prints the words,
  * and `echo "fi"` decrementing the block depth so an unreachable nested exit surfaced as reachable.
  * A diagnostic message is not syntax.
+ *
+ * The scan is over the WHOLE text, not line by line. Re-review at f82514b5 caught the line-by-line
+ * version resetting the quote state at every newline, so a perfectly ordinary multi-line diagnostic
+ *
+ *     echo 'this repo has no verifier
+ *     exit 1
+ *     '
+ *
+ * parsed as executable syntax and certified a hook that only PRINTS the words "exit 1" as one that
+ * refuses. That is the fail-open direction, the one direction this file may never be wrong in. A
+ * shell string does not end at a newline and neither does this reader.
+ *
+ * A newline is never blanked, never opens or closes a quote, and never gets eaten as an escape:
+ * line structure and character offsets both have to keep matching shellCode() exactly.
  */
 function blankQuoted(text) {
-  return String(text ?? "")
-    .split("\n")
-    .map((line) => {
-      let out = "";
-      let quote = null;
-      for (let i = 0; i < line.length; i += 1) {
-        const c = line[i];
-        if (quote) {
-          out += " ";
-          if (c === "\\" && quote === '"' && i + 1 < line.length) {
-            out += " ";
-            i += 1;
-          } else if (c === quote) quote = null;
-        } else if (c === "'" || c === '"') {
-          quote = c;
-          out += " ";
-        } else if (c === "\\" && i + 1 < line.length) {
-          out += "  ";
-          i += 1;
-        } else out += c;
-      }
-      return out;
-    })
-    .join("\n");
+  const src = String(text ?? "");
+  let out = "";
+  let quote = null;
+  for (let i = 0; i < src.length; i += 1) {
+    const c = src[i];
+    if (c === "\n") {
+      out += c;
+      continue;
+    }
+    const escapable = i + 1 < src.length && src[i + 1] !== "\n";
+    if (quote) {
+      out += " ";
+      if (c === "\\" && quote === '"' && escapable) {
+        out += " ";
+        i += 1;
+      } else if (c === quote) quote = null;
+    } else if (c === "'" || c === '"') {
+      quote = c;
+      out += " ";
+    } else if (c === "\\" && escapable) {
+      out += "  ";
+      i += 1;
+    } else out += c;
+  }
+  return out;
 }
 
 /**
@@ -244,7 +259,11 @@ export function refusesWhenVerifierMissing(text) {
 // invoked through a variable or alias, a `verify-local.ps1` that is itself a stub, a refusal reached
 // only under a condition never true at push time, a here-document body, a backslash-continued line,
 // or anything a subshell does. Independent re-review (a9c895f7) enumerated those and they are
-// ACCEPTED, not overlooked -- see the threat model above. Closing them soundly needs the hook
+// ACCEPTED, not overlooked -- see the threat model above. It also reads only an UNQUOTED, unescaped
+// `exit <digits>`: re-review at f82514b5 measured `exit "1"` and `e\xit 1` as "does not refuse".
+// Both do genuinely exit, so both are false NEGATIVES -- a real refusal called insufficient, never a
+// missing one called sufficient. Left as measured, because the cost of being wrong in that direction
+// is a sentence telling a developer to write his refusal plainly. Closing them soundly needs the hook
 // EXECUTED against a stubbed verifier, which the fixtures could do and the live fleet must not:
 // running 28 real hooks in order to audit them would be the audit causing the damage.
 //
