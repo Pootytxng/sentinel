@@ -128,16 +128,22 @@ describe("the proof matrix — the same target gets the same answer through the 
     expect(into.permission).toBe("deny"); // the DESTINATION is the sibling's folder
   });
 
-  it("asks for the owner's global configuration instead of deciding it here", () => {
+  it("refuses a SHELL write into the owner's global configuration outright", () => {
+    // `project-write-assert` asks for the same zone and that is not a contradiction: the memory
+    // store under `~/.claude/projects/**` is written with `Write` on purpose, so the tool path has a
+    // legitimate case and routes. A shell has none. It matters which one this is, because `ask` is a
+    // ROUTING decision and this machine runs `permissions.defaultMode: "auto"`, where a routed
+    // decision degrades to allow — leaving the folder that holds the rules about what agents may do
+    // exactly as writable as before the guard existed.
     const d = ask(`cp ${fwd(join(SCRATCH, "settings.json"))} ${fwd(join(HOME_CLAUDE, "settings.json"))}`);
-    expect(d.permission).toBe("ask");
+    expect(d.permission).toBe("deny");
     expect(d.zone).toBe(ZONES.GLOBAL);
-    expect(d.reason).toContain("outside every repository guard");
+    expect(d.reason).toContain("decide what agents may do");
   });
 
   it("expands `~` before deciding, so the global config cannot be reached by another spelling", () => {
-    expect(ask(`rm ~/.claude/settings.json`).permission).toBe("ask");
-    expect(ask(`rm '~/.claude/settings.json'`).permission).toBe("ask");
+    expect(ask(`rm ~/.claude/settings.json`).permission).toBe("deny");
+    expect(ask(`rm '~/.claude/settings.json'`).permission).toBe("deny");
   });
 
   it("gives variable, interpreter and subcommand forms no false safety approval", () => {
@@ -212,10 +218,52 @@ describe("the #240 shape — refused on Edit, then reaching the same file throug
     expect(ask(`cat ${fwd(join(SCRATCH, "settings.json"))} > ${inSib(".claude/settings.json")}`).permission).toBe("deny");
   });
 
-  it("routes the same restore aimed at the owner's global config to explicit approval", () => {
+  it("refuses the same restore aimed at the owner's global config", () => {
     const d = ask(`cp ${fwd(join(SCRATCH, "settings.json"))} ${fwd(join(HOME_CLAUDE, "settings.json"))}`);
-    expect(d.permission).toBe("ask");
+    expect(d.permission).toBe("deny");
     expect(d.zone).toBe(ZONES.GLOBAL);
+  });
+});
+
+// REGRESSION (found 2026-08-31 by running the SHIPPED hook, after this file was green). Two lexing
+// defects, both of which made a real target unreadable — and an unreadable target is decided on the
+// wrong evidence, whichever way it then falls.
+describe("a path survives the quoting and the `cd` that lead to it", () => {
+  it("keeps backslashes inside DOUBLE quotes, where they are not escapes", () => {
+    // POSIX: inside `"…"` the backslash is special before `$`, a backtick, `"`, `\` and a newline,
+    // and literal before anything else. Consuming it unconditionally turned
+    // `"C:\Users\Kuya\code\sentinel\README.md"` into `C:UsersKuyacodesentinelREADME.md`, which this
+    // checker could not place, so a sibling write took the `ask` path instead of `deny`.
+    expect(lex(String.raw`"C:\Users\Kuya\x.md"`)[0].value).toBe(String.raw`C:\Users\Kuya\x.md`);
+    expect(lex(String.raw`"a\"b"`)[0].value).toBe(`a"b`);
+    expect(lex(String.raw`"a\\b"`)[0].value).toBe(String.raw`a\b`);
+    expect(lex(String.raw`"a\$b"`)[0].value).toBe("a$b");
+    expect(lex(String.raw`"a\$b"`)[0].dynamic).toBe(false);
+    // OUTSIDE quotes the unconditional form is CORRECT and must stay: bash really does turn a bare
+    // `C:\Users\x` into `C:Usersx`, and "fixing" that would deny a command that never touched the
+    // path it appears to name.
+    expect(lex(String.raw`C:\Users\x`)[0].value).toBe("C:Usersx");
+    // PowerShell's escape is the backtick, so a backslash there is only ever a separator.
+    expect(lex(`"C:\\Users\\x"`, "powershell")[0].value).toBe(String.raw`C:\Users\x`);
+    expect(lex('"a`"b"', "powershell")[0].value).toBe(`a"b`);
+  });
+
+  it("follows a `cd` spelled the way the shell that runs it spells paths", () => {
+    // `cd /c/…/sibling && rm -f package.json` was ALLOWED: the destination was resolved with plain
+    // `resolve`, so it landed in a folder that does not exist and every relative target after it
+    // came back `unprotected`. The `cd` destination IS the write target, one operand later.
+    const a = analyze("cd /c/Users/Kuya/code/sentinel && rm -f package.json", { cwd: ROOT });
+    expect(a.ops.map((o) => o.verb)).toContain("rm");
+    const op = a.ops.find((o) => o.verb === "rm");
+    expect(op.cwdUnknown).toBe(false);
+    expect(toComparable(op.cwd)).toBe(process.platform === "win32" ? "c:/users/kuya/code/sentinel" : "/c/users/kuya/code/sentinel");
+  });
+
+  it("says it does not know where it is standing when the `cd` target is unresolvable", () => {
+    // Silence about the cwd is the fail-open shape: a relative target then resolves against the
+    // session root and reads as the session's own.
+    const a = analyze("cd $D && rm x.txt", { cwd: ROOT });
+    expect(a.unresolved.length + a.ops.filter((o) => o.cwdUnknown).length).toBeGreaterThan(0);
   });
 });
 

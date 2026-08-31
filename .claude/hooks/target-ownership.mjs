@@ -69,20 +69,46 @@ export function isWithin(child, parent) {
 }
 
 /**
+ * A Git-Bash / MSYS / Cygwin drive path spelled the way a POSIX shell on Windows spells it.
+ *
+ * `/c/Users/Kuya/code/sentinel/README.md` IS `C:\Users\Kuya\code\sentinel\README.md` on this
+ * machine, and it is the spelling the Bash tool uses by default. Handing it to `path.resolve` on
+ * Windows produces `C:\c\Users\…` — a path under no checkout, which this module then answered
+ * `unprotected`, which the shell checker then ALLOWED. Measured 2026-08-31 against the shipped hook:
+ * a write into a sibling checkout and a write into `~/.claude` were both allowed silently in the
+ * one spelling most likely to be used. It is the exact hole this whole module exists to close, and
+ * the unit tests could not see it because they inject a fake resolver.
+ *
+ * Only the drive forms translate. `/dev/null`, `/tmp/x` and `/etc/x` have no drive to name and are
+ * left alone; they resolve to the current drive and land in `unprotected`, which is what they are.
+ */
+export function fromPosixDrive(t, windows) {
+  if (!windows) return null;
+  const m = /^\/(?:cygdrive\/)?([A-Za-z])(\/.*)?$/.exec(t);
+  return m ? `${m[1].toUpperCase()}:${(m[2] ?? "/").replace(/\//g, "\\")}` : null;
+}
+
+/**
  * Absolute form of a target, with `..` collapsed BEFORE anything compares it. A relative target
  * resolves against the session cwd, which is the only place a shell or a tool call would have meant.
  * @returns {string|null} null when there is nothing to resolve against.
  */
-export function resolveAbsolute(target, cwd) {
+export function resolveAbsolute(target, cwd, { windows = process.platform === "win32" } = {}) {
   const t = String(target ?? "").trim();
   if (!t) return null;
+  const drive = fromPosixDrive(t, windows);
+  if (drive) return resolve(drive);
   if (isAbsolute(t)) return resolve(t);
   // A bare Windows drive-relative form (`C:foo`) names a per-drive cwd this process does not have.
   // It is unresolvable, not relative-to-here; saying so is the difference between an honest
   // `unknown` and a confident wrong answer.
   if (/^[A-Za-z]:(?![\\/])/.test(t)) return null;
   if (!cwd) return null;
-  return resolve(cwd, t);
+  // A `cd /c/Users/…` earlier in the chain leaves the cwd in the same POSIX spelling, so it needs
+  // the same translation — otherwise a relative target resolves against `C:\c\Users\…` and lands
+  // in `unprotected` for exactly the reason above.
+  const base = String(cwd).trim();
+  return resolve(fromPosixDrive(base, windows) ?? base, t);
 }
 
 /**
@@ -189,9 +215,9 @@ export function protectedGlobals({ home = homedir() } = {}) {
  * @returns {{zone: string, abs: string|null, owner: string|null, why: string}}
  */
 export function zoneOf({ target, sessionRoot, cwd = null, deps = {} } = {}) {
-  const { exists = existsSync, real = realpathSync, git = runGit, home = homedir() } = deps;
+  const { exists = existsSync, real = realpathSync, git = runGit, home = homedir(), windows = process.platform === "win32" } = deps;
 
-  const raw = resolveAbsolute(target, cwd);
+  const raw = resolveAbsolute(target, cwd, { windows });
   if (!raw) return { zone: ZONES.UNKNOWN, abs: null, owner: null, why: "the target could not be resolved to an absolute path" };
 
   let abs;

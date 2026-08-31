@@ -42,7 +42,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 
 import { LAPSED_CODES, UNVERIFIABLE_CODES, resolveSessionRoot, verifySession } from "./session-root-assert.mjs";
-import { PROTECTED_ZONES, ZONES, zoneOf } from "./target-ownership.mjs";
+import { PROTECTED_ZONES, ZONES, resolveAbsolute, zoneOf } from "./target-ownership.mjs";
 
 /** The shell tools this installation actually emits. A guard on one of them is a hole at the other. */
 export const SHELL_TOOLS = new Set(["Bash", "PowerShell"]);
@@ -52,6 +52,17 @@ export const OFF_SWITCH = "COMPY_SHELL_OWNERSHIP_OFF";
 // ── lexing ───────────────────────────────────────────────────────────────────────────────────────
 
 const OPERATORS = ["&&", "||", "2>&", "&>>", "2>>", "2>", "&>", ">&", ">>", ">", "<<<", "<<-", "<<", "<", "|", ";", "&", "(", ")", "\n"];
+
+/**
+ * The characters an escape may precede INSIDE double quotes. POSIX: `$`, backtick, `"`, `\` and a
+ * newline; everything else keeps its backslash. PowerShell's backtick escapes `$`, backtick and `"`.
+ * A backslash before anything else is a path separator, not an escape, and reading it as one is how
+ * a quoted Windows path stops being a path.
+ */
+const QUOTED_ESCAPABLE = {
+  posix: new Set(["$", "`", '"', "\\", "\n"]),
+  powershell: new Set(["$", "`", '"', "\n"]),
+};
 
 /**
  * A here-document's BODY is data being written, not commands to run. Lexing it as shell is how a
@@ -128,7 +139,16 @@ export function lex(text, dialect = "posix") {
       let value = "";
       let dynamic = false;
       while (j < src.length && src[j] !== '"') {
-        if (src[j] === escapeChar && j + 1 < src.length) {
+        // INSIDE double quotes the escape character is special before only a few characters. Both
+        // shells agree on the shape and disagree on the set. Consuming it before ANY character is
+        // how `"C:\Users\Kuya\code\sentinel\README.md"` became `C:UsersKuyacodesentinelREADME.md` —
+        // an unresolvable path, which this checker then routed to `ask`. Measured 2026-08-31: every
+        // double-quoted Windows path in the exercise fixture was destroyed that way, so the guard
+        // could neither deny the sibling write nor recognize the session's own root. Outside quotes
+        // the unconditional form is CORRECT and stays — bash really does turn a bare
+        // `C:\Users\x` into `C:Usersx`, and pretending otherwise would deny a command that never
+        // touched the path it appears to name.
+        if (src[j] === escapeChar && j + 1 < src.length && QUOTED_ESCAPABLE[dialect].has(src[j + 1])) {
           value += src[j + 1];
           j += 2;
           continue;
@@ -381,8 +401,14 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
         cwdUnknown = true;
         here = null;
       } else {
-        here = here ? resolve(here, expandHome(to.value, home)) : expandHome(to.value, home);
-        cwdUnknown = false;
+        // Through the shared resolver, not `resolve`, for one measured reason: `cd
+        // /c/Users/Kuya/code/sentinel && rm -f package.json` was ALLOWED, because `resolve` read the
+        // Git-Bash drive path as `C:\c\Users\…` and every relative target after it landed in a
+        // folder that does not exist. The `cd` destination has to be understood exactly as well as
+        // a write target does — it IS the write target, one operand later.
+        const landed = resolveAbsolute(expandHome(to.value, home), here);
+        here = landed;
+        cwdUnknown = !landed;
       }
       continue;
     }
@@ -540,14 +566,24 @@ export function decideShell({
 
   const global = protectedHits.find((z) => z.zone === ZONES.GLOBAL);
   if (global) {
+    // DENY here, where `project-write-assert` asks. The two are not inconsistent — they are answering
+    // for different paths in. `ask` is a ROUTING decision, and under this machine's
+    // `permissions.defaultMode: "auto"` a routed decision degrades to allow; that is acceptable for
+    // the tool path, because the owner's memory store lives under `~/.claude/projects/**` and is
+    // written with `Write` on purpose. Through a SHELL there is no such case: nothing in this
+    // repository writes into `~/.claude` or `~/.codex` with a shell command, and those folders hold
+    // the settings and hooks that decide what an agent may do on this machine. A guard that routes
+    // that write in a mode which auto-approves has not protected it.
     return {
-      permission: "ask",
+      permission: "deny",
       zone: global.zone,
       target: global.abs,
       reason:
         `\`${global.op.verb}\` would write ${global.abs}, inside the owner's global configuration ` +
-        `(${global.owner}). That sits outside every repository guard and is not covered by this ` +
-        `lane's claim, so it needs explicit approval for this exact operation and target.`,
+        `(${global.owner}) — the settings and hooks that decide what agents may do on this machine. ` +
+        `No repository claim covers it and no shell command in this repo needs to. If the owner ` +
+        `asked for this change, hand him the exact before/after and let him apply it; that is the ` +
+        `path his own settings already name.`,
     };
   }
 
