@@ -12,14 +12,15 @@ $budgets = @{
   "docs/BACKLOG.md" = 1000
   "docs/OWNER_ACTION_CHECKLIST.md" = 450
   "docs/BETA_DISTRIBUTION_RECORD.md" = 250
-  # 120 -> 119 on 2026-08-26. The file FAILED at 123 when the retired detached checkout got its
-  # disposition, and the law's answer to a FAIL is an archive move, not a bigger number: two
-  # narratives of work that had FINISHED (#160 merged and pruned, #193 landed) left for
-  # archive/BRANCH_DISPOSITION_SWEEPS.md, taking it to 117. The ratchet banks 4 of those 6 lines.
-  # It is not the full 6 because this file is append-by-design - the standing rule below adds one
-  # table line per new remote ref - so a zero-headroom budget would fail the next lane for
-  # existing, which is a budget that punishes the wrong commit. Two rows of room, then it pays again.
-  "docs/BRANCH_DISPOSITIONS.md" = 119
+  # 119 -> 107 on 2026-08-31. It said "two rows of room, then it pays again"; both rows went to
+  # #271 and #274, the file hit the cap exactly, and it paid: the 2026-08-21 sweep narrative (three
+  # refs pruned that day, nothing live left in it bar two facts kept behind) moved to
+  # archive/BRANCH_DISPOSITION_SWEEPS.md, taking 119 -> 105 with the new row already in. Same
+  # append-by-design reasoning as before, so the ratchet again leaves exactly two rows of headroom
+  # rather than banking all 14 - a zero-headroom budget fails the next lane for existing.
+  # Prior step: 120 -> 119 on 2026-08-26, when the retired detached checkout's disposition took it
+  # to 123 and two FINISHED narratives (#160 landed and pruned, #193 landed) were archived for it.
+  "docs/BRANCH_DISPOSITIONS.md" = 107
   "docs/RELEASE_AUTONOMY.md" = 120
   "docs/RELEASE_TRANSACTION.md" = 120
   "docs/SESSION_HANDOFF.md" = 120
