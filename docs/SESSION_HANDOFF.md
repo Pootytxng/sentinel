@@ -95,10 +95,10 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **27 worktrees besides `main`; NINE branches carry commits not on main — do NOT delete or
-  hard-reset those nine before checking them**: `feat/user-feedback-lab-recovery` ·
+- **27 worktrees besides `main`; TEN branches carry commits not on main — do NOT delete or
+  hard-reset those ten before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` · `lane/shell-ownership-278` (#278, PR #279 open, deliberately unmerged) ·
   `lane/fleet-guard-failclosed-276` (#276, **LIVE — this lane**) · `lane/css-margin-separators-274`
   (#274) · `lane/native-routing-271` (#271) — the last two **LANDED** (`29fb8009`/PR #275 · `e26108f7`/PR #273), listed only because **pruning was denied**.
   **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
