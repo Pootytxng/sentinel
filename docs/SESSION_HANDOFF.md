@@ -99,7 +99,8 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   hard-reset those seven before checking them**: `feat/user-feedback-lab-recovery` ·
   `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
   `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` ·
-  `lane/native-routing-271` (this lane, #271 — leaves with the train that lands it).
+  `lane/native-routing-271` (#271 LANDED as `e26108f7`/PR #273 — merge-tree is a no-op, it is named
+  here only because the squash left the ref ahead and **pruning it was denied**; see its row).
   **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
   bullet for naming a zero-carry branch — **a landed lane's name leaves it in the train that lands
   it** — and today every carrier has a branch, so nothing rides on rule C's path credit. Spent, at
