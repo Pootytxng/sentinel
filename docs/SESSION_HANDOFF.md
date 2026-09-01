@@ -105,11 +105,9 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   landed lane's name leaves with its train**, which is why the #281 (PR #282), #284 (PR #285), #276 (PR #277 →
   `ee5bdd8b`), #298 (PR #299 → `81b16d60`) and #286 (PR #288 → `624fcc40`) lanes are not named here: all five
   merge-committed, so each dropped to zero, and a landing that strands an open PR on a spent base retargets it then,
-  not later. Spent, at zero: `sentinel-fleet-guard-276`, `sentinel-segmented-237`, `sentinel-release-truth-256`,
-  `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 landed out of it), four of the SIX under
-  `.claude/worktrees/` (seven entries; `data-root-integrity-432797` is not one), parked
-  `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233),
-  `sentinel-q9b-stage2`. Every detached checkout carries zero, so rule C credits none.
+  not later. The spent-at-zero checkout inventory moved to docs/archive/BRANCH_DISPOSITION_SWEEPS.md
+  §2026-09-01 (unbackticked on purpose: rule D reads a backticked docs/ path as a docs/ BRANCH) —
+  every entry there carries nothing, so rule C credits none of them and none is a live obligation.
 
 ## Waiting on the owner — two arming gates, nothing else
 
