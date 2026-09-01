@@ -96,7 +96,9 @@ effective_floor() -> Option<u64>:                // None = refuse the remote pat
   floor = witness.map_or(known, |w| max(known, w))   // NOT unwrap_or(0): never an invented floor
   if floor > known || marker == Unreadable:      // an unreadable marker is REPAIRED, not merely survived
       persist_marker(floor)                      // atomic; BEFORE any remote acceptance
-      on failure -> return None                  // keep serving cache/embedded
+      on failure ->
+        if floor > known: return None            // a RISE nothing durable records: refuse this run
+        else:             proceed at floor       // a REPAIR only: the witness re-derives it next run
   Some(floor)
 ```
 
@@ -117,6 +119,13 @@ Rules that fall out of this, and that the implementation's own doc must state:
   the marker unreadable forever — so the machine's whole floor comes to rest on `generation.json`
   staying verifiable, and the day it is not, the run refuses permanently. Fail-closed, and still
   wrong: transient corruption must not become a permanent refusal.
+- **A failed `persist_marker` refuses only when the floor ROSE.** The two reasons the write fires are
+  not the same event. A rise is durable state that nothing else records, so proceeding would reopen
+  the window P3 exists to close. A repair — `floor == known == n`, re-recording what a signature-
+  verified generation still on disk already proves — costs nothing if it fails, because the next run
+  reconciles the same `n` from the same witness. Collapsing them and refusing for both turns an
+  unwritable data directory into a permanent refusal, which is this document's own unreadable-marker
+  finding relocated from the marker never healing to the run never proceeding.
 - **Reconciling from the generation widens the trust base from one file to two, and that is a real
   cost, not a free reconstruction.** A signature proves a generation was ISSUED; it never proves the
   generation is the NEWEST. An attacker who can write the data directory can corrupt the marker and
@@ -206,25 +215,24 @@ fixture. Design review is not redundant with the fixture list; the fixture list 
 `src-tauri/src/remote_rules.rs` was changed, no gate was moved, and the remote feature is **not**
 reported as fixed by this design.
 
-## 8. State at handoff — 2026-09-01, `d31b4940`
+## 8. Two constraints this lane established, which outlive it
 
-Written for a session that has only this file. `docs/SESSION_HANDOFF.md` is at its 120-line cap, so
-this is where the lane's live state lives; the repo-state bullet there names
-`lane/remote-cache-design-286` (#286), which is the route to here.
+Conditions on the **implementation** lane, not status. Deliberately naming no SHA and no PR state: a
+document that pins the head of the commit introducing it is false on arrival, and any sentence about
+an open PR stops being true the moment it merges. Current state lives in `docs/RELEASE_STATE.md`.
 
-- **PR #288 is OPEN at `d31b4940`** and does not merge yet. The merge-pr gate needs an
-  `independentReview` receipt whose `head` equals the current head, and the standing verdict from
-  session sentinel-63 is bound to `25654d16` — one commit older, and that commit is §4/§5's fix,
-  which is *the reviewed content*. An older verdict must not stretch over the change it asked for.
-  **Next step: get a verdict bound to `d31b4940`, write the receipt, merge.**
-- That verdict is **practical, not identity-separate** — both writing sessions push under one GitHub
-  account, so a native GitHub approval would imitate independence rather than evidence it. Reviews on
-  this repo live in PR comments; `gh api repos/.../pulls/<n>/reviews` returns empty even for lanes
-  that were reviewed three rounds deep. Any receipt citing that review must say so in those words.
-- Ordering agreed with sentinel-63: #297 lands, then #288, then #289 is retargeted to main and
-  merged forward ONCE, then #279. Every open lane conflicts on exactly `docs/SESSION_HANDOFF.md` and
-  `docs/BRANCH_DISPOSITIONS.md` and nothing else, so the living docs get resolved once rather than
-  per-lane. Whoever lands #288 states the exact SHA main is at when it does.
-- Still DESIGN ONLY, unchanged by any of the above: no fetch armed, no key or CDN, nothing under
-  `src-tauri/`, no gate moved. §7's disposition stands — implementation is deferred and is a hard
-  precondition of arming, tracked on `docs/RELEASE_STATE.md`'s remote-rules row.
+- **A review verdict binds to the exact head it was written against, and the reason is stronger than
+  expiry.** Each round here was raised *against the branch that fixes the previous round*, so the fix
+  IS the reviewed content — there is no version of the later verdict that could honestly have been
+  bound to the earlier head. Two of the three rounds moved the head; the binding was re-derived each
+  time rather than stretched.
+- **The independent review available on this repo is practical, not identity-separate.** Both writing
+  sessions push under one GitHub account, so a native approval would imitate independence rather than
+  evidence it. Verdicts therefore live in PR comments, and `gh api repos/.../pulls/<n>/reviews`
+  returns empty even for lanes reviewed three rounds deep — an empty list there is the normal case,
+  never evidence that a lane went unreviewed. Any receipt citing such a review must say so in those
+  words.
+
+§7's disposition stands: implementation is deferred and is a hard precondition of arming, tracked on
+`docs/RELEASE_STATE.md`'s remote-rules row. Still DESIGN ONLY — no fetch armed, no key or CDN,
+nothing under `src-tauri/`, no gate moved.
