@@ -251,20 +251,24 @@ section is waiting on you:**
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
-### B-closed4. Four items closed 2026-08-21/22 — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
-**None of them is waiting on you.** `B_startup` (a Windows mutation outside `actions.rs` — already fixed the day after it was filed) · `B_gpu` (the finished GPU-profile screen, now mounted in the Lab, advisory forever) · `B_write` (the unverified-session write refusal, armed) · `B_shelter` (a row that was simply wrong — the collision guard had been on `main` since 2026-08-21, and a guard now fails the build if that stale-ask class recurs). Closing verdicts preserved verbatim in the archive.
+### A_stale. Fourteen dead checkouts and ten rewritten Codex configs  ·  ⏳ NEW 2026-09-01
 
-### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
-No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
+**The ask, once [#290](https://github.com/Pootytxng/sentinel/pull/290) lands:** `git worktree remove`
+for the fourteen checkouts that carry no commit `main` lacks, and `git restore .codex/config.toml` in
+the ten holding a rewritten copy of it. Both were **denied to this session**, and a denial is a stop,
+so neither was reached by another route. **Nothing is lost by either.** The only real content any of
+those folders held was six work-control proof receipts — evidence for merges and closes that existed
+on no branch at all, one of them a full independent-review record — and they were copied onto this
+lane first, which is why the removal waits for #290 rather than happening in either order. What
+remains in the four "dirty" ones is a line-endings-only `CLAUDE.md`, a tool scratch folder, and the
+Codex file. That file is not authored work either: it is the app-server re-sync its own header warns
+about, re-adding two Claude env-vars that do nothing for Codex plus an MCP entry the lane had
+removed on purpose. It keeps the read-only safety floor on its first two lines, so nothing is unsafe
+while it waits. **Why it matters:** `git worktree list` is the list every session reads to learn what
+is live, and fourteen dead folders in it is why sessions keep re-deriving the same wrong picture.
 
-### B_eu. Analytics default-ON in the EU — ✅ DECIDED 2026-08-22 as **(a) US-first**
-Taken on your "do everything", and it is the recommendation that was already on the row. Usage
-analytics **on by default with disclosure** is normal and legal in the US, and you have no EU
-distribution today. Option (b) — ask on first run everywhere — costs real sign-up rate to buy legal
-cover for a market that does not exist yet, and it can be added the day it does. **Reversible and
-cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
-own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
-Europeans — that is the trigger, not a date.
+### B-closed6. Six items closed 2026-08-18/22 — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
+**None of them is waiting on you.** `B_startup` (a Windows mutation outside `actions.rs` — already fixed the day after it was filed) · `B_gpu` (the finished GPU-profile screen, now mounted in the Lab, advisory forever) · `B_write` (the unverified-session write refusal, armed) · `B_shelter` (a row that was simply wrong — the collision guard had been on `main` since 2026-08-21, and a guard now fails the build if that stale-ask class recurs) · `B_land` (feedback and analytics post to your own site, into Cloudflare D1 — **your one residual is a single site deploy when the Q9b endpoints are built**) · `B_eu` (analytics default-ON, decided US-first; revisit the day Compy is downloadable by Europeans — that trigger is the reason it is archived rather than deleted). Closing verdicts preserved verbatim in the archive.
 
 ---
 

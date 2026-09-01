@@ -496,3 +496,21 @@ once left you with an installer that exited "success" and replaced nothing. It i
 `preserve/local-collision-guard-707572f1` without checking whether that commit was already an ancestor
 of `main`. It was. **Guard added so this class of stale ask cannot recur:** a shelter tag whose commit
 is reachable from `origin/main` now fails `scripts/shelter-tag-guard.test.mjs`.
+
+---
+
+## Moved from the live checklist on 2026-09-01 — two decided §B items
+
+> Decided on the owner's own verdicts (2026-08-18 and 2026-08-22) and kept verbatim. `B_land` still carries one residual — a single site deploy once the Q9b endpoints exist — which is why the live checklist's pointer names it rather than merely filing it away. `B_eu` has a trigger rather than a date: revisit when Compy is downloadable by Europeans.
+
+### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record below in this file
+No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
+
+### B_eu. Analytics default-ON in the EU — ✅ DECIDED 2026-08-22 as **(a) US-first**
+Taken on your "do everything", and it is the recommendation that was already on the row. Usage
+analytics **on by default with disclosure** is normal and legal in the US, and you have no EU
+distribution today. Option (b) — ask on first run everywhere — costs real sign-up rate to buy legal
+cover for a market that does not exist yet, and it can be added the day it does. **Reversible and
+cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
+own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
+Europeans — that is the trigger, not a date.
