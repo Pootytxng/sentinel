@@ -9,7 +9,7 @@
   "repo": "Pootytxng/sentinel",
   "branch": "lane/rule-e-negation",
   "worktree": "C:\\Users\\Kuya\\code\\sentinel-recon-261",
-  "currentHead": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
+  "currentHead": "fba86dabb724da3cdc56d2cc0caadb8ecd72238a",
   "explicitHandoff": "Owner turn authorizing this train: 'Please resolve any and all conflicts regarding any of the remaining work in the recent chats. Please review all existing work trees. Cleanup and complete. All remaining work. to bring everything to current. and proceed with a persistent marathon automated workflow while I step away from my desk.' Merging a green PR is explicitly mine under the 2026-08-11 decree and inside the reversible release-engineering train docs/RELEASE_AUTONOMY.md covers with one owner authorization.",
   "exclusiveWriter": true,
   "inheritedWork": true,
@@ -39,6 +39,14 @@
       "head": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
       "detail": "Ran as the pre-push hook on the push that CREATED this head, so the gate and the head are the same object by construction rather than by claim. logs/verify-local-2026-09-01T20-10-40Z.log: frontend 407 test files / 5914 passed / 5 skipped, vite build green in 6.56s, Rust 1253 passed / 0 failed / 24 ignored, clippy clean. Zero GitHub Actions minutes.",
       "headNote": "The push output is the binding: e12521c7..3ef9184d lane/rule-e-negation -> lane/rule-e-negation, printed after LOCAL CHECK RESULT: PASS in the same run."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "fba86dabb724da3cdc56d2cc0caadb8ecd72238a",
+      "detail": "Ran as the pre-push hook on the push that CREATED this head, so the gate and the head are the same object by construction rather than by claim. logs/verify-local-2026-09-01T21-19-28Z.log: frontend 407 test files / 5914 passed / 5 skipped, Rust 1253 passed / 0 failed / 24 ignored, clippy clean. Zero GitHub Actions minutes.",
+      "headNote": "The push output is the binding: 70152c2f..fba86dab HEAD -> lane/rule-e-negation, printed after LOCAL CHECK RESULT: PASS in the same run.",
+      "why": "fba86dab is a merge of origin/main (624fcc40) into this lane, not new work. It was necessary rather than tidy: PR #288 landed by MERGE COMMIT, which took lane/remote-cache-design-286 to zero carry the instant it landed, and that red-ed rules A and D of handoff-worktree-truth on origin/main itself. Until each open lane's carrier bullet is repaired against the new main, no push from any lane can pass its own pre-push gate. This lane therefore carries both its own content and a share of that repair - filed as the fourth instance of issue #300."
     }
   ],
   "docGates": [
@@ -79,7 +87,13 @@
       "https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5499665829",
       "https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5499818979"
     ],
-    "writerNote": "Round 1 at a59c8c96, with the reviewer's interest disclosed in its opening line. Round 2 at e12521c7: PASS with one non-blocking finding, which is the finding recorded below. Round 3 at 3ef9184d: PASS, re-bound after a real re-read rather than a diff-and-hash re-bind, because the commit changes the reviewed logic. The reviewer's stated reason for being able to bind it without re-deriving the whole file is a property rather than a spot check, and it is worth preserving: CLAUSE_END can only SHORTEN a clause, and the new slice is a prefix of the old one, so a shorter clause can lose a marker but can never gain one. Every behaviour change this commit can produce therefore moves a name from exempt to reported, never the reverse - the direction a guard may move without a fresh argument."
+    "writerNote": "Round 1 at a59c8c96, with the reviewer's interest disclosed in its opening line. Round 2 at e12521c7: PASS with one non-blocking finding, which is the finding recorded below. Round 3 at 3ef9184d: PASS, re-bound after a real re-read rather than a diff-and-hash re-bind, because the commit changes the reviewed logic. The reviewer's stated reason for being able to bind it without re-deriving the whole file is a property rather than a spot check, and it is worth preserving: CLAUSE_END can only SHORTEN a clause, and the new slice is a prefix of the old one, so a shorter clause can lose a marker but can never gain one. Every behaviour change this commit can produce therefore moves a name from exempt to reported, never the reverse - the direction a guard may move without a fresh argument.",
+    "headMoved": {
+      "reviewedHead": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
+      "currentHead": "fba86dabb724da3cdc56d2cc0caadb8ecd72238a",
+      "reviewedObject": "80a88bbaa987df3395fbfd48e50584ef69d91251",
+      "claim": "The verdict is still bound to 3ef9184d55b34bec13d219b9ef7071976cadd7db, and the head has moved past it. What did NOT move is the thing that was reviewed: scripts/handoff-worktree-truth.test.mjs is the SAME BLOB at both heads (80a88bba), so the merge-forward cannot have changed the reviewed logic - that is a checkable identity, not a diff-and-hope re-bind. Everything between the two heads is documents and work-control receipts arriving from origin/main. A re-bind has been requested from the reviewing session; until it answers, this receipt records the verdict at the head it was given for, never at the head it was not."
+    }
   },
   "findings": [
     {
