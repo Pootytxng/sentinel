@@ -90,7 +90,7 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
 
 - **32 worktrees besides the canonical checkout. Work that exists on no remote — do NOT delete or hard-reset these
   before checking**: `claude/compy-visual-recovery-kit-6fd074`, holding a single commit (`cdd976f3`, docs on
-  RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, and `lane/rule-c-at-risk-312` (#312, PR #314)
+  RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, and `lane/receipt-modified-309` (#309)
   whenever it holds a commit its push has not carried — EVERY lane joins this list between a commit and its push,
   so no count is pinned here. Most checkouts ahead of `origin/main` are **fully pushed**: deleting those loses
   nothing, each has a row in docs/BRANCH_DISPOSITIONS.md, and rule C prints the live split every run. It stopped
