@@ -135,28 +135,80 @@ export const STATUS_ARGV = ["status", "--porcelain", "-uall", "--", RECEIPT_DIR]
  *   M   modified, either column (` M`, `M `, `MM`) — #309, the case that was invisible
  *   A   added, never committed (`A `, `AM`) — in the index only, which no push carries
  * Anything carrying `D` is excluded: there are no bytes on disk to preserve, the committed copy is
- * untouched, and `readFileSync` would throw on it. A plain rename (`R `/`C `) carries neither M
- * nor A and is excluded too — the content is unchanged and already committed under the old path, so
- * judging the destination would report a false stranding. `RM` does reach here, and correctly: its
- * content has moved away from every committed copy.
+ * untouched, and `readFileSync` would throw on it. `U` is included — an unmerged `UU` is content
+ * sitting in the worktree that no commit holds, which is this guard's target case, and the `D`
+ * shapes (`DU`, `UD`) are already gone by the line above.
+ *
+ * **A rename cannot be judged by its code.** The first cut excluded `R `/`C ` on the reasoning that
+ * the content is unchanged and already committed under the old path, so judging the destination
+ * would report a false stranding. The reasoning is right and the discriminator is wrong: git runs
+ * rename detection at a SIMILARITY THRESHOLD, so a receipt that was renamed AND edited reports the
+ * identical `R ` — a clean second column means "worktree matches index", never "index matches
+ * HEAD". Measured in a scratch repo: a realistic receipt renamed with one field flipped reports
+ * `R `, its destination blob matches nothing committed, and `git log --all` finds zero commits for
+ * that path. Those bytes are on one disk only. That is the exact class this guard exists to catch,
+ * escaping through its own exclusion. (A tiny file falls BELOW the threshold and reports `A `+`D `
+ * instead, which is why a small fixture makes the bug invisible.)
+ *
+ * So the rename is settled by measurement, exactly like #310: the caller injects
+ * `isPureRename(src, dest)`, and only a proof that the destination's bytes equal the source's
+ * COMMITTED blob excludes it. The default is `() => false` — include — because the two failure
+ * directions are not symmetric: a wrongly-included pure rename is a visible false report that the
+ * next run corrects, while a wrongly-excluded edited rename is the silent loss this whole file was
+ * written to prevent. A guard must never exclude on a measurement it did not make.
+ *
+ * KNOWN LIMIT, stated rather than left implicit: `MD`/`AD` — staged content whose worktree copy is
+ * then deleted — is excluded with the other `D` shapes. That is right for the question asked here
+ * (there are no bytes on disk to preserve, and `readFileSync` would throw), but the index does
+ * hold content that is in no commit and no worktree. Recovering it is `git checkout-index`, not
+ * this sweep.
  */
-export function uncommittedReceipts(porcelainStatus) {
+export function uncommittedReceipts(porcelainStatus, isPureRename = () => false) {
   return porcelainStatus
     .split(/\r?\n/)
     .map((line) => {
       if (line.length < 4) return null;
       const code = line.slice(0, 2);
-      // Git quotes a path containing spaces or non-ASCII. Unquoting keeps such a receipt visible;
-      // a backslash-escaped one survives as a path that fails to read, which fails LOUDLY in the
-      // sweep. Both beat the silent drop a `.json` filter would otherwise perform on the quote.
-      const rest = line.slice(3).trim().replace(/^"(.*)"$/, "$1");
-      if (code === "??") return rest;
+      const rest = line.slice(3).trim();
+      if (code === "??") return unquoteGitPath(rest);
       if (code.includes("D")) return null;
-      if (!/[MA]/.test(code)) return null;
-      return rest.includes(" -> ") ? rest.slice(rest.lastIndexOf(" -> ") + 4).trim() : rest;
+      const [src, dest] = splitRenamePorcelain(rest);
+      // M, A or U: the destination's bytes differ from every committed copy by the code alone.
+      if (/[MAU]/.test(code)) return dest;
+      if (!/[RC]/.test(code)) return null;
+      return isPureRename(src, dest) ? null : dest;
     })
     .filter(Boolean)
     .filter((p) => p.endsWith(".json"));
+}
+
+/**
+ * Git quotes a path containing spaces or non-ASCII. Unquoting keeps such a receipt visible; a
+ * backslash-escaped one survives as a path that fails to read, which fails LOUDLY in the sweep.
+ * Both beat the silent drop a `.json` filter would otherwise perform on the closing quote.
+ */
+export function unquoteGitPath(p) {
+  return p.length > 1 && p.startsWith('"') && p.endsWith('"') ? p.slice(1, -1) : p;
+}
+
+/**
+ * A porcelain path field -> [source, destination]. For a non-rename both are the same path.
+ *
+ * Unquoting happens PER SIDE and AFTER the split, which is not cosmetic: git quotes each side
+ * independently, so `"…/old one.json" -> "…/new one.json"` unquoted as a whole by a greedy
+ * `^"(.*)"$` strips only the outermost pair and leaves a stray quote welded to the
+ * destination.
+ * That failed loudly at `readFileSync` rather than losing anything, but it reported the wrong
+ * cause — the header blamed backslash escapes — and a guard that misnames its own failure sends the
+ * next session hunting the wrong bug. Caught by peer review, not by a run.
+ */
+export function splitRenamePorcelain(rest) {
+  const at = rest.lastIndexOf(" -> ");
+  if (at < 0) {
+    const only = unquoteGitPath(rest);
+    return [only, only];
+  }
+  return [unquoteGitPath(rest.slice(0, at).trim()), unquoteGitPath(rest.slice(at + 4).trim())];
 }
 
 describe("a work-control receipt survives the worktree it was written in", () => {
@@ -219,10 +271,33 @@ describe("a work-control receipt survives the worktree it was written in", () =>
     // crash the sweep on `readFileSync` rather than report anything true.
     expect(uncommittedReceipts(` D ${R}`)).toEqual([]);
     expect(uncommittedReceipts(`D  ${R}`)).toEqual([]);
-    // A plain rename carries content that is already committed under the old path, so judging the
-    // destination would report a false stranding. A rename that was ALSO modified is a real finding.
-    expect(uncommittedReceipts(`R  .claude/work-control/old.json -> ${R}`)).toEqual([]);
-    expect(uncommittedReceipts(`RM .claude/work-control/old.json -> ${R}`)).toEqual([R]);
+    // A rename is decided by the injected measurement, never by the code. Same line, both verdicts.
+    const renamed = `R  .claude/work-control/old.json -> ${R}`;
+    expect(uncommittedReceipts(renamed, () => true)).toEqual([]);
+    expect(uncommittedReceipts(renamed, () => false)).toEqual([R]);
+    // The predicate is handed both sides, in order, unquoted.
+    let seen = null;
+    uncommittedReceipts(renamed, (src, dest) => ((seen = [src, dest]), true));
+    expect(seen).toEqual([".claude/work-control/old.json", R]);
+    // Default is INCLUDE. A caller that cannot measure must not silently inherit an exclusion —
+    // this is the direction the first cut got wrong, and it is the whole defect.
+    expect(uncommittedReceipts(renamed)).toEqual([R]);
+    expect(uncommittedReceipts(`RM .claude/work-control/old.json -> ${R}`, () => true)).toEqual([R]);
+    // An unmerged conflict is content in the worktree that no commit holds — the target case.
+    expect(uncommittedReceipts(`UU ${R}`)).toEqual([R]);
+    expect(uncommittedReceipts(`AA ${R}`)).toEqual([R]);
+    // ...but the D shapes of a conflict still lose to the D rule above.
+    expect(uncommittedReceipts(`DU ${R}`)).toEqual([]);
+    expect(uncommittedReceipts(`UD ${R}`)).toEqual([]);
+    // Quoted renames unquote per SIDE. Unquoting the whole field welds a quote to the destination.
+    expect(splitRenamePorcelain('".claude/work-control/old one.json" -> ".claude/work-control/new one.json"')).toEqual([
+      ".claude/work-control/old one.json",
+      ".claude/work-control/new one.json",
+    ]);
+    expect(uncommittedReceipts('RM ".claude/work-control/a b.json" -> ".claude/work-control/c d.json"')).toEqual([
+      ".claude/work-control/c d.json",
+    ]);
+    expect(unquoteGitPath('"')).toBe('"');
     // A clean tracked receipt is the common case and must stay silent.
     expect(uncommittedReceipts("")).toEqual([]);
     // Quoted paths survive rather than being dropped by the `.json` filter at the closing quote.
@@ -268,7 +343,21 @@ describe("a work-control receipt survives the worktree it was written in", () =>
       } catch (error) {
         throw new Error(`could not read ${worktree}: ${error.message}`);
       }
-      for (const file of uncommittedReceipts(status)) {
+      // The rename discriminator, bound to THIS worktree. `hash-object` applies the same clean
+      // filters git applied before committing, so a pure rename's two hashes are byte-identical
+      // even on a CRLF checkout — verified in the scratch repo, not assumed. The leading `./` is
+      // the same measurement error the carrier loop below documents. Any failure returns false,
+      // which INCLUDES the receipt: an unmeasurable rename is reported, never quietly dropped.
+      const isPureRename = (src, dest) => {
+        try {
+          const onDisk = git(["hash-object", "--", dest], worktree).trim();
+          const committed = git(["rev-parse", `HEAD:./${src}`], worktree).trim();
+          return onDisk !== "" && onDisk === committed;
+        } catch {
+          return false;
+        }
+      };
+      for (const file of uncommittedReceipts(status, isPureRename)) {
         // Every commit on ANY ref that touches this path, newest first. Empty means the proof has
         // never been committed anywhere — the stranded case.
         let carriers;
