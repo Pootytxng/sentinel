@@ -90,16 +90,20 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Two dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31
+### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 3rd 2026-09-01
 
-**The ask:** one command, both branches at once —
-`git push origin --delete lane/native-routing-271 lane/css-margin-separators-274`. Both lanes landed
-(PR [#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`, PR
+**The ask:** one command, all three at once — `git push origin --delete lane/native-routing-271
+lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. The first two landed (PR
+[#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`, PR
 [#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`) and neither leftover ref holds
-anything `main` lacks. Deleting the first was **denied to this session**, and a denial is a stop —
-so I did not reach the same effect by another route, and I did not try the same thing again on the
-second branch either, because retrying a blocked effect on a fresh target is the same workaround
-wearing a different name. **Why it matters:** until the refs are gone, their rows and the handoff's
+anything `main` lacks. The third is spent a different way: its PR
+[#163](https://github.com/Pootytxng/sentinel/pull/163) closed **unmerged**, but its one real fix —
+the handoff verdict naming your VS Code tab instead of "the session" — reached `main` independently
+and more fully, leaving the branch 139 lines BEHIND on its own files. Nothing is lost either way: the
+local refs and their clean worktrees still hold every commit, so any of the three can be pushed back
+in one command. Deleting the first was **denied to this session**, and a denial is a stop — so I did
+not reach the same effect by another route. The third hit that same denial on that same sanctioned
+command a week later, which is why it joins this list instead of getting solved. **Why it matters:** until the refs are gone, their rows and the handoff's
 branch list have to keep saying "landed but still here" — small residue, but it is exactly what
 makes the next session distrust the branch list. Nothing is broken while it waits.
 
@@ -247,60 +251,24 @@ section is waiting on you:**
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
-### B_startup. A Windows mutation outside `actions.rs` — ✅ CLOSED 2026-08-22, it was already fixed
-The item was filed 2026-08-02 and **fixed 2026-08-03, the next day, by a different lane** — nobody
-closed the row, so it sat on your list for twenty days asking you to decide something that no longer
-existed. `set_startup_entry_enabled` moved out of `lib.rs` into `history.rs` and now mutates through
-`actions::apply_startup_entry_enabled`: typed `SetStartupEntryEnabled` action, a raw-bytes snapshot
-of Windows' own approval value, and a Trust Ledger entry like every other change — so a startup app
-Compy disables *is* undoable from your history. Verified in the code today, not taken on trust.
-`CLAUDE.md`'s module map still claimed the exception existed and now doesn't. **Nothing on you.**
+### A_stale. Fourteen dead checkouts and ten rewritten Codex configs  ·  ⏳ NEW 2026-09-01
 
-### B_gpu. A finished GPU-profile screen mounted nowhere — ✅ CLOSED 2026-08-22, wired in
-You said do everything, so this took option (a) rather than parking a built-and-tested surface any
-longer. `src/surfaces/GpuProfile.tsx` now mounts in the **Lab**, below the console, as an advisory
-panel: which slice of GPU data you're looking at, plain-English notes for your Radeon, and a
-before/after diff of the readable GPU settings when you change something in Adrenalin yourself.
-It stays advisory forever — LOCKED rule 6 makes GPU-profile *apply* structurally impossible, since
-AMD profile state isn't user-mode readable and rollback-first can't be satisfied. Nothing here
-writes to your PC. *Why it matters:* work that was finished and invisible is now something you can
-actually see, and if you don't like it, say so and it comes out.
+**The ask, once [#290](https://github.com/Pootytxng/sentinel/pull/290) lands:** `git worktree remove`
+for the fourteen checkouts that carry no commit `main` lacks, and `git restore .codex/config.toml` in
+the ten holding a rewritten copy of it. Both were **denied to this session**, and a denial is a stop,
+so neither was reached by another route. **Nothing is lost by either.** The only real content any of
+those folders held was six work-control proof receipts — evidence for merges and closes that existed
+on no branch at all, one of them a full independent-review record — and they were copied onto this
+lane first, which is why the removal waits for #290 rather than happening in either order. What
+remains in the four "dirty" ones is a line-endings-only `CLAUDE.md`, a tool scratch folder, and the
+Codex file. That file is not authored work either: it is the app-server re-sync its own header warns
+about, re-adding two Claude env-vars that do nothing for Codex plus an MCP entry the lane had
+removed on purpose. It keeps the read-only safety floor on its first two lines, so nothing is unsafe
+while it waits. **Why it matters:** `git worktree list` is the list every session reads to learn what
+is live, and fourteen dead folders in it is why sessions keep re-deriving the same wrong picture.
 
-### B_write. The write refusal — ✅ ARMED 2026-08-22 on your "do everything"
-A Claude session you open by hand — rather than through the launcher — used to be *unverified*:
-nothing on disk said which folder, branch, issue and conversation it was working under, and it wrote
-anyway. Now the moment such a session edits a file inside this repo it is stopped and handed the one
-command that verifies it on the spot, so nothing is lost and no window closes. Registered in
-`.claude/settings.json` on `Write|Edit|NotebookEdit`; this machine's live session was adopted first,
-per the spec's own ordering, so arming it could not lock the arming session out.
-*Why it matters:* it is the difference between "a change nobody can attribute later" and "a change
-bound to a folder, a branch and an issue". **`Bash` is deliberately still unguarded** — a named hole
-(spec §3c) that doubles as the escape hatch if the hook ever misbehaves, and a test now fails the
-build if anyone adds `Bash` to it or quietly unwires the hook. Reads stay advisory.
-
-### B_shelter. The collision guard — ✅ NOTHING WAS EVER WAITING ON YOU; it landed 2026-08-21
-**This row was wrong and is withdrawn.** Issue [#128](https://github.com/Pootytxng/sentinel/issues/128)'s
-1,100 lines are **on `main` and have been since 2026-08-21** — merged as `bf8e2e6e`, then hardened by
-`38279f95` to resolve its state root through the #130 resolver. Its tests run in every gate; the
-`scripts/process-mutex-guard.test.mjs` flake the handoff warns about IS this code, live.
-*Why it matters:* it stops a release and an app-install from running over each other — the failure that
-once left you with an installer that exited "success" and replaced nothing. It is protecting you now.
-*How the row got here:* it was re-derived on 2026-08-25 from the shelter tag
-`preserve/local-collision-guard-707572f1` without checking whether that commit was already an ancestor
-of `main`. It was. **Guard added so this class of stale ask cannot recur:** a shelter tag whose commit
-is reachable from `origin/main` now fails `scripts/shelter-tag-guard.test.mjs`.
-
-### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
-No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
-
-### B_eu. Analytics default-ON in the EU — ✅ DECIDED 2026-08-22 as **(a) US-first**
-Taken on your "do everything", and it is the recommendation that was already on the row. Usage
-analytics **on by default with disclosure** is normal and legal in the US, and you have no EU
-distribution today. Option (b) — ask on first run everywhere — costs real sign-up rate to buy legal
-cover for a market that does not exist yet, and it can be added the day it does. **Reversible and
-cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
-own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
-Europeans — that is the trigger, not a date.
+### B-closed6. Six items closed 2026-08-18/22 — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
+**None of them is waiting on you.** `B_startup` (a Windows mutation outside `actions.rs` — already fixed the day after it was filed) · `B_gpu` (the finished GPU-profile screen, now mounted in the Lab, advisory forever) · `B_write` (the unverified-session write refusal, armed) · `B_shelter` (a row that was simply wrong — the collision guard had been on `main` since 2026-08-21, and a guard now fails the build if that stale-ask class recurs) · `B_land` (feedback and analytics post to your own site, into Cloudflare D1 — **your one residual is a single site deploy when the Q9b endpoints are built**) · `B_eu` (analytics default-ON, decided US-first; revisit the day Compy is downloadable by Europeans — that trigger is the reason it is archived rather than deleted). Closing verdicts preserved verbatim in the archive.
 
 ---
 
