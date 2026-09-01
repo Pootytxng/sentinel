@@ -89,7 +89,7 @@ read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
 - **32 worktrees besides the canonical checkout; FOURTEEN branches carry commits not on main — do NOT delete or hard-reset
-  those thirteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+  those fourteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
   `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` (#276) → `lane/rule-e-negation` (#295) ·
   `lane/shell-ownership-278` · `lane/receipt-preservation-298` (#298) · `lane/remote-cache-design-286` (#286) →
