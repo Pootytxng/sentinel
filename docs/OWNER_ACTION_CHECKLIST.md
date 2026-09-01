@@ -90,18 +90,32 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Two dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31
+### A_prune. Dead refs, dead folders, rewritten Codex configs — one cleanup pass  ·  ⏳ 2026-08-31, widened 2026-09-01
 
-**The ask:** one command, both branches at once —
-`git push origin --delete lane/native-routing-271 lane/css-margin-separators-274`. Both lanes landed
-(PR [#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`, PR
-[#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`) and neither leftover ref holds
-anything `main` lacks. Deleting the first was **denied to this session**, and a denial is a stop —
-so I did not reach the same effect by another route, and I did not try the same thing again on the
-second branch either, because retrying a blocked effect on a fresh target is the same workaround
-wearing a different name. **Why it matters:** until the refs are gone, their rows and the handoff's
-branch list have to keep saying "landed but still here" — small residue, but it is exactly what
-makes the next session distrust the branch list. Nothing is broken while it waits.
+**Three commands, and none of them is urgent.** Every one was **denied to this session**, and a denial
+is a stop — so none was reached by another route, and nothing here is broken while it waits.
+
+1. `git push origin --delete lane/native-routing-271 lane/css-margin-separators-274
+   lane/cleanup-train-2026-08-20` — three spent refs. The first two landed (PRs
+   [#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`,
+   [#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`). The third's PR
+   [#163](https://github.com/Pootytxng/sentinel/pull/163) closed **unmerged**, but its one real fix
+   reached `main` independently and more fully, leaving that branch 139 lines BEHIND on its own files.
+2. `git worktree remove` for the **fourteen** checkouts carrying no commit `main` lacks.
+3. `git restore .codex/config.toml` in the **ten** holding a rewritten copy of it.
+
+**Nothing is lost by any of the three.** The local refs and their worktrees still hold every commit,
+so all three branches can be pushed back with one command. The only real content those folders held
+was six work-control proof receipts — evidence for merges and closes that existed on no branch at all,
+one a full independent-review record — and they were copied onto a lane first. What remains is a
+line-endings-only `CLAUDE.md`, a tool scratch folder, and the Codex file, which is not authored work
+either: it is the app-server re-sync its own header warns about, re-adding two Claude env-vars that do
+nothing for Codex plus an MCP entry a lane had removed on purpose. It keeps the read-only safety floor
+on its first two lines, so nothing is unsafe while it sits.
+
+**Why it matters:** `git worktree list` and the branch list are what every new session reads to learn
+what is live. Fourteen dead folders and three landed-but-present refs in them is exactly why sessions
+keep re-deriving the same wrong picture — and why the docs have to keep saying "landed, still here".
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
@@ -247,9 +261,10 @@ section is waiting on you:**
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
-### B-closed. Six input items you already decided — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
+### B-closed6. Six items closed 2026-08-18/22 — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
+**None of them is waiting on you.** `B_startup` (a Windows mutation outside `actions.rs` — already fixed the day after it was filed) · `B_gpu` (the finished GPU-profile screen, now mounted in the Lab, advisory forever) · `B_write` (the unverified-session write refusal, armed) · `B_shelter` (a row that was simply wrong — the collision guard had been on `main` since 2026-08-21, and a guard now fails the build if that stale-ask class recurs) · `B_land` (feedback and analytics post to your own site, into Cloudflare D1 — **your one residual is a single site deploy when the Q9b endpoints are built**) · `B_eu` (analytics default-ON, decided US-first; revisit the day Compy is downloadable by Europeans — that trigger is the reason it is archived rather than deleted). Closing verdicts preserved verbatim in the archive.
 
-`B_startup` · `B_gpu` · `B_write` · `B_shelter` · `B_land` · `B_eu` — all closed by your own verdict, all preserved verbatim there. Nothing in them is waiting on you.
+---
 
 ## §C — Release gates — your money / legal calls  ·  🔒
 These gate **public** release only (not the local app you use daily). Full list:

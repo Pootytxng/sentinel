@@ -36,6 +36,16 @@
 //      a landed lane's name must leave the bullet in the same train that lands it. Residual,
 //      deliberately out of scope here: a checkout named by PATH is judged by C (carriers must be
 //      named) but not by D — D reads branch-shaped code spans only, same extractor as A.
+//   E. Local only. Every CONTAINMENT claim the handoff makes between two named branches must hold
+//      by `git merge-base --is-ancestor`. Added 2026-09-01 after this file shipped
+//      "`compy-health-parity` **contains** `compy-visual-recovery-kit-6fd074`" while neither branch
+//      contained the other — they share 14 commits and diverge at `c8366609`. A, C and D were all
+//      green through it, and structurally had to be: every one of them compares a named branch
+//      against `origin/main` and nothing compares two named branches to each other, so a sentence
+//      about how two lanes relate was the one shape this guard could not see. The consequence is
+//      not cosmetic — "contains" is what tells the next session it may drop one branch and keep the
+//      other, and here that would have thrown away ten commits of #225's Health work. Fail-closed
+//      like C and D: a name that does not resolve is a FAILURE, never a skipped claim.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -238,6 +248,59 @@ export function liveCarriers(list, countAhead) {
 
 const markdown = readFileSync(join(ROOT, HANDOFF), "utf8");
 
+/**
+ * Containment claims between two named branches: "`A` contains `B`", "`A` is an ancestor of `B`".
+ * Read from the WHOLE document, not the repo-state bullet — the claim that motivated this rule sat
+ * in that bullet, but nothing makes that its home, and a rule scoped to one paragraph would miss the
+ * next one written anywhere else. Returns {outer, inner, text} with `outer` claimed to CONTAIN
+ * `inner`, so both spellings normalise to one direction before the ancestry test.
+ */
+export function containmentClaims(markdown) {
+  // Any backticked token, NOT only prefixed ones. The claim that motivated this rule wrote its two
+  // branches bare — `compy-health-parity`, not `claude/compy-health-parity` — so a pattern that
+  // demanded the prefix matched nothing and the rule passed while the doc was wrong. Which of these
+  // tokens is really a branch is settled later, by whether it resolves; deciding it here by shape is
+  // how the first version went inert.
+  const B = "`([A-Za-z0-9._/-]{3,})`";
+  const NEAR = "[^.\\n]{0,40}?";
+  const out = [];
+  for (const m of markdown.matchAll(new RegExp(B + NEAR + "\\bcontains\\b" + NEAR + B, "g"))) {
+    out.push({ outer: m[1], inner: m[2], text: m[0] });
+  }
+  for (const m of markdown.matchAll(
+    new RegExp(B + NEAR + "\\bis (?:an ancestor of|contained (?:in|by))\\b" + NEAR + B, "g"),
+  )) {
+    out.push({ outer: m[2], inner: m[1], text: m[0] });
+  }
+  return out.filter((c, i, a) => a.findIndex((o) => o.outer === c.outer && o.inner === c.inner) === i);
+}
+
+/** Lane names appear bare in prose. Try the name, then the prefixes this repo actually uses. */
+export function resolveLaneName(name, refExists) {
+  if (refExists(name)) return name;
+  for (const p of ["claude/", "lane/", "feat/", "fix/", "design/", "codex/", "docs/", "recovery/", "salvage/", "chore/"]) {
+    if (refExists(p + name)) return p + name;
+  }
+  return null;
+}
+
+export function brokenContainmentClaims(claims, refExists, contains) {
+  const broken = [];
+  for (const c of claims) {
+    const outer = resolveLaneName(c.outer, refExists);
+    const inner = resolveLaneName(c.inner, refExists);
+    // Neither side resolves to a ref: this sentence is not a branch claim at all (a file path, a
+    // directory, a command). Judging it would reproduce the over-reach #243 caught in rule D.
+    if (!outer && !inner) continue;
+    if (!outer) broken.push({ ...c, why: `${c.outer} does not resolve to a ref in this checkout` });
+    else if (!inner) broken.push({ ...c, why: `${c.inner} does not resolve to a ref in this checkout` });
+    else if (!contains(outer, inner)) {
+      broken.push({ ...c, why: `${outer} does NOT contain ${inner} — git merge-base --is-ancestor says no` });
+    }
+  }
+  return broken;
+}
+
 describe("the handoff tells the truth about the worktrees", () => {
   it("still catches the claim it was written for", () => {
     // Pinned separately from the live doc so a green run can never mean "the parser found nothing".
@@ -408,6 +471,33 @@ describe("the handoff tells the truth about the worktrees", () => {
       `${HANDOFF} presents these as lanes to preserve, but on this machine they are not:\n` +
         found.map((f) => `  - ${f.name}: ${f.why}`).join("\n") +
         `\nA landed writing lane is never work to preserve — remove its name from the bullet in the same train that lands it.`,
+    ).toEqual([]);
+  });
+  it("E: every containment claim between two branches is true by --is-ancestor", () => {
+    const live = git("worktree", "list", "--porcelain").split(/\r?\n/).filter((l) => l.startsWith("worktree ")).length;
+    if (live <= 1) {
+      // Same reason as B, C and D: a one-checkout clone holds no local lanes to compare.
+      expect(live).toBe(1);
+      return;
+    }
+    const claims = containmentClaims(markdown);
+    if (claims.length === 0) return; // No claim is a legitimate state — unlike D, this rule has no floor.
+    const contains = (outer, inner) => {
+      try {
+        git("merge-base", "--is-ancestor", inner, outer);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const broken = brokenContainmentClaims(claims, localRefExists, contains);
+    expect(
+      broken,
+      `${HANDOFF} claims one branch contains another, and the repository disagrees:\n` +
+        broken.map((b) => `  - ${b.why}\n      in: ${b.text}`).join("\n") +
+        `\n"Contains" is what tells the next session it may drop one branch and keep the other. ` +
+        `Re-derive it with git merge-base --is-ancestor <inner> <outer>, or say "share N commits, ` +
+        `diverging at <sha>" instead — which is what two lanes that merely overlap actually do.`,
     ).toEqual([]);
   });
 });

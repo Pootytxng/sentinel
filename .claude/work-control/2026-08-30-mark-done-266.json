@@ -1,0 +1,54 @@
+{
+  "transition": "mark-done",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 267,
+  "issue": 266,
+  "branch": "claude/exciting-robinson-0ce4d5",
+  "currentHead": "be1b0fde491adfef358c87cd855ac3bc25837024",
+  "explicitHandoff": "Same owner authorization as .claude/work-control/2026-08-30-merge-pr-267.json, which names this step: '...merge PR #267 without --delete-branch, close #266, mark Work Control Done, then perform the documented detached-main disposition/worktree cleanup with fresh checks.'",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "carriedFrom": "Every inspection field was re-derived live this turn and is written out in full in .claude/work-control/2026-08-30-merge-pr-267.json.",
+    "projectState": "GitHub Project 1 (owner Pootytxng), item PVTI_lAHOCbCIUs4BexYjzg4malA for issue #266, read back live with gh project item-list after the merge: status=Done. The project's own automation moved it when the merge closed the issue via the 'Closes #266' keyword; no manual field edit was needed, and none was made. This receipt is the evidence for that state, so a status that moved by automation is not a status that moved unproven.",
+    "firstOfItsKind": "This is the first mark-done receipt in .claude/work-control/. Earlier lanes recorded merge-pr and close-issue and left the Done move unreceipted; that gap is named here rather than continued."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "be1b0fde491adfef358c87cd855ac3bc25837024",
+      "detail": "The authorising run: .githooks/pre-push, logs/verify-local-2026-08-30T11-06-50Z.log, 405/405 test files, 5790 frontend tests passed / 4 skipped, Rust 1209 passed / 0 failed / 24 ignored, clippy zero warnings, hook exited 0 and the ref moved to be1b0fde."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "be1b0fde491adfef358c87cd855ac3bc25837024",
+      "detail": "The later re-run at 12:03:57Z, failing on scripts/branch-disposition-audit.test.mjs alone, for the foreign ref origin/claude/css-margin-comments-240 whose row rides in open PR #268. Full analysis in the merge receipt."
+    }
+  ],
+  "doneMeans": {
+    "landed": "Merge commit ca10f7fa9a2a3ee5c8e03857ad187739ec90659b on main; issue #266 CLOSED; PR #267 MERGED.",
+    "notDoneYet": "The lane's own housekeeping is NOT done and is deliberately not claimed as done: the ref claude/exciting-robinson-0ce4d5 is still on origin, its CLAIMED row is still in docs/BRANCH_DISPOSITIONS.md on main, and the docs/SESSION_HANDOFF.md worktree bullet still names a branch that is now zero-carry, which fails rule D of scripts/handoff-worktree-truth.test.mjs. All three are repaired by ONE detached-main commit that cannot be pushed until PR #268's disposition row lands on main, because .githooks/pre-push runs the branch-disposition audit against the pusher's tree and that tree has no row for the foreign live ref. Holding is the correct move: pruning this ref before its row can be removed would leave main failing on a second count, and writing #268's row here would collide with the identical row inside #268 and block it."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "codex (independent non-writing reviewer, separate context, no write access to this worktree)",
+    "status": "passed",
+    "head": "be1b0fde491adfef358c87cd855ac3bc25837024",
+    "reason": "PASS at this exact head with no actionable findings. Full text in .claude/work-control/2026-08-30-merge-pr-267.json."
+  }
+}

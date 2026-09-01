@@ -1,0 +1,57 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "feature",
+  "pr": 194,
+  "issue": null,
+  "branch": "feat/test-rig-reading-set",
+  "currentHead": "03563b9218c07fe01bba2a1d044142239c9cd4c8",
+  "explicitHandoff": "The driving session opened with a diagnosis already done: PR #194 was DIRTY/CONFLICTING against origin/main (mergeStateStatus), with the conflict shape pre-checked via `git merge-tree --write-tree HEAD origin/main` and found to be three doc-ledger files only (docs/BACKLOG.md, docs/BRANCH_DISPOSITIONS.md, docs/RELEASE_STATE.md) -- every code/test file in the PR (App.tsx, LabConsole.tsx, LabGround.tsx, their tests, lab.json locales, the affordance-census baseline) merges clean. Instructed to rebase-or-merge onto current origin/main, resolve the three doc conflicts by hand preserving both sides' real information, run the full local verify gate, write the work-control receipt, run work-control-gate.mjs, then gh pr merge -- autonomously, per docs/RELEASE_AUTONOMY.md, stopping only on a red gate or a genuine ownership collision.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-testrig, git dir shared with C:/Users/Kuya/code/sentinel and its sibling worktrees.",
+    "remoteState": "origin/main = 5402117a (Merge pull request #192 from Pootytxng/lane/aurora-idle-cost), re-fetched at session start and unmoved since. gh reported PR #194 OPEN, baseRefName main, headRefOid 135c9f27 (pre-merge) with mergeStateStatus DIRTY / mergeable CONFLICTING; after the merge commit was pushed, re-checked and gh now reports mergeStateStatus CLEAN / mergeable MERGEABLE at headRefOid 03563b92. No status checks exist on the repo (Actions-budget decree), so the local gate below is the whole proof.",
+    "worktree": "git worktree list re-checked at session start: eight worktrees/checkouts. This lane is alone in sentinel-testrig on feat/test-rig-reading-set -- no other worktree references this branch, and docs/WORK_CONTROL.md's claim/collision rules found no overlapping active claim on this branch or its files.",
+    "branch": "feat/test-rig-reading-set. Started at 135c9f27 (clean, up to date with origin). Merged origin/main (5402117a) via `git merge origin/main`, resolved three doc-only conflicts (docs/BACKLOG.md renumbering cascade from one inserted item; docs/BRANCH_DISPOSITIONS.md row reconciliation, see docGates; docs/RELEASE_STATE.md single-slot owner-installed-build conflict, resolved by commit timestamp -- this branch's own build commit 36011078 is timestamped 2026-08-21T18:21:25-07:00, later than lane/aurora-idle-cost's 1f2ba660 at 2026-08-21T04:33:00-07:00, so this branch's row is the current physical-machine truth and the aurora-idle-cost row was compressed into its supersedes-list rather than dropped). Merge commit amended once in place (not yet pushed at that point) to trim two blank lines from BRANCH_DISPOSITIONS.md after the first verify-local run caught a doc-budget overage (121/120) the merge itself introduced. Final head 03563b9218c07fe01bba2a1d044142239c9cd4c8, pushed to origin/feat/test-rig-reading-set (135c9f27..03563b92, pre-push hook gate PASS).",
+    "dirtyState": "git status --porcelain at the final head is empty except this receipt file, which by construction cannot ride inside the head it authorizes and lands in the next commit, matching the pattern used by prior merge-pr receipts (e.g. 2026-08-21-merge-pr-191.json).",
+    "liveProcesses": "Get-Process compy returns nothing -- no installed compy.exe running on this machine right now, and nothing is listening on 9455. This merge is a gh API call plus a docs follow-up commit; no build, install, or app lifecycle work is part of this transition."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "03563b9218c07fe01bba2a1d044142239c9cd4c8",
+      "detail": "Run directly (LOCAL CHECK RESULT: PASS) and again inside .githooks/pre-push during `git push origin feat/test-rig-reading-set`, which only accepts a push on a pass (135c9f27..03563b92 accepted). Covers vitest (360 files, 4754 passed / 4 skipped, 0 failed), tsc + vite build (clean, no errors), cargo test (963 passed, 0 failed, 24 ignored) and cargo clippy (clean). Full output read end-to-end both times, not tailed -- grepped for FAIL/Error/ELIFECYCLE markers across the complete log with zero hits before accepting the first run as green. The first full run (before the blank-line trim) failed on scripts/doc-budget-guard.test.mjs: docs/BRANCH_DISPOSITIONS.md 121/120, caused by this merge net-adding one row (this branch's own PR #194 row, required because the audit rejects an origin ref with no row) while only net-removing one stale row (origin/lane/aurora-idle-cost, whose ref no longer exists on origin -- also an audit-required fix, see docGates). Fixed by trimming two of three redundant blank lines before '## Standing rule' (119/120), amended into the merge commit, re-run clean."
+    }
+  ],
+  "shipProof": {
+    "applicable": false,
+    "reason": "No new build/install was produced in this transition. The PR's own frontend code (App.tsx, LabConsole.tsx, LabGround.tsx, lab-console.test.tsx, lab-ground.test.tsx, lab.json locales, affordance-census baseline) merged clean with zero conflicts against origin/main and is unchanged by this session's work; its self-review PASS on embedded stamp 36011078 predates this session and is recorded in docs/RELEASE_STATE.md's owner-installed row, carried forward by the merge. This session's own diff is entirely conflict-resolution prose in the three doc-ledger files."
+  },
+  "selfReview": {
+    "verdict": "not applicable",
+    "detail": "No .tsx/.css touched this session. The self-review law is triggered by a UI change; this transition is a merge-conflict resolution across docs/BACKLOG.md, docs/BRANCH_DISPOSITIONS.md and docs/RELEASE_STATE.md only. The UI change itself (the Test room's 'Your rig' reading set) was already self-reviewed PASS on the installed build by a prior session on this same branch, per the RELEASE_STATE.md row this merge preserves."
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "No non-writing model is reachable from this session for a live second opinion; Codex is not running against this worktree. WORK_CONTROL.md makes that review advisory rather than blocking. The mutation boundary (actions.rs/history.rs) is untouched by this branch's diff against main -- verified via git merge-tree at session start, which found zero code conflicts, only doc-ledger conflicts -- and every claim in the resolved docs is either re-derived from git history (commit timestamps settling the RELEASE_STATE.md owner-installed conflict) or carried verbatim from one side's existing text."
+  },
+  "docGates": [
+    "doc-budget.ps1 ALL PASS at the final head: CLAUDE.md 259/380, docs/BACKLOG.md 1104/1200 (103.4KB/106KB), docs/BRANCH_DISPOSITIONS.md 119/120 (after the blank-line trim), docs/RELEASE_STATE.md 299/300 (45.6KB/48KB), all other tracked docs comfortably under budget.",
+    "verify-release-state.mjs: 31 citations, 31 ok, 0 near-drift, 0 broken, 0 missing sections, 0 state-drift.",
+    "markdown-link-guard.mjs: PASS, 187 local links checked.",
+    "branch-disposition-audit.mjs: OK at the final head. The merge itself surfaced two real defects in docs/BRANCH_DISPOSITIONS.md that this commit fixes rather than just carrying forward: (1) origin/main already dispositioned origin/lane/aurora-idle-cost, a ref that PR #192's merge had already deleted from origin -- a stale row the audit rejects ('a row naming a ref that is gone'); dropped, its substance (the ambient-idle-CPU fix, before/after numbers, guard names) compressed into the supersedes-list of the RELEASE_STATE.md row it fed. (2) origin/feat/test-rig-reading-set -- this branch's own ref -- had never had a row at all, which the audit also rejects ('exists on origin but has no row'); added, following the established 'this lane's own branch ... this row and ref leave together the moment it lands' pattern used by lane/rig-then-rails (PR #191) and lane/aurora-idle-cost (PR #192). That row is now scheduled for removal in a direct follow-up commit to main immediately after this PR merges and the branch ref is deleted, mirroring commit 581a0b6d exactly."
+  ]
+}

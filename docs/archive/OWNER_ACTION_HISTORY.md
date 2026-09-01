@@ -71,7 +71,6 @@
   Your eyeball is optional — you'll only see these on a first run / tour re-trigger; the main app's live
   look is unchanged.
 
-
 ---
 
 ### A0b. zh-CN (Simplified Chinese) — ✅ CLOSED: merged AND published in v0.9.11 (updated 2026-07-28)
@@ -450,14 +449,9 @@ public. One command, or one word to let me run it. Nothing else.
 
 ---
 
-## §B — resolved input items, moved verbatim 2026-09-01 (doc-budget)
+## Moved from the live checklist on 2026-09-01 — §B items closed 2026-08-21/22
 
-> Six §B sections whose verdicts the owner had already given. Moved out of the live checklist
-> byte-for-byte under TOKEN LAW §1 to pay for a new open item and for the incoming budget ratchet
-> (450 → 385 lines, 33 → 31.5 KB, landing with PR #290). **Nothing here is waiting on the owner.**
-> Nothing re-worded; the only edits are relative links re-pointed for this file's directory level.
-
----
+> Same rule as the rest of this file: closed by the owner's own verdict or by the work simply landing, kept verbatim so the record of what he approved, and when, survives. The live checklist kept a one-line pointer (`B-closed4`). Moved because `docs/OWNER_ACTION_CHECKLIST.md` hit its BYTE budget and TOKEN LAW §1 pays that from the archive, never by raising the cap.
 
 ### B_startup. A Windows mutation outside `actions.rs` — ✅ CLOSED 2026-08-22, it was already fixed
 The item was filed 2026-08-02 and **fixed 2026-08-03, the next day, by a different lane** — nobody
@@ -502,7 +496,13 @@ once left you with an installer that exited "success" and replaced nothing. It i
 of `main`. It was. **Guard added so this class of stale ask cannot recur:** a shelter tag whose commit
 is reachable from `origin/main` now fails `scripts/shelter-tag-guard.test.mjs`.
 
-### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record in [`archive/OWNER_ACTION_HISTORY.md`](OWNER_ACTION_HISTORY.md)
+---
+
+## Moved from the live checklist on 2026-09-01 — two decided §B items
+
+> Decided on the owner's own verdicts (2026-08-18 and 2026-08-22) and kept verbatim. `B_land` still carries one residual — a single site deploy once the Q9b endpoints exist — which is why the live checklist's pointer names it rather than merely filing it away. `B_eu` has a trigger rather than a date: revisit when Compy is downloadable by Europeans.
+
+### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record above in this file
 No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
 
 ### B_eu. Analytics default-ON in the EU — ✅ DECIDED 2026-08-22 as **(a) US-first**
@@ -513,5 +513,3 @@ cover for a market that does not exist yet, and it can be added the day it does.
 cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
 own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
 Europeans — that is the trigger, not a date.
-
----
