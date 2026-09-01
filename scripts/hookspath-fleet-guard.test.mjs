@@ -404,6 +404,60 @@ describe("the pre-push contract", () => {
     expect(prePushContractViolations(backgrounded)).toContainEqual(expect.stringMatching(/backgrounds/));
   });
 
+  it("a diagnostic naming the verifier does not move the dead-code anchor (review round 5)", () => {
+    // Session `sentinel-21`, reviewing PR #277, found the anchor reading the first textual MENTION
+    // rather than the invocation. Both hooks below are the same hook; the first only adds an echo.
+    // Measured before the fix: the first returned NO violations, the second returned the `exit 0`
+    // one. One ordinary diagnostic line disarmed the rule that catches a forgotten debugging exit.
+    const disarmed = [
+      "#!/bin/sh",
+      "set -e",
+      'echo "about to run verify-local.ps1"',
+      "exit 0",
+      'powershell -File "$repo/scripts/verify-local.ps1"',
+    ].join("\n");
+    expect(prePushContractViolations(disarmed)).toContainEqual(expect.stringMatching(/unconditional/));
+
+    // The false positive `lastIndexOf` would have introduced instead, pinned so the cheap repair
+    // cannot come back: this hook is CORRECT — the gate ran, `set -e` covered it, and the trailing
+    // `exit 0` is ordinary. A rule that fails it is a rule an author mutes.
+    const trailing = [
+      "#!/bin/sh",
+      "set -e",
+      'powershell -File "$repo/scripts/verify-local.ps1"',
+      "exit 0",
+      'echo "finished verify-local.ps1"',
+    ].join("\n");
+    expect(prePushContractViolations(trailing)).toEqual([]);
+
+    // A line is not one command: the leading echo must not speak for the invocation beside it.
+    const compound = ["#!/bin/sh", "set -e", 'echo "starting" && sh scripts/verify-local.ps1'].join("\n");
+    expect(prePushContractViolations(compound)).toEqual([]);
+
+    // ...and a hook that ONLY prints the name verifies nothing, which is the fail-closed answer.
+    const printsOnly = ["#!/bin/sh", "set -e", 'echo "we normally run verify-local.ps1 here"'].join("\n");
+    expect(prePushContractViolations(printsOnly)).toContainEqual(expect.stringMatching(/never invokes/));
+  });
+
+  it("rejects a hook that arms `set -e` and then turns it back off (review round 5)", () => {
+    // The same review. The presence check asks whether the words `set -e` appear, not which toggle
+    // ran last, so arming and then disarming above the gate read as armed.
+    const disabled = [
+      "#!/bin/sh",
+      "set -e",
+      "set +e",
+      'powershell -File "$repo/scripts/verify-local.ps1"',
+    ].join("\n");
+    expect(prePushContractViolations(disabled)).toContainEqual(expect.stringMatching(/set \+e/));
+
+    // Re-armed before the gate is not a defect, and neither is a scoped suspension inside an `if` —
+    // failing either would be failing a hook for being written carefully.
+    const rearmed = ["#!/bin/sh", "set -e", "set +e", "set -e", "sh scripts/verify-local.ps1"].join("\n");
+    expect(prePushContractViolations(rearmed)).toEqual([]);
+    const scoped = ["#!/bin/sh", "set -e", "if x; then", "  set +e", "fi", "sh scripts/verify-local.ps1"].join("\n");
+    expect(prePushContractViolations(scoped)).toEqual([]);
+  });
+
   it("rejects an UNREACHABLE refusal branch (review seed 3)", () => {
     // Both halves of the old two-question test are true here and neither is connected to the other.
     const seed = [

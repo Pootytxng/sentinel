@@ -134,6 +134,77 @@ function blankQuoted(text) {
 }
 
 /**
+ * The command word of one shell segment, or "" when there isn't one.
+ *
+ * Read off the BLANKED view, never the real text, so a name inside a diagnostic string cannot pose
+ * as the thing being run. Leading redirections (`>&2`, `2>/dev/null`) and environment assignments
+ * (`FOO=1 echo ...`) are prefixes rather than commands, so they are stepped over instead of being
+ * mistaken for one: `>&2 echo "..."` is still an echo.
+ */
+function commandWord(maskedSegment) {
+  for (const token of maskedSegment.trim().split(/\s+/)) {
+    if (!token) continue;
+    if (/^\d*[<>]+&?\S*$/.test(token)) continue; // a redirection
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) continue; // an env assignment
+    return token;
+  }
+  return "";
+}
+
+/** Commands that can only PRINT their arguments. A mention inside one of these is never a run. */
+const PRINTERS = new Set(["echo", "printf", ":"]);
+
+/**
+ * Does this line RUN the verifier, as opposed to merely naming it in a message?
+ *
+ * Independent review of this lane (session `sentinel-21`, on PR #277) found the anchor below reading
+ * the first textual MENTION, which is not the same question. A single
+ *
+ *     echo "about to run verify-local.ps1"
+ *
+ * near the top moved the anchor above a later `exit 0`, so the dead-code rule searched only the lines
+ * above the echo and found nothing. Measured before the fix: with that echo the hook returned NO
+ * violations; the identical hook without it returned the `exit 0` violation. One ordinary diagnostic
+ * disarmed the rule, and a forgotten debugging `exit 0` is precisely the accident it exists for.
+ *
+ * `lastIndexOf` is the obvious repair and the wrong one. It fires on
+ *
+ *     powershell -File "$repo/scripts/verify-local.ps1"
+ *     exit 0
+ *     echo "finished verify-local.ps1"
+ *
+ * which is a correct hook — the gate ran, `set -e` covered its failure, the trailing `exit 0` is
+ * ordinary — and reports it as dead code. That is the muted-guard failure this file already names
+ * three times. So the anchor asks the narrower question instead: the first line that could actually
+ * execute it.
+ *
+ * SEGMENTS, because a line is not one command. `echo "starting" && sh scripts/verify-local.ps1` does
+ * run it, and the leading echo must not speak for the whole line. The split happens on the blanked
+ * view, so an operator inside a string (`echo "a|b verify-local.ps1"`) is spaces and splits nothing.
+ *
+ * A segment carrying the name but no recognisable command word counts as a MENTION, not a run. That
+ * is the fail-closed direction: an unrecognised mention pushes the anchor LATER, which can only widen
+ * the region searched for dead code, and a hook whose every mention is unrecognised reports "never
+ * invokes" rather than passing.
+ */
+function invokesVerifier(line, maskedLine) {
+  const SPLIT = /\|\||&&|[;|&]/g;
+  const bounds = [];
+  let at = 0;
+  let m;
+  while ((m = SPLIT.exec(maskedLine))) {
+    bounds.push([at, m.index]);
+    at = m.index + m[0].length;
+  }
+  bounds.push([at, maskedLine.length]);
+
+  return bounds.some(
+    ([s, e]) =>
+      line.slice(s, e).includes(VERIFIER) && !PRINTERS.has(commandWord(maskedLine.slice(s, e))),
+  );
+}
+
+/**
  * Contract violations in a pre-push hook's text. Empty means it is a hook that can be trusted to
  * gate a push. Each string is written to be read by whoever has to fix it.
  */
@@ -148,7 +219,17 @@ export function prePushContractViolations(text) {
     return out;
   }
 
-  const verifierAt = body.indexOf(VERIFIER);
+  // Lines that RUN the verifier, with their offsets into `body`. Naming it is not running it.
+  const lines = body.split("\n");
+  const maskedLines = blankQuoted(body).split("\n");
+  const invocations = [];
+  for (let i = 0, at = 0; i < lines.length; at += lines[i].length + 1, i += 1) {
+    if (lines[i].includes(VERIFIER) && invokesVerifier(lines[i], maskedLines[i])) {
+      invocations.push({ line: lines[i], at });
+    }
+  }
+
+  const verifierAt = invocations.length ? invocations[0].at : -1;
   if (verifierAt < 0) {
     out.push(`it never invokes ${VERIFIER}, so it verifies nothing`);
   }
@@ -168,14 +249,31 @@ export function prePushContractViolations(text) {
     if (/^exit\s+0\s*$/m.test(before)) {
       out.push(`it hits an unconditional \`exit 0\` before reaching ${VERIFIER}, so the gate never runs`);
     }
+
+    // `set -e` above and `set +e` below it is the same hook as one that never armed at all, and the
+    // presence check further up cannot see the difference -- it asks whether the words appear, not
+    // which of them ran last. Found by the same review as the anchor above; measured before the fix
+    // as a hook that armed, disarmed, and then ran the gate, reported clean.
+    //
+    // Column zero for the same reason the `exit 0` rule uses it: an UNCONDITIONAL toggle. A `set +e`
+    // indented inside an `if` is a deliberate, scoped suspension around one command, and firing on
+    // that would fail a hook for being carefully written.
+    const toggles = [...before.matchAll(/^set\s+([-+])[a-z]*e\b/gm)];
+    if (toggles.length && toggles[toggles.length - 1][1] === "+") {
+      out.push(
+        `it turns error-exit back off with \`set +e\` before reaching ${VERIFIER}, so a failing step` +
+          ` does not stop the push`,
+      );
+    }
   }
 
   // Invoking the verifier and CARING what it answered are two different things. `set -e` stops on a
   // failing command, but `cmd || :` is a command that succeeded, so `set -e` never fires and the
   // push proceeds on a red gate. Seeded by independent review at dba3c79c as
   // `powershell ... verify-local.ps1 || :`, which the previous contract accepted.
-  for (const line of body.split("\n")) {
-    if (!line.includes(VERIFIER)) continue;
+  // Only the lines that RUN it. A diagnostic quoting `|| true` swallows nothing, and failing a hook
+  // over the contents of its own error message is the muted-guard direction again.
+  for (const { line } of invocations) {
     if (/\|\|\s*(?::|true\b|exit\s+0\b)/.test(line)) {
       out.push(`it runs ${VERIFIER} but swallows a failure with \`|| :\`/\`|| true\`, so a red gate still pushes`);
     }
@@ -266,6 +364,13 @@ export function refusesWhenVerifierMissing(text) {
 // is a sentence telling a developer to write his refusal plainly. Closing them soundly needs the hook
 // EXECUTED against a stubbed verifier, which the fixtures could do and the live fleet must not:
 // running 28 real hooks in order to audit them would be the audit causing the damage.
+//
+// Round 5 (`sentinel-21`, on PR #277) added two more, both accepted for the same reason. The
+// invocation test reads a command WORD, so a verifier reached through `eval`, a function whose body
+// names it, or a variable holding `echo` is a mention this file cannot classify -- each of those
+// lands on "mention", which moves the anchor later and is the fail-closed direction. And the
+// `set +e` rule reads unconditional toggles only: a disarm inside an `if` that never re-arms is
+// invisible to it. Closing that needs the branch conditions evaluated, which is execution again.
 //
 // One gap in the same review is declined for a different and stronger reason. `HOME`,
 // `XDG_CONFIG_HOME`, `APPDATA` and `USERPROFILE` also select a config file that could carry
