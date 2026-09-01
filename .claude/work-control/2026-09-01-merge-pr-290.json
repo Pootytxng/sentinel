@@ -1,0 +1,73 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 290,
+  "issue": 293,
+  "branch": "lane/agent-skills-config",
+  "currentHead": "e8070fe0d797ab55846a140c0fa5e2484bc3159a",
+  "explicitHandoff": "Owner turn authorizing this train: 'Please resolve any and all conflicts regarding any of the remaining work in the recent chats. Please review all existing work trees. Cleanup and complete. All remaining work. to bring everything to current. and proceed with a persistent marathon automated workflow while I step away from my desk. Workaround mitigated work. That allows for you to do so. without causing any issues.' Merging a green PR does not rest on that turn alone: the 2026-08-11 decree makes merging green lanes to main mine without asking, and docs/RELEASE_AUTONOMY.md covers the complete reversible release-engineering train. The owner is away from the desk, so nothing in this transition may reach another machine: it does not publish, tag, arm the updater, move a frozen ref, touch a signing key, or change a security or system setting. The PR is documentation and one test guard.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. This transition runs from the MAIN checkout C:/Users/Kuya/code/sentinel, which currently has lane/agent-skills-config checked out rather than main. Re-derived this turn with git rev-parse --show-toplevel and git branch --show-current, not carried over from before the context compaction.",
+    "remoteState": "git fetch origin run this turn. origin/main = d5dcb9e2b2bfb5f4bda54fbcaac1a595bc48e8df. git ls-remote --heads origin gives refs/heads/lane/agent-skills-config = e8070fe0d797ab55846a140c0fa5e2484bc3159a, identical to the local branch tip and to the PR head reported by gh. gh pr view 290: OPEN, not draft, MERGEABLE, mergeStateStatus CLEAN, base main.",
+    "worktree": "This writer holds the main checkout alone. Thirty-two other worktrees exist; one of them, .claude/worktrees/compy-health-parity, is also mine under the #225 claim posted this turn, and it is a SEPARATE folder on a separate branch, so the one-worktree-per-writer rule holds. Its work is committed at e249ab76 and deliberately NOT pushed; nothing in it is part of this transition.",
+    "branch": "lane/agent-skills-config, 14 commits past origin/main, MERGEABLE/CLEAN. No pushed history was rewritten: the single integration of origin/main was a true merge commit (5524a73e), never a rebase or a force-push. git diff --stat origin/main...HEAD is 15 files, 689 insertions, 137 deletions, and NOT ONE is under src/ or src-tauri/ - the only non-documentation file is scripts/handoff-worktree-truth.test.mjs, a vitest doc guard. Its row in docs/BRANCH_DISPOSITIONS.md is CLAIMED, written by this lane in place of the row main's #285 train had carried for it, so the four review findings raised there survive the row's replacement.",
+    "dirtyState": "git status --porcelain in the main checkout is EMPTY at the head being merged. This receipt file itself is untracked by construction.",
+    "liveProcesses": "No dev server on 1420 and no cargo build in flight. One listener on 5199 (pid 20668), the fixture preview server, which reads only and was not started by this transition. No build or install was run this turn, so the installed Compy is untouched - it still byte-carries 090bc58b, confirmed this turn by scanning %LOCALAPPDATA%/Compy/compy.exe.",
+    "otherWriters": "One live peer, session sentinel-21, which is the independent reviewer for this PR. Board division was agreed explicitly in both directions this turn and neither side is guessing: I hold #290 and #224/#225; it holds #277/#276, #279/#278, #288 and #289, and stated 'I am off lane/agent-skills-config and off claude/compy-health-parity'. It will not merge my lane; the verdict comes back to me and I land it. PR #288's base branch IS lane/license-atomic-284, which is why that ref must survive this merge - see the corrected row this PR ships."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "boardCorrection": "Recorded because it was found by a guard refusing this very write, not by inspection. session-root-assert refused with BRANCH_NOT_THE_BOARDS: Work Control put #270 on 'C:/Users/Kuya/code/sentinel @ main' while the folder is on lane/agent-skills-config. #270 was CLOSED on 2026-08-31 and landed in ad089ac2, so its row was stale - but clearing it alone only trades the refusal for FOLDER_UNCLAIMED, and that exposed the real gap: this lane never had an issue of its own and had been writing in the main checkout under a closed issue's leftover row for its whole life, against docs/WORK_CONTROL.md. Fixed by moving the board rather than the branch, in the order the guard demands: #270's row cleared with a CLAIM CLEARED note, then issue #293 opened for this lane and added to the board as Active with the exact folder and branch (C:/Users/Kuya/code/sentinel @ lane/agent-skills-config) and Last verified 2026-09-01. The guard was correct on both counts and nothing was worked around.",
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "e8070fe0d797ab55846a140c0fa5e2484bc3159a",
+      "detail": "THE AUTHORISING RUN, inside .githooks/pre-push on the push that landed this exact head. logs/verify-local-2026-09-01T15-50-53Z.log. All sections ran: git diff check, frontend tests (406 test files passed / 406, 9745 passed, 2 skipped, 0 failed), frontend type-check and build, Rust tests (1253 passed, 0 failed, 24 ignored), clippy with zero warning lines. 'LOCAL CHECK RESULT: PASS' was written to the console, the hook exited 0, and the ref moved - git ls-remote --heads origin now reports refs/heads/lane/agent-skills-config = e8070fe0. Zero GitHub Actions minutes. The push was run unpiped and in the background on purpose: piping a long pre-push gate through tail has previously dropped the SSH connection on this machine and read as an auth failure.",
+      "headNote": "The push landed 5524a73e..e8070fe0 on the lane ref, two commits: d7b253f8 (rule E) and e8070fe0 (the reviewer's blocking finding applied)."
+    }
+  ],
+  "docGates": [
+    "doc-budget.ps1 - ALL PASS at this head. BRANCH_DISPOSITIONS 107/107, SESSION_HANDOFF 119/120. Both were over budget mid-train and were paid from the archive by compressing prose whose narrative already lives in archive/BRANCH_DISPOSITION_SWEEPS.md; no cap was raised. This PR also RATCHETS DOWN two caps - OWNER_ACTION_CHECKLIST 450 to 385 lines and 33792 to 32256 bytes. 107/107 is exactly at cap with zero headroom, and that is recorded as a standing hazard for the next editor of that file rather than left to be discovered.",
+    "tools/entry/doc-truth.test.mjs - passed at this head. Decision 7 in particular: no live-doc sentence in this PR pairs merge with worktree without denying propagation.",
+    "scripts/handoff-worktree-truth.test.mjs - 22/22 at this head, INCLUDING the new rule E this PR adds. Rule D forced a real edit rather than being satisfied by luck: #285 merge-committed rather than squashed, which dropped lane/license-atomic-284 to zero carry, so its name had to leave the SESSION_HANDOFF carrier bullet in this same train.",
+    "branch-disposition-audit.mjs - OK at this head. Every origin ref has a proven row.",
+    "markdown-link-guard.mjs - PASS, 230 local links checked."
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. The PR contains no runtime code: 15 files, none under src/ or src-tauri/, the only executable file being a vitest doc guard. No shipped behaviour, no UI and no Windows mutation is reachable from it, and the installed build on the owner's desk is byte-unchanged at 090bc58b."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers src/**/*.{tsx,css} UI change. This PR touches no component, no stylesheet and no rendered string - git diff --name-only origin/main...HEAD returns nothing under src/ at all. There is nothing for the owner to look at. This is NOT the case for the #225 Health work also in flight this turn, which is a 42-file UI change and is deliberately being held as an unmerged PR for exactly that reason."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "claude-code, session sentinel-21 [933d27] - a separate live Claude Code session on this machine, separate context, holding its own worktree and its own board items (#277/#276, #279/#278, #288, #289), with no write access to this lane and no stake in it landing",
+    "status": "passed",
+    "head": "e8070fe0d797ab55846a140c0fa5e2484bc3159a",
+    "reason": "APPROVE at this exact head, posted by the reviewer under its own identity as PR #290 comment 5496707048, as a FRESH review that explicitly voids rather than amends its earlier verdict. The history matters and is recorded rather than smoothed over: at the prior head 5524a73e the same reviewer returned REQUEST_CHANGES, posted in full as comment 5496642157, with finding 2 BLOCKING - the row for lane/license-atomic-284 justified preserving the ref with '#286 and #287 point into this ref', which is false twice over because those are issue numbers and issues do not point at refs. I verified that independently before accepting it (gh pr view 288 --json baseRefName returns lane/license-atomic-284; 5117c632 and a7f13eda ARE ancestors of main, so reachability was already satisfied and the real hold is the open PR), fixed it, and the fix necessarily moved the head - correctness outranks preserving an old SHA. The reviewer refused to let its old approval stretch over commits it had never seen, which is the correct reading and is why this receipt binds to e8070fe0 and not to 5524a73e. What it checked at this head, by execution rather than by reading: it extracted containmentClaims and ran it, confirming rule E fires on the original bare-name defect and on 'is an ancestor of', and stays quiet on 'does NOT contain', on 'is not an ancestor of', and on the wording rule E's own failure message recommends; it confirmed both doc-budget changes RATCHET DOWN with nothing paid from a cap; and it re-measured 107 and 119 with wc -l at the head rather than taking my report for them. It disclosed one thing it did NOT do - it did not execute handoff-worktree-truth at my head, because doing so would mean writing into a lane it does not own, so my pre-push gate is my measurement and not its. ONE NON-BLOCKING FINDING, accepted as real and NOT fixed in this PR: the sentence 'neither `A` contains `B`' extracts as a containment claim, both names resolve, and rule E reports it BROKEN even though it is TRUE - so the rule can reject correct prose. It fails CLOSED, so it cannot let a defect through, which is why the reviewer did not block on it. Deliberately deferred rather than dropped: fixing it here would move the head again and void this approval for a defect that cannot cause a false pass. It is queued as a follow-up under the bug-becomes-guard law and recorded in issue #293, with the reviewer's own suggested shape - skip a claim when a negation sits between or immediately before the two tokens, and pin 'neither A contains B' as a unit test asserting zero claims.",
+    "writerSession": "claude-code, session sentinel-63 [2ccbb3], the implementation owner of this lane",
+    "writerNote": "The gate requires writer === actor, and actor is a fixed token (claude-code | codex). The session identity that was in this field is preserved verbatim in writerSession; nothing about who wrote this lane is dropped. The reviewer field keeps its full identity, as the directive requires, and the two are different live sessions, not the same one named twice."
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main...HEAD -- src-tauri/src/actions.rs is empty, 0 lines. The ONE Windows-mutation boundary is untouched. So is every other Rust file: the diff contains no path under src-tauri/ at all.",
+    "locks": "Untouched by construction - this PR changes no runtime code, so no gate can move. Remote-rules fetch stays triple-gated OFF, the Receipts send path stays hard-false and default-OFF, the Q9b Tier 3 path stays dark, and no capability or CSP is loosened. No signing key, secret or .env file is touched, added or referenced.",
+    "scopeConstraint": "The inherited directive's separation constraints hold. PR #288 remains DESIGN ONLY and is untouched by this lane; #289 is untouched; #277/#276 and #279/#278 are untouched and belong to the peer. Nothing here implements a remote-rules cache, arms a fetch, activates a CDN endpoint, or expands a Stage. The frozen beta refs (16069fa) are not moved. The merge is run WITHOUT --delete-branch, both because the directive requires preserving the branch and because that flag has previously set core.bare=true repo-wide and corrupted every worktree on this machine.",
+    "commandAuthority": "No Tauri command was added, removed or renamed; no #[tauri::command] exists anywhere in the diff."
+  }
+}
