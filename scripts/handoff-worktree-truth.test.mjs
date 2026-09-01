@@ -98,11 +98,13 @@ export function statedWorktreeCount(markdown) {
   return numberFrom(m[1]);
 }
 
+const BRANCH_TOKEN = /`((?:lane|feat|fix|agent|docs|claude|codex|design|tooling|recovery)\/[A-Za-z0-9._/-]+)`/g;
+
 /** Branch names in backticks inside the bullet that claims work is NOT on main. */
 export function branchesClaimedUnmerged(markdown) {
   const bullet = repoStateBullet(markdown);
   if (!bullet) return [];
-  return [...bullet.matchAll(/`((?:lane|feat|fix|agent|docs|claude|codex|design|tooling|recovery)\/[A-Za-z0-9._/-]+)`/g)]
+  return [...bullet.matchAll(BRANCH_TOKEN)]
     .map((m) => m[1])
     .filter((v, i, a) => a.indexOf(v) === i);
 }
@@ -205,20 +207,100 @@ export function unmeasuredCarriers(carriers) {
 }
 
 /**
- * Rule D's judgment, one branch at a time: a name the bullet presents as work must resolve to a
- * LOCAL ref and carry at least one commit `origin/main` cannot reach. Everything else is a finding,
- * each carrying its reason. Both collaborators are injected so every verdict — including the two
- * fail-closed ones — is falsifiable through the same seam the live rule uses.
+ * The landing markers the bullet carries, one per branch name: `LANDED` plus a reference, written
+ * in the name's OWN clause — the span from that name to the next branch-shaped token. #300: rules C
+ * and D disagreed with no head able to satisfy both. C fails the bullet for NOT naming a checkout
+ * that carries; D fails it for naming a branch at zero carry. A lane carries right up to the moment
+ * its merge commit lands, so C forbids removing the name that D demands removed the instant it
+ * lands, and `main` is red from then until the next doc train. Squash-merges only hid it: the
+ * commits never become ancestors, so carry stays non-zero and D stays quiet — the guard was
+ * sensitive to which merge BUTTON was used, which is not a property of the work.
+ *
+ * A marker resolves it by making "landed, and named on purpose" a state the bullet can express.
+ * That state is real and this repo is full of it: pruning the spent refs is owner-gated and was
+ * denied, so the names must stay and the doc has to say why. What the marker does NOT do is take
+ * anyone's word for the landing — zero carry is measured, and a SHA reference is resolved and
+ * checked for containment. A `PR #n` reference is provenance only, and is accepted because it is
+ * the one form the landing lane can write BEFORE its own merge commit exists; that window is the
+ * whole defect, so a marker that could not be written in advance would not close it.
+ *
+ * Returns a Map, so an unmarked name reads as absent rather than as a marker with empty fields.
+ * A bare `LANDED` with no reference is deliberately NOT a marker — it is the unfalsifiable half.
  */
-export function staleNamedLanes(claimed, resolvesLocally, countAhead) {
+export function landingMarkers(markdown) {
+  const bullet = repoStateBullet(markdown);
+  const out = new Map();
+  if (!bullet) return out;
+  const flat = bullet.replace(/\s+/g, " ");
+  const hits = [...flat.matchAll(BRANCH_TOKEN)];
+  hits.forEach((hit, i) => {
+    const name = hit[1];
+    if (out.has(name)) return; // the first MARKED mention wins; a later bare mention cannot unmark it
+    const clause = flat.slice(hit.index + hit[0].length, i + 1 < hits.length ? hits[i + 1].index : flat.length);
+    if (!/\bLANDED\b/i.test(clause)) return;
+    const sha = clause.match(/`([0-9a-f]{7,40})`/i);
+    const pr = clause.match(/\bPR #(\d+)\b/);
+    if (!sha && !pr) return;
+    out.set(name, { sha: sha ? sha[1] : null, pr: pr ? Number(pr[1]) : null });
+  });
+  return out;
+}
+
+/**
+ * Rule D's judgment, one branch at a time: a name the bullet presents as work must resolve to a
+ * LOCAL ref and carry at least one commit `origin/main` cannot reach — OR be marked landed, with a
+ * reference that holds up. Everything else is a finding, each carrying its reason. Every
+ * collaborator is injected so every verdict — including the four fail-closed ones — is falsifiable
+ * through the same seam the live rule uses.
+ *
+ * `markers` and `verifyMergeRef` default to "no marker exists, nothing to verify", which is exactly
+ * the pre-#300 rule: a zero-carry name is a finding. The relaxation has to be asked for.
+ */
+export function staleNamedLanes(claimed, resolvesLocally, countAhead, markers = new Map(), verifyMergeRef = () => null) {
   return claimed.flatMap((b) => {
     if (!resolvesLocally(b)) return [{ name: b, why: `refs/heads/${b} does not resolve — the name is not a lane on this machine` }];
     const n = countAhead(`refs/heads/${b}`);
     if (n === null) return [{ name: b, why: "its distance from origin/main could not be measured — broken measurement, not an empty result" }];
-    if (n === 0) return [{ name: b, why: "it carries zero commits origin/main cannot reach — the lane has landed" }];
+    if (n === 0) {
+      const mark = markers.get(b);
+      if (!mark) {
+        return [{ name: b, why: "it carries zero commits origin/main cannot reach — the lane has landed, and nothing in its own clause says so" }];
+      }
+      if (mark.sha) {
+        const contains = verifyMergeRef(b, mark.sha);
+        if (contains === null) {
+          return [{ name: b, why: `its landing reference ${mark.sha} does not resolve here — an unresolvable reference is not a landing` }];
+        }
+        if (contains === false) {
+          return [{ name: b, why: `its landing reference ${mark.sha} does not contain the branch — that reference landed something else` }];
+        }
+      }
+      return [];
+    }
     return [];
   });
 }
+
+/**
+ * Does the landing reference the bullet cites actually contain the branch? Three-valued on purpose,
+ * and the third value is the point: `null` means the question could not be asked here (a reference
+ * this checkout never fetched), which rule D reports as a finding rather than reading as a pass.
+ * `git merge-base --is-ancestor` exits 1 for a clean NO and something else for a broken question —
+ * collapsing those two is how a guard starts certifying whatever it failed to measure.
+ */
+const mergeRefContains = (branch, sha) => {
+  try {
+    git("rev-parse", "--verify", "--quiet", `${sha}^{commit}`);
+  } catch {
+    return null;
+  }
+  try {
+    git("merge-base", "--is-ancestor", `refs/heads/${branch}`, sha);
+    return true;
+  } catch (err) {
+    return err?.status === 1 ? false : null;
+  }
+};
 
 const localRefExists = (b) => {
   try {
@@ -519,6 +601,30 @@ describe("the handoff tells the truth about the worktrees", () => {
     // countAheadVia seam the live rule uses:
     const blindCount = countAheadVia(() => { throw new Error("unknown revision origin/main"); });
     expect(staleNamedLanes(["lane/a"], () => true, blindCount)[0].why).toMatch(/could not be measured/);
+    // #300, the marker relaxation — proven verdict by verdict, because a rule that can only pass is
+    // not a rule. The bullet says LANDED in the name's own clause and cites a reference:
+    const markedSha = landingMarkers("- **not on main** — `lane/a` **LANDED** (`ee5bdd8b`) · `lane/b` still going.");
+    expect(markedSha.get("lane/a")).toEqual({ sha: "ee5bdd8b", pr: null });
+    // ...the marker belongs to the clause it sits in and does NOT bleed onto the next name:
+    expect(markedSha.has("lane/b")).toBe(false);
+    // ...a PR reference is accepted, because it is the only form writable BEFORE the merge commit:
+    expect(landingMarkers("- **not on main** — `lane/a` **LANDED**, PR #277.").get("lane/a")).toEqual({ sha: null, pr: 277 });
+    // ...and a bare LANDED with nothing to follow is not a marker at all:
+    expect(landingMarkers("- **not on main** — `lane/a` **LANDED**, honest.").has("lane/a")).toBe(false);
+    // A zero-carry name with a marker whose SHA contains it is the legitimate state #300 describes:
+    const landedOk = new Map([["lane/a", { sha: "ee5bdd8b", pr: null }]]);
+    expect(staleNamedLanes(["lane/a"], () => true, () => 0, landedOk, () => true)).toEqual([]);
+    // ...a PR-only marker passes without ever asking the verifier, since zero carry already measured
+    // the landing and the number is provenance a reader follows, not a claim this rule can check:
+    let asked = 0;
+    const prOnly = new Map([["lane/a", { sha: null, pr: 277 }]]);
+    expect(staleNamedLanes(["lane/a"], () => true, () => 0, prOnly, () => { asked += 1; return true; })).toEqual([]);
+    expect(asked).toBe(0);
+    // ...an unresolvable reference FAILS rather than passing on the word LANDED:
+    expect(staleNamedLanes(["lane/a"], () => true, () => 0, landedOk, () => null)[0].why).toMatch(/does not resolve here/);
+    // ...and a reference that resolves but landed something ELSE fails too — the mispairing case,
+    // which is exactly what a hand-written SHA next to the wrong name looks like:
+    expect(staleNamedLanes(["lane/a"], () => true, () => 0, landedOk, () => false)[0].why).toMatch(/does not contain the branch/);
     // Rule D judges branch-shaped code spans ONLY — a detached checkout is written as a path, which
     // the shared extractor refuses (`.claude/...` is not a branch prefix), so a path-named carrier
     // keeps flowing through rule C untouched:
@@ -614,12 +720,15 @@ describe("the handoff tells the truth about the worktrees", () => {
     // this rule must not go quietly green on an empty list.
     expect(claimed.length, `${HANDOFF} names no branches in the repo-state bullet — rule D has nothing to judge.`).toBeGreaterThan(0);
     const countAhead = countAheadVia((committish) => git("rev-list", "--count", `origin/main..${committish}`));
-    const found = staleNamedLanes(claimed, localRefExists, countAhead);
+    const found = staleNamedLanes(claimed, localRefExists, countAhead, landingMarkers(markdown), mergeRefContains);
     expect(
       found,
       `${HANDOFF} presents these as lanes to preserve, but on this machine they are not:\n` +
         found.map((f) => `  - ${f.name}: ${f.why}`).join("\n") +
-        `\nA landed writing lane is never work to preserve — remove its name from the bullet in the same train that lands it.`,
+        `\nA landed writing lane is never work to preserve — remove its name from the bullet in the same train that lands it.` +
+        `\nOr, when the ref has to stay because pruning it is owner-gated, say so IN THAT NAME'S OWN CLAUSE: **LANDED**` +
+        ` and a reference — a SHA in backticks, which is resolved here and checked for containment, or \`PR #277\`, which` +
+        ` is provenance only and is the form a landing lane can write before its own merge commit exists (#300).`,
     ).toEqual([]);
   });
   it("E: every containment claim between two branches is true by --is-ancestor", () => {
