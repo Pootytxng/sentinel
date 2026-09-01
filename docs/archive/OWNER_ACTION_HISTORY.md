@@ -514,3 +514,41 @@ cover for a market that does not exist yet, and it can be added the day it does.
 cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
 own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
 Europeans — that is the trigger, not a date.
+
+---
+
+## Archived 2026-09-01 — the two closed-item sections, moved out of the live checklist
+
+Moved verbatim from `docs/OWNER_ACTION_CHECKLIST.md`, which was over its line and byte budget and
+is paid for from the archive rather than by raising the cap. These were already closed: the live
+file keeps a heading and a short pointer so nothing is lost and nothing looks open.
+### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](OWNER_ACTION_HISTORY.md)
+
+None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
+backed up off this machine and verified. **§A now holds THREE things, and only one is a chore:**
+① A0's small residual — delete the redundant `Desktop\COMPY KEY\` copy (one command, 10 seconds);
+② A0's *"expand to the remaining invitees"* — not a chore but a **distribution call** that is yours
+by definition (who gets a build, and when); ③ **A_settings**, two copy-paste edits in a file only you may
+edit. Corrected 2026-08-20: this paragraph said "exactly ONE"
+while ② sat three bullets above it, still marked ⏳ — a checklist that miscounts itself is the same
+defect as one that lists non-asks.
+Archived 2026-08-20 by a self-checkup, because none of them ever needed you and a checklist that
+lists non-asks makes the real ones harder to see: **A_ci** (GitHub refused branch protection on this
+plan — the answer came from GitHub, not from you) · **A_rig** (its own text says "nothing for you to
+do today"; it is a logged honesty note, not an action) · **A_ref2** (a "single delete click" that was
+already done — the ref was gone from origin and its disposition row with it) · **B1** (resolved
+verbally 2026-07-08; its one live residual is tracked in `BACKLOG.md`) · **B7** (site auto-deploy,
+**CANCELLED BY OWNER 2026-07-16 — do not resurface**) · **B_arc** (filed as an owner fork on
+2026-08-20 and it should never have been: dead engineering, not a product call; executed the same
+day — see the `.arc-v2` row in `BACKLOG.md`).
+Archived 2026-08-18 and 2026-08-04, each with its full record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](OWNER_ACTION_HISTORY.md): **A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**. The archive is the index; re-listing what each one was here was a second copy that only cost boot tax.
+
+---
+
+
+### B-closed6. Six items closed 2026-08-18/22 — moved to [`archive/OWNER_ACTION_HISTORY.md`](OWNER_ACTION_HISTORY.md)
+**None of them is waiting on you.** `B_startup` (a Windows mutation outside `actions.rs` — already fixed the day after it was filed) · `B_gpu` (the finished GPU-profile screen, now mounted in the Lab, advisory forever) · `B_write` (the unverified-session write refusal, armed) · `B_shelter` (a row that was simply wrong — the collision guard had been on `main` since 2026-08-21, and a guard now fails the build if that stale-ask class recurs) · `B_land` (feedback and analytics post to your own site, into Cloudflare D1 — **your one residual is a single site deploy when the Q9b endpoints are built**) · `B_eu` (analytics default-ON, decided US-first; revisit the day Compy is downloadable by Europeans — that trigger is the reason it is archived rather than deleted). Closing verdicts preserved verbatim in the archive.
+
+---
+
+

@@ -90,45 +90,45 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 3rd 2026-09-01
+### A_prune. Eleven dead refs I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · re-derived 2026-09-01
 
-**The ask:** one command, all three at once — `git push origin --delete lane/native-routing-271
-lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. The first two landed (PR
-[#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`, PR
-[#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`) and neither leftover ref holds
-anything `main` lacks. The third is spent a different way: its PR
-[#163](https://github.com/Pootytxng/sentinel/pull/163) closed **unmerged**, but its one real fix —
-the handoff verdict naming your VS Code tab instead of "the session" — reached `main` independently
-and more fully, leaving the branch 139 lines BEHIND on its own files. Nothing is lost either way: the
-local refs and their clean worktrees still hold every commit, so any of the three can be pushed back
-in one command. Deleting the first was **denied to this session**, and a denial is a stop — so I did
-not reach the same effect by another route. The third hit that same denial on that same sanctioned
-command a week later, which is why it joins this list instead of getting solved. **Why it matters:** until the refs are gone, their rows and the handoff's
-branch list have to keep saying "landed but still here" — small residue, but it is exactly what
-makes the next session distrust the branch list. Nothing is broken while it waits.
+**The ask:** one command — `git push origin --delete claude/exciting-robinson-0ce4d5
+lane/agent-skills-config lane/atomic-json-281 lane/fleet-guard-failclosed-276 lane/license-atomic-284
+lane/receipt-preservation-298 lane/remote-cache-design-286 lane/segmented-a11y-237
+lane/native-routing-271 lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`.
+**⚠️ `beta/private-beta-001` answers YES to the same "already in `main`" test and must NEVER join that
+command** — it is the FROZEN beta ref (`16069fa`), owner territory. Every future re-derivation will
+surface it, so the exclusion is written down here rather than left to be noticed again.
+
+**Why they are dead.** The first eight are contained in `main` outright, so their refs hold nothing
+`main` lacks (PRs [#282](https://github.com/Pootytxng/sentinel/pull/282),
+[#285](https://github.com/Pootytxng/sentinel/pull/285), [#277](https://github.com/Pootytxng/sentinel/pull/277),
+[#288](https://github.com/Pootytxng/sentinel/pull/288), [#299](https://github.com/Pootytxng/sentinel/pull/299)
+and three older lanes). The last three are spent a different way: `native-routing-271`
+([#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`) and `css-margin-separators-274`
+([#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`) landed by **squash**, so their own
+commits are not ancestors and the refs still look like they carry — what they hold is the pre-squash
+original. `cleanup-train-2026-08-20`'s PR [#163](https://github.com/Pootytxng/sentinel/pull/163) closed
+**unmerged**, but its one real fix — the handoff verdict naming your VS Code tab instead of "the
+session" — reached `main` independently and more fully, leaving that branch 139 lines BEHIND.
+
+Nothing is lost: the local refs and their worktrees still hold every commit, so any of the eleven can
+be pushed back in one command. Deleting the first was **denied to this session**, and a denial is a
+stop, so I did not reach the same effect by another route — the list has grown from three to eleven
+while waiting. **Why it matters:** until the refs are gone, their disposition rows and the handoff's
+branch list must keep saying "landed but still here", which is what teaches the next session to
+distrust that list. Tracked as [#305](https://github.com/Pootytxng/sentinel/issues/305). Nothing is
+broken while it waits.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
-backed up off this machine and verified. **§A now holds THREE things, and only one is a chore:**
-① A0's small residual — delete the redundant `Desktop\COMPY KEY\` copy (one command, 10 seconds);
-② A0's *"expand to the remaining invitees"* — not a chore but a **distribution call** that is yours
-by definition (who gets a build, and when); ③ **A_settings**, two copy-paste edits in a file only you may
-edit. Corrected 2026-08-20: this paragraph said "exactly ONE"
-while ② sat three bullets above it, still marked ⏳ — a checklist that miscounts itself is the same
-defect as one that lists non-asks.
-Archived 2026-08-20 by a self-checkup, because none of them ever needed you and a checklist that
-lists non-asks makes the real ones harder to see: **A_ci** (GitHub refused branch protection on this
-plan — the answer came from GitHub, not from you) · **A_rig** (its own text says "nothing for you to
-do today"; it is a logged honesty note, not an action) · **A_ref2** (a "single delete click" that was
-already done — the ref was gone from origin and its disposition row with it) · **B1** (resolved
-verbally 2026-07-08; its one live residual is tracked in `BACKLOG.md`) · **B7** (site auto-deploy,
-**CANCELLED BY OWNER 2026-07-16 — do not resurface**) · **B_arc** (filed as an owner fork on
-2026-08-20 and it should never have been: dead engineering, not a product call; executed the same
-day — see the `.arc-v2` row in `BACKLOG.md`).
-Archived 2026-08-18 and 2026-08-04, each with its full record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**. The archive is the index; re-listing what each one was here was a second copy that only cost boot tax.
-
----
+Every item under this heading was already closed by the owner and its full text now lives in the
+archive — the reasons, the dates, and the corrections made along the way. Nothing here is waiting on
+him. **A0's key backup is CLOSED (2026-08-18).** The archived text also carried a running count of
+§A, and a checklist that miscounts itself is the same defect as one that lists non-asks, so the count
+moves here and stays current: **§A holds FOUR live things** — A0's two residuals (the redundant
+`Desktop\COMPY KEY\` copy, and the distribution call about the remaining invitees) · **A_settings**,
+two edits in a file only you may make · **A_prune**, one delete command · **A_stale**, one cleanup.
 
 ## §B — Waiting on input only you can give
 
@@ -268,9 +268,9 @@ while it waits. **Why it matters:** `git worktree list` is the list every sessio
 is live, and fourteen dead folders in it is why sessions keep re-deriving the same wrong picture.
 
 ### B-closed6. Six items closed 2026-08-18/22 — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
-**None of them is waiting on you.** `B_startup` (a Windows mutation outside `actions.rs` — already fixed the day after it was filed) · `B_gpu` (the finished GPU-profile screen, now mounted in the Lab, advisory forever) · `B_write` (the unverified-session write refusal, armed) · `B_shelter` (a row that was simply wrong — the collision guard had been on `main` since 2026-08-21, and a guard now fails the build if that stale-ask class recurs) · `B_land` (feedback and analytics post to your own site, into Cloudflare D1 — **your one residual is a single site deploy when the Q9b endpoints are built**) · `B_eu` (analytics default-ON, decided US-first; revisit the day Compy is downloadable by Europeans — that trigger is the reason it is archived rather than deleted). Closing verdicts preserved verbatim in the archive.
 
----
+Six items closed 2026-08-18/22, with their full reasoning, in the archive. Nothing here is waiting
+on him.
 
 ## §C — Release gates — your money / legal calls  ·  🔒
 These gate **public** release only (not the local app you use daily). Full list:
