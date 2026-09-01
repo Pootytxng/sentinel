@@ -58,19 +58,17 @@ trunk, and a worktree's `main` pointer can sit weeks behind without anyone notic
 
 ## The refs
 
-Earlier sweeps (2026-08-04 · 2026-08-05 · 2026-08-12) moved to
-[`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md) on 2026-08-21 under
-TOKEN LAW §1 — every ref they dispositioned is long gone; this file keeps the CURRENT sweep only.
-
-**The 2026-08-21 sweep** for [#126](https://github.com/Pootytxng/sentinel/issues/126) is archived in
-[`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md); **two live facts stay here**: the
+Earlier sweeps (2026-08-04 · 2026-08-05 · 2026-08-12) and the 2026-08-21 sweep for
+[#126](https://github.com/Pootytxng/sentinel/issues/126) are archived in
+[`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md): every ref the earlier three retired
+is long gone, and what the 2026-08-21 sweep proved live is in the table below. **Two live facts stay here**: the
 retired detached checkout's work is preserved under tag `preserve/checklist-disk-item-c5660e`, and **rule C of
 `scripts/handoff-worktree-truth.test.mjs` fails on a branchless checkout** — the shape an `origin` audit cannot see.
 
-**Nineteen non-`PRESERVE` refs remain, and not one of them is retirable by proof** — each needs either
+**Twenty non-`PRESERVE` refs remain, and not one of them is retirable by proof** — each needs either
 an owner product-scope call or the lane that owns it, so #126 is part-discharged, not done: what is
 left is a decision queue, not a cleanup queue. Re-derived 2026-08-31 from `git ls-remote --heads
-origin` after a `--prune` fetch: twenty-two refs besides `main`, three `PRESERVE`. **This paragraph is
+origin` after a `--prune` fetch: twenty-three refs besides `main`, three `PRESERVE`. **This paragraph is
 a count, so it goes stale every time the table below grows, and re-deriving it is part of adding a
 row** — its own history of going stale is in the archive. Older closed narratives (#160's
 landing and prune, the #193 "free desktop app" fix) are in the archive too; the live warning out of
@@ -100,6 +98,7 @@ the second is in the `claude/review-consolidation-structure-9d13f2` row below, w
 | `origin/lane/license-atomic-284` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** Worktree `C:UsersKuyacodesentinel-license-284`, issue [#284](https://github.com/Pootytxng/sentinel/issues/284), PR [#285](https://github.com/Pootytxng/sentinel/pull/285), head `a7f13eda`. Stacked on `lane/atomic-json-281`, so its six commits past `main` are four inherited plus **two of its own** — the same half-written-save repair applied to the Pro licence store, and its own disposition row. **That lane carries its own, fuller row (in `a7f13eda`); when it lands, its text supersedes this one and this line goes.** |
 | `origin/lane/remote-cache-design-286` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** Worktree `C:UsersKuyacodesentinel-remote-design-286`, issue [#286](https://github.com/Pootytxng/sentinel/issues/286), PR [#288](https://github.com/Pootytxng/sentinel/pull/288), head `cc583ab1`. Stacked on `lane/license-atomic-284`: nine commits past `main`, **three of its own** — a design note arguing the signed-rules cache wants one generation rather than three files, its disposition row, and the handoff re-count that first caught 31 checkouts becoming 32. **Design only; no runtime change.** **That lane carries its own, fuller row (in `b9194abf`); when it lands, its text supersedes this one and this line goes.** |
 | `origin/lane/case-receiver-287` | CLAIMED | **Not this lane's branch — dispositioned, untouched.** Worktree `C:UsersKuyacodesentinel-case-receiver-287`, issue [#287](https://github.com/Pootytxng/sentinel/issues/287), PR [#289](https://github.com/Pootytxng/sentinel/pull/289), head `00086f90`, tip of the stack. Eleven commits past `main`, **two of its own** — Q9b Stage 3 (the local receiver: validator, handler, migration, proved and not deployed) and its disposition row. Stage 4, the send command, is not in it. **That lane carries its own, fuller row (in `00086f90`); when it lands, its text supersedes this one and this line goes.** |
+| `origin/lane/agent-skills-config` | CLAIMED | This lane, worktree `C:UsersKuyacodesentinel` (the `main` checkout, which is why rule C counts it as a carrier), PR [#290](https://github.com/Pootytxng/sentinel/pull/290), head `5113b13d`, two commits past `main` — the `/setup-matt-pocock-skills` config files routed into `AGENTS.md` rather than `CLAUDE.md` (34 bytes of headroom against the 25,000-byte ceiling in `src/claude-md-laws-guard.test.ts`, and the ratchet there says an addition pays for itself), and the four stacked-lane rows above. **This row could not ride in the commit that added those**: the ref did not exist on origin until the push, and a row for a ref that does not exist yet fails the very audit that would create it. Row goes when the PR lands. |
 
 ## Standing rule
 
