@@ -1,0 +1,76 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 267,
+  "issue": 266,
+  "branch": "claude/exciting-robinson-0ce4d5",
+  "currentHead": "be1b0fde491adfef358c87cd855ac3bc25837024",
+  "explicitHandoff": "Owner turn opening this lane: 'In C:/Users/Kuya/code/sentinel, src/case-evidence-tier-separation-guard.test.ts (Q9b Tier 3 Stage 1, issue #252) defines its own stripRustComments helper and scopes its scan to \"only executable source\" by stripping comments before its detectors run. That is the same design that was broken three times in a row during the #258 Stage 2 lane... assess whether stripRustComments in the tier-separation guard is exploitable in the same way (Rust has raw strings r#\"...\"#, byte strings, and nested block comments, so the attack surface differs from TypeScript's), and if so apply the same remedy - read every byte, reword any comment that trips a detector, and pin the property structurally. Do not change anything under src-tauri/src/case_evidence_upload.rs itself; this is about the guard.' Follow-up turn authorizing this transition: 'Independent non-writing Codex review for PR #267 is complete at exact head be1b0fde491adfef358c87cd855ac3bc25837024. Verdict: PASS... If the PR head is still exactly be1b0fde and the receipt accepts this exact-head PASS, build and run the required work-control-gate receipt, merge PR #267 without --delete-branch, close #266, mark Work Control Done, then perform the documented detached-main disposition/worktree cleanup with fresh checks. Do not touch or block PR #268 / issue #240.' Scope is exactly the guard. src-tauri/src/case_evidence_upload.rs is byte-identical to origin/main and PR #268 / issue #240 were not touched.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. Worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/exciting-robinson-0ce4d5, which is NOT the main checkout - main is checked out by C:/Users/Kuya/code/sentinel. Re-derived this turn with git rev-parse / git worktree list, not carried over from before the context compaction.",
+    "remoteState": "git fetch origin --prune run this turn. origin/main = a9af1d52c53d60e6d6e2e58c357f7597e7a50cf0 (this lane's own detached-main repair commit, which is the newest commit on main). git ls-remote --heads origin confirms refs/heads/claude/exciting-robinson-0ce4d5 = be1b0fde, identical to the local branch tip and to the PR head. gh pr view 267: OPEN, not draft, MERGEABLE, mergeStateStatus CLEAN.",
+    "worktree": "This lane is alone in .claude/worktrees/exciting-robinson-0ce4d5. It is currently ON its branch, not detached; the detached-main state used for a9af1d52 was reverted to the branch before this turn.",
+    "branch": "claude/exciting-robinson-0ce4d5, five commits past origin/main, MERGEABLE/CLEAN. No pushed history was rewritten - the two integrations of origin/main were true merges (ff353b30, be1b0fde), never a rebase or a force-push. git diff origin/main...HEAD is exactly three files: src/case-evidence-tier-separation-guard.test.ts, src-tauri/src/hw_class.rs, src-tauri/src/lib.rs (236 insertions, 36 deletions). Its row in docs/BRANCH_DISPOSITIONS.md on main is CLAIMED.",
+    "dirtyState": "git status --porcelain shows exactly one entry, ' M CLAUDE.md', and git diff --numstat for it is EMPTY: the working copy was normalised from CRLF to LF (the repo mandates LF via .gitattributes) so the blob hash is identical to main's. It is deliberately not staged, not committed and not reverted, per the reviewer's instruction to preserve it. This receipt file itself is untracked by construction.",
+    "liveProcesses": "No dev server on 1420, no fixture server on 5199, no cargo build in flight; the only Compy process is the installed build, which this lane never rebuilt or reinstalled.",
+    "otherWriters": "PR #268 / issue #240 (lane claude/css-margin-comments-240, worktree C:/Users/Kuya/code/sentinel-css-margin-240) is a separate live writer. It was not touched: no commit here modifies src/test/css-margin.ts, src/test/css-margin.test.ts, src/surfaces/monitor-bar-alignment-guard.test.tsx or src/surfaces/monitor-first-viewport-guard.test.tsx, and no row for its ref was added to docs/BRANCH_DISPOSITIONS.md here - adding one would collide with the row that rides in its own PR and would block it."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "be1b0fde491adfef358c87cd855ac3bc25837024",
+      "detail": "THE AUTHORISING RUN. Inside .githooks/pre-push (line 65) on the push that landed this head; be1b0fde was committed 11:06:40Z and the gate log opened 11:06:50Z. logs/verify-local-2026-08-30T11-06-50Z.log: all five sections ran - git diff check, frontend tests (405 test files passed / 405, 5790 passed, 4 skipped), frontend type-check and build, Rust tests (1209 passed, 0 failed, 24 ignored), clippy (zero warning lines). 'LOCAL CHECK RESULT: PASS' is written to the console at verify-local.ps1:249 and not into the log file, so the proof that the script reached it is that the hook exited 0 and the ref moved: git ls-remote --heads origin now shows refs/heads/claude/exciting-robinson-0ce4d5 = be1b0fde. Zero GitHub Actions minutes.",
+      "headNote": "The push landed 3680f739..be1b0fde on the lane ref."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "be1b0fde491adfef358c87cd855ac3bc25837024",
+      "detail": "RECORDED, NOT HIDDEN. Re-run at 12:03:57Z this turn against the SAME head, and it now fails - 1 test file failed / 404 passed, 5789 passed, 4 skipped. The single failure is scripts/branch-disposition-audit.test.mjs > 'has a true branch-disposition record right now', and its message names a ref that is not this lane's: 'origin/claude/css-margin-comments-240 is in this checkout's cache of origin with no row in docs/BRANCH_DISPOSITIONS.md'. That ref was pushed to origin at 11:27:07Z, twenty minutes AFTER the authorising run above, by the separate live lane behind PR #268 / issue #240; its row exists at line 114 of that branch's own copy of docs/BRANCH_DISPOSITIONS.md and lands on main when #268 lands. git fetch origin --prune was run first, so this is a genuinely live ref, not a stale cache entry. Nothing in this PR is implicated: the assertion compares a doc against origin's ref list and reads none of the three files this PR changes, and the other 404 files - including every guard this lane rewrote - still pass at this head. It is NOT repairable from this lane: writing that row here would collide with the identical row inside PR #268 and would block it, which this turn's instruction forbids. Consequence recorded honestly rather than worked around: main cannot receive a push from any writer until #268's row lands, so this lane's detached-main cleanup commit is held, and its ref is deliberately NOT pruned meanwhile - pruning it while its row cannot be removed would leave main failing on a second count."
+    }
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was rebuilt or reinstalled. The PR changes one vitest guard file and four Rust comment lines; no shipped behaviour, no UI and no Windows mutation is reachable from it. src-tauri/src/case_evidence_upload.rs is byte-identical to origin/main, and the Q9b Tier 3 gate stays hard-false."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers src/**/*.{tsx,css} UI change. This PR touches no component, no stylesheet and no rendered string: src/case-evidence-tier-separation-guard.test.ts is a test, and the two Rust files carry comment rewrites only. There is nothing for the owner to look at."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "codex (independent non-writing reviewer, separate context, no write access to this worktree)",
+    "status": "passed",
+    "head": "be1b0fde491adfef358c87cd855ac3bc25837024",
+    "reason": "PASS at this exact head, no actionable findings. It reviewed the complete three-file diff against current origin/main - src/case-evidence-tier-separation-guard.test.ts, src-tauri/src/hw_class.rs, src-tauri/src/lib.rs - and confirmed four properties independently: the no-strip design closes all six demonstrated hiding shapes (the const-pair /* ... */ blanking, the raw string r#\"a /* b\"#, the byte string b\"/*\", the let sep = \"//\" line, nested block comments, and the combined Stage-4-shaped send path); the one exact-line exception, TIER3_EXCUSED_LINES, is narrowly pinned by whole-line byte identity and is seeded so it cannot silently become a wildcard; the positive 'must be present' assertions are protected against comment and string decoys by occurrence counts, which is the asymmetry that opens up once comments are in scope; and git diff --check is clean. It re-ran the guard itself rather than reading the assertions: npm test -- --run src/case-evidence-tier-separation-guard.test.ts --maxWorkers=4 => 1 file passed, 12/12 tests passed, 04:58 PT. It confirmed HEAD was still exactly be1b0fde after its own verification, so the review covers every commit in the PR with nothing landing behind it."
+  },
+  "docGates": [
+    "doc-budget.ps1 - PASS at this head inside the authorising gate run (SESSION_HANDOFF 120/120, BRANCH_DISPOSITIONS 118/119)",
+    "tools/entry/doc-truth.test.mjs - passed at this head inside the authorising gate run; no live-doc sentence in this PR pairs merge with worktree",
+    "scripts/handoff-worktree-truth.test.mjs - passed at this head; the SESSION_HANDOFF worktree bullet was re-derived live in 3680f739 (25 worktrees besides main, EIGHT carriers) and names both this branch and its checkout path, so rules C and D are both satisfied while the branch still carries",
+    "branch-disposition-audit.mjs - PASSED at this head in the authorising run and FAILS now, on the foreign ref origin/claude/css-margin-comments-240 only; see the failed gateResult above",
+    "src/outbound-claim-guard.test.ts and the five sibling outbound/tier guards - 118/118 at this head"
+  ],
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main...HEAD -- src-tauri/src/actions.rs is empty. The ONE Windows-mutation boundary is untouched, and src/mutation-boundary-guard.test.ts passes at this head.",
+    "locks": "Untouched and re-verified: case_intelligence_gate() hard-returns false; CASE_SIGNING_PUBKEY is all zeros; CASE_CATALOG_ORIGINS and CASE_CATALOG_ENDPOINTS are both empty; the Q9b Tier 3 send path stays dark.",
+    "scopeConstraint": "The owner's hard constraint - 'Do not change anything under src-tauri/src/case_evidence_upload.rs itself' - is proven mechanically: git diff origin/main...HEAD -- src-tauri/src/case_evidence_upload.rs is empty. The one detector collision that file causes, its //! header line tripping the upload-verb detector, is handled from the guard side by an exact-line quarantine rather than by editing the file or by narrowing the detector.",
+    "commandAuthority": "No command was added, removed or renamed; lib.rs's change is one comment line on a mod declaration."
+  }
+}
