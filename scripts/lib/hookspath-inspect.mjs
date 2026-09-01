@@ -160,9 +160,15 @@ const readable = (p) => {
  * below -- git not running at all, and a resolution failure after a clean config read -- cannot be
  * produced by a healthy git on a healthy repo, and leaving them untested is precisely how the
  * previous version shipped four fail-open paths that nothing had ever exercised.
+ *
+ * `deps.stat` exists for the same reason, one review later. A stat that fails for a reason OTHER
+ * than absence -- EACCES, EPERM, EIO, a dead network path -- cannot be produced on demand without
+ * changing permissions on a real checkout, so the two branches that used to read such a failure as
+ * "absent" had never been executed either. They are now, below.
  */
 export function inspectWorktree(wt, mainRoot, deps = {}) {
   const git = deps.git ?? gitRaw;
+  const stat_ = deps.stat ?? statSync;
   const fail = (reason) => ({ path: wt, ok: false, reason });
 
   const here = canonical(wt);
@@ -170,10 +176,20 @@ export function inspectWorktree(wt, mainRoot, deps = {}) {
 
   // The checkout itself has to be there and be a directory. A registered worktree whose directory
   // is gone is bookkeeping (a pending `git worktree prune`), and no push can originate from it.
+  //
+  // ONLY "gone" is benign. Review by `sentinel-21` on PR #277 found the bare catch here reading
+  // every stat error as absence, so a directory this process could not LOOK at -- EACCES, EPERM, a
+  // dead network path, EIO -- returned ok:true and left the sweep. That is exactly the "I could not
+  // tell" -> "fine" conversion this file's header forbids, one function below where it is written,
+  // and it is the worst placed of the four: step 0 waves the checkout through before any hook
+  // question is asked at all.
   let stat;
   try {
-    stat = statSync(here);
-  } catch {
+    stat = stat_(here);
+  } catch (e) {
+    if (e?.code !== "ENOENT" && e?.code !== "ENOTDIR") {
+      return fail(`registered as a worktree but could not be inspected — ${e?.code ?? e?.message}`);
+    }
     return { path: wt, ok: true, reason: "", absent: true };
   }
   if (!stat.isDirectory()) return fail(`registered as a worktree but is not a directory`);
@@ -214,12 +230,14 @@ export function inspectWorktree(wt, mainRoot, deps = {}) {
   // ---- 3. A regular file, not merely something that exists. ------------------------------------
   let hookStat;
   try {
-    hookStat = statSync(hook);
-  } catch {
+    hookStat = stat_(hook);
+  } catch (e) {
+    // Both branches fail, so this one was never fail-open — but a guard that reports the wrong
+    // REASON sends its reader to fix a file that is already there. Say which of the two it was.
     return fail(
       `wired to the local gate but runs NO pre-push hook.\n` +
         `      core.hooksPath: ${cfg.stdout}\n` +
-        `      resolves to:    ${res.stdout}  (does not exist)`,
+        `      resolves to:    ${res.stdout}  (${e?.code === "ENOENT" ? "does not exist" : `unreadable — ${e?.code ?? e?.message}`})`,
     );
   }
   if (!hookStat.isFile()) {
@@ -248,10 +266,22 @@ export function inspectWorktree(wt, mainRoot, deps = {}) {
   if (!usesOwn && usesMain) {
     // The bridge is only legitimate for a checkout that HAS no hook of its own. A checkout that has
     // one and points past it has been redirected, and that is not a bridge, it is a bypass.
+    //
+    // Same correction as step 0, and here the fail-open is direct: "could not look" answering
+    // `false` means the bypass check below is SKIPPED, and a checkout that has its own hook and
+    // points past it passes. Only ENOENT means it genuinely has none.
     let ownExists = false;
     try {
-      ownExists = statSync(ownHook).isFile();
-    } catch {
+      ownExists = stat_(ownHook).isFile();
+    } catch (e) {
+      if (e?.code !== "ENOENT" && e?.code !== "ENOTDIR") {
+        return fail(
+          `core.hooksPath bridges to the main working tree, but this checkout's own\n` +
+            `      ${ownHook}\n` +
+            `      could not be inspected (${e?.code ?? e?.message}), so the bridge cannot be told` +
+            ` from a bypass.`,
+        );
+      }
       ownExists = false;
     }
     if (ownExists) {
@@ -274,9 +304,15 @@ export function inspectWorktree(wt, mainRoot, deps = {}) {
   // The fail-closed refusal is required ONLY here: a checkout with no verifier of its own is the
   // exact situation .githooks/pre-push:77-82 was written for. Demanding it everywhere failed 22
   // safe worktrees for being old -- see the note in prepush-hook-contract.mjs.
+  //
+  // This catch is the THIRD stat and the only one whose bare form is already correct, so it stays
+  // bare deliberately rather than by oversight. `false` here makes the check STRICTER -- it demands
+  // the hook's refusal branch -- so "could not look" lands on the safe side, unlike the two above
+  // where the same shape waved a checkout through. Do not "make it consistent" by narrowing it to
+  // ENOENT: that would turn an unreadable verifier into a pass.
   let hasVerifier = false;
   try {
-    hasVerifier = statSync(join(here, "scripts", "verify-local.ps1")).isFile();
+    hasVerifier = stat_(join(here, "scripts", "verify-local.ps1")).isFile();
   } catch {
     hasVerifier = false;
   }
