@@ -30,7 +30,7 @@ Line counts drift — treat as rough and verify against current code before asse
 - `stutter.rs` (~135) — stutter/1%-low derivation.
 
 **Benchmark & Lab**
-- `benchmark.rs` (~1330), `benchmark_trial.rs` (~615), `benchmark_verdict.rs` (~580), `benchmark_scoreboard.rs` (~460), `comparison.rs` (~475) — the Lab proving-ground bench: trials, verdicts, scoreboard, A/B comparison.
+- `benchmark.rs` (~1330), `benchmark_trial.rs` (~615), `benchmark_verdict.rs` (~580), `benchmark_scoreboard.rs` (~460), `comparison.rs` (~686) — the Lab proving-ground bench: trials, verdicts, scoreboard, A/B comparison.
 - `latency.rs` (~2255) — input/network latency probes.
 - `blackbox.rs` (~2150) — diagnostic black-box capture.
 
@@ -50,3 +50,6 @@ Line counts drift — treat as rough and verify against current code before asse
 - `component_evidence.rs` (~332) — Phase 4: component-level evidence attribution. READ-ONLY.
 - `comparability.rs` (~730), `game_state.rs` (~276), `capture.rs` (~279) — Measurement Platform 2.0 tasks E/F: session-comparability gate, conditions fingerprint, capture-backend/capability model.
 - `fuzz_support.rs` (~184) — test-only input generator for the property/fuzz suites.
+
+**Secondary state persistence**
+- `atomic_write.rs` (~447) — whole-file byte replacement (temp in the target's own dir → rename) for the SECONDARY stores: benchmark, comparison, readiness dismissals, drift, and the license token — which is signed plain text, not JSON, so its exact bytes pass through unserialized. An interrupted save leaves the previous complete file instead of a truncated one that every loader reads as "no data". **NOT power-loss durability, NOT a lock, NOT a transaction** — the module doc says so and the tests prove only a named interruption point. Writes no Windows state, so unstarred. Deliberately NOT used by the Trust Ledger or the signed remote rules; the module doc says why (there, not here, because this map's halves must stay disjoint).

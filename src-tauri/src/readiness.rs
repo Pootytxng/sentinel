@@ -929,7 +929,13 @@ fn dismissals_path() -> std::path::PathBuf {
 }
 
 fn load_dismissals() -> Vec<String> {
-    std::fs::read_to_string(dismissals_path())
+    load_dismissals_from(&dismissals_path())
+}
+
+/// Unchanged policy, lifted to a path so it can be proven without the real data root: missing or
+/// corrupt both mean "nothing dismissed", never an error the user has to answer.
+fn load_dismissals_from(path: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
@@ -939,9 +945,15 @@ fn save_dismissals(ids: &[String]) -> Result<(), String> {
     // User-framed errors (match export.rs's house pattern) — never a raw OS string to the UI.
     std::fs::create_dir_all(crate::compy_data_dir())
         .map_err(|e| format!("could not create the Compy data folder: {e}"))?;
-    let json = serde_json::to_string_pretty(ids)
+    save_dismissals_to(&dismissals_path(), ids)
+}
+
+fn save_dismissals_to(path: &std::path::Path, ids: &[String]) -> Result<(), String> {
+    let json = crate::atomic_write::serialize_pretty(ids)
         .map_err(|e| format!("could not save your dismissed-checks setting: {e}"))?;
-    std::fs::write(dismissals_path(), json)
+    // Identical user-facing wording to before — the replacement is atomic, what the user is told is
+    // not allowed to change.
+    crate::atomic_write::write_atomic(path, json.as_bytes())
         .map_err(|e| format!("could not save your dismissed-checks setting: {e}"))
 }
 
@@ -998,6 +1010,115 @@ pub(crate) fn get_game_readiness() -> GameReadiness {
         .collect();
     r.drifts = crate::drift::detect_and_persist(&observations);
     r
+}
+
+/// #281 — the dismissals store's policy and its two user-facing error strings are UNCHANGED by the
+/// atomic-write lane. Explicit temp paths only; nothing reads the real data root.
+#[cfg(test)]
+mod readiness_dismissal_persistence_tests {
+    use super::*;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "compy-dismiss-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn missing_and_corrupt_both_mean_nothing_dismissed_never_an_error() {
+        let dir = scratch("empty");
+        assert!(load_dismissals_from(&dir.join("absent.json")).is_empty());
+
+        let p = dir.join("readiness_dismissals.json");
+        std::fs::write(&p, "[\"a\", \"b").unwrap();
+        assert!(
+            load_dismissals_from(&p).is_empty(),
+            "a truncated dismissals file must silence nothing, not half a list"
+        );
+    }
+
+    #[test]
+    fn dismissals_round_trip_and_a_shorter_list_replaces_the_longer_one_whole() {
+        let p = scratch("round").join("readiness_dismissals.json");
+        save_dismissals_to(&p, &["a".to_string(), "b".to_string(), "c".to_string()]).expect("first");
+        save_dismissals_to(&p, &["z".to_string()]).expect("second");
+        assert_eq!(load_dismissals_from(&p), vec!["z".to_string()]);
+    }
+
+    #[test]
+    fn a_failed_save_keeps_the_previous_dismissals_and_says_so_in_the_users_words() {
+        // The regression this lane removes: a half-written list parses as nothing, so every check
+        // the user had silenced comes back — and they are told nothing went wrong.
+        let p = scratch("failed").join("readiness_dismissals.json");
+        save_dismissals_to(&p, &["keep-me".to_string()]).expect("first");
+
+        crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::BeforeRename);
+        let err = save_dismissals_to(&p, &["clobber".to_string()])
+            .expect_err("the save did not go through the atomic write path");
+
+        assert!(
+            err.starts_with("could not save your dismissed-checks setting: "),
+            "the user-facing wording changed: {err}"
+        );
+        assert_eq!(load_dismissals_from(&p), vec!["keep-me".to_string()]);
+    }
+
+    #[test]
+    fn a_serialization_failure_uses_the_existing_wording_and_touches_no_file() {
+        let dir = scratch("serialize-failed");
+        let p = dir.join("readiness_dismissals.json");
+        save_dismissals_to(&p, &["keep-me".to_string()]).expect("first");
+        crate::atomic_write::force_next_serialization_failure();
+        let err = save_dismissals_to(&p, &["clobber".to_string()])
+            .expect_err("serialization failure must surface");
+        assert!(
+            err.starts_with("could not save your dismissed-checks setting: "),
+            "the user-facing wording changed: {err}"
+        );
+        assert_eq!(load_dismissals_from(&p), vec!["keep-me".to_string()]);
+        assert!(
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")),
+            "serialization reached the atomic writer"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_share_lock_keeps_the_existing_wording_and_old_dismissals() {
+        let p = scratch("locked").join("readiness_dismissals.json");
+        save_dismissals_to(&p, &["keep-me".to_string()]).expect("first");
+        let held = crate::atomic_write::hold_without_share(&p);
+        let err = save_dismissals_to(&p, &["clobber".to_string()])
+            .expect_err("locked target must fail through the caller");
+        assert!(
+            err.starts_with("could not save your dismissed-checks setting: "),
+            "the user-facing wording changed: {err}"
+        );
+        drop(held);
+        assert_eq!(load_dismissals_from(&p), vec!["keep-me".to_string()]);
+    }
+
+    #[test]
+    fn a_missing_data_folder_is_reported_in_the_outer_wording_not_the_inner_one() {
+        // `save_dismissals` owns the folder-creation message; `save_dismissals_to` owns the write
+        // message. Pinned so the split introduced here cannot swap which string the user sees.
+        let p = scratch("nodir").join("missing").join("readiness_dismissals.json");
+        let err = save_dismissals_to(&p, &["a".to_string()]).expect_err("write into a missing dir");
+        assert!(
+            err.starts_with("could not save your dismissed-checks setting: "),
+            "got: {err}"
+        );
+        assert!(!p.exists());
+    }
 }
 
 #[cfg(test)]

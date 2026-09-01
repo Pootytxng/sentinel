@@ -18,18 +18,14 @@
 
 ## The rule that came out of the walk — read this before touching Health
 
-**DIR-1a: offering help is conditional on evidence.** Asked a narrow question (Health's front door
-and its shortcut cards ask the same thing) the owner **rejected both options to say something
-larger**: every door on that screen was symptom-framed, and a front door built only out of symptoms
-tells a healthy PC's owner either that they are in the wrong place or that Compy found something.
-Compy also does optimisation, and *"i want more fps"* is a legitimate reason to be here. Shipped:
-the interview gained four **goal** answers under two labelled halves (`home-interview-data.ts`,
-`groupChoices`); Health picks the half from `somethingDetected` — a flagged readiness check **or** an
-incident the observer read out of Windows (`HomeConsole.tsx`). Guard
-`src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **A STANDING lens, not a
-closed row** — every new Health affordance must answer *"is this framing earned?"* first.
-**DIR-1b:** the attention state carries a one-line ROUTE to the room that acts on it (#180 §C
-untouched — the detail paragraph still does not render on Health).
+**DIR-1a: offering help is conditional on evidence** — a front door built only out of symptoms tells
+a healthy PC's owner they are in the wrong place, and *"i want more fps"* is a legitimate reason to be
+here. **A STANDING lens, not a closed row**: every new Health affordance must answer *"is this framing
+earned?"* first. The direction is authoritative at `docs/UI_VISION_BACKLOG.md` §"⭐ DIR-1a" — read it
+THERE, never from a paraphrase, this line included. Shipped `b21bc18b`; guard
+`src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **DIR-1b:** the attention
+state carries a one-line ROUTE to the room that acts on it (#180 §C untouched — the detail paragraph
+still does not render on Health).
 
 **Rooms are `Health · Live · History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are
 persistence keys). **Read the rail from `src/design/homeRail.ts`, never from a doc.**
@@ -93,21 +89,23 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides `main`; FOURTEEN branches carry commits not on main — do NOT delete or hard-reset
-  those fourteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
-  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
-  `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` · `lane/shell-ownership-278` ·
-  `lane/agent-skills-config` · `lane/license-atomic-284` · `lane/remote-cache-design-286` → `lane/case-receiver-287`
-  (that arrow is the ONLY ancestry left: 284 is no longer a parent of 286 — five rebases orphaned the chain,
-  merge-base is the superseded `a7f13eda`) · `lane/css-margin-separators-274` · `lane/native-routing-271`, whose
-  PRs #275/#273 **squash**-merged: their commits are not ancestors of `main` but their content IS, so both are
-  spent and safe to prune. **Ancestry is not content** — settle a lane with `git diff origin/main <branch>`,
-  never with `--is-ancestor`. `compy-health-parity` **contains** `compy-visual-recovery-kit-6fd074` (14 shared,
-  diverge `c8366609`): ONE stack, backed up only to `refs/backup/*`. Spent, at zero: `sentinel-recon-261`,
-  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 both landed
-  out of it), four of the SEVEN in `.claude/worktrees/`, parked `sentinel-mission0-accent-landing`,
-  `sentinel-q9b-stage2`, `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233). **No depth/SHA
-  pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`.
+- **32 worktrees besides the canonical checkout; THIRTEEN branches carry commits not on main — do NOT delete or
+  hard-reset those thirteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+  `claude/compy-visual-recovery-kit-6fd074` · `lane/agent-skills-config` · `feat/lab-49-parity-port` ·
+  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` ·
+  `lane/shell-ownership-278` · `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287` (#287), the only
+  real chain left between them (`git merge-base --is-ancestor`) · `lane/css-margin-separators-274` (#274) ·
+  `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are listed
+  only because **pruning them was denied**. `compy-health-parity` **contains** `compy-visual-recovery-kit-6fd074`
+  (14 shared, diverging at `c8366609`): ONE stack, backed up only to `refs/backup/*`. **No depth/SHA pinned**:
+  `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a
+  zero-carry branch — **a landed lane's name leaves with the train that lands it**, which is why neither the #281
+  lane (PR #282 → `082f637e`) nor the #284 lane (PR #285 → `d5dcb9e2`, merge-committed so it dropped straight to
+  zero while 286 and 287 kept pointing into it) is named here. Spent, at zero: `sentinel-recon-261`,
+  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 both landed out
+  of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven entries;
+  `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
+  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
