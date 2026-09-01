@@ -184,3 +184,26 @@ implementation is not coverage, and a comment is not a type.
 **Stop condition, honoured:** this document is the design/proof boundary. Nothing in
 `src-tauri/src/remote_rules.rs` was changed, no gate was moved, and the remote feature is **not**
 reported as fixed by this design.
+
+## 8. State at handoff — 2026-09-01, `d31b4940`
+
+Written for a session that has only this file. `docs/SESSION_HANDOFF.md` is at its 120-line cap, so
+this is where the lane's live state lives; the repo-state bullet there names
+`lane/remote-cache-design-286` (#286), which is the route to here.
+
+- **PR #288 is OPEN at `d31b4940`** and does not merge yet. The merge-pr gate needs an
+  `independentReview` receipt whose `head` equals the current head, and the standing verdict from
+  session sentinel-63 is bound to `25654d16` — one commit older, and that commit is §4/§5's fix,
+  which is *the reviewed content*. An older verdict must not stretch over the change it asked for.
+  **Next step: get a verdict bound to `d31b4940`, write the receipt, merge.**
+- That verdict is **practical, not identity-separate** — both writing sessions push under one GitHub
+  account, so a native GitHub approval would imitate independence rather than evidence it. Reviews on
+  this repo live in PR comments; `gh api repos/.../pulls/<n>/reviews` returns empty even for lanes
+  that were reviewed three rounds deep. Any receipt citing that review must say so in those words.
+- Ordering agreed with sentinel-63: #297 lands, then #288, then #289 is retargeted to main and
+  merged forward ONCE, then #279. Every open lane conflicts on exactly `docs/SESSION_HANDOFF.md` and
+  `docs/BRANCH_DISPOSITIONS.md` and nothing else, so the living docs get resolved once rather than
+  per-lane. Whoever lands #288 states the exact SHA main is at when it does.
+- Still DESIGN ONLY, unchanged by any of the above: no fetch armed, no key or CDN, nothing under
+  `src-tauri/`, no gate moved. §7's disposition stands — implementation is deferred and is a hard
+  precondition of arming, tracked on `docs/RELEASE_STATE.md`'s remote-rules row.
