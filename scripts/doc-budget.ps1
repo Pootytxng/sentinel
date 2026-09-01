@@ -10,7 +10,7 @@ $budgets = @{
   # the point: without the tightening the section just refills and the archive move bought nothing.
   "docs/RELEASE_STATE.md" = 270
   "docs/BACKLOG.md" = 1000
-  "docs/OWNER_ACTION_CHECKLIST.md" = 450
+  "docs/OWNER_ACTION_CHECKLIST.md" = 385
   "docs/BETA_DISTRIBUTION_RECORD.md" = 250
   # 119 -> 107 on 2026-08-31. It said "two rows of room, then it pays again"; both rows went to
   # #271 and #274, the file hit the cap exactly, and it paid: the 2026-08-21 sweep narrative (three
@@ -85,7 +85,7 @@ $budgets = @{
 $byteBudgets = @{
   "docs/BACKLOG.md" = 80896
   "docs/RELEASE_STATE.md" = 43008
-  "docs/OWNER_ACTION_CHECKLIST.md" = 33792
+  "docs/OWNER_ACTION_CHECKLIST.md" = 31744
   "src-tauri/CLAUDE.md" = 10240
 }
 # CLAUDE.md is deliberately NOT in the table above. Its byte ceiling already exists and predates

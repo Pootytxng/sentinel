@@ -24,4 +24,5 @@ created on first use — `gh label create <name>`.
 These five are **separate from** the repo's existing ownership vocabulary (`lane:*`, `gate:*`,
 `work-control`), which is defined by `docs/WORK_CONTROL.md` and is not a triage state. A `gate:kuya`
 issue is owner-gated regardless of which triage label it carries; never substitute one family for
-the other.
+the other. **Apply both axes where both apply** — an issue can be `ready-for-human` (triage state)
+and `gate:kuya` (owner-only decision) at once, and dropping either loses real information.
