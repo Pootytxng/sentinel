@@ -1,0 +1,84 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "actorSession": "claude-code, session sentinel-recon-261",
+  "kind": "implementation",
+  "date": "2026-09-01",
+  "pr": 280,
+  "issue": 237,
+  "repo": "Pootytxng/sentinel",
+  "branch": "lane/segmented-a11y-237",
+  "worktree": "C:\\Users\\Kuya\\code\\sentinel-recon-261",
+  "currentHead": "e12521c7bd6bc0e720009c715e727528f183ea48",
+  "explicitHandoff": "Owner turn authorizing this train: 'Please resolve any and all conflicts regarding any of the remaining work in the recent chats. Please review all existing work trees. Cleanup and complete. All remaining work. to bring everything to current. and proceed with a persistent marathon automated workflow while I step away from my desk.' Closing an issue whose work is already an ancestor of origin/main is inside the reversible release-engineering train that docs/RELEASE_AUTONOMY.md covers with one owner authorization; reopening an issue is one click.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "Pootytxng/sentinel, verified by git remote -v in C:\\Users\\Kuya\\code\\sentinel-recon-261 (SSH remote, resolves directly).",
+    "remoteState": "git fetch origin --prune ran this turn; origin/main measured live. git merge-base --is-ancestor 09872c801d31531883b6b51cbaf0ebfbf183c782 origin/main answers YES, which is the landing this close records.",
+    "worktree": "C:\\Users\\Kuya\\code\\sentinel-recon-261, this session's only checkout. The lane that carried the work is NOT this one and was not touched to write this receipt - the landing was measured from origin, not from that checkout.",
+    "branch": "lane/rule-e-negation is checked out here; the work being closed rode lane/segmented-a11y-237. A close receipt is bound to the MERGE COMMIT, not to the branch the writer happens to stand on. currentHead is e12521c7bd6bc0e720009c715e727528f183ea48, this checkout's live HEAD - the head this close is authorized FROM. The head the work was gated and reviewed at (563ed370eee820276fd7813831a04a41fb8da83a) is not the same thing and is recorded under gateResults[0].head, independentReview.head and issueClosureProof.mergeCommit. The first draft put the landed head here and the gate refused it, which is the gate working: a receipt has to be answerable about the tree it is written against.",
+    "dirtyState": "git status --porcelain -uall inspected before writing; the only pending paths are this receipt and its siblings in the same commit.",
+    "liveProcesses": "One peer Claude Code session (sentinel-21) is live on this machine and holds lane/remote-cache-design-286 and lane/case-receiver-287. It holds no claim on any issue closed here, and was told what this session is doing."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "e12521c7bd6bc0e720009c715e727528f183ea48",
+      "detail": "PASS at this exact head, 2026-09-01T19:51:12Z, logs/verify-local-2026-09-01T19-51-12Z.log - the pre-push run that moved origin/lane/rule-e-negation to e12521c7. Full suite: vitest, cargo test, clippy. This is proof about the tree the close is transacted FROM. The separate proof that the work being closed actually landed is issueClosureProof.mergeCommit, measured with git merge-base --is-ancestor against origin/main."
+    }
+  ],
+  "docGates": [
+    {
+      "command": "node scripts/run-vitest.mjs tools/entry/doc-truth.test.mjs",
+      "status": "passed",
+      "detail": "10/10 in sentinel-recon-261 this turn. Run alone rather than through the full gate, because decision 7 fails any live-doc sentence pairing 'merge' with 'worktree' and its corpus includes uncommitted files."
+    },
+    {
+      "command": "pwsh -NoProfile -File scripts/doc-budget.ps1",
+      "status": "passed",
+      "detail": "ALL PASS this turn; docs/SESSION_HANDOFF.md sits at exactly 120/120, with the two lines its last addition needed paid out of table scaffolding rather than out of the cap."
+    }
+  ],
+  "claimVerification": "Every claim in this receipt about the landing was measured this turn from origin, not copied from the PR: git merge-base --is-ancestor 09872c801d31531883b6b51cbaf0ebfbf183c782 origin/main answers YES, and the file-level evidence named under issueClosureProof.whatLanded was read out of origin/main with git show. Nothing here is asserted from a branch name or from a prior receipt's summary.",
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped to close an issue. The code being closed over landed in its own train and was gated there; this receipt adds one JSON file and moves no binary."
+  },
+  "selfReview": {
+    "verdict": "n/a-for-this-transition",
+    "reason": "The self-review law covers a UI CHANGE before it may be claimed done. This transition changes no pixel - it closes an issue whose UI work landed on 2026-08-31. PR #280's own body records a self-review PASS at native resolution for that change; this receipt neither repeats nor relies on it, because the visual claim is not the claim being made here."
+  },
+  "boundaryProof": {
+    "actionsRs": "Untouched. This transition adds one receipt under .claude/work-control/ and changes no Rust.",
+    "mutationSurface": "No registry write, service or task change, power-plan switch or package removal is introduced anywhere. src/mutation-boundary-guard.test.ts is unaffected and green in the run recorded above."
+  },
+  "independentReview": {
+    "practical": false,
+    "writer": "claude-code",
+    "writerSession": "sentinel-recon-261",
+    "reviewer": "none",
+    "status": "pending",
+    "head": "e12521c7bd6bc0e720009c715e727528f183ea48",
+    "reason": "REQUESTED, NOT YET RETURNED. Session sentinel-21 is reviewing PR #297 at this exact head and has confirmed it will check the code rather than the description. Until that verdict is in, this receipt does NOT authorize the close and the gate correctly refuses it. The earlier verdict at 563ed370eee820276fd7813831a04a41fb8da83a is retained under issueClosureProof as evidence about the LANDING, which is a different claim - and the first draft of this receipt tried to spend it as if it were this one. NO independent review is bound to this merge, and that is recorded rather than implied. gh api repos/Pootytxng/sentinel/pulls/280/reviews returns an empty list - PR #280 was merged with no review of any state. Its body also carried no closing keyword, which is why #237 stayed open after its work landed. The bookkeeping gap this receipt closes is repairable; the review gap it records is not, and cannot be manufactured after the fact. Refusing to close the issue would not un-land the code - it would only leave the ledger silent about both facts."
+  },
+  "issueClosureProof": {
+    "whatTheIssueAsked": "#237 reported that SegmentedControl declared role=\"tablist\" / role=\"tab\" / aria-selected and implemented none of the ARIA tabs pattern it thereby promised - no roving arrow/Home/End focus, no single tab stop, no tabpanel - and asked that it either keep the contract or stop declaring it.",
+    "whatLanded": "Measured on origin/main this turn, not read from the PR: src/design/SegmentedControl.tsx:65 is role=\"group\" with aria-label, and :75-:76 render native type=\"button\" carrying aria-pressed. The tablist/tab/aria-selected declaration is gone, and the module comment at :15-:19 states the contract it now keeps. That is the disposition #237 asked for - stop declaring a pattern that is not implemented - rather than the other one.",
+    "constraintHeld": "No visual change was claimed and none is asserted here: the pill measurement path at :43 still selects on [aria-pressed=\"true\"], which is the same element it selected before under [aria-selected=\"true\"].",
+    "mergeCommit": "09872c801d31531883b6b51cbaf0ebfbf183c782"
+  },
+  "notes": "Closed after the fact. The work landed in PR #280 without a closing keyword in the PR body, so GitHub never closed #237 itself and the issue sat open over landed code - the same silence the receipt-preservation guard was built for, one level up. Recorded so the ledger says why the close is late rather than pretending it was timely. GATE HISTORY, recorded rather than hidden: this receipt was refused twice. First for putting the LANDED head in currentHead, which is the head a transition is authorized FROM, not the head work landed at. Then for citing a gate run and a review bound to that landed head - 'a review of earlier code does not cover the commits after it'. Both refusals were correct, and neither was worked around. The lesson is the one the ledger already teaches elsewhere: close the issue from the lane that landed it, while still standing on the proven head. A close done later has to earn proof at the head it is done from."
+}
