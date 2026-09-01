@@ -323,9 +323,100 @@ const INPLACE = new Map([
 ]);
 
 /** Interpreters whose real target lives inside a string this lexer will not evaluate. */
-const OPAQUE = new Set(["node", "python", "python3", "py", "ruby", "perl", "pwsh", "powershell", "powershell.exe", "cmd", "bash", "sh", "zsh", "eval", "xargs", "env", "start"]);
+const OPAQUE = new Set(["node", "python", "python3", "py", "ruby", "perl", "pwsh", "powershell", "powershell.exe", "cmd", "bash", "sh", "zsh", "eval", "start"]);
 
 const CD_VERBS = new Set(["cd", "pushd", "set-location", "chdir"]);
+
+/**
+ * Wrappers whose own argv names the command that actually runs. `env rm -f ../sib/x` is ONE literal
+ * write with one literal target; reading `env` as the verb is the same evasion as reading `VAR=1` as
+ * one, and it was the plainest hole in the first cut of this guard (#279 review): four spellings of
+ * the same write, one refused. `env`/`xargs` reached the class-3 tail and passed on an owned CWD
+ * while the operand that mattered sat in a sibling; `sudo`/`command` were in no table at all, so a
+ * segment whose SECOND word was `rm` came back "names no recognized mutation".
+ *
+ * Flag grammar per wrapper, because guessing past a flag is how the verb moves one word and the
+ * checker does not follow. `flags` take no value; `values` take the next word (or an attached
+ * `--long=v` / `-oV`); `assignments` allows `VAR=v` before the command; `duration` is a leading
+ * positional that is a time; `inspect` PRINTS instead of running; `opaque` hands the command over as
+ * a string this lexer does not evaluate. A flag in none of them is not guessed at: it becomes an
+ * unresolved class-2 write, because which word is the command is genuinely unknowable from the text.
+ */
+const PREFIX_VERBS = new Map([
+  ["env", { flags: ["-i", "-0", "-v", "--ignore-environment", "--null", "--debug"], values: ["-u", "-C", "--unset", "--chdir"], assignments: true, opaque: ["-S", "--split-string"] }],
+  ["sudo", { flags: ["-b", "-E", "-H", "-i", "-K", "-k", "-n", "-P", "-S", "-A", "-e", "-s"], values: ["-u", "-g", "-p", "-C", "-h", "-r", "-t", "-T", "-D", "-R", "--user", "--group", "--prompt", "--close-from", "--host", "--role", "--type", "--command-timeout", "--chdir", "--chroot"], assignments: true, inspect: ["-l", "-v", "-V", "--list", "--validate", "--version"] }],
+  ["doas", { flags: ["-n", "-s", "-L"], values: ["-u", "-a", "-C"] }],
+  ["command", { flags: ["-p"], inspect: ["-v", "-V"] }],
+  ["nohup", {}],
+  ["setsid", { flags: ["-f", "-w", "-c", "--fork", "--wait", "--ctty"] }],
+  ["nice", { values: ["-n", "--adjustment"], numeric: true }],
+  ["ionice", { flags: ["-t", "--ignore"], values: ["-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"] }],
+  ["chrt", { flags: ["-f", "-b", "-o", "-r", "-i", "-d", "-a", "-R", "-m"], values: ["-p", "-T", "-P"] }],
+  ["time", { flags: ["-p", "--portability", "-v", "--verbose"], values: ["-o", "-f", "-a", "--output", "--format", "--append"] }],
+  ["timeout", { flags: ["--preserve-status", "--foreground", "-v", "--verbose"], values: ["-s", "-k", "--signal", "--kill-after"], duration: true }],
+  ["stdbuf", { values: ["-i", "-o", "-e", "--input", "--output", "--error"] }],
+  // The step-over reaches the argv TEMPLATE only. `find … | xargs rm -f` names no operand there, so
+  // it lands unresolved rather than clean; the stdin form stays class 3 and the tests say so.
+  ["xargs", { flags: ["-0", "--null", "-r", "--no-run-if-empty", "-t", "--verbose", "-p", "--interactive", "-x", "--exit"], values: ["-a", "-d", "-E", "-e", "-I", "-i", "-L", "-l", "-n", "-P", "-s", "--arg-file", "--delimiter", "--eof", "--replace", "--max-lines", "--max-args", "--max-procs", "--max-chars"] }],
+]);
+
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const DURATION = /^\d+(\.\d+)?[smhd]?$/;
+
+/**
+ * Walks leading assignments and wrapper verbs off the front of a segment and reports where the real
+ * command starts. `stop` is set when there is no real command to find: `"nothing"` (the wrapper
+ * printed), `"opaque"` (the command is a string), `"unparsed"` (a flag whose arity is unknown).
+ */
+export function stepPrefixes(words) {
+  let head = 0;
+  let wrapper = null;
+  for (;;) {
+    while (head < words.length && ASSIGNMENT.test(words[head].value)) head += 1;
+    if (head >= words.length) return { head, wrapper, stop: null };
+    if (words[head].dynamic) return { head, wrapper, stop: null };
+    const spec = PREFIX_VERBS.get(words[head].value.replace(/\.exe$/i, "").toLowerCase());
+    if (!spec) return { head, wrapper, stop: null };
+    wrapper ??= words[head].value.replace(/\.exe$/i, "").toLowerCase();
+    head += 1;
+    const flags = new Set(spec.flags ?? []);
+    const values = new Set(spec.values ?? []);
+    const inspect = new Set(spec.inspect ?? []);
+    const opaque = new Set(spec.opaque ?? []);
+    let sawDuration = false;
+    while (head < words.length) {
+      const w = words[head].value;
+      if (w === "--") {
+        head += 1;
+        break;
+      }
+      if (!w.startsWith("-")) {
+        if (spec.assignments && ASSIGNMENT.test(w)) {
+          head += 1;
+          continue;
+        }
+        if (spec.duration && !sawDuration && DURATION.test(w)) {
+          sawDuration = true;
+          head += 1;
+          continue;
+        }
+        break; // this word is the command
+      }
+      const eq = w.indexOf("=");
+      const bare = eq > 1 ? w.slice(0, eq) : w;
+      const short2 = !w.startsWith("--") && w.length > 2 ? w.slice(0, 2) : null;
+      if (opaque.has(bare)) return { head, wrapper, stop: "opaque", flag: w };
+      if (inspect.has(bare)) return { head, wrapper, stop: "nothing", flag: w };
+      if (flags.has(bare)) head += 1;
+      else if (values.has(bare)) head += eq > 1 ? 1 : 2;
+      else if (short2 && values.has(short2)) head += 1;
+      else if (spec.numeric && /^-\d/.test(w)) head += 1;
+      else if (short2 && [...w.slice(1)].every((c) => flags.has(`-${c}`))) head += 1;
+      else return { head, wrapper, stop: "unparsed", flag: w };
+    }
+    if (head >= words.length) return { head, wrapper, stop: null };
+  }
+}
 
 /**
  * The claim/adoption entrypoint is never in the way of itself. A refusal prints
@@ -335,6 +426,9 @@ const CD_VERBS = new Set(["cd", "pushd", "set-location", "chdir"]);
  * its second half judged on its own.
  */
 const ENTRY_CLI = /(^|[\\/])tools[\\/]entry[\\/](cli|adopt|claim|launch)\.mjs$/;
+
+/** Interpreters that can RUN the entry CLI. The exemption is theirs; `cp` and `rm` do not inherit it. */
+const INTERPRETERS = new Set(["node", "python", "python3", "py", "pwsh", "powershell", "bash", "sh"]);
 
 /** Absolute paths embedded in a larger string — an interpreter body, a `-c` argument, a here-string. */
 export function embeddedPaths(text) {
@@ -384,10 +478,21 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
     }
     if (!words.length) continue;
 
-    // `VAR=1 rm -rf …` runs `rm`. Reading the assignment as the verb is how a command hides from a
-    // verb-driven checker in the plainest way there is, so leading assignments are stepped over.
-    let head = 0;
-    while (head < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[head].value)) head += 1;
+    // `VAR=1 rm -rf …` runs `rm`, and so do `sudo rm -rf …` and `env rm -rf …`. Reading the
+    // assignment or the wrapper as the verb is how a command hides from a verb-driven checker in the
+    // plainest way there is, so both are stepped over before the verb is read.
+    const step = stepPrefixes(words);
+    const head = step.head;
+    if (step.stop === "nothing") continue; // `sudo -v`, `command -v rm`: it printed, it did not run
+    if (step.stop) {
+      for (const p of words.flatMap((w) => embeddedPaths(w.value))) at(p, step.wrapper, "embedded");
+      if (step.stop === "opaque") cannot(step.wrapper, "it hands the command over as a string this checker does not evaluate", "opaque");
+      // A flag this table does not carry may or may not swallow the next word, so which word is the
+      // command is not knowable from the text. That is class 2, not the class-3 tail: guessing is
+      // exactly how the verb moves one word while the checker keeps watching the wrapper.
+      else cannot(step.wrapper, `the flag \`${step.flag}\` may or may not take a value, so which command it runs is not knowable from the text`);
+      continue;
+    }
     if (head >= words.length) continue; // a segment that only sets variables writes nothing
 
     const verb = words[head].value.replace(/\.exe$/i, "").toLowerCase();
@@ -398,7 +503,9 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
      *  mutation", which is the one thing it demonstrably is not evidence of. */
     const verbUnknown = words[head].dynamic;
 
-    if (rest.some((w) => ENTRY_CLI.test(w.value.replace(/\\/g, "/")))) continue;
+    // Matching an OPERAND excused `cp tools/entry/cli.mjs ../sibling/…` — a write into a checkout this
+    // session does not own, waved through because the word it mentioned happened to be the cure.
+    if (INTERPRETERS.has(verb) && ENTRY_CLI.test((operandsOf(rest)[0]?.value ?? "").replace(/\\/g, "/"))) continue;
 
     if (verbUnknown) {
       for (const p of words.flatMap((w) => embeddedPaths(w.value))) at(p, verb, "embedded");

@@ -122,6 +122,14 @@ Deny is reserved for the case where the checker has **positive knowledge** of a 
 - **`ask` is a routing decision, not containment.** Under a permission mode that auto-approves, `ask`
   degrades to allow. That is why positive-knowledge violations are `deny` and only ambiguity is
   `ask`.
+- **A wrapper is not one of these limits, and was wrongly treated as one.** `env` / `xargs` / `sudo` /
+  `command` / `nohup` / `nice` / `time` / `timeout` / `stdbuf` / `doas` / `setsid` / `ionice` / `chrt`
+  name the real command in their own argv: verb and target are both literal text, so stepping over
+  them is the same move as stepping over `VAR=1`. Independent review measured four spellings of ONE
+  write into a sibling with only the bare one refused, so this is closed rather than accepted. What
+  stays open, narrowly: `xargs` reading its targets from **stdin** is still class 3, because the
+  step-over reaches the argv template only; and a wrapper flag this table does not carry may or may
+  not swallow the next word, so it is reported as class 2 rather than guessed past.
 - Text analysis cannot see through an alias, a function, a shell variable's *value*, an interpreter
   body, or a binary that writes without naming a recognized verb. Those reach class 2 (`ask`) when a
   recognized verb is present and are simply allowed when none is. A variable in the **verb** position

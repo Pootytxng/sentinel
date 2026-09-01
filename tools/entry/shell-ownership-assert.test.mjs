@@ -462,3 +462,88 @@ describe("what it must never do: persist, log, or leak the session", () => {
     expect(wrote).toBe("");
   });
 });
+
+describe("a wrapper that runs another command is not a command of its own (#279 review)", () => {
+  // Measured by the reviewing session against this file's own head: four spellings of ONE literal
+  // write into a sibling, same verb and same target as text, and only the bare one was refused.
+  // `env`/`xargs` sat in OPAQUE, so they reached the class-3 tail and passed on an owned CWD, while
+  // the operand that mattered was `../sentinel`, spelled out and not in that CWD at all.
+  // `sudo`/`command` sat in no table, so a segment whose SECOND word is `rm` came back "names no
+  // recognized mutation". Stepping over a wrapper is the same move as stepping over `VAR=1`: the
+  // verb and the target are both literal text either way.
+  const SIB_FILE = "../sentinel/package.json";
+
+  it("refuses the write through every wrapper in the family", () => {
+    const wrappers = [
+      "env", "xargs", "sudo", "doas", "command", "nohup", "setsid",
+      "nice", "ionice", "time", "stdbuf -oL", "timeout 5", "timeout 1.5m",
+    ];
+    for (const w of wrappers) {
+      expect(ask(`${w} rm -f ${SIB_FILE}`).permission, w).toBe("deny");
+    }
+  });
+
+  it("steps over the flags a wrapper takes, both attached and separated", () => {
+    const flagged = [
+      "env -i", "env -u PATH", "env --unset=PATH", "env -C /tmp", "env FOO=1 BAR=2",
+      "sudo -u root", "sudo -n -E", "sudo --user=root", "sudo -g wheel",
+      "xargs -0 -I {}", "xargs -n 1", "xargs --max-args=1",
+      "nice -n 10", "nice -5", "timeout -s KILL 5", "timeout --kill-after=2 5",
+      "stdbuf -i0 -oL -eL", "command -p", "doas -u root",
+    ];
+    for (const w of flagged) {
+      expect(ask(`${w} rm -f ${SIB_FILE}`).permission, w).toBe("deny");
+    }
+  });
+
+  it("keeps stepping when wrappers stack, and picks assignments up again after one", () => {
+    expect(ask(`sudo env FOO=1 rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`nohup timeout 5 xargs rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`FOO=1 sudo BAR=2 rm -f ${SIB_FILE}`).permission).toBe("deny");
+  });
+
+  it("does not wave a wrapper through on a flag it cannot parse", () => {
+    // An unknown flag may or may not swallow the next word, so which word is the command is not
+    // knowable from the text. That is the spec's class 2 — a possible write with an unreadable
+    // target — and it takes the approval path rather than the class-3 tail's owned-CWD pass.
+    expect(ask(`sudo --made-up-flag rm -f ${SIB_FILE}`).permission).not.toBe("allow");
+    expect(ask("sudo --made-up-flag rm -f ./local.txt").permission).not.toBe("allow");
+  });
+
+  it("stays honest about xargs, whose real targets can arrive on stdin", () => {
+    // The step-over reaches the argv TEMPLATE only. With no operand spelled there, the targets come
+    // from a pipe this checker never evaluates, so it is unresolved rather than clean.
+    expect(ask("find . -name '*.tmp' | xargs rm -f").permission).not.toBe("allow");
+  });
+
+  it("writes nothing when the wrapper runs nothing", () => {
+    expect(ask("sudo -v").permission).toBe("allow");
+    expect(ask("command -v rm").permission).toBe("allow");
+    expect(ask("env").permission).toBe("allow");
+  });
+
+  it("still refuses a wrapper whose command comes out of a variable", () => {
+    // The step-over must not swallow the dynamic-verb handling behind it: after `sudo` comes off,
+    // `$cmd` is still a command this checker cannot read, and the absolute path spelled beside it is
+    // still a fact. A RELATIVE target under a dynamic verb stays class 3 by spec section 6 - the
+    // embedded scan is what catches the literal version, and nothing here widens that.
+    expect(ask(`sudo $cmd -f ${inSib("package.json")}`).permission).not.toBe("allow");
+    expect(ask(`env $cmd -f ${inSib("package.json")}`).permission).not.toBe("allow");
+  });
+});
+
+describe("the entry-CLI exemption covers the cure, not anything that names it (#279 review)", () => {
+  // The exemption matched any OPERAND, so a write into a sibling was excused because the file it
+  // happened to mention was the printed cure. It has to be the thing that RUNS, not a word present.
+  const CLI = "tools/entry/cli.mjs";
+
+  it("still lets the printed cure run in an unverified session", () => {
+    expect(ask(`node ${CLI} adopt --issue 278 --session abc`, { verify: UNCLAIMED }).permission).toBe("allow");
+    expect(ask(`node --no-warnings ${CLI} claim --issue 278`, { verify: UNCLAIMED }).permission).toBe("allow");
+  });
+
+  it("does not excuse a write into a sibling that merely mentions the cure", () => {
+    expect(ask(`cp ${CLI} ../sentinel/${CLI}`).permission).toBe("deny");
+    expect(ask(`rm -f ../sentinel/package.json ${CLI}`).permission).toBe("deny");
+  });
+});
