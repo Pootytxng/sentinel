@@ -99,9 +99,9 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   those fourteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `lane/agent-skills-config` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
   `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` · `lane/shell-ownership-278` ·
-  STACKED in this order, each on the one before it, so any count includes its parents': `lane/license-atomic-284`
-  (#284) → `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287` (#287) · `lane/css-margin-separators-274`
-  (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are
+  `lane/license-atomic-284` (#284) shares `5117c632`/`a7f13eda` with `lane/remote-cache-design-286` (#286) and
+  `lane/case-receiver-287` (#287) but is **not** their ancestor — only 286 → 287 is a real chain (`git merge-base --is-ancestor`) ·
+  `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are
   listed only because **pruning them was denied**. **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`.
   Rule D (#243) fails this bullet for naming a zero-carry branch — **a landed lane's name leaves with the train that
   lands it**, which is why the #281 lane is no longer named here: PR #282 landed it as `082f637e`. Spent, at zero:
