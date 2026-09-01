@@ -119,7 +119,7 @@ fn save_armed(a: &ArmedComparison) -> Result<(), String> {
 }
 
 fn save_armed_to(path: &std::path::Path, a: &ArmedComparison) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(a).map_err(|e| e.to_string())?;
+    let json = crate::atomic_write::serialize_pretty(a).map_err(|e| e.to_string())?;
     crate::atomic_write::write_atomic(path, json.as_bytes()).map_err(|e| e.to_string())
 }
 
@@ -129,7 +129,7 @@ fn save_result(r: &ComparisonResult) -> Result<(), String> {
 }
 
 fn save_result_to(path: &std::path::Path, r: &ComparisonResult) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(r).map_err(|e| e.to_string())?;
+    let json = crate::atomic_write::serialize_pretty(r).map_err(|e| e.to_string())?;
     crate::atomic_write::write_atomic(path, json.as_bytes()).map_err(|e| e.to_string())
 }
 
@@ -486,6 +486,52 @@ mod comparison_persistence_tests {
             "the save did not go through the atomic write path"
         );
         assert_eq!(latest_result_from(&p).expect("result").verdict, "improved");
+    }
+
+    #[test]
+    fn serialization_failures_preserve_both_comparison_stores_without_a_temp() {
+        let dir = scratch("serialize-failed");
+        let armed_path = dir.join("compy_comparison.json");
+        save_armed_to(&armed_path, &armed("keep-arm")).expect("first arm");
+        crate::atomic_write::force_next_serialization_failure();
+        let err = save_armed_to(&armed_path, &armed("clobber"))
+            .expect_err("armed serialization failure must surface");
+        assert!(err.contains("injected serialization failure"), "got: {err}");
+        assert_eq!(load_armed_from(&armed_path).unwrap().armed_at, "keep-arm");
+
+        let result_path = dir.join("compy_comparison_result.json");
+        save_result_to(&result_path, &result("improved")).expect("first result");
+        crate::atomic_write::force_next_serialization_failure();
+        let err = save_result_to(&result_path, &result("regressed"))
+            .expect_err("result serialization failure must surface");
+        assert!(err.contains("injected serialization failure"), "got: {err}");
+        assert_eq!(latest_result_from(&result_path).unwrap().verdict, "improved");
+        assert!(
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")),
+            "serialization reached the atomic writer"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_share_locks_surface_both_comparison_errors_and_preserve_old_values() {
+        let dir = scratch("locked");
+        let armed_path = dir.join("compy_comparison.json");
+        save_armed_to(&armed_path, &armed("keep-arm")).expect("first arm");
+        let held = crate::atomic_write::hold_without_share(&armed_path);
+        assert!(save_armed_to(&armed_path, &armed("clobber")).is_err());
+        drop(held);
+        assert_eq!(load_armed_from(&armed_path).unwrap().armed_at, "keep-arm");
+
+        let result_path = dir.join("compy_comparison_result.json");
+        save_result_to(&result_path, &result("improved")).expect("first result");
+        let held = crate::atomic_write::hold_without_share(&result_path);
+        assert!(save_result_to(&result_path, &result("regressed")).is_err());
+        drop(held);
+        assert_eq!(latest_result_from(&result_path).unwrap().verdict, "improved");
     }
 
     #[test]

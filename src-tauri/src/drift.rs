@@ -64,7 +64,7 @@ fn save_state(s: &DriftState) {
 /// The directory is still created only AFTER serialization succeeds, exactly as before — a state
 /// that cannot be serialized must not leave a folder behind as its only trace.
 fn save_state_to(path: &std::path::Path, s: &DriftState) {
-    if let Ok(json) = serde_json::to_string_pretty(s) {
+    if let Ok(json) = crate::atomic_write::serialize_pretty(s) {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
@@ -219,6 +219,36 @@ mod drift_persistence_tests {
             Some(&true),
             "the interrupted save reached the file — it is not going through the atomic path"
         );
+        assert!(!load_state_from(&p).last_good.contains_key("clobber"));
+    }
+
+    #[test]
+    fn a_serialization_failure_is_silent_and_touches_neither_target_nor_temp() {
+        let dir = scratch("serialize-failed");
+        let p = dir.join("drift.json");
+        save_state_to(&p, &state("keep-me"));
+        crate::atomic_write::force_next_serialization_failure();
+        save_state_to(&p, &state("clobber"));
+        assert_eq!(load_state_from(&p).last_good.get("keep-me"), Some(&true));
+        assert!(!load_state_from(&p).last_good.contains_key("clobber"));
+        assert!(
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")),
+            "serialization reached the atomic writer"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_share_lock_is_silent_and_preserves_the_old_drift_state() {
+        let p = scratch("locked").join("drift.json");
+        save_state_to(&p, &state("keep-me"));
+        let held = crate::atomic_write::hold_without_share(&p);
+        save_state_to(&p, &state("clobber"));
+        drop(held);
+        assert_eq!(load_state_from(&p).last_good.get("keep-me"), Some(&true));
         assert!(!load_state_from(&p).last_good.contains_key("clobber"));
     }
 

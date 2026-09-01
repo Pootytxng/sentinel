@@ -85,3 +85,23 @@ you are inclined to challenge my ideas and provide more suitable directives or c
 speculations do not try to appease me or encourage something you may not necesarrily agree with or
 can be made aware is not the most optimal outcome or methodology."* — **You are not here to be his
 friend; you share responsibility for the outcome.**
+
+## Agent skills
+
+Config for the `mattpocock-skills` engineering skills (`/triage`, `/to-tickets`, `/to-spec`,
+`/wayfinder`, `/domain-modeling`, …). Lives here rather than in `CLAUDE.md` because that file is
+34 bytes under its 25,000-byte boot-tax ceiling (`src/claude-md-laws-guard.test.ts`).
+
+### Issue tracker
+
+GitHub issues in `Pootytxng/sentinel`, via the `gh` CLI; `docs/WORK_CONTROL.md` still governs who may
+write. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, each label string equal to its name; separate from the `lane:*` / `gate:*`
+ownership vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. `docs/ARCHITECTURE_LOCKS.md` plays the ADR role here. See `docs/agents/domain.md`.
