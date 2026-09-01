@@ -9,7 +9,7 @@
   "repo": "Pootytxng/sentinel",
   "branch": "lane/segmented-a11y-237",
   "worktree": "C:\\Users\\Kuya\\code\\sentinel-recon-261",
-  "currentHead": "e12521c7bd6bc0e720009c715e727528f183ea48",
+  "currentHead": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
   "explicitHandoff": "Owner turn authorizing this train: 'Please resolve any and all conflicts regarding any of the remaining work in the recent chats. Please review all existing work trees. Cleanup and complete. All remaining work. to bring everything to current. and proceed with a persistent marathon automated workflow while I step away from my desk.' Closing an issue whose work is already an ancestor of origin/main is inside the reversible release-engineering train that docs/RELEASE_AUTONOMY.md covers with one owner authorization; reopening an issue is one click.",
   "exclusiveWriter": true,
   "inheritedWork": true,
@@ -36,8 +36,8 @@
     {
       "command": "scripts/verify-local.ps1",
       "status": "passed",
-      "head": "e12521c7bd6bc0e720009c715e727528f183ea48",
-      "detail": "PASS at this exact head, 2026-09-01T19:51:12Z, logs/verify-local-2026-09-01T19-51-12Z.log - the pre-push run that moved origin/lane/rule-e-negation to e12521c7. Full suite: vitest, cargo test, clippy. This is proof about the tree the close is transacted FROM. The separate proof that the work being closed actually landed is issueClosureProof.mergeCommit, measured with git merge-base --is-ancestor against origin/main."
+      "head": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
+      "detail": "The authorising run is the pre-push gate on the push that created 3ef9184d, so the gate and the head this close is authorised from are the same object by construction rather than by claim: logs/verify-local-2026-09-01T20-10-40Z.log, frontend 407 files / 5914 passed / 5 skipped, vite build green, Rust 1253 passed / 0 failed / 24 ignored, clippy clean, zero GitHub Actions minutes. No gate is re-run against the LANDED code - there is nothing new to gate there, and a fresh run against today's origin/main would be evidence about a different tree."
     }
   ],
   "docGates": [
@@ -66,13 +66,18 @@
     "mutationSurface": "No registry write, service or task change, power-plan switch or package removal is introduced anywhere. src/mutation-boundary-guard.test.ts is unaffected and green in the run recorded above."
   },
   "independentReview": {
-    "practical": false,
+    "practical": true,
     "writer": "claude-code",
-    "writerSession": "sentinel-recon-261",
-    "reviewer": "none",
-    "status": "pending",
-    "head": "e12521c7bd6bc0e720009c715e727528f183ea48",
-    "reason": "REQUESTED, NOT YET RETURNED. Session sentinel-21 is reviewing PR #297 at this exact head and has confirmed it will check the code rather than the description. Until that verdict is in, this receipt does NOT authorize the close and the gate correctly refuses it. The earlier verdict at 563ed370eee820276fd7813831a04a41fb8da83a is retained under issueClosureProof as evidence about the LANDING, which is a different claim - and the first draft of this receipt tried to spend it as if it were this one. NO independent review is bound to this merge, and that is recorded rather than implied. gh api repos/Pootytxng/sentinel/pulls/280/reviews returns an empty list - PR #280 was merged with no review of any state. Its body also carried no closing keyword, which is why #237 stayed open after its work landed. The bookkeeping gap this receipt closes is repairable; the review gap it records is not, and cannot be manufactured after the fact. Refusing to close the issue would not un-land the code - it would only leave the ledger silent about both facts."
+    "writerSession": "claude-code, session sentinel-recon-261",
+    "reviewer": "claude-code, session sentinel-21 [933d27] - a separate live Claude Code session on this machine, separate context, no write access to the lane this receipt is written on, verdict bound to an exact head. Stated as what the gate can show and no more: same machine, and the SAME GitHub identity, which is why no native APPROVE was submitted on either side of this train. It is practical independence, not identity separation.",
+    "status": "passed",
+    "head": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
+    "evidence": [
+      "https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5499818979",
+      "https://github.com/Pootytxng/sentinel/issues/237#issuecomment-5499841599"
+    ],
+    "landingVerification": "Verified independently this turn, from a checkout this session does not own and against origin rather than against this receipt: PR #280's merge commit 09872c80 is the exact commit GitHub recorded for that PR, it is an ancestor of origin/main, and the surviving branch ref carries zero commits origin/main cannot reach. That is the whole of what this close asserts.",
+    "reason": "CORRECTED after review. The first draft wrote practical:false, reasoning from the fact that PR #280 was merged with no review. That answers a different question than the field asks. Whether reviewing THIS CLOSE is practical, and whether the MERGE was reviewed, are two statements, and only the first belongs here - the same reviewer was equally available for all three closes in this commit, and it reviewed this one. The unrepairable gap is real and is recorded under mergeReviewGap, where it is a fact about PR #280 rather than an excuse for skipping a review that was available. Raised by session sentinel-21 as the mirror of refusing to write practical:false to get past the gate: the same care, one field over."
   },
   "issueClosureProof": {
     "whatTheIssueAsked": "#237 reported that SegmentedControl declared role=\"tablist\" / role=\"tab\" / aria-selected and implemented none of the ARIA tabs pattern it thereby promised - no roving arrow/Home/End focus, no single tab stop, no tabpanel - and asked that it either keep the contract or stop declaring it.",
@@ -80,5 +85,13 @@
     "constraintHeld": "No visual change was claimed and none is asserted here: the pill measurement path at :43 still selects on [aria-pressed=\"true\"], which is the same element it selected before under [aria-selected=\"true\"].",
     "mergeCommit": "09872c801d31531883b6b51cbaf0ebfbf183c782"
   },
-  "notes": "Closed after the fact. The work landed in PR #280 without a closing keyword in the PR body, so GitHub never closed #237 itself and the issue sat open over landed code - the same silence the receipt-preservation guard was built for, one level up. Recorded so the ledger says why the close is late rather than pretending it was timely. GATE HISTORY, recorded rather than hidden: this receipt was refused twice. First for putting the LANDED head in currentHead, which is the head a transition is authorized FROM, not the head work landed at. Then for citing a gate run and a review bound to that landed head - 'a review of earlier code does not cover the commits after it'. Both refusals were correct, and neither was worked around. The lesson is the one the ledger already teaches elsewhere: close the issue from the lane that landed it, while still standing on the proven head. A close done later has to earn proof at the head it is done from."
+  "notes": "Closed after the fact. The work landed in PR #280 without a closing keyword in the PR body, so GitHub never closed #237 itself and the issue sat open over landed code - the same silence the receipt-preservation guard was built for, one level up. Recorded so the ledger says why the close is late rather than pretending it was timely. REBOUND: this receipt was first written and committed at 64ef701b claiming head e12521c7, and the gate correctly refused it twice - once because the claimed head was not the live head, once because no independent verdict was bound to the live head. Neither refusal was worked around. Committing a receipt BEFORE gating it is what caused the first refusal: the commit moves the head the receipt certifies. Receipts now gate uncommitted and commit after the transition.",
+  "mergeReviewGap": {
+    "pr": 280,
+    "claim": "PR #280 was merged with no review of any state.",
+    "evidenceCorrected": "The first draft cited `gh api repos/Pootytxng/sentinel/pulls/280/reviews` returning an empty list. That is TRUE and it is NOT evidence, because it returns empty for the reviewed PRs too: #280 reviews=0 comments=0, #277 reviews=0 comments=8 (three PASS verdicts), #290 reviews=0 comments=2 (REQUEST_CHANGES then APPROVE at an exact head). Nobody in this fleet posts native GitHub reviews, deliberately, because both sessions push under one identity. An empty reviews list is therefore the NORMAL case here, not a finding. What distinguishes #280 is zero COMMENTS as well - no verdict of any kind, bound to any head, in any form. That is the number this receipt should have cited and now does.",
+    "lesson": "Evidence that returns the same answer whether or not the claim is true is not evidence. Same shape as the fixture defect found on #288: a fixture that passes against the broken implementation is not coverage. Found by session sentinel-21, issue comment 5499841599.",
+    "repairable": false,
+    "why": "A review of the state PR #280 was merged at cannot be manufactured after the fact. Refusing to close #237 would not un-land the code; it would only leave the ledger silent about both facts."
+  }
 }

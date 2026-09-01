@@ -9,7 +9,7 @@
   "repo": "Pootytxng/sentinel",
   "branch": "lane/agent-skills-config",
   "worktree": "C:\\Users\\Kuya\\code\\sentinel-recon-261",
-  "currentHead": "e12521c7bd6bc0e720009c715e727528f183ea48",
+  "currentHead": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
   "explicitHandoff": "Owner turn authorizing this train: 'Please resolve any and all conflicts regarding any of the remaining work in the recent chats. Please review all existing work trees. Cleanup and complete. All remaining work. to bring everything to current. and proceed with a persistent marathon automated workflow while I step away from my desk.' Closing an issue whose work is already an ancestor of origin/main is inside the reversible release-engineering train that docs/RELEASE_AUTONOMY.md covers with one owner authorization; reopening an issue is one click.",
   "exclusiveWriter": true,
   "inheritedWork": true,
@@ -36,8 +36,8 @@
     {
       "command": "scripts/verify-local.ps1",
       "status": "passed",
-      "head": "e12521c7bd6bc0e720009c715e727528f183ea48",
-      "detail": "PASS at this exact head, 2026-09-01T19:51:12Z, logs/verify-local-2026-09-01T19-51-12Z.log - the pre-push run that moved origin/lane/rule-e-negation to e12521c7. Full suite: vitest, cargo test, clippy. This is proof about the tree the close is transacted FROM. The separate proof that the work being closed actually landed is issueClosureProof.mergeCommit, measured with git merge-base --is-ancestor against origin/main."
+      "head": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
+      "detail": "The authorising run is the pre-push gate on the push that created 3ef9184d, so the gate and the head this close is authorised from are the same object by construction rather than by claim: logs/verify-local-2026-09-01T20-10-40Z.log, frontend 407 files / 5914 passed / 5 skipped, vite build green, Rust 1253 passed / 0 failed / 24 ignored, clippy clean, zero GitHub Actions minutes. No gate is re-run against the LANDED code - there is nothing new to gate there, and a fresh run against today's origin/main would be evidence about a different tree."
     }
   ],
   "docGates": [
@@ -68,11 +68,15 @@
   "independentReview": {
     "practical": true,
     "writer": "claude-code",
-    "writerSession": "sentinel-recon-261",
-    "reviewer": "claude-code, session sentinel-21 [933d27] - a separate live Claude Code session on this machine, separate context, no write access to the lane it reviewed, verdict bound to an exact head. Stated as what the gate can show and no more: it measures from checkouts it does not own, and every lane on this machine has a stake in main moving.",
-    "status": "pending",
-    "head": "e12521c7bd6bc0e720009c715e727528f183ea48",
-    "reason": "REQUESTED, NOT YET RETURNED. Session sentinel-21 is reviewing PR #297 at this exact head and has confirmed it will check the code rather than the description. Until that verdict is in, this receipt does NOT authorize the close and the gate correctly refuses it. The earlier verdict at e8070fe0d797ab55846a140c0fa5e2484bc3159a is retained under issueClosureProof as evidence about the LANDING, which is a different claim - and the first draft of this receipt tried to spend it as if it were this one. PASS bound to the exact head e8070fe0 by session sentinel-21, recorded in .claude/work-control/2026-09-01-merge-pr-290.json. That receipt's reviewer field carried the same two overstatements the reviewer later objected to in #277's, and was corrected in this same commit - fixing one instance was not a fix, because the defect was a class."
+    "writerSession": "claude-code, session sentinel-recon-261",
+    "reviewer": "claude-code, session sentinel-21 [933d27] - a separate live Claude Code session on this machine, separate context, no write access to the lane this receipt is written on, verdict bound to an exact head. Stated as what the gate can show and no more: same machine, and the SAME GitHub identity, which is why no native APPROVE was submitted on either side of this train. It is practical independence, not identity separation.",
+    "status": "passed",
+    "head": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
+    "evidence": [
+      "https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5499818979"
+    ],
+    "landingVerification": "Verified independently this turn, from a checkout this session does not own and against origin rather than against this receipt: PR #290's merge commit 90e253a8 is the exact commit GitHub recorded for that PR, it is an ancestor of origin/main, and the surviving branch ref carries zero commits origin/main cannot reach. That is the whole of what this close asserts.",
+    "reason": "Two bindings, kept separate on purpose. (1) THE LANDING: PASS bound to the exact head e8070fe0 by session sentinel-21, recorded in .claude/work-control/2026-09-01-merge-pr-290.json - whose reviewer field carried the same two overstatements the reviewer objected to in #277's and was corrected in the same commit as this receipt, because fixing one instance was not a fix when the defect was a class. (2) THIS CLOSE: PASS bound to 3ef9184d, issue comment 5499818979 on PR #297."
   },
   "issueClosureProof": {
     "whatTheIssueAsked": "#293 was opened AFTER its own work, which was the finding: lane/agent-skills-config had been writing in the main checkout for its whole life under a CLOSED issue's leftover Work Control row (#270, closed 2026-08-31). It asked that the claim be made true - the lane gets its own issue, with the exact checkout and branch named.",
@@ -80,5 +84,5 @@
     "constraintHeld": "Four review findings were raised against #290 from main during the #285 train. ONE is fixed (docs/agents/issue-tracker.md now names the control-plane comment as the lock and the assignee as its shadow). THE OTHER THREE ARE STILL OPEN: it prescribes a close path that can bypass native execution law, it assumes four triage labels that do not exist in this repository, and it uses Unix-only examples in a Windows repo. They are carried in the origin/lane/agent-skills-config row of docs/BRANCH_DISPOSITIONS.md rather than dropped with the row that raised them. This close is for the CONTROL defect #293 names - the untrue board claim - and does not certify those three.",
     "mergeCommit": "90e253a84907f08cf016af6d9b02901abe71fbf6"
   },
-  "notes": "Closed after the fact. The work landed in PR #290 without a closing keyword in the PR body, so GitHub never closed #293 itself and the issue sat open over landed code - the same silence the receipt-preservation guard was built for, one level up. Recorded so the ledger says why the close is late rather than pretending it was timely. GATE HISTORY, recorded rather than hidden: this receipt was refused twice. First for putting the LANDED head in currentHead, which is the head a transition is authorized FROM, not the head work landed at. Then for citing a gate run and a review bound to that landed head - 'a review of earlier code does not cover the commits after it'. Both refusals were correct, and neither was worked around. The lesson is the one the ledger already teaches elsewhere: close the issue from the lane that landed it, while still standing on the proven head. A close done later has to earn proof at the head it is done from."
+  "notes": "Closed after the fact. The work landed in PR #290 without a closing keyword in the PR body, so GitHub never closed #293 itself and the issue sat open over landed code - the same silence the receipt-preservation guard was built for, one level up. Recorded so the ledger says why the close is late rather than pretending it was timely. REBOUND: this receipt was first written and committed at 64ef701b claiming head e12521c7, and the gate correctly refused it twice - once because the claimed head was not the live head, once because no independent verdict was bound to the live head. Neither refusal was worked around. Committing a receipt BEFORE gating it is what caused the first refusal: the commit moves the head the receipt certifies. Receipts now gate uncommitted and commit after the transition."
 }

@@ -1,0 +1,113 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "actorSession": "claude-code, session sentinel-recon-261",
+  "kind": "implementation",
+  "date": "2026-09-01",
+  "pr": 297,
+  "issue": 295,
+  "repo": "Pootytxng/sentinel",
+  "branch": "lane/rule-e-negation",
+  "worktree": "C:\\Users\\Kuya\\code\\sentinel-recon-261",
+  "currentHead": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
+  "explicitHandoff": "Owner turn authorizing this train: 'Please resolve any and all conflicts regarding any of the remaining work in the recent chats. Please review all existing work trees. Cleanup and complete. All remaining work. to bring everything to current. and proceed with a persistent marathon automated workflow while I step away from my desk.' Merging a green PR is explicitly mine under the 2026-08-11 decree and inside the reversible release-engineering train docs/RELEASE_AUTONOMY.md covers with one owner authorization.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "Pootytxng/sentinel, verified by git remote -v in C:\\Users\\Kuya\\code\\sentinel-recon-261 (SSH remote, resolves directly).",
+    "remoteState": "git fetch origin --prune ran this turn. origin/lane/rule-e-negation is 3ef9184d, the same object as the local head, because the push that created it is the run recorded under gateResults.",
+    "worktree": "C:\\Users\\Kuya\\code\\sentinel-recon-261, this session's only checkout and the only one that wrote this lane.",
+    "branch": "lane/rule-e-negation, checked out here for the whole life of the lane.",
+    "dirtyState": "git status --porcelain -uall inspected before the merge was attempted; the only pending path was this receipt, written before the gate ran so the gate would see a head no receipt had yet moved. It is committed on lane/rule-e-negation itself rather than on the lane that follows, because the merge was refused and there is no lane that follows yet.",
+    "liveProcesses": "One peer Claude Code session (sentinel-21) is live on this machine, holding lane/remote-cache-design-286 and reviewing this lane from C:\\Users\\Kuya\\code\\sentinel-remote-design-286. It has no write access to lane/rule-e-negation."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
+      "detail": "Ran as the pre-push hook on the push that CREATED this head, so the gate and the head are the same object by construction rather than by claim. logs/verify-local-2026-09-01T20-10-40Z.log: frontend 407 test files / 5914 passed / 5 skipped, vite build green in 6.56s, Rust 1253 passed / 0 failed / 24 ignored, clippy clean. Zero GitHub Actions minutes.",
+      "headNote": "The push output is the binding: e12521c7..3ef9184d lane/rule-e-negation -> lane/rule-e-negation, printed after LOCAL CHECK RESULT: PASS in the same run."
+    }
+  ],
+  "docGates": [
+    {
+      "command": "node scripts/run-vitest.mjs scripts/handoff-worktree-truth.test.mjs scripts/work-control-receipt-preservation.test.mjs tools/entry/doc-truth.test.mjs scripts/handoff-block.test.mjs scripts/branch-disposition-audit.test.mjs",
+      "status": "passed",
+      "detail": "82 passed across the five doc guards in this checkout before the push. The reviewer independently counted 99 across six from a checkout this session does not own, the difference being that its run includes doc-budget's own vitest guard; both runs agree on handoff-worktree-truth at 14."
+    },
+    {
+      "command": "pwsh -NoProfile -File scripts/doc-budget.ps1",
+      "status": "passed",
+      "detail": "ALL PASS. docs/SESSION_HANDOFF.md sits at exactly 120/120 both before and after this PR: the landing-marker doc fix is net-zero, because each name's own marker is shorter than the shared sentence it replaced. Zero headroom is unchanged debt the next writer pays from the archive, not from the cap."
+    }
+  ],
+  "claimVerification": "Every number in this receipt was read out of the run that produced the head, not summarised from memory. The marker measurements quoted in the PR comment were produced by running the SHIPPED parser against the SHIPPED handoff and writing the map to disk, then reproduced independently by the reviewer on its own checkout with identical results: lane/rule-e-negation {null,297}, lane/css-margin-separators-274 {null,275}, lane/native-routing-271 {null,273}, and c8366609 in no marker at all.",
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. This PR changes one test/guard module and one documentation file; no Rust, no frontend source, no binary."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "No path under src/**/*.{tsx,css} is touched. There is no rendered surface to review."
+  },
+  "boundaryProof": {
+    "actionsRs": "Untouched.",
+    "mutationSurface": "No registry write, service or task change, power-plan switch or package removal is introduced anywhere. src/mutation-boundary-guard.test.ts is unaffected and green in the gate run recorded above."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "writerSession": "claude-code, session sentinel-recon-261",
+    "reviewer": "claude-code, session sentinel-21 [933d27] - a separate live Claude Code session on this machine, separate context, no write access to this lane, verdict bound to an exact head. Stated as what the gate can show and no more: it measures from a checkout it does not own, on the same machine, so the independence here is context and content rather than measurement, and it disclosed a standing interest in this lane landing because its own lane is stacked behind it. It is NOT identity-separate: both sessions push under the same GitHub identity, which is why no native GitHub APPROVE was submitted on either side of this train.",
+    "status": "passed",
+    "head": "3ef9184d55b34bec13d219b9ef7071976cadd7db",
+    "rounds": 3,
+    "evidence": [
+      "https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5498147858",
+      "https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5499665829",
+      "https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5499818979"
+    ],
+    "writerNote": "Round 1 at a59c8c96, with the reviewer's interest disclosed in its opening line. Round 2 at e12521c7: PASS with one non-blocking finding, which is the finding recorded below. Round 3 at 3ef9184d: PASS, re-bound after a real re-read rather than a diff-and-hash re-bind, because the commit changes the reviewed logic. The reviewer's stated reason for being able to bind it without re-deriving the whole file is a property rather than a spot check, and it is worth preserving: CLAUSE_END can only SHORTEN a clause, and the new slice is a prefix of the old one, so a shorter clause can lose a marker but can never gain one. Every behaviour change this commit can produce therefore moves a name from exempt to reported, never the reverse - the direction a guard may move without a fresh argument."
+  },
+  "findings": [
+    {
+      "raisedBy": "claude-code, session sentinel-21",
+      "against": "e12521c7",
+      "status": "fixed in 3ef9184d",
+      "summary": "landingMarkers cut each clause from one branch token to the NEXT one, so the last-named branch in the bullet took every remaining word of it - 1639 of 2363 characters, 69%. Measured on the shipped parser against the shipped handoff, lane/native-routing-271 came out carrying c8366609 (the fork point of two OTHER branches) and PR #275 (a different lane's PR).",
+      "severity": "non-blocking, fail-closed as shipped",
+      "why": "That lane carries 3 commits and is not an ancestor of origin/main, so neither rule A nor rule D reaches its marker, and --is-ancestor lane/native-routing-271 c8366609 exits 1 anyway, so verifyMergeRef would return false and rule D would report 'that reference landed something else'. Nothing was suppressed. The reason to fix it is that the fail-OPEN version is one sentence away: delete the 'diverge at c8366609' phrase upstream and the same clause yields a PR-only marker, which unmarkedLanding accepts without verifying anything, and the lane is permanently excused from A and D on prose that was never about it.",
+      "fix": "CLAUSE_END = /[.;]\\s|\\s\\u00b7\\s/ stops a clause at the next branch name, the end of its sentence, or the middle dot the list already uses, whichever comes first. Plus the matching doc fix, because 'those two LANDED (PR #275 . PR #273)' was one sentence marking two names, which is the defect rule D's own error text names. The doc fix ALONE would not have been enough: with each name marked but the clause still unbounded, native-routing-271 goes from {c8366609, 275} to {c8366609, 273} - the right PR wearing the wrong SHA, which is the failure mode that survives review.",
+      "guard": "Three pins added, per bug -> guard: trailing prose after the last name marks nothing; a real marker survives while the sentence after it is refused (a borrowed SHA is a wrong ANSWER, not a refusal); and a sibling entry across the middle dot is a different entry. handoff-worktree-truth went 11 -> 14."
+    },
+    {
+      "raisedBy": "claude-code, session sentinel-21",
+      "against": "3ef9184d",
+      "status": "OPEN - deliberately not fixed in this PR",
+      "summary": "The clause bound is SYNTACTIC: it stops at a name, a sentence end, or the middle dot, but only a BACKTICKED name is a branch token, so a lane referred to in bare prose is invisible to it. Measured by the reviewer: '`lane/a` (#1) is still open while the #99 lane LANDED with PR #99' yields lane/a -> {sha: null, pr: 99}. One sentence, two lanes, the exemption on the wrong one - and PR-only means it is never verified, so it is permanent.",
+      "severity": "narrow; not reachable from the current bullet, which backticks every lane it names",
+      "disposition": "Filed rather than folded in. Fixing it here would move the head a fourth time and stale a verdict that was just re-bound by re-read, for a case the shipped document cannot currently produce. The header now says the boundary is syntactic so the next writer is not surprised by it."
+    }
+  ],
+  "notes": "Merged WITHOUT --delete-branch, deliberately: gh pr merge --delete-branch once set core.bare=true repo-wide and corrupted every worktree on this machine. Pruning the ref is a separate, owner-gated ask recorded in docs/OWNER_ACTION_CHECKLIST.md. This receipt is written before the gate runs, so the gate sees a head that no receipt has yet moved, and committed after the merge on the lane that follows - a receipt committed on its own lane before the merge would move the head it certifies, which is the regress the currentHead binding exists to prevent. The merge itself did not happen - see outcome and blocker. Every binding in this receipt was gated PASS at 3ef9184d BEFORE the merge was attempted, so the receipt certifies readiness, not completion.",
+  "outcome": "NOT EXECUTED - the merge was refused by this session permissions, not by any gate.",
+  "blocker": {
+    "command": "gh pr merge 297 --merge",
+    "result": "Permission to use Bash with command ... has been denied.",
+    "scope": "Targeted, not blanket. gh issue close, gh pr comment, gh api and git push all ran in this same session this turn; gh pr merge is the one refused verb, so merging a PR is owner territory for this session.",
+    "whatWasNotDone": "No retry in a narrower form, and specifically no request to the peer session (sentinel-21) to merge it instead. That session HAS the capability. Asking it would be cross-session permission laundering: the denial is a decision about what THIS session may do, and a peer executing it on my behalf erases the decision rather than satisfies it.",
+    "disposition": "PR #297 stays open at 3ef9184d with a gate PASS and an independent verdict bound to that exact head. This receipt is the proof that everything except the button was ready. It is preserved rather than deleted so the owner can merge on it, and so the record shows a refusal rather than an omission."
+  }
+}
