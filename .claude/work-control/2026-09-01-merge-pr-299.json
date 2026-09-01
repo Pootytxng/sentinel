@@ -1,0 +1,88 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "actorSession": "claude-code, session sentinel-63 [2ccbb3]",
+  "kind": "implementation",
+  "date": "2026-09-01",
+  "pr": 299,
+  "issue": 298,
+  "repo": "Pootytxng/sentinel",
+  "branch": "lane/receipt-preservation-298",
+  "worktree": "C:\\Users\\Kuya\\code\\sentinel-segmented-237",
+  "currentHead": "d18443968a5cee0e9343dc8741ca90d75246605f",
+  "explicitHandoff": "Owner turn authorizing this train: 'Please resolve any and all conflicts regarding any of the remaining work in the recent chats. Please review all existing work trees. Cleanup and complete. All remaining work. to bring everything to current. and proceed with a persistent marathon automated workflow while I step away from my desk.' Issue #298 and PR #299 are inside that scope: a work-control proof receipt that existed on one disk and no branch is exactly the un-current, un-cleaned state the turn names.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. Re-derived this turn from this worktree with git rev-parse --show-toplevel and git branch --show-current rather than assumed: C:/Users/Kuya/code/sentinel-segmented-237 on lane/receipt-preservation-298.",
+    "remoteState": "origin/lane/receipt-preservation-298 and the PR head both read d1844396 before this transition was attempted, checked with git ls-remote and gh pr view. The reviewer bound its PASS to d1844396 as a LOCAL commit object and said explicitly that the verdict would not travel if the push landed a different SHA; it did not - the pushed ref is the same object.",
+    "worktree": "One writer in this checkout, this session. The only other session touching this lane is the reviewer, read-only, and it measured from sentinel-fleet-guard-276 rather than here.",
+    "branch": "lane/receipt-preservation-298, 5 files ahead of origin/main, none of them under src/ or src-tauri/.",
+    "dirtyState": "One untracked path: this receipt. That is not incidental - a merge receipt cannot be committed to the branch it authorizes merging, which is the stranding this PR's own guard exists to catch. It gets committed by the next train, and the guard reports it if that train never comes.",
+    "liveProcesses": "No compy build, dev server or installer runs from this worktree. Nothing was built, launched or reinstalled by this transition."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "d18443968a5cee0e9343dc8741ca90d75246605f",
+      "detail": "Run as the pre-push hook on the push that created this head, so the gate and the head are the same object by construction rather than by claim. Full local gate on the push that created this head: Rust 1253 passed / 0 failed / 24 ignored, clippy zero warnings, vite build green, frontend suite green. Zero GitHub Actions minutes.",
+      "headNote": "Ran ON d1844396 as the pre-push hook, so the gate and the head are the same object by construction rather than by claim. Log: logs/verify-local-2026-09-01T19-32-44Z.log."
+    }
+  ],
+  "docGates": [
+    "scripts/doc-budget.ps1 - zero FAIL lines at this head, re-measured this turn. SESSION_HANDOFF 118/120, BRANCH_DISPOSITIONS 104/107. Nothing was paid from a raised cap; the SESSION_HANDOFF line was paid by dropping four landing SHAs already recorded in BRANCH_DISPOSITIONS.md.",
+    "handoff-worktree-truth + work-control-receipt-preservation + branch-disposition-audit + doc-truth-guard - 41 passed locally at this head, and the reviewer measured 6 pass on the new guard from ITS worktree, which is the property that matters for a guard that sweeps every worktree."
+  ],
+  "claimVerification": "Every claim this PR makes about the machine was measured at the head it is bound to, and the two that were wrong are recorded rather than repaired silently. The #277 receipt's original cause for rule C - that lane/agent-skills-config landed and its name never left the carrier bullet - was DISPROVEN by the reviewer with `git grep -c agent-skills-config origin/main -- docs/SESSION_HANDOFF.md`, which returns no match; that grep and the wrong sentence both stay in the receipt. The real cause was reproduced, not reasoned: the carrier bullet main carried predated lane/rule-e-negation and lane/receipt-preservation-298, so rule C failed for not naming two checkouts that carry. Independently confirmed across five checkouts by the reviewer, which also established the sharper fact that rule C tracks living-doc staleness rather than the merge button, and that origin/main at ee5bdd8b measures 2 failed / 33 passed - A and D - while this PR's docs measure 35/35.",
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. Five files, none under src/ or src-tauri/: two work-control receipts, two living docs, and one vitest guard. git diff --name-only origin/main...HEAD grep -cE '^src/|^src-tauri/' returns 0."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers UI change under src/**/*.{tsx,css}. The diff contains no path under src/ at all - no component, no stylesheet, no rendered string. There is no screen to look at, so a verdict block would be a fabricated claim rather than a satisfied rubric."
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main...HEAD -- src-tauri/src/actions.rs is empty, 0 lines. The ONE Windows-mutation boundary is untouched, as is every other Rust file - the diff contains no path under src-tauri/ at all.",
+    "mutationSurface": "No registry write, service or task change, power-plan switch or package removal is added anywhere. Nothing in this PR can change a Windows setting."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "writerSession": "claude-code, session sentinel-63 [2ccbb3]",
+    "reviewer": "claude-code, session sentinel-21 [933d27] - a separate live Claude Code session on this machine, separate context, no write access to this lane, verdict bound to an exact head. Its independence is stated as what the gate can show and no more: it measures from a checkout it does not own, and it declared an interest in #286 in the same thread. That precision is itself one of this PR's two findings.",
+    "status": "passed",
+    "head": "d18443968a5cee0e9343dc8741ca90d75246605f",
+    "rounds": 2,
+    "evidence": [
+      "https://github.com/Pootytxng/sentinel/pull/299#issuecomment-5499267280",
+      "https://github.com/Pootytxng/sentinel/pull/299#issuecomment-5499346346"
+    ],
+    "writerNote": "Round 1 at 21ed152a: PASS with two findings, neither in the guard's classification logic. Round 2 re-bound to d1844396 after both were fixed. The reviewer checked the mechanical re-bind condition rather than accepting it - name-status is exactly two files, and it hashed the block from sameReceipt through worktreePaths at BOTH SHAs to 54ecf546, so round 1's approval transfers on a fact. It also composed the two halves my assertions only hold separately, running the SHIPPED argv with the SHIPPED parser against its throwaway repo: two receipts found where the pre-fix argv found none."
+  },
+  "findings": [
+    {
+      "finding": "the #277 receipt overstated its reviewer's independence - 'its own worktree' and 'no stake in it landing' were both false",
+      "raisedBy": "reviewer",
+      "resolution": "corrected in place at d1844396, with the overstatement left visible in the same field. The reviewer measured inside sentinel-fleet-guard-276, which is this lane's checkout, and had declared a #286 interest three times in the same comment."
+    },
+    {
+      "finding": "the live preservation sweep ran git status at the default -unormal, where a fully-untracked receipt directory collapses to one non-.json entry and the worktree silently reports nothing",
+      "raisedBy": "reviewer",
+      "resolution": "argv named as STATUS_ARGV with -uall and pinned by two assertions. Not live: all 33 worktrees measure identically under -unormal, -uall and --ignored. The reviewer then ran the SHIPPED argv and the SHIPPED parser together against its throwaway repo - two receipts found where the pre-fix argv found none - because the two assertions hold each half separately and neither composes them."
+    }
+  ],
+  "notes": "Merged with a merge commit, never --delete-branch: that flag set core.bare=true repo-wide on this machine once and corrupted every worktree. The branch ref is preserved. This receipt is written into a worktree and is therefore stranded until a later train commits it - the exact defect issue #298 exists to catch, and the guard this PR ships is what will report it if that train never comes."
+}

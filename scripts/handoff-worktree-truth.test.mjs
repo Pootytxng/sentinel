@@ -226,6 +226,11 @@ export function unmeasuredCarriers(carriers) {
  *
  * Returns a Map, so an unmarked name reads as absent rather than as a marker with empty fields.
  * A bare `LANDED` with no reference is deliberately NOT a marker — it is the unfalsifiable half.
+ *
+ * LANDS and LANDING are accepted alongside LANDED for one reason: the marker only closes the red
+ * window if the LANDING lane can write it before its own merge commit exists, and at that moment
+ * "LANDED" is not yet true. A guard whose only green path is a sentence that is false when it is
+ * written has taught the wrong lesson. `LANDS WITH PR #297` is true when written and after.
  */
 export function landingMarkers(markdown) {
   const bullet = repoStateBullet(markdown);
@@ -237,13 +242,33 @@ export function landingMarkers(markdown) {
     const name = hit[1];
     if (out.has(name)) return; // the first MARKED mention wins; a later bare mention cannot unmark it
     const clause = flat.slice(hit.index + hit[0].length, i + 1 < hits.length ? hits[i + 1].index : flat.length);
-    if (!/\bLANDED\b/i.test(clause)) return;
+    if (!/\bLAND(?:ED|S|ING)\b/i.test(clause)) return;
     const sha = clause.match(/`([0-9a-f]{7,40})`/i);
     const pr = clause.match(/\bPR #(\d+)\b/);
     if (!sha && !pr) return;
     out.set(name, { sha: sha ? sha[1] : null, pr: pr ? Number(pr[1]) : null });
   });
   return out;
+}
+
+/**
+ * Is this name excused from "it landed, stop preserving it" by a marker the bullet carries? Shared
+ * by rules A and D because the race runs through BOTH of them, which the first reading of #300 got
+ * wrong: A fails a named branch that has become an ancestor of origin/main, D fails a named branch
+ * at zero carry, and a lane that just landed by merge commit is both at once. Exempting only D would
+ * have moved the red from one rule to the other and closed nothing.
+ *
+ * Returns null when the name is properly marked, or the reason it is not. A SHA reference is
+ * resolved and checked for containment; an unresolvable one is a finding rather than a pass.
+ */
+export function unmarkedLanding(name, markers, verifyMergeRef) {
+  const mark = markers.get(name);
+  if (!mark) return "the lane has landed, and nothing in its own clause says so";
+  if (!mark.sha) return null;
+  const contains = verifyMergeRef(name, mark.sha);
+  if (contains === null) return `its landing reference ${mark.sha} does not resolve here — an unresolvable reference is not a landing`;
+  if (contains === false) return `its landing reference ${mark.sha} does not contain the branch — that reference landed something else`;
+  return null;
 }
 
 /**
@@ -262,20 +287,8 @@ export function staleNamedLanes(claimed, resolvesLocally, countAhead, markers = 
     const n = countAhead(`refs/heads/${b}`);
     if (n === null) return [{ name: b, why: "its distance from origin/main could not be measured — broken measurement, not an empty result" }];
     if (n === 0) {
-      const mark = markers.get(b);
-      if (!mark) {
-        return [{ name: b, why: "it carries zero commits origin/main cannot reach — the lane has landed, and nothing in its own clause says so" }];
-      }
-      if (mark.sha) {
-        const contains = verifyMergeRef(b, mark.sha);
-        if (contains === null) {
-          return [{ name: b, why: `its landing reference ${mark.sha} does not resolve here — an unresolvable reference is not a landing` }];
-        }
-        if (contains === false) {
-          return [{ name: b, why: `its landing reference ${mark.sha} does not contain the branch — that reference landed something else` }];
-        }
-      }
-      return [];
+      const why = unmarkedLanding(b, markers, verifyMergeRef);
+      return why === null ? [] : [{ name: b, why: `it carries zero commits origin/main cannot reach — ${why}` }];
     }
     return [];
   });
@@ -614,6 +627,21 @@ describe("the handoff tells the truth about the worktrees", () => {
     // A zero-carry name with a marker whose SHA contains it is the legitimate state #300 describes:
     const landedOk = new Map([["lane/a", { sha: "ee5bdd8b", pr: null }]]);
     expect(staleNamedLanes(["lane/a"], () => true, () => 0, landedOk, () => true)).toEqual([]);
+    // ...LANDS and LANDING count as the same verb. This is not leniency: the lane that closes the
+    // race has to write its own marker BEFORE its merge commit exists, and at that moment "LANDED"
+    // is false. A guard whose only green path is a false sentence has taught the wrong lesson.
+    expect(landingMarkers("- **not on main** — `lane/a` **LANDS WITH PR #297**.").get("lane/a")).toEqual({ sha: null, pr: 297 });
+    expect(landingMarkers("- **not on main** — `lane/a` LANDING with `ee5bdd8b`.").get("lane/a")).toEqual({ sha: "ee5bdd8b", pr: null });
+    // ...and the verb has to BE the word: LANDSCAPE contains LANDS and is not a landing claim. (The
+    // first draft of this case used LANDS-END and failed — a hyphen IS a word boundary, so that one
+    // legitimately reads as the verb. The guard's own test caught the guard's own docstring.)
+    expect(landingMarkers("- **not on main** — `lane/a` redraws the LANDSCAPE, PR #1.").has("lane/a")).toBe(false);
+    // The exemption rules A and D now share, exercised directly: rule A reaches it with names that
+    // are ancestors of origin/main, rule D with names at zero carry, and a lane that landed by MERGE
+    // commit is both. Whichever door it comes through, the same marker excuses it or nothing does.
+    expect(unmarkedLanding("lane/a", landedOk, () => true)).toBe(null);
+    expect(unmarkedLanding("lane/a", new Map(), () => true)).toMatch(/nothing in its own clause says so/);
+    expect(unmarkedLanding("lane/a", landedOk, () => null)).toMatch(/does not resolve here/);
     // ...a PR-only marker passes without ever asking the verifier, since zero carry already measured
     // the landing and the number is provenance a reader follows, not a claim this rule can check:
     let asked = 0;
@@ -646,7 +674,12 @@ describe("the handoff tells the truth about the worktrees", () => {
       claimed.filter(refExists).length,
       `${HANDOFF} names ${claimed.length} unmerged branch(es) and this checkout resolves none of them on origin — the rule would pass without judging anything.`,
     ).toBeGreaterThan(0);
-    const merged = landedBranches(claimed, refExists, landedOnMain);
+    // #300: a name whose own clause states its landing is not a name telling anyone to preserve it.
+    // Rule A and rule D have to agree about that or the race just moves between them.
+    const markers = landingMarkers(markdown);
+    const merged = landedBranches(claimed, refExists, landedOnMain).filter(
+      (b) => unmarkedLanding(b, markers, mergeRefContains) !== null,
+    );
     expect(
       merged,
       `${HANDOFF} warns these branches carry work that is not on main, but they have since landed:\n  - ${merged.join("\n  - ")}\nStop telling the next session to preserve them.`,

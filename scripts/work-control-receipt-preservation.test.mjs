@@ -29,6 +29,16 @@
 // has to argue past is a guard that gets muted rather than fixed (rule E's false positive in #295,
 // rule F's unmeasured-carrier pin in #297). Identical shadows are therefore explicitly benign.
 //
+// IT IS A FLEET-WIDE SERIALIZATION POINT, and that surprised its first outside reader (sentinel-21,
+// 2026-09-01) rather than its author. The sweep covers every checkout on the disk, and the guard is
+// resident in `scripts/verify-local.ps1`, which the pre-push hook runs — so ONE writer's uncommitted
+// receipt reddens every OTHER writer's push, naming a path in a worktree they do not own and must
+// not touch. That is the intended reading of "the proof exists on one disk": proof is a property of
+// the machine, not of a branch. But the red test says nothing about it, and the next reader will
+// conclude the guard is broken instead of pinging the writer who owns the file. The fix is one
+// commit by that writer, no push and no merge — the sweep is `rev-list --all`, so a receipt goes
+// green for the whole clone the moment it is committed ANYWHERE in it.
+//
 // FAILURE POSTURE, deliberately opposite to the hook's. `.claude/hooks/*` allow silently on any error
 // because a hook must never be the reason work cannot proceed. A TEST is the other half of that
 // bargain: an unreadable worktree or an unresolvable `origin/main` FAILS here rather than counting as
