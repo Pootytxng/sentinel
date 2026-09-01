@@ -53,9 +53,13 @@ above. No file locking exists today, and none is proposed — the shapes are mad
 
 ## 3. Why per-file atomic writes are not enough
 
-**Dependency, stated plainly:** the whole-file `atomic_write` helper this design builds on is
-**not on `main` yet** — it is issue #281 / PR #282, still open pending independent review at the time
-of writing. Everything below assumes it lands first; if it does not, P1 needs its own temp-and-rename.
+**Dependency, stated plainly — and since satisfied:** the whole-file `atomic_write` helper this
+design builds on **is on `main`** as `src-tauri/src/atomic_write.rs`, landed via issue #281 / PR #282
+(`082f637e`, merged 2026-09-01). When this section was written it was still open pending independent
+review, and everything below was written conditional on it landing first — so the fallback named here,
+P1 growing its own temp-and-rename, is now **moot rather than chosen**. Nothing else in the design
+moves. Re-derive rather than trusting this line, which is about a branch state and will age:
+`git grep atomic_write origin/main -- src-tauri`.
 
 That helper makes each individual file whole. It does nothing about the **relationship** between
 three files: the SHA-256 binding means manifest N with rules N-1 is *detected* (good), but the floor
