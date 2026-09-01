@@ -203,8 +203,8 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
 - ★ `gpu_profile.rs` (~590) — GPU profile handling (apply structurally impossible → advisory; AMD state not user-mode readable).
 - ★ `remote_rules.rs` (~590) — signed remote-rules (Ed25519 verify wired, fetch triple-gated OFF).
 - ★ `receipts.rs` (~633) — Receipts gate + Tier 2 send path (Q9a): `send_decision` refuses gate → disclosure → opt-in. Built dark, hard-false, **default-OFF even armed** (#207).
-- ★ `license.rs` (~355) — Compy Pro license gate (built dark).
-- ★ `drift.rs` (~478) — applied-change drift detection vs live machine state.
+- ★ `license.rs` (~519) — Compy Pro license gate (built dark).
+- ★ `drift.rs` (~477) — applied-change drift detection vs live machine state.
 - ★ `data_root.rs` (~1050) — canonical data-root resolver (#130): measures where the root LANDS, not the `APPDATA` string; halts on a split; issues `MutationRoot`, the capability `history.rs`/`actions.rs` now require. Guard: `scripts/data-root-guard.test.mjs`.
 
 ## LOCKED safety rules — do not cross without an explicit product-owner decision

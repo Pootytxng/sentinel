@@ -1,4 +1,4 @@
-//! Whole-file byte replacement for Compy's SECONDARY JSON state.
+//! Whole-file byte replacement for Compy's SECONDARY on-disk state.
 //!
 //! ## What this buys
 //!
@@ -22,9 +22,14 @@
 //!
 //! ## Deliberately excluded callers
 //!
-//! The Trust Ledger / rollback history, the signed remote rules and the license store do NOT use
-//! this. `history.rs` carries ledger-specific corruption and rollback rules, and its own
-//! temp/rename pattern is likewise not proof of power-loss durability.
+//! The Trust Ledger / rollback history and the signed remote rules do NOT use this. `history.rs`
+//! carries ledger-specific corruption and rollback rules, and its own temp/rename pattern is
+//! likewise not proof of power-loss durability. The remote-rules cache stores three related objects
+//! that per-file replacement cannot make consistent with each other, so it needs a design decision
+//! rather than this helper.
+//!
+//! The license store is the one caller here that is not JSON: `license.rs` passes the signed token's
+//! **exact plain-text bytes**, because re-serializing them would invalidate the signature.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
