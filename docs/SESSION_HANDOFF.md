@@ -9,12 +9,10 @@
 
 **The desk build is `090bc58b`** (Mission 2 landing, #238; version debt — batch the next cut).
 
-| | |
-|---|---|
-| Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
-| Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
-| Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
+- **Installed** — `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4`
+- **Shipped** — Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249)
+- **Self-review** — PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since
+- **Gate** — doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -91,23 +89,25 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
 - **32 worktrees besides the canonical checkout; TWELVE branches carry commits not on main — do NOT delete or hard-reset
   those twelve before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
-  `lane/vision-pointer-guard-2026-08-24` · `lane/rule-e-negation` (#295 — **LANDS WITH PR #297**; its name stays only
-  because pruning is owner-gated, and it is written here BEFORE the merge because the merge is what makes it true) ·
-  `lane/shell-ownership-278` · `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287` (#287) — the last
-  stacked pair, so one repair does not land twice · `lane/css-margin-separators-274` (#274) ·
-  `lane/native-routing-271` (#271) — **those two LANDED** (PR #275 · PR #273) and are listed only because **pruning them
-  was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at `c8366609`
-  — neither contains the other** (`--is-ancestor` is NO both ways; the kit has ONE unique commit, health-parity TEN);
-  backed up only to `refs/backup/*`, so dropping either loses the other's work. **No depth/SHA pinned**: `git worktree
-  list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a zero-carry branch — **a
-  landed lane's name leaves with the train that lands it**, which is why the #281 (PR #282), #284 (PR #285), #276 (PR
-  #277 → `ee5bdd8b`) and #298 (PR #299 → `81b16d60`) lanes are not named here: all four merge-committed, so each dropped
-  straight to zero, and each landing left open PRs pointing into a spent base (286/287, then #297/#299) that were
-  retargeted at the landing rather than after it. Spent, at zero: `sentinel-segmented-237` (#298 landed out of it),
-  `sentinel-fleet-guard-276`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258`
-  (#258/#264 both landed out of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven
-  entries; `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
-  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
+  `lane/vision-pointer-guard-2026-08-24` · `lane/rule-e-negation` (#295 — **LANDS WITH PR #297**, written before the
+  merge because the merge is what makes it true) · `lane/shell-ownership-278` · `lane/remote-cache-design-286` (#286)
+  → `lane/case-receiver-287` (#287) — the last stacked pair, so one repair does not land twice ·
+  `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (PR #275 · PR #273)
+  and are listed only because **pruning them was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074`
+  **share 14 commits and diverge at `c8366609` — neither contains the other** (`--is-ancestor`, NO both ways). Counted
+  NOT-ON-MAIN, as this bullet counts, the kit has ONE unique commit and health-parity FOURTEEN; from the merge base
+  that same branch answers 170, having merged main in repeatedly, and both writers reached for the unframed number
+  first. Backed up only to `refs/backup/*`, so dropping either loses the other's work. **No depth/SHA pinned**: `git
+  worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a zero-carry
+  branch — **a landed lane's name leaves with the train that lands it**, which is why the #281 (PR #282), #284 (PR
+  #285), #276 (PR #277 → `ee5bdd8b`) and #298 (PR #299 → `81b16d60`) lanes are not named here: all four merge-committed,
+  so each dropped straight to zero, and each landing left open PRs pointing into a spent base (286/287, then
+  #297/#299) that were retargeted at the landing rather than after it. Spent, at zero: `sentinel-segmented-237` (#298
+  landed out of it), `sentinel-fleet-guard-276`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`,
+  `sentinel-q9b-stage2-258` (#258/#264 both landed out of it), four of the SIX registered under `.claude/worktrees/`
+  (that folder holds seven entries; `data-root-integrity-432797` is not a worktree), parked
+  `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233),
+  `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
