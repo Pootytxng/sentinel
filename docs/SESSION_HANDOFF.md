@@ -89,23 +89,23 @@ three independent locks (`case_intelligence_gate()` hard-false · `CASE_SIGNING_
 `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", carrying DIR-1a) and **§G**
 (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides the canonical checkout; TWELVE branches carry commits not on main — do NOT delete or
-  hard-reset those twelve before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
-  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` ·
-  `lane/shell-ownership-278` · `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287` (#287), the only
-  real chain left between them (`git merge-base --is-ancestor`) · `lane/css-margin-separators-274` (#274) ·
-  `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are listed
-  only because **pruning them was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074`
-  **share 14 commits and diverge at `c8366609` — neither contains the other** (`--is-ancestor` is NO
-  both ways; the kit has ONE unique commit, health-parity TEN). Backed up only to `refs/backup/*`, and
-  dropping either would throw the other's work away. Rule E now fails this doc for a false one. **No depth/SHA pinned**:
-  `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a
-  zero-carry branch — **a landed lane's name leaves with the train that lands it**, which is why neither the #281
-  lane (PR #282 → `082f637e`) nor the #284 lane (PR #285 → `d5dcb9e2`, merge-committed so it dropped straight to
-  zero while 286 and 287 kept pointing into it) is named here. Spent, at zero: `sentinel-recon-261`,
-  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 both landed out
-  of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven entries;
+- **32 worktrees besides the canonical checkout; THIRTEEN branches carry commits not on main — do NOT delete or
+  hard-reset those thirteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
+  `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` (#276) → `lane/rule-e-negation` (#295) ·
+  `lane/shell-ownership-278` · `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287` (#287) — the two stacked
+  pairs, each stacked so one repair does not land twice (`git merge-base --is-ancestor`) ·
+  `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 ·
+  `e26108f7`/PR #273) and are listed only because **pruning them was denied**. `compy-health-parity` and
+  `compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at `c8366609` — neither contains the other**
+  (`--is-ancestor` is NO both ways; the kit has ONE unique commit, health-parity TEN). Backed up only to `refs/backup/*`,
+  and dropping either would throw the other's work away. Rule E no longer fails it for a false one. **No depth/SHA
+  pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a
+  zero-carry branch — **a landed lane's name leaves with the train that lands it**, which is why neither the #281 lane
+  (PR #282 → `082f637e`) nor the #284 lane (PR #285 → `d5dcb9e2`, merge-committed so it dropped straight to zero while
+  286 and 287 kept pointing into it) is named here. `sentinel-recon-261` left the spent list on becoming #295's carrier.
+  Spent, at zero: `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 both
+  landed out of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven entries;
   `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
   `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 

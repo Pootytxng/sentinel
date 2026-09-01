@@ -317,14 +317,13 @@ These gate **public** release only (not the local app you use daily). Full list:
 
 ## §D — Taste / visual sign-offs (as they come up)
 
-### D_health. Health room parity — which accent do I judge it at?  ·  ⏳ NEW 2026-09-01  ·  [#225](https://github.com/Pootytxng/sentinel/issues/225)
+### D_health. Health room parity — judged at the DEFAULT accent unless you veto  ·  ⏳ 2026-09-01, corrected same day  ·  [#225](https://github.com/Pootytxng/sentinel/issues/225)
 
-**One question, and it is the only thing blocking the Health room.** Your desk runs theme `midnight` with the Health accent set to Sky `#46a8ff`. Both are **your saved picks, not bugs** — but the approved comp was shot at Health's DEFAULT accent, so the room and the comp are being compared in two different colour schemes.
+**This row asked the wrong question, and is corrected rather than deleted so the mistake is legible.** It said your desk ran theme `midnight` with the Health accent set to a bare Sky `#46a8ff` — a value the picker no longer offers, so the app drops it and the room falls back. **Measured 2026-09-01** by an independent session reading the live app rather than the code — theme `violet`, accent `#b6f24a+#35e0e8` (Lime / Cyan), on all five rooms. That is a **reading, not a setting**: one click on an accent dot makes this line stale and nothing re-measures it for you.
 
-- **(a) Judge it at the default accent** — recommended. The comp is the contract and it was shot there; nothing about your saved picks changes.
-- **(b) Re-shoot the comp** at Sky, and judge against that instead.
+**The call I am taking, so it is not parked on you: judge Health against the comp's DEFAULT accent.** The comp is the contract and it was shot there; your picks are yours and I change nothing. **Veto on sight** if you would rather I re-shoot the comp at Lime / Cyan — the only other honest option, and it costs a re-shoot, not code.
 
-**I will never write your theme or accent to match a comp.** No code changes either way — this decides what "parity" is measured against. Round 3 (`b4bf26bc`) was rejected for an incomplete difference list; that report gap is fixed and the colour state is now stated with native proof.
+**I will never write your theme or accent to match a comp.** No code changes either way. Round 3 (`b4bf26bc`) was rejected for an incomplete difference list; that gap is fixed.
 **Nothing aesthetic is parked on you by default** (CLAUDE.md, "TASTE IS MINE TO EXERCISE, HIS TO
 OVERRULE"). Claude decides the look, ships it, and hands you a before/after to veto on sight. Only
 brand — the product name, logo, price presentation — and reversals of a call you already made land
