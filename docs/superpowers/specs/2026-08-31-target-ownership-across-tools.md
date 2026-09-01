@@ -126,10 +126,28 @@ Deny is reserved for the case where the checker has **positive knowledge** of a 
   `command` / `nohup` / `nice` / `time` / `timeout` / `stdbuf` / `doas` / `setsid` / `ionice` / `chrt`
   name the real command in their own argv: verb and target are both literal text, so stepping over
   them is the same move as stepping over `VAR=1`. Independent review measured four spellings of ONE
-  write into a sibling with only the bare one refused, so this is closed rather than accepted. What
-  stays open, narrowly: `xargs` reading its targets from **stdin** is still class 3, because the
+  write into a sibling with only the bare one refused, so those are closed rather than accepted.
+  **The table is an ALLOWLIST, not a closed class**, and the sentence above read as though it were —
+  corrected here because a spec that claims a class is handled is worse than one that names the gap.
+  Still open and measured: `flock`, `taskset`, `su`, `busybox` and `find -exec` each carry a literal
+  sibling write past the checker today. Each needs its own positional grammar rather than a table
+  row — `flock` swallows a lockfile, `taskset` a CPU mask, `su` a username BEFORE its string-taking
+  `-c`, `find -exec` a command terminated by `;` or `+` mid-argv — and inventing four grammars at once
+  is how `chrt`'s own bug got in. Tracked as [#308](https://github.com/Pootytxng/sentinel/issues/308).
+  Also open, narrowly: `xargs` reading its targets from **stdin** is still class 3, because the
   step-over reaches the argv template only; and a wrapper flag this table does not carry may or may
   not swallow the next word, so it is reported as class 2 rather than guessed past.
+- **A wrapper is not only a POSIX shape.** Independent review's second round found the same hole
+  standing in the other dialect: PowerShell's `Invoke-Command -ScriptBlock { … }`, `Start-Job`,
+  `ForEach-Object` and `%` put verb and target in literal word positions exactly as `sudo` does, so
+  `Invoke-Command -ScriptBlock { Remove-Item <sibling> }` was ALLOWED while `bash -c "rm -f <the same
+  path>"` was refused — the allowed spelling being the one in this machine's primary shell. Closed by
+  making a **bare** `{` or `}` a segment boundary in the powershell dialect, so a scriptblock body is
+  its own segment: no cmdlet allowlist to fall behind, and quoted braces are not boundaries, so a
+  brace in a string cannot cut a command in half. `chrt` was in the list above yet in no test, and
+  that is how its own defect survived: its priority positional was read as the command, so
+  `chrt -f 10 rm -f <sibling>` was allowed. Both are pinned in
+  `tools/entry/shell-ownership-assert.test.mjs`.
 - Text analysis cannot see through an alias, a function, a shell variable's *value*, an interpreter
   body, or a binary that writes without naming a recognized verb. Those reach class 2 (`ask`) when a
   recognized verb is present and are simply allowed when none is. A variable in the **verb** position

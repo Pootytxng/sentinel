@@ -12,6 +12,7 @@
 // the resolver is injected and the fixtures are strings. Nothing in this file touches a live
 // checkout, the real `~/.claude`, the Work Control board, or the verification store.
 
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
@@ -477,6 +478,9 @@ describe("a wrapper that runs another command is not a command of its own (#279 
     const wrappers = [
       "env", "xargs", "sudo", "doas", "command", "nohup", "setsid",
       "nice", "ionice", "time", "stdbuf -oL", "timeout 5", "timeout 1.5m",
+      // chrt was named in the spec's closed list and appeared in NO test, which is exactly how its
+      // positional bug survived the first round: an untested member of a list called complete.
+      "chrt -f 10", "chrt -r 99", "chrt -b 0", "chrt",
     ];
     for (const w of wrappers) {
       expect(ask(`${w} rm -f ${SIB_FILE}`).permission, w).toBe("deny");
@@ -545,5 +549,94 @@ describe("the entry-CLI exemption covers the cure, not anything that names it (#
   it("does not excuse a write into a sibling that merely mentions the cure", () => {
     expect(ask(`cp ${CLI} ../sentinel/${CLI}`).permission).toBe("deny");
     expect(ask(`rm -f ../sentinel/package.json ${CLI}`).permission).toBe("deny");
+  });
+});
+
+// REGRESSION, round 2. Independent review ran the fixed checker against the OTHER shell and found
+// the same hole standing: every wrapper in the table above is POSIX, while PowerShell puts the verb
+// and the target in literal word positions too — the exact condition §6 uses to justify stepping
+// over `sudo`. So one spelling of a write was refused and another was waved through, on the machine
+// whose primary shell is the one being waved through.
+describe("a PowerShell scriptblock body is a command list, not an argument (#279 review round 2)", () => {
+  const ps = (command) => ask(command, { toolName: "PowerShell" });
+  const SIB_FILE = inSib("package.json");
+
+  // The finding in one assertion: same write, same machine, two shells, and before this fix the
+  // PowerShell spelling was the ALLOWED one. Parity is the claim, so parity is what is pinned.
+  it("answers the same as bash for the same write through a scriptblock", () => {
+    const posix = ask(`bash -c "rm -f ${SIB_FILE}"`).permission;
+    const shell = ps(`Invoke-Command -ScriptBlock { Remove-Item ${SIB_FILE} }`).permission;
+    expect(posix).toBe("deny");
+    expect(shell, "the PowerShell spelling must not be the cheap way in").toBe(posix);
+  });
+
+  it("refuses the write through every scriptblock carrier, with no cmdlet allowlist", () => {
+    const carriers = [
+      `Invoke-Command -ScriptBlock { Remove-Item ${SIB_FILE} }`,
+      `Start-Job -ScriptBlock { Remove-Item ${SIB_FILE} }`,
+      `Get-ChildItem | ForEach-Object { Remove-Item ${SIB_FILE} }`,
+      `1..3 | % { Remove-Item ${SIB_FILE} }`,
+      `if ($true) { Remove-Item ${SIB_FILE} }`,
+      `foreach ($f in $list) { Remove-Item ${SIB_FILE} }`,
+      `Invoke-Command -ComputerName x -ScriptBlock { Set-Content ${SIB_FILE} 'x' }`,
+    ];
+    for (const c of carriers) expect(ps(c).permission, c).toBe("deny");
+  });
+
+  // The boundary is a BARE brace. If a quoted one split a segment, any command could be cut in half
+  // by putting a brace in a string — a hole opened by the fix for a hole.
+  it("does not treat a quoted brace as a boundary", () => {
+    const tokens = lex('Write-Host "{"', "powershell");
+    expect(tokens.at(-1).value).toBe("{");
+    expect(tokens.at(-1).raw).toBe('"{"');
+    expect(ps('Write-Host "{"').permission).toBe("allow");
+    expect(ps('Write-Host "}" ; Get-ChildItem').permission).toBe("allow");
+  });
+
+  // A guard that denies ordinary pipeline work gets deleted rather than fixed, so the false-deny
+  // side is pinned as hard as the deny side.
+  it("leaves ordinary scriptblock bodies alone", () => {
+    const benign = [
+      'Get-ChildItem | Where-Object { $_.Name -eq "rm" }',
+      'Get-ChildItem | Where-Object { $_.FullName -like "*.tmp" }',
+      "Get-ChildItem | ForEach-Object { Write-Host $_.Name }",
+      '$h = @{ Name = "rm" }',
+      "Get-Process | % { $_.Id }",
+    ];
+    for (const c of benign) expect(ps(c).permission, c).toBe("allow");
+  });
+
+  // POSIX braces are grouping, not a scriptblock, and splitting there would change what a segment
+  // means in the dialect this guard was built against. The boundary is powershell-only on purpose.
+  it("keeps braces inert in the posix dialect", () => {
+    expect(segments(lex("{ rm -f x; }", "posix"), "posix").length).toBe(
+      segments(lex("{ rm -f x; }", "posix")).length,
+    );
+  });
+
+  // chrt's priority sits where timeout's duration sits, and the step read it as the command.
+  it("does not let chrt's priority positional stand in for the command", () => {
+    expect(ask(`chrt -f 10 rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`chrt -r 99 rm -f ${SIB_FILE}`).permission).toBe("deny");
+    // A query names no command at all and must stay quiet.
+    expect(ask("chrt -p 10 1234").permission).toBe("allow");
+    expect(ask("chrt -p 1234").permission).toBe("allow");
+  });
+});
+
+// The table is an ALLOWLIST. §6 read as though the wrapper class were closed, and it is not — these
+// five still carry a literal sibling write past the checker. Pinned so the sentence and the hole
+// cannot drift apart: if one of them is closed, this test is what says so.
+describe("the wrapper table is an allowlist, and the spec says which ones are still open (#279)", () => {
+  const SPEC = readFileSync(
+    join(import.meta.dirname, "../../docs/superpowers/specs/2026-08-31-target-ownership-across-tools.md"),
+    "utf8",
+  );
+
+  it("names every known-open wrapper, so the gap is documented where the claim is made", () => {
+    for (const w of ["flock", "taskset", "su", "busybox", "find"]) {
+      expect(SPEC, `${w} is still open and §6 must say so`).toContain(w);
+    }
+    expect(SPEC).toMatch(/allowlist/i);
   });
 });

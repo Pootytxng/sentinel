@@ -204,8 +204,26 @@ const REDIRECTS = new Set([">", ">>", "2>", "2>>", "&>", "&>>"]);
 /** `2>&1` redirects to a file DESCRIPTOR. The word after it is a number, not a path to guard. */
 const FD_REDIRECTS = new Set(["2>&", ">&"]);
 
-/** Split a token stream into segments at chain operators, keeping each segment's redirect targets. */
-export function segments(tokens) {
+/**
+ * Split a token stream into segments at chain operators, keeping each segment's redirect targets.
+ *
+ * In the powershell dialect a BARE `{` or `}` is also a boundary, so a scriptblock body is its own
+ * segment. Without that, `Invoke-Command -ScriptBlock { Remove-Item <sibling> }` read its verb as
+ * `Invoke-Command` and came back "names no recognized mutation" — allowed — while the bash spelling
+ * `bash -c "rm -f <the same path>"` was refused, because `bash` is opaque and the embedded-path scan
+ * runs on its body. Same literal write, same machine, opposite answers, and the ALLOWED one was in
+ * this machine's primary shell. Found by independent review of #279; the lexer already emitted the
+ * body as ordinary words, so nothing here needs to parse PowerShell — the checker just has to look.
+ *
+ * This covers `Invoke-Command`, `Start-Job`, `ForEach-Object` and `%` without a cmdlet allowlist, which is
+ * the point: an allowlist would be one more table to fall behind. Splitting is safe because a
+ * scriptblock body is a command list in its own right — the same thing a segment already models.
+ * QUOTED braces are NOT boundaries: the token's `raw` still carries its quotes, so `Write-Host "{"`
+ * stays one segment and cannot be used to split a command in half.
+ */
+export function segments(tokens, dialect = "posix") {
+  const isBrace = (t) =>
+    dialect === "powershell" && t.type === "word" && (t.value === "{" || t.value === "}") && t.raw === t.value;
   const out = [];
   let current = { words: [], redirects: [] };
   const flush = () => {
@@ -214,6 +232,10 @@ export function segments(tokens) {
   };
   for (let i = 0; i < tokens.length; i += 1) {
     const t = tokens[i];
+    if (isBrace(t)) {
+      flush();
+      continue;
+    }
     if (t.type === "op" && CHAIN_OPS.has(t.value)) {
       flush();
       continue;
@@ -351,7 +373,10 @@ const PREFIX_VERBS = new Map([
   ["setsid", { flags: ["-f", "-w", "-c", "--fork", "--wait", "--ctty"] }],
   ["nice", { values: ["-n", "--adjustment"], numeric: true }],
   ["ionice", { flags: ["-t", "--ignore"], values: ["-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"] }],
-  ["chrt", { flags: ["-f", "-b", "-o", "-r", "-i", "-d", "-a", "-R", "-m"], values: ["-p", "-T", "-P"] }],
+  // `priority` is chrt's leading positional, exactly the shape `timeout`'s duration has: `chrt -f 10 rm -f x`
+  // put the verb one word past where a flag walk stops, so the step read `10` as the command, found no
+  // recognized mutation and ALLOWED the write. Same defect as the wrapper hole itself, one word right.
+  ["chrt", { flags: ["-f", "-b", "-o", "-r", "-i", "-d", "-a", "-R", "-m"], values: ["-p", "-T", "-P"], priority: true }],
   ["time", { flags: ["-p", "--portability", "-v", "--verbose"], values: ["-o", "-f", "-a", "--output", "--format", "--append"] }],
   ["timeout", { flags: ["--preserve-status", "--foreground", "-v", "--verbose"], values: ["-s", "-k", "--signal", "--kill-after"], duration: true }],
   ["stdbuf", { values: ["-i", "-o", "-e", "--input", "--output", "--error"] }],
@@ -384,6 +409,7 @@ export function stepPrefixes(words) {
     const inspect = new Set(spec.inspect ?? []);
     const opaque = new Set(spec.opaque ?? []);
     let sawDuration = false;
+    let sawPositional = false;
     while (head < words.length) {
       const w = words[head].value;
       if (w === "--") {
@@ -397,6 +423,11 @@ export function stepPrefixes(words) {
         }
         if (spec.duration && !sawDuration && DURATION.test(w)) {
           sawDuration = true;
+          head += 1;
+          continue;
+        }
+        if (spec.priority && !sawPositional && /^\d+$/.test(w)) {
+          sawPositional = true;
           head += 1;
           continue;
         }
@@ -470,7 +501,7 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
    */
   const cannot = (verb, why, kind = "mutation") => unresolved.push({ verb, why, kind, cwd: here, cwdUnknown });
 
-  for (const seg of segments(lex(stripHeredocs(command), dialect))) {
+  for (const seg of segments(lex(stripHeredocs(command), dialect), dialect)) {
     const words = seg.words;
     for (const r of seg.redirects) {
       if (r.dynamic && !globBounded(r)) cannot("redirection", `the redirect target \`${r.value}\` is not knowable from the text`);
