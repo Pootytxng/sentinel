@@ -244,6 +244,28 @@ export function liveCarriers(list, countAhead) {
 const markdown = readFileSync(join(ROOT, HANDOFF), "utf8");
 
 /**
+ * Words that turn a containment sentence into its opposite. Read over the SENTENCE the match sits
+ * in — never the whole document — because a denial governs its own clause. A rule that let one
+ * "not" anywhere above silence every claim below it would be a mute button, not a fix.
+ */
+const NEGATION = /\b(?:neither|nor|not|never|no|none|cannot|isn't|doesn't|wasn't|without)\b/i;
+
+/**
+ * True when a denial governs the span from `start` to `end`.
+ *
+ * The window opens at the previous sentence terminator, which is the same boundary the NEAR window
+ * inside `containmentClaims` already respects — so this cannot reach past a `.` that the match
+ * itself could not have crossed. Backticked spans are blanked first: a negation is prose, and a
+ * branch that happens to be called `lane/not-landed` must not be able to silence the sentence
+ * quoting it.
+ */
+export function isNegated(text, start, end) {
+  const from = text.slice(0, start).search(/[^.!?\n]*$/);
+  const window = text.slice(from < 0 ? 0 : from, end).replace(/`[^`]*`/g, " ");
+  return NEGATION.test(window);
+}
+
+/**
  * Containment claims between two named branches: "`A` contains `B`", "`A` is an ancestor of `B`".
  * Read from the WHOLE document, not the repo-state bullet — the claim that motivated this rule sat
  * in that bullet, but nothing makes that its home, and a rule scoped to one paragraph would miss the
@@ -260,11 +282,13 @@ export function containmentClaims(markdown) {
   const NEAR = "[^.\\n]{0,40}?";
   const out = [];
   for (const m of markdown.matchAll(new RegExp(B + NEAR + "\\bcontains\\b" + NEAR + B, "g"))) {
+    if (isNegated(markdown, m.index, m.index + m[0].length)) continue;
     out.push({ outer: m[1], inner: m[2], text: m[0] });
   }
   for (const m of markdown.matchAll(
     new RegExp(B + NEAR + "\\bis (?:an ancestor of|contained (?:in|by))\\b" + NEAR + B, "g"),
   )) {
+    if (isNegated(markdown, m.index, m.index + m[0].length)) continue;
     out.push({ outer: m[2], inner: m[1], text: m[0] });
   }
   return out.filter((c, i, a) => a.findIndex((o) => o.outer === c.outer && o.inner === c.inner) === i);
@@ -491,5 +515,43 @@ describe("the handoff tells the truth about the worktrees", () => {
         `Re-derive it with git merge-base --is-ancestor <inner> <outer>, or say "share N commits, ` +
         `diverging at <sha>" instead — which is what two lanes that merely overlap actually do.`,
     ).toEqual([]);
+  });
+
+  it("E: a sentence that DENIES containment is not a claim to check", () => {
+    // bug→guard. Rule E read "neither `A` contains `B`" as an assertion that `A` contains `B` and
+    // reported BROKEN on prose that was TRUE. A false positive is the one failure mode that gets a
+    // guard muted rather than obeyed, so it is worse here than a miss: the rule survives only as
+    // long as a red run means something is actually wrong.
+    //
+    // It slipped through because the match window is `[^.\n]{0,40}?` on either side of "contains",
+    // and a negation is small enough to sit inside that window without disturbing the match. The
+    // window read for negation is the SENTENCE the match sits in — from the previous terminator to
+    // the end of the match — which is the same boundary the NEAR window already respects.
+    const A = "compy-health-parity";
+    const B = "compy-visual-recovery-kit-6fd074";
+
+    // The three shapes the doc actually writes: negation before the first token, between the token
+    // and the verb, and governing an ancestry phrasing from the front of the sentence.
+    expect(containmentClaims(`Neither \`${A}\` contains \`${B}\` nor the reverse.`)).toEqual([]);
+    expect(containmentClaims(`\`main\` no longer contains \`${A}\`.`)).toEqual([]);
+    expect(containmentClaims(`It is not true that \`${A}\` is contained in \`main\`.`)).toEqual([]);
+
+    // ...and the affirmative forms still fire, or the fix would have disarmed the rule rather than
+    // corrected it. Both spellings, since they normalise through different branches.
+    expect(containmentClaims(`\`main\` contains \`${A}\`.`).map((c) => `${c.outer}>${c.inner}`)).toEqual([`main>${A}`]);
+    expect(containmentClaims(`\`${A}\` is an ancestor of \`main\`.`).map((c) => `${c.outer}>${c.inner}`)).toEqual([
+      `main>${A}`,
+    ]);
+
+    // A denial in a NEIGHBOURING sentence must not silence a real claim. Without the sentence bound
+    // the fix would be a mute button: one "not" anywhere above would clear every claim below it.
+    expect(
+      containmentClaims(`\`main\` is not an ancestor of \`${B}\`. \`main\` contains \`${A}\`.`).map((c) => c.inner),
+    ).toEqual([A]);
+
+    // A negation is prose, never part of a name. Backticked spans are blanked before the test, so a
+    // branch that happens to be called `lane/not-landed` cannot silence the sentence quoting it.
+    expect(containmentClaims("`main` contains `lane/not-landed`.").map((c) => c.inner)).toEqual(["lane/not-landed"]);
+    expect(isNegated("plain prose", 0, 11)).toBe(false);
   });
 });
