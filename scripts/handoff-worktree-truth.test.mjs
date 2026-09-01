@@ -60,7 +60,21 @@ const DISPOSITIONS = join("docs", "BRANCH_DISPOSITIONS.md");
 
 const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 
-const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+// Reaches thirty because the carrier count passed twelve on 2026-09-01 and rule H reads it as a
+// number; an unmapped word returns null, which the rules read as "could not look", never as zero.
+const WORDS = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
+  eighteen: 18, nineteen: 19, twenty: 20, "twenty-one": 21, "twenty-two": 22, "twenty-three": 23,
+  "twenty-four": 24, "twenty-five": 25, "twenty-six": 26, "twenty-seven": 27, "twenty-eight": 28,
+  "twenty-nine": 29, thirty: 30,
+};
+
+/** "FOURTEEN" / "fourteen" / "14" — one number, however the prose happens to spell it. */
+const numberFrom = (raw) => {
+  const word = String(raw).toLowerCase();
+  return /^\d+$/.test(word) ? Number(word) : (WORDS[word] ?? null);
+};
 
 /**
  * The one bullet that describes THIS machine's checkouts. Both rules read from it rather than from
@@ -81,8 +95,7 @@ export function repoStateBullet(markdown) {
 export function statedWorktreeCount(markdown) {
   const m = markdown.match(/\b(\d{1,2}|[A-Za-z]+)\s+worktrees\b/i);
   if (!m) return null;
-  const raw = m[1].toLowerCase();
-  return /^\d+$/.test(raw) ? Number(raw) : (WORDS[raw] ?? null);
+  return numberFrom(m[1]);
 }
 
 /** Branch names in backticks inside the bullet that claims work is NOT on main. */
@@ -408,6 +421,36 @@ export function brokenContainmentClaims(claims, refExists, contains) {
  */
 export function driveRelativePaths(markdown) {
   return [...markdown.matchAll(/`([A-Za-z]:(?![\\/])[^`\n]*)`/g)].map((m) => m[1]);
+}
+
+/**
+ * The bullet states its carrier count THREE times: the count word ("FOURTEEN branches carry"), the
+ * warning that repeats it ("do NOT delete or hard-reset those fourteen"), and the list of names
+ * itself. They are three statements of one fact and nothing made them agree — on 2026-09-01 the doc
+ * shipped "FOURTEEN branches carry commits not on main — do NOT delete or hard-reset those thirteen",
+ * a leftover from a TWELVE -> THIRTEEN -> FOURTEEN pass that a re-flow at width 122 walked past.
+ * Rule C measures the SET and rule D measures each NAME; neither reads the prose that counts them.
+ *
+ * The name list is the third witness on purpose, not decoration: two words agreeing on a wrong
+ * number is the failure that survives a check of the words alone, and the names are the only witness
+ * rule C already derives from the machine.
+ *
+ * Returns null when the bullet is gone, and a null WITNESS when its phrase is gone — the caller
+ * fails on either. A guard that cannot find what it counts has not proven agreement.
+ */
+export function carrierCountWitnesses(markdown) {
+  const bullet = repoStateBullet(markdown);
+  if (!bullet) return null;
+  const flat = bullet.replace(/\s+/g, " ");
+  const stated = flat.match(/\b(\d{1,3}|[A-Za-z-]+)\s+branches\s+carry\b/i);
+  // Anchored to the warning verb, not to a bare "those": the bullet says "those two LANDED" further
+  // down about a different set, and an unanchored match would eventually read that one instead.
+  const those = flat.match(/\b(?:delete|hard-reset)\b[^.]*?\bthose\s+(\d{1,3}|[A-Za-z-]+)\b/i);
+  return {
+    stated: stated ? numberFrom(stated[1]) : null,
+    those: those ? numberFrom(those[1]) : null,
+    named: branchesClaimedUnmerged(markdown).length,
+  };
 }
 
 describe("the handoff tells the truth about the worktrees", () => {
@@ -738,5 +781,58 @@ describe("the handoff tells the truth about the worktrees", () => {
           "failing. Almost always a shell ate the backslashes — write the row with a file tool, not a heredoc.",
       ).toEqual([]);
     }
+  });
+
+  it("H: the count word, the warning that repeats it, and the number of names are one fact stated three times", () => {
+    const bulletOf = (carry, those, names) =>
+      `- **32 worktrees besides the canonical checkout; ${carry} branches carry commits not on main — do NOT delete or\n` +
+      `  hard-reset those ${those} before checking them**: ${names.map((n) => "`" + n + "`").join(" · ")} — those two\n` +
+      `  LANDED (PR #273 · PR #275) and stay only because pruning was denied.\n`;
+
+    const three = ["lane/a-one", "lane/b-two", "lane/c-three"];
+
+    // The exact defect, caught: the shipped bullet said FOURTEEN and warned about thirteen.
+    const shipped = carrierCountWitnesses(bulletOf("THREE", "two", three));
+    expect([shipped.stated, shipped.those, shipped.named]).toEqual([3, 2, 3]);
+
+    // Agreement is clean — or the rule would fire on every correct bullet the doc has ever had.
+    const agreed = carrierCountWitnesses(bulletOf("THREE", "three", three));
+    expect([agreed.stated, agreed.those, agreed.named]).toEqual([3, 3, 3]);
+
+    // The failure a check of the two WORDS alone would miss: both say four, three names are listed.
+    const bothWrong = carrierCountWitnesses(bulletOf("four", "four", three));
+    expect([bothWrong.stated, bothWrong.those, bothWrong.named]).toEqual([4, 4, 3]);
+
+    // Numerals count as the same fact, and the trailing "those two LANDED" is a different set —
+    // the warning verb is what anchors the second witness, so that phrase must not be read as it.
+    const numeric = carrierCountWitnesses(bulletOf("3", "3", three));
+    expect([numeric.stated, numeric.those]).toEqual([3, 3]);
+
+    // Fail-closed, both ways: a bullet whose phrases are reworded away reports null, never agreement.
+    const noWarning =
+      "- **32 worktrees besides the canonical checkout; THREE branches carry commits not on main**: `lane/a-one`\n";
+    expect(carrierCountWitnesses(noWarning).those).toBeNull();
+    expect(carrierCountWitnesses("- **nothing about branches here**\n")).toBeNull();
+
+    const live = carrierCountWitnesses(markdown);
+    expect(live, `${HANDOFF} no longer has the bullet that describes this machine's checkouts`).not.toBeNull();
+    expect(
+      live.stated,
+      `${HANDOFF} no longer states how many branches carry commits — rule H cannot prove agreement ` +
+        "between a count and a list when the count is gone, and a guard that cannot look is not a pass.",
+    ).not.toBeNull();
+    expect(
+      live.those,
+      `${HANDOFF} no longer repeats the count in its do-not-delete warning. Rule H reads that warning ` +
+        "as the second witness; if the sentence was deliberately reworded, move the anchor rather than " +
+        "leaving the rule to pass on a witness it never found.",
+    ).not.toBeNull();
+    expect(
+      [live.stated, live.those],
+      `${HANDOFF} states its carrier count three times and they disagree: "${live.stated} branches carry", ` +
+        `"those ${live.those}", and ${live.named} names actually listed. The names are the witness ` +
+        "measured from the machine by rule C, so they are the one to trust — re-derive with " +
+        "`git worktree list` + `git rev-list --count origin/main..<ref>` and fix the words, never the list.",
+    ).toEqual([live.named, live.named]);
   });
 });
