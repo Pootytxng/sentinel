@@ -56,6 +56,7 @@ import { describe, expect, it } from "vitest";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const HANDOFF = join("docs", "SESSION_HANDOFF.md");
+const DISPOSITIONS = join("docs", "BRANCH_DISPOSITIONS.md");
 
 const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 
@@ -355,6 +356,29 @@ export function brokenContainmentClaims(claims, refExists, contains) {
   return broken;
 }
 
+/**
+ * Backticked spans that name a Windows path whose drive letter is not followed by a separator —
+ * `C:Users\Kuya\...` rather than `C:\Users\Kuya\...`.
+ *
+ * bug→guard, 2026-09-01. The `lane/rule-e-negation` disposition row shipped its own worktree as
+ * `C:UsersKuyacodesentinel-recon-261`: every backslash had been eaten one level down by the shell
+ * that wrote the row, and the row read as prose right past review. It is the [[heredocs-eat-one-
+ * backslash-level]] failure landing in a doc instead of in a regex.
+ *
+ * The reason this needs a machine rather than a reader is that the result is *legal*: `C:Users` is a
+ * drive-RELATIVE path on Windows, so nothing downstream errors — it silently means "Users under the
+ * current directory of drive C:", which is almost never where the thing is. A path that resolves
+ * somewhere wrong is worse in a handoff than one that fails loudly, because the next session pastes
+ * it, lands somewhere unexpected, and blames the machine.
+ *
+ * Deliberately a SHAPE check and not an existence check: docs legitimately name checkouts that have
+ * since been removed, and a rule that demanded every path still exist would fire on accurate history
+ * — the muted-guard failure this file has now hit twice.
+ */
+export function driveRelativePaths(markdown) {
+  return [...markdown.matchAll(/`([A-Za-z]:(?![\\/])[^`\n]*)`/g)].map((m) => m[1]);
+}
+
 describe("the handoff tells the truth about the worktrees", () => {
   it("still catches the claim it was written for", () => {
     // Pinned separately from the live doc so a green run can never mean "the parser found nothing".
@@ -632,5 +656,27 @@ describe("the handoff tells the truth about the worktrees", () => {
         `reach:\n  - ${contradictions.join("\n  - ")}\nOne of the two statements is wrong, and the spent ` +
         `one is the dangerous direction — it tells the next session the folder is safe to reset.`,
     ).toEqual([]);
+  });
+
+  it("G: a worktree path keeps its separators — `C:Users…` is a different folder from `C:\\Users\\…`", () => {
+    // The exact defect, caught: the row this lane added, as it was first pushed.
+    expect(driveRelativePaths("worktree `C:UsersKuyacodesentinel-recon-261`, issue #295")).toEqual([
+      "C:UsersKuyacodesentinel-recon-261",
+    ]);
+    // Both real spellings survive, or the rule would fire on every correct path in the file.
+    expect(driveRelativePaths("worktree `C:\\Users\\Kuya\\code\\sentinel-recon-261`")).toEqual([]);
+    expect(driveRelativePaths("worktree `C:/Users/Kuya/code/sentinel-recon-261`")).toEqual([]);
+    // Unbackticked prose is not a path claim, and a bare drive is not one either.
+    expect(driveRelativePaths("C:UsersKuya without backticks is prose, not a cited path")).toEqual([]);
+
+    for (const doc of [HANDOFF, DISPOSITIONS]) {
+      const mangled = driveRelativePaths(readFileSync(join(ROOT, doc), "utf8"));
+      expect(
+        mangled,
+        `${doc} cites a path whose drive letter has no separator after it:\n  - ${mangled.join("\n  - ")}\n` +
+          "Windows reads that as drive-RELATIVE, so it resolves somewhere real and wrong rather than " +
+          "failing. Almost always a shell ate the backslashes — write the row with a file tool, not a heredoc.",
+      ).toEqual([]);
+    }
   });
 });
