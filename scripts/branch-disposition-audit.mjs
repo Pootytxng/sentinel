@@ -16,6 +16,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const DOC = "docs/BRANCH_DISPOSITIONS.md";
 
+const docPathOf = (repoRoot) => join(repoRoot, DOC);
+
 /** Dispositions the record may use, and what each one promises about merge-tree. */
 export const DISPOSITIONS = {
   // main already contains it — the merge is a no-op, and we re-prove that every run.
@@ -271,6 +273,23 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
   return problems;
 }
 
+/**
+ * The split docs/BRANCH_DISPOSITIONS.md used to pin by hand. It went stale on every row added —
+ * twice on 2026-09-01 alone, both times by the lane adding the row — because a number written
+ * beside an append-only table is wrong by the next commit. Same shape as the rule C treadmill
+ * (#312): a measurement kept as prose is a measurement nobody re-takes.
+ *
+ * Printed only on the OK path, and that is the whole reason the number can be trusted rather than
+ * merely current: by then the audit has proven every origin ref has a row and no row names a dead
+ * ref, so counting ROWS is counting REFS. On a PARTIAL checkout that identity is exactly what was
+ * not established, so no count is printed there — a degraded run must not print the full run's
+ * sentence.
+ */
+export function refSplit(rows) {
+  const preserve = rows.filter((r) => r.disposition === "PRESERVE").length;
+  return { total: rows.length, preserve, other: rows.length - preserve };
+}
+
 export function main(argv) {
   const repoRoot = argv[0] || join(dirname(fileURLToPath(import.meta.url)), "..");
   const cover = refSetCoverage(repoRoot);
@@ -298,7 +317,11 @@ export function main(argv) {
     );
     return 0;
   }
-  console.log(`branch-disposition-audit: OK — every origin ref has a proven row in ${DOC}.`);
+  const split = refSplit(parseDispositions(readFileSync(docPathOf(repoRoot), "utf8")));
+  console.log(
+    `branch-disposition-audit: OK — every origin ref has a proven row in ${DOC}.\n` +
+      `  ${split.total} refs besides main: ${split.preserve} PRESERVE, ${split.other} not.`,
+  );
   return 0;
 }
 

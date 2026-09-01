@@ -23,6 +23,7 @@ import {
   listRemoteRefs,
   parseDispositions,
   pruneCommand,
+  refSplit,
   refSetCoverage,
   resolveBase,
 } from "./branch-disposition-audit.mjs";
@@ -125,6 +126,27 @@ describe("parsing", () => {
 
   it("returns nothing when the section is absent, rather than guessing", () => {
     expect(parseDispositions("# doc\n\nno table here\n")).toEqual([]);
+  });
+
+  it("counts the split the doc used to pin by hand", () => {
+    // #309/#312. docs/BRANCH_DISPOSITIONS.md carried `Twenty-five non-PRESERVE refs remain` in prose,
+    // and it was wrong twice on 2026-09-01 alone -- both times written stale by the very lane that
+    // added the row it failed to count. A number beside an append-only table is wrong by the next
+    // commit, so the audit computes it and the doc points at the audit.
+    const rows = parseDispositions(
+      doc([
+        ["origin/keep", "PRESERVE"],
+        ["origin/also-keep", "PRESERVE"],
+        ["origin/live", "CLAIMED"],
+      ]),
+    );
+    expect(refSplit(rows)).toEqual({ total: 3, preserve: 2, other: 1 });
+    // Empty is a real answer, not a crash: a fresh repo with one branch has no rows to count.
+    expect(refSplit([])).toEqual({ total: 0, preserve: 0, other: 0 });
+    // Only an exact PRESERVE counts. A row that merely mentions the word in its evidence does not,
+    // which is the shape that would quietly inflate the protected count as the table grows.
+    expect(refSplit([{ ref: "origin/x", disposition: "CLAIMED", evidence: "never PRESERVE this" }]))
+      .toEqual({ total: 1, preserve: 0, other: 1 });
   });
 });
 
