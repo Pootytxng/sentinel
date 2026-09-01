@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-// Every source file under scripts/ and tools/ must be plain text: no control character other than
-// tab, newline and carriage return.
+// Every source file under scripts/, tools/, src/, docs/ and src-tauri/src/ must be plain text: no
+// control character other than tab, newline and carriage return.
 //
 // bug -> guard, raised in review on PR #289. `scripts/case-endpoint-isolation.test.mjs` carried two
 // RAW NUL bytes as a glob placeholder, so git classified the file binary and its diff read
@@ -15,19 +15,32 @@ import { dirname, resolve } from "node:path";
 // `scripts/verify-release-state-guard.test.mjs`, carried a raw 0x01 the same way. Both are now
 // written as \u escapes, which produce byte-identical runtime strings.
 //
-// Scope is deliberately scripts/ + tools/. `src/` holds two more offenders and they are WORSE: a
-// literal 0x08 where `\b` was meant, which silently turns the assertion around it into a no-op.
-// Fixing those changes what those tests assert and may surface a real product finding, so they are
-// filed as issue #304 rather than folded in here. Widen ROOTS to include "src" in the commit that
-// fixes #304 -- the scope gap should close with the defect, not outlive it.
+// Scope WAS deliberately scripts/ + tools/, with the widening owed to the commit that fixed #304.
+// This is that commit, so the gap closes here rather than outliving the defect: `src` and `docs`
+// join ROOTS, and `src-tauri/src` with them.
+//
+// `src` held the two worse offenders — a literal 0x08 where `\b` was meant, which turns the assertion
+// around it into a no-op that still runs and still passes. `docs` is here because a second instance
+// of the same class landed in one while #304 was open: a `sed -i` replacement carrying a Windows path
+// fired GNU sed's OWN escapes, `\U` uppercasing the rest and `\c` writing a raw 0x0F into
+// docs/BRANCH_DISPOSITIONS.md. It was caught by luck — the byte happened to land inside a path and
+// broke a drive separator, so an unrelated rule failed. The same byte in prose, a table cell or a
+// link title would have passed every gate in this repo. THIS rule would have caught it directly, and
+// did not, only because docs/ was out of scope.
+//
+// `src-tauri/src` was not named in #304 and is added anyway: all four roots were measured at this
+// head before widening, the Rust tree came back clean, and leaving the last source root out to match
+// a sentence written before the measurement is how a half-closed gap gets recorded as handled.
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
-const ROOTS = ["scripts", "tools"];
+const ROOTS = ["scripts", "tools", "src", "docs", "src-tauri/src"];
 
-// Files that are legitimately not text. Nothing under ROOTS matches today; the list exists so a
-// future binary fixture is excluded by a NAMED extension rather than by loosening the byte rule.
-const BINARY = /\.(woff2?|ttf|otf|png|jpe?g|gif|webp|ico|pdf|zip|exe|dll|wasm)$/i;
+// Files that are legitimately not text, excluded by a NAMED extension rather than by loosening the
+// byte rule. This stopped being hypothetical when docs/ joined ROOTS: a spec asset there is an mp4,
+// and every byte in it would otherwise be reported. Video and font entries earn their place the same
+// way — a real fixture under a root, never a pre-emptive widening.
+const BINARY = /\.(woff2?|ttf|otf|png|jpe?g|gif|webp|ico|pdf|zip|exe|dll|wasm|mp4|webm|mov|m4v)$/i;
 
 const ALLOWED = new Set([0x09, 0x0a, 0x0d]);
 const isControl = (byte) => (byte < 0x20 && !ALLOWED.has(byte)) || byte === 0x7f;
@@ -51,7 +64,7 @@ const offendersIn = (bytes) => {
   return found;
 };
 
-describe("source files under scripts/ and tools/ carry no raw control characters", () => {
+describe("source files under every source root carry no raw control characters", () => {
   it("finds no offender in any tracked file", () => {
     const files = tracked();
     expect(files.length).toBeGreaterThan(20);
