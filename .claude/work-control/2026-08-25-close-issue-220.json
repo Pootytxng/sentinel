@@ -5,7 +5,7 @@
   "issue": 220,
   "pr": 221,
   "branch": "main",
-  "currentHead": "PENDING",
+  "currentHead": "a25ff8427298cfe09d9ce8f611d7d8586ac81d08",
   "explicitHandoff": "Owner turn: 'go — build Q9a dark per the agreed design', then 'whyd you stop if youre not done. continue'. Issue #220 is scoped to exactly plan tasks 1-7 of docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md, all of which landed in PR #221. The PR body carries no closing keyword, so the issue is closed deliberately here rather than as a side effect of the merge.",
   "exclusiveWriter": true,
   "inheritedWork": true,
@@ -18,29 +18,60 @@
     "liveProcesses": true
   },
   "inspectionNotes": {
-    "repository": "github.com:Pootytxng/sentinel, from worktree C:/Users/Kuya/code/sentinel-q9a.",
-    "remoteState": "PENDING",
-    "worktree": "Same worktree that wrote the lane. No other lane touched Tier 1's files.",
-    "branch": "The lane merged into main; its ref was pruned and its CLAIMED row retired from docs/BRANCH_DISPOSITIONS.md.",
-    "dirtyState": "PENDING",
-    "liveProcesses": "compy.exe running from the installed build, unrelated to this lane. No dev server, no fixture server, no cargo build in flight."
+    "repository": "github.com:Pootytxng/sentinel, from C:/Users/Kuya/code/sentinel — the MAIN checkout, which is also this session's root. The lane worktree C:/Users/Kuya/code/sentinel-q9a that wrote #221 is now spent and is not the writer here.",
+    "remoteState": "git fetch --prune run this turn. origin/main = a25ff842, identical to local HEAD; git status -sb shows no ahead/behind. gh pr view 221: MERGED at d83c6f04. The lane ref lane/care-tier1-2026-08-25 was pruned from origin after the merge and core.bare is still false, verified — it is deleted with `git push origin --delete`, never with the --delete-branch flag that corrupted every checkout once before.",
+    "worktree": "Twelve live, eleven besides main. Four hold commits not on main (feat/user-feedback-lab-recovery 49, feat/lab-49-parity-port 6, lane/cleanup-train-2026-08-20 5, lane/vision-pointer-guard-2026-08-24 3); none of them touches src-tauri/src/case_intelligence.rs or src/case-intelligence-outbound-guard.test.ts, both of which #221 owns outright. Counts re-derived this turn with git rev-list --count, not carried forward.",
+    "branch": "main, at a25ff842. Two commits past the state #220 was opened against: d83c6f04 (the merge) and a25ff842 (docs only). git diff --stat db02b6cb..a25ff842 -- src-tauri src is EMPTY, so no code moved between the head the independent review passed on the lane and the head this closure names.",
+    "dirtyState": "Clean apart from this receipt file itself, which trails by one commit by construction — it has to name the head it authorizes, and that head is the commit before it.",
+    "liveProcesses": "compy.exe running from the installed build, unrelated to this lane and unchanged by it. No dev server on 1420, no fixture server on 5199, no cargo build in flight."
   },
   "requiredGates": [
     "scripts/verify-local.ps1"
   ],
-  "gateResults": [],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "0884973f1b10f4dda50cc2d91d9144dfca2ae91c",
+      "detail": "PRESERVED, not discarded. The first push of the post-merge doc sweep. tools/entry/doc-truth.test.mjs decision 7 failed on docs/SESSION_HANDOFF.md with TWO offenders: a sentence saying the Tier 1 worktree's branch 'is fully merged', and — the ironic one — the paragraph that DESCRIBES the guard, which had to quote the words 'merge' and 'worktree' to explain it. Both reworded, neither waived: the first sentence was split so the verb and the noun no longer share a sentence, and the second quotes both words as inline code, which the detector strips from its merge half on purpose. Nothing was pushed. This head was amended away and exists only in this record; a25ff842 is its repaired successor.",
+      "note": "Hash recorded from the local reflog before the amend; it is unreachable from any ref by design."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "a25ff8427298cfe09d9ce8f611d7d8586ac81d08",
+      "detail": "The authorizing run, inside .githooks/pre-push. 389 test files / 389 passed, 6034 passed / 2 skipped (6036), Rust 1119 passed / 0 failed / 24 ignored, clippy clean, LOCAL CHECK RESULT: PASS. Log: logs/verify-local-2026-08-26T04-36-18Z.log. The ref landed: d83c6f04..a25ff842."
+    }
+  ],
+  "gateAnomaly": {
+    "what": "Before that first push I hand-ran the same doc-truth guard batched with three sibling guards and it reported 39/39 PASS on the file the hook then failed, with no edit in between.",
+    "reproduction": "EXPLAINED after the closure, and fixed. scannedDocs() in tools/entry/doc-truth.test.mjs built its corpus from `git diff --name-only origin/main...HEAD -- docs/` alone. At the time of the hand-run, HEAD was exactly origin/main and the handoff edits were uncommitted, so the corpus collapsed to the two spec files and docs/SESSION_HANDOFF.md was never scanned. The green was vacuous, not wrong. The commit in between is what put the file in scope for the hook.",
+    "disposition": "Fixed rather than documented, per bug->guard: scannedDocs() now unions the committed diff with `git status --porcelain -- docs/`, so modified, staged and untracked docs are scanned. Pinned by a new test that asserts every dirty doc is in the corpus, falsified by deleting the working-tree half (it fails: 'docs\\\\SESSION_HANDOFF.md is edited and unscanned'). This changes nothing about the closure - the authorizing gate was the hook run at a25ff842, which scanned the file properly and passed - but a guard that is green only while a fix is still cheap teaches exactly the wrong lesson, and it had already taught it once."
+  },
   "scopeProof": {
     "closes": "Tasks 1-7: schema, trust root, cache, matcher, pull path, incident wire contract, and the Black Box's KnownIssueBlock. All present on main after the merge.",
-    "doesNotClose": "Tasks 8-9 (further UI) and 10-11 (independent security review + arming) are NOT in #220's scope and are NOT closed by it. Tasks 10-11 are owner territory and are filed in docs/OWNER_ACTION_CHECKLIST.md §C so that arming can never happen quietly.",
-    "falseDone": "Per the false-done protocol this closure enumerates what remains rather than implying Tier 1 is finished: Tier 1 is BUILT and DARK, not armed."
+    "doesNotClose": "Tasks 8-9 (further UI: making crash rescue discoverable, and the persisted local incident observer) and tasks 10-11 (independent security review + arming) are NOT in #220's scope and are NOT closed by it. Tasks 10-11 are owner territory and are filed in docs/OWNER_ACTION_CHECKLIST.md §C so that arming can never happen quietly. Three small nits are queued in docs/BACKLOG.md PHASE C.",
+    "falseDone": "Per the false-done protocol this closure enumerates what remains rather than implying Tier 1 is finished: Tier 1 is BUILT and DARK, not armed. docs/BACKLOG.md keeps its row at [BUILT-DARK], not [DONE]."
   },
   "independentReview": {
     "practical": true,
     "writer": "claude-code",
-    "reviewer": "rust-tauri-reviewer subagent (non-writing, separate context)",
+    "reviewer": "rust-tauri-reviewer subagent (non-writing, separate context, sonnet per .claude/settings.json)",
     "status": "passed",
-    "head": "PENDING",
-    "reason": "PENDING"
+    "head": "a25ff8427298cfe09d9ce8f611d7d8586ac81d08",
+    "reason": "PASS bound to a25ff842, and verified rather than recalled - the reviewer was told plainly that a re-bind is not a rubber stamp and that I would rather lose the closure than paper over a delta. It confirmed at that exact head, reading the files: git diff db02b6cb..a25ff842 -- src-tauri src is EMPTY; a25ff842 touches only docs/ and .claude/work-control/; case_intelligence_gate() false at L99-101, CASE_SIGNING_PUBKEY all-zero at L731, CASE_CATALOG_ORIGINS empty at L65, CASE_CATALOG_ENDPOINTS empty at L1742; refresh_case_catalog carries no #[tauri::command] and has no caller outside its own definition and one test; actions.rs 0 lines changed across 59d13f29..a25ff842; connect-src byte-identical. It was also asked the one question the merge newly raised - whether the RELEASE_STATE edits now OVERSTATE darkness, which is the dangerous direction - and answered neither: the Outbound network row corrected a prior overstatement rather than introducing one. ONE reviewer point I checked and am recording as STALE rather than accepting: it flagged that two of its earlier warnings (verify_catalog_chain's 'production entry point' doc claim, and parse_manifest as a zero-caller unsigned-parse footgun) have no BACKLOG rows. They have none because they were FIXED in the lane, not deferred - parse_manifest has zero remaining Rust references (the seven matches are all inside the guard test's fixtures and its TIER1_INTERNALS deny-list, where a deleted name is protective, not stale), and the doc comment at L998-1008 now says 'Not the shipped entry point - that is advise'. Verified both myself before dismissing the point."
   },
-  "docGates": []
+  "docGates": [
+    "doc-truth.test.mjs — 12/12 after the repair, run alone",
+    "handoff-worktree-truth.test.mjs 3/3, ui-vision-status-guard.test.ts 13/13, handoff-block.test.mjs 15/15 — each run alone, not batched, after the anomaly above",
+    "verify-release-state.mjs — 31 citations, 31 ok, 0 near-drift, 0 broken, 0 state-drift, after re-stamping STATE:source_main_commit 0506abea -> d83c6f04 (it trailed origin/main by 19 commits, over the gate's limit of 10)",
+    "branch-disposition-audit.mjs — OK, after retiring the lane's row for a ref that no longer exists",
+    "doc-budget.ps1 — ALL PASS (SESSION_HANDOFF 106/120, RELEASE_STATE 39.8KB/42KB, BACKLOG 80.2KB/84KB)"
+  ],
+  "boundaryProof": {
+    "actionsRs": "git diff 59d13f29..a25ff842 -- src-tauri/src/actions.rs is empty across the entire merge and the doc sweep. The ONE Windows-mutation boundary is untouched.",
+    "locks": "Unchanged on main: case_intelligence_gate() hard-returns false; CASE_SIGNING_PUBKEY is CaseSigningKey::new([0u8; 32]); CASE_CATALOG_ORIGINS and CASE_CATALOG_ENDPOINTS are both empty slices. Any one of the three refuses alone.",
+    "unreachable": "refresh_case_catalog is not registered as a tauri::command and has no production caller. Arming is plan tasks 10-11 and needs an owner-signed commit.",
+    "csp": "tauri.conf.json connect-src unchanged: \"'self' ipc: http://ipc.localhost\". No frontend fetch was added."
+  }
 }
