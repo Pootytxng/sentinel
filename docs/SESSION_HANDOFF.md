@@ -102,10 +102,10 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a
   zero-carry branch — **a landed lane's name leaves with the train that lands it**, which is why neither the #281
   lane (PR #282 → `082f637e`) nor the #284 lane (PR #285 → `d5dcb9e2`, merge-committed so it dropped straight to
-  zero while 286 and 287 kept pointing into it) is named here. Spent, at zero: `sentinel-recon-261`,
-  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 both landed out
-  of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven entries;
-  `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
+  zero while 286 and 287 kept pointing into it) is named here. `sentinel-recon-261` left the spent list on becoming
+  #295's carrier. Spent, at zero: `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258`
+  (#258/#264 both landed out of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven
+  entries; `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
   `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — two arming gates, nothing else

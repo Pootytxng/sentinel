@@ -244,6 +244,41 @@ export function liveCarriers(list, countAhead) {
 const markdown = readFileSync(join(ROOT, HANDOFF), "utf8");
 
 /**
+ * The checkout names quoted in the "Spent, at zero" run — the ones a reader is told carry nothing and
+ * may therefore be reset or removed without looking again.
+ *
+ * The run ends at the blank line, never at a `.`: it is a comma list that wraps across lines and has
+ * sentences inside its own parentheses ("(#258/#264 both landed out of it)"), so cutting at the first
+ * terminator would silently shorten the very list this rule polices and turn a red into a green.
+ */
+export function spentAtZeroNames(markdown) {
+  const m = markdown.match(/Spent, at zero\s*[:—][\s\S]*?(?:\r?\n\s*\r?\n|$)/);
+  if (!m) return [];
+  return [...m[0].matchAll(/`([^`]+)`/g)].map((x) => x[1]);
+}
+
+/**
+ * A checkout cannot be spent and a carrier in the same document.
+ *
+ * bug→guard. This lane wrote `lane/rule-e-negation` into the carrier bullet and left the checkout it
+ * lives in — `sentinel-recon-261` — sitting in the same bullet's "Spent, at zero" list. Both halves
+ * were individually well-formed, so rules A through E all passed while the paragraph told the next
+ * session two opposite things about one folder, the more dangerous of which invites a reset.
+ *
+ * Matched by DIRECTORY, because that is the unit the two halves disagree about: the carrier list
+ * names branches, the spent list names checkouts, and only the path connects them.
+ */
+export function spentButCarrying(names, carriers) {
+  const carryingDirs = new Set(
+    carriers
+      .filter((c) => (c.commits ?? 0) > 0)
+      .map((c) => (c.path ?? "").split(/[\/]/).filter(Boolean).pop())
+      .filter(Boolean),
+  );
+  return names.filter((n) => carryingDirs.has(n));
+}
+
+/**
  * Words that turn a containment sentence into its opposite. Read over the SENTENCE the match sits
  * in — never the whole document — because a denial governs its own clause. A rule that let one
  * "not" anywhere above silence every claim below it would be a mute button, not a fix.
@@ -553,5 +588,49 @@ describe("the handoff tells the truth about the worktrees", () => {
     // branch that happens to be called `lane/not-landed` cannot silence the sentence quoting it.
     expect(containmentClaims("`main` contains `lane/not-landed`.").map((c) => c.inner)).toEqual(["lane/not-landed"]);
     expect(isNegated("plain prose", 0, 11)).toBe(false);
+  });
+
+  it("F: no checkout is called spent in the same breath as it is called a carrier", () => {
+    // bug→guard, and the bug was mine: this lane named `lane/rule-e-negation` as a carrier while
+    // leaving `sentinel-recon-261`, the checkout it lives in, in the same bullet's spent list. Rules
+    // A–E all passed — each half is well-formed on its own — so one paragraph told the next session
+    // two opposite things about one folder, and the more dangerous half invites a hard reset.
+    //
+    // Found by session `sentinel-21` reading the pushed branch, not by a gate. That is the whole
+    // argument for the rule: a contradiction between two lists is invisible to any check that reads
+    // one list at a time.
+    const carriers = [
+      { name: "lane/rule-e-negation", commits: 12, path: "C:/Users/Kuya/code/sentinel-recon-261" },
+      { name: "lane/spent", commits: 0, path: "C:/Users/Kuya/code/sentinel-release-truth-256" },
+    ];
+    expect(spentAtZeroNames("Spent, at zero: `a`, `b`.\n\n`c` is elsewhere.")).toEqual(["a", "b"]);
+    // The em-dash spelling is the one this document actually uses after the fix, and the run must
+    // still stop at the blank line rather than at the `.` inside its own parentheses.
+    expect(spentAtZeroNames("Spent, at zero — `a` (landed out of it), `b`.\n\nnext")).toEqual(["a", "b"]);
+    expect(spentAtZeroNames("No such list here.")).toEqual([]);
+
+    // The exact defect, caught.
+    expect(spentButCarrying(["sentinel-recon-261"], carriers)).toEqual(["sentinel-recon-261"]);
+    // A genuinely spent checkout is not flagged — a rule that fires on the whole list is a rule that
+    // gets the list deleted.
+    expect(spentButCarrying(["sentinel-release-truth-256"], carriers)).toEqual([]);
+    // An unmeasured carrier (null commits, the unfetched-origin case rule C models) is not evidence
+    // of carrying, so it must not manufacture a contradiction either.
+    expect(spentButCarrying(["x"], [{ name: "l", commits: null, path: "/tmp/x" }])).toEqual([]);
+
+    const list = git("worktree", "list", "--porcelain");
+    const live = list.split(/\r?\n/).filter((l) => l.startsWith("worktree ")).length;
+    if (live <= 1) {
+      expect(live).toBe(1);
+      return;
+    }
+    const countAhead = countAheadVia((committish) => git("rev-list", "--count", `origin/main..${committish}`));
+    const contradictions = spentButCarrying(spentAtZeroNames(markdown), liveCarriers(list, countAhead));
+    expect(
+      contradictions,
+      `${HANDOFF} lists these checkouts as spent while their branches carry commits origin/main cannot ` +
+        `reach:\n  - ${contradictions.join("\n  - ")}\nOne of the two statements is wrong, and the spent ` +
+        `one is the dangerous direction — it tells the next session the folder is safe to reset.`,
+    ).toEqual([]);
   });
 });
