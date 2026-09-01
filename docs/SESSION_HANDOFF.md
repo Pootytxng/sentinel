@@ -88,21 +88,20 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides the canonical checkout; TWELVE branches carry commits not on main — do NOT delete or hard-reset
-  those twelve before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
-  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
-  `lane/vision-pointer-guard-2026-08-24` · `lane/rule-e-negation` (#295) · `lane/shell-ownership-278` ·
-  `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287` (#287) — the last stacked pair, so one repair does
-  not land twice · `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (PR
-  #275 · PR #273) listed only because **the prune was denied**. `compy-health-parity` and
-  `compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at `c8366609` — neither contains the other**
-  (`--is-ancestor` is NO both ways). Counted **not on main**, as everywhere here: the kit has ONE unique commit,
-  health-parity FOURTEEN (from the merge base instead it answers 170). Backed up only to `refs/backup/*`, so dropping
-  either loses the other's work. **No depth/SHA pinned**: `git worktree list` + `git rev-list --count
-  origin/main..<ref>`. Rule D (#243) fails this bullet for naming a zero-carry branch — **a landed lane's name leaves
-  with the train that lands it**, which is why the #281 (PR #282), #284 (PR #285), #276 (PR #277 → `ee5bdd8b`) and #298
-  (PR #299 → `81b16d60`) lanes are not named here: all four merge-committed, so each dropped to zero, and a landing that
-  strands an open PR on a spent base retargets it at the landing, not after. Spent, at zero: `sentinel-fleet-guard-276`,
+- **32 worktrees besides the canonical checkout; ONE carries work that exists on no remote — do NOT delete or
+  hard-reset it before checking**: `claude/compy-visual-recovery-kit-6fd074`, holding a single commit (`cdd976f3`,
+  docs on RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches. Thirteen checkouts are ahead of `origin/main`,
+  but the other twelve are **fully pushed** — deleting those worktrees loses nothing, and each has a row in
+  docs/BRANCH_DISPOSITIONS.md, which is where refs are tracked. Rule C stopped demanding all thirteen be named on
+  2026-09-01 (#312): the list was 92% refs that cannot be lost, the one that could sat inside it reading exactly like
+  the rest, and no two lanes could ever be green at once while each had to name the other. `claude/compy-health-parity`
+  and `claude/compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at `c8366609` — neither contains the
+  other** (`--is-ancestor` is NO both ways). Counted **not on main**: the kit has ONE unique commit, health-parity
+  FOURTEEN (from the merge base instead it answers 170). Backed up only to `refs/backup/*`, so dropping either loses
+  the other's work. **No depth/SHA pinned** — re-derive risk with `git rev-list --count <ref> --not` over the origin
+  refs `git ls-remote --heads origin` reports, and distance with `git rev-list --count origin/main..<ref>`. **A landed
+  lane's name still leaves with the train that lands it** (rule D, #243): naming a zero-carry branch fails this bullet
+  whether or not rule C ever wanted the name. Spent, at zero: `sentinel-fleet-guard-276`,
   `sentinel-segmented-237`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258`
   (#258/#264 landed out of it), four of the SIX registered under `.claude/worktrees/` (seven entries there;
   `data-root-integrity-432797` is not one), parked `sentinel-mission0-accent-landing`,
