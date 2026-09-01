@@ -232,6 +232,20 @@ export function unmeasuredCarriers(carriers) {
  * "LANDED" is not yet true. A guard whose only green path is a sentence that is false when it is
  * written has taught the wrong lesson. `LANDS WITH PR #297` is true when written and after.
  */
+/**
+ * Where a name's clause STOPS: at the next branch name, at the end of its sentence, or at the
+ * middle dot the list already uses to separate entries -- whichever comes first.
+ *
+ * The first draft stopped only at the next name, which handed the LAST name in the bullet every
+ * remaining word of it. On 2026-09-01 that was 69% of the bullet, and `lane/native-routing-271` came
+ * out carrying `c8366609` -- two OTHER branches' fork point -- and PR #275, which is a different
+ * lane's PR. Both were wrong; both happened to fail closed, because that lane is neither landed nor
+ * at zero carry. One deleted sentence upstream would have left it a PR-only marker, and a PR-only
+ * marker is a permanent exemption granted on prose that was never about the lane. Found by PR #297's
+ * reviewer reading the shipped parser against the shipped bullet, not by any test here.
+ */
+const CLAUSE_END = /[.;]\s|\s\u00b7\s/;
+
 export function landingMarkers(markdown) {
   const bullet = repoStateBullet(markdown);
   const out = new Map();
@@ -241,7 +255,9 @@ export function landingMarkers(markdown) {
   hits.forEach((hit, i) => {
     const name = hit[1];
     if (out.has(name)) return; // the first MARKED mention wins; a later bare mention cannot unmark it
-    const clause = flat.slice(hit.index + hit[0].length, i + 1 < hits.length ? hits[i + 1].index : flat.length);
+    const rest = flat.slice(hit.index + hit[0].length, i + 1 < hits.length ? hits[i + 1].index : flat.length);
+    const stop = rest.search(CLAUSE_END);
+    const clause = stop === -1 ? rest : rest.slice(0, stop);
     if (!/\bLAND(?:ED|S|ING)\b/i.test(clause)) return;
     const sha = clause.match(/`([0-9a-f]{7,40})`/i);
     const pr = clause.match(/\bPR #(\d+)\b/);
@@ -976,5 +992,32 @@ describe("the handoff tells the truth about the worktrees", () => {
         "measured from the machine by rule C, so they are the one to trust — re-derive with " +
         "`git worktree list` + `git rev-list --count origin/main..<ref>` and fix the words, never the list.",
     ).toEqual([live.named, live.named]);
+  });
+
+  it("stops a clause at the sentence, so trailing prose cannot mark the name that stands last", () => {
+    // The shipped defect, reduced: every word after the last name belonged to that name. Here the
+    // land-word, the SHA and the PR number all sit in a LATER sentence about a different lane, and
+    // the name that stands last must come away with none of them.
+    const trailing =
+      "- **not on main** \u2014 `lane/a` (#1) \u00b7 `lane/b` (#2) still going. " +
+      "The #99 lane LANDED at `deadbee` with PR #99, which is a sentence about neither of them.";
+    expect(landingMarkers(trailing).has("lane/b")).toBe(false);
+    expect(landingMarkers(trailing).has("lane/a")).toBe(false);
+  });
+
+  it("keeps a real marker while refusing the sentence after it", () => {
+    // Trailing prose must not be able to ADD to a marker either: the PR number is the author's, the
+    // SHA a sentence later is not, and a marker wearing a borrowed SHA gets verified against the
+    // wrong ref -- which is a wrong ANSWER, not a refusal.
+    const mixed =
+      "- **not on main** \u2014 `lane/a` **LANDED**, PR #5. Unrelated prose LANDED at `c8366609` afterwards.";
+    expect(landingMarkers(mixed).get("lane/a")).toEqual({ sha: null, pr: 5 });
+  });
+
+  it("stops at the list separator, because a sibling entry is a different entry", () => {
+    // Reachable the moment two names share a sentence: without the middle-dot bound, `lane/a` takes
+    // the next entry's PR number exactly the way native-routing took css-margin's.
+    const siblings = "- **not on main** \u2014 `lane/a` **LANDED** \u00b7 a sibling entry mentions PR #7";
+    expect(landingMarkers(siblings).has("lane/a")).toBe(false);
   });
 });

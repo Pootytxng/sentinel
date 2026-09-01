@@ -92,8 +92,8 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   `lane/vision-pointer-guard-2026-08-24` · `lane/rule-e-negation` (#295 — **LANDS WITH PR #297**, written before the
   merge because the merge is what makes it true) · `lane/shell-ownership-278` · `lane/remote-cache-design-286` (#286)
   → `lane/case-receiver-287` (#287) — the last stacked pair, so one repair does not land twice ·
-  `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (PR #275 · PR #273)
-  and are listed only because **pruning them was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074`
+  `lane/css-margin-separators-274` (#274 — **LANDED**, PR #275) · `lane/native-routing-271` (#271 — **LANDED**, PR #273)
+  — both are listed only because **pruning them was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074`
   **share 14 commits and diverge at `c8366609` — neither contains the other** (`--is-ancestor`, NO both ways). Counted
   NOT-ON-MAIN, as this bullet counts, the kit has ONE unique commit and health-parity FOURTEEN; from the merge base
   that same branch answers 170, having merged main in repeatedly, and both writers reached for the unframed number
