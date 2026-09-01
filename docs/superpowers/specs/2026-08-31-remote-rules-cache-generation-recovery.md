@@ -77,19 +77,27 @@ Three properties, in the order they matter:
   runs over the decoded originals. Written through the atomic helper: temp in the same directory,
   then rename. One rename publishes the whole generation, so the A2 row above cannot occur.
 - **P2 — a monotonic floor that survives an unreadable marker.** The marker stays a separate small
-  file, but is read as `Option<u64>`: **absent / unreadable / unparsable is `None`, never `0`.**
+  file, read three-valued: **`Absent` / `Unreadable` / `Version(u64)`.** The *type* is what holds the
+  line. An `Option<u64>` invites `unwrap_or(0)`, which turns `Unreadable` back into `Absent` and hands
+  the run a floor of 0 — the invented fallback §2 forbids. A comment cannot stop that; a third case can.
 - **P3 — reconciliation, which is the load-bearing part.** The effective floor is computed before
   anything is accepted:
 
 ```
-effective_floor():
-  marker  = read_marker()                       // Option<u64>; None means "unknown", not zero
-  cached  = read_generation().and_then(verify)  // signature + SHA-256 bind FIRST, then the floor gate
-  floor   = max(marker.unwrap_or(0), cached.map(|g| g.ruleset_version).unwrap_or(0))
-  if floor > marker.unwrap_or(0):
-      persist_marker(floor)                     // atomic; BEFORE any remote acceptance
-      on failure -> REFUSE the remote path for this run (keep serving cache/embedded)
-  floor
+effective_floor() -> Option<u64>:                // None = refuse the remote path for this run
+  marker  = read_marker()                        // Absent | Unreadable | Version(v)
+  cached  = read_generation().and_then(verify)   // signature + SHA-256 bind FIRST, then the floor gate
+  witness = cached.map(|g| g.ruleset_version)    // a VERIFIED generation is itself a floor witness
+  known   = match (marker, witness):
+              (Unreadable, None)    -> return None   // no floor, and nothing to reconcile one from
+              (Unreadable, Some(n)) -> n             // the generation restores what the marker lost
+              (Absent, _)           -> 0             // genuinely zero; the one honest 0 here
+              (Version(v), _)       -> v
+  floor = max(known, witness.unwrap_or(0))
+  if floor > known:
+      persist_marker(floor)                      // atomic; BEFORE any remote acceptance
+      on failure -> return None                  // keep serving cache/embedded
+  Some(floor)
 ```
 
 Accepting generation N then becomes: verify against `effective_floor()` → publish the generation
@@ -104,7 +112,10 @@ Rules that fall out of this, and that the implementation's own doc must state:
   previous generation in place, leaves the floor unchanged, and refuses the remote path that run.
 - **A failed write never lowers the floor.** The only permitted floor transition is upward.
 - **No marker and no cache** means the machine genuinely has a floor of 0, which is correct rather
-  than a fallback. It is the *unreadable* case that must not read as 0.
+  than a fallback. It is the *unreadable* case that must not read as 0 — and when it is unreadable
+  with no verifiable generation to reconcile against, there is no floor at all, so the run takes the
+  same refusal branch a failed `persist_marker` takes. Accepting anything signed there would be
+  precisely the rollback this document exists to close.
 - **No new insecure fallback**, and none of this arms anything, opens a network path, or adds
   background work.
 
@@ -112,7 +123,11 @@ Rules that fall out of this, and that the implementation's own doc must state:
 
 On the first run of the new code, with `generation.json` absent and any of the legacy trio present:
 
-1. Read the legacy pair; verify it with `floor = legacy_marker.unwrap_or(0)`.
+1. Read the legacy marker three-valued, as P2 requires. `Unreadable` → **migrate nothing this run**:
+   there is no `generation.json` yet, so there is no witness to reconcile against, and migrating
+   against a floor of 0 would let a validly-signed but stale legacy pair install itself as the floor.
+   The files stay; the next run retries. Otherwise verify the legacy pair with
+   `floor = Absent → 0 | Version(v) → v`.
 2. If it verifies → publish it as a generation and advance the marker to its `ruleset_version`.
 3. If it does not verify → **delete nothing**, ignore it, fall through to the embedded baseline.
 4. Legacy files stay on disk; after migration they are never read again. **Their safety is not
@@ -130,12 +145,16 @@ Ephemeral signing keys and local fixture directories only — never the producti
 3. **N-1 is rejected after N has been accepted and the process restarted** — run once with the marker
    write suppressed, to pin the reconciliation path specifically.
 4. A crash injected before and after each replacement point cannot lower the persisted floor.
-5. An unreadable / corrupt / locked marker with a valid generation present yields the generation's
-   floor, **not 0**.
-6. Signature failure, SHA mismatch, expiry and app-version-range failure each leave the previous
+5. An unreadable / corrupt / locked marker **with** a valid generation present yields the generation's
+   floor, **not 0**. This one passes against a two-valued marker too — `max()` returns the generation's
+   version either way — so it is kept for the reconciliation path and cannot stand alone.
+6. An unreadable / corrupt / locked marker with **no** verifiable generation **refuses the remote path**.
+   This is the state that actually fails against `unwrap_or(0)`, where the floor drops to 0 and every
+   signed generation ever issued becomes acceptable.
+7. Signature failure, SHA mismatch, expiry and app-version-range failure each leave the previous
    generation and the previous floor exactly as they were.
-7. A publish that fails mid-way leaves no partial generation and no leftover temp.
-8. Migration: a verifying legacy trio becomes a generation with the right floor; a non-verifying one
+8. A publish that fails mid-way leaves no partial generation and no leftover temp.
+9. Migration: a verifying legacy trio becomes a generation with the right floor; a non-verifying one
    is ignored and nothing is deleted.
 
 ## 7. Disposition, and the decision this asks for
@@ -152,6 +171,15 @@ on the "Remote-rules production key + CDN + staged rollout" row of `docs/RELEASE
 authoritative gate matrix, and the only place that arming gate is actually tracked (there is no
 remote-rules row in `docs/OWNER_ACTION_CHECKLIST.md`). The protocol therefore cannot be skipped on
 the day remote rules are turned on. Arming itself remains owner territory and is untouched here.
+
+**One finding against this document, found in review and fixed here** (session sentinel-63, on #288 at
+`25654d16`): §4's first pseudocode wrote `marker.unwrap_or(0)`, collapsing `Unreadable` to `0` and
+contradicting the P2 prose two lines above it. Fixture 5 could not catch it — it specified an
+unreadable marker *with* a valid generation, where `max()` returns the generation's version whether or
+not P2 exists, so it passed against the broken form. The marker is now three-valued, unreadable with
+no witness refuses the run, §5's migration takes the same branch, and fixture 5 is split so the second
+half can actually fail. **The lesson is the reusable part:** a fixture that passes against the broken
+implementation is not coverage, and a comment is not a type.
 
 **Stop condition, honoured:** this document is the design/proof boundary. Nothing in
 `src-tauri/src/remote_rules.rs` was changed, no gate was moved, and the remote feature is **not**
