@@ -30,11 +30,10 @@ still does not render on Health).
 **Rooms are `Health · Live · History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are
 persistence keys). **Read the rail from `src/design/homeRail.ts`, never from a doc.**
 
-**The lesson ② left behind: SOURCE-reachability is not USER-reachability.** A component can be dark
-one level up while **three guards stay green** (vendor-honesty proved only "not wrapped in a
-condition"; the affordance census counted 80 unreachable strings as live; the mono census described
-CSS nothing rendered). When a guard certifies a surface, check a route reaches it. Finding #4 was
-also partly WRONG (two Test gauges already carry notes) — **an audit is not a work order.**
+**SOURCE-reachability is not USER-reachability.** A component can be dark one level up while **three
+guards stay green** (vendor-honesty proved only "not wrapped in a condition"; the affordance census
+counted 80 unreachable strings as live; the mono census described CSS nothing rendered). When a guard
+certifies a surface, check a route reaches it — and **an audit is not a work order.**
 
 ## Before you touch the UI — the fixture route, and the guards already covering copy
 
@@ -96,8 +95,10 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   `lane/shell-ownership-278` · `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287` (#287), the only
   real chain left between them (`git merge-base --is-ancestor`) · `lane/css-margin-separators-274` (#274) ·
   `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are listed
-  only because **pruning them was denied**. `compy-health-parity` **contains** `compy-visual-recovery-kit-6fd074`
-  (14 shared, diverging at `c8366609`): ONE stack, backed up only to `refs/backup/*`. **No depth/SHA pinned**:
+  only because **pruning them was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074`
+  **share 14 commits and diverge at `c8366609` — neither contains the other** (`--is-ancestor` is NO
+  both ways; the kit has ONE unique commit, health-parity TEN). Backed up only to `refs/backup/*`, and
+  dropping either would throw the other's work away. Rule E now fails this doc for a false one. **No depth/SHA pinned**:
   `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a
   zero-carry branch — **a landed lane's name leaves with the train that lands it**, which is why neither the #281
   lane (PR #282 → `082f637e`) nor the #284 lane (PR #285 → `d5dcb9e2`, merge-committed so it dropped straight to
