@@ -93,8 +93,8 @@ effective_floor() -> Option<u64>:                // None = refuse the remote pat
               (Unreadable, Some(n)) -> n             // the generation restores what the marker lost
               (Absent, _)           -> 0             // genuinely zero; the one honest 0 here
               (Version(v), _)       -> v
-  floor = max(known, witness.unwrap_or(0))
-  if floor > known:
+  floor = witness.map_or(known, |w| max(known, w))   // NOT unwrap_or(0): never an invented floor
+  if floor > known || marker == Unreadable:      // an unreadable marker is REPAIRED, not merely survived
       persist_marker(floor)                      // atomic; BEFORE any remote acceptance
       on failure -> return None                  // keep serving cache/embedded
   Some(floor)
@@ -111,6 +111,18 @@ Rules that fall out of this, and that the implementation's own doc must state:
 - **Never delete the previous generation to make a publish succeed.** A failed publish leaves the
   previous generation in place, leaves the floor unchanged, and refuses the remote path that run.
 - **A failed write never lowers the floor.** The only permitted floor transition is upward.
+- **An unreadable marker is repaired on the first run that reconciles one**, which is why the persist
+  condition is `floor > known || marker == Unreadable` and not `floor > known` alone. Without the
+  second clause `(Unreadable, Some(n))` computes `floor == known == n`, skips the write, and leaves
+  the marker unreadable forever — so the machine's whole floor comes to rest on `generation.json`
+  staying verifiable, and the day it is not, the run refuses permanently. Fail-closed, and still
+  wrong: transient corruption must not become a permanent refusal.
+- **Reconciling from the generation widens the trust base from one file to two, and that is a real
+  cost, not a free reconstruction.** A signature proves a generation was ISSUED; it never proves the
+  generation is the NEWEST. An attacker who can write the data directory can corrupt the marker and
+  swap the cached generation for an older, validly-signed one, and the floor follows it down. The
+  marker was the single anti-rollback anchor; P3 deliberately trades some of that for recoverability,
+  and the arming review must weigh it as a trade rather than inherit it as a repair.
 - **No marker and no cache** means the machine genuinely has a floor of 0, which is correct rather
   than a fallback. It is the *unreadable* case that must not read as 0 — and when it is unreadable
   with no verifiable generation to reconcile against, there is no floor at all, so the run takes the
@@ -180,6 +192,15 @@ not P2 exists, so it passed against the broken form. The marker is now three-val
 no witness refuses the run, §5's migration takes the same branch, and fixture 5 is split so the second
 half can actually fail. **The lesson is the reusable part:** a fixture that passes against the broken
 implementation is not coverage, and a comment is not a type.
+
+**Three further findings from the same reviewer against `d31b4940`, all folded in** (comment
+5499871021): the persist condition skipped the repair on `(Unreadable, Some(n))`, so the first fix
+traded a silent zero for a silent never-heals; reconciling from the generation widens the trust base
+from one file to two and the threat model has to say so; and `witness.unwrap_or(0)` was correct but
+character-identical to the pattern this document teaches readers to distrust, one line under it. All
+three are above. **The pattern across both rounds is worth more than any of them:** every defect here
+was a *shape* — a collapsed case, an unstated trade, a familiar idiom — and none was caught by a
+fixture. Design review is not redundant with the fixture list; the fixture list is downstream of it.
 
 **Stop condition, honoured:** this document is the design/proof boundary. Nothing in
 `src-tauri/src/remote_rules.rs` was changed, no gate was moved, and the remote feature is **not**
