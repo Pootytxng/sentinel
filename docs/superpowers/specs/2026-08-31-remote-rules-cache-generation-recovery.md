@@ -207,9 +207,20 @@ implementation is not coverage, and a comment is not a type.
 traded a silent zero for a silent never-heals; reconciling from the generation widens the trust base
 from one file to two and the threat model has to say so; and `witness.unwrap_or(0)` was correct but
 character-identical to the pattern this document teaches readers to distrust, one line under it. All
-three are above. **The pattern across both rounds is worth more than any of them:** every defect here
-was a *shape* — a collapsed case, an unstated trade, a familiar idiom — and none was caught by a
-fixture. Design review is not redundant with the fixture list; the fixture list is downstream of it.
+three are above.
+
+**Two final findings in a fourth round, both folded in** (comment 5500031121): the persist condition
+still collapsed a RISE and a REPAIR, which fail differently — refusing on a failed repair turned an
+unwritable data directory into permanent refusal, this document's own unreadable-marker defect
+relocated from *the marker never heals* to *the run never proceeds*; and §8 pinned the head of the
+commit that introduced it, so it was false on arrival.
+
+**The pattern across all four rounds is worth more than any of them:** every defect here was a
+*shape* — a collapsed case, an unstated trade, a familiar idiom, a section asserting a present state
+— and **not one was caught by a fixture**. Design review is not redundant with the fixture list; the
+fixture list is downstream of it. Sharper still, twice consecutively: **the repair for one shape
+produced the next one**, in a document whose whole subject is not inventing fallbacks. So treat any
+fix to this design as new unreviewed content, never as a correction that inherits the last verdict.
 
 **Stop condition, honoured:** this document is the design/proof boundary. Nothing in
 `src-tauri/src/remote_rules.rs` was changed, no gate was moved, and the remote feature is **not**
