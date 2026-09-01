@@ -95,18 +95,18 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **30 worktrees besides `main`; TWELVE branches carry commits not on main — do NOT delete or hard-reset
-  those twelve before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
-  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
-  `lane/vision-pointer-guard-2026-08-24` · the four live lanes `lane/fleet-guard-failclosed-276`,
-  `lane/shell-ownership-278`, `lane/atomic-json-281` (#281) and `lane/license-atomic-284` (#284) ·
-  `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED**
-  (`29fb8009`/PR #275 · `e26108f7`/PR #273), listed only because **pruning was denied**. **No depth/SHA
-  pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this
-  bullet for naming a zero-carry branch — **a landed lane's name leaves with the train that lands it**;
-  every carrier has a branch, so rule C's path credit is idle. Spent, at zero: `sentinel-recon-261`,
-  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 both
-  landed out of it), four of the SEVEN in `.claude/worktrees/`, parked `sentinel-mission0-accent-landing`,
+- **32 worktrees besides the canonical checkout; FOURTEEN branches carry commits not on main — do NOT delete or hard-reset
+  those fourteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+  `claude/compy-visual-recovery-kit-6fd074` · `lane/agent-skills-config` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
+  `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` · `lane/shell-ownership-278` ·
+  STACKED in this order, each on the one before it, so any count includes its parents': `lane/license-atomic-284`
+  (#284) → `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287` (#287) · `lane/css-margin-separators-274`
+  (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are
+  listed only because **pruning them was denied**. **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  Rule D (#243) fails this bullet for naming a zero-carry branch — **a landed lane's name leaves with the train that
+  lands it**, which is why the #281 lane is no longer named here: PR #282 landed it as `082f637e`. Spent, at zero:
+  `sentinel-recon-261`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258`
+  (#258/#264 both landed out of it), four of the SEVEN in `.claude/worktrees/`, parked `sentinel-mission0-accent-landing`,
   `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — two arming gates, nothing else

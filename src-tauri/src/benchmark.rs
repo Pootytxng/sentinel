@@ -898,7 +898,7 @@ fn save_store(store: &BenchmarkStore) -> Result<(), String> {
 fn save_store_to(path: &std::path::Path, store: &BenchmarkStore) -> Result<(), String> {
     // Serialize BEFORE any file is opened: a store that cannot be serialized must not have cost the
     // user the baseline that is already on disk. Same error mapping as before.
-    let json = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    let json = crate::atomic_write::serialize_pretty(store).map_err(|e| e.to_string())?;
     crate::atomic_write::write_atomic(path, json.as_bytes()).map_err(|e| e.to_string())
 }
 
@@ -1062,6 +1062,47 @@ mod benchmark_store_persistence_tests {
             save_store_to(&p, &BenchmarkStore::default()).is_err(),
             "the save did not go through the atomic write path"
         );
+        assert_eq!(load_store_from(&p).baseline_at.as_deref(), Some("keep-me"));
+    }
+
+    #[test]
+    fn a_serialization_failure_touches_neither_target_nor_temp() {
+        let dir = scratch("serialize-failed");
+        let p = dir.join("benchmark.json");
+        let good = BenchmarkStore {
+            baseline: None,
+            baseline_at: Some("keep-me".into()),
+        };
+        save_store_to(&p, &good).expect("first save");
+
+        crate::atomic_write::force_next_serialization_failure();
+        let err = save_store_to(&p, &BenchmarkStore::default())
+            .expect_err("injected serialization failure must surface");
+        assert!(err.contains("injected serialization failure"), "got: {err}");
+        assert_eq!(load_store_from(&p).baseline_at.as_deref(), Some("keep-me"));
+        assert!(
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")),
+            "serialization reached the atomic writer"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_share_lock_surfaces_the_benchmark_error_and_preserves_the_old_store() {
+        let p = scratch("locked").join("benchmark.json");
+        let good = BenchmarkStore {
+            baseline: None,
+            baseline_at: Some("keep-me".into()),
+        };
+        save_store_to(&p, &good).expect("first save");
+        let held = crate::atomic_write::hold_without_share(&p);
+        let err = save_store_to(&p, &BenchmarkStore::default())
+            .expect_err("locked target must fail through the caller");
+        assert!(!err.is_empty(), "caller swallowed the lock error");
+        drop(held);
         assert_eq!(load_store_from(&p).baseline_at.as_deref(), Some("keep-me"));
     }
 }

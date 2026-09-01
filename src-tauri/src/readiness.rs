@@ -949,7 +949,7 @@ fn save_dismissals(ids: &[String]) -> Result<(), String> {
 }
 
 fn save_dismissals_to(path: &std::path::Path, ids: &[String]) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(ids)
+    let json = crate::atomic_write::serialize_pretty(ids)
         .map_err(|e| format!("could not save your dismissed-checks setting: {e}"))?;
     // Identical user-facing wording to before — the replacement is atomic, what the user is told is
     // not allowed to change.
@@ -1066,6 +1066,44 @@ mod readiness_dismissal_persistence_tests {
             err.starts_with("could not save your dismissed-checks setting: "),
             "the user-facing wording changed: {err}"
         );
+        assert_eq!(load_dismissals_from(&p), vec!["keep-me".to_string()]);
+    }
+
+    #[test]
+    fn a_serialization_failure_uses_the_existing_wording_and_touches_no_file() {
+        let dir = scratch("serialize-failed");
+        let p = dir.join("readiness_dismissals.json");
+        save_dismissals_to(&p, &["keep-me".to_string()]).expect("first");
+        crate::atomic_write::force_next_serialization_failure();
+        let err = save_dismissals_to(&p, &["clobber".to_string()])
+            .expect_err("serialization failure must surface");
+        assert!(
+            err.starts_with("could not save your dismissed-checks setting: "),
+            "the user-facing wording changed: {err}"
+        );
+        assert_eq!(load_dismissals_from(&p), vec!["keep-me".to_string()]);
+        assert!(
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")),
+            "serialization reached the atomic writer"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_share_lock_keeps_the_existing_wording_and_old_dismissals() {
+        let p = scratch("locked").join("readiness_dismissals.json");
+        save_dismissals_to(&p, &["keep-me".to_string()]).expect("first");
+        let held = crate::atomic_write::hold_without_share(&p);
+        let err = save_dismissals_to(&p, &["clobber".to_string()])
+            .expect_err("locked target must fail through the caller");
+        assert!(
+            err.starts_with("could not save your dismissed-checks setting: "),
+            "the user-facing wording changed: {err}"
+        );
+        drop(held);
         assert_eq!(load_dismissals_from(&p), vec!["keep-me".to_string()]);
     }
 
