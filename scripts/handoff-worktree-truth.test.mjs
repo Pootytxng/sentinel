@@ -280,25 +280,56 @@ export function spentButCarrying(names, carriers) {
 }
 
 /**
- * Words that turn a containment sentence into its opposite. Read over the SENTENCE the match sits
- * in — never the whole document — because a denial governs its own clause. A rule that let one
- * "not" anywhere above silence every claim below it would be a mute button, not a fix.
+ * Words that turn a containment sentence into its opposite.
+ *
+ * Bare `no` used to be on this list and is not any more. It is the one entry that appears far more
+ * often ASSERTING than denying — "there is no doubt X contains Y", "no open PR contains it" — and
+ * every genuine denial the doc writes is carried by one of the others, `no longer` included. Session
+ * `sentinel-21` measured `There is no doubt \`ccc\` contains \`ddd\`.` returning no claims at all,
+ * which is a false claim walking straight past the rule. `none` stays: it denies in every form this
+ * doc uses it.
  */
-const NEGATION = /\b(?:neither|nor|not|never|no|none|cannot|isn't|doesn't|wasn't|without)\b/i;
+const NEGATION = /\b(?:neither|nor|not|never|no longer|none|cannot|isn't|doesn't|wasn't|without)\b/i;
+
+/**
+ * Where a denial's authority ENDS. A negation governs its own clause, not the rest of the sentence.
+ *
+ * Punctuation, and the conjunctions that introduce a contrasting or consequent clause. Deliberately
+ * short: every entry here NARROWS the window, and narrowing it too far turns a true denial back into
+ * a claim, which is the false positive #295 was filed for. `and` is left out for exactly that reason
+ * — it continues a clause at least as often as it starts one.
+ */
+const CLAUSE_BOUNDARY = /[,;:—–]|--|\b(?:but|yet|so|though|although|however|whereas|while)\b/gi;
 
 /**
  * True when a denial governs the span from `start` to `end`.
  *
- * The window opens at the previous sentence terminator, which is the same boundary the NEAR window
- * inside `containmentClaims` already respects — so this cannot reach past a `.` that the match
- * itself could not have crossed. Backticked spans are blanked first: a negation is prose, and a
- * branch that happens to be called `lane/not-landed` must not be able to silence the sentence
- * quoting it.
+ * The window opens at the LATER of the previous sentence terminator and the nearest preceding clause
+ * boundary. The sentence bound alone was the first fix (#295) and it was too coarse — measured by
+ * `sentinel-21` at `a59c8c96`, all three of these returned no claims:
+ *
+ *     Neither `aaa` contains `bbb`, but `ccc` contains `ddd`.
+ *     Neither lane was pruned, so `lane/a` contains `lane/b` still.
+ *     There is no doubt `ccc` contains `ddd`.
+ *
+ * In the first two the denial governs a different clause; in the third it is not a denial at all.
+ * Each is a FALSE claim the rule waved through, and that is the worse direction of the two errors
+ * this rule can make: a false positive annoys the writer of a correct doc, a false negative lets a
+ * wrong doc reach the next session. #295 fixed one and introduced the other, so the clause bound is
+ * the other half of that repair rather than a new rule.
+ *
+ * Backticked spans are blanked across the WHOLE text before either scan, at equal length so offsets
+ * still line up. A negation is prose, never part of a name: a branch called `lane/not-landed` must
+ * not silence the sentence quoting it, and a branch called `lane/but-x` must not split it.
  */
 export function isNegated(text, start, end) {
-  const from = text.slice(0, start).search(/[^.!?\n]*$/);
-  const window = text.slice(from < 0 ? 0 : from, end).replace(/`[^`]*`/g, " ");
-  return NEGATION.test(window);
+  const masked = String(text).replace(/`[^`]*`/g, (m) => " ".repeat(m.length));
+  const sentence = masked.slice(0, start).search(/[^.!?\n]*$/);
+  const base = sentence < 0 ? 0 : sentence;
+  let from = base;
+  // The LAST boundary before the match wins: the claim belongs to the clause it actually sits in.
+  for (const m of masked.slice(base, start).matchAll(CLAUSE_BOUNDARY)) from = base + m.index + m[0].length;
+  return NEGATION.test(masked.slice(from, end));
 }
 
 /**
@@ -612,6 +643,35 @@ describe("the handoff tells the truth about the worktrees", () => {
     // branch that happens to be called `lane/not-landed` cannot silence the sentence quoting it.
     expect(containmentClaims("`main` contains `lane/not-landed`.").map((c) => c.inner)).toEqual(["lane/not-landed"]);
     expect(isNegated("plain prose", 0, 11)).toBe(false);
+  });
+
+  it("E: a denial governs its own CLAUSE, not the rest of the sentence", () => {
+    // The other half of #295's repair, and it exists because the first half over-corrected. Session
+    // `sentinel-21` measured all three of these at `a59c8c96` returning no claims at all — a FALSE
+    // claim walking past the rule, which is the worse of the two errors: a false positive annoys the
+    // writer of a correct doc, a false negative lets a wrong doc reach the next session.
+    const claims = (s) => containmentClaims(s).map((c) => `${c.outer}>${c.inner}`);
+
+    // 1. The denial is spent on the clause before "but".
+    expect(claims("Neither `aaa` contains `bbb`, but `ccc` contains `ddd`.")).toEqual(["ccc>ddd"]);
+
+    // 2. The denial is about something else entirely; the containment is asserted after "so".
+    expect(claims("Neither lane was pruned, so `lane/a` contains `lane/b` still.")).toEqual(["lane/a>lane/b"]);
+
+    // 3. Not a denial at all. Bare `no` left the negation list for this: it asserts more often than
+    //    it denies ("no doubt", "no open PR"), and `no longer` carries the one shape the doc writes.
+    expect(claims("There is no doubt `ccc` contains `ddd`.")).toEqual(["ccc>ddd"]);
+    expect(claims("`main` no longer contains `aaa`.")).toEqual([]);
+
+    // ...and the boundary must not be so eager that a denial stops governing its OWN clause. Each of
+    // these keeps its negation on the same side of the boundary as the claim, which is the false
+    // positive #295 was filed for and the direction this fix must not walk back into.
+    expect(claims("Neither `aaa`, despite the shared history, contains `bbb`.")).toEqual([]);
+    expect(claims("The lanes diverge, so `aaa` no longer contains `bbb`.")).toEqual([]);
+    expect(claims("`aaa` landed, but `bbb` is not an ancestor of `ccc`.")).toEqual([]);
+
+    // A branch whose NAME contains a boundary word must not split the sentence quoting it.
+    expect(claims("Neither `lane/but-x` contains `lane/so-y` nor the reverse.")).toEqual([]);
   });
 
   it("F: no checkout is called spent in the same breath as it is called a carrier", () => {
