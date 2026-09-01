@@ -101,6 +101,17 @@ export function worktreePaths(porcelain) {
   return paths;
 }
 
+/**
+ * The argv the live sweep asks every worktree, named so a test can hold it to the one flag that
+ * matters. `-uall` is not a preference: at git's default `-unormal` a fully-untracked directory
+ * collapses to a single `?? .claude/work-control/` entry, which does not end in `.json`, so the
+ * filter drops it and that worktree reports zero findings. A guard that silently sweeps nothing
+ * is the exact posture this file exists to forbid. Caught by the #299 reviewer, reproduced in a
+ * throwaway repo, and not live on this machine — all 33 worktrees measure identically under
+ * `-unormal`, `-uall` and `--ignored`, so this closes a latent hole rather than a defect.
+ */
+export const STATUS_ARGV = ["status", "--porcelain", "-uall", "--", RECEIPT_DIR];
+
 /** The untracked receipt paths a single worktree reports, relative to that worktree. */
 export function untrackedReceipts(porcelainStatus) {
   return porcelainStatus
@@ -148,6 +159,12 @@ describe("a work-control receipt survives the worktree it was written in", () =>
     expect(
       untrackedReceipts("?? .claude/work-control/a.json\n?? .claude/work-control/notes.md\n M x"),
     ).toEqual([".claude/work-control/a.json"]);
+    // #299 review finding: at git's default `-unormal` a fully-untracked receipt directory arrives as
+    // ONE entry naming the directory, which is not a `.json` path — so the sweep would report nothing
+    // for that worktree and read as clean. The parser is right to drop it; the fix is the flag, and
+    // this is the assertion that keeps the flag from being tidied away later.
+    expect(untrackedReceipts("?? .claude/work-control/")).toEqual([]);
+    expect(STATUS_ARGV).toContain("-uall");
   });
 
   it("every untracked receipt on this machine is a benign shadow of a committed one", () => {
@@ -185,7 +202,7 @@ describe("a work-control receipt survives the worktree it was written in", () =>
       }
       let status;
       try {
-        status = git(["status", "--porcelain", "--", RECEIPT_DIR], worktree);
+        status = git(STATUS_ARGV, worktree);
       } catch (error) {
         throw new Error(`could not read ${worktree}: ${error.message}`);
       }
