@@ -98,7 +98,7 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are listed only because **pruning them was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074`
   **share 14 commits and diverge at `c8366609` — neither contains the other** (`--is-ancestor` is NO
   both ways; the kit has ONE unique commit, health-parity TEN). Backed up only to `refs/backup/*`, and
-  dropping either would throw the other's work away. Rule E now fails this doc for a false one. **No depth/SHA pinned**:
+  dropping either would throw the other's work away. Rule E no longer fails it for a false one. **No depth/SHA pinned**:
   `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a
   zero-carry branch — **a landed lane's name leaves with the train that lands it**, which is why neither the #281
   lane (PR #282 → `082f637e`) nor the #284 lane (PR #285 → `d5dcb9e2`, merge-committed so it dropped straight to
