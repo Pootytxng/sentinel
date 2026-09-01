@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
+import { prePushContractViolations, refusesWhenVerifierMissing, shellCode } from "./lib/prepush-hook-contract.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => readFileSync(join(ROOT, ...rel.split("/")), "utf8");
@@ -321,9 +322,23 @@ describe("the gate is wired to something that runs it", () => {
     expect(pkg.scripts["verify:local"]).toContain("scripts/verify-local.ps1");
   });
 
-  it("has a pre-push hook that invokes it", () => {
+  it("has a pre-push hook that satisfies the SAME contract the fleet guard enforces", () => {
+    // Was `expect(hook).toContain("verify-local.ps1")` against the RAW text, which a comment
+    // mentioning the verifier satisfied. Both checks now come from scripts/lib/prepush-hook-contract
+    // .mjs, so this file (the tracked hook is correct) and hookspath-fleet-guard.test.mjs (every
+    // checkout runs a correct hook) cannot drift into disagreeing about what "correct" means -- and
+    // loosening one loosens the other visibly, in a shared file, instead of silently in one of two.
     expect(exists(".githooks/pre-push")).toBe(true);
-    expect(hook).toContain("verify-local.ps1");
+    expect(prePushContractViolations(hook)).toEqual([]);
+  });
+
+  it("refuses rather than crashes when the checkout it lands in has no verifier", () => {
+    // 713cafab (#269). A worktree created before scripts/verify-local.ps1 existed, or one whose
+    // checkout does not carry it, would otherwise reach the powershell.exe line and fail with a path
+    // error -- a refusal that looks like tooling breakage rather than a gate saying no. The fleet
+    // guard requires this branch only of checkouts that actually lack the verifier; the TRACKED hook
+    // has to carry it unconditionally, because it is the hook those checkouts get.
+    expect(refusesWhenVerifierMissing(hook)).toBe(true);
   });
 
   it("has a setup script that points git at the tracked hooks directory", () => {
@@ -331,6 +346,27 @@ describe("the gate is wired to something that runs it", () => {
     // an inert hook is indistinguishable from a passing one.
     expect(psCode(setup)).toMatch(/core\.hooksPath/);
     expect(psCode(setup)).toMatch(/\.githooks/);
+  });
+
+  it("asks git for an ABSOLUTE hooks path, so its verdict is about the repo and not the shell", () => {
+    // bug->guard, 2026-08-31. `rev-parse --git-path hooks` answers RELATIVELY (".githooks"), and
+    // Test-Path then resolved it against the CALLER's working directory: measured from C:\Users\Kuya,
+    // the script called a correctly armed checkout "NOT ARMED" and exited 1, while `Split-Path
+    // -Parent` of the same value printed an empty directory into the warning that told you where to
+    // fix it. A setup script whose arming verdict depends on where you were standing is worse than
+    // no verdict -- it is the fail-open shape this whole gate exists to refuse, one level up.
+    expect(psCode(setup)).toMatch(/--path-format=absolute\s+--git-path hooks/);
+  });
+
+  it("does not repeat the disproven claim that a relative hooks path resolves against main", () => {
+    // The claim sat in this script's comments and its NOT-ARMED advice, and it sent anyone who hit
+    // the warning to repair the WRONG checkout. Measured on git 2.55.0.windows.3: from the linked
+    // worktree sentinel-fleet-guard-276 with core.hooksPath=.githooks, `rev-parse
+    // --path-format=absolute --git-path hooks` returns that worktree's own .githooks, not main's.
+    // Asserted against the comments too -- unlike every other check in this file -- because a wrong
+    // COMMENT was the entire defect here, and stripping comments would strip the bug.
+    expect(setup).not.toMatch(/resolves against the MAIN worktree/i);
+    expect(setup).not.toMatch(/hook FILE is shared by all worktrees/i);
   });
 
   it("pre-flights core.bare before spending four minutes on the gate", () => {
@@ -393,7 +429,9 @@ describe("the gate is wired to something that runs it", () => {
   it("keeps the hook bypassable only on purpose", () => {
     // `git push --no-verify` exists and always will. What must not exist is a hook that passes by
     // accident: the shell script has to stop on the first error rather than run on.
-    expect(hook).toMatch(/set -e/);
+    //
+    // Asserted against shellCode(), not the raw text: `# set -e` in a comment used to satisfy this.
+    expect(shellCode(hook)).toMatch(/^\s*set\s+-[a-z]*e/m);
   });
 });
 

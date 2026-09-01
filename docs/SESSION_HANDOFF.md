@@ -16,7 +16,7 @@
 | Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
 
-## The two lenses every Health/room change must clear
+## The rule that came out of the walk — read this before touching Health
 
 **DIR-1a: offering help is conditional on evidence** — a front door built only out of symptoms tells
 a healthy PC's owner they are in the wrong place, and *"i want more fps"* is a legitimate reason to be
@@ -41,20 +41,19 @@ certifies a surface, check a route reaches it — and **an audit is not a work o
 `@tauri-apps/api/core`: six FirstWin `?state=` values (`firstwin-held`, `-reverted`, `-unreadable`,
 `-check-failed`, `-undo-failed`, `-latest`) and three debrief ones (`debrief-smooth-offer`,
 `-rough-fix`, `-clean-none`). Serve on 5199 — `npx vite --config docs/ui-sweep/fixture/vite.config.mts`;
-a bare `/` drops your `?state=`. `src/fixture-parity-guard.test.ts` fails the build if the stub stops
-answering a command a card sends, **or a WRITE outside its own branch** — how the self-reviewer reaches a state the shipped app cannot be put into on demand.
+a bare `/` drops your `?state=`. `src/fixture-parity-guard.test.ts` fails the build if the stub
+stops answering a command a card sends, **or if a WRITE is answered outside its own branch** —
+and it is how the self-reviewer reaches a state the shipped app cannot be put into on demand.
 
-- `src/data/jargon-guard.test.ts` covers the **Blackbook DATA corpus only**, NOT surface copy. A
-  wayfinding fix in a SURFACE needs its own guard, or an extension of one: `jargon-term-gloss-`,
-  `voice-`, `stale-reference-`, `readiness-attention-label-`, `crash-rescue-naming-`,
-  `post-check-lab-route-`, `home-console-standard-readout-`, `heading-is-a-name-`,
-  `home-console-front-door-` (`src/**/*guard*.test.*`).
+- `src/data/jargon-guard.test.ts` covers the **Blackbook DATA corpus only**, NOT surface copy.
+  A wayfinding fix in a SURFACE needs its own guard, or an extension of one of these:
+  `jargon-term-gloss-guard.test.ts`, `voice-guard.test.ts`, `stale-reference-guard.test.ts`,
+  `readiness-attention-label-guard.test.ts`, `crash-rescue-naming-guard.test.ts`,
+  `post-check-lab-route-guard.test.ts`, `home-console-standard-readout-guard.test.tsx`,
+  `heading-is-a-name-guard.test.tsx`, `home-console-front-door-gate.test.tsx`.
 
-## Five gate traps this repo keeps paying for — do not pay again
+## Four gate traps this repo keeps paying for — do not pay again
 
-- **A GUARD'S OWN CONSTANT GOES STALE TOO.** `home-console.test.tsx` certified the readout's width
-  budget against a `CLIENT` nobody re-measured — green for rounds while a cell hung off the strip.
-  **A guard asserting a measured px value must carry HOW and WHEN it was taken**; the fixed one does.
 - **`tools/entry/doc-truth.test.mjs` decision 7** fails any live-doc SENTENCE pairing the word
   `merge` with the word `worktree` unless it also denies propagation. True sentences still fail, and
   `\b` matches across a hyphen, so **"pre-merge review" counts** — fixing the first offender creates
@@ -79,42 +78,43 @@ and owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evi
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
-Console (`LabConsole`), its bench already armed as `ExperimentBench`, and
+Console (`LabConsole`), and its proving bench already ships armed as `ExperimentBench`.
 `src/superseded-plan-citation-guard.test.ts` fails the build on any live doc citing a dead plan.
 
 **Do NOT touch** Tier 1 plan tasks 10–11 (independent security review + arming). Owner territory,
-filed in `docs/OWNER_ACTION_CHECKLIST.md` §C so arming can never happen quietly; still dark behind
-three independent locks (`case_intelligence_gate()` hard-false · `CASE_SIGNING_PUBKEY` all zeros ·
-`CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` empty). **Before any UI work:** read
-`docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", carrying DIR-1a) and **§G**
-(the site). Read them THERE, never from a paraphrase.
+filed in `docs/OWNER_ACTION_CHECKLIST.md` §C so arming can never happen quietly. Still dark, three
+independent locks, none touched: `case_intelligence_gate()` hard-false · `CASE_SIGNING_PUBKEY` all
+zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **Before any UI work:**
+read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
+and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides the canonical checkout; THIRTEEN branches carry commits not on main — do NOT delete or
-  hard-reset those thirteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+- **32 worktrees besides the canonical checkout; TWELVE branches carry commits not on main — do NOT delete or
+  hard-reset those twelve before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
-  `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` (#276) → `lane/rule-e-negation` (#295) ·
-  `lane/shell-ownership-278` · `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287` (#287) — the two stacked
-  pairs, each stacked so one repair does not land twice (`git merge-base --is-ancestor`) ·
-  `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 ·
-  `e26108f7`/PR #273) and are listed only because **pruning them was denied**. `compy-health-parity` and
-  `compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at `c8366609` — neither contains the other**
-  (`--is-ancestor` is NO both ways; the kit has ONE unique commit, health-parity TEN). Backed up only to `refs/backup/*`,
-  and dropping either would throw the other's work away. Rule E no longer fails it for a false one. **No depth/SHA
-  pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a
-  zero-carry branch — **a landed lane's name leaves with the train that lands it**, which is why neither the #281 lane
-  (PR #282 → `082f637e`) nor the #284 lane (PR #285 → `d5dcb9e2`, merge-committed so it dropped straight to zero while
-  286 and 287 kept pointing into it) is named here. `sentinel-recon-261` left the spent list on becoming #295's carrier.
-  Spent, at zero: `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 both
-  landed out of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven entries;
-  `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
-  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
+  `lane/vision-pointer-guard-2026-08-24` · `lane/rule-e-negation` (#295) · `lane/shell-ownership-278` ·
+  `lane/receipt-288` (the #288 receipt, in `sentinel-remote-design-286`) · `lane/case-receiver-287` (#287) —
+  unstacked: its base landed and PR #289 was retargeted onto main in the same train · `lane/css-margin-separators-274`
+  (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (PR #275 · PR #273) listed only because **the prune
+  was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at
+  `c8366609` — neither contains the other** (`--is-ancestor` NO both ways). Counted **not on main**, as everywhere
+  here: the kit has ONE unique commit, health-parity FOURTEEN (from the merge base, 170). Backed up only to
+  `refs/backup/*`; dropping either loses the other's work. **No depth/SHA pinned**: `git worktree list` +
+  `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a zero-carry branch — **a
+  landed lane's name leaves with its train**, which is why the #281 (PR #282), #284 (PR #285), #276 (PR #277 →
+  `ee5bdd8b`), #298 (PR #299 → `81b16d60`) and #286 (PR #288 → `624fcc40`) lanes are not named here: all five
+  merge-committed, so each dropped to zero, and a landing that strands an open PR on a spent base retargets it then,
+  not later. Spent, at zero: `sentinel-fleet-guard-276`, `sentinel-segmented-237`, `sentinel-release-truth-256`,
+  `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 landed out of it), four of the SIX under
+  `.claude/worktrees/` (seven entries; `data-root-integrity-432797` is not one), parked
+  `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233),
+  `sentinel-q9b-stage2`. Every detached checkout carries zero, so rule C credits none.
 
-## Waiting on the owner — his eye, then two arming gates
+## Waiting on the owner — two arming gates, nothing else
 
 **Money items are ON HOLD by his standing rule (2026-08-25) and are deliberately NOT listed here as
-blockers** — `compy.gg`, Ko-fi and Pro pricing live in `docs/OWNER_ACTION_CHECKLIST.md` §B/§C.
+blockers** — `compy.gg`, the Ko-fi URL and Compy Pro pricing live in
+`docs/OWNER_ACTION_CHECKLIST.md` §B/§C and must stop being reported as things he owes. The two
+DIR-1 walk questions are ANSWERED and shipped; nothing design-side is parked on him.
 
-- **Health #225 needs his DECISION** (default accent vs re-shoot the comp) **and his LOOK.** Test
-  #224 has Codex's acceptance for its visuals; neither room has his eye yet.
 - **Receipts telemetry arming** (§C) and **Tier 1 arming** (§C) — signing-key custody, the catalog
   domain, and the arming itself, after an independent security review. Only the arming is his.

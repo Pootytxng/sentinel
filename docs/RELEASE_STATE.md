@@ -185,7 +185,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
 | Receipts security review + consent UI + payload preview + kill switch | **OPEN** — gates arming Receipts telemetry. Payload preview + the consent/off-switch commands and the privacy disclosure exist as of Q9a (2026-08-25); the independent security review and the first-run consent UI do not. |
 | Preload-app removal live QA + owner-curated list | **OPEN** — gates arming preload-app removal (built DARK, not a ship blocker). |
 | Aggregate-stack trial live QA | **OPEN** — gates arming the §2a stack trial (built DARK, not a ship blocker). |
-| Remote-rules production key + CDN + staged rollout | **OPEN** — gates arming remote fetch. |
+| Remote-rules production key + CDN + staged rollout | **OPEN** — gates arming remote fetch. **Also a precondition (added 2026-08-31, #286):** the crash-recoverable generation + anti-rollback floor protocol in [`docs/superpowers/specs/2026-08-31-remote-rules-cache-generation-recovery.md`](superpowers/specs/2026-08-31-remote-rules-cache-generation-recovery.md) must be implemented and fixture-proven before fetch is armed. Today the cache's three files are written independently, so a crash after the pair lands but before the floor advances leaves a floor that would later accept a signed *older* ruleset. Unreachable while `remote_fetch_enabled()` is false; arming is what would make it reachable. |
 | v0.9.10 release debris | **CLOSED — deleted 2026-07-28** under owner authorization (draft `360948018` + releases-repo tag). Source tag `92c7608`, recovery branches and local evidence preserved. |
 
 **No active blocker remains on the v0.9.26 release train** — it is complete 9/9 (**NOT re-verifiable — see #199**), published
