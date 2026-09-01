@@ -90,32 +90,34 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Dead refs, dead folders, rewritten Codex configs — one cleanup pass  ·  ⏳ 2026-08-31, widened 2026-09-01
+### A_prune. Dead refs and dead folders — one cleanup pass  ·  ⏳ 2026-08-31, re-scoped 2026-09-01
 
-**Three commands, and none of them is urgent.** Every one was **denied to this session**, and a denial
-is a stop — so none was reached by another route, and nothing here is broken while it waits.
+**Two commands, and neither is urgent.** Both were **denied to this session**, and a denial is a stop.
 
 1. `git push origin --delete lane/native-routing-271 lane/css-margin-separators-274
-   lane/cleanup-train-2026-08-20` — three spent refs. The first two landed (PRs
+   lane/cleanup-train-2026-08-20 lane/agent-skills-config` — four spent refs. Three landed (PRs
    [#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`,
-   [#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`). The third's PR
+   [#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`,
+   [#290](https://github.com/Pootytxng/sentinel/pull/290) → `90e253a8`). The fourth's PR
    [#163](https://github.com/Pootytxng/sentinel/pull/163) closed **unmerged**, but its one real fix
    reached `main` independently and more fully, leaving that branch 139 lines BEHIND on its own files.
 2. `git worktree remove` for the **fourteen** checkouts carrying no commit `main` lacks.
-3. `git restore .codex/config.toml` in the **ten** holding a rewritten copy of it.
 
-**Nothing is lost by any of the three.** The local refs and their worktrees still hold every commit,
-so all three branches can be pushed back with one command. The only real content those folders held
-was six work-control proof receipts — evidence for merges and closes that existed on no branch at all,
-one a full independent-review record — and they were copied onto a lane first. What remains is a
-line-endings-only `CLAUDE.md`, a tool scratch folder, and the Codex file, which is not authored work
-either: it is the app-server re-sync its own header warns about, re-adding two Claude env-vars that do
-nothing for Codex plus an MCP entry a lane had removed on purpose. It keeps the read-only safety floor
-on its first two lines, so nothing is unsafe while it sits.
+**Nothing is lost by either.** The local refs and their worktrees still hold every commit, so any of
+the four branches can be pushed back with one command. The only real content those folders held was
+six work-control proof receipts — evidence for merges and closes that existed on no branch at all, one
+a full independent-review record. All six are now **verified present on `main`**, so those folders
+hold nothing unique. What remains in them is a tool scratch folder and duplicate copies of those same
+six receipts.
+
+**Struck from this item 2026-09-01 — done, not waiting on you:** the ten rewritten `.codex/config.toml`
+copies are restored, and one line-ending drift in a `CLAUDE.md` with them. That restore turned out to
+be permitted when tried on its own, so it was simply done. Every worktree on this machine now reports
+**zero tracked drift**, except the two another writer currently holds, which were left alone on purpose.
 
 **Why it matters:** `git worktree list` and the branch list are what every new session reads to learn
-what is live. Fourteen dead folders and three landed-but-present refs in them is exactly why sessions
-keep re-deriving the same wrong picture — and why the docs have to keep saying "landed, still here".
+what is live. Fourteen dead folders and four landed-but-present refs are why sessions keep re-deriving
+the same wrong picture — and why the docs must keep saying "landed, still here".
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
