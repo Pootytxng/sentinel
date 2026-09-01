@@ -88,12 +88,14 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides the canonical checkout; TWELVE branches carry commits not on main — do NOT delete or
-  hard-reset those twelve before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+- **32 worktrees besides the canonical checkout; THIRTEEN branches carry commits not on main — do NOT delete or
+  hard-reset those thirteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
   `lane/vision-pointer-guard-2026-08-24` · `lane/rule-e-negation` (#295) · `lane/shell-ownership-278` ·
   `lane/receipt-288` (the #288 receipt, in `sentinel-remote-design-286`) · `lane/case-receiver-287` (#287) —
-  unstacked: its base landed and PR #289 was retargeted onto main in the same train · `lane/css-margin-separators-274`
+  unstacked: its base landed and PR #289 was retargeted onto main in the same train ·
+  `lane/vacuous-guards-304` (#304, STACKED on `lane/case-receiver-287` — the ROOTS widening it owes
+  edits a guard that exists only on that base) · `lane/css-margin-separators-274`
   (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (PR #275 · PR #273) listed only because **the prune
   was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at
   `c8366609` — neither contains the other** (`--is-ancestor` NO both ways). Counted **not on main**, as everywhere
