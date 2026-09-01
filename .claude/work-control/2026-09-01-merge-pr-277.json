@@ -1,0 +1,72 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 277,
+  "issue": 276,
+  "branch": "lane/fleet-guard-failclosed-276",
+  "currentHead": "6d3283c95a213bbb8d17b8de72ce6ca21a114a8e",
+  "explicitHandoff": "Owner turn authorizing this train: 'Please resolve any and all conflicts regarding any of the remaining work in the recent chats. Please review all existing work trees. Cleanup and complete. All remaining work. to bring everything to current. and proceed with a persistent marathon automated workflow while I step away from my desk. Workaround mitigated work. That allows for you to do so. without causing any issues.' Merging a green lane does not rest on that turn alone: the 2026-08-11 decree makes merging green lanes to main mine without asking, and docs/RELEASE_AUTONOMY.md covers the complete reversible release-engineering train. The owner is away from the desk, so nothing in this transition reaches another machine: it does not publish, tag, arm the updater, move a frozen ref, touch a signing key, or change a security or system setting.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. This transition runs from the worktree C:/Users/Kuya/code/sentinel-fleet-guard-276, re-derived this turn with git rev-parse --show-toplevel and git branch --show-current rather than carried across the context compaction that sits between the review and this merge.",
+    "remoteState": "git fetch origin run this turn. origin/main = 90e253a8. git ls-remote --heads origin gives refs/heads/lane/fleet-guard-failclosed-276 = 6d3283c95a213bbb8d17b8de72ce6ca21a114a8e, byte-identical to the local branch tip and to the head gh reports for PR #277. gh pr view 277: OPEN, MERGEABLE, mergeStateStatus CLEAN, base main.",
+    "worktree": "This writer holds C:/Users/Kuya/code/sentinel-fleet-guard-276 alone. The reviewer, session sentinel-21, holds its own separate checkout and did NOT write into this one - it disclosed that limit itself rather than being asked about it. Three further checkouts carry work of mine that is deliberately NOT part of this transition and stays unpushed or separately pushed: sentinel-shell-ownership-278 (#279, pushed green at c856a877 this turn), sentinel-case-receiver-287 (#287, local 896a8346), sentinel-recon-261 (rule H, local d6594273, unpushed). Nothing from any of them is in this PR: git diff --name-status 95219610..6d3283c9 is two docs and nothing else.",
+    "branch": "lane/fleet-guard-failclosed-276, 18 commits past origin/main, MERGEABLE/CLEAN. No pushed history was rewritten on it: every head it has ever published was reached by a forward commit, never a rebase or a force-push. git diff --name-only origin/main...HEAD is EIGHT files - docs/BRANCH_DISPOSITIONS.md, docs/RELEASE_STATE.md, docs/SESSION_HANDOFF.md, scripts/hookspath-fleet-guard.test.mjs, scripts/lib/hookspath-inspect.mjs, scripts/lib/prepush-hook-contract.mjs, scripts/local-gate-guard.test.mjs, scripts/setup-local-ci.ps1 - and NOT ONE is under src/ or src-tauri/. I list the diff from git rather than from memory because describing a diff from memory is exactly the failure the reviewer caught me in earlier on this same lane.",
+    "dirtyState": "git status --porcelain in this worktree is EMPTY at 6d3283c9. This receipt file itself is untracked by construction, and that is a known debt rather than an accident: issue #298 exists because seven receipts had been left untracked in one worktree, and its guard scripts/work-control-receipt-preservation.test.mjs fails a 'stranded' receipt. This one is written to be committed on the next lane rather than left where the guard would find it.",
+    "liveProcesses": "No dev server on 1420 and no cargo build in flight at merge time; the only long-running job this turn was the #279 lane's own pre-push gate, which finished green (exit 0) before this transition started. No build or install was run, so the installed Compy on the owner's desk is untouched."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "6d3283c95a213bbb8d17b8de72ce6ca21a114a8e",
+      "detail": "THE AUTHORISING RUN, inside .githooks/pre-push on the push that landed this exact head. Log C:/Users/Kuya/code/sentinel-fleet-guard-276/logs/verify-local-2026-09-01T18-46-57Z.log. Frontend 406 test files passed / 406, 5900 passed / 5 skipped (5905). Frontend type-check and vite build clean. Rust 1253 passed, 0 failed, 24 ignored. Clippy with zero warning lines. 'LOCAL CHECK RESULT: PASS' on the console, hook exited 0, and the ref moved f78f7ee4..6d3283c9. Zero GitHub Actions minutes. Run unpiped and in the background on purpose: piping a long pre-push gate through tail has dropped the SSH connection on this machine before and reads as an auth failure - it also destroyed a diagnostic earlier in this same train, which is why every push since has been unpiped.",
+      "headNote": "Four commits sit between the reviewer's first-reviewed head and this one, and each is recorded rather than smoothed into 'doc fixes': 420065f5 added the origin/lane/receipt-preservation-298 disposition row, f1c3f854 corrected the carrier count word THIRTEEN->FOURTEEN, f78f7ee4 reworded that new row to clear doc-truth decision 7, and 6d3283c9 repaired a Windows path in it that a shell heredoc had mangled to C:UsersKuyacodesentinel-segmented-237. git diff --name-status 95219610..6d3283c9 is exactly docs/BRANCH_DISPOSITIONS.md and docs/SESSION_HANDOFF.md - no guard code moved after the review."
+    }
+  ],
+  "docGates": [
+    "doc-budget.ps1 - ALL PASS at this head, re-measured by the reviewer with wc -l rather than taken from my report. BRANCH_DISPOSITIONS 104/107, SESSION_HANDOFF 119/120. Nothing was paid from a raised cap.",
+    "tools/entry/doc-truth.test.mjs - passed at this head. Decision 7 forced a real edit rather than passing by luck: the new #298 row said the receipts 'authorize a merge or an issue close', which pairs merge with worktree in one sentence without denying propagation. Reworded to 'authorize a landing or an issue close' in f78f7ee4.",
+    "scripts/handoff-worktree-truth.test.mjs - 35 passed at this head together with branch-disposition-audit, rules A-G green. Rule G is the one that matters here and it is NOT on this lane: the mangled path C:UsersKuyacodesentinel-segmented-237 passed this lane's own full gate because rule G lives on lane/rule-e-negation, and was caught only when the rule H work merged this branch into a checkout that HAS rule G. That is the lane-blindness finding recorded on the issue - 'the gate passed on this lane' is not 'the repo's guards passed on this content'.",
+    "branch-disposition-audit.mjs - OK at this head. Every origin ref has a proven row, including the row for origin/lane/receipt-preservation-298 that this PR carries.",
+    "hookspath-fleet-guard + local-gate-guard - 75 passed at this head, including the live walk of every worktree on this machine, so the stricter pre-push anchor this PR ships reddens no real hook."
+  ],
+  "claimVerification": "The #298 disposition row this PR carries asserts that main is red on rules A and D of scripts/handoff-worktree-truth.test.mjs. The reviewer explicitly declined to confirm that - 'consistency is not measurement' - so I measured it myself before merging, in the canonical checkout whose living docs are byte-identical to main's (git diff --stat origin/main -- docs/SESSION_HANDOFF.md docs/BRANCH_DISPOSITIONS.md is empty): npx vitest run scripts/handoff-worktree-truth.test.mjs returns 3 failed / 3 passed, and the failures are A, C and D. The row's claim is TRUE and understated - main is red on C as well, because lane/agent-skills-config landed and its name never left the carrier bullet. Recorded here rather than fixed in this PR: correcting the row would move the head and void a review bound to 6d3283c9 for a sentence that is not false. It is queued for the next living-doc edit.",
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. The PR contains no runtime code: eight files, none under src/ or src-tauri/, the executable ones being vitest doc/hook guards, a shared inspection library and a local-CI setup script that is not part of the app. No shipped behaviour, no UI and no Windows mutation is reachable from it."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers src/**/*.{tsx,css} UI change. git diff --name-only origin/main...HEAD returns nothing under src/ at all - no component, no stylesheet, no rendered string. There is nothing for the owner to look at."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "claude-code, session sentinel-21 [933d27] - a separate live Claude Code session on this machine, separate context, its own worktree, with no write access to this lane and no stake in it landing",
+    "status": "passed",
+    "head": "6d3283c95a213bbb8d17b8de72ce6ca21a114a8e",
+    "reason": "PASS bound to this exact head, posted by the reviewer under its own identity as PR #277 comment 5498806286 (https://github.com/Pootytxng/sentinel/pull/277#issuecomment-5498806286). The history is recorded rather than smoothed: at 4f7f9e1d the same reviewer returned three findings, one of which - an unconditional `exit 0` diagnostic disarming the pre-push anchor - I reproduced against the shipped code before fixing, and a fourth bare catch in statSync that I found only because I started running git diff --name-status first. Fixing them moved the head twice more; the reviewer refused to let an earlier verdict stretch over commits it had never seen, which is the correct reading and is why this receipt binds to 6d3283c9 and not to 95219610. What it checked at THIS head, by execution rather than by reading: hookspath-fleet-guard 37 pass, local-gate-guard 38 pass, branch-disposition-audit + handoff-worktree 35 pass, doc-truth-guard + entry + shipped-feature 24 pass, doc-budget ALL PASS at 104/107 and 119/120 re-measured with wc -l, and rule G returning [] on both living docs - the specific check that the mangled Windows path is gone. It disclosed one thing it did NOT verify: the row's claim that main is red on rules A and D, on the ground that consistency is not measurement. That gap is closed in claimVerification above, by me, before this merge - measured, true, and understated.",
+    "writerSession": "claude-code, session sentinel-63 [2ccbb3], the implementation owner of this lane",
+    "writerNote": "The gate requires writer === actor, and actor is a fixed token (claude-code | codex). The session identity is preserved verbatim in writerSession; nothing about who wrote this lane is dropped. The reviewer field keeps its full identity, as the inherited directive requires, and the two are different live sessions, not one session named twice. The gate blocks on reviewer-equals-writer, not on whose hand runs the merge, so a valid receipt naming a genuinely separate reviewer is what lets me land my own lane - and the reviewer said so explicitly: 'Write the receipt naming me at 6d3283c9 and merge it.'"
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main...HEAD -- src-tauri/src/actions.rs is empty, 0 lines. The ONE Windows-mutation boundary is untouched. So is every other Rust file: the diff contains no path under src-tauri/ at all.",
+    "locks": "Untouched by construction - this PR changes no runtime code, so no gate can move. Remote-rules fetch stays triple-gated OFF, the Receipts send path stays hard-false and default-OFF, the Q9b Tier 3 path stays dark, and no capability or CSP is loosened. No signing key, secret or .env file is touched, added or referenced.",
+    "scopeConstraint": "The inherited directive's separation constraints hold. PR #288 remains DESIGN ONLY and is untouched by this lane; #289 is untouched by it; #290 has already landed; #279/#278 and #287 are separate branches whose work is NOT in this diff. Nothing here implements a remote-rules cache, arms a fetch, activates a CDN endpoint, or expands a Stage. The frozen beta refs (16069fa) are not moved. The merge is run WITHOUT --delete-branch, both because the directive requires preserving the branch and because that flag has previously set core.bare=true repo-wide and corrupted every worktree on this machine; if the ref is to go, it goes through gh api afterwards.",
+    "commandAuthority": "No Tauri command was added, removed or renamed; no #[tauri::command] exists anywhere in the diff."
+  }
+}
