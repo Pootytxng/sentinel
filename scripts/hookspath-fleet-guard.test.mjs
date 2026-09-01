@@ -51,7 +51,14 @@
 
 import { afterAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  statSync as realStat,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -172,6 +179,66 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
     const r = inspectWorktree(f.linked, f.main, { git: flaky });
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/could not be resolved/i);
+  });
+
+  // The three below all seed the SAME shape: a stat that fails for a reason other than absence.
+  // `sentinel-21`, reviewing PR #277, found two of the four catches reading any such failure as
+  // "the file is not there" — the exact "I could not tell" -> "fine" conversion this file's header
+  // forbids. They could not be tested before, because provoking EACCES means changing permissions
+  // on a real checkout, which is a test that breaks the thing it is testing; hence `deps.stat`.
+  const denyingStat = (target) => (p) => {
+    if (String(p) === String(target)) {
+      const e = new Error(`EACCES: permission denied, stat '${p}'`);
+      e.code = "EACCES";
+      throw e;
+    }
+    return realStat(p);
+  };
+
+  it("a checkout that cannot be STATTED fails — it is not 'absent' (review round 5)", () => {
+    const f = fixture("statdenied");
+    f.armWith(f.linked, GOOD_HOOK);
+    f.run(["config", "core.hooksPath", ".githooks"], f.linked);
+
+    // Before the fix this returned `{ ok: true, absent: true }` and left the sweep at step 0,
+    // before a single hook question was asked.
+    const r = inspectWorktree(f.linked, f.main, { stat: denyingStat(realpathSync.native(f.linked)) });
+    expect(r.ok).toBe(false);
+    expect(r.absent).not.toBe(true);
+    expect(r.reason).toMatch(/could not be inspected/i);
+
+    // ...and a checkout that is genuinely gone still reads as absent, which is the case the bare
+    // catch was written for and must survive the narrowing.
+    const gone = inspectWorktree(join(f.base, "never-existed"), f.main);
+    expect(gone).toMatchObject({ ok: true, absent: true });
+  });
+
+  it("an own-hook that cannot be STATTED fails, instead of licensing the bridge (review round 5)", () => {
+    const f = fixture("ownstat");
+    // The legitimate bridge: the linked checkout has no hook of its own and points at the main one.
+    f.armWith(f.main, GOOD_HOOK);
+    f.run(["config", "core.hooksPath", join(f.main, ".githooks")], f.linked);
+    expect(inspectWorktree(f.linked, f.main).ok, "the bridge itself is legitimate").toBe(true);
+
+    // Same checkout, but its own .githooks/pre-push cannot be looked at. Before the fix this
+    // answered `false` — "it has none" — and the bypass check below it was skipped entirely.
+    const own = join(realpathSync.native(f.linked), ".githooks", "pre-push");
+    const r = inspectWorktree(f.linked, f.main, { stat: denyingStat(own) });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/could not be inspected|cannot be told/i);
+  });
+
+  it("names the reason a hook is unreadable, rather than always saying it is missing", () => {
+    const f = fixture("hookstat");
+    f.armWith(f.linked, GOOD_HOOK);
+    f.run(["config", "core.hooksPath", ".githooks"], f.linked);
+    const hook = join(realpathSync.native(f.linked), ".githooks", "pre-push");
+    // This branch always failed, so it was never fail-open — but it sent its reader to create a
+    // file that is already there.
+    const r = inspectWorktree(f.linked, f.main, { stat: denyingStat(hook) });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/unreadable/i);
+    expect(r.reason).not.toMatch(/does not exist/i);
   });
 
   it("a missing hook file fails — the original silent case, now caught", () => {
