@@ -1,0 +1,80 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 289,
+  "issue": 287,
+  "branch": "lane/case-receiver-287",
+  "currentHead": "1c328169a677819bda0738f99a6539989c4b16d1",
+  "explicitHandoff": "Owner turn authorizing this train: 'Please resolve any and all conflicts regarding any of the remaining work in the recent chats.' Under docs/RELEASE_AUTONOMY.md one owner authorization covers the complete reversible release-engineering train, and merging a green reviewed PR is named in the universal autonomy floor as mine. This transition merges ANOTHER writer's lane: sentinel-63 wrote it, this session reviewed it and blocked it, and the block was taken. The reviewer merging what it verified is the correct order here precisely because the writer cannot pass its own review.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. This transition is measured from C:/Users/Kuya/code/sentinel-remote-design-286, DETACHED at 1c328169 for the duration of the gate so that work-control-gate.mjs resolveRepoHead() binds to the same head this receipt names. The lane this checkout normally carries, lane/receipt-288, is a branch ref and was not disturbed; it is restored immediately after. The writer's own worktree C:/Users/Kuya/code/sentinel-case-receiver-287 is also at 1c328169 and was NOT written to, NOT built in and NOT used to run anything - it belongs to sentinel-63 and this session reads it at most.",
+    "remoteState": "git fetch origin run this turn. origin/main = 624fcc40cb1c4c01821061a3eaf3b3c2ac4eb122, the merge commit of PR #288 landed by this session earlier today. git ls-remote --heads origin lane/case-receiver-287 = 1c328169a677819bda0738f99a6539989c4b16d1, identical to the PR head, so nothing is being merged that is not pushed. Fourteen lane/* refs live on origin; this transition moves exactly one of them.",
+    "worktree": "34 live worktrees, and this transition adds none. The PR was reviewed by materialising its scripts/ paths into this checkout and reverting them with git reset + git checkout -- + git clean -fd, deliberately NOT by adding a temporary worktree: an extra checkout would fail rule B of handoff-worktree-truth on the stated-versus-live count, which is a red caused by the review method rather than by the change under review.",
+    "branch": "lane/case-receiver-287, MERGEABLE / CLEAN against main, base main, no conflicts. No pushed history was rewritten by this session on this lane; this session never wrote to that branch at all. The head moved faf3d876 -> 1c328169 in the writer's hands, forward only, applying the two findings this session raised.",
+    "dirtyState": "git status --porcelain is EMPTY at 1c328169 in this checkout, before and after the gate run. This receipt file was written OUTSIDE any repository, in this session's scratchpad, and lands on a lane only after the merge. That is deliberate: work-control-receipt-preservation is a FLEET-WIDE serialization point - it sweeps every worktree on the machine via git rev-list --all and is resident in verify-local.ps1 - so an uncommitted receipt in any checkout reddens every other writer's push. The writer of this PR has gates running, so the window is kept at zero.",
+    "liveProcesses": "No dev server on 1420 and no cargo build in flight beyond this gate's own. One listener on 5199 (pid 20668), the fixture preview server, which reads only. One compy.exe running: the installed build, untouched by this transition, which ships no runtime code.",
+    "otherWriters": "One live peer, session sentinel-63, which is the WRITER of this lane. This session is the independent reviewer and is not, and has never been, a writer on lane/case-receiver-287. The peer stated in-session that it is not writing to the living docs again until its push297 gate returns, and that lane/receipt-288 is this session's to push whenever - so no living-doc collision is in flight at merge time."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "reviewFinding": "This receipt exists because a block was raised and taken, not because a PR was waved through. At faf3d876 this session refused the PR (comment 5500466050): scripts/case-endpoint-isolation.test.mjs carried two RAW NUL bytes, so git classified it binary and its diff read Bin 0 -> 7046 bytes. The one file whose whole job is to be auditable proof that a Tier 3 case receiver cannot reach a deploy path had no reviewable diff and never would have had one. Blocking on a defect with zero runtime effect was the right call for a reason beyond reviewability: scanning for the class turned up three more instances, two of them in src/ where a raw 0x08 written where \\b was meant makes the assertion around it a no-op - guards that read as if they assert something and assert nothing. Those are filed as issue #304 and deliberately NOT folded in here.",
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "1c328169a677819bda0738f99a6539989c4b16d1",
+      "detail": "Run by THIS session, in this checkout, detached at 1c328169, immediately before the merge. LOCAL CHECK RESULT: PASS. logs/verify-local-2026-09-01T21-23-28Z.log. Vitest 410 files / 5966 passed / 5 skipped / 0 failed. Rust 1253 passed / 0 failed / 24 ignored. Clippy clean. This is a first-hand run, not the writer's push gate attested second-hand: the writer cannot supply the proof that authorizes the reviewer's merge, and an environment inability would have been a blocker rather than a pass.",
+      "headNote": "The gate was run at the PR head BEFORE the merge, so it binds to the content being merged rather than to the merge commit that does not exist yet. Note one consequence worth recording: handoff-worktree-truth PASSES at this head, which means merging #289 repairs main's current red - main at 624fcc40 measures 3 failed / 3 passed on that guard. It also means the merge will drop lane/case-receiver-287 to zero carry while the doc at this head still names it, which is the known circularity in that guard: a landing lane's name has to leave with the NEXT train, never its own."
+    }
+  ],
+  "docGates": [
+    "scripts/doc-budget.ps1 - ALL PASS at this head, inside the verify-local run above. The PR holds the Conformance-queue cap at 23808 and pays a 24214 overflow from the archive rather than raising it; this session verified independently that the cap is unchanged, and that the stated reason for not ratcheting it to 23552 - that 33 bytes of headroom is the zero-headroom failure the file already rules against - is recorded in the file rather than only in a commit message.",
+    "docs/SESSION_HANDOFF.md remains at its cap. This session did NOT edit it on any lane, by agreement with the writer, because two lanes editing the same repo-state bullet is the living-docs conflict hotspot."
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. git diff --name-only 624fcc40...1c328169 filtered on src/ and src-tauri/ returns 0 files. No Tauri command, no mutation boundary, no gate. The installed compy.exe is untouched and the owner has nothing to look at."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers src/**/*.{tsx,css} UI change. This PR contains none - nothing under src/ at all - so there is no visual surface to capture and no rubric to run."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "claude-code, session sentinel-21 - a separate live Claude Code session on this machine, separate context, its own worktree and its own board items. NOT identity-separate: same model, same account, same machine, and it has a stake in main moving because its own lane must merge forward past this one. The separation that is real here is the one that matters for this PR - the reviewer refused the writer's head, the writer took the refusal, and the head changed because of it.",
+    "status": "passed",
+    "head": "1c328169a677819bda0738f99a6539989c4b16d1",
+    "reason": "REQUEST_CHANGES at faf3d876 (comment 5500466050), cleared at 1c328169 by verification rather than by attestation. Verified first-hand at this head: all 12 changed files scanned byte by byte, zero control characters outside tab/newline/CR; case-endpoint-isolation.test.mjs now diffs against main as 161 text lines instead of Bin 0 -> 7046 bytes; the globToRegExp placeholder is written as \\u0000 with the algorithm unchanged, so the runtime string is byte-identical; the second offender's raw 0x01 is now \\u0001. The requested guard exists as scripts/source-control-characters.test.mjs and is not vacuous - it carries its own detector self-test, excludes binary by NAMED extension rather than by loosening the byte rule, and this session proved end to end that its detector fires on the old blob at exactly the two offsets that caused the block. 103 tests pass across the guard and the three touched test files.",
+    "writerSession": "claude-code, session sentinel-63, the implementation owner of this lane and of issue #287. The gate requires writer !== reviewer and writer === actor; actor is the fixed token claude-code, which is why the distinguishing detail is carried in prose in these two fields rather than in the token."
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff 624fcc40...1c328169 -- src-tauri/src/actions.rs is empty, 0 lines. The ONE Windows-mutation boundary is untouched, as is every other file under src-tauri/.",
+    "locks": "Untouched. This PR adds no runtime code path: the case-receiver library under scripts/lib/case-endpoint/ is staged, not wired. Remote-rules fetch stays triple-gated OFF, the Receipts send path stays default-OFF, and no capability or CSP is loosened.",
+    "scopeConstraint": "The inherited separation constraint holds: #289 remains Q9b Stage 3, LOCAL/STAGED ONLY. Verified independently at this head rather than taken from the PR body - .github/workflows/deploy-site.yml path triggers are site/**, site-app/**, functions/**, src/data/**, scripts/stage-dist-site.mjs and itself, none of which matches scripts/lib/case-endpoint/**, so merging cannot fire a deploy; wrangler.toml declares exactly two migrations_dir values, migrations and migrations-reports, so wrangler d1 migrations apply cannot reach 0002_case.sql; scripts/stage-dist-site.mjs copies site/ and functions/ only. No secret appears in the diff - IP_PEPPER is documented as a Pages secret set out of band.",
+    "commandAuthority": "No Tauri command was added, removed or renamed; no #[tauri::command] appears anywhere in the diff.",
+    "notMerged": "PR #297 is NOT merged by this transition and is not mine to merge: gh pr merge 297 was DENIED in the peer's session, which makes it an owner decision that this session executing it would nullify. PR #294 and PR #279 are likewise untouched. #279 was reviewed this turn and BLOCKED by this session (comment 5500570402) - merging it is what arms a PreToolUse checker on every shell command, which is owner territory under the security-settings rule regardless of how green it is."
+  },
+  "outcome": {
+    "executed": false,
+    "blockedBy": "permission",
+    "detail": "The merge did NOT execute. `gh pr merge 289 --merge` was refused by this session's permission layer, twice: once with an explicit --subject and once in the bare form that merged PR #288 earlier the same day from this same checkout. Nothing about the PR changed between those two runs; the refusal is environmental, not a finding against #289.",
+    "whatStands": "Everything above this block is first-hand and remains valid at 1c328169: the gate PASS, the byte-level verification of the fix, the guard's end-to-end non-vacuity proof, the isolation re-verification, and the review verdict. This receipt is committed rather than discarded because a gated, reviewed candidate that could not execute is exactly what RELEASE_AUTONOMY says to preserve - the next session must be able to see that the proof was obtained and that only the button was missing.",
+    "notLaundered": "The writer of this lane, session sentinel-63, is live and was NOT asked to merge it instead. An action refused in this session does not become permissible by routing it to a peer, and that holds even though the peer would ordinarily have the right to merge - here it would also mean the writer merging its own reviewed lane, which is the separation this receipt exists to record. Escalated to the owner instead.",
+    "precedent": "This is the second merge refused across the fleet today. `gh pr merge 297` was refused in the peer's session and is already an owner item. #289 now joins it. Both are green, both are reviewed at a bound head, and both have a gated receipt; neither can be landed by either session.",
+    "mainAfter": "624fcc40cb1c4c01821061a3eaf3b3c2ac4eb122, unchanged. main's handoff-worktree-truth guard therefore stays RED - measured this turn at 3 failed / 3 passed, naming lane/remote-cache-design-286 (rules A and D, landed with #288 and still listed as work to preserve) and lane/receipt-288 (rule C, this lane, carrying commits no bullet names). The repair for the first exists in three unlanded lanes and the repair for the second is this lane; both are stalled behind the same closed door. Verified separately that the doc at 1c328169 PASSES that guard, so merging #289 would have cleared part of it.",
+    "supersedes": "Two sentences above this block were true when the gate evaluated them and are now overtaken by events, and they are left as written rather than rewritten after the fact: inspectionNotes.dirtyState says this receipt lands on a lane only after the merge, and docGates says SESSION_HANDOFF.md was not edited. The first is now after the merge ATTEMPT - the receipt is committed because the proof is worth keeping, not because the transition happened. The second still holds and is the reason this lane cannot be pushed: rule C of handoff-worktree-truth requires the carrying lane to be NAMED in that bullet, so pushing would force the very edit the writers agreed to keep to one lane at a time."
+  }
+}
