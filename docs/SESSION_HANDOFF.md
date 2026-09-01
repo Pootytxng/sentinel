@@ -95,9 +95,9 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides `main`; FOURTEEN branches carry commits not on main — do NOT delete or hard-reset
-  those fourteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
-  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
+- **32 worktrees besides the canonical checkout; FIFTEEN branches carry commits not on main — do NOT delete or hard-reset
+  those fifteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+  `claude/compy-visual-recovery-kit-6fd074` · `lane/agent-skills-config` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
   `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` · `lane/shell-ownership-278` ·
   STACKED in this order, each on the one before it, so any count includes its parents': `lane/atomic-json-281`
   (#281) → `lane/license-atomic-284` (#284) → `lane/remote-cache-design-286` (#286) → `lane/case-receiver-287`
