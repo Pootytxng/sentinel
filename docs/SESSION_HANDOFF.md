@@ -88,14 +88,14 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides the canonical checkout; TWO carry work that exists on no remote — do NOT delete or
-  hard-reset them before checking**: `claude/compy-visual-recovery-kit-6fd074`, holding a single commit (`cdd976f3`,
-  docs on RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, and `lane/rule-c-at-risk-312` (#312) until its
-  first push lands. Fourteen checkouts are ahead of `origin/main`, but twelve are **fully pushed** — deleting those
-  worktrees loses nothing, and each has a row in docs/BRANCH_DISPOSITIONS.md, which is where refs are tracked. Rule C
-  stopped demanding all of them be named on 2026-09-01 (#312): the list was 92% refs that cannot be lost, the one that
-  could sat inside it reading exactly like the rest, and no two lanes could be green at once while each had to name the
-  other. `claude/compy-health-parity` and `claude/compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at
+- **32 worktrees besides the canonical checkout. Work that exists on no remote — do NOT delete or hard-reset these
+  before checking**: `claude/compy-visual-recovery-kit-6fd074`, holding a single commit (`cdd976f3`, docs on
+  RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, and `lane/rule-c-at-risk-312` (#312, PR #314)
+  whenever it holds a commit its push has not carried — EVERY lane joins this list between a commit and its push,
+  so no count is pinned here. Most checkouts ahead of `origin/main` are **fully pushed**: deleting those loses
+  nothing, each has a row in docs/BRANCH_DISPOSITIONS.md, and rule C prints the live split every run. It stopped
+  demanding all be named on 2026-09-01 (#312): 92% of that list could not be lost, and no two lanes could be green at
+  once. `claude/compy-health-parity` and `claude/compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at
   `c8366609` — neither contains the other** (`--is-ancestor` is NO both ways). Counted **not on main**: the kit has
   ONE unique commit, health-parity FOURTEEN (from the merge base instead, 170). Backed up only to `refs/backup/*`, so
   dropping either loses the other's work. **No depth/SHA pinned** — re-derive risk with `git rev-list --count <ref>
