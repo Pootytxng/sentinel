@@ -45,7 +45,13 @@ pub(crate) enum FailPoint {
     None,
     /// Fail immediately after the temp file is exclusively created, before any byte is written.
     AfterTempCreate,
-    /// Fail after the bytes are written and flushed, before the rename.
+    /// Write only part of the payload to the temp, then fail.
+    DuringWrite,
+    /// Fail after the complete payload is written, before flushing it.
+    AfterWrite,
+    /// Fail after flushing the complete payload, before synchronizing it.
+    AfterFlush,
+    /// Fail after the temp bytes are synchronized and the handle is closed, before the rename.
     BeforeRename,
 }
 
@@ -86,12 +92,46 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 #[cfg(test)]
 thread_local! {
     static FORCED: std::cell::Cell<FailPoint> = const { std::cell::Cell::new(FailPoint::None) };
+    static FORCE_SERIALIZE_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Arm [`FORCED`] for the next write on this thread. Test-only, and deliberately not `pub`.
 #[cfg(test)]
 pub(crate) fn force_next_failure(at: FailPoint) {
     FORCED.with(|c| c.set(at));
+}
+
+/// Force the next call to [`serialize_pretty`] on this test thread to fail before any file opens.
+#[cfg(test)]
+pub(crate) fn force_next_serialization_failure() {
+    FORCE_SERIALIZE_FAILURE.with(|c| c.set(true));
+}
+
+/// Serialize before a caller creates a temp file. The wrapper exists so caller tests can prove that
+/// a serialization error never reaches the filesystem; production behavior is serde_json's normal
+/// pretty serializer.
+pub(crate) fn serialize_pretty<T: serde::Serialize + ?Sized>(
+    value: &T,
+) -> serde_json::Result<String> {
+    #[cfg(test)]
+    if FORCE_SERIALIZE_FAILURE.with(|c| c.replace(false)) {
+        return Err(serde_json::Error::io(std::io::Error::other(
+            "injected serialization failure",
+        )));
+    }
+    serde_json::to_string_pretty(value)
+}
+
+/// Hold a target without Windows sharing so caller tests exercise the real rename failure through
+/// their own error contract instead of testing only this helper.
+#[cfg(all(test, windows))]
+pub(crate) fn hold_without_share(path: &Path) -> std::fs::File {
+    use std::os::windows::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(path)
+        .expect("hold target without sharing")
 }
 
 #[cfg(test)]
@@ -168,8 +208,20 @@ fn write_and_replace(
         return Err(std::io::Error::other("injected failure after temp create"));
     }
 
+    if fail_at == FailPoint::DuringWrite {
+        let partial_len = bytes.len().div_ceil(2).max(1).min(bytes.len());
+        file.write_all(&bytes[..partial_len])?;
+        return Err(std::io::Error::other("injected failure during temp write"));
+    }
+
     file.write_all(bytes)?;
+    if fail_at == FailPoint::AfterWrite {
+        return Err(std::io::Error::other("injected failure after temp write"));
+    }
     file.flush()?;
+    if fail_at == FailPoint::AfterFlush {
+        return Err(std::io::Error::other("injected failure after temp flush"));
+    }
     // Push this file's own bytes at the OS before the rename. This orders the data ahead of the
     // name change; it is not, and is not claimed as, a durability barrier for the directory entry.
     file.sync_all()?;
@@ -245,6 +297,36 @@ mod tests {
         assert!(err.to_string().contains("after temp create"));
         assert_eq!(std::fs::read(&target).unwrap(), b"OLD");
         assert!(leftovers(&dir).is_empty(), "temp file not cleaned up");
+    }
+
+    fn assert_boundary_failure_preserves_old(fail_at: FailPoint, label: &str) {
+        let dir = scratch(label);
+        let target = dir.join("store.json");
+        std::fs::write(&target, b"OLD-COMPLETE-BYTES").unwrap();
+        let err = write_atomic_at(&target, b"NEW-COMPLETE-BYTES", fail_at)
+            .expect_err("injected boundary must fail");
+        assert!(err.to_string().contains("injected failure"), "got: {err}");
+        assert_eq!(
+            std::fs::read(&target).unwrap(),
+            b"OLD-COMPLETE-BYTES",
+            "{label} changed the target"
+        );
+        assert!(leftovers(&dir).is_empty(), "{label} left a temp file");
+    }
+
+    #[test]
+    fn a_partial_temp_write_failure_leaves_the_old_bytes_untouched() {
+        assert_boundary_failure_preserves_old(FailPoint::DuringWrite, "fail-during-write");
+    }
+
+    #[test]
+    fn a_failure_after_write_before_flush_leaves_the_old_bytes_untouched() {
+        assert_boundary_failure_preserves_old(FailPoint::AfterWrite, "fail-after-write");
+    }
+
+    #[test]
+    fn a_failure_after_flush_before_sync_leaves_the_old_bytes_untouched() {
+        assert_boundary_failure_preserves_old(FailPoint::AfterFlush, "fail-after-flush");
     }
 
     #[test]

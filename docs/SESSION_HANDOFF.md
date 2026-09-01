@@ -7,9 +7,7 @@
 
 ## Where the train is standing
 
-**`main` is clean and pushed; the desk build is `090bc58b`** (Mission 2 landing, #238 — the
-evidence exports, the Q9b contract and the Q9b Stage 1 dark module are docs/UI-dark work; version
-debt, batch the next cut).
+**The desk build is `090bc58b`** (Mission 2 landing, #238; version debt — batch the next cut).
 
 | | |
 |---|---|
@@ -20,27 +18,22 @@ debt, batch the next cut).
 
 ## The rule that came out of the walk — read this before touching Health
 
-**DIR-1a: offering help is conditional on evidence.** Asked a narrow question (Health's front door
-and its shortcut cards ask the same thing) the owner **rejected both options to say something
-larger**: every door on that screen was symptom-framed, and a front door built only out of symptoms
-tells a healthy PC's owner either that they are in the wrong place or that Compy found something.
-Compy also does optimisation, and *"i want more fps"* is a legitimate reason to be here. Shipped:
-the interview gained four **goal** answers under two labelled halves (`home-interview-data.ts`,
-`groupChoices`); Health picks the half from `somethingDetected` — a flagged readiness check **or** an
-incident the observer read out of Windows (`HomeConsole.tsx`). Guard
-`src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **A STANDING lens, not a
-closed row** — every new Health affordance must answer *"is this framing earned?"* first.
-**DIR-1b:** the attention state carries a one-line ROUTE to the room that acts on it (#180 §C
-untouched — the detail paragraph still does not render on Health).
+**DIR-1a: offering help is conditional on evidence** — a front door built only out of symptoms tells
+a healthy PC's owner they are in the wrong place, and *"i want more fps"* is a legitimate reason to be
+here. **A STANDING lens, not a closed row**: every new Health affordance must answer *"is this framing
+earned?"* first. The direction is authoritative at `docs/UI_VISION_BACKLOG.md` §"⭐ DIR-1a" — read it
+THERE, never from a paraphrase, this line included. Shipped `b21bc18b`; guard
+`src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **DIR-1b:** the attention
+state carries a one-line ROUTE to the room that acts on it (#180 §C untouched — the detail paragraph
+still does not render on Health).
 
 **Rooms are `Health · Live · History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are
 persistence keys). **Read the rail from `src/design/homeRail.ts`, never from a doc.**
 
-**The lesson ② left behind: SOURCE-reachability is not USER-reachability.** A component can be dark
-one level up while **three guards stay green** (vendor-honesty proved only "not wrapped in a
-condition"; the affordance census counted 80 unreachable strings as live; the mono census described
-CSS nothing rendered). When a guard certifies a surface, check a route reaches it. Finding #4 was
-also partly WRONG (two Test gauges already carry notes) — **an audit is not a work order.**
+**SOURCE-reachability is not USER-reachability.** A component can be dark one level up while **three
+guards stay green** (vendor-honesty proved only "not wrapped in a condition"; the affordance census
+counted 80 unreachable strings as live; the mono census described CSS nothing rendered). When a guard
+certifies a surface, check a route reaches it — and **an audit is not a work order.**
 
 ## Before you touch the UI — the fixture route, and the guards already covering copy
 
@@ -79,9 +72,9 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 3 (#287) BUILT** — `scripts/lib/case-endpoint/`, local/staged ONLY and **not deployed**:
-proved against a `node:sqlite` D1 fixture, fenced by `scripts/case-endpoint-isolation.test.mjs`.
-**Stage 4 is NEXT**: the Tauri send command. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+**Q9b Stage 2 (#258) LANDED** — `cfc0d21a` / PR #263, the consent screen renders the payload itself.
+**Stage 3 is NEXT**: receiver + migration, local/staged ONLY, never deployed — deployment is Stage 7
+and owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -95,19 +88,25 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides `main`; FOURTEEN branches carry commits not on main — do NOT delete or
-  hard-reset those fourteen before checking them**: `feat/user-feedback-lab-recovery` ·
-  `claude/compy-health-parity` · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` ·
-  `lane/cleanup-train-2026-08-20` · `lane/vision-pointer-guard-2026-08-24` · the six live lanes
-  `lane/fleet-guard-failclosed-276`, `lane/shell-ownership-278`, `lane/atomic-json-281` (#281),
-  `lane/license-atomic-284` (#284), `lane/remote-cache-design-286` (#286), `lane/case-receiver-287`
-  (#287) · `lane/native-routing-271` (#271) and `lane/css-margin-separators-274` (#274) — those two
-  LANDED (PR #273 · PR #275) and stay only because **pruning was denied**. Re-derive, never copy:
-  `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet
-  for naming a zero-carry branch, and every carrier has a branch, so rule C's path credit is idle.
-  Spent, at zero: `sentinel-recon-261`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`,
-  `sentinel-q9b-stage2-258`, `sentinel-q9b-stage2`, `sentinel-segmented-237`,
-  `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace`, four in `.claude/worktrees/`.
+- **32 worktrees besides the canonical checkout; FOURTEEN branches carry commits not on main — do NOT delete or hard-reset
+  those fourteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
+  `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` (#276) → `lane/rule-e-negation` (#295) ·
+  `lane/shell-ownership-278` · `lane/receipt-preservation-298` (#298) · `lane/remote-cache-design-286` (#286) →
+  `lane/case-receiver-287` (#287) — the two stacked pairs, each stacked so one repair does not land twice (`git merge-base
+  --is-ancestor`) · `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED**
+  (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are listed only because **pruning them was denied**. `compy-health-parity`
+  and `compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at `c8366609` — neither contains the other**
+  (`--is-ancestor` is NO both ways; the kit has ONE unique commit, health-parity TEN). Backed up only to `refs/backup/*`,
+  and dropping either would throw the other's work away. Rule E no longer fails it for a false one. **No depth/SHA
+  pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a
+  zero-carry branch — **a landed lane's name leaves with the train that lands it**, which is why neither the #281 lane (PR
+  #282 → `082f637e`) nor the #284 lane (PR #285 → `d5dcb9e2`, merge-committed so it dropped straight to zero while 286 and
+  287 kept pointing into it) is named here. `sentinel-recon-261` left the spent list on becoming #295's carrier. Spent, at
+  zero: `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 both landed out of
+  it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven entries;
+  `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
+  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — two arming gates, nothing else
 

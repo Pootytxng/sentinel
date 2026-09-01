@@ -1,0 +1,55 @@
+{
+  "transition": "close-issue",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 267,
+  "issue": 266,
+  "branch": "claude/exciting-robinson-0ce4d5",
+  "currentHead": "be1b0fde491adfef358c87cd855ac3bc25837024",
+  "explicitHandoff": "Same owner authorization as .claude/work-control/2026-08-30-merge-pr-267.json: 'If the PR head is still exactly be1b0fde and the receipt accepts this exact-head PASS, build and run the required work-control-gate receipt, merge PR #267 without --delete-branch, close #266, mark Work Control Done...' Closing #266 is named in that turn.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNotes": {
+    "carriedFrom": "Every inspection field was re-derived live this turn and is written out in full in .claude/work-control/2026-08-30-merge-pr-267.json; nothing changed between that receipt and this one except the merge itself.",
+    "howItActuallyClosed": "GitHub closed #266 itself at 2026-08-30T12:11:48Z, one second after the merge at 12:11:47Z, because PR #267's body line 1 is 'Closes #266'. The timeline records no commit_id and the closing actor is the repository owner account that owns the token, which is the signature of the closing-keyword automation rather than a separate gh issue close call. This receipt is therefore evidence for a transition that rode the merge it is bound to, not a second unproven act - recorded so the ledger is not silent about it.",
+    "whyThisHead": "be1b0fde is the head that was gated and independently reviewed, and it is the content that landed: the merge commit ca10f7fa9a2a3ee5c8e03857ad187739ec90659b introduces no change of its own, its two parents being a9af1d52 (origin/main) and be1b0fde. A gate result at ca10f7fa cannot honestly be produced right now - see the failed gateResult in the merge receipt, which fails on the foreign ref origin/claude/css-margin-comments-240 belonging to PR #268."
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "be1b0fde491adfef358c87cd855ac3bc25837024",
+      "detail": "The same authorising run as the merge receipt: .githooks/pre-push, logs/verify-local-2026-08-30T11-06-50Z.log, 405/405 test files, 5790 frontend tests passed / 4 skipped, Rust 1209 passed / 0 failed / 24 ignored, clippy zero warnings, hook exited 0 and the ref moved to be1b0fde."
+    },
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "failed",
+      "head": "be1b0fde491adfef358c87cd855ac3bc25837024",
+      "detail": "The same later re-run at 12:03:57Z, failing on scripts/branch-disposition-audit.test.mjs alone, for the foreign ref origin/claude/css-margin-comments-240 whose row rides in open PR #268. Copied here rather than left out, because a receipt that records only the run that helps it is not evidence. Full analysis in the merge receipt."
+    }
+  ],
+  "issueClosureProof": {
+    "whatTheIssueAsked": "#266 asked whether stripRustComments in src/case-evidence-tier-separation-guard.test.ts was bypassable the way the sibling consent guard's stripper was, and to apply the same remedy if so.",
+    "whatLanded": "Exploitability was confirmed with six shapes proven against the exact deleted implementation, each hiding genuinely executing Rust. The stripper is deleted; the detectors now read every byte of the file including comments; the one unavoidable collision - src-tauri/src/case_evidence_upload.rs's //! header tripping the upload-verb detector - is handled by an exact-line quarantine, TIER3_EXCUSED_LINES, self-verified to hold a single entry that still trips a detector on its own; and a structural pin fails the build if any stripper is reintroduced or if the detectors are handed an expression over the file instead of the file. 12/12 in the guard file, 118/118 across the six outbound/tier guards, tsc clean, cargo test 1209 passed, clippy clean, and eight mutations caught with byte-identical sha256 restores.",
+    "constraintHeld": "git diff origin/main...be1b0fde -- src-tauri/src/case_evidence_upload.rs is empty."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "codex (independent non-writing reviewer, separate context, no write access to this worktree)",
+    "status": "passed",
+    "head": "be1b0fde491adfef358c87cd855ac3bc25837024",
+    "reason": "PASS at this exact head with no actionable findings, over the complete three-file diff, with its own fresh run of the guard (12/12) and a confirmation that HEAD had not moved after it verified. Full text in .claude/work-control/2026-08-30-merge-pr-267.json."
+  }
+}
