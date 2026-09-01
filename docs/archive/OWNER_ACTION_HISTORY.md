@@ -447,3 +447,71 @@ reports for you through the connected Cloudflare tools — **you never check an 
 **Your one residual:** when the endpoints are built (Q9b), the site has to be deployed once —
 `npx wrangler pages deploy` — because you cancelled site auto-deploy (B7) and deploys reach the
 public. One command, or one word to let me run it. Nothing else.
+
+---
+
+## §B — resolved input items, moved verbatim 2026-09-01 (doc-budget)
+
+> Six §B sections whose verdicts the owner had already given. Moved out of the live checklist
+> byte-for-byte under TOKEN LAW §1 to pay for a new open item and for the incoming budget ratchet
+> (450 → 385 lines, 33 → 31.5 KB, landing with PR #290). **Nothing here is waiting on the owner.**
+> Nothing re-worded; the only edits are relative links re-pointed for this file's directory level.
+
+---
+
+### B_startup. A Windows mutation outside `actions.rs` — ✅ CLOSED 2026-08-22, it was already fixed
+The item was filed 2026-08-02 and **fixed 2026-08-03, the next day, by a different lane** — nobody
+closed the row, so it sat on your list for twenty days asking you to decide something that no longer
+existed. `set_startup_entry_enabled` moved out of `lib.rs` into `history.rs` and now mutates through
+`actions::apply_startup_entry_enabled`: typed `SetStartupEntryEnabled` action, a raw-bytes snapshot
+of Windows' own approval value, and a Trust Ledger entry like every other change — so a startup app
+Compy disables *is* undoable from your history. Verified in the code today, not taken on trust.
+`CLAUDE.md`'s module map still claimed the exception existed and now doesn't. **Nothing on you.**
+
+### B_gpu. A finished GPU-profile screen mounted nowhere — ✅ CLOSED 2026-08-22, wired in
+You said do everything, so this took option (a) rather than parking a built-and-tested surface any
+longer. `src/surfaces/GpuProfile.tsx` now mounts in the **Lab**, below the console, as an advisory
+panel: which slice of GPU data you're looking at, plain-English notes for your Radeon, and a
+before/after diff of the readable GPU settings when you change something in Adrenalin yourself.
+It stays advisory forever — LOCKED rule 6 makes GPU-profile *apply* structurally impossible, since
+AMD profile state isn't user-mode readable and rollback-first can't be satisfied. Nothing here
+writes to your PC. *Why it matters:* work that was finished and invisible is now something you can
+actually see, and if you don't like it, say so and it comes out.
+
+### B_write. The write refusal — ✅ ARMED 2026-08-22 on your "do everything"
+A Claude session you open by hand — rather than through the launcher — used to be *unverified*:
+nothing on disk said which folder, branch, issue and conversation it was working under, and it wrote
+anyway. Now the moment such a session edits a file inside this repo it is stopped and handed the one
+command that verifies it on the spot, so nothing is lost and no window closes. Registered in
+`.claude/settings.json` on `Write|Edit|NotebookEdit`; this machine's live session was adopted first,
+per the spec's own ordering, so arming it could not lock the arming session out.
+*Why it matters:* it is the difference between "a change nobody can attribute later" and "a change
+bound to a folder, a branch and an issue". **`Bash` is deliberately still unguarded** — a named hole
+(spec §3c) that doubles as the escape hatch if the hook ever misbehaves, and a test now fails the
+build if anyone adds `Bash` to it or quietly unwires the hook. Reads stay advisory.
+
+### B_shelter. The collision guard — ✅ NOTHING WAS EVER WAITING ON YOU; it landed 2026-08-21
+**This row was wrong and is withdrawn.** Issue [#128](https://github.com/Pootytxng/sentinel/issues/128)'s
+1,100 lines are **on `main` and have been since 2026-08-21** — merged as `bf8e2e6e`, then hardened by
+`38279f95` to resolve its state root through the #130 resolver. Its tests run in every gate; the
+`scripts/process-mutex-guard.test.mjs` flake the handoff warns about IS this code, live.
+*Why it matters:* it stops a release and an app-install from running over each other — the failure that
+once left you with an installer that exited "success" and replaced nothing. It is protecting you now.
+*How the row got here:* it was re-derived on 2026-08-25 from the shelter tag
+`preserve/local-collision-guard-707572f1` without checking whether that commit was already an ancestor
+of `main`. It was. **Guard added so this class of stale ask cannot recur:** a shelter tag whose commit
+is reachable from `origin/main` now fails `scripts/shelter-tag-guard.test.mjs`.
+
+### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record in [`archive/OWNER_ACTION_HISTORY.md`](OWNER_ACTION_HISTORY.md)
+No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
+
+### B_eu. Analytics default-ON in the EU — ✅ DECIDED 2026-08-22 as **(a) US-first**
+Taken on your "do everything", and it is the recommendation that was already on the row. Usage
+analytics **on by default with disclosure** is normal and legal in the US, and you have no EU
+distribution today. Option (b) — ask on first run everywhere — costs real sign-up rate to buy legal
+cover for a market that does not exist yet, and it can be added the day it does. **Reversible and
+cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
+own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
+Europeans — that is the trigger, not a date.
+
+---

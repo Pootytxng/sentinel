@@ -123,6 +123,7 @@
     "safeStackAllOn_other": "全部 {{count}} 项已应用",
     "safeStackNone": "此整机没有可应用的项",
     "startHere": "从这里开始",
+    "backToRoom": "返回“测试”",
     "closeStationAriaLabel": "关闭站点",
     "close": "关闭",
     "optimizeReassurance": "这一站可以一键应用你的安全优化组合——和这个房间里的每一项更改一样,均可完全撤销。",

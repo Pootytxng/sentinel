@@ -76,3 +76,46 @@ proof-retirable refs are gone, and what is left is a decision queue, not a clean
 source `site/generate.mjs:441` to "a Windows desktop app with a free tier". The unlanded line on
 `claude/review-consolidation-structure-9d13f2` was **not** used — it says "free forever", the exact
 phrasing the 2026-07-21 decree supersedes.
+
+## Sweep of 2026-08-21 — the three refs it retired
+
+Moved here 2026-08-31 to pay for the `lane/css-margin-separators-274` row, under the rule the live
+file states about itself: it is append-by-design, so a new ref is paid for from the archive, never
+from the cap. All three refs below were deleted from `origin` on 2026-08-21 and none has existed
+since; this is the point-in-time record of *why*.
+
+**Swept 2026-08-21 against `origin/main` @ `f8969e5f` (tree `37d1907`)** — issue
+[#126](https://github.com/Pootytxng/sentinel/issues/126)'s re-proof, run on all fifteen refs, not
+remembered from the rows. `git merge-tree --write-tree origin/main origin/<ref>` at that tree: three
+are no-ops (one of them the `PRESERVE` beta ref, which stays), twelve carry work. **Three retired —
+two `MERGED`, one `SUPERSEDED` on file-level evidence** — deleted from `origin` with their rows
+dropped in that commit:
+
+- `claude/foreground-courtesy-handoff-82687b` — **MERGED**, no-op at this tree; landed as PR
+  [#101](https://github.com/Pootytxng/sentinel/pull/101) (2026-08-11). Its row still read CLAIMED.
+- `docs/design-foundation` — **MERGED**, no-op at this tree; landed as PR
+  [#107](https://github.com/Pootytxng/sentinel/pull/107) (2026-08-12). Its row still read CLAIMED.
+- `claude/checklist-disk-item-c5660e` — **SUPERSEDED** (not a no-op; content reached `main` by
+  another path, which is exactly what that disposition means). Both of its contributions are on the
+  trunk: **A_disk** is in `docs/OWNER_ACTION_CHECKLIST.md` and has since been *closed* (2026-08-11/12)
+  and archived (2026-08-18), and the duplicate `origin/docs/design-foundation` row it existed to drop
+  was dropped by that same commit. Nothing of it is left to land. **Correction 2026-08-26: this row
+  used to end "and no worktree held it", which was false for fifteen days.**
+  `.claude/worktrees/merge-prs-tauri-visibility-c5660e` held it detached at `defcf0ff`, four commits
+  `origin/main` cannot reach — 2026-08-11 edits to two docs since rewritten, so landing them is a
+  re-derivation. No guard saw it: an audit that reads `origin` refs is blind to a branchless
+  checkout. Rule C of `scripts/handoff-worktree-truth.test.mjs` now fails on that shape. **Disposed
+  2026-08-26:** checkout retired, its work preserved under tag `preserve/checklist-disk-item-c5660e`
+  — the four commits plus one more holding an uncommitted edit found there that stripped every
+  comment out of `.codex/config.toml`, which is the record of why that lane is read-only.
+
+## The remaining-refs count, and its own history of going stale
+
+Moved here 2026-08-31 from `docs/BRANCH_DISPOSITIONS.md` to pay for the `lane/segmented-a11y-237`
+row. The live file keeps the LAW the episode taught — re-deriving the count is part of adding a row
+— and no longer carries the episode: that paragraph read **"nine"** long after it stopped being
+true, having been written before the `claude/exciting-robinson-0ce4d5`, `lane/native-routing-271`
+and `lane/css-margin-separators-274` rows existed. It was re-derived to twelve on 2026-08-31, then
+to fourteen the same day when `lane/fleet-guard-failclosed-276` and `lane/shell-ownership-278` were
+dispositioned. Three wrong values inside one file is the argument for the law: a count carried
+forward is not evidence, and `git ls-remote --heads origin` after a `--prune` fetch is.

@@ -12,14 +12,15 @@ $budgets = @{
   "docs/BACKLOG.md" = 1000
   "docs/OWNER_ACTION_CHECKLIST.md" = 450
   "docs/BETA_DISTRIBUTION_RECORD.md" = 250
-  # 120 -> 119 on 2026-08-26. The file FAILED at 123 when the retired detached checkout got its
-  # disposition, and the law's answer to a FAIL is an archive move, not a bigger number: two
-  # narratives of work that had FINISHED (#160 merged and pruned, #193 landed) left for
-  # archive/BRANCH_DISPOSITION_SWEEPS.md, taking it to 117. The ratchet banks 4 of those 6 lines.
-  # It is not the full 6 because this file is append-by-design - the standing rule below adds one
-  # table line per new remote ref - so a zero-headroom budget would fail the next lane for
-  # existing, which is a budget that punishes the wrong commit. Two rows of room, then it pays again.
-  "docs/BRANCH_DISPOSITIONS.md" = 119
+  # 119 -> 107 on 2026-08-31. It said "two rows of room, then it pays again"; both rows went to
+  # #271 and #274, the file hit the cap exactly, and it paid: the 2026-08-21 sweep narrative (three
+  # refs pruned that day, nothing live left in it bar two facts kept behind) moved to
+  # archive/BRANCH_DISPOSITION_SWEEPS.md, taking 119 -> 105 with the new row already in. Same
+  # append-by-design reasoning as before, so the ratchet again leaves exactly two rows of headroom
+  # rather than banking all 14 - a zero-headroom budget fails the next lane for existing.
+  # Prior step: 120 -> 119 on 2026-08-26, when the retired detached checkout's disposition took it
+  # to 123 and two FINISHED narratives (#160 landed and pruned, #193 landed) were archived for it.
+  "docs/BRANCH_DISPOSITIONS.md" = 107
   "docs/RELEASE_AUTONOMY.md" = 120
   "docs/RELEASE_TRANSACTION.md" = 120
   "docs/SESSION_HANDOFF.md" = 120
@@ -49,7 +50,10 @@ $budgets = @{
 # a red gate is worse than shipping a working ratchet, and because bringing them down is a CONTENT
 # decision owned by whoever writes them, not a mechanical trim (bytes are content; re-wrapping a
 # long line does not remove any). The budget may only ever move DOWN. Lower each as its pass lands:
-#   docs/BACKLOG.md         84KB            RATCHETED DOWN FIVE TIMES: 142KB -> 122KB on 2026-08-18 when the
+#   docs/BACKLOG.md         79KB            (84KB -> 79KB on 2026-08-29 when the C-13(b) keyboard-contract
+#                                           record moved to BACKLOG_ARCHIVE.md and the six earlier collapses
+#                                           had left slack.) RATCHETED DOWN FIVE TIMES BEFORE THAT:
+#                                           142KB -> 122KB on 2026-08-18 when the
 #                                           2026-07-27a ... 2026-08-04a steering-log cycles moved to
 #                                           docs/archive/, then 122KB -> 114KB when 2026-08-04b ...
 #                                           2026-08-04g followed them, then 106KB -> 100KB on 2026-08-22
@@ -79,7 +83,7 @@ $budgets = @{
 #                                           check (5b)'s failure text tells whoever hits it.
 # (CLAUDE.md is handled by its own older guard - see the note under the table.)
 $byteBudgets = @{
-  "docs/BACKLOG.md" = 86016
+  "docs/BACKLOG.md" = 80896
   "docs/RELEASE_STATE.md" = 43008
   "docs/OWNER_ACTION_CHECKLIST.md" = 33792
   "src-tauri/CLAUDE.md" = 10240
@@ -135,7 +139,16 @@ $sectionByteBudgets = @{
   # plus the A2/A3 not-a-defect finding moved out verbatim, leaving one consolidated pointer.
   # 13320 -> 11775, banking 256 of the 1545 bytes freed.
   "docs/BACKLOG.md::NEXT UP" = 11776
-  "docs/BACKLOG.md::Conformance queue" = 26624
+  # 24064 -> 23808 on 2026-08-29, banking 256 of the 584 bytes the Q9b Stage 1 repair (#259)
+  # freed. The queue FAILED at 23.8KB when the repair's record was filed, and the payment came
+  # from the archive as the law requires: Q9a's CLOSED visual-self-review record moved to
+  # docs/BACKLOG_ARCHIVE.md verbatim behind a pointer, 23.8KB -> 22.9KB. Freeing room inside a
+  # CAPPED section does not pay for itself, though - it raises what the caps still permit, so
+  # the file budget stops covering the arithmetic and doc-budget-guard.test.mjs fails instead
+  # (81039 vs 80896). Banking the freed room here is the half of the move that closes it; the
+  # remaining 328 bytes are deliberate, because this queue is where the next conformance
+  # finding lands and a zero-headroom cap would fail the session that files it.
+  "docs/BACKLOG.md::Conformance queue" = 23808
   "docs/BACKLOG.md::HQ STEERING LOG" = 4608
 }
 

@@ -63,25 +63,37 @@ if (text === null) process.exit(0); // nothing owner-facing was said; nothing to
 const { ok, missing } = lib.checkHandoffBlock(text);
 if (ok) process.exit(0);
 
+// ONE BULLET PER ACTUALLY-MISSING HALF (#270). This used to print all four every time, regardless
+// of what `missing` held, under the instruction "Append a short block". So a reply that already
+// carried a real tab verdict and a real next action, and only lacked a lane, was answered with a
+// whole fresh block repeating the two halves that were already fine — and the owner saw TWO
+// handoffs. His words: "quite literally redundant". A Stop hook can only ever append to a message
+// already sent, so the block it asks for must be exactly the part that is absent and nothing else.
+const BULLET = {
+  'tab verdict ("safe to close" / "keep this tab open because ...")':
+    `- This tab: "safe to close" OR "keep this tab open because <reason>". Say it about the VS Code ` +
+    `tab in front of him, not about the session — "leave session open" is not a verdict he can act on.`,
+  "next action for the following session":
+    `- Next session: the specific next task, paste-ready, naming files/branches/PRs by path or ` +
+    `number. If nothing is outstanding, say so plainly AND recommend what is worth doing instead — ` +
+    `"nothing left" with no direction is what he asked to stop seeing.`,
+  "which lane that next action is on (same lane / a new lane / name it)":
+    `- Lane: does the next action continue THIS lane or start a different one? Name the branch or PR.`,
+};
+
+const bullets = missing.map((m) => BULLET[m]).filter(Boolean).join("\n");
+
 process.stdout.write(
   JSON.stringify({
     decision: "block",
     reason:
-      `HANDOFF BLOCK MISSING — your reply is missing: ${missing.join("; ")}. ` +
+      `HANDOFF INCOMPLETE — your reply is missing: ${missing.join("; ")}. ` +
       `The owner keeps no notes and reads his sidebar as the index of what is finished versus ` +
       `live, so a reply without this leaves a session he cannot classify and real work gets ` +
-      `buried. Do NOT redo or re-verify any work and do NOT repeat the report you just gave. ` +
-      `Append a short block to it and end the turn:\n` +
-      `**Handoff**\n` +
-      `- This tab: "safe to close" OR "keep this tab open because <reason>". Say it about the ` +
-      `VS Code tab in front of him, not about the session — "leave session open" is not a verdict ` +
-      `he can act on and no longer passes.\n` +
-      `- Lane: does the next action continue THIS lane, or start a different one? Name the ` +
-      `branch or PR.\n` +
-      `- Next session: the specific next task, paste-ready, naming files/branches/PRs by ` +
-      `path or number. If nothing is outstanding, say that plainly and recommend what is worth ` +
-      `doing next instead — "nothing left" without a direction is what he asked to stop seeing.\n` +
-      `- Anything still blocked or waiting on him.`,
+      `buried. Do NOT redo or re-verify any work, and do NOT repeat the report you just gave.\n\n` +
+      `Add ONLY the missing line(s) below. Do NOT write a second "**Handoff**" heading and do NOT ` +
+      `restate the parts you already got right — whatever else your reply said still stands:\n` +
+      bullets,
   }) + "\n",
 );
 process.exit(0);

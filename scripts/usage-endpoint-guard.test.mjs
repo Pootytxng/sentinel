@@ -11,7 +11,7 @@ import { join } from "node:path";
 //   1. PRODUCER/RECEIVER VOCABULARY DRIFT — the one that would actually happen. `functions/api/usage.ts`
 //      validates `ram_gb_bucket`, `duration_bucket` and `gpu_vendor` against closed sets of exact
 //      strings, and those strings are emitted by `ram_gb_bucket`, `duration_bucket` and
-//      `gpu_vendor_token` in `src-tauri/src/receipts.rs`. Nothing links them. Renaming a bucket on
+//      `gpu_vendor_token` on the Rust side. Nothing links them. Renaming a bucket on
 //      the Rust side — a one-word edit that compiles, passes clippy and passes every Rust test —
 //      would make the receiver 400 every real payload in production, silently, forever. This test
 //      re-derives the vocabularies from the Rust source on every run, so that edit fails HERE.
@@ -39,12 +39,17 @@ const ENDPOINT = join("functions", "api", "usage.ts");
 const MIGRATION = join("migrations-reports", "0001_usage.sql");
 const WRANGLER = "wrangler.toml";
 
+// ram_gb_bucket and gpu_vendor_token moved verbatim to the tier-neutral hw_class.rs on 2026-08-29
+// (#252, Q9b contract §4) so Tier 3 shares the exact vocabularies without importing receipts.
+// The vocabulary is wherever the fn lives — this guard follows the fn, not the file.
+const HW_CLASS_RS = join("src-tauri", "src", "hw_class.rs");
+
 const read = (p) => readFileSync(p, "utf8");
 
 /** Body of a Rust fn, from its signature to the first line that is a bare `}` at column 0. */
-function rustFnBody(source, name) {
+function rustFnBody(source, name, at) {
   const start = source.indexOf(`fn ${name}(`);
-  expect(start, `${name} must exist in ${RECEIPTS_RS}`).toBeGreaterThan(-1);
+  expect(start, `${name} must exist in ${at}`).toBeGreaterThan(-1);
   const end = source.indexOf("\n}", start);
   expect(end, `${name} must be a closed fn`).toBeGreaterThan(start);
   return source.slice(start, end);
@@ -63,23 +68,24 @@ function tsSet(source, name) {
 
 describe("Tier 2 usage endpoint — producer/receiver vocabulary", () => {
   const rust = read(RECEIPTS_RS);
+  const hw = read(HW_CLASS_RS);
   const ts = read(ENDPOINT);
 
-  it("accepts exactly the ram_gb_bucket strings receipts.rs emits", () => {
-    const produced = new Set(quoted(rustFnBody(rust, "ram_gb_bucket")));
+  it("accepts exactly the ram_gb_bucket strings hw_class.rs emits", () => {
+    const produced = new Set(quoted(rustFnBody(hw, "ram_gb_bucket", HW_CLASS_RS)));
     expect(tsSet(ts, "RAM_BUCKETS")).toEqual(produced);
   });
 
   it("accepts exactly the duration_bucket strings receipts.rs emits", () => {
-    const produced = new Set(quoted(rustFnBody(rust, "duration_bucket")));
+    const produced = new Set(quoted(rustFnBody(rust, "duration_bucket", RECEIPTS_RS)));
     expect(tsSet(ts, "DURATION_BUCKETS")).toEqual(produced);
   });
 
-  it("accepts exactly the gpu_vendor tokens receipts.rs returns", () => {
+  it("accepts exactly the gpu_vendor tokens hw_class.rs returns", () => {
     // gpu_vendor_token's body holds two kinds of literal: the needles it matches on
     // (`n.contains("radeon")`) and the tokens it returns. Only the returns are the vocabulary, so
     // strip the needles before collecting.
-    const body = rustFnBody(rust, "gpu_vendor_token").replace(/contains\("[^"]*"\)/g, "");
+    const body = rustFnBody(hw, "gpu_vendor_token", HW_CLASS_RS).replace(/contains\("[^"]*"\)/g, "");
     expect(tsSet(ts, "GPU_VENDORS")).toEqual(new Set(quoted(body)));
   });
 
@@ -166,7 +172,7 @@ describe("Tier 2 usage endpoint — blast radius", () => {
 describe("Tier 2 usage endpoint — Q9a builds, it does not arm", () => {
   it("leaves receipts_gate() hard-false", () => {
     const rust = read(RECEIPTS_RS);
-    const body = rustFnBody(rust, "receipts_gate");
+    const body = rustFnBody(rust, "receipts_gate", RECEIPTS_RS);
     expect(body).toMatch(/\bfalse\b/);
     expect(body).not.toMatch(/\btrue\b/);
   });

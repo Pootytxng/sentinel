@@ -1,0 +1,1437 @@
+{
+  "entries": [
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "module_family"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "module_family"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "error_code"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "error_code"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "error_code"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "error_code"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "module_family",
+        "error_code"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "error_code"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "error_code"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "error_code"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "hardware"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "hardware"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "hardware"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "hardware"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "module_family",
+        "hardware"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "hardware"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "hardware"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "hardware"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "error_code",
+        "hardware"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "error_code",
+        "hardware"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "error_code",
+        "hardware"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "error_code",
+        "hardware"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "module_family",
+        "error_code",
+        "hardware"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "error_code",
+        "hardware"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "error_code",
+        "hardware"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "error_code",
+        "hardware"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "module_family",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "error_code",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "error_code",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "error_code",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "error_code",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "module_family",
+        "error_code",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "error_code",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "error_code",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "error_code",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "module_family",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "error_code",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "error_code",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "error_code",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "error_code",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "module_family",
+        "error_code",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "error_code",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "error_code",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "error_code",
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "app_family",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "module_family",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "error_code",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "error_code",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "app_family",
+        "error_code",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "error_code",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "module_family",
+        "error_code",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "error_code",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "error_code",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "error_code",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "app_family",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "module_family",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "error_code",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "error_code",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "app_family",
+        "error_code",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "error_code",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "module_family",
+        "error_code",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "error_code",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "error_code",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "error_code",
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "user_comment",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "app_family",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "module_family",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "error_code",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "user_comment",
+        "error_code",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "app_family",
+        "error_code",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "error_code",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "module_family",
+        "error_code",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "error_code",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "error_code",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "error_code",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\"\n}",
+      "removed": [
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\"\n}",
+      "removed": [
+        "user_comment",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\"\n}",
+      "removed": [
+        "app_family",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\",\n  \"error_code\": \"0xc0000005\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\"\n}",
+      "removed": [
+        "module_family",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"error_code\": \"0xc0000005\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"error_code\": \"0xc0000005\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\"\n}",
+      "removed": [
+        "error_code",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\",\n  \"module_family\": \"ntdll.dll\"\n}",
+      "removed": [
+        "user_comment",
+        "error_code",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\"\n}",
+      "removed": [
+        "app_family",
+        "error_code",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"module_family\": \"ntdll.dll\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "error_code",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\"\n}",
+      "removed": [
+        "module_family",
+        "error_code",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\",\n  \"app_family\": \"valorant\"\n}",
+      "removed": [
+        "user_comment",
+        "module_family",
+        "error_code",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\"\n}",
+      "removed": [
+        "app_family",
+        "module_family",
+        "error_code",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment + incident evidence"
+    },
+    {
+      "base": "both",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"incident_kind\": \"app-crash\",\n  \"occurred_at\": \"2026-06-12T21:42:00+02:00\"\n}",
+      "removed": [
+        "user_comment",
+        "app_family",
+        "module_family",
+        "error_code",
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "incident evidence only"
+    },
+    {
+      "base": "comment-only",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [],
+      "shape": "comment only"
+    },
+    {
+      "base": "comment-only",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"windows_build\": \"26100\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "hardware"
+      ],
+      "shape": "comment only"
+    },
+    {
+      "base": "comment-only",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "windows_build"
+      ],
+      "shape": "comment only"
+    },
+    {
+      "base": "comment-only",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"gpu_driver_version\": \"24.10.1\"\n}",
+      "removed": [
+        "hardware",
+        "windows_build"
+      ],
+      "shape": "comment only"
+    },
+    {
+      "base": "comment-only",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "gpu_driver_version"
+      ],
+      "shape": "comment only"
+    },
+    {
+      "base": "comment-only",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"windows_build\": \"26100\"\n}",
+      "removed": [
+        "hardware",
+        "gpu_driver_version"
+      ],
+      "shape": "comment only"
+    },
+    {
+      "base": "comment-only",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\",\n  \"gpu_vendor\": \"amd\",\n  \"gpu_model\": \"radeon rx 9070 xt\",\n  \"cpu_family\": \"ryzen x3d\",\n  \"ram_gb_bucket\": \"25-32\"\n}",
+      "removed": [
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment only"
+    },
+    {
+      "base": "comment-only",
+      "payload_json": "{\n  \"schema_version\": 1,\n  \"compy_version\": \"0.0.0-fixture\",\n  \"user_comment\": \"it crashed while I was in <path> my ip is <ip>\"\n}",
+      "removed": [
+        "hardware",
+        "windows_build",
+        "gpu_driver_version"
+      ],
+      "shape": "comment only"
+    }
+  ],
+  "fixture_compy_version": "0.0.0-fixture",
+  "note": "GENERATED by case_preview_corpus_matches_what_this_module_produces in src-tauri/src/case_evidence_upload.rs. Do not hand-edit: regenerate with COMPY_UPDATE_CASE_PREVIEW_CORPUS=1 cargo test case_preview_corpus. Every payload_json below is real output of case_preview(), which is why the Tier 3 consent UI needs no serializer of its own.",
+  "removable_units": {
+    "both": [
+      "user_comment",
+      "app_family",
+      "module_family",
+      "error_code",
+      "hardware",
+      "windows_build",
+      "gpu_driver_version"
+    ],
+    "comment-only": [
+      "hardware",
+      "windows_build",
+      "gpu_driver_version"
+    ]
+  },
+  "shapes": [
+    "comment only",
+    "incident evidence only",
+    "comment + incident evidence"
+  ]
+}

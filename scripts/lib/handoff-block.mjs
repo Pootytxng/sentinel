@@ -34,7 +34,34 @@ const TAB_VERDICT =
 
 // Which lane the next action belongs to. "same lane" and "new lane" both pass; so does naming the
 // branch or PR outright, which is stronger. A handoff that names no lane is the ambiguity he hit.
-const LANE = /\b(same lane|this lane|a new lane|different lane|no lane|not lane-scoped|lane\/|branch |pr #\d|#\d{2,})/;
+const LANE_PHRASE = /\b(same lane|this lane|a new lane|different lane|no lane|not lane-scoped|lane\/|branch |pr #\d|#\d{2,})/;
+
+// A LABELLED lane field, answered in the writer's own words (#270). The phrase list above is a
+// CLOSED vocabulary, and the owner paid for that: a block whose "Lane:" line read "machine hygiene
+// - done, no worktree claimed, nothing to merge" was rejected as naming no lane at all, and the
+// hook's remediation then told the model to append a second block. He saw two handoffs and said so.
+// Answering the question in plain English has to count as answering it.
+//
+// THE LABEL ALONE IS NOT ENOUGH — that is the 2026-08-20 "leave session open" lesson applied to
+// this half: naming a field and leaving it hollow is the same non-verdict in a different coat. An
+// answer is two or more words, and is not one of the stock evasions.
+const LANE_LABEL = /(?:^|[\s*_>|-])lane\**\s*:\s*\**\s*([^\n.;|]{0,120})/;
+const NON_ANSWER = /^(n\/?a|tbd|todo|none|unknown|unclear|see above|same|\?+|-+|_+)$/;
+
+// An empty "Lane:" must not annex the field that follows it. Flattening collapses newlines, so a
+// block whose lane line is blank reads as "lane: next session: rebuild" — three words, and the hollow
+// field would pass on the strength of the NEXT one's answer. Cut the capture at the first labelled
+// field inside it, so an unanswered label stays unanswered.
+const NEXT_FIELD = /(^|\s)[a-z][a-z ]{0,24}:.*$/;
+
+const LANE = {
+  test(flat) {
+    if (LANE_PHRASE.test(flat)) return true;
+    const answer = flat.match(LANE_LABEL)?.[1]?.replace(NEXT_FIELD, "$1").trim();
+    if (!answer || NON_ANSWER.test(answer)) return false;
+    return answer.split(/\s+/).filter(Boolean).length >= 2;
+  },
+};
 
 // The next-action half. "handoff" alone is not enough — the word is easy to type and says nothing.
 const NEXT_ACTION = /\b(next session|next step|next action|hand ?off|resume|pick up|start here|paste)\b/;

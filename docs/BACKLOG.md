@@ -172,44 +172,7 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   is really measured (`src/theme-contrast.test.ts`, `src/design/type-scale-guard.test.ts`).
   **Still open under this row:** (a) rank 2, the owner's Figma account + MCP server — his hands, see
   `docs/OWNER_ACTION_CHECKLIST.md`. That is now the ONLY thing holding C-13 open.
-  **(b) CLOSED 2026-08-20 — the `role="menu"` keyboard contract is honoured.** `RoomAccentPicker`
-  declared the role from the day it shipped and carried none of its behaviour: **all 17 items sat in
-  the tab order**, so crossing the topbar by keyboard cost 17 stops instead of one; no arrow keys, so
-  the role's navigation contract was a claim the component did not honour; and no focus restoration,
-  so closing dropped focus onto `<body>` and lost the user's place. Now: roving tabindex (exactly one
-  tabbable item), one linear ring over all 17 items with Up/Left · Down/Right · Home/End and wrap,
-  disabled items skipped, and every close path — Escape, Tab, pick, apply-to-all — returning focus to
-  the trigger. An outside click deliberately does NOT restore focus, so it cannot fight whatever was
-  just clicked. **Kept as a menu rather than ported to `Picker`** (the select-only combobox from
-  C-10): the popover mixes 15 `menuitemradio` swatches with two COMMANDS, and a `listbox` may not
-  contain commands — so this completes the correct contract instead of re-architecting a shipped
-  surface. Picker's recorded warning about focus-on-close is paid explicitly rather than dodged.
-  **Why axe never saw it, and why that generalises:** axe reads the accessibility TREE — roles, names,
-  required children — and every one of those was already correct here, so the 49-case C-13 sweep
-  passed the day the defect was filed. **A role is a promise about behaviour, and behaviour has to be
-  driven to be measured.** Guard: `src/design/room-accent-menu-keyboard.test.tsx` (16 tests) drives
-  real key events against a real mount and asserts real `document.activeElement`, and its last block
-  is a CLASS ratchet — any NEW `role="menu"` under `src/` fails until it carries arrow handling, a
-  roving tabindex and a `.focus()` restore. Falsified FIVE ways (18 tests), each control failing
-  exactly the tests it should and no others: the true pre-fix component (14/18 red), tabindex alone
-  removed (3), the arrow handler alone unwired (6), focus-restore alone dropped from Escape (1), and
-  disabled-skip-on-open alone removed (2). That last one is a hole found in THIS lane's own change
-  during diff review, not in the original: `End`/`ArrowUp` from the trigger opened onto the last
-  INDEX — "reset to default", disabled whenever the room has no pick — so focus landed nowhere and
-  the tab stop parked on an unfocusable item. Refs do not exist at open time, so the skip lives in
-  the focus effect, stepping backward.
-  **Shipped `5fab9e79` (PR [#172](https://github.com/Pootytxng/sentinel/pull/172)); the self-review it
-  owed is PAID 2026-08-20** on installed desk build `75849be1` — the first binary ever to carry it.
-  **Self-review VERDICT: PASS** (10/10 at 1500x980; the reviewer re-confirmed the stamp with its own
-  `get_build_stamp` probe before capturing anything). **What 16 mounted tests could not see:** the
-  roving-tabindex focus ring draws OUTSIDE the swatch fill (`outline: 2px solid rgb(179,102,255)`,
-  `outline-offset: 2px`), so it stays legible on a near-hue swatch (Violet) as well as a contrasting
-  one (Emerald) instead of vanishing into the very colour it marks — an invisible focus ring on a
-  roving tabindex is a keyboard trap the user cannot see. Disabled-skip and wrap were driven with REAL
-  CDP input events in both directions and landed on "Apply to all rooms", never the disabled "Reset to
-  default"; `Escape` put focus visibly back on the trigger. **Recorded for the next keyboard review:**
-  synthetic DOM dispatch fails Chromium's `:focus-visible` heuristic and would have FALSE-FAILED the
-  states item — real input events are required, not `dispatchEvent`.
+  **(b) CLOSED 2026-08-20 — the `role="menu"` keyboard contract is honoured; self-review PASS 2026-08-20.** Full record moved verbatim to [`BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-29, section byte cap). Guard: `src/design/room-accent-menu-keyboard.test.tsx`.
 - [ ] **`launch-focus-guard` RUNTIME tier is intermittent under the pre-push gate — NOT root-caused.**
   2026-08-18: the quiet-launch case rejected three consecutive pushes of the same tree
   (`Compy held the foreground for 33/55 samples (first at 2430ms)`), then PASSED the fourth with that
@@ -356,41 +319,45 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     public.** Guards updated to match, never weakened.
     Merged `8b2f0f64` (PR #218): disclosure UI + off switch, `EULA.md` §10, no CSP widening needed
     (the send is Rust-side). Receiver **deployed + empty** 2026-08-25 on the owner's yes.
-    **Visual self-review DONE 2026-08-25 — PASS** (12/12 after one round-trip). It ran on the
-    fixture rig, not a build, because the surface is unreachable in every build; the rig itself had
-    been dead since #148 and was repaired first (`041cabbc`). Round 1 FAILed item 2: both failure
-    messages rendered in `receipts-hint`, the same calm grey as ordinary copy, so a refused consent
-    write read as a footnote. Fixed and guarded in `b20e59dc` — and the same defect turned out to
-    be in `Fix.tsx` (a refused apply) and `LicensePanel.tsx` (a failed activation), both fixed in
-    the same commit. A second round-trip gave the first-run card a measure (62ch) so its divider and
-    its Accept / No-thanks pair stop where the prose stops instead of stretching a full-width tile.
+    **Visual self-review DONE 2026-08-25 — PASS** (12/12); the round-trip record moved verbatim to
+    [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on 2026-08-29 (section byte cap).
     **Ships by default, not pending** (2026-08-26): the 2026-08-07 decree makes the look the lane's
     to ship and the owner's to veto on sight, and he has the before/after. Only ARMING is his. Said
     honestly — the decree carves out what reaches other people's machines, so a consent screen is
     the closest case yet: first application, not settled precedent.
-    `receipts_gate()` at `src-tauri/src/receipts.rs:23` is the last line
+    `receipts_gate()` at `src-tauri/src/receipts.rs:28` is the last line
     of it, not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
     needs a region check before any sharing ships there.
   - [ ] **Q9b — build Tier 3 in-app feedback + crash reports.** Own module
     (`src-tauri/src/case_evidence_upload.rs`), never inside `support_evidence.rs`. Tier 3's gate is
     unchanged and applies in full: per-case consent, preview/redaction, named recipient, retention,
-    deletion receipt, no background queue, no inherited consent. **Destination decided (B_land, 2026-08-18):** D1 `compy_reports` on the
-    owner's Cloudflare account, reached through its own `functions/api/` endpoint — no email inbox
-    anywhere in the design. The consent screen names it: *"Compy's own store on compy.gg"*. Define
-    the schema in this change (retention column + a ticket id the deletion receipt can quote); the
-    database is empty on purpose. Residual: one `wrangler pages deploy` at ship time (B7).
-  - [x] **Q9c — CPU temperature that feels native, with no driver.** *Shipped 2026-08-18 (PR pending):*
-    `src/surfaces/CpuTempOffer.tsx` replaces the dead-end sentence with an offer that detects what is
-    installed, starts it or links the download, and names HWiNFO's Shared Memory Support switch.
-    Self-review PASS round 3 (6 fixture states). *Background:*
-    `src-tauri/src/cpu_temp.rs` reads HWiNFO's `Global\HWiNFO_SENS_SM2` shared memory and the
-    LibreHardware/OpenHardware WMI namespaces, driver-free, and Monitor shows the value attributed to
-    its source. **The gap was purely UX** — with no sensor app running the user got one sentence telling
-    them to go run one, a dead end under the name-it-AND-fix-it-inline law. The third-party-driver route is
-    closed by Windows, not by us: every free option reads through WinRing0, which is on Microsoft's
-    vulnerable-driver blocklist (default-enforced since Win11 22H2) and flagged by Defender as
-    `VulnerableDriver:WinNT/Winring0` — our installer would trip Windows Security itself. A Compy-signed driver stays
-    policy-possible but costs an EV certificate, so ZERO-BUDGET LAW parks it until revenue exists.
+    deletion receipt, no background queue, no inherited consent. **Destination decided (B_land,
+    2026-08-18):** D1 `compy_reports` on the owner's Cloudflare account, reached through its own
+    `functions/api/` endpoint — no email inbox anywhere in the design. The consent screen names it:
+    *"Compy's own store on compy.gg"*. Define the schema in that change (retention column + a ticket
+    id the deletion receipt can quote); the database is empty on purpose. Residual: one
+    `wrangler pages deploy` at ship time (B7). **Contract WRITTEN 2026-08-29 (#247):**
+    `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` — 30-day retention ruled
+    by the owner. **Stage 1 LANDED 2026-08-29 (#252), still dark** (§2 allowlist struct, Tier 3's own
+    redactor, pure producers, one serializer, pure preview, `hw_class.rs` tier-neutral per §4,
+    `case_evidence_gate()` hard-false and uncalled). Guards:
+    `src/case-evidence-tier-separation-guard.test.ts` + the outbound guard's Tier 3 rows. **Its
+    security precondition FAILED first (#258)** — an invisible character (U+200B and family) inside a
+    username, address, key or serial defeated every exact-match detector while rendering identically;
+    Stage 2 stopped rather than hide the repair inside it. **Stage 1 repair landed 2026-08-29
+    (#259), independently reviewed six passes PASS (#260):** the input boundary drops
+    Cf/Default_Ignorable and folds full-width ASCII before any detector runs, the preview serializes
+    from the same struct as the wire so key order matches byte-for-byte, and the serializer refuses a
+    shapeless payload; the review's own find — `180B..180F`'s four Mongolian selectors — was fixed
+    in-lane. Residual, each test-pinned: mixed-script homoglyphs and U+2800 still defeat an exact
+    match, which is what §2A's "best-effort" covers and what the Stage 2 copy now says. **Stage 2
+    LANDED 2026-08-29 (#258):** `src/surfaces/CaseEvidenceConsent.tsx` — local preview/edit/
+    one-submission consent over Stage 1's canonical bytes, fixture-reachable only, with no command,
+    HTTP, queue or persistence anywhere in it. Next in sequence: **Stage 3 — receiver + migration,
+    local/staged ONLY, never deployed** (contract §11), its own separate proof boundary. The Tauri
+    send command is **Stage 4**, and deployment is Stage 7; §11 forbids collapsing them.
+  - [x] **Q9c — CPU temp, no driver: SHIPPED 2026-08-18** (`CpuTempOffer.tsx`, self-review PASS).
+    Full record verbatim in [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-29, byte cap).
 
 - [ ] **P1 stabilization — Q4 · Q5 · Q6 · Q7 all DELIVERED; ONE leg still open.** The delivery
   narrative for all four moved verbatim to [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on
@@ -417,7 +384,14 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
   what proving one takes instead. Guards: `src/surfaces/FirstWin.test.tsx` (14, falsified),
   `src/surfaces/first-win-data.test.ts` (9), six fixture states in `docs/ui-sweep/fixture/` pinned
   by `src/fixture-parity-guard.test.ts`. Self-review PASS 2026-08-26.
-  Remaining under P2: the Consumer/Technical/Support evidence exports.
+  **Evidence exports DONE 2026-08-29** — `export_report` takes a `tier`: Technical = the existing
+  full-detail markdown; Consumer = a new plain-English render of the same local bundle
+  (`build_consumer_report`, degrade-by-omission, flagging only what a check flagged, per DIR-1a);
+  Support = the existing Q5 incident bundle, deliberately not duplicated. Settings → Feedback & help
+  gained the saved-file tier choice (plain English default; email stays full-detail). Guards: 5 new
+  `export_tests` in `export.rs` + 3 tier tests in `FeedbackExport.test.tsx`. Self-review PASS
+  2026-08-29. **P2's listed legs are all closed; still open elsewhere, not under P2:** the
+  lower-spec-rig leg of P1 (owner-blocked) and the LATER lane below.
 - [ ] **LATER:** Intelligence Phase 4/5, vendor-awareness expansion, Receipts/crowd intelligence,
   remote rules, Pro/affiliate/B2B, and model-assisted explanation remain behind the blueprint's gates.
 
@@ -662,7 +636,11 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   collection with "Vitest failed to find the current suite" (seen once 2026-07-22 on the two
   `src/surfaces/setup/` files; both pass isolated AND on full-suite re-run). Not one of the three
   878a3a9 classes. If it recurs, investigate pool/maxWorkers; a single re-run is the current answer.
-- [ ] evidence-export tiers — audience-shaped renders of the SAME measured evidence pack (`export.rs`
+- [x] evidence-export tiers — **SHIPPED 2026-08-29 as P2's last leg (see P2 above); the 2026-07-17
+  SUBSUMED note below is superseded** — the 2026-08-26 P2 scoping pulled the Consumer/Technical
+  renders forward as presentation-only tiers over `export_report`, and Intelligence Phase 5 keeps
+  only the Upgrade-Advisor/Shop renders. Original row, point-in-time:
+  audience-shaped renders of the SAME measured evidence pack (`export.rs`
   today: `export_report` markdown/JSON + Discord block = the technical-ish default): add **Consumer**
   ("what changed, in plain English"), **Technical** (full probe/CI detail), and **Support** ("help me,
   here's my rig + ledger") render tiers over the one data source — presentation-only, no new probes, no

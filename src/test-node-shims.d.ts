@@ -26,6 +26,8 @@ declare module "path" {
   // into the absolute path the graph is keyed on.
   export function dirname(p: string): string;
   export function resolve(...parts: string[]): string;
+  // case-evidence-tier-separation-guard.test.ts filters walked .rs files by their final segment.
+  export function basename(p: string): string;
 }
 declare module "os" {
   export function homedir(): string;

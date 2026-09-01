@@ -183,7 +183,7 @@ A `ship-reminder` PostToolUse hook nudges this after any `tauri build`.
 
 ### Rust module map (`lib.rs` carved into safety-boundary modules)
 
-Complete 2026-08-18 (48 `.rs` files; line counts rough). **Mutation/rollback +
+Complete 2026-08-29 (51 `.rs` files; line counts rough). **Mutation/rollback +
 gate-relevant modules are starred ★ — scope any mutation-gate change against these first.** The
 read-only remainder (hardware/sensors, monitoring/FPS, benchmark/Lab, advisory/ranking/export,
 intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads only when work touches
@@ -202,9 +202,9 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
 - ★ `services.rs` (~1040) — service-suspend/debloat mutation surface (ARMED).
 - ★ `gpu_profile.rs` (~590) — GPU profile handling (apply structurally impossible → advisory; AMD state not user-mode readable).
 - ★ `remote_rules.rs` (~590) — signed remote-rules (Ed25519 verify wired, fetch triple-gated OFF).
-- ★ `receipts.rs` (~798) — Receipts gate + Tier 2 send path (Q9a): `send_decision` refuses gate → disclosure → opt-in. Built dark, hard-false, **default-OFF even armed** (#207).
-- ★ `license.rs` (~355) — Compy Pro license gate (built dark).
-- ★ `drift.rs` (~351) — applied-change drift detection vs live machine state.
+- ★ `receipts.rs` (~633) — Receipts gate + Tier 2 send path (Q9a): `send_decision` refuses gate → disclosure → opt-in. Built dark, hard-false, **default-OFF even armed** (#207).
+- ★ `license.rs` (~519) — Compy Pro license gate (built dark).
+- ★ `drift.rs` (~477) — applied-change drift detection vs live machine state.
 - ★ `data_root.rs` (~1050) — canonical data-root resolver (#130): measures where the root LANDS, not the `APPDATA` string; halts on a split; issues `MutationRoot`, the capability `history.rs`/`actions.rs` now require. Guard: `scripts/data-root-guard.test.mjs`.
 
 ## LOCKED safety rules — do not cross without an explicit product-owner decision

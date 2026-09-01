@@ -270,12 +270,25 @@ describe("both one-shot keys are consumed and cleared", () => {
     // re-marked itself, and "This is the one you came here to see" reappeared for an incident the
     // user had already left. A one-shot that survives its own visit is not one-shot, whichever half
     // of the pair remembers it.
-    expect(labConsole, "the station toggle no longer clears the deep-linked incident")
+    //
+    // Mission 1 (2026-08-28) renamed the hand-driven switch from a `setOpenStation((cur) => ...)`
+    // toggle to `openFrom(key, opener)`, because a selected station now replaces the room and the
+    // control that opened it has to be remembered by identity. The invariant is untouched and the
+    // guard got STRICTER for the rename: the clear is now required INSIDE the switch and INSIDE
+    // the close, not merely somewhere in the file, where an unrelated line could satisfy it.
+    expect(labConsole, "the station switch no longer clears the deep-linked incident")
       .toMatch(/setOpenIncidentId\(null\)/);
-    const toggle = labConsole.match(/const openStationAt[\s\S]{0,600}?\n {2}\};/)?.[0]
+    const switcher = labConsole.match(/const openFrom = \([\s\S]{0,600}?\n {2}\};/)?.[0]
+      ?? labConsole.match(/const openStationAt[\s\S]{0,600}?\n {2}\};/)?.[0]
       ?? labConsole.match(/setOpenStation\(\(cur\) =>[\s\S]{0,300}?\n/)?.[0]
       ?? "";
-    expect(toggle, "the station toggle is gone — this guard is policing nothing").not.toBe("");
+    expect(switcher, "the station switch is gone — this guard is policing nothing").not.toBe("");
+    expect(switcher, "switching stations by hand no longer drops the deep-linked incident")
+      .toMatch(/setOpenIncidentId\(null\)/);
+    const closer = labConsole.match(/const closeStation = \([\s\S]{0,400}?\n {2}\};/)?.[0] ?? "";
+    expect(closer, "closeStation is gone — this guard is policing nothing").not.toBe("");
+    expect(closer, "closing a station no longer drops the deep-linked incident")
+      .toMatch(/setOpenIncidentId\(null\)/);
   });
 
   it("passes it into BlackBox as a selection, never as a filter", () => {

@@ -67,23 +67,63 @@ describe("FeedbackExport — outbound boundary", () => {
     expect(decodeURIComponent(url)).toContain("coil whine on load screen");
     expect(decodeURIComponent(url)).toContain("v0.9.4");
     // The bundle it emailed about was built locally via export_report, feedback passed through.
-    expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: "coil whine on load screen" });
+    // Email is the SUPPORT errand: it always carries the full-detail report, whatever the save
+    // tier says — a plain-English file with no probe detail defeats the reason it was emailed.
+    expect(invokeMock).toHaveBeenCalledWith("export_report", {
+      feedback: "coil whine on load screen",
+      tier: "technical",
+    });
   });
 
   it("blank note → feedback is null (backend appends no empty section), still local-only", async () => {
     render(<FeedbackExport />);
     fireEvent.click(screen.getByRole("button", { name: "Email it to me" }));
     await waitFor(() => expect(openUrlMock).toHaveBeenCalledTimes(1));
-    expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: null });
+    expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: null, tier: "technical" });
   });
 
   it("'Save a report file' writes the local bundle and opens NO url", async () => {
     render(<FeedbackExport />);
     fireEvent.click(screen.getByRole("button", { name: "Save a report file" }));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: null }));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: null, tier: "consumer" }),
+    );
     // Saved path is surfaced; no mail client, no network.
     expect(await screen.findByText(RESULT.path)).toBeInTheDocument();
     expect(openUrlMock).not.toHaveBeenCalled();
+  });
+});
+
+// Evidence-export tiers (P2): the saved file is audience-shaped. These pin the three decisions —
+// plain English is the DEFAULT (this app's first audience is a non-technical gamer), the toggle
+// switches the saved render, and the email path never loses detail because of it.
+describe("FeedbackExport — evidence-export tiers", () => {
+  it("the saved report defaults to the plain-English tier", async () => {
+    render(<FeedbackExport />);
+    expect(screen.getByRole("button", { name: "Plain English" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Save a report file" }));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: null, tier: "consumer" }),
+    );
+  });
+
+  it("choosing Full detail saves the technical render instead", async () => {
+    render(<FeedbackExport />);
+    fireEvent.click(screen.getByRole("button", { name: "Full detail" }));
+    expect(screen.getByRole("button", { name: "Full detail" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Save a report file" }));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: null, tier: "technical" }),
+    );
+  });
+
+  it("the email path stays full-detail even with the plain tier selected", async () => {
+    render(<FeedbackExport />);
+    expect(screen.getByRole("button", { name: "Plain English" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Email it to me" }));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: null, tier: "technical" }),
+    );
   });
 });
 
@@ -118,7 +158,10 @@ describe("FeedbackExport — the draft survives leaving Settings", () => {
     render(<FeedbackExport />);
     fireEvent.click(screen.getByRole("button", { name: "Save a report file" }));
     await waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: "coil whine under load" }),
+      expect(invokeMock).toHaveBeenCalledWith("export_report", {
+        feedback: "coil whine under load",
+        tier: "consumer",
+      }),
     );
   });
 

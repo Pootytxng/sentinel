@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { ExportResult } from "../types";
+import type { ExportResult, ReportTier } from "../types";
 import { BentoTile } from "../design/bento/BentoGrid";
 import { lsGet, lsSet } from "../data/safe-storage";
 
@@ -71,6 +71,11 @@ export function FeedbackExport({
   // Lazy initialiser, not an effect: the text must be on screen in the FIRST paint after remount,
   // and re-slicing to NOTES_MAX defends against a draft stored before the cap ever changed.
   const [notes, setNotes] = useState(() => (lsGet(DRAFT_KEY) ?? "").slice(0, NOTES_MAX));
+  // Evidence-export tiers (P2): the SAVED file's shape. Plain English is the default — this app's
+  // first audience is a non-technical gamer, and the full probe tables are one press away, never
+  // hidden. "Email it to me" always sends the full-detail report regardless: it exists so support
+  // can diagnose, and a plain-English file with no probe detail defeats that errand.
+  const [tier, setTier] = useState<ReportTier>("consumer");
   const [busy, setBusy] = useState<"email" | "save" | null>(null);
   const [result, setResult] = useState<ExportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,9 +91,9 @@ export function FeedbackExport({
 
   // Both actions build the same local bundle from the CURRENT notes, so the file always reflects what
   // the tester just typed. Blank notes → null → the backend appends no feedback section (no empty header).
-  const generate = async (): Promise<ExportResult> => {
+  const generate = async (reportTier: ReportTier): Promise<ExportResult> => {
     const feedback = notes.trim() ? notes.trim() : null;
-    const r = await invoke<ExportResult>("export_report", { feedback });
+    const r = await invoke<ExportResult>("export_report", { feedback, tier: reportTier });
     setResult(r);
     return r;
   };
@@ -97,7 +102,7 @@ export function FeedbackExport({
     setBusy("email");
     setError(null);
     try {
-      const r = await generate();
+      const r = await generate("technical");
       await openUrl(buildMailto(notes, r, subjectTag, t));
     } catch (e) {
       // The bundle may have saved even if the mail client didn't open — say what actually happened.
@@ -115,7 +120,7 @@ export function FeedbackExport({
     setBusy("save");
     setError(null);
     try {
-      await generate();
+      await generate(tier);
     } catch {
       setError(t("settings.feedback.errSaveFailed"));
     } finally {
@@ -163,6 +168,30 @@ export function FeedbackExport({
       />
       <div className="fb-count">
         {notes.length}/{NOTES_MAX}
+      </div>
+
+      {/* Tier choice for the SAVED file only (same segmented pattern as SupportEvidence). The
+          email path is not offered a choice: it exists to reach support, and support needs the
+          full-detail report every time. */}
+      <div className="set-row">
+        <div className="set-row-text">
+          <div className="set-row-title">{t("settings.feedback.tierTitle")}</div>
+          <div className="set-row-sub">
+            {t(tier === "consumer" ? "settings.feedback.tierConsumerSub" : "settings.feedback.tierTechnicalSub")}
+          </div>
+        </div>
+        <div className="set-seg" role="group" aria-label={t("settings.feedback.tierTitle")}>
+          {(["consumer", "technical"] as ReportTier[]).map((p) => (
+            <button
+              key={p}
+              className={`set-seg-btn ${tier === p ? "set-seg-on" : ""}`}
+              aria-pressed={tier === p}
+              onClick={() => setTier(p)}
+            >
+              {t(p === "consumer" ? "settings.feedback.tierConsumer" : "settings.feedback.tierTechnical")}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="fb-actions">

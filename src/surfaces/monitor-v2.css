@@ -64,10 +64,12 @@
   margin-bottom: var(--v2-gap);
   border-bottom: 1px solid var(--v2-line);
 }
-/* Detail level sits at the far edge whether or not the section segments render (Basic). */
-:root[data-v2="on"] .mv2-bar > :last-child {
-  margin-left: auto;
-}
+/* NO auto left margin here (issue #236). The bar's only child is the room's Live/Sessions face
+   switch, and a tab bar follows the app's normal tab alignment — flush with the content it
+   switches (History's `.bbv2-bar` is the reference). The rule that used to live here was written
+   when the bar held a SECOND control ("Detail level") that belonged at the far edge; the 2026-08-20
+   comprehensibility sweep deleted that control, so the push landed on the navigation instead.
+   Pinned by `monitor-bar-alignment-guard.test.tsx`, which proves no shipped rule can reach it. */
 
 :root[data-v2="on"] .mv2-body {
   display: flex;

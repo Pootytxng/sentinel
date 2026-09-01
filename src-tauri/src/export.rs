@@ -591,6 +591,174 @@ fn build_discord_block(
     o
 }
 
+/// Pure: the Consumer projection — the SAME already-gathered sources as the technical report,
+/// re-rendered as plain English for someone who will never read a probe table (evidence-export
+/// tiers, P2). Presentation-only by construction: it receives the same serialized Values the
+/// technical render receives, invents nothing, and degrades by OMITTING a line whose source field
+/// is missing — a "—" placeholder is technical furniture, and a consumer render that prints one
+/// is asserting a reading it doesn't have. The "Anything to look at?" section only lists checks
+/// the machine actually flagged (earned framing, DIR-1a): zero flagged says so plainly, and a
+/// readiness pack with no counts is reported as not-yet-checked, never assumed clean.
+pub(crate) fn build_consumer_report(
+    hardware: &Value,
+    trust_ledger: &Value,
+    readiness: &Value,
+    sessions: &Value,
+    exported_at: &str,
+    feedback: Option<&str>,
+) -> String {
+    let mut o = String::new();
+    let _ = writeln!(o, "# Your Compy report\n");
+    let _ = writeln!(o, "_Exported {} · Compy v{}_\n", exported_at, env!("CARGO_PKG_VERSION"));
+    let _ = writeln!(
+        o,
+        "> Generated locally. Compy collects no telemetry, has no account, and sends nothing \
+         off your device. You choose where to share this file.\n"
+    );
+
+    // ── Your PC ── (plain names only; a missing reading is omitted, never dashed)
+    let _ = writeln!(o, "## Your PC\n");
+    let mut wrote_hw = false;
+    let cpu = vstr(hardware, "cpu_brand");
+    if cpu != "—" {
+        let _ = writeln!(o, "- **Processor:** {cpu}");
+        wrote_hw = true;
+    }
+    for g in obj_arr(hardware, "gpus") {
+        let name = vstr(g, "name");
+        if name != "—" {
+            let _ = writeln!(o, "- **Graphics card:** {name}");
+            wrote_hw = true;
+        }
+    }
+    if let Some(t) = vu64(hardware, "ram_total_bytes") {
+        let _ = writeln!(o, "- **Memory:** {}", gib(t));
+        wrote_hw = true;
+    }
+    let os = hardware
+        .get("windows_version")
+        .filter(|w| !w.is_null())
+        .map(|w| vstr(w, "product_name"))
+        .filter(|s| s != "—");
+    if let Some(os) = os {
+        let _ = writeln!(o, "- **Windows:** {os}");
+        wrote_hw = true;
+    }
+    if !wrote_hw {
+        let _ = writeln!(o, "Compy could not read this PC's hardware details.");
+    }
+    let _ = writeln!(o);
+
+    // ── What Compy has changed ── (the ledger, in plain words; the undo door named)
+    let _ = writeln!(o, "## What Compy has changed\n");
+    let ledger = as_arr(trust_ledger);
+    let applied: Vec<&Value> = ledger.iter().filter(|c| vstr(c, "status") == "applied").collect();
+    if applied.is_empty() {
+        let _ = writeln!(o, "Compy has not changed anything on this PC yet.");
+    } else {
+        let active = applied
+            .iter()
+            .filter(|c| vbool(c, "is_still_active") != Some(false))
+            .count();
+        let s = if active == 1 { "change" } else { "changes" };
+        let _ = writeln!(
+            o,
+            "{active} {s} made by Compy {} active right now. Every change Compy makes can be \
+             undone from the History room.\n",
+            if active == 1 { "is" } else { "are" },
+        );
+        for c in &applied {
+            let title = vstr(c, "rec_title");
+            if vbool(c, "is_still_active") == Some(false) {
+                let _ = writeln!(
+                    o,
+                    "- **{title}** — Compy applied this, but something outside Compy has since \
+                     changed it."
+                );
+            } else {
+                let when = vstr(c, "applied_at");
+                if when == "—" {
+                    let _ = writeln!(o, "- **{title}**");
+                } else {
+                    let _ = writeln!(o, "- **{title}** — applied {when}");
+                }
+            }
+        }
+    }
+    let _ = writeln!(o);
+
+    // ── What Compy measured ── (live readings, honestly labelled; no reading → no sentence)
+    let _ = writeln!(o, "## What Compy measured\n");
+    let sess = as_arr(sessions);
+    if sess.is_empty() {
+        let _ = writeln!(o, "No gaming sessions have been measured yet.");
+    } else {
+        let n = sess.len();
+        let s = if n == 1 { "session" } else { "sessions" };
+        let _ = writeln!(
+            o,
+            "Compy watched {n} gaming {s}. These are live readings from your own play, not lab \
+             benchmarks."
+        );
+        if let Some(latest) = sess.first() {
+            if let Some(fps) = vf64(latest, "avg_fps") {
+                let game = {
+                    let p = vstr(latest, "process_name");
+                    if p == "—" { "a game".to_string() } else { p }
+                };
+                let dur = vu64(latest, "duration_secs")
+                    .map(|d| format!(" over {}", fmt_duration(d)))
+                    .unwrap_or_default();
+                let _ = writeln!(
+                    o,
+                    "- Most recent: **{game}** — about {fps:.0} frames per second{dur}."
+                );
+            }
+        }
+    }
+    let _ = writeln!(o);
+
+    // ── Anything to look at? ── (only what the machine flagged; unknown stays unknown)
+    let _ = writeln!(o, "## Anything to look at?\n");
+    match vu64(readiness, "attention_count") {
+        None => {
+            let _ = writeln!(o, "This PC's readiness has not been checked yet.");
+        }
+        Some(0) => {
+            let _ = writeln!(o, "Nothing on this PC is flagged right now.");
+        }
+        Some(n) => {
+            let s = if n == 1 { "thing" } else { "things" };
+            let _ = writeln!(o, "Compy's checks flagged {n} {s}:\n");
+            for c in obj_arr(readiness, "checks") {
+                if vstr(c, "status") == "attention" {
+                    let label = vstr(c, "label");
+                    let detail = vstr(c, "detail");
+                    if detail == "—" {
+                        let _ = writeln!(o, "- **{label}**");
+                    } else {
+                        let _ = writeln!(o, "- **{label}** — {detail}");
+                    }
+                }
+            }
+        }
+    }
+    let _ = writeln!(o);
+
+    // ── Privacy & safety ── (the same vetted sentences as the technical report — one claim, reused)
+    let _ = writeln!(o, "## Privacy & safety\n");
+    let _ = writeln!(o, "- This report was generated **locally**. Compy sends nothing off your device — no telemetry, no account, no tracking.");
+    let _ = writeln!(o, "- You choose where (and whether) to share this file.");
+    let _ = writeln!(o, "\n_{SITE_TAGLINE}_ · {SITE_URL}");
+
+    if let Some(f) = feedback.map(str::trim).filter(|f| !f.is_empty()) {
+        let _ = writeln!(o, "\n## Your note\n");
+        let _ = writeln!(o, "{f}");
+    }
+
+    o
+}
+
 /// Webview-boundary cap for the user-typed feedback (defense-in-depth, same posture as the
 /// receipt-title cap): three short answers fit comfortably; a compromised webview can't bloat
 /// the report/memory with an unbounded string. Char-boundary safe.
@@ -600,7 +768,22 @@ fn cap_feedback(feedback: Option<String>) -> Option<String> {
 }
 
 #[tauri::command]
-pub(crate) fn export_report(feedback: Option<String>) -> Result<ExportResult, String> {
+pub(crate) fn export_report(
+    feedback: Option<String>,
+    tier: Option<String>,
+) -> Result<ExportResult, String> {
+    // Evidence-export tiers (P2): one data source, audience-shaped renders. Absent/technical →
+    // the full report (back-compat: every pre-tier caller keeps its exact behaviour); consumer →
+    // the plain-English projection. Anything else is a caller bug, refused not guessed.
+    let consumer = match tier.as_deref() {
+        None | Some("technical") => false,
+        Some("consumer") => true,
+        Some(other) => {
+            return Err(format!(
+                "unknown report tier \"{other}\" — expected consumer or technical"
+            ))
+        }
+    };
     let feedback = cap_feedback(feedback);
     let exported_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let mut hardware = serde_json::to_value(crate::hardware::get_hardware_info()).unwrap_or(Value::Null);
@@ -616,17 +799,28 @@ pub(crate) fn export_report(feedback: Option<String>) -> Result<ExportResult, St
         serde_json::to_value(crate::diagnostics::get_diagnostics()).unwrap_or(Value::Null);
     let rules_source = crate::recommendations::get_rules_source().to_string();
 
-    let markdown = build_markdown_report(
-        &hardware,
-        &recommendations,
-        &trust_ledger,
-        &readiness,
-        &sessions,
-        &diagnostics,
-        &rules_source,
-        &exported_at,
-        feedback.as_deref(),
-    );
+    let markdown = if consumer {
+        build_consumer_report(
+            &hardware,
+            &trust_ledger,
+            &readiness,
+            &sessions,
+            &exported_at,
+            feedback.as_deref(),
+        )
+    } else {
+        build_markdown_report(
+            &hardware,
+            &recommendations,
+            &trust_ledger,
+            &readiness,
+            &sessions,
+            &diagnostics,
+            &rules_source,
+            &exported_at,
+            feedback.as_deref(),
+        )
+    };
     // Built before the JSON bundle below moves the source Values.
     let discord = build_discord_block(&hardware, &readiness, &sessions, &trust_ledger, &exported_at);
 
@@ -635,7 +829,13 @@ pub(crate) fn export_report(feedback: Option<String>) -> Result<ExportResult, St
     // Millisecond granularity (%3f, no leading dot) so two exports within the same second don't
     // collide on the filename and silently overwrite the earlier report.
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S%3f");
-    let md_path = dir.join(format!("compy-report-{stamp}.md"));
+    // Distinct names so a support conversation can tell at a glance which projection it was sent.
+    let md_name = if consumer {
+        format!("compy-report-plain-{stamp}.md")
+    } else {
+        format!("compy-report-{stamp}.md")
+    };
+    let md_path = dir.join(md_name);
     std::fs::write(&md_path, markdown_with_bom(&markdown))
         .map_err(|e| format!("could not write report: {e}"))?;
 
@@ -690,6 +890,86 @@ pub(crate) fn open_export_folder() -> Result<(), String> {
 mod export_tests {
     use super::*;
     use serde_json::json;
+
+    // ── Consumer projection (evidence-export tiers, P2) ─────────────────────────────────────────
+
+    #[test]
+    fn consumer_report_renders_the_same_sources_in_plain_english() {
+        let hw = json!({
+            "cpu_brand": "AMD Ryzen 7 7800X3D",
+            "gpus": [{ "name": "Radeon RX 9070 XT" }],
+            "ram_total_bytes": 32u64 * 1024 * 1024 * 1024,
+            "windows_version": { "product_name": "Windows 11 Home" }
+        });
+        let ledger = json!([
+            { "rec_id": "a", "rec_title": "Turn off Xbox Game DVR", "status": "applied",
+              "applied_at": "2026-08-01", "is_still_active": true },
+            { "rec_id": "b", "rec_title": "High performance power plan", "status": "applied",
+              "applied_at": "2026-08-02", "is_still_active": false }
+        ]);
+        let readiness = json!({ "attention_count": 1, "checks": [
+            { "status": "attention", "label": "Game install drive", "detail": "HDD detected" },
+            { "status": "ready", "label": "GPU driver", "detail": "up to date" }
+        ]});
+        let sessions = json!([{ "process_name": "diablo4.exe", "avg_fps": 143.7,
+                                "duration_secs": 3600u64 }]);
+        let md = build_consumer_report(&hw, &ledger, &readiness, &sessions, "t", None);
+        assert!(md.contains("## Your PC"));
+        assert!(md.contains("Radeon RX 9070 XT"));
+        assert!(md.contains("1 change made by Compy is active right now"), "{md}");
+        assert!(md.contains("undone from the History room"));
+        assert!(md.contains("something outside Compy has since changed it"), "inactive row stays honest");
+        assert!(md.contains("about 144 frames per second over 1h 0m"), "{md}");
+        assert!(md.contains("not lab benchmarks"), "measurement honesty line always rides along");
+        assert!(md.contains("**Game install drive** — HDD detected"));
+        assert!(!md.contains("GPU driver"), "only flagged checks render — ready ones are not 'to look at'");
+        assert!(md.contains(SITE_TAGLINE) && md.contains(SITE_URL), "shared footer");
+    }
+
+    #[test]
+    fn consumer_report_degrades_by_omission_never_by_dash() {
+        // Empty everything: every section states its true empty case, and the technical "—"
+        // placeholder never appears — a consumer render must not assert readings it doesn't have.
+        let md = build_consumer_report(&Value::Null, &json!([]), &json!({}), &json!([]), "t", None);
+        assert!(md.contains("could not read this PC's hardware details"));
+        assert!(md.contains("Compy has not changed anything on this PC yet."));
+        assert!(md.contains("No gaming sessions have been measured yet."));
+        assert!(md.contains("readiness has not been checked yet"), "no counts → unknown, never assumed clean");
+        // The em-dash is legal as a separator with words on both sides; a BARE "—" standing in
+        // for a missing value is the technical placeholder this render bans.
+        for line in md.lines() {
+            let l = line.trim_end();
+            assert!(!l.ends_with('—') && !l.contains(": —") && !l.contains("** — ·"),
+                "dash placeholder leaked into consumer render: {line}");
+        }
+    }
+
+    #[test]
+    fn consumer_report_flagging_is_earned() {
+        // DIR-1a for exports: zero flagged says so plainly; a flag renders only when the machine
+        // actually raised one.
+        let clean = json!({ "attention_count": 0, "checks": [] });
+        let md = build_consumer_report(&Value::Null, &json!([]), &clean, &json!([]), "t", None);
+        assert!(md.contains("Nothing on this PC is flagged right now."));
+        assert!(!md.contains("flagged 0"), "never a scary zero-count sentence");
+    }
+
+    #[test]
+    fn consumer_report_omits_fps_sentence_without_a_measurement() {
+        // A session row with no avg_fps must not produce a frames-per-second claim.
+        let sessions = json!([{ "process_name": "game.exe" }]);
+        let md = build_consumer_report(&Value::Null, &json!([]), &json!({}), &sessions, "t", None);
+        assert!(md.contains("Compy watched 1 gaming session"));
+        assert!(!md.contains("frames per second"), "no measurement, no number");
+    }
+
+    #[test]
+    fn consumer_report_carries_the_users_note_and_blank_appends_nothing() {
+        let with = build_consumer_report(&Value::Null, &json!([]), &json!({}), &json!([]), "t", Some("coil whine"));
+        assert!(with.contains("## Your note") && with.contains("coil whine"));
+        let blank = build_consumer_report(&Value::Null, &json!([]), &json!({}), &json!([]), "t", Some("   "));
+        assert!(!blank.contains("## Your note"), "blank note appends no empty header");
+    }
 
     #[test]
     fn markdown_file_is_written_with_utf8_bom() {

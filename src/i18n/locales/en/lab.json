@@ -124,6 +124,7 @@
     "safeStackAllOn_other": "all {{count}} applied",
     "safeStackNone": "nothing to apply on this rig",
     "startHere": "Start here",
+    "backToRoom": "Back to Test",
     "closeStationAriaLabel": "Close station",
     "close": "Close",
     "optimizeReassurance": "This station applies your safe stack in one click — and like every change made in this room, it's fully reversible.",

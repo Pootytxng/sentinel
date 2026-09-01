@@ -7,21 +7,16 @@
 
 ## Where the train is standing
 
-**Test #224 is ACCEPTED. Health #225 is REJECTED pending ONE owner decision (below). Neither lane
-is pushed.** `claude/compy-health-parity` carries the #225 Health candidate `b4bf26bc` — that is
-what is INSTALLED on the desk. `claude/compy-visual-recovery-kit-6fd074` carries #224's `bf88150a`,
-which **Codex independently ACCEPTED on 2026-08-27** — visuals only, explicitly **not a GO**: still
-unpushed, #224 still open. `main` is clean at `5bf84051`. Do not push either lane, do not close
-#224/#225, and do not write in the other lane's tree.
+**`main` is clean and pushed; the desk build is `090bc58b`** (Mission 2 landing, #238 — the
+evidence exports, the Q9b contract and the Q9b Stage 1 dark module are docs/UI-dark work; version
+debt, batch the next cut).
 
 | | |
 |---|---|
-| Installed | `b4bf26bc`, runtime `get_build_stamp` → `b4bf26bc · release · shell 0.9.26`, 1 attempt / 0 transient, one installer on the Desktop, SHA-256 `12B0E033…E0978` |
-| Health #225, the geometry | `--hc-stage-max` 500→530px · one new `--hc-comp-drop: 48px` declared ONCE on `.hc-panel` and spent twice (`margin-top` **and** subtracted inside the `max-height` cap, so NO BREAKPOINT holds) · symptom glyph `size` 28→40. Measured installed: stage **height 530** (comp 530.3), **top 159** (comp 158.7), bottom **689** (comp 689.0) |
-| The fix the self-review forced | `.hc-readout` was clipping the CPU-temp cell — "CPU TEM". **The defect was in the GUARD.** `home-console.test.tsx` held `CLIENT = 565` as the strip's width at 1280x720; it is **547**, so every budget was checked against 18px that do not exist and stayed green while five floors (526px) over-subscribed a 515px box. Floors are now each their own derivation (80/80/83/83, was 88 across): 500 ≤ 515. **Not a regression** — emulating the pre-round-2 constants over CDP leaves the same overflow, at a viewport where the panel does not scroll at all. Pre-existing, and now proven red-before-green |
-| Shared-room proof | Live **0** and History **0** differing fingerprint fields; Test 1 data-driven field (`.v2-room-below` height, a third value on the same build minutes later). Test's 37.6 % pixel diff is **reproduced by the same build against itself** (37.63 %) — `.v2-room::after`'s scanline phase follows the room's height (`hud-rooms.css:35`) |
-| Gate | `tsc` clean · **full vitest 405 files / 5677 passed / 5 skipped / 0 failed** · `verify-release-state` 31 citations, 31 ok, 0 drift · doc-budget ALL PASS · **self-review 12/12 PASS** |
-| Evidence | `…\GPT HQ\operations\compy-visual-recovery-kit\REVIEW_HEALTH_CANDIDATE_b4bf26bc.md`, `assets/candidate-b4bf26bc/`, `assets/shared-regression/`. Earlier rounds are amended, never overwritten. `GPT HQ` is outside this repo, so **the kit's own `CLAUDE.md` and hooks are INERT** for writes into it — a PostToolUse hook says so on every one |
+| Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
+| Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
+| Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
+| Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
 
 ## The two lenses every Health/room change must clear
 
@@ -31,10 +26,14 @@ a healthy PC's owner either that they are in the wrong place or that Compy found
 `somethingDetected` in `HomeConsole.tsx`, guarded by `home-console-front-door-gate.test.tsx`.
 **A STANDING lens, not a closed row. DIR-1b:** an attention state carries a one-line ROUTE out.
 
-**SOURCE-reachability is not USER-reachability.** The vendor-honesty line once sat behind a
-component dark one level up while three guards stayed green — when a guard certifies a surface,
-prove a route reaches it. Corollary: **an audit is not a work order.** **Rooms are `Health · Live ·
-History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are keys); rail `src/design/homeRail.ts`.
+**Rooms are `Health · Live · History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are
+persistence keys). **Read the rail from `src/design/homeRail.ts`, never from a doc.**
+
+**The lesson ② left behind: SOURCE-reachability is not USER-reachability.** A component can be dark
+one level up while **three guards stay green** (vendor-honesty proved only "not wrapped in a
+condition"; the affordance census counted 80 unreachable strings as live; the mono census described
+CSS nothing rendered). When a guard certifies a surface, check a route reaches it. Finding #4 was
+also partly WRONG (two Test gauges already carry notes) — **an audit is not a work order.**
 
 ## Before you touch the UI — the fixture route, and the guards already covering copy
 
@@ -61,30 +60,22 @@ answering a command a card sends, **or a WRITE outside its own branch** — how 
   `\b` matches across a hyphen, so **"pre-merge review" counts** — fixing the first offender creates
   the second. Reword, never loosen (precedent PR #166). Run it **alone** before pushing
   (`node scripts/run-vitest.mjs tools/entry/doc-truth.test.mjs`): seconds versus four minutes in
-  `.githooks/pre-push`. Its corpus includes `git status`, so uncommitted docs are scanned too, and
-  its test COUNT is dynamic (9, 10, 11, 12 seen) — never cite a fixed number.
-- **`verify-release-state.mjs` cannot pass on an unpushed stamp.** `SOURCE-COMMIT-ORPHAN` fires
-  because `STATE:source_main_commit` is not yet an ancestor of `origin/main` — the row cannot be
-  written until the commit it names has landed. Push the code commit FIRST (stash the doc edit),
+  `.githooks/pre-push`. Its corpus includes `git status` (uncommitted docs are scanned too) and its
+  test COUNT is dynamic — never cite a fixed number.
+- **`verify-release-state.mjs` cannot pass on an unpushed stamp** — `SOURCE-COMMIT-ORPHAN` fires
+  until `STATE:source_main_commit` is an ancestor of `origin/main`: push the code commit FIRST,
   then write the RELEASE_STATE row and push that. Same shape as the disposition-row trap.
-- **The Owner-installed row carries a 3000-byte cap** (`LINEAGE-BLOAT`, check 5b) and fits the
-  current build + ONE predecessor. A new desk build pays for itself: move the OLD row byte-for-byte
-  to the TOP of `docs/archive/RELEASE_STATE_HISTORY.md`, replace its label cell, re-point its one
-  relative link for the extra directory level, then write the new row. Same law as a doc-budget
-  FAIL: **paid from the archive, never from the cap.**
-- **`git checkout <file>` on an uncommitted fix destroys it silently.** Copy the file to the
-  scratchpad and restore with `cp`, or commit first.
+- **A doc-budget FAIL is paid from the ARCHIVE, never from the cap** — oldest CLOSED row out,
+  pointer left, cap ratcheted DOWN. **A relocated row owes its links a re-point**: `docs/` relative
+  paths break from `docs/archive/`; `markdown-link-guard` catches it at the push (`093f5600`).
+- **`git checkout <file>` on an uncommitted fix destroys it silently** — copy it to the scratchpad
+  first, or commit.
 
 ## THE NEXT STEP, exactly
 
-**Health #225 is BLOCKED on one owner decision, not on code.** Round 3 was rejected for an
-incomplete difference list (colour state); fixed as report item (f) with native proof — no code
-changed, no rebuild. His desk runs theme `midnight` + Health accent Sky `#46a8ff`, both persisted
-PICKS, not defects. Ask: judge parity at Health's DEFAULT accent (recommended — the comp was shot
-there, `HOME_ACCENT #a78bfa`), or re-shoot the comp? **Never write his theme/accent to match.**
-
-Standing queue behind it: **the Consumer / Technical / Support evidence exports** (P2's last item) —
-`support_evidence.rs` + `SupportEvidence.tsx` exist, the two projections as SURFACES do not; DIR-1a applies first.
+**Q9b Stage 2 (#258) LANDED** — `cfc0d21a` / PR #263, the consent screen renders the payload itself.
+**Stage 3 is NEXT**: receiver + migration, local/staged ONLY, never deployed — deployment is Stage 7
+and owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -98,16 +89,19 @@ three independent locks (`case_intelligence_gate()` hard-false · `CASE_SIGNING_
 `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", carrying DIR-1a) and **§G**
 (the site). Read them THERE, never from a paraphrase.
 
-- **Thirteen worktrees besides `main`. Seven are spent or read-only (`test-design-visual-fixes-fec3ec`
-  and `health-lane-bootstrap-a2a8cc` both carry zero own commits); six carry commits not on main —
-  do NOT delete or hard-reset those six unchecked**: `feat/user-feedback-lab-recovery` (49) ·
-  `claude/compy-health-parity` (22, the #225 Health lane, candidate awaiting review) ·
-  `claude/compy-visual-recovery-kit-6fd074` (15, the #224 Test lane, ACCEPTED, still unpushed) ·
-  `feat/lab-49-parity-port` (6) · `lane/cleanup-train-2026-08-20` (5) ·
-  `lane/vision-pointer-guard-2026-08-24` (3). A detached, branchless one was retired 2026-08-26
-  under tag `preserve/checklist-disk-item-c5660e` (5 commits, none on `main`). Rule C of
-  `scripts/handoff-worktree-truth.test.mjs` fails on any carrier this bullet does not name; re-derive
-  with `git worktree list` + `git rev-list --count origin/main..X`.
+- **32 worktrees besides the canonical checkout; FOURTEEN branches carry commits not on main — do NOT delete or hard-reset
+  those fourteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+  `claude/compy-visual-recovery-kit-6fd074` · `lane/agent-skills-config` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
+  `lane/vision-pointer-guard-2026-08-24` · `lane/fleet-guard-failclosed-276` · `lane/shell-ownership-278` ·
+  `lane/license-atomic-284` (#284) shares `5117c632`/`a7f13eda` with `lane/remote-cache-design-286` (#286) and
+  `lane/case-receiver-287` (#287) but is **not** their ancestor — only 286 → 287 is a real chain (`git merge-base --is-ancestor`) ·
+  `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (`29fb8009`/PR #275 · `e26108f7`/PR #273) and are
+  listed only because **pruning them was denied**. **No depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`.
+  Rule D (#243) fails this bullet for naming a zero-carry branch — **a landed lane's name leaves with the train that
+  lands it**, which is why the #281 lane is no longer named here: PR #282 landed it as `082f637e`. Spent, at zero:
+  `sentinel-recon-261`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258`
+  (#258/#264 both landed out of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven entries; `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
+  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — his eye, then two arming gates
 

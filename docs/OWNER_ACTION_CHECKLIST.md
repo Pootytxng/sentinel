@@ -90,6 +90,19 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
+### A_prune. Two dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31
+
+**The ask:** one command, both branches at once —
+`git push origin --delete lane/native-routing-271 lane/css-margin-separators-274`. Both lanes landed
+(PR [#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`, PR
+[#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`) and neither leftover ref holds
+anything `main` lacks. Deleting the first was **denied to this session**, and a denial is a stop —
+so I did not reach the same effect by another route, and I did not try the same thing again on the
+second branch either, because retrying a blocked effect on a fresh target is the same workaround
+wearing a different name. **Why it matters:** until the refs are gone, their rows and the handoff's
+branch list have to keep saying "landed but still here" — small residue, but it is exactly what
+makes the next session distrust the branch list. Nothing is broken while it waits.
+
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
@@ -234,62 +247,9 @@ section is waiting on you:**
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
-### B_startup. A Windows mutation outside `actions.rs` — ✅ CLOSED 2026-08-22, it was already fixed
-The item was filed 2026-08-02 and **fixed 2026-08-03, the next day, by a different lane** — nobody
-closed the row, so it sat on your list for twenty days asking you to decide something that no longer
-existed. `set_startup_entry_enabled` moved out of `lib.rs` into `history.rs` and now mutates through
-`actions::apply_startup_entry_enabled`: typed `SetStartupEntryEnabled` action, a raw-bytes snapshot
-of Windows' own approval value, and a Trust Ledger entry like every other change — so a startup app
-Compy disables *is* undoable from your history. Verified in the code today, not taken on trust.
-`CLAUDE.md`'s module map still claimed the exception existed and now doesn't. **Nothing on you.**
+### B-closed. Six input items you already decided — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-### B_gpu. A finished GPU-profile screen mounted nowhere — ✅ CLOSED 2026-08-22, wired in
-You said do everything, so this took option (a) rather than parking a built-and-tested surface any
-longer. `src/surfaces/GpuProfile.tsx` now mounts in the **Lab**, below the console, as an advisory
-panel: which slice of GPU data you're looking at, plain-English notes for your Radeon, and a
-before/after diff of the readable GPU settings when you change something in Adrenalin yourself.
-It stays advisory forever — LOCKED rule 6 makes GPU-profile *apply* structurally impossible, since
-AMD profile state isn't user-mode readable and rollback-first can't be satisfied. Nothing here
-writes to your PC. *Why it matters:* work that was finished and invisible is now something you can
-actually see, and if you don't like it, say so and it comes out.
-
-### B_write. The write refusal — ✅ ARMED 2026-08-22 on your "do everything"
-A Claude session you open by hand — rather than through the launcher — used to be *unverified*:
-nothing on disk said which folder, branch, issue and conversation it was working under, and it wrote
-anyway. Now the moment such a session edits a file inside this repo it is stopped and handed the one
-command that verifies it on the spot, so nothing is lost and no window closes. Registered in
-`.claude/settings.json` on `Write|Edit|NotebookEdit`; this machine's live session was adopted first,
-per the spec's own ordering, so arming it could not lock the arming session out.
-*Why it matters:* it is the difference between "a change nobody can attribute later" and "a change
-bound to a folder, a branch and an issue". **`Bash` is deliberately still unguarded** — a named hole
-(spec §3c) that doubles as the escape hatch if the hook ever misbehaves, and a test now fails the
-build if anyone adds `Bash` to it or quietly unwires the hook. Reads stay advisory.
-
-### B_shelter. The collision guard — ✅ NOTHING WAS EVER WAITING ON YOU; it landed 2026-08-21
-**This row was wrong and is withdrawn.** Issue [#128](https://github.com/Pootytxng/sentinel/issues/128)'s
-1,100 lines are **on `main` and have been since 2026-08-21** — merged as `bf8e2e6e`, then hardened by
-`38279f95` to resolve its state root through the #130 resolver. Its tests run in every gate; the
-`scripts/process-mutex-guard.test.mjs` flake the handoff warns about IS this code, live.
-*Why it matters:* it stops a release and an app-install from running over each other — the failure that
-once left you with an installer that exited "success" and replaced nothing. It is protecting you now.
-*How the row got here:* it was re-derived on 2026-08-25 from the shelter tag
-`preserve/local-collision-guard-707572f1` without checking whether that commit was already an ancestor
-of `main`. It was. **Guard added so this class of stale ask cannot recur:** a shelter tag whose commit
-is reachable from `origin/main` now fails `scripts/shelter-tag-guard.test.mjs`.
-
-### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
-No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
-
-### B_eu. Analytics default-ON in the EU — ✅ DECIDED 2026-08-22 as **(a) US-first**
-Taken on your "do everything", and it is the recommendation that was already on the row. Usage
-analytics **on by default with disclosure** is normal and legal in the US, and you have no EU
-distribution today. Option (b) — ask on first run everywhere — costs real sign-up rate to buy legal
-cover for a market that does not exist yet, and it can be added the day it does. **Reversible and
-cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
-own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
-Europeans — that is the trigger, not a date.
-
----
+`B_startup` · `B_gpu` · `B_write` · `B_shelter` · `B_land` · `B_eu` — all closed by your own verdict, all preserved verbatim there. Nothing in them is waiting on you.
 
 ## §C — Release gates — your money / legal calls  ·  🔒
 These gate **public** release only (not the local app you use daily). Full list:
@@ -339,6 +299,15 @@ These gate **public** release only (not the local app you use daily). Full list:
 ---
 
 ## §D — Taste / visual sign-offs (as they come up)
+
+### D_health. Health room parity — which accent do I judge it at?  ·  ⏳ NEW 2026-09-01  ·  [#225](https://github.com/Pootytxng/sentinel/issues/225)
+
+**One question, and it is the only thing blocking the Health room.** Your desk runs theme `midnight` with the Health accent set to Sky `#46a8ff`. Both are **your saved picks, not bugs** — but the approved comp was shot at Health's DEFAULT accent, so the room and the comp are being compared in two different colour schemes.
+
+- **(a) Judge it at the default accent** — recommended. The comp is the contract and it was shot there; nothing about your saved picks changes.
+- **(b) Re-shoot the comp** at Sky, and judge against that instead.
+
+**I will never write your theme or accent to match a comp.** No code changes either way — this decides what "parity" is measured against. Round 3 (`b4bf26bc`) was rejected for an incomplete difference list; that report gap is fixed and the colour state is now stated with native proof.
 **Nothing aesthetic is parked on you by default** (CLAUDE.md, "TASTE IS MINE TO EXERCISE, HIS TO
 OVERRULE"). Claude decides the look, ships it, and hands you a before/after to veto on sight. Only
 brand — the product name, logo, price presentation — and reversals of a call you already made land
