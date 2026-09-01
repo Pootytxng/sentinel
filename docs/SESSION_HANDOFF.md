@@ -106,7 +106,7 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   Rule D (#243) fails this bullet for naming a zero-carry branch — **a landed lane's name leaves with the train that
   lands it**, which is why the #281 lane is no longer named here: PR #282 landed it as `082f637e`. Spent, at zero:
   `sentinel-recon-261`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258`
-  (#258/#264 both landed out of it), four of the SEVEN in `.claude/worktrees/`, parked `sentinel-mission0-accent-landing`,
+  (#258/#264 both landed out of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven entries; `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
   `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — two arming gates, nothing else
