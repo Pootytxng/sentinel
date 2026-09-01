@@ -514,3 +514,41 @@ cover for a market that does not exist yet, and it can be added the day it does.
 cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
 own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
 Europeans — that is the trigger, not a date.
+
+### A0. Updater key backup + the one-tester canary — ✅ both CLOSED (archived 2026-09-01)
+
+Moved out of the live checklist because they were closed and still being re-read as open work. The
+third A0 half — deleting the `DesktopCOMPY KEY` copy — is NOT closed and stays live there.
+
+- ✅ **Updater signing key backed up OFF this machine — CLOSED 2026-08-18 (owner-reported).** The
+  owner ran `scripts/backup-updater-key.ps1`, proved the armored file opens with
+  `scripts/restore-updater-key.ps1 -Verify`, and stored the result off this PC with the passphrase in
+  his password manager. The fleet anchor (`43711DD10AAB67D7`, the pubkey pinned in
+  `src-tauri/tauri.conf.json` and `scripts/updater-trust-root-guard.test.mjs:23`) now survives a dead
+  drive. **Why it mattered:** lose it → the fleet can never receive another update; leak it → whoever
+  holds it can sign an update Compy installs silently on every install, because the updater has been
+  live since 2026-07-22. Backup/restore behaviour stays pinned by
+  `scripts/updater-key-backup-guard.test.mjs`.
+- ✅ **One-tester canary — PASS (recorded 2026-07-28).** A tester completed it through Compy's
+  **normal public updater** and is **currently running v0.9.11**; **no updater failure was
+  reported.** That is the entire record — their prior version, the exact timing, and any per-step
+  detail were never captured, so nothing more can be claimed. **Nothing is pending from you on the
+  canary; do not re-run it or recruit another tester for it.** The only remaining distribution call
+  is whether/when to widen to the other invitees (§B2).
+
+### §D. Two taste calls ruled and shipped 2026-08-26 — archived 2026-09-01
+
+- ✅ **The wordmark reading `©ompy` — RULED AND SHIPPED 2026-08-26** ([#213](https://github.com/Pootytxng/sentinel/issues/213) A1)
+  You chose "drop the inner ring when tiny". Done: below 22px the heartbeat inside the C is not drawn,
+  so the rail mark reads **Compy**. The threshold is 22 rather than the ~24 I proposed because a
+  capture at 16/19/20/22/24 measured the pulse legible at 22 — Settings → About draws it at exactly
+  that size and keeps its flourish. Your triple-click egg still plays at rail size: the pulse appears
+  for the beat, then tucks away. Nothing else about the mark moved. Before/after sent to you.
+- ✅ **The verdict headline's "· and 3 more" tail — RULED AND SHIPPED 2026-08-26** ([#219](https://github.com/Pootytxng/sentinel/issues/219))
+  You chose "drop the count from the headline". Done: the big line names the one flagged thing and
+  stops. Nothing is hidden — the line under it still prints the honest proportion ("15 of 16 checks
+  look good.") and the rest are one press away in Check and Fix. **Correction:** I first told you
+  "the rest are still visible in the list below" — on Home they are not, they are one click away.
+  Nothing is hidden either way, but you ruled on a slightly wrong description of the screen and you
+  should know that. Say the word and Home can name them all inline. The retired translation
+  string is deleted in both languages so it cannot be wired back up by accident.

@@ -23,15 +23,12 @@
 
 ### A0. NEW 2026-07-23 — Live updater: key backup + the LAST manual send
 
-- ✅ **Updater signing key backed up OFF this machine — CLOSED 2026-08-18 (owner-reported).** The
-  owner ran `scripts/backup-updater-key.ps1`, proved the armored file opens with
-  `scripts/restore-updater-key.ps1 -Verify`, and stored the result off this PC with the passphrase in
-  his password manager. The fleet anchor (`43711DD10AAB67D7`, the pubkey pinned in
-  `src-tauri/tauri.conf.json` and `scripts/updater-trust-root-guard.test.mjs:23`) now survives a dead
-  drive. **Why it mattered:** lose it → the fleet can never receive another update; leak it → whoever
-  holds it can sign an update Compy installs silently on every install, because the updater has been
-  live since 2026-07-22. Backup/restore behaviour stays pinned by
-  `scripts/updater-key-backup-guard.test.mjs`.
+- ✅ **Two A0 halves are closed and their full records now live in
+  [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md):** the updater signing key was
+  backed up off this machine (2026-08-18, owner-reported, restore verified) and the one-tester canary
+  PASSED through the normal public updater (2026-07-28). **Nothing is pending from you on either —
+  do not re-run the canary or recruit another tester for it.** Both remain mechanically pinned
+  (`scripts/updater-key-backup-guard.test.mjs`, `scripts/updater-trust-root-guard.test.mjs`).
 - ⏳ **Residual (small, owner's hands): the `C:\Users\Kuya\Desktop\COMPY KEY\` copy.** It hashes
   identical to `C:\Users\Kuya\.tauri\compy-updater.key` — same secret, same disk, and a Desktop folder
   is the first place anything that ever runs on this PC looks. Now that an off-machine backup exists,
@@ -41,12 +38,6 @@
   Repo side is clean and mechanically enforced: no key material has ever been committed on any
   branch, and `scripts/secret-containment-guard.test.mjs` fails the build if key/`.env` patterns leave
   `.gitignore` or if key material ever lands in the index. Nothing for you in that half.
-- ✅ **One-tester canary — PASS (recorded 2026-07-28).** A tester completed it through Compy's
-  **normal public updater** and is **currently running v0.9.11**; **no updater failure was
-  reported.** That is the entire record — their prior version, the exact timing, and any per-step
-  detail were never captured, so nothing more can be claimed. **Nothing is pending from you on the
-  canary; do not re-run it or recruit another tester for it.** The only remaining distribution call
-  is whether/when to widen to the other invitees (§B2).
 - ⏳ **Expanding to the remaining invitees.** Their current installs (0.9.0/0.1.0) have NO updater and
   cannot hear about updates until they install one build that does. Do **not** send the stale v0.9.3
   installer, and do **not** send the **v0.9.9** build (`664aa5e`) that previously ran on your machine
@@ -90,23 +81,40 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 3rd 2026-09-01
+### A_prune. Nine dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · widened 2026-09-01
 
-**The ask:** one command, all three at once — `git push origin --delete lane/native-routing-271
-lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. The first two landed (PR
+**The ask:** one command, all nine at once — `git push origin --delete lane/native-routing-271
+lane/css-margin-separators-274 lane/cleanup-train-2026-08-20 lane/agent-skills-config
+lane/atomic-json-281 lane/license-atomic-284 lane/segmented-a11y-237
+lane/fleet-guard-failclosed-276 claude/exciting-robinson-0ce4d5`. **Six of the nine carry literally
+zero commits `main` lacks** (`git rev-list --count origin/main..<ref>` = 0), which is the strongest
+form of "already landed" — every commit on them is reachable from `main`, so there is nothing to
+lose and nothing to check. The other three are spent a different way and each is worth one line:
+`native-routing-271` and `css-margin-separators-274` landed by **squash** (PR
 [#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`, PR
-[#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`) and neither leftover ref holds
-anything `main` lacks. The third is spent a different way: its PR
+[#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`), so their refs still show
+commits while their content is on `main`; `cleanup-train-2026-08-20`'s PR
 [#163](https://github.com/Pootytxng/sentinel/pull/163) closed **unmerged**, but its one real fix —
 the handoff verdict naming your VS Code tab instead of "the session" — reached `main` independently
-and more fully, leaving the branch 139 lines BEHIND on its own files. Nothing is lost either way: the
-local refs and their clean worktrees still hold every commit, so any of the three can be pushed back
-in one command. Deleting the first was **denied to this session**, and a denial is a stop — so I did
-not reach the same effect by another route. The third hit that same denial on that same sanctioned
-command a week later, which is why it joins this list instead of getting solved. **Why it matters:** until the refs are gone, their rows and the handoff's
-branch list have to keep saying "landed but still here" — small residue, but it is exactly what
-makes the next session distrust the branch list. Nothing is broken while it waits.
+and more fully, leaving the branch 139 lines BEHIND on its own files. Nothing is lost either way:
+the local refs and their worktrees still hold every commit, so any of the nine can be pushed back in
+one command. Deleting the first was **denied to this session**, and a denial is a stop — so I did
+not reach the same effect by another route, and each later one joined this list instead of getting
+solved. **Why it matters:** until the refs are gone, their rows and the handoff's branch list have
+to keep saying "landed but still here", which is exactly what makes the next session distrust the
+branch list. Nothing is broken while it waits.
 
+### A_accept. The Health and Test rooms are built and waiting on YOUR acceptance  ·  ⏳ NEW 2026-09-01
+
+**The ask:** look at PR [#294](https://github.com/Pootytxng/sentinel/pull/294) and say accept or
+redirect. This is the biggest finished thing not on `main` — 28 commits, the Test room (#224) and
+the Health room (#225) laid out to their approved comps. **It is not blocked on engineering.** The
+code gates passed, and a separate session ran the visual self-review and returned PASS on all twelve
+rubric items, re-bound to the exact head. What is left is the one layer neither session may close:
+both issues say so in their own words — #224, *"mechanical tests and self-review … cannot produce
+ACCEPT — independent Codex/owner review does"*, and #225 step 7, *"do not … merge, close this issue,
+or claim acceptance."* **Why it matters:** two finished rooms are sitting off `main` waiting for a
+yes, and every day they wait they drift further from the branch they will have to merge into.
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
@@ -251,15 +259,17 @@ section is waiting on you:**
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
-### A_stale. Fourteen dead checkouts and ten rewritten Codex configs  ·  ⏳ NEW 2026-09-01
+### A_stale. Nineteen dead checkouts and ten rewritten Codex configs  ·  ⏳ NEW 2026-09-01
 
-**The ask, once [#290](https://github.com/Pootytxng/sentinel/pull/290) lands:** `git worktree remove`
-for the fourteen checkouts that carry no commit `main` lacks, and `git restore .codex/config.toml` in
+**The ask, and #290 has landed so nothing gates it now:** `git worktree remove` for the nineteen
+checkouts that carry no commit `main` lacks — re-measured 2026-09-01 against `main` = `ee5bdd8b`, at
+which 33 checkouts exist and 13 of them carry work, and `git restore .codex/config.toml` in
 the ten holding a rewritten copy of it. Both were **denied to this session**, and a denial is a stop,
 so neither was reached by another route. **Nothing is lost by either.** The only real content any of
-those folders held was six work-control proof receipts — evidence for merges and closes that existed
-on no branch at all, one of them a full independent-review record — and they were copied onto this
-lane first, which is why the removal waits for #290 rather than happening in either order. What
+those folders held was work-control proof receipts — evidence for merges and closes that existed on
+no branch at all. There were SEVEN, not the six this section first claimed, and the last one was
+still stranded after #290: [#298](https://github.com/Pootytxng/sentinel/issues/298) exists because of
+that, and its guard now fails the build on a receipt that lives on one disk and nowhere else. What
 remains in the four "dirty" ones is a line-endings-only `CLAUDE.md`, a tool scratch folder, and the
 Codex file. That file is not authored work either: it is the app-server re-sync its own header warns
 about, re-adding two Claude env-vars that do nothing for Codex plus an MCP entry the lane had
@@ -342,21 +352,12 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
   rename on 2026-08-19; the rail ships it (`src/design/homeRail.ts:17`). Everything else in that queue
   is taste and therefore mine — I ship it and hand you a before/after to veto on sight, per the
   2026-08-07 decree.
-- ✅ **The wordmark reading `©ompy` — RULED AND SHIPPED 2026-08-26** ([#213](https://github.com/Pootytxng/sentinel/issues/213) A1)
-  You chose "drop the inner ring when tiny". Done: below 22px the heartbeat inside the C is not drawn,
-  so the rail mark reads **Compy**. The threshold is 22 rather than the ~24 I proposed because a
-  capture at 16/19/20/22/24 measured the pulse legible at 22 — Settings → About draws it at exactly
-  that size and keeps its flourish. Your triple-click egg still plays at rail size: the pulse appears
-  for the beat, then tucks away. Nothing else about the mark moved. Before/after sent to you.
-- ✅ **The verdict headline's "· and 3 more" tail — RULED AND SHIPPED 2026-08-26** ([#219](https://github.com/Pootytxng/sentinel/issues/219))
-  You chose "drop the count from the headline". Done: the big line names the one flagged thing and
-  stops. Nothing is hidden — the line under it still prints the honest proportion ("15 of 16 checks
-  look good.") and the rest are one press away in Check and Fix. **Correction:** I first told you
-  "the rest are still visible in the list below" — on Home they are not, they are one click away.
-  Nothing is hidden either way, but you ruled on a slightly wrong description of the screen and you
-  should know that. Say the word and Home can name them all inline. The retired translation
-  string is deleted in both languages so it cannot be wired back up by accident.
-
+- ✅ **Two taste calls you ruled on 2026-08-26 are shipped and archived** — the `©ompy` wordmark
+  ([#213](https://github.com/Pootytxng/sentinel/issues/213) A1, inner ring dropped below 22px) and the
+  verdict headline's `· and 3 more` tail ([#219](https://github.com/Pootytxng/sentinel/issues/219),
+  count dropped). Full records, including the correction to how I described the Home screen when you
+  ruled, in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md). **One live offer
+  survives from the second:** say the word and Home names every check inline instead of one press away.
 ---
 
 ## Where the full lists live (so nothing is buried again)
