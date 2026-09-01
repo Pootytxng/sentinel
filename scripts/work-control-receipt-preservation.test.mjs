@@ -35,6 +35,12 @@
 // zero findings, for the reason rule C of `scripts/handoff-worktree-truth.test.mjs` states —
 // `catch { 0 }` is how a guard grows the blind spot it was built to close.
 //
+// #309 WIDENED THE QUESTION. The first cut filtered `git status --porcelain` to `?? ` lines, which
+// asks whether a file is UNTRACKED. The guard's question is whether the bytes exist anywhere but one
+// disk, and a receipt that was committed and then edited in place answers those two differently: git
+// reports ` M`, the filter dropped it, and the worktree read clean while committed proof sat
+// overwritten. Same silent degradation as the stale draft above, through the door that cut left open.
+//
 // Local-only by nature: it sweeps `git worktree list`, and a CI checkout has one worktree and no
 // stranded receipts to find. It SKIPS there and says so, rather than passing vacuously.
 
@@ -112,12 +118,44 @@ export function worktreePaths(porcelain) {
  */
 export const STATUS_ARGV = ["status", "--porcelain", "-uall", "--", RECEIPT_DIR];
 
-/** The untracked receipt paths a single worktree reports, relative to that worktree. */
-export function untrackedReceipts(porcelainStatus) {
+/**
+ * Every receipt path in one worktree whose bytes on disk are in no commit — relative to that
+ * worktree. Renamed from `untrackedReceipts` in #309, because it no longer returns only untracked
+ * ones and a name that says otherwise is how the hole below stayed invisible.
+ *
+ * #309. The original read `?? ` lines and nothing else, so it asked "is this file untracked" when
+ * the guard's question is "do these bytes exist anywhere but this disk". A receipt that was
+ * committed and then EDITED IN PLACE answers yes to the second and no to the first: git reports it
+ * as ` M`, the filter dropped the line, and the sweep read the worktree as clean while a committed
+ * proof record sat overwritten on disk. That is the same silent-degradation failure as the
+ * 2026-08-25 stale draft this file was written for, arriving through the one door it left open.
+ *
+ * So the test is now the status CODE, not the untracked marker:
+ *   ??  untracked          — the original case
+ *   M   modified, either column (` M`, `M `, `MM`) — #309, the case that was invisible
+ *   A   added, never committed (`A `, `AM`) — in the index only, which no push carries
+ * Anything carrying `D` is excluded: there are no bytes on disk to preserve, the committed copy is
+ * untouched, and `readFileSync` would throw on it. A plain rename (`R `/`C `) carries neither M
+ * nor A and is excluded too — the content is unchanged and already committed under the old path, so
+ * judging the destination would report a false stranding. `RM` does reach here, and correctly: its
+ * content has moved away from every committed copy.
+ */
+export function uncommittedReceipts(porcelainStatus) {
   return porcelainStatus
     .split(/\r?\n/)
-    .filter((l) => l.startsWith("?? "))
-    .map((l) => l.slice(3).trim())
+    .map((line) => {
+      if (line.length < 4) return null;
+      const code = line.slice(0, 2);
+      // Git quotes a path containing spaces or non-ASCII. Unquoting keeps such a receipt visible;
+      // a backslash-escaped one survives as a path that fails to read, which fails LOUDLY in the
+      // sweep. Both beat the silent drop a `.json` filter would otherwise perform on the quote.
+      const rest = line.slice(3).trim().replace(/^"(.*)"$/, "$1");
+      if (code === "??") return rest;
+      if (code.includes("D")) return null;
+      if (!/[MA]/.test(code)) return null;
+      return rest.includes(" -> ") ? rest.slice(rest.lastIndexOf(" -> ") + 4).trim() : rest;
+    })
+    .filter(Boolean)
     .filter((p) => p.endsWith(".json"));
 }
 
@@ -157,17 +195,41 @@ describe("a work-control receipt survives the worktree it was written in", () =>
 
   it("reads only .json out of a porcelain status", () => {
     expect(
-      untrackedReceipts("?? .claude/work-control/a.json\n?? .claude/work-control/notes.md\n M x"),
+      uncommittedReceipts("?? .claude/work-control/a.json\n?? .claude/work-control/notes.md\n M x"),
     ).toEqual([".claude/work-control/a.json"]);
     // #299 review finding: at git's default `-unormal` a fully-untracked receipt directory arrives as
     // ONE entry naming the directory, which is not a `.json` path — so the sweep would report nothing
     // for that worktree and read as clean. The parser is right to drop it; the fix is the flag, and
     // this is the assertion that keeps the flag from being tidied away later.
-    expect(untrackedReceipts("?? .claude/work-control/")).toEqual([]);
+    expect(uncommittedReceipts("?? .claude/work-control/")).toEqual([]);
     expect(STATUS_ARGV).toContain("-uall");
   });
 
-  it("every untracked receipt on this machine is a benign shadow of a committed one", () => {
+  it("a committed receipt EDITED IN PLACE is read, not skipped for being tracked", () => {
+    // #309. Every line below was invisible to this guard until the filter stopped asking "is it
+    // untracked" and started asking "are these bytes in a commit". The middle three are the hole:
+    // a receipt that was committed and then overwritten on disk reported nothing at all.
+    const R = ".claude/work-control/2026-09-01-merge-pr-300.json";
+    expect(uncommittedReceipts(` M ${R}`)).toEqual([R]);
+    expect(uncommittedReceipts(`M  ${R}`)).toEqual([R]);
+    expect(uncommittedReceipts(`MM ${R}`)).toEqual([R]);
+    expect(uncommittedReceipts(`A  ${R}`)).toEqual([R]);
+    expect(uncommittedReceipts(`AM ${R}`)).toEqual([R]);
+    // Deleted: nothing on disk to preserve, and the committed copy is untouched. Returning it would
+    // crash the sweep on `readFileSync` rather than report anything true.
+    expect(uncommittedReceipts(` D ${R}`)).toEqual([]);
+    expect(uncommittedReceipts(`D  ${R}`)).toEqual([]);
+    // A plain rename carries content that is already committed under the old path, so judging the
+    // destination would report a false stranding. A rename that was ALSO modified is a real finding.
+    expect(uncommittedReceipts(`R  .claude/work-control/old.json -> ${R}`)).toEqual([]);
+    expect(uncommittedReceipts(`RM .claude/work-control/old.json -> ${R}`)).toEqual([R]);
+    // A clean tracked receipt is the common case and must stay silent.
+    expect(uncommittedReceipts("")).toEqual([]);
+    // Quoted paths survive rather than being dropped by the `.json` filter at the closing quote.
+    expect(uncommittedReceipts(` M "${R}"`)).toEqual([R]);
+  });
+
+  it("every receipt whose bytes are in no commit is a benign shadow of one", () => {
     let porcelain;
     try {
       porcelain = git(["worktree", "list", "--porcelain"]);
@@ -206,7 +268,7 @@ describe("a work-control receipt survives the worktree it was written in", () =>
       } catch (error) {
         throw new Error(`could not read ${worktree}: ${error.message}`);
       }
-      for (const file of untrackedReceipts(status)) {
+      for (const file of uncommittedReceipts(status)) {
         // Every commit on ANY ref that touches this path, newest first. Empty means the proof has
         // never been committed anywhere — the stranded case.
         let carriers;
@@ -247,7 +309,9 @@ describe("a work-control receipt survives the worktree it was written in", () =>
               .map((f) => `  - [${f.verdict}] ${f.file}\n      in ${f.worktree}\n      ${f.why}`)
               .join("\n") +
             "\nA stranded receipt must be committed. A stale shadow must be replaced with the" +
-            " committed copy, never committed over it."
+            " committed copy, never committed over it — including when the stale copy is a TRACKED" +
+            " receipt edited in place, which is the case #309 added and the one that reads most" +
+            " like an ordinary uncommitted change."
         : "",
     ).toEqual([]);
   });
