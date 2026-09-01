@@ -102,21 +102,35 @@ fn result_path() -> std::path::PathBuf {
 }
 
 fn load_armed() -> Option<ArmedComparison> {
-    std::fs::read_to_string(armed_path())
+    load_armed_from(&armed_path())
+}
+
+/// Unchanged `Option` semantics, lifted to a path so they can be proven without the real data root:
+/// missing and corrupt both mean `None` — "nothing is armed" — never an error.
+fn load_armed_from(path: &std::path::Path) -> Option<ArmedComparison> {
+    std::fs::read_to_string(path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
 }
 
 fn save_armed(a: &ArmedComparison) -> Result<(), String> {
     std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
-    let json = serde_json::to_string_pretty(a).map_err(|e| e.to_string())?;
-    std::fs::write(armed_path(), json).map_err(|e| e.to_string())
+    save_armed_to(&armed_path(), a)
+}
+
+fn save_armed_to(path: &std::path::Path, a: &ArmedComparison) -> Result<(), String> {
+    let json = crate::atomic_write::serialize_pretty(a).map_err(|e| e.to_string())?;
+    crate::atomic_write::write_atomic(path, json.as_bytes()).map_err(|e| e.to_string())
 }
 
 fn save_result(r: &ComparisonResult) -> Result<(), String> {
     std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
-    let json = serde_json::to_string_pretty(r).map_err(|e| e.to_string())?;
-    std::fs::write(result_path(), json).map_err(|e| e.to_string())
+    save_result_to(&result_path(), r)
+}
+
+fn save_result_to(path: &std::path::Path, r: &ComparisonResult) -> Result<(), String> {
+    let json = crate::atomic_write::serialize_pretty(r).map_err(|e| e.to_string())?;
+    crate::atomic_write::write_atomic(path, json.as_bytes()).map_err(|e| e.to_string())
 }
 
 /// The watermark an arm is allowed to bank. An unreadable ledger REFUSES to arm rather than banking
@@ -330,14 +344,208 @@ pub(crate) fn on_session_finalized(s: &SessionSummary) {
 }
 
 pub(crate) fn latest_result() -> Option<ComparisonResult> {
-    std::fs::read_to_string(result_path())
+    latest_result_from(&result_path())
+}
+
+/// Same `Option` semantics as [`load_armed_from`], lifted to a path for the same reason.
+fn latest_result_from(path: &std::path::Path) -> Option<ComparisonResult> {
+    std::fs::read_to_string(path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
 }
 
 /// Dismiss the surfaced result (e.g. after the user has seen / acted on it).
 pub(crate) fn clear_result() {
-    let _ = std::fs::remove_file(result_path());
+    clear_result_at(&result_path());
+}
+
+/// Clearing DELETES; it does not write, so it never goes through the atomic helper — a "consistency"
+/// sweep that turned this into a write of empty bytes would leave a file that parses as nothing but
+/// still exists. Lifted to a path so that stays provable.
+fn clear_result_at(path: &std::path::Path) {
+    let _ = std::fs::remove_file(path);
+}
+
+/// #281 — the armed store's `Option` semantics and `clear_result` are UNCHANGED by the
+/// atomic-write lane. Explicit temp paths only; nothing reads the real data root.
+#[cfg(test)]
+mod comparison_persistence_tests {
+    use super::*;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "compy-cmp-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn armed(at: &str) -> ArmedComparison {
+        ArmedComparison {
+            rec_id: "r".into(),
+            rec_title: "t".into(),
+            game: "g".into(),
+            baseline_avg_fps: 100.0,
+            baseline_low1_fps: 80.0,
+            armed_at: at.into(),
+            ledger_watermark: 3,
+            kind: ComparisonKind::Tuning,
+            baseline_peak_temp_c: Some(71),
+            crash_reported: false,
+        }
+    }
+
+    #[test]
+    fn missing_and_corrupt_both_read_as_none_never_an_error() {
+        let dir = scratch("none");
+        assert!(load_armed_from(&dir.join("absent.json")).is_none());
+
+        let p = dir.join("compy_comparison.json");
+        std::fs::write(&p, "{\"rec_id\": \"r\", \"baseline_avg").unwrap();
+        assert!(
+            load_armed_from(&p).is_none(),
+            "a truncated arm was read as an armed comparison"
+        );
+    }
+
+    #[test]
+    fn an_armed_comparison_round_trips_and_replaces_the_previous_one_whole() {
+        let p = scratch("round").join("compy_comparison.json");
+        save_armed_to(&p, &armed("first-and-much-longer-than-the-second")).expect("first");
+        save_armed_to(&p, &armed("second")).expect("second");
+        let got = load_armed_from(&p).expect("armed");
+        assert_eq!(got.armed_at, "second");
+        assert_eq!(got.ledger_watermark, 3, "the watermark did not survive");
+        assert_eq!(got.kind, ComparisonKind::Tuning);
+        assert_eq!(got.baseline_peak_temp_c, Some(71));
+    }
+
+    #[test]
+    fn a_failed_save_leaves_the_previous_arm_armed() {
+        // The dangerous outcome this lane removes: a half-written arm that loads as `None` looks
+        // exactly like "nothing was ever armed", so the baseline is silently lost.
+        let p = scratch("failed").join("compy_comparison.json");
+        save_armed_to(&p, &armed("keep-me")).expect("first");
+        crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::BeforeRename);
+        assert!(
+            save_armed_to(&p, &armed("clobber")).is_err(),
+            "the save did not go through the atomic write path"
+        );
+        assert_eq!(load_armed_from(&p).expect("still armed").armed_at, "keep-me");
+    }
+
+    fn result(verdict: &str) -> ComparisonResult {
+        ComparisonResult {
+            rec_id: "r".into(),
+            rec_title: "t".into(),
+            game: "g".into(),
+            baseline_avg_fps: 100.0,
+            baseline_low1_fps: 80.0,
+            after_avg_fps: 104.0,
+            after_low1_fps: 88.0,
+            delta_avg_pct: 4.0,
+            delta_low1_pct: 10.0,
+            noise_floor_pct: DEFAULT_NOISE_FLOOR_PCT,
+            verdict: verdict.into(),
+            at: "2026-08-31T00:00:00Z".into(),
+            kind: ComparisonKind::Fix,
+            baseline_peak_temp_c: None,
+            after_peak_temp_c: None,
+            delta_temp_c: None,
+            crash_reported: false,
+        }
+    }
+
+    #[test]
+    fn a_result_round_trips_and_a_corrupt_one_surfaces_nothing() {
+        let p = scratch("result").join("compy_comparison_result.json");
+        save_result_to(&p, &result("improved")).expect("save");
+        assert_eq!(latest_result_from(&p).expect("result").verdict, "improved");
+        assert_eq!(latest_result_from(&p).unwrap().noise_floor_pct, 3.0);
+
+        std::fs::write(&p, "{\"verdict\": \"impro").unwrap();
+        assert!(
+            latest_result_from(&p).is_none(),
+            "a truncated result was surfaced to the user"
+        );
+    }
+
+    #[test]
+    fn a_failed_result_save_leaves_the_previous_verdict_readable() {
+        // The armed store and the result store are two separate call sites; this pins the second,
+        // so converting only one of them back to `std::fs::write` still turns a test red.
+        let p = scratch("result-failed").join("compy_comparison_result.json");
+        save_result_to(&p, &result("improved")).expect("first");
+        crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::BeforeRename);
+        assert!(
+            save_result_to(&p, &result("regressed")).is_err(),
+            "the save did not go through the atomic write path"
+        );
+        assert_eq!(latest_result_from(&p).expect("result").verdict, "improved");
+    }
+
+    #[test]
+    fn serialization_failures_preserve_both_comparison_stores_without_a_temp() {
+        let dir = scratch("serialize-failed");
+        let armed_path = dir.join("compy_comparison.json");
+        save_armed_to(&armed_path, &armed("keep-arm")).expect("first arm");
+        crate::atomic_write::force_next_serialization_failure();
+        let err = save_armed_to(&armed_path, &armed("clobber"))
+            .expect_err("armed serialization failure must surface");
+        assert!(err.contains("injected serialization failure"), "got: {err}");
+        assert_eq!(load_armed_from(&armed_path).unwrap().armed_at, "keep-arm");
+
+        let result_path = dir.join("compy_comparison_result.json");
+        save_result_to(&result_path, &result("improved")).expect("first result");
+        crate::atomic_write::force_next_serialization_failure();
+        let err = save_result_to(&result_path, &result("regressed"))
+            .expect_err("result serialization failure must surface");
+        assert!(err.contains("injected serialization failure"), "got: {err}");
+        assert_eq!(latest_result_from(&result_path).unwrap().verdict, "improved");
+        assert!(
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")),
+            "serialization reached the atomic writer"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_share_locks_surface_both_comparison_errors_and_preserve_old_values() {
+        let dir = scratch("locked");
+        let armed_path = dir.join("compy_comparison.json");
+        save_armed_to(&armed_path, &armed("keep-arm")).expect("first arm");
+        let held = crate::atomic_write::hold_without_share(&armed_path);
+        assert!(save_armed_to(&armed_path, &armed("clobber")).is_err());
+        drop(held);
+        assert_eq!(load_armed_from(&armed_path).unwrap().armed_at, "keep-arm");
+
+        let result_path = dir.join("compy_comparison_result.json");
+        save_result_to(&result_path, &result("improved")).expect("first result");
+        let held = crate::atomic_write::hold_without_share(&result_path);
+        assert!(save_result_to(&result_path, &result("regressed")).is_err());
+        drop(held);
+        assert_eq!(latest_result_from(&result_path).unwrap().verdict, "improved");
+    }
+
+    #[test]
+    fn clearing_removes_the_result_and_stays_harmless_when_it_is_already_gone() {
+        // Clearing deletes; it does not write. Pinned so a later "consistency" sweep cannot convert
+        // it into a write of empty bytes, which would leave a file that parses as nothing but still
+        // exists — and `latest_result` would go on being asked to parse it forever.
+        let p = scratch("clear").join("compy_comparison_result.json");
+        save_result_to(&p, &result("no-change")).expect("save");
+        clear_result_at(&p);
+        assert!(!p.exists(), "the result file survived clearing");
+        clear_result_at(&p);
+        assert!(!p.exists(), "clearing an absent result must stay harmless");
+    }
 }
 
 #[cfg(test)]
