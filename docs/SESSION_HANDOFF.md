@@ -86,28 +86,28 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides the canonical checkout; TWELVE branches carry commits not on main — do NOT delete or hard-reset
-  those twelve before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
+- **32 worktrees besides the canonical checkout; TWELVE branches carry commits not on main — do NOT delete or
+  hard-reset those twelve before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
   `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
   `lane/vision-pointer-guard-2026-08-24` · `lane/rule-e-negation` (#295 — **LANDS WITH PR #297**, written before the
-  merge because the merge is what makes it true) · `lane/shell-ownership-278` · `lane/remote-cache-design-286` (#286)
-  → `lane/case-receiver-287` (#287) — the last stacked pair, so one repair does not land twice ·
-  `lane/css-margin-separators-274` (#274 — **LANDED**, PR #275) · `lane/native-routing-271` (#271 — **LANDED**, PR #273)
-  — both are listed only because **pruning them was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074`
-  **share 14 commits and diverge at `c8366609` — neither contains the other** (`--is-ancestor`, NO both ways). Counted
-  NOT-ON-MAIN, as this bullet counts, the kit has ONE unique commit and health-parity FOURTEEN; from the merge base
-  that same branch answers 170, having merged main in repeatedly, and both writers reached for the unframed number
-  first. Backed up only to `refs/backup/*`, so dropping either loses the other's work. **No depth/SHA pinned**: `git
-  worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a zero-carry
-  branch — **a landed lane's name leaves with the train that lands it**, which is why the #281 (PR #282), #284 (PR
-  #285), #276 (PR #277 → `ee5bdd8b`) and #298 (PR #299 → `81b16d60`) lanes are not named here: all four merge-committed,
-  so each dropped straight to zero, and each landing left open PRs pointing into a spent base (286/287, then
-  #297/#299) that were retargeted at the landing rather than after it. Spent, at zero: `sentinel-segmented-237` (#298
-  landed out of it), `sentinel-fleet-guard-276`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`,
-  `sentinel-q9b-stage2-258` (#258/#264 both landed out of it), four of the SIX registered under `.claude/worktrees/`
-  (that folder holds seven entries; `data-root-integrity-432797` is not a worktree), parked
-  `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233),
-  `sentinel-q9b-stage2`.
+  merge because the merge is what makes it true) · `lane/shell-ownership-278` · `lane/receipt-288` (the #288 receipt,
+  in `sentinel-remote-design-286`) · `lane/case-receiver-287` (#287) — no longer stacked: its base merged, so PR #289
+  now targets main directly · `lane/css-margin-separators-274` (#274 — **LANDED**, PR #275) ·
+  `lane/native-routing-271` (#271 — **LANDED**, PR #273) — both are listed only because **pruning them was denied**.
+  `compy-health-parity` and `compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at `c8366609` — neither
+  contains the other** (`--is-ancestor`, NO both ways). Counted NOT-ON-MAIN, as this bullet counts, the kit has ONE
+  unique commit and health-parity FOURTEEN; from the merge base that same branch answers 170, having merged main in
+  repeatedly, and both writers reached for the unframed number first. Backed up only to `refs/backup/*`, so dropping
+  either loses the other's work. **No depth/SHA pinned**: `git worktree list` +
+  `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a zero-carry branch — **a
+  landed lane's name leaves with the train that lands it**, which is why the #281 (PR #282), #284 (PR #285), #276 (PR
+  #277 → `ee5bdd8b`), #298 (PR #299 → `81b16d60`) and #286 (PR #288 → `624fcc40`) lanes are not named here: all five
+  merge-committed, so each dropped straight to zero, and each landing left open PRs pointing into a spent base,
+  retargeted at the landing rather than after it. Spent, at zero: `sentinel-segmented-237` (#298 landed out of it),
+  `sentinel-fleet-guard-276`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258`
+  (#258/#264 both landed out of it), four of the SIX registered under `.claude/worktrees/` (that folder holds seven
+  entries; `data-root-integrity-432797` is not a worktree), parked `sentinel-mission0-accent-landing`,
+  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`.
 
 ## Waiting on the owner — two arming gates, nothing else
 
