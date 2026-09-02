@@ -199,13 +199,35 @@ export function statedWorktreeCount(markdown) {
   return /^\d+$/.test(raw) ? Number(raw) : (WORDS[raw] ?? null);
 }
 
-/** Branch names in backticks inside the bullet that claims work is NOT on main. */
-export function branchesClaimedUnmerged(markdown) {
+/**
+ * Branch names in backticks inside the bullet that claims work is NOT on main.
+ *
+ * #310. \`docs\` is both a real branch prefix here and the directory every status doc lives in, so
+ * \`docs/BRANCH_DISPOSITIONS.md\` — a path this bullet has every reason to cite, since it is where
+ * the refs the bullet stopped enumerating are tracked — parsed as a branch, and rule D reported it
+ * as a lane that no longer resolves. The standing workaround was to leave that one path
+ * UNBACKTICKED, which is a formatting rule imposed on a doc by a parser bug: the next writer to
+ * backtick it correctly reds a gate they did not break. The neighbouring case was already known —
+ * see the \`sectioned\` fixture below, where a heading ENDS the bullet — but a heading cannot help
+ * when the citation belongs inside the bullet itself.
+ *
+ * Shape cannot separate the two. Both read \`prefix/name\`, and \`.md\` is a legal ref component, so
+ * any extension list is a guess that the first counter-example breaks. What separates them is the
+ * repository, which is why the measurement is INJECTED rather than assumed: a token git knows as a
+ * path is a path.
+ *
+ * The default is \`() => false\` so unit callers keep the pure behaviour and no test silently
+ * acquires a dependency on a live repo. A branch genuinely sharing its name with a tracked path
+ * would be dropped; that costs rule D one name and is the safe direction — the alternative is the
+ * gate this defect already produced, red against a doc that is correct.
+ */
+export function branchesClaimedUnmerged(markdown, isTrackedPath = () => false) {
   const bullet = repoStateBullet(markdown);
   if (!bullet) return [];
   return [...bullet.matchAll(/`((?:lane|feat|fix|agent|docs|claude|codex|design|tooling|recovery)\/[A-Za-z0-9._/-]+)`/g)]
     .map((m) => m[1])
-    .filter((v, i, a) => a.indexOf(v) === i);
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .filter((name) => !isTrackedPath(name));
 }
 
 /**
@@ -380,7 +402,17 @@ export function staleNamedLanes(claimed, resolvesLocally, countAhead, isGraced) 
     throw new Error("staleNamedLanes needs a grace predicate (#333) — omitting it must not read as \"always fresh\"");
   }
   return claimed.flatMap((b) => {
-    if (!resolvesLocally(b)) return [{ name: b, why: `refs/heads/${b} does not resolve — the name is not a lane on this machine` }];
+    if (!resolvesLocally(b)) {
+      return [
+        {
+          name: b,
+          why:
+            `refs/heads/${b} does not resolve, and it is not a tracked path either — the token is ` +
+            "neither a lane on this machine nor a file this bullet can be citing (a renamed or " +
+            "archived doc reaches here too, and that is a stale citation, not a missing branch)",
+        },
+      ];
+    }
     const n = countAhead(`refs/heads/${b}`);
     if (n === null) return [{ name: b, why: "its distance from origin/main could not be measured — broken measurement, not an empty result" }];
     if (n === 0) {
@@ -402,6 +434,36 @@ const localRefExists = (b) => {
   } catch {
     return false;
   }
+};
+
+/**
+ * #310. Does git know this token as a PATH rather than a ref? Two probes, because one is not
+ * enough: \`ls-files\` answers for THIS CHECKOUT, and rule D runs in every worktree on the fleet. A
+ * doc tracked on \`main\` but absent from whichever lane the guard happens to run in would fail the
+ * first probe, fall through to the branch arm, and be reported as a lane that does not resolve —
+ * the very false positive #310 exists to remove, one checkout over. That is the \`--remotes\`
+ * mistake in a different costume: asking "this checkout" a question about "the repo". Caught by
+ * peer review before it shipped; both checkouts agree today, so no run would have exposed it until
+ * the first lane that predates or postdates a doc rename.
+ *
+ * A wholly untracked new doc still parses as a branch. That is narrow, self-correcting the moment
+ * it is committed, and the failure text above now names the possibility instead of asserting past
+ * it. \`execFileSync\` takes argv directly with no shell, so the \`<ref>:<path>\` form is safe here
+ * in a way it is not from a shell.
+ */
+const isTrackedPath = (token) => {
+  const quietly = (args) => {
+    try {
+      execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  // A miss is the COMMON case, so stderr is ignored: the shared \`git\` helper would print git's
+  // "did not match any file(s)" on every green run, which reads exactly like a failure.
+  if (quietly(["ls-files", "--error-unmatch", "--", token])) return true;
+  return quietly(["cat-file", "-e", `origin/main:${token.replace(/\/+$/, "")}`]);
 };
 
 /**
@@ -831,6 +893,18 @@ describe("the handoff tells the truth about the worktrees", () => {
     // rule D as a "branch", where the fail-closed resolver would flag it as unresolvable.
     const sectioned = "- **One carries work that is not on main** — `lane/a`.\n## Waiting on the owner\nsee `docs/OWNER_ACTION_CHECKLIST.md` §C.";
     expect(branchesClaimedUnmerged(sectioned)).toEqual(["lane/a"]);
+    // #310. The case a heading cannot fix: the citation belongs INSIDE the bullet, because the
+    // bullet stopped enumerating pushed lanes and now points at the table that tracks them. Shape
+    // alone cannot judge it — both arms below are the same string — so the predicate decides.
+    const cites =
+      "- **One carries work that is not on main** — \`lane/a\`; the rest have rows in \`docs/BRANCH_DISPOSITIONS.md\`.";
+    expect(branchesClaimedUnmerged(cites, (t) => t === "docs/BRANCH_DISPOSITIONS.md")).toEqual(["lane/a"]);
+    // And with no measurement available, the old behaviour is preserved rather than guessed at:
+    // the caller that cannot ask git gets the token back and decides for itself.
+    expect(branchesClaimedUnmerged(cites)).toEqual(["lane/a", "docs/BRANCH_DISPOSITIONS.md"]);
+    // A doc that is a path but NOT a branch-prefixed token was never at risk; pinned so a future
+    // widening of the alternation cannot quietly start eating it.
+    expect(branchesClaimedUnmerged("- **not on main** — \`lane/a\`, see \`README.md\`.")).toEqual(["lane/a"]);
   });
 
   it("#333 round 2: grace survives a conflict-resolving landing merge, and still expires on a real stale name", () => {
@@ -879,7 +953,7 @@ describe("the handoff tells the truth about the worktrees", () => {
   });
 
   it("A: every branch it calls unmerged is genuinely not on origin/main", () => {
-    const claimed = branchesClaimedUnmerged(markdown);
+    const claimed = branchesClaimedUnmerged(markdown, isTrackedPath);
     expect(claimed.length, `${HANDOFF} names no unmerged branches — did the bullet get reworded?`).toBeGreaterThan(0);
     // Not inert: at least one named branch must be a ref this checkout can actually judge.
     expect(
@@ -1067,7 +1141,7 @@ describe("the handoff tells the truth about the worktrees", () => {
       expect(live).toBe(1);
       return;
     }
-    const claimed = branchesClaimedUnmerged(markdown);
+    const claimed = branchesClaimedUnmerged(markdown, isTrackedPath);
     // Not inert: rule A already insists the bullet names at least one branch; if that ever loosens,
     // this rule must not go quietly green on an empty list.
     expect(claimed.length, `${HANDOFF} names no branches in the repo-state bullet — rule D has nothing to judge.`).toBeGreaterThan(0);
