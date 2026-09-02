@@ -119,3 +119,33 @@ and `lane/css-margin-separators-274` rows existed. It was re-derived to twelve o
 to fourteen the same day when `lane/fleet-guard-failclosed-276` and `lane/shell-ownership-278` were
 dispositioned. Three wrong values inside one file is the argument for the law: a count carried
 forward is not evidence, and `git ls-remote --heads origin` after a `--prune` fetch is.
+
+## The remaining-refs count, again (2026-09-01)
+
+Moved here 2026-09-01 from `docs/BRANCH_DISPOSITIONS.md` to pay for five new rows added under
+[#323](https://github.com/Pootytxng/sentinel/issues/323): `lane/docs-path-not-branch-310`,
+`lane/guard-budget-313`, `lane/prune-list-truth-305`, `lane/receipt-modified-309`,
+`lane/wrapper-allowlist-308`. The live file already keeps the law this repeats — re-deriving the
+count is part of adding a row — so only the retired paragraph itself moves, byte-for-byte. It read,
+in full:
+
+> Earlier sweeps (2026-08-04 · 2026-08-05 · 2026-08-12) and the 2026-08-21 sweep for
+> [#126](https://github.com/Pootytxng/sentinel/issues/126) are archived in
+> `archive/BRANCH_DISPOSITION_SWEEPS.md`: every ref the earlier three retired is long gone, and what
+> the 2026-08-21 sweep proved live is in the table below. **Two live facts stay here**: the retired
+> detached checkout's work is preserved under tag `preserve/checklist-disk-item-c5660e`, and **rule C
+> of `scripts/handoff-worktree-truth.test.mjs` fails on a branchless checkout** — the shape an
+> `origin` audit cannot see.
+>
+> **Twenty-five non-`PRESERVE` refs remain, and not one is retirable by proof** — each needs either
+> an owner product-scope call or the lane that owns it, so #126 is part-discharged, not done: what is
+> left is a decision queue, not a cleanup queue. Re-derived 2026-09-01 from
+> `git ls-remote --heads origin` after a `--prune` fetch: twenty-eight refs besides `main`, three
+> `PRESERVE`. **This is a count, so it goes stale every time the table grows and re-deriving it is
+> part of adding a row**; its history of doing that is archived, as are older closed narratives
+> (#160's landing and prune, the #193 "free desktop app" fix) — the live warning out of the second is
+> in the `claude/review-consolidation-structure-9d13f2` row.
+
+Already stale the day it was written: re-derived directly from `git ls-remote --heads origin` for
+this same move (35 heads, minus `main`), the true count is **thirty-four refs besides `main`, three
+`PRESERVE`** — no arithmetic on the twenty-eight above is trustworthy; only a fresh `ls-remote` is.
