@@ -1,0 +1,6 @@
+{
+  "ref": "origin/claude/exciting-robinson-0ce4d5",
+  "disposition": "CLAIMED",
+  "issue": 266,
+  "evidence": "A sibling worktree, not this lane, at `C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\exciting-robinson-0ce4d5`, issue [#266](https://github.com/Pootytxng/sentinel/issues/266). PR [#267](https://github.com/Pootytxng/sentinel/pull/267) holds what needs review: `6760387a` deletes `stripRustComments` from `src/case-evidence-tier-separation-guard.test.ts` — six proven bypasses, each hiding executing Rust from the detectors — plus the four comment rewrites that buys. The shebang repair rode straight to `main` in this commit instead, because it was what had `main` red. PR #267 **merged 2026-08-30** and `git merge-base --is-ancestor 6760387a origin/main` now answers YES, so the work is on `main`; the row stays only while the origin ref does."
+}

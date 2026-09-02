@@ -1,0 +1,6 @@
+{
+  "ref": "origin/feat/console-project-doctor",
+  "disposition": "CLAIMED",
+  "issue": 55,
+  "evidence": "Codex lane, worktree `C:\\Users\\Kuya\\code\\sentinel-project-doctor`, issue [#55](https://github.com/Pootytxng/sentinel/issues/55). The claim carries a 12-hour alarm with **no automatic takeover**, so an expired clock is not a licence to touch it. `tools/console/doctor.html` is absent from `main`."
+}

@@ -1,0 +1,6 @@
+{
+  "ref": "origin/feat/user-feedback-lab-recovery",
+  "disposition": "UNLANDED",
+  "issue": null,
+  "evidence": "49 commits, 120 files, 14703 insertions; **81 files absent from `main`** — the 42 this row used to carry was never re-derived; count it with `git diff --diff-filter=A --name-only origin/main <ref> | wc -l` rather than reading it here (LabDeck, RecDetailCard, the decision-journey IA and its guards). The compaction-window work from this branch *did* land. The Lab candidate sits behind a temporary owner flag and is a large product/design train — **owner review**, and a visual self-review, before any of it moves."
+}

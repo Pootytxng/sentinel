@@ -1,0 +1,6 @@
+{
+  "ref": "origin/fix/green-main-after-314-332",
+  "disposition": "CLAIMED",
+  "issue": 332,
+  "evidence": "Not this lane's branch — dispositioned, untouched. Issue [#332](https://github.com/Pootytxng/sentinel/issues/332), PR [#334](https://github.com/Pootytxng/sentinel/pull/334) → `20ef848d`, landed 2026-09-02. It dropped the landed `lane/rule-c-at-risk-312` name from the `SESSION_HANDOFF.md` carrier bullet after PR #314 landed it, which is what greened rules A and D of `handoff-worktree-truth` for that name. `git merge-base --is-ancestor origin/fix/green-main-after-314-332 origin/main` answers YES and `git merge-tree --write-tree origin/main origin/fix/green-main-after-314-332` is a true no-op tree — technically `MERGED`, but recorded `CLAIMED` for the same reason as the landed rows above: the ref is still on origin, `MERGED` would fail this file's own audit while it is, and the prune is owner action `OWNER_ACTION_CHECKLIST.md` §A_prune. **This row exists because an undispositioned ref reds the audit for every push in the repo.**"
+}

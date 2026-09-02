@@ -108,8 +108,10 @@ one is a Codex claim, and the rest need an owner product-scope call (bklit desig
 user-feedback Lab recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation —
 whose price wording was rejected and superseded by the landed `d5571766` — tool-shed-hygiene,
 lab-49-parity-port). Evidence:
-[`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md), now at **120/120** against its doc-budget ceiling,
-so the next branch pushed to origin must archive that file's current sweep before it can add its row.
+one record per ref under [`docs/dispositions/`](dispositions/), described by
+[`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md). The ceiling that used to make each new branch
+archive a sweep before it could add its row is gone with the table (#291) — a new ref adds its own
+file and edits nothing shared.
 
 **ALSO OPEN, not yet queued** (so none of it drops silently): **#64** Q2b main-window caller checks
 — open but DEFERRED BY DECISION, re-verified against its own trigger list 2026-08-25 and the reasons
@@ -609,7 +611,7 @@ When running a `/loop` or scheduled session against "the checklist":
    the merge is a no-op → already shipped → prune, don't surface. Only a tree-changing merge is real unmerged work.
    And re-RUN cargo/vitest for counts each cycle — never carry an assumed number forward. ([[branch-redundancy-detect-by-mergetree]])
 
-> **🌿 Branch-integration health** — the 2026-06-24e sweep (every branch dispositioned, `main` the single product truth) is a **point-in-time record**, moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22). **Its standing claim was false when written and is now enforced instead of asserted (2026-08-04, Q6):** every one of the **20** origin branches carries a row in **`docs/BRANCH_DISPOSITIONS.md`**, and `scripts/branch-disposition-audit.mjs` fails the build when a ref has no row, a row names a dead ref, or a `MERGED` row stops being a no-op. Result: 6 MERGED · 6 SUPERSEDED (content reached `main` by another path) · 3 PRESERVE (the frozen beta ref + two failed v0.9.9 candidates `RELEASE_AUTONOMY.md` requires kept) · 1 CLAIMED by the Codex lane (`feat/console-project-doctor`, no automatic takeover) · **4 UNLANDED** carrying real work — `codex/tool-shed-hygiene` (partial), `feat/bklit-anime-design-system` (owner product-scope), `feat/user-feedback-lab-recovery` (owner review), `design/quiet-pit-wall` (deferred, needs a visual self-review). `main` remains the **release** truth — every shipped build is built from it — but that is not a claim that no work lives elsewhere; live lane ownership is governed by `docs/WORK_CONTROL.md`. The durable merge-tree law stays in protocol rule 5 above; re-run it before asserting a branch is stranded.
+> **🌿 Branch-integration health** — the 2026-06-24e sweep (every branch dispositioned, `main` the single product truth) is a **point-in-time record**, moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22). **Its standing claim was false when written and is now enforced instead of asserted (2026-08-04, Q6):** every origin branch carries a record in **`docs/dispositions/`** (one file per ref since #291; the count is computed by the audit, not written down), and `scripts/branch-disposition-audit.mjs` fails the build when a ref has no record, a record names a dead ref, or a `MERGED` record stops being a no-op. Result: 6 MERGED · 6 SUPERSEDED (content reached `main` by another path) · 3 PRESERVE (the frozen beta ref + two failed v0.9.9 candidates `RELEASE_AUTONOMY.md` requires kept) · 1 CLAIMED by the Codex lane (`feat/console-project-doctor`, no automatic takeover) · **4 UNLANDED** carrying real work — `codex/tool-shed-hygiene` (partial), `feat/bklit-anime-design-system` (owner product-scope), `feat/user-feedback-lab-recovery` (owner review), `design/quiet-pit-wall` (deferred, needs a visual self-review). `main` remains the **release** truth — every shipped build is built from it — but that is not a claim that no work lives elsewhere; live lane ownership is governed by `docs/WORK_CONTROL.md`. The durable merge-tree law stays in protocol rule 5 above; re-run it before asserting a branch is stranded.
 
 ---
 

@@ -1,0 +1,6 @@
+{
+  "ref": "origin/lane/native-routing-271",
+  "disposition": "CLAIMED",
+  "issue": 271,
+  "evidence": "Sidebar remediation Task 1, issue [#271](https://github.com/Pootytxng/sentinel/issues/271), worktree `C:\\Users\\Kuya\\code\\sentinel-native-routing-271`. Documentation only — the Q9b stage correction in `BACKLOG.md` (contract §11: Stage 3 is the local receiver, Stage 4 is the send command), the `RELEASE_STATE.md` `source_main_commit` re-stamp that was failing `verify-release-state` for every push in the repo, and the carrier bullet. **LANDED** as PR [#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`, which `git merge-base --is-ancestor e26108f7 origin/main` puts ON `origin/main`, so nothing here is unlanded. That used to be proven with a merge-tree no-op, which stopped being true the moment either side edited a living doc — and it has; **ancestry is the durable proof, a no-op is not.** **It reads `CLAIMED` and not `MERGED` only because the prune is BLOCKED** — deleting the ref was denied to this session on 2026-08-31, and a denial is a stop, not a licence to reach the same effect another way; `MERGED` would fail the audit while the ref is still on origin. Owner action, filed as `OWNER_ACTION_CHECKLIST.md` §A_prune: `git push origin --delete lane/native-routing-271`, then drop this row and the carrier bullet together."
+}

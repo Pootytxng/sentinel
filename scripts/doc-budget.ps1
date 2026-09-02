@@ -32,7 +32,7 @@ $budgets = @{
   # exactly 107/107 -- passing, with nothing spare. The next row here does NOT have a free line to
   # take and must be paid from `archive/BRANCH_DISPOSITION_SWEEPS.md` before it is written. The cap
   # does not move for it; that is the whole point of the ratchet.
-  "docs/BRANCH_DISPOSITIONS.md" = 107
+  "docs/BRANCH_DISPOSITIONS.md" = 82
   "docs/RELEASE_AUTONOMY.md" = 120
   "docs/RELEASE_TRANSACTION.md" = 120
   "docs/SESSION_HANDOFF.md" = 120
