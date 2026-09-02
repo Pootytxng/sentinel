@@ -56,13 +56,12 @@ audit call a genuinely-merged branch unmerged. Pinned in `scripts/branch-disposi
 ## The refs
 
 Sweep history (2026-08-04 through 2026-08-21, #126) is archived in
-[`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md), including the 2026-09-01
-count narrative this replaces (moved 2026-09-01 to pay for the #323 rows). **Two facts still live here**:
-the retired detached checkout's work is preserved under tag `preserve/checklist-disk-item-c5660e`, and
-**rule C of `scripts/handoff-worktree-truth.test.mjs` fails on a branchless checkout** (a shape an
-`origin` audit cannot see). **Re-derived 2026-09-01**: thirty-four refs besides `main` on
-`git ls-remote --heads origin` after `--prune`, three `PRESERVE`; none of the rest is retirable by
-proof — each needs an owner call or its owning lane, and re-deriving this count is part of adding a row.
+[`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md), including the 2026-09-01 count narrative this
+replaces (moved 2026-09-01 to pay for the #323 rows). **Two facts still live here**: the retired detached checkout's work is
+preserved under tag `preserve/checklist-disk-item-c5660e`, and **rule C of `scripts/handoff-worktree-truth.test.mjs` fails on a
+branchless checkout** (a shape an `origin` audit cannot see). **Re-derived 2026-09-02**: thirty-five refs besides `main` on `git
+ls-remote --heads origin` after `--prune`, three `PRESERVE`; none of the rest is retirable by proof — each needs an owner call or
+its owning lane, and re-deriving this count is part of adding a row.
 
 | ref | disposition | evidence |
 | --- | --- | --- |
@@ -100,6 +99,7 @@ proof — each needs an owner call or its owning lane, and re-deriving this coun
 | `origin/lane/prune-list-truth-305` | CLAIMED | Not this lane's branch — dispositioned, untouched. Issue [#305](https://github.com/Pootytxng/sentinel/issues/305), PR [#319](https://github.com/Pootytxng/sentinel/pull/319), stacked two deep on `lane/docs-path-not-branch-310` — 20 commits past `origin/main`. `git merge-tree --write-tree origin/main origin/lane/prune-list-truth-305` is not a no-op, so it is not `MERGED`. Corrects `docs/OWNER_ACTION_CHECKLIST.md` §A_prune, which undercounted dead refs (three listed, eleven measured) — the live comment thread on #305 has since widened it further, to a full checkout-vs-ref count split. No worktree for this exact branch was found on this machine at measurement time. **The ref stays**; disposition is the owning lane's call. |
 | `origin/lane/guard-budget-313` | CLAIMED | Not this lane's branch — dispositioned, untouched. Worktree `C:\Users\Kuya\code\sentinel-remote-design-286` (the checkout that carried `lane/remote-cache-design-286` then `lane/receipt-288`, **reused** again), issue [#313](https://github.com/Pootytxng/sentinel/issues/313), PR [#317](https://github.com/Pootytxng/sentinel/pull/317), based on `main` — 18 commits past `origin/main`. `git merge-tree --write-tree origin/main origin/lane/guard-budget-313` is not a no-op, so it is not `MERGED`. Targets `scripts/hookspath-fleet-guard.test.mjs` paying 49% of the default test budget under contention (measured: 137 git spawns building twenty from-scratch repos). **The ref stays**; disposition is the owning lane's call. |
 | `origin/lane/wrapper-allowlist-308` | CLAIMED | Not this lane's branch — dispositioned, untouched. Worktree `C:\Users\Kuya\code\sentinel-atomic-281` (this lane's own worktree until it was reused here, per the row above), issue [#308](https://github.com/Pootytxng/sentinel/issues/308), PR [#320](https://github.com/Pootytxng/sentinel/pull/320), based on `lane/shell-ownership-278` — 21 commits past `origin/main`. `git merge-tree --write-tree origin/main origin/lane/wrapper-allowlist-308` is not a no-op, so it is not `MERGED`. Closes the last five wrapper holes (`flock`, `taskset`, `su`, `busybox`, `find -exec`) in the shell one-writer rule. **The ref stays**; disposition is the owning lane's call. |
+| `origin/fix/green-main-after-314-332` | CLAIMED | Not this lane's branch — dispositioned, untouched. Issue [#332](https://github.com/Pootytxng/sentinel/issues/332), PR [#334](https://github.com/Pootytxng/sentinel/pull/334) → `20ef848d`, landed 2026-09-02. It dropped the landed `lane/rule-c-at-risk-312` name from the `SESSION_HANDOFF.md` carrier bullet after PR #314 landed it, which is what greened rules A and D of `handoff-worktree-truth` for that name. `git merge-base --is-ancestor origin/fix/green-main-after-314-332 origin/main` answers YES and `git merge-tree --write-tree origin/main origin/fix/green-main-after-314-332` is a true no-op tree — technically `MERGED`, but recorded `CLAIMED` for the same reason as the landed rows above: the ref is still on origin, `MERGED` would fail this file's own audit while it is, and the prune is owner action `OWNER_ACTION_CHECKLIST.md` §A_prune. **This row exists because an undispositioned ref reds the audit for every push in the repo.** |
 
 ## Standing rule
 
