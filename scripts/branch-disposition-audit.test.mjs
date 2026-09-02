@@ -24,6 +24,7 @@ import {
   listRemoteRefs,
   mergeCitations,
   parseDispositions,
+  parseRow,
   pruneCommand,
   refSplit,
   refSetCoverage,
@@ -657,20 +658,23 @@ describe("PR-to-merge-commit citations", () => {
 describe("the record's prose does not outlive the refs it describes", () => {
   const record = () => readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8");
 
-  // Aligned with `parseDispositions` in the audit itself, which reads `line.trimStart()` and trims
-  // each cell: an indented or padded row is a row THERE, so it must be a row HERE, or one leading
-  // space would hide a claim from both rules below while the audit went on validating its key.
-  // Found by review, with nothing indented in the table today -- a guard that can be stepped around
-  // by a space is the "green that is not evidence" class (#322) wearing a different hat. The one
-  // divergence left is deliberate: `parseDispositions` reads only the `## The refs` section and
-  // these rules read the whole file, which can only ever check MORE lines, never fewer.
-  const isRow = (line) => /^\s*\|\s*`origin\//.test(line);
+  // The predicate is the audit's OWN, imported rather than copied: a line is a row here exactly
+  // when `parseRow` calls it a row there, because it is the same function. Two rounds of review
+  // went into learning that a copy drifts -- round 1 widened the copy for indentation, and round 4
+  // found it still required backticks around the ref where `parseRow` only strips them if present,
+  // so `| origin/lane/x | CLAIMED | 5 commits past origin/main |` was a row to the audit and
+  // invisible to both rules below. Neither miss needed a hostile author: they are what a guard that
+  // paraphrases someone else's definition does on its own. Not copying it is the only fix that does
+  // not need a third round. These rules apply that predicate to the whole file where
+  // `parseDispositions` applies it to the `## The refs` section alone, which can only ever check
+  // more lines, never fewer.
+  const isRow = (line) => parseRow(line) !== null;
   const rowKeys = (md) =>
     new Set(
       md
         .split("\n")
         .filter(isRow)
-        .map((line) => line.split("`")[1].replace(/^origin\//, "")),
+        .map((line) => parseRow(line).ref.replace(/^origin\//, "")),
     );
 
   // A count is measured against a branch tip, and a branch tip moves on every merge -- so the
@@ -693,11 +697,19 @@ describe("the record's prose does not outlive the refs it describes", () => {
   //     and code markers are stripped BEFORE matching, which retires the formatting-bypass family
   //     in one move rather than one alternative per review, and the coverage is stated as a closed
   //     set below instead of the remainder being stated as a closed set.
+  //   round 4 found that closed set was not closed. The spelled numbers stopped at fifty, so
+  //     "eighty commits behind main" walked past a rule whose comment said nothing else was caught
+  //     -- a paraphrase of a list is a third thing to keep in sync, and it fell out of sync in the
+  //     same commit that wrote it. The alternation now runs through the magnitudes, and the
+  //     sentence below points AT it rather than restating it.
   //
-  // WHAT IS CAUGHT, exhaustively, because a positive statement cannot go stale by omission the way
-  // the two miss-lists above did. After `*`, backtick and `_` are stripped from the row, an offender
-  // is: a number, spelled or digits, then "commit"/"commits", then "past", "behind" or "ahead of",
-  // then optionally "the", then `main` or `origin/main` on a word boundary. Nothing else is caught.
+  // WHAT IS CAUGHT. After `*`, backtick and `_` are stripped from the row, an offender is: a count,
+  // then "commit"/"commits", then "past", "behind" or "ahead of", then optionally "the", then
+  // `main` or `origin/main` on a word boundary. A count is any run of digits, or one of the words
+  // spelled out in the alternation below -- which, matching on a word boundary, also catches the
+  // compounds ending in one of them ("a hundred and twelve commits past main"). A quantity worded
+  // outside that list -- "a dozen commits past `main`" -- is NOT caught, and that case is pinned in
+  // the self-test, so where the edge sits is a measured fact rather than a sentence about one.
   //
   // Two kinds of outsider, given as EXAMPLES and explicitly not as a complete list:
   //   * a count against a NAMED landed commit ("3 commits past `16069fa`") -- anchored to something
@@ -707,7 +719,7 @@ describe("the record's prose does not outlive the refs it describes", () => {
   //     here. No pattern separates that from honest prose without redding the rest of the file, so
   //     it is a review duty and always will be.
   const PINNED_COUNT =
-    /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|\d+)\s+commits?\s+(?:past|behind|ahead\s+of)\s+(?:the\s+)?(?:origin\/)?main\b/i;
+    /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|\d+)\s+commits?\s+(?:past|behind|ahead\s+of)\s+(?:the\s+)?(?:origin\/)?main\b/i;
   // Stripped, not alternated: bolding the number, the noun, the verb or the ref, and dropping
   // the backticks entirely, are all the same bypass wearing different clothes. Round 2 answered
   // one of them with `(?:\*\*)?` and left five.
@@ -760,7 +772,18 @@ describe("the record's prose does not outlive the refs it describes", () => {
     expect(pinsACount(row("7 commits past origin/main"))).toBe(true);
     expect(pinsACount(row("7 commits ahead of the `main` branch"))).toBe(true);
 
-    // The two example outsiders, pinned so that nobody reads this rule as covering them.
+    // Round 4: the magnitudes the alternation used to stop short of, and a row the copied `isRow`
+    // predicate did not see at all -- `parseRow` strips backticks around a ref, it never requires
+    // them, so a row written without them is a row to the audit and must be one here.
+    expect(pinsACount(row("eighty commits behind `main`"))).toBe(true);
+    expect(pinsACount(row("a hundred commits past `main`"))).toBe(true);
+    expect(isRow("| origin/lane/x | CLAIMED | 5 commits past origin/main |")).toBe(true);
+    expect(pinsACount("| origin/lane/x | CLAIMED | 5 commits past origin/main |")).toBe(true);
+    expect(isRow("| Ref | Disposition | Evidence |")).toBe(false);
+
+    // The two example outsiders, pinned so that nobody reads this rule as covering them, and the
+    // wording the alternation does not reach, pinned so that the sentence above is measured.
+    expect(pinsACount(row("a dozen commits past `main`"))).toBe(false);
     expect(pinsACount(row("3 commits past `16069fa`"))).toBe(false);
     expect(pinsACount(row("#286/#287 fell to 3 and 5"))).toBe(false);
 

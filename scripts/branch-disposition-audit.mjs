@@ -149,6 +149,22 @@ export function isNoop(repoRoot, base, ref) {
   return tree === git(repoRoot, ["rev-parse", `${base}^{tree}`]).trim();
 }
 
+/**
+ * One row of the refs table, or null if the line is not one. THE definition of "is a row", in one
+ * place: the guard in `branch-disposition-audit.test.mjs` imports this instead of re-deriving it,
+ * because the version that re-derived it as a regex diverged. That copy REQUIRED backticks around
+ * the ref where this only strips them if they are there, so `| origin/lane/x | CLAIMED | ... |`
+ * was a row to the audit and invisible to the guard -- a banned commit count inside it included.
+ */
+export function parseRow(line) {
+  if (!line.trimStart().startsWith("|")) return null;
+  const cells = line.split("|").slice(1, -1);
+  if (cells.length < 3) return null;
+  const ref = cells[0].trim().replace(/^`|`$/g, "");
+  if (!ref.startsWith("origin/")) return null; // header and separator rows
+  return { ref, disposition: cells[1].trim(), evidence: cells.slice(2).join("|").trim() };
+}
+
 /** Rows of the `## The refs` table: the backticked ref in column 1, the disposition in column 2. */
 export function parseDispositions(markdown) {
   const start = markdown.indexOf("## The refs");
@@ -159,13 +175,8 @@ export function parseDispositions(markdown) {
 
   const rows = [];
   for (const line of section.split("\n")) {
-    if (!line.trimStart().startsWith("|")) continue;
-    const cells = line.split("|").slice(1, -1);
-    if (cells.length < 3) continue;
-    const ref = cells[0].trim().replace(/^`|`$/g, "");
-    const disposition = cells[1].trim();
-    if (!ref.startsWith("origin/")) continue; // header and separator rows
-    rows.push({ ref, disposition, evidence: cells.slice(2).join("|").trim() });
+    const row = parseRow(line);
+    if (row) rows.push(row);
   }
   return rows;
 }
