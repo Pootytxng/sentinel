@@ -67,10 +67,10 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**LIVE LANE — #313 / PR #317**, worktree `sentinel-remote-design-286`, head `3b31a96a`, draft, gate PASS.
-BLOCKED on one review bound to THAT head — the PASS at `a963db1d` does not cover the four commits after it.
-Receipt `.claude/work-control/2026-09-01-mark-pr-ready-313.json` is `pending` by design; on PASS edit it
-UNTRACKED → `node scripts/work-control-gate.mjs` → `gh pr ready 317` → commit. **Never merge — owner's.**
+**LIVE LANE — #313 / PR #317**, worktree `sentinel-remote-design-286`, draft, gate PASS. **Never merge.**
+Head = the `origin/lane/guard-budget-313` tip — a SHA pinned here is stale on arrival, so re-read it.
+BLOCKED on a review bound to THAT head. Receipt `.claude/work-control/2026-09-01-mark-pr-ready-313.json`
+carries THREE head fields — re-head all three, re-run verify-local AT that head, gate it, then `gh pr ready 317`.
 
 **Q9b Stage 3 is NEXT** (Stage 2 landed, `cfc0d21a` / PR #263): receiver + migration, local/staged
 ONLY, never deployed — deployment is Stage 7, owner territory. Spec:
