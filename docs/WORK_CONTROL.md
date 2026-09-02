@@ -99,6 +99,14 @@ itself (`git rev-parse HEAD`) and blocks when the receipt disagrees with it — 
 is not proof. Gate results **and** the independent review are both bound to that head; a review
 recorded at an earlier head does not cover the commits made after it.
 
+That head must also be **reachable from canonical remote evidence**, asked live (#291). A commit that
+exists only on this disk, only on a fork, or only through a remote-tracking ref left behind by an old
+fetch reads exactly like a pushed commit locally, and authorizes a transition on proof no reviewer can
+fetch. So the gate reads `git ls-remote --heads` on the remote whose **URL** is `Pootytxng/sentinel` —
+not the remote named `origin`, and never `refs/remotes/origin/*`, which is the last fetch rather than
+origin. An origin that cannot be asked **blocks**; so does an origin whose tips this checkout has not
+fetched, because an empty exclusion set would otherwise make everything look reachable.
+
 Only `PASS` authorizes the transition. `BLOCKED` is the state, not permission to reinterpret a failed
 or unavailable gate. Opening an explicitly blocked draft is allowed because it does not claim
 readiness. The **non-writing model performs the final independent review whenever practical**; if

@@ -86,6 +86,12 @@ const RESIDENCY = {
     kind: "manual",
     why: "Restarts the dev app on the owner's desk. Resident execution would seize his screen mid-session.",
   },
+  // Both a module and a CLI. The report it prints is for a human; the measurement it exports is
+  // what rule C drives, so the residency that matters is the test, not the printer.
+  "fleet-snapshot.mjs": {
+    kind: "npm-test",
+    runner: "scripts/handoff-worktree-truth.test.mjs",
+  },
   // Not resident on purpose. It asks the LIVE machine what is running, so a resident copy would
   // fail every time a q7 probe or a self-review legitimately holds a debug port open -- i.e. it
   // would go red exactly while the tool that opens the port is doing its job. Its residency is
