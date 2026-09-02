@@ -384,6 +384,12 @@ export const PREFIX_VERBS = new Map([
   // put the verb one word past where a flag walk stops, so the step read `10` as the command, found no
   // recognized mutation and ALLOWED the write. Same defect as the wrapper hole itself, one word right.
   ["chrt", { flags: ["-f", "-b", "-o", "-r", "-i", "-d", "-a", "-R", "-m"], values: ["-p", "-T", "-P"], priority: true }],
+  // A CPU mask sits exactly where `chrt` puts a priority and `timeout` puts a duration — the same
+  // shape a third time, and it failed the same way: `taskset 0x3 rm -f <sibling>` read the mask as
+  // the command and the write was never seen. Hex (`0x3`) or a list/range (`0`, `0,1`, `0-3`), and
+  // taken greedily but only while the word still LOOKS like a mask — `taskset rm -f x` must land on
+  // `rm`, and the test pins that: a MASK loosened to match any word ate the `rm` silently.
+  ["taskset", { flags: ["-a", "--all-tasks"], values: ["-c", "--cpu-list", "-p", "--pid"], mask: true }],
   ["time", { flags: ["-p", "--portability", "-v", "--verbose"], values: ["-o", "-f", "-a", "--output", "--format", "--append"] }],
   ["timeout", { flags: ["--preserve-status", "--foreground", "-v", "--verbose"], values: ["-s", "-k", "--signal", "--kill-after"], duration: true }],
   ["stdbuf", { values: ["-i", "-o", "-e", "--input", "--output", "--error"] }],
@@ -394,6 +400,8 @@ export const PREFIX_VERBS = new Map([
 
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const DURATION = /^\d+(\.\d+)?[smhd]?$/;
+/** taskset's leading CPU mask: hex, or a decimal list/range. Leading only, and matched once. */
+const MASK = /^(0x[0-9a-fA-F]+|[0-9]+([-,][0-9]+)*)$/;
 
 /**
  * Walks leading assignments and wrapper verbs off the front of a segment and reports where the real
@@ -435,6 +443,15 @@ export function stepPrefixes(words) {
         }
         if (spec.priority && !sawPositional && /^\d+$/.test(w)) {
           sawPositional = true;
+          head += 1;
+          continue;
+        }
+        // Greedy, unlike the duration and priority positionals above, and the difference is
+        // deliberate AND measured: made one-shot, the walk stops on the second mask-shaped word,
+        // treats THAT as the command, and `rm -f <sibling>` becomes a mere argument of something
+        // unrecognised — which the checker allows. `taskset 0x3 0-1 rm -f <sibling>` went from deny
+        // to allow under a one-shot version. The test pins it, so this line cannot quietly relax.
+        if (spec.mask && MASK.test(w)) {
           head += 1;
           continue;
         }

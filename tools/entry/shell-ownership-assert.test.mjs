@@ -666,6 +666,35 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
     }
   });
 
+  // The third wrapper in this file to carry a bare leading positional, after `timeout`'s duration
+  // and `chrt`'s priority. Same shape, same hole: the mask read as the command.
+  it("does not let taskset's CPU mask stand in for the command", () => {
+    expect(ask(`taskset 0x3 rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`taskset 3 mv ${SIB_FILE} /tmp/x`).permission).toBe("deny");
+    expect(ask(`taskset -c 0,1 rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`taskset --cpu-list 0-3 rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`taskset -a -c 0-3 rm -f ${SIB_FILE}`).permission).toBe("deny");
+    // MASK has to stay TIGHT. Loosened to match any word, it eats `rm` and the head lands on a
+    // flag — measured, and every other assertion here stayed green while it did.
+    expect(ask(`taskset rm -f ${SIB_FILE}`).permission).toBe("deny");
+    // ...and greedy. Made one-shot, the walk stops on the second mask-shaped word and treats it as
+    // the command, so the `rm` behind it reads as an argument and the write is allowed — measured,
+    // this exact line is the one that caught it.
+    expect(ask(`taskset 0x3 0-1 rm -f ${SIB_FILE}`).permission).toBe("deny");
+  });
+
+  it("still allows ordinary taskset use — the false-deny direction", () => {
+    for (const c of [
+      "taskset -p 1234",
+      "taskset -p 0x3 1234",
+      "taskset 0x3 ls -la",
+      "taskset -c 0,1 npm run build",
+      "taskset -a -c 0-3 cargo test",
+    ]) {
+      expect(ask(c).permission, c).toBe("allow");
+    }
+  });
+
   // THE chrt BUG, MECHANIZED. `chrt` shipped inside a table the spec called complete, carrying no
   // probe of its own, and its positional read as the command. A list of NAMES cannot catch that —
   // it is satisfied by the name being mentioned anywhere. So the table is enumerated instead: every
@@ -686,6 +715,7 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
     stdbuf: "stdbuf -oL",
     xargs: "xargs",
     busybox: "busybox",
+    taskset: "taskset 0x3",
   };
 
   // THE OTHER DIRECTION, and the one that makes the marker cost something. Every name §6 marks
@@ -696,7 +726,6 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
   // endorses the hole; it pins the claim so the claim cannot go stale in either direction.
   const OPEN_PROBES = {
     flock: `flock /tmp/lock rm -f ${SIB_FILE}`,
-    taskset: `taskset 0x3 rm -f ${SIB_FILE}`,
     su: `su root rm -f ${SIB_FILE}`,
     find: `find . -name x -exec rm -f ${SIB_FILE} ;`,
   };
