@@ -119,3 +119,24 @@ and `lane/css-margin-separators-274` rows existed. It was re-derived to twelve o
 to fourteen the same day when `lane/fleet-guard-failclosed-276` and `lane/shell-ownership-278` were
 dispositioned. Three wrong values inside one file is the argument for the law: a count carried
 forward is not evidence, and `git ls-remote --heads origin` after a `--prune` fetch is.
+
+## 2026-09-01 — two measurements moved out of the live doc
+
+Moved out of `BRANCH_DISPOSITIONS.md` to pay for the row that lane's own first push would
+create (#305). Both rules stay in that file; these are the measurements behind them.
+
+**A two-tree `git diff origin/main <ref>` invents deletions.** It counts every file `main`
+gained afterwards as a removal, so it reports removals a three-way merge would never make.
+Measured on the three rows that sat below it at the time, it would have claimed **345, 372 and
+512 deletions against a true zero**.
+
+The companion example — a three-dot diff reporting +195 lines for `latency-capture`, every
+symbol of which was already on `main` — was not moved here: it already lives in the header of
+`scripts/branch-disposition-audit.mjs`, so the doc was carrying a second copy, not a record.
+
+**A count written beside an append-only table is wrong by the next commit.** The live count of
+refs went stale twice on 2026-09-01 alone, both times by the very lane that added the row —
+#312's finding in a different costume. The cure is that no count is pinned in that prose at
+all: `node scripts/branch-disposition-audit.mjs` prints the live split on OK, *after* it has
+proven the rows and origin's refs are one-to-one. That ordering is what makes the printed
+number trustworthy rather than merely current.
