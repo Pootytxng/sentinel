@@ -285,6 +285,61 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
  * not established, so no count is printed there — a degraded run must not print the full run's
  * sentence.
  */
+/**
+ * Every "PR #N landed as `sha`" citation in the record, in the TWO shapes the document actually
+ * uses today:
+ *
+ *   PR [#334](.../pull/334) -> `20ef848d`
+ *   PR [#314](.../pull/314) (`7dafc402`, ...)
+ *
+ * Deliberately narrow. A third shape is NOT read, so a caller must also assert that the real
+ * document still yields citations: a matcher that silently matches nothing reads as a pass while
+ * checking nothing, which is #330's failure wearing a new hat.
+ *
+ * This exists because a row shipped `20ef848d` as PR #314's merge commit when it is PR #334's --
+ * two rows apart in the same file, so the document contradicted itself and every guard was green.
+ * `audit()` could not catch it: it proves each ref has a row and each MERGED row is a true no-op,
+ * and says nothing about prose pairing a number with a SHA.
+ *
+ * Known limit, stated rather than left to be discovered: the squash shape `... (#N)` is also how a
+ * subject cites an ISSUE, so a squash citation proves the SHA is not paired with the WRONG number
+ * rather than proving the number is a PR. That is the defect this guard exists for.
+ */
+export function mergeCitations(markdown) {
+  const re = /PR \[#(\d+)\]\([^)]*\)\s*(?:(?:->|\u2192)\s*`([0-9a-f]{7,40})`|\(`([0-9a-f]{7,40})`)/g;
+  return [...(markdown ?? "").matchAll(re)].map((m) => ({ pr: Number(m[1]), sha: m[2] ?? m[3] }));
+}
+
+/**
+ * The citations that are FALSE. A citation is true when the cited commit's own subject names that
+ * PR. `subjectOf` is injected so the fixtures can decide without a repository.
+ *
+ * Two directions this refuses to soften. Omitting `subjectOf` throws rather than defaulting, and an
+ * unresolvable SHA counts as FALSE rather than being skipped -- a citation this repository cannot
+ * check is not a citation it has verified, and "could not read it" must never render as "fine".
+ */
+export function falseMergeCitations(citations, subjectOf) {
+  if (typeof subjectOf !== "function") {
+    throw new Error('falseMergeCitations needs a subject reader -- omitting it must not read as "all true"');
+  }
+  return (citations ?? []).filter(({ pr, sha }) => {
+    let subject;
+    try {
+      subject = subjectOf(sha);
+    } catch {
+      return true;
+    }
+    if (typeof subject !== "string" || subject === "") return true;
+    // Both landing shapes this repository actually produces. A merge commit names the PR in
+    // "Merge pull request #N from ..."; a squash merge ends its subject "... (#N)". Refusing the
+    // squash form would have failed two TRUE rows (#273, #275) on their first run -- the #295
+    // mistake in the other direction, a guard calling honest prose a lie.
+    const merged = new RegExp(String.raw`Merge pull request #${pr}(\D|$)`).test(subject);
+    const squashed = new RegExp(String.raw`\(#${pr}\)\s*$`).test(subject);
+    return !(merged || squashed);
+  });
+}
+
 export function refSplit(rows) {
   const preserve = rows.filter((r) => r.disposition === "PRESERVE").length;
   return { total: rows.length, preserve, other: rows.length - preserve };

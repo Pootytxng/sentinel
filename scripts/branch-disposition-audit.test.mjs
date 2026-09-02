@@ -19,8 +19,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   audit,
+  falseMergeCitations,
   isNoop,
   listRemoteRefs,
+  mergeCitations,
   parseDispositions,
   pruneCommand,
   refSplit,
@@ -429,5 +431,90 @@ describe("this repository", () => {
     const problems = audit({ repoRoot, coverage: { tracksEveryBranch: false, shallow: false, reason: "test" } });
     expect(problems.filter((p) => /no longer exists/.test(p))).toEqual([]);
     expect(problems).toEqual([]);
+  });
+});
+
+describe("PR-to-merge-commit citations", () => {
+  // Why: a row in the real document cited `20ef848d` as PR #314's merge commit. It is PR #334's --
+  // and the row two below it said so correctly, so the file contradicted itself while every guard
+  // stayed green. Two independent reviewers caught it by hand; nothing mechanical could have.
+  const subjects = {
+    "7dafc402": "Merge pull request #314 from Pootytxng/lane/rule-c-at-risk-312",
+    "20ef848d": "Merge pull request #334 from Pootytxng/fix/green-main-after-314-332",
+  };
+  const subjectOf = (sha) => subjects[sha] ?? null;
+
+  it("reads both shapes the document uses, and only those", () => {
+    const md = [
+      "| a | CLAIMED | PR [#334](https://github.com/o/r/pull/334) \u2192 `20ef848d`, landed. |",
+      "| b | CLAIMED | PR [#314](https://github.com/o/r/pull/314) (`7dafc402`, upstream). |",
+      "| c | CLAIMED | PR [#315](https://github.com/o/r/pull/315), based on `main` -- 11 commits. |",
+    ].join("\n");
+    expect(mergeCitations(md)).toEqual([
+      { pr: 334, sha: "20ef848d" },
+      { pr: 314, sha: "7dafc402" },
+    ]);
+  });
+
+  it("passes a true pairing and fails the swapped one", () => {
+    const truthful = "PR [#314](https://github.com/o/r/pull/314) (`7dafc402`)";
+    const swapped = "PR [#314](https://github.com/o/r/pull/314) (`20ef848d`)";
+    expect(falseMergeCitations(mergeCitations(truthful), subjectOf)).toEqual([]);
+    expect(falseMergeCitations(mergeCitations(swapped), subjectOf)).toEqual([{ pr: 314, sha: "20ef848d" }]);
+  });
+
+  it("accepts a squash landing, whose subject ends (#N) instead", () => {
+    // Refusing this shape failed two TRUE rows on the first live run (#273, #275). A guard that
+    // calls honest prose a lie is the #295 failure, just pointed the other way.
+    const squashes = {
+      e26108f7: "docs(routing): reconcile native closeout \u2014 Stage 3 is the receiver (#273)",
+    };
+    const md = "PR [#273](https://github.com/o/r/pull/273) (`e26108f7`)";
+    expect(falseMergeCitations(mergeCitations(md), (s) => squashes[s] ?? null)).toEqual([]);
+    const wrong = "PR [#274](https://github.com/o/r/pull/274) (`e26108f7`)";
+    expect(falseMergeCitations(mergeCitations(wrong), (s) => squashes[s] ?? null)).toEqual([
+      { pr: 274, sha: "e26108f7" },
+    ]);
+  });
+
+  it("requires the squash number at the END, not merely somewhere", () => {
+    const body = { abc1234: "fix: follow up to (#273) in the parser" };
+    const md = "PR [#273](https://github.com/o/r/pull/273) (`abc1234`)";
+    expect(falseMergeCitations(mergeCitations(md), (s) => body[s] ?? null)).toEqual([
+      { pr: 273, sha: "abc1234" },
+    ]);
+  });
+
+  it("does not let #31 match #314's subject", () => {
+    // A bare `#${pr}` test would call this true, because the subject contains "#314".
+    const md = "PR [#31](https://github.com/o/r/pull/31) (`7dafc402`)";
+    expect(falseMergeCitations(mergeCitations(md), subjectOf)).toEqual([{ pr: 31, sha: "7dafc402" }]);
+  });
+
+  it("counts an unreadable commit as false, never as fine", () => {
+    const md = "PR [#999](https://github.com/o/r/pull/999) (`deadbeef`)";
+    expect(falseMergeCitations(mergeCitations(md), subjectOf)).toEqual([{ pr: 999, sha: "deadbeef" }]);
+    const throws = () => {
+      throw new Error("unreadable history");
+    };
+    expect(falseMergeCitations(mergeCitations(md), throws)).toEqual([{ pr: 999, sha: "deadbeef" }]);
+  });
+
+  it("refuses to run without a subject reader", () => {
+    expect(() => falseMergeCitations([{ pr: 1, sha: "abc1234" }])).toThrow(/subject reader/);
+  });
+
+  it("holds for THIS repository's record, and proves it read something", () => {
+    const cited = mergeCitations(readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8"));
+    // Without this, a reworded document would silently make every assertion below vacuous.
+    expect(cited.length).toBeGreaterThan(0);
+    const live = (sha) => {
+      try {
+        return git(repoRoot, ["log", "-1", "--format=%s", sha]);
+      } catch {
+        return null;
+      }
+    };
+    expect(falseMergeCitations(cited, live)).toEqual([]);
   });
 });
