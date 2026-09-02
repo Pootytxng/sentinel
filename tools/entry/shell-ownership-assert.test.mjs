@@ -770,6 +770,16 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
   // it is satisfied by the name being mentioned anywhere. So the table is enumerated instead: every
   // wrapper in it owes a minimal invocation here, and that invocation has to surface the write.
   // Adding a row without adding a probe fails on the equality, before any behaviour is asserted.
+  //
+  // AND THE LIMIT OF THAT, measured rather than assumed, so nobody spends the afternoon I spent
+  // rebuilding it. The obvious next step is to generate a probe per FLAG SPELLING by walking
+  // PREFIX_VERBS. It was written, run against six injections, and deleted: a probe generated from
+  // the table cannot see a spelling the table never had, cannot see one removed from it, and
+  // cannot see a typo either — it dutifully probes the typo and the walk consumes it. Every
+  // injection it caught was already caught by a hand-written probe below, and the ones nothing
+  // else caught, it missed too. A guard generated from the list it guards is the same vacuity as
+  // a list of names, one level down. The realistic per-wrapper probes below are what catch an
+  // omission, which is why they are not redundant with each other and must not be thinned.
   const WRAPPER_PROBES = {
     env: "env",
     sudo: "sudo",
