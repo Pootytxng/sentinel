@@ -385,6 +385,13 @@ export const PREFIX_VERBS = new Map([
   // "…"` is the documented form — so the walk keeps going rather than stopping on the next word.
   ["flock", { flags: ["-s", "--shared", "-x", "--exclusive", "-u", "--unlock", "-n", "--nb", "--nonblock", "-o", "--close", "-F", "--no-fork", "--verbose"], values: ["-w", "--wait", "--timeout", "-E", "--conflict-exit-code"], opaque: ["-c", "--command"], inspect: ["-h", "--help", "-V", "--version"], positional: 1 }],
   ["nohup", {}],
+  // The username, and the second user of `positional`. `su root rm -f <sibling>` read `root` as the
+  // command; the write behind it was never looked at. Two spellings matter and both are covered:
+  // `-c` takes the command as a string (found by the embedded-path scan), and a bare `su root rm …`
+  // lands the walk on `rm`. Real `su` hands trailing words to the login shell rather than execing
+  // them, so treating `rm` as the command is stricter than the shell is — deliberately, because the
+  // error that costs something here is missing a write, not refusing a form nobody uses.
+  ["su", { flags: ["-", "-l", "--login", "-m", "-p", "--preserve-environment", "-P", "--pty", "-f", "--fast"], values: ["-s", "--shell", "-g", "--group", "-G", "--supp-group", "-w", "--whitelist-environment"], opaque: ["-c", "--command", "--session-command"], inspect: ["-h", "--help", "-V", "--version"], positional: 1 }],
   ["setsid", { flags: ["-f", "-w", "-c", "--fork", "--wait", "--ctty"] }],
   ["nice", { values: ["-n", "--adjustment"], numeric: true }],
   ["ionice", { flags: ["-t", "--ignore"], values: ["-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"] }],

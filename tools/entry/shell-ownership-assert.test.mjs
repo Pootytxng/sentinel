@@ -730,6 +730,41 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
     }
   });
 
+  // The second `positional` wrapper, and the one where the cap is easiest to get wrong: uncapped,
+  // the walk eats the username AND the command AND the target, runs out of words, and finds no
+  // command at all — which reads as nothing to check rather than as a failure to parse.
+  it("does not let su's username stand in for the command", () => {
+    expect(ask(`su root rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`su - root -c "rm -f ${SIB_FILE}"`).permission).toBe("deny");
+    expect(ask(`su -c "rm -f ${SIB_FILE}"`).permission).toBe("deny");
+    expect(ask(`su -s /bin/sh root -c "rm -f ${SIB_FILE}"`).permission).toBe("deny");
+    expect(ask(`su root --session-command "rm -f ${SIB_FILE}"`).permission).toBe("deny");
+    // The cap, with no flag left to fail closed on: uncapped this walks off the end of the argv.
+    expect(ask(`su root rm ${SIB_FILE}`).permission).toBe("deny");
+  });
+
+  it("still allows ordinary su use — the false-deny direction", () => {
+    for (const c of [
+      'su root -c "ls -la"',
+      'su - deploy -c "npm run build"',
+      'su -m root -c "echo hi"',
+      'su -s /bin/bash root -c "cargo test"',
+      'su --login deploy -c "ls"',
+      // One per LONG spelling in the row. Every deny case above fails closed on an unrecognised
+      // flag, so none of them can tell a known long form from an unknown one; only these can.
+      'su --shell /bin/bash root -c "ls"',
+      'su --group wheel root -c "ls"',
+      'su --supp-group docker root -c "ls"',
+      'su --whitelist-environment PATH root -c "ls"',
+      'su --preserve-environment root -c "ls"',
+      'su --pty --fast root -c "ls"',
+      'su root --session-command "ls -la"',
+      "su root ls -la",
+    ]) {
+      expect(ask(c).permission, c).toBe("allow");
+    }
+  });
+
   // THE chrt BUG, MECHANIZED. `chrt` shipped inside a table the spec called complete, carrying no
   // probe of its own, and its positional read as the command. A list of NAMES cannot catch that —
   // it is satisfied by the name being mentioned anywhere. So the table is enumerated instead: every
@@ -752,6 +787,7 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
     busybox: "busybox",
     taskset: "taskset 0x3",
     flock: "flock /tmp/lock",
+    su: "su root",
   };
 
   // THE OTHER DIRECTION, and the one that makes the marker cost something. Every name §6 marks
@@ -761,7 +797,6 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
   // WRAPPER_PROBES, which is exactly the three-place update the issue asks for. Nothing here
   // endorses the hole; it pins the claim so the claim cannot go stale in either direction.
   const OPEN_PROBES = {
-    su: `su root rm -f ${SIB_FILE}`,
     find: `find . -name x -exec rm -f ${SIB_FILE} ;`,
   };
 
