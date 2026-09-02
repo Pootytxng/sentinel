@@ -1,0 +1,71 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 345,
+  "issue": 344,
+  "branch": "lane/merge-receipt-carrier-344",
+  "currentHead": "391d6ccd8b8c64eaa03cce912835099790aa82e5",
+  "explicitHandoff": "Owner turn authorizing this train: a marathon safe-throughput workflow to maximize verified completed work while preserving ownership, exact-head review, release, evidence and documentation law. Its PROCEED instructions bind this transition: on APPROVE, re-fetch, verify exact head, base and mergeability, save this receipt, run the exact full gate and scripts/work-control-gate.mjs, and merge ONLY on PASS; on REQUEST CHANGES, repair at a new head under a fresh independent review and never let the writer self-review. No batch merge, no self-approval, no reuse of a stale review, and mergeable is not reviewed. This lane sits inside that authorization and adds nothing to it: it lands one JSON evidence file and two lines of living documentation.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. Run from C:/Users/Kuya/code/sentinel-release-truth-256, the worktree holding the #344 claim. GitHub Actions has started no job in this repository since 2026-08-11 for billing (#321), so MERGEABLE/CLEAN on PR #345 means no merge conflict and says NOTHING about tests. The only proof that exists is the local gate scripts/verify-local.ps1, run whole by .githooks/pre-push, and it is the gate cited below.",
+    "remoteState": "git fetch origin run immediately before this transition. origin/main = c3e3ffab09e67ab127cb9b80f36612995449e15b, which is PR #342's merge commit, and it has not moved since. git ls-remote origin lane/merge-receipt-carrier-344 = 391d6ccd8b8c64eaa03cce912835099790aa82e5, identical to git rev-parse HEAD in this worktree, so the reviewed head, the gated head and the head being merged are one commit. PR #345 reads OPEN, base main, MERGEABLE/CLEAN at that head.",
+    "worktree": "This writer holds C:/Users/Kuya/code/sentinel-release-truth-256 alone. No second writer was started: the next item in the queue, PR #316, edits docs/BRANCH_DISPOSITIONS.md and docs/SESSION_HANDOFF.md, the two capped documents this lane also edits, so the parallelism law names it explicitly as a case to serialize. It was checked read-only and deliberately not reviewed in parallel, because its disposition rows are derived against live origin and are void the moment this lands.",
+    "branch": "lane/merge-receipt-carrier-344, three commits over an unmoved base, no force-push and no rebase at any point. This branch is a CARRIER rather than a one-shot lane: it exists so a merge receipt reaches git without buying a whole lane per merge, and its row in docs/BRANCH_DISPOSITIONS.md is CLAIMED, which the audit's DISPOSITIONS table defines as promising nothing about merge-tree, so the row stays true after this merge and reds no gate for any other writer.",
+    "dirtyState": "git status --porcelain in the writer's worktree was EMPTY at the head being merged, apart from this receipt itself, which is untracked at merge time by construction -- a merge receipt is written to authorize a merge, so it can never already be inside the branch being merged. That is the strand that has now hit six times (#314, #334, #335, #315, #338, #342) and is filed as #341. This receipt will be committed onto this same carrier branch after the merge, not into a new lane, which is the entire point of the carrier.",
+    "liveProcesses": "No dev server on port 1420 and no cargo or rustc build in flight at merge time. Nothing was built, installed, launched or shipped by this lane.",
+    "otherWriters": "No competing writer on this lane. The queue behind it was re-derived this turn from gh pr list rather than from any note: #316, #319, #289, #311, with #279/#320 and #294 owner-gated and untouched."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "391d6ccd8b8c64eaa03cce912835099790aa82e5",
+      "detail": "Run whole and unnarrowed by .githooks/pre-push on the push that created this exact head. LOCAL CHECK RESULT: PASS -- tsc, vite build, the full vitest suite at 407/407 test files, cargo test at 1254 passed / 0 failed / 24 ignored, and clippy with -D warnings. Nothing skipped, no .only, no narrowed selection, no raised threshold.",
+      "headNote": "The ref move was judged by git ls-remote against git rev-parse HEAD, never by the wrapper's exit code. That distinction is not pedantry here: during the #336 lane the wrapper exited 0 on a push whose gate had FAILED and which never moved the ref, so an exit code is not evidence that a gate passed. The tip on origin is the only honest read of a push in this repository."
+    }
+  ],
+  "docGates": [
+    "scripts/doc-budget.ps1 - ALL PASS at this head, NO CAP RAISED, and doc-budget.ps1 is byte-identical to main.",
+    "docs/BRANCH_DISPOSITIONS.md - 107 lines against a cap of 107, zero headroom. Net-zero: one row out with its pruned ref, one row in for this carrier.",
+    "docs/SESSION_HANDOFF.md - 119 lines against a cap of 120. A single-line name swap for rules C and D of scripts/handoff-worktree-truth.test.mjs.",
+    "node scripts/branch-disposition-audit.mjs - OK across 36 refs, 3 PRESERVE, with the landing SHA now named as a citation rather than bare."
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. The diff is one JSON evidence file and two lines of living documentation. No installer was produced, no Desktop staging happened, and the owner's installed build is untouched by this lane."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers UI change under src/**/*.{tsx,css}. This PR touches no component, no stylesheet and no rendered surface, so there is no visual state for a screenshot to prove."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "One read-only review subagent with its own fresh context, having written no part of this branch, working in its own scratch clones outside every registered worktree. It verified the head unchanged at the start AND the end of its review, made no edit, comment, claim or merge, and spawned no subagent of its own.",
+    "status": "passed",
+    "head": "391d6ccd8b8c64eaa03cce912835099790aa82e5",
+    "reason": "NOT a first-round approve, and the record should say so. The first verdict at this exact head was REQUEST CHANGES, on one blocking finding that was real and that I reproduced before acting: the pushed commit message of e5197e5b contains the sentence 'This does not fix #341.', which matches the closing-keyword pattern GitHub acts on, and issue #341 is OPEN. Merging as a merge commit would have landed that message on the default branch and silently closed #341 -- the identical mechanism that closed PR #316 two seconds after PR #338 merged, and the exact defect class this lane's own commit narrates. GitHub does not parse negation. The resolution was NOT self-certified. The tree was not edited; only the merge method changed, and that change was put back to the same reviewer to rule on rather than cleared by the writer. Its second verdict is APPROVE (squash only), and it found the thing that would have defeated a naive fix: this repository's squash_merge_commit_message is COMMIT_MESSAGES, so an un-overridden squash would have concatenated the branch commit messages into the one commit that reaches main, relocating the hazard instead of removing it. The merge therefore passes an explicit --subject and --body, which GitHub uses verbatim in place of that default, plus --match-head-commit pinned to this head. The reviewer further confirmed that squash breaks nothing that reads the record: citationVerdict already accepts a trailing (#N) as a first-class squash landing, the MERGED re-proof is merge-tree over content rather than ancestry, and the receipt-preservation guard is strengthened because a squash introduces the receipt path directly onto main. Its one non-blocking finding is ruled non-blocking BY THE REVIEWER, not by me: git rev-list --all answers from a writer's local ref cache, so a carrier ref later pruned or force-pushed could keep a stale pass alive for one writer while a fresh clone correctly reported a strand. That does not touch this receipt, whose content lands on main here, and it is recorded against #341 and #344 as a named limit on batching many receipts across a long unmerged window.",
+    "writerSession": "claude-code, the implementation writer holding the #344 claim in C:/Users/Kuya/code/sentinel-release-truth-256.",
+    "writerNote": "The gate requires writer === actor, and actor is a fixed token (claude-code | codex). The separation that matters is enforced above it: the reviewer is a distinct context that wrote none of this branch, and it both raised the blocking finding and ruled on its own resolution."
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main..HEAD -- src-tauri/src/actions.rs is empty, 0 lines. The ONE Windows mutation boundary does not move in this lane, and no path under src/ or src-tauri/ is touched at all.",
+    "locks": "Untouched. This PR changes no shipped runtime code, so no LOCKED gate can move. Remote-rules fetch stays triple-gated off, the Receipts send path stays hard-false and default-OFF, the updater is not armed, no capability or CSP is loosened, and no driver, injection or kernel surface is involved.",
+    "scopeConstraint": "The frozen beta refs (16069fa) are not moved. Nothing here publishes, tags, arms the updater, reaches another person's machine, spends money, or changes a security or system setting. No secret and no signing key is read, written or referenced. No force-push and no history rewrite: the blocking finding above could have been repaired by rewording a pushed commit, and that route was refused precisely because it is destructive git and therefore owner territory -- the merge method was changed instead, which needs no rewrite.",
+    "commandAuthority": "No Tauri command was added, removed or renamed; no #[tauri::command] exists anywhere in this diff."
+  }
+}
