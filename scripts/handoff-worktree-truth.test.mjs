@@ -14,7 +14,11 @@
 //   A. Portable. Every branch the handoff names as carrying work not on main must actually not be
 //      an ancestor of `origin/main`. This runs anywhere the remote ref is fetched, CI included, and
 //      it is the rule that decays on its own — a branch merges and the warning silently becomes a
-//      lie that reads exactly like the truth.
+//      lie that reads exactly like the truth. GRACED FOR ONE CYCLE since #333, same mechanism as
+//      rule D below (`landedNameIsGraced`) and for the identical reason: this repo does not always
+//      prune a merged branch's `origin` ref, so A can fire on the very name rule C just forced a
+//      landing lane to write, the instant that lane's own merge lands. See rule D's paragraph for
+//      the full account — the trap and the fix are one mechanism serving both rules.
 //   B. Local only. A stated worktree count must match `git worktree list`. A CI checkout has one
 //      worktree and nothing to compare against, so this SKIPS there rather than passing vacuously —
 //      and says so. That is not a hole worth closing: handoffs are written on the owner's desk,
@@ -87,6 +91,63 @@
 //      a landed lane's name must leave the bullet in the same train that lands it. Residual,
 //      deliberately out of scope here: a checkout named by PATH is judged by C (carriers must be
 //      named) but not by D — D reads branch-shaped code spans only, same extractor as A.
+//
+//      GRACED FOR ONE CYCLE, added after #333 (the third reproduction of the trap this created).
+//      C's `unpushed > 0` makes the branch making THIS PUSH itself an at-risk carrier — the commit
+//      is on no remote until the push completes — so C refuses the push unless the lane names
+//      itself. D then judges that exact name a lie the instant it lands, and nothing inside the
+//      SAME lane can remove it: a commit that un-names the branch is still unpushed when C runs
+//      against it, so C immediately demands the name back. No ordering of commits in one lane
+//      satisfies both rules at once — proven empirically at `5b1e3f9c`, which tried bare deletion
+//      and was refused by C naming the in-flight commit itself as at risk.
+//
+//      The fix is not to stop checking; it is to stop demanding an impossible ordering. D now
+//      asks one more question before failing a landed name: is this branch's own history still
+//      the FRESHEST thing to have touched the handoff doc, reachable from `origin/main`? Computed
+//      the way C already derives its trust — live, from git, never from what the bullet claims —
+//      via `git log -1 --format=%H origin/main -- docs/SESSION_HANDOFF.md` and an ancestor check
+//      of that commit against the branch's local tip. If nothing has edited the doc since this
+//      branch landed, nothing has HAD THE CHANCE to remove its name yet, so this run grants one
+//      cycle of grace: reported, not failed. The grace is spent the moment ANY later commit edits
+//      the doc again and still leaves the name in place — that later commit's own tip becomes the
+//      new freshest editor, the older name's ancestor check now reads false, and D fails it as
+//      genuinely stale. This is exactly the #243 shape (a name surviving an editing opportunity)
+//      and is why the fix is a narrowing of when D fires, never a loosening of what it accepts:
+//      `scripts/handoff-worktree-truth.test.mjs`'s own tests below prove both directions fire —
+//      a graced landing is silent, an older stale name (one that has already survived a doc edit)
+//      still fails. Self-naming for C is UNCHANGED by this: a lane still must name itself to push;
+//      it no longer has to also solve un-naming itself inside the same, impossible, single lane.
+//
+//      ROUND 2 (PR #335 review, 2026-09-02): round 1 compared the freshest doc editor against the
+//      branch's raw TIP, which is only right when the landing merge is clean. A clean merge's
+//      result for the doc path is TREESAME to the branch's own edit, so git's history
+//      simplification makes `freshestDocEditOnMain` report that edit commit directly — an
+//      ancestor of the tip, grace granted. `docs/SESSION_HANDOFF.md` is this repo's documented
+//      merge hotspot (13 of 14 concurrent lanes conflict on it), and when the landing merge has to
+//      CONFLICT-RESOLVE it, the merge commit's tree for that path matches NEITHER parent, so the
+//      merge commit itself is what `git log -1 -- <path>` reports as freshest — and a merge
+//      commit is an ancestor of neither of its own parents. Checking ancestry against the raw tip
+//      then reads that merge as a stranger and denies grace to a branch that just landed by the
+//      only mechanism available to it, reproducing #333 unchanged. Two reviewers converged on
+//      this independently; one reproduced it in a scratch repo rather than arguing it.
+//
+//      The fix compares against the LANDING, not the tip. `landingCommitOf` resolves the earliest
+//      commit reachable from `origin/main` that is a descendant of the branch's tip — via
+//      `git rev-list --ancestry-path <tip>..origin/main`, oldest entry first-after-tip — which is
+//      the merge commit itself for an ordinary merge, or the tip itself when nothing has landed on
+//      top of it yet. `landedNameIsGraced` is then asked about THAT commit instead of the raw tip.
+//      A clean merge is unaffected: the landing commit's ancestry still contains the branch's own
+//      doc edit, so grace is granted the same way as before. A conflict-resolving merge now reads
+//      correctly, because the freshest editor (the merge commit) IS the landing commit — equality,
+//      no ancestor question needed. The #243 shape this exists to still catch is unchanged: a
+//      commit that touches the doc AFTER the landing and leaves the name in place is a strict
+//      descendant of the landing commit, never an ancestor of it, so grace is still denied.
+//
+//      This round also corrects a false claim in commit `0b555277`'s message — "freshest editor
+//      is a descendant of the tip -> graced". That is backwards and always was: that shape DENIES
+//      grace, per the #243 paragraph two above. The test meant to prove it (this file, ~line 717)
+//      shipped with an inverted stub that asserted the wrong answer; it is fixed in the same train
+//      as this paragraph, alongside the conflict-merge case above.
 //   E. Local only. Every CONTAINMENT claim the handoff makes between two named branches must hold
 //      by `git merge-base --is-ancestor`. Added 2026-09-01 after this file shipped
 //      "`compy-health-parity` **contains** `compy-visual-recovery-kit-6fd074`" while neither branch
@@ -153,9 +214,23 @@ export function branchesClaimedUnmerged(markdown) {
  * negative control does not exist to write. `resolves` is separate from `isAncestor` on purpose — a
  * ref this checkout has never fetched must not be reported as "not merged", which is how a guard
  * goes quietly inert.
+ *
+ * #333: `isGraced` grants a landed branch one cycle before A reports it — the same grace as rule D
+ * (`landedNameIsGraced`, `staleNamedLanes`), for a reason found live rather than assumed: this
+ * repo's merge procedure does NOT always prune a merged branch's `origin` ref (verified against
+ * `git ls-remote`: neither `origin/fix/green-main-after-314-332` nor
+ * `origin/lane/rule-c-at-risk-312` was pruned after landing), so whenever that ref survives, A
+ * resolves it and fires on the SAME name rule D would — issue #333 names both explicitly: "Rule A
+ * and D go red on main at exactly that moment." A lane forced by rule C to name itself before
+ * pushing cannot also un-name itself before merging; the grace is what makes that not a dead end.
+ * Mandatory, not optional-with-a-default, for the reason `atRiskCarriers` already settled: an
+ * omitted collaborator must not silently read as "always fresh".
  */
-export function landedBranches(claimed, resolves, isAncestor) {
-  return claimed.filter((b) => resolves(b) && isAncestor(b));
+export function landedBranches(claimed, resolves, isAncestor, isGraced) {
+  if (typeof isGraced !== "function") {
+    throw new Error("landedBranches needs a grace predicate (#333) — omitting it must not read as \"always fresh\"");
+  }
+  return claimed.filter((b) => resolves(b) && isAncestor(b) && !isGraced(b));
 }
 
 const refExists = (b) => {
@@ -252,17 +327,70 @@ export function unmeasuredCarriers(carriers) {
 }
 
 /**
+ * #333. Whether a landed branch's own local tip is still the FRESHEST thing to have touched the
+ * handoff doc, reachable from `origin/main` — i.e. whether anything has had the CHANCE to remove
+ * its name since it landed. `freshestDocEdit` is the commit `git log -1 -- <handoff>` returns from
+ * `origin/main`; `isAncestorOrEqual` is injected so this is falsifiable without a real repo.
+ *
+ * Equality is checked before asking the ancestor question so a branch that IS the freshest editor
+ * reads true even when the injected ancestor check is a stub that always says no — the two
+ * questions are independent and a caller must not have to answer the second to get the first right.
+ */
+export function landedNameIsGraced(branchTip, freshestDocEdit, isAncestorOrEqual) {
+  return branchTip === freshestDocEdit || isAncestorOrEqual(freshestDocEdit, branchTip);
+}
+
+/**
+ * #333 round 2 (the conflict-merge shape). What `landedNameIsGraced` should be asked about is not
+ * the branch's raw tip but its LANDING — the earliest commit reachable from `origin/main` that is
+ * a descendant of `tip`. For an ordinary clean merge this makes no difference (see the round-2
+ * paragraph on rule D above), but when the landing merge has to conflict-resolve the guarded doc,
+ * the merge commit itself becomes the freshest editor, and a merge commit is an ancestor of
+ * NEITHER of its parents — so asking about the raw tip reads that merge as a stranger and denies
+ * grace to a branch that just landed by the only mechanism available to it.
+ *
+ * `ancestryPath` is `git rev-list --ancestry-path <tip>..origin/main`'s own output shape: every
+ * commit that is both a descendant of `tip` and an ancestor-or-equal of `origin/main`, NEWEST
+ * FIRST (git's default order), excluding `tip` itself. The oldest entry — last in that order — is
+ * the earliest point after `tip` where `tip`'s work became reachable from `origin/main`: the
+ * landing, merge commit or otherwise. An EMPTY path means nothing has landed on top of `tip` yet
+ * by this definition, so `tip` is trivially its own landing.
+ *
+ * Pure and injected-input, like `landedNameIsGraced` itself, so this is falsifiable without a real
+ * repo: pass the exact array shape `landingCommitOnMain` builds from `git rev-list`, in the order
+ * git prints it.
+ */
+export function landingCommitOf(tip, ancestryPath) {
+  return ancestryPath.length > 0 ? ancestryPath[ancestryPath.length - 1] : tip;
+}
+
+/**
  * Rule D's judgment, one branch at a time: a name the bullet presents as work must resolve to a
  * LOCAL ref and carry at least one commit `origin/main` cannot reach. Everything else is a finding,
- * each carrying its reason. Both collaborators are injected so every verdict — including the two
- * fail-closed ones — is falsifiable through the same seam the live rule uses.
+ * each carrying its reason. All three collaborators are injected so every verdict — including the
+ * three fail-closed ones — is falsifiable through the same seam the live rule uses.
+ *
+ * `isGraced` is mandatory, not optional-with-a-default, for the reason `atRiskCarriers` already
+ * settled two rules up: a caller that forgets it must not have the omission silently read as
+ * "always fresh", which would turn this rule's landed-name check into decoration. A `landed` name
+ * still fails whenever `isGraced` says no — freshly, or because #333's one cycle is already spent.
  */
-export function staleNamedLanes(claimed, resolvesLocally, countAhead) {
+export function staleNamedLanes(claimed, resolvesLocally, countAhead, isGraced) {
+  if (typeof isGraced !== "function") {
+    throw new Error("staleNamedLanes needs a grace predicate (#333) — omitting it must not read as \"always fresh\"");
+  }
   return claimed.flatMap((b) => {
     if (!resolvesLocally(b)) return [{ name: b, why: `refs/heads/${b} does not resolve — the name is not a lane on this machine` }];
     const n = countAhead(`refs/heads/${b}`);
     if (n === null) return [{ name: b, why: "its distance from origin/main could not be measured — broken measurement, not an empty result" }];
-    if (n === 0) return [{ name: b, why: "it carries zero commits origin/main cannot reach — the lane has landed" }];
+    if (n === 0) {
+      if (isGraced(b)) return [];
+      return [{
+        name: b,
+        why: "it carries zero commits origin/main cannot reach — the lane has landed, and the doc " +
+          "has been edited again since without removing it (#333's one cycle of grace is spent)",
+      }];
+    }
     return [];
   });
 }
@@ -273,6 +401,52 @@ const localRefExists = (b) => {
     return true;
   } catch {
     return false;
+  }
+};
+
+/**
+ * #333, shared by the live A and D tests below: the newest commit reachable from `origin/main`
+ * that touched the handoff doc at all, and an ancestor-or-equal test to compare a branch tip
+ * against it. `null` means that history could not be read, and must fail closed — no grace handed
+ * out — rather than read as "everything is fresh". One function, not duplicated per rule, because
+ * the two rules disagree only about WHICH tip to compare (`origin/<b>` for A, `refs/heads/<b>` for
+ * D), never about what "fresh" means.
+ */
+const freshestDocEditOnMain = () => {
+  try {
+    return git("log", "-1", "--format=%H", "origin/main", "--", "docs/SESSION_HANDOFF.md") || null;
+  } catch {
+    return null;
+  }
+};
+
+const isAncestorOrEqual = (a, b) => {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  try {
+    git("merge-base", "--is-ancestor", a, b);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * #333 round 2, live wiring for `landingCommitOf`: resolves `tip`'s landing on `origin/main` via
+ * `git rev-list --ancestry-path`, which prints newest-first — exactly the shape `landingCommitOf`
+ * expects. On a resolution failure (an unreadable `tip`, an origin that cannot be reached) this
+ * falls back to `tip` itself rather than inventing a landing point git could not compute — the
+ * same fail-toward-the-narrower-behavior choice `freshestDocEditOnMain` makes with `null`, except
+ * here there is a safe narrower behavior (round 1's own tip-based check) to fall back to instead
+ * of failing closed outright.
+ */
+const landingCommitOnMain = (tip) => {
+  try {
+    const raw = git("rev-list", "--ancestry-path", `${tip}..origin/main`);
+    const path = raw ? raw.split(/\r?\n/).filter(Boolean) : [];
+    return landingCommitOf(tip, path);
+  } catch {
+    return tip;
   }
 };
 
@@ -396,6 +570,21 @@ export function trustedExclusions(cachedTrackingRefs, liveOriginHeads) {
   return trusted.length ? trusted : null;
 }
 
+/**
+ * Test-only. Builds a real (if tiny) ancestor-or-equal check from an explicit descendant map, so a
+ * stub's ancestry direction is derived from ONE set of "this commit's real descendants" facts
+ * instead of separate hand-tuned booleans that can silently disagree with each other — which is
+ * exactly how PR #335's round 1 shipped an inverted stub: `landedNameIsGraced("staleTip",
+ * "newerLaneTip", stub)` asserted `true` for a shape its own adjacent comment called "the grace is
+ * spent". `descendantsOf[c]` must list every commit reachable by walking forward from `c` (real
+ * git parent/child direction — a descendant is never its own ancestor's ancestor); asking "is `a`
+ * an ancestor of `b`" then reduces to "does `descendantsOf[a]` contain `b`", the same direction
+ * `git merge-base --is-ancestor a b` answers, never the reverse.
+ */
+function fakeIsAncestorOrEqual(descendantsOf) {
+  return (a, b) => a === b || (descendantsOf[a] ?? []).includes(b);
+}
+
 const markdown = readFileSync(join(ROOT, HANDOFF), "utf8");
 
 /**
@@ -470,10 +659,17 @@ describe("the handoff tells the truth about the worktrees", () => {
     // The ancestry half, against a stub — no branch on origin is merged today, so this is the only
     // way to prove the rule fires rather than merely never having anything to say.
     const all = () => true;
-    expect(landedBranches(["lane/a", "feat/b"], all, (b) => b === "feat/b")).toEqual(["feat/b"]);
-    expect(landedBranches(["lane/a"], all, () => false)).toEqual([]);
+    const neverGraced = () => false;
+    expect(landedBranches(["lane/a", "feat/b"], all, (b) => b === "feat/b", neverGraced)).toEqual(["feat/b"]);
+    expect(landedBranches(["lane/a"], all, () => false, neverGraced)).toEqual([]);
     // An unfetched ref is unknown, not clean.
-    expect(landedBranches(["lane/a"], () => false, all)).toEqual([]);
+    expect(landedBranches(["lane/a"], () => false, all, neverGraced)).toEqual([]);
+    // #333: a landed branch graced this cycle is not reported, same mechanism as rule D below —
+    // proven here too so a rule A that always grants grace cannot hide behind rule D's own tests.
+    expect(landedBranches(["lane/a"], all, all, () => true)).toEqual([]);
+    expect(landedBranches(["lane/a"], all, all, neverGraced)).toEqual(["lane/a"]);
+    // isGraced is mandatory (#333), the same shape as staleNamedLanes' own requirement.
+    expect(() => landedBranches(["lane/a"], all, all)).toThrow(/needs a grace predicate/);
     // Rule C, against stubs — the live tree is expected to be clean, so this is the only place the
     // rule can be proven to FIRE rather than merely having nothing to say.
     const bullet = "- **Two carry commits that are not on main** — `lane/a`.";
@@ -577,19 +773,53 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(countAheadVia(() => { throw new Error("unknown revision origin/main"); })("HEAD")).toBe(null);
     expect(countAheadVia(() => "")("HEAD")).toBe(null);
     // Rule D, against stubs — every verdict proven to FIRE, so a green run can never mean the
-    // parser found nothing. A named local branch that carries zero is the #243 defect itself:
-    const stale = staleNamedLanes(["lane/a"], () => true, () => 0);
+    // parser found nothing. A named local branch that carries zero, with no grace on offer, is the
+    // #243 defect itself:
+    const alwaysStale = () => false;
+    const stale = staleNamedLanes(["lane/a"], () => true, () => 0, alwaysStale);
     expect(stale.map((s) => s.name)).toEqual(["lane/a"]);
     expect(stale[0].why).toMatch(/zero commits/);
-    // ...a named local branch that carries is legitimate (the in-flight writing lane's shape):
-    expect(staleNamedLanes(["lane/a"], () => true, () => 3)).toEqual([]);
+    // ...a named local branch that carries is legitimate (the in-flight writing lane's shape) —
+    // isGraced is not even consulted, since countAhead never reaches zero:
+    expect(staleNamedLanes(["lane/a"], () => true, () => 3, alwaysStale)).toEqual([]);
     // ...a name with no local ref FAILS rather than skips — rule A's silent seam, closed:
-    expect(staleNamedLanes(["lane/gone"], () => false, () => 3).map((s) => s.name)).toEqual(["lane/gone"]);
-    expect(staleNamedLanes(["lane/gone"], () => false, () => 3)[0].why).toMatch(/does not resolve/);
+    expect(staleNamedLanes(["lane/gone"], () => false, () => 3, alwaysStale).map((s) => s.name)).toEqual(["lane/gone"]);
+    expect(staleNamedLanes(["lane/gone"], () => false, () => 3, alwaysStale)[0].why).toMatch(/does not resolve/);
     // ...and a measurement failure FAILS rather than reading as zero, through the same
     // countAheadVia seam the live rule uses:
     const blindCount = countAheadVia(() => { throw new Error("unknown revision origin/main"); });
-    expect(staleNamedLanes(["lane/a"], () => true, blindCount)[0].why).toMatch(/could not be measured/);
+    expect(staleNamedLanes(["lane/a"], () => true, blindCount, alwaysStale)[0].why).toMatch(/could not be measured/);
+    // isGraced is mandatory (#333) — an omitted collaborator must not silently read as "always
+    // fresh", the same shape atRiskCarriers already refuses two rules up.
+    expect(() => staleNamedLanes(["lane/a"], () => true, () => 0)).toThrow(/needs a grace predicate/);
+
+    // #333: the grace mechanism itself, proven BOTH directions so a rule D that always grants
+    // grace (a deletion wearing this fix's disguise) fails here, not on the owner's machine in
+    // three weeks. `landedNameIsGraced` first, against stubs:
+    const noBranchIsAncestor = () => false;
+    // A branch's own tip IS the freshest doc editor: graced without even asking the ancestor
+    // question — equality alone must be enough.
+    expect(landedNameIsGraced("sameTip", "sameTip", noBranchIsAncestor)).toBe(true);
+    // The freshest editor is a DESCENDANT of this branch's tip (something newer touched the doc):
+    // the grace is spent, this is the #243 shape. PR #335 round 1 shipped this exact assertion
+    // inverted (`.toBe(true)`, against a stub hand-tuned to agree with the wrong answer) — the
+    // ancestor check is modeled here from an explicit descendant fact (staleTip is an ancestor of
+    // newerLaneTip, never the reverse) via `fakeIsAncestorOrEqual` instead, so the direction cannot
+    // be fudged per-assertion the way a one-off boolean was.
+    const staleLineage = fakeIsAncestorOrEqual({ staleTip: ["newerLaneTip"] });
+    expect(landedNameIsGraced("staleTip", "newerLaneTip", staleLineage)).toBe(false);
+    expect(landedNameIsGraced("staleTip", "unrelatedTip", noBranchIsAncestor)).toBe(false);
+    // Threaded end to end through staleNamedLanes: a just-landed lane reads as no finding at all —
+    // this is the "just landed" case the fix exists to stop failing...
+    const justLanded = (b) => landedNameIsGraced(`refs/heads/${b}`, `refs/heads/${b}`, noBranchIsAncestor);
+    expect(staleNamedLanes(["fix/repair-lane"], () => true, () => 0, justLanded)).toEqual([]);
+    // ...while a name that survived an editing opportunity — the freshest doc edit is reachable
+    // FROM this branch's tip but is not itself this branch's tip, i.e. someone else touched the
+    // doc since and still left the name in place — still fails, with a why that says so.
+    const goneStale = () => false;
+    const stillStale = staleNamedLanes(["lane/old-and-forgotten"], () => true, () => 0, goneStale);
+    expect(stillStale.map((s) => s.name)).toEqual(["lane/old-and-forgotten"]);
+    expect(stillStale[0].why).toMatch(/gone stale|grace is spent/);
     // Rule D judges branch-shaped code spans ONLY — a detached checkout is written as a path, which
     // the shared extractor refuses (`.claude/...` is not a branch prefix), so a path-named carrier
     // keeps flowing through rule C untouched:
@@ -603,6 +833,51 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(branchesClaimedUnmerged(sectioned)).toEqual(["lane/a"]);
   });
 
+  it("#333 round 2: grace survives a conflict-resolving landing merge, and still expires on a real stale name", () => {
+    // `landingCommitOf` alone first: an empty ancestry path means nothing has landed on top of the
+    // tip yet, so the tip is trivially its own landing; a non-empty path resolves to its OLDEST
+    // entry (last, since git prints newest-first) regardless of how many commits sit between the
+    // tip and origin/main today.
+    expect(landingCommitOf("tip", [])).toBe("tip");
+    expect(landingCommitOf("tip", ["mergeCommit"])).toBe("mergeCommit");
+    expect(landingCommitOf("tip", ["laterEdit", "mergeCommit"])).toBe("mergeCommit");
+
+    // The DAG the reviewers reproduced in a scratch repo: `branchTip` and `mainBeforeMerge` are the
+    // two parents of `mergeCommit` (an ordinary merge with two parents), and `laterEdit` is an
+    // ordinary later commit built on top of it. One descendant map, so every ancestor question
+    // below is answered from the SAME facts rather than a per-assertion boolean.
+    const conflictMergeLineage = fakeIsAncestorOrEqual({
+      branchTip: ["mergeCommit", "laterEdit"],
+      mainBeforeMerge: ["mergeCommit", "laterEdit"],
+      mergeCommit: ["laterEdit"],
+    });
+
+    // The bug itself, reproduced structurally: when the landing merge has to conflict-resolve the
+    // doc, `mergeCommit` — not any commit inside the branch — is what `git log -1` reports as
+    // freshest. Asking `landedNameIsGraced` about the raw TIP (round 1's mechanism) denies grace,
+    // because a merge commit is an ancestor of NEITHER of its parents — this is #333 reproducing
+    // unchanged, exactly as the round-1 review found:
+    expect(landedNameIsGraced("branchTip", "mergeCommit", conflictMergeLineage)).toBe(false);
+
+    // The fix: ask about the LANDING instead. With origin/main sitting exactly at the merge (the
+    // ancestry path from branchTip to origin/main is just [mergeCommit]), the landing commit IS
+    // mergeCommit, which IS the freshest editor — equality, grace granted:
+    const landingAtMerge = landingCommitOf("branchTip", ["mergeCommit"]);
+    expect(landingAtMerge).toBe("mergeCommit");
+    expect(landedNameIsGraced(landingAtMerge, "mergeCommit", conflictMergeLineage)).toBe(true);
+
+    // And the #243 shape survives being reached through a conflict-resolving landing: `laterEdit`
+    // touches the doc again afterward and leaves the name in place. origin/main has moved to
+    // laterEdit, so the ancestry path from branchTip is now [laterEdit, mergeCommit] (newest
+    // first) — the landing commit is still mergeCommit (unaffected by what lands after it), but
+    // the freshest editor is now laterEdit, a strict DESCENDANT of the landing, never an ancestor
+    // of it. Grace is correctly spent — a genuinely stale name is not laundered by having once
+    // landed through a conflict:
+    const landingAfterLaterEdit = landingCommitOf("branchTip", ["laterEdit", "mergeCommit"]);
+    expect(landingAfterLaterEdit).toBe("mergeCommit");
+    expect(landedNameIsGraced(landingAfterLaterEdit, "laterEdit", conflictMergeLineage)).toBe(false);
+  });
+
   it("A: every branch it calls unmerged is genuinely not on origin/main", () => {
     const claimed = branchesClaimedUnmerged(markdown);
     expect(claimed.length, `${HANDOFF} names no unmerged branches — did the bullet get reworded?`).toBeGreaterThan(0);
@@ -611,7 +886,27 @@ describe("the handoff tells the truth about the worktrees", () => {
       claimed.filter(refExists).length,
       `${HANDOFF} names ${claimed.length} unmerged branch(es) and this checkout resolves none of them on origin — the rule would pass without judging anything.`,
     ).toBeGreaterThan(0);
-    const merged = landedBranches(claimed, refExists, landedOnMain);
+    // #333: same one-cycle grace as rule D, derived the same way, off `origin/<b>` because that is
+    // what THIS rule resolves landedness from — see `freshestDocEditOnMain` above for why a single
+    // freshest-edit commit serves both rules.
+    const freshest = freshestDocEditOnMain();
+    const gracedByA = [];
+    const isGraced = (b) => {
+      if (freshest === null) return false;
+      let tip = null;
+      try {
+        tip = git("rev-parse", `origin/${b}`);
+      } catch { /* stays null: refExists already gates this branch out before isGraced runs */ }
+      // Round 2: graced against the LANDING (`landingCommitOnMain`), not the raw tip — see that
+      // function's doc comment for why a conflict-resolving merge needs this.
+      const result = tip !== null && landedNameIsGraced(landingCommitOnMain(tip), freshest, isAncestorOrEqual);
+      if (result) gracedByA.push(b);
+      return result;
+    };
+    const merged = landedBranches(claimed, refExists, landedOnMain, isGraced);
+    if (gracedByA.length) {
+      console.log(`rule A: ${gracedByA.length} landed name(s) graced this cycle (#333), remove on the next doc edit: ${gracedByA.join(", ")}`);
+    }
     expect(
       merged,
       `${HANDOFF} warns these branches carry work that is not on main, but they have since landed:\n  - ${merged.join("\n  - ")}\nStop telling the next session to preserve them.`,
@@ -777,7 +1072,35 @@ describe("the handoff tells the truth about the worktrees", () => {
     // this rule must not go quietly green on an empty list.
     expect(claimed.length, `${HANDOFF} names no branches in the repo-state bullet — rule D has nothing to judge.`).toBeGreaterThan(0);
     const countAhead = countAheadVia((committish) => git("rev-list", "--count", `origin/main..${committish}`));
-    const found = staleNamedLanes(claimed, localRefExists, countAhead);
+    // #333's grace, derived live the way rule C already derives its own trust: never from what the
+    // bullet claims, only from git. `freshestDocEditOnMain()` is the newest commit reachable from
+    // `origin/main` that touched the handoff at all — computed ONCE, because every claimed branch
+    // is judged against the same freshest editor. `null` if that history could not be read, which
+    // must fail closed (no grace handed out) rather than read as "everything is fresh".
+    const freshestDocEdit = freshestDocEditOnMain();
+    // Recorded from INSIDE the predicate, not re-derived after, so logging never costs a second
+    // round of git spawns per branch — this rule has no fleet-wide loop to amortize the way rule
+    // C does, but there is no reason to pay for it twice anyway.
+    const gracedNames = [];
+    const isGraced = (b) => {
+      if (freshestDocEdit === null) return false;
+      let tip = null;
+      try {
+        tip = git("rev-parse", `refs/heads/${b}`);
+      } catch { /* stays null: an unresolvable ref is staleNamedLanes' OWN earlier finding, not this one's to grace */ }
+      // Round 2: graced against the LANDING (`landingCommitOnMain`), not the raw tip — see that
+      // function's doc comment for why a conflict-resolving merge needs this.
+      const result = tip !== null && landedNameIsGraced(landingCommitOnMain(tip), freshestDocEdit, isAncestorOrEqual);
+      if (result) gracedNames.push(b);
+      return result;
+    };
+    const found = staleNamedLanes(claimed, localRefExists, countAhead, isGraced);
+    // Say what graced, every run — silence here would be indistinguishable from a grace mechanism
+    // that stopped being asked anything, exactly the concern #312's console.log lines exist to
+    // answer for rule C.
+    if (gracedNames.length) {
+      console.log(`rule D: ${gracedNames.length} landed name(s) graced this cycle (#333), remove on the next doc edit: ${gracedNames.join(", ")}`);
+    }
     expect(
       found,
       `${HANDOFF} presents these as lanes to preserve, but on this machine they are not:\n` +
