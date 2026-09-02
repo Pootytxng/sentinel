@@ -90,22 +90,22 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
 
 - **32 worktrees besides the canonical checkout. Work that exists on no remote — do NOT delete or hard-reset these
   before checking**: `claude/compy-visual-recovery-kit-6fd074`, holding a single commit (`cdd976f3`, docs on
-  RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, plus today `lane/prune-list-truth-305` (#305) — EVERY
-  lane joins this list between a commit and its push, so no count is pinned here. Most checkouts ahead of
-  `origin/main` are **fully pushed**: deleting those loses nothing, each has a row in `docs/BRANCH_DISPOSITIONS.md`,
-  and rule C prints the live split every run. It stopped demanding all be named on 2026-09-01 (#312): 92% of that list
-  could not be lost, and no two lanes could be green at once. `claude/compy-health-parity` and
-  `claude/compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at `c8366609` — neither contains the
-  other** (`--is-ancestor` is NO both ways). Counted **not on main**: the kit has ONE unique commit, health-parity
-  FOURTEEN (from the merge base instead, 170). Backed up only to `refs/backup/*`, so dropping either loses the other's
-  work. **No depth/SHA pinned** — re-derive risk with `git rev-list --count <ref> --not` over the origin refs `git
-  ls-remote --heads origin` reports, distance with `origin/main..<ref>`. **A landed lane's name still leaves with the
-  train that lands it** (rule D, #243): naming a zero-carry branch fails this bullet whether or not rule C wanted the
-  name. Spent, at zero: `sentinel-fleet-guard-276`, `sentinel-segmented-237`, `sentinel-release-truth-256`,
-  `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 landed out of it), four of the SIX registered
-  under `.claude/worktrees/` (seven entries there; `data-root-integrity-432797` is not one), parked
-  `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233),
-  `sentinel-q9b-stage2`. Every detached checkout carries zero, so rule C has nothing to credit.
+  RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, plus today `lane/prune-list-truth-305` (#305) and a
+  peer's `lane/guard-budget-313` (#313) — EVERY lane joins this list between a commit and its push, so no count is
+  pinned here. Most checkouts ahead of `origin/main` are **fully pushed**: deleting those loses nothing, each has a
+  row in `docs/BRANCH_DISPOSITIONS.md`, and rule C prints the live split every run. It stopped demanding all be named
+  on 2026-09-01 (#312): 92% of that list could not be lost, and no two lanes could be green at once.
+  `claude/compy-health-parity` and `claude/compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at
+  `c8366609` — neither contains the other** (`--is-ancestor` is NO both ways). Counted **not on main**: the kit has
+  ONE unique commit, health-parity FOURTEEN (from the merge base instead, 170). Backed up only to `refs/backup/*`, so
+  dropping either loses the other's work. **No depth/SHA pinned** — re-derive risk with `git rev-list --count <ref>
+  --not` over the origin refs `git ls-remote --heads origin` reports, distance with `origin/main..<ref>`. **A landed
+  lane's name still leaves with the train that lands it** (rule D, #243): naming a zero-carry branch fails this bullet
+  whether or not rule C wanted the name. Spent, at zero: `sentinel-fleet-guard-276`, `sentinel-segmented-237`,
+  `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 landed out of it),
+  four of the SIX registered under `.claude/worktrees/` (seven entries there; `data-root-integrity-432797` is not
+  one), parked `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace` (Mission 1 is ON main,
+  #231/#233), `sentinel-q9b-stage2`. Every detached checkout carries zero, so rule C has nothing to credit.
 
 ## Waiting on the owner — two arming gates, nothing else
 
