@@ -88,7 +88,7 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides the canonical checkout. Work that exists on no remote — do NOT delete or hard-reset these
+- **33 worktrees besides the canonical checkout. Work that exists on no remote — do NOT delete or hard-reset these
   before checking**: `claude/compy-visual-recovery-kit-6fd074`, holding a single commit (`cdd976f3`, docs on
   RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, and `lane/rule-c-at-risk-312` (#312, PR #314)
   whenever it holds a commit its push has not carried — EVERY lane joins this list between a commit and its push,
