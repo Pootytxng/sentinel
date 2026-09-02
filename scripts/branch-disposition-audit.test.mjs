@@ -396,7 +396,9 @@ describe("what a checkout is entitled to say about origin", () => {
 // docs/archive/** is exempt: those are point-in-time records of what was true when written, and
 // editing them to match today is falsifying them. A live doc with a real reason to name the call can
 // carry a greppable `blocked-prune-allow` on the line — the same escape hatch the mutation-boundary
-// and outbound guards use. No live doc needs one today.
+// and outbound guards use. One live doc carries one: the `lane/receipt-315-preserve-336` row in
+// docs/BRANCH_DISPOSITIONS.md, which names the call to record that it is BLOCKED here -- the exact
+// wall the sessions above kept hitting, and the opposite of prescribing it.
 describe("the live docs do not prescribe the blocked prune", () => {
   it("nowhere recommends the gh REST deletion for pruning a ref", () => {
     const tracked = git(repoRoot, ["ls-files", "*.md"])
