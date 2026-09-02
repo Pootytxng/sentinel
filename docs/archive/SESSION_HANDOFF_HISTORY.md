@@ -61,3 +61,17 @@ Landed and reported: pricing evidence + the owner's **$4.99/mo · $39/yr · $89 
 is the Codex lane's. **Compy Pro itself is unbuilt.** Recorded closed but not *solved*: #121's cause
 stays unattributable at 100 ms poll resolution, and #128's **release** mutex has never been held
 during a real publish.
+
+## 2026-09-01 — the self-review row leaves the live handoff
+
+Moved out of `SESSION_HANDOFF.md` to pay for the `lane/wrapper-allowlist-308` carrier name that
+rule C began demanding the moment `sentinel-atomic-281` was repurposed onto that branch. The doc
+was at 120/120 with zero headroom and the bullet was already wrapped tight at 118 columns, so the
+line could not be recovered by reflowing; widening the wrap would have shed lines without shedding
+content, which games the metric rather than paying it.
+
+This row is a point-in-time verdict for work that has already landed. It is evidence of a passed
+gate, not state anyone needs to resume from — which is what makes it archive material rather than
+live-doc material. Verbatim:
+
+| Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |

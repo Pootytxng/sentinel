@@ -13,7 +13,6 @@
 |---|---|
 | Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
 | Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
-| Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
 
 ## The rule that came out of the walk — read this before touching Health
@@ -88,26 +87,27 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **32 worktrees besides the canonical checkout; SIXTEEN branches carry commits not on main — do NOT delete or
-  hard-reset those sixteen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity` ·
-  `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
+- **32 worktrees besides the canonical checkout; SEVENTEEN branches carry commits not on main — do NOT delete or
+  hard-reset those seventeen before checking them**: `feat/user-feedback-lab-recovery` · `claude/compy-health-parity`
+  · `claude/compy-visual-recovery-kit-6fd074` · `feat/lab-49-parity-port` · `lane/cleanup-train-2026-08-20` ·
   `lane/vision-pointer-guard-2026-08-24` · `lane/rule-e-negation` (#295) · `lane/shell-ownership-278` ·
   `lane/case-receiver-287` (#287) · `lane/receipt-modified-309` (#309) · `lane/docs-path-not-branch-310` (#310) ·
   `lane/vacuous-guards-304` (#304) · `lane/guard-budget-313` (#313, this lane) · `lane/prune-list-truth-305` (#305) ·
-  `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) — **those two LANDED** (PR #275 · PR
-  #273) listed only because **the prune was denied**. `compy-health-parity` and `compy-visual-recovery-kit-6fd074`
-  **share 14 commits and diverge at `c8366609` — neither contains the other** (`--is-ancestor` is NO both ways).
-  Counted **not on main**, as everywhere here: the kit has ONE unique commit, health-parity FOURTEEN (from the merge
-  base instead it answers 170). Backed up only to `refs/backup/*`, so dropping either loses the other's work. **No
-  depth/SHA pinned**: `git worktree list` + `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet
-  for naming a zero-carry branch — **a landed lane's name leaves with the train that lands it**, which is why the #281
-  (PR #282), #284 (PR #285), #276 (PR #277 → `ee5bdd8b`), #298 (PR #299 → `81b16d60`) and #286 (PR #288 → `624fcc40`)
-  lanes are not named here: all five merge-committed, so each dropped to zero, and a landing that strands an open PR
-  on a spent base retargets it at the landing, not after. Spent, at zero: `sentinel-fleet-guard-276`,
-  `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 landed out of it), four of the SIX registered
-  under `.claude/worktrees/` (seven entries there; `data-root-integrity-432797` is not one), parked
-  `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233),
-  `sentinel-q9b-stage2`. Every detached checkout carries zero, so rule C has nothing to credit.
+  `lane/wrapper-allowlist-308` (#308) · `lane/css-margin-separators-274` (#274) · `lane/native-routing-271` (#271) —
+  **those two LANDED** (PR #275 · PR #273) listed only because **the prune was denied**. `compy-health-parity` and
+  `compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at `c8366609` — neither contains the other**
+  (`--is-ancestor` is NO both ways). Counted **not on main**, as everywhere here: the kit has ONE unique commit,
+  health-parity FOURTEEN (from the merge base instead it answers 170). Backed up only to `refs/backup/*`, so dropping
+  either loses the other's work. **No depth/SHA pinned**: `git worktree list` +
+  `git rev-list --count origin/main..<ref>`. Rule D (#243) fails this bullet for naming a zero-carry branch — **a
+  landed lane's name leaves with the train that lands it**, which is why the #281 (PR #282), #284 (PR #285), #276 (PR
+  #277 → `ee5bdd8b`), #298 (PR #299 → `81b16d60`) and #286 (PR #288 → `624fcc40`) lanes are not named here: all five
+  merge-committed, so each dropped to zero, and a landing that strands an open PR on a spent base retargets it at the
+  landing, not after. Spent, at zero: `sentinel-fleet-guard-276`, `sentinel-q9b-redactor-259`,
+  `sentinel-q9b-stage2-258` (#258/#264 landed out of it), four of the SIX registered under `.claude/worktrees/` (seven
+  entries there; `data-root-integrity-432797` is not one), parked `sentinel-mission0-accent-landing`,
+  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`. Every detached checkout
+  carries zero, so rule C has nothing to credit.
 
 ## Waiting on the owner — two arming gates, nothing else
 
