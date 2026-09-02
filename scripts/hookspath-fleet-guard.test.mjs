@@ -53,6 +53,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import {
   cpSync,
+  readFileSync,
   mkdtempSync,
   mkdirSync,
   realpathSync,
@@ -192,20 +193,35 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
     const a = fixture("independence-a");
     const b = fixture("independence-b");
 
-    // The two absolute pointers `git worktree repair` rewrites. Untouched, both still name the
-    // template, which is the absolute-path failure mode this whole guard exists for.
-    expect(realpathSync(a.run(["rev-parse", "--show-toplevel"], a.linked).trim())).toBe(realpathSync(a.linked));
-    expect(realpathSync(a.run(["rev-parse", "--show-toplevel"], a.main).trim())).toBe(realpathSync(a.main));
+    // `git worktree repair` rewrites TWO absolute pointers, and it takes one assertion each to
+    // cover them. This set used to carry five. A reviewer removed the repair call and ran them:
+    // `rev-parse --show-toplevel` PASSED unrepaired from both checkouts — it answers with the
+    // directory it ran in, whatever `.git` points at — so those two were never coverage. A third,
+    // asserting no registered path sits under the template, CANNOT fail while the equality below
+    // pins the list exactly and two mkdtemp siblings can never be prefixes of each other. All
+    // three are gone. An assertion that cannot fail is worse than no assertion: it reads as
+    // coverage to anyone counting checks, and the number comes out wrong in the safe direction.
+
+    // Pointer one: mainwt/.git/worktrees/<name>/gitdir, read back out through `worktree list`.
     const registered = a
       .run(["worktree", "list", "--porcelain"], a.main)
       .split(/\r?\n/)
       .filter((l) => l.startsWith("worktree "))
       .map((l) => realpathSync(l.slice("worktree ".length).trim()));
     expect(registered).toEqual([realpathSync(a.main), realpathSync(a.linked)]);
-    expect(registered.some((p) => p.startsWith(realpathSync(template)))).toBe(false);
 
-    // Independence, proven by mutation: arming one fixture must not arm the other. This is the
-    // assertion that fails if the copy is ever replaced by a symlink or a shared clone.
+    // Pointer two: linked/.git, which names that administrative directory back in mainwt.
+    // Nothing above reads it, and unrepaired it still names the template — so this is the half
+    // of the cure that had no assertion at all, not a second way of asking the same question.
+    const dotGit = readFileSync(join(a.linked, ".git"), "utf8").trim();
+    expect(dotGit.startsWith("gitdir:")).toBe(true);
+    const gitdir = resolve(a.linked, dotGit.slice("gitdir:".length).trim());
+    expect(realpathSync(gitdir).startsWith(realpathSync(a.base))).toBe(true);
+
+    // Independence, proven by mutation. Measured, against what this comment used to claim: on an
+    // unrepaired copy the half that fires is the POSITIVE one — `a.ok` is false, because a.main's
+    // registry still points at the template. The negative half is the shared-clone catch. Both
+    // stay; deleting either as "the redundant one" removes a case the other does not reach.
     a.armWith(a.linked, GOOD_HOOK);
     a.run(["config", "core.hooksPath", ".githooks"], a.main);
     expect(inspectWorktree(a.linked, a.main).ok).toBe(true);

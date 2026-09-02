@@ -2,7 +2,7 @@
 //
 // THE BUG THIS EXISTS FOR. `docs/BRANCH_DISPOSITIONS.md` shipped a row claiming a lane lived at
 // `C:UsersKuyacodesentinel-remote-design-286`. That is not a path on any machine. It was written
-// as `C:\Users\...` inside a generator script, the heredoc carrying that script to disk ate one
+// as `C:\\Users\\...` inside a generator script; the heredoc carrying that script to disk ate one
 // backslash level so the file held `C:\Users\...`, and JavaScript then read `\U` as an unknown
 // escape and dropped the backslash entirely. Three layers, each individually reasonable, and the
 // output was a directory that cannot be opened. A second instance was already sitting in
@@ -12,8 +12,14 @@
 // escaping chain that produced them is still there and will be used again by the next generator
 // script. The repo already carries one memory about heredocs eating a backslash level; prose did
 // not stop the second instance, so this is the tier above it. Measured while writing this: a
-// quoted heredoc through the agent tool turns `\d` into `\d` and `\\d` into `\d`, so a
+// quoted heredoc through the agent tool turns `\\` into `\` and `\\\\` into `\\`, so a
 // generator must double every backslash it wants to survive.
+//
+// THIS HEADER SHIPPED CORRUPTED, in the commit that added the guard. Both lines above were
+// written as escaped literals and went through the very chain they describe, so the rule came
+// out as `\d` into `\d` — nonsense, and nonsense that reads as an explanation. They are
+// built from String.fromCharCode(92) now, which is the only construction that survives. Third
+// instance of this class in one session, twice while actively thinking about it.
 //
 // SCOPE. Every tracked markdown file, archives included. An archive is a point-in-time record of
 // what was BELIEVED, which is worth preserving; a path with no separators records nothing, it is
