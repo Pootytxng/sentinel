@@ -90,22 +90,31 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 3rd 2026-09-01
+### A_prune. Eleven dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 4th 2026-09-01
 
-**The ask:** one command, all three at once — `git push origin --delete lane/native-routing-271
-lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. The first two landed (PR
-[#273](https://github.com/Pootytxng/sentinel/pull/273) → `e26108f7`, PR
-[#275](https://github.com/Pootytxng/sentinel/pull/275) → `29fb8009`) and neither leftover ref holds
-anything `main` lacks. The third is spent a different way: its PR
-[#163](https://github.com/Pootytxng/sentinel/pull/163) closed **unmerged**, but its one real fix —
-the handoff verdict naming your VS Code tab instead of "the session" — reached `main` independently
-and more fully, leaving the branch 139 lines BEHIND on its own files. Nothing is lost either way: the
-local refs and their clean worktrees still hold every commit, so any of the three can be pushed back
-in one command. Deleting the first was **denied to this session**, and a denial is a stop — so I did
-not reach the same effect by another route. The third hit that same denial on that same sanctioned
-command a week later, which is why it joins this list instead of getting solved. **Why it matters:** until the refs are gone, their rows and the handoff's
-branch list have to keep saying "landed but still here" — small residue, but it is exactly what
-makes the next session distrust the branch list. Nothing is broken while it waits.
+**The ask:** one command, all eleven at once — `git push origin --delete
+claude/exciting-robinson-0ce4d5 lane/agent-skills-config lane/atomic-json-281
+lane/fleet-guard-failclosed-276 lane/license-atomic-284 lane/receipt-preservation-298
+lane/remote-cache-design-286 lane/segmented-a11y-237 lane/native-routing-271
+lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. This said THREE until 2026-09-01
+([#305](https://github.com/Pootytxng/sentinel/issues/305)) — eight more had gone dead while the list
+stood still. **`beta/private-beta-001` is deliberately NOT in it**: it answers YES to the same
+containment query every re-derivation runs, and it is the frozen beta ref (`16069fa`) that
+`CLAUDE.md` puts in owner territory. That exclusion is written down here so a later session cannot
+"complete the list", and `scripts/prune-candidates.test.mjs` fails if this command ever names it.
+The first eight are **contained in `main`** — `git merge-base --is-ancestor` says yes for each, so
+deleting them cannot lose a commit. The last three are not ancestors and still hold nothing you
+want: `271` and `274` landed by squash and would only reintroduce a stale copy of three status docs
+(merge-tree confirms their real fixes are already on `main`), and PR
+[#163](https://github.com/Pootytxng/sentinel/pull/163) closed unmerged, leaving
+`cleanup-train-2026-08-20` **522 commits behind with an OLDER `handoff-block` guard** — merging it
+would REGRESS `main`. Nothing is lost either way: the local refs and their clean worktrees still
+hold every commit, so any of the eleven can be pushed back in one command. Deleting was **denied to
+this session**, and a denial is a stop — I did not reach the same effect another way. **Re-derive
+before running** — this list is point-in-time and went stale once already. **Why it matters:** until
+the refs are gone, their rows and the handoff's branch list have to keep saying "landed but still
+here" — small residue, but it is exactly what makes the next session distrust the branch list.
+Nothing is broken while it waits.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
@@ -117,15 +126,8 @@ by definition (who gets a build, and when); ③ **A_settings**, two copy-paste e
 edit. Corrected 2026-08-20: this paragraph said "exactly ONE"
 while ② sat three bullets above it, still marked ⏳ — a checklist that miscounts itself is the same
 defect as one that lists non-asks.
-Archived 2026-08-20 by a self-checkup, because none of them ever needed you and a checklist that
-lists non-asks makes the real ones harder to see: **A_ci** (GitHub refused branch protection on this
-plan — the answer came from GitHub, not from you) · **A_rig** (its own text says "nothing for you to
-do today"; it is a logged honesty note, not an action) · **A_ref2** (a "single delete click" that was
-already done — the ref was gone from origin and its disposition row with it) · **B1** (resolved
-verbally 2026-07-08; its one live residual is tracked in `BACKLOG.md`) · **B7** (site auto-deploy,
-**CANCELLED BY OWNER 2026-07-16 — do not resurface**) · **B_arc** (filed as an owner fork on
-2026-08-20 and it should never have been: dead engineering, not a product call; executed the same
-day — see the `.arc-v2` row in `BACKLOG.md`).
+Archived 2026-08-20 by a self-checkup, because none of them ever needed you: **A_ci · A_rig ·
+A_ref2 · B1 · B7 · B_arc**. Each one's reason is in the archive under its own heading.
 Archived 2026-08-18 and 2026-08-04, each with its full record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**. The archive is the index; re-listing what each one was here was a second copy that only cost boot tax.
 
 ---
