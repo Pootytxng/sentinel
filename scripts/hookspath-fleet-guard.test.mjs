@@ -49,9 +49,10 @@
 // Dependency-free on purpose, like local-gate-guard and ci-budget-guard: a guard that protects the
 // build must not be one `npm install` away from being unable to run.
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import {
+  cpSync,
   mkdtempSync,
   mkdirSync,
   realpathSync,
@@ -87,6 +88,16 @@ const GOOD_HOOK = [
   'powershell.exe -NoProfile -File "$repo/scripts/verify-local.ps1"',
 ].join("\n");
 
+// #313. This file's cost, DECLARED rather than discovered at someone's push. It walks every
+// registered worktree and builds real repositories, so it is one of the few here whose runtime
+// tracks the size of the machine's fleet rather than the size of the repo. Measured after the
+// template change: ~3.4s isolated, of which ~915ms is the live fleet walk. The ceiling is set well
+// above that on purpose — it is a statement of the budget, not an assertion about the clock, which
+// would flake the moment two gates ran at once. What it buys is that growth past this point fails
+// as a named breach of a stated budget instead of as a mystery timeout that reads like a flake and
+// gets re-run. A guard taught to look unreliable is most of the way to being muted.
+vi.setConfig({ testTimeout: 30_000 });
+
 const temps = [];
 afterAll(() => {
   for (const dir of temps) {
@@ -98,33 +109,70 @@ afterAll(() => {
   }
 });
 
+const fixtureGit = (args, cwd) =>
+  execFileSync("git", ["-c", "core.hooksPath=", "-c", "protocol.file.allow=always", ...args], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+/**
+ * #313. The template every fixture below is copied from, seeded once on first use rather than
+ * per test.
+ *
+ * This file spent 7.36s of a 15s default `testTimeout` before any contention, and profiling put
+ * only 915ms of that in the live fleet walk. The rest was fixture CONSTRUCTION: some two dozen
+ * tests each spawning git six times to build the same two-worktree repo. There was nothing
+ * repeated to memoise — the cost was the spawns themselves, which is why #313's proposed fix
+ * (borrowed from rule C of `scripts/handoff-worktree-truth.test.mjs`) did not fit and this one
+ * does. Measured at N=25 before it was written: 4693ms to build each, 755ms to copy each, 6.2x.
+ *
+ * Built lazily so a run that filters to the fleet tests never pays for it at all.
+ */
+let template = null;
+function fixtureTemplate() {
+  if (template) return template;
+  const base = mkdtempSync(join(tmpdir(), "hookspath-template-"));
+  temps.push(base);
+  const main = join(base, "mainwt");
+  mkdirSync(main, { recursive: true });
+  fixtureGit(["init", "-q", "-b", "main"], main);
+  fixtureGit(["config", "user.email", "fixture@example.invalid"], main);
+  fixtureGit(["config", "user.name", "fixture"], main);
+  writeFileSync(join(main, "README"), "fixture\n");
+  fixtureGit(["add", "README"], main);
+  fixtureGit(["commit", "-qm", "seed"], main);
+  fixtureGit(["worktree", "add", "-q", "-b", "lane", join(base, "linked")], main);
+  template = base;
+  return template;
+}
+
 /**
  * A throwaway repo with a main working tree and one linked worktree, both real.
  *
  * Isolated under the OS temp dir, never inside this repo and never against real app data. `-c
  * core.hooksPath=` on every fixture command keeps the fixture's own git from picking up anything
  * the developer's environment has set.
+ *
+ * #313: a COPY of the template above, not a fresh build. Every caller still gets its own directory
+ * tree and its own git objects, so no shared mutable state is introduced and no test can reach
+ * another's — only the six spawns become one.
+ *
+ * That one is `git worktree repair`, and it is not optional. A linked worktree is wired by two
+ * ABSOLUTE paths — `linked/.git` pointing into `mainwt/.git/worktrees/lane`, and that directory's
+ * `gitdir` file pointing back — so a copied fixture is wired to the TEMPLATE until they are
+ * rewritten. Repair is what makes the copy sound, and it is the same absolute-path trap this whole
+ * guard exists for: an absolute `core.hooksPath` into a different worktree is failure mode 1 above.
  */
 function fixture(name) {
   const base = mkdtempSync(join(tmpdir(), `hookspath-${name}-`));
   temps.push(base);
   const main = join(base, "mainwt");
   const linked = join(base, "linked");
-  const run = (args, cwd) =>
-    execFileSync("git", ["-c", "core.hooksPath=", "-c", "protocol.file.allow=always", ...args], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+  const run = (args, cwd) => fixtureGit(args, cwd);
 
-  mkdirSync(main, { recursive: true });
-  run(["init", "-q", "-b", "main"], main);
-  run(["config", "user.email", "fixture@example.invalid"], main);
-  run(["config", "user.name", "fixture"], main);
-  writeFileSync(join(main, "README"), "fixture\n");
-  run(["add", "README"], main);
-  run(["commit", "-qm", "seed"], main);
-  run(["worktree", "add", "-q", "-b", "lane", linked], main);
+  cpSync(fixtureTemplate(), base, { recursive: true });
+  run(["worktree", "repair", linked], main);
 
   const armWith = (dir, body) => {
     mkdirSync(join(dir, ".githooks"), { recursive: true });
@@ -135,6 +183,35 @@ function fixture(name) {
 }
 
 describe("the fleet guard fails when it cannot PROVE a gate — fixture repositories", () => {
+  // #313. The fixtures below are copies of one template, and every verdict in this describe rests
+  // on each being a real, self-contained repository. A copy that stayed wired to the template
+  // would still LOOK like a working fixture — git commands succeed, tests go green — while every
+  // assertion silently judged the same shared checkout. So the copy is falsified here rather than
+  // trusted: the pointer must lead home, and two fixtures must not be able to see each other.
+  it("a copied fixture is its own repository, not a window onto the template", () => {
+    const a = fixture("independence-a");
+    const b = fixture("independence-b");
+
+    // The two absolute pointers `git worktree repair` rewrites. Untouched, both still name the
+    // template, which is the absolute-path failure mode this whole guard exists for.
+    expect(realpathSync(a.run(["rev-parse", "--show-toplevel"], a.linked).trim())).toBe(realpathSync(a.linked));
+    expect(realpathSync(a.run(["rev-parse", "--show-toplevel"], a.main).trim())).toBe(realpathSync(a.main));
+    const registered = a
+      .run(["worktree", "list", "--porcelain"], a.main)
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith("worktree "))
+      .map((l) => realpathSync(l.slice("worktree ".length).trim()));
+    expect(registered).toEqual([realpathSync(a.main), realpathSync(a.linked)]);
+    expect(registered.some((p) => p.startsWith(realpathSync(template)))).toBe(false);
+
+    // Independence, proven by mutation: arming one fixture must not arm the other. This is the
+    // assertion that fails if the copy is ever replaced by a symlink or a shared clone.
+    a.armWith(a.linked, GOOD_HOOK);
+    a.run(["config", "core.hooksPath", ".githooks"], a.main);
+    expect(inspectWorktree(a.linked, a.main).ok).toBe(true);
+    expect(inspectWorktree(b.linked, b.main).ok).toBe(false);
+  });
+
   it("an unset core.hooksPath fails: a registered worktree that is not wired runs no hook", () => {
     // Nothing to unset: `git init` sets no core.hooksPath, so this fixture IS the unwired state.
     const f = fixture("unset");
