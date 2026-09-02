@@ -75,3 +75,13 @@ gate, not state anyone needs to resume from — which is what makes it archive m
 live-doc material. Verbatim:
 
 | Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
+
+## 2026-09-01 — two status rows leave the live handoff
+
+Moved out of `SESSION_HANDOFF.md` to pay for the #313 resume block, the file being at 120/120.
+A landed-work lineage and a generic gate line: both records of what passed, neither state anyone
+resumes from. The Q9b Stage 2 landing narrative was folded into the Stage 3 pointer in the same
+pass, for the same reason — Stage 3 is the live instruction, Stage 2 is history.
+
+| Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
+| Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |

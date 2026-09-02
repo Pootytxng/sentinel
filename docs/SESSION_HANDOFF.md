@@ -9,11 +9,7 @@
 
 **The desk build is `090bc58b`** (Mission 2 landing, #238; version debt — batch the next cut).
 
-| | |
-|---|---|
-| Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
-| Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
+**Installed:** `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4`
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -71,14 +67,18 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 2 (#258) LANDED** — `cfc0d21a` / PR #263, the consent screen renders the payload itself.
-**Stage 3 is NEXT**: receiver + migration, local/staged ONLY, never deployed — deployment is Stage 7
-and owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+**LIVE LANE — #313 / PR #317**, worktree `sentinel-remote-design-286`, head `3b31a96a`, draft, gate PASS.
+BLOCKED on one review bound to THAT head — the PASS at `a963db1d` does not cover the four commits after it.
+Receipt `.claude/work-control/2026-09-01-mark-pr-ready-313.json` is `pending` by design; on PASS edit it
+UNTRACKED → `node scripts/work-control-gate.mjs` → `gh pr ready 317` → commit. **Never merge — owner's.**
 
-**The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
-(`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
-Console (`LabConsole`), and its proving bench already ships armed as `ExperimentBench`.
-`src/superseded-plan-citation-guard.test.ts` fails the build on any live doc citing a dead plan.
+**Q9b Stage 3 is NEXT** (Stage 2 landed, `cfc0d21a` / PR #263): receiver + migration, local/staged
+ONLY, never deployed — deployment is Stage 7, owner territory. Spec:
+`docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+
+**The Instrument Bench plan is NOT an option and must never be offered as one.** BUILT (`403be45`) and
+REJECTED as the Lab by the owner on 2026-07-09; the live Test room is the Ops Console (`LabConsole`), its
+bench ships armed as `ExperimentBench`. `src/superseded-plan-citation-guard.test.ts` fails a dead citation.
 
 **Do NOT touch** Tier 1 plan tasks 10–11 (independent security review + arming). Owner territory,
 filed in `docs/OWNER_ACTION_CHECKLIST.md` §C so arming can never happen quietly. Still dark, three
