@@ -20,6 +20,18 @@ $budgets = @{
   # rather than banking all 14 - a zero-headroom budget fails the next lane for existing.
   # Prior step: 120 -> 119 on 2026-08-26, when the retired detached checkout's disposition took it
   # to 123 and two FINISHED narratives (#160 landed and pruned, #193 landed) were archived for it.
+  # 2026-09-01: the cap did NOT move for #309's row, and the payment did not come from a row. The
+  # audit had just proven every one of the 30 refs live, so nothing was retirable -- it came from
+  # the pinned counts in the prose above the table, which had gone stale twice that day by the
+  # hand of the lane adding the row. `refSplit` in branch-disposition-audit.mjs prints the live
+  # split on OK instead. That is the §6 move: the rule that keeps getting broken gets a mechanism,
+  # not another paragraph -- and it freed 3 lines, which at that tip left 105/107 and the two rows
+  # of headroom the ratchet below was set to preserve.
+  # 2026-09-02, corrected in place rather than left to read as current: that headroom is GONE. This
+  # lane merged `main`, which had independently added two rows of its own, so the file lands at
+  # exactly 107/107 -- passing, with nothing spare. The next row here does NOT have a free line to
+  # take and must be paid from `archive/BRANCH_DISPOSITION_SWEEPS.md` before it is written. The cap
+  # does not move for it; that is the whole point of the ratchet.
   "docs/BRANCH_DISPOSITIONS.md" = 107
   "docs/RELEASE_AUTONOMY.md" = 120
   "docs/RELEASE_TRANSACTION.md" = 120
