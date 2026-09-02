@@ -96,10 +96,10 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
   nothing, each has a row in docs/BRANCH_DISPOSITIONS.md, and rule C prints the live split every run. It stopped
   demanding all be named on 2026-09-01 (#312): 92% of that list could not be lost, and no two lanes could be green at
   once. `claude/compy-health-parity` and `claude/compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at
-  `c8366609` — neither contains the other** (`--is-ancestor` is NO both ways). Counted **not on main**: the kit has
-  ONE unique commit, health-parity FOURTEEN (from the merge base instead, 170). Backed up only to `refs/backup/*`, so
-  dropping either loses the other's work. **No depth/SHA pinned** — re-derive risk with `git rev-list --count <ref>
-  --not` over the origin refs `git ls-remote --heads origin` reports, distance with `origin/main..<ref>`. **A landed
+  `c8366609` — neither contains the other** (`--is-ancestor` is NO both ways); the kit has ONE unique commit, **health-
+  parity's is unpinned** — it re-merges main, so use the formula below. Backed up only to `refs/backup/*`, so dropping
+  either loses the other's work. **No depth/SHA pinned** — re-derive risk with `git rev-list --count <ref> --not` over
+  the origin refs `git ls-remote --heads origin` reports, distance with `origin/main..<ref>`. **A landed
   lane's name still leaves with the train that lands it** (rule D, #243): naming a zero-carry branch fails this bullet
   whether or not rule C wanted the name. Spent, at zero: `sentinel-fleet-guard-276`,
   `sentinel-segmented-237`, `sentinel-release-truth-256`, `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258`
