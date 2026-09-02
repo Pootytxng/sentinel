@@ -7,9 +7,8 @@
 
 ## Where the train is standing
 
-**The desk build is `090bc58b`** (Mission 2 landing, #238; version debt — batch the next cut).
-
-**Installed:** `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4`
+**The desk build is `090bc58b`** (Mission 2 landing, #238; version debt — batch the next cut). Installed and verified by
+STAMP not mtime: byte-found in the exe, `73b629ed` byte-absent, one installer on the Desktop; `main` NOT pinned — `git log --oneline -4`.
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -69,8 +68,9 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 **LIVE LANE — #313 / PR #317**, worktree `sentinel-remote-design-286`, draft, gate PASS. **Never merge.**
 Head = the `origin/lane/guard-budget-313` tip — a SHA pinned here is stale on arrival, so re-read it.
-BLOCKED on a review bound to THAT head. Receipt `.claude/work-control/2026-09-01-mark-pr-ready-313.json`
-carries THREE head fields — re-head all three, re-run verify-local AT that head, gate it, then `gh pr ready 317`.
+BLOCKED on ONE thing: a review bound to THAT head. Receipt `2026-09-01-mark-pr-ready-313.json` is re-headed and carries a
+real gate PASS at it; only `independentReview` is pending — fill it, re-run `scripts/work-control-gate.mjs`, `gh pr ready 317`.
+**That gate compares that field to the receipt's OWN `currentHead`, never to live HEAD — a wholly stale receipt passes it.**
 
 **Q9b Stage 3 is NEXT** (Stage 2 landed, `cfc0d21a` / PR #263): receiver + migration, local/staged
 ONLY, never deployed — deployment is Stage 7, owner territory. Spec:
