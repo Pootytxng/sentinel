@@ -1,0 +1,6 @@
+{
+  "ref": "origin/lane/vision-pointer-guard-2026-08-24",
+  "disposition": "UNLANDED",
+  "issue": null,
+  "evidence": "**Not this lane's branch — harvested, and must NOT be merged wholesale.** Checked out at `C:\\Users\\Kuya\\code\\sentinel-vision-pointer`, last touched 2026-08-25; **no PR was ever opened**, so this row's earlier promise that its own fuller row would supersede this one has nothing behind it. Its `docs/agents/` scaffold was written in parallel with this lane's — same three files, different text — and this lane's is the fuller one, so its three genuine improvements were **grafted here instead** (a control-plane pointer at the top of `issue-tracker.md`, the WORK_CONTROL-claim-comes-first ordering on the Claim line, and apply-both-axes in `triage-labels.md`); when [#290](https://github.com/Pootytxng/sentinel/pull/290) lands, this ref becomes SUPERSEDED. **Its `CLAUDE.md` delta is a regression** — it reverts `main` to 2026-08-18: module map 46 `.rs` files, `receipts.rs` no-send-path against the #207 telemetry ruling and the shipped No-telemetry promise, the owner-REJECTED Instrument-Bench Lab direction restored as live, and rule 5's `vendor-honesty-line-guard` route pin dropped. Harvest by reading; never `git merge`."
+}

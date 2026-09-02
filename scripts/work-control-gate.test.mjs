@@ -1,10 +1,23 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
-import { defaultOwnerFor, evaluateWorkControl } from "./work-control-gate.mjs";
+import {
+  canonicalRemoteName,
+  defaultOwnerFor,
+  evaluateWorkControl as evaluateRaw,
+  headProvenanceVia,
+  parseRemotes,
+  remoteHeadShas,
+} from "./work-control-gate.mjs";
+
+// Provenance has its own describe block below, with its own falsifications. Every case in the
+// blocks before it is about what the receipt itself proves, so they run against a remote that
+// says yes: a test that silently depended on the network would be measuring the network.
+const evaluateWorkControl = (receipt, options = {}) =>
+  evaluateRaw(receipt, { headProvenance: () => ({ ok: true, why: "stubbed" }), ...options });
 
 // The REAL head of this worktree. Fixtures used to say HEAD, and the gate accepted it — which
 // is precisely the hole this file now guards: a receipt is written by the actor asking for
@@ -206,37 +219,288 @@ describe("proof-gated GitHub transitions", () => {
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// RECEIPT PROVENANCE
+//
+// Everything above asks whether the receipt is internally consistent. These ask the question that
+// decides whether the evidence exists anywhere but this disk -- design requirement 4 of #291: a
+// merge or close receipt must be reachable from canonical remote evidence, and a purely local, a
+// stale-cached, or a fork-only ref must not satisfy it.
+//
+// The pure cases below inject the git runner, so each failure mode is provable without a network
+// and without a repository. The CLI cases further down build a REAL repository whose canonical
+// origin is a bare repo on disk, because a stale remote-tracking ref is not a thing a stub can
+// honestly imitate: it is a specific disagreement between what git cached and what origin has.
+// ---------------------------------------------------------------------------------------------
+describe("receipt provenance", () => {
+  const ONE = "1".repeat(40);
+  const TWO = "2".repeat(40);
+
+  it("finds the canonical remote by URL, and is not fooled by a fork of the same name", () => {
+    const shapes = [
+      "git@github.com:Pootytxng/sentinel.git",
+      "https://github.com/Pootytxng/sentinel",
+      "https://github.com/Pootytxng/sentinel.git/",
+      "C:\\Users\\someone\\mirrors\\Pootytxng\\sentinel",
+    ];
+    for (const url of shapes) {
+      expect(canonicalRemoteName([{ name: "whatever", url }]), url).toBe("whatever");
+    }
+    // The name is not the evidence. A remote CALLED origin that points at someone else's fork is
+    // exactly the case a name check waves through, and the case that makes a receipt worthless:
+    // the merge happens on the canonical repo, where nobody can fetch this commit.
+    expect(
+      canonicalRemoteName([{ name: "origin", url: "git@github.com:SomeoneElse/sentinel.git" }]),
+    ).toBe(null);
+    expect(canonicalRemoteName([])).toBe(null);
+  });
+
+  it("reads remotes and live heads out of git's own output", () => {
+    expect(
+      parseRemotes(
+        "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n" +
+          "origin\tgit@github.com:Pootytxng/sentinel.git (push)\n" +
+          "fork\thttps://github.com/Someone/sentinel (fetch)\n",
+      ),
+    ).toEqual([
+      { name: "origin", url: "git@github.com:Pootytxng/sentinel.git" },
+      { name: "fork", url: "https://github.com/Someone/sentinel" },
+    ]);
+    expect(remoteHeadShas(`${ONE}\trefs/heads/main\n${TWO}\trefs/heads/lane/x\n`)).toEqual([
+      ONE,
+      TWO,
+    ]);
+    // Tags are not branches. Counting one as evidence would let a tag left on a deleted branch's
+    // tip stand in for a branch origin no longer serves.
+    expect(remoteHeadShas(`${ONE}\trefs/tags/v1\n`)).toEqual([]);
+  });
+
+  it("passes only when origin's own tips reach the head", () => {
+    const provenance = headProvenanceVia((args) => {
+      if (args[0] === "remote") return "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n";
+      if (args[0] === "ls-remote") return `${ONE}\trefs/heads/main\n`;
+      if (args[0] === "cat-file") return "";
+      if (args[0] === "rev-list") return "0\n";
+      throw new Error(`unexpected git ${args[0]}`);
+    });
+    expect(provenance(TWO)).toEqual({ ok: true, why: "reachable from origin" });
+  });
+
+  it("refuses a head origin does not have, whatever is holding it locally", () => {
+    // "3 commits exist on no branch origin has" is the same answer for a branch that was never
+    // pushed, a branch that only exists on a fork, and a remote-tracking ref left behind by a
+    // fetch -- because none of them are origin, which is the whole point.
+    const provenance = headProvenanceVia((args) => {
+      if (args[0] === "remote") return "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n";
+      if (args[0] === "ls-remote") return `${ONE}\trefs/heads/main\n`;
+      if (args[0] === "cat-file") return "";
+      if (args[0] === "rev-list") return "3\n";
+      throw new Error(`unexpected git ${args[0]}`);
+    });
+    const verdict = provenance(TWO);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.why).toMatch(/exist on no branch origin/i);
+  });
+
+  it("refuses when there is no canonical remote at all", () => {
+    const provenance = headProvenanceVia((args) => {
+      if (args[0] === "remote") return "origin\tgit@github.com:SomeoneElse/sentinel.git (fetch)\n";
+      throw new Error(`unexpected git ${args[0]}`);
+    });
+    const verdict = provenance(TWO);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.why).toMatch(/no remote points at Pootytxng\/sentinel/i);
+  });
+
+  it("blocks rather than passing when origin cannot be asked", () => {
+    // Environment inability is a blocker, not a pass. An unreachable origin is the one condition
+    // under which it is tempting to shrug and continue, and the one where continuing means the
+    // receipt was never checked against anything.
+    const unreachable = headProvenanceVia((args) => {
+      if (args[0] === "remote") return "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n";
+      throw new Error("Could not resolve host: github.com");
+    });
+    expect(unreachable(TWO)).toEqual({ ok: false, why: "origin could not be asked what it has" });
+
+    const empty = headProvenanceVia((args) =>
+      args[0] === "remote" ? "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n" : "",
+    );
+    expect(empty(TWO).ok).toBe(false);
+    expect(empty(TWO).why).toMatch(/reports no branches/i);
+  });
+
+  it("blocks when origin's tips are not in this checkout instead of narrowing the evidence", () => {
+    // rev-list cannot walk an object it does not have, so an unfetched origin would otherwise
+    // silently shrink the set of things the head has to be reachable from -- and an empty set
+    // makes everything reachable from nothing, which reads as a pass in the wrong implementation.
+    const provenance = headProvenanceVia((args) => {
+      if (args[0] === "remote") return "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n";
+      if (args[0] === "ls-remote") return `${ONE}\trefs/heads/main\n`;
+      if (args[0] === "cat-file") throw new Error("Not a valid object name");
+      throw new Error("rev-list must never be reached with an empty exclusion set");
+    });
+    const verdict = provenance(TWO);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.why).toMatch(/fetch origin and re-run/i);
+  });
+
+  it("carries the refusal into the transition verdict", () => {
+    const result = evaluateRaw(record(), {
+      resolveHead: () => HEAD,
+      headProvenance: () => ({ ok: false, why: "origin does not have it" }),
+    });
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/not durably reachable/i);
+  });
+});
+
 describe("work-control receipt CLI", () => {
-  function runReceipt(receipt) {
+  // A real repository, and a real canonical origin: a bare repo on disk whose PATH ends in
+  // Pootytxng/sentinel, which is what the gate matches on. No network, and nothing stubbed --
+  // these cases exercise the same code the gate runs against GitHub.
+  const made = [];
+
+  function makeRepo() {
+    const root = mkdtempSync(join(tmpdir(), "compy-wc-repo-"));
+    made.push(root);
+    const canonical = join(root, "Pootytxng", "sentinel");
+    const fork = join(root, "SomeoneElse", "sentinel");
+    const work = join(root, "work");
+    const hooks = join(root, "no-hooks");
+    for (const dir of [canonical, fork, work, hooks]) mkdirSync(dir, { recursive: true });
+    const bare = (dir) => execFileSync("git", ["init", "-q", "--bare", "-b", "main", dir]);
+    bare(canonical);
+    bare(fork);
+    execFileSync("git", ["init", "-q", "-b", "main", work]);
+    const git = (...args) => execFileSync("git", args, { cwd: work, encoding: "utf8" }).trim();
+    git("config", "user.email", "gate@test.invalid");
+    git("config", "user.name", "gate test");
+    git("config", "commit.gpgsign", "false");
+    // This repository points core.hooksPath at .githooks; a fixture repo must not inherit a
+    // pre-commit hook that knows nothing about it.
+    git("config", "core.hooksPath", hooks);
+    writeFileSync(join(work, "a.txt"), "one", "utf8");
+    git("add", "-A");
+    git("commit", "-q", "-m", "one");
+    git("remote", "add", "origin", canonical);
+    git("remote", "add", "fork", fork);
+    git("push", "-q", "origin", "main");
+    return { work, git, canonical, pushed: git("rev-parse", "HEAD") };
+  }
+
+  afterAll(() => {
+    for (const root of made) rmSync(root, { recursive: true, force: true });
+  });
+
+  function runReceipt(receipt, cwd) {
     const directory = mkdtempSync(join(tmpdir(), "compy-work-control-"));
     const path = join(directory, "receipt.json");
     writeFileSync(path, JSON.stringify(receipt), "utf8");
     try {
       return spawnSync(process.execPath, [resolve("scripts", "work-control-gate.mjs"), path], {
         encoding: "utf8",
+        cwd,
       });
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   }
 
-  it("exits zero and prints PASS for a complete current-head receipt", () => {
-    const result = runReceipt(record());
-    expect(result.status, result.stderr).toBe(0);
+  /** The complete receipt, re-bound to whichever head the fixture repository is standing on. */
+  function at(head) {
+    return record({
+      currentHead: head,
+      gateResults: EXACT_PASS.map((gate) => ({ ...gate, head })),
+      independentReview: { ...record().independentReview, head },
+    });
+  }
+
+  it("exits zero and prints PASS for a complete receipt origin can actually reach", () => {
+    const repo = makeRepo();
+    const result = runReceipt(at(repo.pushed), repo.work);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({ decision: "PASS", blockers: [], warnings: [] });
   });
 
   it("exits nonzero and prints BLOCKED when an exact required gate is unavailable", () => {
+    const repo = makeRepo();
+    const complete = at(repo.pushed);
     const result = runReceipt(
-      record({
+      {
+        ...complete,
         gateResults: [
-          { command: "npm test", status: "unavailable", head: HEAD, reason: "no host access" },
-          EXACT_PASS[1],
+          { command: "npm test", status: "unavailable", head: repo.pushed, reason: "no host" },
+          complete.gateResults[1],
         ],
-      }),
+      },
+      repo.work,
     );
     expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout).decision).toBe("BLOCKED");
+  });
+
+  it("refuses a receipt whose head has never left this disk", () => {
+    const repo = makeRepo();
+    writeFileSync(join(repo.work, "a.txt"), "two", "utf8");
+    repo.git("commit", "-q", "-am", "two");
+    const local = repo.git("rev-parse", "HEAD");
+    expect(local).not.toBe(repo.pushed);
+    const result = runReceipt(at(local), repo.work);
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(/not durably reachable/i);
+  });
+
+  it("refuses a receipt held up only by a stale remote-tracking ref", () => {
+    // The trap this exists for: refs/remotes/origin/* is the last FETCH, not origin. Below, origin
+    // genuinely had the commit and then genuinely lost it, while git's cache still says otherwise.
+    // A gate that reads the cache calls this pushed; a gate that asks origin calls it gone.
+    const repo = makeRepo();
+    repo.git("checkout", "-q", "-b", "stale");
+    writeFileSync(join(repo.work, "a.txt"), "stale", "utf8");
+    repo.git("commit", "-q", "-am", "stale");
+    const stranded = repo.git("rev-parse", "HEAD");
+    repo.git("push", "-q", "origin", "stale");
+    repo.git("fetch", "-q", "origin");
+    // Deleted by someone else, on the remote itself: `git push origin --delete` would also
+    // drop the local remote-tracking ref, which is the very thing this case has to keep.
+    execFileSync("git", ["--git-dir", repo.canonical, "update-ref", "-d", "refs/heads/stale"]);
+    repo.git("checkout", "-q", "--detach", stranded);
+    repo.git("branch", "-q", "-D", "stale");
+    // Only the cached ref still names it, which is what makes this a proof: the cache is the one
+    // thing a naive implementation could have been reading.
+    expect(repo.git("rev-parse", "refs/remotes/origin/stale")).toBe(stranded);
+    const result = runReceipt(at(stranded), repo.work);
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(/not durably reachable/i);
+  });
+
+  it("refuses a receipt that only a fork can reach", () => {
+    const repo = makeRepo();
+    writeFileSync(join(repo.work, "a.txt"), "forked", "utf8");
+    repo.git("commit", "-q", "-am", "forked");
+    const onlyOnFork = repo.git("rev-parse", "HEAD");
+    repo.git("push", "-q", "fork", "main");
+    // Pushed, fetched, reachable -- from the wrong repository. The merge happens on the canonical
+    // one, where this commit does not exist.
+    repo.git("fetch", "-q", "fork");
+    const result = runReceipt(at(onlyOnFork), repo.work);
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(/not durably reachable/i);
+  });
+
+  it("refuses a fork standing in the place called origin, however reachable it is", () => {
+    // The maximal version of the case above: the remote is named origin, it answers, it has the
+    // commit, and it is still the wrong repository. Everything a name check looks at says yes.
+    const repo = makeRepo();
+    repo.git("remote", "remove", "origin");
+    repo.git("remote", "rename", "fork", "origin");
+    repo.git("push", "-q", "origin", "main");
+    expect(repo.git("ls-remote", "--heads", "origin")).toContain(repo.pushed);
+    const result = runReceipt(at(repo.pushed), repo.work);
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(
+      /no remote points at Pootytxng\/sentinel/i,
+    );
   });
 });
 

@@ -1,0 +1,6 @@
+{
+  "ref": "origin/lane/shell-ownership-278",
+  "disposition": "CLAIMED",
+  "issue": 278,
+  "evidence": "Not this lane's branch — dispositioned, untouched. Sidebar remediation Task 4, issue [#278](https://github.com/Pootytxng/sentinel/issues/278), worktree `C:\\Users\\Kuya\\code\\sentinel-shell-ownership-278`, PR [#279](https://github.com/Pootytxng/sentinel/pull/279). Makes the one-writer rule follow the TARGET rather than the tool, across five ownership zones, where `unknown` is never treated as `unprotected`. **Open and unmerged on purpose**: merging ARMS a guard that runs before every shell command in the repo, which is the owner's call, not this session's. No tip SHA is pinned here, because a row that names one is stale the next time the lane pushes. **That lane carries its own, fuller row; when it lands, its text supersedes this one and this line goes.**"
+}

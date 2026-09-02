@@ -1,0 +1,6 @@
+{
+  "ref": "origin/codex/tool-shed-hygiene",
+  "disposition": "UNLANDED",
+  "issue": null,
+  "evidence": "**Partially landed.** `scripts/markdown-link-guard.mjs` is byte-identical on `main`, but the `.agents/skills/*` mirror layer (10 files), `scripts/agents-layout-guard.mjs` + its test, two archive splits and the plan doc are all absent. Codex-lane tooling — the unlanded half is the `.agents/` mirror, not a product change. **Merge cost re-measured 2026-09-01 against `d5dcb9e2`** with `git merge-tree --write-tree` — the only honest way to ask what a merge does, because a two-tree `git diff origin/main <ref>` counts every file `main` gained afterwards as a deletion. It reports **4 conflicts** (`.claude/USAGE_ECONOMICS.md`, `COMPY_OVERVIEW.md`, `docs/PACKAGING_SIGNING_PLAN.md`, and an add/add on `scripts/markdown-link-guard.test.mjs`) and **not one path `main` has is dropped** (`git diff --diff-filter=D` against the merge result is empty). Line counts over a conflicted tree are not trustworthy — marker text inflates them — so only the conflict count and the no-drop check are pinned. Cheap to land; the open question is whether a `.agents/` mirror is still wanted alongside `.claude/skills/`, not whether it is safe."
+}

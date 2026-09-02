@@ -28,11 +28,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { parseDispositions } from "./branch-disposition-audit.mjs";
+import { readAll } from "./lib/dispositions.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CHECKLIST = "docs/OWNER_ACTION_CHECKLIST.md";
-const DISPOSITIONS = "docs/BRANCH_DISPOSITIONS.md";
+const DISPOSITIONS = "docs/dispositions/";
 
 const git = (args) =>
   execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -126,18 +126,22 @@ describe("the live checklist", () => {
       "beta/private-beta-001",
     );
 
-    const preserve = parseDispositions(readFileSync(join(ROOT, DISPOSITIONS), "utf8"))
+    // One file per ref since #291, so this reads a directory rather than a table — and a record
+    // the store itself refuses is not a PRESERVE argument anyone can rely on.
+    const { records, problems } = readAll(ROOT);
+    expect(problems, `${DISPOSITIONS} holds records the store refuses`).toEqual([]);
+    const preserve = records
       .filter((r) => r.disposition === "PRESERVE")
       .map((r) => r.ref.replace(/^origin\//, ""));
     expect(
       preserve.length,
-      `${DISPOSITIONS} lists no PRESERVE rows, so this check would pass vacuously.`,
+      `${DISPOSITIONS} holds no PRESERVE record, so this check would pass vacuously.`,
     ).toBeGreaterThan(0);
     const wrong = named.filter((n) => preserve.includes(n));
     expect(
       wrong,
       `§A_prune names ${wrong.length} ref(s) that ${DISPOSITIONS} marks PRESERVE: ${wrong.join(", ")}.\n` +
-        `PRESERVE means a row has already argued that ref must survive. The checklist and the record ` +
+        `PRESERVE means a record has already argued that ref must survive. The checklist and the record ` +
         `cannot both be right — fix whichever is wrong BEFORE the owner runs the command.`,
     ).toEqual([]);
   });

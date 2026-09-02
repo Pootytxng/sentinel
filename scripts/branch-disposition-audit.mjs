@@ -1,4 +1,4 @@
-// Branch-disposition audit — every remote ref must have a proven row in docs/BRANCH_DISPOSITIONS.md.
+// Branch-disposition audit — every remote ref must have a proven record in docs/dispositions/.
 //
 // Why this exists: docs/BACKLOG.md asserted "every branch has a verified disposition" while nothing
 // had ever verified one. The claim was false when written and stayed false for weeks. Prose cannot
@@ -10,28 +10,19 @@
 // whose every symbol was already on main).
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const DOC = "docs/BRANCH_DISPOSITIONS.md";
+import { DIR, DISPOSITIONS, readAll, slugOf } from "./lib/dispositions.mjs";
 
-const docPathOf = (repoRoot) => join(repoRoot, DOC);
+// The record used to be one table in one file, and that is what made every lane collide with every
+// other lane (#291). It is now one JSON file per ref under `docs/dispositions/`. Nothing about the
+// PROOF changed — coverage gating, the merge-tree re-proof of a MERGED row, and the prunable
+// deadline are all still below, unchanged. Only where the claim is stored moved.
+export const DOC = DIR;
 
 /** Dispositions the record may use, and what each one promises about merge-tree. */
-export const DISPOSITIONS = {
-  // main already contains it — the merge is a no-op, and we re-prove that every run.
-  // `prunable` is not a label, it is a deadline: see the check at the bottom of `audit`.
-  MERGED: { noop: true, prunable: true },
-  // its content reached main by another path, so the merge is NOT a no-op (main moved on).
-  SUPERSEDED: { noop: false, prunable: true },
-  // carries work main does not have.
-  UNLANDED: { noop: false },
-  // frozen or failed-candidate refs. Never a merge target, so merge-tree says nothing useful.
-  PRESERVE: { noop: null },
-  // another lane holds it under docs/WORK_CONTROL.md. Not ours to characterise.
-  CLAIMED: { noop: null },
-};
+export { DISPOSITIONS };
 
 /**
  * How to prune a ref — in one place, because getting it wrong left a stale row standing for days.
@@ -186,20 +177,20 @@ export function parseDispositions(markdown) {
  * wrong. On a degraded checkout that is a WEAKER statement than "the record is true" — ask
  * `refSetCoverage` which claims were actually available, and see `main` for how it is reported.
  */
-export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}) {
-  const problems = [];
-  const rows = parseDispositions(readFileSync(docPath, "utf8"));
+export function audit({ repoRoot, coverage } = {}) {
+  // A record the store could not parse is a problem, not a record. Both halves come back so a
+  // broken file fails the audit instead of quietly shrinking the set it checks.
+  const { records: rows, problems } = readAll(repoRoot);
   if (rows.length === 0) {
-    problems.push(`${DOC} has no disposition rows — the '## The refs' table is missing or empty.`);
+    problems.push(`${DOC}/ holds no disposition records.`);
     return problems;
   }
 
   // --- Claims about the DOCUMENT. These read no refs, so they hold on any checkout. ---
-  const seen = new Set();
-  for (const { ref } of rows) {
-    if (seen.has(ref)) problems.push(`${ref} appears twice in ${DOC} — one row per ref.`);
-    seen.add(ref);
-  }
+  // One record per ref is now structural rather than checked: the filename IS the slug of the ref,
+  // and `readAll` refuses a record whose ref does not match its own filename. Two records for one
+  // ref cannot both exist, so the duplicate scan that used to live here has nothing left to find.
+  const seen = new Set(rows.map((r) => r.ref));
   // Vocabulary used to be checked inside the merge-tree loop, below a `live.has(ref)` guard — so a
   // nonsense disposition on a ref this clone had not fetched went unreported. It is a property of
   // the row, not of the remote; it belongs here.
@@ -229,16 +220,16 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
       // the ref SURVIVING it. The wording follows: this checkout can only say what its cache holds,
       // never what origin holds — the same rule the coverage gates above enforce, one case later.
       problems.push(
-        `${ref} is in this checkout's cache of origin with no row in ${DOC}. Refresh the cache ` +
+        `${ref} is in this checkout's cache of origin with no record in ${DOC}/. Refresh the cache ` +
           `first — \`git fetch origin --prune\` — a ref another lane already deleted on origin ` +
           `lingers here and looks exactly like an undispositioned one. If it survives the prune, ` +
-          `disposition it, or delete it: ${pruneCommand(ref)}`,
+          `disposition it (write ${DOC}/${slugOf(ref)}.json), or delete it: ${pruneCommand(ref)}`,
       );
     }
   }
   for (const ref of seen) {
     if (!live.has(ref)) {
-      problems.push(`${DOC} dispositions ${ref}, which no longer exists — drop the row.`);
+      problems.push(`${DOC}/${slugOf(ref)}.json dispositions ${ref}, which no longer exists — delete the record.`);
     }
   }
 
@@ -249,7 +240,34 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
   for (const { ref, disposition } of rows) {
     if (!live.has(ref)) continue; // already reported; merge-tree would just throw
     const rule = DISPOSITIONS[disposition];
-    if (!rule || rule.noop === null) continue; // unknown word already reported; PRESERVE/CLAIMED claim nothing
+    if (!rule) continue; // unknown word already reported, above
+
+    // #350: CLAIMED used to take PRESERVE's skip below -- "noop: null, claims nothing" -- on the
+    // theory that a live writer's ref is expected to diverge from base. But PRESERVE means "outside
+    // the landed/unlanded question, forever" (a frozen reference point) and CLAIMED means "a lane is
+    // actively working this, right now" -- and active work either lands or it doesn't. Sharing
+    // PRESERVE's skip let a CLAIMED row assert anything, including its own merge, with nothing ever
+    // re-checking it: the live case this issue was filed over is `lane/docs-path-not-branch-310`,
+    // CLAIMED, whose own prose says "Merged as PR #316" while nothing had re-measured it since.
+    // So CLAIMED gets exactly one check, in exactly one direction: has the ref, in fact, already
+    // landed? A "no" (still genuinely diverged) is a live claim standing and needs no complaint --
+    // that half is still PRESERVE-shaped, on purpose. A "yes" means the claim is dead: the row must
+    // be re-dispositioned as LANDED (kept) or MERGED (pruned), not left asserting currency it no
+    // longer has. Neither answer is "prunable" by itself -- that is for whichever word replaces
+    // CLAIMED to decide -- so this never feeds the `rule.prunable` check below.
+    if (disposition === "CLAIMED") {
+      if (isNoop(repoRoot, base, ref)) {
+        problems.push(
+          `${ref} is recorded CLAIMED, but merging it into ${base} is already a no-op — the work has ` +
+            `landed. A CLAIMED row carries no ongoing warranty once that is true, so re-disposition it ` +
+            `on today's evidence: LANDED if this ref is deliberately kept (another PR may still be ` +
+            `based on it), or MERGED if not, then prune it: ${pruneCommand(ref)}`,
+        );
+      }
+      continue;
+    }
+    if (rule.noop === null) continue; // PRESERVE claims nothing about merge-tree, on purpose, forever
+
     const noop = isNoop(repoRoot, base, ref);
     if (rule.noop && !noop) {
       // The remedy travels with the failure, because the failure is nearly always the same story:
@@ -257,7 +275,7 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
       // that re-proving it is usually impossible, not that they should go hunting for a merge.
       problems.push(
         `${ref} is recorded MERGED but merging it into ${base} still changes the tree. ` +
-          `A MERGED row is perishable — prune the ref and drop the row (${pruneCommand(ref)}), ` +
+          `A MERGED record is perishable — prune the ref and delete the record (${pruneCommand(ref)}), ` +
           `or re-disposition it on today's evidence.`,
       );
     }
@@ -276,7 +294,7 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
     if (!mismatched && rule.prunable) {
       problems.push(
         `${ref} is recorded ${disposition}, which means prunable, but the ref is still on origin. ` +
-          `Prune it and drop the row: ${pruneCommand(ref)}`,
+          `Prune it and delete the record: ${pruneCommand(ref)}`,
       );
     }
   }
@@ -453,20 +471,20 @@ export function main(argv) {
   if (!cover.tracksEveryBranch) {
     console.log(
       `branch-disposition-audit: PARTIAL — ${cover.reason}.\n` +
-        `  The rows in ${DOC} are internally consistent. Whether they match origin was NOT checked.`,
+        `  The records in ${DOC}/ are internally consistent. Whether they match origin was NOT checked.`,
     );
     return 0;
   }
   if (cover.shallow) {
     console.log(
       `branch-disposition-audit: PARTIAL — ${cover.reason}.\n` +
-        `  Every origin ref has a row and no row names a dead ref. MERGED rows were NOT re-proven.`,
+        `  Every origin ref has a record and no record names a dead ref. MERGED records were NOT re-proven.`,
     );
     return 0;
   }
-  const split = refSplit(parseDispositions(readFileSync(docPathOf(repoRoot), "utf8")));
+  const split = refSplit(readAll(repoRoot).records);
   console.log(
-    `branch-disposition-audit: OK — every origin ref has a proven row in ${DOC}.\n` +
+    `branch-disposition-audit: OK — every origin ref has a proven record in ${DOC}/.\n` +
       `  ${split.total} refs besides main: ${split.preserve} PRESERVE, ${split.other} not.`,
   );
   return 0;

@@ -1,0 +1,6 @@
+{
+  "ref": "origin/recovery/failed-v0.9.9-prepare-1fa06a8",
+  "disposition": "PRESERVE",
+  "issue": null,
+  "evidence": "A preserved failed release candidate. `docs/RELEASE_AUTONOMY.md`: \"Preserve every failed candidate before reset, replacement, or abandonment.\" Never a merge target."
+}

@@ -1,0 +1,6 @@
+{
+  "ref": "origin/lane/cleanup-train-2026-08-20",
+  "disposition": "CLAIMED",
+  "issue": null,
+  "evidence": "**Not this lane's branch — measured, not merged.** PR [#163](https://github.com/Pootytxng/sentinel/pull/163) was **CLOSED unmerged on 2026-08-25**, so this row's earlier promise that #163 would carry a fuller row and supersede this one is dead, and this text is the disposition. Its one substantive fix — the handoff verdict naming his VS Code tab rather than the session — reached `main` independently and more fully: `git diff origin/main <ref> -- scripts/lib/handoff-block.mjs scripts/handoff-block.test.mjs` is **14 insertions against 139 deletions**, so the branch is BEHIND on its own files. Ancestry says unlanded, content says spent; content wins. It is **not** recorded SUPERSEDED, the label it earns, because SUPERSEDED carries a prune deadline and the sanctioned `git push origin --delete` is **denied to this session** — owner checklist A_prune. The local ref and the clean worktree `C:\\Users\\Kuya\\code\\sentinel-diskbloat` both still hold `456995b5`, so the prune loses nothing."
+}

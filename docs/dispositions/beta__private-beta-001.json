@@ -1,0 +1,6 @@
+{
+  "ref": "origin/beta/private-beta-001",
+  "disposition": "PRESERVE",
+  "issue": null,
+  "evidence": "The frozen beta ref `16069fa`, LOCKED by CLAUDE.md (\"never move the frozen beta refs\"). Merge-tree is a no-op, so it is an ancestor of `main` — that makes it safe, not prunable."
+}

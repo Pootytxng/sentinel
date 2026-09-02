@@ -1,0 +1,6 @@
+{
+  "ref": "origin/claude/foundation-acceptance-test-e08dfe",
+  "disposition": "CLAIMED",
+  "issue": 291,
+  "evidence": "The parallel-lane foundation: one disposition record per ref, a handoff that measures the fleet instead of remembering it, and receipt provenance against canonical origin. This record is itself the first proof the split works — writing it touched one file that belongs to one ref, not a table every lane has to queue behind."
+}
