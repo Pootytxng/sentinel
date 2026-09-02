@@ -126,8 +126,10 @@ Moved here 2026-09-01 from `docs/BRANCH_DISPOSITIONS.md` to pay for five new row
 [#323](https://github.com/Pootytxng/sentinel/issues/323): `lane/docs-path-not-branch-310`,
 `lane/guard-budget-313`, `lane/prune-list-truth-305`, `lane/receipt-modified-309`,
 `lane/wrapper-allowlist-308`. The live file already keeps the law this repeats — re-deriving the
-count is part of adding a row — so only the retired paragraph itself moves, byte-for-byte. It read,
-in full:
+count is part of adding a row — so only the retired paragraph itself moves. Its wording and numbers
+are unchanged except for one disclosed edit: the markdown link back to this same file, which cannot
+meaningfully link to itself from inside its own body, is flattened below to a bare code span. It
+read:
 
 > Earlier sweeps (2026-08-04 · 2026-08-05 · 2026-08-12) and the 2026-08-21 sweep for
 > [#126](https://github.com/Pootytxng/sentinel/issues/126) are archived in
