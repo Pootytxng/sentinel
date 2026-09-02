@@ -197,9 +197,14 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
     // cover them. This set used to carry five. A reviewer removed the repair call and ran them:
     // `rev-parse --show-toplevel` PASSED unrepaired from both checkouts — it answers with the
     // directory it ran in, whatever `.git` points at — so those two were never coverage. A third,
-    // asserting no registered path sits under the template, CANNOT fail while the equality below
-    // pins the list exactly and two mkdtemp siblings can never be prefixes of each other. All
-    // three are gone. An assertion that cannot fail is worse than no assertion: it reads as
+    // asserting no registered path sits under the template, is subtler and the first draft of this
+    // comment got it wrong: restored with the equality neutralised it FAILS, so it CAN be false.
+    // What it can never be is the assertion that REPORTS, because the equality below entails it —
+    // that pins the list to exactly two mkdtemp siblings, and two mkdtemp names are equal-length
+    // and distinct, so neither can be a string prefix of the other. The implication runs one way,
+    // which is also the answer to "what if a later edit loosens the equality": that edit is the one
+    // that must re-add this assertion, and it is looking straight at this line when it does.
+    // All three are gone. An assertion that cannot report is worse than no assertion: it reads as
     // coverage to anyone counting checks, and the number comes out wrong in the safe direction.
 
     // Pointer one: mainwt/.git/worktrees/<name>/gitdir, read back out through `worktree list`.
@@ -213,7 +218,24 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
     // Pointer two: linked/.git, which names that administrative directory back in mainwt.
     // Nothing above reads it, and unrepaired it still names the template — so this is the half
     // of the cure that had no assertion at all, not a second way of asking the same question.
+    //
+    // Proven against the objection that will one day be used to delete it — "redundant with the
+    // equality above". Neutralising that equality only shows this pair CAN fire; it does not show
+    // the pair reaches a state the equality misses. The separating state does, and it was built
+    // rather than argued: hand-write mainwt/.git/worktrees/<dir>/gitdir the way repair writes it and
+    // leave linked/.git still naming the template, and the equality PASSES on its own merits while
+    // this pair catches it. Partial repair is a real state, not a contrived one — repairing from
+    // the main tree and repairing from inside the linked tree fix different pointers. `<dir>` is the
+    // linked worktree's DIRECTORY basename, not its branch — reproducing this cost one run to that.
+    // (Write that pointer forward-slashed. Git writes it that way on Windows and will not strip
+    // its own `/.git` suffix from a backslashed one, which fails the equality for an unrelated
+    // reason and looks like a fixture bug.)
     const dotGit = readFileSync(join(a.linked, ".git"), "utf8").trim();
+    // A parse precondition for the slice below, NOT a pointer check, and it cannot fail in any
+    // state this fixture reaches: a copy still begins with `gitdir:`, and a symlink or nested-clone
+    // fixture would hand back a directory and throw EISDIR one line earlier. Kept for the readable
+    // failure it gives if that ever stops being true, and labelled so it is never counted as one
+    // of the two pointer assertions. The commit above set that standard; it applies here too.
     expect(dotGit.startsWith("gitdir:")).toBe(true);
     const gitdir = resolve(a.linked, dotGit.slice("gitdir:".length).trim());
     expect(realpathSync(gitdir).startsWith(realpathSync(a.base))).toBe(true);
