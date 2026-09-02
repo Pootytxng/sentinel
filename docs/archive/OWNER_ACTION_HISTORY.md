@@ -514,3 +514,19 @@ cover for a market that does not exist yet, and it can be added the day it does.
 cheap to reverse:** the region gate is a first-run branch, not an architecture. Nothing about your
 own machine or the local app changes either way. Revisit this the moment Compy is downloadable by
 Europeans — that is the trigger, not a date.
+
+## Moved from the live checklist on 2026-09-01 — six items archived on 2026-08-20
+
+The live checklist kept the full reason for each of these long after they stopped being asks.
+It now carries the six names and a pointer here; this is the copy that holds the why. Moved to
+pay for §A_prune growing from three refs to eleven (#305) — the doc-budget cap did not move.
+
+Archived 2026-08-20 by a self-checkup, because none of them ever needed you and a checklist that
+lists non-asks makes the real ones harder to see: **A_ci** (GitHub refused branch protection on this
+plan — the answer came from GitHub, not from you) · **A_rig** (its own text says "nothing for you to
+do today"; it is a logged honesty note, not an action) · **A_ref2** (a "single delete click" that was
+already done — the ref was gone from origin and its disposition row with it) · **B1** (resolved
+verbally 2026-07-08; its one live residual is tracked in `BACKLOG.md`) · **B7** (site auto-deploy,
+**CANCELLED BY OWNER 2026-07-16 — do not resurface**) · **B_arc** (filed as an owner fork on
+2026-08-20 and it should never have been: dead engineering, not a product call; executed the same
+day — see the `.arc-v2` row in `BACKLOG.md`).
