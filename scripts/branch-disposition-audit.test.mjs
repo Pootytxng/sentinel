@@ -396,9 +396,11 @@ describe("what a checkout is entitled to say about origin", () => {
 // docs/archive/** is exempt: those are point-in-time records of what was true when written, and
 // editing them to match today is falsifying them. A live doc with a real reason to name the call can
 // carry a greppable `blocked-prune-allow` on the line — the same escape hatch the mutation-boundary
-// and outbound guards use. One live doc carries one: the `lane/receipt-315-preserve-336` row in
-// docs/BRANCH_DISPOSITIONS.md, which names the call to record that it is BLOCKED here -- the exact
-// wall the sessions above kept hitting, and the opposite of prescribing it.
+// and outbound guards use. Exactly one live line carries it today, in docs/BRANCH_DISPOSITIONS.md,
+// naming the call to record that it is BLOCKED here -- the exact wall the sessions above kept
+// hitting, and the opposite of prescribing it. Deliberately not named by row: rows are retired
+// when their ref is pruned, so a row name here would rot the way the docblock below this file's
+// own review did. Count it with `git grep -c blocked-prune-allow -- '*.md'`, do not read it here.
 describe("the live docs do not prescribe the blocked prune", () => {
   it("nowhere recommends the gh REST deletion for pruning a ref", () => {
     const tracked = git(repoRoot, ["ls-files", "*.md"])
@@ -635,5 +637,109 @@ describe("PR-to-merge-commit citations", () => {
       { pr: 273, sha: "e26108f7" },
       { pr: 275, sha: "29fb8009" },
     ]);
+  });
+});
+
+// Both rules below came out of the independent review of PR #338, which found a row still calling
+// PR #316 "stacked on `lane/receipt-modified-309` -- 14 commits past `origin/main`" in the very
+// commit that deleted that ref, with the true count by then 3. The audit was green throughout:
+// `branch-disposition-audit.mjs` validates row KEYS against origin's refs and never reads row
+// PROSE, so a row can name a branch this table itself pruned and nothing notices. That is the
+// standing "green that is not evidence" class (#322), one level down.
+//
+// Deliberately offline. Both read the document and each other, never the network -- #339 is a red
+// this same lane caught, where one `ls-remote` inside the 407-file parallel storm lost its slice
+// and reddened the whole gate. A rule that can only fail for a real reason is worth more than a
+// rule that is one round-trip more thorough.
+describe("the record's prose does not outlive the refs it describes", () => {
+  const record = () => readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8");
+  const rowKeys = (md) =>
+    new Set(
+      md
+        .split("\n")
+        .filter((line) => line.startsWith("| `origin/"))
+        .map((line) => line.split("`")[1].replace(/^origin\//, "")),
+    );
+
+  // A count is measured against `origin/main`, and `origin/main` moves on every merge -- so the
+  // number is stale the moment any other lane lands, without a word of this file changing. The
+  // table already learned this for tip SHAs ("a row naming its own branch's head is stale on
+  // arrival"); a count is the same mistake with more arithmetic. Measured before banning: of the
+  // five rows that pinned one, two were already wrong (14 -> 3, 20 -> 9) and three were still
+  // right, which is exactly the mix that makes the wrong ones believable.
+  //
+  // STATED LIMIT, so this comment does not claim more than the rule does: only counts against
+  // `origin/main` are banned. A row measuring against a NAMED landed commit is anchored to
+  // something that does not move and is fine. A row saying "N commits past `main`" -- the local
+  // branch, not the remote-tracking ref -- is NOT caught here; two rows say that today and both
+  // are true, and widening the pattern to `main` would also have to catch the prose sections,
+  // where the phrase is used to explain the method rather than to pin a fact.
+  const PINNED_COUNT =
+    /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|\d+)\s+commits?\s+past\s+`origin\/main`/i;
+
+  it("pins no commit count against a baseline that moves", () => {
+    const offenders = record()
+      .split("\n")
+      .map((line, i) => ({ line, n: i + 1 }))
+      .filter(({ line }) => line.startsWith("| `origin/") && PINNED_COUNT.test(line))
+      .map(({ n }) => `docs/BRANCH_DISPOSITIONS.md:${n}`);
+    expect(offenders).toEqual([]);
+  });
+
+  // Without this the rule above passes on a document it never understood -- a reworded table, or a
+  // regex that quietly stopped matching, and the ban reads as satisfied because nothing matched.
+  it("would catch a pinned count in either spelling", () => {
+    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... — 14 commits past `origin/main`. |")).toBe(true);
+    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... two of its seven commits past `origin/main` |")).toBe(
+      true,
+    );
+    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... one commit past `origin/main` |")).toBe(true);
+    // The stated limit, pinned so a later reader cannot mistake it for coverage.
+    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... Three commits past `main`, checked out at |")).toBe(
+      false,
+    );
+    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... 3 commits past `16069fa` |")).toBe(false);
+  });
+
+  // "stacked on X" is a claim about the shape of the world RIGHT NOW, unlike "landed as #315",
+  // which is history and stays true forever. Only the present-tense form is checked, because a
+  // blanket ban on naming a dead ref would red the honest half of this table: row after row names
+  // a branch that has since been pruned, correctly, in the past tense -- and one row names
+  // `claude/compy-visual-recovery-kit-6fd074`, which has never been on any remote and is named
+  // here precisely so it does not get deleted. Failing those would be #295 again, a guard reading
+  // true prose as a lie.
+  const STACK_CLAIM = /stacked\s+(?:\w+\s+deep\s+)?on\s+`((?:origin\/)?[A-Za-z0-9._/-]+)`/gi;
+  const stackClaims = (md) =>
+    md
+      .split("\n")
+      .flatMap((line, i) =>
+        line.startsWith("| `origin/")
+          ? [...line.matchAll(STACK_CLAIM)].map((m) => ({ n: i + 1, base: m[1].replace(/^origin\//, "") }))
+          : [],
+      );
+
+  it("claims no live stack on a ref the table no longer rows", () => {
+    const md = record();
+    const claims = stackClaims(md);
+    // Vacuous otherwise: a table that stopped using the word would pass this without being read.
+    expect(claims.length).toBeGreaterThan(0);
+    const keys = rowKeys(md);
+    // A row exists for every live origin ref -- that is what `branch-disposition-audit.mjs` already
+    // enforces -- so "has a row here" is the offline way to ask "still exists", with no round-trip.
+    const dangling = claims
+      .filter(({ base }) => !keys.has(base))
+      .map(({ n, base }) => `docs/BRANCH_DISPOSITIONS.md:${n} claims a live stack on \`${base}\`, which has no row`);
+    expect(dangling).toEqual([]);
+  });
+
+  it("would catch the row that prompted it, and spares the past tense", () => {
+    const dead = "| `origin/lane/a` | CLAIMED | PR #316, stacked on `lane/receipt-modified-309` — 14 commits. |";
+    const alive = "| `origin/lane/a` | CLAIMED | stacked two deep on `lane/b` |";
+    const history = "| `origin/lane/a` | CLAIMED | its base `lane/receipt-modified-309` landed as PR #315. |";
+    const md = ["| `origin/lane/a` | X | y |", "| `origin/lane/b` | X | y |"].join("\n");
+    const keys = rowKeys(md);
+    expect(stackClaims(dead).map((c) => keys.has(c.base))).toEqual([false]);
+    expect(stackClaims(alive).map((c) => keys.has(c.base))).toEqual([true]);
+    expect(stackClaims(history)).toEqual([]);
   });
 });
