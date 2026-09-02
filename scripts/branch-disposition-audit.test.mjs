@@ -400,7 +400,10 @@ describe("what a checkout is entitled to say about origin", () => {
 // naming the call to record that it is BLOCKED here -- the exact wall the sessions above kept
 // hitting, and the opposite of prescribing it. Deliberately not named by row: rows are retired
 // when their ref is pruned, so a row name here would rot the way the docblock below this file's
-// own review did. Count it with `git grep -c blocked-prune-allow -- '*.md'`, do not read it here.
+// own review did. Count it with `git grep -c blocked-prune-allow -- '*.md' ':!docs/archive'`, and
+// do not read the row here. The exclusion is not cosmetic: this rule exempts the archive, so a
+// count that includes it answers a different question than the one the rule asks -- zero hits
+// there today, which is the right number reached over the wrong corpus.
 describe("the live docs do not prescribe the blocked prune", () => {
   it("nowhere recommends the gh REST deletion for pruning a ref", () => {
     const tracked = git(repoRoot, ["ls-files", "*.md"])
@@ -653,35 +656,65 @@ describe("PR-to-merge-commit citations", () => {
 // rule that is one round-trip more thorough.
 describe("the record's prose does not outlive the refs it describes", () => {
   const record = () => readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8");
+
+  // Aligned with `parseDispositions` in the audit itself, which reads `line.trimStart()` and trims
+  // each cell: an indented or padded row is a row THERE, so it must be a row HERE, or one leading
+  // space would hide a claim from both rules below while the audit went on validating its key.
+  // Found by review, with nothing indented in the table today -- a guard that can be stepped around
+  // by a space is the "green that is not evidence" class (#322) wearing a different hat. The one
+  // divergence left is deliberate: `parseDispositions` reads only the `## The refs` section and
+  // these rules read the whole file, which can only ever check MORE lines, never fewer.
+  const isRow = (line) => /^\s*\|\s*`origin\//.test(line);
   const rowKeys = (md) =>
     new Set(
       md
         .split("\n")
-        .filter((line) => line.startsWith("| `origin/"))
+        .filter(isRow)
         .map((line) => line.split("`")[1].replace(/^origin\//, "")),
     );
 
-  // A count is measured against `origin/main`, and `origin/main` moves on every merge -- so the
+  // A count is measured against a branch tip, and a branch tip moves on every merge -- so the
   // number is stale the moment any other lane lands, without a word of this file changing. The
   // table already learned this for tip SHAs ("a row naming its own branch's head is stale on
   // arrival"); a count is the same mistake with more arithmetic. Measured before banning: of the
-  // five rows that pinned one, two were already wrong (14 -> 3, 20 -> 9) and three were still
-  // right, which is exactly the mix that makes the wrong ones believable.
+  // five rows that pinned one against `origin/main`, two were already wrong (14 -> 3, 20 -> 9) and
+  // three were still right, which is exactly the mix that makes the wrong ones believable.
   //
-  // STATED LIMIT, so this comment does not claim more than the rule does: only counts against
-  // `origin/main` are banned. A row measuring against a NAMED landed commit is anchored to
-  // something that does not move and is fine. A row saying "N commits past `main`" -- the local
-  // branch, not the remote-tracking ref -- is NOT caught here; two rows say that today and both
-  // are true, and widening the pattern to `main` would also have to catch the prose sections,
-  // where the phrase is used to explain the method rather than to pin a fact.
+  // WIDENED after the review of this same PR, in three directions the first version got wrong:
+  //   * `main` as well as `origin/main`. The first version's stated reason for stopping -- that
+  //     reaching `main` would also catch the prose sections, which use the phrase to explain the
+  //     method -- was simply false: this rule only ever reads table rows, and prose lines never
+  //     reach it. Two more rows had to give up a count, both true at the time and both perishable.
+  //   * "ahead of" as well as "past", which one of those two rows used.
+  //   * `**bold**` around the number. "now carries **zero** commits past `origin/main`" sat in this
+  //     table THROUGH the commit that added this rule and matched nothing, because the emphasis
+  //     markers stood between the number and the noun. A ban a writer can slip by bolding a digit
+  //     is not a ban; that this one was slipped by accident is the only reason it reads as luck.
+  //
+  // STATED LIMIT, so this comment does not claim more than the rule does. Two forms are NOT caught:
+  //   1. a count against a NAMED landed commit ("3 commits past `16069fa`"), anchored to something
+  //      that does not move, and fine;
+  //   2. a count with NO baseline in the sentence -- "#286/#287 fell to 3 and 5", which stood in
+  //      this table while wrong (measured 0 and 7) and was caught by a human reviewer, not here.
+  //      No pattern separates that from honest prose without redding the rest of the file, so it
+  //      stays a review duty. Both forms are pinned as misses below, so that nobody reads this rule
+  //      as covering them -- which is the mistake that put the wrong numbers past it once already.
   const PINNED_COUNT =
-    /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|\d+)\s+commits?\s+past\s+`origin\/main`/i;
+    /\b(?:\*\*)?(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|\d+)(?:\*\*)?\s+commits?\s+(?:past|ahead\s+of)\s+`(?:origin\/)?main`/i;
 
   it("pins no commit count against a baseline that moves", () => {
-    const offenders = record()
+    const rows = record()
       .split("\n")
       .map((line, i) => ({ line, n: i + 1 }))
-      .filter(({ line }) => line.startsWith("| `origin/") && PINNED_COUNT.test(line))
+      .filter(({ line }) => isRow(line));
+    // Without this the ban passes on a document the rule never found: rename a column, reformat the
+    // table, and "no offenders" means "no rows read". The commit that shipped this rule claimed
+    // every rule here carried a self-test that stopped it passing vacuously; for THIS one that was
+    // false, and the review said so. The floor sits far below the row count so that retiring a row
+    // cannot red it.
+    expect(rows.length).toBeGreaterThan(20);
+    const offenders = rows
+      .filter(({ line }) => PINNED_COUNT.test(line))
       .map(({ n }) => `docs/BRANCH_DISPOSITIONS.md:${n}`);
     expect(offenders).toEqual([]);
   });
@@ -694,11 +727,19 @@ describe("the record's prose does not outlive the refs it describes", () => {
       true,
     );
     expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... one commit past `origin/main` |")).toBe(true);
-    // The stated limit, pinned so a later reader cannot mistake it for coverage.
+    // The three widenings, each pinned to the row that escaped the first version of this rule.
     expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... Three commits past `main`, checked out at |")).toBe(
-      false,
+      true,
     );
+    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... a sibling branch, 7 commits ahead of `main`. |")).toBe(
+      true,
+    );
+    expect(
+      PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... now carries **zero** commits past `origin/main` |"),
+    ).toBe(true);
+    // The two stated misses, pinned so a later reader cannot mistake this rule for coverage.
     expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... 3 commits past `16069fa` |")).toBe(false);
+    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... #286/#287 fell to 3 and 5 |")).toBe(false);
   });
 
   // "stacked on X" is a claim about the shape of the world RIGHT NOW, unlike "landed as #315",
@@ -713,7 +754,7 @@ describe("the record's prose does not outlive the refs it describes", () => {
     md
       .split("\n")
       .flatMap((line, i) =>
-        line.startsWith("| `origin/")
+        isRow(line)
           ? [...line.matchAll(STACK_CLAIM)].map((m) => ({ n: i + 1, base: m[1].replace(/^origin\//, "") }))
           : [],
       );
@@ -724,8 +765,16 @@ describe("the record's prose does not outlive the refs it describes", () => {
     // Vacuous otherwise: a table that stopped using the word would pass this without being read.
     expect(claims.length).toBeGreaterThan(0);
     const keys = rowKeys(md);
-    // A row exists for every live origin ref -- that is what `branch-disposition-audit.mjs` already
-    // enforces -- so "has a row here" is the offline way to ask "still exists", with no round-trip.
+    // The direction this needs is the CONVERSE of the cover check, and the first version of this
+    // comment cited the wrong one. Not "every live ref has a row" -- that would leave a row for a
+    // pruned ref perfectly legal -- but "every ROW has a live ref", which the audit also enforces:
+    // `if (!live.has(ref)) problems.push(... no longer exists -- drop the row)`. Given that, "has a
+    // row here" is the offline way to ask "still exists", with no round-trip.
+    //
+    // STATED LIMIT: both directions sit behind `if (!cover.tracksEveryBranch) return problems;` in
+    // that file, so in a checkout that cannot see every branch the audit enforces neither and this
+    // rule degrades to checking the table against itself. It is never LOUDER than the audit, only
+    // quieter -- the safe direction, but not the one the bare sentence above implied.
     const dangling = claims
       .filter(({ base }) => !keys.has(base))
       .map(({ n, base }) => `docs/BRANCH_DISPOSITIONS.md:${n} claims a live stack on \`${base}\`, which has no row`);
