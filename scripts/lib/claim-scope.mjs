@@ -40,7 +40,20 @@ export function parseWriteScope(markdown) {
   const rest = text.slice(start).replace(/^[-*]\s*Write scope:/i, "");
   const end = rest.search(/\n\s*\n|\n[-*]\s/);
   const bullet = end < 0 ? rest : rest.slice(0, end);
-  const declared = [...bullet.matchAll(/`([^`]+)`/g)].map((m) => normalizePattern(m[1]));
+
+  // A path a sentence DISCLAIMS is not a path the lane claimed. Without this, the bullet
+  // "this lane does not edit `docs/SESSION_HANDOFF.md`" grants the handoff -- exactly backwards
+  // for the one file #291 exists about, and the drift check would then wave through the edit it
+  // was built to catch. Judged per path rather than per sentence, so `a` survives "`a` but not
+  // `b`": the text between one path and the next is what decides it.
+  const declared = [];
+  let cursor = 0;
+  for (const match of bullet.matchAll(/`([^`]+)`/g)) {
+    const gap = bullet.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+    if (/\b(?:not|never|except|excluding|outside|other than)\b/i.test(gap)) continue;
+    declared.push(normalizePattern(match[1]));
+  }
   return declared.filter((p, i, a) => p && a.indexOf(p) === i);
 }
 

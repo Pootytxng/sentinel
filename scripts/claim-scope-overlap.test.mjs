@@ -35,8 +35,12 @@ describe("a write scope is data, not prose", () => {
       "scripts/branch-disposition-audit.mjs",
       "scripts/branch-disposition-audit.test.mjs",
       "docs/dispositions/*.json",
-      "docs/SESSION_HANDOFF.md",
     ]);
+    // The claim NAMES docs/SESSION_HANDOFF.md -- to promise it will not be touched. Reading that
+    // as a grant would hand the lane the one file #291 exists to keep out of lanes, and the drift
+    // check would then wave through the exact edit it was built to catch.
+    expect(parseWriteScope(ALPHA)).not.toContain("docs/SESSION_HANDOFF.md");
+    expect(parseWriteScope("- Write scope: `src/a.ts` but not `src/b.ts`")).toEqual(["src/a.ts"]);
     // Stops at the next bullet. A scope that swallowed the rest of the claim would cover every path
     // named anywhere in it, which reads as a very broad claim and is really a parser bug.
     expect(parseWriteScope(ALPHA)).not.toContain("2026-09-02 23:10 UTC");
