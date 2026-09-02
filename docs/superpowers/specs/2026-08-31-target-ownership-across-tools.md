@@ -129,22 +129,28 @@ Deny is reserved for the case where the checker has **positive knowledge** of a 
   write into a sibling with only the bare one refused, so those are closed rather than accepted.
   **The table is an ALLOWLIST, not a closed class**, and the sentence above read as though it were —
   corrected here because a spec that claims a class is handled is worse than one that names the gap.
-  Still open and measured: `flock`, `su` and `find -exec` each carry a literal
-  sibling write past the checker today. Each needs its own positional grammar rather than a table
-  row — `flock` swallows a lockfile, `su` a username BEFORE its string-taking
-  `-c`, `find -exec` a command terminated by `;` or `+` mid-argv — and inventing four grammars at once
-  is how `chrt`'s own bug got in. Tracked as [#308](https://github.com/Pootytxng/sentinel/issues/308),
-  closing one at a time; `busybox` is closed and carried — a multi-call binary needs no positional
+  Still open and measured: none. Every wrapper this section once listed is now carried, and the
+  marker below stays present-but-empty rather than deleted, so the claim keeps costing something.
+  Each needed its own positional grammar rather than a bare table row — `flock` swallows a lockfile,
+  `su` a username BEFORE its string-taking `-c` — and inventing four grammars at once is how
+  `chrt`'s own bug got in. Tracked as [#308](https://github.com/Pootytxng/sentinel/issues/308),
+  closed one at a time; `busybox` is closed and carried — a multi-call binary needs no positional
   grammar, the applet already sits in the command position. `taskset` is closed too: its CPU mask is
   the third bare leading positional in this table after `timeout`'s duration and `chrt`'s priority,
-  and it failed identically. What keeps that list honest is not this
-  sentence: `tools/entry/shell-ownership-assert.test.mjs` enumerates the table itself and requires a
-  probe per row, so a name cannot be added here without a test or left here after it is carried.
-  The set is machine-read from the marker below rather than from this paragraph: the prose cites
-  closed wrappers as precedent, so a reader that scans the sentence cannot tell a listing from a
-  citation. The marker and the sentence are pinned to each other by the test.
+  and it failed identically. The last to close was `find`, which is not a wrapper at all and gets
+  its own extraction beside `git`'s: its command sits MID-ARGV after `-exec` / `-execdir` / `-ok` /
+  `-okdir` terminated by `;` or `+`, `-delete` and `-fprintf` write with no command named anywhere,
+  and `{}` resolves to find's own path operands. `-execdir` runs in the directory holding each
+  match, so a relative target under it is reported unknown rather than resolved against this one.
+  What keeps that list honest is not this sentence: `tools/entry/shell-ownership-assert.test.mjs`
+  enumerates the table itself and requires a probe per row, so a name cannot be added here without a
+  test or left here after it is carried. The set is machine-read from the marker below rather than
+  from this paragraph: the prose cites closed wrappers as precedent, so a reader that scans the
+  sentence cannot tell a listing from a citation. The marker and the sentence are pinned to each
+  other by the test — in both directions, because the prose went stale on `flock` and `su` while the
+  marker was right, and only the marker was being checked.
 
-  <!-- open-wrappers: find -->
+  <!-- open-wrappers: -->
 
   Also open, narrowly: `xargs` reading its targets from **stdin** is still class 3, because the
   step-over reaches the argv template only; and a wrapper flag this table does not carry may or may

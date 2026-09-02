@@ -765,6 +765,86 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
     }
   });
 
+  // `find` is the last §6 hole and the only one that was never a wrapper. Its command sits mid-argv
+  // and `-delete` names no command at all, so it gets its own extraction rather than a table row —
+  // which is why it is NOT in WRAPPER_PROBES below: PREFIX_VERBS does not carry it, and the
+  // enumeration there would fail if it did. Measured before the branch existed: all eight of these
+  // were ALLOWED, `find . -name x -exec rm -f <sibling>/y ;` included, whose target is a plain
+  // literal with no `{}` anywhere in it.
+  it("does not let find's mid-argv command carry the write past", () => {
+    for (const c of [
+      `find . -name x -exec rm -f ${SIB_FILE} ;`,
+      `find . -name x -ok rm -f ${SIB_FILE} ;`,
+      `find . -name x -exec sudo rm -f ${SIB_FILE} ;`,
+      // `{}` is not a path — the target is what find SEARCHED, which is why the path operands are
+      // separated from the expression before either is read.
+      `find ${inSib(".")} -name x -exec rm -f {} ;`,
+      `find ${inSib(".")} -exec rm -rf {} +`,
+      // ...and the two primaries that write with no command named anywhere.
+      `find ${inSib(".")} -delete`,
+      `find -L ${inSib(".")} -delete`,
+      `find . -type f -fprintf ${SIB_FILE} %p`,
+    ]) {
+      expect(ask(c).permission, c).toBe("deny");
+    }
+  });
+
+  // ALL THREE FOUND BY FALSIFICATION, not by reading the branch. Injections that deleted the
+  // terminator walk and the recursion left every other test in this file green.
+  it("reads the rest of the find expression after the -exec terminator", () => {
+    // Without the `;`/`+` walk the whole tail becomes arguments of `echo`, and the `-delete`
+    // riding behind it is never seen at all.
+    expect(ask(`find ${inSib(".")} -exec echo {} + -delete`).permission).toBe("deny");
+  });
+
+  it("follows a find nested inside another find's -exec", () => {
+    expect(ask(`find . -exec find ${inSib(".")} -delete ;`).permission).toBe("deny");
+    expect(ask(`find . -exec find . -exec find ${inSib(".")} -delete ; ;`).permission).toBe("deny");
+  });
+
+  // `-execdir` runs in the directory HOLDING each match, so a relative target under it lands
+  // somewhere this checker cannot name. That is `ask`, not `allow` and not `deny`: the spec's
+  // class 2. An ABSOLUTE target is unaffected by which directory it ran in, and still denies.
+  it("reports find -execdir's relative target unknown rather than resolving it here", () => {
+    expect(ask("find . -name x -execdir rm -f {} ;").permission).toBe("ask");
+    expect(ask(`find . -name x -execdir rm -f ${SIB_FILE} ;`).permission).toBe("deny");
+  });
+
+  // THE FALSE-DENY DIRECTION, which is what makes the branch above shippable. `find` is one of the
+  // most common commands there is, and a guard that asks about every one of these gets removed.
+  it("still allows ordinary find use", () => {
+    for (const c of [
+      "find . -type f -name *.tmp",
+      "find . -name *.orig -exec rm -f {} +",
+      "find . -type f -exec chmod 644 {} ;",
+      "find . -exec ls -la {} ;",
+      "find . -exec grep -rn foo {} +",
+      // A glob inside the -exec command. Gated on `w.dynamic` this asked, and nothing noticed.
+      "find . -exec rm -f *.log ;",
+      "find src -name *.tsx -newer package.json",
+      "find . -maxdepth 2 -type d",
+    ]) {
+      expect(ask(c).permission, c).toBe("allow");
+    }
+  });
+
+  // Re-entry goes back through the TEXT, so a word carrying shell punctuation would come back as a
+  // different command than the one that ran. Those refuse rather than guess — including the one
+  // shape that matters most, an `-exec` whose command is itself a shell.
+  it("refuses to guess at a find -exec command it cannot spell back", () => {
+    for (const c of [
+      `find . -exec sh -c "rm -f ${SIB_FILE}" ;`,
+      "find . -exec $CMD -f x ;",
+      "find . -name x -exec",
+      // RELEX itself, pinned in the one direction it is observable. Emptied, this rejoins into
+      // two segments — `sometool -x a` and `b` — and every test above still passes, which is the
+      // shape of a line that could be deleted without anything noticing.
+      `find . -exec sometool -x "a;b" ;`,
+    ]) {
+      expect(ask(c).permission, c).not.toBe("allow");
+    }
+  });
+
   // THE chrt BUG, MECHANIZED. `chrt` shipped inside a table the spec called complete, carrying no
   // probe of its own, and its positional read as the command. A list of NAMES cannot catch that —
   // it is satisfied by the name being mentioned anywhere. So the table is enumerated instead: every
@@ -806,9 +886,7 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
   // Closing one of these means this file fails until the name leaves the marker and joins
   // WRAPPER_PROBES, which is exactly the three-place update the issue asks for. Nothing here
   // endorses the hole; it pins the claim so the claim cannot go stale in either direction.
-  const OPEN_PROBES = {
-    find: `find . -name x -exec rm -f ${SIB_FILE} ;`,
-  };
+  const OPEN_PROBES = {};
 
   it("proves every wrapper §6 marks open really is still open", () => {
     expect(Object.keys(OPEN_PROBES).sort()).toEqual([...OPEN].sort());
@@ -840,12 +918,27 @@ describe("the wrapper table is an allowlist, and the spec says which ones are st
   // both directions, so the marker cannot quietly become the only true copy.
 
   it("names every known-open wrapper, so the gap is documented where the claim is made", () => {
-    expect(OPEN.length, "§6 must carry an open-wrappers marker").toBeGreaterThan(0);
+    // PRESENT, not non-empty. With the last hole closed the list is legitimately empty, and the
+    // marker still has to exist: deleting it would make every assertion below vacuously true.
+    expect(SPEC, "§6 must carry an open-wrappers marker").toMatch(/<!-- open-wrappers:[^>]*-->/);
     for (const w of OPEN) {
       expect(SPEC, `${w} is marked open and the prose of §6 must say so too`).toContain(w);
     }
     expect(SPEC).toMatch(/allowlist/i);
   });
+
+  // FOUND BY BEING WRONG, so it is guarded rather than written down. The marker was narrowed as
+  // `flock` and `su` closed, and the sentence beside it still said all three were open — true only
+  // of `find`, and nothing checked it, because the old assertion ran one way: names IN the marker
+  // must appear in the prose. A closed wrapper still named as open is the same stale claim the
+  // marker exists to prevent, so the two are now pinned as sets in both directions.
+  it("keeps the prose's own open list identical to the marker", () => {
+    const claim = SPEC.match(/Still open and measured: ([^.]*)\./);
+    expect(claim, "§6 must state its open list in prose as well as in the marker").toBeTruthy();
+    const named = [...claim[1].matchAll(/`([a-z-]+)[^`]*`/g)].map((m) => m[1]);
+    expect(named.sort(), "the prose and the marker must name the same set").toEqual([...OPEN].sort());
+  });
+
 
   it("does not call a wrapper open once the table carries it", () => {
     for (const name of PREFIX_VERBS.keys()) {

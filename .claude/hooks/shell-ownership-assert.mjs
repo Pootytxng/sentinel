@@ -526,6 +526,12 @@ const expandHome = (p, home) => (p === "~" || p.startsWith("~/") || p.startsWith
  *  the checker from asking about every ordinary wildcard. */
 const globBounded = (w) => /^[^$`]*$/.test(w.raw ?? w.value) && !w.value.includes("..") && !/^([A-Za-z]:|[\\/]|~)/.test(w.value);
 
+/** Punctuation that would re-lex into something other than one plain word. `find -exec` hands its
+ *  command back to this analyzer as TEXT, so a word carrying any of these would come back as a
+ *  DIFFERENT command than the one that ran — those are refused, not guessed at. Globs are absent on
+ *  purpose: re-lexing marks them dynamic, and `globBounded` already answers for them correctly. */
+const RELEX = new Set([" ", "\t", "\n", "'", '"', "`", "$", "\\", ";", "|", "&", "<", ">", "(", ")", "#"]);
+
 /**
  * One command string -> the operations it names.
  *
@@ -658,6 +664,103 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
         }
         if (w.dynamic && !globBounded(w)) cannot(gitVerb, `the pathspec \`${w.value}\` is not knowable from the text`);
         else if (/[\\/.]/.test(w.value)) at(expandHome(w.value, home), gitVerb);
+      }
+      continue;
+    }
+
+    // `find` is the last hole in §6 and the only one that is not a wrapper at all. Its command sits
+    // MID-ARGV — `-exec … ;` runs a second command with the matches as its arguments — and `-delete`
+    // writes without naming a command anywhere. `stepPrefixes` cannot help: nothing in the leading
+    // words says a write is coming. So, like `git` above, it gets its own extraction. Measured
+    // before any of this was written, all eight forms were ALLOWED, including
+    // `find . -name x -exec rm -f <sibling>/y ;`, whose target is a plain literal with no `{}` in it.
+    if (verb === "find") {
+      // Leading options, then the path operands, then the expression. `-D` takes a value and `-O2`
+      // carries its own; every other `-` word opens the expression, as do `(`, `!` and `,`.
+      let i = 0;
+      const paths = [];
+      for (; i < rest.length; i += 1) {
+        const v = rest[i].value;
+        if (v === "-H" || v === "-L" || v === "-P" || /^-O[0-9]*$/.test(v)) continue;
+        if (v === "-D") {
+          i += 1;
+          continue;
+        }
+        if (v.startsWith("-") || v === "(" || v === "!" || v === ",") break;
+        paths.push(rest[i]);
+      }
+      // A `find` with no path operand searches `.`, which is a real directory and this session's
+      // own — not nothing. Defaulting it is what keeps `find -delete` from reading as targetless.
+      const searched = paths.length ? paths : [{ value: ".", dynamic: false }];
+      const expr = rest.slice(i);
+      const targetOf = (w, why) => {
+        if (w.dynamic && !globBounded(w)) cannot(why, `the operand \`${w.value}\` is not knowable from the text`);
+        else at(expandHome(w.value, home), why);
+      };
+
+      for (let j = 0; j < expr.length; j += 1) {
+        const p = expr[j].value;
+        // find's OWN writing primaries. `-delete` names no target because its targets are what it
+        // searched, which is the whole reason the path operands had to be separated out above.
+        if (p === "-delete") {
+          for (const s of searched) targetOf(s, "find -delete");
+          continue;
+        }
+        if (p === "-fprintf" || p === "-fls" || p === "-fprint" || p === "-fprint0") {
+          const f = expr[j + 1];
+          j += 1;
+          if (!f) cannot(`find ${p}`, "it names no target this checker can see");
+          else targetOf(f, `find ${p}`);
+          continue;
+        }
+        if (p !== "-exec" && p !== "-execdir" && p !== "-ok" && p !== "-okdir") continue;
+
+        // The command runs to `;` or `+`. A bare `;` has already ended the segment upstream, so most
+        // of the time the terminator is simply absent and the command runs to the end.
+        const start = j + 1;
+        let end = start;
+        while (end < expr.length && expr[end].value !== ";" && expr[end].value !== "+") end += 1;
+        const cmd = expr.slice(start, end);
+        j = end;
+        if (!cmd.length) {
+          cannot(`find ${p}`, "it names no command this checker can see");
+          continue;
+        }
+
+        // Re-entry is what reads `-exec sudo rm -f …` and `-exec git -C … checkout` as what they
+        // are, rather than as a second table that would drift from the first. It goes back through
+        // the TEXT, so a word carrying shell punctuation would re-lex into something else — those
+        // fail closed instead of being guessed at, and so does a path that cannot be spelled as an
+        // argument. `{}` is find's placeholder for each match, so the real target of
+        // `-exec rm -f {} ;` is what find SEARCHED: one sub-command per path operand.
+        // Deliberately NOT gated on `w.dynamic`: re-lexing reads a `$VAR` back as dynamic and a
+        // bounded glob back as bounded, which is a better answer than refusing both. Gating on it
+        // turned `find . -exec rm -f *.log ;` into an ask, and every test stayed green while it did.
+        const joinable = (w) => ![...w.value].some((c) => RELEX.has(c));
+        const holes = cmd.some((w) => w.value.includes("{}"));
+        for (const s of holes ? searched : [null]) {
+          if (s && !joinable(s)) {
+            cannot(`find ${p}`, `the path \`${s.value}\` is not knowable as an argument of the command it runs`);
+            continue;
+          }
+          const sub = s ? cmd.map((w) => ({ ...w, value: w.value.split("{}").join(s.value) })) : cmd;
+          if (!sub.every(joinable)) {
+            cannot(`find ${p}`, "the command it runs is not knowable from the text");
+            continue;
+          }
+          // Bounded without a depth cap: the sub-command is strictly shorter than the command that
+          // carried it, since `find`, its path operands and `-exec` are all dropped before re-entry.
+          // A cap was written first and deleted on measurement — it only ever weakened the answer,
+          // turning a nested `find -exec find <sibling> -delete` from a deny into an ask.
+          const inner = analyze(sub.map((w) => w.value).join(" "), { cwd: here, dialect, home });
+          // `-execdir` and `-okdir` run in the directory HOLDING each match, not in this one, so a
+          // relative target there resolves somewhere this checker cannot name. Absolute targets are
+          // unaffected — that is exactly the split `cwdUnknown` already encodes.
+          const elsewhere = p === "-execdir" || p === "-okdir";
+          const carry = (e) => ({ ...e, verb: `find ${p} ${e.verb}`, cwd: here, cwdUnknown: cwdUnknown || elsewhere });
+          for (const op of inner.ops) ops.push(carry(op));
+          for (const u of inner.unresolved) unresolved.push(carry(u));
+        }
       }
       continue;
     }
