@@ -90,7 +90,7 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
 
 - **33 worktrees besides the canonical checkout. Work that exists on no remote — do NOT delete or hard-reset these
   before checking**: `claude/compy-visual-recovery-kit-6fd074`, holding a single commit (`cdd976f3`, docs on
-  RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, and `fix/green-main-after-314-332` (#332) whenever it
+  RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, and `fix/handoff-grace-cycle-333` (#333) whenever it
   holds a commit its push has not carried — EVERY lane joins this list between a commit and its push, so no count is
   pinned here. Most checkouts ahead of `origin/main` are **fully pushed**: deleting those loses nothing, each has a row
   in docs/BRANCH_DISPOSITIONS.md, and rule C prints the live split every run. It stopped demanding all be named on
