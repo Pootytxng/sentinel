@@ -1,0 +1,38 @@
+{
+  "transition": "open-draft-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "issue": 313,
+  "branch": "lane/guard-budget-313",
+  "currentHead": "774dfd997733bcda8fb923cc321f1032a7729f52",
+  "headNote": "Recorded for the reader, not bound by the gate: open-draft-pr is a NON-proof transition, so this field is not matched against the repository. It is the real full head, written out rather than padded or abbreviated - an invented or shortened SHA in a receipt is the exact hazard this gate warns about, and a field being unchecked is no licence to put a fiction in it. A proof-dependent transition on this lane (mark-pr-ready) requires a real 40-character head, its own gate results, and an independent review bound to that same head - none of which this receipt claims.",
+  "explicitHandoff": "NO OWNER TURN AUTHORISES THIS, and none is claimed: the owner has not spoken in this session at all. The standing authorization is docs/RELEASE_AUTONOMY.md, which covers the complete reversible release-engineering train and explicitly names opening PRs as work to do rather than escalate, plus ~/.claude/CLAUDE.md section 3, which puts branches and PRs on the do-it-and-report list. Scope is bounded by the ownership claim this session posted on issue #313 before writing a line. The transition is a DRAFT PR: it reaches no other machine, publishes nothing, arms nothing, moves no frozen ref, touches no key and changes no security or system setting. Marking it ready and merging it are separate transitions this receipt does not authorize; merging in particular is refused by this session's permission layer and is owner territory.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel-remote-design-286. Re-derived this turn with git rev-parse --show-toplevel and git branch --show-current rather than carried over: this checkout previously carried lane/remote-cache-design-286 and then lane/receipt-288, and was REUSED for this lane rather than a new folder being added.",
+    "remoteState": "git fetch origin --prune run twice this turn. origin/main = 624fcc40cb1c4c01821061a3eaf3b3c2ac4eb122, unmoved for the whole session because nothing has landed. git ls-remote --heads origin confirms refs/heads/lane/guard-budget-313 exists and matches the local tip after each push. Five refs that exist at origin had no disposition row on main; four rows were adopted verbatim from origin/lane/docs-path-not-branch-310 at b0814a32 and the fifth is this lane's own.",
+    "worktree": "This writer holds sentinel-remote-design-286 alone. 33 registered worktrees; the peer session holds sentinel-atomic-281, sentinel-release-truth-256, sentinel-segmented-237 and a new checkout carrying lane/prune-list-truth-305, none of which this session has written to. One worktree per writer holds.",
+    "branch": "lane/guard-budget-313, cut from main at 624fcc40, three commits at the time of the last push and four now. No pushed history was rewritten: every push was a fast-forward, no rebase and no force. git diff --stat origin/main...HEAD is 3 files - scripts/hookspath-fleet-guard.test.mjs plus docs/SESSION_HANDOFF.md and docs/BRANCH_DISPOSITIONS.md. NOT ONE path under src/ or src-tauri/ (measured: grep -c returns 0).",
+    "dirtyState": "git status --porcelain was EMPTY at 727c805b before this receipt was written. This receipt file itself is untracked by construction.",
+    "liveProcesses": "No dev server on 1420 and no cargo build in flight. One listener on 5199 (pid 20668), the fixture preview server, which reads only and was not started by this session. Nothing was built, reinstalled or shipped this turn, so the installed Compy on the owner's desk is byte-unchanged.",
+    "otherWriters": "One live peer, session sentinel-63, coordinated explicitly in both directions this turn. It holds #300, #301, #305, #310 and its stacked lanes; this session holds #313 only and is not taking #303. A duplicate disposition row both sessions had written for origin/lane/docs-path-not-branch-310 was resolved by withdrawing THIS session's copy in favour of the lane that owns the ref."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "independentReview": {
+    "practical": false,
+    "reason": "Not required for a draft PR, and not claimed for one. This receipt authorizes opening the PR in DRAFT state precisely so that review happens on the PR rather than being asserted in advance: the reviewer is the peer session sentinel-63, which has reviewed this session's lanes before and had three of its own reviewed by it this turn. Marking the PR ready is a separate, proof-dependent transition that will require a review bound to the exact head, and this receipt does not stand in for it."
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main...HEAD -- src-tauri/src/actions.rs is empty. The one Windows-mutation boundary is untouched, as is every other Rust file: the diff contains no path under src-tauri/ at all.",
+    "locks": "No gate can move: the PR changes one vitest guard and two documentation ledgers. Remote-rules fetch stays triple-gated OFF, the Receipts send path stays hard-false and default-OFF, no capability or CSP is loosened, and no key, secret or .env file is touched or referenced.",
+    "scopeConstraint": "#288 remains DESIGN ONLY and #289 remains Q9b Stage 3 local/staged; neither is touched by this lane. The frozen beta refs (16069fa) are not moved. No branch is deleted and gh pr merge is not run - merging is refused by this session's permission layer and routing it to the peer would launder that decision."
+  }
+}
