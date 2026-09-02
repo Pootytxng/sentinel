@@ -360,7 +360,9 @@ const CD_VERBS = new Set(["cd", "pushd", "set-location", "chdir"]);
  * Flag grammar per wrapper, because guessing past a flag is how the verb moves one word and the
  * checker does not follow. `flags` take no value; `values` take the next word (or an attached
  * `--long=v` / `-oV`); `assignments` allows `VAR=v` before the command; `duration` is a leading
- * positional that is a time; `inspect` PRINTS instead of running; `opaque` hands the command over as
+ * positional that is a time; `positional: n` swallows n leading non-flag words of any shape,
+ * capped at n, and keeps walking flags after them; `inspect` PRINTS instead of running;
+ * `opaque` hands the command over as
  * a string this lexer does not evaluate. A flag in none of them is not guessed at: it becomes an
  * unresolved class-2 write, because which word is the command is genuinely unknowable from the text.
  */
@@ -376,6 +378,12 @@ export const PREFIX_VERBS = new Map([
   // the verb is the whole cure. `busybox sh -c "…"` lands on `sh` and stays class 3, exactly as a
   // bare `sh -c` does, because the applet inherits nothing from the wrapper.
   ["busybox", { inspect: ["--help", "--list"] }],
+  // The lock file sits where chrt puts a priority — but it is a PATH, so no pattern can screen it,
+  // and `flock /tmp/lock rm -f <sibling>` read `/tmp/lock` as the command and allowed the write.
+  // Two things separate this from the numeric positionals above. It matches any non-flag word, so
+  // it is capped at one and consumed only once. And flags continue AFTER it — `flock /tmp/l -c
+  // "…"` is the documented form — so the walk keeps going rather than stopping on the next word.
+  ["flock", { flags: ["-s", "--shared", "-x", "--exclusive", "-u", "--unlock", "-n", "--nb", "--nonblock", "-o", "--close", "-F", "--no-fork", "--verbose"], values: ["-w", "--wait", "--timeout", "-E", "--conflict-exit-code"], opaque: ["-c", "--command"], inspect: ["-h", "--help", "-V", "--version"], positional: 1 }],
   ["nohup", {}],
   ["setsid", { flags: ["-f", "-w", "-c", "--fork", "--wait", "--ctty"] }],
   ["nice", { values: ["-n", "--adjustment"], numeric: true }],
@@ -425,6 +433,7 @@ export function stepPrefixes(words) {
     const opaque = new Set(spec.opaque ?? []);
     let sawDuration = false;
     let sawPositional = false;
+    let positionals = 0;
     while (head < words.length) {
       const w = words[head].value;
       if (w === "--") {
@@ -452,6 +461,15 @@ export function stepPrefixes(words) {
         // unrecognised — which the checker allows. `taskset 0x3 0-1 rm -f <sibling>` went from deny
         // to allow under a one-shot version. The test pins it, so this line cannot quietly relax.
         if (spec.mask && MASK.test(w)) {
+          head += 1;
+          continue;
+        }
+        // Shape-blind, so it is COUNTED instead. A lock file is a path and a username is a name;
+        // neither can be told from a command by looking at it, which is exactly why the cap is the
+        // whole safety property. Uncapped, this swallows the command itself and every write behind
+        // a `flock` goes unseen — measured, and the tests pin the count in both directions.
+        if (spec.positional && positionals < spec.positional) {
+          positionals += 1;
           head += 1;
           continue;
         }

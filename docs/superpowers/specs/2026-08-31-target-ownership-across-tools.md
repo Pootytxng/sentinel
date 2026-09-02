@@ -144,7 +144,7 @@ Deny is reserved for the case where the checker has **positive knowledge** of a 
   closed wrappers as precedent, so a reader that scans the sentence cannot tell a listing from a
   citation. The marker and the sentence are pinned to each other by the test.
 
-  <!-- open-wrappers: flock su find -->
+  <!-- open-wrappers: su find -->
 
   Also open, narrowly: `xargs` reading its targets from **stdin** is still class 3, because the
   step-over reaches the argv template only; and a wrapper flag this table does not carry may or may

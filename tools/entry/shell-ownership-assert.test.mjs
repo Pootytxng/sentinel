@@ -695,6 +695,41 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
     }
   });
 
+  // The lock file is the first leading positional here that no pattern can screen: it is a path,
+  // and a path looks like a command. The cap is what makes it safe, so both halves are pinned.
+  it("does not let flock's lock file stand in for the command", () => {
+    expect(ask(`flock /tmp/lock rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`flock -n /tmp/lock rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`flock -x -w 5 /tmp/lock mv ${SIB_FILE} /tmp/x`).permission).toBe("deny");
+    expect(ask(`flock --timeout 5 /tmp/lock rm -f ${SIB_FILE}`).permission).toBe("deny");
+    // `-c` takes the command as a STRING this lexer does not evaluate, so the target is found by
+    // the embedded-path scan instead of the argv walk. Same answer, different route — pinned
+    // because a route nothing tests is a route that can be removed by accident.
+    expect(ask(`flock /tmp/lock -c "rm -f ${SIB_FILE}"`).permission).toBe("deny");
+    // ...and the cap. Uncapped, the walk eats `rm` as a second positional and lands on a flag.
+    expect(ask(`flock /tmp/lock rm ${SIB_FILE}`).permission).toBe("deny");
+  });
+
+  it("still allows ordinary flock use — the false-deny direction", () => {
+    for (const c of [
+      "flock /tmp/lock ls -la",
+      "flock -n /tmp/lock npm run build",
+      "flock -w 5 /tmp/lock echo hi",
+      "flock -x /tmp/lock cargo test",
+      'flock /tmp/lock -c "ls -la"',
+      // Each of these is a flag whose absence from the row is invisible to every deny test above:
+      // an unrecognised flag is refused anyway. The false-deny direction is the only place a
+      // missing value flag or a missed short bundle can be seen at all.
+      "flock --timeout 5 /tmp/lock ls -la",
+      "flock -E 9 /tmp/lock ls -la",
+      "flock -no /tmp/lock ls -la",
+      "flock -u /tmp/lock ls -la",
+      "flock --no-fork /tmp/lock ls -la",
+    ]) {
+      expect(ask(c).permission, c).toBe("allow");
+    }
+  });
+
   // THE chrt BUG, MECHANIZED. `chrt` shipped inside a table the spec called complete, carrying no
   // probe of its own, and its positional read as the command. A list of NAMES cannot catch that —
   // it is satisfied by the name being mentioned anywhere. So the table is enumerated instead: every
@@ -716,6 +751,7 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
     xargs: "xargs",
     busybox: "busybox",
     taskset: "taskset 0x3",
+    flock: "flock /tmp/lock",
   };
 
   // THE OTHER DIRECTION, and the one that makes the marker cost something. Every name §6 marks
@@ -725,7 +761,6 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
   // WRAPPER_PROBES, which is exactly the three-place update the issue asks for. Nothing here
   // endorses the hole; it pins the claim so the claim cannot go stale in either direction.
   const OPEN_PROBES = {
-    flock: `flock /tmp/lock rm -f ${SIB_FILE}`,
     su: `su root rm -f ${SIB_FILE}`,
     find: `find . -name x -exec rm -f ${SIB_FILE} ;`,
   };
