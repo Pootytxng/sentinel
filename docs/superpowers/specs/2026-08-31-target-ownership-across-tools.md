@@ -129,11 +129,21 @@ Deny is reserved for the case where the checker has **positive knowledge** of a 
   write into a sibling with only the bare one refused, so those are closed rather than accepted.
   **The table is an ALLOWLIST, not a closed class**, and the sentence above read as though it were —
   corrected here because a spec that claims a class is handled is worse than one that names the gap.
-  Still open and measured: `flock`, `taskset`, `su`, `busybox` and `find -exec` each carry a literal
+  Still open and measured: `flock`, `taskset`, `su` and `find -exec` each carry a literal
   sibling write past the checker today. Each needs its own positional grammar rather than a table
   row — `flock` swallows a lockfile, `taskset` a CPU mask, `su` a username BEFORE its string-taking
   `-c`, `find -exec` a command terminated by `;` or `+` mid-argv — and inventing four grammars at once
-  is how `chrt`'s own bug got in. Tracked as [#308](https://github.com/Pootytxng/sentinel/issues/308).
+  is how `chrt`'s own bug got in. Tracked as [#308](https://github.com/Pootytxng/sentinel/issues/308),
+  closing one at a time; `busybox` is closed and carried — a multi-call binary needs no positional
+  grammar, the applet already sits in the command position. What keeps that list honest is not this
+  sentence: `tools/entry/shell-ownership-assert.test.mjs` enumerates the table itself and requires a
+  probe per row, so a name cannot be added here without a test or left here after it is carried.
+  The set is machine-read from the marker below rather than from this paragraph: the prose cites
+  closed wrappers as precedent, so a reader that scans the sentence cannot tell a listing from a
+  citation. The marker and the sentence are pinned to each other by the test.
+
+  <!-- open-wrappers: flock taskset su find -->
+
   Also open, narrowly: `xargs` reading its targets from **stdin** is still class 3, because the
   step-over reaches the argv template only; and a wrapper flag this table does not carry may or may
   not swallow the next word, so it is reported as class 2 rather than guessed past.

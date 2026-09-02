@@ -364,11 +364,18 @@ const CD_VERBS = new Set(["cd", "pushd", "set-location", "chdir"]);
  * a string this lexer does not evaluate. A flag in none of them is not guessed at: it becomes an
  * unresolved class-2 write, because which word is the command is genuinely unknowable from the text.
  */
-const PREFIX_VERBS = new Map([
+export const PREFIX_VERBS = new Map([
   ["env", { flags: ["-i", "-0", "-v", "--ignore-environment", "--null", "--debug"], values: ["-u", "-C", "--unset", "--chdir"], assignments: true, opaque: ["-S", "--split-string"] }],
   ["sudo", { flags: ["-b", "-E", "-H", "-i", "-K", "-k", "-n", "-P", "-S", "-A", "-e", "-s"], values: ["-u", "-g", "-p", "-C", "-h", "-r", "-t", "-T", "-D", "-R", "--user", "--group", "--prompt", "--close-from", "--host", "--role", "--type", "--command-timeout", "--chdir", "--chroot"], assignments: true, inspect: ["-l", "-v", "-V", "--list", "--validate", "--version"] }],
   ["doas", { flags: ["-n", "-s", "-L"], values: ["-u", "-a", "-C"] }],
   ["command", { flags: ["-p"], inspect: ["-v", "-V"] }],
+  // A multi-call binary, and the cheapest hole in the table: the applet IS the command, sitting in
+  // the command position with nothing between. `busybox rm -f <sibling>` was ALLOWED outright,
+  // because `busybox` names no recognized mutation and the checker never read the next word — not
+  // an ambiguity it reported, a silent allow. No positional grammar is needed here; stepping over
+  // the verb is the whole cure. `busybox sh -c "…"` lands on `sh` and stays class 3, exactly as a
+  // bare `sh -c` does, because the applet inherits nothing from the wrapper.
+  ["busybox", { inspect: ["--help", "--list"] }],
   ["nohup", {}],
   ["setsid", { flags: ["-f", "-w", "-c", "--fork", "--wait", "--ctty"] }],
   ["nice", { values: ["-n", "--adjustment"], numeric: true }],

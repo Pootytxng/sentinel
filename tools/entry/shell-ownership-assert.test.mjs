@@ -19,6 +19,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ZONES, isWithin, resolveAbsolute, toComparable } from "../../.claude/hooks/target-ownership.mjs";
 import {
   OFF_SWITCH,
+  PREFIX_VERBS,
   SHELL_TOOLS,
   analyze,
   decideShell,
@@ -624,19 +625,122 @@ describe("a PowerShell scriptblock body is a command list, not an argument (#279
   });
 });
 
-// The table is an ALLOWLIST. §6 read as though the wrapper class were closed, and it is not — these
-// five still carry a literal sibling write past the checker. Pinned so the sentence and the hole
-// cannot drift apart: if one of them is closed, this test is what says so.
+// §6 of the spec carries a machine-readable marker of the wrapper holes still open. It is read
+// once here because both describes below depend on it: one proves the table does not overlap it,
+// the other proves every name in it is a REAL hole and not a stale claim.
+const SPEC = readFileSync(
+  join(import.meta.dirname, "../../docs/superpowers/specs/2026-08-31-target-ownership-across-tools.md"),
+  "utf8",
+);
+const OPEN = (SPEC.match(/<!-- open-wrappers:([^>]*)-->/) ?? [null, ""])[1].trim().split(/\s+/).filter(Boolean);
+
+// #308. The wrapper table is an ALLOWLIST, and §6 named five members it did not carry — each one
+// walking a literal sibling write straight past the checker. They close one at a time, in the order
+// the issue sets, and each owes BOTH directions in the commit that closes it: the refused write, and
+// a false-deny probe showing ordinary use of that wrapper still passes. A table that starts denying
+// normal commands is how a guard gets deleted instead of fixed.
+describe("wrappers whose own arguments hid the command (#308)", () => {
+  const SIB_FILE = inSib("package.json");
+
+  // Measured before the fix, through `stepPrefixes`: the step landed on `busybox` itself, and
+  // `analyze` returned no ops AND no unresolved — the write was not ambiguous, it was invisible.
+  it("does not let a busybox applet hide behind the multi-call binary", () => {
+    expect(ask(`busybox rm -f ${SIB_FILE}`).permission).toBe("deny");
+    expect(ask(`busybox mv ${SIB_FILE} /tmp/x`).permission).toBe("deny");
+    // The interpreter applet inherits nothing: it is judged exactly as a bare `sh` is judged.
+    expect(ask(`busybox sh -c "rm -f ${SIB_FILE}"`).permission).toBe(
+      ask(`sh -c "rm -f ${SIB_FILE}"`).permission,
+    );
+  });
+
+  it("still allows ordinary busybox use — the false-deny direction", () => {
+    for (const c of [
+      "busybox ls -la",
+      "busybox du -sh .",
+      "busybox --list",
+      "busybox --help",
+      `busybox cat ${SIB_FILE}`,
+      "busybox grep -r todo src",
+    ]) {
+      expect(ask(c).permission, c).toBe("allow");
+    }
+  });
+
+  // THE chrt BUG, MECHANIZED. `chrt` shipped inside a table the spec called complete, carrying no
+  // probe of its own, and its positional read as the command. A list of NAMES cannot catch that —
+  // it is satisfied by the name being mentioned anywhere. So the table is enumerated instead: every
+  // wrapper in it owes a minimal invocation here, and that invocation has to surface the write.
+  // Adding a row without adding a probe fails on the equality, before any behaviour is asserted.
+  const WRAPPER_PROBES = {
+    env: "env",
+    sudo: "sudo",
+    doas: "doas",
+    command: "command",
+    nohup: "nohup",
+    setsid: "setsid",
+    nice: "nice -n 10",
+    ionice: "ionice -c 2",
+    chrt: "chrt -f 10",
+    time: "time",
+    timeout: "timeout 5",
+    stdbuf: "stdbuf -oL",
+    xargs: "xargs",
+    busybox: "busybox",
+  };
+
+  // THE OTHER DIRECTION, and the one that makes the marker cost something. Every name §6 marks
+  // open must be a hole that is measurably still there. These assertions expect `allow` on a
+  // sibling write, which is the bug — deliberately, and only for as long as the spec claims it.
+  // Closing one of these means this file fails until the name leaves the marker and joins
+  // WRAPPER_PROBES, which is exactly the three-place update the issue asks for. Nothing here
+  // endorses the hole; it pins the claim so the claim cannot go stale in either direction.
+  const OPEN_PROBES = {
+    flock: `flock /tmp/lock rm -f ${SIB_FILE}`,
+    taskset: `taskset 0x3 rm -f ${SIB_FILE}`,
+    su: `su root rm -f ${SIB_FILE}`,
+    find: `find . -name x -exec rm -f ${SIB_FILE} ;`,
+  };
+
+  it("proves every wrapper §6 marks open really is still open", () => {
+    expect(Object.keys(OPEN_PROBES).sort()).toEqual([...OPEN].sort());
+    for (const [name, command] of Object.entries(OPEN_PROBES)) {
+      expect(ask(command).permission, `${name} is marked open but no longer walks the write past`).toBe(
+        "allow",
+      );
+    }
+  });
+
+  it("probes every wrapper in the table, so an untested row cannot ship", () => {
+    expect(Object.keys(WRAPPER_PROBES).sort()).toEqual([...PREFIX_VERBS.keys()].sort());
+    for (const [name, prefix] of Object.entries(WRAPPER_PROBES)) {
+      expect(ask(`${prefix} rm -f ${SIB_FILE}`).permission, `${name} must not hide the write`).toBe(
+        "deny",
+      );
+    }
+  });
+});
+
+// The table is an ALLOWLIST, and §6 has to keep saying which members it still does not carry. This
+// narrows as each hole closes, and the second assertion is what makes the narrowing mandatory: a
+// name the table now carries must have left the spec's open list in the same commit.
 describe("the wrapper table is an allowlist, and the spec says which ones are still open (#279)", () => {
-  const SPEC = readFileSync(
-    join(import.meta.dirname, "../../docs/superpowers/specs/2026-08-31-target-ownership-across-tools.md"),
-    "utf8",
-  );
+  // The marker is read at module scope, not sliced out of the prose. The first version of this
+  // test did slice the prose, between two phrases, and failed on its own first run: the sentence
+  // cites `chrt` as the precedent for closing these one at a time, and a scan cannot tell a
+  // citation from a listing. The assertions below pin the marker and the prose to each other in
+  // both directions, so the marker cannot quietly become the only true copy.
 
   it("names every known-open wrapper, so the gap is documented where the claim is made", () => {
-    for (const w of ["flock", "taskset", "su", "busybox", "find"]) {
-      expect(SPEC, `${w} is still open and §6 must say so`).toContain(w);
+    expect(OPEN.length, "§6 must carry an open-wrappers marker").toBeGreaterThan(0);
+    for (const w of OPEN) {
+      expect(SPEC, `${w} is marked open and the prose of §6 must say so too`).toContain(w);
     }
     expect(SPEC).toMatch(/allowlist/i);
+  });
+
+  it("does not call a wrapper open once the table carries it", () => {
+    for (const name of PREFIX_VERBS.keys()) {
+      expect(OPEN, `${name} is carried by the table now, so §6 must not mark it open`).not.toContain(name);
+    }
   });
 });
