@@ -25,13 +25,20 @@ export const DIR = "docs/dispositions";
 
 /**
  * What a disposition promises about merge-tree. `noop: null` means "claims nothing" — the audit
- * cannot re-prove it, and must not pretend to.
+ * cannot re-prove it in either direction, and must not pretend to.
  *
  * LANDED is new (#291). It is the state the old vocabulary could not express: the work IS on main,
  * and the ref is deliberately kept anyway — a frozen reference point, or a lane still cited by an
  * open review. Before it, such a ref had to be filed CLAIMED to escape the prunable deadline, so
  * "CLAIMED" silently meant two different things: a live writer holds this, and nobody holds this
  * but do not delete it. A reader could not tell which, and neither could the audit.
+ *
+ * CLAIMED's `noop: null` is narrower than it looks (#350). It still means the audit may not assert
+ * an EXPECTED direction — a live writer's ref is allowed to diverge from base for as long as the
+ * work is in progress. It does NOT mean "never measured": `branch-disposition-audit.mjs` still asks
+ * whether a CLAIMED ref has already landed, because that is the one fact CLAIMED can go stale on
+ * without anyone noticing — a row can keep asserting live work over a ref that merged weeks ago.
+ * PRESERVE carries no such check and never will; it is outside the landed/unlanded question forever.
  */
 export const DISPOSITIONS = {
   MERGED: { noop: true, prunable: true },
