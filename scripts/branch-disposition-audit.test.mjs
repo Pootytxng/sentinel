@@ -680,27 +680,39 @@ describe("the record's prose does not outlive the refs it describes", () => {
   // five rows that pinned one against `origin/main`, two were already wrong (14 -> 3, 20 -> 9) and
   // three were still right, which is exactly the mix that makes the wrong ones believable.
   //
-  // WIDENED after the review of this same PR, in three directions the first version got wrong:
-  //   * `main` as well as `origin/main`. The first version's stated reason for stopping -- that
-  //     reaching `main` would also catch the prose sections, which use the phrase to explain the
-  //     method -- was simply false: this rule only ever reads table rows, and prose lines never
-  //     reach it. Two more rows had to give up a count, both true at the time and both perishable.
-  //   * "ahead of" as well as "past", which one of those two rows used.
-  //   * `**bold**` around the number. "now carries **zero** commits past `origin/main`" sat in this
-  //     table THROUGH the commit that added this rule and matched nothing, because the emphasis
-  //     markers stood between the number and the noun. A ban a writer can slip by bolding a digit
-  //     is not a ban; that this one was slipped by accident is the only reason it reads as luck.
+  // Widened three times, each after an independent review found a phrasing the version before it let
+  // through -- and twice the COMMENT was the defect as much as the pattern was:
+  //   round 1 banned `origin/main` only, and gave as its reason for not reaching `main` that the
+  //     prose sections would be caught too. False: this rule only ever reads table rows.
+  //   round 2 added `main`, "ahead of", and a bolded number -- "now carries **zero** commits past
+  //     `main`" had sat in this table THROUGH the commit that added the rule -- and then named
+  //     exactly two remaining misses as though that were the whole remainder. It was not:
+  //     "N commits behind `main`" was a third, in a file whose own row 74 discusses behind-counts,
+  //     and half a dozen more followed from bolding a different word.
+  //   round 3 stopped enumerating misses, because enumerating them is what failed twice. Emphasis
+  //     and code markers are stripped BEFORE matching, which retires the formatting-bypass family
+  //     in one move rather than one alternative per review, and the coverage is stated as a closed
+  //     set below instead of the remainder being stated as a closed set.
   //
-  // STATED LIMIT, so this comment does not claim more than the rule does. Two forms are NOT caught:
-  //   1. a count against a NAMED landed commit ("3 commits past `16069fa`"), anchored to something
-  //      that does not move, and fine;
-  //   2. a count with NO baseline in the sentence -- "#286/#287 fell to 3 and 5", which stood in
-  //      this table while wrong (measured 0 and 7) and was caught by a human reviewer, not here.
-  //      No pattern separates that from honest prose without redding the rest of the file, so it
-  //      stays a review duty. Both forms are pinned as misses below, so that nobody reads this rule
-  //      as covering them -- which is the mistake that put the wrong numbers past it once already.
+  // WHAT IS CAUGHT, exhaustively, because a positive statement cannot go stale by omission the way
+  // the two miss-lists above did. After `*`, backtick and `_` are stripped from the row, an offender
+  // is: a number, spelled or digits, then "commit"/"commits", then "past", "behind" or "ahead of",
+  // then optionally "the", then `main` or `origin/main` on a word boundary. Nothing else is caught.
+  //
+  // Two kinds of outsider, given as EXAMPLES and explicitly not as a complete list:
+  //   * a count against a NAMED landed commit ("3 commits past `16069fa`") -- anchored to something
+  //     that does not move, and fine;
+  //   * a count with no baseline in the sentence at all ("#286/#287 fell to 3 and 5") -- which stood
+  //     in this table while wrong, measured 0 and 7, and was caught by a human reviewer rather than
+  //     here. No pattern separates that from honest prose without redding the rest of the file, so
+  //     it is a review duty and always will be.
   const PINNED_COUNT =
-    /\b(?:\*\*)?(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|\d+)(?:\*\*)?\s+commits?\s+(?:past|ahead\s+of)\s+`(?:origin\/)?main`/i;
+    /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|\d+)\s+commits?\s+(?:past|behind|ahead\s+of)\s+(?:the\s+)?(?:origin\/)?main\b/i;
+  // Stripped, not alternated: bolding the number, the noun, the verb or the ref, and dropping
+  // the backticks entirely, are all the same bypass wearing different clothes. Round 2 answered
+  // one of them with `(?:\*\*)?` and left five.
+  const stripMarkup = (line) => line.replace(/[*`_]/g, "");
+  const pinsACount = (line) => PINNED_COUNT.test(stripMarkup(line));
 
   it("pins no commit count against a baseline that moves", () => {
     const rows = record()
@@ -714,32 +726,48 @@ describe("the record's prose does not outlive the refs it describes", () => {
     // cannot red it.
     expect(rows.length).toBeGreaterThan(20);
     const offenders = rows
-      .filter(({ line }) => PINNED_COUNT.test(line))
+      .filter(({ line }) => pinsACount(line))
       .map(({ n }) => `docs/BRANCH_DISPOSITIONS.md:${n}`);
     expect(offenders).toEqual([]);
   });
 
   // Without this the rule above passes on a document it never understood -- a reworded table, or a
   // regex that quietly stopped matching, and the ban reads as satisfied because nothing matched.
-  it("would catch a pinned count in either spelling", () => {
-    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... — 14 commits past `origin/main`. |")).toBe(true);
-    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... two of its seven commits past `origin/main` |")).toBe(
-      true,
-    );
-    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... one commit past `origin/main` |")).toBe(true);
-    // The three widenings, each pinned to the row that escaped the first version of this rule.
-    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... Three commits past `main`, checked out at |")).toBe(
-      true,
-    );
-    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... a sibling branch, 7 commits ahead of `main`. |")).toBe(
-      true,
-    );
-    expect(
-      PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... now carries **zero** commits past `origin/main` |"),
-    ).toBe(true);
-    // The two stated misses, pinned so a later reader cannot mistake this rule for coverage.
-    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... 3 commits past `16069fa` |")).toBe(false);
-    expect(PINNED_COUNT.test("| `origin/lane/x` | CLAIMED | ... #286/#287 fell to 3 and 5 |")).toBe(false);
+  it("would catch a pinned count however it is spelled or formatted", () => {
+    const row = (evidence) => `| \`origin/lane/x\` | CLAIMED | ${evidence} |`;
+
+    // Round 1's own cases.
+    expect(pinsACount(row("— 14 commits past `origin/main`."))).toBe(true);
+    expect(pinsACount(row("two of its seven commits past `origin/main`"))).toBe(true);
+    expect(pinsACount(row("one commit past `origin/main`"))).toBe(true);
+
+    // Round 2: the two rows that escaped round 1, each in the words it actually used, plus the
+    // LITERAL sentence that sat in this table through the commit adding the rule. Verbatim from
+    // `git show 0b0a870b:docs/BRANCH_DISPOSITIONS.md` -- that string carries TWO bypasses at once,
+    // the bolded number and the bare `main`, and the commit that fixed it misquoted the second half
+    // as `origin/main`. A regression test that reproduces the defect approximately is how a
+    // misquote survives, so this one is the real bytes.
+    expect(pinsACount(row("Three commits past `main`, checked out at"))).toBe(true);
+    expect(pinsACount(row("a sibling branch, 7 commits ahead of `main`."))).toBe(true);
+    expect(pinsACount(row("`origin/lane/license-atomic-284` now carries **zero** commits past `main`,"))).toBe(true);
+
+    // Round 3: the blocking miss, and the formatting family that came with it.
+    expect(pinsACount(row("27 commits behind `main`"))).toBe(true);
+    expect(pinsACount(row("27 commits behind `origin/main`"))).toBe(true);
+    expect(pinsACount(row("7 **commits** past `origin/main`"))).toBe(true);
+    expect(pinsACount(row("7 commits **past** `origin/main`"))).toBe(true);
+    expect(pinsACount(row("7 commits past **`origin/main`**"))).toBe(true);
+    expect(pinsACount(row("7 commits past origin/main"))).toBe(true);
+    expect(pinsACount(row("7 commits ahead of the `main` branch"))).toBe(true);
+
+    // The two example outsiders, pinned so that nobody reads this rule as covering them.
+    expect(pinsACount(row("3 commits past `16069fa`"))).toBe(false);
+    expect(pinsACount(row("#286/#287 fell to 3 and 5"))).toBe(false);
+
+    // And the sentences this file uses to say a count is deliberately absent, which must stay legal
+    // or the ban would forbid explaining itself. Both are live in row 74 today.
+    expect(pinsACount(row("Neither an ahead- nor a behind-count is pinned here"))).toBe(false);
+    expect(pinsACount(row("the behind-count this row used to carry — 27 — was off by 820"))).toBe(false);
   });
 
   // "stacked on X" is a claim about the shape of the world RIGHT NOW, unlike "landed as #315",
