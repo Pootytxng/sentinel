@@ -286,60 +286,66 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
  * sentence.
  */
 /**
- * Every place the record pairs a PR number with a commit SHA, split into the three answers that
- * matter: pairings that CLAIM a landing, mentions that plainly do not, and anything this file does
- * not recognise.
+ * Every "PR #N landed at `sha`" citation in the record, in the three shapes the document uses:
  *
- * The third bucket is the point. The first cut of this guard read two shapes and silently skipped a
- * third the document was already using twice, so it reported full verification while checking nine
- * of eleven citations -- #330's failure exactly, a rule passing because its anchor was absent. An
- * unrecognised pairing is now RETURNED, and the caller reds on it until a human classifies it.
- * "Could not read this" must never render as "fine".
+ *   PR [#334](.../pull/334) -> `20ef848d`
+ *   PR [#314](.../pull/314) (`7dafc402`, ...)
+ *   PR [#277](.../pull/277) merge-committed to `main` as `ee5bdd8b`
  *
- * Shapes are matched on the JOIN -- the text between the PR link and the SHA -- because that is
- * where the claim lives. Every pattern below was copied off a row that exists:
+ * The join is part of the pattern, so there is NO distance window and nothing can be dropped for
+ * being far away. The previous cut paired a PR link with the first SHA within 200 characters and
+ * classified the text between them; a reviewer showed that a citation 211 characters wide vanished
+ * entirely -- not landing, not non-landing, not even "unclassified" -- which is precisely the
+ * silent-skip failure that cut was written to end. Widening the number moved the cliff instead of
+ * removing it, and at 2000 it invented five spurious findings against this very document. A bound
+ * nobody can justify is a bound that will be wrong again, so it is gone.
  *
- *   PR [#334](.../pull/334) -> `20ef848d`                          LANDING
- *   PR [#314](.../pull/314) (`7dafc402`, ...)                      LANDING
- *   PR [#277](.../pull/277) merge-committed to `main` as `ee5b..`  LANDING
- *   PR [#89](.../pull/89) closed unmerged 2026-08-08; `93c931a3`   not a landing claim
- *   PR [#267](.../pull/267) holds what needs review: `6760387a`    not a landing claim
- *   PR [#289](.../pull/289). **Stacked on ...** ... (`aff17ea1`    not a landing claim
- *
- * Demanding a landing from the last three would be #295 pointed the other way -- a guard reading
- * honest prose as a lie.
+ * Completeness is now asserted the other way round, by `uncitedLandings`, which needs no window.
  *
  * This exists because a row shipped `20ef848d` as PR #314's merge commit when it is PR #334's --
  * two rows apart in the same file, so the document contradicted itself and every guard was green.
  * `audit()` could not catch it: it proves each ref has a row and each MERGED row is a true no-op,
  * and says nothing about prose pairing a number with a SHA.
  */
-const CITATION_PAIR = /PR \[#(\d+)\]\([^)]*\)((?:(?!PR \[#)[\s\S]){0,200}?)`([0-9a-f]{7,40})`/g;
+const CITATION =
+  /PR \[#(\d+)\]\([^)]*\)(?:\s*(?:->|\u2192)\s*|\s*\(|\s*merge-committed to `main` as\s*)`([0-9a-f]{7,40})`/g;
 
-const LANDING_JOINS = [
-  /^\s*(?:->|\u2192)\s*$/,
-  /^\s*\($/,
-  /^\s*merge-committed to `main` as\s*$/,
-];
-
-const NON_LANDING_JOINS = [/closed unmerged\b/, /holds what needs review/, /\bStacked on\b/];
-
-export function citationsInRecord(markdown) {
-  const landings = [];
-  const nonLandings = [];
-  const unclassified = [];
-  for (const m of (markdown ?? "").matchAll(CITATION_PAIR)) {
-    const hit = { pr: Number(m[1]), sha: m[3], join: m[2] };
-    if (LANDING_JOINS.some((re) => re.test(hit.join))) landings.push({ pr: hit.pr, sha: hit.sha });
-    else if (NON_LANDING_JOINS.some((re) => re.test(hit.join))) nonLandings.push(hit);
-    else unclassified.push(hit);
-  }
-  return { landings, nonLandings, unclassified };
+export function mergeCitations(markdown) {
+  return [...(markdown ?? "").matchAll(CITATION)].map((m) => ({ pr: Number(m[1]), sha: m[2] }));
 }
 
-/** The landing claims alone. Callers that skip `unclassified` are checking a subset -- see above. */
-export function mergeCitations(markdown) {
-  return citationsInRecord(markdown).landings;
+/**
+ * SHAs that ARE landings on `main` but are named in this document for some other reason, so their
+ * absence from the citation list is correct rather than a shape that went unread. Kept tiny and
+ * explained one by one: the moment this needs a third entry, somebody has to look at why.
+ */
+export const NON_CITATION_LANDINGS = Object.freeze({
+  "16069fa": "the frozen beta ref `origin/beta/private-beta-001`, a PRESERVE row -- never a PR landing",
+  "36bdf6b": "a MERGE-BASE in the quietpitwall row's partial-landing arithmetic, not a PR's landing",
+});
+
+/**
+ * The completeness half, and the reason no window is needed: any real landing this record mentions
+ * must be mentioned AS a citation. So a landing written in a fourth shape -- or in a shape too far
+ * from its PR link for `CITATION` to bind -- surfaces here instead of disappearing.
+ *
+ * What it guarantees is exact and narrower than it first reads: no landing this record names goes
+ * ENTIRELY uncited. It does NOT verify every landing claim. A claim in an unrecognised shape about
+ * a SHA that never landed, or about one the record already cites correctly elsewhere, is invisible
+ * to both halves -- the citation half never binds it, and this half sees the SHA as cited. Both
+ * cases are pinned in the suite so the boundary is visible instead of rediscovered. Closing them
+ * needs per-occurrence attribution out of prose: a landing-verb critic over this document flagged
+ * 24 honest sentences, so that cure is worse than the disease.
+ */
+export function uncitedLandings(markdown, landedOnMain) {
+  if (typeof landedOnMain !== "function") {
+    throw new Error('uncitedLandings needs a landing reader -- omitting it must not read as "all cited"');
+  }
+  const cited = new Set(mergeCitations(markdown).map((c) => c.sha));
+  const seen = [...(markdown ?? "").matchAll(/`([0-9a-f]{7,40})`/g)].map((m) => m[1]);
+  return [...new Set(seen)].filter(
+    (sha) => !cited.has(sha) && !(sha in NON_CITATION_LANDINGS) && reallyLanded(sha, landedOnMain),
+  );
 }
 
 function readSubject(sha, subjectOf) {

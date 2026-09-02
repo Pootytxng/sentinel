@@ -19,7 +19,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   audit,
-  citationsInRecord,
   falseMergeCitations,
   isNoop,
   listRemoteRefs,
@@ -30,6 +29,8 @@ import {
   refSetCoverage,
   resolveBase,
   squashOnlyCitations,
+  uncitedLandings,
+  NON_CITATION_LANDINGS,
 } from "./branch-disposition-audit.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -443,19 +444,20 @@ describe("PR-to-merge-commit citations", () => {
   const subjects = {
     "7dafc402": "Merge pull request #314 from Pootytxng/lane/rule-c-at-risk-312",
     "20ef848d": "Merge pull request #334 from Pootytxng/fix/green-main-after-314-332",
+    ee5bdd8b: "Merge pull request #277 from Pootytxng/lane/fleet-guard-failclosed-276",
     e26108f7: "docs(routing): reconcile native closeout \u2014 Stage 3 is the receiver (#273)",
     "952ce309": "fix(guard): rule D accepts a landing marker, so C and D stop contradicting (#300)",
   };
   const subjectOf = (sha) => subjects[sha] ?? null;
   // 952ce309 is deliberately absent: it is a lane commit, never a landing on main.
-  const onMain = new Set(["7dafc402", "20ef848d", "e26108f7"]);
+  const onMain = new Set(["7dafc402", "20ef848d", "ee5bdd8b", "e26108f7"]);
   const landedOnMain = (sha) => onMain.has(sha);
 
-  it("reads all three landing shapes the document uses", () => {
+  it("reads all three landing shapes, and pairs nothing else", () => {
     const md = [
       "| a | CLAIMED | PR [#334](https://github.com/o/r/pull/334) \u2192 `20ef848d`, landed. |",
       "| b | CLAIMED | PR [#314](https://github.com/o/r/pull/314) (`7dafc402`, upstream). |",
-      "| c | MERGED | PR [#277](https://github.com/o/r/pull/277) merge-committed to `main` as `ee5bdd8b` on 2026-09-01. |",
+      "| c | MERGED | PR [#277](https://github.com/o/r/pull/277) merge-committed to `main` as `ee5bdd8b`. |",
       "| d | CLAIMED | PR [#315](https://github.com/o/r/pull/315), based on `main` -- 11 commits. |",
     ].join("\n");
     expect(mergeCitations(md)).toEqual([
@@ -465,20 +467,43 @@ describe("PR-to-merge-commit citations", () => {
     ]);
   });
 
-  it("separates mentions that never claimed a landing, and reds on shapes it does not know", () => {
-    // The first cut read two shapes and skipped a third the file already used twice, while its
-    // live assertion still read as full verification. Silence is the failure being guarded here.
+  it("does not pair a PR with a SHA merely because they share a row", () => {
+    // The pattern binds through the join, so there is no distance at which a stray SHA gets
+    // adopted -- and none at which a real one is dropped. The previous cut used a 200-character
+    // window and a citation 211 wide vanished from all three of its buckets.
+    const far = `PR [#900](https://github.com/o/r/pull/900) ${"filler ".repeat(40)} \`20ef848d\``;
+    expect(mergeCitations(far)).toEqual([]);
+    // Not silence, though: the SHA is a real landing, so the completeness half surfaces it.
+    expect(uncitedLandings(far, landedOnMain)).toEqual(["20ef848d"]);
+  });
+
+  it("surfaces a landing written in a shape it cannot read, instead of skipping it", () => {
+    const fourthShape = "PR [#277](https://github.com/o/r/pull/277) was eventually landed by `ee5bdd8b`.";
+    expect(mergeCitations(fourthShape)).toEqual([]);
+    expect(uncitedLandings(fourthShape, landedOnMain)).toEqual(["ee5bdd8b"]);
+  });
+
+  it("cannot see a second, false claim about a SHA the record already cites -- a stated limit", () => {
+    // Pinned so the boundary is visible rather than rediscovered by the next reviewer. The
+    // citation half never binds this shape, and the completeness half sees `20ef848d` as already
+    // cited, so nothing fires. A landing-verb critic would catch it and flagged 24 honest
+    // sentences of this document doing so; the cure is worse. If someone ever closes this, this
+    // test reds and they update it deliberately.
     const md = [
-      "PR [#89](https://github.com/o/r/pull/89) closed unmerged 2026-08-08; `93c931a3` is its tip.",
-      "PR [#267](https://github.com/o/r/pull/267) holds what needs review: `6760387a`.",
-      "PR [#411](https://github.com/o/r/pull/411) was somehow associated with `abcdef1234` here.",
+      "PR [#334](https://github.com/o/r/pull/334) → `20ef848d`",
+      "PR [#900](https://github.com/o/r/pull/900) was, much later and in prose, landed by `20ef848d`.",
     ].join("\n");
-    const { landings, nonLandings, unclassified } = citationsInRecord(md);
-    expect(landings).toEqual([]);
-    expect(nonLandings.map((c) => c.pr)).toEqual([89, 267]);
-    expect(unclassified.map((c) => ({ pr: c.pr, sha: c.sha }))).toEqual([
-      { pr: 411, sha: "abcdef1234" },
-    ]);
+    expect(mergeCitations(md)).toEqual([{ pr: 334, sha: "20ef848d" }]);
+    expect(uncitedLandings(md, landedOnMain)).toEqual([]);
+  });
+
+  it("does not flag a mention that is not a landing at all", () => {
+    const prose = "The tip `952ce309` is a lane commit and `deadbeef` resolves to nothing.";
+    expect(uncitedLandings(prose, landedOnMain)).toEqual([]);
+  });
+
+  it("refuses to run the completeness half without a landing reader", () => {
+    expect(() => uncitedLandings("`20ef848d`")).toThrow(/landing reader/);
   });
 
   it("passes a true pairing and fails the swapped one", () => {
@@ -559,10 +584,9 @@ describe("PR-to-merge-commit citations", () => {
 
   it("holds for THIS repository's record, and proves it read something", () => {
     const record = readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8");
-    const { landings, unclassified } = citationsInRecord(record);
-    // Without these two, a reworded document would make every assertion below vacuous.
-    expect(landings.length).toBeGreaterThan(0);
-    expect(unclassified).toEqual([]);
+    const cited = mergeCitations(record);
+    // Without this, a reworded document would make every assertion below vacuous.
+    expect(cited.length).toBeGreaterThan(0);
 
     const baseline = ["origin/main", "main"].find((ref) => {
       try {
@@ -584,10 +608,14 @@ describe("PR-to-merge-commit citations", () => {
       }
     };
 
-    expect(falseMergeCitations(landings, live, landedOnRecordMain)).toEqual([]);
+    expect(falseMergeCitations(cited, live, landedOnRecordMain)).toEqual([]);
+    // Every real landing this document names is named AS a citation, bar the two it names for
+    // other reasons. This is what replaced the 200-character window: no landing can go unread.
+    expect(uncitedLandings(record, landedOnRecordMain)).toEqual([]);
+    expect(Object.keys(NON_CITATION_LANDINGS).every((sha) => record.includes(sha))).toBe(true);
     // Pinned, because the squash shape cannot prove #N is a PR rather than an issue. A NEW
     // squash-only citation reds here until somebody confirms it by hand -- that is the design.
-    expect(squashOnlyCitations(landings, live, landedOnRecordMain)).toEqual([
+    expect(squashOnlyCitations(cited, live, landedOnRecordMain)).toEqual([
       { pr: 273, sha: "e26108f7" },
       { pr: 275, sha: "29fb8009" },
     ]);
