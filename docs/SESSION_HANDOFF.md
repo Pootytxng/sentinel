@@ -94,7 +94,7 @@ RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, today `lane/docs-
   `lane/receipt-carrier-345` (#346) whenever its push lags — EVERY lane joins this list between a commit and its push,
   so no count is pinned here. Most checkouts ahead of `origin/main` are **fully pushed**: deleting those loses
   nothing, each has a row in `docs/BRANCH_DISPOSITIONS.md`, and rule C prints the live split every run. It stopped
-  demanding all be named on 2026-09-01 (#312): 92% could not be lost, and no two lanes could be green at once.
+  demanding all be named on 2026-09-01 (#312): 92% of them could not be lost, and no two lanes could be green at once.
   `claude/compy-health-parity` and `claude/compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at
   `c8366609` — neither contains the other** (`--is-ancestor` is NO both ways). Counted **not on main**: the kit has ONE
   unique commit; health-parity's is unpinned, re-merging main — use the formula below. Backed up only to
