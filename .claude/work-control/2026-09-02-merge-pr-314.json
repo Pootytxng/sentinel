@@ -1,0 +1,71 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 314,
+  "issue": 323,
+  "branch": "lane/rule-c-at-risk-312",
+  "currentHead": "b1f6d774eac9f3f4c60f646293a190c2e15bb7eb",
+  "explicitHandoff": "Owner turn authorizing this train: a marathon safe-throughput workflow to maximize verified completed work while preserving ownership, exact-head review, release, evidence and documentation law, followed by an explicit PROCEED whose instruction 6 states that on APPROVE the orchestrator re-fetches, verifies exact head/base/mergeability, saves the Work Control receipt, runs the exact full gate and work-control-gate.mjs, and merges only on PASS. Merging a green lane does not rest on that turn alone: the 2026-08-11 decree makes merging green PRs to main mine without asking, and docs/RELEASE_AUTONOMY.md covers the complete reversible release-engineering train. The owner is away from the desk, so nothing in this transition may reach another machine: it does not publish, tag, arm the updater, move a frozen ref, touch a signing key, or change a security or system setting. The PR is two living documents, one archive document, and one vitest doc guard.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. This transition runs from C:/Users/Kuya/code/sentinel-land-312, a worktree created by this train specifically so this PR could land (the fleet grew 33 to 34 for it, which this PR's own commit fb9f83b9 documents and which rule B noticed). Re-derived this turn with git rev-parse --show-toplevel and git branch --show-current: toplevel C:/Users/Kuya/code/sentinel-land-312, branch lane/rule-c-at-risk-312. Not carried over from before the context compaction.",
+    "remoteState": "git fetch origin run this turn. origin/main = 624fcc40cb1c4c01821061a3eaf3b3c2ac4eb122, UNCHANGED from the value it held when the authorizing gate ran, which is why that gate run remains valid: git merge-base --is-ancestor origin/main b1f6d774 returns true, so this head is a strict fast-forward and the tree the gate tested IS the tree main becomes. git ls-remote --heads origin gives refs/heads/lane/rule-c-at-risk-312 = b1f6d774eac9f3f4c60f646293a190c2e15bb7eb, identical to the local tip and to the PR head reported by gh. gh pr view 314: OPEN, MERGEABLE, base main, headRefOid b1f6d774. GitHub Actions has run ZERO jobs in this repository since 2026-08-11 (billing, issue #321), so MERGEABLE means no merge conflict and says NOTHING about tests; the local gate is the only proof that exists.",
+    "worktree": "This writer holds C:/Users/Kuya/code/sentinel-land-312 alone. Thirty-four worktrees are registered; the orchestration session runs from .claude/worktrees/serene-torvalds-9e495e, which holds no Work Control claim and performs no writes to this lane, so the one-worktree-per-writer rule holds. Two review subagents executed tests inside this worktree without modifying it; one created and deleted a temporary probe file to construct a guard failure, and the worktree was verified clean afterwards (git status --porcelain empty, no scripts/zz-* present, HEAD still b1f6d774).",
+    "branch": "lane/rule-c-at-risk-312, 14 commits past origin/main, MERGEABLE. No pushed history was rewritten: git reflog show refs/remotes/origin/lane/rule-c-at-risk-312 shows every entry as 'update by push' with no forced-update marker, and both previously reviewed heads remain ancestors (git merge-base --is-ancestor 5aad4ba0 b1f6d774 and b4029859 b1f6d774 both true), so no completed review was amended out from under itself. git diff --stat origin/main...HEAD is 4 files, 410 insertions, 56 deletions, and NOT ONE is under src/ or src-tauri/ - the only non-documentation file is scripts/handoff-worktree-truth.test.mjs, a vitest doc guard.",
+    "dirtyState": "git status --porcelain in C:/Users/Kuya/code/sentinel-land-312 is EMPTY at the head being merged (0 lines, measured this turn). This receipt file itself is untracked by construction.",
+    "liveProcesses": "No dev server on port 1420 (measured this turn: free) and no cargo or rustc build in flight. No build, install or ship was run in this train, so the installed Compy on the owner's desk is untouched and byte-unchanged; nothing in this PR could alter it, since the diff contains no runtime code at all.",
+    "otherWriters": "No competing writer on this lane. The Codex reconciliation receipt of 2026-09-01 records Codex standing down while Claude holds the implementation claim and taking no implementation or merge lane. Issue #323 carries this lane's claim. The five review passes were performed by read-only subagents holding no claim and no write access."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "b1f6d774eac9f3f4c60f646293a190c2e15bb7eb",
+      "detail": "THE AUTHORISING RUN, inside .githooks/pre-push on the push that landed this exact head (attempt 2 of 3 authorized). All sections ran: git diff check, frontend tests (Test Files 407 passed / 407, Tests 5907 passed | 5 skipped of 5912), frontend type-check and build, Rust tests (1253 passed, 0 failed, 24 ignored), clippy under -D warnings with zero warning lines. 'LOCAL CHECK RESULT: PASS' was written, the hook exited 0, and the ref moved b4029859..b1f6d774. Zero GitHub Actions minutes. Attempt 1, on the earlier commit 7bbb5eaa, was a GENUINE REFUSAL and is recorded rather than smoothed over: 3 of 5912 tests failed, all in scripts/handoff-worktree-truth.test.mjs, because that commit's own prose rewording deleted the literal phrase 'not on main' which repoStateBullet() matches to locate its anchor bullet. That is not the tracked #324 load flake; it is a real regression the gate caught before the head was published, repaired in b1f6d774, and filed as issue #330. The push was run unpiped: piping a long pre-push gate through tail has previously dropped the SSH connection on this machine and read as an auth failure.",
+      "headNote": "The gate was additionally re-run to completion at this exact head by BOTH round-5 reviewers, independently of each other and of the writer, each reporting the identical figures above. Because origin/main has not moved since, the tree measured is the tree main becomes on landing."
+    }
+  ],
+  "docGates": [
+    "doc-budget.ps1 - ALL PASS at this head. docs/BRANCH_DISPOSITIONS.md 107/107, docs/SESSION_HANDOFF.md 119/120. No cap was raised at any point in this train; the budget was paid from docs/archive/BRANCH_DISPOSITION_SWEEPS.md. 107/107 is exactly at cap with ZERO headroom, recorded here as a standing hazard for the next editor of that file rather than left to be discovered.",
+    "scripts/branch-disposition-audit.test.mjs - 29/29 at this head. Every origin ref has a proven row; verified by both reviewers as an exact bijection with git ls-remote (34 refs besides main, 3 PRESERVE).",
+    "scripts/handoff-worktree-truth.test.mjs - 6/6 at this head, including the rule C rewrite this PR ships. Both reviewers constructed failures rather than assuming: a fabricated unpushed carrier absent from the bullet is flagged, atRiskCarriers throws on a null trusted set, and dropping a real trusted ref changes the verdict - proving the exclusion set is load-bearing, not decorative.",
+    "Eleven further doc-integrity guards run by a reviewer at this head (markdown-link-guard, doc-truth-guard, doc-budget-guard, hq-doc-citation-guard, shipped-feature-doc-truth, superseded-plan-citation-guard, ui-vision-status-guard, context-thrash-guard, shelter-tag-guard, taste-autonomy-guard, approved-comps-guard) - 161 tests, all passing."
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. The PR contains no runtime code: git diff --name-only origin/main...HEAD returns 4 files, none under src/ or src-tauri/, the only executable file being a vitest doc guard. No shipped behaviour, no UI and no Windows mutation is reachable from it, and the installed build on the owner's desk is byte-unchanged."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers src/**/*.{tsx,css} UI change. This PR touches no component, no stylesheet and no rendered string - the diff contains nothing under src/ at all. There is nothing for the owner to look at."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "Two read-only review subagents at this exact head, dispatched separately, each holding its own fresh context, neither having written any part of this PR, neither able to edit, comment, approve, merge or claim, and neither aware of the other's findings. STATED PLAINLY rather than dressed up: these are subagents of the orchestrating session, NOT separate live Claude Code sessions as in the #290 receipt. That is a weaker form of independence than a peer session and is recorded as such. What makes it meaningful rather than nominal: each was given a refutation-oriented brief, each ran the complete gate itself rather than reading the writer's numbers, each re-derived every factual claim with its own commands, and each carried a distinct additional lens.",
+    "status": "passed",
+    "head": "b1f6d774eac9f3f4c60f646293a190c2e15bb7eb",
+    "reason": "TWO APPROVES at this exact head, both with all checks proven. The history is recorded rather than smoothed over: this PR took FIVE review rounds and the first four each returned REQUEST CHANGES on a genuine blocking defect - (1) the complete gate failed; (2) an archive move was claimed byte-for-byte when it had flattened a markdown link; (3) the lane/remote-cache-design-286 row said 'Open and unmerged' when PR #288 had merged it into main as 624fcc40, provable by merge-tree no-op; (4) the lane/receipt-288 row claimed 'four commits, verified directly with git rev-list' when rev-list returns five, and reflog timing proved the fifth commit predated the claim by 49 minutes. All four are one family - a false factual claim in prose no guard reads - which is filed as issue #325. Round 4's fix was therefore broadened from patching the finding to SWEEPING every falsifiable claim in every row the diff touches; that sweep found two further defects (the receipt-modified-309 seven-inherited-plus-four-own split, and drifted 14/170 figures in SESSION_HANDOFF) and is commit 7bbb5eaa. Round 5 verified the sweep's own 'everything else came back clean' assertion rather than accepting it: reviewer 1 re-derived all eight swept rows and matched every one, and constructed adversarial probes proving the changed guard still fails; reviewer 2 independently enumerated the diff's real scope with git diff -U0 to test whether the sweep's claimed scope covered it, verified every count, base-ref and merge-tree claim including those inside the two commit MESSAGES, and grepped the whole tree for restatements of every corrected value. ONE NON-BLOCKING FINDING, accepted as real and deliberately NOT fixed here: docs/BRANCH_DISPOSITIONS.md:97 names this lane's worktree as sentinel-atomic-281, which this PR's own commit fb9f83b9 made stale (that worktree now holds lane/wrapper-allowlist-308; this lane is in sentinel-land-312). Found by the reviewer who nonetheless approved. Not fixed because no guard, script or test reads that path - rule C derives the mapping from git worktree list directly and its live run at this head is correct - and because fixing it would move the head and void both approvals over metadata nothing depends on. Filed as issue #331 for the next lane that touches the row, with the recommendation to drop the pinned path for the unpinned idiom this same PR adopted elsewhere.",
+    "writerSession": "claude-code, the implementation writer holding the #323 claim in C:/Users/Kuya/code/sentinel-land-312",
+    "writerNote": "The gate requires writer === actor, and actor is a fixed token (claude-code | codex). The writing session's identity is preserved verbatim in writerSession; nothing about who wrote this lane is dropped. The reviewer field states exactly what kind of independence the reviews had, including its limits."
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main...HEAD -- src-tauri/src/actions.rs is empty, 0 lines. The ONE Windows-mutation boundary is untouched. So is every other Rust file: the diff contains no path under src-tauri/ at all.",
+    "locks": "Untouched by construction - this PR changes no runtime code, so no gate can move. Remote-rules fetch stays triple-gated OFF, the Receipts send path stays hard-false and default-OFF, the Q9b Tier 3 path stays dark, and no capability or CSP is loosened. No signing key, secret or .env file is touched, added or referenced. No security or system setting is read or written.",
+    "scopeConstraint": "The frozen beta refs (16069fa) are not moved. Nothing here publishes, tags, arms the updater, or reaches another machine. No guard, gate or budget was weakened to achieve this: doc-budget.ps1, .githooks/, verify-local.ps1, run-vitest.mjs and branch-disposition-audit.test.mjs are byte-identical to main, verified by both reviewers, and the diff contains no .skip, quarantine, retry-wrap, raised cap or added --maxWorkers. The merge is run WITHOUT --delete-branch, both because the ref must survive for the lanes stacked on it and because that flag has previously set core.bare=true repo-wide and corrupted every worktree on this machine.",
+    "commandAuthority": "No Tauri command was added, removed or renamed; no #[tauri::command] exists anywhere in the diff."
+  }
+}

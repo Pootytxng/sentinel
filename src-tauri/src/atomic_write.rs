@@ -248,14 +248,46 @@ mod tests {
     /// writes the real `%APPDATA%\Compy` data root.
     fn scratch(tag: &str) -> PathBuf {
         static N: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
+        scratch_at(std::env::temp_dir().join(format!(
             "compy-atomic-{}-{}-{}",
             tag,
             std::process::id(),
             N.fetch_add(1, Ordering::Relaxed)
-        ));
+        )))
+    }
+
+    /// A scratch directory that STARTS empty rather than one that is assumed to be.
+    ///
+    /// The name above is only as unique as a process id, and Windows recycles those. Nothing here
+    /// ever removes a scratch directory, so every run leaves its own behind and the next process to
+    /// draw the same pid inherits it -- 1802 of them had accumulated in `%TEMP%` when this was
+    /// found. Most inherit harmlessly. `the_old_target_is_never_removed_to_make_the_rename_work`
+    /// does not: it creates `store.json` as a DIRECTORY on purpose and leaves it there, so the
+    /// inheriting run panicked on `create_dir` with `AlreadyExists` -- reddening the full local
+    /// gate, which is the only proof this repo has, for a reason with nothing to do with the code
+    /// under test or the branch being pushed.
+    fn scratch_at(dir: PathBuf) -> PathBuf {
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("scratch dir");
         dir
+    }
+
+    #[test]
+    fn a_scratch_dir_inherited_from_a_recycled_pid_starts_empty() {
+        // Exactly what a recycled pid inherits: the deliberate directory-in-the-target's-place from
+        // the test above, plus a temp file from an interrupted write. Reverting the `remove_dir_all`
+        // line reds this and nothing else.
+        let dir = scratch("inherited");
+        std::fs::create_dir(dir.join("store.json")).expect("stale target");
+        std::fs::write(dir.join("store.json.stale.tmp"), b"x").expect("stale temp");
+
+        let again = scratch_at(dir.clone());
+
+        assert_eq!(again, dir);
+        assert!(
+            std::fs::read_dir(&dir).expect("read scratch").next().is_none(),
+            "an inherited scratch dir was reused with its previous run's leftovers still in it"
+        );
     }
 
     fn leftovers(dir: &Path) -> Vec<String> {
