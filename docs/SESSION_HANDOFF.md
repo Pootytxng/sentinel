@@ -70,7 +70,7 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 Head = the `origin/lane/guard-budget-313` tip — a SHA pinned here is stale on arrival, so re-read it.
 BLOCKED on ONE thing: a review bound to THAT head. Receipt `2026-09-01-mark-pr-ready-313.json` is re-headed and carries a
 real gate PASS at it; only `independentReview` is pending — fill it, re-run `scripts/work-control-gate.mjs`, `gh pr ready 317`.
-**That gate compares that field to the receipt's OWN `currentHead`, never to live HEAD — a wholly stale receipt passes it.**
+**It resolves live HEAD itself and blocks on any mismatch (`work-control-gate.mjs:102`) — so re-head FIRST, and run it while the receipt is still UNTRACKED: committing it moves HEAD past what it claims.**
 
 **Q9b Stage 3 is NEXT** (Stage 2 landed, `cfc0d21a` / PR #263): receiver + migration, local/staged
 ONLY, never deployed — deployment is Stage 7, owner territory. Spec:
