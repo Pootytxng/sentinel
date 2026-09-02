@@ -375,8 +375,8 @@ export function originHeads(runner) {
 /**
  * The remote-tracking refs it is SOUND to exclude: the cached ones origin still has. `null` when
  * origin could not be asked, or when the intersection is empty — both mean "no trustworthy
- * exclusion set", and the caller falls back to the stricter pre-#312 measurement rather than
- * excluding nothing and calling every checkout at risk.
+ * exclusion set", and the caller REFUSES (fails the assertion rather than falling back to the
+ * pre-#312 measurement or silently excluding nothing and calling every checkout at risk).
  *
  * Only the cache having a ref origin LACKS is dangerous. The cache being BEHIND origin is safe in
  * the other direction: an older cached sha excludes less, so the at-risk count over-reports, and
