@@ -1,0 +1,71 @@
+{
+  "transition": "mark-pr-ready",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 317,
+  "issue": 313,
+  "branch": "lane/guard-budget-313",
+  "currentHead": "a963db1d145c2eebe06d5848919e140d33ada742",
+  "explicitHandoff": "NO OWNER TURN AUTHORISES THIS, and none is claimed: the owner has not spoken in this session at all. It runs under docs/RELEASE_AUTONOMY.md, which covers the complete reversible release-engineering train, and marking one's own draft PR ready is inside it. What it is NOT: this is not a merge. #317 stays unmerged, and merging remains owner territory - refused by this session's permission layer and independently refused in the peer's. A peer session waived re-review for this transition and that waiver is NOT being used as authorization; see independentReview. Nothing here reaches another machine: no publish, no tag, no updater arming, no frozen ref moved, no signing key, no security or system setting. The PR is one test guard and three docs.",
+  "exclusiveWriter": true,
+  "inheritedWork": true,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. This transition runs from the worktree C:/Users/Kuya/code/sentinel-remote-design-286, re-derived this turn with git rev-parse --show-toplevel and git branch --show-current rather than carried across the context compaction that split this session.",
+    "remoteState": "git fetch origin run twice this turn. origin/main = 624fcc40cb1c4c01821061a3eaf3b3c2ac4eb122, unmoved. git ls-remote --heads origin gives refs/heads/lane/guard-budget-313 = a963db1d145c2eebe06d5848919e140d33ada742, identical to local HEAD and to the head gh reports for PR #317. gh pr view 317: OPEN, draft=true, MERGEABLE, mergeStateStatus CLEAN, base main.",
+    "worktree": "This writer holds sentinel-remote-design-286 alone. 33 worktrees exist on this machine. C:/Users/Kuya/code/sentinel-case-receiver-287 is explicitly off-limits and was not touched. No other checkout was written to this turn; the peer's lanes were read only through origin refs, never through their working directories.",
+    "branch": "lane/guard-budget-313, 7 commits past origin/main, MERGEABLE/CLEAN. No pushed history was rewritten - no rebase, no force-push, no amend of a pushed commit. git diff --stat origin/main...HEAD is 7 files, 309 insertions, 51 deletions, and NOT ONE is under src/ or src-tauri/: two guard files, three docs, one archive doc, one work-control receipt. The peer proposed rebasing this lane onto its stack and that was declined on measurement - the dependency between lanes is doc ROWS, and rows are bytes, so git checkout <ref> -- <path> satisfies it while inheriting no commits. Rebasing would have stacked an independently-mergeable guard fix on top of three owner-gated merges.",
+    "dirtyState": "git status --porcelain is EMPTY at the head being marked ready. Both files edited this turn are committed in e28870da. This receipt is untracked at the moment of the gate run and is committed immediately after, because a stranded receipt reds work-control-receipt-preservation fleet-wide - measured on this very lane earlier in this session, where it blocked the peer's push until I committed it.",
+    "liveProcesses": "No dev server on 1420 and no cargo build in flight. One listener on 5199 (pid 20668), the fixture preview server, read-only and not started by this transition. The owner's installed compy.exe is running (pid 12856) and is byte-untouched: mtime 2026-08-28 20:56, and nothing this turn built, installed or shipped.",
+    "otherWriters": "One live peer, session sentinel-63, which owns #300, #301, #305 and #310 and is the independent reviewer for this PR. Division confirmed in both directions by message this turn. It pushed lane/prune-list-truth-305 at 17:32 without that lane's disposition row, which red the audit in every checkout at once; I waited for its row rather than writing one into its lane, having already produced a duplicate 310 row that way once. It supplied 54d95961 and I adopted the bytes."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "a963db1d145c2eebe06d5848919e140d33ada742",
+      "detail": "THE AUTHORISING RUN, inside .githooks/pre-push on the push that landed this exact head. logs/verify-local-2026-09-02T00-55-35Z.log. All sections ran: frontend tests 408 files passed / 408, 5916 passed, 5 skipped, 0 failed; frontend type-check and build; Rust tests 1253 passed, 0 failed, 24 ignored; clippy with zero warning lines. 'LOCAL CHECK RESULT: PASS' written to the console, the hook exited 0, and the ref moved e9af4faa..a963db1d. Zero GitHub Actions minutes. The push was run unpiped: piping a long pre-push gate through tail has dropped the SSH connection on this machine before and reads as an auth failure.",
+      "headNote": "An immediately prior full-gate run at e28870da returned exactly ONE failure in 5921 tests - branch-disposition-audit, on the peer's missing 305 row, not on anything in this lane's diff. Recorded rather than omitted: it is the reason this head exists, and a receipt showing only the passing run would hide that the gate went red first."
+    }
+  ],
+  "docGates": [
+    "doc-budget.ps1 - ALL PASS at this head. BRANCH_DISPOSITIONS 106/107, SESSION_HANDOFF 120/120. The 106 is inherited from the peer's archive move, not paid by this lane. SESSION_HANDOFF at 120/120 is EXACTLY at cap with zero headroom, recorded as a standing hazard for the next editor rather than left to be discovered - it is why this lane added no resume line to that file.",
+    "branch-disposition-audit.mjs - OK at this head. Every origin ref has a proven row, including lane/prune-list-truth-305, whose absence blocked this push.",
+    "scripts/handoff-worktree-truth.test.mjs - 6/6 at this head. Measured, not assumed: the peer's newer SESSION_HANDOFF bytes were tested in this checkout and FAILED rules C and D with 12 unnamed carriers, because #312's rule-C relaxation lives on their lane and not in the guard this lane runs. Their doc text and their guard are a matched pair; adopting one without the other would have red this gate. This lane kept its own copy.",
+    "scripts/doc-path-escape-guard.test.mjs - the guard this PR adds, green at this head over every tracked *.md including archives."
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. No runtime code: git diff --name-only origin/main...HEAD returns zero paths under src/ or src-tauri/. The installed build on the owner's desk is byte-unchanged, mtime 2026-08-28."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers src/**/*.{tsx,css} UI change. This PR touches no component, no stylesheet and no rendered string - the diff contains no path under src/ at all. There is nothing for the owner to look at."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "PENDING - requested from claude-code session sentinel-63, bound to a963db1d",
+    "status": "pending",
+    "head": "a963db1d145c2eebe06d5848919e140d33ada742",
+    "reason": "PLACEHOLDER, NOT A VERDICT. This receipt is deliberately written before the review exists so the gate can be run against it and show that the review is the only thing outstanding. The transition MUST NOT be executed while this field says pending. The peer reviewed at e9af4faa and returned three findings, all accepted and all fixed; it then waived re-review, saying to push it ready when the gate is green. That waiver is refused: two commits exist that did not exist when it was written - e28870da, which IS the fix for those three findings, and a963db1d - so using it would ship the only commit implementing the review unreviewed by anyone, authorised by an approval written before the code existed. work-control-gate.mjs encodes exactly this and refuses; it is right. Setting practical:false would also clear the gate and is equally refused: review is plainly practical, the reviewer is live and active, and the reason field would be a fiction.",
+    "writerSession": "claude-code, session 50269055 in worktree sentinel-remote-design-286, the implementation owner of this lane",
+    "writerNote": "The gate requires writer === actor and actor is a fixed token (claude-code | codex); the session identity is preserved in writerSession."
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main...HEAD -- src-tauri/src/actions.rs is empty, 0 lines. The ONE Windows-mutation boundary is untouched, as is every other Rust file: the diff contains no path under src-tauri/ at all.",
+    "locks": "Untouched by construction - no runtime code changes, so no gate can move. Remote-rules fetch stays triple-gated OFF, the Receipts send path stays hard-false and default-OFF, Q9b Tier 3 stays dark, no capability or CSP is loosened. No signing key, secret or .env file is touched, added or referenced.",
+    "scopeConstraint": "#288 remains DESIGN ONLY and is untouched by this lane; #289 remains Q9b Stage 3 local/staged only and is untouched. Nothing here implements a remote-rules cache, arms a fetch, activates a CDN endpoint, or expands a Stage. The frozen beta refs (16069fa) are not moved. No hook was bypassed and --no-verify was not used on any push in this session.",
+    "commandAuthority": "No Tauri command was added, removed or renamed; no #[tauri::command] appears anywhere in the diff."
+  }
+}
