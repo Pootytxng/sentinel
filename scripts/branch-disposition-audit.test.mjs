@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   audit,
+  citationsInRecord,
   falseMergeCitations,
   isNoop,
   listRemoteRefs,
@@ -28,6 +29,7 @@ import {
   refSplit,
   refSetCoverage,
   resolveBase,
+  squashOnlyCitations,
 } from "./branch-disposition-audit.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -441,38 +443,79 @@ describe("PR-to-merge-commit citations", () => {
   const subjects = {
     "7dafc402": "Merge pull request #314 from Pootytxng/lane/rule-c-at-risk-312",
     "20ef848d": "Merge pull request #334 from Pootytxng/fix/green-main-after-314-332",
+    e26108f7: "docs(routing): reconcile native closeout \u2014 Stage 3 is the receiver (#273)",
+    "952ce309": "fix(guard): rule D accepts a landing marker, so C and D stop contradicting (#300)",
   };
   const subjectOf = (sha) => subjects[sha] ?? null;
+  // 952ce309 is deliberately absent: it is a lane commit, never a landing on main.
+  const onMain = new Set(["7dafc402", "20ef848d", "e26108f7"]);
+  const landedOnMain = (sha) => onMain.has(sha);
 
-  it("reads both shapes the document uses, and only those", () => {
+  it("reads all three landing shapes the document uses", () => {
     const md = [
       "| a | CLAIMED | PR [#334](https://github.com/o/r/pull/334) \u2192 `20ef848d`, landed. |",
       "| b | CLAIMED | PR [#314](https://github.com/o/r/pull/314) (`7dafc402`, upstream). |",
-      "| c | CLAIMED | PR [#315](https://github.com/o/r/pull/315), based on `main` -- 11 commits. |",
+      "| c | MERGED | PR [#277](https://github.com/o/r/pull/277) merge-committed to `main` as `ee5bdd8b` on 2026-09-01. |",
+      "| d | CLAIMED | PR [#315](https://github.com/o/r/pull/315), based on `main` -- 11 commits. |",
     ].join("\n");
     expect(mergeCitations(md)).toEqual([
       { pr: 334, sha: "20ef848d" },
       { pr: 314, sha: "7dafc402" },
+      { pr: 277, sha: "ee5bdd8b" },
+    ]);
+  });
+
+  it("separates mentions that never claimed a landing, and reds on shapes it does not know", () => {
+    // The first cut read two shapes and skipped a third the file already used twice, while its
+    // live assertion still read as full verification. Silence is the failure being guarded here.
+    const md = [
+      "PR [#89](https://github.com/o/r/pull/89) closed unmerged 2026-08-08; `93c931a3` is its tip.",
+      "PR [#267](https://github.com/o/r/pull/267) holds what needs review: `6760387a`.",
+      "PR [#411](https://github.com/o/r/pull/411) was somehow associated with `abcdef1234` here.",
+    ].join("\n");
+    const { landings, nonLandings, unclassified } = citationsInRecord(md);
+    expect(landings).toEqual([]);
+    expect(nonLandings.map((c) => c.pr)).toEqual([89, 267]);
+    expect(unclassified.map((c) => ({ pr: c.pr, sha: c.sha }))).toEqual([
+      { pr: 411, sha: "abcdef1234" },
     ]);
   });
 
   it("passes a true pairing and fails the swapped one", () => {
     const truthful = "PR [#314](https://github.com/o/r/pull/314) (`7dafc402`)";
     const swapped = "PR [#314](https://github.com/o/r/pull/314) (`20ef848d`)";
-    expect(falseMergeCitations(mergeCitations(truthful), subjectOf)).toEqual([]);
-    expect(falseMergeCitations(mergeCitations(swapped), subjectOf)).toEqual([{ pr: 314, sha: "20ef848d" }]);
+    expect(falseMergeCitations(mergeCitations(truthful), subjectOf, landedOnMain)).toEqual([]);
+    expect(falseMergeCitations(mergeCitations(swapped), subjectOf, landedOnMain)).toEqual([
+      { pr: 314, sha: "20ef848d" },
+    ]);
   });
 
-  it("accepts a squash landing, whose subject ends (#N) instead", () => {
-    // Refusing this shape failed two TRUE rows on the first live run (#273, #275). A guard that
-    // calls honest prose a lie is the #295 failure, just pointed the other way.
-    const squashes = {
-      e26108f7: "docs(routing): reconcile native closeout \u2014 Stage 3 is the receiver (#273)",
-    };
-    const md = "PR [#273](https://github.com/o/r/pull/273) (`e26108f7`)";
-    expect(falseMergeCitations(mergeCitations(md), (s) => squashes[s] ?? null)).toEqual([]);
-    const wrong = "PR [#274](https://github.com/o/r/pull/274) (`e26108f7`)";
-    expect(falseMergeCitations(mergeCitations(wrong), (s) => squashes[s] ?? null)).toEqual([
+  it("refuses a subject that ends (#N) when the commit never landed on main", () => {
+    // The round-2 attack, with this repository's real data. #300 is an OPEN ISSUE and `952ce309`
+    // is a lane commit, but the subject ends `(#300)` -- so a subject-only check certified the
+    // fabricated row "PR [#300](...) (`952ce309`)" as a true landing.
+    const md = "PR [#300](https://github.com/o/r/pull/300) (`952ce309`)";
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([
+      { pr: 300, sha: "952ce309" },
+    ]);
+    // The second reviewer built the same attack independently off a different pair, which is why
+    // this is a class and not an anecdote: #240 is also an issue, `d59c3d65` also a lane commit.
+    const other = "PR [#240](https://github.com/o/r/pull/240) (`d59c3d65`)";
+    const subject240 = () => "fix(test): guard-local comment stripping no longer fuses margin tokens (#240)";
+    expect(falseMergeCitations(mergeCitations(other), subject240, landedOnMain)).toEqual([
+      { pr: 240, sha: "d59c3d65" },
+    ]);
+  });
+
+  it("still accepts a real squash landing, and marks it as resting on the weaker shape", () => {
+    // Refusing this failed two TRUE rows on the first live run (#273, #275) -- #295 inverted.
+    const md = "PR [#273](https://github.com/o/r/pull/273) \u2192 `e26108f7`";
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([]);
+    expect(squashOnlyCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([
+      { pr: 273, sha: "e26108f7" },
+    ]);
+    const wrong = "PR [#274](https://github.com/o/r/pull/274) \u2192 `e26108f7`";
+    expect(falseMergeCitations(mergeCitations(wrong), subjectOf, landedOnMain)).toEqual([
       { pr: 274, sha: "e26108f7" },
     ]);
   });
@@ -480,7 +523,7 @@ describe("PR-to-merge-commit citations", () => {
   it("requires the squash number at the END, not merely somewhere", () => {
     const body = { abc1234: "fix: follow up to (#273) in the parser" };
     const md = "PR [#273](https://github.com/o/r/pull/273) (`abc1234`)";
-    expect(falseMergeCitations(mergeCitations(md), (s) => body[s] ?? null)).toEqual([
+    expect(falseMergeCitations(mergeCitations(md), (s) => body[s] ?? null, () => true)).toEqual([
       { pr: 273, sha: "abc1234" },
     ]);
   });
@@ -488,26 +531,51 @@ describe("PR-to-merge-commit citations", () => {
   it("does not let #31 match #314's subject", () => {
     // A bare `#${pr}` test would call this true, because the subject contains "#314".
     const md = "PR [#31](https://github.com/o/r/pull/31) (`7dafc402`)";
-    expect(falseMergeCitations(mergeCitations(md), subjectOf)).toEqual([{ pr: 31, sha: "7dafc402" }]);
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([
+      { pr: 31, sha: "7dafc402" },
+    ]);
   });
 
   it("counts an unreadable commit as false, never as fine", () => {
     const md = "PR [#999](https://github.com/o/r/pull/999) (`deadbeef`)";
-    expect(falseMergeCitations(mergeCitations(md), subjectOf)).toEqual([{ pr: 999, sha: "deadbeef" }]);
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([
+      { pr: 999, sha: "deadbeef" },
+    ]);
     const throws = () => {
       throw new Error("unreadable history");
     };
-    expect(falseMergeCitations(mergeCitations(md), throws)).toEqual([{ pr: 999, sha: "deadbeef" }]);
+    expect(falseMergeCitations(mergeCitations(md), throws, () => true)).toEqual([
+      { pr: 999, sha: "deadbeef" },
+    ]);
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, throws)).toEqual([
+      { pr: 999, sha: "deadbeef" },
+    ]);
   });
 
-  it("refuses to run without a subject reader", () => {
-    expect(() => falseMergeCitations([{ pr: 1, sha: "abc1234" }])).toThrow(/subject reader/);
+  it("refuses to run without both readers", () => {
+    expect(() => falseMergeCitations([{ pr: 1, sha: "abc1234" }])).toThrow(/landing reader/);
+    expect(() => falseMergeCitations([{ pr: 1, sha: "abc1234" }], subjectOf)).toThrow(/landing reader/);
   });
 
   it("holds for THIS repository's record, and proves it read something", () => {
-    const cited = mergeCitations(readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8"));
-    // Without this, a reworded document would silently make every assertion below vacuous.
-    expect(cited.length).toBeGreaterThan(0);
+    const record = readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8");
+    const { landings, unclassified } = citationsInRecord(record);
+    // Without these two, a reworded document would make every assertion below vacuous.
+    expect(landings.length).toBeGreaterThan(0);
+    expect(unclassified).toEqual([]);
+
+    const baseline = ["origin/main", "main"].find((ref) => {
+      try {
+        git(repoRoot, ["rev-parse", "--verify", "--quiet", ref]);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    // No baseline means the landing half cannot be checked at all -- fail, never skip.
+    expect(baseline).toBeTruthy();
+    const firstParent = git(repoRoot, ["rev-list", "--first-parent", baseline]).split("\n");
+    const landedOnRecordMain = (sha) => firstParent.some((full) => full.startsWith(sha));
     const live = (sha) => {
       try {
         return git(repoRoot, ["log", "-1", "--format=%s", sha]);
@@ -515,6 +583,13 @@ describe("PR-to-merge-commit citations", () => {
         return null;
       }
     };
-    expect(falseMergeCitations(cited, live)).toEqual([]);
+
+    expect(falseMergeCitations(landings, live, landedOnRecordMain)).toEqual([]);
+    // Pinned, because the squash shape cannot prove #N is a PR rather than an issue. A NEW
+    // squash-only citation reds here until somebody confirms it by hand -- that is the design.
+    expect(squashOnlyCitations(landings, live, landedOnRecordMain)).toEqual([
+      { pr: 273, sha: "e26108f7" },
+      { pr: 275, sha: "29fb8009" },
+    ]);
   });
 });

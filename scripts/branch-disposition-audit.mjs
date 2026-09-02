@@ -286,58 +286,130 @@ export function audit({ repoRoot, docPath = join(repoRoot, DOC), coverage } = {}
  * sentence.
  */
 /**
- * Every "PR #N landed as `sha`" citation in the record, in the TWO shapes the document actually
- * uses today:
+ * Every place the record pairs a PR number with a commit SHA, split into the three answers that
+ * matter: pairings that CLAIM a landing, mentions that plainly do not, and anything this file does
+ * not recognise.
  *
- *   PR [#334](.../pull/334) -> `20ef848d`
- *   PR [#314](.../pull/314) (`7dafc402`, ...)
+ * The third bucket is the point. The first cut of this guard read two shapes and silently skipped a
+ * third the document was already using twice, so it reported full verification while checking nine
+ * of eleven citations -- #330's failure exactly, a rule passing because its anchor was absent. An
+ * unrecognised pairing is now RETURNED, and the caller reds on it until a human classifies it.
+ * "Could not read this" must never render as "fine".
  *
- * Deliberately narrow. A third shape is NOT read, so a caller must also assert that the real
- * document still yields citations: a matcher that silently matches nothing reads as a pass while
- * checking nothing, which is #330's failure wearing a new hat.
+ * Shapes are matched on the JOIN -- the text between the PR link and the SHA -- because that is
+ * where the claim lives. Every pattern below was copied off a row that exists:
+ *
+ *   PR [#334](.../pull/334) -> `20ef848d`                          LANDING
+ *   PR [#314](.../pull/314) (`7dafc402`, ...)                      LANDING
+ *   PR [#277](.../pull/277) merge-committed to `main` as `ee5b..`  LANDING
+ *   PR [#89](.../pull/89) closed unmerged 2026-08-08; `93c931a3`   not a landing claim
+ *   PR [#267](.../pull/267) holds what needs review: `6760387a`    not a landing claim
+ *   PR [#289](.../pull/289). **Stacked on ...** ... (`aff17ea1`    not a landing claim
+ *
+ * Demanding a landing from the last three would be #295 pointed the other way -- a guard reading
+ * honest prose as a lie.
  *
  * This exists because a row shipped `20ef848d` as PR #314's merge commit when it is PR #334's --
  * two rows apart in the same file, so the document contradicted itself and every guard was green.
  * `audit()` could not catch it: it proves each ref has a row and each MERGED row is a true no-op,
  * and says nothing about prose pairing a number with a SHA.
- *
- * Known limit, stated rather than left to be discovered: the squash shape `... (#N)` is also how a
- * subject cites an ISSUE, so a squash citation proves the SHA is not paired with the WRONG number
- * rather than proving the number is a PR. That is the defect this guard exists for.
  */
+const CITATION_PAIR = /PR \[#(\d+)\]\([^)]*\)((?:(?!PR \[#)[\s\S]){0,200}?)`([0-9a-f]{7,40})`/g;
+
+const LANDING_JOINS = [
+  /^\s*(?:->|\u2192)\s*$/,
+  /^\s*\($/,
+  /^\s*merge-committed to `main` as\s*$/,
+];
+
+const NON_LANDING_JOINS = [/closed unmerged\b/, /holds what needs review/, /\bStacked on\b/];
+
+export function citationsInRecord(markdown) {
+  const landings = [];
+  const nonLandings = [];
+  const unclassified = [];
+  for (const m of (markdown ?? "").matchAll(CITATION_PAIR)) {
+    const hit = { pr: Number(m[1]), sha: m[3], join: m[2] };
+    if (LANDING_JOINS.some((re) => re.test(hit.join))) landings.push({ pr: hit.pr, sha: hit.sha });
+    else if (NON_LANDING_JOINS.some((re) => re.test(hit.join))) nonLandings.push(hit);
+    else unclassified.push(hit);
+  }
+  return { landings, nonLandings, unclassified };
+}
+
+/** The landing claims alone. Callers that skip `unclassified` are checking a subset -- see above. */
 export function mergeCitations(markdown) {
-  const re = /PR \[#(\d+)\]\([^)]*\)\s*(?:(?:->|\u2192)\s*`([0-9a-f]{7,40})`|\(`([0-9a-f]{7,40})`)/g;
-  return [...(markdown ?? "").matchAll(re)].map((m) => ({ pr: Number(m[1]), sha: m[2] ?? m[3] }));
+  return citationsInRecord(markdown).landings;
+}
+
+function readSubject(sha, subjectOf) {
+  try {
+    const s = subjectOf(sha);
+    return typeof s === "string" && s !== "" ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+function reallyLanded(sha, landedOnMain) {
+  try {
+    return landedOnMain(sha) === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * The citations that are FALSE. A citation is true when the cited commit's own subject names that
- * PR. `subjectOf` is injected so the fixtures can decide without a repository.
+ * "true" (the commit is a landing on main and its own subject names that PR), "squash" (a landing
+ * whose subject merely ENDS `(#N)`), or "false".
  *
- * Two directions this refuses to soften. Omitting `subjectOf` throws rather than defaulting, and an
- * unresolvable SHA counts as FALSE rather than being skipped -- a citation this repository cannot
- * check is not a citation it has verified, and "could not read it" must never render as "fine".
+ * Both conditions are load-bearing and fail independently. Subject-only was the round-2 hole: this
+ * repository ends nearly every subject with its governing number, so `952ce309 fix(guard): ...
+ * (#300)` -- a lane commit, not on main, for an OPEN ISSUE #300 -- passed a subject-only check as
+ * PR #300's landing. Landing-only would re-admit the original bug, since `20ef848d` is a perfectly
+ * real landing that simply belongs to a different PR.
  */
-export function falseMergeCitations(citations, subjectOf) {
-  if (typeof subjectOf !== "function") {
-    throw new Error('falseMergeCitations needs a subject reader -- omitting it must not read as "all true"');
+function citationVerdict(pr, sha, subjectOf, landedOnMain) {
+  if (!reallyLanded(sha, landedOnMain)) return "false";
+  const subject = readSubject(sha, subjectOf);
+  if (subject === null) return "false";
+  if (new RegExp(String.raw`Merge pull request #${pr}(\D|$)`).test(subject)) return "true";
+  if (new RegExp(String.raw`\(#${pr}\)\s*$`).test(subject)) return "squash";
+  return "false";
+}
+
+/**
+ * The landing claims that are FALSE. `subjectOf` and `landedOnMain` are both injected so fixtures
+ * can decide without a repository, and both are REQUIRED: omitting one must not read as "all true".
+ * An unresolvable SHA counts as FALSE rather than being skipped -- a citation this repository
+ * cannot check is not a citation it has verified.
+ */
+export function falseMergeCitations(citations, subjectOf, landedOnMain) {
+  if (typeof subjectOf !== "function" || typeof landedOnMain !== "function") {
+    throw new Error(
+      'falseMergeCitations needs a subject reader AND a landing reader -- omitting either must not read as "all true"',
+    );
   }
-  return (citations ?? []).filter(({ pr, sha }) => {
-    let subject;
-    try {
-      subject = subjectOf(sha);
-    } catch {
-      return true;
-    }
-    if (typeof subject !== "string" || subject === "") return true;
-    // Both landing shapes this repository actually produces. A merge commit names the PR in
-    // "Merge pull request #N from ..."; a squash merge ends its subject "... (#N)". Refusing the
-    // squash form would have failed two TRUE rows (#273, #275) on their first run -- the #295
-    // mistake in the other direction, a guard calling honest prose a lie.
-    const merged = new RegExp(String.raw`Merge pull request #${pr}(\D|$)`).test(subject);
-    const squashed = new RegExp(String.raw`\(#${pr}\)\s*$`).test(subject);
-    return !(merged || squashed);
-  });
+  return (citations ?? [])
+    .filter(({ pr, sha }) => citationVerdict(pr, sha, subjectOf, landedOnMain) === "false")
+    .map(({ pr, sha }) => ({ pr, sha }));
+}
+
+/**
+ * Landings accepted ONLY by the squash shape -- the residual this guard cannot close offline.
+ * `... (#N)` is both how GitHub squash-merges a PR and how this repo cites a governing issue, and
+ * no local read distinguishes them. Requiring a real `main` landing narrows the hole to "a genuine
+ * landing whose trailing number is an issue"; pinning this set closes the rest, because a NEW
+ * squash-only citation then reds until somebody confirms #N is a PR. One review per occurrence,
+ * rather than silent acceptance forever.
+ */
+export function squashOnlyCitations(citations, subjectOf, landedOnMain) {
+  if (typeof subjectOf !== "function" || typeof landedOnMain !== "function") {
+    throw new Error("squashOnlyCitations needs a subject reader AND a landing reader");
+  }
+  return (citations ?? [])
+    .filter(({ pr, sha }) => citationVerdict(pr, sha, subjectOf, landedOnMain) === "squash")
+    .map(({ pr, sha }) => ({ pr, sha }));
 }
 
 export function refSplit(rows) {
