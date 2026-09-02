@@ -363,7 +363,16 @@ describe("append-only build-identity rows (check 5b)", () => {
 // The live check. Everything above proves the detector works; this is the one that fails when the
 // doc and the tree part company, on the next test run rather than at the next release gate.
 describe("RELEASE_STATE.md as it stands, against the tree it cites", () => {
-  it("has no broken citation, no missing section and no state drift", () => {
+  // Explicit timeout, and NOT to paper over a flake. This test opens every file RELEASE_STATE
+  // cites and reads to the cited line, so its cost scales with the doc; standing alone it takes
+  // ~10s of vitest.config.ts's GLOBAL 15000ms default, which was never a budget chosen for this
+  // test. That margin survives `npm test` and does not survive .githooks/pre-push, where ~23 node
+  // processes compete: it timed out at 15000ms on three consecutive gate runs on 2026-09-01 while
+  // passing 51/51 standing alone each time, and a gate that fails on load rather than on truth
+  // teaches everyone to re-run until green, which is how a real failure gets waved through.
+  // 60s is the contention headroom, not permission to get slower — if this ever needs more, the
+  // fix is to make the check cheaper, not to raise this number again.
+  it("has no broken citation, no missing section and no state drift", { timeout: 60_000 }, () => {
     const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
     const { bad, missingSections, stateFail, citations } = verifyRepo(repo);
     expect(bad.map((r) => `${r.verdict} ${r.file}:${r.line} ${r.detail}`)).toEqual([]);
