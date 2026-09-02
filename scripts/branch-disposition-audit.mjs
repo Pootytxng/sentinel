@@ -240,7 +240,34 @@ export function audit({ repoRoot, coverage } = {}) {
   for (const { ref, disposition } of rows) {
     if (!live.has(ref)) continue; // already reported; merge-tree would just throw
     const rule = DISPOSITIONS[disposition];
-    if (!rule || rule.noop === null) continue; // unknown word already reported; PRESERVE/CLAIMED claim nothing
+    if (!rule) continue; // unknown word already reported, above
+
+    // #350: CLAIMED used to take PRESERVE's skip below -- "noop: null, claims nothing" -- on the
+    // theory that a live writer's ref is expected to diverge from base. But PRESERVE means "outside
+    // the landed/unlanded question, forever" (a frozen reference point) and CLAIMED means "a lane is
+    // actively working this, right now" -- and active work either lands or it doesn't. Sharing
+    // PRESERVE's skip let a CLAIMED row assert anything, including its own merge, with nothing ever
+    // re-checking it: the live case this issue was filed over is `lane/docs-path-not-branch-310`,
+    // CLAIMED, whose own prose says "Merged as PR #316" while nothing had re-measured it since.
+    // So CLAIMED gets exactly one check, in exactly one direction: has the ref, in fact, already
+    // landed? A "no" (still genuinely diverged) is a live claim standing and needs no complaint --
+    // that half is still PRESERVE-shaped, on purpose. A "yes" means the claim is dead: the row must
+    // be re-dispositioned as LANDED (kept) or MERGED (pruned), not left asserting currency it no
+    // longer has. Neither answer is "prunable" by itself -- that is for whichever word replaces
+    // CLAIMED to decide -- so this never feeds the `rule.prunable` check below.
+    if (disposition === "CLAIMED") {
+      if (isNoop(repoRoot, base, ref)) {
+        problems.push(
+          `${ref} is recorded CLAIMED, but merging it into ${base} is already a no-op — the work has ` +
+            `landed. A CLAIMED row carries no ongoing warranty once that is true, so re-disposition it ` +
+            `on today's evidence: LANDED if this ref is deliberately kept (another PR may still be ` +
+            `based on it), or MERGED if not, then prune it: ${pruneCommand(ref)}`,
+        );
+      }
+      continue;
+    }
+    if (rule.noop === null) continue; // PRESERVE claims nothing about merge-tree, on purpose, forever
+
     const noop = isNoop(repoRoot, base, ref);
     if (rule.noop && !noop) {
       // The remedy travels with the failure, because the failure is nearly always the same story:
