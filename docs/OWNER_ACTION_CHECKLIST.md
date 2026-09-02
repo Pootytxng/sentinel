@@ -109,13 +109,13 @@ yes for each, so deleting them cannot lose a commit; four (`332`, `333`, `310`, 
 today. The last three are not ancestors and still hold nothing you want: `271` (151 behind) and
 `274` (149 behind) landed by squash and would only reintroduce a stale copy of status docs. `274`'s
 delta now also shows `scripts/doc-budget.ps1`, which it did NOT at the last derivation — but that is
-`main` moving, not `274` holding something: `main`'s copy is dated 2026-09-02 against `274`'s
-2026-08-30, and both carry identical caps. PR
+`main` moving, not `274` holding work: `274` caps this very file at 450 lines where `main` has since
+ratcheted it to 385, and restoring a looser budget is what the ratchet forbids. PR
 [#163](https://github.com/Pootytxng/sentinel/pull/163) closed unmerged, leaving
 `cleanup-train-2026-08-20` **590 commits behind with an OLDER `handoff-block` guard** — merging it
 would REGRESS `main`. Nothing is lost either way: the local refs and their clean worktrees still
 hold every commit, so any of the fifteen can be pushed back in one command — and
-`prune-candidates.test.mjs` now measures that promise ref by ref instead of restating it. Deleting
+`prune-candidates.test.mjs` measures that promise ref by ref. Deleting
 was **denied to this session**, and a denial is a stop — I did not reach the same effect another
 way. **Re-derive before running.** **Why it matters:** until the refs are gone, their rows and the
 handoff's branch list have to keep saying "landed but still here" — small residue, but it is exactly
