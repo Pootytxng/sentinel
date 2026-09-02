@@ -71,7 +71,8 @@ append-only record is wrong by the next commit, which it was twice on 2026-09-01
 Sweep history (2026-08-04 through 2026-08-21, #126) is archived in [`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md).
 **Two facts still live here**: the retired detached checkout's work is preserved under tag
 `preserve/checklist-disk-item-c5660e`, and **rule C of `scripts/handoff-worktree-truth.test.mjs`
-fails on a branchless checkout** (a shape an `origin` audit cannot see).
+fails on a branchless checkout holding commits no remote has** — the one shape a ref-facing audit
+cannot see, because it has no ref.
 
 ## Standing rule
 

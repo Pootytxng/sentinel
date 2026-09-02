@@ -2,8 +2,9 @@
 
 > Live pointer only. Gate truth: [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue:
 > [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP. Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
-> Budget 120 lines; this file, `BRANCH_DISPOSITIONS.md` and `BACKLOG.md::Conformance queue` are all
-> AT cap — trim before adding a line. Replace this file, never append.
+> Budget 120 lines; this file and `BACKLOG.md::Conformance queue` are AT cap — trim before adding a
+> line. Replace this file, never append. **Durable instructions only**: no fleet counts, no lane
+> names, nothing another lane has to come back and repair (#291).
 
 ## Where the train is standing
 
@@ -88,25 +89,23 @@ zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **B
 read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
 and **§G** (the site). Read them THERE, never from a paraphrase.
 
-- **33 worktrees besides the canonical checkout. Work that exists on no remote — do NOT delete or hard-reset these
-  before checking**: `claude/compy-visual-recovery-kit-6fd074`, holding a single commit (`cdd976f3`, docs on
-RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, `lane/receipt-carrier-345` (#346) and
-  `lane/prune-list-truth-305` (#305) whenever a push lags — EVERY lane joins this list between a commit and its push,
-  so no count is pinned here. Most checkouts ahead of `origin/main` are **fully pushed**: deleting those loses
-  nothing, each has a row in `docs/BRANCH_DISPOSITIONS.md`, and rule C prints the live split every run. It stopped
-  demanding all be named on 2026-09-01 (#312): 92% of them could not be lost, and no two lanes could be green at once.
-  `claude/compy-health-parity` and `claude/compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at
-  `c8366609` — neither contains the other** (`--is-ancestor` is NO both ways). Counted **not on main**: the kit has ONE
-  unique commit; health-parity's is unpinned, re-merging main — use the formula below. Backed up only to
-  `refs/backup/*`, so dropping either loses the other's work. **No depth/SHA pinned** — re-derive risk with `git
-  rev-list --count <ref> --not` over the origin refs `git ls-remote --heads origin` reports, distance with
-  `origin/main..<ref>`. **A landed lane's name still leaves with the train that lands it** (rule D, #243): naming a
-  zero-carry branch fails this bullet whether or not rule C wanted the name. Spent, at zero:
-  `sentinel-fleet-guard-276`, `sentinel-segmented-237`, `sentinel-q9b-redactor-259`,
-  `sentinel-q9b-stage2-258` (#258/#264 landed out of it), four of the SIX registered under `.claude/worktrees/` (seven
-  entries there; `data-root-integrity-432797` is not one), parked `sentinel-mission0-accent-landing`,
-  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`. Every detached checkout
-  carries zero, so rule C has nothing to credit.
+- **The fleet is measured, never written down.** `node scripts/fleet-snapshot.mjs` prints every
+  checkout on this machine: its branch, how far past `origin/main` it sits, and whether anything it
+  holds exists on no remote. No count, carrier list or lane name is stored in this file. They used to
+  be, and #291 measured the price: eight of eight open PRs on 2026-09-02 edited this file, almost
+  none of them about their own subject — one lane adding a worktree made the stated total false for
+  every other lane's gate, so whoever pushed next paid for it, then rebased because someone else had
+  just paid for it too.
+- **The one shape that can still be LOST** is a checkout on a detached head holding commits no remote
+  has. `git worktree remove` deletes the folder, and nothing else knew those commits existed. Rule C
+  of `scripts/handoff-worktree-truth.test.mjs` fails on exactly that; the fix is to give the work a
+  ref (`git branch <name> <sha>`) or push it, never a line here — prose does not make a commit
+  reachable. A checkout on a branch is safe: local branches live in the common `.git` and outlive
+  their worktree, so deleting the folder loses nothing.
+- **Two lanes that overlap are a git question, not a remembered one.** Ask
+  `git merge-base --is-ancestor <inner> <outer>` before dropping either, both ways — "shares N
+  commits, diverging at `<sha>`" is what two lanes that merely overlap actually do, and neither
+  containing the other is the common answer. `refs/backup/*` is not a substitute for asking.
 
 ## Waiting on the owner — two arming gates, nothing else
 
