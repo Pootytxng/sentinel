@@ -1,0 +1,6 @@
+{
+  "ref": "origin/lane/claimed-reproof-350",
+  "disposition": "CLAIMED",
+  "issue": 350,
+  "evidence": "Lane Alpha of the #291 two-lane pilot. CLAIMED shared PRESERVE's skip in the audit, so a CLAIMED row could assert its own merge with nothing re-checking it; this lane gives CLAIMED one directional check — has it already landed? Recorded by the integration owner rather than by the lane, because the lane had already finished when its ref appeared on origin, and a ref with no record blocks every other lane's gate. That coupling is itself a finding against #291 and is written up on that issue."
+}
