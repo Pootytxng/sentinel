@@ -57,8 +57,8 @@
   live: v0.9.26 (`5e64074c`) published 2026-08-19** — public release id `372920800`, installer
   SHA-256 `4b72d681…9294e98`, manifest `0.9.26`, signature verified, and your own box runs those
   exact bytes — and the canary (on v0.9.11) proves that path works on someone else's machine. Every
-  precondition is met (full local gate set green; hosted Actions stay off by your standing decision
-  — see B7 — so **local IS the gate**), so nothing blocks widening but your call on who and when.
+  precondition is met (full local gate set green; hosted Actions have been REFUSED for billing since
+  2026-08-11 — see A_ci — so **local IS the only gate**), so nothing blocks widening but your call.
   The release page is
   `https://github.com/Pootytxng/compy-releases/releases/latest`. Once an invitee installs one
   updater-enabled build, future patches reach them in-app ("update ready" pill → one click). Key
@@ -106,6 +106,13 @@ not reach the same effect by another route. The third hit that same denial on th
 command a week later, which is why it joins this list instead of getting solved. **Why it matters:** until the refs are gone, their rows and the handoff's
 branch list have to keep saying "landed but still here" — small residue, but it is exactly what
 makes the next session distrust the branch list. Nothing is broken while it waits.
+
+### A_ci. GitHub refuses to RUN any check — a billing problem  ·  ⏳ NEW 2026-09-01
+
+**The ask:** GitHub → Settings → Billing; clear the failed payment or raise the spending limit.
+**Since 2026-08-11 no Actions job has STARTED** — *"not started because recent account payments have
+failed or your spending limit needs to be increased."* **Why it matters:** the 2026-08-31 run reports
+green **success** with `steps: 0` in 2s, so green ticks are not evidence and local pre-push is the ONLY proof. [#321](https://github.com/Pootytxng/sentinel/issues/321).
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
@@ -257,9 +264,9 @@ section is waiting on you:**
 for the fourteen checkouts that carry no commit `main` lacks, and `git restore .codex/config.toml` in
 the ten holding a rewritten copy of it. Both were **denied to this session**, and a denial is a stop,
 so neither was reached by another route. **Nothing is lost by either.** The only real content any of
-those folders held was six work-control proof receipts — evidence for merges and closes that existed
-on no branch at all, one of them a full independent-review record — and they were copied onto this
-lane first, which is why the removal waits for #290 rather than happening in either order. What
+those folders held was eight work-control proof receipts — evidence for merges and closes that existed
+on no branch at all, one a full independent-review record — copied onto this lane first and also to
+`_receipts-recovered-2026-09-01/`, which is why removal waits for #290, not either order. What
 remains in the four "dirty" ones is a line-endings-only `CLAUDE.md`, a tool scratch folder, and the
 Codex file. That file is not authored work either: it is the app-server re-sync its own header warns
 about, re-adding two Claude env-vars that do nothing for Codex plus an MCP entry the lane had
