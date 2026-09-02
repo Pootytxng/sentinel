@@ -117,6 +117,37 @@
 //      a graced landing is silent, an older stale name (one that has already survived a doc edit)
 //      still fails. Self-naming for C is UNCHANGED by this: a lane still must name itself to push;
 //      it no longer has to also solve un-naming itself inside the same, impossible, single lane.
+//
+//      ROUND 2 (PR #335 review, 2026-09-02): round 1 compared the freshest doc editor against the
+//      branch's raw TIP, which is only right when the landing merge is clean. A clean merge's
+//      result for the doc path is TREESAME to the branch's own edit, so git's history
+//      simplification makes `freshestDocEditOnMain` report that edit commit directly — an
+//      ancestor of the tip, grace granted. `docs/SESSION_HANDOFF.md` is this repo's documented
+//      merge hotspot (13 of 14 concurrent lanes conflict on it), and when the landing merge has to
+//      CONFLICT-RESOLVE it, the merge commit's tree for that path matches NEITHER parent, so the
+//      merge commit itself is what `git log -1 -- <path>` reports as freshest — and a merge
+//      commit is an ancestor of neither of its own parents. Checking ancestry against the raw tip
+//      then reads that merge as a stranger and denies grace to a branch that just landed by the
+//      only mechanism available to it, reproducing #333 unchanged. Two reviewers converged on
+//      this independently; one reproduced it in a scratch repo rather than arguing it.
+//
+//      The fix compares against the LANDING, not the tip. `landingCommitOf` resolves the earliest
+//      commit reachable from `origin/main` that is a descendant of the branch's tip — via
+//      `git rev-list --ancestry-path <tip>..origin/main`, oldest entry first-after-tip — which is
+//      the merge commit itself for an ordinary merge, or the tip itself when nothing has landed on
+//      top of it yet. `landedNameIsGraced` is then asked about THAT commit instead of the raw tip.
+//      A clean merge is unaffected: the landing commit's ancestry still contains the branch's own
+//      doc edit, so grace is granted the same way as before. A conflict-resolving merge now reads
+//      correctly, because the freshest editor (the merge commit) IS the landing commit — equality,
+//      no ancestor question needed. The #243 shape this exists to still catch is unchanged: a
+//      commit that touches the doc AFTER the landing and leaves the name in place is a strict
+//      descendant of the landing commit, never an ancestor of it, so grace is still denied.
+//
+//      This round also corrects a false claim in commit `0b555277`'s message — "freshest editor
+//      is a descendant of the tip -> graced". That is backwards and always was: that shape DENIES
+//      grace, per the #243 paragraph two above. The test meant to prove it (this file, ~line 717)
+//      shipped with an inverted stub that asserted the wrong answer; it is fixed in the same train
+//      as this paragraph, alongside the conflict-merge case above.
 //   E. Local only. Every CONTAINMENT claim the handoff makes between two named branches must hold
 //      by `git merge-base --is-ancestor`. Added 2026-09-01 after this file shipped
 //      "`compy-health-parity` **contains** `compy-visual-recovery-kit-6fd074`" while neither branch
@@ -310,6 +341,30 @@ export function landedNameIsGraced(branchTip, freshestDocEdit, isAncestorOrEqual
 }
 
 /**
+ * #333 round 2 (the conflict-merge shape). What `landedNameIsGraced` should be asked about is not
+ * the branch's raw tip but its LANDING — the earliest commit reachable from `origin/main` that is
+ * a descendant of `tip`. For an ordinary clean merge this makes no difference (see the round-2
+ * paragraph on rule D above), but when the landing merge has to conflict-resolve the guarded doc,
+ * the merge commit itself becomes the freshest editor, and a merge commit is an ancestor of
+ * NEITHER of its parents — so asking about the raw tip reads that merge as a stranger and denies
+ * grace to a branch that just landed by the only mechanism available to it.
+ *
+ * `ancestryPath` is `git rev-list --ancestry-path <tip>..origin/main`'s own output shape: every
+ * commit that is both a descendant of `tip` and an ancestor-or-equal of `origin/main`, NEWEST
+ * FIRST (git's default order), excluding `tip` itself. The oldest entry — last in that order — is
+ * the earliest point after `tip` where `tip`'s work became reachable from `origin/main`: the
+ * landing, merge commit or otherwise. An EMPTY path means nothing has landed on top of `tip` yet
+ * by this definition, so `tip` is trivially its own landing.
+ *
+ * Pure and injected-input, like `landedNameIsGraced` itself, so this is falsifiable without a real
+ * repo: pass the exact array shape `landingCommitOnMain` builds from `git rev-list`, in the order
+ * git prints it.
+ */
+export function landingCommitOf(tip, ancestryPath) {
+  return ancestryPath.length > 0 ? ancestryPath[ancestryPath.length - 1] : tip;
+}
+
+/**
  * Rule D's judgment, one branch at a time: a name the bullet presents as work must resolve to a
  * LOCAL ref and carry at least one commit `origin/main` cannot reach. Everything else is a finding,
  * each carrying its reason. All three collaborators are injected so every verdict — including the
@@ -373,6 +428,25 @@ const isAncestorOrEqual = (a, b) => {
     return true;
   } catch {
     return false;
+  }
+};
+
+/**
+ * #333 round 2, live wiring for `landingCommitOf`: resolves `tip`'s landing on `origin/main` via
+ * `git rev-list --ancestry-path`, which prints newest-first — exactly the shape `landingCommitOf`
+ * expects. On a resolution failure (an unreadable `tip`, an origin that cannot be reached) this
+ * falls back to `tip` itself rather than inventing a landing point git could not compute — the
+ * same fail-toward-the-narrower-behavior choice `freshestDocEditOnMain` makes with `null`, except
+ * here there is a safe narrower behavior (round 1's own tip-based check) to fall back to instead
+ * of failing closed outright.
+ */
+const landingCommitOnMain = (tip) => {
+  try {
+    const raw = git("rev-list", "--ancestry-path", `${tip}..origin/main`);
+    const path = raw ? raw.split(/\r?\n/).filter(Boolean) : [];
+    return landingCommitOf(tip, path);
+  } catch {
+    return tip;
   }
 };
 
@@ -494,6 +568,21 @@ export function trustedExclusions(cachedTrackingRefs, liveOriginHeads) {
     .filter((ref) => ref !== "origin" && ref !== "origin/HEAD")
     .filter((ref) => live.has(ref.replace(/^origin\//, "")));
   return trusted.length ? trusted : null;
+}
+
+/**
+ * Test-only. Builds a real (if tiny) ancestor-or-equal check from an explicit descendant map, so a
+ * stub's ancestry direction is derived from ONE set of "this commit's real descendants" facts
+ * instead of separate hand-tuned booleans that can silently disagree with each other — which is
+ * exactly how PR #335's round 1 shipped an inverted stub: `landedNameIsGraced("staleTip",
+ * "newerLaneTip", stub)` asserted `true` for a shape its own adjacent comment called "the grace is
+ * spent". `descendantsOf[c]` must list every commit reachable by walking forward from `c` (real
+ * git parent/child direction — a descendant is never its own ancestor's ancestor); asking "is `a`
+ * an ancestor of `b`" then reduces to "does `descendantsOf[a]` contain `b`", the same direction
+ * `git merge-base --is-ancestor a b` answers, never the reverse.
+ */
+function fakeIsAncestorOrEqual(descendantsOf) {
+  return (a, b) => a === b || (descendantsOf[a] ?? []).includes(b);
 }
 
 const markdown = readFileSync(join(ROOT, HANDOFF), "utf8");
@@ -712,9 +801,13 @@ describe("the handoff tells the truth about the worktrees", () => {
     // question — equality alone must be enough.
     expect(landedNameIsGraced("sameTip", "sameTip", noBranchIsAncestor)).toBe(true);
     // The freshest editor is a DESCENDANT of this branch's tip (something newer touched the doc):
-    // the grace is spent, this is the #243 shape, and no live ancestry stub is asked to disagree.
-    const freshestIsDescendantOfTip = (freshest, tip) => tip === "staleTip" && freshest === "newerLaneTip";
-    expect(landedNameIsGraced("staleTip", "newerLaneTip", freshestIsDescendantOfTip)).toBe(true);
+    // the grace is spent, this is the #243 shape. PR #335 round 1 shipped this exact assertion
+    // inverted (`.toBe(true)`, against a stub hand-tuned to agree with the wrong answer) — the
+    // ancestor check is modeled here from an explicit descendant fact (staleTip is an ancestor of
+    // newerLaneTip, never the reverse) via `fakeIsAncestorOrEqual` instead, so the direction cannot
+    // be fudged per-assertion the way a one-off boolean was.
+    const staleLineage = fakeIsAncestorOrEqual({ staleTip: ["newerLaneTip"] });
+    expect(landedNameIsGraced("staleTip", "newerLaneTip", staleLineage)).toBe(false);
     expect(landedNameIsGraced("staleTip", "unrelatedTip", noBranchIsAncestor)).toBe(false);
     // Threaded end to end through staleNamedLanes: a just-landed lane reads as no finding at all —
     // this is the "just landed" case the fix exists to stop failing...
@@ -740,6 +833,51 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(branchesClaimedUnmerged(sectioned)).toEqual(["lane/a"]);
   });
 
+  it("#333 round 2: grace survives a conflict-resolving landing merge, and still expires on a real stale name", () => {
+    // `landingCommitOf` alone first: an empty ancestry path means nothing has landed on top of the
+    // tip yet, so the tip is trivially its own landing; a non-empty path resolves to its OLDEST
+    // entry (last, since git prints newest-first) regardless of how many commits sit between the
+    // tip and origin/main today.
+    expect(landingCommitOf("tip", [])).toBe("tip");
+    expect(landingCommitOf("tip", ["mergeCommit"])).toBe("mergeCommit");
+    expect(landingCommitOf("tip", ["laterEdit", "mergeCommit"])).toBe("mergeCommit");
+
+    // The DAG the reviewers reproduced in a scratch repo: `branchTip` and `mainBeforeMerge` are the
+    // two parents of `mergeCommit` (an ordinary merge with two parents), and `laterEdit` is an
+    // ordinary later commit built on top of it. One descendant map, so every ancestor question
+    // below is answered from the SAME facts rather than a per-assertion boolean.
+    const conflictMergeLineage = fakeIsAncestorOrEqual({
+      branchTip: ["mergeCommit", "laterEdit"],
+      mainBeforeMerge: ["mergeCommit", "laterEdit"],
+      mergeCommit: ["laterEdit"],
+    });
+
+    // The bug itself, reproduced structurally: when the landing merge has to conflict-resolve the
+    // doc, `mergeCommit` — not any commit inside the branch — is what `git log -1` reports as
+    // freshest. Asking `landedNameIsGraced` about the raw TIP (round 1's mechanism) denies grace,
+    // because a merge commit is an ancestor of NEITHER of its parents — this is #333 reproducing
+    // unchanged, exactly as the round-1 review found:
+    expect(landedNameIsGraced("branchTip", "mergeCommit", conflictMergeLineage)).toBe(false);
+
+    // The fix: ask about the LANDING instead. With origin/main sitting exactly at the merge (the
+    // ancestry path from branchTip to origin/main is just [mergeCommit]), the landing commit IS
+    // mergeCommit, which IS the freshest editor — equality, grace granted:
+    const landingAtMerge = landingCommitOf("branchTip", ["mergeCommit"]);
+    expect(landingAtMerge).toBe("mergeCommit");
+    expect(landedNameIsGraced(landingAtMerge, "mergeCommit", conflictMergeLineage)).toBe(true);
+
+    // And the #243 shape survives being reached through a conflict-resolving landing: `laterEdit`
+    // touches the doc again afterward and leaves the name in place. origin/main has moved to
+    // laterEdit, so the ancestry path from branchTip is now [laterEdit, mergeCommit] (newest
+    // first) — the landing commit is still mergeCommit (unaffected by what lands after it), but
+    // the freshest editor is now laterEdit, a strict DESCENDANT of the landing, never an ancestor
+    // of it. Grace is correctly spent — a genuinely stale name is not laundered by having once
+    // landed through a conflict:
+    const landingAfterLaterEdit = landingCommitOf("branchTip", ["laterEdit", "mergeCommit"]);
+    expect(landingAfterLaterEdit).toBe("mergeCommit");
+    expect(landedNameIsGraced(landingAfterLaterEdit, "laterEdit", conflictMergeLineage)).toBe(false);
+  });
+
   it("A: every branch it calls unmerged is genuinely not on origin/main", () => {
     const claimed = branchesClaimedUnmerged(markdown);
     expect(claimed.length, `${HANDOFF} names no unmerged branches — did the bullet get reworded?`).toBeGreaterThan(0);
@@ -759,7 +897,9 @@ describe("the handoff tells the truth about the worktrees", () => {
       try {
         tip = git("rev-parse", `origin/${b}`);
       } catch { /* stays null: refExists already gates this branch out before isGraced runs */ }
-      const result = tip !== null && landedNameIsGraced(tip, freshest, isAncestorOrEqual);
+      // Round 2: graced against the LANDING (`landingCommitOnMain`), not the raw tip — see that
+      // function's doc comment for why a conflict-resolving merge needs this.
+      const result = tip !== null && landedNameIsGraced(landingCommitOnMain(tip), freshest, isAncestorOrEqual);
       if (result) gracedByA.push(b);
       return result;
     };
@@ -948,7 +1088,9 @@ describe("the handoff tells the truth about the worktrees", () => {
       try {
         tip = git("rev-parse", `refs/heads/${b}`);
       } catch { /* stays null: an unresolvable ref is staleNamedLanes' OWN earlier finding, not this one's to grace */ }
-      const result = tip !== null && landedNameIsGraced(tip, freshestDocEdit, isAncestorOrEqual);
+      // Round 2: graced against the LANDING (`landingCommitOnMain`), not the raw tip — see that
+      // function's doc comment for why a conflict-resolving merge needs this.
+      const result = tip !== null && landedNameIsGraced(landingCommitOnMain(tip), freshestDocEdit, isAncestorOrEqual);
       if (result) gracedNames.push(b);
       return result;
     };
