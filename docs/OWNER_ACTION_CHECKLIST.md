@@ -90,31 +90,36 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Eleven dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 4th 2026-09-01
+### A_prune. Fifteen dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 5th 2026-09-02
 
-**The ask:** one command, all eleven at once — `git push origin --delete
+**The ask:** one command, all fifteen at once — `git push origin --delete
 claude/exciting-robinson-0ce4d5 lane/agent-skills-config lane/atomic-json-281
 lane/fleet-guard-failclosed-276 lane/license-atomic-284 lane/receipt-preservation-298
-lane/remote-cache-design-286 lane/segmented-a11y-237 lane/native-routing-271
-lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. This said THREE until 2026-09-01
-([#305](https://github.com/Pootytxng/sentinel/issues/305)) — eight more had gone dead while the list
-stood still. **`beta/private-beta-001` is deliberately NOT in it**: it answers YES to the same
-containment query every re-derivation runs, and it is the frozen beta ref (`16069fa`) that
-`CLAUDE.md` puts in owner territory. That exclusion is written down here so a later session cannot
-"complete the list", and `scripts/prune-candidates.test.mjs` fails if this command ever names it.
-The first eight are **contained in `main`** — `git merge-base --is-ancestor` says yes for each, so
-deleting them cannot lose a commit. The last three are not ancestors and still hold nothing you
-want: `271` and `274` landed by squash and would only reintroduce a stale copy of three status docs
-(merge-tree confirms their real fixes are already on `main`), and PR
+lane/remote-cache-design-286 lane/segmented-a11y-237 fix/green-main-after-314-332
+fix/handoff-grace-cycle-333 lane/docs-path-not-branch-310 lane/rule-c-at-risk-312
+lane/native-routing-271 lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. It said THREE
+until 2026-09-01 and ELEVEN until 2026-09-02
+([#305](https://github.com/Pootytxng/sentinel/issues/305)) — it goes stale every time a lane lands,
+so it is **re-derived, never carried over**. **`beta/private-beta-001` is deliberately NOT in it**:
+it answers YES to the same containment query every re-derivation runs, and it is the frozen beta ref
+(`16069fa`) that `CLAUDE.md` puts in owner territory. That exclusion is written down here so a later
+session cannot "complete the list", and `scripts/prune-candidates.test.mjs` fails if this command
+ever names it. The first twelve are **contained in `main`** — `git merge-base --is-ancestor` says
+yes for each, so deleting them cannot lose a commit; four (`332`, `333`, `310`, `312`) landed only
+today. The last three are not ancestors and still hold nothing you want: `271` (151 behind) and
+`274` (149 behind) landed by squash and would only reintroduce a stale copy of status docs. `274`'s
+delta now also shows `scripts/doc-budget.ps1`, which it did NOT at the last derivation — but that is
+`main` moving, not `274` holding something: `main`'s copy is dated 2026-09-02 against `274`'s
+2026-08-30, and both carry identical caps. PR
 [#163](https://github.com/Pootytxng/sentinel/pull/163) closed unmerged, leaving
-`cleanup-train-2026-08-20` **522 commits behind with an OLDER `handoff-block` guard** — merging it
+`cleanup-train-2026-08-20` **590 commits behind with an OLDER `handoff-block` guard** — merging it
 would REGRESS `main`. Nothing is lost either way: the local refs and their clean worktrees still
-hold every commit, so any of the eleven can be pushed back in one command. Deleting was **denied to
-this session**, and a denial is a stop — I did not reach the same effect another way. **Re-derive
-before running** — this list is point-in-time and went stale once already. **Why it matters:** until
-the refs are gone, their rows and the handoff's branch list have to keep saying "landed but still
-here" — small residue, but it is exactly what makes the next session distrust the branch list.
-Nothing is broken while it waits.
+hold every commit, so any of the fifteen can be pushed back in one command — and
+`prune-candidates.test.mjs` now measures that promise ref by ref instead of restating it. Deleting
+was **denied to this session**, and a denial is a stop — I did not reach the same effect another
+way. **Re-derive before running.** **Why it matters:** until the refs are gone, their rows and the
+handoff's branch list have to keep saying "landed but still here" — small residue, but it is exactly
+what makes the next session distrust the branch list. Nothing is broken while it waits.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
