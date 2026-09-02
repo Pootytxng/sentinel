@@ -1,0 +1,79 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 348,
+  "issue": 346,
+  "branch": "lane/receipt-carrier-345",
+  "currentHead": "874eaf6e1b422fd8d21c646346b704ec34b7ce09",
+  "explicitHandoff": "Owner turn authorizing this train: a marathon safe-throughput workflow to maximize verified completed work while preserving ownership, exact-head review, release, evidence and documentation law. Its PROCEED instructions bind this transition: on APPROVE, re-fetch, verify exact head, base and mergeability, save this receipt, run the exact full gate and scripts/work-control-gate.mjs, and merge ONLY on PASS; on REQUEST CHANGES, repair at a new head under a fresh independent review, and never let the writer self-review. No batch merge, no self-approval, no reuse of a stale review, and mergeable is not reviewed. This lane is claimed on issue #346.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. Run from C:/Users/Kuya/code/sentinel-release-truth-256, the worktree holding the #346 claim. GitHub Actions has started no job in this repository since 2026-08-11 for billing (#321), so MERGEABLE/CLEAN on PR #348 means no merge conflict and says NOTHING about tests. The only proof that exists is the local gate scripts/verify-local.ps1, run whole by .githooks/pre-push, and it is the gate cited below.",
+    "remoteState": "git fetch origin --prune run immediately before this transition. origin/main = 25c3ddb7e53840740470b0c30fcaf087af5bd2c5, PR #316's merge commit, unmoved. git ls-remote origin lane/receipt-carrier-345 = 874eaf6e1b422fd8d21c646346b704ec34b7ce09, identical to git rev-parse HEAD in this worktree AND to the head the independent reviewer confirmed by ls-remote as its own first action. PR #348 reads OPEN, base main, MERGEABLE/CLEAN at that head.",
+    "worktree": "This writer holds C:/Users/Kuya/code/sentinel-release-truth-256 alone. No second writer was started. PR #319 was inspected and is CONFLICTING/DIRTY against main and edits docs/BRANCH_DISPOSITIONS.md and docs/SESSION_HANDOFF.md -- the same two capped documents this PR edits -- which the parallelism law names explicitly as a case to serialize, so it was left untouched until this lands. The reviewer worked outside every registered worktree, in its own scratch clone under %TEMP%/pr348-review.",
+    "branch": "lane/receipt-carrier-345, the receipt CARRIER, on its second run. Its first run landed as PR #347 by merge commit rather than squash, deliberately, so that its commits would remain ancestors of main; they did, and this branch FAST-FORWARDED onto the new main rather than being rebuilt. That is the first time in this train a receipt lane was reused instead of replaced, and it is the design being proven. No rebase and no force-push at any point.",
+    "dirtyState": "git status --porcelain in the writer's worktree was EMPTY at the head being merged, apart from this receipt itself, which is untracked at merge time by construction. It will be committed onto this same carrier on its third run.",
+    "liveProcesses": "No dev server on port 1420 and no cargo or rustc build in flight at merge time. Nothing was built, installed, launched or shipped by this lane.",
+    "otherWriters": "No competing writer on this lane and no PR is based on this ref -- checked before the merge method was chosen, because deleting or moving a base ref shuts every PR standing on it (#337). --delete-branch is not passed regardless: the carrier is kept on purpose."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "874eaf6e1b422fd8d21c646346b704ec34b7ce09",
+      "detail": "Run whole and unnarrowed by .githooks/pre-push on the push that created this exact head. LOCAL CHECK RESULT: PASS -- tsc, vite build, the full vitest suite at 407/407 test files, cargo test at 1254 passed / 0 failed / 24 ignored, and clippy with -D warnings. Nothing skipped, no .only, no narrowed selection, no raised threshold.",
+      "headNote": "Judged by comparing git ls-remote origin lane/receipt-carrier-345 against git rev-parse HEAD, both 874eaf6e, and NOT by the push wrapper's exit code. That wrapper exited 0 on a FAILED gate twice in this train -- most recently on the first push of PR #316, where the ref simply never moved. This push moved the ref, which is the verdict.",
+      "reviewerCoverage": "The reviewer deliberately did NOT re-run the cargo, tsc or vite portions and said so in its own verdict rather than implying coverage it did not have, reasoning that the diff has zero footprint under src/ or src-tauri/ so those gates are structurally unaffected. That judgement is recorded here as the reviewer's, not adopted as this receipt's: the cargo/tsc/vite proof for this exact head comes from the pre-push run above and from nowhere else, and the two are deliberately not conflated. The reviewer DID independently run npm test in its scratch clone (403/407 files, 5889/5893 tests), the disposition audit, handoff-worktree-truth 7/7 and work-control-receipt-preservation 7/7, and it attributed its 4 failures to that throwaway clone's missing site-app/node_modules and absent core.hooksPath rather than to this PR."
+    }
+  ],
+  "docGates": [
+    "scripts/doc-budget.ps1 - ALL PASS at this head, NO CAP RAISED. The reviewer confirmed scripts/doc-budget.ps1 is not in the diff at all, so no cap could have moved.",
+    "docs/BRANCH_DISPOSITIONS.md - 107 lines against a cap of 107, zero headroom, net-zero versus main: one row rewritten in place, +1/-1.",
+    "docs/SESSION_HANDOFF.md - 119 lines against a cap of 120, net-zero, +1/-1. The characters restoring the referent were paid for inside the same block, NOT by raising the cap, which is payable only from docs/archive/.",
+    "node scripts/branch-disposition-audit.mjs - OK across 36 refs, 3 PRESERVE, reproduced by the reviewer to the exact numbers."
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. The diff is two Work Control receipts and two one-line document edits. No installer was produced and the owner's installed build is untouched."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers UI change under src/**/*.{tsx,css}. The reviewer confirmed by git diff --name-status that the three-dot diff against main is exactly four files, none under src/ or src-tauri/."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "One read-only review subagent with its own fresh context, having written no part of this branch, working in its own scratch clone at %TEMP%/pr348-review outside every registered worktree. It made no edit, comment, claim or merge, and spawned no subagent of its own.",
+    "status": "passed",
+    "head": "874eaf6e1b422fd8d21c646346b704ec34b7ce09",
+    "reason": "APPROVE, no blocking findings, every claim reproduced by running commands rather than by reading this PR's prose -- and it corrected the PR's own wording on the one mechanism the corrected row turns on, which is the strongest signal in the record that it was not agreeing by default. The central technical claim it was asked to falsify is that a deletion-only push SKIPS the local gate: it read .githooks/pre-push itself, confirmed lines 47-61 read as quoted, confirmed the comment 'the fix to a deadlock the gate creates for itself' is verbatim, and confirmed the shell logic -- refs read from stdin, then the all-zero-local-sha test -- skips the whole gate only when EVERY pushed ref-line is a deletion. It verified the receipt for PR #316 was honest rather than self-flattering by checking that 66be1f27's sole parent is 18829830, so the first-push-failed story is corroborated by the commit graph and not merely asserted, and that PR #316's landed diff really is three files, none under src/ or src-tauri/. It ran the closing-keyword scan itself over both git log origin/main..874eaf6e --format=%B and the PR body, finding zero matches -- the check that matters most here, because a false negative would auto-close a live issue at merge. And it read the audit's DISPOSITIONS map to answer the taxonomy question rather than guessing.",
+    "writerSession": "claude-code, the implementation writer holding the #346 claim in C:/Users/Kuya/code/sentinel-release-truth-256.",
+    "writerNote": "The gate requires writer === actor, and actor is a fixed token (claude-code | codex). The separation that matters is enforced above it: the reviewer is a distinct context that wrote none of this branch and reached its verdict by running commands, including one that contradicted the brief it was given.",
+    "premiseCorrected": "The assignment, echoing this PR's own body and the row it lands, said the disposition audit 'reads live origin'. It does not. scripts/branch-disposition-audit.mjs line 59 runs git for-each-ref --format=%(refname:short) refs/remotes/origin -- this checkout's LAST-FETCHED cache of origin's refs, not a live ls-remote query. Verified independently at merge time by reading line 59. The row's operative conclusion is unaffected: the reasoning that a row-drop cannot go first still holds for any pusher who has fetched recently, and the safe order is still delete-first-then-row-drop. But the mechanism is overstated by one step, and the phrase is wrong where it is now landing on main. It is NOT repaired at this head, deliberately: repairing it would move the head and void the review that was just conducted at it, which is the same trade taken on PR #316's prose note. It is repaired instead by PR #319, the very next lane, which already edits docs/BRANCH_DISPOSITIONS.md and owns prune-list truth. Carrying an inaccuracy knowingly for one merge is only acceptable because it is written down here and assigned to a named next lane.",
+    "nonBlockingNotesAccepted": [
+      "The lane/docs-path-not-branch-310 row carries disposition CLAIMED while its own prose now says it merged as PR #316. Because DISPOSITIONS.CLAIMED is { noop: null } and the audit's line 252 skips every row whose noop is null -- the same code path PRESERVE takes -- the audit gives ZERO ongoing warranty that such a merge claim stays true, unlike a MERGED row which is re-proven by merge-tree every run. The reviewer correctly identified this as pre-existing, inherited from PR #316's landing rather than introduced or worsened here, and as a defect in the disposition taxonomy rather than a reason to block. Filed as its own issue rather than folded silently into this merge.",
+      "This branch's commit message says the SESSION_HANDOFF restore was 'nine characters back'; measured directly the delta is eight, 'of them '. Immaterial to any gate, since doc-budget's actual line and byte counts were verified PASS independently on both sides, but recorded rather than quietly dropped."
+    ]
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main...874eaf6e -- src-tauri/src/actions.rs is 0 lines, and the reviewer independently confirmed by git diff --name-status that no path under src/ or src-tauri/ appears at all. The ONE Windows mutation boundary does not move.",
+    "locks": "Untouched. This PR changes no shipped runtime code, so no LOCKED gate can move. Remote-rules fetch stays triple-gated off, the Receipts send path stays hard-false and default-OFF, the updater is not armed, no capability or CSP is loosened, and no driver, injection or kernel surface is involved.",
+    "scopeConstraint": "The frozen beta refs (16069fa) are not moved. Nothing here publishes, tags, arms the updater, reaches another person's machine, spends money, or changes a security or system setting. No secret and no signing key is read, written or referenced. No force-push and no history rewrite. The claim on #346 is a carrier for merge receipts plus the living documents a receipt's row touches; the four files here are exactly that.",
+    "commandAuthority": "No Tauri command was added, removed or renamed; no #[tauri::command] exists anywhere in this diff.",
+    "mergeMethod": "A MERGE COMMIT, not a squash, and --delete-branch is NOT passed. Every commit message was scanned for the pattern GitHub acts on -- close[sd]?|fix(e[sd])?|resolve[sd]? adjacent to #N -- before it was written, and the reviewer re-ran that scan independently over both the commit bodies and the PR body with zero matches. The only issue references are 'Refs #346' and 'Refs #341', which carry no closing semantics. merge_commit_title is MERGE_MESSAGE and merge_commit_message is PR_TITLE, so the landing commit carries the PR title and NOT concatenated commit messages, and its subject takes the 'Merge pull request #348' shape that citationVerdict already accepts as a first-class landing -- no new squashOnlyCitations pin is needed. A merge commit is also what keeps this carrier reusable: a squash would orphan its commits from main and force a new ref next time, or a force-push, which is owner territory.",
+    "deletionOrder": "Not applicable to this merge, and that is the point of one of the two document edits. No ref is deleted here. The carrier ref is KEPT on purpose so the next merge's receipt has somewhere to land. The corrected row records, for whoever prunes next, that a deletion-only push skips the gate and therefore the delete must come FIRST, with the row-drop landing straight onto main immediately after -- and that what reddened main earlier on 2026-09-02 was the WINDOW left open by parking a row-drop on a branch, not the ordering itself. Actual pruning is deferred to PR #319."
+  }
+}
