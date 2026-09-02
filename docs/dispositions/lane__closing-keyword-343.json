@@ -1,6 +1,0 @@
-{
-  "ref": "origin/lane/closing-keyword-343",
-  "disposition": "CLAIMED",
-  "issue": 343,
-  "evidence": "Lane Beta of the #291 two-lane pilot. A closing keyword beside a live issue number closes that issue on merge — it happened twice here, once through a sentence that read 'does not fix #N', which GitHub does not parse as negation. This lane guards the pattern and leaves intent to a greppable escape hatch. Recorded by the integration owner for the same reason as its sibling lane: the ref existed before anyone could record it, and an unrecorded ref reddens every concurrent lane."
-}
