@@ -330,11 +330,14 @@ export const NON_CITATION_LANDINGS = Object.freeze({
  * from its PR link for `CITATION` to bind -- surfaces here instead of disappearing.
  *
  * What it guarantees is exact and narrower than it first reads: no landing this record names goes
- * ENTIRELY uncited. It does NOT verify every landing claim. A claim in an unrecognised shape about
- * a SHA that never landed, or about one the record already cites correctly elsewhere, is invisible
- * to both halves -- the citation half never binds it, and this half sees the SHA as cited. Both
- * cases are pinned in the suite so the boundary is visible instead of rediscovered. Closing them
- * needs per-occurrence attribution out of prose: a landing-verb critic over this document flagged
+ * ENTIRELY uncited. It does NOT verify every landing claim. In an unrecognised shape the citation
+ * half never binds, and then this half stays silent for two DIFFERENT reasons, so both have to be
+ * named: a SHA the record already cites correctly elsewhere reads as cited, and a SHA that never
+ * landed is not a landing to be uncited about -- the second needs no prior citation to hide behind,
+ * which makes the gap wider than the first case alone suggests. Both are pinned, one test each, at
+ * "-- a stated limit" and "about a SHA that never landed"; if this paragraph ever claims coverage
+ * those tests do not have, it is this file's own defect one level down. Closing either needs
+ * per-occurrence attribution out of prose: a landing-verb critic over this document flagged
  * 24 honest sentences, so that cure is worse than the disease.
  */
 export function uncitedLandings(markdown, landedOnMain) {

@@ -497,6 +497,20 @@ describe("PR-to-merge-commit citations", () => {
     expect(uncitedLandings(md, landedOnMain)).toEqual([]);
   });
 
+  it("cannot see a landing claim, in a shape it cannot read, about a SHA that never landed", () => {
+    // The SECOND stated limit, and the one that needs no prior citation to hide behind: an invented
+    // PR and an invented SHA in free prose are equally invisible, so the gap is wider than "a SHA
+    // the record already cites". The citation half never binds this shape; the completeness half
+    // only judges SHAs that really landed, and this one did not, so there is nothing for it to be
+    // uncited ABOUT. Pinned because `uncitedLandings`'s docstring says both limits are pinned, and
+    // a guard whose own comments overstate their coverage is this file's defect one level down.
+    const md =
+      "PR [#9001](https://github.com/o/r/pull/9001) was, in an after-the-fact writeup, " +
+      "actually landed by `deadfeed1234567890abcdef1234567890abcdef`.";
+    expect(mergeCitations(md)).toEqual([]);
+    expect(uncitedLandings(md, landedOnMain)).toEqual([]);
+  });
+
   it("does not flag a mention that is not a landing at all", () => {
     const prose = "The tip `952ce309` is a lane commit and `deadbeef` resolves to nothing.";
     expect(uncitedLandings(prose, landedOnMain)).toEqual([]);
