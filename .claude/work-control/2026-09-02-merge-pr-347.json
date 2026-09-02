@@ -1,0 +1,72 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 347,
+  "issue": 346,
+  "branch": "lane/receipt-carrier-345",
+  "currentHead": "8a01bc788f7efe9e814d4e696effadd994b54f76",
+  "explicitHandoff": "Owner turn authorizing this train: a marathon safe-throughput workflow to maximize verified completed work while preserving ownership, exact-head review, release, evidence and documentation law. Its PROCEED instructions bind this transition: on APPROVE, re-fetch, verify exact head, base and mergeability, save this receipt, run the exact full gate and scripts/work-control-gate.mjs, and merge ONLY on PASS; on REQUEST CHANGES, repair at a new head under a fresh independent review and never let the writer self-review. No batch merge, no self-approval, no reuse of a stale review, and mergeable is not reviewed. This lane sits inside that authorization and adds nothing to it. It is also the repair of a fault this writer caused: main is RED right now because a landed ref was pruned while the commit dropping its disposition row still lived on a branch, so the default branch simultaneously rows a ref that no longer exists and omits a row for one that does. Every writer branching from main is blocked until this lands, which is why it goes ahead of the rest of the queue.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. Run from C:/Users/Kuya/code/sentinel-release-truth-256, the worktree holding the #346 claim. GitHub Actions has started no job in this repository since 2026-08-11 for billing (#321), so MERGEABLE/CLEAN on PR #347 means no merge conflict and says NOTHING about tests. The only proof that exists is the local gate scripts/verify-local.ps1, run whole by .githooks/pre-push, and it is the gate cited below.",
+    "remoteState": "git fetch origin --prune run immediately before this transition. origin/main = 109cb2848f05dc75bfc4424541fab14d80ef124e, PR #345's squash landing, unmoved since. git ls-remote origin lane/receipt-carrier-345 = 8a01bc788f7efe9e814d4e696effadd994b54f76, identical to git rev-parse HEAD in this worktree AND identical to the head the independent reviewer verified at both the start and the end of its review, so the reviewed head, the gated head and the head being merged are one commit. PR #347 reads OPEN, base main, MERGEABLE/CLEAN at that head. git ls-remote origin lane/merge-receipt-carrier-344 returns empty, independently confirming the pruned ref is genuinely gone from origin rather than only from a local cache.",
+    "worktree": "This writer holds C:/Users/Kuya/code/sentinel-release-truth-256 alone. No second writer was started. The next queued item, PR #316, edits docs/BRANCH_DISPOSITIONS.md and docs/SESSION_HANDOFF.md, the two capped documents this lane also edits, which the parallelism law names explicitly as a case to serialize. Its merge was begun this session, aborted untouched with git merge --abort at b0814a32, and deliberately deferred: importing a red main into a guard repair would have hidden which failure belonged to which lane. The reviewer worked outside every registered worktree, in its own scratch clone under %TEMP%\\pr347-review.",
+    "branch": "lane/receipt-carrier-345, two commits over an unmoved base, cut fresh from main. No force-push and no rebase at any point. This branch is a CARRIER rather than a one-shot lane: it exists so a merge receipt reaches git without buying a whole lane per merge, and its row in docs/BRANCH_DISPOSITIONS.md is CLAIMED, which the audit's DISPOSITIONS table defines as promising nothing about merge-tree, so the row stays true after this merge and reds no gate for any other writer. It is a NEW ref rather than the previous carrier continued because that one landed by squash, so its commits are not ancestors of main and continuing on it would have required a force-push.",
+    "dirtyState": "git status --porcelain in the writer's worktree was EMPTY at the head being merged, apart from this receipt itself, which is untracked at merge time by construction -- a merge receipt is written to authorize a merge, so it can never already be inside the branch being merged. That is the strand this carrier exists to absorb, filed as #341. This receipt will be committed onto this same carrier branch after the merge, not into a new lane, which is the entire point of the carrier.",
+    "liveProcesses": "No dev server on port 1420 and no cargo or rustc build in flight at merge time. Nothing was built, installed, launched or shipped by this lane.",
+    "otherWriters": "No competing writer on this lane. The queue behind it was re-derived this turn rather than read from a note: #316 (paused with its cause recorded on #310), then #319, #289, #311, with #279/#320 and #294 owner-gated and untouched."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "8a01bc788f7efe9e814d4e696effadd994b54f76",
+      "detail": "Run whole and unnarrowed by .githooks/pre-push on the push that created this exact head. LOCAL CHECK RESULT: PASS -- tsc, vite build, the full vitest suite at 407/407 test files, cargo test at 1254 passed / 0 failed / 24 ignored, and clippy with -D warnings. Nothing skipped, no .only, no narrowed selection, no raised threshold.",
+      "headNote": "The ref move was judged by git ls-remote against git rev-parse HEAD, never by the wrapper's exit code. That distinction is not pedantry here: during the #336 lane the wrapper exited 0 on a push whose gate had FAILED and which never moved the ref, so an exit code is not evidence that a gate passed. The tip on origin is the only honest read of a push in this repository."
+    }
+  ],
+  "docGates": [
+    "scripts/doc-budget.ps1 - ALL PASS at this head, NO CAP RAISED. The reviewer confirmed independently that git diff origin/main..8a01bc78 -- scripts/doc-budget.ps1 is 0 lines, so the caps are byte-identical to main.",
+    "docs/BRANCH_DISPOSITIONS.md - 107 lines against a cap of 107, zero headroom. Net-zero, verified as exactly one line replaced by one line: the pruned ref's stale row out, this carrier's row in.",
+    "docs/SESSION_HANDOFF.md - 119 lines against a cap of 120. Net-zero, one line replaced by one: the at-risk bullet names this carrier where it named the landed one, satisfying rule C and rule D of scripts/handoff-worktree-truth.test.mjs together.",
+    "node scripts/branch-disposition-audit.mjs - OK across 36 refs, 3 PRESERVE at this head. On origin/main the same command FAILS, which the reviewer reproduced from a fresh clone after an explicit --prune to rule out a stale-cache artifact, citing exactly the two claimed reasons. This lane is what makes it green again."
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. The diff is one JSON evidence file and two lines of living documentation. No installer was produced, no Desktop staging happened, and the owner's installed build is untouched by this lane."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers UI change under src/**/*.{tsx,css}. This PR touches no component, no stylesheet and no rendered surface, so there is no visual state for a screenshot to prove. The reviewer confirmed the diff is exactly three files, none under src/ or src-tauri/."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "One read-only review subagent with its own fresh context, having written no part of this branch, working in its own scratch clone at %TEMP%\\pr347-review outside every registered worktree. It made no edit, comment, claim or merge, and spawned no subagent of its own.",
+    "status": "passed",
+    "head": "8a01bc788f7efe9e814d4e696effadd994b54f76",
+    "reason": "APPROVE, first round, no blocking findings, and the record should be specific about what that verdict rests on: all nine assigned checks were run by execution rather than read from this PR's prose. It verified the head with git ls-remote before starting. It reproduced the central urgency claim by checking out main in a fresh clone, running git fetch origin --prune, and running the audit, which FAILED citing exactly the two claimed reasons, then confirmed OK at this head. It measured the receipt blob off the git object rather than the checkout, immune to CRLF distortion, matching 9c8bcc4400ddebd633ed9c94245951694d91abaf / 71 lines / 10473 bytes, and cross-checked its contents against live GitHub: PR #345's headRefOid matches the receipt's currentHead, and its merge commit has exactly one parent, confirming the squash the receipt narrates. It verified the #345 record's honesty from the outside, finding the literal 'This does not fix #341.' in the pushed message of e5197e5b, confirming #341 still OPEN, and confirming the landed squash message carries zero keyword matches -- proving that repair was actually applied on GitHub and not merely described. Most usefully, it did not accept the omitted-SHA reasoning as plausible: it PATCHED docs/BRANCH_DISPOSITIONS.md in its scratch worktree to add the citation, reran the suite, watched it go 49/49 to 48/49 failing exactly the pinned squashOnlyCitations assertion with {pr:345, sha:'109cb284'} appearing unexpectedly, and reverted. Two non-blocking observations, both ruled non-blocking BY THE REVIEWER and neither hidden here. First: it could reproduce only 61 of 63 guards, the two failures being rules C and D of scripts/handoff-worktree-truth.test.mjs, which assert live local machine state -- actual worktree count and local branch resolution. It proved these environmental rather than caused by this diff by rerunning the identical tests against origin/main in the identical scratch clone and getting the same two failures for the same reason, and neither file is touched by the diff. Its fair caveat stands in the record: the 63/63 claim is credible as a writer-machine result but cannot be reproduced test-for-test off this specific 33-worktree machine, by those tests' own design. Second: a third variant of the --all hole beyond the two disclosed, structurally inherent and not introduced by this PR -- git rev-list --all resolves refs from EVERY remote configured on a writer's machine, not specifically origin, so a receipt pushed only to a fork would satisfy the guard there while remaining invisible to a fresh clone of the canonical repository. The PR's disclosure of 'these are the holes' is therefore slightly incomplete, and that correction is being filed on #341 rather than left in a review transcript.",
+    "writerSession": "claude-code, the implementation writer holding the #346 claim in C:/Users/Kuya/code/sentinel-release-truth-256.",
+    "writerNote": "The gate requires writer === actor, and actor is a fixed token (claude-code | codex). The separation that matters is enforced above it: the reviewer is a distinct context that wrote none of this branch and reached its verdict by running commands against the repository, not by reading this receipt."
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main..HEAD -- src-tauri/src/actions.rs is empty, 0 lines, confirmed independently by the reviewer. The ONE Windows mutation boundary does not move in this lane, and no path under src/ or src-tauri/ is touched at all.",
+    "locks": "Untouched. This PR changes no shipped runtime code, so no LOCKED gate can move. Remote-rules fetch stays triple-gated off, the Receipts send path stays hard-false and default-OFF, the updater is not armed, no capability or CSP is loosened, and no driver, injection or kernel surface is involved.",
+    "scopeConstraint": "The frozen beta refs (16069fa) are not moved. Nothing here publishes, tags, arms the updater, reaches another person's machine, spends money, or changes a security or system setting. No secret and no signing key is read, written or referenced. No force-push and no history rewrite. The scope is the three files named in issue #346 and nothing else; no guard forced a fourth, and had one done so the claim would have been amended in writing before the write.",
+    "commandAuthority": "No Tauri command was added, removed or renamed; no #[tauri::command] exists anywhere in this diff.",
+    "mergeMethod": "A MERGE COMMIT, not a squash, and the choice is deliberate. Both commit messages, the PR title and the PR body were each scanned this turn for the pattern GitHub acts on -- \\b(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[0-9]+ -- with zero matches, independently re-scanned by the reviewer including gerund forms, and #341, #343 and #346 were each confirmed OPEN immediately before merging. The hazard that forced the previous lane to squash does not apply here. A merge commit keeps this branch's commits as ancestors of main, which is exactly what lets the carrier keep being reused instead of rebuilt after every landing. --delete-branch is NOT passed: it once set core.bare=true repository-wide and corrupted every worktree."
+  }
+}

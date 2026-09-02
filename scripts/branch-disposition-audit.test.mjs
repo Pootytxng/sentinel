@@ -19,13 +19,19 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   audit,
+  falseMergeCitations,
   isNoop,
   listRemoteRefs,
+  mergeCitations,
   parseDispositions,
+  parseRow,
   pruneCommand,
   refSplit,
   refSetCoverage,
   resolveBase,
+  squashOnlyCitations,
+  uncitedLandings,
+  NON_CITATION_LANDINGS,
 } from "./branch-disposition-audit.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -391,7 +397,14 @@ describe("what a checkout is entitled to say about origin", () => {
 // docs/archive/** is exempt: those are point-in-time records of what was true when written, and
 // editing them to match today is falsifying them. A live doc with a real reason to name the call can
 // carry a greppable `blocked-prune-allow` on the line — the same escape hatch the mutation-boundary
-// and outbound guards use. No live doc needs one today.
+// and outbound guards use. Exactly one live line carries it today, in docs/BRANCH_DISPOSITIONS.md,
+// naming the call to record that it is BLOCKED here -- the exact wall the sessions above kept
+// hitting, and the opposite of prescribing it. Deliberately not named by row: rows are retired
+// when their ref is pruned, so a row name here would rot the way the docblock below this file's
+// own review did. Count it with `git grep -c blocked-prune-allow -- '*.md' ':!docs/archive'`, and
+// do not read the row here. The exclusion is not cosmetic: this rule exempts the archive, so a
+// count that includes it answers a different question than the one the rule asks -- zero hits
+// there today, which is the right number reached over the wrong corpus.
 describe("the live docs do not prescribe the blocked prune", () => {
   it("nowhere recommends the gh REST deletion for pruning a ref", () => {
     const tracked = git(repoRoot, ["ls-files", "*.md"])
@@ -429,5 +442,404 @@ describe("this repository", () => {
     const problems = audit({ repoRoot, coverage: { tracksEveryBranch: false, shallow: false, reason: "test" } });
     expect(problems.filter((p) => /no longer exists/.test(p))).toEqual([]);
     expect(problems).toEqual([]);
+  });
+});
+
+describe("PR-to-merge-commit citations", () => {
+  // Why: a row in the real document cited `20ef848d` as PR #314's merge commit. It is PR #334's --
+  // and the row two below it said so correctly, so the file contradicted itself while every guard
+  // stayed green. Two independent reviewers caught it by hand; nothing mechanical could have.
+  const subjects = {
+    "7dafc402": "Merge pull request #314 from Pootytxng/lane/rule-c-at-risk-312",
+    "20ef848d": "Merge pull request #334 from Pootytxng/fix/green-main-after-314-332",
+    ee5bdd8b: "Merge pull request #277 from Pootytxng/lane/fleet-guard-failclosed-276",
+    e26108f7: "docs(routing): reconcile native closeout \u2014 Stage 3 is the receiver (#273)",
+    "952ce309": "fix(guard): rule D accepts a landing marker, so C and D stop contradicting (#300)",
+  };
+  const subjectOf = (sha) => subjects[sha] ?? null;
+  // 952ce309 is deliberately absent: it is a lane commit, never a landing on main.
+  const onMain = new Set(["7dafc402", "20ef848d", "ee5bdd8b", "e26108f7"]);
+  const landedOnMain = (sha) => onMain.has(sha);
+
+  it("reads all three landing shapes, and pairs nothing else", () => {
+    const md = [
+      "| a | CLAIMED | PR [#334](https://github.com/o/r/pull/334) \u2192 `20ef848d`, landed. |",
+      "| b | CLAIMED | PR [#314](https://github.com/o/r/pull/314) (`7dafc402`, upstream). |",
+      "| c | MERGED | PR [#277](https://github.com/o/r/pull/277) merge-committed to `main` as `ee5bdd8b`. |",
+      "| d | CLAIMED | PR [#315](https://github.com/o/r/pull/315), based on `main` -- 11 commits. |",
+    ].join("\n");
+    expect(mergeCitations(md)).toEqual([
+      { pr: 334, sha: "20ef848d" },
+      { pr: 314, sha: "7dafc402" },
+      { pr: 277, sha: "ee5bdd8b" },
+    ]);
+  });
+
+  it("does not pair a PR with a SHA merely because they share a row", () => {
+    // The pattern binds through the join, so there is no distance at which a stray SHA gets
+    // adopted -- and none at which a real one is dropped. The previous cut used a 200-character
+    // window and a citation 211 wide vanished from all three of its buckets.
+    const far = `PR [#900](https://github.com/o/r/pull/900) ${"filler ".repeat(40)} \`20ef848d\``;
+    expect(mergeCitations(far)).toEqual([]);
+    // Not silence, though: the SHA is a real landing, so the completeness half surfaces it.
+    expect(uncitedLandings(far, landedOnMain)).toEqual(["20ef848d"]);
+  });
+
+  it("surfaces a landing written in a shape it cannot read, instead of skipping it", () => {
+    const fourthShape = "PR [#277](https://github.com/o/r/pull/277) was eventually landed by `ee5bdd8b`.";
+    expect(mergeCitations(fourthShape)).toEqual([]);
+    expect(uncitedLandings(fourthShape, landedOnMain)).toEqual(["ee5bdd8b"]);
+  });
+
+  it("cannot see a second, false claim about a SHA the record already cites -- a stated limit", () => {
+    // Pinned so the boundary is visible rather than rediscovered by the next reviewer. The
+    // citation half never binds this shape, and the completeness half sees `20ef848d` as already
+    // cited, so nothing fires. A landing-verb critic would catch it and flagged 24 honest
+    // sentences of this document doing so; the cure is worse. If someone ever closes this, this
+    // test reds and they update it deliberately.
+    const md = [
+      "PR [#334](https://github.com/o/r/pull/334) → `20ef848d`",
+      "PR [#900](https://github.com/o/r/pull/900) was, much later and in prose, landed by `20ef848d`.",
+    ].join("\n");
+    expect(mergeCitations(md)).toEqual([{ pr: 334, sha: "20ef848d" }]);
+    expect(uncitedLandings(md, landedOnMain)).toEqual([]);
+  });
+
+  it("cannot see a landing claim, in a shape it cannot read, about a SHA that never landed", () => {
+    // The SECOND stated limit, and the one that needs no prior citation to hide behind: an invented
+    // PR and an invented SHA in free prose are equally invisible, so the gap is wider than "a SHA
+    // the record already cites". The citation half never binds this shape; the completeness half
+    // only judges SHAs that really landed, and this one did not, so there is nothing for it to be
+    // uncited ABOUT. Pinned because `uncitedLandings`'s docstring says both limits are pinned, and
+    // a guard whose own comments overstate their coverage is this file's defect one level down.
+    const md =
+      "PR [#9001](https://github.com/o/r/pull/9001) was, in an after-the-fact writeup, " +
+      "actually landed by `deadfeed1234567890abcdef1234567890abcdef`.";
+    expect(mergeCitations(md)).toEqual([]);
+    expect(uncitedLandings(md, landedOnMain)).toEqual([]);
+  });
+
+  it("does not flag a mention that is not a landing at all", () => {
+    const prose = "The tip `952ce309` is a lane commit and `deadbeef` resolves to nothing.";
+    expect(uncitedLandings(prose, landedOnMain)).toEqual([]);
+  });
+
+  it("refuses to run the completeness half without a landing reader", () => {
+    expect(() => uncitedLandings("`20ef848d`")).toThrow(/landing reader/);
+  });
+
+  it("passes a true pairing and fails the swapped one", () => {
+    const truthful = "PR [#314](https://github.com/o/r/pull/314) (`7dafc402`)";
+    const swapped = "PR [#314](https://github.com/o/r/pull/314) (`20ef848d`)";
+    expect(falseMergeCitations(mergeCitations(truthful), subjectOf, landedOnMain)).toEqual([]);
+    expect(falseMergeCitations(mergeCitations(swapped), subjectOf, landedOnMain)).toEqual([
+      { pr: 314, sha: "20ef848d" },
+    ]);
+  });
+
+  it("refuses a subject that ends (#N) when the commit never landed on main", () => {
+    // The round-2 attack, with this repository's real data. #300 is an OPEN ISSUE and `952ce309`
+    // is a lane commit, but the subject ends `(#300)` -- so a subject-only check certified the
+    // fabricated row "PR [#300](...) (`952ce309`)" as a true landing.
+    const md = "PR [#300](https://github.com/o/r/pull/300) (`952ce309`)";
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([
+      { pr: 300, sha: "952ce309" },
+    ]);
+    // The second reviewer built the same attack independently off a different pair, which is why
+    // this is a class and not an anecdote: #240 is also an issue, `d59c3d65` also a lane commit.
+    const other = "PR [#240](https://github.com/o/r/pull/240) (`d59c3d65`)";
+    const subject240 = () => "fix(test): guard-local comment stripping no longer fuses margin tokens (#240)";
+    expect(falseMergeCitations(mergeCitations(other), subject240, landedOnMain)).toEqual([
+      { pr: 240, sha: "d59c3d65" },
+    ]);
+  });
+
+  it("still accepts a real squash landing, and marks it as resting on the weaker shape", () => {
+    // Refusing this failed two TRUE rows on the first live run (#273, #275) -- #295 inverted.
+    const md = "PR [#273](https://github.com/o/r/pull/273) \u2192 `e26108f7`";
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([]);
+    expect(squashOnlyCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([
+      { pr: 273, sha: "e26108f7" },
+    ]);
+    const wrong = "PR [#274](https://github.com/o/r/pull/274) \u2192 `e26108f7`";
+    expect(falseMergeCitations(mergeCitations(wrong), subjectOf, landedOnMain)).toEqual([
+      { pr: 274, sha: "e26108f7" },
+    ]);
+  });
+
+  it("requires the squash number at the END, not merely somewhere", () => {
+    const body = { abc1234: "fix: follow up to (#273) in the parser" };
+    const md = "PR [#273](https://github.com/o/r/pull/273) (`abc1234`)";
+    expect(falseMergeCitations(mergeCitations(md), (s) => body[s] ?? null, () => true)).toEqual([
+      { pr: 273, sha: "abc1234" },
+    ]);
+  });
+
+  it("does not let #31 match #314's subject", () => {
+    // A bare `#${pr}` test would call this true, because the subject contains "#314".
+    const md = "PR [#31](https://github.com/o/r/pull/31) (`7dafc402`)";
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([
+      { pr: 31, sha: "7dafc402" },
+    ]);
+  });
+
+  it("counts an unreadable commit as false, never as fine", () => {
+    const md = "PR [#999](https://github.com/o/r/pull/999) (`deadbeef`)";
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, landedOnMain)).toEqual([
+      { pr: 999, sha: "deadbeef" },
+    ]);
+    const throws = () => {
+      throw new Error("unreadable history");
+    };
+    expect(falseMergeCitations(mergeCitations(md), throws, () => true)).toEqual([
+      { pr: 999, sha: "deadbeef" },
+    ]);
+    expect(falseMergeCitations(mergeCitations(md), subjectOf, throws)).toEqual([
+      { pr: 999, sha: "deadbeef" },
+    ]);
+  });
+
+  it("refuses to run without both readers", () => {
+    expect(() => falseMergeCitations([{ pr: 1, sha: "abc1234" }])).toThrow(/landing reader/);
+    expect(() => falseMergeCitations([{ pr: 1, sha: "abc1234" }], subjectOf)).toThrow(/landing reader/);
+  });
+
+  it("holds for THIS repository's record, and proves it read something", () => {
+    const record = readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8");
+    const cited = mergeCitations(record);
+    // Without this, a reworded document would make every assertion below vacuous.
+    expect(cited.length).toBeGreaterThan(0);
+
+    const baseline = ["origin/main", "main"].find((ref) => {
+      try {
+        git(repoRoot, ["rev-parse", "--verify", "--quiet", ref]);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    // No baseline means the landing half cannot be checked at all -- fail, never skip.
+    expect(baseline).toBeTruthy();
+    const firstParent = git(repoRoot, ["rev-list", "--first-parent", baseline]).split("\n");
+    const landedOnRecordMain = (sha) => firstParent.some((full) => full.startsWith(sha));
+    const live = (sha) => {
+      try {
+        return git(repoRoot, ["log", "-1", "--format=%s", sha]);
+      } catch {
+        return null;
+      }
+    };
+
+    expect(falseMergeCitations(cited, live, landedOnRecordMain)).toEqual([]);
+    // Every real landing this document names is named AS a citation, bar the two it names for
+    // other reasons. This is what replaced the 200-character window: no landing can go unread.
+    expect(uncitedLandings(record, landedOnRecordMain)).toEqual([]);
+    expect(Object.keys(NON_CITATION_LANDINGS).every((sha) => record.includes(sha))).toBe(true);
+    // Pinned, because the squash shape cannot prove #N is a PR rather than an issue. A NEW
+    // squash-only citation reds here until somebody confirms it by hand -- that is the design.
+    expect(squashOnlyCitations(cited, live, landedOnRecordMain)).toEqual([
+      { pr: 273, sha: "e26108f7" },
+      { pr: 275, sha: "29fb8009" },
+    ]);
+  });
+});
+
+// Both rules below came out of the independent review of PR #338, which found a row still calling
+// PR #316 "stacked on `lane/receipt-modified-309` -- 14 commits past `origin/main`" in the very
+// commit that deleted that ref, with the true count by then 3. The audit was green throughout:
+// `branch-disposition-audit.mjs` validates row KEYS against origin's refs and never reads row
+// PROSE, so a row can name a branch this table itself pruned and nothing notices. That is the
+// standing "green that is not evidence" class (#322), one level down.
+//
+// Deliberately offline. Both read the document and each other, never the network -- #339 is a red
+// this same lane caught, where one `ls-remote` inside the 407-file parallel storm lost its slice
+// and reddened the whole gate. A rule that can only fail for a real reason is worth more than a
+// rule that is one round-trip more thorough.
+describe("the record's prose does not outlive the refs it describes", () => {
+  const record = () => readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8");
+
+  // The predicate is the audit's OWN, imported rather than copied: a line is a row here exactly
+  // when `parseRow` calls it a row there, because it is the same function. Two rounds of review
+  // went into learning that a copy drifts -- round 1 widened the copy for indentation, and round 4
+  // found it still required backticks around the ref where `parseRow` only strips them if present,
+  // so `| origin/lane/x | CLAIMED | 5 commits past origin/main |` was a row to the audit and
+  // invisible to both rules below. Neither miss needed a hostile author: they are what a guard that
+  // paraphrases someone else's definition does on its own. Not copying it is the only fix that does
+  // not need a third round. These rules apply that predicate to the whole file where
+  // `parseDispositions` applies it to the `## The refs` section alone, which can only ever check
+  // more lines, never fewer.
+  const isRow = (line) => parseRow(line) !== null;
+  const rowKeys = (md) =>
+    new Set(
+      md
+        .split("\n")
+        .filter(isRow)
+        .map((line) => parseRow(line).ref.replace(/^origin\//, "")),
+    );
+
+  // A count is measured against a branch tip, and a branch tip moves on every merge -- so the
+  // number is stale the moment any other lane lands, without a word of this file changing. The
+  // table already learned this for tip SHAs ("a row naming its own branch's head is stale on
+  // arrival"); a count is the same mistake with more arithmetic. Measured before banning: of the
+  // five rows that pinned one against `origin/main`, two were already wrong (14 -> 3, 20 -> 9) and
+  // three were still right, which is exactly the mix that makes the wrong ones believable.
+  //
+  // Widened three times, each after an independent review found a phrasing the version before it let
+  // through -- and twice the COMMENT was the defect as much as the pattern was:
+  //   round 1 banned `origin/main` only, and gave as its reason for not reaching `main` that the
+  //     prose sections would be caught too. False: this rule only ever reads table rows.
+  //   round 2 added `main`, "ahead of", and a bolded number -- "now carries **zero** commits past
+  //     `main`" had sat in this table THROUGH the commit that added the rule -- and then named
+  //     exactly two remaining misses as though that were the whole remainder. It was not:
+  //     "N commits behind `main`" was a third, in a file whose own row 74 discusses behind-counts,
+  //     and half a dozen more followed from bolding a different word.
+  //   round 3 stopped enumerating misses, because enumerating them is what failed twice. Emphasis
+  //     and code markers are stripped BEFORE matching, which retires the formatting-bypass family
+  //     in one move rather than one alternative per review, and the coverage is stated as a closed
+  //     set below instead of the remainder being stated as a closed set.
+  //   round 4 found that closed set was not closed. The spelled numbers stopped at fifty, so
+  //     "eighty commits behind main" walked past a rule whose comment said nothing else was caught
+  //     -- a paraphrase of a list is a third thing to keep in sync, and it fell out of sync in the
+  //     same commit that wrote it. The alternation now runs through the magnitudes, and the
+  //     sentence below points AT it rather than restating it.
+  //
+  // WHAT IS CAUGHT. After `*`, backtick and `_` are stripped from the row, an offender is: a count,
+  // then "commit"/"commits", then "past", "behind" or "ahead of", then optionally "the", then
+  // `main` or `origin/main` on a word boundary. A count is any run of digits, or one of the words
+  // spelled out in the alternation below -- which, matching on a word boundary, also catches the
+  // compounds ending in one of them ("a hundred and twelve commits past main"). A quantity worded
+  // outside that list -- "a dozen commits past `main`" -- is NOT caught, and that case is pinned in
+  // the self-test, so where the edge sits is a measured fact rather than a sentence about one.
+  //
+  // Two kinds of outsider, given as EXAMPLES and explicitly not as a complete list:
+  //   * a count against a NAMED landed commit ("3 commits past `16069fa`") -- anchored to something
+  //     that does not move, and fine;
+  //   * a count with no baseline in the sentence at all ("#286/#287 fell to 3 and 5") -- which stood
+  //     in this table while wrong, measured 0 and 7, and was caught by a human reviewer rather than
+  //     here. No pattern separates that from honest prose without redding the rest of the file, so
+  //     it is a review duty and always will be.
+  const PINNED_COUNT =
+    /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|\d+)\s+commits?\s+(?:past|behind|ahead\s+of)\s+(?:the\s+)?(?:origin\/)?main\b/i;
+  // Stripped, not alternated: bolding the number, the noun, the verb or the ref, and dropping
+  // the backticks entirely, are all the same bypass wearing different clothes. Round 2 answered
+  // one of them with `(?:\*\*)?` and left five.
+  const stripMarkup = (line) => line.replace(/[*`_]/g, "");
+  const pinsACount = (line) => PINNED_COUNT.test(stripMarkup(line));
+
+  it("pins no commit count against a baseline that moves", () => {
+    const rows = record()
+      .split("\n")
+      .map((line, i) => ({ line, n: i + 1 }))
+      .filter(({ line }) => isRow(line));
+    // Without this the ban passes on a document the rule never found: rename a column, reformat the
+    // table, and "no offenders" means "no rows read". The commit that shipped this rule claimed
+    // every rule here carried a self-test that stopped it passing vacuously; for THIS one that was
+    // false, and the review said so. The floor sits far below the row count so that retiring a row
+    // cannot red it.
+    expect(rows.length).toBeGreaterThan(20);
+    const offenders = rows
+      .filter(({ line }) => pinsACount(line))
+      .map(({ n }) => `docs/BRANCH_DISPOSITIONS.md:${n}`);
+    expect(offenders).toEqual([]);
+  });
+
+  // Without this the rule above passes on a document it never understood -- a reworded table, or a
+  // regex that quietly stopped matching, and the ban reads as satisfied because nothing matched.
+  it("would catch a pinned count however it is spelled or formatted", () => {
+    const row = (evidence) => `| \`origin/lane/x\` | CLAIMED | ${evidence} |`;
+
+    // Round 1's own cases.
+    expect(pinsACount(row("— 14 commits past `origin/main`."))).toBe(true);
+    expect(pinsACount(row("two of its seven commits past `origin/main`"))).toBe(true);
+    expect(pinsACount(row("one commit past `origin/main`"))).toBe(true);
+
+    // Round 2: the two rows that escaped round 1, each in the words it actually used, plus the
+    // LITERAL sentence that sat in this table through the commit adding the rule. Verbatim from
+    // `git show 0b0a870b:docs/BRANCH_DISPOSITIONS.md` -- that string carries TWO bypasses at once,
+    // the bolded number and the bare `main`, and the commit that fixed it misquoted the second half
+    // as `origin/main`. A regression test that reproduces the defect approximately is how a
+    // misquote survives, so this one is the real bytes.
+    expect(pinsACount(row("Three commits past `main`, checked out at"))).toBe(true);
+    expect(pinsACount(row("a sibling branch, 7 commits ahead of `main`."))).toBe(true);
+    expect(pinsACount(row("`origin/lane/license-atomic-284` now carries **zero** commits past `main`,"))).toBe(true);
+
+    // Round 3: the blocking miss, and the formatting family that came with it.
+    expect(pinsACount(row("27 commits behind `main`"))).toBe(true);
+    expect(pinsACount(row("27 commits behind `origin/main`"))).toBe(true);
+    expect(pinsACount(row("7 **commits** past `origin/main`"))).toBe(true);
+    expect(pinsACount(row("7 commits **past** `origin/main`"))).toBe(true);
+    expect(pinsACount(row("7 commits past **`origin/main`**"))).toBe(true);
+    expect(pinsACount(row("7 commits past origin/main"))).toBe(true);
+    expect(pinsACount(row("7 commits ahead of the `main` branch"))).toBe(true);
+
+    // Round 4: the magnitudes the alternation used to stop short of, and a row the copied `isRow`
+    // predicate did not see at all -- `parseRow` strips backticks around a ref, it never requires
+    // them, so a row written without them is a row to the audit and must be one here.
+    expect(pinsACount(row("eighty commits behind `main`"))).toBe(true);
+    expect(pinsACount(row("a hundred commits past `main`"))).toBe(true);
+    expect(isRow("| origin/lane/x | CLAIMED | 5 commits past origin/main |")).toBe(true);
+    expect(pinsACount("| origin/lane/x | CLAIMED | 5 commits past origin/main |")).toBe(true);
+    expect(isRow("| Ref | Disposition | Evidence |")).toBe(false);
+
+    // The two example outsiders, pinned so that nobody reads this rule as covering them, and the
+    // wording the alternation does not reach, pinned so that the sentence above is measured.
+    expect(pinsACount(row("a dozen commits past `main`"))).toBe(false);
+    expect(pinsACount(row("3 commits past `16069fa`"))).toBe(false);
+    expect(pinsACount(row("#286/#287 fell to 3 and 5"))).toBe(false);
+
+    // And the sentences this file uses to say a count is deliberately absent, which must stay legal
+    // or the ban would forbid explaining itself. Both are live in row 74 today.
+    expect(pinsACount(row("Neither an ahead- nor a behind-count is pinned here"))).toBe(false);
+    expect(pinsACount(row("the behind-count this row used to carry — 27 — was off by 820"))).toBe(false);
+  });
+
+  // "stacked on X" is a claim about the shape of the world RIGHT NOW, unlike "landed as #315",
+  // which is history and stays true forever. Only the present-tense form is checked, because a
+  // blanket ban on naming a dead ref would red the honest half of this table: row after row names
+  // a branch that has since been pruned, correctly, in the past tense -- and one row names
+  // `claude/compy-visual-recovery-kit-6fd074`, which has never been on any remote and is named
+  // here precisely so it does not get deleted. Failing those would be #295 again, a guard reading
+  // true prose as a lie.
+  const STACK_CLAIM = /stacked\s+(?:\w+\s+deep\s+)?on\s+`((?:origin\/)?[A-Za-z0-9._/-]+)`/gi;
+  const stackClaims = (md) =>
+    md
+      .split("\n")
+      .flatMap((line, i) =>
+        isRow(line)
+          ? [...line.matchAll(STACK_CLAIM)].map((m) => ({ n: i + 1, base: m[1].replace(/^origin\//, "") }))
+          : [],
+      );
+
+  it("claims no live stack on a ref the table no longer rows", () => {
+    const md = record();
+    const claims = stackClaims(md);
+    // Vacuous otherwise: a table that stopped using the word would pass this without being read.
+    expect(claims.length).toBeGreaterThan(0);
+    const keys = rowKeys(md);
+    // The direction this needs is the CONVERSE of the cover check, and the first version of this
+    // comment cited the wrong one. Not "every live ref has a row" -- that would leave a row for a
+    // pruned ref perfectly legal -- but "every ROW has a live ref", which the audit also enforces:
+    // `if (!live.has(ref)) problems.push(... no longer exists -- drop the row)`. Given that, "has a
+    // row here" is the offline way to ask "still exists", with no round-trip.
+    //
+    // STATED LIMIT: both directions sit behind `if (!cover.tracksEveryBranch) return problems;` in
+    // that file, so in a checkout that cannot see every branch the audit enforces neither and this
+    // rule degrades to checking the table against itself. It is never LOUDER than the audit, only
+    // quieter -- the safe direction, but not the one the bare sentence above implied.
+    const dangling = claims
+      .filter(({ base }) => !keys.has(base))
+      .map(({ n, base }) => `docs/BRANCH_DISPOSITIONS.md:${n} claims a live stack on \`${base}\`, which has no row`);
+    expect(dangling).toEqual([]);
+  });
+
+  it("would catch the row that prompted it, and spares the past tense", () => {
+    const dead = "| `origin/lane/a` | CLAIMED | PR #316, stacked on `lane/receipt-modified-309` — 14 commits. |";
+    const alive = "| `origin/lane/a` | CLAIMED | stacked two deep on `lane/b` |";
+    const history = "| `origin/lane/a` | CLAIMED | its base `lane/receipt-modified-309` landed as PR #315. |";
+    const md = ["| `origin/lane/a` | X | y |", "| `origin/lane/b` | X | y |"].join("\n");
+    const keys = rowKeys(md);
+    expect(stackClaims(dead).map((c) => keys.has(c.base))).toEqual([false]);
+    expect(stackClaims(alive).map((c) => keys.has(c.base))).toEqual([true]);
+    expect(stackClaims(history)).toEqual([]);
   });
 });
