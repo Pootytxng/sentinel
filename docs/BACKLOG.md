@@ -323,10 +323,8 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     (the send is Rust-side). Receiver **deployed + empty** 2026-08-25 on the owner's yes.
     **Visual self-review DONE 2026-08-25 — PASS** (12/12); the round-trip record moved verbatim to
     [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) on 2026-08-29 (section byte cap).
-    **Ships by default, not pending** (2026-08-26): the 2026-08-07 decree makes the look the lane's
-    to ship and the owner's to veto on sight, and he has the before/after. Only ARMING is his. Said
-    honestly — the decree carves out what reaches other people's machines, so a consent screen is
-    the closest case yet: first application, not settled precedent.
+    **Ships by default, not pending** (2026-08-26) — reasoning verbatim in
+    [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-31, section byte cap).
     `receipts_gate()` at `src-tauri/src/receipts.rs:28` is the last line
     of it, not the first, and arming is owner territory. 🪪 **owner-gated sub-item:** EU/UK distribution
     needs a region check before any sharing ships there.
@@ -344,20 +342,20 @@ substituted asks (B4), his UI-vision pick (B5), the startup-mutation and GPU-scr
     redactor, pure producers, one serializer, pure preview, `hw_class.rs` tier-neutral per §4,
     `case_evidence_gate()` hard-false and uncalled). Guards:
     `src/case-evidence-tier-separation-guard.test.ts` + the outbound guard's Tier 3 rows. **Its
-    security precondition FAILED first (#258)** — an invisible character (U+200B and family) inside a
-    username, address, key or serial defeated every exact-match detector while rendering identically;
-    Stage 2 stopped rather than hide the repair inside it. **Stage 1 repair landed 2026-08-29
-    (#259), independently reviewed six passes PASS (#260):** the input boundary drops
-    Cf/Default_Ignorable and folds full-width ASCII before any detector runs, the preview serializes
-    from the same struct as the wire so key order matches byte-for-byte, and the serializer refuses a
-    shapeless payload; the review's own find — `180B..180F`'s four Mongolian selectors — was fixed
-    in-lane. Residual, each test-pinned: mixed-script homoglyphs and U+2800 still defeat an exact
+    security precondition FAILED first (#258) and the repair landed reviewed (#259/#260)** —
+    verbatim in [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-31, section byte cap); the
+    boundary now drops Cf/Default_Ignorable and folds full-width ASCII before any detector runs.
+    Residual, each test-pinned: mixed-script homoglyphs and U+2800 still defeat an exact
     match, which is what §2A's "best-effort" covers and what the Stage 2 copy now says. **Stage 2
     LANDED 2026-08-29 (#258):** `src/surfaces/CaseEvidenceConsent.tsx` — local preview/edit/
     one-submission consent over Stage 1's canonical bytes, fixture-reachable only, with no command,
-    HTTP, queue or persistence anywhere in it. Next in sequence: **Stage 3 — receiver + migration,
-    local/staged ONLY, never deployed** (contract §11), its own separate proof boundary. The Tauri
-    send command is **Stage 4**, and deployment is Stage 7; §11 forbids collapsing them.
+    HTTP, queue or persistence anywhere in it. **Stage 3 BUILT 2026-08-31 (#287):**
+    `scripts/lib/case-endpoint/` — validator, handler and migration, proved by running the REAL
+    exported handlers against a `node:sqlite` D1 fixture with the real migration applied (48 tests;
+    all 14 deliberate mutations red it). **Local/staged ONLY, never deployed** (§11): outside every
+    `deploy-site.yml` path trigger, the staged bundle and both configured `migrations_dir`s — and
+    `scripts/case-endpoint-isolation.test.mjs` reads those four real files rather than asserting it.
+    Send command is **Stage 4**, deploy is Stage 7; §11 forbids collapsing them.
   - [x] **Q9c — CPU temp, no driver: SHIPPED 2026-08-18** (`CpuTempOffer.tsx`, self-review PASS).
     Full record verbatim in [`docs/BACKLOG_ARCHIVE.md`](BACKLOG_ARCHIVE.md) (2026-08-29, byte cap).
 

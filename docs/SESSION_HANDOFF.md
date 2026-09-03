@@ -70,12 +70,17 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
   paths break from `docs/archive/`; `markdown-link-guard` catches it at the push (`093f5600`).
 - **`git checkout <file>` on an uncommitted fix destroys it silently** — copy it to the scratchpad
   first, or commit.
+- **A raw control character inside a regex or a `sed` replacement is invisible and can vacate a
+  guard** (#304) — six literal 0x08 bytes stood in for `\b` in two test regexes, so both assertions
+  matched a byte no tracked file contains and could never fail; a `sed -i` `\U`/`\c` escape
+  separately wrote a raw 0x0F into a doc. `scripts/source-control-characters.test.mjs` ROOTS now
+  covers `src`, `docs` and `src-tauri/src` too, not just `scripts`/`tools`.
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 2 (#258) LANDED** — `cfc0d21a` / PR #263, the consent screen renders the payload itself.
-**Stage 3 is NEXT**: receiver + migration, local/staged ONLY, never deployed — deployment is Stage 7
-and owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+**Q9b Stage 3 (#287) BUILT** — `scripts/lib/case-endpoint/` validator, handler and migration, proved
+local/staged ONLY, never deployed (§11), via PR #289. **Stage 4 is NEXT**: the Tauri send command;
+deployment is Stage 7, owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -91,11 +96,8 @@ and **§G** (the site). Read them THERE, never from a paraphrase.
 
 - **The fleet is measured, never written down.** `node scripts/fleet-snapshot.mjs` prints every
   checkout on this machine: its branch, how far past `origin/main` it sits, and whether anything it
-  holds exists on no remote. No count, carrier list or lane name is stored in this file. They used to
-  be, and #291 measured the price: eight of eight open PRs on 2026-09-02 edited this file, almost
-  none of them about their own subject — one lane adding a worktree made the stated total false for
-  every other lane's gate, so whoever pushed next paid for it, then rebased because someone else had
-  just paid for it too.
+  holds exists on no remote. No count, carrier list or lane name is stored in this file — #291's
+  price for the old way is archived in `docs/archive/SESSION_HANDOFF_HISTORY.md` §2026-09-03.
 - **The one shape that can still be LOST** is a checkout on a detached head holding commits no remote
   has. `git worktree remove` deletes the folder, and nothing else knew those commits existed. Rule C
   of `scripts/handoff-worktree-truth.test.mjs` fails on exactly that; the fix is to give the work a

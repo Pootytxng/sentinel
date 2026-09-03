@@ -164,7 +164,7 @@ describe("embedded build-stamp token extraction", () => {
   });
 
   it("yields nothing rather than throwing on a binary with no stamp-shaped run", () => {
-    expect(embeddedStampTokens("\0no hex runs here at all\0")).toEqual([]);
+    expect(embeddedStampTokens("\0\u0001no hex runs here at all\0")).toEqual([]);
   });
 });
 

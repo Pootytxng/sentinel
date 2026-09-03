@@ -79,7 +79,7 @@ describe("postureLine (real headline + priorities-driven sentence)", () => {
     expect(p.tone).toBe("attention");
     // The name, not a count and not a category.
     expect(p.headline).toBe("Monitor below max refresh");
-    expect(p.headline).not.toMatch(/things?[^.]*needs?[^.]*attention/i);
+    expect(p.headline).not.toMatch(/\bthings?\b[^.]*\bneeds?\b[^.]*attention/i);
     // The fix travels WITH the name — a stock disclaimer here is the defect this pins.
     expect(p.sentence).toBe(flagged.detail);
     expect(p.reassurance).toMatch(/without your say-so|say-so/i);
