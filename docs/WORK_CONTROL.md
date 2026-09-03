@@ -161,7 +161,9 @@ branch belong in the issue claim. Read-only reviewers may inspect a writer workt
 2. **One folder, one writer.** A different branch does not make concurrent writes in the same
    working folder safe.
 3. **Overlapping scopes serialize.** The later session stays read-only or uses a truly separate
-   worktree/clone and non-overlapping branch.
+   worktree/clone and non-overlapping branch. A scope is measured, not trusted (#356):
+   `scripts/scope-drift-gate.mjs` fails a push whose changed paths fall outside the folder's claimed
+   Write scope, and `.claude/hooks/scope-drift-check.mjs` says so during the session.
 4. **Unknown means locked.** If a live session's exact folder or scope is unknown, treat every
    plausible folder as occupied until the session hands off or Kuya identifies it.
 5. **Expiry is an alarm, not a takeover.** A 12-hour claim becoming stale never authorizes deleting,

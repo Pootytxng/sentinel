@@ -9,6 +9,7 @@
 // `--date` (`--text` fails with "Did not receive a date value") and clearing an expiry needs `--clear`.
 
 import { execFileSync } from "node:child_process";
+import { writeClaimCache } from "../../scripts/lib/scope-drift.mjs";
 
 export const CLAIM_HEADER = "### Ownership claim";
 export const HANDOFF_HEADER = "### Handoff";
@@ -159,7 +160,7 @@ export function execPlan(plan, { dryRun = false } = {}) {
 }
 
 /** The refusal that makes a claim mean something. */
-export function postClaim({ issue, verdict, facts, ids, dryRun = false }) {
+export function postClaim({ issue, verdict, facts, ids, dryRun = false, cacheDir = undefined }) {
   if (verdict?.verdict !== "PASS") {
     throw new Error(
       `Refusing to post a claim on #${issue}: preflight verdict is ${verdict?.verdict ?? "(none)"}. ` +
@@ -167,5 +168,16 @@ export function postClaim({ issue, verdict, facts, ids, dryRun = false }) {
     );
   }
   const plan = planPostClaim({ issue, ids, facts, verdict });
-  return { plan, ran: execPlan(plan, { dryRun }) };
+  const ran = execPlan(plan, { dryRun });
+  if (!dryRun) {
+    // The scope this claim just declared, remembered locally for the drift readers (#356). A cache
+    // failure is not a claim failure: the thread is the record, the cache only saves a round trip.
+    try {
+      writeClaimCache(
+        { issue, scopeText: facts.scope, folder: facts.folder ?? null, branch: facts.branch ?? null, postedAt: new Date().toISOString(), source: "postClaim" },
+        cacheDir ? { dir: cacheDir } : {},
+      );
+    } catch {}
+  }
+  return { plan, ran };
 }

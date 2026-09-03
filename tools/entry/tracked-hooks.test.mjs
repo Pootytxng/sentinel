@@ -68,6 +68,8 @@ const EXPECTED_HOOKS = [
   // #278 — the same rule, applied to the shell, plus the resolver both guards share.
   "shell-ownership-assert.mjs",
   "target-ownership.mjs",
+  // #356 -- the after-the-fact half: what actually changed on disk, against the claim's scope.
+  "scope-drift-check.mjs",
 ];
 
 let scratch = null;

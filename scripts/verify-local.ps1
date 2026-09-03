@@ -172,6 +172,7 @@ function Resolve-RequiredCommand {
 $git = Resolve-RequiredCommand "git"
 $npm = Resolve-RequiredCommand "npm"
 $cargo = Resolve-RequiredCommand "cargo"
+$node = Resolve-RequiredCommand "node"
 
 # Defines Test-DependenciesSatisfied. It carries the reasoning for what "installed" means and is
 # driven against fixture trees by scripts/deps-bootstrap-guard.test.mjs.
@@ -229,6 +230,11 @@ try {
   }
 
   Invoke-Check -Name "git diff check" -Command $git -Arguments @("-c", "safe.directory=$repo", "-C", $repo, "diff", "--check")
+  # #356: the filesystem is the authority on what a lane wrote. Every path changed since origin/main,
+  # committed or not, is compared with the Write scope of this folder's claim; a path outside it
+  # fails the push. A folder with no session record or no cached claim is "not measured" and passes
+  # with that line on the log -- the gate says what it could not check rather than pretend.
+  Invoke-Check -Name "write-scope drift (#356)" -Command $node -Arguments @("scripts/scope-drift-gate.mjs")
   Invoke-Check -Name "frontend tests" -Command $npm -Arguments @("test") -NodeHosted
   Invoke-Check -Name "frontend type-check and build" -Command $npm -Arguments @("run", "build") -NodeHosted
   Invoke-Check -Name "Rust tests" -Command $cargo -Arguments @("test", "--manifest-path", "src-tauri/Cargo.toml")

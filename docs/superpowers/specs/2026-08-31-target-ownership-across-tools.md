@@ -197,3 +197,25 @@ rooted at `C:\Users\Kuya\code\sentinel` is running the new guard. The PR is ther
 **left unmerged**, with an activation/rollback receipt in the PR body, and the completion criterion
 Task 4 names — *"a fresh session exercising allowed and refused behaviours"* — belongs to whoever
 performs the apply, not to this one.
+
+## 8. The filesystem backstop (#356) — landed 2026-09-02, with the harvest
+
+Sections 4 and 6 are honest about the shell checker's ceiling: it reads a command before it runs, and
+what it cannot parse it cannot judge. The closeout (#356) declined the obvious next step — a third
+shell parser — and added the check that does not parse at all. `scripts/lib/scope-drift.mjs` reads
+what the tree actually is (`git status`, untracked included, plus every commit since `origin/main`)
+and compares each changed path with the Write scope of the folder's claim, through the same
+`claim-scope.mjs` the overlap check uses. Two readers, one library:
+
+- `.claude/hooks/scope-drift-check.mjs` — PostToolUse on Bash, PowerShell, Write, Edit, MultiEdit
+  and NotebookEdit; warn-only (`additionalContext`), silent when it cannot measure, and a finding is
+  repeated only when the drifting set changes or ten minutes pass. `COMPY_SCOPE_DRIFT_OFF=1` silences it.
+- `scripts/scope-drift-gate.mjs` — the verdict. `verify-local.ps1` runs it right after
+  `git diff --check` on every push and FAILS on any changed path outside the claim. A folder with no
+  session record, or no readable claim, passes with "not measured" on the log; it never pretends.
+
+The claim is cached at `%LOCALAPPDATA%\CompyEntry\claims\<issue>.json` by `claim.mjs` when it
+posts and re-read from the thread after ten minutes; the thread stays the record. The parser also
+learned, from this repo's own closeout claim, that a disclaimer carries across a bare conjunction:
+"No other `src/` or `src-tauri/` writes" used to grant `src-tauri/`. Division of labour, in one
+line: the shell checker is early warning, the filesystem comparison is authoritative.

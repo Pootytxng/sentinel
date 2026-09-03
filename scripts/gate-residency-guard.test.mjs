@@ -225,6 +225,11 @@ const RESIDENCY = {
     kind: "scheduled",
     why: "The CompyUsageAudit Windows task runs it Mondays and writes docs/usage-audit/LATEST.md. It reads session transcripts outside the repo, so a commit cannot change its answer.",
   },
+  "scope-drift-gate.mjs": {
+    kind: "push-gate",
+    staticGuard: "scripts/scope-drift-gate.test.mjs",
+    why: "The filesystem backstop for write scope (#356): verify-local.ps1 runs it before the test suite, and its own test pins that call. Warn-only at write time is the hook; this is the verdict.",
+  },
   "verify-local.ps1": {
     kind: "push-gate",
     staticGuard: "scripts/local-gate-guard.test.mjs",
