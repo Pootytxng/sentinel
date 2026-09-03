@@ -131,15 +131,18 @@ describe(".claude/hooks are either wired or say they are not", () => {
     expect(declaresItselfUnwired(buried)).toBe(false);
   });
 
-  it("the one deliberate opt-out is still the only one, and still says why", () => {
-    // Pins the known state so a second silent opt-out is a visible change, not a slow drift.
+  it("the deliberate opt-outs are still only these two, and each still says why", () => {
+    // Pins the known state so a third silent opt-out is a visible change, not a slow drift. The two
+    // are unwired for different reasons and the reasons are pinned separately: one is owner-gated,
+    // the other is a shared library with no entrypoint at all (#278).
     const settings = read(SETTINGS);
     const unwired = readdirSync(HOOKS)
       .filter((n) => n.endsWith(".mjs"))
       .filter((n) => !settings.includes(n));
-    expect(unwired).toEqual(["work-control-receipt-guard.mjs"]);
+    expect(unwired).toEqual(["target-ownership.mjs", "work-control-receipt-guard.mjs"]);
     expect(read(join(HOOKS, "work-control-receipt-guard.mjs"))).toMatch(
       /owner installs this by hand/i,
     );
+    expect(read(join(HOOKS, "target-ownership.mjs"))).toMatch(/this is a LIBRARY, not a hook/i);
   });
 });
