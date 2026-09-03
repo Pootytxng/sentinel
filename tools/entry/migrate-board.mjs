@@ -10,6 +10,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { normalizeWorktreeField } from "./worktree-field.mjs";
+import { BOARD_READ_LIMIT, parseBoardItems } from "./gather.mjs";
 
 export const PROJECT_NUMBER = 1;
 export const PROJECT_OWNER = "Pootytxng";
@@ -61,9 +62,10 @@ export function renderPlan(plan) {
 
 const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 
-export function readBoard() {
-  const raw = gh(["project", "item-list", String(PROJECT_NUMBER), "--owner", PROJECT_OWNER, "--format", "json", "--limit", "100"]);
-  return JSON.parse(raw).items.map((it) => ({
+// Whole board or a throw (a truncated read would migrate the first N rows and call the rest done).
+export function readBoard({ run = gh } = {}) {
+  const raw = run(["project", "item-list", String(PROJECT_NUMBER), "--owner", PROJECT_OWNER, "--format", "json", "--limit", String(BOARD_READ_LIMIT)]);
+  return parseBoardItems(raw).map((it) => ({
     number: it.content?.number,
     itemId: it.id,
     value: it[FIELD_NAME.toLowerCase()] ?? "",

@@ -84,11 +84,28 @@ export function loadPolicy(file = join(HERE, "context-policy.json")) {
   return JSON.parse(readFileSync(file, "utf8"));
 }
 
+// `gh project item-list` returns at most `--limit` rows and says nothing when the board has more: the
+// read is truncated silently, and every issue past the cut reads as "not on the board" -- a refusal
+// with a false reason (#339 on a 135-item board, under the old limit of 100). The limit is generous,
+// and the count gh reports alongside the rows is compared to what arrived: a short read is not a read.
+export const BOARD_READ_LIMIT = 1000;
+
+/** gh's item-list payload -> rows, or a throw when the payload is a truncated board. */
+export function parseBoardItems(raw) {
+  const parsed = JSON.parse(raw);
+  const items = parsed.items ?? [];
+  const total = parsed.totalCount;
+  if (Number.isInteger(total) && total > items.length) {
+    throw new Error(`board read truncated: ${items.length} of ${total} items arrived (BOARD_READ_LIMIT=${BOARD_READ_LIMIT})`);
+  }
+  return items;
+}
+
 /** Board items in the shape the reconciler expects. `reachable:false` is a verdict input, not a crash. */
-export function readBoard() {
+export function readBoard({ run = gh } = {}) {
   try {
-    const raw = gh(["project", "item-list", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json", "--limit", "100"]);
-    const items = JSON.parse(raw).items.map((it) => ({
+    const raw = run(["project", "item-list", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json", "--limit", String(BOARD_READ_LIMIT)]);
+    const items = parseBoardItems(raw).map((it) => ({
       number: it.content?.number,
       title: it.title,
       itemId: it.id,
