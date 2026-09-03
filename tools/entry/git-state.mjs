@@ -38,6 +38,7 @@ export function inspectGitState(dir) {
     untracked: 0,
     staged: 0,
     stashed: 0,
+    stashedElsewhere: 0,
     ahead: 0,
     behind: 0,
     unmerged: 0,
@@ -87,8 +88,21 @@ export function inspectGitState(dir) {
   s.staged = s.files.staged.length;
   s.unmerged = s.files.unmerged.length;
 
+  // The stash stack is one per repository, shared by every worktree, so an entry made on another
+  // branch is another checkout's parked work, not this folder's: it is counted apart and does not
+  // make this folder unclean (four ABANDONED entries from other lanes refused every launch here).
+  // An entry whose branch cannot be read stays counted against this folder.
   const stashOut = git(dir, ["stash", "list"]);
-  s.stashed = stashOut ? stashOut.split(/\r?\n/).filter((l) => l.trim() !== "").length : 0;
+  const entries = stashOut ? stashOut.split(/\r?\n/).filter((l) => l.trim() !== "") : [];
+  const stashBranch = (l) => {
+    const m = l.match(/^stash@\{\d+\}:\s*(?:WIP on|On)\s+(.+?):/);
+    return m ? m[1].trim() : null;
+  };
+  s.stashed = entries.filter((l) => {
+    const b = stashBranch(l);
+    return b === null || s.detached || !s.branch || b === s.branch;
+  }).length;
+  s.stashedElsewhere = entries.length - s.stashed;
 
   s.workingTreeClean = s.modified === 0 && s.untracked === 0 && s.staged === 0 && s.unmerged === 0;
   s.clean =
@@ -114,6 +128,6 @@ export function describeGitState(state) {
   if (state.stashed) parts.push(`${state.stashed} stashed`);
   if (state.ahead || state.behind) parts.push(`ahead ${state.ahead}, behind ${state.behind}`);
   if (state.detached) parts.push("detached HEAD");
-  if (parts.length === 0) return `clean on ${state.branch}`;
+  if (parts.length === 0) return `clean on ${state.branch}${state.stashedElsewhere ? ` (${state.stashedElsewhere} stashed on other branches)` : ""}`;
   return `${state.detached ? "detached" : state.branch}: ${parts.join(" · ")}`;
 }

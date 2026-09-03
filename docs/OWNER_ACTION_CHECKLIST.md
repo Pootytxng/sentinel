@@ -90,47 +90,46 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Fifteen dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 5th 2026-09-02
+### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 6th 2026-09-02
 
-**The ask:** one command, all fifteen at once — `git push origin --delete
-claude/exciting-robinson-0ce4d5 lane/agent-skills-config lane/atomic-json-281
-lane/fleet-guard-failclosed-276 lane/license-atomic-284 lane/receipt-preservation-298
-lane/remote-cache-design-286 lane/segmented-a11y-237 fix/green-main-after-314-332
-fix/handoff-grace-cycle-333 lane/docs-path-not-branch-310 lane/rule-c-at-risk-312
-lane/native-routing-271 lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. It said THREE
-until 2026-09-01 and ELEVEN until 2026-09-02
-([#305](https://github.com/Pootytxng/sentinel/issues/305)) — it goes stale every time a lane lands,
-so it is **re-derived, never carried over**. **`beta/private-beta-001` is deliberately NOT in it**:
-it answers YES to the same containment query every re-derivation runs, and it is the frozen beta ref
-(`16069fa`) that `CLAUDE.md` puts in owner territory. That exclusion is written down here so a later
-session cannot "complete the list", and `scripts/prune-candidates.test.mjs` fails if this command
-ever names it. The first twelve are **contained in `main`** — `git merge-base --is-ancestor` says
-yes for each, so deleting them cannot lose a commit; four (`332`, `333`, `310`, `312`) landed only
-today. The last three are not ancestors and still hold nothing you want: `271` (151 behind) and
-`274` (149 behind) landed by squash and would only reintroduce a stale copy of status docs. `274`'s
-delta now also shows `scripts/doc-budget.ps1`, which it did NOT at the last derivation — but that is
-`main` moving, not `274` holding work: `274` caps this very file at 450 lines where `main` has since
-ratcheted it to 385, and restoring a looser budget is what the ratchet forbids. PR
+**The ask:** one command — `git push origin --delete lane/native-routing-271
+lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. It named FIFTEEN this morning: the
+twelve that were **contained in `main`** went with the #355 sweep (P0-B, commit `f93a890e`), which a
+session may do because deleting a ref `main` already holds cannot lose a commit. These three are
+NOT ancestors, and that is exactly why they are yours: `271` (151 behind) and `274` (149 behind)
+landed by squash and would only reintroduce a stale copy of status docs; PR
 [#163](https://github.com/Pootytxng/sentinel/pull/163) closed unmerged, leaving
 `cleanup-train-2026-08-20` **590 commits behind with an OLDER `handoff-block` guard** — merging it
-would REGRESS `main`. Nothing is lost either way: the local refs and their clean worktrees still
-hold every commit, so any of the fifteen can be pushed back in one command — and
-`prune-candidates.test.mjs` measures that promise ref by ref. Deleting
-was **denied to this session**, and a denial is a stop — I did not reach the same effect another
-way. **Re-derive before running.** **Why it matters:** until the refs are gone, their rows and the
-handoff's branch list have to keep saying "landed but still here" — small residue, but it is exactly
-what makes the next session distrust the branch list. Nothing is broken while it waits.
+would REGRESS `main`. Nothing is lost either way: the local refs and their worktrees still hold every
+commit, and `scripts/prune-candidates.test.mjs` measures that promise ref by ref.
+**`beta/private-beta-001` is deliberately NOT in it** — the frozen beta ref (`16069fa`) that
+`CLAUDE.md` puts in owner territory; the same test fails if this command ever names it. It goes stale
+every time a lane lands, so it is **re-derived, never carried over — re-derive before running.**
+**Why it matters:** until the refs are gone their rows keep saying "landed but still here", which is
+exactly what makes the next session distrust the branch list. Nothing is broken while it waits.
+
+### A_wmi. Windows Management Instrumentation is hung on this PC  ·  ⏳ NEW 2026-09-02
+
+**The ask:** reboot when convenient — or restart the *Windows Management Instrumentation* service
+yourself; a system service is yours, not mine, under the standing security/system-settings rule.
+**Measured 2026-09-02:** `Get-CimInstance Win32_Process` never returns, and `taskkill` takes 61s
+and kills nothing, while `Get-Process` and the kernel's own process table answer in milliseconds.
+The toolchain no longer depends on it — the tree kill and its guard read the kernel table (commit
+`7aeff5f2`), and the preflight's process probe is bounded to 20s and reports nothing rather than
+stalling — but anything else on this PC that asks WMI will stay slow or empty until the service is
+back. **Why it matters:** two pre-push gates went red on a kill that had already happened; the fix
+removed the dependency, only you can remove the symptom.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
-backed up off this machine and verified. **§A now holds THREE things, and only one is a chore:**
+backed up off this machine and verified. **§A now holds FIVE things, three of them chores:**
 ① A0's small residual — delete the redundant `Desktop\COMPY KEY\` copy (one command, 10 seconds);
 ② A0's *"expand to the remaining invitees"* — not a chore but a **distribution call** that is yours
 by definition (who gets a build, and when); ③ **A_settings**, two copy-paste edits in a file only you may
-edit. Corrected 2026-08-20: this paragraph said "exactly ONE"
-while ② sat three bullets above it, still marked ⏳ — a checklist that miscounts itself is the same
-defect as one that lists non-asks.
+edit; ④ **A_prune**, one delete command; ⑤ **A_wmi**, one reboot. Corrected 2026-08-20 ("exactly
+ONE" while ② sat above it) and again 2026-09-02 ("THREE" while A_prune sat above it) — a checklist
+that miscounts itself is the same defect as one that lists non-asks.
 Archived 2026-08-20 by a self-checkup, because none of them ever needed you: **A_ci · A_rig ·
 A_ref2 · B1 · B7 · B_arc**. Each one's reason is in the archive under its own heading.
 Archived 2026-08-18 and 2026-08-04, each with its full record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**. The archive is the index; re-listing what each one was here was a second copy that only cost boot tax.

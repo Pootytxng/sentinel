@@ -15,6 +15,8 @@
 import { BLOCKING_GATES, buildMenu, FALLBACK_POLICY } from "./select.mjs";
 import { LOCAL_SETTINGS_PATH } from "./tier.mjs";
 import { parseWorktreeField, samePath } from "./worktree-field.mjs";
+import { overlapRemediation, scopeOverlapVerdict } from "./scope-overlap.mjs";
+import { claimExpiry } from "./claim.mjs";
 
 export const STARTABLE_STATUS = ["Ready", "Active"];
 // Owned by the SELECTOR now (#23) — a gated task has to be unavailable on the menu, not refused after
@@ -101,6 +103,7 @@ export const REMEDIATION_ORDER = [
   "task.gate",
   "task.claim", // another writer holds it
   "folder.writer",
+  "scope.overlap", // another writer's claim covers a path this task would write (#358)
   "processes", // something live is in there right now
   "git.clean", // work that can be lost outranks every convenience below
   "git.branchElsewhere",
@@ -185,7 +188,9 @@ export function reconcile(facts) {
   let claimActual = "no claim";
   let takeoverDraft = null;
   if (claim) {
-    const expired = claim.expires ? new Date(`${claim.expires}T23:59:59Z`) < now : false;
+    // Read as the claim spelled it — a date ends its day, a timestamp is exact (claim.mjs).
+    const expiry = claimExpiry(claim.expires);
+    const expired = expiry ? expiry < now : false;
     const otherLane = self.lane && claim.lane && claim.lane !== self.lane;
     const otherIssue = task && claim.issue && Number(claim.issue) !== Number(task.number);
     claimOk = !expired && !otherLane && !otherIssue;
@@ -239,6 +244,18 @@ export function reconcile(facts) {
       otherWriter ? `#${otherWriter.number} (${otherWriter.lane}) is Active in this folder` : "none",
       !otherWriter,
       otherWriter ? "One folder, one writer (collision rule 2). A different branch does not make concurrent writes safe." : null),
+  );
+
+  // --- Write-scope overlap (#358) ----------------------------------------
+  // Decided over the other Active items' posted claims and the base commit's tracked paths, both
+  // measured by gather.mjs. Facts never gathered are not a PASS: unknown means locked (rule 4).
+  const scopeFacts = facts?.scope ?? null;
+  const overlap = scopeFacts
+    ? scopeOverlapVerdict(scopeFacts)
+    : { ok: false, reason: "not gathered — unknown means locked (collision rule 4)", findings: [], unknown: [], undeclared: false };
+  checks.push(
+    mk("scope.overlap", "no path claimed by another Active writer", overlap.reason, overlap.ok,
+      overlap.ok ? null : scopeFacts ? overlapRemediation(overlap) : "Reconcile facts from gatherFacts(), which measures the scopes; a verdict without them is not a verdict."),
   );
 
   // --- The checkout -------------------------------------------------------
@@ -404,6 +421,7 @@ function describeState(s) {
   if (s.untracked) parts.push(`${s.untracked} untracked`);
   if (s.unmerged) parts.push(`${s.unmerged} unmerged`);
   if (s.stashed) parts.push(`${s.stashed} stashed`);
+  if (s.stashedElsewhere) parts.push(`${s.stashedElsewhere} stashed on other branches (shared stack, not this folder's)`);
   if (s.ahead || s.behind) parts.push(`ahead ${s.ahead}, behind ${s.behind}`);
   if (s.detached) parts.push("detached HEAD");
   return parts.length ? parts.join(" · ") : "clean";

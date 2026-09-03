@@ -177,13 +177,27 @@ export function parseDispositions(markdown) {
  * wrong. On a degraded checkout that is a WEAKER statement than "the record is true" — ask
  * `refSetCoverage` which claims were actually available, and see `main` for how it is reported.
  */
-export function audit({ repoRoot, coverage } = {}) {
+/**
+ * The audit, with both halves of its answer: `problems` fail the build; `derived` are the
+ * dispositions the audit measured for itself and does not need a human to write down (#355).
+ *
+ * Only ONE kind of unrecorded ref is a problem: one that has already landed. That ref needs a call
+ * no merge-tree can make — LANDED (kept, for a named reason) or MERGED (pruned) — so a human record
+ * is mandatory there and nowhere else. An unrecorded ref that still diverges from the base carries
+ * work main does not have; the machine can say so itself, and a record that merely repeats the
+ * measurement is a row that goes stale the moment main moves. So it is reported, never blocked on.
+ * The doc used to say "every remote ref is undispositioned until recorded", and that rule turned
+ * every lane's branch into every other lane's red gate the day it was pushed.
+ */
+export function auditReport({ repoRoot, coverage } = {}) {
+  const derived = [];
+  const done = () => ({ problems, derived });
   // A record the store could not parse is a problem, not a record. Both halves come back so a
   // broken file fails the audit instead of quietly shrinking the set it checks.
   const { records: rows, problems } = readAll(repoRoot);
   if (rows.length === 0) {
     problems.push(`${DOC}/ holds no disposition records.`);
-    return problems;
+    return done();
   }
 
   // --- Claims about the DOCUMENT. These read no refs, so they hold on any checkout. ---
@@ -204,39 +218,66 @@ export function audit({ repoRoot, coverage } = {}) {
 
   // --- Claims about ORIGIN. Only a checkout that can see origin is allowed to make them. ---
   const cover = coverage ?? refSetCoverage(repoRoot);
-  if (!cover.tracksEveryBranch) return problems;
+  if (!cover.tracksEveryBranch) return done();
 
   const live = new Set(listRemoteRefs(repoRoot));
-  for (const ref of live) {
-    if (!seen.has(ref)) {
-      // THE THIRD DEGRADATION, and the only one that is loud instead of silent. The two above make
-      // the cache too small to speak from; this one makes it too OLD. A ref another lane deleted on
-      // origin stays in refs/remotes/origin here until something prunes it, and a leftover ref is
-      // byte-identical to an undispositioned one. It cost a lane that owns none of this a red
-      // pre-push gate on 2026-08-24 (origin/lane/copy-truth-2-2026-08-24, already deleted on
-      // origin), and the message it read told it to go delete a branch on the remote.
-      //
-      // So the cheap, local, non-destructive cure leads, and the destructive one is conditional on
-      // the ref SURVIVING it. The wording follows: this checkout can only say what its cache holds,
-      // never what origin holds — the same rule the coverage gates above enforce, one case later.
-      problems.push(
-        `${ref} is in this checkout's cache of origin with no record in ${DOC}/. Refresh the cache ` +
-          `first — \`git fetch origin --prune\` — a ref another lane already deleted on origin ` +
-          `lingers here and looks exactly like an undispositioned one. If it survives the prune, ` +
-          `disposition it (write ${DOC}/${slugOf(ref)}.json), or delete it: ${pruneCommand(ref)}`,
-      );
-    }
-  }
+  const unrecorded = [...live].filter((ref) => !seen.has(ref));
   for (const ref of seen) {
     if (!live.has(ref)) {
       problems.push(`${DOC}/${slugOf(ref)}.json dispositions ${ref}, which no longer exists — delete the record.`);
     }
   }
 
+  // THE THIRD DEGRADATION, and the only one that is loud instead of silent. The two above make the
+  // cache too small to speak from; this one makes it too OLD. A ref another lane deleted on origin
+  // stays in refs/remotes/origin here until something prunes it, and a leftover ref is
+  // byte-identical to an undispositioned one. It cost a lane that owns none of this a red pre-push
+  // gate on 2026-08-24 (origin/lane/copy-truth-2-2026-08-24, already deleted on origin), and the
+  // message it read told it to go delete a branch on the remote.
+  //
+  // So the cheap, local, non-destructive cure leads, and the destructive one is conditional on the
+  // ref SURVIVING it. The wording follows: this checkout can only say what its cache holds, never
+  // what origin holds — the same rule the coverage gates above enforce, one case later.
+  const unrecordedLead = (ref) =>
+    `${ref} is in this checkout's cache of origin with no record in ${DOC}/`;
+  const cacheCaveat =
+    "Refresh the cache first — `git fetch origin --prune` — a ref another lane already deleted on " +
+    "origin lingers here and looks exactly like an undispositioned one.";
+
   // --- Re-proof. Needs ancestry as well as the refs. ---
-  if (cover.shallow) return problems;
+  if (cover.shallow) {
+    // No ancestry, so no way to tell landed from diverged: every unrecorded ref stays a problem
+    // here, exactly as before #355. A degraded checkout may not hand out the full checkout's pass.
+    for (const ref of unrecorded) {
+      problems.push(
+        `${unrecordedLead(ref)}, and this checkout is shallow, so whether it has landed cannot be ` +
+          `measured here. ${cacheCaveat} If it survives the prune, disposition it (write ` +
+          `${DOC}/${slugOf(ref)}.json), or delete it: ${pruneCommand(ref)}`,
+      );
+    }
+    return done();
+  }
 
   const base = resolveBase(repoRoot);
+  for (const ref of unrecorded) {
+    if (isNoop(repoRoot, base, ref)) {
+      problems.push(
+        `${unrecordedLead(ref)}, and merging it into ${base} is already a no-op — the work has ` +
+          `landed. ${cacheCaveat} If it survives the prune, this is the one call the audit cannot ` +
+          `make for you: LANDED if the ref is deliberately kept (write ${DOC}/${slugOf(ref)}.json ` +
+          `with the reason), or MERGED — delete it: ${pruneCommand(ref)}`,
+      );
+    } else {
+      derived.push({
+        ref,
+        disposition: "UNLANDED",
+        note:
+          `no record in ${DOC}/, and merging it into ${base} changes the tree, so it carries work ` +
+          "main does not have. Measured, not recorded: a record is owed only once a judgment exists " +
+          "(CLAIMED, PRESERVE, or UNLANDED with evidence).",
+      });
+    }
+  }
   for (const { ref, disposition } of rows) {
     if (!live.has(ref)) continue; // already reported; merge-tree would just throw
     const rule = DISPOSITIONS[disposition];
@@ -299,7 +340,12 @@ export function audit({ repoRoot, coverage } = {}) {
     }
   }
 
-  return problems;
+  return done();
+}
+
+/** The failing half alone, for every caller that only asks "is the record true". */
+export function audit(opts) {
+  return auditReport(opts).problems;
 }
 
 /**
@@ -339,6 +385,10 @@ export function mergeCitations(markdown) {
 export const NON_CITATION_LANDINGS = Object.freeze({
   "16069fa": "the frozen beta ref `origin/beta/private-beta-001`, a PRESERVE row -- never a PR landing",
   "36bdf6b": "a MERGE-BASE in the quietpitwall row's partial-landing arithmetic, not a PR's landing",
+  // Third entry, 2026-09-02 (#355): the sweep deleted the record that cited this SHA as PR #285's
+  // merge commit, while four unrelated partial-landing records still name it as the `main` tip they
+  // re-measured against on 2026-09-01. A measurement baseline is not a landing claim.
+  d5dcb9e2: "the `main` tip four partial-landing records re-measured merge cost against on 2026-09-01 -- a baseline, not a citation",
 });
 
 /**
@@ -458,7 +508,7 @@ export function refSplit(rows) {
 export function main(argv) {
   const repoRoot = argv[0] || join(dirname(fileURLToPath(import.meta.url)), "..");
   const cover = refSetCoverage(repoRoot);
-  const problems = audit({ repoRoot, coverage: cover });
+  const { problems, derived } = auditReport({ repoRoot, coverage: cover });
 
   if (problems.length > 0) {
     console.error("branch-disposition-audit: FAIL");
@@ -484,9 +534,14 @@ export function main(argv) {
   }
   const split = refSplit(readAll(repoRoot).records);
   console.log(
-    `branch-disposition-audit: OK — every origin ref has a proven record in ${DOC}/.\n` +
-      `  ${split.total} refs besides main: ${split.preserve} PRESERVE, ${split.other} not.`,
+    `branch-disposition-audit: OK — every landed origin ref has a proven record in ${DOC}/.\n` +
+      `  ${split.total} recorded refs besides main: ${split.preserve} PRESERVE, ${split.other} not.`,
   );
+  // Measured, not recorded (#355). Printed so nobody mistakes "no record" for "nobody looked".
+  if (derived.length > 0) {
+    console.log(`  ${derived.length} unrecorded ref(s) measured ${derived[0].disposition} — reported, not failed:`);
+    for (const d of derived) console.log(`    - ${d.ref}: ${d.note}`);
+  }
   return 0;
 }
 

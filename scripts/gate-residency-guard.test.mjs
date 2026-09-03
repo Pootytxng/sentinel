@@ -217,9 +217,18 @@ const RESIDENCY = {
     staticGuard: "scripts/verify-release-gate.test.mjs",
     why: "Re-runs npm and cargo audit against live advisory databases. Its answer changes when an advisory is published, not when this repo changes, so residency would make `npm test` fail for reasons no commit caused — the classifier logic is unit-tested instead.",
   },
+  "actions-health.mjs": {
+    kind: "scheduled",
+    why: "Asks api.github.com whether Actions jobs actually EXECUTED (a completed job with 0 steps; a green run over a failed job — the 2026-08-31 Dependency-audit incident). Its answer changes with GitHub's billing state, not with a commit, so it is not resident in `npm test`; it runs on demand and as the second action of the CompyUsageAudit task, writing docs/usage-audit/ACTIONS-HEALTH.md. The judgment is a pure function pinned by scripts/actions-health.test.mjs.",
+  },
   "usage-audit.mjs": {
     kind: "scheduled",
     why: "The CompyUsageAudit Windows task runs it Mondays and writes docs/usage-audit/LATEST.md. It reads session transcripts outside the repo, so a commit cannot change its answer.",
+  },
+  "scope-drift-gate.mjs": {
+    kind: "push-gate",
+    staticGuard: "scripts/scope-drift-gate.test.mjs",
+    why: "The filesystem backstop for write scope (#356): verify-local.ps1 runs it before the test suite, and its own test pins that call. Warn-only at write time is the hook; this is the verdict.",
   },
   "verify-local.ps1": {
     kind: "push-gate",

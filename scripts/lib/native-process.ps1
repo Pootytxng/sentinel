@@ -144,11 +144,126 @@ function Set-NativeEnvironment {
   }
 }
 
+# -- Process tree without WMI -------------------------------------------------------------------
+# taskkill.exe answers through WMI (Win32_Process), with or without /T. On 2026-09-02 this machine's
+# WMI provider hung: Get-CimInstance Win32_Process never returned, "taskkill /PID <n> /F" took 61s
+# and killed nothing, and the abandoned killer -- started with inherited handles, as every
+# System.Diagnostics.Process child is -- held duplicates of the CALLER's stdout/stderr pipes for the
+# rest of its life. A wrapper reading this script to EOF (the guard's spawnSync, a CI step, a
+# terminal) therefore blocked ~60s past a kill that had already happened. Two defects, one root: the
+# kill path leaned on a service that can be down, and let its own helper outlive the timeout.
+#
+# The tree is now read from a toolhelp snapshot (kernel32; no service between us and the answer;
+# ~5ms measured) and terminated through .NET Process.Kill, leaves first, root last. taskkill remains
+# only as the fallback for a host where the helper type cannot be compiled, and a fallback killer
+# that outlives its wait is itself killed: nothing this function starts may survive its return.
+$script:NativeProcessSnapshotSource = @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+namespace Compy {
+  public class NativeProcessSnapshotEntry { public int ProcessId; public int ParentProcessId; public string ExeName; }
+  public static class NativeProcessSnapshot {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct PROCESSENTRY32W { public uint dwSize; public uint cntUsage; public uint th32ProcessID; public IntPtr th32DefaultHeapID; public uint th32ModuleID; public uint cntThreads; public uint th32ParentProcessID; public int pcPriClassBase; public uint dwFlags; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile; }
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool Process32FirstW(IntPtr hSnapshot, ref PROCESSENTRY32W lppe);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool Process32NextW(IntPtr hSnapshot, ref PROCESSENTRY32W lppe);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr h);
+    public static List<NativeProcessSnapshotEntry> Snapshot() {
+      var list = new List<NativeProcessSnapshotEntry>();
+      IntPtr h = CreateToolhelp32Snapshot(2 /* TH32CS_SNAPPROCESS */, 0);
+      if (h == IntPtr.Zero || h == new IntPtr(-1)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+      try {
+        var e = new PROCESSENTRY32W(); e.dwSize = (uint)Marshal.SizeOf(typeof(PROCESSENTRY32W));
+        if (!Process32FirstW(h, ref e)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        do { list.Add(new NativeProcessSnapshotEntry { ProcessId = (int)e.th32ProcessID, ParentProcessId = (int)e.th32ParentProcessID, ExeName = e.szExeFile }); } while (Process32NextW(h, ref e));
+      } finally { CloseHandle(h); }
+      return list;
+    }
+  }
+}
+'@
+
+# One row per process: ProcessId, ParentProcessId, ExeName. THROWS when the snapshot cannot be
+# taken -- a caller that wants "unknown" must catch, because an empty answer here would read as
+# "no descendants", which is the false pass.
+function Get-NativeProcessSnapshot {
+  if (-not ('Compy.NativeProcessSnapshot' -as [type])) {
+    Add-Type -TypeDefinition $script:NativeProcessSnapshotSource -ErrorAction Stop
+  }
+  $rows = [Compy.NativeProcessSnapshot]::Snapshot()
+  $seenSelf = $false
+  $out = foreach ($r in $rows) {
+    if ($r.ProcessId -eq $PID) { $seenSelf = $true }
+    [pscustomobject]@{ ProcessId = $r.ProcessId; ParentProcessId = $r.ParentProcessId; ExeName = $r.ExeName }
+  }
+  # A snapshot that cannot see the process taking it is not a process list.
+  if (-not $seenSelf) { throw "process snapshot did not include this process ($PID); refusing to read it as a process list" }
+  return @($out)
+}
+
+# Every descendant of ProcessId, parents before children, each pid once. Parent-pid values are
+# inherited from creators that may be dead and recycled, so a cycle is possible on paper and must
+# not be an infinite loop here.
+function Get-NativeDescendantIds {
+  param(
+    [Parameter(Mandatory = $true)][int]$ProcessId,
+    [object[]]$Snapshot
+  )
+  if (-not $Snapshot) { $Snapshot = Get-NativeProcessSnapshot }
+  $byParent = @{}
+  foreach ($row in $Snapshot) {
+    if (-not $byParent.ContainsKey($row.ParentProcessId)) { $byParent[$row.ParentProcessId] = New-Object System.Collections.ArrayList }
+    $null = $byParent[$row.ParentProcessId].Add($row.ProcessId)
+  }
+  $order = New-Object System.Collections.ArrayList
+  $seen = @{ $ProcessId = $true }
+  $queue = New-Object System.Collections.Queue
+  $queue.Enqueue($ProcessId)
+  while ($queue.Count -gt 0) {
+    $current = $queue.Dequeue()
+    if ($byParent.ContainsKey($current)) {
+      foreach ($child in $byParent[$current]) {
+        if (-not $seen.ContainsKey($child)) { $seen[$child] = $true; $null = $order.Add($child); $queue.Enqueue($child) }
+      }
+    }
+  }
+  return @($order)
+}
+
 function Stop-NativeProcessTree {
   param(
     [Parameter(Mandatory = $true)][int]$ProcessId,
     [int]$TimeoutMs = 10000
   )
+  $descendants = $null
+  $snapshotTakenAt = $null
+  # COMPY_NATIVE_TREE_KILL_FALLBACK=1 forces the taskkill path. The guard sets it to prove the
+  # fallback cannot strand its caller; a release run never does.
+  if ($env:COMPY_NATIVE_TREE_KILL_FALLBACK -ne "1") {
+    try {
+      $snapshotTakenAt = Get-Date
+      $descendants = Get-NativeDescendantIds -ProcessId $ProcessId
+    } catch {
+      $descendants = $null
+    }
+  }
+  if ($null -ne $descendants) {
+    # Leaves first, root last, so nothing is orphaned mid-walk and re-parented out of reach. Each
+    # kill re-checks identity: a pid freed since the snapshot may already belong to a process that
+    # was never ours (measured 2026-08-29: a freed pid re-occupied within 3s in 4 of 12 trials), and
+    # a process that started AFTER the snapshot cannot be one the snapshot listed.
+    $targets = @($descendants)
+    [array]::Reverse($targets)
+    foreach ($id in @($targets + @($ProcessId))) {
+      try {
+        $victim = [System.Diagnostics.Process]::GetProcessById($id)
+        if ($victim.StartTime -le $snapshotTakenAt) { $victim.Kill() }
+      } catch { }
+    }
+    return
+  }
   $taskkill = Join-Path $env:SystemRoot "System32\taskkill.exe"
   if (Test-Path -LiteralPath $taskkill -PathType Leaf) {
     $info = New-Object System.Diagnostics.ProcessStartInfo
@@ -164,7 +279,12 @@ function Stop-NativeProcessTree {
       if ($killer.Start()) {
         $null = $killer.StandardOutput.ReadToEndAsync()
         $null = $killer.StandardError.ReadToEndAsync()
-        $killer.WaitForExit($TimeoutMs) | Out-Null
+        if (-not $killer.WaitForExit($TimeoutMs)) {
+          # A killer still running past its wait is the pipe-holder described above. It is killed
+          # here; the caller's own Process.Kill on the root is the next line of defence.
+          try { $killer.Kill() } catch { }
+          $killer.WaitForExit(2000) | Out-Null
+        }
       }
     } catch {
       # The tracked-process fallback below still runs. Timeout handling must never pretend a failed

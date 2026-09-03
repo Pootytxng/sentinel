@@ -39,6 +39,10 @@ param(
     # Skip installing the in-session root assert. The launch is then unverified from inside.
     [switch] $NoOverlay,
 
+    # The Write scope to claim, as backticked paths. Omit to take the issue body's "Write scope"
+    # bullet; a task with no scope is refused while another writer is Active (#358).
+    [string] $Scope = '',
+
     # Prepare everything and stop before opening the editor.
     [switch] $NoLaunch,
 
@@ -326,6 +330,7 @@ if ($Issue -le 0) {
 $launchArgs = @('--control', $ControlDir, '--log', $LogFile, '--issue', "$Issue")
 if ($DryRun) { $launchArgs += '--dry-run' }
 if ($NoOverlay) { $launchArgs += '--no-overlay' }
+if ($Scope) { $launchArgs += @('--scope', $Scope) }
 if (-not $Details) { $launchArgs += '--quiet' }
 
 if ($Details) { Head "Preparing #$Issue" }

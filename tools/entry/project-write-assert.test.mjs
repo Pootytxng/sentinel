@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import * as tracked from "../../.claude/hooks/session-root-assert.mjs";
+import { ZONES } from "../../.claude/hooks/target-ownership.mjs";
 import {
   GUARDED_TOOLS,
   adoptCommand,
@@ -36,6 +37,19 @@ const SOURCE = readFileSync(HOOK_FILE, "utf8");
 
 const ROOT = "C:\\Users\\Kuya\\code\\sentinel-home-room";
 const SESSION = "11111111-2222-3333-4444-555555555555";
+const SIBLING = "C:\\Users\\Kuya\\code\\sentinel";
+const OWNER_CONFIG = "C:\\Users\\Kuya\\.claude";
+
+// Where a path LIVES is proved against real repositories in `target-ownership.test.mjs`. Injecting
+// it here keeps these tests answering the only question this hook decides — what to do once the zone
+// is known — instead of depending on which folders happen to exist on the machine running them.
+const under = (parent, target) => String(target).toLowerCase().replace(/\//g, "\\").startsWith(`${parent.toLowerCase()}\\`);
+const FAKE_ZONE = ({ target }) => {
+  if (under(SIBLING, target)) return { zone: ZONES.SIBLING, abs: target, owner: SIBLING, why: "another checkout of this repository" };
+  if (under(OWNER_CONFIG, target)) return { zone: ZONES.GLOBAL, abs: target, owner: OWNER_CONFIG, why: "inside the owner's global configuration" };
+  if (/^[A-Za-z]:(?![\\/])/.test(String(target))) return { zone: ZONES.UNKNOWN, abs: null, owner: null, why: "the target could not be resolved to an absolute path" };
+  return { zone: ZONES.UNPROTECTED, abs: target, owner: null, why: "fixture: outside every protected zone" };
+};
 
 const write = (over = {}) => ({
   toolName: "Write",
@@ -45,6 +59,7 @@ const write = (over = {}) => ({
   sessionId: SESSION,
   cwd: ROOT,
   knownIssue: null,
+  zone: FAKE_ZONE,
   ...over,
 });
 
@@ -84,7 +99,11 @@ describe("one implementation of identity — the hook asks, it does not decide",
 });
 
 describe("what is and is not a project write", () => {
-  it("guards exactly the three tools that change a file, and not Bash (the named hole, spec §3c)", () => {
+  it("guards exactly the three tools that change a file, and leaves the shell to its own hook", () => {
+    // The §3c hole is closed, but NOT here: `Bash` is guarded by `shell-ownership-assert.mjs`, a
+    // separate PreToolUse entry with its own off switch. This hook staying narrow is what keeps the
+    // escape hatch real — a wrong shell checker cannot take `Write` down with it, and a wrong
+    // `Write` refusal cannot be repaired by a shell this file also decides. See #278 spec §5.
     expect([...GUARDED_TOOLS].sort()).toEqual(["Edit", "NotebookEdit", "Write"]);
     expect(decide(write({ toolName: "Bash", toolInput: { command: "sed -i s/a/b/ src/App.css" } })).allow).toBe(true);
   });
@@ -101,10 +120,54 @@ describe("what is and is not a project write", () => {
     expect(d.allow).toBe(false);
   });
 
-  it("never refuses a path outside the project root", () => {
-    for (const outside of [join(tmpdir(), "scratch.txt"), "C:\\Users\\Kuya\\code\\sentinel\\src\\App.css", "D:\\x.md"]) {
+  it("leaves an unprotected path outside the project root alone", () => {
+    for (const outside of [join(tmpdir(), "scratch.txt"), "D:\\x.md"]) {
       expect(decide(write({ toolInput: { file_path: outside } })).allow, outside).toBe(true);
     }
+  });
+
+  it("refuses a SIBLING checkout of this repository, which used to pass for `outside protection`", () => {
+    // This exact path was pinned as ALLOWED until #278. Distance from the root is not safety: the
+    // one-writer rule is about who owns the target, and another lane's checkout is another owner's.
+    const d = decide(write({ toolInput: { file_path: `${SIBLING}\\src\\App.css` } }));
+    expect(d.allow).toBe(false);
+    expect(d.permission).toBe("deny");
+    expect(d.code).toBe("TARGET_NOT_OURS");
+    expect(d.reason).toContain("switching tools is not the way round it");
+  });
+
+  it("stays refused for a sibling even once this session IS verified", () => {
+    const d = decide(write({ toolInput: { file_path: `${SIBLING}\\src\\App.css` }, verdict: { ok: true, mode: "launch" } }));
+    expect(d.allow).toBe(false);
+    expect(d.code).toBe("TARGET_NOT_OURS");
+  });
+
+  it("routes the owner's global configuration to approval rather than deciding it", () => {
+    const d = decide(write({ toolInput: { file_path: `${OWNER_CONFIG}\\settings.json` } }));
+    expect(d.allow).toBe(false);
+    expect(d.permission).toBe("ask");
+    expect(d.code).toBe("TARGET_OWNER_CONFIG");
+  });
+
+  it("treats a path shape it cannot place as unknown, not as outside", () => {
+    // A drive-relative path names a per-drive working directory this process does not have. On the
+    // SESSION's own drive it resolves inside the root and is answered there (`C:notapath\x.md` ->
+    // `<root>\notapath\x.md`, exactly as node's own fs would); on another drive nothing can place it.
+    const d = decide(write({ toolInput: { file_path: "Z:notapath\\x.md" } }));
+    expect(d.allow).toBe(false);
+    expect(d.permission).toBe("ask");
+    expect(d.code).toBe("TARGET_UNRESOLVED");
+  });
+
+  it("emits `ask` as `ask` and everything else as `deny`", () => {
+    const wire = (target) => {
+      let wrote = "";
+      emit(decide(write({ toolInput: { file_path: target } })), { write: (s) => (wrote += s) });
+      return JSON.parse(wrote).hookSpecificOutput.permissionDecision;
+    };
+    expect(wire(`${OWNER_CONFIG}\\settings.json`)).toBe("ask");
+    expect(wire(`${SIBLING}\\src\\App.css`)).toBe("deny");
+    expect(wire(`${ROOT}\\src\\App.css`)).toBe("deny");
   });
 
   it("does not mistake a sibling folder whose name STARTS with the root for a child", () => {

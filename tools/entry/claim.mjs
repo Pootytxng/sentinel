@@ -9,6 +9,7 @@
 // `--date` (`--text` fails with "Did not receive a date value") and clearing an expiry needs `--clear`.
 
 import { execFileSync } from "node:child_process";
+import { writeClaimCache } from "../../scripts/lib/scope-drift.mjs";
 
 export const CLAIM_HEADER = "### Ownership claim";
 export const HANDOFF_HEADER = "### Handoff";
@@ -66,23 +67,54 @@ export function renderHandoff(h) {
   ].join("\n");
 }
 
-const field = (body, label) => {
-  const m = body.match(new RegExp(`^-\\s*${label.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}:\\s*(.*)$`, "mi"));
-  return m ? m[1].trim() : null;
+const esc = (s) => s.replace(/[.*+?^{}()|[\]\\/$]/g, "\\$&");
+// One enclosing backtick pair, trimmed — a hand-written claim quotes its folder or branch as code.
+const plain = (v) => (v && /^`[^`]*`$/.test(v) ? v.slice(1, -1) : v);
+
+/**
+ * One field of a claim or handoff, by label. Reads the block this module renders (`- Label: value`),
+ * the bold variants a hand-written comment uses (`- **Label:** value`, `- **Label**: value`), and a
+ * two-column table row (`| **label** | value |`) — the form another session posted on #224, which
+ * read as a claim with no fields and so, under #358, as a live writer whose scope nobody could see
+ * (collision rule 4: a refusal the other side could not cure). Aliases are the labels other writers
+ * use for the same fact.
+ */
+const field = (body, label, aliases = []) => {
+  for (const name of [label, ...aliases]) {
+    const bullet = body.match(new RegExp("^[-*]\\s*(?:\\*\\*)?" + esc(name) + "(?::\\s*\\*\\*|\\*\\*\\s*:|:)\\s*(.*)$", "mi"));
+    if (bullet) return bullet[1].trim();
+    const row = body.match(new RegExp("^\\|\\s*(?:\\*\\*)?" + esc(name) + "(?:\\*\\*)?\\s*\\|\\s*(.*?)\\s*\\|\\s*$", "mi"));
+    if (row) return row[1].trim();
+  }
+  return null;
 };
+
+/**
+ * A claim's expiry as a Date. Writers spell it "2026-09-03", "2026-09-02T04:55Z (12 hours)",
+ * "2026-09-02T12:00:00Z" or "2026-08-03 (12-hour alarm; no automatic takeover)"; a date alone ends at
+ * the end of its day (UTC). Unparseable is null — a claim stays live until its expiry is READ as
+ * past, never assumed past.
+ */
+export function claimExpiry(text) {
+  const m = /^\s*(\d{4}-\d{2}-\d{2})(T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?)?/.exec(String(text ?? ""));
+  if (!m) return null;
+  const time = m[2] ? (/(?:Z|[+-]\d{2}:?\d{2})$/.test(m[2]) ? m[2] : m[2] + "Z") : "T23:59:59Z";
+  const d = new Date(m[1] + time);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 /** Parse a claim comment back into facts. Returns null when the comment is not a claim. */
 export function parseClaim(body) {
   if (!body?.includes(CLAIM_HEADER)) return null;
   return {
     lane: field(body, "Lane"),
-    executor: field(body, "Executor/tool"),
-    repository: field(body, "Repository"),
-    folder: field(body, "Worktree folder"),
-    branch: field(body, "Branch"),
-    scope: field(body, "Write scope"),
+    executor: field(body, "Executor/tool", ["executor", "writer"]),
+    repository: plain(field(body, "Repository", ["repo"])),
+    folder: plain(field(body, "Worktree folder", ["worktree", "folder"])),
+    branch: plain(field(body, "Branch")),
+    scope: field(body, "Write scope", ["scope"]),
     started: field(body, "Started"),
-    expires: field(body, "Claim expires"),
+    expires: field(body, "Claim expires", ["expiry", "expires"]),
     nextAction: field(body, "Next action"),
   };
 }
@@ -159,7 +191,7 @@ export function execPlan(plan, { dryRun = false } = {}) {
 }
 
 /** The refusal that makes a claim mean something. */
-export function postClaim({ issue, verdict, facts, ids, dryRun = false }) {
+export function postClaim({ issue, verdict, facts, ids, dryRun = false, cacheDir = undefined }) {
   if (verdict?.verdict !== "PASS") {
     throw new Error(
       `Refusing to post a claim on #${issue}: preflight verdict is ${verdict?.verdict ?? "(none)"}. ` +
@@ -167,5 +199,16 @@ export function postClaim({ issue, verdict, facts, ids, dryRun = false }) {
     );
   }
   const plan = planPostClaim({ issue, ids, facts, verdict });
-  return { plan, ran: execPlan(plan, { dryRun }) };
+  const ran = execPlan(plan, { dryRun });
+  if (!dryRun) {
+    // The scope this claim just declared, remembered locally for the drift readers (#356). A cache
+    // failure is not a claim failure: the thread is the record, the cache only saves a round trip.
+    try {
+      writeClaimCache(
+        { issue, scopeText: facts.scope, folder: facts.folder ?? null, branch: facts.branch ?? null, postedAt: new Date().toISOString(), source: "postClaim" },
+        cacheDir ? { dir: cacheDir } : {},
+      );
+    } catch {}
+  }
+  return { plan, ran };
 }

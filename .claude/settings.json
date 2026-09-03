@@ -69,6 +69,17 @@
         ]
       },
       {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/shell-ownership-assert.mjs\"",
+            "timeout": 10,
+            "statusMessage": "compy-entry:shell-ownership"
+          }
+        ]
+      },
+      {
         "matcher": "Workflow",
         "hooks": [
           {
@@ -128,6 +139,17 @@
             "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"",
             "timeout": 5,
             "statusMessage": "Checking UI changes"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/scope-drift-check.mjs\"",
+            "timeout": 10,
+            "statusMessage": "compy-entry:scope-drift"
           }
         ]
       },

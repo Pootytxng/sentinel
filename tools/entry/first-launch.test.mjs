@@ -294,6 +294,7 @@ describe("time of check == time of use — the base is pinned to one commit", ()
     subagentModel: null,
     hooks: null,
     processes: [],
+    scope: { mine: ["tools/entry"], text: "`tools/entry/`", source: "claim", others: [], files: [] },
   });
 
   beforeAll(() => {

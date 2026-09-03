@@ -72,6 +72,9 @@ export function listProcesses({ names = WATCHED } = {}) {
     const out = execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", ps], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      // 2026-09-02: this machine's WMI provider hung and Win32_Process never answered, so an unbounded
+      // read here stalled every preflight for minutes. Bounded: a probe that cannot run returns [].
+      timeout: 20000,
     }).trim();
     if (!out) return [];
     const parsed = JSON.parse(out);

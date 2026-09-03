@@ -30,6 +30,7 @@ import {
   squashOnlyCitations,
   uncitedLandings,
   NON_CITATION_LANDINGS,
+  auditReport,
 } from "./branch-disposition-audit.mjs";
 import { DIR, readAll, slugOf, write } from "./lib/dispositions.mjs";
 
@@ -213,25 +214,58 @@ describe("what the audit refuses to pass", () => {
     expect(run([["origin/landed", "PRESERVE"], ["origin/ahead", "UNLANDED"]])).toEqual([]);
   });
 
-  it("fails when a live ref has no row — the original defect", () => {
-    const problems = run([["origin/landed", "PRESERVE"]]);
+  // #355 narrowed the original defect (#65: "every branch has a verified disposition" while nothing
+  // checked one) to the half a machine cannot settle. A landed ref with no record needs a HUMAN
+  // call — LANDED (kept, for a reason) or MERGED (pruned) — so its absence is still the defect.
+  it("fails when a LANDED ref has no row — the original defect, narrowed by #355", () => {
+    const problems = run([["origin/ahead", "UNLANDED"]]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("origin/landed");
+    expect(problems[0]).toMatch(/no record/);
+    expect(problems[0]).toMatch(/already a no-op/);
+    expect(problems[0]).toMatch(/LANDED .*or MERGED/);
+  });
+
+  // The other half needs no human: merge-tree says the ref carries work main lacks, and "UNLANDED"
+  // is exactly that sentence. Blocking every lane on a record that merely repeats the measurement
+  // was the rule that made each pushed branch every other lane's red gate (#355).
+  it("reports — does not fail — a DIVERGED ref with no row, as a measured UNLANDED (#355)", () => {
+    layRecords(fixture, [["origin/landed", "PRESERVE"]]);
+    const { problems, derived } = auditReport({ repoRoot: fixture });
+    expect(problems).toEqual([]);
+    expect(derived).toHaveLength(1);
+    expect(derived[0]).toMatchObject({ ref: "origin/ahead", disposition: "UNLANDED" });
+    expect(derived[0].note).toMatch(/no record/);
+    expect(derived[0].note).toMatch(/[Mm]easured, not recorded/);
+    // The array-shaped audit() is the derived-blind view every existing caller keeps.
+    expect(audit({ repoRoot: fixture })).toEqual([]);
+  });
+
+  // Without ancestry the two halves cannot be told apart, so a shallow checkout keeps the pre-#355
+  // rule: every unrecorded ref is a problem. A degraded checkout must not hand out the full one's pass.
+  it("still fails an unrowed DIVERGED ref on a shallow checkout — it cannot measure the difference", () => {
+    const problems = run([["origin/landed", "PRESERVE"]], {
+      coverage: { tracksEveryBranch: true, shallow: true, reason: "test" },
+    });
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("origin/ahead");
-    expect(problems[0]).toMatch(/no record/);
+    expect(problems[0]).toMatch(/shallow/);
+    expect(problems[0]).toMatch(/cannot be measured/);
+    expect(problems[0].indexOf("git fetch origin --prune")).toBeLessThan(problems[0].indexOf("--delete"));
   });
 
   // A stale ref and an undispositioned one are the same bytes in refs/remotes/origin, so this
   // message is read by lanes that did nothing wrong. It has to send them to the local, reversible
   // cure BEFORE it names a command that deletes a branch on the shared remote.
   it("sends an unrowed ref to `fetch --prune` before it names a destructive command", () => {
-    const [problem] = run([["origin/landed", "PRESERVE"]]);
+    const [problem] = run([["origin/ahead", "UNLANDED"]]);
     expect(problem).toMatch(/git fetch origin --prune/);
     expect(problem.indexOf("git fetch origin --prune")).toBeLessThan(problem.indexOf("--delete"));
   });
 
   // It also may not assert that the ref is live on origin: a cache is the only thing it read.
   it("does not claim an unrowed ref exists on origin", () => {
-    expect(run([["origin/landed", "PRESERVE"]])[0]).not.toMatch(/exists on origin/);
+    expect(run([["origin/ahead", "UNLANDED"]])[0]).not.toMatch(/exists on origin/);
   });
 
   it("fails when a row names a ref that is gone", () => {
@@ -348,7 +382,7 @@ describe("every request for a ref to go carries the command that works", () => {
 
   it("names it in every failure that asks for a deletion, and never names `gh api`", () => {
     const asksForDeletion = [
-      run([["origin/landed", "PRESERVE"]]), // a live ref with no row at all
+      run([["origin/ahead", "UNLANDED"]]), // a LANDED ref with no row at all (#355: a diverged one is reported, not deleted)
       run([["origin/landed", "MERGED"], ["origin/ahead", "UNLANDED"]]), // prunable, still standing
       run([["origin/landed", "PRESERVE"], ["origin/ahead", "MERGED"]]), // a MERGED proof gone stale
       run([["origin/landed", "CLAIMED"], ["origin/ahead", "UNLANDED"]]), // a CLAIMED ref that landed
@@ -466,42 +500,11 @@ describe("the live docs do not prescribe the blocked prune", () => {
   });
 });
 
-// #350 shipped the CLAIMED re-proof above, and the moment it runs against this real repository it
-// finds 13 CLAIMED rows that are already no-ops against `origin/main` -- `lane/docs-path-not-branch-310`
-// (the row the issue was filed over) among them, plus twelve more nobody had looked at. That is not
-// a bug in the check; it is the check working, against records this lane's write scope does not
-// reach: fixing a `docs/dispositions/*.json` file is the "sweep of existing CLAIMED rows" cost #350
-// named on the record, and it is out of scope here on purpose (this lane's own worktree rules bar
-// it) -- filed as follow-up work, never quietly done as a side effect of landing the mechanism.
-//
-// So this pins today's known offenders BY REF, the same shape `NON_CITATION_LANDINGS` and
-// `squashOnlyCitations` already use below: a short, reviewed list, not an open-ended "ignore any
-// CLAIMED-landed problem" filter. A ref leaving this list because its record got swept is harmless --
-// the filter just stops matching it, and shrinking the array is the sweep's own follow-up diff. A
-// NEW ref joining the CLAIMED-landed set, or any OTHER kind of problem, is not on this list and still
-// reds the test below.
-const KNOWN_STALE_CLAIMED_ROWS_PENDING_350_SWEEP = [
-  "origin/claude/exciting-robinson-0ce4d5",
-  "origin/fix/green-main-after-314-332",
-  "origin/fix/handoff-grace-cycle-333",
-  "origin/lane/agent-skills-config",
-  "origin/lane/atomic-json-281",
-  "origin/lane/docs-path-not-branch-310",
-  "origin/lane/fleet-guard-failclosed-276",
-  "origin/lane/license-atomic-284",
-  "origin/lane/prune-list-truth-305",
-  "origin/lane/receipt-preservation-298",
-  "origin/lane/remote-cache-design-286",
-  "origin/lane/rule-c-at-risk-312",
-  "origin/lane/segmented-a11y-237",
-];
-
 describe("this repository", () => {
-  it("has a true branch-disposition record right now, aside from pre-#350 CLAIMED debt", () => {
-    const problems = audit({ repoRoot });
-    const isKnownStaleClaim = (p) =>
-      KNOWN_STALE_CLAIMED_ROWS_PENDING_350_SWEEP.some((ref) => p.startsWith(`${ref} is recorded CLAIMED,`));
-    expect(problems.filter((p) => !isKnownStaleClaim(p))).toEqual([]);
+  // The 13 CLAIMED rows #350 found already landed were swept on 2026-09-02 (#355): MERGED, pruned,
+  // records deleted. Nothing is filtered here any more; a stale CLAIMED row reds this outright.
+  it("has a true branch-disposition record right now", () => {
+    expect(audit({ repoRoot })).toEqual([]);
   });
 
   // The live shape of the CI failure. Whatever the record says today, a checkout that cannot see

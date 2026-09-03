@@ -46,12 +46,20 @@ export function parseWriteScope(markdown) {
   // for the one file #291 exists about, and the drift check would then wave through the edit it
   // was built to catch. Judged per path rather than per sentence, so `a` survives "`a` but not
   // `b`": the text between one path and the next is what decides it.
+  //
+  // A bare conjunction carries the previous verdict (2026-09-02): in "No other `src/` or
+  // `src-tauri/` writes" the second path is disclaimed by the same "no" as the first, and a reading
+  // that resets at "or" grants `src-tauri/` to a lane that just said it would not touch it -- the
+  // hole this repo's own closeout claim fell through. "no" joins the disclaimers for the same bullet.
   const declared = [];
   let cursor = 0;
+  let disclaimed = false;
   for (const match of bullet.matchAll(/`([^`]+)`/g)) {
     const gap = bullet.slice(cursor, match.index);
     cursor = match.index + match[0].length;
-    if (/\b(?:not|never|except|excluding|outside|other than)\b/i.test(gap)) continue;
+    const bare = /^[\s,;/]*(?:or|and|nor)?[\s,;/]*$/i.test(gap);
+    if (!bare) disclaimed = /\b(?:no|not|never|except|excluding|outside|other than)\b/i.test(gap);
+    if (disclaimed) continue;
     declared.push(normalizePattern(match[1]));
   }
   return declared.filter((p, i, a) => p && a.indexOf(p) === i);
