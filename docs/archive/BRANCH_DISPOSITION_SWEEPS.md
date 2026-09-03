@@ -5,6 +5,13 @@
 > narratives of sweeps whose refs are all long gone; the live file keeps only the CURRENT sweep and
 > the CURRENT rows. Back to the live file: [`../BRANCH_DISPOSITIONS.md`](../BRANCH_DISPOSITIONS.md).
 
+## Why the table left the live file (2026-09-02, #291)
+
+Moved here 2026-09-03 to pay for the #337 prune-order paragraph. On 2026-09-02 all eight open PRs
+edited the one disposition table that used to sit in the live file, so every lane conflicted with
+every other lane merely by existing, whatever its subject. The table became one JSON record per ref
+under `docs/dispositions/`, named by the ref's slug, so two lanes can never write the same file.
+
 ## Sweeps of 2026-08-04, 2026-08-05 and 2026-08-12
 
 Swept 2026-08-04 against `main` @ `1a513cb`; the `origin/claude/*` rows added 2026-08-05 against

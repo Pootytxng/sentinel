@@ -33,11 +33,13 @@ rebase is not the safe half: neither `--squash` nor `--rebase` leaves an ancestr
 three-way merge reintroduces the branch's own stale copies (it hit this file twice on 2026-08-05 and
 destroyed an unreproducible proof on 2026-08-06 — [`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md)).
 
-**A MERGED row is therefore perishable: prune the ref in the same breath as recording the merge**,
+**A MERGED row is therefore perishable: prune the ref in the same push as recording the merge**,
 rather than leave a row that fails its own audit on the next unrelated edit — including the edit that
 records the merge. **The audit enforces it**, and its failure text names the prune: `git push origin
 --delete <branch>`, neither blocked on this machine nor stopped by the gate (`.githooks/pre-push`
-skips a deletion-only push). Pinned in `scripts/branch-disposition-audit.test.mjs`.
+skips a deletion-only push). Pinned in `scripts/branch-disposition-audit.test.mjs`. **Retarget every
+open PR based on the ref (`gh pr edit <n> --base main`) BEFORE deleting it** — GitHub silently closes
+any open PR whose base is deleted (#337); `scripts/prune-order-guard.test.mjs` fails the push otherwise.
 
 **The base is `origin/main`, not the local `main`**, and the audit reads local remote-tracking refs,
 so it reflects the last `git fetch` rather than the server. A local `main` is a checkout owned by
@@ -58,10 +60,8 @@ audit call a genuinely-merged branch unmerged. Pinned in `scripts/branch-disposi
 
 **One file per ref, under [`docs/dispositions/`](dispositions/)**, named by the ref's own slug. That
 naming is the guarantee: a ref can hold exactly one record, and two lanes can never write the same
-file. It is why the table that used to sit here is gone ([#291](https://github.com/Pootytxng/sentinel/issues/291)) —
-on 2026-09-02 all eight open PRs edited this one file, so every lane conflicted with every other lane
-merely by existing, whatever its subject. A lane now adds `docs/dispositions/<slug>.json` and touches
-nothing another lane owns.
+file — the table that used to sit here made every open PR conflict with every other one ([#291](https://github.com/Pootytxng/sentinel/issues/291),
+in the sweeps archive). A lane adds `docs/dispositions/<slug>.json` and touches nothing another lane owns.
 
 A record carries `ref`, `disposition`, `issue` and `evidence` — the same four columns, one file each.
 JSON rather than Markdown on purpose: the live-doc prose rules read documents, and a mechanical
