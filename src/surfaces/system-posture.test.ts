@@ -97,19 +97,65 @@ describe("deriveSystemPosture", () => {
   const POSTURE_SRC = "src/surfaces/system-posture.ts";
   const DERIVATION_ONLY = "it is derivation-only";
 
-  function surfaceFiles(): string[] {
+  // A file can only put `reasons` on screen if the value reaches it, and there are exactly two
+  // routes: it imports the posture module, or the one module that does carries the field outward.
+  // Both are checked, because a text grep for the word alone cannot tell the posture field from
+  // `ev.reasons` on an evidence object or `c.reasons` on a case — the two unrelated reads that live
+  // in HardwareGrid.tsx and WhatChangedPanel.tsx today and would otherwise BOTH read as consumers,
+  // turning this guard's vacuous pass into a false fail. That is why restoring the word boundary
+  // was not, on its own, the repair (#304).
+  function sourceFiles(): string[] {
     return (readdirSync("src", { recursive: true }) as string[])
-      .filter((f) => f.endsWith(".tsx") && !f.includes(".test."))
+      .filter((f) => /\.tsx?$/.test(f) && !f.includes(".test."))
       .map((f) => join("src", f));
   }
 
+  // Rough on purpose and stated rather than papered over: this also strips a `//` inside a string
+  // literal, so a URL sharing a line with a real `.reasons` read would be missed. No such line
+  // exists in the tree, and the alternative is a TypeScript parse for a grep-shaped question.
+  const stripComments = (text: string) =>
+    text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const readsField = (text: string) => /\.reasons\b/.test(stripComments(text));
+  // The second route: an importer that spreads the derived posture outward ships `reasons` without
+  // ever naming it. Every postureLine return is field-by-field today; this keeps it that way.
+  const spreadsPosture = (text: string) => /\.\.\.\s*(p|posture)\b/.test(stripComments(text));
+
   it("`reasons` is derivation-only, and the comment says so — neither may drift alone", () => {
-    const files = surfaceFiles();
-    // Non-vacuity: if the walk stops finding surfaces, the assertion below proves nothing.
+    const files = sourceFiles();
+    // Non-vacuity: if the walk stops finding files, or stops finding the landmarks, nothing below
+    // is earned. command-center-data.ts is named because the whole check reduces to `no importer
+    // reads the field`, which is trivially true of an empty importer list.
     expect(files.length).toBeGreaterThan(20);
     expect(files.some((f) => f.endsWith("HomeConsole.tsx"))).toBe(true);
+    expect(files.some((f) => f.endsWith("command-center-data.ts"))).toBe(true);
 
-    const consumers = files.filter((f) => /reasons/.test(readFileSync(f, "utf8")));
+    const importers = files.filter(
+      (f) =>
+        !f.endsWith("system-posture.ts") &&
+        /from\s+["'][^"']*system-posture["']/.test(readFileSync(f, "utf8")),
+    );
+    expect(
+      importers,
+      "nothing imports system-posture — the walk or the import pattern is broken, not the invariant",
+    ).not.toEqual([]);
+    expect(importers.some((f) => f.endsWith("command-center-data.ts"))).toBe(true);
+
+    // The detector, falsified LIVE. Without this the `someone wired it up` branch below is dead
+    // code and the test collapses to `the comment is still present` — which is exactly what the
+    // raw-backspace regex this replaces had quietly become. A guard that cannot reach its own
+    // second outcome is not a guard.
+    expect(readsField('const x = posture.reasons.join(", ");')).toBe(true);
+    expect(spreadsPosture("return { ...p, tone };")).toBe(true);
+    expect(readsField("// the reasons are listed on the evidence object")).toBe(false);
+    // ...and the two unrelated `.reasons` readers must not be importers, which is what keeps the
+    // restored word boundary from turning a vacuous pass into a false fail.
+    expect(importers.some((f) => f.endsWith("HardwareGrid.tsx"))).toBe(false);
+    expect(importers.some((f) => f.endsWith("WhatChangedPanel.tsx"))).toBe(false);
+
+    const consumers = importers.filter((f) => {
+      const text = readFileSync(f, "utf8");
+      return readsField(text) || spreadsPosture(text);
+    });
     const saysDerivationOnly = readFileSync(POSTURE_SRC, "utf8").includes(DERIVATION_ONLY);
 
     if (consumers.length === 0) {
@@ -119,7 +165,7 @@ describe("deriveSystemPosture", () => {
       // Someone wired it up — good, but then the note is now false and has to go with the change.
       expect(
         saysDerivationOnly,
-        `${consumers.join(", ")} now render reasons; drop the "${DERIVATION_ONLY}" note`,
+        `${consumers.join(", ")} now carry posture reasons outward; drop the "${DERIVATION_ONLY}" note`,
       ).toBe(false);
     }
   });
