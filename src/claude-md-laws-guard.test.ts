@@ -208,8 +208,24 @@ describe("CLAUDE.md carries every operative law", () => {
 const MAX_BYTES = 25_000;
 const MIN_BYTES = 12_000;
 
+// Measured as git STORES the file, not as this checkout RENDERS it. 2026-09-02: a worktree checked
+// out with CRLF (core.autocrlf=true, the desktop app's worktree creation) read 25,225 bytes on disk
+// for a blob git holds at 24,966 — one CR per line — and this test went red on a commit that never
+// touched CLAUDE.md, in one checkout and not another. A boot-tax measurement that depends on which
+// machine runs it is not a measurement. Normalizing line endings makes every checkout agree with
+// `git show HEAD:CLAUDE.md | wc -c`, which is the number the ceiling was set against.
+export const canonicalBytes = (s: string): number => Buffer.byteLength(s.replace(/\r\n/g, "\n"), "utf8");
+
 describe("CLAUDE.md stays within its boot-tax budget", () => {
-  const bytes = Buffer.byteLength(text, "utf8");
+  const bytes = canonicalBytes(text);
+
+  it("measures the file as git stores it — a CRLF checkout must not move the number", () => {
+    const lf = text.replace(/\r\n/g, "\n");
+    const crlf = lf.replace(/\n/g, "\r\n");
+    expect(canonicalBytes(crlf)).toBe(canonicalBytes(lf));
+    // The rendering really does differ, so the pin is not vacuous: CR bytes exist to be discounted.
+    expect(Buffer.byteLength(crlf, "utf8")).toBeGreaterThan(Buffer.byteLength(lf, "utf8"));
+  });
 
   it(`is under ${MAX_BYTES} bytes (re-bloat guard)`, () => {
     expect(
