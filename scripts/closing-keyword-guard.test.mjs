@@ -33,9 +33,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // asserts a closing keyword on purpose, so the intent is on the record instead of guessed at.
 const ALLOW_MARKER = "closing-keyword-allow";
 
-// GitHub's own closing-keyword set, adjacent to a reference. Case-insensitive — GitHub does not
-// care about case, so neither does this. Deliberately NOT negation-aware: see the header above.
-const PATTERN = /\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\s+#[0-9]+/gi;
+// GitHub's own closing-keyword set, adjacent to a reference in any of the three shapes GitHub
+// acts on: `#N`, `owner/repo#N`, and the full issue or pull URL. Case-insensitive — GitHub does
+// not care about case, so neither does this. Deliberately NOT negation-aware: see the header above.
+const NAME = "[A-Za-z0-9_.-]+";
+const REFERENCE = `(?:#[0-9]+|${NAME}\\/${NAME}#[0-9]+|https?:\\/\\/github\\.com\\/${NAME}\\/${NAME}\\/(?:issues|pull)\\/[0-9]+)`;
+const PATTERN = new RegExp(`\\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\\s+${REFERENCE}`, "gi");
 
 export function findClosingKeywordMatches(text) {
   const matches = [];
@@ -129,6 +132,21 @@ describe("closing-keyword guard: pattern matching", () => {
     for (const phrase of cases) {
       expect(findClosingKeywordMatches(phrase).length, phrase).toBe(1);
     }
+  });
+
+  it("fires on the two other reference shapes GitHub acts on: owner/repo#N and the full URL", () => {
+    expect(findClosingKeywordMatches("Closes Pootytxng/sentinel#337 by accident")).toEqual([
+      { line: 1, text: "Closes Pootytxng/sentinel#337" },
+    ]);
+    expect(findClosingKeywordMatches("fixes https://github.com/Pootytxng/sentinel/issues/337")).toEqual([
+      { line: 1, text: "fixes https://github.com/Pootytxng/sentinel/issues/337" },
+    ]);
+    expect(findClosingKeywordMatches("Resolved http://github.com/Pootytxng/sentinel/pull/359, in prose")).toEqual([
+      { line: 1, text: "Resolved http://github.com/Pootytxng/sentinel/pull/359" },
+    ]);
+    // A repository or URL with no number is not a reference; a URL with no keyword is a mention.
+    expect(findClosingKeywordMatches("fixes Pootytxng/sentinel and closes https://github.com/Pootytxng/sentinel")).toEqual([]);
+    expect(findClosingKeywordMatches("see https://github.com/Pootytxng/sentinel/issues/337 for the record")).toEqual([]);
   });
 
   it("does not fire on a bare issue mention with no adjacent keyword", () => {
