@@ -73,9 +73,9 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 2 (#258) LANDED** — `cfc0d21a` / PR #263, the consent screen renders the payload itself.
-**Stage 3 is NEXT**: receiver + migration, local/staged ONLY, never deployed — deployment is Stage 7
-and owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+**Q9b Stage 3 (#287) BUILT** — `scripts/lib/case-endpoint/` validator, handler and migration, proved
+local/staged ONLY, never deployed (§11), via PR #289. **Stage 4 is NEXT**: the Tauri send command;
+deployment is Stage 7, owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
