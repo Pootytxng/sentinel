@@ -104,6 +104,12 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-throttle.mjs\"",
             "timeout": 10,
             "statusMessage": "subagent spawn-count check"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/hookspath-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "isolation-worktree refusal (shared hooksPath, #362)"
           }
         ]
       },
@@ -120,6 +126,17 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/hookspath-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "shared hooksPath repair after an agent (#362)"
+          }
+        ]
+      },
       {
         "matcher": "Write|Edit",
         "hooks": [

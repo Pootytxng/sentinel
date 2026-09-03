@@ -530,3 +530,12 @@ verbally 2026-07-08; its one live residual is tracked in `BACKLOG.md`) · **B7**
 **CANCELLED BY OWNER 2026-07-16 — do not resurface**) · **B_arc** (filed as an owner fork on
 2026-08-20 and it should never have been: dead engineering, not a product call; executed the same
 day — see the `.arc-v2` row in `BACKLOG.md`).
+
+## §A count corrections and A0's key backup (moved from the live checklist 2026-09-03)
+
+A0's key backup is CLOSED (2026-08-18) — the signing key is backed up off this machine and verified.
+The live §A count was corrected 2026-08-20 ("exactly ONE" while the distribution call sat above it) and
+again 2026-09-02 ("THREE" while A_prune sat above it) — a checklist that miscounts itself is the same
+defect as one that lists non-asks. Re-derived 2026-09-03: FIVE (A0 residual · A0 distribution call ·
+A_settings · A_prune · A_wmi). Re-listing every archived item in the live file was a second copy that
+only cost boot tax; the archive is the index.

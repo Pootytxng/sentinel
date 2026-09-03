@@ -90,16 +90,16 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 6th 2026-09-02
+### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · re-derived 2026-09-03
 
 **The ask:** one command — `git push origin --delete lane/native-routing-271
 lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. It named FIFTEEN this morning: the
 twelve that were **contained in `main`** went with the #355 sweep (P0-B, commit `f93a890e`), which a
 session may do because deleting a ref `main` already holds cannot lose a commit. These three are
-NOT ancestors, and that is exactly why they are yours: `271` (151 behind) and `274` (149 behind)
+NOT ancestors, and that is exactly why they are yours: `271` (189 behind) and `274` (187 behind)
 landed by squash and would only reintroduce a stale copy of status docs; PR
 [#163](https://github.com/Pootytxng/sentinel/pull/163) closed unmerged, leaving
-`cleanup-train-2026-08-20` **590 commits behind with an OLDER `handoff-block` guard** — merging it
+`cleanup-train-2026-08-20` **628 commits behind with an OLDER `handoff-block` guard** — merging it
 would REGRESS `main`. Nothing is lost either way: the local refs and their worktrees still hold every
 commit, and `scripts/prune-candidates.test.mjs` measures that promise ref by ref.
 **`beta/private-beta-001` is deliberately NOT in it** — the frozen beta ref (`16069fa`) that
@@ -122,21 +122,23 @@ removed the dependency, only you can remove the symptom.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
-backed up off this machine and verified. **§A now holds FIVE things, three of them chores:**
-① A0's small residual — delete the redundant `Desktop\COMPY KEY\` copy (one command, 10 seconds);
-② A0's *"expand to the remaining invitees"* — not a chore but a **distribution call** that is yours
-by definition (who gets a build, and when); ③ **A_settings**, two copy-paste edits in a file only you may
-edit; ④ **A_prune**, one delete command; ⑤ **A_wmi**, one reboot. Corrected 2026-08-20 ("exactly
-ONE" while ② sat above it) and again 2026-09-02 ("THREE" while A_prune sat above it) — a checklist
-that miscounts itself is the same defect as one that lists non-asks.
-Archived 2026-08-20 by a self-checkup, because none of them ever needed you: **A_ci · A_rig ·
-A_ref2 · B1 · B7 · B_arc**. Each one's reason is in the archive under its own heading.
-Archived 2026-08-18 and 2026-08-04, each with its full record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**. The archive is the index; re-listing what each one was here was a second copy that only cost boot tax.
+None of them is waiting on you (A0's key backup closed 2026-08-18; record and the two count
+corrections in the archive). **§A holds FIVE things, three chores:** ① A0's residual — delete the
+redundant `Desktop\COMPY KEY\` copy; ② A0's *"expand to the remaining invitees"* — a **distribution call**,
+yours by definition; ③ **A_settings**, two copy-paste edits in a file only you may edit; ④ **A_prune**,
+one delete; ⑤ **A_wmi**, one reboot.
+Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_ci · A_rig · A_ref2 · B1 · B7 · B_arc · A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**.
 
 ---
 
 ## §B — Waiting on input only you can give
+
+### B8. Your #224 board row carries another lane's data — still yours?  ·  ⏳ NEW 2026-09-03
+
+**The ask:** one word. The Work Control row for [#224](https://github.com/Pootytxng/sentinel/issues/224) is Lane = **Kuya**, so no agent retires
+it — but its fields are #225's (worktree `compy-health-parity`, expiry 2026-08-27), while your newest claim on it
+names `compy-visual-recovery-kit-6fd074`, expiry 2026-09-02. Say **"mine"** and it stays; say **"release"** and the
+P0 lane retires it with the others. **Why it matters:** until then #224 blocks every lane touching its paths, on a claim nobody can tell is live.
 
 ### B2. Widening updater distribution past the canary — go / no-go  ·  ⏳
 
