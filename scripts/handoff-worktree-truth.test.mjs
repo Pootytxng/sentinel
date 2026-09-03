@@ -163,7 +163,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, inject, it } from "vitest";
 
 // The fleet measurement moved to scripts/fleet-snapshot.mjs (#291) so the report a session reads and
 // the rule that judges it are one implementation. It used to live here, which meant the only way to
@@ -177,16 +177,13 @@ import {
   trustedExclusions,
   unmeasuredCarriers,
 } from "./fleet-snapshot.mjs";
+import { ORIGIN_HEADS_KEY, providedLsRemote } from "./lib/vitest-global-setup.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const HANDOFF = join("docs", "SESSION_HANDOFF.md");
 
 const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
-// Reaching origin is the one thing in this file that leaves the machine, so it is the one call that
-// gets a deadline: a remote that hangs must read as unreachable, never as a slow guard.
-const TALK_TO_ORIGIN = { cwd: ROOT, encoding: "utf8", timeout: 10_000 };
-
 const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
 
 /**
@@ -912,7 +909,14 @@ describe("the handoff tells the truth about the worktrees", () => {
   // rule reported is still measured and still printed every run -- by scripts/fleet-snapshot.mjs,
   // which is the same code -- it just no longer bills an unrelated lane for saying so.
   it("C: work only a removable checkout can find must be given a ref", () => {
-    const s = snapshot({ git });
+    // #339: origin is asked ONCE, in the main process before the worker pool exists, by
+    // scripts/lib/vitest-global-setup.mjs; its answer arrives here through vitest's provide/inject.
+    // Asked from inside the pool, this file competed with 400 others for the same cores, and a
+    // `git ls-remote` that lost its slice read as an unreachable origin and redded the whole gate on
+    // a machine that was online throughout. null is the setup's refusal and stays one below;
+    // undefined means the setup did not run (a bare vitest pointed elsewhere), and then the snapshot
+    // measures for itself, exactly as before.
+    const s = snapshot({ git, lsRemote: providedLsRemote(inject(ORIGIN_HEADS_KEY)) });
     if (s.total <= 1) {
       // A one-checkout clone has nothing to compare, exactly as in rule B. Say so; do not pass quietly.
       expect(s.total).toBe(1);

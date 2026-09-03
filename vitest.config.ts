@@ -27,6 +27,12 @@ export default defineConfig({
     // runs and reports as a bare file-level failure with no assertion to read. Seen on
     // scripts/export-library.test.mjs. The default is 10s.
     hookTimeout: 15000,
+    // #339: rule C of scripts/handoff-worktree-truth.test.mjs needs one answer from origin (`git
+    // ls-remote --heads`). Asked from inside the pool it competed with 400 files for the same cores,
+    // lost its slice, and redded the gate as "origin unreachable" on an online machine. globalSetup
+    // runs once in the main process before the pool exists; the answer reaches the worker through
+    // provide/inject, and null (unreachable at setup) still fails closed there.
+    globalSetup: ["./scripts/lib/vitest-global-setup.mjs"],
     // No `retry` here, deliberately. A different small set of files failed on nearly every run for
     // days — encoding-guard, export-library, release-transaction-e2e, ExperimentBench — each one
     // passing when re-run alone, which reads exactly like contention and is not: two test files
