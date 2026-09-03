@@ -182,7 +182,8 @@ export function gatherScopeFacts({ task, items = [], claim = null, scopeText = n
       // A released claim already reads as null; an expired one is read as stale here, so the
       // verdict can name it without treating it as a writer (and still refuse if its paths overlap).
       const live = thread(i.number)?.claim ?? null;
-      const expiry = live ? claimExpiry(live.expires) : null;
+      // Anchored on the posting time, so a bare "12 hours" reads as the writer meant it.
+      const expiry = live ? claimExpiry(live.expires, { anchor: live.postedAt }) : null;
       return {
         number: i.number,
         lane: i.lane ?? null,

@@ -188,8 +188,9 @@ export function reconcile(facts) {
   let claimActual = "no claim";
   let takeoverDraft = null;
   if (claim) {
-    // Read as the claim spelled it — a date ends its day, a timestamp is exact (claim.mjs).
-    const expiry = claimExpiry(claim.expires);
+    // Read as the claim spelled it — a date ends its day, a timestamp is exact, a bare term counts
+    // from the posting time (claim.mjs).
+    const expiry = claimExpiry(claim.expires, { anchor: claim.postedAt });
     const expired = expiry ? expiry < now : false;
     const otherLane = self.lane && claim.lane && claim.lane !== self.lane;
     const otherIssue = task && claim.issue && Number(claim.issue) !== Number(task.number);

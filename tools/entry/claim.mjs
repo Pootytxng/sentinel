@@ -92,15 +92,26 @@ const field = (body, label, aliases = []) => {
 /**
  * A claim's expiry as a Date. Writers spell it "2026-09-03", "2026-09-02T04:55Z (12 hours)",
  * "2026-09-02T12:00:00Z" or "2026-08-03 (12-hour alarm; no automatic takeover)"; a date alone ends at
- * the end of its day (UTC). Unparseable is null — a claim stays live until its expiry is READ as
- * past, never assumed past.
+ * the end of its day (UTC). A bare term — "12 hours", "12h", "2 days" — means that long after the
+ * claim was POSTED, and is readable only with the posting time (`anchor`) in hand: the claim on #313
+ * spelled it that way, and read without an anchor it never expired, so a lane that finished on
+ * 2026-09-01 refused every overlapping writer for good. Unparseable is null — a claim stays live
+ * until its expiry is READ as past, never assumed past.
  */
-export function claimExpiry(text) {
-  const m = /^\s*(\d{4}-\d{2}-\d{2})(T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?)?/.exec(String(text ?? ""));
-  if (!m) return null;
-  const time = m[2] ? (/(?:Z|[+-]\d{2}:?\d{2})$/.test(m[2]) ? m[2] : m[2] + "Z") : "T23:59:59Z";
-  const d = new Date(m[1] + time);
-  return Number.isNaN(d.getTime()) ? null : d;
+export function claimExpiry(text, { anchor = null } = {}) {
+  const s = String(text ?? "");
+  const m = /^\s*(\d{4}-\d{2}-\d{2})(T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?)?/.exec(s);
+  if (m) {
+    const time = m[2] ? (/(?:Z|[+-]\d{2}:?\d{2})$/.test(m[2]) ? m[2] : m[2] + "Z") : "T23:59:59Z";
+    const d = new Date(m[1] + time);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const rel = /^\s*[(~]?\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|d|day|days)\b/i.exec(s);
+  if (!rel || !anchor) return null;
+  const at = new Date(anchor);
+  if (Number.isNaN(at.getTime())) return null;
+  const n = Number(rel[1]);
+  return new Date(at.getTime() + n * (/^d/i.test(rel[2]) ? 86_400_000 : 3_600_000));
 }
 
 /** Parse a claim comment back into facts. Returns null when the comment is not a claim. */
