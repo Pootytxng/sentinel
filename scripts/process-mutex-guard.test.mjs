@@ -124,6 +124,17 @@ const collect = (child) =>
 const runHarness = (action, testCase, extra = []) =>
   collect(startHarness(action, testCase, extra));
 
+// The harness stamps `ATTEMPT` (before it asks for the mutex), `ACQUIRED` and `RELEASED` on stdout,
+// UTC to the millisecond. Epoch ms, or null when a line is absent -- an absent stamp must fail the
+// comparison it feeds, never read as zero.
+const stamps = (stdout) => {
+  const at = (label) => {
+    const m = new RegExp("^" + label + " (\\S+)$", "m").exec(stdout);
+    return m ? Date.parse(m[1]) : null;
+  };
+  return { attempt: at("ATTEMPT"), acquired: at("ACQUIRED"), released: at("RELEASED") };
+};
+
 // Same reason as the timeout above: 10s is not enough for powershell.exe to reach its ready
 // file when 357 test files are competing for the machine.
 const waitFor = async (predicate, timeoutMs = 45_000) => {
@@ -151,22 +162,54 @@ afterEach(async () => {
 describe.runIf(process.platform === "win32")("process-scoped Compy collision guard", () => {
   it("fails closed when a second process reaches a held resource", async () => {
     const testCase = makeCase();
+    // The holder lets go when TOLD, never after a fixed hold. A fixed 1500ms raced the contender's
+    // own powershell.exe start-up, which is unbounded under the full pool: measured 2026-09-03
+    // (#324), the contender arrived after the holder had already released and the assertion read
+    // that start-up delay as the mutex admitting a second process. HoldMs is only the hang stop.
+    const releaseFile = join(testCase.stateRoot, "release-holder.txt");
     const holder = startHarness("hold", testCase, [
       "-ReadyFile",
       testCase.readyFile,
+      "-ReleaseFile",
+      releaseFile,
       "-HoldMs",
-      "1500",
+      "60000",
     ]);
     const holderResult = collect(holder);
     await waitFor(() => existsSync(testCase.readyFile));
 
     const contender = await runHarness("acquire", testCase);
+    writeFileSync(releaseFile, "release", "utf8");
+    const held = await holderResult;
+
     expect(contender.code).not.toBe(0);
     expect(contender.stderr).toContain("MUTEX COLLISION");
     expect(contender.stderr).toContain(testCase.resource);
+    expect(held.code).toBe(0);
 
-    expect((await holderResult).code).toBe(0);
+    // The premise, PROVEN by both processes' own stamps rather than assumed from the sequence: the
+    // contender asked while the holder owned the mutex. Reading (b) of #324 -- an acquisition race
+    // in the mutex itself -- would show here as a collision-free contender inside this window.
+    const window = stamps(held.stdout);
+    const attempt = stamps(contender.stdout).attempt;
+    expect(attempt).not.toBeNull();
+    expect(window.acquired).not.toBeNull();
+    expect(window.released).not.toBeNull();
+    expect(attempt).toBeGreaterThanOrEqual(window.acquired);
+    expect(attempt).toBeLessThanOrEqual(window.released);
+
     expect((await runHarness("acquire", testCase)).code).toBe(0);
+  });
+
+  it("the ownership window is measured, not assumed: a holder already gone shows the contender arriving after it", async () => {
+    // The instrument must be able to read the miss it exists to catch. This is the shape the old
+    // fixed-hold test produced under load -- and it is a PASS for the mutex, not a collision.
+    const testCase = makeCase();
+    const gone = await runHarness("hold", testCase, ["-HoldMs", "0"]);
+    expect(gone.code).toBe(0);
+    const late = await runHarness("acquire", testCase);
+    expect(late.code).toBe(0);
+    expect(stamps(late.stdout).attempt).toBeGreaterThan(stamps(gone.stdout).released);
   });
 
   it("keeps a crashed holder blocked until explicit issue-backed recovery inspection", async () => {
