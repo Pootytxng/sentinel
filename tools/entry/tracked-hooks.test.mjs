@@ -70,6 +70,9 @@ const EXPECTED_HOOKS = [
   "target-ownership.mjs",
   // #356 -- the after-the-fact half: what actually changed on disk, against the claim's scope.
   "scope-drift-check.mjs",
+  // #362 (P0-H case 12) -- refuse the isolation worktree that flips the shared core.hooksPath
+  // absolute, and restore it after any Agent call. Registered twice on purpose (Pre and Post).
+  "hookspath-guard.mjs",
 ];
 
 let scratch = null;

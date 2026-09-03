@@ -51,6 +51,8 @@ import { pruneDeadOverlay, writeOverlay } from "./overlay.mjs";
 const ANSI = /\u001b\[[0-9;]*m/g;
 let narrate = (line) => console.error(line);
 const say = (...a) => narrate(a.map((x) => String(x)).join(" "));
+/** The brief narration names the FILE. `${brief}` printed "[object Object]" (measured 2026-09-03, #362). */
+export const briefWrittenLine = (brief) => `  launch brief written to ${brief?.file ?? brief}`;
 
 /**
  * Whether the log actually received anything, and why not when it did not.
@@ -393,7 +395,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     claimExpires: expires,
     nextAction: task.nextAction ?? null,
   });
-  say(`  launch brief written to ${brief}`);
+  say(briefWrittenLine(brief));
   effects.record("wrote the durable task brief", brief.file);
 
   // 5. token -- what the in-session assert checks the real root against
