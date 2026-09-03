@@ -33,7 +33,7 @@ B's folder, branch, claim, brief and token were all created by the real launcher
 | 7 | new unlanded origin ref does not red unrelated writers | **PASS** | After A's ref appeared on origin (`4e7bd25e`, no disposition record): preflight #363 = PASS (17 checks); `branch-disposition-audit` exit 0 — `1 unrecorded ref(s) measured UNLANDED — reported, not failed`. |
 | 8 | unreachable origin blocks proof transitions | **PASS** | Receipt built at the pushed head `4e7bd25e` (`make-receipt`: HEAD == origin's lane ref). Control run: `decision: PASS`. With `GIT_SSH_COMMAND=false`: `decision: BLOCKED — The receipt is not durably reachable: origin could not be asked what it has.` |
 | 9 | local/fork-only receipt cannot authorize | **PASS** | Empty local commit (`efe19770`, discarded after): the receipt builder refuses — `origin has 4e7bd25e…, HEAD is efe19770…`; a hand-written receipt claiming that head: `decision: BLOCKED — 1 commit(s) up to and including this head exist on no branch origin currently has.` HEAD restored to `4e7bd25e`, nothing pushed. |
-| 10 | merge doesn't strand peers via bookkeeping | **measured at this lane's merge** | Result (preflight #363 + disposition audit, run right after PR merge and ref prune) is posted on #362; it could not be inside a document the same merge lands. |
+| 10 | merge doesn't strand peers via bookkeeping | **PARTIAL, now guarded** | Measured at PR #364's merge. Right after the merge, ref still on origin: disposition audit **FAIL** (landed, no record) while preflight #363 **PASS** — a peer keeps writing, but its push gate reds for as long as the window stays open. After the guarded prune: audit OK, preflight #363 PASS. Finding 5; cure `scripts/land-pr.mjs`. |
 | 11 | branch not pruned while an open PR uses it as base | **PASS** | Against the REAL pair on origin — open PR #311 is based on `lane/case-receiver-287`. That ref's working-tree record flipped to MERGED for one run: `prune-order-guard` FAILS — `origin/lane/case-receiver-287 is recorded MERGED (prunable) while open PR #311 is based on it -- retarget first: gh pr edit 311 --repo Pootytxng/sentinel --base main`. Record restored from HEAD (`git status`: 0 changes) → 5/5 pass. The pilot-branch variant (a PR based on `pilot/p0h-writer-b`) cannot exist until B pushes: GitHub answered `Base sha can't be blank`. |
 | 12 | full gate survives simultaneous lanes without #324/#339 false reds; name the Vite HMR 24678 collision | **PARTIAL** | A's full gate PASSED twice today (the second while #363's claim was live); the run with B's gate in flight at the same time is owed to B's session (case 1). *Finding 3* is the false red that DID fire, and its guard. Vite: `vite.config.ts` pins the dev server to `1420` with `strictPort` and HMR to `1421` (host set); port `24678` (Vite's default HMR port) appears nowhere in the repo, and the gate never opens the dev server, so two gates cannot meet on it. Two `npm run tauri dev` would refuse on `1420` first — the standing one-dev-instance rule, not a gate hazard. |
 
@@ -71,6 +71,16 @@ asserts the live shared config is relative.
 `cli.mjs adopt --issue 362`; the record now names #362 and the drift check reads the #362 thread. Not a
 defect of the tools — a step the re-home procedure has to include.
 
+**Finding 5 — the merge-to-prune window strands every peer's gate.** `gh pr merge 364` at 16:44:53Z left
+`origin/claude/priority-order-parallel-productivity-ae19bb` landed and unrecorded; `branch-disposition-audit`
+went FAIL for the whole repository (*"no record in docs/dispositions/, and merging it into origin/main is
+already a no-op"*) while `preflight --issue 363` stayed PASS. `git push origin --delete` at 16:45:47Z, and the
+audit was OK again. Fifty-four seconds here, because the prune was the very next command; a session that
+turns to anything else first leaves every concurrent push red for that long. Guard: `scripts/land-pr.mjs` —
+receipt gate, retarget check (#337), merge, prune, fetch, audit, in one command; refuses a fork head, a kept
+(PRESERVE/LANDED) ref, and a head an open PR is based on; `scripts/land-pr.test.mjs` pins the order and the
+refusals.
+
 ## What closes the pilot
 
 1. Owner: the one command in Finding 1. B's session runs its brief and pushes through the gate.
@@ -78,4 +88,4 @@ defect of the tools — a step the re-home procedure has to include.
    B's ref pruned in the guarded order (retarget check first — the pilot-branch variant of case 11);
    #363 closed with a pointer here; B's worktree removed from a session that owns it or by the owner
    (the hook refuses it from here: §A of the owner checklist carries the one-line command).
-3. Case 10's numbers on #362 after this lane's merge.
+3. ~~Case 10's numbers on #362 after this lane's merge.~~ Done: the row above, Finding 5, and the #362 comment.
