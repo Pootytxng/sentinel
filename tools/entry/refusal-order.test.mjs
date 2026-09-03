@@ -75,6 +75,7 @@ function world(overrides = {}) {
     subagentModel: { value: "sonnet", source: `${FOLDER}\\.claude\\settings.json` },
     hooks: { ok: true, checked: new Array(7).fill({}), missing: [], stale: [], remediation: null },
     processes: [],
+    scope: { mine: ["tools/entry"], text: "`tools/entry/`", source: "claim", others: [], files: [] },
     ...overrides,
   };
 }

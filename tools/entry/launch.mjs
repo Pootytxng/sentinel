@@ -236,7 +236,7 @@ export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, 
   return { attempted: true, ok: true, verdict: reconcile(repairedFacts), facts: repairedFacts, disclosure: plan.disclosure, regathered: Boolean(fresh) };
 }
 
-export async function launch({ issue = null, dryRun = false, noOverlay = false, controlDir, self = { lane: "Claude Code" } }) {
+export async function launch({ issue = null, dryRun = false, noOverlay = false, controlDir, self = { lane: "Claude Code" }, scope = null }) {
   // Every refusal below carries this, so "nothing was written" is proven rather than assumed.
   const effects = new Effects();
 
@@ -253,7 +253,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   if (picked.auto) say(`  resuming #${task.number} — it is already yours and still claimed, so there was nothing to choose`);
   // STAGE 1 — the preliminary verdict. Read-only: no fetch, no writes, and it already names the
   // exact commit an absent worktree would be created from.
-  const gathered = gatherFacts({ issue: task.number, task, board, self });
+  const gathered = gatherFacts({ issue: task.number, task, board, self, scopeText: scope });
   const { target, base } = gathered;
   let facts = gathered.facts;
   let verdict = reconcile(facts);
@@ -267,7 +267,7 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
       controlDir,
       dryRun,
       // The same call that produced the pre-write facts, run again against the folder as it is now.
-      regather: () => gatherFacts({ issue: task.number, task, board, self }),
+      regather: () => gatherFacts({ issue: task.number, task, board, self, scopeText: scope }),
     });
     if (repair.attempted) {
       if (repair.ok) {
@@ -359,7 +359,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
         repository: REPO,
         folder: target.path,
         branch: target.branch,
-        scope: task.title,
+        // The scope the drift readers and the next dispatch will be measured against (#358) —
+        // never the title, which names no path and so claims nothing.
+        scope: facts.scope?.text ?? "not declared at launch — narrow it before the first write (#358)",
         started: facts.now.toISOString().slice(0, 10),
         expires,
         nextAction: task.nextAction ?? "(set by the session)",
@@ -469,6 +471,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       issue: arg("--issue") ? Number(arg("--issue")) : null,
       dryRun: argv.includes("--dry-run"),
       noOverlay: argv.includes("--no-overlay"),
+      scope: arg("--scope"),
       controlDir: arg("--control") ?? process.cwd(),
     });
     console.log(JSON.stringify(result));

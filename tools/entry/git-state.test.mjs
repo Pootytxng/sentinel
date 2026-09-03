@@ -140,6 +140,18 @@ describe("guard 5 — every dirty class is detected on its own", () => {
     expect(s.clean).toBe(false);
   });
 
+  it("a stash made on another branch is another checkout's, not this folder's — the stack is shared", () => {
+    // Every worktree of a repository sees the whole stash stack. The entry above was made on main,
+    // so a checkout of a different branch is clean — and still told the entry exists.
+    const wt = join(root, "stashed-other-branch");
+    git(repos.stashed, "worktree", "add", "--quiet", "-b", "other", wt);
+    const s = inspectGitState(wt);
+    expect(s.stashed).toBe(0);
+    expect(s.stashedElsewhere).toBe(1);
+    expect(s.clean).toBe(true);
+    expect(describeGitState(s)).toBe("clean on other (1 stashed on other branches)");
+  });
+
   it("a stash — invisible to `git status`, and the reason `clean` is not enough", () => {
     const s = inspectGitState(repos.stashed);
     expect(s.stashed).toBe(1);

@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  claimExpiry,
   parseClaim,
   parseHandoff,
   planPostClaim,
@@ -111,6 +112,46 @@ describe("round-tripping a claim off the issue", () => {
 
   it("returns null for a comment that is not a claim", () => {
     expect(parseClaim("just a normal comment")).toBeNull();
+  });
+
+  it("reads the bold-bullet and two-column-table forms other writers post by hand", () => {
+    // #224's claim (2026-09-01) was a table. It parsed as a claim with no fields — and under #358 a
+    // live writer with no readable scope is a refusal the other side cannot cure.
+    const table = [
+      "### Ownership claim — exclusive write owner, issue #224",
+      "",
+      "| field | value |",
+      "|---|---|",
+      "| **writer** | Claude Code session `sentinel-63` |",
+      "| **worktree** | `C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\compy-visual-recovery-kit-6fd074` |",
+      "| **branch** | `claude/compy-visual-recovery-kit-6fd074` |",
+      "| **head at claim** | `cdd976f3` |",
+      "| **expiry** | 2026-09-02T12:00:00Z |",
+    ].join("\n");
+    expect(parseClaim(table)).toMatchObject({
+      executor: "Claude Code session `sentinel-63`",
+      folder: "C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\compy-visual-recovery-kit-6fd074",
+      branch: "claude/compy-visual-recovery-kit-6fd074",
+      expires: "2026-09-02T12:00:00Z",
+      scope: null,
+      lane: null,
+    });
+    const bold = "### Ownership claim\n- **Lane:** Codex\n- **Write scope**: `scripts/x.mjs`, `docs/`\n- **Claim expires:** 2026-09-03\n";
+    expect(parseClaim(bold)).toMatchObject({ lane: "Codex", scope: "`scripts/x.mjs`, `docs/`", expires: "2026-09-03" });
+  });
+});
+
+describe("claimExpiry — the expiry as writers actually spell it", () => {
+  it("reads a date, a timestamp, and either with prose after it", () => {
+    expect(claimExpiry("2026-09-03").toISOString()).toBe("2026-09-03T23:59:59.000Z");
+    expect(claimExpiry("2026-09-02T04:55Z (12 hours)").toISOString()).toBe("2026-09-02T04:55:00.000Z");
+    expect(claimExpiry("2026-09-02T12:00:00Z").toISOString()).toBe("2026-09-02T12:00:00.000Z");
+    expect(claimExpiry("2026-08-03 (12-hour alarm; no automatic takeover)").toISOString()).toBe("2026-08-03T23:59:59.000Z");
+  });
+
+  it("is null, never a guess, for anything else — a claim stays live until its expiry is read as past", () => {
+    expect(claimExpiry(null)).toBeNull();
+    expect(claimExpiry("next Tuesday")).toBeNull();
   });
 });
 

@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { discoverCheckouts } from "./checkouts.mjs";
 import { inspectGitState } from "./git-state.mjs";
 import { verifyHooks } from "./hooks-verify.mjs";
-import { parseClaim, parseHandoff } from "./claim.mjs";
+import { claimExpiry, parseClaim, parseHandoff } from "./claim.mjs";
 import { inspectProcesses } from "./processes.mjs";
 import {
   intendedWindow,
@@ -22,6 +22,7 @@ import {
 } from "./settings-resolve.mjs";
 import { envWindowOf, planTier, readLocalLayer, readProjectWindow, readTierRecord } from "./tier.mjs";
 import { parseWorktreeField } from "./worktree-field.mjs";
+import { scopeFromText, scopeTextFromBody } from "./scope-overlap.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
 export const PROJECT = { number: 1, owner: "Pootytxng" };
@@ -126,6 +127,64 @@ export function readIssueThread(issue) {
   }
 }
 
+/** The issue body — where a task's Write scope lives before its first claim. Null when unreadable. */
+export function readIssueBody(issue) {
+  try {
+    return JSON.parse(gh(["issue", "view", String(issue), "--repo", REPO, "--json", "body"])).body ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The facts `scope.overlap` decides over (#358): this task's declared paths (from --scope, else its
+ * own live claim, else the issue body's "Write scope" bullet), every OTHER Active item's declared
+ * paths from its live claim, and the tracked paths of the base commit — the set a glob can claim.
+ * The readers are injected so the guards can drive this without GitHub or git.
+ */
+export function gatherScopeFacts({ task, items = [], claim = null, scopeText = null, base = null, now = new Date(), hostDir = HOST_DIR, git = gitIn, thread = readIssueThread, body = readIssueBody }) {
+  let text = null;
+  let source = null;
+  if (scopeText) {
+    text = scopeText;
+    source = "cli";
+  } else if (claim?.scope) {
+    text = claim.scope;
+    source = "claim";
+  } else if (task?.number) {
+    const fromBody = scopeTextFromBody(body(task.number));
+    if (fromBody) {
+      text = fromBody;
+      source = "issue";
+    }
+  }
+  const mine = text ? scopeFromText(text) : [];
+  const others = (items ?? [])
+    .filter((i) => i.status === "Active" && Number(i.number) !== Number(task?.number))
+    .map((i) => {
+      // A released claim already reads as null; an expired one is read as stale here, so the
+      // verdict can name it without treating it as a writer (and still refuse if its paths overlap).
+      const live = thread(i.number)?.claim ?? null;
+      const expiry = live ? claimExpiry(live.expires) : null;
+      return {
+        number: i.number,
+        lane: i.lane ?? null,
+        scope: live ? scopeFromText(live.scope) : null,
+        live: Boolean(live),
+        expired: Boolean(expiry && expiry < now),
+        expires: expiry ? expiry.toISOString().slice(0, 10) : (live?.expires ?? null),
+      };
+    });
+  let files = null;
+  try {
+    const ref = base?.ok && base.sha ? base.sha : CREATE_BASE_REF;
+    files = git(hostDir, ["ls-tree", "-r", "--name-only", ref]).split("\n").map((l) => l.trim()).filter(Boolean);
+  } catch {
+    files = null;
+  }
+  return { mine, text, source, others, files };
+}
+
 /** The field ids claim.mjs needs to write. Read once, passed in, never guessed. */
 export function readProjectIds(itemId) {
   const projectId = JSON.parse(gh(["project", "view", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json"])).id;
@@ -211,7 +270,7 @@ export function refetchSnapshotFacts({ facts, base, hostDir = HOST_DIR, env = pr
  * Everything `reconcile()` needs, measured.
  * @returns {{facts: object, target: {path, branch}|null, board: object}}
  */
-export function gatherFacts({ issue, task, self = { lane: "Claude Code" }, now = new Date(), board = null, policy = null, base = null }) {
+export function gatherFacts({ issue, task, self = { lane: "Claude Code" }, now = new Date(), board = null, policy = null, base = null, scopeText = null }) {
   const theBoard = board ?? readBoard();
   const theTask = task ?? theBoard.items.find((i) => Number(i.number) === Number(issue)) ?? null;
 
@@ -251,6 +310,7 @@ export function gatherFacts({ issue, task, self = { lane: "Claude Code" }, now =
       task: theTask,
       claim: thread.claim,
       handoff: thread.handoff,
+      scope: gatherScopeFacts({ task: theTask, items: theBoard.items, claim: thread.claim, scopeText, base: createBase, now }),
       checkouts,
       gitState,
       expectedCommonDir: EXPECTED_COMMON_DIR,
