@@ -217,6 +217,18 @@ if ($modes.ContainsKey($Scenario)) {
   } catch {
     Write-Output ("THREW=" + $_.Exception.Message)
   }
+} elseif ($Scenario -eq "timeout-kill-fallback") {
+  # The taskkill path, forced. On a host whose WMI is down taskkill itself hangs (~60s, measured
+  # 2026-09-02) and, started with inherited handles, holds the caller's pipes for as long as it
+  # lives. The library must kill its own killer so this harness reaches EOF inside the drain budget.
+  $env:COMPY_NATIVE_TREE_KILL_FALLBACK = "1"
+  try {
+    $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList @($FakeGh, "hang") -TimeoutMs 2000
+  } finally {
+    Remove-Item Env:COMPY_NATIVE_TREE_KILL_FALLBACK -ErrorAction SilentlyContinue
+  }
+  Write-Output ("TIMEDOUT=" + $result.TimedOut)
+  Write-Output ("TERMINATION_ATTEMPTED=" + $result.TerminationAttempted)
 } elseif ($Scenario -eq "timeout-tree-kill") {
   $pidFile = Join-Path ([IO.Path]::GetTempPath()) ("compy-treekill-" + [Guid]::NewGuid().ToString("N") + ".txt")
   $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList @($FakeGh, "tree-hang", $pidFile) -TimeoutMs 2000
@@ -245,19 +257,20 @@ if ($modes.ContainsKey($Scenario)) {
     $fate = "ALIVE"
     $probe = [Diagnostics.Stopwatch]::StartNew()
     while ($probe.ElapsedMilliseconds -lt 20000) {
-      $live = $null
+      $rows = $null
       $queryOk = $true
-      try { $live = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $childPid) -ErrorAction Stop } catch { $queryOk = $false }
+      # WMI-free on purpose (2026-09-02): the CIM Win32_Process query hung for minutes on the dev
+      # machine and this poll never returned, so the gate went red on a kill that had happened. The
+      # snapshot is the kernel's own process table. Identity is the child's PARENT pid: toolhelp
+      # keeps the creator's pid after the creator dies, and a recycled pid is a process some OTHER
+      # creator made -- which is exactly the reuse this poll must not mistake for our child.
+      try { $rows = @(Get-NativeProcessSnapshot) } catch { $queryOk = $false }
       if ($queryOk) {
+        $live = $rows | Where-Object { $_.ProcessId -eq $childPid } | Select-Object -First 1
         if ($null -eq $live) { $fate = "DEAD"; break }
-        $cmd = [string]$live.CommandLine
-        # An EMPTY CommandLine is not evidence of reuse -- a live child whose command line a WMI
-        # hiccup failed to read would misread as PID_REUSED and pass falsely. Keep polling instead.
-        if (-not [string]::IsNullOrWhiteSpace($cmd)) {
-          if (($cmd -notlike ("*" + $FakeGh + "*")) -or ($cmd -notlike "*child-hang*")) { $fate = "PID_REUSED"; break }
-        }
+        if (($live.ParentProcessId -ne $result.ProcessId) -or ($live.ExeName -notlike "node*")) { $fate = "PID_REUSED"; break }
       }
-      # A CIM query failure does NOT read as death: fail closed toward ALIVE, never toward a pass.
+      # A snapshot failure does NOT read as death: fail closed toward ALIVE, never toward a pass.
       Start-Sleep -Milliseconds 250
     }
     if ($fate -eq "ALIVE") {
@@ -503,6 +516,7 @@ afterAll(() => {
 });
 
 const run = (scenario) => {
+  const t0 = Date.now();
   const result = spawnSync(
     "powershell.exe",
     [
@@ -524,7 +538,10 @@ const run = (scenario) => {
   expect(out, `harness did not survive scenario ${scenario}:\n${out}`).toContain("SURVIVED");
   expect(result.status, `harness exit for ${scenario}:\n${out}`).toBe(0);
   const field = (name) => (out.match(new RegExp(`^${name}=(.*)$`, "m")) ?? [])[1]?.trim() ?? "";
-  return { out, field, elapsed: Number(field("ELAPSED_MS")) };
+  // `elapsed` is the harness's own clock; `wall` is this spawnSync's. They differ by exactly the
+  // time a process the library started (or failed to kill) kept a duplicate of our pipe open after
+  // the harness had finished -- a 7s kill once read as a 64s hang here (2026-09-02).
+  return { out, field, elapsed: Number(field("ELAPSED_MS")), wall: Date.now() - t0 };
 };
 
 describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.9 publishes)", () => {
@@ -595,11 +612,13 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
   }, 60000);
 
   it("kills a hung child at the timeout and never calls it an absent tag", () => {
-    const { field, elapsed } = run("timeout-kill");
+    const { field, elapsed, wall } = run("timeout-kill");
     expect(field("TIMEDOUT")).toBe("True");
     expect(field("THREW")).toContain("timed out");
     expect(field("THREW")).toContain("not treated as an absent tag");
     expect(elapsed).toBeLessThan(30000);
+    // The harness finishing is not the caller being free: the pipe must close too (2026-09-02).
+    expect(wall).toBeLessThan(30000);
   }, 60000);
 
   // deflake (issue #254): this test failed the full-parallel pre-push gate twice on 2026-08-29 by
@@ -622,6 +641,19 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
     // DEAD and PID_REUSED both prove the descendant no longer exists; ALIVE is the regression.
     expect(["DEAD", "PID_REUSED"]).toContain(field("TREE_CHILD_FATE"));
   }, 120000);
+
+  // bug->guard (2026-09-02): taskkill answers through WMI and hung ~60s on the dev machine, and the
+  // abandoned killer held inherited duplicates of THIS pipe, so spawnSync could not see EOF until
+  // it died -- a 7s kill read as a 64s hang and failed the gate on a test the library had passed.
+  // The tree kill no longer uses taskkill at all (toolhelp snapshot + Process.Kill); this forces the
+  // fallback that still does and proves the killer cannot outlive its wait: whatever taskkill does,
+  // the harness reaches EOF inside the drain budget.
+  it("kills its own killer when the taskkill fallback outlives the timeout", () => {
+    const { field, wall } = run("timeout-kill-fallback");
+    expect(field("TIMEDOUT")).toBe("True");
+    expect(field("TERMINATION_ATTEMPTED")).toBe("True");
+    expect(wall).toBeLessThan(30000);
+  }, 60000);
 
   it("fails closed on an unexpected nonzero exit, carrying the child's stderr", () => {
     const { field } = run("checked-fails-closed");
@@ -896,12 +928,15 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
 // platform: it asserts on the HARNESS source, not on live processes.
 describe("tree-kill death probe stays deterministic (issue #254)", () => {
   it("keeps the identity-checked, bounded, fail-closed poll in the harness", () => {
-    // Identity: a pid only counts as our child while Win32_Process still shows OUR command line.
-    expect(HARNESS).toContain("Get-CimInstance Win32_Process");
-    expect(HARNESS).toMatch(/notlike[^\n]*child-hang/);
+    // Identity (WMI-free since 2026-09-02): a pid only counts as our child while the kernel's process
+    // table still shows a node.exe whose creator was the timed-out parent. Win32_Process was the
+    // previous witness; it hung for minutes on the dev machine and the poll never returned.
+    expect(HARNESS).toContain("Get-NativeProcessSnapshot");
+    expect(HARNESS).not.toContain("Get-CimInstance");
+    expect(HARNESS).toContain("$live.ParentProcessId -ne $result.ProcessId");
     expect(HARNESS).toContain('$fate = "PID_REUSED"');
-    // ...and an unreadable command line proves nothing: only a READ line may classify as reuse.
-    expect(HARNESS).toContain("IsNullOrWhiteSpace($cmd)");
+    // ...and a snapshot that could not be taken proves nothing: only a READ table may classify.
+    expect(HARNESS).toContain("$queryOk = $false");
     // Setup that never produced a descendant is inconclusive, not a verdict either way.
     expect(HARNESS).toContain("TREE_CHILD_FATE=SPAWN_INCONCLUSIVE");
     // A failed run must not leak the immortal child-hang node -- and the cleanup must not route
