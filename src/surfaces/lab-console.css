@@ -25,7 +25,7 @@
    arc gauges pinned to the corners. Its own glass frame is GONE (bento conversion 2026-08-12): the
    hero <BentoTile> draws the panel now, and keeping both drew a box inside a box. What stays is
    everything structural: `position: relative` is the containing block for the corner gauges, the
-   brackets and the ReticleCursor scope, and `border-radius` is what the cursor-follow glow ring
+   rig and the ReticleCursor scope, and `border-radius` is what the cursor-follow glow ring
    (`::after`, `border-radius: inherit`) traces. Padding drops to 0 — the tile's --v2-pad owns it. */
 :root[data-v2="on"] .lc-stage {
   position: relative;
@@ -38,43 +38,28 @@
 :root[data-v2="on"] .lc-rig {
   width: 100%;
   height: 100%;
-  min-height: 320px;
-  display: grid;
-  place-items: center;
+  min-height: 0;
+  display: block;
 }
-
-/* Corner brackets — a HUD framing device, drawn as two 1px edges per corner (no image asset). */
-:root[data-v2="on"] .lc-brk {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border-color: var(--ix-accent);
-  opacity: 0.55;
-  pointer-events: none;
+/* THE RIG FILLS ITS STAGE (2026-08-26, measured). `place-items: center` used to shrink-wrap the
+   viewer, so `.rig-canvas` took its auto width -- ~300 px at 1280, at 1500 AND at 1920. The rig was
+   size-INVARIANT: the bigger the owner's window, the smaller the hologram looked (15.6% of width at
+   1920 against the comp's 30.5%). Stretching the viewer is also what lets camera-fit work: below
+   FIT_REF_ASPECT (1.2) the camera pulls BACK, and a 300x450 box is aspect 0.67, so the collapse was
+   costing the rig scale twice over. The stage is now ruled to aspect-ratio 1.2 (below). */
+:root[data-v2="on"] .lc-rig .rig-viewer {
+  width: 100%;
+  height: 100%;
+  gap: 0;
 }
-:root[data-v2="on"] .lc-brk-tl {
-  top: 10px;
-  left: 10px;
-  border-top: 2px solid;
-  border-left: 2px solid;
-}
-:root[data-v2="on"] .lc-brk-tr {
-  top: 10px;
-  right: 10px;
-  border-top: 2px solid;
-  border-right: 2px solid;
-}
-:root[data-v2="on"] .lc-brk-bl {
-  bottom: 10px;
-  left: 10px;
-  border-bottom: 2px solid;
-  border-left: 2px solid;
-}
-:root[data-v2="on"] .lc-brk-br {
-  bottom: 10px;
-  right: 10px;
-  border-bottom: 2px solid;
-  border-right: 2px solid;
+/* The canvas is the stage -- no second frame. Its own border/plinth drew the nested grey box the
+   owner rejected; the bench panel is the only surface here. */
+:root[data-v2="on"] .lc-rig .rig-canvas {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 :root[data-v2="on"] .lc-corner {
@@ -282,9 +267,12 @@
 /* The button is the shared green primary (`.v2-primary` carries fill, border and focus ring --
    the owner overruled the violet it used to wear). Only its box is local: the comp measures it at
    262 x 44 app px, i.e. shrink-to-fit, never a column-wide bar. */
+/* The comp's button is 264 x 45 app px around a 148 px label -- 58 px of air each side. At 26 the
+   button measured 211 and read as a small control under a hero headline instead of the room's one
+   dominant action. */
 :root[data-v2="on"] .lc-start {
   min-height: 44px;
-  padding: 0 26px;
+  padding: 0 52px;
 }
 :root[data-v2="on"] .lc-action-note {
   margin: 12px 0 0;
@@ -305,7 +293,8 @@
   align-items: center;
   column-gap: 10px;
   width: 100%;
-  padding: 14px 2px;
+  /* Same 63 app px row the six stations keep -- the comp rules all seven to one rhythm. */
+  padding: 18px 2px;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--v2-line);
@@ -346,23 +335,48 @@
 }
 
 /* ---- the bench panel ------------------------------------------------------------------------ */
+/* One surface. 04-test-approved.png draws the bench as a single graphite panel whose stage runs
+   edge to edge and whose reading strip is divided from it by one full-bleed hairline -- no padding
+   ring, no inner box. Padding belongs to the strip, which is the only part of the panel that holds
+   text. */
 :root[data-v2="on"] .lc-bench {
   display: flex;
   flex-direction: column;
-  gap: var(--v2-gap);
-  padding: var(--v2-pad);
+  gap: 0;
+  padding: 0;
   background: var(--v2-panel);
   border: 1px solid var(--v2-line);
   border-radius: var(--v2-r);
+  overflow: hidden;
 }
 /* The hologram gets the room's largest surface -- the comp gives it 560 of the panel's 777 app px,
    and the handoff forbids covering that canvas with click targets or diagrams, which is why the
    four gauges left its corners. */
+/* RULED BY ASPECT, NEVER BY PIXELS. The comp gives the stage 675 x 560 app px -- aspect 1.205,
+   which is FIT_REF_ASPECT to within a pixel, so the camera sits at its base distance and the rig
+   frames the same way at every window size. A fixed height cannot hold that ratio at more than one
+   viewport, and a fixed height is exactly what produced the 299 px rig. */
 :root[data-v2="on"] .lc-bench .lc-stage {
-  min-height: 520px;
+  min-height: 0;
+  aspect-ratio: 1.2;
+  border-radius: 0;
+  overflow: hidden;
+  display: block;
 }
-/* THE BENCH READING SET — four cells, one row, under a rule. Proven · Noise floor · Safe stack ·
-   Instruments read: what this bench can VOUCH for. (The comp prints Readiness / Avg FPS / 1% Low
+/* OUT OF FLOW, DELIBERATELY. react-three-fiber sizes its canvas from the container and then writes
+   that size back as an inline style; while the rig was an in-flow grid item, the canvas's own stale
+   inline width became the grid track's max-content width, so the stage never shrank when the window
+   did -- at 1280 the rig still measured its 1500-px width and spilled under the panel's clip. Taking
+   the rig out of flow breaks the loop: the stage's size comes from its width and its aspect alone,
+   and the canvas can only ever follow it. */
+:root[data-v2="on"] .lc-bench .lc-rig {
+  position: absolute;
+  inset: 0;
+}
+/* THE BENCH READING SET — four cells, one row, under a rule. Proven · Noise floor ·
+   Instruments read · Safe stack: what this bench can VOUCH for. That order is the comp's own
+   (arc, numeral, numeral, arc) and it is not decorative — the two arcs bookend the strip, so the
+   eye reads one instrument rather than four tiles. (The comp prints Readiness / Avg FPS / 1% Low
    here; the handoff names those as the older duplicated Health metrics from an early draft and
    they are deliberately not adopted -- they are Health's verdict and they stay there.) */
 :root[data-v2="on"] .lc-readings {
@@ -371,7 +385,12 @@
   /* No gap: the cells are RULED apart instead (below), and a gap would push every rule
      half a gutter off its own centre line. */
   gap: 0;
-  padding-top: var(--v2-gap);
+  /* Measured off the comp at app scale (2026-08-27): hairline at y683, label top y750, tick box
+     y766..838, stamp y862..881, strip foot y925 — so 43 px of air above the label and 44 below the
+     stamp, and the strip lands 242 px tall. The rejected build used 30/12 and packed five rows into
+     it, which is the "denser and taller" half of the strip finding. The padding is the strip's, not
+     the panel's, because the hairline above it is full-bleed. */
+  padding: 42px 15px 42px;
   border-top: 1px solid var(--v2-line);
 }
 :root[data-v2="on"] .lc-reading {
@@ -379,18 +398,224 @@
   justify-items: center;
   text-align: center;
   min-width: 0;
-  padding: 0 var(--v2-gap);
+  padding: 0 6px;
 }
-/* 04-test-approved.png rules the readings apart with a DOTTED hairline rather than spacing them.
-   It is the difference between four numbers and one instrument with four faces -- the same reason
-   the bench has an edge at all. First cell has nothing to its left to divide it from. */
+/* The comp rules the readings apart with a hairline rather than spacing them: it is the difference
+   between four numbers and one instrument with four faces, the same reason the bench has an edge at
+   all. DOTTED, and INSET -- measured off the comp, the rule is a bright pixel every third row and it
+   runs y745..875 of a strip that spans 704..928, so it starts 9 px under the cell's top edge and
+   stops 40 px above its bottom, clear of the label above and the note below. A plain `border-left`
+   cannot be shortened, so the rule is a pseudo-element. First cell has nothing to its left.
+   Re-measured against the comp's own strip geometry (2026-08-27): the rule runs app y721..847 while
+   the cell box runs 725..883, so it starts 4 px ABOVE the cell's top edge and stops 36 px above its
+   foot — clear of the stamp row, level with the label. */
 :root[data-v2="on"] .lc-reading + .lc-reading {
+  position: relative;
+}
+:root[data-v2="on"] .lc-reading + .lc-reading::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -4px;
+  bottom: 36px;
   border-left: 1px dotted var(--v2-line);
 }
+
+/* THE READING, STACKED (2026-08-26). The kit's ArcGauge is a two-column instrument -- ring on the
+   left, label/tag/note on the right -- which is right for Health's wide cells and wrong for this
+   strip: in a 155 px cell the label broke over three lines, the MEASURED pill ran 19 px past the
+   content box (the horizontal scrollbar at 1280x720) and the four cells stopped looking like one
+   instrument. The comp stacks them: LABEL, then the ring, then the stamp, then the note, centred.
+   `display: contents` on the label group lets the four members take their own rows without
+   re-implementing the gauge, so every honest state (NOT YET, NO READING, the note) survives. */
+:root[data-v2="on"] .lc-readings .arc-gauge {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* FIXED ROWS, so the four cells align across the strip. Each gauge carries the same template, so
+     the labels share a baseline, the rings share a centre line and the MEASURED stamps share a row
+     even though one label runs to two lines and one reading has no side unit at all. Auto rows
+     would let every cell set its own rhythm, which is what made the strip read as four unrelated
+     numbers instead of one instrument.
+
+     FOUR rows, not five (2026-08-27). The fifth existed so a permanent gloss line could sit under
+     the stamp; the comp has no such line and the stamp and the note are the SAME row, because a
+     cell states a fact or states its provenance and never both. LabConsole enforces that
+     exclusivity at the call site (`measured` off exactly when a note is present) and the rhythm
+     guards in lab-console.test.tsx pin it, so the shared row can never be two things at once.
+
+     THE NUMBERS ARE THE COMP'S OWN (re-measured off assets/approved/test.png 2026-08-27, ink runs
+     per cell, comp px / 1.0333 = app px). Strip hairline app 683, panel foot app 899 -- 216 tall:
+       42  air              (comp 706 -> 725)
+       32  label row        label box 725..742, ring starts 757
+       64  ring             757..821   (comp ink 782..847)
+        9  gap / side unit  821..830
+       26  stamp row (auto) 830..856   (comp ink 860..884)
+       42  air              856..899
+     The previous template said 33/76/20/auto and never applied AT ALL: the comment above it had
+     been closed early by a stray comment terminator mid-paragraph, so the declaration right after
+     it was swallowed by CSS error recovery and every cell was laid out on auto rows. That is why
+     the rings measured 76 against the comp's 64 -- "four visually heavy rings" was a broken
+     comment, not a design choice. Never write a comment terminator inside CSS prose, backticks or
+     not; lab-console-strip-rhythm-guard.test.ts now reads this template back out of the file. */
+  /* minmax on the two text rows, not bare px: `justify-items: center` sizes a grid item to its
+     max-content, so at 1280 the label INSTRUMENTS READ measured 103px inside a 92px cell and the
+     empty-state side unit NO READING needs more than the 9px gap. Both rows hold their comp height
+     whenever the content fits -- which is every cell at 1500 -- and grow instead of clipping when
+     it does not. Clipping text is a correctness failure, never a layout choice. */
+  grid-template-rows: minmax(32px, auto) 64px minmax(9px, auto) auto;
+  justify-items: center;
+  text-align: center;
+  gap: 0;
+  width: 100%;
+}
+/* 64px — the comp's own ring, measured as an ink run at x800..960 (comp y782..847). */
+:root[data-v2="on"] .lc-readings .arc-gauge > svg {
+  grid-area: 2 / 1;
+  width: 64px;
+  height: 64px;
+  align-self: center;
+}
+:root[data-v2="on"] .lc-readings .ag-ctr {
+  grid-area: 2 / 1;
+  width: 64px;
+  place-self: center;
+}
+/* A bare numeral is not bounded by a ring, so it is not bounded by the ring's width either. */
+:root[data-v2="on"] .lc-readings .ag-as-numeral .ag-ctr {
+  width: auto;
+  max-width: 100%;
+}
+/* TWO VOICES, NOT ONE — and that is the comp's, not a preference. Measured ink runs at app scale:
+   the BARE numeral (Noise floor, Instruments read) draws a 26 px cap, which is the verdict step at
+   40px; the number INSIDE a ring draws small enough to live in a 64px ring, which is the section
+   step at 26px. Setting both to 40 is what made the rings look overloaded and the numerals look
+   unremarkable — the strip lost the two-ring / two-large-numeral rhythm the review asked for. */
+:root[data-v2="on"] .lc-readings .ag-as-numeral .ag-v {
+  font-size: var(--type-verdict);
+  font-weight: 700;
+}
+:root[data-v2="on"] .lc-readings .ag-as-ring .ag-v {
+  font-size: var(--type-section);
+  font-weight: 700;
+}
+:root[data-v2="on"] .lc-readings .ag-label {
+  display: contents;
+}
+:root[data-v2="on"] .lc-readings .ag-label > :first-child {
+  grid-area: 1 / 1;
+  /* start, not centre: the label sits at the TOP of its 32px row in the comp (ink at app 725, 42px
+     under the hairline) and the row's remaining air belongs between the label and the ring. */
+  align-self: start;
+  /* the row is centred, so an unconstrained item takes its max-content width and hangs out of the
+     cell -- this is the floor that makes it wrap instead. */
+  max-width: 100%;
+  line-height: 1.3;
+}
+:root[data-v2="on"] .lc-readings .ag-u-side {
+  grid-area: 3 / 1;
+}
+/* ONE supporting line, one row. Stamp, grade and note all land here and only ever one of them is
+   present per cell — see the grid-template comment above. */
+:root[data-v2="on"] .lc-readings .ag-tag,
+:root[data-v2="on"] .lc-readings .ag-grade,
+:root[data-v2="on"] .lc-readings .ag-note {
+  grid-area: 4 / 1;
+  align-self: start;
+  justify-self: center;
+  text-align: center;
+  max-width: 100%;
+}
 /* The rig's answer sits under the readings, still one click from the hologram that fills it. */
+/* The rig's answer keeps its place under the strip, but it is no longer a fourth ruled band: it
+   sits IN the strip's bottom padding as the panel's quiet foot, so the bench reads as the comp's
+   two parts -- stage, then readings -- and the aria-live readout still lands where a click on the
+   hologram sends the reader's eye. */
 :root[data-v2="on"] .lc-bench .lc-evidence {
-  padding-top: var(--v2-gap);
-  border-top: 1px solid var(--v2-line);
+  padding: 0 15px 16px;
+}
+/* NOTHING SELECTED, NOTHING SAID (Codex REJECT of 9bef1cc2, "extra status and explanatory lines
+   make the strip denser and taller"). The bench used to print a standing sentence here inviting the
+   reader to pick a part — a bento-era line (791e6ae1) that the approved comp does not have and that
+   cost the first viewport a whole row at 1280x720. The region stays in the DOM because it is the
+   aria-live target the hologram writes its answer into; it just has no height until there is an
+   answer. */
+:root[data-v2="on"] .lc-bench .lc-evidence:empty {
+  padding: 0;
+}
+
+/* ── THE BENCH KEEPS ITS SHARE ON A WIDE DISPLAY — TEST ONLY ─────────────────────────────────
+   bug→guard for the Codex REJECT of candidate 9bef1cc2, finding "the rig is still smaller and
+   less dominant than the approved reference".
+
+   --v2-aside is `min(680px, 56.5%)` (tokens-v2.css). The 680 cap never bound while every room was
+   pinned to a 1160px content box — 56.5% of 1160 is 655. Now that the lane scales (shell-v2.css,
+   `.v2-content-wrap`), 1920 gives the room a 1544px box where 56.5% is 872, the cap bites, and the
+   proportion INVERTS: the narrative column measured 816 against the bench's 680, so the story was
+   the larger surface and the rig read as the sidebar. Every approved comp has it the other way.
+
+   Raising the cap for Test alone, not for the token: Health, Live and History are not what was
+   rejected, and their proportions at 1920 stay exactly as they ship today. 880 is 56.5% of 1557,
+   so the percentage governs at 1920 and the cap still exists for a display wide enough to need it.
+   58.2% is the comp's own, re-measured 2026-08-27: the bench panel runs x791..1488 comp px, which
+   is 675.5 app px of a 1161 app px content box. The 56.5% token draws it 27 px narrow at 1500 --
+   part of "bench width, split balance and gutter still do not match". 880 keeps the panel inside a
+   1080-tall viewport at 1920 (stage 733 + strip 216 + 110 top = 1059). */
+:root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] {
+  --v2-aside: min(880px, 58.2%);
+}
+
+/* ══ SHORT-VIEWPORT COMPACTION — TEST ONLY ═══════════════════════════════════════════════════
+   bug→guard for the Codex REJECT of candidate 9bef1cc2 (2026-08-27), finding "1280x720 — major
+   acceptance failure": only ~2 of 6 station rows were exposed and the bench readings were clipped.
+
+   The arithmetic, measured on the live build at 1280x720: the scroll lane is 636 px tall, and the
+   room's natural composition needs 954 in the narrative column (verdict 414 + six stations 461 +
+   Add a part 63) and 679 in the evidence column. Every approved comp was drawn at 1500x980, where
+   the same room lands at 939 in a 980 lane — 41 px of slack. A 720-tall window is 260 px short of
+   that, so no amount of re-ordering fits it; the composition has to COMPACT.
+
+   What compacts is AIR and one type step, never content:
+     · the strip's own comp-measured 42px cushions, the station rows' 10px, Add a part's 18px;
+     · the aside's share drops 56.5% -> 47%, which widens the narrative column and is what stops
+       three station labels and the sub from wrapping to a second line in the first place;
+     · the headline takes the SAME one step to --type-verdict that headline-fit.ts already takes
+       past 31 characters — an established token used for this exact element, not a new size and
+       not a shrink below the scale. That one rule lives in src/design/shell-v2.css, beside the
+       character-count step it reuses, because comp-fidelity-guard.test.ts rightly refuses to let
+       any room size the four approved rooms' verdict type from its own sheet.
+   No control is hidden, nothing is replaced by a fixture value, and at 1500x980 and 1920x1080 the
+   query does not match, so the approved geometry is byte-for-byte untouched.
+
+   Scoped to [data-room="lab"] throughout: Health, Live and History share .v2-verdict, .dock-node
+   and .v2-content, and none of them is what was rejected. Guard: lab-short-viewport-guard.test.ts.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+@media (max-height: 880px) {
+  :root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] {
+    --v2-aside: min(680px, 47%);
+  }
+  /* The lane's own 26px cushion is the last 10px of the fit, and it is only ever narrowed for
+     the room that needs it -- :has scopes it to a lane actually holding Test. */
+  :root[data-v2="on"] .v2-content:has(.v2-room[data-room="lab"]) {
+    padding-top: 16px;
+  }
+  :root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] > .v2-verdict {
+    gap: 8px;
+  }
+  :root[data-v2="on"] .v2-room[data-layout="split"][data-room="lab"] > .v2-verdict .v2-verdict-action {
+    margin-top: 8px;
+  }
+  :root[data-v2="on"] .v2-room[data-room="lab"] .dock[data-layout="list"] .dock-node {
+    padding: 2px 2px;
+  }
+  :root[data-v2="on"] .v2-room[data-room="lab"] .lc-route {
+    padding: 6px 2px;
+  }
+  :root[data-v2="on"] .v2-room[data-room="lab"] .lc-readings {
+    padding: 16px 15px 14px;
+  }
+  :root[data-v2="on"] .v2-room[data-room="lab"] .lc-bench .lc-evidence {
+    padding: 0 15px 10px;
+  }
 }
 
 /* ---- THE SELECTED-STATION WORKSPACE (Mission 1, 2026-08-28) --------------------------------

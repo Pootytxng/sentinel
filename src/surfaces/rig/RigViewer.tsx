@@ -31,6 +31,8 @@ const RigHologram = lazy(() =>
 export const RigViewer = memo(function RigViewer({
   hw,
   chromeless = false,
+  cameraDist,
+  cameraTargetY,
   onSelectedIdChange,
 }: {
   hw: HardwareInfo;
@@ -39,6 +41,18 @@ export const RigViewer = memo(function RigViewer({
   // Console, whose corner gauges would otherwise collide with the viewer's bottom form). Manual
   // parts still render in the model; only the management CHROME is hidden.
   chromeless?: boolean;
+  // HOW CLOSE THE CAMERA SITS, passed straight through to the hologram's own `cameraDist` (which
+  // both seats the camera and gives FitCamera its base distance). Undefined means "the hologram's
+  // default", so every existing caller is unchanged by construction — this is a pass-through, not
+  // a new default. A host that frames the bay itself needs it: the Lab bench gives the rig a whole
+  // panel, and at the shared distance the model sat marooned in it no matter how large the window
+  // grew. Guard: lab-bench-framing-guard.test.ts pins that the default stays in RigHologram, so
+  // adding one here would re-frame every rig in the app from a single line.
+  cameraDist?: number;
+  // WHERE THE CAMERA AIMS VERTICALLY, passed straight through like cameraDist and undefined by
+  // default for the same reason: every existing caller keeps the hologram's own framing. The Lab
+  // bench aims lower so the floor ring gets the bottom air its comp draws (#224 round 4).
+  cameraTargetY?: number;
   // Selection stays internal state (autoRotate/exploded live here too) — this is an OPT-IN mirror
   // for a host that wants to react to it (e.g. the Ops Console showing evidence for the selected
   // part), not a hand-off of ownership.
@@ -140,6 +154,8 @@ export const RigViewer = memo(function RigViewer({
             // Chromeless = the Lab evidence map: no explode/orbit buttons, so clicking the model is
             // the only way in and nothing may block a real part's hitbox.
             evidenceMap={chromeless}
+            cameraDist={cameraDist}
+            cameraTargetY={cameraTargetY}
           />
         </Suspense>
 

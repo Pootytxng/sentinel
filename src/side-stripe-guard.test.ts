@@ -17,8 +17,9 @@ import { describe, expect, it } from "vitest";
 // WHAT IS NOT A SIDE STRIPE, and why this guard does not flag it:
 //   - CSS TRIANGLES (`.fix-advisory-chev`, `.wt-cursor::before`) — a thick side border paired with
 //     transparent top AND bottom borders IS the triangle idiom. Geometry, not decoration.
-//   - HUD CORNER BRACKETS (`.hc-brk-tl` and friends) — a side border paired with a perpendicular
-//     top/bottom border draws a corner, which is a deliberate frame.
+//   - CORNER FRAMES — a side border paired with a perpendicular top/bottom border draws a corner,
+//     which is a deliberate frame. (Health's `.hc-brk-*` elbows were the example until #225
+//     deleted them; the exemption is mechanical and survives its example.)
 // Both share one mechanical signature: a real perpendicular edge in the same rule. That is the
 // exemption below, and it is why the guard can be strict without arguing about intent.
 
@@ -160,15 +161,16 @@ describe("side stripes are banned (>1px coloured border-left/right as an accent)
       }
     });
 
-    it("reads widths, and leaves triangles and corner brackets alone", () => {
+    it("reads widths, and leaves triangles alone", () => {
       expect(pxWidth(" 2px solid var(--x)")).toBe(2);
       expect(pxWidth(" 1px solid var(--x)")).toBe(1);
       expect(pxWidth(" solid var(--x)")).toBeNull();
-      // Triangles/brackets are exempted by the perpendicular-edge rule — proven live by the fact
-      // that these three are NOT in BASELINE and NOT reported.
+      // Triangles are exempted by the perpendicular-edge rule — proven live by the fact that
+      // these two are NOT in BASELINE and NOT reported. (The third example, `.hc-brk-*`, was
+      // deleted by #225; asserting the absence of a selector that no longer exists proves
+      // nothing, so it went with it.)
       expect(HITS.some((h) => h.selector.includes(".fix-advisory-chev")), "chevron").toBe(false);
       expect(HITS.some((h) => h.selector.includes(".wt-cursor")), "cursor arrow").toBe(false);
-      expect(HITS.some((h) => h.selector.includes(".hc-brk-")), "HUD corner bracket").toBe(false);
     });
   });
 });

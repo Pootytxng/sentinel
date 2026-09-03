@@ -271,12 +271,24 @@ describe("comp fidelity — the shell geometry all four comps share", () => {
     ).toMatch(/\.v2-room-title \{[^}]*font-size: var\(--type-card\)/);
   });
 
-  it("the content box is the comps' 1169px, which the old 1120 cap could not produce", () => {
-    // All four comps put content between x=286 and x=1494 of 1550 — a 1208px box = 1169 app px.
-    // With this sheet's 30px gutters, a 1160 cap lands x=278..1438 on the owner's 1500-wide
-    // window against the comps' 277..1446. The cap still binds on a wide monitor, which is the
-    // reason it exists: a 1920 window may not stretch a 46-character sentence across 1600px.
+  it("the content box is the comps' box at 1500, and Test's alone scales on a wide display", () => {
+    // All four comps put content between x=286 and x=1494 of 1550 — a 1208px box = 1169 app px,
+    // re-measured 2026-08-27 off 04-test-approved.png's own panel border at 1161.
+    //
+    // The 2026-08-27 review round 1 failed Test's 1920x1080 outright (fixed cap = centred island,
+    // ~267px dead margin each side), and round 2 rejected the fix's overreach: making the cap
+    // proportional for EVERY room shipped an unreviewed geometry change to Live and History, which
+    // read stretched and sparse at 1920. The settled shape is both at once — the DEFAULT is the
+    // fixed 1160 the reviewed rooms shipped with, and a Test-scoped `:has()` rule carries the
+    // proportional cap for the one room whose 1920 geometry was actually reviewed.
+    //
+    // The arithmetic (lands the comps' box at 1500, grows at 1920, keeps a ceiling) lives in
+    // src/design/content-width-guard.test.ts, which resolves the rule the way the browser does
+    // and also pins the default/scoped split. Here we only pin that both halves exist.
     expect(body(shell, ':root[data-v2="on"] .v2-content-wrap')).toMatch(/max-width:\s*1160px/);
+    expect(
+      body(shell, ':root[data-v2="on"] .v2-content-wrap:has(> .v2-room[data-room="lab"])'),
+    ).toMatch(/max-width:\s*min\([\d.]+%,\s*\d+px\)/);
   });
 
   it("the topbar is the comps' 50px", () => {
@@ -401,7 +413,10 @@ describe("comp fidelity — Test, matched against 04-test-approved.png", () => {
     // The comp draws a dotted hairline between each pair of cells and no gutter at all. It is the
     // difference between four loose numbers and one instrument with four faces. A `gap` here would
     // also push every rule half a gutter off its own centre line, so the cells carry the padding.
-    expect(body(lab, ':root[data-v2="on"] .lc-reading + .lc-reading')).toMatch(
+    // Measured off the comp 2026-08-26: the rule is INSET, not full-height -- a bright pixel every
+    // third row from y745 to y875 of a strip spanning y704..928. A border cannot be shortened, so
+    // the hairline moved to a pseudo-element; the fact being pinned is unchanged.
+    expect(body(lab, ':root[data-v2="on"] .lc-reading + .lc-reading::before')).toMatch(
       /border-left: 1px dotted var\(--v2-line\)/,
     );
     expect(body(lab, ':root[data-v2="on"] .lc-readings'), "a gutter would decentre the rules").toMatch(

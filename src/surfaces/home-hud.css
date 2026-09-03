@@ -16,19 +16,15 @@
 :root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] {
   position: relative;
 }
-/* Whisper page scanline — the CRT skin at "felt not seen" alpha; never intercepts input. */
-:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 5;
-  background: repeating-linear-gradient(
-    0deg,
-    var(--hud-scanline-page) 0 1px,
-    transparent 1px 4px
-  );
-}
+/* THE WHOLE-PAGE SCANLINE IS GONE (#225). It laid a 1-in-4px CRT gradient over the ENTIRE Health
+   room, and the approved comp draws a continuous, untextured page ground — sampled #0C0E12 flat
+   from the rail edge to the right margin, with no repeating structure anywhere in it. The
+   rejection named "added visual language" as the fault and this was the largest instance of it:
+   a texture the contract does not have, over every pixel of the room. It was decorative
+   (pointer-events:none), so nothing real left with it. The rule was Health-only by selector
+   (`[data-room="home"]`), and hud-rooms.css paints the other rooms through its own
+   `:not([data-room="home"])` rule — so removing this cannot reach Test, Live or History.
+   The `position: relative` above STAYS: .hc-ann and the pointer glow are positioned against it. */
 /* The verdict speaks in sentence case — calm confidence, not a shouted banner. The HUD
    register lives in the micro-labels/readout around it, so the answer itself stays human.
    UX-1 look-caught defect (v0.9.23 desk review, 2026-08-13): this rule is scoped only by

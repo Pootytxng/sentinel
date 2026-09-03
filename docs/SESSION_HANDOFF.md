@@ -16,6 +16,7 @@
 | Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
 | Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
+| Harvest | Wave 1 Lane B (#224/#225): PR #294's content harvested onto this branch (39 files as-is, 7 docs re-derived); the visual gate is pending at the installed build, acceptance stays the owner's (#224 proof boundary, #225 step 7). The source lane's own ref still exists and still carries 29 commits `main` lacks — the CONTENT is on `main`, the commits are not; the live set is a git question (`node scripts/fleet-snapshot.mjs`), never a name stored here. |
 
 ## The rule that came out of the walk — read this before touching Health
 
@@ -71,10 +72,8 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 - **`git checkout <file>` on an uncommitted fix destroys it silently** — copy it to the scratchpad
   first, or commit.
 - **A raw control character inside a regex or a `sed` replacement is invisible and can vacate a
-  guard** (#304) — six literal 0x08 bytes stood in for `\b` in two test regexes, so both assertions
-  matched a byte no tracked file contains and could never fail; a `sed -i` `\U`/`\c` escape
-  separately wrote a raw 0x0F into a doc. `scripts/source-control-characters.test.mjs` ROOTS now
-  covers `src`, `docs` and `src-tauri/src` too, not just `scripts`/`tools`.
+  guard** (#304, incident detail archived 2026-09-03) — `scripts/source-control-characters.test.mjs`
+  ROOTS now covers `src`, `docs` and `src-tauri/src` too, not just `scripts`/`tools`.
 
 ## THE NEXT STEP, exactly
 

@@ -21,6 +21,10 @@
 :root[data-v2="on"] .ag-neutral .ag-fill { stroke: var(--ix-text-2); }
 :root[data-v2="on"] .ag-ctr { position: relative; grid-column: 1; grid-row: 1 / span 2;
   place-self: center; text-align: center; pointer-events: none; width: 56px; }
+/* NUMERAL VARIANT — no arc, so nothing constrains the number to the ring's 56px. The width comes
+   off, and the number takes the room a bare magnitude needs. Purely additive: a gauge that never
+   asks for `variant="numeral"` never matches this and stays byte-identical. */
+:root[data-v2="on"] .ag-as-numeral .ag-ctr { width: auto; }
 :root[data-v2="on"] .ag-v { font-family: var(--ix-mono); font-size: var(--type-card); font-weight: 600;
   color: var(--ix-text-1); font-variant-numeric: tabular-nums; line-height: 1; }
 :root[data-v2="on"] .ag-empty .ag-v { color: var(--ix-text-3); }

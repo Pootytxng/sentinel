@@ -10,11 +10,17 @@
 // control nobody styled, adding nothing.
 //
 // A5 — the custom titlebar printed "Compy" in the system font 40px above the rail's designed
-// <Wordmark> printing "Compy" again. One product, two hands, one glance.
+// <Wordmark> printing "Compy" again. One product, two hands, one glance. **A5 was SUPERSEDED
+// 2026-08-27 (#224 round 3):** the owner's literal-parity instruction for the approved comps —
+// which draw the small "Compy" caption beside the gear, designed wordmark and all — is the later
+// ruling, and the round-2 Codex review confirmed the supersession explicitly rather than leaving
+// it an open fork. So the A5 half of this guard now pins the caption's PRESENCE: losing it again
+// would un-ship the approved picture, not re-earn A5.
 //
 // The amendment these earned (Cowork lane, 2026-08-24, adopted): **a clipped element, an
 // overlapping glyph, or an unstyled native control is a correctness failure, not a matter of
-// taste.** Correctness failures get guards. This is that guard.
+// taste.** Correctness failures get guards. This is that guard — A4's half unchanged, A5's half
+// inverted by the later ruling.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 
@@ -96,17 +102,23 @@ describe("no native tooltip repeats text the shell already shows (#213 A4)", () 
   });
 });
 
-describe("the product introduces itself once (#213 A5)", () => {
-  it("gives the titlebar no app-name caption", () => {
+describe("the titlebar carries the app-name caption (literal parity, supersedes #213 A5)", () => {
+  it("renders the small Compy caption beside the gear, as every approved comp draws it", () => {
     const { container } = render(<WindowChrome />);
+    const caption = container.querySelector(".wc-title");
     expect(
-      container.textContent ?? "",
-      "the titlebar printed the app name 40px above the rail's designed wordmark — one of the two " +
-        "had to go, and the designed one stays",
-    ).not.toMatch(/compy/i);
+      caption?.textContent ?? "",
+      "the approved comps draw a small 'Compy' caption in the titlebar; the owner's literal-parity " +
+        "instruction (2026-08-27) supersedes #213 A5's removal — losing it un-ships the approved picture",
+    ).toMatch(/compy/i);
   });
 
-  it("keeps exactly one wordmark in the shell — the designed one", () => {
+  it("keeps the caption a label, not a control — no title attr for A4 to object to", () => {
+    const { container } = render(<WindowChrome />);
+    expect(container.querySelector(".wc-title")?.hasAttribute("title")).toBe(false);
+  });
+
+  it("keeps exactly one DESIGNED wordmark in the shell — the caption is plain text, not a second mark", () => {
     const { container } = renderShell();
     expect(container.querySelectorAll(".cmp-wordmark").length).toBe(1);
   });

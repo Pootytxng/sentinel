@@ -25,7 +25,7 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=81f407f5 -->
+<!-- STATE:source_main_commit=91fe6904 -->
 <!-- STATE:latest_release_version=0.9.26 -->
 <!-- STATE:candidate_version=0.9.26 -->
 <!-- STATE:candidate_branch=main -->
@@ -77,7 +77,7 @@ owner's desk does NOT run those bytes.** It runs a newer, unreleased v0.9.26 des
 its own controls out of the column, independently reviewed PASS at that head and landed as [#238](https://github.com/Pootytxng/sentinel/pull/238).
 The earlier desk rows, `73b629ed`, `380f98ca`, `1703be9f`, `b21bc18b` and `72efd7e6` included, are
 byte-preserved in [archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTORY.md).
-**Landing is not releasing** — nothing was published). Same
+**Installing is not releasing** — nothing was published). Same
 version number, different commit — never read byte equivalence out of a matching version string.
 It replaced v0.9.25 (`efde8310`), which replaced v0.9.24 (`289c658d`), v0.9.18 (`cfc0c4b7`),
 v0.9.17 (`a614744c`), v0.9.15 (`1b437785`) and v0.9.12 (`a1be896`) as the fleet-visible build.

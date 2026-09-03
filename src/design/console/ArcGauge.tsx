@@ -18,6 +18,7 @@ const TICKS = Array.from({ length: 24 }, (_, i) => {
 
 export function ArcGauge({
   label, value, max, unit, tone = "neutral", measured = true, note, grade, gradeTone = "good",
+  variant = "ring",
 }: {
   /** ReactNode so callers can gloss jargon labels inline (e.g. a <Term> tooltip on "1% low"). */
   label: ReactNode; value: number | null; max: number; unit: string; tone?: ArcTone; measured?: boolean;
@@ -35,6 +36,20 @@ export function ArcGauge({
   grade?: string;
   /** Which end of the ladder the grade sits on: green good, amber wants-a-look, red bad. */
   gradeTone?: "good" | "warn" | "bad";
+  /**
+   * HOW THE READING IS DRAWN — and only that. `ring` (the default, so every existing caller is
+   * byte-identical) draws the ticked arc with the number inside it. `numeral` drops the arc and
+   * prints the number large and bare.
+   *
+   * It exists because a ring is a claim: it says "this reading sits somewhere on a scale you can
+   * see". That is true of a readiness score or an applied-count out of a known total, and it is
+   * NOT true of a raw magnitude like a frame rate or a noise floor, where any `max` the caller
+   * picks is an invented ceiling. The approved Test composition (2026-08-26) makes exactly that
+   * distinction — two arcs, two bare numerals — so this is the honesty of the drawing, not a
+   * decoration switch. Every state below (NOT YET, NO READING, the tag, the note) is identical
+   * in both variants; only the arc goes.
+   */
+  variant?: "ring" | "numeral";
 }) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
@@ -73,7 +88,8 @@ export function ArcGauge({
   }, [tick]);
 
   return (
-    <div className={`arc-gauge ag-${tone} ${empty ? "ag-empty" : ""}`}>
+    <div className={`arc-gauge ag-${tone} ag-as-${variant} ${empty ? "ag-empty" : ""}`}>
+      {variant === "ring" && (
       <svg viewBox="0 0 56 56" aria-hidden="true">
         {TICKS.map((t, i) => <line key={i} className="ag-tick" x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />)}
         <circle className="ag-track" cx="28" cy="28" r={R} />
@@ -85,6 +101,7 @@ export function ArcGauge({
           <circle ref={tickRef} className="jv-gauge-tick" cx="28" cy="28" r={R} opacity={0} />
         )}
       </svg>
+      )}
       <div className="ag-ctr">
         <div className="ag-v">{empty ? "— —" : Math.round(shown!)}</div>
         {/* TYPE-1 look-caught defect (v0.9.19 review, 2026-08-13): at the 13px floor a long unit
@@ -92,10 +109,13 @@ export function ArcGauge({
             the old 8px fit was fine print, the exact disease TYPE-1 cures. The ring only ever
             carries a SHORT unit (°C, %, fps, ms); anything longer moves BESIDE the label, never
             below the floor. Guarded in arc-gauge.test.tsx. */}
-        {!empty && unit.length <= 3 && <div className="ag-u">{unit}</div>}
+        {!empty && unit.length > 0 && unit.length <= 3 && <div className="ag-u">{unit}</div>}
       </div>
       <div className="ag-label">
         <span>{label}</span>
+        {/* An EMPTY unit is a caller saying "this number needs no unit" (Test's INSTRUMENTS READ,
+            whose label already ends in the word). It must render nothing at all -- not an empty
+            node in the ring, and not a blank line beside the label. */}
         {(empty || unit.length > 3) && (
           <span className="ag-u ag-u-side">{empty ? t("common.arcGauge.noReading") : unit}</span>
         )}
