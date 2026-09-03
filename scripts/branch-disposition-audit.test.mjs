@@ -871,8 +871,10 @@ describe("the record's prose does not outlive the refs it describes", () => {
   it("claims no live stack on a ref the store no longer records", () => {
     const rs = records();
     const claims = stackClaims(rs);
-    // Vacuous otherwise: a table that stopped using the word would pass this without being read.
-    expect(claims.length).toBeGreaterThan(0);
+    // Anti-vacuity is the sibling test below, on a fixture. A store that has stopped using the word
+    // is a legal state, not a vacuous one: since 2026-09-03 no live record claims a stack at all --
+    // the last stacked lane (#311 on #289's ref) was harvested onto main and both refs pruned -- and
+    // a floor of "at least one live stack claim" would red that honest store forever.
     const keys = recordKeys(rs);
     // The direction this needs is the CONVERSE of the cover check, and the first version of this
     // comment cited the wrong one. Not "every live ref has a row" -- that would leave a row for a
