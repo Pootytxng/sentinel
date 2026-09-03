@@ -133,6 +133,7 @@ const RESIDENCY = {
     kind: "npm-test",
     runner: "scripts/process-mutex-guard.test.mjs",
   },
+  "land-pr.mjs": { kind: "npm-test", runner: "scripts/land-pr.test.mjs" },
   "markdown-link-guard.mjs": { kind: "npm-test", runner: "scripts/markdown-link-guard.test.mjs" },
   "production-adapter-lookup-harness.ps1": {
     kind: "npm-test",

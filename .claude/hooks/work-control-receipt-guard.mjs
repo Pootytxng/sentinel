@@ -30,6 +30,9 @@ import { join } from "node:path";
 
 const PROOF_DEPENDENT = [
   { re: /\bgh\s+pr\s+merge\b/, transition: "merge-pr" },
+  // scripts/land-pr.mjs runs `gh pr merge` from inside node (P0-H case 10, #362); the command line
+  // names the script, not gh, so it is matched here or the guard has a hole exactly one wrapper wide.
+  { re: /\bland-pr\.mjs\b/, transition: "merge-pr" },
   { re: /\bgh\s+issue\s+close\b/, transition: "close-issue" },
   { re: /\bgh\s+pr\s+ready\b/, transition: "mark-pr-ready" },
 ];
