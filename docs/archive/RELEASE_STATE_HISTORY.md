@@ -4,6 +4,22 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-09-02 - how hosted CI's minutes were exhausted (moved out of the Hosted CI row, byte budget)
+
+The Hosted CI row was re-worded 2026-09-02 from "settled OFF by owner decision" to "remote execution
+UNAVAILABLE; the local gate is the proof authority; a green workflow status is not evidence its job
+ran" (measured by `../../scripts/actions-health.mjs`). Its history moved here verbatim:
+
+**Corrected 2026-08-10 — the old claim "workflows present but never start" was false.** The monthly
+included minutes reset on 1 Aug and CI ran **111 real times in six days** (~570/month, against a
+budget guard that assumed 122), exhausting them again by ~06:00 UTC on 7 Aug; every job since is
+rejected before runner startup. Cause was run VOLUME from the parallel agent lanes, not per-run cost.
+**GitHub's rejection annotation mentions failed payments — it is generic and wrong here:** no failed
+payment, billed $0, deliberate $0 Actions budget with stop-usage on. The owner declined the spend
+under the zero-budget law and directed that it never be re-asked. The full local gate set at the
+time: encoding guard · release-state verifier · hook self-tests · doc budget · tsc · vitest · frontend
+build · cargo test · clippy `-D warnings` · release-pipeline guards · updater-signature verify.
+
 ### 2026-08-28 - the 73b629ed desk row (the Mission 1 Test station workspace), moved verbatim
 
 Superseded by the 090bc58b desk build, the isolated landing of Mission 2 - the Live room giving up
