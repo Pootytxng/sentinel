@@ -1,8 +1,9 @@
 # Branch dispositions — every remote ref, and why it still exists
 
 > **Current state only.** One record per live ref on `origin`, in `docs/dispositions/`.
-> `scripts/branch-disposition-audit.mjs` fails the build when a ref has no record, when a record
-> names a ref that is gone, or when a `MERGED` record is not actually a no-op against `main`. Run `node scripts/branch-disposition-audit.mjs`.
+> `scripts/branch-disposition-audit.mjs` fails the build when a **landed** ref has no record, when a
+> record names a ref that is gone, or when a `MERGED` record is not actually a no-op against `main`;
+> an unrecorded ref that still diverges is measured `UNLANDED` and reported, not failed (#355). Run `node scripts/branch-disposition-audit.mjs`.
 >
 > It reports **PARTIAL**, not OK, on a checkout that cannot see all of `origin` — a shallow or
 > single-branch clone (which is what `actions/checkout@v4` makes by default) may not say a ref is
@@ -76,5 +77,6 @@ cannot see, because it has no ref.
 
 ## Standing rule
 
-A new remote ref is undispositioned until it has a record in `docs/dispositions/`. The audit is the
-enforcement; writing the record is part of the work that created the branch, not a later cleanup.
+A remote ref with no record is measured, not assumed (#355): one that still diverges from `origin/main`
+is reported `UNLANDED` by the audit itself and owes a record only once a human judgment exists; one that
+has already landed blocks until a human records `LANDED` (kept, with a reason) or `MERGED` (pruned).
