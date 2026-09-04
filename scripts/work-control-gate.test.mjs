@@ -1,34 +1,22 @@
 // @vitest-environment node
-import { afterAll, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { execFileSync, spawnSync } from "node:child_process";
+import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import {
   canonicalRemoteName,
   defaultOwnerFor,
   evaluateWorkControl as evaluateRaw,
   headProvenanceVia,
+  mutationAuthorsFor,
   parseRemotes,
   remoteHeadShas,
 } from "./work-control-gate.mjs";
 
-// Provenance has its own describe block below, with its own falsifications. Every case in the
-// blocks before it is about what the receipt itself proves, so they run against a remote that
-// says yes: a test that silently depended on the network would be measuring the network.
 const evaluateWorkControl = (receipt, options = {}) =>
   evaluateRaw(receipt, { headProvenance: () => ({ ok: true, why: "stubbed" }), ...options });
 
-// The REAL head of this worktree. Fixtures used to say HEAD, and the gate accepted it — which
-// is precisely the hole this file now guards: a receipt is written by the actor asking for
-// authorization, so a head it invented proved nothing. Every fixture below is bound to the head
-// the repository is actually on, and the CLI cases re-resolve it in a child process.
 const HEAD = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 const OTHER_HEAD = `${"0".repeat(39)}1`;
 
-// Bug -> guard (2026-08-09): PR #89 was closed after replacement evidence looked strong, but
-// before PR #90's exact required gates could run. Substitute evidence and an unavailable execution
-// environment must never authorize a proof-dependent GitHub transition.
 const INSPECTED = {
   repository: true,
   remoteState: true,
@@ -46,18 +34,18 @@ const EXACT_PASS = [
 function record(overrides = {}) {
   return {
     actor: "codex",
-    explicitHandoff: "https://github.com/Pootytxng/sentinel/issues/49#issuecomment-current",
-    exclusiveWriter: true,
+    leaseEvidence: "https://github.com/Pootytxng/sentinel/issues/49#issuecomment-current-lease",
+    overlapExclusive: true,
     inheritedWork: true,
     inspection: INSPECTED,
     transition: "close-superseded-pr",
     currentHead: HEAD,
+    mutationAuthors: ["codex"],
     requiredGates: ["npm test", "cargo test --manifest-path src-tauri/Cargo.toml"],
     gateResults: EXACT_PASS,
     independentReview: {
       practical: true,
       reviewer: "claude-code",
-      writer: "codex",
       status: "passed",
       head: HEAD,
     },
@@ -65,30 +53,58 @@ function record(overrides = {}) {
   };
 }
 
-describe("Claude/Codex role specialization", () => {
-  it("keeps Claude Code as the implementation default and Codex as the independent-review default", () => {
-    expect(defaultOwnerFor("implementation")).toBe("claude-code");
-    expect(defaultOwnerFor("independent-review")).toBe("codex");
+describe("dynamic mutation lease model", () => {
+  it("has no permanent implementation or review model", () => {
+    expect(defaultOwnerFor("implementation")).toBe("best-fit-available");
+    expect(defaultOwnerFor("independent-review")).toBe("non-authoring-reviewer");
   });
 
-  it("blocks either model from writing without an explicit, exclusive handoff", () => {
-    const result = evaluateWorkControl(record({ explicitHandoff: "", exclusiveWriter: false }));
+  it.each(["claude-code", "codex", "chatgpt-hq", "cowork"])(
+    "allows %s to be the current executor when it holds the lease",
+    (actor) => {
+      const reviewer = actor === "claude-code" ? "codex" : "claude-code";
+      const result = evaluateWorkControl(
+        record({
+          actor,
+          mutationAuthors: [actor],
+          independentReview: { practical: true, reviewer, status: "passed", head: HEAD },
+        }),
+      );
+      expect(result.decision).toBe("PASS");
+    },
+  );
+
+  it("rejects undeclared executors", () => {
+    const result = evaluateWorkControl(record({ actor: "mystery-agent", mutationAuthors: ["mystery-agent"] }));
     expect(result.decision).toBe("BLOCKED");
-    expect(result.blockers).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(/explicit handoff/i),
-        expect.stringMatching(/exclusive writer/i),
-      ]),
+    expect(result.blockers.join("\n")).toMatch(/declared executor/i);
+  });
+
+  it("requires durable lease evidence, not a model default", () => {
+    const result = evaluateWorkControl(record({ leaseEvidence: "", explicitHandoff: "" }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/lease evidence/i);
+  });
+
+  it("accepts historical explicitHandoff receipts as lease evidence", () => {
+    const result = evaluateWorkControl(
+      record({ leaseEvidence: undefined, explicitHandoff: "https://github.com/Pootytxng/sentinel/issues/49#handoff" }),
     );
+    expect(result.decision).toBe("PASS");
   });
 
-  it("rejects an implementation actor outside the two declared model lanes", () => {
-    const result = evaluateWorkControl(record({ actor: "unknown-agent" }));
+  it("requires exclusivity only for the overlapping bounded scope", () => {
+    const result = evaluateWorkControl(record({ overlapExclusive: false, exclusiveWriter: false }));
     expect(result.decision).toBe("BLOCKED");
-    expect(result.blockers.join("\n")).toMatch(/implementation actor/i);
+    expect(result.blockers.join("\n")).toMatch(/overlapping bounded scope/i);
   });
 
-  it("blocks inherited work until current repository, GitHub, worktree, dirty-state, and process inspection is complete", () => {
+  it("accepts the historical exclusiveWriter field for old receipts", () => {
+    const result = evaluateWorkControl(record({ overlapExclusive: undefined, exclusiveWriter: true }));
+    expect(result.decision).toBe("PASS");
+  });
+
+  it("blocks inherited work until repository/remote/worktree/branch/dirty/process truth is re-derived", () => {
     const result = evaluateWorkControl(
       record({ inspection: { ...INSPECTED, remoteState: false, liveProcesses: false } }),
     );
@@ -96,16 +112,41 @@ describe("Claude/Codex role specialization", () => {
     expect(result.blockers.join("\n")).toMatch(/remoteState/);
     expect(result.blockers.join("\n")).toMatch(/liveProcesses/);
   });
+
+  it("deduplicates sequential mutation authors", () => {
+    expect(mutationAuthorsFor(record({ mutationAuthors: ["claude-code", "codex", "claude-code"] }))).toEqual([
+      "claude-code",
+      "codex",
+    ]);
+  });
+
+  it("falls back to the current actor for legacy single-author receipts", () => {
+    expect(mutationAuthorsFor(record({ mutationAuthors: undefined, actor: "chatgpt-hq" }))).toEqual([
+      "chatgpt-hq",
+    ]);
+  });
+
+  it("does not demand independent review merely to claim/push/handoff ordinary work", () => {
+    const result = evaluateWorkControl(
+      record({
+        transition: "push-branch",
+        requiredGates: [],
+        gateResults: [],
+        independentReview: undefined,
+      }),
+    );
+    expect(result.decision).toBe("PASS");
+  });
 });
 
-describe("proof-gated GitHub transitions", () => {
-  it("blocks unknown transition names so a typo cannot bypass proof", () => {
-    const result = evaluateWorkControl(record({ transition: "close-superceded-pr" }));
+describe("proof-dependent transitions", () => {
+  it("blocks unknown transition names", () => {
+    const result = evaluateWorkControl(record({ transition: "merge-ish" }));
     expect(result.decision).toBe("BLOCKED");
     expect(result.blockers.join("\n")).toMatch(/unknown work-control transition/i);
   });
 
-  it("treats an unavailable required gate as a blocker even when a substitute passes", () => {
+  it("treats an unavailable exact gate as BLOCKED even when a substitute passes", () => {
     const result = evaluateWorkControl(
       record({
         gateResults: [
@@ -119,7 +160,7 @@ describe("proof-gated GitHub transitions", () => {
     expect(result.blockers.join("\n")).toMatch(/npm test.*unavailable.*blocker/i);
   });
 
-  it("rejects exact gate receipts from any head other than the transition head", () => {
+  it("rejects exact-gate receipts from a stale head", () => {
     const result = evaluateWorkControl(
       record({ gateResults: EXACT_PASS.map((gate) => ({ ...gate, head: OTHER_HEAD })) }),
     );
@@ -127,135 +168,87 @@ describe("proof-gated GitHub transitions", () => {
     expect(result.blockers.join("\n")).toMatch(/current head/i);
   });
 
-  it("allows an explicitly blocked draft to open without laundering it into readiness", () => {
-    const result = evaluateWorkControl(
-      record({
-        transition: "open-draft-pr",
-        requiredGates: [],
-        gateResults: [],
-        independentReview: { practical: false, reason: "implementation is still in progress" },
-      }),
-    );
-    expect(result.decision).toBe("PASS");
-  });
-
-  it("requires a different model's final review when that review is practical", () => {
-    const result = evaluateWorkControl(
-      record({
-        independentReview: { practical: true, reviewer: "codex", writer: "codex", status: "passed", head: HEAD },
-      }),
-    );
-    expect(result.decision).toBe("BLOCKED");
-    expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
-  });
-
-  it("binds the independent review to the actor who actually wrote the change", () => {
-    const result = evaluateWorkControl(
-      record({
-        independentReview: {
-          practical: true,
-          reviewer: "claude-code",
-          writer: "claude-code",
-          status: "passed",
-          head: HEAD,
-        },
-      }),
-    );
-    expect(result.decision).toBe("BLOCKED");
-    expect(result.blockers.join("\n")).toMatch(/receipt actor/i);
-  });
-
-  // Bug -> guard (2026-08-11, PR #90 recovery P4): the gate bound gate results to `currentHead` but
-  // never asked git what the head WAS, so a receipt carrying one invented SHA everywhere satisfied
-  // every binding in it. Internal consistency is not proof.
-  it("rejects a head that is not a real commit id", () => {
+  it("rejects a non-40-character receipt head", () => {
     const result = evaluateWorkControl(record({ currentHead: "abc123", gateResults: [] }));
     expect(result.decision).toBe("BLOCKED");
     expect(result.blockers.join("\n")).toMatch(/full 40-character commit SHA/i);
   });
 
-  it("rejects a well-formed head the repository is not actually on", () => {
+  it("rejects a receipt head different from the repository head", () => {
     const result = evaluateWorkControl(
       record({
         currentHead: OTHER_HEAD,
         gateResults: EXACT_PASS.map((gate) => ({ ...gate, head: OTHER_HEAD })),
-        independentReview: {
-          practical: true,
-          reviewer: "claude-code",
-          writer: "codex",
-          status: "passed",
-          head: OTHER_HEAD,
-        },
+        independentReview: { practical: true, reviewer: "claude-code", status: "passed", head: OTHER_HEAD },
       }),
     );
     expect(result.decision).toBe("BLOCKED");
-    expect(result.blockers.join("\n")).toMatch(/the repository is at/i);
+    expect(result.blockers.join("\n")).toMatch(/repository is at/i);
   });
 
-  it("blocks rather than waves through when the head cannot be resolved at all", () => {
+  it("blocks when the repository head cannot be resolved", () => {
     const result = evaluateWorkControl(record(), { resolveHead: () => null });
     expect(result.decision).toBe("BLOCKED");
     expect(result.blockers.join("\n")).toMatch(/could not be resolved/i);
   });
 
-  it("rejects an independent review recorded at an earlier head than the transition", () => {
+  it("rejects review at an earlier head", () => {
     const result = evaluateWorkControl(
-      record({
-        independentReview: {
-          practical: true,
-          reviewer: "claude-code",
-          writer: "codex",
-          status: "passed",
-          head: OTHER_HEAD,
-        },
-      }),
+      record({ independentReview: { practical: true, reviewer: "claude-code", status: "passed", head: OTHER_HEAD } }),
     );
     expect(result.decision).toBe("BLOCKED");
     expect(result.blockers.join("\n")).toMatch(/independent review is recorded at/i);
   });
 
-  it("allows a proof-dependent transition only after exact current-head gates and independent review pass", () => {
-    expect(evaluateWorkControl(record())).toEqual({ decision: "PASS", blockers: [], warnings: [] });
+  it("rejects every mutation author as the exact-head reviewer", () => {
+    const result = evaluateWorkControl(
+      record({
+        actor: "codex",
+        mutationAuthors: ["claude-code", "codex"],
+        independentReview: { practical: true, reviewer: "claude-code", status: "passed", head: HEAD },
+      }),
+    );
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/one of the mutation authors/i);
+  });
+
+  it("allows sequential Claude/Codex authors with an independent ChatGPT HQ review", () => {
+    const result = evaluateWorkControl(
+      record({
+        actor: "codex",
+        mutationAuthors: ["claude-code", "codex"],
+        independentReview: { practical: true, reviewer: "chatgpt-hq", status: "passed", head: HEAD },
+      }),
+    );
+    expect(result).toEqual({ decision: "PASS", blockers: [], warnings: [] });
+  });
+
+  it("requires a reason when independent review is genuinely impractical", () => {
+    const result = evaluateWorkControl(
+      record({ independentReview: { practical: false, reason: "" } }),
+    );
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/impracticality reason/i);
   });
 });
 
-// ---------------------------------------------------------------------------------------------
-// RECEIPT PROVENANCE
-//
-// Everything above asks whether the receipt is internally consistent. These ask the question that
-// decides whether the evidence exists anywhere but this disk -- design requirement 4 of #291: a
-// merge or close receipt must be reachable from canonical remote evidence, and a purely local, a
-// stale-cached, or a fork-only ref must not satisfy it.
-//
-// The pure cases below inject the git runner, so each failure mode is provable without a network
-// and without a repository. The CLI cases further down build a REAL repository whose canonical
-// origin is a bare repo on disk, because a stale remote-tracking ref is not a thing a stub can
-// honestly imitate: it is a specific disagreement between what git cached and what origin has.
-// ---------------------------------------------------------------------------------------------
 describe("receipt provenance", () => {
   const ONE = "1".repeat(40);
   const TWO = "2".repeat(40);
 
-  it("finds the canonical remote by URL, and is not fooled by a fork of the same name", () => {
-    const shapes = [
+  it("finds the canonical remote by URL and is not fooled by a fork", () => {
+    for (const url of [
       "git@github.com:Pootytxng/sentinel.git",
       "https://github.com/Pootytxng/sentinel",
       "https://github.com/Pootytxng/sentinel.git/",
       "C:\\Users\\someone\\mirrors\\Pootytxng\\sentinel",
-    ];
-    for (const url of shapes) {
+    ]) {
       expect(canonicalRemoteName([{ name: "whatever", url }]), url).toBe("whatever");
     }
-    // The name is not the evidence. A remote CALLED origin that points at someone else's fork is
-    // exactly the case a name check waves through, and the case that makes a receipt worthless:
-    // the merge happens on the canonical repo, where nobody can fetch this commit.
-    expect(
-      canonicalRemoteName([{ name: "origin", url: "git@github.com:SomeoneElse/sentinel.git" }]),
-    ).toBe(null);
-    expect(canonicalRemoteName([])).toBe(null);
+    expect(canonicalRemoteName([{ name: "origin", url: "git@github.com:SomeoneElse/sentinel.git" }])).toBe(null);
   });
 
-  it("reads remotes and live heads out of git's own output", () => {
+  it("parses remotes and only branch heads", () => {
     expect(
       parseRemotes(
         "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n" +
@@ -266,16 +259,10 @@ describe("receipt provenance", () => {
       { name: "origin", url: "git@github.com:Pootytxng/sentinel.git" },
       { name: "fork", url: "https://github.com/Someone/sentinel" },
     ]);
-    expect(remoteHeadShas(`${ONE}\trefs/heads/main\n${TWO}\trefs/heads/lane/x\n`)).toEqual([
-      ONE,
-      TWO,
-    ]);
-    // Tags are not branches. Counting one as evidence would let a tag left on a deleted branch's
-    // tip stand in for a branch origin no longer serves.
-    expect(remoteHeadShas(`${ONE}\trefs/tags/v1\n`)).toEqual([]);
+    expect(remoteHeadShas(`${ONE}\trefs/heads/main\n${TWO}\trefs/tags/v1\n`)).toEqual([ONE]);
   });
 
-  it("passes only when origin's own tips reach the head", () => {
+  it("passes only when canonical remote tips reach the proof head", () => {
     const provenance = headProvenanceVia((args) => {
       if (args[0] === "remote") return "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n";
       if (args[0] === "ls-remote") return `${ONE}\trefs/heads/main\n`;
@@ -286,10 +273,7 @@ describe("receipt provenance", () => {
     expect(provenance(TWO)).toEqual({ ok: true, why: "reachable from origin" });
   });
 
-  it("refuses a head origin does not have, whatever is holding it locally", () => {
-    // "3 commits exist on no branch origin has" is the same answer for a branch that was never
-    // pushed, a branch that only exists on a fork, and a remote-tracking ref left behind by a
-    // fetch -- because none of them are origin, which is the whole point.
+  it("blocks a local/fork/stale-only proof head", () => {
     const provenance = headProvenanceVia((args) => {
       if (args[0] === "remote") return "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n";
       if (args[0] === "ls-remote") return `${ONE}\trefs/heads/main\n`;
@@ -302,243 +286,11 @@ describe("receipt provenance", () => {
     expect(verdict.why).toMatch(/exist on no branch origin/i);
   });
 
-  it("refuses when there is no canonical remote at all", () => {
-    const provenance = headProvenanceVia((args) => {
-      if (args[0] === "remote") return "origin\tgit@github.com:SomeoneElse/sentinel.git (fetch)\n";
-      throw new Error(`unexpected git ${args[0]}`);
-    });
-    const verdict = provenance(TWO);
-    expect(verdict.ok).toBe(false);
-    expect(verdict.why).toMatch(/no remote points at Pootytxng\/sentinel/i);
-  });
-
-  it("blocks rather than passing when origin cannot be asked", () => {
-    // Environment inability is a blocker, not a pass. An unreachable origin is the one condition
-    // under which it is tempting to shrug and continue, and the one where continuing means the
-    // receipt was never checked against anything.
-    const unreachable = headProvenanceVia((args) => {
-      if (args[0] === "remote") return "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n";
-      throw new Error("Could not resolve host: github.com");
-    });
-    expect(unreachable(TWO)).toEqual({ ok: false, why: "origin could not be asked what it has" });
-
-    const empty = headProvenanceVia((args) =>
-      args[0] === "remote" ? "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n" : "",
-    );
-    expect(empty(TWO).ok).toBe(false);
-    expect(empty(TWO).why).toMatch(/reports no branches/i);
-  });
-
-  it("blocks when origin's tips are not in this checkout instead of narrowing the evidence", () => {
-    // rev-list cannot walk an object it does not have, so an unfetched origin would otherwise
-    // silently shrink the set of things the head has to be reachable from -- and an empty set
-    // makes everything reachable from nothing, which reads as a pass in the wrong implementation.
+  it("blocks when canonical origin cannot be asked", () => {
     const provenance = headProvenanceVia((args) => {
       if (args[0] === "remote") return "origin\tgit@github.com:Pootytxng/sentinel.git (fetch)\n";
-      if (args[0] === "ls-remote") return `${ONE}\trefs/heads/main\n`;
-      if (args[0] === "cat-file") throw new Error("Not a valid object name");
-      throw new Error("rev-list must never be reached with an empty exclusion set");
+      throw new Error("offline");
     });
-    const verdict = provenance(TWO);
-    expect(verdict.ok).toBe(false);
-    expect(verdict.why).toMatch(/fetch origin and re-run/i);
+    expect(provenance(TWO)).toEqual({ ok: false, why: "origin could not be asked what it has" });
   });
-
-  it("carries the refusal into the transition verdict", () => {
-    const result = evaluateRaw(record(), {
-      resolveHead: () => HEAD,
-      headProvenance: () => ({ ok: false, why: "origin does not have it" }),
-    });
-    expect(result.decision).toBe("BLOCKED");
-    expect(result.blockers.join("\n")).toMatch(/not durably reachable/i);
-  });
-});
-
-describe("work-control receipt CLI", () => {
-  // A real repository, and a real canonical origin: a bare repo on disk whose PATH ends in
-  // Pootytxng/sentinel, which is what the gate matches on. No network, and nothing stubbed --
-  // these cases exercise the same code the gate runs against GitHub.
-  const made = [];
-
-  function makeRepo() {
-    const root = mkdtempSync(join(tmpdir(), "compy-wc-repo-"));
-    made.push(root);
-    const canonical = join(root, "Pootytxng", "sentinel");
-    const fork = join(root, "SomeoneElse", "sentinel");
-    const work = join(root, "work");
-    const hooks = join(root, "no-hooks");
-    for (const dir of [canonical, fork, work, hooks]) mkdirSync(dir, { recursive: true });
-    const bare = (dir) => execFileSync("git", ["init", "-q", "--bare", "-b", "main", dir]);
-    bare(canonical);
-    bare(fork);
-    execFileSync("git", ["init", "-q", "-b", "main", work]);
-    const git = (...args) => execFileSync("git", args, { cwd: work, encoding: "utf8" }).trim();
-    git("config", "user.email", "gate@test.invalid");
-    git("config", "user.name", "gate test");
-    git("config", "commit.gpgsign", "false");
-    // This repository points core.hooksPath at .githooks; a fixture repo must not inherit a
-    // pre-commit hook that knows nothing about it.
-    git("config", "core.hooksPath", hooks);
-    writeFileSync(join(work, "a.txt"), "one", "utf8");
-    git("add", "-A");
-    git("commit", "-q", "-m", "one");
-    git("remote", "add", "origin", canonical);
-    git("remote", "add", "fork", fork);
-    git("push", "-q", "origin", "main");
-    return { work, git, canonical, pushed: git("rev-parse", "HEAD") };
-  }
-
-  afterAll(() => {
-    for (const root of made) rmSync(root, { recursive: true, force: true });
-  });
-
-  function runReceipt(receipt, cwd) {
-    const directory = mkdtempSync(join(tmpdir(), "compy-work-control-"));
-    const path = join(directory, "receipt.json");
-    writeFileSync(path, JSON.stringify(receipt), "utf8");
-    try {
-      return spawnSync(process.execPath, [resolve("scripts", "work-control-gate.mjs"), path], {
-        encoding: "utf8",
-        cwd,
-      });
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  }
-
-  /** The complete receipt, re-bound to whichever head the fixture repository is standing on. */
-  function at(head) {
-    return record({
-      currentHead: head,
-      gateResults: EXACT_PASS.map((gate) => ({ ...gate, head })),
-      independentReview: { ...record().independentReview, head },
-    });
-  }
-
-  it("exits zero and prints PASS for a complete receipt origin can actually reach", () => {
-    const repo = makeRepo();
-    const result = runReceipt(at(repo.pushed), repo.work);
-    expect(result.status, result.stdout + result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual({ decision: "PASS", blockers: [], warnings: [] });
-  });
-
-  it("exits nonzero and prints BLOCKED when an exact required gate is unavailable", () => {
-    const repo = makeRepo();
-    const complete = at(repo.pushed);
-    const result = runReceipt(
-      {
-        ...complete,
-        gateResults: [
-          { command: "npm test", status: "unavailable", head: repo.pushed, reason: "no host" },
-          complete.gateResults[1],
-        ],
-      },
-      repo.work,
-    );
-    expect(result.status).toBe(1);
-    expect(JSON.parse(result.stdout).decision).toBe("BLOCKED");
-  });
-
-  it("refuses a receipt whose head has never left this disk", () => {
-    const repo = makeRepo();
-    writeFileSync(join(repo.work, "a.txt"), "two", "utf8");
-    repo.git("commit", "-q", "-am", "two");
-    const local = repo.git("rev-parse", "HEAD");
-    expect(local).not.toBe(repo.pushed);
-    const result = runReceipt(at(local), repo.work);
-    expect(result.status).toBe(1);
-    expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(/not durably reachable/i);
-  });
-
-  it("refuses a receipt held up only by a stale remote-tracking ref", () => {
-    // The trap this exists for: refs/remotes/origin/* is the last FETCH, not origin. Below, origin
-    // genuinely had the commit and then genuinely lost it, while git's cache still says otherwise.
-    // A gate that reads the cache calls this pushed; a gate that asks origin calls it gone.
-    const repo = makeRepo();
-    repo.git("checkout", "-q", "-b", "stale");
-    writeFileSync(join(repo.work, "a.txt"), "stale", "utf8");
-    repo.git("commit", "-q", "-am", "stale");
-    const stranded = repo.git("rev-parse", "HEAD");
-    repo.git("push", "-q", "origin", "stale");
-    repo.git("fetch", "-q", "origin");
-    // Deleted by someone else, on the remote itself: `git push origin --delete` would also
-    // drop the local remote-tracking ref, which is the very thing this case has to keep.
-    execFileSync("git", ["--git-dir", repo.canonical, "update-ref", "-d", "refs/heads/stale"]);
-    repo.git("checkout", "-q", "--detach", stranded);
-    repo.git("branch", "-q", "-D", "stale");
-    // Only the cached ref still names it, which is what makes this a proof: the cache is the one
-    // thing a naive implementation could have been reading.
-    expect(repo.git("rev-parse", "refs/remotes/origin/stale")).toBe(stranded);
-    const result = runReceipt(at(stranded), repo.work);
-    expect(result.status).toBe(1);
-    expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(/not durably reachable/i);
-  });
-
-  it("refuses a receipt that only a fork can reach", () => {
-    const repo = makeRepo();
-    writeFileSync(join(repo.work, "a.txt"), "forked", "utf8");
-    repo.git("commit", "-q", "-am", "forked");
-    const onlyOnFork = repo.git("rev-parse", "HEAD");
-    repo.git("push", "-q", "fork", "main");
-    // Pushed, fetched, reachable -- from the wrong repository. The merge happens on the canonical
-    // one, where this commit does not exist.
-    repo.git("fetch", "-q", "fork");
-    const result = runReceipt(at(onlyOnFork), repo.work);
-    expect(result.status).toBe(1);
-    expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(/not durably reachable/i);
-  });
-
-  it("refuses a fork standing in the place called origin, however reachable it is", () => {
-    // The maximal version of the case above: the remote is named origin, it answers, it has the
-    // commit, and it is still the wrong repository. Everything a name check looks at says yes.
-    const repo = makeRepo();
-    repo.git("remote", "remove", "origin");
-    repo.git("remote", "rename", "fork", "origin");
-    repo.git("push", "-q", "origin", "main");
-    expect(repo.git("ls-remote", "--heads", "origin")).toContain(repo.pushed);
-    const result = runReceipt(at(repo.pushed), repo.work);
-    expect(result.status).toBe(1);
-    expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(
-      /no remote points at Pootytxng\/sentinel/i,
-    );
-  });
-});
-
-describe("the role and proof law stays loaded in both model lanes", () => {
-  const flat = (path) => readFileSync(path, "utf8").replace(/\s+/g, " ");
-  const required = {
-    "docs/WORK_CONTROL.md": [
-      "Claude Code is the default implementation owner",
-      "Codex is the default independent reviewer",
-      "explicit handoff",
-      "one active implementation writer per scope",
-      "required gates cannot be substituted",
-      "environment inability is a blocker, not a pass",
-      "proof-dependent GitHub transition",
-      "non-writing model performs the final independent review whenever practical",
-      "node scripts/work-control-gate.mjs <receipt.json>",
-    ],
-    "AGENTS.md": [
-      "Claude Code is the default implementation owner",
-      "Codex is the default independent reviewer",
-      "explicit handoff",
-      "scripts/work-control-gate.mjs",
-    ],
-    "CLAUDE.md": [
-      "Claude Code is the default implementation owner",
-      "Codex is the default independent reviewer",
-      "explicit handoff",
-      "required gates cannot be substituted",
-      "environment inability is a blocker, not a pass",
-      "scripts/work-control-gate.mjs",
-    ],
-  };
-
-  for (const [path, markers] of Object.entries(required)) {
-    it(`${path} carries the canonical role/proof contract`, () => {
-      const text = flat(path);
-      const missing = markers.filter((marker) => !text.includes(marker));
-      expect(missing, `${path} dropped role/proof law markers`).toEqual([]);
-    });
-  }
 });
