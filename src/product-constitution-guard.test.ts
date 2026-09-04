@@ -41,7 +41,8 @@ describe("Compy product constitution authority", () => {
     expect(f).toContain("Compy optimizes outcomes, not settings.");
     expect(f).toContain("MAKE THIS PC BETTER.");
     expect(f).toContain("FIGURE OUT WHAT WENT WRONG.");
-    expect(f).toContain("The fundamental unit of optimization is not a tweak. It is a Trial.");
+    expect(f).toContain("The fundamental unit of optimization is not a tweak.");
+    expect(f).toContain("It is a **Trial**.");
     expect(f).toContain("No measurable change. Original setting restored.");
     expect(f).toContain("Simple outside, deep inside");
   });
