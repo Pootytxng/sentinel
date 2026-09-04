@@ -1,443 +1,459 @@
 # Architecture Locks
 
-> Compy is the PC doctor users turn to after a crash, freeze, slowdown, or unexplained hiccup. Its treatment layer is still rollback-first; optimization is a secondary specialty.
+**Status:** SUPREME SAFETY / ARCHITECTURE AUTHORITY  
+**Product direction:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md)  
+**Current implementation/release truth:** [`RELEASE_STATE.md`](RELEASE_STATE.md)
 
-This document captures decisions that are hard to change once users are in the wild, plus the operating policies that govern how new features get added. Future contributors (including future Claude sessions) must respect these. Breaking them silently is a "users-can't-update-or-rollback" class incident — or worse, a "remote control plane shipped without signed verification" class incident.
+This document defines safety, rollback, privilege, persistence, trust-root, network/capability, and
+immutability contracts that are deliberately hard to change once users are in the wild.
 
-The doc has three sections:
+It does **not** define whether Care or Performance is primary, product positioning, monetization,
+roadmap order, or UX hierarchy. Those belong to the Product Constitution and its derived documents.
 
-1. **Operating Policies** — how Compy behaves and what it is allowed to do. Apply to all current and future work.
-2. **Immutability Tiers** — concrete data and identifier decisions, ranked by how locked-in they become.
-3. **Baseline Exclusions** — tweaks deliberately not in baseline v1, with the conditions under which they could appear later as advanced/diagnostic features.
+Breaking these locks silently is a users-can't-update-or-rollback class incident — or worse, a
+remote-control-plane / privilege-escalation incident.
+
+Point-in-time statements such as “built,” “armed,” “installed,” or “verified” belong in
+`RELEASE_STATE.md`; this file states the durable contract.
 
 ---
 
-## 1. Operating Policies
+## 1. Operating policies
 
-These are policies, not data formats. They govern judgment calls across the codebase.
+### 1.1 Remote rules are privileged policy, not ordinary data
 
-### 1.1 Remote rules are privileged policy, not data
+Any remotely supplied rule capable of selecting a privileged Windows action is treated as privileged
+policy metadata with the same seriousness as executable update policy.
 
-Any rule served from a CDN is treated as **privileged Windows policy metadata**, with the same care as code-signing-protected app updates. The fact that the JSON cannot contain Rust code is necessary but not sufficient — the JSON can still select elevated actions on a user's machine.
+Required invariants:
 
-Implications, all of which must be true before any remote fetch ships:
+- **No generic mutation dispatcher.** No remote `registry-set`, `service-set`, arbitrary PowerShell,
+  command string, path string, or equivalent generic write primitive.
+- Apply behavior is represented by typed, source-auditable enums and allowlisted parameters.
+- A maintainer must be able to enumerate every privileged operation Compy can perform by reading the
+  shipped source.
+- Remote policy may select only among actions the shipped binary already knows.
+- Unknown enum variants, fields, services, identifiers, or parameters fail closed.
+- The privileged action allowlist changes only through an app release.
 
-- **No generic mutation dispatchers.** No `apply_kind: "registry-set"`, no `apply_kind: "service-set"`, no `apply_kind: "powershell-run"`. Apply behavior is dispatched through typed Rust enums (see §2.4) with allowlisted variants and parameters.
-- **All apply / rollback variants are auditable in source.** A maintainer can read the Rust source and enumerate every possible privileged operation Compy can perform. Remote JSON only *selects* among them.
-- **Unknown enum variants, unknown fields, unknown services, and unknown parameter values are rejected.** Loud parse failure, no silent skip-and-continue.
-- **The action allowlist is updated only through app releases**, never through remote rules.
+Remote knowledge/advisory data and remote mutation policy are separate trust surfaces and must never
+be conflated.
 
-### 1.2 AI explains, never mutates
+### 1.2 AI explains and assists; it does not own mutation authority
 
-If and when an LLM is integrated, the allowed surface is strictly:
+An LLM or other probabilistic system may:
 
-- Explaining what a recommendation does in plain English
-- Summarizing detected hardware
-- Classifying logs or applied-change history
-- Suggesting advisories for **human review** before any apply path runs
+- explain a supported recommendation or Trial;
+- summarize detected hardware/state;
+- summarize logs/history/evidence;
+- help classify or communicate evidence;
+- propose an advisory for human/product logic to evaluate.
 
-The disallowed surface, with no exceptions:
+It may not autonomously:
 
-- Deciding what to apply
-- Inventing new tweak actions
-- Choosing registry paths, services, or parameters
-- Writing or altering apply or rollback logic
-- Modifying the typed action allowlist
+- invent a new mutation primitive;
+- choose arbitrary registry paths, services, commands, drivers, or parameters;
+- write or modify the privileged action allowlist at runtime;
+- bypass the deterministic eligibility, Trial, Risk, rollback, or verification machinery;
+- turn a probabilistic suggestion directly into an elevated mutation.
 
 **The AI narrates the chainsaw. It does not hold it.**
 
-### 1.3 Cold-start behavior
+The Product Constitution permits Compy to guide users aggressively toward outcomes; that does not
+change this mutation-authority boundary.
 
-Compy must be useful on first launch with no network access, indefinitely.
+### 1.3 Offline-capable cold start
 
-- The embedded baseline is the starting catalog. Always.
-- Remote validation runs in the background after the UI is interactive.
-- The catalog is replaced only if the remote bundle passes every gate in §1.4.
-- If the fetch fails, expires, or fails verification, the embedded or last-known-good cached catalog stays active.
-- The user sees a small, non-alarming status indicator ("Using built-in recommendations. Online rule updates unavailable.") — no modal, no panic, no upsell.
+Compy's core local value must remain useful without a network connection.
 
-### 1.4 Remote fetch is gated behind signed manifest validation
+For signed remote rule/advisory systems:
 
-No remote **rules** fetch ships, including in private or closed beta, until all of the following are in place:
+- ship an embedded baseline or equivalent local fallback where the capability requires one;
+- remote validation happens only after the local app can function;
+- failure, expiry, timeout, or signature rejection falls back to embedded/last-known-good state;
+- absence of network is not converted into a scare modal or false failure;
+- support evidence must be able to identify which source was active.
 
-- Ed25519 public key embedded in the binary
-- Signed manifest format with `schema_version`, `ruleset_version`, `created_at`, `expires_at`, `min_app_version`, `max_app_version`, `rules_sha256`, `rules_url`
-- Manifest signature verification before any rules JSON is downloaded
-- Rules JSON SHA-256 verified against the signed manifest
-- Monotonic `ruleset_version` enforcement (rollback-attack protection — never accept an older ruleset than last-known-good)
-- `expires_at` enforcement (freeze-attack protection)
-- `min_app_version` / `max_app_version` enforcement
-- Last-known-good cache
-- Oversized-file rejection (cap on JSON size)
-- Network timeouts
-- Logging of which source is active (embedded / cached / remote) so support can answer "where did this rule come from?"
+The exact online capabilities currently armed are Release State truth.
 
-Private beta with the embedded baseline only is fine and recommended for feedback velocity. Private beta with unsigned remote fetch is not. The remote control plane does not get smuggled in under "we'll add signing later."
+### 1.4 Signed remote mutation policy is fail-closed
 
-**Status (2026-05-30): the verification machinery is BUILT and tested, not stubbed.** Real Ed25519 verification is wired via `ed25519-compact` (`verify_manifest_with_key` / `verify_chain_with_key` in `lib.rs`), covering every gate above: signature, SHA-256 binding, monotonic `ruleset_version`, `expires_at`, app-version range, size caps. 11 unit tests (`manifest_tests`) prove valid bundles verify and that tampering, wrong-key, malformed-signature, rollback, freeze, and out-of-range app version are all rejected. The offline signer (`src-tauri/examples/sign_manifest.rs`) produces app-verifiable manifests. **Remote fetch remains disabled** — three independent things still gate it: (1) `RULES_SIGNING_PUBKEY_BYTES` is still the all-zeros placeholder, (2) `remote_fetch_enabled()` hard-returns `false`, (3) no CDN URL is configured. Arming remote fetch = generate a production keypair offline, embed its public key, configure the URL, and flip the flag — a deliberate, reviewable change, not an accident.
+No remote **mutation rules** capability may ship armed until all of the following are true:
 
-### 1.5 Rollback is independent of the live catalog
+- production Ed25519 public key embedded in the binary;
+- signed manifest with at least `schema_version`, `ruleset_version`, `created_at`, `expires_at`,
+  `min_app_version`, `max_app_version`, `rules_sha256`, and `rules_url`;
+- signature verification occurs before trusting the manifest;
+- rules bytes are SHA-256 bound to the signed manifest;
+- monotonic ruleset version blocks rollback attacks;
+- expiry blocks freeze attacks;
+- app-version range is enforced;
+- last-known-good cache exists;
+- oversized payloads are rejected;
+- network operations have bounded timeouts;
+- active source/provenance is observable for support;
+- the action set remains source-allowlisted under §1.1.
 
-A user must always be able to roll back any applied change, even if:
+**Unsigned remote rules must never ship, even in beta.**
 
-- The CDN is down
-- The rule has been removed from the catalog
-- The rule has been renamed or its conditions changed
-- The user has downgraded the app to an older version
-- Compy itself has changed how the rule dispatches internally
+A placeholder public key or hard-false runtime gate must fail closed. Arming requires deliberate
+review; one changed constant must never accidentally enable the entire control plane.
 
-This is achieved by storing the complete rollback contract inside `AppliedChange` at apply time (see §2.1). Rollback never consults the live `Vec<Recommendation>`; it consults local history.
+### 1.5 Rollback is independent of the current catalog
 
-### 1.6 UI strings from remote rules are sanitized
+A user must be able to roll back a Compy-applied change even when:
 
-Rule text rendered in the UI is treated as untrusted. No HTML, no Markdown injection, no `dangerouslySetInnerHTML`. Plain text only, with character escaping at the React render boundary.
+- the network is unavailable;
+- the rule is removed, renamed in presentation, or no longer recommended;
+- the remote catalog changes;
+- the user is on a different compatible app version;
+- implementation details are refactored.
 
-### 1.7 No fake performance claims
+Therefore the complete rollback contract is captured **at apply time** and persisted locally.
+Rollback consults local history, not the current recommendation catalog.
 
-Compy does not promise FPS gains, latency reductions, or other measured improvements unless and until they are produced by actual measurements on the user's machine. The three labels are kept strictly separate in the UI:
+**Never apply a change you can't roll back** unless a separately owner-approved architecture exception
+explicitly defines why the operation is allowed despite irreversibility; such an exception is outside
+the normal optimization catalog and must never be inferred from the user's “Push” risk preference.
 
-- **Verified** — a configuration value was deterministically changed (e.g. Fast Startup now off; checked via registry).
-- **Measured signal** — a probe was run (memory latency, network jitter, storage random-read latency). This is a signal, not proof of gaming improvement.
-- **Expected impact** — theoretical impact described in the rule's text. Never displayed as a measured number.
+### 1.6 Remote/UI text is untrusted input
 
-Synthetic microbenchmarks may be exposed as health signals. They may not be presented as "this tweak improved your FPS by X%." Real before/after gaming proof requires PresentMon/ETW frame-pacing capture.
+Remote advisory/rule strings rendered by the UI are treated as untrusted plain text.
 
-**Scope update (2026-06-03, owner-approved).** PresentMon/ETW frame-time capture is **promoted from "out of v1" to the core efficacy "Measure"** — real per-tweak before/after frame-pacing deltas (frame times, 1%/0.1% lows) are the ultimate proof the measured-efficacy direction is built on. This reuses the **already-shipping, read-only, anti-cheat-safe** elevated `fps.rs --fps-capture` ETW helper (no new capability, no mutation, no injection — the same mechanism the Monitoring tab already uses). **The honesty invariant above is unchanged and reinforced:** a measured delta must still clear the run-to-run **noise floor** (default 3%) or be reported as an explicit **"no measurable change"**; synthetic runners stay labeled health signals ("is-my-hardware-to-spec"), kept distinct from PresentMon's "did-this-help-my-game" proof. Building the PresentMon→`compute_efficacy` seam stays gated behind the dark `benchmark_enabled()` until it ships and is QA'd.
+No remote HTML execution, no `dangerouslySetInnerHTML`, no markup path that can become script or
+privileged command execution. Rendering must escape content at the presentation boundary.
 
-### 1.8 Capability Exception Gate + outbound case intelligence
+### 1.7 Measurement claims remain evidence-scoped
 
-**Owner decision (2026-08-09, issue #91):** the blanket "no Compy driver / no new outbound surface"
-prohibitions are replaced by a challengeable gate. This is not a general unlock.
+Compy may describe a deterministic state change as verified only when it verified that state.
 
-#### Default posture
+Compy may describe a performance/latency/stability effect as measured only when actual measurement
+supports it on the relevant machine/workload.
 
-Every new capability starts **local, user-mode, least-privilege, non-invasive, offline-usable and
-fail-closed**. The proposer must use documented Windows APIs, ETW, vendor SDKs, local files, WMI/CIM,
-or a user-mode service before requesting a stronger boundary.
+Keep these categories distinct:
 
-An exception record is valid only when it names all of the following:
+- **Known/verified state** — deterministic observation/configuration verification.
+- **Measured result** — observed benchmark/session/Trial effect.
+- **Supported inference** — evidence points toward an interpretation but does not prove cause.
+- **Expected mechanism** — engineering rationale, not measured outcome.
+- **Unknown** — insufficient evidence.
 
-1. the user-visible failure and measurable success criterion;
-2. evidence that lower-risk routes cannot deliver that outcome;
-3. exact target, privilege level, caller, data read/written, persistence and performance budget;
-4. anti-cheat, security, privacy and stability threat model;
-5. consent, disclosure, retention/deletion and revocation behavior;
-6. rollback/uninstall, update/signing, kill switch and recovery from a bad release;
-7. dark/canary/staged rollout, independent review, abort metrics and review expiry;
-8. the owner decision that permits implementation and the later decision that permits arming.
+Synthetic microbenchmarks may be health signals; they are not automatically proof that a game
+improved. Real before/after gaming claims require comparable game/workload evidence and the Trial
+Protocol's noise rules.
 
-Approval applies only to the named capability. It cannot be cited to justify an adjacent transport,
-driver IOCTL, endpoint, payload, telemetry field, capability permission, CSP widening or mutation.
+A delta that does not clear credible run-to-run noise is reported as **no measurable change**, not a
+win rounded up for marketing.
+
+### 1.8 Capability Exception Gate
+
+Every new capability starts local, user-mode, least-privilege, non-invasive, offline-usable where
+reasonable, and fail-closed.
+
+Before requesting a stronger boundary, the proposer must first evaluate documented Windows APIs,
+ETW, vendor-supported SDKs/interfaces, local files, WMI/CIM, or another lower-risk user-mode route.
+
+A valid exception record names:
+
+1. user-visible failure and measurable success criterion;
+2. evidence lower-risk routes cannot deliver the outcome;
+3. exact target, caller, privilege level, data read/written, persistence, and performance budget;
+4. anti-cheat, security, privacy, and stability threat model;
+5. consent, disclosure, retention/deletion, and revocation behavior;
+6. rollback/uninstall, update/signing, kill switch, and bad-release recovery;
+7. dark/canary/staged proof, independent review, abort metrics, and review expiry;
+8. explicit owner decision to implement and, separately where needed, to arm/release.
+
+Approval applies only to the named capability. It cannot be cited to justify an adjacent driver
+IOCTL, endpoint, payload field, telemetry field, CSP widening, permission, or mutation.
 
 #### Boundaries that remain absolute
 
-- **No third-party game/process injection:** no DLL injection, code hooks inside a game, game-memory
-  reading/writing, or execution inside an anti-cheat process.
-- No vulnerable or borrowed third-party kernel driver (BYOVD).
-- No generic physical-memory, arbitrary MSR, PCI configuration, I/O-port, device-register or
+- **No third-party game/process injection:** no DLL injection, game-memory read/write, runtime hooks,
+  or executing Compy code inside a game or anti-cheat process.
+- No vulnerable/borrowed third-party kernel driver (BYOVD).
+- No generic physical-memory, arbitrary MSR, PCI configuration, I/O-port, device-register, or
   kernel read/write primitive.
-- No silent evidence upload, no raw dump auto-upload, no hidden background queue.
+- No silent evidence upload, raw dump auto-upload, or hidden background evidence queue.
 - Remote/advisory content never creates a mutation primitive or bypasses `actions.rs`.
 
 #### Compy-shipped driver exception
 
-A Compy driver is policy-possible but is **not approved by this decision and is not needed for the
-first Compy Care train**. Its own record must additionally prove a kernel driver is required; use a
-minimal WDF design; constrain every IOCTL and caller; pass HVCI/Memory Integrity, Driver Verifier,
-HLK/compatibility, signing and uninstall/rollback tests; document anti-cheat compatibility; and
-survive an independent driver-security review. A driver cannot be justified only to fill a sensor
-tile. Current runtime remains driver-free, and CPU temperature remains external-monitor-only.
+A Compy-authored driver is policy-possible only through its own approved Capability Exception record.
+The mere fact that a sensor, optimizer, or competitor uses a driver is not sufficient justification.
+
+Any driver proposal additionally requires:
+
+- proof the desired outcome cannot be reached with a safer supported interface;
+- minimal WDF-style design and narrowly constrained IOCTL/caller surface;
+- HVCI/Memory Integrity compatibility;
+- Driver Verifier and appropriate compatibility/HLK testing;
+- signed distribution and clean uninstall/rollback;
+- anti-cheat compatibility analysis;
+- independent driver-security review;
+- explicit staged-release abort criteria.
+
+A driver must never be justified only to fill an otherwise honest “unavailable” sensor tile.
 
 #### Outbound tiers
 
-| Tier | Purpose | Consent | Data leaving Compy | Independent gate |
-|---|---|---|---|---|
-| **1 — signed case knowledge** | Keep public known-issue guidance current | disclosed request + global off switch | catalog request metadata only; **no machine-derived incident payload** | separate advisory signing trust, domain, cache, caps, timeouts; local deny-only kill switch |
-| **2 — scrubbed incident fingerprint** | Learn which issue shapes recur | opt-in, default OFF and it stays OFF after arming, disclosed at first run, real off switch, previewable (ruled 2026-08-24 #207, superseding the 2026-08-18 §2 amendment) | allowlisted coarse fields only; no raw log/dump/path/serial/user identity | payload schema, redaction proof, retention/deletion, revocation, abuse review |
-| **3 — per-case evidence upload** | Let a user send one support case | explicit consent for that incident after preview/redaction | exactly the displayed bundle to a named recipient | one-case receipt, endpoint policy, retention/deletion response, no background queue |
+These are distinct capabilities and never inherit consent from one another:
 
-Tiers never inherit consent from one another. Tier 1 does not authorize Tier 2 or 3.
+| Tier | Purpose | Consent | Data leaving Compy |
+| --- | --- | --- | --- |
+| **1 — signed case knowledge** | keep public advisory knowledge current | disclosed request + global off switch | catalog request metadata only; no machine-derived incident payload |
+| **2 — scrubbed incident fingerprint** | learn recurring issue shapes | opt-in, default OFF, previewable, real off switch | allowlisted coarse fields only; no raw dump/log/path/serial/user identity |
+| **3 — per-case evidence upload** | user intentionally sends one support case | explicit per-incident consent after preview/redaction | exactly the displayed bundle to the named recipient |
 
-#### Kill-switch and source-origin authority
+Each tier requires its own schema, retention/deletion, abuse, and security review appropriate to the
+data it handles.
 
-Tier 1's initial kill switch is **local and deny-only**. It may keep the production gate false or
-stop refresh/use of case intelligence; it cannot enable the feature, change endpoints, add payload
-fields, alter matching, or weaken the hard-false gate. Any remotely delivered disable signal is a
-new inbound trust surface and needs its own Capability Exception record, distinct signing key/schema
-and owner arming decision. It may disable only, never enable or configure, and it cannot travel inside
-the advisory catalog.
+Tier 1's initial kill switch is local and deny-only. A remotely delivered kill/enable/configure signal
+is a new inbound trust surface and requires a separate reviewed capability.
 
-Public case-source links use a compile-time `CASE_SOURCE_ORIGINS` allowlist owned in
-`src-tauri/src/case_intelligence.rs`. That list changes only through an app release with Rust/security
-review. A signed catalog may select a URL under an existing HTTPS origin; it cannot add an origin,
-redirect Compy's transport, or cause an in-app fetch. Opening a source is an explicit user click into
-the system browser.
-
-#### Tier 1 implementation lock
-
-The first outbound case-intelligence build is a new Rust-side advisory module, not `remote_rules.rs`,
-`receipts.rs`, or `support_evidence.rs`, and not a webview fetch. It uses a separate public key,
-manifest schema, catalog-endpoint allowlist, compiled source-link allowlist, cache namespace and monotonic version. It verifies signature,
-hash, expiry, app-version range and size before caching; preserves an embedded/last-known-good
-fallback; matches the downloaded public catalog against the existing local crash incident on-device;
-and returns advisory wording only. It does not widen CSP, upload incident data, add a mutation
-variant, or alter support evidence transport. The runtime gate stays hard-false until endpoint,
-signing custody, privacy copy, security review and arming evidence are exact.
-
-Detailed directive: `docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md`.
-Execution plans:
-`docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md` and
-`docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md`.
+Public case-source origins are compile-time allowlisted and change only through an app release.
+A signed catalog may select a URL under an existing allowed HTTPS origin; it cannot add a new origin,
+redirect transport, mutate the machine, or trigger an in-app arbitrary fetch.
 
 ---
 
-## 2. Immutability Tiers
+## 2. Immutability tiers
 
-### Tier 1 — Immutable forever (changing breaks already-installed users)
+These are durable compatibility contracts. Current implementation details are verified against source
+and Release State; the compatibility rule survives refactors.
 
-#### Rec IDs
+### Tier 1 — immutable once shipped to users
 
-Every `Recommendation.id` shipped in a release is a permanent contract. No renames, ever. Retired recs keep their id; remove the rule but keep dispatch handlers for any historical apply.
+#### Recommendation / Trial action identifiers
 
-#### `AppliedChange` schema (the full rollback contract)
+Every shipped stable recommendation/action identifier that can appear in persisted history is a
+permanent compatibility contract. Retired items keep their historical identifier. Presentation names
+may change; persisted IDs do not.
 
-Persisted in `%APPDATA%\Compy\history.json`. Fields can be added (with `#[serde(default)]`) but never renamed or removed. The minimum fields required for rollback independence (per §1.5):
+#### `AppliedChange` rollback schema
+
+Persisted rollback history under `%APPDATA%\Compy\history.json` is additive-only once shipped.
+Existing serialized fields may not be renamed or removed without a backwards-compatible migration
+that preserves rollback for existing users.
+
+The durable minimum contract includes the semantic equivalents of:
 
 ```rust
 struct AppliedChange {
-    id: String,                  // unique per applied change
-    rec_id: String,              // the recommendation's stable id
-    rec_title_at_apply: String,  // human-readable label snapshot
-    applied_at: String,          // ISO 8601
-    status: String,              // "applied" | "rolled_back"
-
-    // Rollback independence: store the contract at apply time
+    id: String,
+    rec_id: String,
+    rec_title_at_apply: String,
+    applied_at: String,
+    status: String,
     applied_action: AppliedAction,
     rollback_action: RollbackAction,
     snapshot: Snapshot,
-
-    // Provenance
     app_version_at_apply: String,
-    ruleset_version_at_apply: String,  // matches the signed manifest version, or "embedded-baseline"
+    ruleset_version_at_apply: String,
     elevation_used: bool,
 }
 ```
 
-Once shipped, this struct's fields are additive-only forever. The `AppliedAction`, `RollbackAction`, and `Snapshot` enums are also additive — new variants only, never rename or remove.
+Fields may be added with backwards-compatible defaults where appropriate. Removing the ability to
+read an older persisted change is a rollback-breaking migration and is forbidden without an explicit
+compatibility plan.
 
-#### Snapshot variants
+`AppliedAction`, `RollbackAction`, and `Snapshot` are additive compatibility enums: new variants may
+be added; shipped serialized variants are not casually renamed/removed.
 
-Each snapshot variant stores the **prior machine state** for one shape of mutation. Examples:
+#### Snapshot contract
 
-```rust
-enum Snapshot {
-    Service { name: KnownService, prior_state: ServiceState, prior_start_type: ServiceStartType },
-    RegistryDword { target: KnownDwordTarget, prior: Option<u32> },
-    RegistryBinary { target: KnownBinaryTarget, prior: Option<Vec<u8>> },
-    PowerPlan { prior_guid: String },
-    NagleNicSet { entries: Vec<NagleNicSnapshot> },
-    None,
-}
-```
+A Snapshot stores the prior machine state necessary to restore one bounded mutation shape.
+Examples include service state/start type, registry prior values, prior power plan, NIC-state sets,
+or another typed prior-state structure.
 
-Adding a new variant is fine. Renaming or removing existing ones permanently breaks rollback of older history entries.
+`Snapshot::None` is not permission to apply an otherwise irreversible optimization. It is valid only
+for action shapes whose rollback contract legitimately requires no captured machine value.
 
 #### Bundle identifier
 
-Currently `gg.compy.app` (set at the 2026-06-04 Sentinel→Compy rename; matches `src-tauri/tauri.conf.json`). Immutable once shipped to users — changing it breaks already-installed users' rollback/data paths.
+`gg.compy.app` is the current durable application identifier established by the Sentinel→Compy
+migration. Changing it after distribution can break installed-app identity and data/rollback paths;
+any future change requires an explicit migration plan and owner release decision.
 
-#### AppData directory `%APPDATA%\Compy`
+#### AppData root
 
-History persistence lives here. Renaming requires migration code.
+`%APPDATA%\Compy` is the durable user-data root for persisted history. Renaming/moving it requires
+migration code that preserves existing data and rollback.
 
----
+### Tier 2 — schema-versioned contracts
 
-### Tier 2 — Schema-versioned (changing requires a new schema version)
+#### Remote rule/advisory schemas
 
-#### Remote rules JSON schema
+Remote schemas use explicit schema versions and versioned compatibility. Older supported clients must
+remain able to fetch/validate the schema version they understand until that client version reaches a
+deliberate EOL.
 
-Versioned URLs: `rules-v1.json`, `rules-v2.json`. Embedded constant `RULES_SCHEMA_VERSION` selects which URL the client fetches. Inside each file: `schema_version` field as a belt-and-suspenders mismatch check.
+A schema mismatch is a loud failure, not silent best-effort parsing of privileged data.
 
-Migration path: ship a v2 schema → v1 stays alive at its URL for older clients → newer clients use v2 → eventually older app versions reach EOL.
+#### Typed privileged action allowlist
 
-#### Typed action allowlist (`AppliedAction`, `RollbackAction`)
+Applied and rollback actions remain separate typed contracts: what was done is distinct from how the
+stored snapshot restores it.
 
-The two enums separate **what was done** from **how to undo it using the stored snapshot**. They are independent contracts — a future refactor of apply behavior cannot reach back and break rollback of historical entries.
+Privileged enums use strict deserialization. No free-form registry/service/command strings from a
+remote source, no permissive `serde(other)` catch-all on enums that drive privileged behavior, and no
+unknown-field acceptance that can silently reinterpret policy.
 
-```rust
-// What was done at apply time
-enum AppliedAction {
-    DisableKnownService { service: KnownService },
-    EnableHardwareGpuScheduling,
-    SetUltimatePerformancePlan,
-    DisableNagleOnActiveNics,
-    SetGameModeEnabled,
-    SetVisualEffectsBestPerformance,
-    DisableMouseAcceleration,
-    DisableGameBarAndDvr,
-    DisableFastStartup,
-    DisableReservedStorage,
-    // Additive only. New variants require an app release.
-}
+Allowlisted identifiers are additive and source-reviewed.
 
-// How to undo it, given the stored Snapshot
-enum RollbackAction {
-    RestoreServiceFromSnapshot { service: KnownService },
-    RestoreHwSchModeFromSnapshot,
-    RestorePowerPlanFromSnapshot,
-    RestoreNagleNicsFromSnapshot,
-    RestoreGameModeFromSnapshot,
-    RestoreVisualEffectsFromSnapshot,
-    RestoreMouseAccelFromSnapshot,
-    RestoreGameBarFromSnapshot,
-    RestoreFastStartupFromSnapshot,
-    RestoreReservedStorageFromSnapshot,
-}
+#### Recommendation/category taxonomy
 
-// Allowlisted identifiers — no free-form strings
-enum KnownService {
-    SysMain,
-    DiagTrack,
-    WSearch,
-    NvTelemetryContainer,
-    // Additive only.
-}
-```
+Serialized or externally consumed category/taxonomy values are changed only with coordinated schema
+migration. UI labels may evolve without rewriting persisted compatibility identifiers.
 
-Strict serde rules apply: `deny_unknown_fields` on every struct, exhaustive enum tag matching, no `#[serde(other)]` catch-alls on enums that drive privileged behavior. Unknown variants → loud parse failure.
+### Tier 3 — changeable with deliberate migration/testing
 
-#### Rec category strings
+Examples:
 
-`Windows | Power | GPU | Display | Storage | Network`. Adding new categories is additive. Renames are coordinated across Rust + TS + CSS plus a schema version bump.
+- additive history metadata with safe defaults;
+- implementation dependency used for elevation, when behavior/security remain equivalent;
+- WMI/DXGI/SMBIOS detection source changes with validated fallbacks;
+- internal module decomposition that does not change persisted or privilege contracts.
 
 ---
 
-### Tier 3 — Worth being careful about, but recoverable
+## 3. Performance-tuning exclusions and entry conditions
 
-- History file format additions (use `#[serde(default)]`)
-- The `runas` crate dependency (swappable for a custom helper)
-- WMI / DXGI / SMBIOS detection sources (already use fallbacks)
+The old “baseline v1” framing is retired. Current product risk/Trial policy lives in
+`product/RISK_MODEL.md`, `product/TRIAL_PROTOCOL.md`, and `product/OPTIMIZATION_ENGINE.md`.
 
----
+### Permanently barred from Compy's normal automated optimization catalog
 
-## 3. Baseline Exclusions
+These stay barred regardless of an attractive benchmark delta unless a future explicit architecture
+amendment proves the underlying safety premise itself has changed:
 
-> **Doctrine pointer (added 2026-07-11 audit — this section was NOT updated for the policy below and
-> read as a flat hard-freeze):** CLAUDE.md LOCKED rule 6 (owner decision 2026-07-09) OPENED the tweak
-> catalog under a measurable-benefit-under-rails policy. The list below now SPLITS: HPET/BCDEdit timer
-> hacks, global MMCSS abuse, core-parking writes, Defender/Update/mitigation disables, and fixed-pagefile
-> forcing **stay barred regardless of measured fps** (safety/stability/anti-cheat, not just unmeasured).
-> Everything else below — NIC offload disable packs, interrupt-moderation changes, global
-> fullscreen-optimizations disable, "TCP mega-pack" writes, universal MPO disable — is now a
-> **candidate** if it clears the proving-ground bench + the permanent safety rails + its own mutation-gate
-> QA. See CLAUDE.md rule 6 for the authoritative current split; treat this doc's flat list below as
-> historical framing, not current policy.
+- HPET/timer hacks;
+- BCDEdit timer/boot-parameter hacks;
+- global MMCSS abuse;
+- forced core-parking writes / numproc boot manipulation;
+- disabling Defender or equivalent security protections for performance;
+- disabling Windows Update as a gaming optimization;
+- disabling hardware security/mitigation patches for performance;
+- fixed-size pagefile forcing that creates preventable crash/data-risk conditions;
+- ungated kernel-level mutation capability;
+- vulnerable-driver techniques;
+- game/anti-cheat injection;
+- any technique known to trip or bypass EAC/BattlEye or equivalent anti-cheat in an unsupported way.
 
-These tweaks are **explicitly excluded from baseline safe recommendations** in v1. They may only appear later as **advanced, diagnostic, user-initiated, problem-specific advisories** — with strong warnings, no default apply, and full rollback where possible. They are not forever-banned from every possible diagnostic path; they are barred from the safe baseline.
+**Measurement does not make an unsafe mechanism safe.**
 
-### Excluded from baseline
+### Candidate only after constitutional Trial + Risk proof
 
-- HPET enable / disable toggles
-- BCDEdit timer-resolution and `useplatformtick` tweaks
-- Global MMCSS / SystemResponsiveness registry edits
-- Disabling Windows Defender, real-time protection, or scheduled scans
-- Disabling Windows Update or its scheduled tasks
-- Disabling Spectre / Meltdown / hardware-mitigation patches
-- Forced core parking / `bcdedit` numproc overrides
-- Generic NIC offload disable packs (LSO, RSS, RSC, etc.)
-- Generic interrupt-moderation changes
-- Global fullscreen-optimizations disable (Microsoft has reversed their own guidance multiple times; not safe to ship as default)
-- Fixed-size pagefile "optimization" (causes crashes when undersized)
-- "Registry TCP mega-pack" style bulk network parameter writes
-- Universal MPO (Multi-Plane Overlay) disable
+The following classes are not automatically good or bad; they become candidates only when relevant
+to the actual machine/workload, reversible, supportable, measurable, and inside the Risk Model:
 
-### Conditions for any future inclusion
+- NIC offload/interrupt-moderation changes;
+- fullscreen-optimization policy changes;
+- bounded network-stack changes;
+- MPO changes when problem-specific and safely reversible;
+- advanced supported scheduling/power behavior;
+- supported vendor tuning interfaces;
+- other previously fashionable “optimizer” settings whose value must be proven per machine rather
+  than assumed universally.
 
-If any of the above is later added to Compy, it must be:
+A candidate is not kept merely because it exists in another optimizer. Applicability + Trial evidence
++ rollback + risk determine inclusion.
 
-- Advanced mode only (separate UI surface, opt-in)
-- Problem-specific (gated on a detected issue, not "more performance")
-- User-initiated (never recommended as default; user opens advanced mode and explicitly selects)
-- Behind strong warnings that name the specific risk
-- Fully rollback-capable, with a snapshot that can survive driver / Windows updates
-- Documented with reproducible measurement methodology, not theoretical impact
+### Structural impossibility
+
+If Compy cannot read or reconstruct the prior state reliably enough to satisfy rollback, automatic
+apply remains structurally unavailable regardless of expected benefit. GPU-profile mutation remains
+in this category while the relevant prior state cannot be read reliably through a supported interface.
 
 ---
 
-## 4. Pre-launch Checklist
+## 4. Release/security checklist gates
 
-Tracked here so the right decisions are made at the right time, not skipped:
+This is a durable category checklist; exact completed/pending state belongs in `RELEASE_STATE.md` and
+`OWNER_ACTION_CHECKLIST.md`.
 
-- [ ] Trademark check on the public name (the Sentinel→Compy rename was executed 2026-06-04 — name committed at app level; CompyOne is an established holder in adjacent space, so clearance is still open)
-- [ ] Final bundle identifier confirmed
-- [ ] Final public product name confirmed
-- [ ] EV code-signing certificate purchased and integrated into the build pipeline
-- [x] Tauri 2 built-in updater configured (`tauri.conf.json` updater section + pinned signing key);
-      every fleet-visible publication still requires the exact owner GO in
-      `docs/RELEASE_STATE.md`
-- [ ] LICENSE replaced from the placeholder with the final commercial license
-- [ ] Privacy policy + EULA + clear disclaimers about reboot-required tweaks
-- [ ] Signed remote rules manifest pipeline live (see §1.4) — verification code already landed; production key + URL gated by this checklist
-- [ ] Last-known-good rules cache verified across cold-start scenarios
-- [x] Trust Ledger UI surface implemented (per §1.5)
+Before broad public distribution, verify as applicable:
+
+- public product name/trademark clearance;
+- bundle identifier and migration plan;
+- code signing integrated into the release pipeline;
+- updater signing and owner-controlled publication path;
+- final software license/EULA/privacy disclosures;
+- permission/elevation explanation;
+- rollback and data migration across supported upgrade paths;
+- remote-rule production key/URL only when that capability is explicitly armed;
+- last-known-good remote fallback behavior;
+- AV/SmartScreen/installer trust testing appropriate to distribution channel;
+- user-visible security/privacy claims match the actual binary.
+
+Checklist completion is never inferred from this document; verify Release State.
 
 ---
 
-## 5. Rules Signing — Key Management
+## 5. Rules-signing key management
 
-The rules-manifest signing key is treated like an updater signing key — it is the trust root for every privileged Windows change Compy performs in the field. Mishandling it equals mishandling root on every installed machine.
+The privileged remote-rules signing key is a trust root for every remote-selected privileged action.
+Treat compromise as a fleet security incident.
 
 ### Hard rules
 
-- **The Ed25519 private key NEVER lives in this repository.** Not in commits, not in `.env*`, not in CI secrets, not in the developer's home directory unencrypted.
-- **The current embedded public key (`RULES_SIGNING_PUBKEY_BYTES` in lib.rs) is the 32-zero-byte placeholder.** While that placeholder is in the binary, `remote_fetch_enabled()` hard-returns `false`. Replacing the placeholder with a real key and the URL is the single action that arms remote fetch.
-- **Rotation is via app update only.** New public key → new app version that embeds it. The CDN cannot rotate the signing key — that would defeat the trust root.
-- **Manifest signature is over a canonical form of the manifest with the `signature` field removed.** The signer and the verifier must agree on the canonicalization. We currently use `serde_json::to_vec(&value)` after removing the `signature` field; if we ever upgrade to RFC 8785, both sides update together with a schema version bump.
+- **The Ed25519 private key NEVER lives in this repository.** Not in commits, `.env*`, ordinary CI
+  secrets, or an internet-connected developer workstation.
+- Placeholder public keys and hard-false runtime gates fail closed.
+- Public-key rotation occurs through an app update, not through the same CDN whose content the key is
+  meant to authenticate.
+- Manifest signature canonicalization is versioned and signer/verifier must agree exactly.
+- The production key and release procedure are owner/security territory.
 
-### Storage of the production private key
+### Preferred private-key custody
 
-When the time comes (pre-launch), the production private key SHOULD live:
+1. Hardware security module / hardware-backed signing requiring operator action — preferred.
+2. Dedicated offline/air-gapped signing system — acceptable when HSM custody is impractical.
 
-1. **In a hardware security module** (YubiKey, AWS KMS asymmetric key, or equivalent), with signing requiring physical or operator action. **Preferred**.
-2. **On an offline / air-gapped machine** used only for signing the manifest at release time. **Acceptable** if HSM is impractical for the initial launch.
+The production private key must not be persistently stored on an ordinary developer workstation or
+broad cloud CI runner.
 
-The production private key MUST NOT live on:
+### Signing flow invariants
 
-- Any developer workstation
-- Any cloud CI environment with broad access
-- Any environment that has internet access during signing
+The release signer must:
 
-### Per-release signing flow
+1. hash the exact rules payload;
+2. construct the exact versioned manifest;
+3. sign the canonical manifest payload with the private key;
+4. embed the signature;
+5. self-verify against the intended public key before publication;
+6. preserve monotonic ruleset versioning and bounded expiry.
 
-Use the offline signer `src-tauri/examples/sign_manifest.rs` on the HSM/air-gapped machine — it automates steps 1–4 and self-verifies its own output before writing:
+The existing offline signer may implement this flow while it remains verified; specific command lines
+and current source locations are implementation truth, not architecture law.
 
-```
-# one-time, offline: generate the production keypair
-cargo run --example sign_manifest -- --gen-key
-#   → store the SEED on the HSM/offline machine; embed the PUBLIC KEY in
-#     RULES_SIGNING_PUBKEY_BYTES (it prints a ready-to-paste array).
+### Key compromise
 
-# each release, offline:
-cargo run --example sign_manifest -- \
-    --seed seed.hex --rules rules-v1.json \
-    --rules-url https://cdn.example.com/rules/v1.json \
-    --ruleset-version <strictly greater than last> \
-    --expires-days <30..180> --min-app 0.1.0 --max-app 99.0.0 \
-    --out rules-v1.manifest.json
-```
+On suspected compromise:
 
-The tool computes the rules SHA-256, builds the manifest, signs the canonical form (manifest with `signature` absent — identical to `canonical_manifest_payload` in lib.rs), embeds the hex signature, and aborts unless its output re-verifies against the public key. Then: upload `rules-v1.manifest.json` and `rules-v1.json` to the CDN.
+- stop/disable remote refresh through the safest available deny path;
+- prepare an app update with a new public key/trust root;
+- do not use the compromised key to “announce” its own replacement;
+- preserve safe last-known-good/offline behavior for old clients;
+- document incident scope and rotate according to the release/security process.
 
-The private seed is passed by path and is never stored in the repo. `--gen-key`'s seed output must go straight to the HSM/offline store.
+A compromised privileged-policy key is not a routine content-operations event.
 
-### Compromise / suspected compromise of the private key
+---
 
-- IMMEDIATELY publish an app update that embeds a new public key.
-- Continue serving the old `rules-v1.json` from the CDN unchanged — old clients keep working off their last-known-good cache.
-- Old clients without an upgrade have no remote-fetch path until they update; this is the intended safety property.
+## 6. Architecture amendment rule
 
-### What `RULES_SIGNING_PUBKEY_BYTES = [0u8; 32]` guarantees
+A material change to this document requires:
 
-- `verify_chain` checks `RULES_SIGNING_PUBKEY_BYTES == [0u8; 32]` explicitly and returns `ManifestError::BadKey` before any cryptographic verification — defense in depth. (The real verify lives in `verify_chain_with_key` / `verify_manifest_with_key`, which the production path only reaches with the embedded key after that guard.)
-- `remote_fetch_enabled()` hard-codes `false` independently of the placeholder, so the embedded baseline is the only rule source even if the verification logic itself is buggy.
-- Both guards must be removed simultaneously to enable remote fetch. There is no path where one is on and the other is off in shipped code.
+1. explicit statement of which lock changes and why;
+2. product need tied to the Product Constitution;
+3. threat/rollback/compatibility analysis;
+4. migration impact on existing users and persisted data;
+5. tests/guards capable of detecting accidental regression where mechanizable;
+6. independent review appropriate to the risk;
+7. owner approval for security, secrets, capability, irreversible, or fleet-visible boundaries;
+8. same-change reconciliation of dependent docs/tests.
+
+Product ambition is allowed to grow. It must grow **through** these constraints rather than silently
+around them.
