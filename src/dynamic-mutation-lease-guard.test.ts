@@ -4,7 +4,12 @@ import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
-const BOOTSTRAPS = ["CLAUDE.md", "AGENTS.md", "docs/WORK_CONTROL.md"] as const;
+const BOOTSTRAPS = [
+  "CLAUDE.md",
+  "AGENTS.md",
+  "docs/WORK_CONTROL.md",
+  "docs/product/CONSTITUTIONAL_MIGRATION.md",
+] as const;
 const ROUTERS = ["tools/entry/select.mjs", "tools/entry/preflight.mjs"] as const;
 
 const PERMANENT_ROLE_PATTERNS = [
