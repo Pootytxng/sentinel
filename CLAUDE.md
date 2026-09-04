@@ -14,7 +14,7 @@
 > - `docs/PRODUCT_CONSTITUTION.md` — SUPREME PRODUCT AUTHORITY.
 > - **`docs/RELEASE_STATE.md` is authoritative** for what is built, armed, installed, verified, or blocked.
 > - `docs/ARCHITECTURE_LOCKS.md` — safety/architecture authority.
-> - `docs/WORK_CONTROL.md` — active writer/claim authority.
+> - `docs/WORK_CONTROL.md` — mutation-lease, scope, handoff, and proof-transition authority.
 > - `docs/product/ROADMAP.md` — derived product execution sequence.
 > - `docs/BACKLOG.md` — execution ledger only; never a source of product philosophy.
 
@@ -80,12 +80,16 @@ or pricing doctrine without an explicit constitutional amendment.
 build → verify → commit → push → next; failed gates trigger repair, not wishful pass. Preserve failed
 candidates before reset/abandonment. Questions are for genuine owner forks, not routine engineering.
 
-**Role specialization + proof order:** Claude Code is the default implementation owner; Codex is
-the default independent reviewer. Either becomes the sole active writer only by explicit handoff under
-`docs/WORK_CONTROL.md` after inspecting remote/repo/worktree/branch/dirty/process truth. Exact required
-gates cannot be substituted; environment inability is a blocker, not a pass. Run
-`scripts/work-control-gate.mjs` before proof-dependent GitHub transitions. One worktree per writer;
-mutexes enforce exclusion but never grant ownership.
+**Dynamic executor routing + proof order:** Claude Code, Codex, and ChatGPT HQ are all eligible
+executors. There is no permanent implementation department. For each bounded slice, choose the model
+with the best current context, remaining capacity, local/tool access, and ability to reach the next
+proof boundary. The hard invariant is **one active mutation lease per overlapping scope**, recorded
+under `docs/WORK_CONTROL.md`; non-holders may keep reading, coordinating, and reviewing in parallel.
+Handoffs transfer mutation authority only and should be cheap when another executor is the better fit.
+Exact required gates cannot be substituted; environment inability is a blocker, not a pass. Run
+`scripts/work-control-gate.mjs` before proof-dependent GitHub transitions. Independent review is a
+transition gate and must cover the exact head by a reviewer who did not author the mutation being
+approved. One worktree per writer; mutexes enforce exclusion but never grant ownership.
 
 **Owner-bound in this repo** (in addition to `~/.claude/CLAUDE.md`):
 1. Secrets/signing: the Ed25519 private key or any secret never enters repo / `.env*` / CI.
@@ -230,7 +234,7 @@ hardware-specific work begins.
 ## Current state, history, and how to resume
 
 1. `docs/PRODUCT_CONSTITUTION.md` — product truth; read before product/design/prioritization work.
-2. `docs/WORK_CONTROL.md` — before any write, derive current claim/worktree/scope/expiry/process truth.
+2. `docs/WORK_CONTROL.md` — before any write, derive current mutation lease/worktree/scope/expiry/process truth.
 3. `docs/RELEASE_STATE.md` — current build/gate/release truth; same-commit updates when state changes.
 4. `docs/product/ROADMAP.md` — derived product sequence.
 5. `docs/BACKLOG.md` — living execution ledger. Per **false-done** protocol, never claim completion
