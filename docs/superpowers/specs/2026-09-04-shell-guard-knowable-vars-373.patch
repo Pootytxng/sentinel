@@ -1,0 +1,156 @@
+diff --git a/.claude/hooks/shell-ownership-assert.mjs b/.claude/hooks/shell-ownership-assert.mjs
+index aae83c61..9860972d 100644
+--- a/.claude/hooks/shell-ownership-assert.mjs
++++ b/.claude/hooks/shell-ownership-assert.mjs
+@@ -532,6 +532,122 @@ const globBounded = (w) => /^[^$`]*$/.test(w.raw ?? w.value) && !w.value.include
+  *  purpose: re-lexing marks them dynamic, and `globBounded` already answers for them correctly. */
+ const RELEX = new Set([" ", "\t", "\n", "'", '"', "`", "$", "\\", ";", "|", "&", "<", ">", "(", ")", "#"]);
+ 
++/** Environment names whose values are directories this checker can place. Nothing else is read from
++ *  the environment: `$PATH`, `$RANDOM` and every user variable stay unknowable on purpose. */
++export const KNOWN_ENV = ["TEMP", "TMP", "LOCALAPPDATA", "APPDATA", "USERPROFILE", "HOME"];
++
++const IDENT = /[A-Za-z_][A-Za-z0-9_]*/y;
++const STATEMENT_BREAK = new Set([";", "&", "|", "\n", "(", "{"]);
++const VALUE_END = new Set([" ", "\t", "\n", ";", "&", "|", ")", "(", "<", ">"]);
++
++/**
++ * Replace the variables whose value the text (or the well-known environment) already states, so a
++ * literal-by-construction operand is judged as the literal it is. Measured 2026-09-04 (#373): 33 of
++ * the 40 approval prompts in a day were `"$S/…"`, `"$TEMP/…"`, `"$LOCALAPPDATA/…"` — operands whose
++ * value was on the same line or in the process environment, refused as "not knowable" because the
++ * lexer reads `$` and stops. Two rules keep this from becoming a guess:
++ *   1. only a plain assignment at the head of a statement (`S=…`, `export S=…`, `local S=…`) whose
++ *      value is itself fully known teaches a name; `S=$(…)`, `S=$OTHER` with OTHER unknown, `read S`
++ *      and every other binding form leave the name unknown, so `rm -rf $TARGET` still asks;
++ *   2. single quotes are honoured — `'$S'` is the literal text `$S`, and stays so.
++ * PowerShell is untouched: `$env:TEMP` and `$s = …` have their own rules and no measured cost.
++ */
++export function expandKnownVars(command, { env = process.env, dialect = "posix" } = {}) {
++  const src = String(command ?? "");
++  if (dialect !== "posix" || !src.includes("$")) return src;
++  const known = new Map();
++  for (const name of KNOWN_ENV) {
++    const v = env?.[name];
++    if (typeof v === "string" && /^([A-Za-z]:[\\/]|\/)/.test(v)) known.set(name, v.replace(/\\/g, "/"));
++  }
++
++  let out = "";
++  let i = 0;
++  let inDouble = false;
++  let head = true; // at the head of a statement, where `NAME=value` is an assignment
++  // An assignment being captured: where its value starts in `out`, so the EXPANDED value is recorded.
++  let capture = null;
++  const closeCapture = () => {
++    if (!capture) return;
++    let value = out.slice(capture.from);
++    const q = value[0];
++    if ((q === '"' || q === "'") && value.length >= 2 && value.endsWith(q)) value = value.slice(1, -1);
++    if (value !== "" && !/[$`]/.test(value)) known.set(capture.name, value);
++    else known.delete(capture.name);
++    capture = null;
++  };
++
++  while (i < src.length) {
++    const c = src[i];
++    if (c === "'" && !inDouble) {
++      const j = src.indexOf("'", i + 1);
++      const end = j === -1 ? src.length : j + 1;
++      out += src.slice(i, end);
++      i = end;
++      head = false;
++      continue;
++    }
++    if (c === "\\" && i + 1 < src.length) {
++      out += c + src[i + 1];
++      i += 2;
++      head = false;
++      continue;
++    }
++    if (c === "$") {
++      let name = null;
++      let len = 1;
++      if (src[i + 1] === "{") {
++        const m = /^\{([A-Za-z_][A-Za-z0-9_]*)\}/.exec(src.slice(i + 1));
++        if (m) [name, len] = [m[1], 1 + m[0].length];
++      } else {
++        IDENT.lastIndex = i + 1;
++        const m = IDENT.exec(src);
++        if (m) [name, len] = [m[0], 1 + m[0].length];
++      }
++      if (name !== null && known.has(name)) out += known.get(name);
++      else out += src.slice(i, i + len);
++      i += len;
++      head = false;
++      continue;
++    }
++    if (c === '"') {
++      inDouble = !inDouble;
++      out += c;
++      i += 1;
++      head = false;
++      continue;
++    }
++    if (!inDouble) {
++      if (capture && VALUE_END.has(c)) closeCapture();
++      if (STATEMENT_BREAK.has(c)) head = true;
++      else if (c === " " || c === "\t") { /* whitespace keeps the head */ }
++      else if (head && /[A-Za-z_]/.test(c)) {
++        IDENT.lastIndex = i;
++        const m = IDENT.exec(src);
++        const word = m[0];
++        const after = IDENT.lastIndex;
++        if ((word === "export" || word === "local") && /[ \t]/.test(src[after] ?? "")) {
++          out += word;
++          i = after;
++          continue; // still at the head: the assignment follows
++        }
++        if (src[after] === "=" && src[after + 1] !== "=") {
++          out += word + "=";
++          i = after + 1;
++          capture = { name: word, from: out.length };
++          head = false;
++          continue;
++        }
++        head = false;
++      } else head = false;
++    }
++    out += c;
++    i += 1;
++  }
++  closeCapture();
++  return out;
++}
++
+ /**
+  * One command string -> the operations it names.
+  *
+@@ -539,7 +655,7 @@ const RELEX = new Set([" ", "\t", "\n", "'", '"', "`", "$", "\\", ";", "|", "&",
+  *            unresolved: Array<{verb: string, why: string}>,
+  *            cwdUnknown: boolean}}
+  */
+-export function analyze(command, { cwd = null, dialect = "posix", home = homedir() } = {}) {
++export function analyze(command, { cwd = null, dialect = "posix", home = homedir(), env = process.env } = {}) {
+   const ops = [];
+   const unresolved = [];
+   let here = cwd;
+@@ -556,7 +672,9 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
+    */
+   const cannot = (verb, why, kind = "mutation") => unresolved.push({ verb, why, kind, cwd: here, cwdUnknown });
+ 
+-  for (const seg of segments(lex(stripHeredocs(command), dialect), dialect)) {
++  // Heredoc bodies go first, so a line inside one cannot teach this pass a name (#373).
++  const text = expandKnownVars(stripHeredocs(command), { env, dialect });
++  for (const seg of segments(lex(text, dialect), dialect)) {
+     const words = seg.words;
+     for (const r of seg.redirects) {
+       if (r.dynamic && !globBounded(r)) cannot("redirection", `the redirect target \`${r.value}\` is not knowable from the text`);
+@@ -825,7 +943,7 @@ export function decideShell({
+   if (typeof command !== "string" || command.trim() === "") return { permission: "allow", why: "no command to inspect" };
+ 
+   const dialect = toolName === "PowerShell" ? "powershell" : "posix";
+-  const { ops, unresolved } = analyze(command, { cwd, dialect, home });
++  const { ops, unresolved } = analyze(command, { cwd, dialect, home, env });
+   if (!ops.length && !unresolved.length) return { permission: "allow", why: "names no recognized mutation" };
+ 
+   // Zones first, verification second: the board is only read when something protected is in play.
