@@ -16,6 +16,20 @@ This file records which pre-rebirth sources may still contain useful history but
 
 No other document may silently claim supremacy across these domains.
 
+## Global pre-rebirth default
+
+**Ratification cutoff: 2026-09-04.** Any dated plan, spec, review, decision, handoff, council brief, or product-strategy artifact written before this cutoff has **zero product-direction authority by default**, even when its historical body says `ACTIVE`, `IN BUILD`, `GREEN-LIT`, `owner-approved`, `owner GO`, `source of truth`, `canonical`, `priority override`, `begin implementing`, or equivalent.
+
+That default is deliberately asymmetric:
+
+- old product identity, feature priority, roadmap order, launch sequencing, monetization decrees, UI/product direction, and execution-order language are historical unless explicitly re-ratified by current product authority;
+- conforming technical, safety, architecture, implementation, benchmark, test, or decision provenance may still be useful inside its bounded domain;
+- technical provenance never promotes the surrounding historical product direction back into force;
+- before executing a legacy technical statement, re-check it against `docs/ARCHITECTURE_LOCKS.md`, `docs/RELEASE_STATE.md`, and `docs/WORK_CONTROL.md` as applicable;
+- only `docs/PRODUCT_CONSTITUTION.md` plus its current derived roadmap can re-ratify old product direction.
+
+A top-of-file retirement/supersession notice is preferred on mixed documents whose historical status language looks executable. The absence of such a notice **never** restores authority: this manifest and the Constitution still govern. High-signal mixed documents are also individually classified below so the drift guard can make that classification non-vacuous and fail on newly discovered unclassified authority-like prose.
+
 ## Explicitly superseded product-direction sources
 
 The following are **historical evidence only** unless a bounded factual statement is revalidated and incorporated into current authority:
@@ -36,9 +50,7 @@ The following are **historical evidence only** unless a bounded factual statemen
 
 ## Current-looking mixed sources explicitly bounded by this migration
 
-These files retain useful technical or decision provenance, but their original status language can
-look executable. Their top-of-file supersession notices are mandatory; removing one is an authority
-regression.
+These files retain useful technical or decision provenance, but their original status language can look executable. Existing top-of-file supersession notices are mandatory where already installed; removing one is an authority regression. Files listed here without an inline notice are nevertheless centrally bounded by the global pre-rebirth default above and may not route current product work.
 
 | Source | Retained value | Superseded authority |
 |---|---|---|
@@ -47,6 +59,32 @@ regression.
 | `docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md` | acceptance and safety provenance | product sequencing, BACKLOG priority, and Receipts Doctrine product-law routing |
 | `docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md` | capability, consent, rollback, injection, and origin-control provenance | Care-primary / optimization-secondary product hierarchy and implementation-ready product direction |
 | `docs/decisions/2026-08-18-outbound-capability-expansion.md` | decision history | `ACTIVE` and Tier 2 default-ON policy, reversed by owner ruling #207 and current `ARCHITECTURE_LOCKS.md` |
+
+### Semantic authority-audit corpus
+
+The final migration audit also found the following pre-rebirth documents carrying status/source-of-truth/owner-GO/build-order language that could be misread as current direction. Their historical bodies are preserved; current product routing is retired by this manifest unless explicitly re-ratified under the Constitution.
+
+- `docs/superpowers/specs/2026-06-01-experience-design-system-pass-design.md`
+- `docs/superpowers/specs/2026-06-05-knowledge-layer-chapter.md`
+- `docs/superpowers/specs/2026-06-08-tuning-guides-stability-measurement.md`
+- `docs/superpowers/specs/2026-06-12-doctrine-voice-baptism-design-refresh.md`
+- `docs/superpowers/specs/2026-06-12-monetization-transformation-plan.md`
+- `docs/superpowers/specs/2026-06-12-R5-unattended-marathon.md`
+- `docs/superpowers/specs/2026-06-12-receipts-marathon-R3.md`
+- `docs/superpowers/specs/2026-06-12-waitlist-wiring.md`
+- `docs/superpowers/specs/2026-06-15-monetization-model-proposal.md`
+- `docs/superpowers/specs/2026-07-02-external-audit-2-council.md`
+- `docs/superpowers/specs/2026-07-02-full-tidy-directive.md`
+- `docs/superpowers/specs/2026-07-05-lab-bento-checkup.md`
+- `docs/superpowers/specs/2026-07-05-lab-linear-guided-bench.md`
+- `docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md`
+- `docs/superpowers/specs/2026-07-06-firstcheck-monitor-mvp-train.md`
+- `docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md`
+- `docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md`
+- `docs/superpowers/plans/2026-08-20-comprehensibility-sweep.md`
+- `docs/reviews/2026-07-15-cc-brief-panel-review-execution.md`
+
+This list is not permission for a small allowlist to replace semantic checking. `src/product-constitution-guard.test.ts` must keep a positive control and must fail when it finds a new pre-rebirth current-looking directive that has neither an explicit top-level constitutional boundary nor an explicit classification in this manifest.
 
 ## Specifically retired theses
 
