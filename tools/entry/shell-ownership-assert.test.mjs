@@ -12,7 +12,8 @@
 // the resolver is injected and the fixtures are strings. Nothing in this file touches a live
 // checkout, the real `~/.claude`, the Work Control board, or the verification store.
 
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
@@ -31,6 +32,9 @@ import {
   segments,
   stripHeredocs,
 } from "../../.claude/hooks/shell-ownership-assert.mjs";
+// Namespace import as well: `expandKnownVars` (#373) is owner-hands until he applies the patch, and a
+// named import of an export that is not there yet would refuse to load the whole file.
+import * as hook from "../../.claude/hooks/shell-ownership-assert.mjs";
 
 // `/home/...` so the fixture paths match the embedded-path scan on BOTH platforms: on Windows
 // `resolve` gives `C:\home\…` (drive-letter form) and on Linux the literal `/home/…` form.
@@ -944,5 +948,100 @@ describe("the wrapper table is an allowlist, and the spec says which ones are st
     for (const name of PREFIX_VERBS.keys()) {
       expect(OPEN, `${name} is carried by the table now, so §6 must not mark it open`).not.toContain(name);
     }
+  });
+});
+
+describe("operands whose value the text or the environment already states are literals (#373)", () => {
+  // Measured 2026-09-04: 33 of the 40 approval prompts in one day were `"$S/…"`, `"$TEMP/…"` and
+  // `"$LOCALAPPDATA/…"` operands — values stated on the same line or in the process environment,
+  // refused as "not knowable" because the lexer reads `$` and stops. The hook change is OWNER-HANDS:
+  // the auto-mode classifier refuses a session any edit to a hook that gates its own authority, so
+  // the fix ships as a patch beside its spec, and the assertions below wait for him — visibly
+  // SKIPPED, never vacuously green (memory: green-that-is-not-evidence).
+  const REPO = join(import.meta.dirname, "../..");
+  const PATCH = join(REPO, "docs/superpowers/specs/2026-09-04-shell-guard-knowable-vars-373.patch");
+  const applied = typeof hook.expandKnownVars === "function";
+
+  it("the owner-hand patch still applies to the hook as it is — and is gone once applied", () => {
+    if (applied) {
+      expect(existsSync(PATCH), "the patch is spent: delete it in the same commit that applies it").toBe(false);
+      return;
+    }
+    expect(existsSync(PATCH), "the patch the spec points at must exist").toBe(true);
+    expect(() => execFileSync("git", ["apply", "--check", PATCH], { cwd: REPO, stdio: "pipe" })).not.toThrow();
+  });
+
+  describe.skipIf(!applied)("once applied", () => {
+    const scratch = fwd(SCRATCH);
+
+    it("a same-command assignment makes a redirect target knowable", () => {
+      expect(ask(`S="${scratch}"; cat > "$S/a.md" <<'EOF'\nhi\nEOF`).permission).toBe("allow");
+      const { ops, unresolved } = analyze(`S="${scratch}"; cat > "$S/a.md"`, { cwd: ROOT, env: {} });
+      expect(unresolved).toEqual([]);
+      expect(toComparable(ops[0].target)).toBe(toComparable(join(SCRATCH, "a.md")));
+    });
+
+    it("a well-known environment directory is knowable", () => {
+      const d = ask(`mkdir -p "$TEMP/p" && cp a.txt "\${TEMP}/p/b.txt"`, { env: { TEMP: scratch } });
+      expect(d.permission).toBe("allow");
+      expect(d.why).toBe("nothing protected is reached");
+    });
+
+    it("a name the text does not bind still asks — the one case that matters", () => {
+      const d = ask("rm -rf $TARGET");
+      expect(d.permission).toBe("ask");
+      expect(d.reason).toContain("not knowable from the text");
+    });
+
+// FOUND BY INDEPENDENT REVIEW, so it is guarded rather than written down. The first version of
+    // this pass treated `(` as an ordinary statement break, so a subshell taught its parent a name:
+    // `(S=/scratch); rm $S/x` was judged as `rm /scratch/x` when the shell really runs `rm /x`.
+    // Reasoning about a path the command never touches is a FALSE ALLOW, and `X=$(S=…; …)` makes it
+    // easy to hit by accident — so a binding is learned only in the outermost scope.
+    it("a subshell does not teach its parent a name", () => {
+      expect(ask(`(S="${fwd(SIB)}"); rm "$S/package.json"`).permission).toBe("ask");
+      expect(ask(`X=$(S="${fwd(SIB)}"; echo hi); rm "$S/package.json"`).permission).toBe("ask");
+      expect(ask(`S=\`D="${fwd(SIB)}"; echo x\`; rm "$D/package.json"`).permission).toBe("ask");
+      // A value still flows INTO a subshell — inheritance runs one way.
+      const inner = analyze(`S="${scratch}"; (cd /tmp; printf x > "$S/a")`, { cwd: ROOT, env: {} });
+      expect(toComparable(inner.ops.at(-1).target)).toBe(toComparable(join(SCRATCH, "a")));
+    });
+
+    // Same review: the expanded text is RE-LEXED, so a value carrying shell punctuation could invent
+    // a statement that never runs. A value is spliced only when it re-lexes as one plain word.
+    it("an expansion cannot fabricate shell structure", () => {
+      const { ops } = analyze('S="/a;rm -rf /b"; echo $S', { cwd: ROOT, env: {} });
+      expect(ops.some((o) => String(o.target).includes("/b"))).toBe(false);
+      expect(ask('S="/a b"; rm $S/x').permission).toBe("ask");
+      expect(hook.expandKnownVars("S='<<EOF'; echo $S", { env: {} })).toBe("S='<<EOF'; echo $S");
+    });
+
+    it("the environment teaches directories only, never an arbitrary name", () => {
+      expect(ask("rm -rf $TARGET", { env: { TARGET: scratch, PATH: scratch } }).permission).toBe("ask");
+    });
+
+    it("a bound name pointing into a sibling checkout is denied, exactly as the literal is", () => {
+      const d = ask(`WT="${fwd(SIB)}"; rm "$WT/package.json"`);
+      expect(d.permission).toBe("deny");
+      expect(d.zone).toBe(ZONES.SIBLING);
+    });
+
+    it("a value the text does not fully state does not teach a name", () => {
+      expect(ask('S=$(pwd); rm "$S/x"').permission).toBe("ask");
+      expect(ask('S=$OTHER/sub; rm "$S/x"').permission).toBe("ask");
+    });
+
+    it("single quotes are honoured — '$S' is the text, not the value", () => {
+      const { ops } = analyze(`S="${scratch}"; printf x > '$S/a'`, { cwd: ROOT, env: {} });
+      expect(ops[0].target.endsWith("$S/a")).toBe(true);
+    });
+
+    it("a heredoc body cannot teach a name", () => {
+      expect(ask(`cat > note.txt <<'EOF'\nS=${fwd(SIB)}\nEOF\nrm "$S/package.json"`).permission).toBe("ask");
+    });
+
+    it("leaves PowerShell alone", () => {
+      expect(hook.expandKnownVars("$env:TEMP", { env: { TEMP: scratch }, dialect: "powershell" })).toBe("$env:TEMP");
+    });
   });
 });
