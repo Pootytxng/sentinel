@@ -1,6 +1,6 @@
 # Product Rebirth Supersession Manifest
 
-**Migration branch:** `hq/product-constitution-rebirth`  
+**Migration branch:** `hq/product-constitution-rebirth`<br>
 **Ratified product authority:** `../PRODUCT_CONSTITUTION.md`
 
 This file records which pre-rebirth sources may still contain useful history but no longer define current product direction.
@@ -33,6 +33,20 @@ The following are **historical evidence only** unless a bounded factual statemen
 | `docs/superpowers/specs/*` product strategy specs predating rebirth | design/strategy decisions | historical unless explicitly re-ratified |
 | historical council/monetization proposals | advisory reasoning | historical only |
 | issues/comments encoding old product hierarchy | execution history | not constitutional authority |
+
+## Current-looking mixed sources explicitly bounded by this migration
+
+These files retain useful technical or decision provenance, but their original status language can
+look executable. Their top-of-file supersession notices are mandatory; removing one is an authority
+regression.
+
+| Source | Retained value | Superseded authority |
+|---|---|---|
+| `docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md` | bounded implementation/evidence design | `IN BUILD` and priority/execution direction |
+| `docs/reviews/2026-07-16-owner-directive-intelligence-platform.md` | owner reasoning and historical requirements | “begin implementing” and backlog priority override |
+| `docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md` | acceptance and safety provenance | product sequencing, BACKLOG priority, and Receipts Doctrine product-law routing |
+| `docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md` | capability, consent, rollback, injection, and origin-control provenance | Care-primary / optimization-secondary product hierarchy and implementation-ready product direction |
+| `docs/decisions/2026-08-18-outbound-capability-expansion.md` | decision history | `ACTIVE` and Tier 2 default-ON policy, reversed by owner ruling #207 and current `ARCHITECTURE_LOCKS.md` |
 
 ## Specifically retired theses
 

@@ -1,7 +1,7 @@
 # Architecture Locks
 
-**Status:** SUPREME SAFETY / ARCHITECTURE AUTHORITY  
-**Product direction:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md)  
+**Status:** SUPREME SAFETY / ARCHITECTURE AUTHORITY<br>
+**Product direction:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md)<br>
 **Current implementation/release truth:** [`RELEASE_STATE.md`](RELEASE_STATE.md)
 
 This document defines safety, rollback, privilege, persistence, trust-root, network/capability, and
@@ -158,7 +158,8 @@ win rounded up for marketing.
 
 **Owner decision (2026-08-09, issue #91):** the blanket "no Compy driver / no new outbound surface"
 prohibitions were replaced by this challengeable gate. It is not a general unlock. Directive:
-`docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md`; execution plans:
+`docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md` (product hierarchy
+superseded; conforming technical capability provenance remains); execution plans:
 `docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md` and
 `docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md`.
 

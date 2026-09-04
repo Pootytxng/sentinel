@@ -1,6 +1,6 @@
 # Monetization — SUPERSEDED
 
-**Status:** HISTORICAL ONLY  
+**Status:** HISTORICAL ONLY<br>
 **Superseded by:** [`product/MONETIZATION.md`](product/MONETIZATION.md) and [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md) on 2026-09-04
 
 This file formerly framed Compy's monetization model, pricing, processor choice, and free/Pro split.

@@ -31,6 +31,10 @@ export const LIVE_POLICY_PATHS = [
   "docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md",
 ] as const;
 
+export const SUPERSEDED_POLICY_PATHS = [
+  "docs/decisions/2026-08-18-outbound-capability-expansion.md",
+] as const;
+
 const FORBIDDEN_POLICY_PATHS = [
   "CLAUDE.md",
   "AGENTS.md",
@@ -144,6 +148,9 @@ const REQUIRED: Record<string, string[]> = {
     "cannot ride inside the catalog",
   ],
   "docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md": [
+    "product direction superseded 2026-09-04",
+    "docs/product_constitution.md",
+    "docs/architecture_locks.md",
     "capability exception gate",
     "case_source_origins",
     "changes only through an app release",
@@ -226,8 +233,37 @@ export function auditCapabilityExceptionPolicy(snapshot: PolicySnapshot): string
   return issues;
 }
 
+export function auditSupersededCapabilityPolicy(snapshot: PolicySnapshot): string[] {
+  const issues: string[] = [];
+  for (const path of SUPERSEDED_POLICY_PATHS) {
+    const source = snapshot[path];
+    if (typeof source !== "string") {
+      issues.push(`missing superseded policy file: ${path}`);
+      continue;
+    }
+    const top = normalize(source.slice(0, 1800));
+    const required = [
+      "policy and product direction superseded 2026-09-04",
+      "owner reversed that default on 2026-08-24 in #207",
+      "tier 2 is opt-in, default off, and stays off after arming",
+      "docs/architecture_locks.md",
+      "docs/product_constitution.md",
+      "cannot authorize runtime",
+    ];
+    for (const marker of required) {
+      if (!top.includes(normalize(marker))) {
+        issues.push(`${path}: missing supersession marker: ${marker}`);
+      }
+    }
+  }
+  return issues;
+}
+
 const liveSnapshot: PolicySnapshot = Object.fromEntries(
   LIVE_POLICY_PATHS.map((path) => [path, readFileSync(path, "utf8")]),
+);
+const supersededSnapshot: PolicySnapshot = Object.fromEntries(
+  SUPERSEDED_POLICY_PATHS.map((path) => [path, readFileSync(path, "utf8")]),
 );
 
 // The greppable line-level escape hatch a doc uses to QUOTE a retired claim without re-asserting it
@@ -253,6 +289,17 @@ describe("Capability Exception policy coherence", () => {
   it("keeps every applicable live mirror aligned", () => {
     expect(LIVE_POLICY_PATHS.some((path) => path.startsWith("docs/archive/"))).toBe(false);
     expect(auditCapabilityExceptionPolicy(liveSnapshot)).toEqual([]);
+  });
+
+  it("keeps the retired default-ON decision explicitly superseded", () => {
+    expect(auditSupersededCapabilityPolicy(supersededSnapshot)).toEqual([]);
+  });
+
+  it("rejects an unbounded retired default-ON decision (positive control)", () => {
+    const snapshot = clone(supersededSnapshot);
+    snapshot["docs/decisions/2026-08-18-outbound-capability-expansion.md"] =
+      "# Decision\n\n**Status:** ACTIVE\n\nTier 2 is on by default.";
+    expect(auditSupersededCapabilityPolicy(snapshot).length).toBeGreaterThan(0);
   });
 
   // The owner's 2026-08-24 ruling (#207) put Tier 2 BACK to opt-in / default OFF after a five-day

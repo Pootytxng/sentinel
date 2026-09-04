@@ -1,5 +1,12 @@
 # Intelligence Phase 1 — Foundation + "What changed?" (decision record)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The `IN BUILD` label, priority, and execution
+> directives below are historical and confer no current authority. Product identity and direction
+> now come from `docs/PRODUCT_CONSTITUTION.md`; product sequence derives through
+> `docs/product/ROADMAP.md`, and current ownership must come from `docs/WORK_CONTROL.md`. The bounded
+> technical record remains provenance only where it conforms to the Constitution and
+> `docs/ARCHITECTURE_LOCKS.md`.
+>
 **Status:** IN BUILD 2026-07-16. **Provenance:** owner directive `docs/reviews/2026-07-16-owner-directive-intelligence-platform.md`
 §5 (Cowork-lane artifact — executed from, never committed). Owner-approved ("begin implementing the
 foundation immediately"), not a brainstorm. **Namespace law (§6):** this lane is "Intelligence Phase N"

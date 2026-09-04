@@ -13,8 +13,11 @@ Markdown carry another stale status ledger.
 
 It does **not** replace Compy's existing sources of product truth:
 
+- `docs/PRODUCT_CONSTITUTION.md` remains authoritative for product identity, principles, and
+  direction; `docs/product/ROADMAP.md` derives product sequence and priority from it.
 - `docs/RELEASE_STATE.md` remains authoritative for gates, builds, artifacts, and releases.
-- `docs/BACKLOG.md` remains authoritative for product-work status and priority.
+- `docs/BACKLOG.md` records current execution status only; it does not create product direction or
+  preserve inherited priority.
 - `docs/OWNER_ACTION_CHECKLIST.md` remains authoritative for owner obligations.
 - Code, commits, tests, receipts, and runtime evidence remain authoritative for implementation.
 
@@ -40,7 +43,9 @@ flowchart LR
 
 | Truth | Canonical home |
 |---|---|
-| Product priority and completion | `docs/BACKLOG.md` and the named product spec |
+| Product identity and direction | `docs/PRODUCT_CONSTITUTION.md` |
+| Derived product sequence and priority | `docs/product/ROADMAP.md` |
+| Current execution status | `docs/BACKLOG.md` (execution ledger only) |
 | Gates, artifacts, installed build, publication | `docs/RELEASE_STATE.md` and release receipts |
 | Current executor, worktree, branch, status, next action | Kuya Work Control Project |
 | Goal, scope, decisions, handoffs, evidence | One linked GitHub issue |

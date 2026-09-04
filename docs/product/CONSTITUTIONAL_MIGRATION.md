@@ -287,3 +287,32 @@ and why, so a reviewer can check the reasoning rather than re-derive it from the
   Constitution §32, which is what the Constitution itself says about historical price decrees.
 - **Not touched, deliberately:** `src-tauri/**`, `docs/RELEASE_STATE.md` beyond `source_main_commit`,
   and every claim about what is published, installed, or armed.
+
+## 17. Writer record — Codex verified takeover and adversarial repair (2026-09-04)
+
+The exact-head independent review of `d13de5d6b2981d02cb98f0b98c4eb7edee24d5a3` returned
+**CHANGES REQUIRED**. Claude's work was at a clean, pushed boundary, but its original desktop task
+was not rooted in the migration worktree. Codex stopped the identified stale read-only tasks; a new
+Claude task was then left paused and non-writing at the application's workspace-trust prompt. Codex
+did not approve or bypass that security decision. The verified takeover and expanded file claim are
+recorded natively on #369 before this repair.
+
+The repair closes five authority paths that green string guards had missed:
+
+- `docs/WORK_CONTROL.md` no longer gives BACKLOG product-priority authority; the Constitution owns
+  direction, the Roadmap derives sequence/priority, and BACKLOG records execution status only.
+- Four pre-rebirth specs/reviews whose headers still said `IN BUILD`, owner-approved,
+  implementation-ready, or “begin implementing” now carry mandatory top-level product-direction
+  supersession notices while preserving bounded technical and owner-history evidence.
+- The 2026-08-18 outbound decision's `ACTIVE` Tier 2 default-ON instruction is explicitly historical
+  and subordinate to the later owner #207 default-OFF ruling in `ARCHITECTURE_LOCKS.md`.
+- `PRODUCT.md` now presents the two constitutional flagship journeys as equal instead of describing
+  optimization as something the safety layer merely happens to do.
+- The Constitution guard now discovers current-looking executable legacy documents structurally,
+  requires their top-level classification, and pins Work Control routing. The capability guard keeps
+  the mixed Care/capability spec in its live technical corpus while requiring its product
+  supersession boundary, and separately validates the retired outbound decision.
+
+No runtime, release, installed-state, publication, capability, or owner-only setting is changed.
+The review at `d13de5d6b2981d02cb98f0b98c4eb7edee24d5a3` becomes stale when this repair produces a new head;
+that new remote-reachable head requires a fresh independent review before any transition.

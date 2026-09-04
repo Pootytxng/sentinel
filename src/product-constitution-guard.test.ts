@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync, statSync } from "fs";
+import { join } from "path";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const flat = (s: string) => s.replace(/\s+/g, " ");
@@ -12,6 +13,8 @@ const docsReadme = read("docs/README.md");
 const locks = read("docs/ARCHITECTURE_LOCKS.md");
 const backlog = read("docs/BACKLOG.md");
 const roadmap = read("docs/product/ROADMAP.md");
+const workControl = read("docs/WORK_CONTROL.md");
+const product = read("PRODUCT.md");
 
 const legacyTombstones = [
   "docs/RECEIPTS_DOCTRINE.md",
@@ -49,7 +52,44 @@ const activeAuthorityFiles: [string, string][] = [
   ["docs/ARCHITECTURE_LOCKS.md", locks],
   ["docs/BACKLOG.md", backlog],
   ["docs/product/ROADMAP.md", roadmap],
+  ["docs/WORK_CONTROL.md", workControl],
+  ["PRODUCT.md", product],
 ];
+
+const CURRENT_LOOKING_ROOTS = [
+  "docs/superpowers/specs",
+  "docs/superpowers/plans",
+  "docs/reviews",
+  "docs/decisions",
+];
+const CURRENT_AUTHORITY_SIGNAL =
+  /(?:\bStatus\b[^\n]{0,20}\bACTIVE\b|\bStatus\b[^\n]{0,20}\bIN BUILD\b|owner-approved direction|owner-requested program blueprint|begin implementing|PRIORITY OVERRIDE|implementation-ready plan|product priority and completion remain in|PRODUCT_DIRECTION\.md sequence is authoritative)/i;
+const SUPERSESSION_BANNER = /(?:POLICY AND )?PRODUCT DIRECTION SUPERSEDED/i;
+
+function collectMarkdown(root: string): string[] {
+  const out: string[] = [];
+  const walk = (path: string) => {
+    const stat = statSync(path);
+    if (stat.isDirectory()) {
+      for (const child of readdirSync(path)) walk(join(path, child));
+    } else if (path.endsWith(".md")) {
+      out.push(path.replace(/\\/g, "/"));
+    }
+  };
+  walk(root);
+  return out;
+}
+
+export function findUnboundedCurrentLookingLegacyDocs(snapshot: Record<string, string>): string[] {
+  return Object.entries(snapshot)
+    .filter(([, body]) => CURRENT_AUTHORITY_SIGNAL.test(body.slice(0, 1800)))
+    .filter(([, body]) => {
+      const top = body.slice(0, 1800);
+      return !SUPERSESSION_BANNER.test(top) || !top.includes("docs/PRODUCT_CONSTITUTION.md");
+    })
+    .map(([path]) => path)
+    .sort();
+}
 
 describe("Compy product constitution authority", () => {
   it("contains the ratified north-star laws", () => {
@@ -98,6 +138,14 @@ describe("Compy product constitution authority", () => {
     expect(backlog).not.toContain("CURRENT PROGRAM CUTLINE — PRODUCT QUALITY STABILIZATION");
   });
 
+  it("Work Control separates product authority from execution status", () => {
+    expect(workControl).toContain("docs/PRODUCT_CONSTITUTION.md");
+    expect(workControl).toContain("docs/product/ROADMAP.md");
+    expect(workControl).toContain("current execution status only");
+    expect(workControl).not.toMatch(/BACKLOG\.md[^\n]{0,100}(?:authoritative|canonical)[^\n]{0,60}(?:priority|product priority)/i);
+    expect(workControl).not.toMatch(/Product priority and completion[^\n]*BACKLOG\.md/i);
+  });
+
   it.each(legacyTombstones)("%s is mechanically marked superseded/historical", (path) => {
     const body = read(path);
     expect(body).toMatch(/SUPERSEDED|HISTORICAL ONLY|HISTORICAL SNAPSHOT ONLY/);
@@ -132,6 +180,40 @@ describe("Compy product constitution authority", () => {
     expect(f).toContain("MAKE THIS PC BETTER");
     expect(f).toContain("FIGURE OUT WHAT WENT WRONG");
     expect(f).toContain("same machine model, evidence, history, Trial system, rollback machinery");
+  });
+
+  it("PRODUCT.md gives the two constitutional journeys equal standing", () => {
+    const f = flat(product);
+    expect(f).toContain("make this PC better");
+    expect(f).toContain("figure out what went wrong");
+    expect(f).toContain("equal flagship journeys");
+    expect(f).not.toMatch(/safety layer that happens to optimize/i);
+  });
+
+  it("current-looking legacy specs, reviews, and decisions have a top-level supersession boundary", () => {
+    const paths = CURRENT_LOOKING_ROOTS.flatMap(collectMarkdown);
+    const snapshot = Object.fromEntries(paths.map((path) => [path, read(path)]));
+    const currentLooking = Object.entries(snapshot)
+      .filter(([, body]) => CURRENT_AUTHORITY_SIGNAL.test(body.slice(0, 1800)))
+      .map(([path]) => path)
+      .sort();
+
+    expect(currentLooking).toEqual([
+      "docs/decisions/2026-08-18-outbound-capability-expansion.md",
+      "docs/reviews/2026-07-16-owner-directive-intelligence-platform.md",
+      "docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md",
+      "docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md",
+      "docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md",
+    ]);
+    expect(findUnboundedCurrentLookingLegacyDocs(snapshot)).toEqual([]);
+  });
+
+  it("the current-looking legacy scan is armed (positive control)", () => {
+    expect(
+      findUnboundedCurrentLookingLegacyDocs({
+        "docs/spec.md": "# Plan\n\n**Status:** ACTIVE\n\nBegin work now.",
+      }),
+    ).toEqual(["docs/spec.md"]);
   });
 
   // 2026-09-04 (#369): the active-authority audit found twelve still-live routing files (skills,

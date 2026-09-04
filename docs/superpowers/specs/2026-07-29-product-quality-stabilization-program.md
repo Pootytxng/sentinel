@@ -1,5 +1,12 @@
 # Compy Product Quality Stabilization Program
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This pre-rebirth program no longer controls
+> product sequence, priority, completion, or product law. Those now come from
+> `docs/PRODUCT_CONSTITUTION.md` and its derived `docs/product/ROADMAP.md`; `docs/BACKLOG.md` is an
+> execution-status ledger only. The remaining train descriptions are historical or bounded
+> implementation/safety provenance and may be reused only after revalidation against the current
+> Constitution, `docs/ARCHITECTURE_LOCKS.md`, release truth, and Work Control.
+>
 > **Status:** owner-requested program blueprint, 2026-07-29. This document defines sequencing,
 > dependencies, acceptance, and stop boundaries. It does not authorize implementation by itself.
 > Live execution ownership remains in [Kuya Work Control](../../WORK_CONTROL.md); product priority and

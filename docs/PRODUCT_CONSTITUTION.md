@@ -1,7 +1,7 @@
 # Compy Product Constitution
 
-**Status:** SUPREME PRODUCT AUTHORITY  
-**Ratified by owner:** 2026-09-04  
+**Status:** SUPREME PRODUCT AUTHORITY<br>
+**Ratified by owner:** 2026-09-04<br>
 **Scope:** product identity, user promise, product behavior, UX doctrine, capability priority, positioning, development direction, and product decision-making.
 
 This document supersedes every prior statement of Compy's product identity or strategic direction, including the Receipts Doctrine, historical PRDs, Product Direction documents, monetization councils, historical roadmaps, strategy specs, feature-ranking decisions, and any statement that defines Compy Care or optimization as subordinate to the other.

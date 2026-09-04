@@ -1,6 +1,6 @@
 # Product Requirements Document — SUPERSEDED
 
-**Status:** HISTORICAL BASELINE ONLY  
+**Status:** HISTORICAL BASELINE ONLY<br>
 **Superseded by:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md) and [`product/ROADMAP.md`](product/ROADMAP.md) on 2026-09-04
 
 This file formerly described an earlier Compy product thesis.

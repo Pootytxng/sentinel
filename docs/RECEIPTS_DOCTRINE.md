@@ -1,6 +1,6 @@
 # Receipts Doctrine — SUPERSEDED
 
-**Status:** HISTORICAL ONLY  
+**Status:** HISTORICAL ONLY<br>
 **Superseded by:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md) on 2026-09-04
 
 This file formerly acted as Compy's canonical product and monetization doctrine.

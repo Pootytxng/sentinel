@@ -1,6 +1,6 @@
 # Product Direction — SUPERSEDED
 
-**Status:** HISTORICAL ONLY  
+**Status:** HISTORICAL ONLY<br>
 **Superseded by:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md) on 2026-09-04
 
 This file formerly defined Compy's product direction and feature thesis.

@@ -1,6 +1,6 @@
 # Monetization Plan — SUPERSEDED
 
-**Status:** HISTORICAL ONLY  
+**Status:** HISTORICAL ONLY<br>
 **Superseded by:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md), [`product/MONETIZATION.md`](product/MONETIZATION.md), [`product/VALIDATION.md`](product/VALIDATION.md), and [`product/ROADMAP.md`](product/ROADMAP.md) on 2026-09-04
 
 This file formerly sequenced Compy's monetization work under the Receipts Doctrine.

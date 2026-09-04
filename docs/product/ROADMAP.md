@@ -1,8 +1,8 @@
 # Compy Reborn Roadmap
 
-**Derived authority:** `../PRODUCT_CONSTITUTION.md`  
-**Current-state authority:** `../RELEASE_STATE.md`  
-**Safety authority:** `../ARCHITECTURE_LOCKS.md`  
+**Derived authority:** `../PRODUCT_CONSTITUTION.md`<br>
+**Current-state authority:** `../RELEASE_STATE.md`<br>
+**Safety authority:** `../ARCHITECTURE_LOCKS.md`<br>
 **Execution authority:** `../WORK_CONTROL.md`
 
 This roadmap does not redefine the product. It converts the Constitution into build order.

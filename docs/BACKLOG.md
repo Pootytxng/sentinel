@@ -1,8 +1,8 @@
 # Compy — Living Execution Ledger
 
-**Purpose:** current execution status only.  
-**Product priority source:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md) → [`product/ROADMAP.md`](product/ROADMAP.md)  
-**Current build/gate truth:** [`RELEASE_STATE.md`](RELEASE_STATE.md)  
+**Purpose:** current execution status only.<br>
+**Product priority source:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md) → [`product/ROADMAP.md`](product/ROADMAP.md)<br>
+**Current build/gate truth:** [`RELEASE_STATE.md`](RELEASE_STATE.md)<br>
 **Ownership truth:** [`WORK_CONTROL.md`](WORK_CONTROL.md)
 
 This file no longer defines product philosophy or inherits priority from pre-rebirth roadmaps.

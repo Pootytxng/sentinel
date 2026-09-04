@@ -69,6 +69,9 @@ const EXPECTED_SUPERSEDED = [
   "2026-07-08-lab-proving-ground.md",
   "2026-07-09-lab-instrument-bench-p1.md",
   "2026-07-09-lab-redesign-direction-proposal.md",
+  "2026-07-16-intelligence-foundation-train1.md",
+  "2026-07-29-product-quality-stabilization-program.md",
+  "2026-08-09-compy-care-capability-exception-gate.md",
   "2026-08-21-unverified-session-write-refusal.md",
 ];
 

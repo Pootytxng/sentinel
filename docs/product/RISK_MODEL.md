@@ -1,6 +1,6 @@
 # Risk Model
 
-**Derived from:** `../PRODUCT_CONSTITUTION.md`  
+**Derived from:** `../PRODUCT_CONSTITUTION.md`<br>
 **Constrained by:** `../ARCHITECTURE_LOCKS.md`
 
 Risk is not a marketing badge. It determines what Compy may automate, what validation is required, what consent is needed, and when Compy must refuse.

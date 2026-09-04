@@ -1,6 +1,6 @@
 # Compy Project Overview — SUPERSEDED SNAPSHOT
 
-**Status:** HISTORICAL SNAPSHOT ONLY  
+**Status:** HISTORICAL SNAPSHOT ONLY<br>
 **Superseded by:** [`docs/PRODUCT_CONSTITUTION.md`](docs/PRODUCT_CONSTITUTION.md) and the current authority stack on 2026-09-04
 
 This file previously summarized where Compy was and where it was going. That summary predates the constitutional rebirth and must not be used as current product direction.
