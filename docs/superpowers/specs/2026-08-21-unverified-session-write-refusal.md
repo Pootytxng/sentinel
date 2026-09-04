@@ -185,30 +185,8 @@ them.
   `"classifies every refusal code the assert can actually produce"` test extended, not replaced.
 - A test that `project-write-assert.mjs` imports `verifySession` rather than reimplementing it.
 - A test that the refusal message contains a runnable `adopt` command including the session id — a
-  refusal without its cure is the failure mode this whole spec exists to avoid. **Superseded by §7.**
+  refusal without its cure is the failure mode this whole spec exists to avoid. **Superseded by §8.**
 - A test that a path outside the project root is never refused.
-
----
-
-## 7. Owner ruling 2026-09-03 (#368) — the advisory codes route, they do not refuse
-
-Two measured defects made the refusal unfixable in practice, and the owner ruled "never again":
-
-1. **The cure was dead.** #216 moved verification to facts (a board row names the folder); `adopt`
-   writes a local record the board check never reads, so `FOLDER_UNCLAIMED` could not be cured by
-   the command the refusal printed. Every desktop-app session starts in an unclaimed worktree.
-2. **The guard could not see new claims.** `session-root-assert.mjs` still fetched the board at
-   `--limit 100` after #339 raised the launcher's to 1000. On a 136-item board every claim past row
-   100 — every new lane — was invisible to the refusing hook while the launcher saw it. Fixed in the
-   hook (same limit, same truncation check, pinned in `session-root-assert.test.mjs`).
-
-Ruling: `FOLDER_UNCLAIMED` and `BOARD_UNREACHABLE` return **`permission: "ask"`** from both
-`project-write-assert.mjs` and `shell-ownership-assert.mjs`; under `defaultMode: "auto"` a routed
-decision is the classifier's call, so an unclaimed session proceeds. Sibling-checkout, contradicted
-and global-config writes stay **deny**. The reason text names the real cure (an Ownership claim on
-the issue). Because those two hooks gate the assistant's own authority, the owner applies that
-diff by hand (`git apply docs/superpowers/patches/368-advisory-codes-ask.patch`); the board-limit
-fix, the allow block and this section land on the branch.
 
 ---
 
@@ -241,3 +219,39 @@ number the refusal wants to offer.
 2026-08-22** — step 4 is done. `Bash` stays out of the matcher on purpose (§3c): it is the escape
 hatch if this hook ever misbehaves, and `tracked-hooks.test.mjs` fails the build if it is ever
 added.
+
+---
+
+## 8. Owner ruling 2026-09-03 (#368) — the advisory codes route, they do not refuse
+
+Two measured defects made the refusal unfixable in practice, and the owner ruled "never again":
+
+1. **The cure was dead.** #216 moved verification to facts (a board row names the folder); `adopt`
+   writes a local record the board check never reads, so `FOLDER_UNCLAIMED` could not be cured by
+   the command the refusal printed. Every desktop-app session starts in an unclaimed worktree.
+2. **The guard could not see new claims.** `session-root-assert.mjs` still fetched the board at
+   `--limit 100` after #339 raised the launcher's to 1000. On a 136-item board every claim past row
+   100 — every new lane — was invisible to the refusing hook while the launcher saw it. Fixed in the
+   hook (same limit, same truncation check, pinned in `session-root-assert.test.mjs`).
+
+Ruling: `FOLDER_UNCLAIMED` and `BOARD_UNREACHABLE` return **`permission: "ask"`** from both
+`project-write-assert.mjs` and `shell-ownership-assert.mjs`; under `defaultMode: "auto"` a routed
+decision is the classifier's call, so an unclaimed session proceeds. Sibling-checkout, contradicted
+and global-config writes stay **deny**. The reason text names the real cure (an Ownership claim on
+the issue). Because those two hooks gate the assistant's own authority, the owner's own hard-deny
+reserves that edit to his hand — the auto-mode classifier refused it in-session, twice. The change,
+exactly, so it can be applied without re-deriving it (the three tests that pin `deny` flip with it:
+`project-write-assert.test.mjs`, `shell-ownership-assert.test.mjs`, `session-root-assert.test.mjs`):
+
+```diff
+--- .claude/hooks/project-write-assert.mjs   (both the UNVERIFIABLE and the LAPSED return)
+-      allow: false,
++      allow: false,
++      permission: "ask",
+--- .claude/hooks/shell-ownership-assert.mjs (the `own && unverified` return)
+-      permission: "deny",
++      permission: advisory ? "ask" : "deny",
+```
+
+The board-limit fix, the allow block and this section landed on the branch (#368).
+
