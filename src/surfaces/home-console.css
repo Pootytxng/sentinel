@@ -714,12 +714,24 @@
    hair at 720p. They may wrap again now, and that is harmless BY CONSTRUCTION: the shared row grid
    below makes row 1 as tall as the tallest label, so every value still starts on the same line. A
    wrapped label is not a defect; a reading hanging off the edge is. Guarded in home-console.test.tsx,
-   whose CLIENT constant now carries how and when it was measured. */
+   whose CLIENT constant now carries how and when it was measured.
+   ROUND 12 (Wave 1 Lane B self-review at 5ee0de97, 2026-09-03): THE FLOORS WERE DERIVED FROM THE
+   VALUES, AND THE WIDEST UNBREAKABLE CHILD OF A MEASURED CELL IS ITS PILL. "MEASURED" at the 13px
+   label size, tracked 0.1em and padded 5px, is 92.6px wide; round 11's 80/83px floors left it a
+   74.3px content box, and at 720p three pills crossed their neighbours' hairlines by 3.6-5.3px.
+   Green the whole time, because the guard's READS never counted the pill. Every reading floor is
+   now the pill plus hairline plus padding (99.6 -> 100px), and since 150 + 4x100 + 4x6 = 574 does
+   not fit in 515 -- with the type floor, the pill's one appearance and the single row all fixed --
+   the INSTRUMENT is what gives: its floor drops to the word "Readiness" (84 -> 86px) because its
+   label wraps under the ring below 150px (.hc-read-arc rules below). Budget at 1280x720:
+   86 + 4x100 + 4x6 = 510 <= 515. At the owner's 1500x980 every track is above its floor and
+   fr-sized exactly as before, so nothing there moves. Guard: home-console.test.tsx derives the pill
+   from reading.css, so a change to its tracking or padding moves these floors with it. */
 :root[data-v2="on"] .hc-readout {
   --hc-readout-sep: 6px;
   display: grid;
-  grid-template-columns: minmax(150px, 2fr) minmax(80px, 1fr) minmax(80px, 1fr)
-    minmax(83px, 1fr) minmax(83px, 1fr);
+  grid-template-columns: minmax(86px, 2fr) minmax(100px, 1fr) minmax(100px, 1fr)
+    minmax(100px, 1fr) minmax(100px, 1fr);
   /* THE FIVE CELLS SHARE THESE THREE ROWS (self-review round 10). Every reading is label · value ·
      attestation, and each cell used to size those three rows for ITSELF. At 1280×720 "GPU TEMP" and
      "CPU TEMP" wrap to two lines where "AVG FPS" and "1% LOW" do not, so their values sat 17px
@@ -752,6 +764,32 @@
 :root[data-v2="on"] .hc-read-arc {
   min-width: 0;
   grid-row: span 3;
+}
+/* ROUND 12 (see the readout budget above): below 150px the instrument's label wraps UNDER the ring
+   instead of beside it -- the browser measuring, no breakpoint (the handoff's "one composition
+   that flexes"). The ring, its centre readout and the label are the kit's own children; only
+   their flow changes, and only in this cell. Above 150px -- the owner's 1500x980 and the comp --
+   the line never wraps and the layout is the kit's grid to the pixel: ring, 10px, label, the ring
+   centred on the label. The centre readout rides the ring: pulled back over it by its own width,
+   then the kit's 10px gap on its far side. */
+:root[data-v2="on"] .hc-read-arc .ag-as-ring {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 0;
+}
+:root[data-v2="on"] .hc-read-arc .ag-as-ring > svg {
+  flex: none;
+}
+:root[data-v2="on"] .hc-read-arc .ag-as-ring > .ag-ctr {
+  flex: none;
+  width: 56px;
+  margin-left: -56px;
+  margin-right: 10px;
+}
+:root[data-v2="on"] .hc-read-arc .ag-as-ring > .ag-label {
+  flex: 1 1 84px;
+  min-width: 0;
 }
 
 /* ── WHAT HAS BEEN HAPPENING (issue #49) — the three shortcuts into the interview. Row buttons, not

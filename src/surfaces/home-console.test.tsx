@@ -978,6 +978,28 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     const HAIRLINE = 1;
     const LABEL = 84; // "Readiness" at the 13px type floor -- one word, so it cannot wrap
 
+    // ROUND 12 (Wave 1 Lane B self-review at 5ee0de97, 2026-09-03): READS are the VALUES, and the
+    // widest unbreakable child of a measured cell is not its value -- it is the MEASURED pill. Read
+    // on the installed build at CLIENT 1280x720: .rd-tag 92.6px wide inside a 74.3px content box,
+    // three pills overlapping their neighbours' hairlines by 3.6-5.3px. Green the whole time,
+    // because READS never counted the pill. Its width is derived from reading.css so a change to
+    // its tracking or padding moves this floor with it; only the glyph run is a measured constant.
+    const PILL_GLYPHS = 70.2; // "MEASURED", Geist Sans uppercase at the 13px label size, 2026-09-03
+    const readingCss = stripComments(
+      readFileSync(join("src", "design", "console", "reading.css"), "utf8"),
+    );
+    const tag = /\.rd-tag\s*\{([^}]*)\}/.exec(readingCss)?.[1] ?? "";
+    const typeScale = readFileSync(join("src", "design", "type-scale.css"), "utf8");
+    const labelPx = Number(/--type-label:\s*(\d+(?:\.\d+)?)px/.exec(typeScale)?.[1]);
+    const tracking = Number(/letter-spacing:\s*(\d*\.?\d+)em/.exec(tag)?.[1]);
+    const padX = Number(/padding:\s*\d+px\s+(\d+)px/.exec(tag)?.[1]);
+    const borderPx = Number(/border:\s*(\d+)px/.exec(tag)?.[1]);
+    expect(
+      [labelPx, tracking, padX, borderPx].every(Number.isFinite),
+      ".rd-tag must declare em tracking, px padding and a px border at the --type-label size",
+    ).toBe(true);
+    const PILL = PILL_GLYPHS + "MEASURED".length * tracking * labelPx + 2 * padX + 2 * borderPx;
+
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
     const tokens = readFileSync(join("src", "design", "tokens-v2.css"), "utf8");
     const readout = block(css, ':root[data-v2="on"] .hc-readout');
@@ -995,7 +1017,24 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       Number.isFinite(ring) && Number.isFinite(kitGap),
       "arc-gauge.css must still declare the ring width and its label gap",
     ).toBe(true);
-    const GAUGE_MIN = ring + kitGap + LABEL;
+    // ROUND 12: five pill-wide floors do not fit beside a 150px instrument in 515px, and the type
+    // floor, the pill's one appearance and the single row are all fixed -- so the INSTRUMENT gives.
+    // Health's cell lets the gauge's label wrap UNDER the ring (flex-wrap, the browser measuring,
+    // no breakpoint), so its floor is the wider of the ring and the word "Readiness", not their
+    // sum. Accepted only when the wrap is declared and the label keeps its whole word as its basis.
+    const plain = stripComments(css);
+    const arcCell = /\.hc-read-arc\s+\.ag-as-ring\s*\{([^}]*)\}/.exec(plain)?.[1] ?? "";
+    const arcLabel = /\.hc-read-arc\s+\.ag-as-ring\s*>\s*\.ag-label\s*\{([^}]*)\}/.exec(plain)?.[1] ?? "";
+    const wraps = /flex-wrap:\s*wrap/.test(arcCell);
+    if (wraps) {
+      const basis = Number(/flex:\s*1\s+1\s+(\d+)px/.exec(arcLabel)?.[1]);
+      expect(
+        basis,
+        "the wrapped label's flex-basis must be at least the word \"Readiness\" (" + LABEL +
+          "px), or it is squeezed before it wraps",
+      ).toBeGreaterThanOrEqual(LABEL);
+    }
+    const GAUGE_MIN = wraps ? Math.max(ring, LABEL) : ring + kitGap + LABEL;
 
     // A length here may be a px literal, a v2 token, or the strip's own local variable. Resolve it,
     // so the budget is checked against what the browser will actually use.
@@ -1058,11 +1097,13 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
         "px) -- a starved instrument prints its label over the reading beside it",
     ).toBeGreaterThanOrEqual(GAUGE_MIN);
     READS.forEach((w, i) => {
+      const widest = Math.max(w, PILL);
       expect(
         floors[i + 1],
-        "reading " + (i + 1) + " must fit its value (" + w + "px, mono, never wraps) plus the " +
-          "hairline and its padding: a value clipped by its neighbour is a reading nobody can read",
-      ).toBeGreaterThanOrEqual(w + HAIRLINE + sep);
+        "reading " + (i + 1) + " must fit its widest unbreakable child (" + widest.toFixed(1) +
+          "px: its value, or the MEASURED pill, whichever is wider) plus the hairline and its " +
+          "padding: a reading clipped by its neighbour is a reading nobody can read",
+      ).toBeGreaterThanOrEqual(widest + HAIRLINE + sep);
     });
 
     // (4) ...and all five together still fit the narrowest supported strip, or the browser
