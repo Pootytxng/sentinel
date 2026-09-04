@@ -98,7 +98,8 @@ export function headProvenanceVia(runner) {
             ok: false,
             why:
               `${beyond} commit(s) up to and including this head exist on no branch ${remote} ` +
-              `currently has. Push the proof head to ${remote} before using it for a transition`,
+              `currently has. A local-only, fork-only or stale-cached commit is not evidence a ` +
+              `reviewer can fetch. Push this branch to ${remote} before using it for a transition`,
           };
     } catch {
       return { ok: false, why: `the reachability count against ${remote} could not be taken` };
@@ -150,17 +151,19 @@ const REQUIRED_INSPECTION = [
 ];
 
 /**
- * Compatibility export used by older callers/tests. There is intentionally no model-specific owner.
- * The actual executor is selected live under docs/WORK_CONTROL.md.
+ * @deprecated Compatibility only for historical receipts/tests. Production dispatch MUST NOT use
+ * this function to choose an executor. Current routing is live/capacity-based under WORK_CONTROL.
+ * Search/guards keep this function out of selector/preflight/launcher decisions.
  */
 export function defaultOwnerFor(kind) {
-  if (kind === "implementation") return "best-fit-available";
-  if (kind === "independent-review") return "non-authoring-reviewer";
+  if (kind === "implementation") return "claude-code";
+  if (kind === "independent-review") return "codex";
   throw new Error(`unknown work kind: ${kind}`);
 }
 
 const uniq = (xs) => [...new Set(xs)];
 
+/** All executors that mutated the proof delta, not merely the holder of the final lease. */
 export function mutationAuthorsFor(record) {
   const supplied = Array.isArray(record?.mutationAuthors)
     ? record.mutationAuthors.map((x) => String(x).trim()).filter(Boolean)
@@ -178,7 +181,7 @@ export function evaluateWorkControl(
   const actor = String(record?.actor ?? "").trim();
   if (!IMPLEMENTATION_ACTORS.has(actor)) {
     blockers.push(
-      "The work-control actor must be a declared executor (claude-code, codex, chatgpt-hq, or cowork).",
+      "The implementation actor must be a declared executor (claude-code, codex, chatgpt-hq, or cowork).",
     );
   }
 
@@ -189,18 +192,21 @@ export function evaluateWorkControl(
     blockers.push(`Unknown work-control transition: ${record?.transition ?? "(missing)"}.`);
   }
 
-  // A fresh slice needs a durable lease/claim; inherited work needs a handoff/takeover. Older
-  // receipts called this `explicitHandoff`, so keep it as a compatibility alias rather than making
-  // historical receipts unreadable.
+  // New receipts call this leaseEvidence. Historical receipts called the same durable task record an
+  // explicitHandoff, so both remain readable while the runtime semantics move to mutation leases.
   const leaseEvidence = String(record?.leaseEvidence ?? record?.explicitHandoff ?? "").trim();
   if (!leaseEvidence) {
-    blockers.push("Mutation authority requires durable lease evidence recorded on the linked task.");
+    blockers.push(
+      "Implementation ownership requires durable lease evidence (historical receipts: an explicit handoff) recorded on the task.",
+    );
   }
 
-  // `exclusiveWriter` is the old field. The new name states the actual invariant: exclusivity applies
-  // to overlapping scope, not to a model as a permanent department.
+  // Historical receipts use exclusiveWriter. New receipts should use overlapExclusive, because the
+  // invariant is exclusivity of overlapping bounded mutation, not a permanent single-model department.
   if (record?.overlapExclusive !== true && record?.exclusiveWriter !== true) {
-    blockers.push("The mutation lease must be exclusive for its overlapping bounded scope.");
+    blockers.push(
+      "Implementation ownership requires one exclusive writer for the overlapping bounded scope (overlapExclusive).",
+    );
   }
 
   if (record?.inheritedWork === true) {
@@ -227,13 +233,15 @@ export function evaluateWorkControl(
       blockers.push("A proof-dependent GitHub transition requires the current head SHA.");
     } else if (!FULL_SHA.test(currentHead)) {
       blockers.push(
-        `currentHead "${currentHead}" is not a full 40-character commit SHA, so it cannot be matched against the repository.`,
+        `currentHead "${currentHead}" is not a full 40-character commit SHA, so it cannot be ` +
+          "matched against the repository.",
       );
     } else {
       const actualHead = resolveHead();
       if (!actualHead) {
         blockers.push(
-          "The repository head could not be resolved (git rev-parse HEAD failed); environment inability is a blocker, not a pass.",
+          "The repository head could not be resolved (git rev-parse HEAD failed), so no receipt " +
+            "can be bound to it; environment inability is a blocker, not a pass.",
         );
       } else if (actualHead !== currentHead) {
         blockers.push(`The receipt claims head ${currentHead}, but the repository is at ${actualHead}.`);
@@ -241,7 +249,10 @@ export function evaluateWorkControl(
         const provenance = headProvenance(currentHead);
         if (!provenance?.ok) {
           blockers.push(
-            `The receipt is not durably reachable: ${provenance?.why ?? "provenance could not be established"}.`,
+            `The receipt is not durably reachable: ` +
+              `${provenance?.why ?? "provenance could not be established"}. A merge or close ` +
+              `receipt authorizes a transition on the canonical repository, so its evidence has ` +
+              `to survive this checkout.`,
           );
         }
       }
@@ -261,7 +272,8 @@ export function evaluateWorkControl(
       const unavailable = exact.find((result) => result?.status === "unavailable");
       if (unavailable) {
         blockers.push(
-          `${command} is unavailable${unavailable.reason ? ` (${unavailable.reason})` : ""}; environment inability is a blocker, and substitute gates do not count as a pass.`,
+          `${command} is unavailable${unavailable.reason ? ` (${unavailable.reason})` : ""}; ` +
+            "environment inability is a blocker, and substitute gates do not count as a pass.",
         );
         continue;
       }
@@ -285,17 +297,30 @@ export function evaluateWorkControl(
       }
     } else {
       const reviewer = String(review?.reviewer ?? "").trim();
-      if (review?.practical !== true || review?.status !== "passed" || !reviewer) {
-        blockers.push("Final independent review must pass whenever that review is practical.");
+
+      // Historical receipts explicitly named the final lease holder in review.writer. Preserve that
+      // consistency check when the field exists; new multi-author receipts may omit it and rely on
+      // mutationAuthors instead.
+      if (review?.writer && review.writer !== actor) {
+        blockers.push("The independent-review writer must match the receipt actor.");
       }
-      if (reviewer && authors.includes(reviewer)) {
+
+      if (review?.practical !== true || review?.status !== "passed" || !reviewer) {
         blockers.push(
-          `Independent reviewer ${reviewer} is one of the mutation authors (${authors.join(", ")}); proof review must be non-authoring.`,
+          "Final review must pass with a non-writing model/reviewer whenever that review is practical.",
         );
       }
+
+      if (reviewer && authors.includes(reviewer)) {
+        blockers.push(
+          `Final review must pass with a non-writing model/reviewer: ${reviewer} is one of the mutation authors (${authors.join(", ")}).`,
+        );
+      }
+
       if (currentHead && review?.head !== currentHead) {
         blockers.push(
-          `The independent review is recorded at ${review?.head ?? "no head"}, not the current head ${currentHead}; a review of earlier code does not cover later commits.`,
+          `The independent review is recorded at ${review?.head ?? "no head"}, not the current head ` +
+            `${currentHead}; a review of earlier code does not cover the commits after it.`,
         );
       }
     }
