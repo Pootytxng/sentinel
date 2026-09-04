@@ -60,8 +60,8 @@ These are defaults, not permanent tool prohibitions:
   and second-opinion work; absent an explicit handoff, Codex stays read-only.
 - Either model may become the sole implementation writer only through an explicit handoff in the
   current task and linked issue.
-- Before a proof-dependent GitHub mutation, follow `docs/WORK_CONTROL.md` and run the required gate;
-  inability to run a required gate is a blocker, never a pass.
+- Before a proof-dependent GitHub mutation, follow `docs/WORK_CONTROL.md` and run
+  `scripts/work-control-gate.mjs`; inability to run a required gate is a blocker, never a pass.
 - The owner controls fleet-visible publication/distribution, secrets/signing custody, security/system
   settings, destructive Git, paid services, and material telemetry/network/updater policy changes.
 
@@ -72,11 +72,16 @@ Read the full locks before proposing implementation. At minimum:
 - **No fabricated or unmeasured claims.**
 - **Rollback-first integrity.** A change Compy applies must retain a durable restoration path under
   the architecture rules that govern that capability.
-- **No third-party game/process injection.**
-- **No vulnerable-driver shortcut or generic physical-memory/MSR/PCI/device-register surface.**
+- **Capability Exception Gate; no third-party game/process injection.** Default remains local,
+  user-mode, least-privilege and non-invasive. A Compy-shipped driver is policy-possible only through
+  the named gate (`docs/ARCHITECTURE_LOCKS.md` §1.8); none ships today, no vulnerable third-party
+  driver is allowed, and no generic physical-memory/MSR/PCI/device-register surface is allowed. DLL
+  injection, game-memory access and runtime hooks remain prohibited.
 - **AI explains and advises; it never invents privileged mutations or owns the action allowlist.**
 - **Security/system settings are owner-gated.** Diagnose read-only unless explicitly authorized.
-- **New outbound/network/capability behavior requires the named review/consent boundary.**
+- **No new network / telemetry / CSP / capability / updater behavior** outside an owner-approved
+  Capability Exception record. Issue #91 authorizes Tier 1 design + dark implementation; endpoint,
+  signing custody, and arming stay owner-gated.
 - **Signed remote rules remain fail-closed.** Private signing keys never enter repo, `.env*`, or CI.
 
 ## Product laws that must not be diluted

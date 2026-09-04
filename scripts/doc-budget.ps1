@@ -9,7 +9,10 @@ $budgets = @{
   # drift by definition. They moved to archive/RELEASE_STATE_HISTORY.md. Banking the headroom is
   # the point: without the tightening the section just refills and the archive move bought nothing.
   "docs/RELEASE_STATE.md" = 270
-  "docs/BACKLOG.md" = 1000
+  # 2026-09-04 (#369): BACKLOG.md was rebuilt as a 130-line / 5.4KB execution ledger by the
+  # constitutional migration; the ratchets follow it down (the slack rule in doc-budget-guard.test.mjs
+  # allows at most 8KB of byte headroom).
+  "docs/BACKLOG.md" = 300
   "docs/OWNER_ACTION_CHECKLIST.md" = 385
   "docs/BETA_DISTRIBUTION_RECORD.md" = 250
   # 119 -> 107 on 2026-08-31. It said "two rows of room, then it pays again"; both rows went to
@@ -95,7 +98,7 @@ $budgets = @{
 #                                           check (5b)'s failure text tells whoever hits it.
 # (CLAUDE.md is handled by its own older guard - see the note under the table.)
 $byteBudgets = @{
-  "docs/BACKLOG.md" = 80896
+  "docs/BACKLOG.md" = 12288
   "docs/RELEASE_STATE.md" = 43008
   "docs/OWNER_ACTION_CHECKLIST.md" = 32256
   "src-tauri/CLAUDE.md" = 10240
@@ -150,7 +153,10 @@ $sectionByteBudgets = @{
   # rulings were recorded, and the payment came from the archive: five archive-POINTER blocks
   # plus the A2/A3 not-a-defect finding moved out verbatim, leaving one consolidated pointer.
   # 13320 -> 11775, banking 256 of the 1545 bytes freed.
-  "docs/BACKLOG.md::NEXT UP" = 11776
+  # 2026-09-04 (#369): the constitutional migration rebuilt BACKLOG.md as an execution ledger; the
+  # NEXT UP / Conformance queue / HQ STEERING LOG sections no longer exist, so their caps are re-pointed
+  # at the ledger sections that replaced them (measured 1577 / 683 / 284 bytes at re-pointing).
+  "docs/BACKLOG.md::Constitutional migration" = 2048
   # 24064 -> 23808 on 2026-08-29, banking 256 of the 584 bytes the Q9b Stage 1 repair (#259)
   # freed. The queue FAILED at 23.8KB when the repair's record was filed, and the payment came
   # from the archive as the law requires: Q9a's CLOSED visual-self-review record moved to
@@ -171,8 +177,8 @@ $sectionByteBudgets = @{
   # one closed row this queue had was archived long ago, so the NEXT payment has no closed row to
   # move - it will have to come from open-row narrative that has gone historical, the way this one
   # did. Note that too, rather than reaching for the cap.
-  "docs/BACKLOG.md::Conformance queue" = 23808
-  "docs/BACKLOG.md::HQ STEERING LOG" = 4608
+  "docs/BACKLOG.md::Re-derive current blockers" = 1024
+  "docs/BACKLOG.md::Owner-gated / external decisions" = 512
 }
 
 $root = Split-Path $PSScriptRoot -Parent

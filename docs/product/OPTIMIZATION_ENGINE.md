@@ -37,6 +37,11 @@ Initial objective set:
 
 A user who does not know what to choose defaults to `recommended`.
 
+Evidence for any objective draws on the Constitution's §5 metric families — average FPS, 1% lows,
+0.1% lows when sample quality supports them, frame-time distribution and variance, visible stutter,
+defensible input-latency proxies, CPU/GPU bottleneck and utilization state, thermal and power behavior,
+stability, and visual-quality constraints — never average FPS alone.
+
 ## 3. Candidate pipeline
 
 Every candidate passes through:

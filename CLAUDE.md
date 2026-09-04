@@ -62,9 +62,9 @@ or pricing doctrine without an explicit constitutional amendment.
 - **Outbound + Capability Exception Gate:** new capabilities remain local/user-mode by default and
   cross a boundary only through a named reviewed exception. Keep the three distinct outbound tiers:
   **Tier 1 signed advisory download / no machine-data upload** · **Tier 2 scrubbed incident fingerprint**
-  · **Tier 3 explicit per-case evidence upload**. Never merge their consent/transport. Machine-data
-  sharing is opt-in and **default-OFF** unless a later owner-approved architecture decision explicitly
-  changes that contract.
+  · **Tier 3 explicit per-case evidence upload**. Never merge their consent/transport. Tier 2 is
+  opt-in, default OFF and it stays OFF after arming, disclosed at first run, with a real off switch
+  (owner ruling 2026-08-24, #207); only a later explicit owner architecture decision changes that.
 - **ONE MUTATION BOUNDARY:** Compy changes Windows from `src-tauri/src/actions.rs` and **nowhere else**.
   Snapshot → apply → verify → receipt → rollback. `src/mutation-boundary-guard.test.ts` protects this.
   `mutation-boundary-allow` is only the greppable line-level escape for prose that names a command.
@@ -80,10 +80,10 @@ or pricing doctrine without an explicit constitutional amendment.
 build → verify → commit → push → next; failed gates trigger repair, not wishful pass. Preserve failed
 candidates before reset/abandonment. Questions are for genuine owner forks, not routine engineering.
 
-**Role specialization + proof order:** Claude Code is default implementation owner; Codex is default
-independent reviewer. Either becomes the sole active writer only by explicit handoff under
+**Role specialization + proof order:** Claude Code is the default implementation owner; Codex is
+the default independent reviewer. Either becomes the sole active writer only by explicit handoff under
 `docs/WORK_CONTROL.md` after inspecting remote/repo/worktree/branch/dirty/process truth. Exact required
-gates cannot be substituted; environment inability is a blocker, never a pass. Run
+gates cannot be substituted; environment inability is a blocker, not a pass. Run
 `scripts/work-control-gate.mjs` before proof-dependent GitHub transitions. One worktree per writer;
 mutexes enforce exclusion but never grant ownership.
 
@@ -99,12 +99,15 @@ mutexes enforce exclusion but never grant ownership.
 If a task can be safely done by us within authority, do it. Reversibility never licenses crossing a
 security, secrets, ship-to-others, or ownership boundary. Verification is never skipped.
 
-### Taste autonomy
+### TASTE IS MINE TO EXERCISE, HIS TO OVERRULE (owner decree 2026-08-07)
 
-Aesthetic calls are not owner-gated by default. Make the call, verify visually, and provide a viewable
-before/after so the owner can veto on sight. Ask first where taste becomes brand/money/publication
-(product name, logo, price presentation, fleet-visible distribution). A genuine fork carries one
-recommended default. `scripts/taste-autonomy-guard.test.mjs` protects this standing rule.
+Aesthetic calls are **not** owner-gated and must never be parked on him by default — his words:
+*"i do not want taste calls to exclusively fall on me id like to see your ideas and consider your
+taste calls as well."* Make the call, verify visually, and hand him a **viewable before/after**
+(`SendUserFile`, per `.claude/skills/self-review`) so he can veto on sight. Ask first only where
+taste becomes brand/money/publication (product name, logo, price presentation, fleet-visible
+distribution). A genuine fork ships **with a recommendation attached**, never as a menu.
+`scripts/taste-autonomy-guard.test.mjs` protects this decree.
 
 ### SECURITY / SYSTEM SETTINGS — OWNER-GATED, never autonomous
 
@@ -119,7 +122,10 @@ owner.
 
 - Owner replies: plain, short, outcome first; implementation detail belongs in commit/PR/spec.
 - End implementation sessions with a HANDOFF BLOCK: paste-ready next action, lane, tab-close verdict.
-- Default effort high; x-high at mutation/rollback or similarly adversarial proof boundaries.
+- **Subagent routing:** `.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` — **the
+  setting is the guard, do not add per-session routing instructions.** Pin a stronger `model:` in
+  agent frontmatter only where adversarial judgment is provably the point (`web-design-director` is
+  the one documented exception). Effort: default high; x-high at the mutation/rollback boundary.
 - **SELF-REVIEW before claiming ANY UI change done.** Run the `self-review` project skill through the
   self-reviewer agent; green unit tests are not visual proof. **never capture or cdp-eval inline** in
   the orchestrator. No done-claim without a **quoted PASS verdict**.
@@ -144,23 +150,31 @@ installers → stage only the new NSIS → silent install → launch). Verify li
 - Trust Ledger: `%APPDATA%\Compy\history.json`; runtime FPS IPC under `%APPDATA%\Compy\runtime\`.
 - `%LOCALAPPDATA%\Compy\` is the installed app directory, never the IPC directory.
 
-### Rust module map
+### Rust module map (`lib.rs` carved into safety-boundary modules)
 
-The detailed read-only module map lives in `src-tauri/CLAUDE.md`. **Mechanically verified — run
-`scripts/verify-module-map.mjs`** before trusting it after structural changes.
+Complete 2026-08-29 (51 `.rs` files; line counts rough). **Mutation/rollback +
+gate-relevant modules are starred ★ — scope any mutation-gate change against these first.** The
+read-only remainder (hardware/sensors, monitoring/FPS, benchmark/Lab, advisory/ranking/export,
+intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads only when work touches
+`src-tauri/`. **Mechanically verified — run `node scripts/verify-module-map.mjs` before trusting either half.**
 
-Mutation/gate-critical modules include:
+**Core wiring & entry**
+- `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); else `run()`. Runs BEFORE any window.
+- ★ `lib.rs` (~1870) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:558`), `safety_tests`. ★ for the command surface only — the `set_startup_entry_enabled` exception closed 2026-08-03; it lives in `history.rs` and mutates through `actions::apply_startup_entry_enabled` like every other apply.
 
-- `src-tauri/src/actions.rs` — THE mutation/rollback boundary.
-- `src-tauri/src/history.rs` — Trust Ledger / apply / rollback history.
-- `src-tauri/src/gaming_orchestrator.rs` + `gaming_session.rs` — Gaming Mode lifecycle/persistence.
-- `src-tauri/src/services.rs` — service/debloat mutation surface.
-- `src-tauri/src/gpu_profile.rs` — GPU-profile advisory/apply constraints.
-- `src-tauri/src/remote_rules.rs` — signed remote rules.
-- `src-tauri/src/receipts.rs` — outbound receipt gate/path.
-- `src-tauri/src/license.rs` — dark licensing implementation.
-- `src-tauri/src/drift.rs` — applied-change drift detection.
-- `src-tauri/src/data_root.rs` — canonical mutation-data root.
+**★ Mutation, rollback & gates (the safety boundary)**
+- ★ `actions.rs` (~5404) — THE Windows-mutation + rollback boundary, no exceptions: typed `AppliedAction`/`RollbackAction`/`Snapshot`, all `apply_*`/`rollback_*_typed`, `dispatch_rollback`, `resolve_rollback`, `synthesize_legacy_rollback`, `run_elevated_powershell`.
+- ★ `history.rs` (~2416) — Trust Ledger: `AppliedChange`, persistence (`load/save_history`), `apply_recommendation`/`rollback_change`/`get_applied_changes`. Rollback resolves from local history ALONE.
+- ★ `gaming_orchestrator.rs` (~1660) — Gaming Mode session lifecycle: start/stop/keeper, orphan detection + recovery, staged-change commit. Mutation-boundary.
+- ★ `gaming_session.rs` (~513) — Gaming Mode session model + atomic persistence (`gaming-session.json`, `SESSION_SCHEMA_VERSION`).
+- ★ `game_mode_persist.rs` (~190) — Game Mode registry snapshot/persist helpers.
+- ★ `services.rs` (~1040) — service-suspend/debloat mutation surface (ARMED).
+- ★ `gpu_profile.rs` (~590) — GPU profile handling (apply structurally impossible → advisory; AMD state not user-mode readable).
+- ★ `remote_rules.rs` (~590) — signed remote-rules (Ed25519 verify wired, fetch triple-gated OFF).
+- ★ `receipts.rs` (~633) — Receipts gate + Tier 2 send path (Q9a): `send_decision` refuses gate → disclosure → opt-in. Built dark, hard-false, **default-OFF even armed** (#207).
+- ★ `license.rs` (~519) — Compy Pro license gate (built dark).
+- ★ `drift.rs` (~477) — applied-change drift detection vs live machine state.
+- ★ `data_root.rs` (~1050) — canonical data-root resolver (#130): measures where the root LANDS, not the `APPDATA` string; halts on a split; issues `MutationRoot`, the capability `history.rs`/`actions.rs` now require. Guard: `scripts/data-root-guard.test.mjs`.
 
 ## LOCKED safety rules — do not cross without explicit product-owner decision
 
@@ -168,12 +182,13 @@ Mutation/gate-critical modules include:
    least-privilege, non-invasive. Any exception must be named/capability-specific and prove a lower-risk
    route cannot achieve the outcome; define privilege/data surface, consent, rollback/uninstall,
    signing/update, kill switch, staged proof, independent security/anti-cheat review, abort metrics,
-   and owner sign-off. Full process: `docs/ARCHITECTURE_LOCKS.md`. The **current build ships no driver**.
+   and owner sign-off. Full process: `docs/ARCHITECTURE_LOCKS.md` §1.8. A Compy driver is no longer categorically
+   forbidden, but **the current build ships no driver** and none may be built before its own record.
    **No vulnerable third-party driver** and no generic physical-memory/MSR/PCI/device-register surface.
    CPU temperature stays **external-monitor-only** unless a separately approved supported capability
    ships; unavailable remains unknown, never fabricated.
 
-2. **No third-party game/process injection.** Absolute: **no DLL injection**, **game-memory access**,
+2. **No third-party game/process injection.** This remains absolute: **no DLL injection**, **game-memory access**,
    runtime hooks, or code inside game/anti-cheat processes. FPS/frametime remains external ETW; overlays
    are limited to **borderless/windowed**, never exclusive-fullscreen injection.
 
@@ -221,8 +236,11 @@ hardware-specific work begins.
 5. `docs/BACKLOG.md` — living execution ledger. Per **false-done** protocol, never claim completion
    without naming remaining/gated work.
 6. `docs/OWNER_ACTION_CHECKLIST.md` — consolidated owner-only actions. Never let an owner item drop.
-7. `docs/UI_VISION_BACKLOG.md` — owner-authored visual asks that remain live. A UI implementation can
-   pass tests and still be incomplete; **a reskin is not the vision**.
+7. `docs/UI_VISION_BACKLOG.md` — the ONE home for owner-authored UI/design asks. For anything
+   UI/visual read its 🔴 OPEN rows — today DIR-1 (the standing intuitive-UI lens) and §G (the site);
+   `src/ui-vision-status-guard.test.ts` rule D pins this line to those headings. A UI implementation
+   can pass tests and still be incomplete; **a reskin is not the vision**; never re-queue a row from a
+   paraphrase.
 8. `docs/CHANGELOG.md` — historical dated record only.
 
 Legacy `docs/RECEIPTS_DOCTRINE.md`, `docs/PRODUCT_DIRECTION.md`, `docs/PRD.md`, and old monetization

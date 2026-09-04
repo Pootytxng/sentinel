@@ -85,7 +85,7 @@ opus = rare, judgment-heavy workers only · fable = never a subagent. Full table
 ## Tier 2 — spec'd, not built (build when the surface goes live; specs are the decisions, pre-made)
 
 1. **`receipts-copy-lint`** — rubric-lint ALL outward copy (compy.gg pages, share cards, Learn
-   entries, marketing) against `RECEIPTS_DOCTRINE.md` + `ARCHITECTURE_LOCKS.md` §1.7: the three
+   entries, marketing) against `PRODUCT_CONSTITUTION.md` §29–§30 + `ARCHITECTURE_LOCKS.md` §1.7: the three
    labels stay strictly distinct (Verified / Measured signal / Expected impact); zero unmeasured or
    fabricated claims; measured wins amplified loudly (retired: "your PC is probably fine" defensive
    copy); NVIDIA sensor confidence never upgraded past what a monitored session proves; noise-floor

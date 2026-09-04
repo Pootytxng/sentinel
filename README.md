@@ -13,7 +13,7 @@ The product law is simple:
 
 > **Compy optimizes outcomes, not settings.**
 
-Compy reads the actual machine, reasons about what is relevant to that hardware/workload, uses safe reversible experiments where supported, measures the result, keeps what helps, restores what does not, and retains enough evidence to explain later problems.
+Compy is built to read the actual machine, reason about what is relevant to that hardware/workload, use safe reversible experiments where supported, measure the result, keep what helps, restore what does not, and retain enough evidence to explain later problems. What is actually built, armed, installed, or verified today is [`docs/RELEASE_STATE.md`](docs/RELEASE_STATE.md) truth, not this paragraph.
 
 Built with **Tauri 2** (Rust core in `src-tauri/`) + **React/TypeScript** frontend (`src/`). The GitHub repository retains the historical name `sentinel`.
 

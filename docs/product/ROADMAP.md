@@ -22,6 +22,12 @@ Both must converge on the same machine model, evidence, history, Trial system, r
 
 The project should not optimize for feature count. It should optimize for the quality of these two journeys.
 
+Phase numbering below is dependency order, not product ranking. The optimization phases precede Care
+convergence only because Care's "what changed since it worked?" path consumes the Machine Model, Trial,
+history, and rollback machinery those phases build. **FIGURE OUT WHAT WENT WRONG** is never subordinate
+to **MAKE THIS PC BETTER**, and no phase may ship Performance value by weakening the shared machinery
+Care depends on.
+
 ---
 
 ## Phase 0 — Constitutional migration and drift elimination

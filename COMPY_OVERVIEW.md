@@ -14,3 +14,5 @@ Read instead:
 - [`docs/WORK_CONTROL.md`](docs/WORK_CONTROL.md) — active execution ownership
 
 The complete pre-rebirth overview remains preserved in Git history for historical comparison only.
+
+Full pre-rebirth text, preserved as historical evidence only: `git show 91fe69042e67321576e307ecc9c6870ba189ef6d:COMPY_OVERVIEW.md` (the last mainline commit carrying the complete body).

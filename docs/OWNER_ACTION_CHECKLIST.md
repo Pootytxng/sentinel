@@ -197,12 +197,12 @@ button) and ~~**(b) an explicit "deploy GO"** for the site refresh~~ — **(b) G
 ("deploy go looks good for now"); the site now deploys autonomously and is LIVE on
 `compy-bd6.pages.dev` (SEO plumbing + `/compare` shipped 2026-07-15). **Still open: only (a) the Ko-fi
 URL.**
-- **Ko-fi is the single most-ready money surface** ([`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md)
-  "Bridge"): `src/data/site.ts` `KOFI_URL` is empty by design (empty = no support link ships, **no
+- **Ko-fi is the single most-ready money surface** ([`product/MONETIZATION.md`](product/MONETIZATION.md);
+  Ko-fi bridge): `src/data/site.ts` `KOFI_URL` is empty by design (empty = no support link ships, **no
   dead link**), and two dormant slots — the footer and the waitlist section — light up the instant
   you give me the URL. One line, regenerate, deploy. **Result → tell Claude: your Ko-fi profile URL.**
 
-### B6. Monetization plan — money-surface unlocks  ·  ⏳  ·  [`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md)
+### B6. Monetization — money-surface unlocks  ·  ⏳  ·  [`product/MONETIZATION.md`](product/MONETIZATION.md)
 Drawn up 2026-07-15 at your ask ("draw up a monetization plan … and how best to set it up on the
 site"). The plan documents/sequences what the site is **already built to do** — nothing here is a new
 spend or a new outbound boundary. The layers, ranked by passivity, and the owner-only unlocks each
@@ -213,8 +213,8 @@ one waits on:
   Associates / Newegg — your signup, a money call) **② enough Receipts data** to make a web
   bottleneck-report say something true. Until accounts exist, verdicts use plain retailer links (no
   revenue, still honest).
-- **Compy Pro (Layer 3)** — built dark, correct posture. **Price ✅ SET 2026-08-22: $4.99/mo ·
-  $39/yr · $89 one-time lifetime** ([`PRICING_RESEARCH.md`](PRICING_RESEARCH.md) — every comparable
+- **Compy Pro (Layer 3)** — built dark, correct posture. **Price band 2026-08-22 (a hypothesis under Constitution §32): $4.99/mo ·
+  $39/yr · $89 lifetime** ([`PRICING_RESEARCH.md`](PRICING_RESEARCH.md) — every comparable
   charges more than the old $25/yr guess, and a shop charges $45–95 just to *look* at a PC). Still
   needs **a legal entity + merchant-of-record (Paddle route) + shipped Pro value.** The site's "in
   the works / no price yet" card stays until Pro is purchasable.

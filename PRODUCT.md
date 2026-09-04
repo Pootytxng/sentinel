@@ -19,9 +19,9 @@ Compy is an all-in-one **PC optimization & safety dashboard** — positioned as 
 rollback-first Windows configuration safety layer that happens to optimize."* Its core
 differentiator is **hardware-aware, per-rig** guidance: it reads the actual machine and
 tailors safe, reversible settings to it, instead of generic internet tweaks that break
-things. Under the Receipts Doctrine its broader identity is **the measurement brand that
-proves everything** — the free app is the trust engine: it measures honestly, amplifies
-real gains, and never fabricates a claim. Success = the user trusts what Compy tells them,
+things. Under the Product Constitution (`docs/PRODUCT_CONSTITUTION.md`) it **proves what
+it changed**: it measures honestly, amplifies real gains, and never fabricates a claim (the
+Receipts-era framing is tombstoned history). Success = the user trusts what Compy tells them,
 acts with confidence, and can always undo.
 
 ## Brand Personality

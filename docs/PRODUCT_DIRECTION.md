@@ -20,3 +20,5 @@ Safety constraints remain separately governed by [`ARCHITECTURE_LOCKS.md`](ARCHI
 The full pre-rebirth contents remain available in Git history for historical analysis only.
 
 Any old statement that makes Care or optimization subordinate to the other, treats a universal preset as the product goal, or uses tweak-count/process-count thinking as product value is retired unless explicitly re-ratified through the Constitution amendment process.
+
+Full pre-rebirth text, preserved as historical evidence only: `git show 91fe69042e67321576e307ecc9c6870ba189ef6d:docs/PRODUCT_DIRECTION.md` (the last mainline commit carrying the complete body).

@@ -15,3 +15,5 @@ Use instead:
 - [`RELEASE_STATE.md`](RELEASE_STATE.md) — current implementation truth
 
 The complete pre-rebirth PRD remains preserved in Git history for historical analysis only.
+
+Full pre-rebirth text, preserved as historical evidence only: `git show 91fe69042e67321576e307ecc9c6870ba189ef6d:docs/PRD.md` (the last mainline commit carrying the complete body).

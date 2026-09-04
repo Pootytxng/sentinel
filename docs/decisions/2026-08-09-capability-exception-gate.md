@@ -10,6 +10,11 @@
 
 ## Decision
 
+> **Product framing superseded 2026-09-04 (#369):** the Care-primary / optimization-second hierarchy
+> in the next paragraph is retired by `docs/PRODUCT_CONSTITUTION.md` (two equal flagship journeys
+> through one machine model). The Capability Exception Gate decision itself, and every tier,
+> kill-switch and origin rule in this record, remain in force.
+
 Compy's primary identity is **Compy Care: the PC doctor users open after any crash, freeze, slowdown,
 or unexplained hiccup.** Measured optimization remains its second specialty. Care owns the continuing
 loop—intake, triage, local case chart, bounded differential, one next plan, follow-up and prevention.

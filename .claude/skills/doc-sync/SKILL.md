@@ -11,8 +11,10 @@ description: >-
 # Doc-Sync — which doc, what order, same commit
 
 State lives in exactly one place; everything else points at it. When they disagree, precedence is:
-**RELEASE_STATE.md wins current state · CLAUDE.md wins standing law · code wins over both** (and a
-code/doc mismatch is a finding to report, not silently patch — see gate-drift-audit).
+**RELEASE_STATE.md wins current state · PRODUCT_CONSTITUTION.md wins product truth ·
+ARCHITECTURE_LOCKS.md wins safety · WORK_CONTROL.md wins ownership · CLAUDE.md is bootstrap, not law ·
+code wins over any doc claim about what is built** (a code/doc mismatch is a finding to report, not
+silently patch — see gate-drift-audit).
 
 ## The update order (same commit as the change wherever possible)
 

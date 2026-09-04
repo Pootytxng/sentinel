@@ -231,3 +231,59 @@ The migration is fully synchronized only when:
 - independent review covers that exact head;
 - merged `main` passes the constitutional boot/guard verification;
 - post-migration product triage starts from the Constitution, not from inherited queue momentum.
+
+## 16. Writer record — Claude Code reconciliation (2026-09-04)
+
+Exact heads, commands, and results live on #369 / #371; this section records only what was decided
+and why, so a reviewer can check the reasoning rather than re-derive it from the diff.
+
+- **Main integrated by merge, not rebase.** The branch was HQ-authored through the GitHub API and
+  already published under PR #371; rewriting it would have invalidated HQ's own review anchors. The
+  #370 paths did not touch the migration file set and merged without conflict.
+- **Release-state verifier had two drifts, not one.** `SOURCE-COMMIT-STALE` was re-stamped truth-only
+  to current `main`, nothing else in `RELEASE_STATE.md` changed. `INSTALLED-STAMP-DRIFT` was **not**
+  absorbed: the stamp the verifier reads from the installed `compy.exe` belongs to a #225-lane desk
+  build that is not on `main`, and that lane's branch already carries the row reconciliation. Folding
+  another writer's installed-build claim into a docs migration would violate both Work Control and §7.
+- **Doc budget re-pointed, then ratcheted.** The migration removed the three BACKLOG sections whose
+  byte caps `scripts/doc-budget.ps1` named, so the caps moved to the sections that replaced them and
+  the BACKLOG file budgets followed the file down (the guard's slack rule forbids a padded budget).
+  This is the one path outside the original PR #371 file set; it is a gate-truth repair, not product
+  work.
+- **Safety-preservation review found softenings and repaired them in place** rather than
+  rationalizing: signature-before-download ordering; unconditional embedded-baseline cold start; the
+  inline rollback exception hatch (removed — the only route is a §6 amendment); the advanced/
+  problem-specific/user-initiated/warned conditions for surfacing barred items; the Tier 1
+  implementation lock, enumerated kill-switch limits, `CASE_SOURCE_ORIGINS` ownership, and Tier 2
+  "stays OFF after arming"; strict-serde specifics; key-custody storage prohibitions; the AI
+  "human review" boundary and its full disallowed surface; universal MPO disable back on the barred
+  list, consistent with `CLAUDE.md` rule 6; Capability Exception Gate provenance and directive
+  pointers.
+- **Product-intent review found one dilution and repaired it:** roadmap phase order read as
+  Performance-before-Care ranking. The roadmap now states that numbering is dependency order and that
+  neither flagship journey is subordinate. README's present-tense capability paragraph now defers
+  current-state truth to `RELEASE_STATE.md`; the Optimization Engine restates the Constitution's
+  multi-metric evidence families; each tombstone names the exact commit that carries its full
+  pre-rebirth body.
+- **The full suite, not the three named guards, found the rewrite's collateral.** `npm test` at the
+  merged head failed six existing guards that pin exact bootstrap markers: the role/proof contract
+  and `scripts/work-control-gate.mjs` reference (`work-control-gate.test.mjs`), the taste decree
+  (`taste-autonomy-guard.test.mjs`), the "Subagent routing" rule the model-guard hook cites
+  (`agent-machinery-guard.test.ts`), the 🔴 OPEN pointer to `UI_VISION_BACKLOG.md`
+  (`ui-vision-status-guard.test.ts`), the mechanically verified Rust module map
+  (`verify-module-map-guard.test.mjs`), and the Capability Exception mirrors
+  (`capability-exception-policy-guard.test.ts`). All were restored in `CLAUDE.md`, `AGENTS.md` and
+  `ARCHITECTURE_LOCKS.md` §1.8 in their pinned wording. The capability guard's corpus was amended
+  rather than the tombstones: `COMPY_OVERVIEW.md`, `RECEIPTS_DOCTRINE.md`, `PRODUCT_DIRECTION.md`
+  and `BACKLOG.md` no longer carry policy mirrors (they stay in the forbidden-permission scan), and
+  `PRODUCT_CONSTITUTION.md` is pinned to its own deferral to the Locks.
+- **Active-authority audit: twelve live routing files still named a tombstone as canonical**
+  (`PRODUCT.md`, the session/Cowork handoffs, the Council protocol, pricing research, the owner
+  checklist, three skills, both web-design-director seats, and the 2026-08-09 decision record). Each
+  now routes to the Constitution or `product/MONETIZATION.md` and names the tombstone as history;
+  nothing was deleted to quiet grep. `src/product-constitution-guard.test.ts` gained the law: a live
+  routing file may mention a tombstone only in a paragraph that also says it is history, and may
+  never call one canonical. The $4.99 / $39 / $89 band is recorded as a hypothesis under
+  Constitution §32, which is what the Constitution itself says about historical price decrees.
+- **Not touched, deliberately:** `src-tauri/**`, `docs/RELEASE_STATE.md` beyond `source_main_commit`,
+  and every claim about what is published, installed, or armed.

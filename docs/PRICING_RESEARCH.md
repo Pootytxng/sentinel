@@ -6,6 +6,11 @@
 > **Status: the owner ruled on §5 the same day — see §7.** The band is $4.99/mo · $39/yr · $89
 > lifetime. The research below is left intact as the reasoning behind it.
 >
+> **Constitutional status (2026-09-04, #369):** under `PRODUCT_CONSTITUTION.md` §32 and
+> `product/MONETIZATION.md` this band is a research hypothesis, not a price decree ("no historical
+> pricing decree outranks this rule"); the `RECEIPTS_DOCTRINE.md` / `MONETIZATION_PLAN.md` entries it
+> was written into are tombstoned history.
+>
 > **This doc does not set a price by itself.** Price presentation is owner/brand/money territory
 > (`CLAUDE.md` → taste decree; `OWNER_ACTION_CHECKLIST.md` §B6, §C). It gathers the evidence,
 > names a recommendation, and states plainly what is still unmeasured.
@@ -15,7 +20,7 @@
 
 ## 1. What we currently assert, and on what basis
 
-`RECEIPTS_DOCTRINE.md:81` states Compy Pro at **$3–4/mo or ~$25/yr**, and B2B at **$10–30/seat/mo**.
+`RECEIPTS_DOCTRINE.md:81` (pre-rebirth text, now tombstoned) stated Compy Pro at **$3–4/mo or ~$25/yr**, and B2B at **$10–30/seat/mo**.
 Neither number has a source behind it in this repo. They were written as a plausible band, not
 derived from comparables or from demand. Treat both as **unevidenced placeholders** until this doc's
 recommendation is accepted or replaced.
@@ -96,7 +101,7 @@ Stated plainly, because the honest-measurement law applies to money claims too:
   who still signs up. That is a $0 experiment and it is the correct next step before any number is
   committed to.
 - **Nothing here changes what Pro must contain.** A price is only defensible once there is enough
-  shipped Pro value to be worth it (`MONETIZATION_PLAN.md` Layer 3, gate ③).
+  shipped Pro value to be worth it (tombstoned `MONETIZATION_PLAN.md` Layer 3, gate ③).
 
 ## 7. Owner decisions — ✅ RULED 2026-08-22
 
@@ -105,9 +110,9 @@ lifetime."*
 
 | Question | Ruling |
 |---|---|
-| Working band for Compy Pro | **$4.99/mo · $39/yr · $89 one-time lifetime.** Written into [`RECEIPTS_DOCTRINE.md`](RECEIPTS_DOCTRINE.md) §Money stack 3 and [`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md) Layer 3; the old $3–4/mo · ~$25/yr placeholder is superseded. |
+| Working band for Compy Pro | **$4.99/mo · $39/yr · $89 one-time lifetime.** Was written into `RECEIPTS_DOCTRINE.md` §Money stack 3 and `MONETIZATION_PLAN.md` Layer 3 (both tombstoned 2026-09-04 — see the header note; a hypothesis under Constitution §32); the old $3–4/mo · ~$25/yr placeholder is superseded. |
 | Is a lifetime SKU acceptable | **Yes** — named explicitly in the ruling. It caps revenue per user and is hard to withdraw once offered; that cost was accepted for the trust it buys in this category. |
-| Publish the price on the site | **No — not yet.** Not addressed in the ruling, so decided here and recorded as reversible: the site's Pro card stays price-free until Pro exists, per `MONETIZATION_PLAN.md`'s Director HOLD. A price on a page that cannot sell anything is the one move this doc's own §4 argues against. Flip it the day Pro is purchasable. |
+| Publish the price on the site | **No — not yet.** Not addressed in the ruling, so decided here and recorded as reversible: the site's Pro card stays price-free until Pro exists, per the tombstoned `MONETIZATION_PLAN.md`'s Director HOLD, kept as a reversible site decision. A price on a page that cannot sell anything is the one move this doc's own §4 argues against. Flip it the day Pro is purchasable. |
 
 **Still unmeasured, and still the next step:** nothing above is demand evidence (§6). Put the band in
 front of the waitlist and measure who still signs up before a payment processor is ever wired.

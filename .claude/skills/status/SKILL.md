@@ -21,7 +21,8 @@ believe you did — the point of this skill is that the answer is reconstructed.
 |---|---|
 | `git log --oneline -12` · `git status -sb` · `git branch --show-current` | what actually landed, what is uncommitted, where HEAD is vs origin |
 | `docs/RELEASE_STATE.md` (gate matrix) | **authoritative** live gate/build/release state |
-| `docs/BACKLOG.md` | next non-gated `[ ]` item |
+| `docs/PRODUCT_CONSTITUTION.md` → `docs/product/ROADMAP.md` | product truth and the derived sequence; `BACKLOG.md` is a ledger, never a priority source |
+| `docs/BACKLOG.md` | next non-gated `[ ]` item, P0 first |
 | `docs/OWNER_ACTION_CHECKLIST.md` | what is on **his** hands, eyes, input, money |
 | `docs/UI_VISION_BACKLOG.md` 🔴 OPEN | unbuilt visual/motion work — see the trap below |
 | `docs/WORK_CONTROL.md` | live claims; an overlapping claim means another lane owns it |

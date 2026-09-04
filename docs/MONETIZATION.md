@@ -15,3 +15,5 @@ Current commercial authority is derived from the Product Constitution and lives 
 The existing licensing implementation remains current implementation only where confirmed by `RELEASE_STATE.md` and the code; it does not dictate the business model.
 
 The full pre-rebirth document remains preserved in Git history for reference.
+
+Full pre-rebirth text, preserved as historical evidence only: `git show 91fe69042e67321576e307ecc9c6870ba189ef6d:docs/MONETIZATION.md` (the last mainline commit carrying the complete body).

@@ -1,10 +1,10 @@
 # SESSION HANDOFF — paste-ready prompt for the next session
 
-> Live pointer only. Gate truth: [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue:
-> [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP. Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
-> Budget 120 lines; this file and `BACKLOG.md::Conformance queue` are AT cap — trim before adding a
-> line. Replace this file, never append. **Durable instructions only**: no fleet counts, no lane
-> names, nothing another lane has to come back and repair (#291).
+> Live pointer only. Product truth: [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md). Gate truth:
+> [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue: [`BACKLOG.md`](BACKLOG.md) (ledger, P0 first, derived
+> from `product/ROADMAP.md`). Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
+> Budget 120 lines; this file is AT cap — trim before adding a line. Replace this file, never append.
+> **Durable instructions only**: no fleet counts, no lane names, nothing another lane must repair (#291).
 
 ## Where the train is standing
 

@@ -21,3 +21,5 @@ The full pre-rebirth Receipts Doctrine remains preserved in Git history and may 
 In particular, the former statements that **Compy Care is the primary product and optimization is secondary**, that consumer Compy should end in a predetermined monthly subscription structure, or that older fixed price bands are current law are **retired**.
 
 Reintroducing any retired thesis requires an explicit constitutional amendment under `PRODUCT_CONSTITUTION.md`; it cannot happen by citing this historical file.
+
+Full pre-rebirth text, preserved as historical evidence only: `git show 91fe69042e67321576e307ecc9c6870ba189ef6d:docs/RECEIPTS_DOCTRINE.md` (the last mainline commit carrying the complete body).

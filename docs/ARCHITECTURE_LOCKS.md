@@ -47,32 +47,35 @@ An LLM or other probabilistic system may:
 - summarize detected hardware/state;
 - summarize logs/history/evidence;
 - help classify or communicate evidence;
-- propose an advisory for human/product logic to evaluate.
+- suggest advisories for **human review** before any apply path runs.
 
-It may not autonomously:
+It may not, with no exceptions:
 
-- invent a new mutation primitive;
+- decide what to apply;
+- invent a new mutation primitive or tweak action;
 - choose arbitrary registry paths, services, commands, drivers, or parameters;
+- write or alter apply or rollback logic;
 - write or modify the privileged action allowlist at runtime;
 - bypass the deterministic eligibility, Trial, Risk, rollback, or verification machinery;
 - turn a probabilistic suggestion directly into an elevated mutation.
 
 **The AI narrates the chainsaw. It does not hold it.**
 
-The Product Constitution permits Compy to guide users aggressively toward outcomes; that does not
-change this mutation-authority boundary.
+No product doctrine, including the Product Constitution, changes this mutation-authority boundary.
 
 ### 1.3 Offline-capable cold start
 
-Compy's core local value must remain useful without a network connection.
+Compy must be useful on first launch with no network access, indefinitely.
 
 For signed remote rule/advisory systems:
 
-- ship an embedded baseline or equivalent local fallback where the capability requires one;
-- remote validation happens only after the local app can function;
-- failure, expiry, timeout, or signature rejection falls back to embedded/last-known-good state;
-- absence of network is not converted into a scare modal or false failure;
-- support evidence must be able to identify which source was active.
+- the embedded baseline is the starting catalog. Always;
+- remote validation runs in the background, only after the UI is interactive;
+- the catalog is replaced only if the remote bundle passes every gate in §1.4;
+- failure, expiry, timeout, or signature rejection keeps the embedded or last-known-good catalog active;
+- absence of network is at most a small, non-alarming status line ("Using built-in recommendations.
+  Online rule updates unavailable.") — no modal, no panic, no upsell, no false failure;
+- support evidence must be able to identify which source was active (embedded / cached / remote).
 
 The exact online capabilities currently armed are Release State truth.
 
@@ -83,7 +86,7 @@ No remote **mutation rules** capability may ship armed until all of the followin
 - production Ed25519 public key embedded in the binary;
 - signed manifest with at least `schema_version`, `ruleset_version`, `created_at`, `expires_at`,
   `min_app_version`, `max_app_version`, `rules_sha256`, and `rules_url`;
-- signature verification occurs before trusting the manifest;
+- manifest signature verification before any rules JSON is downloaded;
 - rules bytes are SHA-256 bound to the signed manifest;
 - monotonic ruleset version blocks rollback attacks;
 - expiry blocks freeze attacks;
@@ -96,8 +99,13 @@ No remote **mutation rules** capability may ship armed until all of the followin
 
 **Unsigned remote rules must never ship, even in beta.**
 
-A placeholder public key or hard-false runtime gate must fail closed. Arming requires deliberate
-review; one changed constant must never accidentally enable the entire control plane.
+Remote fetch stays disabled behind three independent gates: a placeholder public key that fails closed
+before any cryptographic verification runs, a hard-false runtime enable gate that is independent of the
+key check, and no configured production URL. Both code guards must be removed together to arm remote
+fetch; there is no shipped path where one is on and the other is off. Arming is a deliberate, reviewed
+change; one changed constant must never accidentally enable the entire control plane. Private beta with
+the embedded baseline only is fine; private beta with unsigned remote fetch is not, and the control plane
+is never smuggled in under "we'll add signing later."
 
 ### 1.5 Rollback is independent of the current catalog
 
@@ -112,9 +120,10 @@ A user must be able to roll back a Compy-applied change even when:
 Therefore the complete rollback contract is captured **at apply time** and persisted locally.
 Rollback consults local history, not the current recommendation catalog.
 
-**Never apply a change you can't roll back** unless a separately owner-approved architecture exception
-explicitly defines why the operation is allowed despite irreversibility; such an exception is outside
-the normal optimization catalog and must never be inferred from the user's “Push” risk preference.
+**Never apply a change you can't roll back.** An operation whose prior state cannot be captured
+restorably is structurally unavailable to automated apply (see "Structural impossibility" in §3). A
+user's risk preference, including any "Push" tier, never unlocks it, and no product ambition infers an
+exception; the only route to change this rule is an explicit owner-approved amendment under §6.
 
 ### 1.6 Remote/UI text is untrusted input
 
@@ -145,7 +154,13 @@ Protocol's noise rules.
 A delta that does not clear credible run-to-run noise is reported as **no measurable change**, not a
 win rounded up for marketing.
 
-### 1.8 Capability Exception Gate
+### 1.8 Capability Exception Gate + outbound case intelligence
+
+**Owner decision (2026-08-09, issue #91):** the blanket "no Compy driver / no new outbound surface"
+prohibitions were replaced by this challengeable gate. It is not a general unlock. Directive:
+`docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md`; execution plans:
+`docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md` and
+`docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md`.
 
 Every new capability starts local, user-mode, least-privilege, non-invasive, offline-usable where
 reasonable, and fail-closed.
@@ -179,8 +194,8 @@ IOCTL, endpoint, payload field, telemetry field, CSP widening, permission, or mu
 
 #### Compy-shipped driver exception
 
-A Compy-authored driver is policy-possible only through its own approved Capability Exception record.
-The mere fact that a sensor, optimizer, or competitor uses a driver is not sufficient justification.
+A Compy driver is policy-possible only through its own approved Capability Exception record; the
+current runtime remains driver-free and no driver may be built before that record exists. The mere fact that a sensor, optimizer, or competitor uses a driver is not sufficient justification.
 
 Any driver proposal additionally requires:
 
@@ -199,21 +214,42 @@ A driver must never be justified only to fill an otherwise honest “unavailable
 
 These are distinct capabilities and never inherit consent from one another:
 
-| Tier | Purpose | Consent | Data leaving Compy |
-| --- | --- | --- | --- |
-| **1 — signed case knowledge** | keep public advisory knowledge current | disclosed request + global off switch | catalog request metadata only; no machine-derived incident payload |
-| **2 — scrubbed incident fingerprint** | learn recurring issue shapes | opt-in, default OFF, previewable, real off switch | allowlisted coarse fields only; no raw dump/log/path/serial/user identity |
-| **3 — per-case evidence upload** | user intentionally sends one support case | explicit per-incident consent after preview/redaction | exactly the displayed bundle to the named recipient |
+| Tier | Purpose | Consent | Data leaving Compy | Independent gate |
+| --- | --- | --- | --- | --- |
+| **1 — signed case knowledge** | keep public advisory knowledge current | disclosed request + global off switch | catalog request metadata only; **no machine-derived incident payload** | separate advisory signing trust, domain, cache, caps, timeouts; local deny-only kill switch |
+| **2 — scrubbed incident fingerprint** | learn recurring issue shapes | opt-in, default OFF **and it stays OFF after arming**, disclosed at first run, real off switch, previewable (owner ruling 2026-08-24 #207, retiring the 2026-08-18 "on by default once armed" <!-- retired-claim-allow --> amendment) | allowlisted coarse fields only; no raw dump/log/path/serial/user identity | payload schema, redaction proof, retention/deletion, revocation, abuse review |
+| **3 — per-case evidence upload** | user intentionally sends one support case | explicit per-incident consent after preview/redaction | exactly the displayed bundle to the named recipient | one-case receipt, endpoint policy, retention/deletion response, no background queue |
 
 Each tier requires its own schema, retention/deletion, abuse, and security review appropriate to the
-data it handles.
+data it handles. Tier 1 does not authorize Tier 2 or 3; each later tier needs its own Capability
+Exception record, consent copy, and arming decision.
 
-Tier 1's initial kill switch is local and deny-only. A remotely delivered kill/enable/configure signal
-is a new inbound trust surface and requires a separate reviewed capability.
+#### Kill-switch and source-origin authority
 
-Public case-source origins are compile-time allowlisted and change only through an app release.
-A signed catalog may select a URL under an existing allowed HTTPS origin; it cannot add a new origin,
-redirect transport, mutate the machine, or trigger an in-app arbitrary fetch.
+Tier 1's initial kill switch is **local and deny-only**. It may keep the production gate false or stop
+refresh/use of case intelligence; it cannot enable the feature, change endpoints, add payload fields,
+alter matching, or weaken the hard-false gate. Any remotely delivered disable signal is a new inbound
+trust surface and needs its own Capability Exception record, distinct signing key/schema, and owner
+arming decision; it may disable only, never enable or configure, and it cannot travel inside the
+advisory catalog.
+
+Public case-source origins use a compile-time `CASE_SOURCE_ORIGINS` allowlist owned in
+`src-tauri/src/case_intelligence.rs`. That list changes only through an app release with Rust/security
+review. A signed catalog may select a URL under an existing allowed HTTPS origin; it cannot add an origin,
+redirect Compy's transport, mutate the machine, or trigger an in-app arbitrary fetch. Opening a
+source is an explicit user click into the system browser.
+
+#### Tier 1 implementation lock
+
+The first outbound case-intelligence build is a separate Rust-side advisory module, not
+`remote_rules.rs`, `receipts.rs`, or `support_evidence.rs`, and not a webview fetch. It uses a
+separate public key, manifest schema, catalog-endpoint allowlist, compiled source-link allowlist, cache
+namespace, and monotonic version. It verifies signature, hash, expiry, app-version range, and size
+before caching; preserves an embedded/last-known-good fallback; matches the downloaded public catalog
+against the existing local incident on-device; and returns advisory wording only. It does not widen
+CSP, upload incident data, add a mutation variant, or alter support-evidence transport. The runtime
+gate stays hard-false until endpoint, signing custody, privacy copy, security review, and arming
+evidence are exact.
 
 ---
 
@@ -298,7 +334,9 @@ stored snapshot restores it.
 
 Privileged enums use strict deserialization. No free-form registry/service/command strings from a
 remote source, no permissive `serde(other)` catch-all on enums that drive privileged behavior, and no
-unknown-field acceptance that can silently reinterpret policy.
+unknown-field acceptance that can silently reinterpret policy. Concretely: `deny_unknown_fields` on
+every persisted/privileged struct, exhaustive enum tag matching, and unknown variants → loud parse
+failure, never silent reinterpretation.
 
 Allowlisted identifiers are additive and source-reviewed.
 
@@ -336,6 +374,7 @@ amendment proves the underlying safety premise itself has changed:
 - disabling Windows Update as a gaming optimization;
 - disabling hardware security/mitigation patches for performance;
 - fixed-size pagefile forcing that creates preventable crash/data-risk conditions;
+- universal MPO (Multi-Plane Overlay) disable as a blanket optimization;
 - ungated kernel-level mutation capability;
 - vulnerable-driver techniques;
 - game/anti-cheat injection;
@@ -351,7 +390,6 @@ to the actual machine/workload, reversible, supportable, measurable, and inside 
 - NIC offload/interrupt-moderation changes;
 - fullscreen-optimization policy changes;
 - bounded network-stack changes;
-- MPO changes when problem-specific and safely reversible;
 - advanced supported scheduling/power behavior;
 - supported vendor tuning interfaces;
 - other previously fashionable “optimizer” settings whose value must be proven per machine rather
@@ -359,6 +397,20 @@ to the actual machine/workload, reversible, supportable, measurable, and inside 
 
 A candidate is not kept merely because it exists in another optimizer. Applicability + Trial evidence
 + rollback + risk determine inclusion.
+
+### Conditions for any future inclusion of a barred or candidate-class item
+
+Barred items are excluded from Compy's normal automated optimization catalog; they are not forever
+banned from every diagnostic path. If any barred item, or any candidate-class item above, is ever
+surfaced, it must be:
+
+- advanced/diagnostic surface only (separate, opt-in UI; never the default journey);
+- problem-specific (gated on a detected issue on this machine, not "more performance");
+- user-initiated (never recommended by default; the user opens the surface and explicitly selects);
+- behind strong warnings that name the specific risk, on top of the engineering controls, never
+  instead of them;
+- fully rollback-capable, with a snapshot that survives driver/Windows updates;
+- documented with reproducible measurement methodology, not theoretical impact.
 
 ### Structural impossibility
 
@@ -398,8 +450,8 @@ Treat compromise as a fleet security incident.
 
 ### Hard rules
 
-- **The Ed25519 private key NEVER lives in this repository.** Not in commits, `.env*`, ordinary CI
-  secrets, or an internet-connected developer workstation.
+- **The Ed25519 private key NEVER lives in this repository.** Not in commits, `.env*`, CI secrets of
+  any kind, or unencrypted anywhere in a developer's home directory.
 - Placeholder public keys and hard-false runtime gates fail closed.
 - Public-key rotation occurs through an app update, not through the same CDN whose content the key is
   meant to authenticate.
@@ -411,8 +463,8 @@ Treat compromise as a fleet security incident.
 1. Hardware security module / hardware-backed signing requiring operator action — preferred.
 2. Dedicated offline/air-gapped signing system — acceptable when HSM custody is impractical.
 
-The production private key must not be persistently stored on an ordinary developer workstation or
-broad cloud CI runner.
+The production private key MUST NOT live on any developer workstation, any cloud CI environment with
+broad access, or any environment that has internet access during signing.
 
 ### Signing flow invariants
 
@@ -433,7 +485,8 @@ and current source locations are implementation truth, not architecture law.
 On suspected compromise:
 
 - stop/disable remote refresh through the safest available deny path;
-- prepare an app update with a new public key/trust root;
+- immediately prepare, and publish under the owner's release gate, an app update that embeds a new
+  public key/trust root;
 - do not use the compromised key to “announce” its own replacement;
 - preserve safe last-known-good/offline behavior for old clients;
 - document incident scope and rotate according to the release/security process.

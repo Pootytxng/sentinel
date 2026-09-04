@@ -9,18 +9,21 @@ import { describe, expect, it } from "vitest";
 // failure mode. This guard reads an explicit operative corpus, never docs/archive/**; the historical
 // Gate Decisions file is included only to pin its supersession banner. The pure auditor lets unsafe
 // policy mutations be proved to fail without editing files.
+//
+// AMENDED 2026-09-04 (#369, constitutional migration). COMPY_OVERVIEW.md, RECEIPTS_DOCTRINE.md and
+// PRODUCT_DIRECTION.md became tombstones and BACKLOG.md became an execution ledger, so none of them
+// may carry policy any more; their mirrors moved to CLAUDE.md, AGENTS.md and ARCHITECTURE_LOCKS.md
+// §1.8, and the Product Constitution is pinned to its own deferral to the Locks. The tombstones stay
+// in the FORBIDDEN scan: a superseded file must not quietly re-assert a blanket permission either.
 
 export const LIVE_POLICY_PATHS = [
   "CLAUDE.md",
   "AGENTS.md",
-  "COMPY_OVERVIEW.md",
   ".claude/skills/INDEX.md",
+  "docs/PRODUCT_CONSTITUTION.md",
   "docs/ARCHITECTURE_LOCKS.md",
-  "docs/RECEIPTS_DOCTRINE.md",
-  "docs/PRODUCT_DIRECTION.md",
   "docs/PRIVACY.md",
   "docs/RELEASE_STATE.md",
-  "docs/BACKLOG.md",
   "docs/GATE_DECISIONS.md",
   "docs/decisions/2026-08-09-capability-exception-gate.md",
   "docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md",
@@ -32,6 +35,7 @@ const FORBIDDEN_POLICY_PATHS = [
   "CLAUDE.md",
   "AGENTS.md",
   "COMPY_OVERVIEW.md",
+  "docs/PRODUCT_CONSTITUTION.md",
   "docs/ARCHITECTURE_LOCKS.md",
   "docs/RECEIPTS_DOCTRINE.md",
   "docs/PRODUCT_DIRECTION.md",
@@ -72,16 +76,13 @@ const REQUIRED: Record<string, string[]> = {
     "none ships today",
     "issue #91 authorizes tier 1 design + dark implementation",
   ],
-  "COMPY_OVERVIEW.md": [
-    "last reconciled: 2026-08-09",
-    "current build ships no kernel driver",
-    "a future compy driver would need its own capability exception gate record",
-    "game/process injection remains prohibited",
-    "no case-intelligence endpoint or upload exists today",
-  ],
   ".claude/skills/INDEX.md": [
     "the signed updater is already live",
     "receipts is a tier 2 precursor and must not inherit updater or tier 1 approval",
+  ],
+  "docs/PRODUCT_CONSTITUTION.md": [
+    "this constitution does not override architecture_locks.md on safety/security/immutability",
+    "safety/architecture truth — docs/architecture_locks.md",
   ],
   "docs/ARCHITECTURE_LOCKS.md": [
     "capability exception gate + outbound case intelligence",
@@ -99,21 +100,6 @@ const REQUIRED: Record<string, string[]> = {
     "case_source_origins",
     "it cannot add an origin",
     "opening a source is an explicit user click into the system browser",
-  ],
-  "docs/RECEIPTS_DOCTRINE.md": [
-    "capability exception gate",
-    "no third-party game/process injection",
-    "a compy driver is exception-gated",
-    "none ships today",
-    "tier 1/2/3 boundaries",
-  ],
-  "docs/PRODUCT_DIRECTION.md": [
-    "capability exception gate",
-    "no third-party game/process injection",
-    "current build ships no compy driver",
-    "tier 1 signed advisory download/no machine upload",
-    "tier 2 scrubbed fingerprint, opt-in and default off even after arming",
-    "tier 3 explicit per-case evidence upload",
   ],
   "docs/PRIVACY.md": [
     "this policy describes current runtime behavior",
@@ -136,15 +122,6 @@ const REQUIRED: Record<string, string[]> = {
     "one surface: signed update check/download",
     "current runtime ships no compy driver and performs no game/process injection",
     "requires the capability exception gate",
-  ],
-  "docs/BACKLOG.md": [
-    "compy care: primary pc-doctor directive + capability exception gate",
-    "zero machine-derived upload",
-    "tier 2 — not authorized by tier 1",
-    "tier 3 — not authorized by tier 1",
-    "a compy driver is policy-possible only through",
-    "game/process injection remain barred",
-    "a compact care entry is always visible on home",
   ],
   "docs/GATE_DECISIONS.md": [
     "historical process snapshot (2026-06-27) — not current gate state",
@@ -254,7 +231,7 @@ const liveSnapshot: PolicySnapshot = Object.fromEntries(
 );
 
 // The greppable line-level escape hatch a doc uses to QUOTE a retired claim without re-asserting it
-// (COMPY_OVERVIEW.md and RECEIPTS_DOCTRINE.md both cite the superseded default this way).
+// (ARCHITECTURE_LOCKS.md §1.8's Tier 2 row cites the superseded default this way).
 const RETIRED_CLAIM_ALLOW = "retired-claim-allow";
 const RETIRED_DEFAULT_ON = /on by default once armed/i;
 
@@ -291,13 +268,13 @@ describe("Capability Exception policy coherence", () => {
 
   it("catches the retired default-ON wording when it comes back unmarked (positive control)", () => {
     const snapshot = clone(liveSnapshot);
-    snapshot["docs/PRODUCT_DIRECTION.md"] += "\nReceipts sharing is on by default once armed.";
+    snapshot["docs/PRIVACY.md"] += "\nReceipts sharing is on by default once armed.";
     expect(findRetiredDefaultAssertions(snapshot)).toHaveLength(1);
-    expect(findRetiredDefaultAssertions(snapshot)[0]).toMatch(/^docs\/PRODUCT_DIRECTION\.md:\d+$/);
+    expect(findRetiredDefaultAssertions(snapshot)[0]).toMatch(/^docs\/PRIVACY\.md:\d+$/);
 
     // ...and the marker is a real hatch, not a phrase the scanner ignores everywhere.
     const marked = clone(liveSnapshot);
-    marked["docs/PRODUCT_DIRECTION.md"] +=
+    marked["docs/PRIVACY.md"] +=
       `\nRetired wording: "on by default once armed" <!-- ${RETIRED_CLAIM_ALLOW} -->`;
     expect(findRetiredDefaultAssertions(marked)).toEqual([]);
   });
@@ -338,7 +315,7 @@ describe("Capability Exception policy coherence", () => {
 
   it("rejects consent inheritance across outbound tiers", () => {
     const snapshot = clone(liveSnapshot);
-    snapshot["docs/BACKLOG.md"] += "\nTier 1 authorizes Tier 2 and Tier 3.";
+    snapshot["docs/PRODUCT_CONSTITUTION.md"] += "\nTier 1 authorizes Tier 2 and Tier 3.";
     expect(auditCapabilityExceptionPolicy(snapshot)).toContain(
       "forbidden policy: Tier 1 authorizes Tier 2",
     );

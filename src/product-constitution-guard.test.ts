@@ -22,6 +22,25 @@ const legacyTombstones = [
   "COMPY_OVERVIEW.md",
 ];
 
+// Live routing/bootstrap files outside the authority stack that a fresh session still reads.
+const legacyRoutingFiles = [
+  "PRODUCT.md",
+  "docs/SESSION_HANDOFF.md",
+  "docs/COWORK_HANDOFF.md",
+  "docs/COUNCIL_PROTOCOL.md",
+  "docs/PRICING_RESEARCH.md",
+  "docs/OWNER_ACTION_CHECKLIST.md",
+  ".claude/skills/INDEX.md",
+  ".claude/skills/status/SKILL.md",
+  ".claude/skills/doc-sync/SKILL.md",
+  ".claude/agents/web-design-director.md",
+  ".codex/agents/web-design-director.toml",
+  "docs/decisions/2026-08-09-capability-exception-gate.md",
+];
+const TOMBSTONE_NAME =
+  /Receipts [Dd]octrine|RECEIPTS_DOCTRINE\.md|PRODUCT_DIRECTION\.md|MONETIZATION_PLAN\.md|\bPRD\.md|COMPY_OVERVIEW\.md/;
+const RETIRED_WORD = /tombstone|superseded|historical|history|retired|pre-rebirth/i;
+
 const activeAuthorityFiles: [string, string][] = [
   ["CLAUDE.md", claude],
   ["AGENTS.md", agents],
@@ -113,6 +132,31 @@ describe("Compy product constitution authority", () => {
     expect(f).toContain("MAKE THIS PC BETTER");
     expect(f).toContain("FIGURE OUT WHAT WENT WRONG");
     expect(f).toContain("same machine model, evidence, history, Trial system, rollback machinery");
+  });
+
+  // 2026-09-04 (#369): the active-authority audit found twelve still-live routing files (skills,
+  // agent seats, handoffs, PRODUCT.md, the 2026-08-09 decision) that named a tombstone as canonical.
+  // Grep-quieting by deletion is banned, so the law is: a live routing file may mention a tombstone
+  // only in a paragraph that also says it is history.
+  it.each(legacyRoutingFiles)("%s cites tombstones only as history", (path) => {
+    const paragraphs = read(path).split(/\r?\n\s*\r?\n/);
+    const offenders = paragraphs.filter((p) => TOMBSTONE_NAME.test(p) && !RETIRED_WORD.test(p));
+    expect(offenders, `${path} routes authority to a tombstone without marking it history`).toEqual([]);
+  });
+
+  it("no live routing file makes a tombstone canonical", () => {
+    for (const path of legacyRoutingFiles) {
+      expect(read(path), `${path}`).not.toMatch(
+        /(?:Receipts Doctrine|RECEIPTS_DOCTRINE\.md|PRODUCT_DIRECTION\.md|MONETIZATION_PLAN\.md)[^\n]{0,80}(?:wins over|is canonical|supreme)/i,
+      );
+      expect(read(path), `${path}`).not.toMatch(/Canonical(?: core)?: `docs\/RECEIPTS_DOCTRINE\.md`/);
+    }
+  });
+
+  it("the routing law is armed (positive control)", () => {
+    const bad = "Read this first.\n\nCanonical: `docs/RECEIPTS_DOCTRINE.md` wins over everything.\n";
+    const offenders = bad.split(/\r?\n\s*\r?\n/).filter((p) => TOMBSTONE_NAME.test(p) && !RETIRED_WORD.test(p));
+    expect(offenders).toHaveLength(1);
   });
 
   it("CLAUDE bootstrap carries the constitutional product laws", () => {
