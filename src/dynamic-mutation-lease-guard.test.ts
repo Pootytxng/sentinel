@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
 const BOOTSTRAPS = ["CLAUDE.md", "AGENTS.md", "docs/WORK_CONTROL.md"] as const;
+const ROUTERS = ["tools/entry/select.mjs", "tools/entry/preflight.mjs"] as const;
 
 const PERMANENT_ROLE_PATTERNS = [
   /Claude Code is the default implementation owner/i,
@@ -27,22 +28,24 @@ describe("dynamic mutation lease control law", () => {
   });
 
   it("keeps generic selector and preflight free of a hardcoded Claude identity", () => {
-    for (const path of ["tools/entry/select.mjs", "tools/entry/preflight.mjs"]) {
+    for (const path of ROUTERS) {
       const text = read(path);
       expect(text, path).not.toMatch(/self\s*=\s*\{\s*lane:\s*["']Claude Code["']/);
       expect(text, path).not.toMatch(/lane:\s*["']Claude Code["']\s*\}\s*,\s*now/);
+      expect(text, `${path} must not consult the deprecated role-default helper`).not.toMatch(/defaultOwnerFor/);
     }
   });
 
-  it("does not mechanically assign implementation or review to a specific model", () => {
+  it("allows every declared executor instead of mechanically assigning implementation jurisdiction", () => {
     const gate = read("scripts/work-control-gate.mjs");
-    expect(gate).toContain('return "best-fit-available"');
-    expect(gate).toContain('return "non-authoring-reviewer"');
-    expect(gate).not.toMatch(/kind === ["']implementation["']\) return ["']claude-code["']/);
-    expect(gate).not.toMatch(/kind === ["']independent-review["']\) return ["']codex["']/);
+    for (const actor of ["claude-code", "codex", "chatgpt-hq", "cowork"]) {
+      expect(gate, actor).toContain(`"${actor}"`);
+    }
+    expect(gate).toMatch(/@deprecated Compatibility only for historical receipts\/tests/i);
+    expect(gate).toMatch(/Production dispatch MUST NOT use/i);
   });
 
-  it("binds proof review against every mutation author, not only the last lease holder", () => {
+  it("binds proof review against every mutation author, not only the final lease holder", () => {
     const gate = read("scripts/work-control-gate.mjs");
     expect(gate).toMatch(/mutationAuthorsFor/);
     expect(gate).toMatch(/authors\.includes\(reviewer\)/);
