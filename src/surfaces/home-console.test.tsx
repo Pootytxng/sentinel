@@ -1289,6 +1289,26 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       "at 1280x720 the cap must still leave the rig its usable floor -- inflate the named chrome " +
         "past this and the stage has nowhere left to stand",
     ).toBeGreaterThan(px["hc-stage-min"]);
+    // ROUND 12b (Wave 1 Lane B self-review round 2 at 1dd701b1, 2026-09-03): the floor must ALSO
+    // leave the readout its WRAPPED height. Round 12 let the readiness label wrap under its ring
+    // below 150px, which at an exact 1280x720 makes the strip 83px taller than inline -- and the
+    // stage was already standing on its floor, so the panel overflowed by 41px and "14 of 16 checks
+    // passed" was reachable only by a scroll nobody was shown. The horizontal budget was re-derived
+    // to the pixel and the vertical one was never looked at. The panel's non-stage content at that
+    // size -- control row + wrapped readout + padding -- measured 269px on the installed 1dd701b1
+    // (scrollHeight 589 with the stage at 320). That is a CONTENT measurement, so it is not the
+    // authority: the self-reviewer's live `.hc-panel` scrollHeight === clientHeight check at all
+    // three sizes is (rubric item 5). This pin only refuses the floor being raised back past the
+    // last measured budget, and asks one more wrapped 13px line of room beyond it.
+    const NON_STAGE_720 = 269; // measured 2026-09-03, installed 1dd701b1, 1280x720, English
+    const BORDERS = 2; // .hc-panel's own 1px top + bottom border, inside its border-box max-height
+    const LINE = 18; // one wrapped line at the 13px label floor, line-height 1.35 -> 17.55
+    expect(
+      capAt(SHORT) - BORDERS - NON_STAGE_720 - px["hc-stage-min"],
+      "at 1280x720 the wrapped readout plus the rig's floor must fit the panel's cap with one more " +
+        "wrapped line to spare -- lower --hc-stage-min or shrink the strip; a note nobody can see " +
+        "is the clipped reading rounds 3-9 paid for",
+    ).toBeGreaterThanOrEqual(LINE);
     // ...and the owner's real window and 1080p must still be able to give the comp its full stage.
     for (const v of [980, 1080]) {
       expect(

@@ -60,6 +60,11 @@ The dev build runs two same-origin webviews + a small default window, so capture
 4. **Interactive states** — hover / active / disabled don't break or mislead (no false danger-red
    on a primary action). Say which you checked.
 5. **Layout** — alignment, spacing, no clipping/overflow; empty + loading states hold.
+   **Panel overflow is MEASURED, never assumed (bug→guard, #225 round 2 at 1dd701b1, 2026-09-03):**
+   for every scroll-container panel the diff can reach (Health's `.hc-panel` at minimum), report
+   `scrollHeight` vs `clientHeight` at 1280×720, 1500×980 and 1920×1080. Equal is PASS; any
+   surplus is FAIL even though `overflow-y: auto` would let a scrollbar reach it — the jsdom guard
+   only proves the net exists, and a note nobody sees is the clipped reading rounds 3–9 paid for.
    **Bento tile hygiene (bug→guard, Blackbook 2026-08-12 — caught twice in one commit):** when a
    block moves INSIDE a `<BentoTile>`, its old wrapper's frame and gap must be re-homed, not
    assumed. MEASURE, don't eyeball: (a) no direct child of `.v2-tile-body` may keep its own

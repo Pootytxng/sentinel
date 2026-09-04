@@ -281,7 +281,7 @@
      size and would have to be cut. So the stage absorbs the whole viewport difference, between a
      floor and the approved comp's ceiling, continuously:
 
-       stage → the comp's 530px when the room allows it, never below 320px, and the whole
+       stage → the comp's 530px when the room allows it, never below its floor, and the whole
                 difference in between — with nothing else on the panel giving up a pixel.
 
      ROUND 9 DELETED THE CONSTANT THAT KEPT BEING WRONG. The stage used to be
@@ -294,7 +294,7 @@
      So nothing here measures content any more. The PANEL is capped at the space the room actually
      has; the control row and the readout take exactly what they need (`flex: none` below); and the
      stage is the only shrinkable child — it asks for the comp's 530px and gives ground, never below
-     320px, when the panel runs out of room. The browser does the measuring, so it cannot go stale.
+     its floor, when the panel runs out of room. The browser does the measuring, so it cannot go stale.
        --hc-chrome-top    72px  = 46px shell topbar + 26px .v2-content padding-top
        --hc-comp-drop     48px  = the approved comp's own offset of this card below the row top
        --hc-hud-reserve   36px  = .v2-content's margin-bottom in the HUD shell (self-review round 2;
@@ -304,7 +304,18 @@
      All three are FIXED chrome. None of them is content whose height can change under a
      translation, which is the whole point. Guard: home-console.test.tsx rejects any content-derived
      height constant here, and any `@media` in this file. */
-  --hc-stage-min: 320px;
+  /* --hc-stage-min 320 -> 261 (ROUND 12b, Wave 1 Lane B self-review round 2 at 1dd701b1, 2026-09-03).
+     Round 12 let the readiness label wrap under its ring below 150px so the readout's pills could
+     have their width; that wrap costs the strip 83px of HEIGHT at an exact 1280x720, and the stage
+     was already standing on 320, so the panel overflowed by 41px and "14 of 16 checks passed" was
+     reachable only by a scroll nobody was shown. The horizontal budget was re-derived to the pixel
+     and the vertical one was never looked at. The stage is the one elastic here by design, so the
+     floor pays: 320 - 41 (the measured overflow) - 18 (one more wrapped 13px line, the guard's
+     headroom) = 261. At 720p the stage now settles at ~279 and nothing is clipped; at the owner's
+     1500x980 and at 1080p the floor does not bind and nothing moves. Guard: home-console.test.tsx
+     ROUND 12b pins cap - borders - the measured non-stage content - this floor >= one line, and
+     the self-reviewer measures .hc-panel scrollHeight against clientHeight at all three sizes. */
+  --hc-stage-min: 261px;
   --hc-stage-max: 530px;
   --hc-chrome-top: 72px;
   --hc-hud-reserve: 36px;
@@ -335,7 +346,7 @@
      growing --hc-chrome-top to the headline's height. That is the constant this all replaced.
 
      The net, not the plan. The stage gives ground first — it is the only shrinkable child — and
-     only if it reaches its 320px floor and the panel STILL cannot fit does the leftover become a
+     only if it reaches its floor and the panel STILL cannot fit does the leftover become a
      scroll. Round 3's failure was five labels on screen with none of their five values, silently
      eaten by the lane's clip. A scrollbar is ugly; a reading nobody can reach is dishonest. */
   overflow-y: auto;
