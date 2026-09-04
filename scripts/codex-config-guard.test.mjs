@@ -1,59 +1,113 @@
-// Codex config guard — .codex/config.toml keeps getting rewritten, so the file defends itself now.
+// Codex config guard - .codex/config.toml keeps getting rewritten, so the file defends itself now.
 //
 // TWICE, by two different lanes, the same regression appeared as an uncommitted working-tree change
-// and had to be stashed rather than landed:
-//
-//   stash@{1}  2026-08-20, on feat/user-feedback-lab-recovery
-//   stash@{0}  2026-08-21, on lane/rig-then-rails
-//
-// Both reverted the 2026-07-19 lane-hardening train the same two ways, byte for byte: they re-added
+// and had to be stashed rather than landed (stash@{1} 2026-08-20, stash@{0} 2026-08-21). Both
+// reverted the 2026-07-19 lane-hardening train the same two ways, byte for byte: they re-added
 // `[mcp_servers.shadcn]` running an unpinned `shadcn@latest`, and re-added the two `CLAUDE_CODE_*`
-// env keys that configure Claude Code and do nothing whatsoever for Codex. Neither lane authored the
-// change on purpose; some tool writes this file. A third recurrence was predictable, and the
-// standing law is that a rule which keeps getting broken becomes a guard rather than another
-// paragraph — the file already carried the paragraph, in its own header comment, and the paragraph
-// did not hold.
+// env keys that configure Claude Code and do nothing for Codex. Neither lane authored the change;
+// the Codex desktop app's external-agent IMPORT SYNC writes this file (#196). A global toggle to
+// stop the sync (2026-08-24) did not hold either.
 //
-// The read-only floor below is asserted DEFENSIVELY, not because it was ever observed broken: both
-// stashes left `sandbox_mode`/`approval_policy` intact and top-level. It is here because a rewrite
-// that reorders this file is exactly what would break it, and it would break it silently.
+// So since 2026-09-04 the tracked file IS the sync's deterministic output, byte for byte, and the
+// rewrite is a no-op. The sync re-serializes the TOML (dropping every comment line) and adds
+// `[shell_environment_policy.set]` copied from `.claude/settings.json`'s `env` block and
+// `[mcp_servers.shadcn]` copied from `.mcp.json`. This guard therefore pins the file to that shape,
+// with each copied table asserted EQUAL TO ITS SOURCE rather than absent:
 //
-// Scope is deliberately narrow. This guard asserts the FLOOR and the two named regressions, not the
-// whole file: comments, ordering, formatting and any future key are free to change.
+//   1. the advisory lane's floor: `sandbox_mode = "read-only"` and `approval_policy = "never"`, as
+//      bare top-level keys BEFORE the first [table] header (below one, TOML silently makes them
+//      that table's keys and the top-level setting is gone);
+//   2. no `@latest` anywhere - the `.mcp.json` source is policed by mcp-config-guard.test.mjs, this
+//      polices the copy;
+//   3. the only MCP server table is `[mcp_servers.shadcn]`, and its args pin exactly the same
+//      `package@version` string `.mcp.json` pins (a missing pin on either side fails);
+//   4. `[shell_environment_policy.set]` holds exactly the keys and values of `.claude/settings.json`
+//      `env` - the `CLAUDE_CODE_*` names are no-ops for Codex and are there only because the sync
+//      copies them, so they must match the source or the sync will rewrite them;
+//   5. no comment lines at all (the sync strips them; prose lives in .codex/README.md), and nothing
+//      under `[shell_environment_policy]` but `inherit = "core"`;
+//   6. `.codex/README.md` exists and mentions the import sync, so the prose cannot be silently lost.
 //
-// The `@latest` half of it polices a COPY. The declaration originates in `.mcp.json`, which nothing
-// read until `scripts/mcp-config-guard.test.mjs` (issue #203, 2026-08-25) — so until then the rule
-// held in the file nobody edits and was free in the file everyone does. Both guards stay: this one
-// keeps the Codex lane's config honest, that one keeps the source honest.
+// The file IS loaded: current Codex reads a project `.codex/config.toml` whenever the repository is
+// trusted, and this one is (`trust_level = "trusted"` in the global config). There is no CODEX_HOME
+// condition - an earlier version of this header said there was, and that was stale. A pass here is
+// still not proof of how a given run was sandboxed (a runtime flag or the app's selector can sit
+// above this file); it is proof that the default this checkout ships is the read-only floor.
 //
-// NOT asserted, because the file says so itself and it is true: this config is not loaded unless
-// CODEX_HOME points at this directory. The floor still has to be right — a scaffold that documents a
-// read-only lane and does not encode one is worse than no scaffold — but nobody should read a pass
-// here as proof of how a given Codex run was actually sandboxed.
+// Parsing is deliberately naive (Node built-ins, line-based): the file is small, flat and generated,
+// and a real TOML parser would be a dependency added to police a 16-line file.
 
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG = join(repoRoot, ".codex", "config.toml");
+const README = join(repoRoot, ".codex", "README.md");
+const MCP_JSON = join(repoRoot, ".mcp.json");
+const SETTINGS = join(repoRoot, ".claude", "settings.json");
 
-/** Strip full-line and trailing comments so the header's prose is never mistaken for a setting. */
+const rawLines = (toml) => toml.split(/\r?\n/);
+
+/** Non-blank lines with any trailing comment stripped. The live file has no comments (asserted
+ *  below); the strip is for the fixtures in the falsification block, which still carry them. */
 const settings = (toml) =>
-  toml
-    .split(/\r?\n/)
+  rawLines(toml)
     .map((line) => line.replace(/(^|\s)#.*$/, "").trim())
     .filter(Boolean);
 
-/** The lines above the first [table] header — TOML's bare-key region. */
+/** The lines above the first [table] header - TOML's bare-key region. */
 const bareKeyRegion = (toml) => {
   const lines = settings(toml);
   const firstTable = lines.findIndex((l) => l.startsWith("["));
   return firstTable === -1 ? lines : lines.slice(0, firstTable);
 };
 
+/** table name -> its setting lines. "" is the bare-key region. Order of first appearance kept. */
+const tables = (toml) => {
+  const out = new Map([["", []]]);
+  let current = "";
+  for (const line of settings(toml)) {
+    const header = /^\[([^\]]+)\]$/.exec(line);
+    if (header) {
+      current = header[1].trim();
+      if (!out.has(current)) out.set(current, []);
+      continue;
+    }
+    out.get(current).push(line);
+  }
+  return out;
+};
+
+/** `key = "string"` pairs of one table as a plain object. A line that is not one maps to null,
+ *  so an unexpected shape shows up in the equality diff instead of vanishing. */
+const stringPairs = (tableLines = []) =>
+  Object.fromEntries(
+    tableLines.map((line) => {
+      const m = /^([A-Za-z0-9_.-]+)\s*=\s*"([^"]*)"$/.exec(line);
+      return m ? [m[1], m[2]] : [line, null];
+    }),
+  );
+
+/** The quoted strings of a TOML string array under `key`, whether written on one line or many
+ *  (the sync writes `args = [` / one string per line / `]`). null when the key is absent. */
+const stringArray = (tableLines = [], key) => {
+  const text = tableLines.join("\n");
+  const at = text.indexOf(`${key} =`);
+  if (at === -1) return null;
+  const open = text.indexOf("[", at);
+  const close = text.indexOf("]", open);
+  if (open === -1 || close === -1) return null;
+  return [...text.slice(open + 1, close).matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+};
+
+/** `pkg@1.2.3` - an exact version, never a dist-tag and never a range. */
+const EXACT_PIN = /^@?[^@\s]+@\d+\.\d+\.\d+$/;
+const pinOf = (args) => (Array.isArray(args) ? args.find((a) => EXACT_PIN.test(a)) ?? null : null);
+
 const read = () => readFileSync(CONFIG, "utf8");
+const json = (path) => JSON.parse(readFileSync(path, "utf8"));
 
 describe("codex config: the advisory lane's read-only floor", () => {
   it("declares sandbox_mode read-only and approval_policy never", () => {
@@ -76,41 +130,69 @@ describe("codex config: the advisory lane's read-only floor", () => {
   });
 });
 
-describe("codex config: the two regressions that keep coming back", () => {
-  it("pins every external command — no @latest anywhere", () => {
+describe("codex config: the shape the import sync writes, pinned to its sources (#196)", () => {
+  it("pins every external command - no @latest anywhere", () => {
     const offenders = settings(read()).filter((l) => l.includes("@latest"));
     expect(
       offenders,
       "An unpinned @latest command means the next run executes whatever was published since. " +
-        "Pin an exact version or drop the server.",
+        "Pin an exact version in .mcp.json (the sync copies it here) or drop the server.",
     ).toEqual([]);
   });
 
-  it("carries no MCP servers — Codex's role here is read-only audit and advice", () => {
-    const offenders = settings(read()).filter((l) => /^\[mcp_servers\b/.test(l));
-    expect(
-      offenders,
-      "AGENTS.md's lane split gives Codex read-only audit; UI-generation servers are outside it, " +
-        "and v0 additionally spends owner-gated credits. Re-add only on an owner decision.",
-    ).toEqual([]);
+  it("carries exactly one MCP server table, [mcp_servers.shadcn], pinned to the same version .mcp.json pins", () => {
+    const t = tables(read());
+    const mcpTables = [...t.keys()].filter((k) => /^mcp_servers\b/.test(k));
+    expect(mcpTables, "the sync copies .mcp.json's servers; any other table is a hand edit the sync will erase").toEqual([
+      "mcp_servers.shadcn",
+    ]);
+
+    const source = json(MCP_JSON).mcpServers?.shadcn;
+    expect(source, ".mcp.json must declare the shadcn server the sync copies").toBeTruthy();
+    const sourcePin = pinOf(source.args);
+    expect(sourcePin, ".mcp.json's shadcn entry must pin an exact package@version").not.toBeNull();
+
+    const copy = t.get("mcp_servers.shadcn");
+    const copyArgs = stringArray(copy, "args");
+    const copyPin = pinOf(copyArgs);
+    expect(copyPin, ".codex/config.toml's shadcn entry must pin an exact package@version").not.toBeNull();
+    expect(copyPin, "the copy's pin must equal .mcp.json's pin, or the sync rewrites it").toBe(sourcePin);
+    expect(copyArgs, "the args are copied whole, not just the pin").toEqual(source.args);
+    expect(stringPairs(copy.filter((l) => /^command\s*=/.test(l))).command).toBe(source.command);
   });
 
-  it("carries no CLAUDE_CODE_* keys — they configure Claude Code, not Codex", () => {
-    const offenders = settings(read()).filter((l) => l.includes("CLAUDE_CODE_"));
+  it("[shell_environment_policy.set] holds exactly the keys and values of .claude/settings.json env", () => {
+    const env = json(SETTINGS).env;
+    expect(env, ".claude/settings.json must carry an env block - it is the source the sync copies").toBeTruthy();
+    const set = tables(read()).get("shell_environment_policy.set");
+    expect(set, "the sync writes [shell_environment_policy.set]; without it the next rewrite adds it").toBeDefined();
     expect(
-      offenders,
-      "These are Claude Code env-var names. Setting them here does nothing; it only makes the file " +
-        "look like it governs something it does not.",
-    ).toEqual([]);
+      stringPairs(set),
+      "the CLAUDE_CODE_* keys are no-ops for Codex and exist only as the sync's copy of settings.json env; " +
+        "a value that differs from the source is a diff the sync will undo",
+    ).toEqual(env);
+  });
+
+  it("carries no comment lines - the sync strips them, so prose lives in .codex/README.md", () => {
+    const comments = rawLines(read()).filter((l) => l.trimStart().startsWith("#"));
+    expect(comments, "a comment here is erased by the next import sync; put it in .codex/README.md").toEqual([]);
+  });
+
+  it("[shell_environment_policy] holds nothing but inherit = core", () => {
+    expect(tables(read()).get("shell_environment_policy")).toEqual(['inherit = "core"']);
+  });
+
+  it("keeps .codex/README.md, which carries the prose this file can no longer hold", () => {
+    expect(existsSync(README), ".codex/README.md is where the retired header's substance lives").toBe(true);
+    expect(readFileSync(README, "utf8")).toMatch(/import sync/i);
   });
 });
 
-// ── Falsification ────────────────────────────────────────────────────────────────────────────────
-// A guard that has never been shown to fail is a guard nobody has tested. Cases 2 and 3 are the
-// literal shape both stashes had — `[mcp_servers.shadcn]` on `shadcn@latest`, and the two
-// `CLAUDE_CODE_*` keys. Case 1 is the failure that has not happened yet and would be invisible if
-// it did.
-describe("codex config guard: it fires on the shape that was actually stashed", () => {
+// -- Falsification ------------------------------------------------------------------------------
+// A guard that has never been shown to fail is a guard nobody has tested. Each case is the literal
+// shape of a regression: the floor pushed below a header, the stashed `shadcn@latest`, an env value
+// that drifted from its source, and a comment - which the sync would erase on its next pass.
+describe("codex config guard: it fires on the shapes that actually came back", () => {
   const FLOOR = ['sandbox_mode = "read-only"', 'approval_policy = "never"'].join("\n");
 
   it("catches sandbox_mode pushed below a table header", () => {
@@ -119,23 +201,26 @@ describe("codex config guard: it fires on the shape that was actually stashed", 
     expect(bareKeyRegion(broken).some((l) => l.startsWith("sandbox_mode ="))).toBe(false);
   });
 
-  it("catches an unpinned MCP server, which trips both the @latest and the mcp_servers check", () => {
+  it("catches an unpinned MCP server, which trips both the @latest and the pin check", () => {
     const broken = `${FLOOR}\n\n[mcp_servers.shadcn]\ncommand = "npx"\nargs = ["shadcn@latest", "mcp"]\n`;
     expect(settings(broken).filter((l) => l.includes("@latest"))).toHaveLength(1);
-    expect(settings(broken).filter((l) => /^\[mcp_servers\b/.test(l))).toHaveLength(1);
+    expect(pinOf(stringArray(tables(broken).get("mcp_servers.shadcn"), "args"))).toBeNull();
   });
 
-  it("catches the no-op CLAUDE_CODE_* keys", () => {
-    const broken = `${FLOOR}\n\n[shell_environment_policy.set]\nCLAUDE_CODE_SUBAGENT_MODEL = "sonnet"\n`;
-    expect(settings(broken).filter((l) => l.includes("CLAUDE_CODE_"))).toHaveLength(1);
+  it("catches an env value that no longer matches its source", () => {
+    const broken = `${FLOOR}\n\n[shell_environment_policy.set]\nCLAUDE_CODE_SUBAGENT_MODEL = "opus"\n`;
+    expect(stringPairs(tables(broken).get("shell_environment_policy.set"))).not.toEqual(json(SETTINGS).env);
   });
 
-  it("does not fire on a comment that merely discusses the banned shapes", () => {
-    // The live file's header explains why @latest and the MCP servers were removed. Prose about a
-    // ban must never read as the ban being violated, or the guard would fail on its own rationale.
-    const commented = `# removed: [mcp_servers.shadcn] used "shadcn@latest"; CLAUDE_CODE_* did nothing\n${FLOOR}\n`;
+  it("reads a multi-line args array the way the sync writes it", () => {
+    const synced = `[mcp_servers.x]\nargs = [\n    "pkg@1.2.3",\n    "mcp",\n]\n`;
+    expect(stringArray(tables(synced).get("mcp_servers.x"), "args")).toEqual(["pkg@1.2.3", "mcp"]);
+  });
+
+  it("treats a comment line as the violation it now is", () => {
+    const commented = `# removed: [mcp_servers.shadcn] used "shadcn@latest"\n${FLOOR}\n`;
+    expect(rawLines(commented).filter((l) => l.trimStart().startsWith("#"))).toHaveLength(1);
+    // ...while the settings view still ignores its text, so a comment cannot fake a setting either.
     expect(settings(commented).filter((l) => l.includes("@latest"))).toEqual([]);
-    expect(settings(commented).filter((l) => /^\[mcp_servers\b/.test(l))).toEqual([]);
-    expect(settings(commented).filter((l) => l.includes("CLAUDE_CODE_"))).toEqual([]);
   });
 });
