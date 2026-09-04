@@ -262,9 +262,10 @@ export function run({
 /**
  * The wire format PreToolUse understands. An allow says nothing at all.
  *
- * `ask` joins `deny` here (#278). It is a ROUTING decision, not containment: under a permission mode
- * that auto-approves it degrades to allow, which is exactly why it is reserved for ambiguity and a
- * resolved violation still gets `deny`.
+ * `ask` joins `deny` here (#278). A hook `ask` is a REAL PROMPT in every permission mode, including
+ * `permissions.defaultMode: "auto"`, and a hook decision overrides `permissions.allow` rules
+ * (code.claude.com/docs/en/permission-modes, /hooks); it never degrades to allow. That is exactly why
+ * it is reserved for the genuinely unresolvable, and a resolved violation still gets `deny`.
  */
 export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) {
   if (decision.allow) return 0;

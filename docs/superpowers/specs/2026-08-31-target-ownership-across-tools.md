@@ -119,9 +119,14 @@ Deny is reserved for the case where the checker has **positive knowledge** of a 
 
 ## 6. Limits, stated rather than discovered
 
-- **`ask` is a routing decision, not containment.** Under a permission mode that auto-approves, `ask`
-  degrades to allow. That is why positive-knowledge violations are `deny` and only ambiguity is
-  `ask`.
+- **`ask` is a real prompt, not a routing hint.** (Corrected 2026-09-04.) A hook's
+  `permissionDecision: "ask"` is shown to the user in every permission mode, `defaultMode: "auto"`
+  included, and a hook decision overrides `permissions.allow` rules
+  (code.claude.com/docs/en/permission-modes, /hooks). This section used to claim the opposite -
+  that `ask` "degrades to allow" under auto - and that false premise is why 33 of one day's 40
+  prompts were `ask`s on operands whose value was on the same line (#373). Positive-knowledge
+  violations are still `deny`; `ask` is reserved for the genuinely unresolvable, because every
+  `ask` costs the owner a keystroke.
 - **A wrapper is not one of these limits, and was wrongly treated as one.** `env` / `xargs` / `sudo` /
   `command` / `nohup` / `nice` / `time` / `timeout` / `stdbuf` / `doas` / `setsid` / `ionice` / `chrt`
   name the real command in their own argv: verb and target are both literal text, so stepping over

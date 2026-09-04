@@ -137,10 +137,11 @@ describe("the proof matrix — the same target gets the same answer through the 
   it("refuses a SHELL write into the owner's global configuration outright", () => {
     // `project-write-assert` asks for the same zone and that is not a contradiction: the memory
     // store under `~/.claude/projects/**` is written with `Write` on purpose, so the tool path has a
-    // legitimate case and routes. A shell has none. It matters which one this is, because `ask` is a
-    // ROUTING decision and this machine runs `permissions.defaultMode: "auto"`, where a routed
-    // decision degrades to allow — leaving the folder that holds the rules about what agents may do
-    // exactly as writable as before the guard existed.
+    // legitimate case and routes. A shell has none. (A hook `ask` is a real prompt in every mode,
+    // `defaultMode: "auto"` included — it does not degrade to allow, as this comment once claimed —
+    // so the distinction is not about safety but about whether there is anything to put in front of
+    // the owner. For a shell write into the folder that holds the rules about what agents may do,
+    // there is not, so positive knowledge of the zone is enough to refuse.)
     const d = ask(`cp ${fwd(join(SCRATCH, "settings.json"))} ${fwd(join(HOME_CLAUDE, "settings.json"))}`);
     expect(d.permission).toBe("deny");
     expect(d.zone).toBe(ZONES.GLOBAL);
@@ -954,10 +955,11 @@ describe("the wrapper table is an allowlist, and the spec says which ones are st
 describe("operands whose value the text or the environment already states are literals (#373)", () => {
   // Measured 2026-09-04: 33 of the 40 approval prompts in one day were `"$S/…"`, `"$TEMP/…"` and
   // `"$LOCALAPPDATA/…"` operands — values stated on the same line or in the process environment,
-  // refused as "not knowable" because the lexer reads `$` and stops. The hook change is OWNER-HANDS:
-  // the auto-mode classifier refuses a session any edit to a hook that gates its own authority, so
-  // the fix ships as a patch beside its spec, and the assertions below wait for him — visibly
-  // SKIPPED, never vacuously green (memory: green-that-is-not-evidence).
+  // refused as "not knowable" because the lexer reads `$` and stops. The hook change shipped as a
+  // patch beside its spec (a session may not edit a hook that gates its own authority without the
+  // owner's say), and the assertions below stayed visibly SKIPPED, never vacuously green (memory:
+  // green-that-is-not-evidence), until it was applied. APPLIED 2026-09-04 by Cowork HQ under the
+  // owner's explicit in-session authorization; the gate below now demands the patch's absence.
   const REPO = join(import.meta.dirname, "../..");
   const PATCH = join(REPO, "docs/superpowers/specs/2026-09-04-shell-guard-knowable-vars-373.patch");
   const applied = typeof hook.expandKnownVars === "function";
