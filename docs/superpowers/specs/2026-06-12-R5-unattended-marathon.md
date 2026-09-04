@@ -1,5 +1,10 @@
 # 2026-06-12 — R5 UNATTENDED MARATHON (Cowork-specced, owner resting)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This unattended work order and its instruction
+> to trust `PRODUCT_DIRECTION.md` / the Receipts Doctrine are historical and no longer executable.
+> Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; current scope and writer ownership
+> come only from Work Control. Safety detail below is preserved as bounded provenance.
+>
 > Owner is stepping away to rest and wants CC self-sufficient for as long as possible. This is the
 > work order. SPORT MODE, fully unattended. Build → verify → commit → push → next; batch ALL
 > questions/decisions into the Review Queue. Work the lanes IN ORDER, each to completion or until it

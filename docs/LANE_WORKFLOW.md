@@ -1,5 +1,9 @@
 # 🏗️ Compy Looped-Workflow — the cost-efficient master structure (v2)
 
+> **SUPERSEDED EXECUTION MODEL — HISTORICAL ONLY (2026-09-04).** This file cannot authorize a
+> workflow, lane, claim, process, merge, or transition. Current execution law is exclusively
+> [`docs/WORK_CONTROL.md`](WORK_CONTROL.md).
+
 > **Why this exists.** v1 (the perpetual `lane-runner.ps1` fleet) did real work fast but burned a 5-hour
 > token budget in ~30 min (~10×). This is the redesign that keeps the speed + thoroughness while making cost
 > **bounded and predictable**. Primary engine: **`scripts/compy-burst.workflow.js`** (run via the Workflow tool).

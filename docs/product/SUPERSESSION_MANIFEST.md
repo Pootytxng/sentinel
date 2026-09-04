@@ -50,7 +50,16 @@ The following are **historical evidence only** unless a bounded factual statemen
 
 ## Current-looking mixed sources explicitly bounded by this migration
 
-These files retain useful technical or decision provenance, but their original status language can look executable. Existing top-of-file supersession notices are mandatory where already installed; removing one is an authority regression. Files listed here without an inline notice are nevertheless centrally bounded by the global pre-rebirth default above and may not route current product work.
+These files retain useful technical or decision provenance, but their original status language can
+look executable. `src/product-constitution-guard.test.ts` now pins the exact 47-file current-looking
+corpus across `docs/superpowers/specs`, `docs/superpowers/plans`, `docs/reviews`, and
+`docs/decisions`; each file must carry a top-level Constitution-routing supersession notice. The
+exact set is executable guard data rather than a hand-maintained second list here. Removing a notice,
+adding a newly current-looking file, or making the detector go blind is an authority regression.
+
+The global pre-rebirth default remains controlling even for a file that the semantic detector does
+not recognize. An omitted inline notice never restores authority, and a centrally classified file
+may not route current product work.
 
 | Source | Retained value | Superseded authority |
 |---|---|---|
@@ -85,6 +94,20 @@ The final migration audit also found the following pre-rebirth documents carryin
 - `docs/reviews/2026-07-15-cc-brief-panel-review-execution.md`
 
 This list is not permission for a small allowlist to replace semantic checking. `src/product-constitution-guard.test.ts` must keep a positive control and must fail when it finds a new pre-rebirth current-looking directive that has neither an explicit top-level constitutional boundary nor an explicit classification in this manifest.
+
+The expanded corpus includes old design-system, Gaming Mode, Knowledge, monetization, Console HUD,
+Lab, Monitor, Blackbook, Intelligence, capability, comprehensibility, site, and review records. Their
+technical safety, rollback, evidence, privacy, and shipped-fact provenance remains available, but
+their product hierarchy, priority, approval, gate-cleared, “source of truth,” and “execute/build”
+language is historical.
+
+Two other former authority families are explicitly bounded:
+
+- `docs/UI_VISION_BACKLOG.md` is historical owner-request and shipped-state evidence, not a second
+  product direction, priority, approval, or work queue. Fresh-session pointers must route through the
+  Constitution and roadmap before consulting it.
+- `docs/PARALLEL_WORKTREE_OPS.md`, `docs/LANE_BUS.md`, and `docs/LANE_WORKFLOW.md` are historical
+  execution designs and cannot compete with `docs/WORK_CONTROL.md`.
 
 ## Specifically retired theses
 

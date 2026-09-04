@@ -16,6 +16,7 @@ const roadmap = read("docs/product/ROADMAP.md");
 const workControl = read("docs/WORK_CONTROL.md");
 const product = read("PRODUCT.md");
 const supersessionManifest = read("docs/product/SUPERSESSION_MANIFEST.md");
+const uiVisionBacklog = read("docs/UI_VISION_BACKLOG.md");
 
 const legacyTombstones = [
   "docs/RECEIPTS_DOCTRINE.md",
@@ -48,10 +49,24 @@ const legacyRoutingFiles = [
   ".codex/agents/web-design-director.toml",
   "docs/decisions/2026-08-09-capability-exception-gate.md",
 ].filter(existsSync);
-
+const uiEvidenceRoutingFiles = [
+  "CLAUDE.md",
+  "docs/SESSION_HANDOFF.md",
+  "docs/OWNER_ACTION_CHECKLIST.md",
+  ".claude/skills/status/SKILL.md",
+  ".claude/skills/self-review/SKILL.md",
+  ".claude/agents/self-reviewer.md",
+];
+const historicalExecutionFiles = [
+  "docs/PARALLEL_WORKTREE_OPS.md",
+  "docs/LANE_BUS.md",
+  "docs/LANE_WORKFLOW.md",
+];
 const TOMBSTONE_NAME =
-  /Receipts [Dd]octrine|RECEIPTS_DOCTRINE\.md|PRODUCT_DIRECTION\.md|MONETIZATION_PLAN\.md|\bPRD\.md|COMPY_OVERVIEW\.md/;
+  /Receipts [Dd]octrine|RECEIPTS_DOCTRINE\.md|PRODUCT_DIRECTION\.md|(?<!product\/)MONETIZATION\.md|MONETIZATION_PLAN\.md|\bPRD\.md|COMPY_OVERVIEW\.md/;
 const RETIRED_WORD = /tombstone|superseded|historical|history|retired|pre-rebirth|bounded provenance/i;
+const TOMBSTONE_AUTHORITY_WORD =
+  /canonical|source of truth|governs?|authoritative|wins over|supreme|follow[^\n]{0,40}for all product decisions/i;
 
 const activeAuthorityFiles: [string, string][] = [
   ["CLAUDE.md", claude],
@@ -72,17 +87,98 @@ const CURRENT_LOOKING_ROOTS = [
   "docs/decisions",
 ];
 const PRE_REBIRTH_CUTOFF = "2026-09-04";
-const CURRENT_AUTHORITY_SIGNAL =
-  /(?:\bStatus\b[^\n]{0,40}\b(?:ACTIVE|IN BUILD|GREEN[- ]?LIT|IMPLEMENTATION[- ]?READY)\b|owner[- ]approved direction|owner[- ]requested program blueprint|owner\s+GO|begin implementing|PRIORITY OVERRIDE|implementation[- ]ready plan|PRODUCT_DIRECTION\.md sequence is authoritative|product priority and completion remain in|(?:source of truth|canonical|governing)[^\n]{0,140}(?:product|direction|roadmap|priority|build|launch|monetization|experience|ui)|(?:product|direction|roadmap|priority|build|launch|monetization|experience|ui)[^\n]{0,140}(?:source of truth|canonical|governing))/i;
-const SUPERSESSION_BANNER = /(?:POLICY AND )?PRODUCT DIRECTION SUPERSEDED|PRODUCT[- ]DIRECTION AUTHORITY RETIRED/i;
-
-const CURRENT_LOOKING_BASELINE = [
-  "docs/decisions/2026-08-18-outbound-capability-expansion.md",
-  "docs/reviews/2026-07-16-owner-directive-intelligence-platform.md",
-  "docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md",
-  "docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md",
-  "docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md",
+const CURRENT_AUTHORITY_SIGNALS = [
+  /\bStatus\b[^\n]{0,40}\b(?:ACTIVE|IN BUILD|GREEN[- ]?LIT|IMPLEMENTATION[- ]?READY)\b/i,
+  /owner-approved direction|owner-requested program blueprint|begin implementing|PRIORITY OVERRIDE|implementation-ready plan/i,
+  /product priority and completion remain in|PRODUCT_DIRECTION\.md sequence is authoritative/i,
+  /PRODUCT_DIRECTION\.md.{0,300}(?:source of truth|asks of any new feature|trust them|authoritative)/i,
+  /(?:source of truth|asks of any new feature|trust them|authoritative).{0,300}PRODUCT_DIRECTION\.md/i,
+  /(?:RECEIPTS_DOCTRINE\.md|Receipts Doctrine).{0,300}(?:governs?|source of truth|trust them|canonical|law on every|priority|owner directive)/i,
+  /(?:governs?|source of truth|trust them|canonical|law on every|priority|owner directive).{0,300}(?:RECEIPTS_DOCTRINE\.md|Receipts Doctrine)/i,
+  /TOP-PRIORITY DIRECTIVE|owner-decided,\s*execute now|Implementation GREEN-LIT/i,
+  /\bStatus\b.{0,80}QUEUED,\s*not started|work order.{0,160}SPORT MODE/i,
+  /autonomous long-run,\s*owner GO|owner GO.{0,120}gate-override/i,
+  /canonical,\s*compaction-proof copy|Owner-greenlit.{0,320}run them/i,
+  /Each picked option becomes a scoped CC build task|\bStatus\b.{0,160}APPROVED.{0,200}build it all/i,
+  /^# .*owner directive/im,
+  /Decision record for.{0,240}owner directive/i,
+  /Design source of truth|ENTRY GATE|owner's binding requirements/i,
+  /UI_VISION_BACKLOG\.md.{0,160}STANDING DIRECTIVE|Directive verbatim.{0,160}UI_VISION_BACKLOG\.md/i,
+  /\bStatus:\*\* (?:SPEC|DRAFT)[^\n]{0,160}(?:not built|NOT AUTHORIZED)|Implementation authorized:\s*build \+ push/i,
+  /(?:source of truth|canonical|governing)[^\n]{0,140}(?:product|direction|roadmap|priority|build|launch|monetization|experience|ui)/i,
+  /(?:product|direction|roadmap|priority|build|launch|monetization|experience|ui)[^\n]{0,140}(?:source of truth|canonical|governing)/i,
+  /(?:follow|read|use|consult)[^\n]{0,100}(?:PRODUCT_DIRECTION\.md|RECEIPTS_DOCTRINE\.md|Receipts Doctrine|(?<!product\/)MONETIZATION\.md|\bPRD\.md)[^\n]{0,100}(?:product|direction|decision|priority|pricing|monetization)/i,
+  /(?:canonical|authoritative|source of truth|governs?)[^\n]{0,100}(?:PRODUCT_DIRECTION\.md|RECEIPTS_DOCTRINE\.md|Receipts Doctrine|(?<!product\/)MONETIZATION\.md|\bPRD\.md)/i,
 ];
+const SUPERSESSION_BANNER =
+  /(?:POLICY AND )?PRODUCT DIRECTION SUPERSEDED|PRODUCT[- ]DIRECTION AUTHORITY RETIRED|HISTORICAL UI EVIDENCE[^\n]{0,80}NOT CURRENT PRODUCT AUTHORITY/i;
+
+const EXPECTED_CURRENT_LOOKING = [
+  "docs/decisions/2026-08-09-capability-exception-gate.md",
+  "docs/decisions/2026-08-18-canonical-data-root.md",
+  "docs/decisions/2026-08-18-outbound-capability-expansion.md",
+  "docs/reviews/2026-07-15-cc-brief-panel-review-execution.md",
+  "docs/reviews/2026-07-15-consumer-panel-review.md",
+  "docs/reviews/2026-07-16-owner-directive-intelligence-platform.md",
+  "docs/reviews/2026-08-23-codex-four-room-review-brief.md",
+  "docs/superpowers/plans/2026-06-02-gaming-mode-f1.md",
+  "docs/superpowers/plans/2026-06-04-beta-build-order.md",
+  "docs/superpowers/plans/2026-07-09-console-hud-phase1-lab.md",
+  "docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md",
+  "docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md",
+  "docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md",
+  "docs/superpowers/plans/2026-07-10-monitor-v3-ribbon.md",
+  "docs/superpowers/plans/2026-07-10-monitor-v4-session-waterfall.md",
+  "docs/superpowers/plans/2026-07-11-consumer-panel-overhaul.md",
+  "docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md",
+  "docs/superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md",
+  "docs/superpowers/plans/2026-07-30-single-entry-workflow.md",
+  "docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md",
+  "docs/superpowers/plans/2026-08-20-comprehensibility-sweep.md",
+  "docs/superpowers/specs/2026-06-01-experience-design-system-pass-design.md",
+  "docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md",
+  "docs/superpowers/specs/2026-06-05-compy-design-system.md",
+  "docs/superpowers/specs/2026-06-05-fix-surface.md",
+  "docs/superpowers/specs/2026-06-05-knowledge-layer-chapter.md",
+  "docs/superpowers/specs/2026-06-05-knowledge-layer-notes.md",
+  "docs/superpowers/specs/2026-06-06-shadow-realm-doctrine.md",
+  "docs/superpowers/specs/2026-06-08-tuning-guides-stability-measurement.md",
+  "docs/superpowers/specs/2026-06-12-doctrine-voice-baptism-design-refresh.md",
+  "docs/superpowers/specs/2026-06-12-monetization-transformation-plan.md",
+  "docs/superpowers/specs/2026-06-12-R5-unattended-marathon.md",
+  "docs/superpowers/specs/2026-06-12-receipts-marathon-R3.md",
+  "docs/superpowers/specs/2026-06-12-waitlist-wiring.md",
+  "docs/superpowers/specs/2026-06-15-monetization-model-proposal.md",
+  "docs/superpowers/specs/2026-06-20-intuitiveness-sweep.md",
+  "docs/superpowers/specs/2026-06-21-optimize-merge-design.md",
+  "docs/superpowers/specs/2026-06-24-council-staged-1.0-hygiene.md",
+  "docs/superpowers/specs/2026-07-01-token-routing-protocol.md",
+  "docs/superpowers/specs/2026-07-02-design-direction-product-ui-system.md",
+  "docs/superpowers/specs/2026-07-02-external-audit-2-council.md",
+  "docs/superpowers/specs/2026-07-02-full-tidy-directive.md",
+  "docs/superpowers/specs/2026-07-02-owner-vision-directive.md",
+  "docs/superpowers/specs/2026-07-05-lab-bento-checkup.md",
+  "docs/superpowers/specs/2026-07-05-lab-linear-guided-bench.md",
+  "docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md",
+  "docs/superpowers/specs/2026-07-06-design-rnd-options.md",
+  "docs/superpowers/specs/2026-07-06-firstcheck-monitor-mvp-train.md",
+  "docs/superpowers/specs/2026-07-08-lab-proving-ground.md",
+  "docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md",
+  "docs/superpowers/specs/2026-07-09-lab-redesign-COURSE-CORRECTION.md",
+  "docs/superpowers/specs/2026-07-14-site-makeover-research-spitball.md",
+  "docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md",
+  "docs/superpowers/specs/2026-07-17-intelligence-phase2-train2.md",
+  "docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md",
+  "docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md",
+  "docs/superpowers/specs/2026-07-30-single-entry-workflow.md",
+  "docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md",
+  "docs/superpowers/specs/2026-08-21-test-rig-reading-set.md",
+];
+
+function hasCurrentAuthoritySignal(body: string): boolean {
+  const searchable = flat(body);
+  return CURRENT_AUTHORITY_SIGNALS.some((pattern) => pattern.test(searchable));
+}
 
 function collectMarkdown(root: string): string[] {
   const out: string[] = [];
@@ -114,7 +210,7 @@ function collectAgentEntrypoints(root: string): string[] {
 }
 
 function datedPathIsPreRebirth(path: string): boolean {
-  const match = path.match(/(?:^|\/)(20\d\d-\d\d-\d\d)[^/]*\.md$/);
+  const match = path.match(/(?:^|\/)[^/]*(20\d\d-\d\d-\d\d)[^/]*\.md$/);
   return Boolean(match && match[1] < PRE_REBIRTH_CUTOFF);
 }
 
@@ -130,10 +226,29 @@ function hasTopLevelConstitutionBoundary(body: string): boolean {
 export function findUnboundedCurrentLookingLegacyDocs(snapshot: Record<string, string>): string[] {
   return Object.entries(snapshot)
     .filter(([path]) => datedPathIsPreRebirth(path))
-    .filter(([, body]) => CURRENT_AUTHORITY_SIGNAL.test(body.slice(0, 5000)))
+    .filter(([, body]) => hasCurrentAuthoritySignal(body))
     .filter(([path, body]) => !hasTopLevelConstitutionBoundary(body) && !manifestClassifies(path))
     .map(([path]) => path)
     .sort();
+}
+
+export function findUndisclosedClassifiedDirectiveCitations(
+  liveSnapshot: Record<string, string>,
+  classifiedPaths: string[],
+): string[] {
+  const offenders: string[] = [];
+  for (const [livePath, body] of Object.entries(liveSnapshot)) {
+    const lines = body.split(/\r?\n/);
+    lines.forEach((line, i) => {
+      for (const legacyPath of classifiedPaths) {
+        const basename = legacyPath.split("/").pop() ?? legacyPath;
+        if (!line.includes(legacyPath) && !line.includes(basename)) continue;
+        const window = [lines[i - 1] ?? "", line, lines[i + 1] ?? ""].join(" ");
+        if (!RETIRED_WORD.test(window)) offenders.push(`${livePath}:${i + 1} -> ${legacyPath}`);
+      }
+    });
+  }
+  return offenders;
 }
 
 describe("Compy product constitution authority", () => {
@@ -169,6 +284,25 @@ describe("Compy product constitution authority", () => {
     expect(body).toContain("PRODUCT_CONSTITUTION.md");
   });
 
+  it.each([
+    ["CLAUDE.md", claude],
+    ["AGENTS.md", agents],
+    ["README.md", rootReadme],
+  ])("%s carries the same constitutional product entry", (name, body) => {
+    const f = flat(body);
+    expect(f, name).toContain("Compy optimizes outcomes, not settings.");
+    expect(f, name).toContain("MAKE THIS PC BETTER");
+    expect(f, name).toContain("FIGURE OUT WHAT WENT WRONG");
+    expect(f, name).toMatch(/historical evidence only|pre-rebirth strategy specs are historical evidence only/i);
+  });
+
+  it("the docs index cannot route a human around the Constitution", () => {
+    expect(docsReadme).toContain("supreme product authority");
+    expect(docsReadme).toContain("PRODUCT_CONSTITUTION.md");
+    expect(docsReadme).toContain("Care primary / optimization secondary");
+    expect(docsReadme).toContain("superseded product thesis");
+  });
+
   it("Architecture Locks declares safety authority, not product hierarchy", () => {
     expect(locks).toContain("SUPREME SAFETY / ARCHITECTURE AUTHORITY");
     expect(locks).toContain("PRODUCT_CONSTITUTION.md");
@@ -189,6 +323,30 @@ describe("Compy product constitution authority", () => {
     expect(workControl).toContain("current execution status only");
     expect(workControl).not.toMatch(/BACKLOG\.md[^\n]{0,100}(?:authoritative|canonical)[^\n]{0,60}(?:priority|product priority)/i);
     expect(workControl).not.toMatch(/Product priority and completion[^\n]*BACKLOG\.md/i);
+  });
+
+  it("the legacy UI vision ledger is evidence, not a second product authority", () => {
+    const top = uiVisionBacklog.slice(0, 1800);
+    expect(top).toContain("HISTORICAL UI EVIDENCE");
+    expect(top).toContain("NOT CURRENT PRODUCT AUTHORITY");
+    expect(top).toContain("PRODUCT_CONSTITUTION.md");
+    expect(top).toContain("product/ROADMAP.md");
+  });
+
+  it.each(uiEvidenceRoutingFiles)("%s routes UI evidence through the Constitution", (path) => {
+    const body = read(path);
+    expect(body).toContain("UI_VISION_BACKLOG.md");
+    expect(body).toContain("PRODUCT_CONSTITUTION.md");
+    expect(body).toMatch(/historical|evidence/i);
+    expect(body).not.toMatch(
+      /UI_VISION_BACKLOG\.md[^\n]{0,100}(?:is |— the )?(?:authoritative|canonical|ONE home)/i,
+    );
+  });
+
+  it.each(historicalExecutionFiles)("%s cannot compete with Work Control", (path) => {
+    const top = read(path).slice(0, 1800);
+    expect(top).toMatch(/SUPERSEDED|HISTORICAL ONLY/);
+    expect(top).toContain("WORK_CONTROL.md");
   });
 
   it.each(legacyTombstones)("%s is mechanically marked superseded/historical", (path) => {
@@ -220,9 +378,10 @@ describe("Compy product constitution authority", () => {
 
   it("active authority cannot make the Receipts Doctrine canonical again", () => {
     for (const [path, body] of activeAuthorityFiles) {
-      expect(body, `${path} restored Receipts Doctrine authority`).not.toMatch(
-        /Receipts Doctrine[^\n]{0,80}(?:canonical|wins over|supreme)/i,
-      );
+      const offenders = body
+        .split(/\r?\n\s*\r?\n/)
+        .filter((paragraph) => TOMBSTONE_NAME.test(paragraph) && TOMBSTONE_AUTHORITY_WORD.test(paragraph) && !RETIRED_WORD.test(paragraph));
+      expect(offenders, `${path} restored tombstone authority`).toEqual([]);
     }
   });
 
@@ -246,12 +405,11 @@ describe("Compy product constitution authority", () => {
     const snapshot = Object.fromEntries(paths.map((path) => [path, read(path)]));
     const currentLooking = Object.entries(snapshot)
       .filter(([path]) => datedPathIsPreRebirth(path))
-      .filter(([, body]) => CURRENT_AUTHORITY_SIGNAL.test(body.slice(0, 5000)))
+      .filter(([, body]) => hasCurrentAuthoritySignal(body))
       .map(([path]) => path)
       .sort();
 
-    expect(currentLooking.length).toBeGreaterThanOrEqual(CURRENT_LOOKING_BASELINE.length);
-    expect(currentLooking).toEqual(expect.arrayContaining(CURRENT_LOOKING_BASELINE));
+    expect(currentLooking).toEqual([...EXPECTED_CURRENT_LOOKING].sort());
     expect(findUnboundedCurrentLookingLegacyDocs(snapshot)).toEqual([]);
   });
 
@@ -261,6 +419,32 @@ describe("Compy product constitution authority", () => {
         "docs/superpowers/specs/2026-08-01-spec.md": "# Plan\n\n**Status:** ACTIVE\n\nBegin implementing now.",
       }),
     ).toEqual(["docs/superpowers/specs/2026-08-01-spec.md"]);
+    expect(
+      findUnboundedCurrentLookingLegacyDocs({
+        "docs/superpowers/specs/2026-08-02-late.md":
+          "# Old spec\n\n" + "Historical detail.\n\n".repeat(900) +
+          "## Authority\n`docs/RECEIPTS_DOCTRINE.md` governs every new product decision.",
+      }),
+    ).toEqual(["docs/superpowers/specs/2026-08-02-late.md"]);
+    expect(
+      findUnboundedCurrentLookingLegacyDocs({
+        "docs/superpowers/specs/legacy-2026-08-03.md":
+          "# Legacy\n\nFollow `docs/PRODUCT_DIRECTION.md` for all product decisions.",
+      }),
+    ).toEqual(["docs/superpowers/specs/legacy-2026-08-03.md"]);
+  });
+
+  it("dynamically checks skills and agent entrypoints for undisclosed tombstone routing", () => {
+    const paths = [".claude/skills", ".claude/agents", ".codex/agents"]
+      .flatMap(collectMarkdown)
+      .concat(legacyRoutingFiles);
+    const offenders = [...new Set(paths)].flatMap((path) =>
+      read(path)
+        .split(/\r?\n\s*\r?\n/)
+        .filter((paragraph) => TOMBSTONE_NAME.test(paragraph) && !RETIRED_WORD.test(paragraph))
+        .map(() => path),
+    );
+    expect(offenders).toEqual([]);
   });
 
   // 2026-09-04 (#369): the active-authority audit found still-live routing files (skills,
@@ -279,13 +463,16 @@ describe("Compy product constitution authority", () => {
       ...collectAgentEntrypoints(".claude/agents"),
       ...collectAgentEntrypoints(".codex/agents"),
     ];
-    const paths = [...new Set([...legacyRoutingFiles, ...dynamicAgentEntrypoints])];
-
+    const paths = [...new Set([
+      ...activeAuthorityFiles.map(([path]) => path),
+      ...legacyRoutingFiles,
+      ...dynamicAgentEntrypoints,
+    ])];
     for (const path of paths) {
-      expect(read(path), `${path}`).not.toMatch(
-        /(?:Receipts Doctrine|RECEIPTS_DOCTRINE\.md|PRODUCT_DIRECTION\.md|MONETIZATION_PLAN\.md)[^\n]{0,80}(?:wins over|is canonical|supreme)/i,
-      );
-      expect(read(path), `${path}`).not.toMatch(/Canonical(?: core)?: `docs\/RECEIPTS_DOCTRINE\.md`/);
+      const offenders = read(path)
+        .split(/\r?\n\s*\r?\n/)
+        .filter((paragraph) => TOMBSTONE_NAME.test(paragraph) && TOMBSTONE_AUTHORITY_WORD.test(paragraph) && !RETIRED_WORD.test(paragraph));
+      expect(offenders, `${path} routes authority to a tombstone`).toEqual([]);
     }
   });
 
@@ -298,27 +485,42 @@ describe("Compy product constitution authority", () => {
       ...collectAgentEntrypoints(".claude/agents"),
       ...collectAgentEntrypoints(".codex/agents"),
     ])];
-    const offenders: string[] = [];
-
-    for (const livePath of live) {
-      const lines = read(livePath).split(/\r?\n/);
-      lines.forEach((line, i) => {
-        for (const legacyPath of classified) {
-          const basename = legacyPath.split("/").pop() ?? legacyPath;
-          if (!line.includes(legacyPath) && !line.includes(basename)) continue;
-          const window = [lines[i - 1] ?? "", line, lines[i + 1] ?? ""].join(" ");
-          if (!RETIRED_WORD.test(window)) offenders.push(`${livePath}:${i + 1} -> ${legacyPath}`);
-        }
-      });
-    }
+    const snapshot = Object.fromEntries(live.map((path) => [path, read(path)]));
+    const offenders = findUndisclosedClassifiedDirectiveCitations(snapshot, classified);
 
     expect(offenders, "live routing cited a classified pre-rebirth directive without disclosing its retired/historical status").toEqual([]);
   });
 
+  it("the classified-directive routing scan stays armed even behind a valid top-level boundary", () => {
+    const legacyPath = "docs/superpowers/specs/2026-08-01-old-direction.md";
+    const body = [
+      "# Mixed record",
+      "> **PRODUCT DIRECTION SUPERSEDED.** Current authority: `docs/PRODUCT_CONSTITUTION.md`.",
+      "",
+      "Historical evidence follows.",
+      "",
+      `Use \`${legacyPath}\` as the canonical build direction.`,
+    ].join("\n");
+    expect(findUndisclosedClassifiedDirectiveCitations({ "docs/bannered.md": body }, [legacyPath])).toEqual([
+      `docs/bannered.md:6 -> ${legacyPath}`,
+    ]);
+  });
+
   it("the routing law is armed (positive control)", () => {
-    const bad = "Read this first.\n\nCanonical: `docs/RECEIPTS_DOCTRINE.md` wins over everything.\n";
-    const offenders = bad.split(/\r?\n\s*\r?\n/).filter((p) => TOMBSTONE_NAME.test(p) && !RETIRED_WORD.test(p));
-    expect(offenders).toHaveLength(1);
+    const bad = [
+      "Canonical: `docs/RECEIPTS_DOCTRINE.md` wins over everything.",
+      "Canonical authority: Receipts Doctrine.",
+      "Follow `docs/PRODUCT_DIRECTION.md` for all product decisions.",
+      "The PRD.md is the product source of truth.",
+      "`docs/MONETIZATION.md` is canonical for current pricing.",
+      "MONETIZATION.md is canonical for current pricing.",
+    ];
+    for (const paragraph of bad) {
+      expect(TOMBSTONE_NAME.test(paragraph), paragraph).toBe(true);
+      expect(TOMBSTONE_AUTHORITY_WORD.test(paragraph), paragraph).toBe(true);
+      expect(RETIRED_WORD.test(paragraph), paragraph).toBe(false);
+    }
+    expect(TOMBSTONE_NAME.test("Current authority: docs/product/MONETIZATION.md")).toBe(false);
   });
 
   it("CLAUDE bootstrap carries the constitutional product laws", () => {

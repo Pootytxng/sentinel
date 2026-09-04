@@ -1,5 +1,10 @@
 # Owner directive 2026-07-02 — "full tidy" feedback + the ruled path
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The product/UI directive and priority implied
+> below are historical, not an active task order. Current experience direction comes from
+> `docs/PRODUCT_CONSTITUTION.md`; reusable factual observations remain bounded design provenance
+> subject to current code, Roadmap, and Work Control.
+>
 > Verbatim intent, captured per PERSIST-TO-DISK: owner wants every tab slimmer/tidier and more
 > consolidated; can't tell what Fable's work is actually changing; is considering a **full
 > refactor** prioritizing intuitive architecture + UI, "react-style web-design templates within

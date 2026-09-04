@@ -161,6 +161,9 @@ const REQUIRED: Record<string, string[]> = {
     "the persisted home card is the authoritative route",
   ],
   "docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md": [
+    "product direction superseded 2026-09-04",
+    "docs/product_constitution.md",
+    "docs/architecture_locks.md",
     "seeded src/capability-exception-policy-guard.test.ts",
     "remote disable is a separate signed/gated trust surface",
     "catalog content cannot add transport origins",

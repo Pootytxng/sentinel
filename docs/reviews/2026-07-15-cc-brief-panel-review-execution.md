@@ -1,5 +1,10 @@
 # CC Brief — execute the 2026-07-15 consumer panel review
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This execution brief, its “source of truth,”
+> “execute now,” and old product/monetization routing are historical and no longer authorize work.
+> Current product direction comes from `docs/PRODUCT_CONSTITUTION.md`; current sequence and ownership
+> require the Roadmap and Work Control. The panel evidence remains historical research only.
+>
 > **Source of truth for the review's content:** [`2026-07-15-consumer-panel-review.md`](2026-07-15-consumer-panel-review.md)
 > (archived verbatim — do not paraphrase from this brief instead of that file if you need the
 > owner's exact original wording on anything). This brief is Cowork's triage of that review against

@@ -1,5 +1,10 @@
 # Compy Design System — "Instrument" (brand + UI kernel)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The canonical, owner-law, and build-direction
+> language below is historical rather than executable product authority. Current experience direction
+> comes from `docs/PRODUCT_CONSTITUTION.md`; still-conforming accessibility, honesty, and component
+> evidence remains bounded provenance.
+
 *2026-06-05, Cowork session. The canonical design kernel every Compy surface inherits from.
 Status: **DRAFT for owner review** — drafted while the owner was out; nothing here is committed or
 built yet. Mockups for command-center, Trust Ledger, Check/radar, the integrated wordmark, the

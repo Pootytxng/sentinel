@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 
 // SUPERSEDED-PLAN CITATION GUARD (2026-08-26).
@@ -64,24 +64,82 @@ const HEADER_LINES = 20;
 // until a human reads it and adds it, and a detector that silently goes blind fails here too
 // instead of reporting a clean corpus. Do not edit this to make a run pass — read the header first.
 const EXPECTED_SUPERSEDED = [
+  "2026-06-01-experience-design-system-pass-design.md",
+  "2026-06-02-gaming-mode-f1-design.md",
+  "2026-06-02-gaming-mode-f1.md",
+  "2026-06-04-beta-build-order.md",
+  "2026-06-05-compy-design-system.md",
+  "2026-06-05-fix-surface.md",
+  "2026-06-05-knowledge-layer-chapter.md",
+  "2026-06-05-knowledge-layer-notes.md",
   "2026-06-06-arc-redress.md",
   "2026-06-06-check-play-lab.md",
+  "2026-06-06-shadow-realm-doctrine.md",
+  "2026-06-08-tuning-guides-stability-measurement.md",
+  "2026-06-12-R5-unattended-marathon.md",
+  "2026-06-12-doctrine-voice-baptism-design-refresh.md",
+  "2026-06-12-monetization-transformation-plan.md",
+  "2026-06-12-receipts-marathon-R3.md",
+  "2026-06-12-waitlist-wiring.md",
+  "2026-06-15-monetization-model-proposal.md",
+  "2026-06-20-intuitiveness-sweep.md",
+  "2026-06-21-optimize-merge-design.md",
+  "2026-06-24-council-staged-1.0-hygiene.md",
+  "2026-07-01-token-routing-protocol.md",
+  "2026-07-02-design-direction-product-ui-system.md",
+  "2026-07-02-external-audit-2-council.md",
+  "2026-07-02-full-tidy-directive.md",
+  "2026-07-02-owner-vision-directive.md",
+  "2026-07-05-lab-bento-checkup.md",
+  "2026-07-05-lab-linear-guided-bench.md",
+  "2026-07-05-ui-deslop-organic-directive.md",
+  "2026-07-06-design-rnd-options.md",
+  "2026-07-06-firstcheck-monitor-mvp-train.md",
   "2026-07-08-lab-proving-ground.md",
+  "2026-07-09-compy-console-hud-direction.md",
+  "2026-07-09-console-hud-phase1-lab.md",
   "2026-07-09-lab-instrument-bench-p1.md",
+  "2026-07-09-lab-redesign-COURSE-CORRECTION.md",
   "2026-07-09-lab-redesign-direction-proposal.md",
+  "2026-07-10-console-hud-phase2-home.md",
+  "2026-07-10-console-hud-phase3-monitor.md",
+  "2026-07-10-monitor-v3-ribbon.md",
+  "2026-07-10-monitor-v4-session-waterfall.md",
+  "2026-07-11-consumer-panel-overhaul.md",
+  "2026-07-11-monitor-v5-deck-stack.md",
+  "2026-07-12-console-hud-phase4-blackbook.md",
+  "2026-07-14-site-makeover-research-spitball.md",
   "2026-07-16-intelligence-foundation-train1.md",
+  "2026-07-17-intelligence-phase2-train2.md",
+  "2026-07-17-intelligence-phase3-experiment-engine.md",
   "2026-07-29-product-quality-stabilization-program.md",
+  "2026-07-30-single-entry-workflow.md",
+  "2026-08-09-capability-exception-policy-rails.md",
   "2026-08-09-compy-care-capability-exception-gate.md",
+  "2026-08-20-comprehensibility-sweep.md",
+  "2026-08-21-test-rig-reading-set.md",
   "2026-08-21-unverified-session-write-refusal.md",
 ];
 
 // Words that make a citation honest: the reader is told the target is not current direction.
 const DISCLOSURE = /supersede|superseded|rejected|retired|historical|reference|no longer|point-in-time|not the current|stale|closed/i;
 
-// Live docs whose citations must disclose. Dated point-in-time reports are excluded by pattern —
-// a 2026-07-11 audit is ALLOWED to describe what was current on 2026-07-11.
-const EXCLUDED = new Set(["BACKLOG_ARCHIVE.md", "CHANGELOG.md"]);
-const DATED_REPORT = /_20\d\d-\d\d-\d\d\.md$/;
+const EXCLUDED_LIVE_PATHS = new Set([
+  // Append-only historical ledgers narrate what was current at each recorded point; they are not
+  // boot or recommendation surfaces.
+  "docs/BACKLOG_ARCHIVE.md",
+  "docs/CHANGELOG.md",
+  // This is the canonical classification inventory, so every citation it contains is explicitly
+  // historical by the document's function rather than by a repeated per-row adjective.
+  "docs/product/SUPERSESSION_MANIFEST.md",
+]);
+const HISTORICAL_DOC_PREFIXES = [
+  "docs/archive/",
+  "docs/reviews/",
+  "docs/decisions/",
+  "docs/superpowers/plans/",
+  "docs/superpowers/specs/",
+];
 
 // Citations that are correct as they stand and cannot phrase the disclosure inline. Key is
 // "<live doc>:<superseded basename>"; the value is why it is allowed. Adding an entry is a
@@ -101,25 +159,53 @@ export function declaresItselfSuperseded(text: string): boolean {
   });
 }
 
-function supersededDocs(): Map<string, string> {
-  const out = new Map<string, string>();
+function supersededDocPaths(): string[] {
+  const out: string[] = [];
   for (const dir of REPO_MARKERS) {
     if (!existsSync(dir)) continue;
     for (const name of readdirSync(dir)) {
       if (!name.endsWith(".md")) continue;
-      if (declaresItselfSuperseded(readFileSync(join(dir, name), "utf8"))) out.set(name, `${dir}/${name}`);
+      if (declaresItselfSuperseded(readFileSync(join(dir, name), "utf8"))) out.push(`${dir}/${name}`);
     }
+  }
+  return out.sort();
+}
+
+function supersededDocs(): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const path of supersededDocPaths()) {
+    const name = path.split("/").pop() ?? path;
+    out.set(name, path);
   }
   return out;
 }
 
-function liveDocs(): string[] {
-  const out = ["CLAUDE.md", join("src-tauri", "CLAUDE.md")].filter((f) => existsSync(f));
-  for (const name of readdirSync("docs")) {
-    if (!name.endsWith(".md") || EXCLUDED.has(name) || DATED_REPORT.test(name)) continue;
-    out.push(join("docs", name));
-  }
+function collectLiveDocs(root: string): string[] {
+  if (!existsSync(root)) return [];
+  const out: string[] = [];
+  const walk = (path: string) => {
+    const stat = statSync(path);
+    if (stat.isDirectory()) {
+      for (const child of readdirSync(path)) walk(join(path, child));
+    } else if (path.endsWith(".md") || path.endsWith(".toml")) {
+      out.push(path.replace(/\\/g, "/"));
+    }
+  };
+  walk(root);
   return out;
+}
+
+function liveDocs(): string[] {
+  const out = ["CLAUDE.md", "AGENTS.md", "README.md", "PRODUCT.md", join("src-tauri", "CLAUDE.md")]
+    .filter((f) => existsSync(f))
+    .map((f) => f.replace(/\\/g, "/"));
+  out.push(
+    ...collectLiveDocs("docs").filter((path) => !HISTORICAL_DOC_PREFIXES.some((prefix) => path.startsWith(prefix))),
+    ...collectLiveDocs(".claude/skills"),
+    ...collectLiveDocs(".claude/agents"),
+    ...collectLiveDocs(".codex/agents"),
+  );
+  return [...new Set(out)].filter((path) => !EXCLUDED_LIVE_PATHS.has(path)).sort();
 }
 
 /** Every undisclosed citation of a superseded plan/spec, as "<doc>:<line> -> <basename>". */
@@ -153,6 +239,13 @@ describe("a live doc may not point at a superseded plan without saying it is sup
     expect([...supersededDocs().keys()].sort()).toEqual(EXPECTED_SUPERSEDED);
   });
 
+  it("does not let duplicate basenames hide a superseded document", () => {
+    const paths = supersededDocPaths();
+    expect(paths).toHaveLength(EXPECTED_SUPERSEDED.length + 1);
+    expect(paths).toContain("docs/superpowers/plans/2026-07-30-single-entry-workflow.md");
+    expect(paths).toContain("docs/superpowers/specs/2026-07-30-single-entry-workflow.md");
+  });
+
   it("does not mistake a doc that NARRATES a rejection for a doc that IS rejected", () => {
     // All three shapes are real headers from this repo that the first draft of the detector got
     // wrong. Each one would have pushed a "(superseded)" disclaimer onto a pointer at LIVE
@@ -184,7 +277,11 @@ describe("a live doc may not point at a superseded plan without saying it is sup
     const docs = liveDocs();
     expect(docs.length).toBeGreaterThan(10);
     expect(docs).toContain("CLAUDE.md");
-    expect(docs.map((d) => d.replace(/\\/g, "/"))).toContain("docs/SESSION_HANDOFF.md");
+    expect(docs).toContain("AGENTS.md");
+    expect(docs).toContain("README.md");
+    expect(docs).toContain("docs/SESSION_HANDOFF.md");
+    expect(docs).toContain("docs/product/ROADMAP.md");
+    expect(docs).toContain(".claude/skills/status/SKILL.md");
   });
 
   it("no live doc cites a superseded plan or spec without disclosing it", () => {

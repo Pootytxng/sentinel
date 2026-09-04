@@ -235,15 +235,16 @@ push:
 - **"Upgrade-path engine"** (your Optimize feedback, 2026-07-03): the advisory upgrade block exists,
   but the fuller engine was deferred to "its own spec" and never built. Want it built, or leave it?
 
-### B5. Your UI vision — what is still yours to call  ·  ⏳  ·  [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md)
+### B5. Historical UI evidence reconciled — no current owner action  ·  ✅  ·  [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md)
 The motion/interaction stack you were most excited about is **built and on by default** — magnetic
 cursor, Lenis spine, GSAP data-ticks and the room wipe shipped `1d310e12` (2026-07-12) and you
 approved them on sight ("everything looks good"). The panoramic drag gallery you rejected 2026-07-09
 and it was **deleted on your order** (`2de8d17c`); its drag/inertia feel lives on the rig hologram.
 Two doc lines kept paraphrasing all of that as unbuilt and sent a session at it on 2026-08-24;
 `src/ui-vision-status-guard.test.ts` rule D now fails the build on a pointer that names features
-instead of rows. What [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) still lists 🔴 OPEN: **DIR-1**
-(your standing intuitive-UI lens — mine to apply on every train, nothing for you to pick) and **§G**
+instead of rows. What historical [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) still labels 🔴 OPEN
+is evidence to reconcile against the Product Constitution and roadmap, not current product priority
+or authorization: **DIR-1** (your intuitive-UI lens) and **§G**
 (the site's mini playable demo, which you flagged "maybe later"). **Yours — BOTH are now answered, so nothing in this
 section is waiting on you:**
 1. ~~**Do you want a panoramic drag surface back**~~ — ✅ **ANSWERED "no", 2026-08-25.** You took the
@@ -254,10 +255,9 @@ section is waiting on you:**
    You approved four room comps on 2026-08-23 and they have been bundled and implementation-ready
    since. Three of my ledgers said you still owed me pictures. **Nothing on you here — B1/B3/B4/B5
    are mine to make and show you, and B2 is already your ruling.**
-- **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
-  the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument
-  Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
-  is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
+- **You said "there's more I'm missing" + "capture it first"** — preserved here as historical evidence. This record does not ask you to reconstruct a list and does not authorize its former
+  Instrument Bench build target. Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; current
+  sequence comes from `docs/product/ROADMAP.md`.
 
 ### A_stale. Fourteen dead checkouts and ten rewritten Codex configs  ·  ⏳ NEW 2026-09-01
 
@@ -373,7 +373,7 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
 | Gaming Mode QA cases | [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md) |
 | Beta smoke pass | [`BETA_SMOKE_CHECKLIST.md`](BETA_SMOKE_CHECKLIST.md) |
 | What's next / status ledger | [`BACKLOG.md`](BACKLOG.md) |
-| **Owner's UI / design vision** | [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) |
+| Historical owner UI/design evidence (not product priority) | [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) |
 | Live gate/build state | [`RELEASE_STATE.md`](RELEASE_STATE.md) |
 | Funnel go-live steps | [`archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md`](archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md) |
 | NVIDIA validation (needs NVIDIA hardware) | [`NVIDIA_VALIDATION_PLAN.md`](NVIDIA_VALIDATION_PLAN.md) |

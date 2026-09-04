@@ -1,5 +1,10 @@
 # Codex review brief — four-room visual direction (issue #49)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This exact-head review brief is a historical audit
+> record, not current product authority, priority, approval, or work authorization. Current product
+> direction is [`docs/PRODUCT_CONSTITUTION.md`](../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../product/ROADMAP.md).
+
 **Head under review:** `438890fc` on `feat/four-room-visual-direction`, worktree
 `C:\Users\Kuya\code\sentinel-fourroom`. **Unpushed and unmerged**, deliberately — #49 authorized
 local implementation and its verification, explicitly not release.

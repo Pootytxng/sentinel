@@ -138,7 +138,9 @@ are exactly its wheelhouse. The routing duty (above) means flagging this per tas
 
 ## The design laws coined with Kuya (enforce on every spec/review)
 
-All recorded in `docs/superpowers/plans/2026-06-04-beta-build-order.md` + the design kernel:
+Historical provenance is recorded in the superseded
+`docs/superpowers/plans/2026-06-04-beta-build-order.md`; current authority is
+`docs/PRODUCT_CONSTITUTION.md` plus the derived product docs:
 - **Bathroom law** — signpost at the moment of need; never condescend; never bare.
 - **Foam-pit law** — nothing should require *learning* (shortcuts are silent redundancy only, never the path).
 - **Doorknob law** (core-promise status) — every door shows its knob; nothing static looks clickable.
@@ -171,9 +173,10 @@ paid surface via Azure Trusted Signing ~$10/mo · entity+Paddle ← Pro launch �
 before 1.0**). Organic-first: friends + the owner's Discord community = the named seed channel.
 Never tee up a spend without the free alternative it beats.
 
-## Token-routing protocol (standing, 2026-07-01)
+## Historical token-routing protocol (superseded, 2026-07-01)
 
-Full table: `docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. Cowork lane summary:
+Historical table (superseded by current local agent/model policy):
+`docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. Point-in-time Cowork lane summary:
 **all spec/audit/design/research/status work runs HERE; CC's Fable turns are reserved for build
 trains only** (Fable ≈ the right tool for ~5–15% of tasks — ours are the builds). Audit by
 reading git directly — never ask CC to re-narrate (Fable output tokens), and never put "explain

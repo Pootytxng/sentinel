@@ -1,5 +1,10 @@
 # Canonical data root — design decision (2026-08-18)
 
+> **PRODUCT DIRECTION AUTHORITY RETIRED 2026-09-04 (#369).** This record remains technical data-root,
+> rollback, and recovery provenance where it conforms to current architecture and release truth; it
+> does not define current product direction. Product decisions route through
+> `docs/PRODUCT_CONSTITUTION.md` and its derived roadmap.
+
 Issue: #130. Supersedes the mechanism stated in #129.
 
 ## The defect

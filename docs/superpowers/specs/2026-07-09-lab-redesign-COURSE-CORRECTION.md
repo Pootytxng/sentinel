@@ -1,5 +1,10 @@
 # Lab redesign — COURSE CORRECTION (owner rejected the marathon, 2026-07-09)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The source-of-truth, approval, and build
+> routing below are historical and no longer direct current Lab work. Current product and experience
+> direction comes from `docs/PRODUCT_CONSTITUTION.md`; technical safety and measured evidence remain
+> bounded provenance where they conform to current authority.
+
 > **STATUS: the `2026-07-08-lab-proving-ground.md` spec's UI direction is WRONG per the owner and is
 > SUPERSEDED by this brief.** The catalog/mutation-safety parts of that spec (Directive 1 measurable-
 > benefit policy, §2a aggregate A/B, the safety rails) still stand. But its **layout/UX direction —

@@ -1,5 +1,12 @@
 # UI / Design Vision Backlog — the ONE home for the owner's visual asks
 
+> **HISTORICAL UI EVIDENCE — NOT CURRENT PRODUCT AUTHORITY (2026-09-04).** This ledger preserves
+> owner requests, shipped-state notes, and unresolved taste evidence, but it no longer owns product
+> direction, priority, approval, or work authorization. Start with
+> [`docs/PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md); derive sequence from
+> [`docs/product/ROADMAP.md`](product/ROADMAP.md), execution state from [`docs/BACKLOG.md`](BACKLOG.md),
+> and current owner actions from [`docs/OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
+
 > **Why this file exists (2026-07-08).** The owner flagged that a UI task list he'd made had been
 > dropped — and he was right. His design/UI direction was scattered across ~20 specs (2026-06-05 →
 > 2026-07-07); several asks were mentioned once and never tracked again, and a few were **quietly
@@ -897,7 +904,7 @@ full response ive written here seeing how things seem to get lost in translation
    their exact ms). All three: same feed, budget line, exact-moment markers, consumer readouts.
    ✅ **Owner PICKED same day: B + A's drag-segment, lean into previous-session comparison**
    ("really refining that as a working implementation … more comprehensive visually and
-   systematically" — full verbatim in the plan). **v4 plan written + entry gate cleared:**
+   systematically" — full verbatim in the plan). **Historical v4 plan (product direction now superseded):**
    `docs/superpowers/plans/2026-07-10-monitor-v4-session-waterfall.md` (LIVE mode: real 240-frame
    scope + drag-zoom + receding same-capture snapshots · SESSIONS mode: the last ≤5 sessions' real
    `stutter_timeline` as depth layers, `stutter_events` dip pins, delta strip, same-game filter —
@@ -937,7 +944,7 @@ full response ive written here seeing how things seem to get lost in translation
    overlay control · honest empties · zero new IPC). Natural combine flagged on the page:
    A's top half + B's stack. ~~⏳ GATE: owner picks A/B/C (or a combine)~~ → ✅ **PICKED same day
    (owner, 2026-07-11): "A's top + B's stack"** ("ooooo ya i like the mockups you sent me").
-   Build plan: `docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md` (v5 "Flight Deck +
+   Historical superseded build plan: `docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md` (v5 "Flight Deck +
    Session Stack" — one face, two halves, no mode toggle, waterfall deleted; builds in a FRESH
    session).
    **→ v5 BUILT + SHIPPED 2026-07-11 (`960734c`, installer `A4D3BF98…D147E0`, stamp-verified
@@ -1003,6 +1010,7 @@ full response ive written here seeing how things seem to get lost in translation
    with the direction — don't rule it out "unless reasonably so" (a stated, specific reason).
    Fold this amendment into the direction spec with the v3 train.
    ✅ **FOLDED IN** (verified 2026-08-04): the amendment is carried verbatim at
+   historical, product-direction-superseded
    `docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md:163`, with the one retained rail —
    depth may move the panel/chrome UNIFORMLY, never warp the data ink; a spike's plotted position stays
    truthful. The spec's anti-pattern column was updated to match (differential parallax BETWEEN plot
@@ -1023,7 +1031,8 @@ full response ive written here seeing how things seem to get lost in translation
    retain them verbatim here and decompose every part ([[decompose-owner-lists-atomic-todos]]).
 
 ### A. The JARVIS interaction / motion layer — ✅ SHIPPED DEFAULT-ON (2026-07-12, owner-approved "everything looks good")
-Source: `docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md:111-176`. The de-slop
+Historical source (product direction superseded):
+`docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md:111-176`. The de-slop
 directive's redesign lane is marked "COMPLETE," but that only covered the **Instrument-HUD reskin**.
 The **motion/interaction effect plan** the owner was most excited about was scoped, given a specific
 tech stack, then bypassed — the shipped work used CSS/native React instead. **VERIFIED 0 files in
@@ -1185,7 +1194,8 @@ longer exists. The Lab opens on station 1 (enable-all + Power features) by defau
 DEFAULT OFF, 2026-07-09):** the owner eyeballed the Instrument-Bench bento and **rejected it too** ("generic slop / wide
 horizontal boxes"). Brainstorming → 3 interactive HUD mockups (Artifact `e2830b73…`) → owner picked **A · Ops Console**:
 a spatial game-HUD — the real 3D rig hologram at center, corner arc gauges, a magnify Dock of stations. Direction LOCKED
-spec `docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md`, plan `…/plans/2026-07-09-console-hud-phase1-lab.md`.
+historical superseded spec `docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md`, plan
+`…/plans/2026-07-09-console-hud-phase1-lab.md`.
 Phase 1 (Tasks 1–6) built + shipped behind the SAME `compy_lab_ground` flag:
 - **`LabConsole` — the Ops Console (`b18f498`):** replaces the rejected `LabBench` bento (**DELETED**). Real `RigViewer`
   hologram (chromeless) at center in a bracketed stage · four honest corner **ArcGauge**s (Readiness · Avg FPS · Safe stack ·
@@ -1250,7 +1260,8 @@ A.2/A.3/A.5/A.6 core shipped 2026-07-12 (`1d310e1`, `compy_jarvis_motion` DEFAUL
 per-tab Console rollout can now assume the layer exists behind its flag.** **Both owner-gated calls RESOLVED
 2026-07-10:** Optimize panel **open-on-click confirmed** ("cleaner") · the standalone **Optimize rail tab DROPS at
 default-ON** (owner call; the removal ships with the default-ON flip, after the eyeball). Phase-2 (Home cold-open) plan
-committed: `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md` (entry-gated on the round-2 eyeball).
+committed historically (product direction now superseded):
+`docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md` (entry-gated on the round-2 eyeball).
 ✅ **Eyeball gate CLEARED (owner round-4 "ALL GOOD", 2026-07-10) → default-ON + tab drop SHIPPED LIVE `59249bb`:**
 the Ops Console Lab is the default, the rail is Home · Monitor · Blackbook · Lab, and the Lab's Optimize station is
 the one door (with the "Applied & history" ledger disclosure inside — the self-reviewer's reachability catch, fixed
@@ -1261,7 +1272,8 @@ the room Dock (Monitor · Blackbook · Lab doors, Lab primary; ONE forward affor
 suppression was the self-reviewer's duplication catch, guard-pinned). Motion: spotlight · reveal · reticle ·
 parallax, reduced ⇒ still. ✅ **OWNER APPROVED 2026-07-10 ("everything looks good") → DEFAULT ON shipped
 `bce72d6`** (Settings row now "Home console"; "0" = the classic failsafe). **Phase 3 (Monitor) is next — plan
-written:** `docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md` (flag `compy_monitor_console`
+written (historical product direction, now superseded):
+`docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md` (flag `compy_monitor_console`
 DEFAULT OFF · NEW `Oscilloscope` kit component on the real live telemetry · builds in a fresh session).
 
 **🟢 PHASE 4 (Blackbook console) — BUILT + SHIPPED behind flag `617db5b` (2026-07-12, installer `43234A53…943D5`, stamp-verified); ~~owner eyeball is the open gate~~ → ✅ CLEARED — flipped DEFAULT-ON 2026-07-13 (`18272be`).**
@@ -1291,7 +1303,8 @@ forensics, `BlackBox.tsx`, in the Lab). So this was a real IA fork, owner-gated.
 Artifact <https://claude.ai/code/artifact/b00295a5-97d0-4f33-9703-0ae975951e91>: **A "The Logbook"** (library +
 a unified your-record tape) · **B "Flight Recorder"** (scrub-tape hero, library → Reference tab) · **C "Field
 Records"** (reskin the library only). ✅ **Owner picked A** ("blackbook looks good" + A); naming default accepted
-(room stays "Blackbook", timeline = "the logbook", Lab "Black Box" left alone). Plan written:
+(room stays "Blackbook", timeline = "the logbook", Lab "Black Box" left alone). Historical plan,
+with product direction now superseded:
 `docs/superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md` (flag `compy_blackbook_console` DEFAULT OFF ·
 pure `buildLogbook` tape over EXISTING data — zero new IPC/`src-tauri` · rollback reuses the audited path ·
 title-header law · honest-empty · reduced-motion still). **Builds in a FRESH session**, then eyeball → default-ON.
@@ -1312,7 +1325,8 @@ Guards: `src/design/command-palette.test.tsx` · `command-palette-flag.test.tsx`
 <!-- shipped-status-history -->
 **Why this row read the opposite for six weeks (closed 2026-08-19 as backlog C-12).** It was parked in
 2026-07 as *"new feature, backlog candidate post-P6, owner call"*
-(`docs/superpowers/specs/2026-07-02-design-direction-product-ui-system.md:36,54,83`) and this section
+(`docs/superpowers/specs/2026-07-02-design-direction-product-ui-system.md:36,54,83`, now historical
+pre-rebirth direction) and this section
 said *"parked, then dropped — never mentioned again anywhere."* That was true when written and false
 from 2026-08-11 on, and nothing checked it; `docs/CONFORMANCE_AUDIT_2026-08-18.md` §C-12 caught it by
 hand. This is the inverse of the usual rot — a **shipped** feature recorded as **dropped**, which
@@ -1339,7 +1353,8 @@ prescription contract · consumer/shop report exports) in the intelligence lane 
 ### G. 🔴 SITE FULL MAKEOVER — owner-commissioned 2026-07-14 (the dormant trigger FIRED, for the site)
 History: the 2026-06-12 voice-baptism directive queued **§B0 site glow** + a dormant **§C FULL
 OVERHAUL** trigger (*"only if §B underwhelms the owner"*) that no later doc revisited
-(`docs/superpowers/specs/2026-06-12-doctrine-voice-baptism-design-refresh.md:31-80`).
+(`docs/superpowers/specs/2026-06-12-doctrine-voice-baptism-design-refresh.md:31-80`, historical
+pre-rebirth direction).
 **2026-07-14: the owner saw the shipped two-strip hero (`2eda4eb`) and rejected it outright** —
 *"i do not like the hero site at all and i think it needs a complete makeover"*. The site-side
 trigger is now FIRED and owner-directed. His verbatim requirements:
@@ -1432,7 +1447,8 @@ to a source element it does not have. One-word revert if the owner wants the poi
 ## 🟡 STILL UNVERIFIED — older asks not yet code-checked (lower priority)
 
 - **"Full tidy" left-to-right usage order** — ground-up rewrite rejected for the P6 Journey
-  "forward-doors" pass (a substitution; P6 shipped). `2026-07-02-full-tidy-directive.md:1-8`.
+  "forward-doors" pass (a substitution; P6 shipped).
+  `2026-07-02-full-tidy-directive.md:1-8` is historical pre-rebirth direction.
 - **Elastic/erratic-window adaptive layout** — reads resolved-in-doc, final blessing uncaptured.
   `2026-06-06-elastic-window-pass.md`.
 - **Intuitiveness sweep** (full-app confusion weed-out) · **Beta Feedback #3** six-part list ·

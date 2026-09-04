@@ -159,12 +159,15 @@ win rounded up for marketing.
 **Owner decision (2026-08-09, issue #91):** the blanket "no Compy driver / no new outbound surface"
 prohibitions were replaced by this challengeable gate. It is not a general unlock. Directive:
 `docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md` (product hierarchy
-superseded; conforming technical capability provenance remains); execution plans:
+superseded; conforming technical capability provenance remains); execution-plan provenance
+(product routing superseded; conforming technical capability content remains):
 `docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md` and
 `docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md`.
 
-Every new capability starts local, user-mode, least-privilege, non-invasive, offline-usable where
-reasonable, and fail-closed.
+Every new capability starts local, user-mode, least-privilege, non-invasive, offline-usable, and
+fail-closed. A capability that cannot preserve useful offline behavior requires its own explicitly
+owner-approved Capability Exception record with a durable embedded or last-known-good fallback; a
+proposer cannot waive the baseline merely by calling offline operation unreasonable.
 
 Before requesting a stronger boundary, the proposer must first evaluate documented Windows APIs,
 ETW, vendor-supported SDKs/interfaces, local files, WMI/CIM, or another lower-risk user-mode route.
@@ -178,7 +181,7 @@ A valid exception record names:
 5. consent, disclosure, retention/deletion, and revocation behavior;
 6. rollback/uninstall, update/signing, kill switch, and bad-release recovery;
 7. dark/canary/staged proof, independent review, abort metrics, and review expiry;
-8. explicit owner decision to implement and, separately where needed, to arm/release.
+8. explicit owner decision to implement and a separate explicit owner decision to arm/release.
 
 Approval applies only to the named capability. It cannot be cited to justify an adjacent driver
 IOCTL, endpoint, payload field, telemetry field, CSP widening, permission, or mutation.
@@ -296,7 +299,8 @@ read an older persisted change is a rollback-breaking migration and is forbidden
 compatibility plan.
 
 `AppliedAction`, `RollbackAction`, and `Snapshot` are additive compatibility enums: new variants may
-be added; shipped serialized variants are not casually renamed/removed.
+be added; shipped serialized variants are never renamed or removed unless a backwards-compatible
+mapping preserves the ability to deserialize and actually roll back every supported historical entry.
 
 #### Snapshot contract
 

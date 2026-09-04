@@ -24,7 +24,7 @@ believe you did — the point of this skill is that the answer is reconstructed.
 | `docs/PRODUCT_CONSTITUTION.md` → `docs/product/ROADMAP.md` | product truth and the derived sequence; `BACKLOG.md` is a ledger, never a priority source |
 | `docs/BACKLOG.md` | next non-gated `[ ]` item, P0 first |
 | `docs/OWNER_ACTION_CHECKLIST.md` | what is on **his** hands, eyes, input, money |
-| `docs/UI_VISION_BACKLOG.md` 🔴 OPEN | unbuilt visual/motion work — see the trap below |
+| `docs/UI_VISION_BACKLOG.md` 🔴 OPEN | historical UI evidence to reconcile, never product priority or a work queue |
 | `docs/WORK_CONTROL.md` | live claims; an overlapping claim means another lane owns it |
 
 Token law applies: **search these by section, never whole-file.** Dispatch the doc reads to a sonnet
@@ -35,8 +35,10 @@ the main context.
 
 1. **False-done.** Never say "done" / "queue empty" without enumerating what remains AND what is
    gated. A checkbox is not evidence.
-2. **The reskin trap.** RELEASE_STATE tracks the shipped Instrument-HUD reskin, not his motion /
-   interaction vision. UI is never "complete" while `docs/UI_VISION_BACKLOG.md` has 🔴 OPEN items.
+2. **The reskin trap.** A visual implementation can be narrower than an owner's recorded ask. Treat
+   `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows as historical evidence to reconcile against
+   `docs/PRODUCT_CONSTITUTION.md` and `docs/product/ROADMAP.md`, never as proof of current priority,
+   authorization, or incompleteness by themselves.
 3. **Pushed ≠ landed.** `git status -sb` ahead/behind, and whether CI is green, are separate facts
    from "I committed it." Report the one you actually checked.
 

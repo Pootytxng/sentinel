@@ -236,11 +236,12 @@ hardware-specific work begins.
 5. `docs/BACKLOG.md` — living execution ledger. Per **false-done** protocol, never claim completion
    without naming remaining/gated work.
 6. `docs/OWNER_ACTION_CHECKLIST.md` — consolidated owner-only actions. Never let an owner item drop.
-7. `docs/UI_VISION_BACKLOG.md` — the ONE home for owner-authored UI/design asks. For anything
-   UI/visual read its 🔴 OPEN rows — today DIR-1 (the standing intuitive-UI lens) and §G (the site);
-   `src/ui-vision-status-guard.test.ts` rule D pins this line to those headings. A UI implementation
-   can pass tests and still be incomplete; **a reskin is not the vision**; never re-queue a row from a
-   paraphrase.
+7. `docs/UI_VISION_BACKLOG.md` — historical owner-request and shipped-state evidence, not product
+   authority, priority, approval, or a work queue. For UI/visual work, start with the Constitution and
+   roadmap; reconcile relevant 🔴 OPEN rows (currently DIR-1 and §G) as evidence without inheriting
+   their priority or treating them as authorization. `src/ui-vision-status-guard.test.ts` prevents stale row paraphrases from
+   becoming work again. **a reskin is not the vision** by itself; scope and completion still require
+   current constitutional and execution evidence.
 8. `docs/CHANGELOG.md` — historical dated record only.
 
 Legacy `docs/RECEIPTS_DOCTRINE.md`, `docs/PRODUCT_DIRECTION.md`, `docs/PRD.md`, and old monetization

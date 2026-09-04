@@ -1,5 +1,11 @@
 # Console HUD — Phase 4: the Blackbook "Logbook" console
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical implementation record, not
+> current product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Conforming read-only and evidence constraints
+> remain useful under [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 > **Entry gate CLEARED (owner, 2026-07-12): direction A "The Logbook" picked** from the concept
 > Artifact <https://claude.ai/code/artifact/b00295a5-97d0-4f33-9703-0ae975951e91> ("blackbook looks
 > good" + A). Naming default accepted: the room stays **"Blackbook"**, its timeline is **"the

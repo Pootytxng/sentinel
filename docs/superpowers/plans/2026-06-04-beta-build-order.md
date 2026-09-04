@@ -1,5 +1,11 @@
 # Beta Build Order — from the design tour to invites out
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical sequencing record, not current
+> product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Its financial and owner-action boundaries
+> remain historical provenance; current owner gates remain governed by the active authority set.
+
 > **ADVISORY / REFERENCE ONLY (owner directive, 2026-06-04).** This pass structure is *not* a
 > schedule and *not* a gate. The owner sequences final execution; HQ sequences engineering by real
 > technical dependencies. All financial items (domains, signing, anything paid) are **deferred** —

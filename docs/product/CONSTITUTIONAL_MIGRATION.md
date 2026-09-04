@@ -75,7 +75,8 @@ At the 2026-09-04 synchronization check, `main` had advanced through PR #370, wh
 
 - `.claude/hooks/session-root-assert.mjs`
 - `.claude/settings.json`
-- `docs/superpowers/specs/2026-08-21-unverified-session-write-refusal.md`
+- `docs/superpowers/specs/2026-08-21-unverified-session-write-refusal.md` (historical changed-path
+  reference; its superseded session-policy framing is not migration authority)
 - `tools/entry/session-root-assert.test.mjs`
 
 Those paths did not overlap the then-current constitutional migration diff. This is context only; re-check current state before integrating because `main` may move again.
@@ -316,3 +317,37 @@ The repair closes five authority paths that green string guards had missed:
 No runtime, release, installed-state, publication, capability, or owner-only setting is changed.
 The review at `d13de5d6b2981d02cb98f0b98c4eb7edee24d5a3` becomes stale when this repair produces a new head;
 that new remote-reachable head requires a fresh independent review before any transition.
+
+## 18. Second adversarial sweep — hidden authority and guard depth (2026-09-04)
+
+Independent review of pushed head `7491bd0ff8b8dc6561b8f89a25b791c095cb4170` returned
+**CHANGES REQUIRED**. The review is stale as soon as this repair is committed. It found that the first
+guard still trusted a narrow current-looking phrase set and could miss executable authority late in a
+document. A second repository-wide semantic sweep then found additional live-looking sources that the
+review examples had not named.
+
+This repair:
+
+- scans the full body of legacy specs, plans, reviews, and decisions for multiple executable-authority
+  shapes rather than trusting one header string or the first 1,800 bytes;
+- pins the exact 47-file current-looking corpus so both detector blindness and unclassified additions
+  fail loudly, and keeps a late-document positive control that proves the full-body scan;
+- expands top-level supersession boundaries across the design-system, Gaming Mode, Knowledge,
+  monetization, Console HUD, Lab, Monitor, Blackbook, Intelligence, capability, comprehensibility,
+  site, and review families while preserving conforming technical provenance;
+- makes the superseded-plan citation guard enumerate the expanded corpus and requires live citations
+  to disclose supersession in place rather than widening its disclosure escape hatch;
+- dynamically scans Claude skills/agents and Codex agent entrypoints for undisclosed tombstone
+  routing;
+- reclassifies `docs/UI_VISION_BACKLOG.md` as historical owner evidence, then rewires Claude bootstrap,
+  status, self-review, handoff, and owner-checklist paths through the Constitution and roadmap;
+- reclassifies the dormant parallel-worktree/bus/workflow documents under `docs/WORK_CONTROL.md` so a
+  reader cannot follow a supersession chain into another dead execution model;
+- preserves `docs/ARCHITECTURE_LOCKS.md` as the authority for rollback, mutation, schema, key custody,
+  capability, injection, privilege, unknown-data, and owner-gate rules;
+- leaves `INSTALLED-STAMP-DRIFT` in the separate #225 lane while keeping this migration's
+  `source_main_commit` reconciliation distinct.
+
+The writer must now post one complete machine-readable scope claim, pass the exact scope gate, run the
+full local gate, push a new remote-reachable 40-character head, and obtain a fresh independent review
+of that exact head before any PR transition.

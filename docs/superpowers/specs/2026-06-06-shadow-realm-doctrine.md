@@ -1,5 +1,10 @@
 # The Shadow Realm Doctrine — hidden depth for the studious (easter eggs)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The doctrine and owner-blessed direction below
+> are historical, not current product authority. Any current product or experience decision must
+> derive from `docs/PRODUCT_CONSTITUTION.md`; still-conforming honesty and safety constraints remain
+> bounded provenance only.
+
 *2026-06-06, Cowork, owner-blessed. The owner's framing: the surface app serves everyone (foam
 pit — nothing must ever be learned); beneath it, a quiet layer rewards the users who STUDY
 Compy — "Compy is even cooler than it already appeared to be." Like the artist who spots true
