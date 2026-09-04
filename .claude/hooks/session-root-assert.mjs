@@ -320,15 +320,24 @@ export function invalidateBoardCache({ dir = TOKEN_DIR } = {}) {
   }
 }
 
+/**
+ * `gh project item-list` returns at most `--limit` rows and says nothing when the board has more.
+ * This copy stayed at 100 after #339 raised the launcher's (`tools/entry/gather.mjs`) to 1000, so on
+ * a 136-item board every claim past row 100 — every NEW lane — read as FOLDER_UNCLAIMED here while
+ * the launcher saw it fine (#368). Same limit, same truncation check: a short read is not a read.
+ */
+export const BOARD_READ_LIMIT = 1000;
+
 /** One `gh` call. Returns null when the board could not be read — which is never "empty board". */
-export function fetchBoardRows() {
+export function fetchBoardRows({ run = null } = {}) {
   try {
-    const raw = execFileSync(
-      "gh",
-      ["project", "item-list", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json", "--limit", "100"],
-      { encoding: "utf8", timeout: 20_000, stdio: ["ignore", "pipe", "ignore"] },
-    );
-    const items = JSON.parse(raw).items ?? [];
+    const argv = ["project", "item-list", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json", "--limit", String(BOARD_READ_LIMIT)];
+    const raw = run
+      ? run(argv)
+      : execFileSync("gh", argv, { encoding: "utf8", timeout: 20_000, stdio: ["ignore", "pipe", "ignore"] });
+    const parsed = JSON.parse(raw);
+    const items = parsed.items ?? [];
+    if (Number.isInteger(parsed.totalCount) && parsed.totalCount > items.length) return null;
     return boardRows(items.map((it) => ({ ...it, number: it.content?.number })));
   } catch {
     return null;
