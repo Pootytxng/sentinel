@@ -993,6 +993,29 @@ describe("operands whose value the text or the environment already states are li
       expect(d.reason).toContain("not knowable from the text");
     });
 
+// FOUND BY INDEPENDENT REVIEW, so it is guarded rather than written down. The first version of
+    // this pass treated `(` as an ordinary statement break, so a subshell taught its parent a name:
+    // `(S=/scratch); rm $S/x` was judged as `rm /scratch/x` when the shell really runs `rm /x`.
+    // Reasoning about a path the command never touches is a FALSE ALLOW, and `X=$(S=…; …)` makes it
+    // easy to hit by accident — so a binding is learned only in the outermost scope.
+    it("a subshell does not teach its parent a name", () => {
+      expect(ask(`(S="${fwd(SIB)}"); rm "$S/package.json"`).permission).toBe("ask");
+      expect(ask(`X=$(S="${fwd(SIB)}"; echo hi); rm "$S/package.json"`).permission).toBe("ask");
+      expect(ask(`S=\`D="${fwd(SIB)}"; echo x\`; rm "$D/package.json"`).permission).toBe("ask");
+      // A value still flows INTO a subshell — inheritance runs one way.
+      const inner = analyze(`S="${scratch}"; (cd /tmp; printf x > "$S/a")`, { cwd: ROOT, env: {} });
+      expect(toComparable(inner.ops.at(-1).target)).toBe(toComparable(join(SCRATCH, "a")));
+    });
+
+    // Same review: the expanded text is RE-LEXED, so a value carrying shell punctuation could invent
+    // a statement that never runs. A value is spliced only when it re-lexes as one plain word.
+    it("an expansion cannot fabricate shell structure", () => {
+      const { ops } = analyze('S="/a;rm -rf /b"; echo $S', { cwd: ROOT, env: {} });
+      expect(ops.some((o) => String(o.target).includes("/b"))).toBe(false);
+      expect(ask('S="/a b"; rm $S/x').permission).toBe("ask");
+      expect(hook.expandKnownVars("S='<<EOF'; echo $S", { env: {} })).toBe("S='<<EOF'; echo $S");
+    });
+
     it("the environment teaches directories only, never an arbitrary name", () => {
       expect(ask("rm -rf $TARGET", { env: { TARGET: scratch, PATH: scratch } }).permission).toBe("ask");
     });

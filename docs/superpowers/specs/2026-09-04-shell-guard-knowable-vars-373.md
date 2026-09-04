@@ -51,3 +51,22 @@ demanding its absence, and the nine assertions under "once applied" start runnin
 The patched hook was exercised in a scratch mirror of `.claude/hooks/` + `tools/entry/` with the
 same test file (the mirror is the only place a session may run the patched code); the in-repo run
 shows the "once applied" block skipped and the apply-check green. Both runs are quoted on the PR.
+
+## 5. What independent review changed (2026-09-04)
+
+A read-only reviewer ran the extracted helper against adversarial input and returned **FAIL** on the
+first patch, with one genuine false-ALLOW:
+
+- **Subshell scope leak.** `(` was treated as an ordinary statement break, so `(S=/scratch); rm $S/x`
+  was judged as `rm /scratch/x` while the shell really runs `rm /x` — the checker reasoned about a
+  path the command never touches. `X=$(S=…; …)` makes it easy to hit by accident. **Fixed:** a
+  binding is learned only in the outermost scope; `(`, `$(` and backticks open a scope, and a value
+  still flows *into* one because inheritance runs one way.
+- **Splice could fabricate structure.** The expanded text is re-lexed, so `S="/a;rm -rf /b"; echo $S`
+  invented a statement that never runs. **Fixed:** a value is spliced only if it re-lexes as one
+  plain word (`SPLICEABLE`), which also refuses spaces, quotes and backslashes — each refusal leaves
+  the operand unknowable, which is the safe direction.
+
+Both are pinned by tests ("a subshell does not teach its parent a name", "an expansion cannot
+fabricate shell structure"). The reviewer separately confirmed the skip-gating is real, not
+decorative, and that the apply command works as written.
