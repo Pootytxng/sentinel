@@ -295,3 +295,27 @@ describe("one implementation, two entry points", () => {
     }
   });
 });
+
+// #368 — the hook's board read stayed at `--limit 100` after #339 raised the launcher's to 1000. On
+// a 136-item board every claim past row 100 (every NEW lane) read as FOLDER_UNCLAIMED here while the
+// launcher saw it, so the owner's "fixed" claim path was never visible to the guard that refuses.
+describe("the board read is not truncated (#368)", () => {
+  const item = (n) => ({ id: `I${n}`, content: { number: n }, status: "Active", "worktree / branch": `C:\\Users\\Kuya\\code\\sentinel-${n} @ lane/${n}` });
+
+  it("asks gh for the same limit the launcher does, never the old 100", async () => {
+    const { BOARD_READ_LIMIT } = await import("./gather.mjs");
+    expect(tracked.BOARD_READ_LIMIT).toBe(BOARD_READ_LIMIT);
+    expect(tracked.BOARD_READ_LIMIT).toBeGreaterThanOrEqual(1000);
+    let argv = null;
+    tracked.fetchBoardRows({ run: (a) => ((argv = a), JSON.stringify({ items: [], totalCount: 0 })) });
+    expect(argv.slice(-2)).toEqual(["--limit", String(tracked.BOARD_READ_LIMIT)]);
+  });
+
+  it("treats a short read as no read — a truncated board must not turn issue 101+ into 'unclaimed'", () => {
+    const short = JSON.stringify({ items: Array.from({ length: 100 }, (_, i) => item(i + 1)), totalCount: 136 });
+    expect(tracked.fetchBoardRows({ run: () => short })).toBeNull();
+    const full = JSON.stringify({ items: Array.from({ length: 136 }, (_, i) => item(i + 1)), totalCount: 136 });
+    const rows = tracked.fetchBoardRows({ run: () => full });
+    expect(rows.some((r) => r.issue === 136)).toBe(true);
+  });
+});
