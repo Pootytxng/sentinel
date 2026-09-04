@@ -44,6 +44,8 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
+// One formatter for the advisory line, so `Write` and the shell say the same thing (#368).
+import { advisoryContext } from "./project-write-assert.mjs";
 import { LAPSED_CODES, UNVERIFIABLE_CODES, resolveSessionRoot, verifySession } from "./session-root-assert.mjs";
 import { PROTECTED_ZONES, ZONES, resolveAbsolute, zoneOf } from "./target-ownership.mjs";
 
@@ -1030,7 +1032,21 @@ export function decideShell({
   const own = protectedHits.find((z) => z.zone === ZONES.OWN);
   if (own && unverified) {
     const code = verdict?.code ?? "UNKNOWN";
-    const advisory = UNVERIFIABLE_CODES.has(code) || LAPSED_CODES.has(code);
+    // The advisory codes PROCEED (#368, spec 2026-08-21 §8/§9): nothing live contradicts this
+    // session, the folder is merely unclaimed or the board unreadable. Same answer `Write` and
+    // `Edit` give — allow, with the cure the push gate enforces delivered as one line of context.
+    // Not `ask`: a hook ask is a real prompt in every mode, and this fires on every write.
+    if (UNVERIFIABLE_CODES.has(code) || LAPSED_CODES.has(code)) {
+      return {
+        permission: "allow",
+        zone: own.zone,
+        target: own.abs,
+        code,
+        why: `advisory (${code}): the write proceeds with its cure as context`,
+        additionalContext: advisoryContext({ code, knownIssue: verdict?.issue ?? null }),
+      };
+    }
+    // A live record actively disagrees about this folder: that is positive knowledge, and deny.
     return {
       permission: "deny",
       zone: own.zone,
@@ -1038,11 +1054,9 @@ export function decideShell({
       code,
       reason:
         `Blocked: this session is not verified for this folder (${code}), and \`${own.op.verb}\` ` +
-        `writes inside it.\n\n${advisory ? "" : `${verdict?.reason ?? ""}\n\n`}` +
+        `writes inside it.\n\n${verdict?.reason ?? ""}\n\n` +
         `This is the same refusal \`Write\` and \`Edit\` give; the shell is not a way around it.` +
-        (advisory
-          ? `\n\nVerify this session without restarting it, then retry:\n\n    node tools/entry/cli.mjs adopt --issue <n> --session <id>`
-          : `\n\nResolve the disagreement before changing ${own.abs}.`),
+        `\n\nResolve the disagreement before changing ${own.abs}.`,
     };
   }
 
@@ -1128,9 +1142,26 @@ export function run({ hookInput, env = process.env, verify = verifySession, zone
   });
 }
 
-/** PreToolUse wire format. An allow says nothing at all; deny and ask both carry their reason. */
+/**
+ * PreToolUse wire format. A plain allow says nothing at all; an allow carrying `additionalContext`
+ * (#368, the advisory codes) is written as `permissionDecision: "allow"` plus that context — the
+ * one field that reaches the model on an allow. Deny and ask both carry their reason.
+ */
 export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) {
-  if (!decision || decision.permission === "allow") return 0;
+  if (!decision) return 0;
+  if (decision.permission === "allow") {
+    if (typeof decision.additionalContext !== "string" || decision.additionalContext === "") return 0;
+    write(
+      `${JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "allow",
+          additionalContext: decision.additionalContext,
+        },
+      })}\n`,
+    );
+    return 0;
+  }
   write(
     `${JSON.stringify({
       hookSpecificOutput: {

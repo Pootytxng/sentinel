@@ -255,3 +255,30 @@ exactly, so it can be applied without re-deriving it (the three tests that pin `
 
 The board-limit fix, the allow block and this section landed on the branch (#368).
 
+---
+
+## 9. 2026-09-04 - section 8 corrected: hook ask is a real prompt in every mode
+
+Section 8's `ask` rested on a false premise. Per code.claude.com/docs/en/permission-modes and
+/hooks, a PreToolUse hook's `permissionDecision: "ask"` is shown to the user as a real prompt in
+EVERY permission mode, `defaultMode: "auto"` included, and a hook decision overrides
+`permissions.allow` rules. Measured the same way on #373: 33 of one day's 40 prompts were hook
+`ask`s. Routing the advisory codes to `ask` would therefore have prompted on every single write in
+an unclaimed desktop-app session - the opposite of "never again".
+
+The ruling's stated intent ("an unclaimed session proceeds") is now implemented as it was meant:
+
+- `FOLDER_UNCLAIMED` and `BOARD_UNREACHABLE` return `permissionDecision: "allow"` from BOTH
+  `project-write-assert.mjs` and `shell-ownership-assert.mjs`, carrying one line of
+  `additionalContext` that names the cure the push gate enforces - post an Ownership claim on the
+  issue (the issue number is filled in when a previous read left it on disk). One shared formatter,
+  `advisoryContext`, so `Write`, `Edit`, `NotebookEdit` and the shell say the same thing.
+- Every other non-ok code keeps its answer: a live contradiction (`WRITER_LIVE`,
+  `BRANCH_NOT_THE_BOARDS`, `REPO_MISMATCH`, ...) and a sibling checkout stay `deny`; the owner's
+  global config and an unresolvable target stay `ask`; an unclassified code stays `deny`.
+- Pinned in `project-write-assert.test.mjs`, `shell-ownership-assert.test.mjs` and
+  `session-root-assert.test.mjs`, each with a case proving the deny side is unchanged.
+
+The hook edit was authorized by the owner in Cowork on 2026-09-04 ("resolve every single task
+yourself"); section 8 stays as the history of how the ruling was first specified.
+

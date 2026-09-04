@@ -192,17 +192,20 @@ describe("the assert fails closed when a FACT disagrees", () => {
   });
 
   // #125 step 5 (2026-08-22, the owner armed the write refusal). These two are a PAIR and must stay
-  // one: session START still advises, because a session that only reads is not broken and making it
-  // fatal would close windows for nothing; the WRITE path is the half that refuses. Deleting the
-  // advisory assertion is how the next change silently makes session start fatal, which is exactly
-  // what the spec's rollout order (§4 step 5) says not to let happen.
+  // one: session START advises, because a session that only reads is not broken and making it
+  // fatal would close windows for nothing. The WRITE path was the half that refused until #368
+  // (spec §8, corrected in §9): an UNCLAIMED folder's write now PROCEEDS with one line of context
+  // naming the cure the push gate enforces - allow, not ask, because a hook ask is a real prompt in
+  // every mode and this fires on every write. Deleting the advisory assertion is how the next change
+  // silently makes session start fatal, which is exactly what the spec's rollout order (§4 step 5)
+  // says not to let happen; deleting the write assertion is how a refusal quietly comes back.
   it("only advises in a folder no issue on the board claims", () => {
     const r = facts({ board: { reachable: true, rows: [] } });
     expect(r.code).toBe("FOLDER_UNCLAIMED");
     expect(verdictOf(r).exit).toBe(0);
   });
 
-  it("but REFUSES the project write that same unverified session tries to make", async () => {
+  it("and the project write that same unclaimed session makes PROCEEDS, carrying its cure (#368)", async () => {
     const { decide } = await import("../../.claude/hooks/project-write-assert.mjs");
     // A root that EXISTS on disk: isInsideRoot canonicalizes both sides, so a fabricated folder
     // resolves to nothing and would make this pass for the wrong reason.
@@ -220,9 +223,35 @@ describe("the assert fails closed when a FACT disagrees", () => {
       root: here,
       sessionId: "11111111-2222-3333-4444-555555555555",
     });
+    expect(d.allow).toBe(true);
+    expect(d.permission).toBe("allow");
+    // The answer ships with its own cure, or it is just a silent pass (spec §3a, §9).
+    expect(d.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(d.additionalContext).toMatch(/Ownership claim/);
+  });
+
+  it("but still REFUSES that write when the board's claim on the folder contradicts the session", async () => {
+    const { decide } = await import("../../.claude/hooks/project-write-assert.mjs");
+    const here = join(HERE, "..", "..");
+    // A real verdict from the assert with a claim that names a different branch: a contradiction,
+    // not an unclaimed folder, so #368's allow does not apply.
+    const r = facts({
+      board: { reachable: true, rows: [{ issue: 18, folder: here, branch: "somebody-elses-branch" }] },
+      env: { CLAUDE_PROJECT_DIR: here },
+      hookInput: { session_id: SESSION, cwd: here },
+      cwd: here,
+    });
+    expect(r.ok).toBe(false);
+    expect(tracked.ADVISORY_CODES.has(r.code)).toBe(false);
+    const d = decide({
+      toolName: "Write",
+      toolInput: { file_path: join(here, "src", "App.tsx") },
+      verdict: r,
+      root: here,
+      sessionId: "11111111-2222-3333-4444-555555555555",
+    });
     expect(d.allow).toBe(false);
-    // The refusal ships with its own cure, or it is just a closed window (spec §3a).
-    expect(d.reason).toMatch(/adopt/);
+    expect(d.additionalContext).toBeUndefined();
   });
 
   it("and still lets that same session write OUTSIDE the project — the gate is scoped, not total", async () => {

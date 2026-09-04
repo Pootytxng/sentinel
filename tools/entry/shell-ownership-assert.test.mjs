@@ -84,14 +84,46 @@ const ask = (command, over = {}) =>
   });
 
 describe("the proof matrix — the same target gets the same answer through the shell", () => {
-  it("denies a write inside its own folder when the session is not verified", () => {
+  it("lets a write inside its own UNCLAIMED folder proceed, with the cure as context (#368)", () => {
+    // Spec 2026-08-21 §8/§9: the owner ruled "never again" to writes refused in an unclaimed
+    // desktop-app session. Not `ask` — a hook ask is a real prompt in every mode, and this fires on
+    // every write — so it is allow plus one line naming what the push gate will require.
     const d = ask(`printf 'x' > ${inRoot("src/App.css")}`, { verify: UNCLAIMED });
-    expect(d.permission).toBe("deny");
+    expect(d.permission).toBe("allow");
     expect(d.zone).toBe(ZONES.OWN);
     expect(d.code).toBe("FOLDER_UNCLAIMED");
-    // The cure has to be in the refusal, or a blocked session has nowhere to go.
-    expect(d.reason).toContain("tools/entry/cli.mjs adopt");
-    expect(d.reason).toContain("the shell is not a way around it");
+    expect(d.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(d.additionalContext).toContain("Ownership claim");
+    expect(d.additionalContext).toContain("push gate");
+    expect(d.additionalContext).not.toContain("\n");
+  });
+
+  it("proceeds the same way when the board could not be read - the lapsed code (#368)", () => {
+    const UNREACHABLE = () => ({ ok: false, code: "BOARD_UNREACHABLE", reason: "board read failed", issue: 278 });
+    const d = ask(`printf 'x' > ${inRoot("src/App.css")}`, { verify: UNREACHABLE });
+    expect(d.permission).toBe("allow");
+    expect(d.code).toBe("BOARD_UNREACHABLE");
+    expect(d.additionalContext).toContain("BOARD_UNREACHABLE");
+    // The issue number a previous read left behind is named, so the cure is concrete.
+    expect(d.additionalContext).toContain("#278");
+  });
+
+  it("still DENIES its own folder when a live record contradicts the session (#368 keeps deny)", () => {
+    for (const code of ["WRITER_LIVE", "BRANCH_NOT_THE_BOARDS", "REPO_MISMATCH"]) {
+      const verify = () => ({ ok: false, code, reason: `fixture: ${code} disagrees` });
+      const d = ask(`printf 'x' > ${inRoot("src/App.css")}`, { verify });
+      expect(d.permission, code).toBe("deny");
+      expect(d.code, code).toBe(code);
+      expect(d.reason, code).toContain(`fixture: ${code} disagrees`);
+      expect(d.reason, code).toContain("the shell is not a way around it");
+      expect(d.additionalContext, code).toBeUndefined();
+    }
+  });
+
+  it("still DENIES a sibling checkout from an unclaimed session - the advisory code excuses nothing there", () => {
+    const d = ask(`rm -rf ${inSib("src")}`, { verify: UNCLAIMED });
+    expect(d.permission).toBe("deny");
+    expect(d.zone).toBe(ZONES.SIBLING);
   });
 
   it("denies a write into a SIBLING checkout even when the session IS verified", () => {
@@ -364,14 +396,23 @@ describe("a target the verb hides, and a read the verb does not", () => {
     // `git tag -l 'v*'` and `git show-ref --heads` were refused as mutations in an unverified
     // session. Requiring every word after the verb to be a flag made the listing PATTERN look like
     // a tag being created; `show-ref` was simply missing from the read-only set.
-    expect(ask("git tag -l 'v*'", { verify: UNCLAIMED }).permission).toBe("allow");
-    expect(ask("git branch --list 'lane/*'", { verify: UNCLAIMED }).permission).toBe("allow");
-    expect(ask("git show-ref --heads", { verify: UNCLAIMED }).permission).toBe("allow");
-    expect(ask("git branch", { verify: UNCLAIMED }).permission).toBe("allow");
+    for (const cmd of ["git tag -l 'v*'", "git branch --list 'lane/*'", "git show-ref --heads", "git branch"]) {
+      const d = ask(cmd, { verify: UNCLAIMED });
+      expect(d.permission, cmd).toBe("allow");
+      // A listing never reaches verification, so it carries no advisory either.
+      expect(d.additionalContext, cmd).toBeUndefined();
+    }
 
     // Without a listing flag the positional is a name being CREATED, and `-d` deletes: still writes.
-    expect(ask("git tag v1.0", { verify: UNCLAIMED }).permission).not.toBe("allow");
-    expect(ask("git branch -d old", { verify: UNCLAIMED }).permission).not.toBe("allow");
+    // A write in an unclaimed folder proceeds with the advisory (#368), so "still a write" is
+    // proved by the advisory being there - and by the same command being DENIED when a live record
+    // contradicts the session.
+    for (const cmd of ["git tag v1.0", "git branch -d old"]) {
+      const d = ask(cmd, { verify: UNCLAIMED });
+      expect(d.code, cmd).toBe("FOLDER_UNCLAIMED");
+      expect(d.additionalContext, cmd).toContain("FOLDER_UNCLAIMED");
+      expect(ask(cmd, { verify: MISMATCH }).permission, cmd).toBe("deny");
+    }
   });
 });
 
@@ -463,10 +504,24 @@ describe("what it must never do: persist, log, or leak the session", () => {
     expect(payload.hookSpecificOutput.permissionDecision).toBe("deny");
   });
 
-  it("says nothing at all on an allow", () => {
+  it("says nothing at all on a plain allow", () => {
     let wrote = "";
     expect(emit({ permission: "allow" }, { write: (s) => (wrote += s) })).toBe(0);
     expect(wrote).toBe("");
+  });
+
+  it("puts an advisory allow on the wire as allow + additionalContext, and still leaks nothing (#368)", () => {
+    let wrote = "";
+    const own = { ...hookInput, tool_input: { command: `printf 'x' > ${inRoot("x.txt")}` } };
+    const decision = run({ hookInput: own, env: { CLAUDE_PROJECT_DIR: ROOT }, verify: UNCLAIMED, zone: fakeZone, home: HOME });
+    expect(emit(decision, { write: (s) => (wrote += s) })).toBe(0);
+    const payload = JSON.parse(wrote);
+    expect(Object.keys(payload)).toEqual(["hookSpecificOutput"]);
+    expect(Object.keys(payload.hookSpecificOutput).sort()).toEqual(["additionalContext", "hookEventName", "permissionDecision"]);
+    expect(payload.hookSpecificOutput.permissionDecision).toBe("allow");
+    expect(payload.hookSpecificOutput.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(wrote).not.toContain("sess-secret-01");
+    expect(wrote).not.toContain("transcript");
   });
 });
 
