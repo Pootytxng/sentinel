@@ -1088,6 +1088,24 @@ describe("operands whose value the text or the environment already states are li
       expect(ask('S=$OTHER/sub; rm "$S/x"').permission).toBe("ask");
     });
 
+    // FOUND BY INDEPENDENT REVIEW (2026-09-04, second round). `S=/x rm -rf $S/y` has no `;` after
+    // the assignment: it is a PREFIX assignment, scoped to rm's environment, and POSIX expands `$S`
+    // in that same command with S's PRIOR value. Learning it judged a path the command never
+    // touches. Only a command that is nothing but assignments teaches a name.
+    it("a prefix assignment teaches nothing - the judged path must be the touched path", () => {
+      const d = ask(`S=${scratch} rm -rf $S/y`);
+      expect(d.permission).toBe("ask");
+      expect(d.reason).toContain("not knowable from the text");
+      expect(ask(`S=${scratch} T=${scratch} rm -rf $T/y`).permission).toBe("ask");
+      // The prior value is what `$S` expands to, and it stands after the prefixed command.
+      const { ops } = analyze(`S="${scratch}"; S="${fwd(SIB)}" printf x > "$S/a"; printf y > "$S/b"`, { cwd: ROOT, env: {} });
+      expect(ops.map((o) => toComparable(o.target))).toEqual([toComparable(join(SCRATCH, "a")), toComparable(join(SCRATCH, "b"))]);
+      // ...while a command that is NOTHING BUT assignments still teaches every one of them.
+      const two = analyze(`S="${scratch}" T="${scratch}/t"; printf x > "$T/a"`, { cwd: ROOT, env: {} });
+      expect(toComparable(two.ops[0].target)).toBe(toComparable(join(SCRATCH, "t", "a")));
+      expect(ask(`S="${scratch}" && printf x > "$S/a"`).permission).toBe("allow");
+    });
+
     it("single quotes are honoured — '$S' is the text, not the value", () => {
       const { ops } = analyze(`S="${scratch}"; printf x > '$S/a'`, { cwd: ROOT, env: {} });
       expect(ops[0].target.endsWith("$S/a")).toBe(true);

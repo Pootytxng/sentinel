@@ -563,8 +563,12 @@ const SPLICEABLE = /^[^\s$`;&|<>()'"\\]+$/;
  *
  * Four rules keep this from becoming a guess, and each exists because the opposite is a FALSE ALLOW:
  *   1. only a plain assignment at the head of a statement (`S=…`, `export S=…`, `local S=…`) whose
- *      value is itself fully known teaches a name; `S=$(…)`, `S=$OTHER` with OTHER unknown, `read S`
- *      and every other binding form leave the name unknown, so `rm -rf $TARGET` still asks;
+ *      value is itself fully known teaches a name - and only when that simple command is NOTHING
+ *      BUT assignments (ended by `;`, `&&`, `||`, `&`, `|`, a newline or the end of input). A PREFIX
+ *      assignment, `S=/x rm -rf $S/y`, lives in `rm`'s environment alone and POSIX expands `$S` in
+ *      that same command with S's prior value, so it teaches nothing (found by review 2026-09-04);
+ *      `S=$(…)`, `S=$OTHER` with OTHER unknown, `read S` and every other binding form leave the
+ *      name unknown, so `rm -rf $TARGET` still asks;
  *   2. only an assignment in the OUTERMOST scope teaches anything. A subshell does not export its
  *      names to its parent, so `(S=/scratch); rm $S/x` really runs `rm /x`; believing the assignment
  *      would make this checker reason about a path the command never touches. `$(…)` and backticks
@@ -593,14 +597,50 @@ export function expandKnownVars(command, { env = process.env, dialect = "posix" 
   let depth = 0; // subshell / command-substitution nesting; names are learned only at 0
   // An assignment being captured: where its value starts in `out`, so the EXPANDED value is recorded.
   let capture = null;
+  // The assignments of the CURRENT simple command, and whether that command names a command word.
+  // They are learned only when the command ends and was nothing but assignments: `S=/x rm $S/y` is
+  // a PREFIX assignment - it lives in `rm`'s environment alone, and POSIX expands `$S` in that same
+  // command with S's PRIOR value - so it teaches nothing, and the prior value (if any) stands.
+  let pending = [];
+  let commandWord = false;
+  const frames = []; // the enclosing command's {pending, commandWord} while inside a scope
   const closeCapture = () => {
     if (!capture) return;
     let value = out.slice(capture.from);
     const q = value[0];
     if ((q === '"' || q === "'") && value.length >= 2 && value.endsWith(q)) value = value.slice(1, -1);
-    if (SPLICEABLE.test(value)) known.set(capture.name, value);
-    else known.delete(capture.name);
+    pending.push({ name: capture.name, value });
     capture = null;
+  };
+  const endStatement = () => {
+    closeCapture();
+    if (!commandWord) {
+      for (const { name, value } of pending) {
+        if (SPLICEABLE.test(value)) known.set(name, value);
+        else known.delete(name);
+      }
+    }
+    pending = [];
+    commandWord = false;
+  };
+  const enterScope = () => {
+    closeCapture();
+    frames.push({ pending, commandWord });
+    pending = [];
+    commandWord = false;
+    depth += 1;
+  };
+  const leaveScope = () => {
+    closeCapture();
+    const outer = frames.pop();
+    pending = outer?.pending ?? [];
+    commandWord = outer?.commandWord ?? false;
+    depth = Math.max(0, depth - 1);
+  };
+  /** A token that is not an assignment begins here: if it is at the head, it is the command word. */
+  const beginWord = () => {
+    if (head) commandWord = true;
+    head = false;
   };
 
   while (i < src.length) {
@@ -610,20 +650,20 @@ export function expandKnownVars(command, { env = process.env, dialect = "posix" 
       const end = j === -1 ? src.length : j + 1;
       out += src.slice(i, end);
       i = end;
-      head = false;
+      beginWord();
       continue;
     }
     if (c === "\\" && i + 1 < src.length) {
       out += c + src[i + 1];
       i += 2;
-      head = false;
+      beginWord();
       continue;
     }
     if (c === "$") {
       // `$(` opens a command substitution: a scope, even inside double quotes.
       if (src[i + 1] === "(") {
-        closeCapture();
-        depth += 1;
+        beginWord();
+        enterScope();
         out += "$(";
         i += 2;
         head = true;
@@ -642,13 +682,14 @@ export function expandKnownVars(command, { env = process.env, dialect = "posix" 
       if (name !== null && known.has(name)) out += known.get(name);
       else out += src.slice(i, i + len);
       i += len;
-      head = false;
+      beginWord();
       continue;
     }
     if (c === "`") {
-      // A backtick substitution is a scope too, and it is its own opener and closer.
-      closeCapture();
-      depth += 1;
+      // A backtick substitution is a scope too, and it is its own opener and closer (it is never
+      // left, so nothing after a backtick pair is learned - the conservative direction).
+      beginWord();
+      enterScope();
       out += c;
       i += 1;
       head = true;
@@ -658,19 +699,24 @@ export function expandKnownVars(command, { env = process.env, dialect = "posix" 
       inDouble = !inDouble;
       out += c;
       i += 1;
-      head = false;
+      beginWord();
       continue;
     }
     if (!inDouble) {
-      if (capture && VALUE_END.has(c)) closeCapture();
+      if (capture && VALUE_END.has(c)) {
+        closeCapture();
+        head = true; // another assignment may follow (`S=/x T=/y`), or the command word that voids them
+      }
       if (c === "(") {
-        depth += 1;
+        enterScope();
         head = true;
       } else if (c === ")") {
-        depth = Math.max(0, depth - 1);
+        leaveScope();
         head = true;
-      } else if (STATEMENT_BREAK.has(c)) head = true;
-      else if (c === " " || c === "\t") { /* whitespace keeps the head */ }
+      } else if (STATEMENT_BREAK.has(c)) {
+        endStatement();
+        head = true;
+      } else if (c === " " || c === "\t") { /* whitespace keeps the head */ }
       else if (head && /[A-Za-z_]/.test(c)) {
         IDENT.lastIndex = i;
         const m = IDENT.exec(src);
@@ -691,13 +737,13 @@ export function expandKnownVars(command, { env = process.env, dialect = "posix" 
           head = false;
           continue;
         }
-        head = false;
-      } else head = false;
+        beginWord();
+      } else beginWord();
     }
     out += c;
     i += 1;
   }
-  closeCapture();
+  endStatement();
   return out;
 }
 
