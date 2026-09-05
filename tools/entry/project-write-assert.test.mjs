@@ -7,7 +7,10 @@
 //   * it refuses something that is not a project write (the scratchpad, %TEMP%, a sibling repo),
 //   * it refuses without saying how to get back in, or prints a cure that would itself refuse,
 //   * it grows its own copy of the identity rules and drifts away from the assert,
-//   * it quietly persists a session record from a PreToolUse hook that fires on every write.
+//   * it quietly persists a session record from a PreToolUse hook that fires on every write,
+//   * (#368, spec §8/§9) it refuses - or prompts on - a write in a merely UNCLAIMED folder, where the
+//     ruling is allow plus one line of context naming the cure; only a contradiction or a foreign
+//     checkout may still deny.
 //
 // Everything is driven through the injected seams (`verify`, `issueLookup`, fabricated hook input),
 // so no test here touches the real launch store or this machine's live verification state.
@@ -115,9 +118,15 @@ describe("what is and is not a project write", () => {
     expect(decide(write({ toolInput: { path: "c" } })).allow).toBe(true);
   });
 
-  it("refuses a NotebookEdit inside the project the same as a Write", () => {
-    const d = decide(write({ toolName: "NotebookEdit", toolInput: { notebook_path: `${ROOT}\\notes.ipynb` } }));
-    expect(d.allow).toBe(false);
+  it("answers a NotebookEdit inside the project the same as a Write", () => {
+    const contradicted = { ok: false, code: "WRITER_LIVE", reason: "belongs to another conversation" };
+    const nb = (over) => decide(write({ toolName: "NotebookEdit", toolInput: { notebook_path: `${ROOT}\\notes.ipynb` }, ...over }));
+    // A contradicted session is refused through either tool...
+    expect(nb({ verdict: contradicted }).allow).toBe(false);
+    expect(decide(write({ verdict: contradicted })).allow).toBe(false);
+    // ...and an unclaimed one proceeds with the same context line through either tool (#368).
+    expect(nb({}).allow).toBe(true);
+    expect(nb({}).additionalContext).toBe(decide(write()).additionalContext);
   });
 
   it("leaves an unprotected path outside the project root alone", () => {
@@ -159,15 +168,28 @@ describe("what is and is not a project write", () => {
     expect(d.code).toBe("TARGET_UNRESOLVED");
   });
 
-  it("emits `ask` as `ask` and everything else as `deny`", () => {
-    const wire = (target) => {
+  it("emits `ask` as `ask`, a refusal as `deny`, and an advisory as context with NO decision", () => {
+    const wire = (target, over = {}) => {
       let wrote = "";
-      emit(decide(write({ toolInput: { file_path: target } })), { write: (s) => (wrote += s) });
-      return JSON.parse(wrote).hookSpecificOutput.permissionDecision;
+      emit(decide(write({ toolInput: { file_path: target }, ...over })), { write: (s) => (wrote += s) });
+      return JSON.parse(wrote).hookSpecificOutput;
     };
-    expect(wire(`${OWNER_CONFIG}\\settings.json`)).toBe("ask");
-    expect(wire(`${SIBLING}\\src\\App.css`)).toBe("deny");
-    expect(wire(`${ROOT}\\src\\App.css`)).toBe("deny");
+    // The stricter zones are answered the same way from an unclaimed session (the fixture default)
+    // as from a verified one: the advisory code excuses nothing outside the root.
+    expect(wire(`${OWNER_CONFIG}\\settings.json`).permissionDecision).toBe("ask");
+    expect(wire(`${SIBLING}\\src\\App.css`).permissionDecision).toBe("deny");
+    // Inside the root, unclaimed: context on the wire and NO `permissionDecision` key (#368, review
+    // 2026-09-04). "allow" would skip the interactive prompt and the auto-mode classifier for the
+    // call; no decision leaves the normal permission flow in charge and still reaches the model.
+    const advisory = wire(`${ROOT}\\src\\App.css`);
+    expect(Object.keys(advisory).sort()).toEqual(["additionalContext", "hookEventName"]);
+    expect("permissionDecision" in advisory).toBe(false);
+    expect(advisory.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(advisory.permissionDecisionReason).toBeUndefined();
+    // Inside the root, contradicted: deny on the wire, no context.
+    const refused = wire(`${ROOT}\\src\\App.css`, { verdict: { ok: false, code: "WRITER_LIVE", reason: "taken" } });
+    expect(refused.permissionDecision).toBe("deny");
+    expect(refused.additionalContext).toBeUndefined();
   });
 
   it("does not mistake a sibling folder whose name STARTS with the root for a child", () => {
@@ -190,24 +212,40 @@ describe("what is and is not a project write", () => {
   });
 });
 
-describe("the refusal ships its cure — the failure mode this whole spec exists to avoid", () => {
-  it("prints a runnable adopt command with the session id already filled in", () => {
+describe("the answer ships its cure — the failure mode this whole spec exists to avoid", () => {
+  // #368 (spec §8, corrected in §9): the advisory codes PROCEED. The cure is no longer a refusal
+  // printing `adopt` (which wrote a record the board check never read - a dead cure); it is one line
+  // of `additionalContext` naming the Ownership claim the push gate enforces. Not `ask`: a hook ask
+  // is a real prompt in every mode, and this hook fires on every write.
+  it("lets an UNCLAIMED folder's write proceed and names the real cure in one line", () => {
     const d = decide(write());
-    expect(d.allow).toBe(false);
-    expect(d.reason).toContain(`node tools/entry/cli.mjs adopt --issue <n> --session ${SESSION}`);
+    expect(d.allow).toBe(true);
+    // No objection is not a decision: nothing here becomes a `permissionDecision` on the wire.
+    expect(d.permission).toBeUndefined();
+    expect(d.code).toBe("FOLDER_UNCLAIMED");
+    expect(d.additionalContext).toContain("compy-entry: FOLDER_UNCLAIMED");
+    expect(d.additionalContext).toContain("Ownership claim");
+    expect(d.additionalContext).toContain("push gate");
+    expect(d.additionalContext).not.toContain("\n");
+    expect(d.reason).toBeUndefined();
   });
 
-  it("refuses every lapsed code too, and offers the issue that is still on disk", () => {
+  it("proceeds on every lapsed code too, and names the issue that is still on disk", () => {
     for (const code of tracked.LAPSED_CODES) {
       const d = decide(write({ verdict: { ok: false, code, reason: "…" }, knownIssue: 125 }));
-      expect(d.allow, code).toBe(false);
-      expect(d.reason, code).toContain(`adopt --issue 125 --session ${SESSION}`);
+      expect(d.allow, code).toBe(true);
+      expect(d.additionalContext, code).toContain(`compy-entry: ${code}`);
+      expect(d.additionalContext, code).toContain("Ownership claim on #125");
     }
+    // ...and says "the issue" rather than inventing a number when none is on disk.
+    const d = decide(write({ verdict: { ok: false, code: [...tracked.LAPSED_CODES][0], reason: "…" }, knownIssue: null }));
+    expect(d.additionalContext).toContain("Ownership claim on the issue");
   });
 
-  it("says <id> rather than a guess when the harness sent no session id", () => {
+  it("puts no session id on the wire, and the adopt formatter says <id> rather than a guess", () => {
     const d = decide(write({ sessionId: null }));
-    expect(d.reason).toContain("--session <id>");
+    expect(d.additionalContext).not.toContain("--session");
+    expect(decide(write()).additionalContext).not.toContain(SESSION);
     expect(adoptCommand({ sessionId: null, issue: 0 })).toBe(
       "node tools/entry/cli.mjs adopt --issue <n> --session <id>",
     );
@@ -226,6 +264,26 @@ describe("the refusal ships its cure — the failure mode this whole spec exists
   it("stops on a code nobody classified — an unclassified refusal is not a pass", () => {
     const d = decide(write({ verdict: { ok: false, code: "SOMETHING_NEW", reason: "…" } }));
     expect(d.allow).toBe(false);
+    expect(d.additionalContext).toBeUndefined();
+  });
+
+  it("#368 changes ONLY the advisory codes: claimed-by-another and contradicted still deny", () => {
+    for (const code of ["WRITER_LIVE", "WRITER_UNKNOWN", "BRANCH_NOT_THE_BOARDS", "REPO_MISMATCH"]) {
+      const d = decide(write({ verdict: { ok: false, code, reason: `fixture: ${code}` } }));
+      expect(d.allow, code).toBe(false);
+      expect(d.permission ?? "deny", code).toBe("deny");
+      expect(d.reason, code).toContain(`fixture: ${code}`);
+      expect(d.additionalContext, code).toBeUndefined();
+    }
+  });
+
+  it("#368 changes nothing about a sibling checkout: an unclaimed session is still refused there", () => {
+    const d = decide(write({ toolInput: { file_path: `${SIBLING}\\src\\App.css` } })); // verdict: FOLDER_UNCLAIMED
+    expect(d.allow).toBe(false);
+    expect(d.permission).toBe("deny");
+    expect(d.code).toBe("TARGET_NOT_OURS");
+    // ...and the owner's global config still routes to a real prompt rather than proceeding.
+    expect(decide(write({ toolInput: { file_path: `${OWNER_CONFIG}\\settings.json` } })).permission).toBe("ask");
   });
 });
 
@@ -253,10 +311,26 @@ describe("the issue suggestion is read, never invented", () => {
 });
 
 describe("the wire format", () => {
-  it("says nothing at all on an allow", () => {
+  it("says nothing at all on a plain allow", () => {
     let out = "";
     expect(emit({ allow: true }, { write: (s) => (out += s) })).toBe(0);
     expect(out).toBe("");
+  });
+
+  it("emits an allow that carries context as additionalContext ALONE - no permissionDecision (#368)", () => {
+    // hooks-guide: exit 0 with hookSpecificOutput carrying only additionalContext is "no decision;
+    // the normal permission flow still applies", and the context reaches the model. A
+    // `permissionDecision: "allow"` would skip the prompt and the auto-mode classifier instead.
+    let out = "";
+    expect(emit({ allow: true, additionalContext: "compy-entry: X - proceed" }, { write: (s) => (out += s) })).toBe(0);
+    const parsed = JSON.parse(out);
+    expect(Object.keys(parsed)).toEqual(["hookSpecificOutput"]);
+    expect(Object.keys(parsed.hookSpecificOutput).sort()).toEqual(["additionalContext", "hookEventName"]);
+    expect("permissionDecision" in parsed.hookSpecificOutput).toBe(false);
+    expect(parsed.hookSpecificOutput).toEqual({
+      hookEventName: "PreToolUse",
+      additionalContext: "compy-entry: X - proceed",
+    });
   });
 
   it("emits one PreToolUse deny carrying the reason", () => {
@@ -270,19 +344,25 @@ describe("the wire format", () => {
     });
   });
 
-  it("end to end: an unverified session's write into the project is denied with its cure", () => {
+  it("end to end: an unclaimed session's write into the project proceeds with its cure as context", () => {
+    const hookInput = { tool_name: "Edit", tool_input: { file_path: `${ROOT}\\docs\\BACKLOG.md` }, cwd: ROOT, session_id: SESSION };
     const d = run({
-      hookInput: {
-        tool_name: "Edit",
-        tool_input: { file_path: `${ROOT}\\docs\\BACKLOG.md` },
-        cwd: ROOT,
-        session_id: SESSION,
-      },
+      hookInput,
       env: { CLAUDE_PROJECT_DIR: ROOT },
       verify: () => ({ ok: false, code: "FOLDER_UNCLAIMED", reason: "nothing to check" }),
+      issueLookup: () => 368,
+    });
+    expect(d.allow).toBe(true);
+    expect(d.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(d.additionalContext).toContain("Ownership claim on #368");
+    // ...while the same write from a session a live record contradicts is still refused end to end.
+    const refused = run({
+      hookInput,
+      env: { CLAUDE_PROJECT_DIR: ROOT },
+      verify: () => ({ ok: false, code: "WRITER_LIVE", reason: "another conversation holds this folder" }),
       issueLookup: () => null,
     });
-    expect(d.allow).toBe(false);
-    expect(d.reason).toContain(`--session ${SESSION}`);
+    expect(refused.allow).toBe(false);
+    expect(refused.reason).toContain("another conversation holds this folder");
   });
 });
