@@ -19,7 +19,8 @@ Work Control does **not** replace Compy's other truth domains:
 - `docs/ARCHITECTURE_LOCKS.md` — safety and architecture constraints.
 - `docs/RELEASE_STATE.md` — current build, installed, artifact, gate, and release truth.
 - `docs/product/ROADMAP.md` — product sequence derived from the Constitution and current truth.
-- `docs/BACKLOG.md` — execution ledger only; it does not create product direction or inherited priority.
+- `docs/BACKLOG.md` — records current execution status only; it does not create product direction or
+  inherited priority.
 - `docs/OWNER_ACTION_CHECKLIST.md` — owner obligations.
 - Code, commits, tests, receipts, and runtime evidence — implementation truth.
 
@@ -57,9 +58,10 @@ becomes a competing priority ledger.
 - **ChatGPT HQ** may implement through connected repository tools when that is the shortest safe path,
   or coordinate/review when another executor holds the mutation lease.
 - **Cowork** may own research, documents, copy, design judgment, and explicitly claimed write scopes.
-- **Kuya** owns only real owner gates: secrets/signing, security/system settings, distribution or
-  publication, money, destructive/irreversible choices, people/account access, and genuine product
-  forks. Routine executor selection and handoff are engineering coordination, not owner gates.
+- **Kuya** owns only real owner gates: secrets/signing, security/system settings,
+  publication/distribution, money, destructive/irreversible choices, people/account access, and
+  genuine product forks. Routine executor selection and handoff are engineering coordination, not
+  owner gates.
 
 A model/tool name is not ownership. A **mutation lease** is ownership of one bounded scope at one
 measured work location for one current slice.
@@ -116,6 +118,20 @@ This is the intended collaboration model:
 - one mutation lease for any overlapping scope;
 - lightweight lease transfer when execution should move;
 - independent review only at proof-dependent transitions.
+
+### Executor identity
+
+Every executor commits with its own git identity so the gate's `mutationAuthors` list and the
+reviewer-not-author rule can be checked against `git log` instead of trusted on assertion.
+
+- `user.name` values: `claude-code`, `codex`, `cowork-hq`; HQ commits made through the GitHub API keep
+  the account name.
+- Identity is set per worktree (`extensions.worktreeConfig` is already true in this repository:
+  `git config --worktree user.name <executor>` and matching `user.email`), or via
+  `GIT_AUTHOR_NAME` / `GIT_COMMITTER_NAME` in the executor's shell.
+- A lease record names the identity the holder commits under.
+- Commits authored as the bare desk identity (`t <t@t>`) are a defect; the next lease holder corrects
+  the configuration before its first commit.
 
 ## Claim before write
 

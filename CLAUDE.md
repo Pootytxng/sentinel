@@ -89,7 +89,8 @@ Handoffs transfer mutation authority only and should be cheap when another execu
 Exact required gates cannot be substituted; environment inability is a blocker, not a pass. Run
 `scripts/work-control-gate.mjs` before proof-dependent GitHub transitions. Independent review is a
 transition gate and must cover the exact head by a reviewer who did not author the mutation being
-approved. One worktree per writer; mutexes enforce exclusion but never grant ownership.
+approved. One worktree per writer; mutexes enforce exclusion but never grant ownership. Commit under
+the executor identity named in `docs/WORK_CONTROL.md` "Executor identity" so authorship is checkable.
 
 **Owner-bound in this repo** (in addition to `~/.claude/CLAUDE.md`):
 1. Secrets/signing: the Ed25519 private key or any secret never enters repo / `.env*` / CI.

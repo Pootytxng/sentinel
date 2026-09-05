@@ -431,3 +431,16 @@ This repair:
 The writer must now post one complete machine-readable scope claim, pass the exact scope gate, run the
 full local gate, push a new remote-reachable 40-character head, and obtain a fresh independent review
 of that exact head before any PR transition.
+
+## 19. Writer record - Cowork HQ verified takeover and reconciliation (2026-09-05)
+
+Cowork HQ took the mutation lease for this branch after a verified takeover record was posted on #369.
+Codex's uncommitted guard edit was preserved as
+`C:\Users\Kuya\code\hq-desk-fix-2026-09-04\codex-369-guard-wip-2026-09-04.patch` and the worktree was
+restored to a clean state before any write. `origin/main` `1aae437a` (PR #377) was merged in with no
+conflicts. PR #375 (`hq/dynamic-mutation-lease`) was reconciled into this branch by merge; the single
+conflicted file was this runbook, resolved so section 6 keeps both the explicit PR #370 path list and
+the "if main moved" procedure, and section 16 keeps the full historical execution record beneath the
+lease-model provenance notice. An executor identity rule was added to `docs/WORK_CONTROL.md` so the
+gate's mutation-author check binds to real commit identities. The exact head SHA of this
+reconciliation will be added by the closing step.

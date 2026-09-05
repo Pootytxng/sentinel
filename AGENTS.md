@@ -69,6 +69,8 @@ The invariant is **one active mutation lease per overlapping scope**:
 Never infer the lease holder from tool identity, chat, or an old comment. Read the current linked issue
 and actual worktree/process state.
 
+Commit under your own executor git identity as defined in `docs/WORK_CONTROL.md` "Executor identity".
+
 Before a proof-dependent GitHub transition, follow `docs/WORK_CONTROL.md` and run
 `scripts/work-control-gate.mjs`. Exact required gates cannot be substituted; environment inability is
 BLOCKED, not PASS.
@@ -103,13 +105,15 @@ Read the full locks before proposing implementation. At minimum:
 - **One mutation boundary.** Windows mutation belongs in `src-tauri/src/actions.rs` under the repo's
   established exceptions/guards; do not invent a second mutation path.
 - **Capability Exception Gate; no third-party game/process injection.** Default remains local,
-  user-mode, least-privilege, and non-invasive. No vulnerable third-party driver; no generic
-  physical-memory/MSR/PCI/device-register surface. DLL injection, game-memory access, and runtime
-  hooks remain prohibited.
+  user-mode, least-privilege and non-invasive. A Compy-shipped driver is policy-possible only through
+  the named gate (`docs/ARCHITECTURE_LOCKS.md` §1.8); none ships today, no vulnerable third-party
+  driver is allowed, and no generic physical-memory/MSR/PCI/device-register surface is allowed. DLL
+  injection, game-memory access and runtime hooks remain prohibited.
 - **AI explains/advises; it does not invent privileged mutations or own the action allowlist.**
 - **Security/system settings are owner-gated.** Diagnose read-only unless explicitly authorized.
 - **No new network / telemetry / CSP / capability / updater behavior** outside an owner-approved
-  Capability Exception record.
+  Capability Exception record. Issue #91 authorizes Tier 1 design + dark implementation; endpoint,
+  signing custody, and arming stay owner-gated.
 - **Signed remote rules remain fail-closed.** Private signing keys never enter repo, `.env*`, or CI.
 
 ## Product laws that must not be diluted
