@@ -1023,7 +1023,11 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
 const HEADER = "Blocked: this command writes into a checkout this session does not own.";
 
 /**
- * @returns {{permission: "allow"|"deny"|"ask", reason?: string, zone?: string, target?: string}}
+ * `permission: "allow"` means NO OBJECTION from this hook - the normal permission flow applies -
+ * and is never written as a decision (see `emit`). `additionalContext`, when present, is the #368
+ * advisory line for an unclaimed folder.
+ *
+ * @returns {{permission: "allow"|"deny"|"ask", reason?: string, additionalContext?: string, zone?: string, target?: string, code?: string}}
  */
 export function decideShell({
   toolName,
@@ -1076,35 +1080,44 @@ export function decideShell({
   const unverified = !verdict?.ok;
 
   const own = protectedHits.find((z) => z.zone === ZONES.OWN);
+  // The advisory line (#368, spec 2026-08-21 §8/§9): this session is unverified in a way nothing
+  // live contradicts - the folder is merely unclaimed, or the board unreadable. It is CARRIED, not
+  // decided on: every stricter check below still runs exactly as it would for a verified session
+  // (global config, unknown zone, unresolved operands, opaque verbs), so a compound command cannot
+  // ride an unclaimed folder past them. Only an outcome of "no objection" turns into context
+  // without a decision - `emit` writes `additionalContext` alone, no `permissionDecision`, so the
+  // settings rules and the auto-mode classifier still apply. Never `allow` (that would skip both
+  // for the call), and never `ask` (a real prompt in every mode, on every write).
+  let advisory = null;
   if (own && unverified) {
     const code = verdict?.code ?? "UNKNOWN";
-    // The advisory codes PROCEED (#368, spec 2026-08-21 §8/§9): nothing live contradicts this
-    // session, the folder is merely unclaimed or the board unreadable. Same answer `Write` and
-    // `Edit` give — allow, with the cure the push gate enforces delivered as one line of context.
-    // Not `ask`: a hook ask is a real prompt in every mode, and this fires on every write.
     if (UNVERIFIABLE_CODES.has(code) || LAPSED_CODES.has(code)) {
+      advisory = { code, line: advisoryContext({ code, knownIssue: verdict?.issue ?? null }) };
+    } else {
+      // A live record actively disagrees about this folder: that is positive knowledge, and deny.
       return {
-        permission: "allow",
+        permission: "deny",
         zone: own.zone,
         target: own.abs,
         code,
-        why: `advisory (${code}): the write proceeds with its cure as context`,
-        additionalContext: advisoryContext({ code, knownIssue: verdict?.issue ?? null }),
+        reason:
+          `Blocked: this session is not verified for this folder (${code}), and \`${own.op.verb}\` ` +
+          `writes inside it.\n\n${verdict?.reason ?? ""}\n\n` +
+          `This is the same refusal \`Write\` and \`Edit\` give; the shell is not a way around it.` +
+          `\n\nResolve the disagreement before changing ${own.abs}.`,
       };
     }
-    // A live record actively disagrees about this folder: that is positive knowledge, and deny.
-    return {
-      permission: "deny",
-      zone: own.zone,
-      target: own.abs,
-      code,
-      reason:
-        `Blocked: this session is not verified for this folder (${code}), and \`${own.op.verb}\` ` +
-        `writes inside it.\n\n${verdict?.reason ?? ""}\n\n` +
-        `This is the same refusal \`Write\` and \`Edit\` give; the shell is not a way around it.` +
-        `\n\nResolve the disagreement before changing ${own.abs}.`,
-    };
   }
+  /** Every decision from here on carries the advisory line when there is one. On a deny or an ask
+   *  it rides beside the reason; on "no objection" it is the whole output, and the decision names
+   *  the folder and code it is about. */
+  const carry = (decision) => {
+    if (!advisory) return decision;
+    const named = decision.permission === "allow"
+      ? { zone: own.zone, target: own.abs, code: advisory.code, why: `advisory (${advisory.code}): no objection; ${decision.why}` }
+      : {};
+    return { ...decision, ...named, additionalContext: advisory.line };
+  };
 
   const global = protectedHits.find((z) => z.zone === ZONES.GLOBAL);
   if (global) {
@@ -1117,7 +1130,7 @@ export function decideShell({
     // command, and those folders hold the settings and hooks that decide what an agent may do on
     // this machine. With no legitimate case to route, a prompt would only be a keystroke away from
     // the wrong answer, so positive knowledge of the zone is enough to refuse outright.
-    return {
+    return carry({
       permission: "deny",
       zone: global.zone,
       target: global.abs,
@@ -1127,12 +1140,12 @@ export function decideShell({
         `No repository claim covers it and no shell command in this repo needs to. If the owner ` +
         `asked for this change, hand him the exact before/after and let him apply it; that is the ` +
         `path his own settings already name.`,
-    };
+    });
   }
 
   const unknown = protectedHits.find((z) => z.zone === ZONES.UNKNOWN);
   if (unknown) {
-    return {
+    return carry({
       permission: "ask",
       zone: unknown.zone,
       target: unknown.op.target,
@@ -1140,11 +1153,11 @@ export function decideShell({
         `\`${unknown.op.verb}\` names \`${unknown.op.target}\`, and this checker could not work out ` +
         `where that lands (${unknown.why}). An unresolved path is not evidence that it is outside ` +
         `protection, so it takes the normal approval path rather than a guess.`,
-    };
+    });
   }
 
   if (unresolved.length) {
-    const asking = (u) => ({
+    const asking = (u) => carry({
       permission: "ask",
       zone: ZONES.UNKNOWN,
       reason:
@@ -1166,10 +1179,10 @@ export function decideShell({
     const cwdZone = (u) => (!u.cwdUnknown && u.cwd ? zone({ target: u.cwd, sessionRoot, cwd: u.cwd, deps: { home } }).zone : ZONES.UNKNOWN);
     const stray = unresolved.find((u) => ![ZONES.OWN, ZONES.UNPROTECTED].includes(cwdZone(u)));
     if (stray) return asking(stray);
-    return { permission: "allow", why: "every unresolved operand is bounded by a directory this session is standing in" };
+    return carry({ permission: "allow", why: "every unresolved operand is bounded by a directory this session is standing in" });
   }
 
-  return { permission: "allow", why: "nothing protected is reached" };
+  return carry({ permission: "allow", why: "nothing protected is reached" });
 }
 
 /** The IO shell. Injectable end to end, so no test touches the live verification state. */
@@ -1189,34 +1202,29 @@ export function run({ hookInput, env = process.env, verify = verifySession, zone
 }
 
 /**
- * PreToolUse wire format. A plain allow says nothing at all; an allow carrying `additionalContext`
- * (#368, the advisory codes) is written as `permissionDecision: "allow"` plus that context — the
- * one field that reaches the model on an allow. Deny and ask both carry their reason.
+ * PreToolUse wire format. `permission: "allow"` means this hook raises NO OBJECTION, and is never
+ * written as a decision: a plain one says nothing at all, and one carrying `additionalContext`
+ * (#368, the advisory codes) is written as that context ALONE - no `permissionDecision` - which the
+ * hooks reference defines as "no decision; the normal permission flow still applies", with the
+ * context delivered to the model. (`permissionDecision: "allow"` would skip the interactive prompt
+ * and the auto-mode classifier for the call, which is broader than an advisory means.) Deny and
+ * ask carry their reason, plus the advisory line beside it when there is one.
  */
 export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) {
   if (!decision) return 0;
+  const context = typeof decision.additionalContext === "string" && decision.additionalContext !== "" ? decision.additionalContext : null;
   if (decision.permission === "allow") {
-    if (typeof decision.additionalContext !== "string" || decision.additionalContext === "") return 0;
-    write(
-      `${JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "allow",
-          additionalContext: decision.additionalContext,
-        },
-      })}\n`,
-    );
+    if (!context) return 0;
+    write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: context } })}\n`);
     return 0;
   }
-  write(
-    `${JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: decision.permission,
-        permissionDecisionReason: decision.reason,
-      },
-    })}\n`,
-  );
+  const out = {
+    hookEventName: "PreToolUse",
+    permissionDecision: decision.permission,
+    permissionDecisionReason: decision.reason,
+  };
+  if (context) out.additionalContext = context;
+  write(`${JSON.stringify({ hookSpecificOutput: out })}\n`);
   return 0;
 }
 

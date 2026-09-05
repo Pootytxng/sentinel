@@ -188,16 +188,18 @@ export function decide({ toolName, toolInput, verdict, root, sessionId = null, c
 
   const code = verdict?.code ?? "UNKNOWN";
 
-  // The advisory codes PROCEED (#368, spec §8/§9). Nothing live contradicts this session; the
-  // folder is merely unclaimed, or the board could not be read this time. The write goes through
-  // and the model is told, in one line, what the push gate will require of it.
+  // The advisory codes raise NO OBJECTION (#368, spec §8/§9). Nothing live contradicts this
+  // session; the folder is merely unclaimed, or the board could not be read this time. Every
+  // stricter check (sibling, global config, unresolved target) has already run above, exactly as
+  // for a verified session. This hook makes no decision - `emit` writes the context ALONE, so the
+  // settings rules and the auto-mode classifier still apply - and the model is told, in one line,
+  // what the push gate will require of it.
   if (UNVERIFIABLE_CODES.has(code) || LAPSED_CODES.has(code)) {
     return {
       allow: true,
-      permission: "allow",
       code,
       target,
-      why: `advisory (${code}): the write proceeds with its cure as context`,
+      why: `advisory (${code}): no objection; the write proceeds with its cure as context`,
       additionalContext: advisoryContext({ code, knownIssue }),
     };
   }
@@ -257,10 +259,13 @@ export function run({
 }
 
 /**
- * The wire format PreToolUse understands. A plain allow says nothing at all; an allow that carries
- * `additionalContext` (#368, the advisory codes) is written out as `permissionDecision: "allow"`
- * plus that context — the only field that reaches the model on an allow, since
- * `permissionDecisionReason` is surfaced on deny/ask alone.
+ * The wire format PreToolUse understands. `allow: true` means this hook raises NO OBJECTION and is
+ * never written as a decision: a plain one says nothing at all, and one that carries
+ * `additionalContext` (#368, the advisory codes) is written as that context ALONE - no
+ * `permissionDecision` - which the hooks reference defines as "no decision; the normal permission
+ * flow still applies", with the context delivered to the model. (`permissionDecision: "allow"`
+ * would skip the interactive prompt and the auto-mode classifier for the call - broader than an
+ * advisory means.)
  *
  * `ask` joins `deny` here (#278). A hook `ask` is a REAL PROMPT in every permission mode, including
  * `permissions.defaultMode: "auto"`, and a hook decision overrides `permissions.allow` rules
@@ -270,15 +275,8 @@ export function run({
 export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) {
   if (decision.allow) {
     if (typeof decision.additionalContext !== "string" || decision.additionalContext === "") return 0;
-    write(
-      `${JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "allow",
-          additionalContext: decision.additionalContext,
-        },
-      })}\n`,
-    );
+    // Context ALONE: no `permissionDecision` key, so this is "no decision" to the harness.
+    write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: decision.additionalContext } })}\n`);
     return 0;
   }
   write(

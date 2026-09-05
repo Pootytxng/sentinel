@@ -168,17 +168,22 @@ describe("what is and is not a project write", () => {
     expect(d.code).toBe("TARGET_UNRESOLVED");
   });
 
-  it("emits `ask` as `ask`, a refusal as `deny`, and an advisory as `allow` with its context", () => {
+  it("emits `ask` as `ask`, a refusal as `deny`, and an advisory as context with NO decision", () => {
     const wire = (target, over = {}) => {
       let wrote = "";
       emit(decide(write({ toolInput: { file_path: target }, ...over })), { write: (s) => (wrote += s) });
       return JSON.parse(wrote).hookSpecificOutput;
     };
+    // The stricter zones are answered the same way from an unclaimed session (the fixture default)
+    // as from a verified one: the advisory code excuses nothing outside the root.
     expect(wire(`${OWNER_CONFIG}\\settings.json`).permissionDecision).toBe("ask");
     expect(wire(`${SIBLING}\\src\\App.css`).permissionDecision).toBe("deny");
-    // Inside the root, unclaimed (the fixture default): allow + context on the wire (#368).
+    // Inside the root, unclaimed: context on the wire and NO `permissionDecision` key (#368, review
+    // 2026-09-04). "allow" would skip the interactive prompt and the auto-mode classifier for the
+    // call; no decision leaves the normal permission flow in charge and still reaches the model.
     const advisory = wire(`${ROOT}\\src\\App.css`);
-    expect(advisory.permissionDecision).toBe("allow");
+    expect(Object.keys(advisory).sort()).toEqual(["additionalContext", "hookEventName"]);
+    expect("permissionDecision" in advisory).toBe(false);
     expect(advisory.additionalContext).toContain("FOLDER_UNCLAIMED");
     expect(advisory.permissionDecisionReason).toBeUndefined();
     // Inside the root, contradicted: deny on the wire, no context.
@@ -215,7 +220,8 @@ describe("the answer ships its cure — the failure mode this whole spec exists 
   it("lets an UNCLAIMED folder's write proceed and names the real cure in one line", () => {
     const d = decide(write());
     expect(d.allow).toBe(true);
-    expect(d.permission).toBe("allow");
+    // No objection is not a decision: nothing here becomes a `permissionDecision` on the wire.
+    expect(d.permission).toBeUndefined();
     expect(d.code).toBe("FOLDER_UNCLAIMED");
     expect(d.additionalContext).toContain("compy-entry: FOLDER_UNCLAIMED");
     expect(d.additionalContext).toContain("Ownership claim");
@@ -311,15 +317,18 @@ describe("the wire format", () => {
     expect(out).toBe("");
   });
 
-  it("emits an allow that carries context as allow + additionalContext, and nothing else (#368)", () => {
+  it("emits an allow that carries context as additionalContext ALONE - no permissionDecision (#368)", () => {
+    // hooks-guide: exit 0 with hookSpecificOutput carrying only additionalContext is "no decision;
+    // the normal permission flow still applies", and the context reaches the model. A
+    // `permissionDecision: "allow"` would skip the prompt and the auto-mode classifier instead.
     let out = "";
     expect(emit({ allow: true, additionalContext: "compy-entry: X - proceed" }, { write: (s) => (out += s) })).toBe(0);
     const parsed = JSON.parse(out);
     expect(Object.keys(parsed)).toEqual(["hookSpecificOutput"]);
-    expect(Object.keys(parsed.hookSpecificOutput).sort()).toEqual(["additionalContext", "hookEventName", "permissionDecision"]);
-    expect(parsed.hookSpecificOutput).toMatchObject({
+    expect(Object.keys(parsed.hookSpecificOutput).sort()).toEqual(["additionalContext", "hookEventName"]);
+    expect("permissionDecision" in parsed.hookSpecificOutput).toBe(false);
+    expect(parsed.hookSpecificOutput).toEqual({
       hookEventName: "PreToolUse",
-      permissionDecision: "allow",
       additionalContext: "compy-entry: X - proceed",
     });
   });

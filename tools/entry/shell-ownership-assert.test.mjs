@@ -126,6 +126,48 @@ describe("the proof matrix — the same target gets the same answer through the 
     expect(d.zone).toBe(ZONES.SIBLING);
   });
 
+  // FOUND BY INDEPENDENT REVIEW (2026-09-04). The advisory branch RETURNED before the global,
+  // unknown-zone and unresolved-operand checks, so a compound command that touched its own folder
+  // AND something stricter rode the unclaimed folder past them: `cp ./x.json ~/.claude/settings.json`
+  // was allow from an unclaimed session and deny from a verified one. The advisory is carried, not
+  // decided on; every stricter check runs exactly as it would for a verified session.
+  it("a compound command that also reaches the owner's global config is DENIED from an unclaimed session, as from a verified one", () => {
+    const cmd = `cp ${inRoot("x.json")} ${fwd(join(HOME_CLAUDE, "settings.json"))}`;
+    const verified = ask(cmd);
+    expect(verified.permission).toBe("deny");
+    expect(verified.zone).toBe(ZONES.GLOBAL);
+    const unclaimed = ask(cmd, { verify: UNCLAIMED });
+    expect(unclaimed.permission).toBe("deny");
+    expect(unclaimed.zone).toBe(ZONES.GLOBAL);
+    expect(unclaimed.reason).toBe(verified.reason);
+    // The advisory line rides beside the refusal; it never replaces it.
+    expect(unclaimed.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(verified.additionalContext).toBeUndefined();
+  });
+
+  it("a compound command that also names an unresolvable operand ASKS from an unclaimed session, as from a verified one", () => {
+    const cmd = `printf x > ${inRoot("own.txt")}; rm -rf $TARGET`;
+    const verified = ask(cmd);
+    expect(verified.permission).toBe("ask");
+    const unclaimed = ask(cmd, { verify: UNCLAIMED });
+    expect(unclaimed.permission).toBe("ask");
+    expect(unclaimed.zone).toBe(ZONES.UNKNOWN);
+    expect(unclaimed.reason).toBe(verified.reason);
+    expect(unclaimed.additionalContext).toContain("FOLDER_UNCLAIMED");
+    // The same for a target the checker cannot place, and for an opaque verb standing in a sibling.
+    expect(ask(`printf x > ${inRoot("own.txt")}; cd $D && rm x.txt`, { verify: UNCLAIMED }).permission).toBe("ask");
+    const opaque = `printf x > ${inRoot("own.txt")}; cd ${fwd(SIB)} && node build.mjs`;
+    expect(ask(opaque).permission).toBe("ask");
+    expect(ask(opaque, { verify: UNCLAIMED }).permission).toBe("ask");
+  });
+
+  it("the advisory is the whole answer ONLY when nothing stricter objects", () => {
+    const d = ask(`printf x > ${inRoot("own.txt")}; mkdir -p ${inRoot("notes")}`, { verify: UNCLAIMED });
+    expect(d.permission).toBe("allow");
+    expect(d.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(d.reason).toBeUndefined();
+  });
+
   it("denies a write into a SIBLING checkout even when the session IS verified", () => {
     const d = ask(`sed -i 's/a/b/' ${inSib("src/App.css")}`);
     expect(d.permission).toBe("deny");
@@ -510,18 +552,33 @@ describe("what it must never do: persist, log, or leak the session", () => {
     expect(wrote).toBe("");
   });
 
-  it("puts an advisory allow on the wire as allow + additionalContext, and still leaks nothing (#368)", () => {
+  it("puts an advisory on the wire as additionalContext ALONE - no permissionDecision - and still leaks nothing (#368)", () => {
+    // hooks-guide: exit 0 with hookSpecificOutput carrying only additionalContext is "no decision;
+    // the normal permission flow still applies", and the context reaches the model. Writing
+    // `permissionDecision: "allow"` instead would skip the interactive prompt and the auto-mode
+    // classifier for the call - broader than an advisory means (review 2026-09-04).
     let wrote = "";
     const own = { ...hookInput, tool_input: { command: `printf 'x' > ${inRoot("x.txt")}` } };
     const decision = run({ hookInput: own, env: { CLAUDE_PROJECT_DIR: ROOT }, verify: UNCLAIMED, zone: fakeZone, home: HOME });
     expect(emit(decision, { write: (s) => (wrote += s) })).toBe(0);
     const payload = JSON.parse(wrote);
     expect(Object.keys(payload)).toEqual(["hookSpecificOutput"]);
-    expect(Object.keys(payload.hookSpecificOutput).sort()).toEqual(["additionalContext", "hookEventName", "permissionDecision"]);
-    expect(payload.hookSpecificOutput.permissionDecision).toBe("allow");
+    expect(Object.keys(payload.hookSpecificOutput).sort()).toEqual(["additionalContext", "hookEventName"]);
+    expect("permissionDecision" in payload.hookSpecificOutput).toBe(false);
     expect(payload.hookSpecificOutput.additionalContext).toContain("FOLDER_UNCLAIMED");
     expect(wrote).not.toContain("sess-secret-01");
     expect(wrote).not.toContain("transcript");
+  });
+
+  it("keeps a deny that carries the advisory line as a deny on the wire, with the line beside it", () => {
+    let wrote = "";
+    const compound = { ...hookInput, tool_input: { command: `cp ${inRoot("x.json")} ${fwd(join(HOME_CLAUDE, "settings.json"))}` } };
+    const decision = run({ hookInput: compound, env: { CLAUDE_PROJECT_DIR: ROOT }, verify: UNCLAIMED, zone: fakeZone, home: HOME });
+    expect(emit(decision, { write: (s) => (wrote += s) })).toBe(0);
+    const out = JSON.parse(wrote).hookSpecificOutput;
+    expect(out.permissionDecision).toBe("deny");
+    expect(out.permissionDecisionReason).toContain("global configuration");
+    expect(out.additionalContext).toContain("FOLDER_UNCLAIMED");
   });
 });
 
