@@ -1,8 +1,9 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 
-const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+// Repository-relative paths, read from the root vitest runs in - the same shape as the sibling
+// guards in src/, and the shape the app tsconfig (no Node types) can type-check.
+const read = (path: string) => readFileSync(path, "utf8");
 
 const BOOTSTRAPS = [
   "CLAUDE.md",
