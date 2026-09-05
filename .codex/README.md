@@ -30,12 +30,13 @@ web-design-director's headless-Chrome capture cannot run here. Those agents degr
 source-only reasoning and MUST say so rather than claim a check they could not execute.
 
 To actually RUN those checks, an owner-approved VERIFICATION lane is launched SEPARATELY - it is
-NOT switchable from this file. A project-local `.codex/config.toml` cannot define OR select a
-named profile: Codex profiles live under `$CODEX_HOME` as `profile-name.config.toml` and are
-chosen with `codex --profile <name>`. The safer near-no-prompt verification starting point is
-`read-only` + `approval_policy = "on-request"` + `approvals_reviewer = "auto_review"` (commands
-surface for auto-review instead of an unrestricted bypass); a write-capable step additionally
-needs `--sandbox workspace-write`. The safe default stays read-only/never for every other run.
+NOT switchable from this file. Codex profiles are `[profiles.<name>]` tables in a config.toml,
+selected at launch with `codex --profile <name>`; this tracked file defines none and selects
+none (the guard pins its exact shape). A verification lane that needs command
+execution is therefore started with explicit runtime overrides on the command line - `--sandbox`
+(for example `--sandbox workspace-write` for a write-capable step) and `-c key=value` (for
+example `-c approval_policy=on-request`) - because the runtime layer sits ABOVE project config
+(section 3). The safe default stays read-only/never for every other run started here.
 
 ## 2. Why this exact shape (the import sync)
 

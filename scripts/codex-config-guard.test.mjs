@@ -50,11 +50,14 @@ const SETTINGS = join(repoRoot, ".claude", "settings.json");
 
 const rawLines = (toml) => toml.split(/\r?\n/);
 
-/** Non-blank lines with any trailing comment stripped. The live file has no comments (asserted
- *  below); the strip is for the fixtures in the falsification block, which still carry them. */
+/** Non-blank lines, minus whole-line comments. A line is a comment only when `#` is its first
+ *  non-space character; a `#` anywhere else may sit inside a quoted value (`"a #1"`), so it is
+ *  never stripped (review 2026-09-04). The live file has no comments (asserted below); the strip
+ *  is for the fixtures in the falsification block, which still carry them. */
+const isCommentLine = (line) => line.trimStart().startsWith("#");
 const settings = (toml) =>
   rawLines(toml)
-    .map((line) => line.replace(/(^|\s)#.*$/, "").trim())
+    .map((line) => (isCommentLine(line) ? "" : line.trim()))
     .filter(Boolean);
 
 /** The lines above the first [table] header - TOML's bare-key region. */
@@ -174,7 +177,7 @@ describe("codex config: the shape the import sync writes, pinned to its sources 
   });
 
   it("carries no comment lines - the sync strips them, so prose lives in .codex/README.md", () => {
-    const comments = rawLines(read()).filter((l) => l.trimStart().startsWith("#"));
+    const comments = rawLines(read()).filter(isCommentLine);
     expect(comments, "a comment here is erased by the next import sync; put it in .codex/README.md").toEqual([]);
   });
 
@@ -218,9 +221,18 @@ describe("codex config guard: it fires on the shapes that actually came back", (
   });
 
   it("treats a comment line as the violation it now is", () => {
-    const commented = `# removed: [mcp_servers.shadcn] used "shadcn@latest"\n${FLOOR}\n`;
-    expect(rawLines(commented).filter((l) => l.trimStart().startsWith("#"))).toHaveLength(1);
+    const commented = `# removed: [mcp_servers.shadcn] used "shadcn@latest"\n  # indented too\n${FLOOR}\n`;
+    expect(rawLines(commented).filter(isCommentLine)).toHaveLength(2);
     // ...while the settings view still ignores its text, so a comment cannot fake a setting either.
     expect(settings(commented).filter((l) => l.includes("@latest"))).toEqual([]);
+  });
+
+  it("never strips a # inside a quoted value - only a whole-line comment is a comment", () => {
+    // Review 2026-09-04: the old strip cut `(^|\s)#.*$`, so a value with a space-then-# lost its
+    // tail and a pin like "shadcn@latest" hiding after one was invisible to the @latest check.
+    const quoted = `${FLOOR}\n\n[mcp_servers.x]\ncommand = "npx"\nargs = ["pkg #1", "shadcn@latest"]\n`;
+    expect(settings(quoted)).toContain('args = ["pkg #1", "shadcn@latest"]');
+    expect(settings(quoted).filter((l) => l.includes("@latest"))).toHaveLength(1);
+    expect(rawLines(quoted).filter(isCommentLine)).toEqual([]);
   });
 });
