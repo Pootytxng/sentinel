@@ -141,6 +141,28 @@ export const IMPLEMENTATION_ACTORS = new Set([
   "cowork",
 ]);
 
+// Review-only seats are valid reviewer identities but can never be mutation authors. Human-readable
+// context and evidence stay in independentReview.reviewerNote/evidence instead of being smuggled into
+// this identity token. Aliases resolve to their executor identity so spelling cannot manufacture
+// independence (for example, cowork-hq reviewing cowork-authored mutation).
+export const REVIEWER_ONLY_IDENTITIES = new Set([
+  "frontend-ipc-contract-auditor",
+  "rust-tauri-reviewer",
+  "self-reviewer",
+  "web-design-director",
+]);
+
+const REVIEWER_ALIASES = new Map([
+  ["cowork-hq", "cowork"],
+]);
+
+export function reviewerIdentityFor(value) {
+  const token = String(value ?? "").trim().toLowerCase();
+  if (!token) return null;
+  if (IMPLEMENTATION_ACTORS.has(token) || REVIEWER_ONLY_IDENTITIES.has(token)) return token;
+  return REVIEWER_ALIASES.get(token) ?? null;
+}
+
 const REQUIRED_INSPECTION = [
   "repository",
   "remoteState",
@@ -304,24 +326,35 @@ export function evaluateWorkControl(
         warnings.push(`Independent review not practical: ${review.reason}`);
       }
     } else {
-      const reviewer = String(review?.reviewer ?? "").trim();
+      const reviewerToken = String(review?.reviewer ?? "").trim();
+      const reviewer = reviewerIdentityFor(reviewerToken);
 
       // Historical receipts explicitly named the final lease holder in review.writer. Preserve that
       // consistency check when the field exists; new multi-author receipts may omit it and rely on
       // mutationAuthors instead.
-      if (review?.writer && review.writer !== actor) {
+      if (review?.writer && String(review.writer).trim().toLowerCase() !== actor) {
         blockers.push("The independent-review writer must match the receipt actor.");
       }
 
-      if (review?.practical !== true || review?.status !== "passed" || !reviewer) {
+      if (review?.practical !== true || review?.status !== "passed" || !reviewerToken) {
         blockers.push(
           "Final review must pass with a non-writing model/reviewer whenever that review is practical.",
         );
       }
 
-      if (reviewer && authors.includes(reviewer)) {
+      if (reviewerToken && !reviewer) {
         blockers.push(
-          `Final review must pass with a non-writing model/reviewer: ${reviewer} is one of the mutation authors (${authors.join(", ")}).`,
+          `Unknown reviewer identity "${reviewerToken}". Use a declared executor or reviewer-only identity; ` +
+            "put context and evidence in reviewerNote/evidence.",
+        );
+      }
+
+      if (reviewer && authors.includes(reviewer)) {
+        const identity = reviewerToken.toLowerCase() === reviewer
+          ? reviewer
+          : `${reviewerToken} (canonical identity ${reviewer})`;
+        blockers.push(
+          `Final review must pass with a non-writing model/reviewer: ${identity} is one of the mutation authors (${authors.join(", ")}).`,
         );
       }
 

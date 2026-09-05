@@ -67,6 +67,15 @@ const TOMBSTONE_NAME =
 const RETIRED_WORD = /tombstone|superseded|historical|history|retired|pre-rebirth|bounded provenance/i;
 const TOMBSTONE_AUTHORITY_WORD =
   /canonical|source of truth|governs?|authoritative|wins over|supreme|follow[^\n]{0,40}for all product decisions/i;
+const RETIRED_HIERARCHY_PATTERNS = [
+  /\b(?:Compy )?Care is (?:the )?primary(?: product)?\b/i,
+  /\bCare[- ]primary\b/i,
+  /\boptimization(?:\/proving)? is (?:the )?(?:second|secondary)(?: specialty)?\b/i,
+  /optimization remains .* secondary to diagnosis/i,
+  /\boptimization[- ]secondary\b/i,
+  /\boptimization is (?:the )?primary(?: product)?\b/i,
+  /\b(?:Compy )?Care is (?:the )?secondary(?: product)?\b/i,
+];
 
 const activeAuthorityFiles: [string, string][] = [
   ["CLAUDE.md", claude],
@@ -112,6 +121,46 @@ const CURRENT_AUTHORITY_SIGNALS = [
 ];
 const SUPERSESSION_BANNER =
   /(?:POLICY AND )?PRODUCT DIRECTION SUPERSEDED|PRODUCT[- ]DIRECTION AUTHORITY RETIRED|HISTORICAL UI EVIDENCE[^\n]{0,80}NOT CURRENT PRODUCT AUTHORITY/i;
+
+const EXPECTED_MANIFEST_CLASSIFICATIONS = {
+  "Explicitly superseded product-direction sources": [
+    "docs/RECEIPTS_DOCTRINE.md",
+    "docs/PRODUCT_DIRECTION.md",
+    "docs/PRD.md",
+    "docs/MONETIZATION.md",
+    "docs/MONETIZATION_PLAN.md",
+    "docs/PRICING_RESEARCH.md",
+    "COMPY_OVERVIEW.md",
+  ],
+  "Current-looking mixed sources explicitly bounded by this migration": [
+    "docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md",
+    "docs/reviews/2026-07-16-owner-directive-intelligence-platform.md",
+    "docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md",
+    "docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md",
+    "docs/decisions/2026-08-18-outbound-capability-expansion.md",
+  ],
+  "Semantic authority-audit corpus": [
+    "docs/superpowers/specs/2026-06-01-experience-design-system-pass-design.md",
+    "docs/superpowers/specs/2026-06-05-knowledge-layer-chapter.md",
+    "docs/superpowers/specs/2026-06-08-tuning-guides-stability-measurement.md",
+    "docs/superpowers/specs/2026-06-12-doctrine-voice-baptism-design-refresh.md",
+    "docs/superpowers/specs/2026-06-12-monetization-transformation-plan.md",
+    "docs/superpowers/specs/2026-06-12-R5-unattended-marathon.md",
+    "docs/superpowers/specs/2026-06-12-receipts-marathon-R3.md",
+    "docs/superpowers/specs/2026-06-12-waitlist-wiring.md",
+    "docs/superpowers/specs/2026-06-15-monetization-model-proposal.md",
+    "docs/superpowers/specs/2026-07-02-external-audit-2-council.md",
+    "docs/superpowers/specs/2026-07-02-full-tidy-directive.md",
+    "docs/superpowers/specs/2026-07-05-lab-bento-checkup.md",
+    "docs/superpowers/specs/2026-07-05-lab-linear-guided-bench.md",
+    "docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md",
+    "docs/superpowers/specs/2026-07-06-firstcheck-monitor-mvp-train.md",
+    "docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md",
+    "docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md",
+    "docs/superpowers/plans/2026-08-20-comprehensibility-sweep.md",
+    "docs/reviews/2026-07-15-cc-brief-panel-review-execution.md",
+  ],
+};
 
 const EXPECTED_CURRENT_LOOKING = [
   "docs/decisions/2026-08-09-capability-exception-gate.md",
@@ -214,39 +263,93 @@ function datedPathIsPreRebirth(path: string): boolean {
   return Boolean(match && match[1] < PRE_REBIRTH_CUTOFF);
 }
 
-function manifestClassifies(path: string, manifest = supersessionManifest): boolean {
-  // Only these sections assign dispositions. Mentions elsewhere cannot classify a document.
-  const tableSections = new Set([
-    "Explicitly superseded product-direction sources",
-    "Current-looking mixed sources explicitly bounded by this migration",
+type ManifestClassifications = {
+  "Explicitly superseded product-direction sources": string[];
+  "Current-looking mixed sources explicitly bounded by this migration": string[];
+  "Semantic authority-audit corpus": string[];
+};
+
+export function collectStructuredManifestClassifications(
+  manifest = supersessionManifest,
+): ManifestClassifications {
+  const classifications: ManifestClassifications = {
+    "Explicitly superseded product-direction sources": [],
+    "Current-looking mixed sources explicitly bounded by this migration": [],
+    "Semantic authority-audit corpus": [],
+  };
+  const tableHeaders = new Map([
+    ["Explicitly superseded product-direction sources", "Pre-rebirth source|Former role|Rebirth disposition"],
+    ["Current-looking mixed sources explicitly bounded by this migration", "Source|Retained value|Superseded authority"],
   ]);
   let section = "";
-  let classifiedTable = false;
+  let tableState: "outside" | "needs-separator" | "rows" = "outside";
+  let fenceMarker = "";
   for (const line of manifest.split(/\r?\n/)) {
+    const fence = line.match(/^\s*(`{3,}|~{3,})/);
+    if (fence) {
+      const marker = fence[1][0];
+      if (!fenceMarker) fenceMarker = marker;
+      else if (fenceMarker === marker) fenceMarker = "";
+      tableState = "outside";
+      continue;
+    }
+    if (fenceMarker) continue;
+
     const heading = line.match(/^#{1,6}\s+(.+?)\s*$/);
     if (heading) {
       section = heading[1];
-      classifiedTable = false;
+      tableState = "outside";
       continue;
     }
-    if (section === "Semantic authority-audit corpus" && line.trim() === "- `" + path + "`") {
-      return true;
-    }
-    if (!tableSections.has(section)) continue;
-    const cells = line.trim().split("|").slice(1, -1).map((cell) => cell.trim());
-    if (!line.trim().startsWith("|") || !line.trim().endsWith("|")) {
-      if (line.trim()) classifiedTable = false;
+    if (section === "Semantic authority-audit corpus") {
+      const bullet = line.trim().match(/^- `([^`]+)`$/);
+      if (bullet) classifications[section].push(bullet[1]);
       continue;
     }
-    if (cells.join("|") === "Pre-rebirth source|Former role|Rebirth disposition" ||
-        cells.join("|") === "Source|Retained value|Superseded authority") {
-      classifiedTable = true;
+    const expectedHeader = tableHeaders.get(section);
+    if (!expectedHeader) {
+      tableState = "outside";
       continue;
     }
-    if (classifiedTable && cells.length === 3 && cells[0] === "`" + path + "`" &&
-        cells.slice(1).every((cell) => cell.length > 0 && !/^[-:]+$/.test(cell))) return true;
+
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (tableState !== "outside") tableState = "outside";
+      continue;
+    }
+    if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) {
+      tableState = "outside";
+      continue;
+    }
+
+    const cells = trimmed.split("|").slice(1, -1).map((cell) => cell.trim());
+    if (cells.join("|") === expectedHeader) {
+      tableState = "needs-separator";
+      continue;
+    }
+    if (tableState === "needs-separator" && cells.length === 3 &&
+        cells.every((cell) => /^:?-{3,}:?$/.test(cell))) {
+      tableState = "rows";
+      continue;
+    }
+    if (tableState !== "rows") {
+      tableState = "outside";
+      continue;
+    }
+
+    const pathCell = cells[0]?.match(/^`([^`]+)`$/);
+    const completeDisposition = cells.length === 3 &&
+      cells.slice(1).every((cell) => cell.length > 0 && !/^[-:]+$/.test(cell));
+    if (pathCell && completeDisposition) {
+      classifications[section as keyof ManifestClassifications].push(pathCell[1]);
+    }
   }
-  return false;
+  return classifications;
+}
+
+function manifestClassifies(path: string, manifest = supersessionManifest): boolean {
+  return Object.values(collectStructuredManifestClassifications(manifest))
+    .some((paths) => paths.includes(path));
 }
 
 function hasTopLevelConstitutionBoundary(body: string): boolean {
@@ -282,6 +385,20 @@ export function findUndisclosedClassifiedDirectiveCitations(
   return offenders;
 }
 
+export function findLiveRetiredHierarchyEntrypoints(
+  snapshot: Record<string, string>,
+): string[] {
+  return Object.entries(snapshot)
+    .filter(([, body]) => body
+      .split(/\r?\n\s*\r?\n/)
+      .some((paragraph) =>
+        RETIRED_HIERARCHY_PATTERNS.some((pattern) => pattern.test(paragraph)) &&
+        !RETIRED_WORD.test(paragraph),
+      ))
+    .map(([path]) => path)
+    .sort();
+}
+
 describe("structured manifest classification (#379)", () => {
   const path = "docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md";
   const table = "## Current-looking mixed sources explicitly bounded by this migration\n\n" +
@@ -296,6 +413,12 @@ describe("structured manifest classification (#379)", () => {
     "## Unrelated table\n| Source | Retained value | Superseded authority |\n|---|---|---|\n" + row,
     "## Semantic authority-audit corpus\n- `" + path + "` remains unclassified",
     "## Semantic authority-audit corpus\n### Pending\n- `" + path + "`",
+    "## Current-looking mixed sources explicitly bounded by this migration\n\n```md\n" +
+      "| Source | Retained value | Superseded authority |\n|---|---|---|\n" + row + "\n```",
+    "## Current-looking mixed sources explicitly bounded by this migration\n\n" +
+      "| Source | Retained value | Superseded authority |\n" + row,
+    table + "\n" + row,
+    "## Semantic authority-audit corpus\n\n```md\n- `" + path + "`\n```",
   ])("does not classify from incidental or incomplete text: %s", (manifest) => {
     expect(manifestClassifies(path, manifest)).toBe(false);
   });
@@ -304,6 +427,13 @@ describe("structured manifest classification (#379)", () => {
     expect(manifestClassifies(path, table + row)).toBe(true);
     expect(manifestClassifies(path, "### Semantic authority-audit corpus\n\n- `" + path + "`\n")).toBe(true);
     expect(manifestClassifies(path + ".other", table + row)).toBe(false);
+  });
+
+  // bug->guard #382: synthetic parser controls cannot prove the live manifest is still classified.
+  it("classifies the real manifest's exact 7 + 5 + 19 disposition set", () => {
+    expect(collectStructuredManifestClassifications(supersessionManifest)).toEqual(
+      EXPECTED_MANIFEST_CLASSIFICATIONS,
+    );
   });
 });
 
@@ -418,18 +548,22 @@ describe("Compy product constitution authority", () => {
   });
 
   it("active authority files cannot restore the retired Care-vs-Performance hierarchy", () => {
-    const forbidden = [
-      /Care is (?:the )?primary product/i,
-      /Compy Care is (?:the )?primary product/i,
-      /optimization(?:\/proving)? is (?:the )?(?:second|secondary) specialty/i,
-      /optimization remains .* secondary to diagnosis/i,
-    ];
+    expect(findLiveRetiredHierarchyEntrypoints(Object.fromEntries(activeAuthorityFiles))).toEqual([]);
+  });
 
-    for (const [path, body] of activeAuthorityFiles) {
-      for (const pattern of forbidden) {
-        expect(body, `${path} restored retired product hierarchy: ${pattern}`).not.toMatch(pattern);
-      }
-    }
+  it("dynamically checks every skill and agent entrypoint for a live retired product hierarchy", () => {
+    const paths = [".claude/skills", ".claude/agents", ".codex/agents"]
+      .flatMap(collectAgentEntrypoints);
+    const snapshot = Object.fromEntries(paths.map((path) => [path, read(path)]));
+    expect(findLiveRetiredHierarchyEntrypoints(snapshot)).toEqual([]);
+  });
+
+  it("the dynamic entrypoint hierarchy scan is armed and allows explicit retirement history", () => {
+    expect(findLiveRetiredHierarchyEntrypoints({
+      ".claude/skills/new-skill/SKILL.md": "Care is primary; optimization is secondary.",
+      ".codex/agents/reviewer.toml":
+        "Historical pre-rebirth doctrine said Care-primary / optimization-secondary; it is retired.",
+    })).toEqual([".claude/skills/new-skill/SKILL.md"]);
   });
 
   it("active authority cannot make the Receipts Doctrine canonical again", () => {

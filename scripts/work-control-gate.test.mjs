@@ -149,6 +149,65 @@ describe("proof-gated GitHub transitions", () => {
     expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
   });
 
+  // bug->guard #382: reviewer spelling, aliases, or prose cannot manufacture independence.
+  it.each(
+    ["claude-code", "codex", "chatgpt-hq", "cowork"].flatMap((author) => [
+      [author, author],
+      [author.toUpperCase(), author],
+      [` ${author} `, author],
+    ]),
+  )("blocks reviewer spelling %j when %s authored the mutation", (reviewer, author) => {
+    const result = evaluateWorkControl(record({
+      actor: author,
+      mutationAuthors: [author],
+      independentReview: { practical: true, reviewer, writer: author, status: "passed", head: HEAD },
+    }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
+  });
+
+  it("treats cowork-hq as the cowork executor identity, not an independent alias", () => {
+    const result = evaluateWorkControl(record({
+      actor: "cowork",
+      mutationAuthors: ["codex", "cowork"],
+      independentReview: {
+        practical: true,
+        reviewer: " COWORK-HQ ",
+        writer: "cowork",
+        status: "passed",
+        head: HEAD,
+      },
+    }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
+  });
+
+  it.each(["mystery-reviewer", "codex (fresh read-only context)"])(
+    "rejects undeclared reviewer identity %j",
+    (reviewer) => {
+      const result = evaluateWorkControl(record({
+        independentReview: { practical: true, reviewer, writer: "codex", status: "passed", head: HEAD },
+      }));
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/reviewer identity/i);
+    },
+  );
+
+  it("accepts a declared reviewer-only identity and retains separate context evidence", () => {
+    const result = evaluateWorkControl(record({
+      independentReview: {
+        practical: true,
+        reviewer: "rust-tauri-reviewer",
+        reviewerNote: "fresh read-only context that authored no mutation",
+        evidence: "https://github.com/Pootytxng/sentinel/pull/1#pullrequestreview-1",
+        writer: "codex",
+        status: "passed",
+        head: HEAD,
+      },
+    }));
+    expect(result.decision).toBe("PASS");
+  });
+
   // bug->guard #379: a supplied author list must never erase the current lease holder.
   it.each([undefined, "cowork"])("blocks omitted-actor self-review with writer %s", (writer) => {
     const result = evaluateWorkControl(record({
