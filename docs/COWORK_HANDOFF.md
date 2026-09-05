@@ -15,9 +15,10 @@
   pre-push gate, WORK_CONTROL claims), Cowork may implement, commit, merge, ship and publish. It
   has done so (PRs #114–#119, published v0.9.15/v0.9.17). Cowork keeps cross-session state in the
   HQ project ledger (`claude/HQ_DECISION_LEDGER.md`, Cowork project `019ff3cc…`).
-- **CC ("Claude Code" in VS Code)** — the DEFAULT implementation owner: git, compiling, tests,
-  Windows verification, installers. Default, not exclusive — either lane writes only under a
-  WORK_CONTROL claim, one writer per folder/scope.
+- **CC ("Claude Code" in VS Code)** - an eligible executor, often the best fit for git, compiling,
+  tests, Windows verification, installers. No permanent implementation owner: any executor (CC,
+  Codex, Cowork, ChatGPT HQ) writes only under a current mutation lease (`docs/WORK_CONTROL.md`),
+  one writer per overlapping scope.
 - **Kuya (owner)** — owns money, brand (product name, logo, price presentation), people (tester
   invites/sends), and anything irreversible. He drives; he decides final execution order.
   **Aesthetic taste is NOT his to carry** — agents decide it and show him a before/after to veto

@@ -131,6 +131,10 @@ reviewer-not-author rule can be checked against `git log` instead of trusted on 
   `git config --worktree user.name <executor>` and matching `user.email`), or via
   `GIT_AUTHOR_NAME` / `GIT_COMMITTER_NAME` in the executor's shell.
 - A lease record names the identity the holder commits under.
+- Claude Code sets this automatically for linked worktrees at SessionStart
+  (`.claude/hooks/session-root-assert.mjs`, never the main checkout, never over an existing
+  `--worktree` identity); Codex receives it from the global `~/.codex/config.toml` shell
+  environment; Cowork HQ sets it per worktree by hand.
 - Commits authored as the bare desk identity (`t <t@t>`) are a defect; the next lease holder corrects
   the configuration before its first commit.
 

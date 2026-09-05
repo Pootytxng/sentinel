@@ -20,7 +20,8 @@
 //     saying two folders match while the other says they differ is precisely a wrong root passing
 //     for a right one. This pins the two copies together.
 
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -355,5 +356,113 @@ describe("the board read is not truncated (#368)", () => {
     const full = JSON.stringify({ items: Array.from({ length: 136 }, (_, i) => item(i + 1)), totalCount: 136 });
     const rows = tracked.fetchBoardRows({ run: () => full });
     expect(rows.some((r) => r.issue === 136)).toBe(true);
+  });
+});
+
+// docs/WORK_CONTROL.md "Executor identity" - every executor commits under its own name so the gate's
+// mutationAuthors and the reviewer-not-author rule can be read off `git log`. Claude Code sets its
+// own at SessionStart, per LINKED worktree, and only where nothing is set yet. The fixtures are real
+// (`git init`, a real `git worktree add`, real `git config --worktree`) - the rule being guarded is
+// about what git actually stores, so a mock would only reproduce the assumption.
+describe("executor identity - the hook sets claude-code on a linked worktree it opens, and nowhere else", () => {
+  const git = (cwd, ...args) =>
+    execFileSync("git", ["-c", "user.name=guard", "-c", "user.email=guard@test", ...args], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  const worktreeName = (dir) => {
+    try {
+      return git(dir, "config", "--worktree", "user.name");
+    } catch {
+      return null; // exit 1: unset
+    }
+  };
+
+  let bed = null;
+  let host = null;
+  const setup = () => {
+    if (bed) return;
+    bed = mkdtempSync(join(tmpdir(), "compy-entry-identity-"));
+    host = join(bed, "host");
+    execFileSync("git", ["init", "-q", "-b", "main", host], { stdio: "ignore" });
+    git(host, "config", "extensions.worktreeConfig", "true");
+    writeFileSync(join(host, "README.md"), "fixture\n");
+    git(host, "add", "-A");
+    git(host, "commit", "-q", "-m", "fixture");
+  };
+  afterAll(() => {
+    if (!bed) return;
+    try {
+      rmSync(bed, { recursive: true, force: true });
+    } catch {
+      /* a locked file on Windows must not fail the suite */
+    }
+  });
+
+  it("(a) a linked worktree with no --worktree identity gets claude-code, and says so in one line", () => {
+    setup();
+    const linked = join(bed, "linked-fresh");
+    git(host, "worktree", "add", "-q", "-b", "lane/fresh", linked);
+    expect(worktreeName(linked)).toBeNull();
+
+    const r = tracked.ensureWorktreeIdentity(linked);
+    expect(r.action).toBe("set");
+    expect(r.line).toBe("compy-entry: worktree identity set to claude-code");
+    expect(worktreeName(linked)).toBe(tracked.WORKTREE_IDENTITY.name);
+    expect(git(linked, "config", "--worktree", "user.email")).toBe(tracked.WORKTREE_IDENTITY.email);
+    // Per worktree, not per repository: the host's own config did not gain it.
+    expect(worktreeName(host)).toBeNull();
+    expect(() => git(host, "config", "--local", "user.name")).toThrow();
+    // Idempotent: the second session in the same folder keeps what the first set.
+    expect(tracked.ensureWorktreeIdentity(linked).action).toBe("kept");
+  }, 30_000);
+
+  it("(b) a linked worktree that already carries a --worktree identity is left exactly as it was", () => {
+    setup();
+    const linked = join(bed, "linked-owned");
+    git(host, "worktree", "add", "-q", "-b", "lane/owned", linked);
+    git(linked, "config", "--worktree", "user.name", "codex");
+    git(linked, "config", "--worktree", "user.email", "codex@desk.local");
+
+    const r = tracked.ensureWorktreeIdentity(linked);
+    expect(r.action).toBe("kept");
+    expect(r.line).toBeNull();
+    expect(worktreeName(linked)).toBe("codex");
+    expect(git(linked, "config", "--worktree", "user.email")).toBe("codex@desk.local");
+  }, 30_000);
+
+  it("(c) the main checkout is never touched, even with nothing set", () => {
+    setup();
+    expect(worktreeName(host)).toBeNull();
+    const r = tracked.ensureWorktreeIdentity(host);
+    expect(r.action).toBe("main");
+    expect(r.line).toBeNull();
+    expect(worktreeName(host)).toBeNull();
+    expect(() => git(host, "config", "--local", "user.name")).toThrow();
+  }, 30_000);
+
+  it("a folder that is not a checkout, or no root at all, is skipped without a line - never a throw", () => {
+    setup();
+    const plain = mkdtempSync(join(bed, "not-a-repo-"));
+    // Keep git's discovery from walking up into an ancestor repository (the temp dir is not one, but
+    // the rule is "skip quietly", so it must hold wherever the temp dir happens to be).
+    expect(tracked.ensureWorktreeIdentity(plain, { run: () => ({ ok: false, out: "fatal: not a git repository", status: 128 }) }).action).toBe("skipped");
+    expect(tracked.ensureWorktreeIdentity(null).action).toBe("skipped");
+    expect(tracked.ensureWorktreeIdentity("").action).toBe("skipped");
+  });
+
+  it("a git failure past the checkout test is one logged line, not a write and not a throw", () => {
+    const calls = [];
+    const run = (_root, args) => {
+      calls.push(args.join(" "));
+      if (args[0] === "rev-parse") return { ok: true, out: args[1] === "--git-dir" ? "C:\\host\\.git\\worktrees\\x" : "C:\\host\\.git", status: 0 };
+      // `git config --worktree` without extensions.worktreeConfig: exit 128, not the "unset" exit 1.
+      return { ok: false, out: "fatal: --worktree cannot be used with multiple working trees", status: 128 };
+    };
+    const r = tracked.ensureWorktreeIdentity("C:\\host\\x", { run });
+    expect(r.action).toBe("failed");
+    expect(r.line).toMatch(/^compy-entry: worktree identity not set - fatal: --worktree/);
+    expect(calls.filter((c) => c.startsWith("config --worktree user.name claude-code"))).toEqual([]);
   });
 });
