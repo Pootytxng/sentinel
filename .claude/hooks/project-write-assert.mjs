@@ -188,7 +188,7 @@ export function decide({ toolName, toolInput, verdict, root, sessionId = null, c
 
   const code = verdict?.code ?? "UNKNOWN";
 
-  // The advisory codes raise NO OBJECTION (#368, spec §8/§9). Nothing live contradicts this
+  // The advisory codes raise NO OBJECTION (#368, spec sections 8/9). Nothing live contradicts this
   // session; the folder is merely unclaimed, or the board could not be read this time. Every
   // stricter check (sibling, global config, unresolved target) has already run above, exactly as
   // for a verified session. This hook makes no decision - `emit` writes the context ALONE, so the

@@ -226,7 +226,7 @@ describe("the assert fails closed when a FACT disagrees", () => {
       sessionId: "11111111-2222-3333-4444-555555555555",
     });
     expect(d.allow).toBe(true);
-    // No objection, not a decision (spec §9 as corrected 2026-09-04): the wire carries the context
+    // No objection, not a decision (spec section 9 as corrected 2026-09-04): the wire carries the context
     // and NO `permissionDecision`, so the normal permission flow still applies to the call.
     expect(d.permission).toBeUndefined();
     let wrote = "";

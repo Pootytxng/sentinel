@@ -567,7 +567,7 @@ const SPLICEABLE = /^[^\s$`;&|<>()'"\\]+$/;
  *      BUT assignments (ended by `;`, `&&`, `||`, `&`, `|`, a newline or the end of input). A PREFIX
  *      assignment, `S=/x rm -rf $S/y`, lives in `rm`'s environment alone and POSIX expands `$S` in
  *      that same command with S's prior value, so it teaches nothing (found by review 2026-09-04);
- *      `S=$(…)`, `S=$OTHER` with OTHER unknown, `read S` and every other binding form leave the
+ *      `S=$(...)`, `S=$OTHER` with OTHER unknown, `read S` and every other binding form leave the
  *      name unknown, so `rm -rf $TARGET` still asks;
  *   2. only an assignment in the OUTERMOST scope teaches anything. A subshell does not export its
  *      names to its parent, so `(S=/scratch); rm $S/x` really runs `rm /x`; believing the assignment
@@ -1080,7 +1080,7 @@ export function decideShell({
   const unverified = !verdict?.ok;
 
   const own = protectedHits.find((z) => z.zone === ZONES.OWN);
-  // The advisory line (#368, spec 2026-08-21 §8/§9): this session is unverified in a way nothing
+  // The advisory line (#368, spec 2026-08-21 sections 8/9): this session is unverified in a way nothing
   // live contradicts - the folder is merely unclaimed, or the board unreadable. It is CARRIED, not
   // decided on: every stricter check below still runs exactly as it would for a verified session
   // (global config, unknown zone, unresolved operands, opaque verbs), so a compound command cannot
