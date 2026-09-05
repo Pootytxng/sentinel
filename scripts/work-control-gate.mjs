@@ -168,7 +168,7 @@ export function mutationAuthorsFor(record) {
   const supplied = Array.isArray(record?.mutationAuthors)
     ? record.mutationAuthors.map((x) => String(x).trim()).filter(Boolean)
     : [];
-  return uniq(supplied.length ? supplied : [String(record?.actor ?? "").trim()].filter(Boolean));
+  return uniq([String(record?.actor ?? "").trim(), ...supplied].filter(Boolean));
 }
 
 export function evaluateWorkControl(
@@ -217,6 +217,14 @@ export function evaluateWorkControl(
     }
   }
 
+  // A declaration supplements the known actor; it cannot remove that actor from review checks.
+  if (record?.mutationAuthors !== undefined) {
+    if (!Array.isArray(record.mutationAuthors)) {
+      blockers.push("mutationAuthors must be an array when supplied.");
+    } else if (!record.mutationAuthors.some((author) => String(author).trim() === actor)) {
+      blockers.push("mutationAuthors must include the receipt actor when supplied.");
+    }
+  }
   const authors = mutationAuthorsFor(record);
   for (const author of authors) {
     if (!IMPLEMENTATION_ACTORS.has(author)) {

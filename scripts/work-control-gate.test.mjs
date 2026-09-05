@@ -149,6 +149,41 @@ describe("proof-gated GitHub transitions", () => {
     expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
   });
 
+  // bug->guard #379: a supplied author list must never erase the current lease holder.
+  it.each([undefined, "cowork"])("blocks omitted-actor self-review with writer %s", (writer) => {
+    const result = evaluateWorkControl(record({
+      actor: "cowork",
+      mutationAuthors: ["codex"],
+      independentReview: { practical: true, reviewer: "cowork", writer, status: "passed", head: HEAD },
+    }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
+  });
+
+  it("rejects an explicit author list that omits the receipt actor even with an independent reviewer", () => {
+    const result = evaluateWorkControl(record({
+      actor: "cowork", mutationAuthors: ["codex"],
+      independentReview: { practical: true, reviewer: "claude-code", status: "passed", head: HEAD },
+    }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/mutationAuthors.*receipt actor/i);
+  });
+
+  it.each(["codex", null, {}])("rejects malformed declared mutationAuthors %j", (mutationAuthors) => {
+    expect(evaluateWorkControl(record({ mutationAuthors })).decision).toBe("BLOCKED");
+  });
+
+  it("retains every declared earlier writer and permits a separate final reviewer", () => {
+    const receipt = record({
+      actor: "cowork", mutationAuthors: [" codex ", "cowork", "codex"],
+      independentReview: { practical: true, reviewer: "claude-code", status: "passed", head: HEAD },
+    });
+    expect(evaluateWorkControl(receipt).decision).toBe("PASS");
+    expect(evaluateWorkControl({ ...receipt, independentReview: {
+      ...receipt.independentReview, reviewer: "codex",
+    }}).decision).toBe("BLOCKED");
+  });
+
   it("binds the independent review to the actor who actually wrote the change", () => {
     const result = evaluateWorkControl(
       record({
