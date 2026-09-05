@@ -19,21 +19,23 @@
 //      worktree of this repository is another lane's checkout, and `~/.claude` is the owner's
 //      configuration. Both were allowed by the same line. `target-ownership.mjs` answers where a
 //      path lives; this file only decides what to do about it.
-//   3. THE REFUSAL CARRIES A RUNNABLE CURE. `node tools/entry/cli.mjs adopt --issue <n> --session
-//      <id>` with the id already filled in from the hook input, because a CLI run from Bash cannot
-//      know which conversation it belongs to and guessing is how the wrong conversation adopts a
-//      folder.
+//   3. THE ANSWER CARRIES ITS CURE. An advisory outcome proceeds with one line of
+//      `additionalContext` naming the real cure (an Ownership claim on the issue, which the push
+//      gate enforces); a refusal carries the assert's own reason. Nothing here is a closed window.
 //   4. IT DISTINGUISHES "NEVER VERIFIED" FROM "DISAGREES". The advisory codes (#125 step 1's
-//      UNVERIFIABLE + LAPSED split) mean nothing live contradicts this session — adoption is the
-//      honest cure and it is offered. A STOP code means a live record actively disagrees about the
-//      folder, branch, repo or conversation; adoption would refuse that too (ADOPT_FOLDER_CLAIMED),
-//      so offering it would be advice that cannot work. Those get the assert's own reason instead.
+//      UNVERIFIABLE + LAPSED split) mean nothing live contradicts this session, and since the
+//      2026-09-03 ruling (#368, spec §8/§9) they PROCEED: `permissionDecision: "allow"` plus the
+//      cure as `additionalContext`. A STOP code means a live record actively disagrees about the
+//      folder, branch, repo or conversation; that stays `deny` with the assert's own reason.
 //
-// LAPSED IS REFUSED LIKE AN UNCLAIMED FOLDER, deliberately. Since #216 there is exactly one lapsed
-// code — BOARD_UNREACHABLE — and it means the fact that would answer "what is this folder for" could
-// not be read this time. A session cannot re-verify itself out of that: the answer is on the board,
-// not in anything local, so it gets the same refusal as a folder nothing claims. The kindness that
-// survives is the cure line, which is printed with the folder's issue number already in it when a
+// WHY ALLOW + CONTEXT, NOT ASK. Every desktop-app session starts in an unclaimed worktree, and the
+// owner ruled "never again" to writes refused there. §8 first specified `ask` on the premise that
+// `permissions.defaultMode: "auto"` would route it to allow; that premise is false — a hook `ask`
+// is a real prompt in every mode (code.claude.com/docs/en/hooks), so it would have prompted on
+// EVERY write. The ruling's intent ("an unclaimed session proceeds") is therefore implemented as
+// allow, with the cure delivered as context instead of a wall. LAPSED (BOARD_UNREACHABLE, the one
+// lapsed code since #216) is treated the same way: the fact that would answer "what is this folder
+// for" could not be read this time, and the folder's issue number is named in the line when a
 // previous read left one on disk.
 //
 // IT NEVER PERSISTS. `verifySession({persist: false})`. This hook runs on every single write; it is
@@ -42,7 +44,8 @@
 //
 // FAILS OPEN on unreadable input or an unrecognized tool shape: a guard that stops work because it
 // could not parse its own stdin is a worse outage than the one it prevents. It fails CLOSED on the
-// thing it is for — an identifiable project write from a session that is not verified.
+// thing it is for — an identifiable project write from a session a live record contradicts, or
+// into a checkout this session does not own.
 //
 // This file is NOT self-contained and does not need to be: tracked-hooks.test.mjs applies that rule
 // to session-root-assert.mjs alone (it is copied on its own into folders that predate tools/entry).
@@ -94,13 +97,28 @@ export function isInsideRoot(target, root, { cwd = null } = {}) {
   return samePath(abs, root) || a.startsWith(`${r}\\`);
 }
 
-/** The cure, with the conversation id already in it. `<id>` only when the harness sent none. */
+/**
+ * The adopt line, with the conversation id already in it. `<id>` only when the harness sent none.
+ * No longer printed by `decide` (#368: the advisory codes proceed, and `adopt` writes a local record
+ * the board check never reads); kept as the one formatter for that line so nothing re-derives it.
+ */
 export function adoptCommand({ sessionId, issue = null }) {
   const issuePart = Number.isInteger(Number(issue)) && Number(issue) > 0 ? String(Number(issue)) : "<n>";
   return `node tools/entry/cli.mjs adopt --issue ${issuePart} --session ${sessionId || "<id>"}`;
 }
 
-const HEADER = "Blocked: this session is not verified for this folder, and this is a project write.";
+/**
+ * The one line an advisory outcome carries into the model's context (#368). It names the cure the
+ * push gate actually enforces — an Ownership claim on the issue — and the issue itself when a
+ * previous read left its number on disk. One line, because it rides along on every write.
+ */
+export function advisoryContext({ code, knownIssue = null }) {
+  const what = UNVERIFIABLE_CODES.has(code)
+    ? "this folder has no Work Control claim"
+    : "Work Control could not be read, so this folder's claim is unverified";
+  const issue = Number.isInteger(Number(knownIssue)) && Number(knownIssue) > 0 ? `#${Number(knownIssue)}` : "the issue";
+  return `compy-entry: ${code} - ${what}; writes proceed, but post an Ownership claim on ${issue} before pushing (the push gate enforces it).`;
+}
 
 /**
  * The whole decision, with every fact injected — no disk, no stdin. The shell below gathers.
@@ -112,8 +130,8 @@ const HEADER = "Blocked: this session is not verified for this folder, and this 
  * @param {string} f.root           the resolved session root
  * @param {string|null} f.sessionId from the hook input
  * @param {string|null} f.cwd       the session cwd, for resolving a relative target
- * @param {number|null} f.knownIssue an issue number still on disk, for a LAPSED cure
- * @returns {{allow: boolean, reason?: string, code?: string, target?: string}}
+ * @param {number|null} f.knownIssue an issue number still on disk, named in the advisory line
+ * @returns {{allow: boolean, permission?: "allow"|"deny"|"ask", reason?: string, additionalContext?: string, code?: string, target?: string}}
  */
 export function decide({ toolName, toolInput, verdict, root, sessionId = null, cwd = null, knownIssue = null, zone = zoneOf }) {
   if (!GUARDED_TOOLS.has(String(toolName ?? ""))) return { allow: true, why: "not a write tool" };
@@ -169,39 +187,20 @@ export function decide({ toolName, toolInput, verdict, root, sessionId = null, c
   if (verdict?.ok) return { allow: true, why: `verified (${verdict.mode})`, target };
 
   const code = verdict?.code ?? "UNKNOWN";
-  const cure = adoptCommand({ sessionId, issue: knownIssue });
 
-  if (UNVERIFIABLE_CODES.has(code)) {
+  // The advisory codes raise NO OBJECTION (#368, spec sections 8/9). Nothing live contradicts this
+  // session; the folder is merely unclaimed, or the board could not be read this time. Every
+  // stricter check (sibling, global config, unresolved target) has already run above, exactly as
+  // for a verified session. This hook makes no decision - `emit` writes the context ALONE, so the
+  // settings rules and the auto-mode classifier still apply - and the model is told, in one line,
+  // what the push gate will require of it.
+  if (UNVERIFIABLE_CODES.has(code) || LAPSED_CODES.has(code)) {
     return {
-      allow: false,
+      allow: true,
       code,
       target,
-      reason:
-        `${HEADER}\n\n` +
-        `Nothing on disk ever verified that ${root} is the folder, branch and claim this ` +
-        `conversation is working under (${code}), so a write here is a change nobody can attribute.\n\n` +
-        `Verify this session without restarting it — run this in Bash, with the issue you are ` +
-        `actually working:\n\n    ${cure}\n\n` +
-        `That binds folder + branch + session + issue exactly as a launch does; it reads the branch ` +
-        `and never sets it. Then retry the write. If the work genuinely belongs outside this ` +
-        `repository, write it outside the repository — paths outside ${root} are not guarded.`,
-    };
-  }
-
-  if (LAPSED_CODES.has(code)) {
-    return {
-      allow: false,
-      code,
-      target,
-      reason:
-        `${HEADER}\n\n` +
-        `A launch WAS made for this folder and its clock ran out (${code}). That record cannot ` +
-        `re-verify this session: the branch, the issue and the conversation id all move on during ` +
-        `honest work, so "still matches" would only pass sessions that changed nothing.\n\n` +
-        `Verify this session without restarting it — run this in Bash` +
-        (knownIssue ? ` (the issue is the one already on disk; change it if the work moved on)` : "") +
-        `:\n\n    ${cure}\n\n` +
-        `Then retry the write.`,
+      why: `advisory (${code}): no objection; the write proceeds with its cure as context`,
+      additionalContext: advisoryContext({ code, knownIssue }),
     };
   }
 
@@ -260,14 +259,26 @@ export function run({
 }
 
 /**
- * The wire format PreToolUse understands. An allow says nothing at all.
+ * The wire format PreToolUse understands. `allow: true` means this hook raises NO OBJECTION and is
+ * never written as a decision: a plain one says nothing at all, and one that carries
+ * `additionalContext` (#368, the advisory codes) is written as that context ALONE - no
+ * `permissionDecision` - which the hooks reference defines as "no decision; the normal permission
+ * flow still applies", with the context delivered to the model. (`permissionDecision: "allow"`
+ * would skip the interactive prompt and the auto-mode classifier for the call - broader than an
+ * advisory means.)
  *
- * `ask` joins `deny` here (#278). It is a ROUTING decision, not containment: under a permission mode
- * that auto-approves it degrades to allow, which is exactly why it is reserved for ambiguity and a
- * resolved violation still gets `deny`.
+ * `ask` joins `deny` here (#278). A hook `ask` is a REAL PROMPT in every permission mode, including
+ * `permissions.defaultMode: "auto"`, and a hook decision overrides `permissions.allow` rules
+ * (code.claude.com/docs/en/permission-modes, /hooks); it never degrades to allow. That is exactly why
+ * it is reserved for the genuinely unresolvable, and a resolved violation still gets `deny`.
  */
 export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) {
-  if (decision.allow) return 0;
+  if (decision.allow) {
+    if (typeof decision.additionalContext !== "string" || decision.additionalContext === "") return 0;
+    // Context ALONE: no `permissionDecision` key, so this is "no decision" to the harness.
+    write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: decision.additionalContext } })}\n`);
+    return 0;
+  }
   write(
     `${JSON.stringify({
       hookSpecificOutput: {

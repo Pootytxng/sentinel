@@ -29,9 +29,12 @@
 //     resolver, all exit 0.
 //
 // DENY IS ONLY FOR POSITIVE KNOWLEDGE. A resolved path inside a checkout this session does not own
-// is a fact, and gets `deny`. Ambiguity — an unresolved operand, an unknown path shape, the owner's
-// global config — gets `ask`, because `ask` under an auto-approving permission mode degrades to
-// allow, and a guard whose only mode degrades is not a guard.
+// is a fact, and gets `deny`. Ambiguity — an unresolved operand, an unknown path shape — gets `ask`.
+// A hook `ask` is a REAL PROMPT in every permission mode, `permissions.defaultMode: "auto"` included,
+// and a hook decision overrides `permissions.allow` rules (code.claude.com/docs/en/permission-modes,
+// /hooks). It does not degrade to allow anywhere — an earlier version of this comment said it did,
+// and that false premise is why 33 of one day's 40 prompts were `ask`s on knowable operands (#373).
+// So `ask` is reserved for the genuinely unresolvable, where a human keystroke is the right answer.
 //
 // IT NEVER PERSISTS AND NEVER LOGS. No claim is written, no lineage record, no board row, no file.
 // `verifySession({persist: false})`, and it is only called when a protected zone is actually in play
@@ -41,6 +44,8 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
+// One formatter for the advisory line, so `Write` and the shell say the same thing (#368).
+import { advisoryContext } from "./project-write-assert.mjs";
 import { LAPSED_CODES, UNVERIFIABLE_CODES, resolveSessionRoot, verifySession } from "./session-root-assert.mjs";
 import { PROTECTED_ZONES, ZONES, resolveAbsolute, zoneOf } from "./target-ownership.mjs";
 
@@ -532,6 +537,216 @@ const globBounded = (w) => /^[^$`]*$/.test(w.raw ?? w.value) && !w.value.include
  *  purpose: re-lexing marks them dynamic, and `globBounded` already answers for them correctly. */
 const RELEX = new Set([" ", "\t", "\n", "'", '"', "`", "$", "\\", ";", "|", "&", "<", ">", "(", ")", "#"]);
 
+/** Environment names whose values are directories this checker can place. Nothing else is read from
+ *  the environment: `$PATH`, `$RANDOM` and every user variable stay unknowable on purpose. */
+export const KNOWN_ENV = ["TEMP", "TMP", "LOCALAPPDATA", "APPDATA", "USERPROFILE", "HOME"];
+
+const IDENT = /[A-Za-z_][A-Za-z0-9_]*/y;
+/** Where a new statement can begin. `(` is NOT here — a subshell is a scope, handled separately. */
+const STATEMENT_BREAK = new Set([";", "&", "|", "\n", "{"]);
+const VALUE_END = new Set([" ", "\t", "\n", ";", "&", "|", ")", "(", "<", ">"]);
+
+/** A value may be spliced back into the command text only if re-lexing it yields exactly one plain
+ *  word. Anything that could become a second word, a redirect, an operator, a quote or a
+ *  substitution is refused — the spliced text is RE-PARSED by this checker, and a value carrying
+ *  `;` would invent a statement that never runs. `\` is refused for the same reason: outside quotes
+ *  the lexer eats it, so a Windows path spliced bare would become a different path. Refusing means
+ *  the operand stays unknowable and takes the approval path — the safe direction. */
+const SPLICEABLE = /^[^\s$`;&|<>()'"\\]+$/;
+
+/**
+ * Replace the variables whose value the text (or the well-known environment) already states, so a
+ * literal-by-construction operand is judged as the literal it is. Measured 2026-09-04 (#373): 33 of
+ * the 40 approval prompts in a day were `"$S/…"`, `"$TEMP/…"`, `"$LOCALAPPDATA/…"` — operands whose
+ * value was on the same line or in the process environment, refused as "not knowable" because the
+ * lexer reads `$` and stops.
+ *
+ * Four rules keep this from becoming a guess, and each exists because the opposite is a FALSE ALLOW:
+ *   1. only a plain assignment at the head of a statement (`S=…`, `export S=…`, `local S=…`) whose
+ *      value is itself fully known teaches a name - and only when that simple command is NOTHING
+ *      BUT assignments (ended by `;`, `&&`, `||`, `&`, `|`, a newline or the end of input). A PREFIX
+ *      assignment, `S=/x rm -rf $S/y`, lives in `rm`'s environment alone and POSIX expands `$S` in
+ *      that same command with S's prior value, so it teaches nothing (found by review 2026-09-04);
+ *      `S=$(...)`, `S=$OTHER` with OTHER unknown, `read S` and every other binding form leave the
+ *      name unknown, so `rm -rf $TARGET` still asks;
+ *   2. only an assignment in the OUTERMOST scope teaches anything. A subshell does not export its
+ *      names to its parent, so `(S=/scratch); rm $S/x` really runs `rm /x`; believing the assignment
+ *      would make this checker reason about a path the command never touches. `$(…)` and backticks
+ *      are the same scope, and the common `X=$(S=/tmp; …)` form makes this easy to hit by accident.
+ *      Expansion still happens at every depth — a value flows INTO a subshell, just not out of it;
+ *   3. a value is spliced only if it re-lexes as one plain word (`SPLICEABLE`), so an expansion can
+ *      never fabricate an operator, a redirect, a quote or a second word;
+ *   4. single quotes are honoured — `'$S'` is the literal text `$S`, and stays so.
+ * PowerShell is untouched: `$env:TEMP` and `$s = …` have their own rules and no measured cost.
+ */
+export function expandKnownVars(command, { env = process.env, dialect = "posix" } = {}) {
+  const src = String(command ?? "");
+  if (dialect !== "posix" || !src.includes("$")) return src;
+  const known = new Map();
+  for (const name of KNOWN_ENV) {
+    const v = env?.[name];
+    if (typeof v !== "string" || !/^([A-Za-z]:[\\/]|\/)/.test(v)) continue;
+    const norm = v.replace(/\\/g, "/");
+    if (SPLICEABLE.test(norm)) known.set(name, norm);
+  }
+
+  let out = "";
+  let i = 0;
+  let inDouble = false;
+  let head = true; // at the head of a statement, where `NAME=value` is an assignment
+  let depth = 0; // subshell / command-substitution nesting; names are learned only at 0
+  // An assignment being captured: where its value starts in `out`, so the EXPANDED value is recorded.
+  let capture = null;
+  // The assignments of the CURRENT simple command, and whether that command names a command word.
+  // They are learned only when the command ends and was nothing but assignments: `S=/x rm $S/y` is
+  // a PREFIX assignment - it lives in `rm`'s environment alone, and POSIX expands `$S` in that same
+  // command with S's PRIOR value - so it teaches nothing, and the prior value (if any) stands.
+  let pending = [];
+  let commandWord = false;
+  const frames = []; // the enclosing command's {pending, commandWord} while inside a scope
+  const closeCapture = () => {
+    if (!capture) return;
+    let value = out.slice(capture.from);
+    const q = value[0];
+    if ((q === '"' || q === "'") && value.length >= 2 && value.endsWith(q)) value = value.slice(1, -1);
+    pending.push({ name: capture.name, value });
+    capture = null;
+  };
+  const endStatement = () => {
+    closeCapture();
+    if (!commandWord) {
+      for (const { name, value } of pending) {
+        if (SPLICEABLE.test(value)) known.set(name, value);
+        else known.delete(name);
+      }
+    }
+    pending = [];
+    commandWord = false;
+  };
+  const enterScope = () => {
+    closeCapture();
+    frames.push({ pending, commandWord });
+    pending = [];
+    commandWord = false;
+    depth += 1;
+  };
+  const leaveScope = () => {
+    closeCapture();
+    const outer = frames.pop();
+    pending = outer?.pending ?? [];
+    commandWord = outer?.commandWord ?? false;
+    depth = Math.max(0, depth - 1);
+  };
+  /** A token that is not an assignment begins here: if it is at the head, it is the command word. */
+  const beginWord = () => {
+    if (head) commandWord = true;
+    head = false;
+  };
+
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "'" && !inDouble) {
+      const j = src.indexOf("'", i + 1);
+      const end = j === -1 ? src.length : j + 1;
+      out += src.slice(i, end);
+      i = end;
+      beginWord();
+      continue;
+    }
+    if (c === "\\" && i + 1 < src.length) {
+      out += c + src[i + 1];
+      i += 2;
+      beginWord();
+      continue;
+    }
+    if (c === "$") {
+      // `$(` opens a command substitution: a scope, even inside double quotes.
+      if (src[i + 1] === "(") {
+        beginWord();
+        enterScope();
+        out += "$(";
+        i += 2;
+        head = true;
+        continue;
+      }
+      let name = null;
+      let len = 1;
+      if (src[i + 1] === "{") {
+        const m = /^\{([A-Za-z_][A-Za-z0-9_]*)\}/.exec(src.slice(i + 1));
+        if (m) [name, len] = [m[1], 1 + m[0].length];
+      } else {
+        IDENT.lastIndex = i + 1;
+        const m = IDENT.exec(src);
+        if (m) [name, len] = [m[0], 1 + m[0].length];
+      }
+      if (name !== null && known.has(name)) out += known.get(name);
+      else out += src.slice(i, i + len);
+      i += len;
+      beginWord();
+      continue;
+    }
+    if (c === "`") {
+      // A backtick substitution is a scope too, and it is its own opener and closer (it is never
+      // left, so nothing after a backtick pair is learned - the conservative direction).
+      beginWord();
+      enterScope();
+      out += c;
+      i += 1;
+      head = true;
+      continue;
+    }
+    if (c === '"') {
+      inDouble = !inDouble;
+      out += c;
+      i += 1;
+      beginWord();
+      continue;
+    }
+    if (!inDouble) {
+      if (capture && VALUE_END.has(c)) {
+        closeCapture();
+        head = true; // another assignment may follow (`S=/x T=/y`), or the command word that voids them
+      }
+      if (c === "(") {
+        enterScope();
+        head = true;
+      } else if (c === ")") {
+        leaveScope();
+        head = true;
+      } else if (STATEMENT_BREAK.has(c)) {
+        endStatement();
+        head = true;
+      } else if (c === " " || c === "\t") { /* whitespace keeps the head */ }
+      else if (head && /[A-Za-z_]/.test(c)) {
+        IDENT.lastIndex = i;
+        const m = IDENT.exec(src);
+        const word = m[0];
+        const after = IDENT.lastIndex;
+        if ((word === "export" || word === "local") && /[ \t]/.test(src[after] ?? "")) {
+          out += word;
+          i = after;
+          continue; // still at the head: the assignment follows
+        }
+        if (src[after] === "=" && src[after + 1] !== "=") {
+          out += word + "=";
+          i = after + 1;
+          // Inside a subshell the binding dies with it, so the name is not learned — and any value
+          // it already had is not trusted past this point either.
+          if (depth === 0) capture = { name: word, from: out.length };
+          else known.delete(word);
+          head = false;
+          continue;
+        }
+        beginWord();
+      } else beginWord();
+    }
+    out += c;
+    i += 1;
+  }
+  endStatement();
+  return out;
+}
+
 /**
  * One command string -> the operations it names.
  *
@@ -539,7 +754,7 @@ const RELEX = new Set([" ", "\t", "\n", "'", '"', "`", "$", "\\", ";", "|", "&",
  *            unresolved: Array<{verb: string, why: string}>,
  *            cwdUnknown: boolean}}
  */
-export function analyze(command, { cwd = null, dialect = "posix", home = homedir() } = {}) {
+export function analyze(command, { cwd = null, dialect = "posix", home = homedir(), env = process.env } = {}) {
   const ops = [];
   const unresolved = [];
   let here = cwd;
@@ -556,7 +771,9 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
    */
   const cannot = (verb, why, kind = "mutation") => unresolved.push({ verb, why, kind, cwd: here, cwdUnknown });
 
-  for (const seg of segments(lex(stripHeredocs(command), dialect), dialect)) {
+  // Heredoc bodies go first, so a line inside one cannot teach this pass a name (#373).
+  const text = expandKnownVars(stripHeredocs(command), { env, dialect });
+  for (const seg of segments(lex(text, dialect), dialect)) {
     const words = seg.words;
     for (const r of seg.redirects) {
       if (r.dynamic && !globBounded(r)) cannot("redirection", `the redirect target \`${r.value}\` is not knowable from the text`);
@@ -806,7 +1023,11 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
 const HEADER = "Blocked: this command writes into a checkout this session does not own.";
 
 /**
- * @returns {{permission: "allow"|"deny"|"ask", reason?: string, zone?: string, target?: string}}
+ * `permission: "allow"` means NO OBJECTION from this hook - the normal permission flow applies -
+ * and is never written as a decision (see `emit`). `additionalContext`, when present, is the #368
+ * advisory line for an unclaimed folder.
+ *
+ * @returns {{permission: "allow"|"deny"|"ask", reason?: string, additionalContext?: string, zone?: string, target?: string, code?: string}}
  */
 export function decideShell({
   toolName,
@@ -825,7 +1046,7 @@ export function decideShell({
   if (typeof command !== "string" || command.trim() === "") return { permission: "allow", why: "no command to inspect" };
 
   const dialect = toolName === "PowerShell" ? "powershell" : "posix";
-  const { ops, unresolved } = analyze(command, { cwd, dialect, home });
+  const { ops, unresolved } = analyze(command, { cwd, dialect, home, env });
   if (!ops.length && !unresolved.length) return { permission: "allow", why: "names no recognized mutation" };
 
   // Zones first, verification second: the board is only read when something protected is in play.
@@ -859,35 +1080,57 @@ export function decideShell({
   const unverified = !verdict?.ok;
 
   const own = protectedHits.find((z) => z.zone === ZONES.OWN);
+  // The advisory line (#368, spec 2026-08-21 sections 8/9): this session is unverified in a way nothing
+  // live contradicts - the folder is merely unclaimed, or the board unreadable. It is CARRIED, not
+  // decided on: every stricter check below still runs exactly as it would for a verified session
+  // (global config, unknown zone, unresolved operands, opaque verbs), so a compound command cannot
+  // ride an unclaimed folder past them. Only an outcome of "no objection" turns into context
+  // without a decision - `emit` writes `additionalContext` alone, no `permissionDecision`, so the
+  // settings rules and the auto-mode classifier still apply. Never `allow` (that would skip both
+  // for the call), and never `ask` (a real prompt in every mode, on every write).
+  let advisory = null;
   if (own && unverified) {
     const code = verdict?.code ?? "UNKNOWN";
-    const advisory = UNVERIFIABLE_CODES.has(code) || LAPSED_CODES.has(code);
-    return {
-      permission: "deny",
-      zone: own.zone,
-      target: own.abs,
-      code,
-      reason:
-        `Blocked: this session is not verified for this folder (${code}), and \`${own.op.verb}\` ` +
-        `writes inside it.\n\n${advisory ? "" : `${verdict?.reason ?? ""}\n\n`}` +
-        `This is the same refusal \`Write\` and \`Edit\` give; the shell is not a way around it.` +
-        (advisory
-          ? `\n\nVerify this session without restarting it, then retry:\n\n    node tools/entry/cli.mjs adopt --issue <n> --session <id>`
-          : `\n\nResolve the disagreement before changing ${own.abs}.`),
-    };
+    if (UNVERIFIABLE_CODES.has(code) || LAPSED_CODES.has(code)) {
+      advisory = { code, line: advisoryContext({ code, knownIssue: verdict?.issue ?? null }) };
+    } else {
+      // A live record actively disagrees about this folder: that is positive knowledge, and deny.
+      return {
+        permission: "deny",
+        zone: own.zone,
+        target: own.abs,
+        code,
+        reason:
+          `Blocked: this session is not verified for this folder (${code}), and \`${own.op.verb}\` ` +
+          `writes inside it.\n\n${verdict?.reason ?? ""}\n\n` +
+          `This is the same refusal \`Write\` and \`Edit\` give; the shell is not a way around it.` +
+          `\n\nResolve the disagreement before changing ${own.abs}.`,
+      };
+    }
   }
+  /** Every decision from here on carries the advisory line when there is one. On a deny or an ask
+   *  it rides beside the reason; on "no objection" it is the whole output, and the decision names
+   *  the folder and code it is about. */
+  const carry = (decision) => {
+    if (!advisory) return decision;
+    const named = decision.permission === "allow"
+      ? { zone: own.zone, target: own.abs, code: advisory.code, why: `advisory (${advisory.code}): no objection; ${decision.why}` }
+      : {};
+    return { ...decision, ...named, additionalContext: advisory.line };
+  };
 
   const global = protectedHits.find((z) => z.zone === ZONES.GLOBAL);
   if (global) {
     // DENY here, where `project-write-assert` asks. The two are not inconsistent — they are answering
-    // for different paths in. `ask` is a ROUTING decision, and under this machine's
-    // `permissions.defaultMode: "auto"` a routed decision degrades to allow; that is acceptable for
-    // the tool path, because the owner's memory store lives under `~/.claude/projects/**` and is
-    // written with `Write` on purpose. Through a SHELL there is no such case: nothing in this
-    // repository writes into `~/.claude` or `~/.codex` with a shell command, and those folders hold
-    // the settings and hooks that decide what an agent may do on this machine. A guard that routes
-    // that write in a mode which auto-approves has not protected it.
-    return {
+    // for different paths in. A hook `ask` is a real prompt in every permission mode (including
+    // `permissions.defaultMode: "auto"`; it never degrades to allow), and the tool path has a
+    // legitimate case to put in front of the owner: the memory store lives under
+    // `~/.claude/projects/**` and is written with `Write` on purpose. Through a SHELL there is no
+    // such case: nothing in this repository writes into `~/.claude` or `~/.codex` with a shell
+    // command, and those folders hold the settings and hooks that decide what an agent may do on
+    // this machine. With no legitimate case to route, a prompt would only be a keystroke away from
+    // the wrong answer, so positive knowledge of the zone is enough to refuse outright.
+    return carry({
       permission: "deny",
       zone: global.zone,
       target: global.abs,
@@ -897,12 +1140,12 @@ export function decideShell({
         `No repository claim covers it and no shell command in this repo needs to. If the owner ` +
         `asked for this change, hand him the exact before/after and let him apply it; that is the ` +
         `path his own settings already name.`,
-    };
+    });
   }
 
   const unknown = protectedHits.find((z) => z.zone === ZONES.UNKNOWN);
   if (unknown) {
-    return {
+    return carry({
       permission: "ask",
       zone: unknown.zone,
       target: unknown.op.target,
@@ -910,11 +1153,11 @@ export function decideShell({
         `\`${unknown.op.verb}\` names \`${unknown.op.target}\`, and this checker could not work out ` +
         `where that lands (${unknown.why}). An unresolved path is not evidence that it is outside ` +
         `protection, so it takes the normal approval path rather than a guess.`,
-    };
+    });
   }
 
   if (unresolved.length) {
-    const asking = (u) => ({
+    const asking = (u) => carry({
       permission: "ask",
       zone: ZONES.UNKNOWN,
       reason:
@@ -936,10 +1179,10 @@ export function decideShell({
     const cwdZone = (u) => (!u.cwdUnknown && u.cwd ? zone({ target: u.cwd, sessionRoot, cwd: u.cwd, deps: { home } }).zone : ZONES.UNKNOWN);
     const stray = unresolved.find((u) => ![ZONES.OWN, ZONES.UNPROTECTED].includes(cwdZone(u)));
     if (stray) return asking(stray);
-    return { permission: "allow", why: "every unresolved operand is bounded by a directory this session is standing in" };
+    return carry({ permission: "allow", why: "every unresolved operand is bounded by a directory this session is standing in" });
   }
 
-  return { permission: "allow", why: "nothing protected is reached" };
+  return carry({ permission: "allow", why: "nothing protected is reached" });
 }
 
 /** The IO shell. Injectable end to end, so no test touches the live verification state. */
@@ -958,18 +1201,30 @@ export function run({ hookInput, env = process.env, verify = verifySession, zone
   });
 }
 
-/** PreToolUse wire format. An allow says nothing at all; deny and ask both carry their reason. */
+/**
+ * PreToolUse wire format. `permission: "allow"` means this hook raises NO OBJECTION, and is never
+ * written as a decision: a plain one says nothing at all, and one carrying `additionalContext`
+ * (#368, the advisory codes) is written as that context ALONE - no `permissionDecision` - which the
+ * hooks reference defines as "no decision; the normal permission flow still applies", with the
+ * context delivered to the model. (`permissionDecision: "allow"` would skip the interactive prompt
+ * and the auto-mode classifier for the call, which is broader than an advisory means.) Deny and
+ * ask carry their reason, plus the advisory line beside it when there is one.
+ */
 export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) {
-  if (!decision || decision.permission === "allow") return 0;
-  write(
-    `${JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: decision.permission,
-        permissionDecisionReason: decision.reason,
-      },
-    })}\n`,
-  );
+  if (!decision) return 0;
+  const context = typeof decision.additionalContext === "string" && decision.additionalContext !== "" ? decision.additionalContext : null;
+  if (decision.permission === "allow") {
+    if (!context) return 0;
+    write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: context } })}\n`);
+    return 0;
+  }
+  const out = {
+    hookEventName: "PreToolUse",
+    permissionDecision: decision.permission,
+    permissionDecisionReason: decision.reason,
+  };
+  if (context) out.additionalContext = context;
+  write(`${JSON.stringify({ hookSpecificOutput: out })}\n`);
   return 0;
 }
 

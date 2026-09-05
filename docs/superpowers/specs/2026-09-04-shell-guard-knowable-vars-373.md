@@ -1,11 +1,23 @@
 # The shell guard reads a variable whose value is on the same line (#373)
 
-**Status: OWNER-HANDS.** The change is one patch, next to this file:
-`docs/superpowers/specs/2026-09-04-shell-guard-knowable-vars-373.patch`. The auto-mode classifier
-refuses a session any edit to a hook that gates its own authority (the owner's standing hard-deny,
-same as spec `2026-08-21-unverified-session-write-refusal.md` §8), so a session cannot apply it.
-`tools/entry/shell-ownership-assert.test.mjs` pins that the patch still applies to the hook as it is,
-and that the assertions it unlocks stay visibly **skipped** until it lands — never vacuously green.
+**Status: APPLIED 2026-09-04** by Cowork HQ under the owner's explicit in-session authorization
+("resolve every single task yourself"). The patch file this spec shipped beside
+(`docs/superpowers/specs/2026-09-04-shell-guard-knowable-vars-373.patch`) was applied with
+`git apply` and removed in the same commit, as section 3 prescribes; `expandKnownVars` now lives in
+`.claude/hooks/shell-ownership-assert.mjs`, and the "once applied" block in
+`tools/entry/shell-ownership-assert.test.mjs` runs instead of skipping.
+
+History: until 2026-09-04 this read **OWNER-HANDS**. The change shipped as a patch next to this
+file because the auto-mode classifier refuses a session any edit to a hook that gates its own
+authority (the owner's standing hard-deny, same as spec
+`2026-08-21-unverified-session-write-refusal.md` section 8), so a session could not apply it on its
+own. The test pinned that the patch still applied to the hook as it was, and that the assertions it
+unlocks stayed visibly **skipped** until it landed - never vacuously green.
+
+Correction recorded with the apply: a hook `ask` is a real prompt in every permission mode,
+`permissions.defaultMode: "auto"` included, and hook decisions override `permissions.allow` rules
+(code.claude.com/docs/en/permission-modes, /hooks). The hook's own comments claimed `ask`
+"degrades to allow" under auto; that was false and is fixed in the same commit.
 
 ## 1. What is measured
 

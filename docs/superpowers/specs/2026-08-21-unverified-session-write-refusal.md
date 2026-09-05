@@ -255,3 +255,43 @@ exactly, so it can be applied without re-deriving it (the three tests that pin `
 
 The board-limit fix, the allow block and this section landed on the branch (#368).
 
+---
+
+## 9. 2026-09-04 - section 8 corrected: hook ask is a real prompt in every mode
+
+Section 8's `ask` rested on a false premise. Per code.claude.com/docs/en/permission-modes and
+/hooks, a PreToolUse hook's `permissionDecision: "ask"` is shown to the user as a real prompt in
+EVERY permission mode, `defaultMode: "auto"` included, and a hook decision overrides
+`permissions.allow` rules. Measured the same way on #373: 33 of one day's 40 prompts were hook
+`ask`s. Routing the advisory codes to `ask` would therefore have prompted on every single write in
+an unclaimed desktop-app session - the opposite of "never again".
+
+The ruling's stated intent ("an unclaimed session proceeds") is now implemented as it was meant:
+
+- `FOLDER_UNCLAIMED` and `BOARD_UNREACHABLE` are NO DECISION from BOTH `project-write-assert.mjs`
+  and `shell-ownership-assert.mjs`: the hook exits 0 with `hookSpecificOutput` carrying ONLY
+  `additionalContext` (no `permissionDecision` key). Per code.claude.com/docs/en/hooks-guide that
+  means "no decision; the normal permission flow still applies" - settings allow/deny/ask rules
+  and the auto-mode classifier - and the context is delivered to the model. Not
+  `permissionDecision: "allow"`: that skips the interactive prompt and the classifier for the
+  call, which is broader than an advisory means (found by review 2026-09-04). The one line names
+  the cure the push gate enforces - post an Ownership claim on the issue (the issue number is
+  filled in when a previous read left it on disk). One shared formatter, `advisoryContext`, so
+  `Write`, `Edit`, `NotebookEdit` and the shell say the same thing.
+- The stricter checks run FIRST, exactly as for a verified session, and the advisory never
+  short-circuits them: a sibling checkout, the owner's global config, an unknown zone, an
+  unresolved operand and an opaque verb outside the own root each get their deny/ask as before
+  (the advisory line rides beside that reason). The advisory is the whole output only when the
+  outcome would otherwise be "no objection". Review 2026-09-04 proved the earlier early return
+  let `cp ./x.json ~/.claude/settings.json` through from an unclaimed session.
+- Every other non-ok code keeps its answer: a live contradiction (`WRITER_LIVE`,
+  `BRANCH_NOT_THE_BOARDS`, `REPO_MISMATCH`, ...) and a sibling checkout stay `deny`; the owner's
+  global config and an unresolvable target stay `ask`; an unclassified code stays `deny`.
+- Pinned in `project-write-assert.test.mjs`, `shell-ownership-assert.test.mjs` and
+  `session-root-assert.test.mjs`: the advisory wire has `additionalContext` and NO
+  `permissionDecision`; own+global and own+unresolved compound commands from an unclaimed session
+  answer as from a verified one; the deny side is unchanged.
+
+The hook edit was authorized by the owner in Cowork on 2026-09-04 ("resolve every single task
+yourself"); section 8 stays as the history of how the ruling was first specified.
+
