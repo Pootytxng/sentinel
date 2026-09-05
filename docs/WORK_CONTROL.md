@@ -61,7 +61,8 @@ becomes a competing priority ledger.
 - **Kuya** owns only real owner gates: secrets/signing, security/system settings,
   publication/distribution, money, destructive/irreversible choices, people/account access, and
   genuine product forks. Routine executor selection and handoff are engineering coordination, not
-  owner gates.
+  owner gates. Aesthetic taste is not on that list - agents decide it and show him. An aesthetic call
+  is not a gate - decide it, ship it, show a before/after.
 
 A model/tool name is not ownership. A **mutation lease** is ownership of one bounded scope at one
 measured work location for one current slice.
