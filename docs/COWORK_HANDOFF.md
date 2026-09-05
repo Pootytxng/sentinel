@@ -138,7 +138,9 @@ are exactly its wheelhouse. The routing duty (above) means flagging this per tas
 
 ## The design laws coined with Kuya (enforce on every spec/review)
 
-All recorded in `docs/superpowers/plans/2026-06-04-beta-build-order.md` + the design kernel:
+Historical provenance is recorded in the superseded
+`docs/superpowers/plans/2026-06-04-beta-build-order.md`; current authority is
+`docs/PRODUCT_CONSTITUTION.md` plus the derived product docs:
 - **Bathroom law** — signpost at the moment of need; never condescend; never bare.
 - **Foam-pit law** — nothing should require *learning* (shortcuts are silent redundancy only, never the path).
 - **Doorknob law** (core-promise status) — every door shows its knob; nothing static looks clickable.
@@ -146,20 +148,22 @@ All recorded in `docs/superpowers/plans/2026-06-04-beta-build-order.md` + the de
 - **"All original" law** — everything we ship is ours; competitor content is reference only.
 - **Honest-measurement law → Receipts law (REFRAMED 2026-06-12)** — never fabricate / never claim
   unmeasured; time-and-sample-qualified; **measured wins get amplified LOUDLY** (silence about real
-  wins is now also a violation). Canonical: `docs/RECEIPTS_DOCTRINE.md`.
+  wins is now also a violation). Canonical: `docs/PRODUCT_CONSTITUTION.md` (the Receipts Doctrine is a
+  tombstone since 2026-09-04, #369).
 - **Navigation never teleports** · single-shimmer/single-glow (CI-guarded).
 
-## The endgame — MONEY-NOW (Receipts Doctrine; supersedes "money-last" 2026-06-12)
+## The endgame — durable value (Constitution §32; the MONEY-NOW Receipts formula is history)
 
-**Owner decree: Compy must generate income.** Canonical core: `docs/RECEIPTS_DOCTRINE.md` (read it;
-it wins over older direction text, including the previous version of this section). Free app =
-trust engine + funnel; money = content engine (Library→compy.gg) → opt-in Receipts telemetry →
-affiliate upgrade engine → Compy Pro → B2B licensing, in phases with gates + ONE KPI each.
-Signing cert / legal entity / repo rename now schedule themselves at the **first paid surface**
-(concrete trigger, not "someday"). The friends beta continues as the trust seed. Filter every
-spec/review through: *does this move money — or trust-at-scale that converts — without fabricating
-a claim or loosening a locked gate?* Aggressive is sanctioned; scammy is rejected on ROI grounds
-(brand damage kills the funnel) before ethics even enters the room.
+**Owner decree: Compy must generate income** — still standing. What changed 2026-09-04 (#369): the
+canonical core is `docs/PRODUCT_CONSTITUTION.md`, with `docs/product/MONETIZATION.md` as the derived
+monetization doc; `docs/RECEIPTS_DOCTRINE.md` is a tombstone with no authority left. Free core =
+genuine value + trust; paid = depth, convenience, history, advanced experimentation — never safety or
+rollback; price and structure stay hypotheses until real willingness-to-pay evidence exists. Signing
+cert / legal entity / repo rename still schedule themselves at the **first paid surface** (concrete
+trigger, not "someday"). The friends beta continues as the trust seed. Filter every spec/review
+through: *does this create demonstrated durable value, or trust that converts, without fabricating a
+claim or loosening a locked gate?* Aggressive is sanctioned; scammy is rejected on ROI grounds (brand
+damage kills the funnel) before ethics even enters the room.
 
 **ZERO-BUDGET LAW (standing owner constraint, 2026-06-12):** the owner is bootstrapping on $0 —
 every phase ships on free tiers first (free `*.pages.dev`/`github.io` subdomain before the domain;
@@ -169,9 +173,10 @@ paid surface via Azure Trusted Signing ~$10/mo · entity+Paddle ← Pro launch �
 before 1.0**). Organic-first: friends + the owner's Discord community = the named seed channel.
 Never tee up a spend without the free alternative it beats.
 
-## Token-routing protocol (standing, 2026-07-01)
+## Historical token-routing protocol (superseded, 2026-07-01)
 
-Full table: `docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. Cowork lane summary:
+Historical table (superseded by current local agent/model policy):
+`docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. Point-in-time Cowork lane summary:
 **all spec/audit/design/research/status work runs HERE; CC's Fable turns are reserved for build
 trains only** (Fable ≈ the right tool for ~5–15% of tasks — ours are the builds). Audit by
 reading git directly — never ask CC to re-narrate (Fable output tokens), and never put "explain

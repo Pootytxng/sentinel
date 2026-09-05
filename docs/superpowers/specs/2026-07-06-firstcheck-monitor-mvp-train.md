@@ -1,5 +1,10 @@
 # CC TASK TRAIN — FirstCheck + Monitor redesign · launch runway (Cowork handoff, 2026-07-06)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This owner-greenlit build train and its
+> instruction to run tasks immediately are historical, not current execution authority. Current
+> product/experience direction comes from `docs/PRODUCT_CONSTITUTION.md`; technical history remains
+> bounded provenance subject to current code, Roadmap, release truth, and Work Control.
+>
 > Owner-greenlit, from the owner's live-build audit (4 screenshots) + Cowork repo recon.
 > **Lane split per the token-routing protocol (2026-07-01):** T0–T3 are CC BUILD tasks — run them
 > as one SPORT-MODE train (build → verify → commit → push per task, batch questions to the end).

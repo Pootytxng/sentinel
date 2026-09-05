@@ -504,41 +504,51 @@ describe("work-control receipt CLI", () => {
   });
 });
 
-describe("the role and proof law stays loaded in both model lanes", () => {
+describe("the lease and proof law stays loaded in every model bootstrap", () => {
   const flat = (path) => readFileSync(path, "utf8").replace(/\s+/g, " ");
+  // Owner-ratified 2026-09-04 (#369 / PR #375): the permanent "Claude implements, Codex reviews"
+  // split is retired. Lane labels are informational; a mutation lease per overlapping scope is the
+  // only ownership. A bootstrap that restores the old split fails here and in
+  // src/dynamic-mutation-lease-guard.test.ts, so the two guards agree on one law.
+  const retired = [
+    "Claude Code is the default implementation owner",
+    "Codex is the default independent reviewer",
+  ];
   const required = {
     "docs/WORK_CONTROL.md": [
-      "Claude Code is the default implementation owner",
-      "Codex is the default independent reviewer",
-      "explicit handoff",
-      "one active implementation writer per scope",
+      "one active mutation lease per overlapping scope",
+      "A handoff transfers only mutation authority",
       "required gates cannot be substituted",
-      "environment inability is a blocker, not a pass",
+      "environment inability is **BLOCKED**, not PASS",
       "proof-dependent GitHub transition",
-      "non-writing model performs the final independent review whenever practical",
+      "must not be one of the mutation authors",
       "node scripts/work-control-gate.mjs <receipt.json>",
     ],
     "AGENTS.md": [
-      "Claude Code is the default implementation owner",
-      "Codex is the default independent reviewer",
-      "explicit handoff",
+      "one active mutation lease per overlapping scope",
+      "a handoff transfers mutation authority only",
+      "required gates cannot be substituted",
+      "environment inability is BLOCKED, not PASS",
+      "must not be one of the mutation authors",
       "scripts/work-control-gate.mjs",
     ],
     "CLAUDE.md": [
-      "Claude Code is the default implementation owner",
-      "Codex is the default independent reviewer",
-      "explicit handoff",
+      "one active mutation lease per overlapping scope",
+      "Handoffs transfer mutation authority only",
       "required gates cannot be substituted",
       "environment inability is a blocker, not a pass",
+      "a reviewer who did not author the mutation being approved",
       "scripts/work-control-gate.mjs",
     ],
   };
 
   for (const [path, markers] of Object.entries(required)) {
-    it(`${path} carries the canonical role/proof contract`, () => {
+    it(`${path} carries the canonical lease/proof contract and not the retired role split`, () => {
       const text = flat(path);
       const missing = markers.filter((marker) => !text.includes(marker));
-      expect(missing, `${path} dropped role/proof law markers`).toEqual([]);
+      expect(missing, `${path} dropped lease/proof law markers`).toEqual([]);
+      const restored = retired.filter((sentence) => text.includes(sentence));
+      expect(restored, `${path} restored the retired permanent role split`).toEqual([]);
     });
   }
 });

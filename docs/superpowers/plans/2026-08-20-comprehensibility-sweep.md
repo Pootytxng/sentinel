@@ -1,5 +1,10 @@
 # Plan — the comprehensibility sweep (owner directive, 2026-08-20)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The queued status, owner-message authority,
+> and BACKLOG priority override below are historical and no longer executable. Current product and
+> experience direction comes from `docs/PRODUCT_CONSTITUTION.md`; current sequence and ownership
+> require the Roadmap and Work Control. The body remains historical product evidence.
+>
 > **Status:** QUEUED, not started. Execution belongs to a FRESH session (see §6).
 > **Authority:** owner message 2026-08-20, quoted in §1. It re-ranks the `BACKLOG.md` NEXT UP queue.
 > **Scope rule from him:** *"dont create any new or unecessary work"* — every item below is either

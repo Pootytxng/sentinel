@@ -1,5 +1,10 @@
 # Monitor v4 — "Session Waterfall" (concept B refined into the working hero)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical implementation and review
+> record, not current product authority, priority, approval, or work authorization. Current product
+> direction is [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived
+> in [`docs/product/ROADMAP.md`](../../product/ROADMAP.md).
+
 > **✅ RESUME NOTE RESOLVED 2026-07-11:** the readability rework below is COMMITTED (`082414c` +
 > `915cb96` middot legend fix), full vitest 1320/167 green, own-eyes iterated on the live dev
 > instance (Compare + Now both read clean), fresh full self-review round **PASS**, rebuilt +

@@ -101,7 +101,9 @@ The dev build runs two same-origin webviews + a small default window, so capture
    he made last week. **Evidence required: name the surfaces the diff touches, then `git log -S`
    the flag/class/string behind each one and quote the most recent owner-decision commit you find,
    or state "searched <terms>, no prior owner decision found".** A `docs/UI_VISION_BACKLOG.md`
-   decision or a commit whose message quotes the owner both count.
+   entry is historical evidence, not current product authority; reconcile it with
+   `docs/PRODUCT_CONSTITUTION.md`, the roadmap, current issues, and code. A commit whose message
+   quotes the owner is likewise evidence to reconcile, not standalone work authorization.
    **Precedent (2026-08-18, the defect that created this item):** the owner removed the "What are
    you here to do?" box on sight on 2026-08-12 (`4d1afa92`, his words: *"the what are you here to
    do text box was ugly looks cleaner without it"*). Six days later UX-1 (`f1766e86`) promoted that
@@ -126,7 +128,8 @@ The dev build runs two same-origin webviews + a small default window, so capture
     element, an overlapping glyph, or an unstyled native control is a correctness failure, not a
     matter of taste"* (Cowork lane amendment, 2026-08-24, adopted by the owner in the same message
     that handed this lane #49). Those three classes FAIL this item on sight. They may not be
-    deferred to the owner as a taste question, parked in `docs/UI_VISION_BACKLOG.md`, or reported
+    deferred to the owner as a taste question, parked as product direction in historical
+    `docs/UI_VISION_BACKLOG.md`, or reported
     as "cosmetic" — the taste decree (CLAUDE.md, 2026-08-07) governs *choices between defensible
     looks*, and a glyph colliding with its neighbour is not one of those. Scan the capture for
     them explicitly and say what you looked at; "nothing clipped" with no named region is a FAIL.

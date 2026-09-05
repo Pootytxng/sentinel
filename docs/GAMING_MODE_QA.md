@@ -8,7 +8,10 @@ no-partial-on-cancel-at-start · RestoreFailed-on-cancel-during-restore · fail-
 restore-targets-stored-GUID-on-external-change). **What this checklist is now:** the *live, in-the-field*
 proof that the harness can't give — the cases that need **crashing the app, rebooting mid-session, and
 cancelling real UAC prompts on your hardware.** Case **#4 (full reboot)** is the headline one. Source:
-`docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md` §7 · contract `docs/GAMING_MODE_PLAN.md` §8.
+historical product direction, now superseded, in
+`docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md` §7; its conforming rollback/safety
+provenance and the `docs/GAMING_MODE_PLAN.md` §8 contract remain subject to
+`docs/ARCHITECTURE_LOCKS.md`.
 
 **Fully reversible:** if any case fails, set `gaming_mode_gate()` → `false` to re-hide the whole feature
 while I fix the bug on a branch — nothing else has to change.

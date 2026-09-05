@@ -1,5 +1,11 @@
 # Monitor v5 — "Flight Deck + Session Stack" (concept round 3 pick, owner 2026-07-11)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical implementation record, not
+> current product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Its data-honesty constraints remain useful
+> technical provenance under [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 > **Entry gate: CLEARED.** Concept round 3 Artifact
 > <https://claude.ai/code/artifact/9ebf6305-e488-422d-b699-0c281b15676c> — owner reacted "ooooo ya
 > i like the mockups you sent me" and picked **"A's top + B's stack"** via the pick prompt

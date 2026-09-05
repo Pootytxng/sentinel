@@ -1,5 +1,10 @@
 # Single-entry Compy workflow — implementation plan
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This pre-rebirth build order no longer
+> authorizes product work. Current direction and sequence come from `docs/PRODUCT_CONSTITUTION.md`
+> and its derived roadmap; useful Work Control implementation provenance remains bounded by current
+> `docs/WORK_CONTROL.md`.
+
 **Spec:** [`docs/superpowers/specs/2026-07-30-single-entry-workflow.md`](../specs/2026-07-30-single-entry-workflow.md)
 · **Issue:** [#18](https://github.com/Pootytxng/sentinel/issues/18) · **Branch:**
 `feat/single-entry-workflow` · **Worktree:** `C:\Users\Kuya\code\sentinel-workflow`

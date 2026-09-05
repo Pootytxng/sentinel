@@ -1,5 +1,10 @@
 # 2026-06-12 — Waitlist wiring (Cowork spec; owner GO + council gate-override granted)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The owner-GO task order, product framing, and
+> council gate-override language below are historical and do not authorize deployment, accounts,
+> telemetry, or external writes. Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; current
+> release, privacy, security, and owner gates remain independently authoritative.
+>
 > Owner GO'd wiring the waitlist and granted the council authority to overrule pre-existing process
 > gates where the mission needs it. KPI = 14-day waitlist signups; today the form collects NOTHING
 > (the funnel's one conversion action is dead). This spec makes it real, $0, and on-brand.

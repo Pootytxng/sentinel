@@ -1,5 +1,10 @@
 # OWNER VISION DIRECTIVE — 2026-07-02 (CANONICAL for design direction)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This former canonical owner directive is
+> preserved as historical owner-intent evidence but no longer governs current product or UI work.
+> Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; reactivation requires its amendment
+> process rather than treating this record as live authority.
+
 > Owner statement, persisted verbatim in substance: he is **not satisfied with the current
 > direction of the app so far**. His Linear/Geist/Raycast/shadcn product-UI-system brief
 > (captured in `2026-07-02-design-direction-product-ui-system.md`) is **the actual vision to

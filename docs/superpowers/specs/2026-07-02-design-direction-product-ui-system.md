@@ -1,5 +1,10 @@
 # Design direction — the product UI system (owner brief 2026-07-02, reconciled)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The governing design precedents, owner verdicts,
+> and build direction below are historical rather than current authority. Current product and
+> experience direction comes from `docs/PRODUCT_CONSTITUTION.md`; useful implementation and
+> accessibility evidence remains bounded provenance.
+
 > Owner supplied a Linear / Vercel Geist / Raycast / shadcn-principles brief ("specify it as a
 > product UI system, not as a vibe"). This spec extracts its enforceable rules and maps them onto
 > the EXISTING system — it does not start a parallel redesign. Governing precedents:

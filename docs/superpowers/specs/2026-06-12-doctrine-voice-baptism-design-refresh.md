@@ -1,5 +1,10 @@
 # 2026-06-12 — Doctrine voice baptism (§A now) + staged design refresh (§B/§C queued)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The Receipts Doctrine governing statement,
+> “execute now” instruction, product voice, and queued design priority below are historical. Current
+> voice and experience law come from `docs/PRODUCT_CONSTITUTION.md`. The body is preserved as design
+> history and bounded implementation provenance, not as an active task order.
+>
 > Owner directives: (1) full wording/labeling sweep — "baptize all previous copy with the new
 > directive"; tab labels (e.g. "Fix") reviewed for appeal; (2) queue a complete design overhaul.
 > Staged to protect the live beta: words → paint → (only if needed) demolition. Doctrine voice

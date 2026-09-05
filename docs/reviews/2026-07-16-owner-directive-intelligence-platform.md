@@ -1,5 +1,11 @@
 # OWNER DIRECTIVE — Compy Intelligence Platform (approved direction, begin implementing)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The “begin implementing” instruction and
+> priority override below are historical and no longer executable. Current product identity and
+> direction come from `docs/PRODUCT_CONSTITUTION.md`; product sequence derives through
+> `docs/product/ROADMAP.md`, and implementation ownership comes only from `docs/WORK_CONTROL.md`.
+> The original owner reasoning is preserved as history, not as a route around the Constitution.
+>
 > **Provenance:** owner-authored directive, 2026-07-16, reviewed and finalized with Cowork the same
 > day. Cowork's edits vs. the owner's draft (all owner-approved): fixed one wrong filename in the
 > read order, added the lane-separation rule (§0.11), namespaced the phase numbering (§6), added

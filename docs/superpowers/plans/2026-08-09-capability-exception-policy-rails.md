@@ -1,5 +1,11 @@
 # Capability Exception Policy Rails — Implementation Plan
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The product-routing statements below,
+> including BACKLOG as priority authority, are historical. Current product direction comes from
+> `docs/PRODUCT_CONSTITUTION.md`; current safety/capability authority is
+> `docs/ARCHITECTURE_LOCKS.md`. The remaining guard and capability details are bounded technical
+> provenance and do not independently authorize runtime or implementation changes.
+>
 > **For Claude:** REQUIRED SUB-SKILL: use superpowers:executing-plans to implement this plan task by
 > task. Use test-driven-development for every guard. PR #90 @ `c2868bc` now records exact
 > current-head gates; do not begin until its missing independent review and merge/disposition are

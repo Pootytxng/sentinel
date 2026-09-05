@@ -1,5 +1,10 @@
 # compy.gg FULL MAKEOVER — research digest + spitball (2026-07-14)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical research/design record, not
+> current product authority, priority, approval, work authorization, or deploy approval. Current
+> product direction is [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence
+> derived in [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Publish/deploy remains owner-gated.
+
 > Owner rejected the shipped two-strip hero (`2eda4eb`) outright and commissioned a complete site
 > makeover: research-first, spitball, decide together. This doc is the durable record of the
 > 5-lane research sweep (workflow `wf_294fe87f-8bc`, 5× sonnet researchers, ~358k tokens) and the

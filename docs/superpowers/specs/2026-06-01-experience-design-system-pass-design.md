@@ -1,5 +1,11 @@
 # Experience / Design System Pass — Architecture & Scope
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The green-lit status and
+> `PRODUCT_DIRECTION.md` source-of-truth routing below are historical, not executable authority.
+> Current product/experience direction comes from `docs/PRODUCT_CONSTITUTION.md`. The component,
+> accessibility, and implementation details remain bounded provenance only where they conform to
+> current architecture, release truth, and Work Control.
+>
 **Status:** Decisions A–F locked (§8). **Implementation GREEN-LIT by owner 2026-06-01** — building
 sub-project #1 (foundation) → #2 (Dashboard) → #3 (SystemPosture). NOTE: building ≠ launching; a
 public *release* stays separately gated on code-signing + legal.

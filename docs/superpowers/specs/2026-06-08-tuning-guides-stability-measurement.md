@@ -1,5 +1,10 @@
 # Tuning Guides + Stability Measurement — spec (owner-approved 2026-06-08)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This built-feature record remains technical
+> provenance, but its `PRODUCT_DIRECTION.md` product-routing statement is historical. Current
+> product direction comes from `docs/PRODUCT_CONSTITUTION.md`; current build truth comes from
+> `docs/RELEASE_STATE.md`, and safety remains governed by `docs/ARCHITECTURE_LOCKS.md`.
+>
 *Hardware-aware **advisory** undervolt guidance that sends the user to the **vendor's own tool**,
 paired with Compy **measuring whether the tune actually worked and held up** on their rig — reusing
 the session/sensor monitoring that already exists. **Compy never applies a voltage or a clock.** The
