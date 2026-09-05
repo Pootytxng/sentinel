@@ -445,4 +445,6 @@ lease-model provenance notice. An executor identity rule was added to `docs/WORK
 gate's mutation-author check binds to real commit identities. Owner-directed follow-up: the tests
 that pinned the retired role split were re-pinned to the lease law, never deleted. Reconciliation
 proof head: `c276292a42b1270b5f3c6d2da352f9bd8443a612` (full `npm test` 6522 passed / 0 failed,
-doc-budget ALL PASS). The pushed head is this record's own docs-only commit, one after that SHA.
+doc-budget ALL PASS). The commits between that SHA and the pushed head are this record and a
+type-check-only import fix to the lease guard (no assertion changed); the exact pushed head is the
+one the local gate passed on and is recorded on #369.
