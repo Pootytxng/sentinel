@@ -1,6 +1,6 @@
 # Product Rebirth Supersession Manifest
 
-**Migration branch:** `hq/product-constitution-rebirth`<br>
+**Historical migration branch:** `hq/product-constitution-rebirth`<br>
 **Ratified product authority:** `../PRODUCT_CONSTITUTION.md`
 
 This file records which pre-rebirth sources may still contain useful history but no longer define current product direction.
@@ -15,6 +15,10 @@ This file records which pre-rebirth sources may still contain useful history but
 - Execution status → `docs/BACKLOG.md`
 
 No other document may silently claim supremacy across these domains.
+
+Machine classification requires an exact path in a complete disposition row in either
+classification table below, or an exact path-only bullet under Semantic authority-audit corpus.
+Incidental mentions, incomplete rows, and lists in unrelated sections do not classify a file.
 
 ## Global pre-rebirth default
 
@@ -51,7 +55,7 @@ The following are **historical evidence only** unless a bounded factual statemen
 ## Current-looking mixed sources explicitly bounded by this migration
 
 These files retain useful technical or decision provenance, but their original status language can
-look executable. `src/product-constitution-guard.test.ts` now pins the exact 47-file current-looking
+look executable. `src/product-constitution-guard.test.ts` now pins the exact 59-file current-looking
 corpus across `docs/superpowers/specs`, `docs/superpowers/plans`, `docs/reviews`, and
 `docs/decisions`; each file must carry a top-level Constitution-routing supersession notice. The
 exact set is executable guard data rather than a hand-maintained second list here. Removing a notice,

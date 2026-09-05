@@ -214,8 +214,39 @@ function datedPathIsPreRebirth(path: string): boolean {
   return Boolean(match && match[1] < PRE_REBIRTH_CUTOFF);
 }
 
-function manifestClassifies(path: string): boolean {
-  return supersessionManifest.includes(`\`${path}\``);
+function manifestClassifies(path: string, manifest = supersessionManifest): boolean {
+  // Only these sections assign dispositions. Mentions elsewhere cannot classify a document.
+  const tableSections = new Set([
+    "Explicitly superseded product-direction sources",
+    "Current-looking mixed sources explicitly bounded by this migration",
+  ]);
+  let section = "";
+  let classifiedTable = false;
+  for (const line of manifest.split(/\r?\n/)) {
+    const heading = line.match(/^#{1,6}\s+(.+?)\s*$/);
+    if (heading) {
+      section = heading[1];
+      classifiedTable = false;
+      continue;
+    }
+    if (section === "Semantic authority-audit corpus" && line.trim() === "- `" + path + "`") {
+      return true;
+    }
+    if (!tableSections.has(section)) continue;
+    const cells = line.trim().split("|").slice(1, -1).map((cell) => cell.trim());
+    if (!line.trim().startsWith("|") || !line.trim().endsWith("|")) {
+      if (line.trim()) classifiedTable = false;
+      continue;
+    }
+    if (cells.join("|") === "Pre-rebirth source|Former role|Rebirth disposition" ||
+        cells.join("|") === "Source|Retained value|Superseded authority") {
+      classifiedTable = true;
+      continue;
+    }
+    if (classifiedTable && cells.length === 3 && cells[0] === "`" + path + "`" &&
+        cells.slice(1).every((cell) => cell.length > 0 && !/^[-:]+$/.test(cell))) return true;
+  }
+  return false;
 }
 
 function hasTopLevelConstitutionBoundary(body: string): boolean {
@@ -250,6 +281,31 @@ export function findUndisclosedClassifiedDirectiveCitations(
   }
   return offenders;
 }
+
+describe("structured manifest classification (#379)", () => {
+  const path = "docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md";
+  const table = "## Current-looking mixed sources explicitly bounded by this migration\n\n" +
+    "| Source | Retained value | Superseded authority |\n|---|---|---|\n";
+  const row = "| `" + path + "` | implementation evidence | historical execution direction |";
+
+  it.each([
+    "TODO: `" + path + "` has not been classified.",
+    "## Notes\n- `" + path + "`",
+    table + "| `" + path + "` | evidence | |",
+    table + "| prefix `" + path + "` | evidence | historical direction |",
+    "## Unrelated table\n| Source | Retained value | Superseded authority |\n|---|---|---|\n" + row,
+    "## Semantic authority-audit corpus\n- `" + path + "` remains unclassified",
+    "## Semantic authority-audit corpus\n### Pending\n- `" + path + "`",
+  ])("does not classify from incidental or incomplete text: %s", (manifest) => {
+    expect(manifestClassifies(path, manifest)).toBe(false);
+  });
+
+  it("accepts an exact classified row and the bounded historical corpus list", () => {
+    expect(manifestClassifies(path, table + row)).toBe(true);
+    expect(manifestClassifies(path, "### Semantic authority-audit corpus\n\n- `" + path + "`\n")).toBe(true);
+    expect(manifestClassifies(path + ".other", table + row)).toBe(false);
+  });
+});
 
 describe("Compy product constitution authority", () => {
   it("contains the ratified north-star laws", () => {

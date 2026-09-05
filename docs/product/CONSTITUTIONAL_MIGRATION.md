@@ -33,8 +33,8 @@ because they are older, detailed, linked from an issue, or quoted by an agent.
 ## 3. Native migration records
 
 - Work Control / migration issue: **#369**
-- Draft migration PR: **#371**
-- Migration branch: `hq/product-constitution-rebirth`
+- Landed migration PR: **#371**; post-migration guard repair: **#379**
+- Historical migration branch: `hq/product-constitution-rebirth` (retired after landing)
 
 Never trust a SHA, executor, worktree, claim, or proof receipt copied into prose as current. Derive the
 exact current `origin/main`, PR head, migration branch head, active mutation lease(s), worktree/dirty
@@ -410,7 +410,7 @@ This repair:
 
 - scans the full body of legacy specs, plans, reviews, and decisions for multiple executable-authority
   shapes rather than trusting one header string or the first 1,800 bytes;
-- pins the exact 47-file current-looking corpus so both detector blindness and unclassified additions
+- pins the exact 59-file current-looking corpus so both detector blindness and unclassified additions
   fail loudly, and keeps a late-document positive control that proves the full-body scan;
 - expands top-level supersession boundaries across the design-system, Gaming Mode, Knowledge,
   monetization, Console HUD, Lab, Monitor, Blackbook, Intelligence, capability, comprehensibility,
@@ -441,10 +441,32 @@ restored to a clean state before any write. `origin/main` `1aae437a` (PR #377) w
 conflicts. PR #375 (`hq/dynamic-mutation-lease`) was reconciled into this branch by merge; the single
 conflicted file was this runbook, resolved so section 6 keeps both the explicit PR #370 path list and
 the "if main moved" procedure, and section 16 keeps the full historical execution record beneath the
-lease-model provenance notice. An executor identity rule was added to `docs/WORK_CONTROL.md` so the
-gate's mutation-author check binds to real commit identities. Owner-directed follow-up: the tests
+lease-model provenance notice. An executor identity rule was added to `docs/WORK_CONTROL.md` so reviewers can compare
+the declared mutation authors with real commit identities. The gate itself checks declarations;
+it does not reconstruct earlier contributors from Git history. Owner-directed follow-up: the tests
 that pinned the retired role split were re-pinned to the lease law, never deleted. Reconciliation
 proof head: `c276292a42b1270b5f3c6d2da352f9bd8443a612` (full `npm test` 6522 passed / 0 failed,
 doc-budget ALL PASS). The commits between that SHA and the pushed head are this record and a
 type-check-only import fix to the lease guard (no assertion changed); the exact pushed head is the
 one the local gate passed on and is recorded on #369.
+
+## 20. Post-migration correction record — Codex (#379, 2026-09-05)
+
+The earlier writer history omitted HQ commits `029ae348fd952ebb53ca5e2f7aa62d16f95481bc`
+and `8816e085f7706b759f5d8957d9891569b5e1a85d`, both authored through the GitHub API
+under the account identity Pootytang. They changed the supersession manifest and its guard;
+HQ therefore belongs in the migration mutation-author history, not its nonauthor acceptance set.
+
+After Cowork released #369, Codex took the five-path #379 repair lease from main
+`14c5fa1ca88635a82ad3a07d1e85a23c00a756df`. The review gate now always retains the receipt
+actor and rejects inconsistent author declarations. The manifest guard checks structured
+classifications instead of arbitrary path mentions. The declared-author check still cannot
+discover an omitted earlier writer: independent review must reconcile the complete Git and
+handoff provenance before acceptance. No historical independent approval is invented here.
+
+The migration delivered 117 changed paths, including execution tooling, rather than only
+documentation/bootstrap and one test. The measured current-looking corpus contains 59 files.
+The unfinished Codex patch and preserved WIP branch remain provenance, not accepted repairs
+or deletion candidates. Exact repair head, tests, remaining flags and lease disposition live
+on #379. Release-state files remain in the separate overlapping #225 lane until a recorded
+transfer; a historical full-test PASS does not waive separate release-state verification.
