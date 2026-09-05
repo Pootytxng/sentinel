@@ -442,5 +442,7 @@ conflicts. PR #375 (`hq/dynamic-mutation-lease`) was reconciled into this branch
 conflicted file was this runbook, resolved so section 6 keeps both the explicit PR #370 path list and
 the "if main moved" procedure, and section 16 keeps the full historical execution record beneath the
 lease-model provenance notice. An executor identity rule was added to `docs/WORK_CONTROL.md` so the
-gate's mutation-author check binds to real commit identities. The exact head SHA of this
-reconciliation will be added by the closing step.
+gate's mutation-author check binds to real commit identities. Owner-directed follow-up: the tests
+that pinned the retired role split were re-pinned to the lease law, never deleted. Reconciliation
+proof head: `c276292a42b1270b5f3c6d2da352f9bd8443a612` (full `npm test` 6522 passed / 0 failed,
+doc-budget ALL PASS). The pushed head is this record's own docs-only commit, one after that SHA.
