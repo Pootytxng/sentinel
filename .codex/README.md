@@ -4,7 +4,7 @@ This file is the prose that used to live in the header of `config.toml`. It move
 2026-09-04 (#196) because comments cannot survive in that file any more - see "Why this exact
 shape" below. Do not add a comment line to `config.toml`; put it here instead.
 
-## 1. The file IS loaded, and it is the advisory lane's floor
+## 1. The file IS loaded, and it is the review-run default floor
 
 Current Codex reads a project-scoped `.codex/config.toml` whenever the repository is trusted, and
 this repo is `trust_level = "trusted"` in the global `%USERPROFILE%\.codex\config.toml`. The keys
@@ -12,8 +12,10 @@ are LIVE for ordinary runs started here, not portable scaffolding. (An older hea
 opposite - "NOT LOADED BY DEFAULT ... only when CODEX_HOME points at this directory" - which was
 true of codex-cli 0.146.0 on 2026-08-18 and is not true now.)
 
-Codex's role in this repo is READ-ONLY audit and advice (AGENTS.md lane split), so the config
-refuses writes and refuses to prompt for escalation rather than granting a bypass:
+Codex is an eligible executor under a mutation lease (docs/WORK_CONTROL.md), not a permanently
+read-only advisor. This file is the per-run DEFAULT for review runs: it refuses writes and refuses
+to prompt for escalation rather than granting a bypass. A write lane is launched above it with
+explicit `--sandbox` / `-c` overrides (section 3) AND a current mutation lease:
 
 - `sandbox_mode = "read-only"` - the filesystem/exec sandbox rejects writes and escalations.
 - `approval_policy = "never"` - no interactive approval prompts; combined with read-only, an
@@ -29,14 +31,15 @@ unattended: frontend-ipc-contract-auditor's `tsc --noEmit`, self-reviewer's CDP 
 web-design-director's headless-Chrome capture cannot run here. Those agents degrade to
 source-only reasoning and MUST say so rather than claim a check they could not execute.
 
-To actually RUN those checks, an owner-approved VERIFICATION lane is launched SEPARATELY - it is
-NOT switchable from this file. Codex profiles are `[profiles.<name>]` tables in a config.toml,
-selected at launch with `codex --profile <name>`; this tracked file defines none and selects
-none (the guard pins its exact shape). A verification lane that needs command
-execution is therefore started with explicit runtime overrides on the command line - `--sandbox`
-(for example `--sandbox workspace-write` for a write-capable step) and `-c key=value` (for
-example `-c approval_policy=on-request`) - because the runtime layer sits ABOVE project config
-(section 3). The safe default stays read-only/never for every other run started here.
+To actually RUN those checks, a VERIFICATION or WRITE lane is launched SEPARATELY under a mutation
+lease (docs/WORK_CONTROL.md) - it is NOT switchable from this file. Codex profiles are
+`[profiles.<name>]` tables in a config.toml, selected at launch with `codex --profile <name>`;
+this tracked file defines none and selects none (the guard pins its exact shape). A verification
+or write lane that needs command execution is therefore started with explicit runtime overrides
+on the command line - `--sandbox` (for example `--sandbox workspace-write` for a write-capable
+step) and `-c key=value` (for example `-c approval_policy=on-request`) - because the runtime
+layer sits ABOVE project config (section 3). The safe default stays read-only/never for every
+other run started here.
 
 ## 2. Why this exact shape (the import sync)
 

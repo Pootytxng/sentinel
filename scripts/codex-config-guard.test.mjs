@@ -14,9 +14,11 @@
 // `[mcp_servers.shadcn]` copied from `.mcp.json`. This guard therefore pins the file to that shape,
 // with each copied table asserted EQUAL TO ITS SOURCE rather than absent:
 //
-//   1. the advisory lane's floor: `sandbox_mode = "read-only"` and `approval_policy = "never"`, as
-//      bare top-level keys BEFORE the first [table] header (below one, TOML silently makes them
-//      that table's keys and the top-level setting is gone);
+//   1. the review-run default floor: `sandbox_mode = "read-only"` and `approval_policy = "never"`,
+//      as bare top-level keys BEFORE the first [table] header (below one, TOML silently makes them
+//      that table's keys and the top-level setting is gone). This is a per-run default, not a role:
+//      Codex is an eligible executor under a mutation lease (docs/WORK_CONTROL.md) and a write lane
+//      launches above this floor with explicit --sandbox / -c overrides;
 //   2. no `@latest` anywhere - the `.mcp.json` source is policed by mcp-config-guard.test.mjs, this
 //      polices the copy;
 //   3. the only MCP server table is `[mcp_servers.shadcn]`, and its args pin exactly the same
@@ -112,7 +114,7 @@ const pinOf = (args) => (Array.isArray(args) ? args.find((a) => EXACT_PIN.test(a
 const read = () => readFileSync(CONFIG, "utf8");
 const json = (path) => JSON.parse(readFileSync(path, "utf8"));
 
-describe("codex config: the advisory lane's read-only floor", () => {
+describe("codex config: the review-run default read-only floor", () => {
   it("declares sandbox_mode read-only and approval_policy never", () => {
     const lines = settings(read());
     expect(lines).toContain('sandbox_mode = "read-only"');
