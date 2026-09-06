@@ -1,0 +1,71 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Lease holder and sole mutation author of the proof delta. Closure is executed by GitHub's 'Closes #384' keyword when PR #386 merges into main, under the same exact-head proof as 2026-09-06-merge-pr-386.json; Cowork HQ (cowork-hq) verifies the closure and posts the closeout. HQ authored no mutation in the proof delta.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/384#issuecomment-5555968420",
+  "overlapExclusive": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Same inspection as 2026-09-06-merge-pr-386.json: HQ worktree detached clean at 47f325f9; origin branch and PR head 47f325f9; origin/main 901f090c; PR #386 OPEN/MERGEABLE/CLEAN; author worktree clean at the same head; no live sentinel build/test/agent process. Issue #384's exit condition (Phase 1 exit holds; nothing open blocks Phase 2) is stated in docs/BACKLOG.md at this head and each P0 acceptance item is bound to #371/#380/#383.",
+  "transition": "close-issue",
+  "currentHead": "47f325f9b3bb04d312fe678290c8e23180909756",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83/logs/verify-local-2026-09-06T01-11-24Z.log",
+      "summary": "428 frontend files passed; 6482 tests passed / 4 skipped (6486)"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83/logs/verify-local-2026-09-06T01-11-24Z.log",
+      "summary": "TypeScript and Vite production build PASS"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83/logs/verify-local-2026-09-06T01-11-24Z.log",
+      "summary": "1254 passed; 0 failed; 24 ignored"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83/logs/verify-local-2026-09-06T01-11-24Z.log",
+      "summary": "clippy clean under -D warnings"
+    }
+  ],
+  "gateEvidenceNote": "See 2026-09-06-merge-pr-386.json gateEvidenceNote: author's protected-push verification at this head, bound by commit timestamp 01:07:05Z and pre-push run 01:11:24Z; reviewer re-ran 7 guard files (230/230), doc-budget ALL PASS, disposition audit OK at this head.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "cowork-hq",
+    "status": "passed",
+    "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+    "verdict": "APPROVE",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/386#pullrequestreview-5124829236",
+    "reviewerNote": "Fresh nonauthor Cowork HQ review (cowork-hq, canonical cowork); the delta's only mutation author is claude-code. COMMENTED-state native review carries the APPROVE verdict because GitHub refuses the APPROVED event from the PR-author account."
+  },
+  "pr": 386,
+  "issue": 384,
+  "kind": "lane",
+  "branch": "claude/post-constitution-reconciliation-d5df83"
+}
