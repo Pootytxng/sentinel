@@ -177,7 +177,12 @@ $sectionByteBudgets = @{
   # one closed row this queue had was archived long ago, so the NEXT payment has no closed row to
   # move - it will have to come from open-row narrative that has gone historical, the way this one
   # did. Note that too, rather than reaching for the cap.
-  "docs/BACKLOG.md::Re-derive current blockers" = 1024
+  # The 24064 -> 23808 history above belongs to the retired Conformance queue this cap was re-pointed
+  # away from in #369. 2026-09-05: re-pointed again, to the P1 heading the post-constitution
+  # re-derivation renamed it to. The cap was NOT raised - the first draft of that re-derivation
+  # measured 2217 bytes and was cut to 971 to fit, which is what "keep the blocker list short" means
+  # in bytes. Same rule from here: pay an overflow out of the prose, never out of the number.
+  "docs/BACKLOG.md::Roadmap Phase 1 blockers" = 1024
   "docs/BACKLOG.md::Owner-gated / external decisions" = 512
 }
 
