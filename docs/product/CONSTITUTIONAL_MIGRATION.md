@@ -1,6 +1,9 @@
 # Compy Constitutional Migration — Synchronization Runbook
 
-**Status:** ACTIVE until issue #369 and PR #371 close and merged-main boot verification passes.
+**Status:** **CLOSED 2026-09-05** — issue #369 closed, PR #371 merged, guard repairs #379/#380 and
+#382/#383 landed. Retained as the historical runbook for how the migration was executed. It is not a
+work queue, and it does not authorize restarting migration work. Current execution status lives in
+[`../BACKLOG.md`](../BACKLOG.md); current product sequence in [`ROADMAP.md`](ROADMAP.md).
 
 This is the execution runbook for the constitutional rebirth. GitHub/native repository state is
 authority; chat is coordination context. Re-derive live state before every mutation, handoff, proof,

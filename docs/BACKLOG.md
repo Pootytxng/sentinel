@@ -16,11 +16,9 @@ must be re-triaged against current safety/release truth and the reborn roadmap.
 
 ---
 
-## P0 — Constitutional migration
+## P0 — Constitutional migration — **COMPLETE 2026-09-05**
 
-- [ ] Land the product rebirth migration only after all acceptance proofs below pass.
-
-Required before merge:
+Landed on `main`. Do not reopen this phase, and do not restart migration work.
 
 - [x] `PRODUCT_CONSTITUTION.md` established as supreme product authority.
 - [x] Domain authority separated: Product Constitution / Architecture Locks / Release State / Work Control.
@@ -29,32 +27,31 @@ Required before merge:
 - [x] Root README, docs index, Codex bootstrap (`AGENTS.md`), and Claude bootstrap (`CLAUDE.md`) point to the Constitution.
 - [x] `ARCHITECTURE_LOCKS.md` stripped of obsolete product hierarchy while preserving safety/immutability contracts.
 - [x] Backlog rebuilt as an execution ledger instead of product doctrine.
-- [ ] Add and review a mechanical product-constitution drift guard.
-- [ ] Verify existing `CLAUDE.md` law guard still passes after the bootstrap rewrite.
-- [ ] Repo-wide audit: classify every remaining legacy doctrine reference as historical, bounded evidence, or active defect.
-- [ ] Independent review: compare installed Constitution/derived docs to owner-ratified discussion; no material omission or reinterpretation.
-- [ ] Verify migration branch is based on current `main` or safely rebase/retarget without importing superseded doctrine.
-- [ ] Open/merge the constitutional migration through current Work Control / proof rules.
+- [x] Mechanical drift guard: `src/product-constitution-guard.test.ts` (+ `src/capability-exception-policy-guard.test.ts`), hardened by #379/#382.
+- [x] `CLAUDE.md` law guard re-verified after the bootstrap rewrite: `src/claude-md-laws-guard.test.ts`.
+- [x] Every remaining legacy doctrine reference classified as historical, bounded evidence, or defect in `product/SUPERSESSION_MANIFEST.md`; the guard parses the real manifest (#382).
+- [x] Independent review at each landed head; verdicts bound to exact heads in the work-control receipts.
+- [x] Migration merged: PR #371 (issue #369), guard repairs PR #380 (issue #379) and PR #383 (issue #382).
 
-**Stop rule:** no ordinary product feature work should use this branch. It is a docs/control migration.
+**Evidence:** `product/CONSTITUTIONAL_MIGRATION.md` is the closed runbook, retained as history.
 
 ---
 
-## P1 — Re-derive current blockers after constitutional merge
+## P1 — Roadmap Phase 1 blockers — re-derived 2026-09-05 at `901f090c`
 
-Do **not** copy the pre-rebirth queue forward mechanically.
+Re-triaged against [Phase 1](product/ROADMAP.md#phase-1--safe-current-build-stabilization), not
+inherited. **Nothing open blocks Phase 2.**
 
-After the Constitution lands:
+- **Repaired here:** the stranded PR #383 merge receipt, whose loss reddened the gate fleet-wide.
+- **Also repaired:** this worktree's `core.hooksPath`, which had silently disarmed its pre-push gate.
+- **Not this lane's:** `RELEASE_STATE.md`'s stale commit/stamp anchors. The desk runs unmerged
+  `c82440a1`; both are already fixed at `3ab9b010` on the live #224/#225 lane. Let that lane land.
+- **Not blockers:** #156 — the post-install stamp gate catches it; never loosen it. #283, #292, #64.
+- **Owner-gated:** #321 CI billing, #205 signing, #201 `compy.gg` — `OWNER_ACTION_CHECKLIST.md`.
+- **Not inherited:** the #295-#351 governance cluster is Phase-1-irrelevant by the roadmap's own
+  deprioritization rule; it must not gate product learning.
 
-1. fetch current `main`;
-2. run/inspect current Release State verification;
-3. inspect open work-control/release/safety issues and PRs;
-4. identify any blocker that prevents trustworthy product development or external testing;
-5. close/supersede stale completed control issues;
-6. produce a short current blocker list ranked by actual user/proof risk.
-
-Only blockers that materially threaten safe mutation, rollback, measurement truth, release integrity,
-or reliable external testing outrank the reborn product roadmap.
+Phase 1 exit holds. Proceed to P2.
 
 ---
 
