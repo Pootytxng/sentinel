@@ -683,12 +683,25 @@ mod diagnostics_tests {
             "Peripherals",
             "Background services",
         ];
-        assert!(names.len() >= fixed.len(), "expected at least the fixed set, got {names:?}");
+        // "Machine Model" is a fixed SUFFIX, not part of the rig-dependent middle: it is pushed
+        // unconditionally, so a build where it is absent or merely optional is a build where a
+        // consumer cannot rely on it being there. Asserted separately from the prefix so the
+        // existing eight keep their exact contract order (#385).
+        assert!(
+            names.len() > fixed.len(),
+            "expected at least the fixed set plus the Machine Model summary, got {names:?}"
+        );
         assert_eq!(&names[..fixed.len()], &fixed, "the fixed section set/order is a UI + Export contract");
-        // The tail is rig-dependent + condition-gated: the per-category "Services · …" inventory
+        assert_eq!(
+            names.last().map(String::as_str),
+            Some("Machine Model"),
+            "the Machine Model summary is always the LAST section, so a reader reaches it from a known place"
+        );
+        // The middle is rig-dependent + condition-gated: the per-category "Services · …" inventory
         // groups (which appear depends on the live services), plus the drift-only recovery guide and
-        // the (scan-gated) overlay-tools advisory. Every trailing section must be one of these.
-        for extra in &names[fixed.len()..] {
+        // the (scan-gated) overlay-tools advisory. Every section between the prefix and the Machine
+        // Model suffix must be one of these.
+        for extra in &names[fixed.len()..names.len() - 1] {
             assert!(
                 extra.starts_with("Services · ")
                     || extra == "Background services · How to restore"
