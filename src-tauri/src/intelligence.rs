@@ -179,7 +179,9 @@ pub(crate) fn load_store_from(path: &Path) -> IntelligenceStore {
     }
 }
 
-fn load_store() -> IntelligenceStore {
+/// Read the persisted store. READ-ONLY: unlike `get_intelligence_timeline`, this never refreshes
+/// or appends a snapshot, which is why the Machine Model composes from it.
+pub(crate) fn load_store() -> IntelligenceStore {
     load_store_from(&store_path())
 }
 

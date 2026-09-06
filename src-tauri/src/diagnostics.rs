@@ -479,7 +479,161 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         sections.push(DiagnosticSection { name: "On-screen overlays".into(), entries });
     }
 
+    // ─── Shared Machine Model (Roadmap Phase 2, #385) ─────────────────
+    //
+    // ONE bounded section, rendered from the SAME value `get_machine_model` returns. It is built
+    // here and rendered by a pure function of that value, so this surface can never become a
+    // second implementation of the same truth (MACHINE_MODEL.md §8).
+    sections.push(machine_model_section(&crate::machine_model::build()));
+
     sections
+}
+
+/// Render the Machine Model as one diagnostics section. PURE in `m`: it reads nothing else, so
+/// every value below traces to the model the command returns.
+pub(crate) fn machine_model_section(
+    m: &crate::machine_model::MachineModel,
+) -> DiagnosticSection {
+    use crate::machine_model::Freshness;
+
+    let mut entries = Vec::<DiagnosticEntry>::new();
+
+    // Freshness in plain English, so a reader can tell a live read from a remembered one.
+    let freshness_note = |f: Freshness| -> &'static str {
+        match f {
+            Freshness::Stamped => "Compy recorded when it observed this.",
+            Freshness::LiveAtBuild => "Read just now; the producer records no timestamp of its own.",
+            Freshness::UnstampedCache => "Read once this session and remembered since. Not proof of a re-read just now.",
+            Freshness::NotApplicable => "No value, so no freshness.",
+        }
+    };
+    let show = |f: &crate::machine_model::Fact<String>| -> (String, Option<String>) {
+        match (f.value.as_ref(), f.unknown_reason.as_ref()) {
+            (Some(v), _) => (
+                v.clone(),
+                Some(format!("{} · {}", f.source, freshness_note(f.freshness))),
+            ),
+            (None, Some(why)) => ("Unknown".into(), Some(why.clone())),
+            (None, None) => ("Unknown".into(), None),
+        }
+    };
+
+    // 1. What machine is this?
+    for (label, fact) in [
+        ("Processor", &m.identity.cpu),
+        ("Graphics", &m.identity.gpu),
+        ("Graphics driver", &m.identity.gpu_driver),
+        ("Display", &m.identity.display),
+        ("Windows", &m.identity.windows),
+        ("Rig identity", &m.identity.rig_hash),
+    ] {
+        let (value, note) = show(fact);
+        entries.push(DiagnosticEntry { label: label.into(), value, note });
+    }
+    let (ram_value, ram_note) = match m.identity.ram_gb.value {
+        Some(gb) => (
+            format!("{gb} GB"),
+            Some(format!(
+                "{} · {}",
+                m.identity.ram_gb.source,
+                freshness_note(m.identity.ram_gb.freshness)
+            )),
+        ),
+        None => ("Unknown".into(), m.identity.ram_gb.unknown_reason.clone()),
+    };
+    entries.push(DiagnosticEntry { label: "Memory".into(), value: ram_value, note: ram_note });
+
+    entries.push(DiagnosticEntry {
+        label: "Identity producers disagree".into(),
+        value: if m.identity.disagreements.is_empty() {
+            "No".into()
+        } else {
+            m.identity
+                .disagreements
+                .iter()
+                .map(|d| format!("{}: {} vs {}", d.field, d.left.value, d.right.value))
+                .collect::<Vec<_>>()
+                .join(" · ")
+        },
+        note: Some(if m.identity.disagreements.is_empty() {
+            "Every producer that contributes to rig identity currently agrees.".into()
+        } else {
+            format!(
+                "{} A difference is not proof that either reading is wrong.",
+                m.identity.canonical_rule
+            )
+        }),
+    });
+
+    // 2. What recently changed?
+    entries.push(DiagnosticEntry {
+        label: "Recorded changes".into(),
+        value: format!(
+            "{} recorded · {} identity snapshots",
+            m.chronology.total_events, m.chronology.identity_snapshots
+        ),
+        note: Some(match m.chronology.entries.first() {
+            Some(e) => format!("Most recent: {} ({}). {}", e.summary, e.observed_at, m.chronology.causation_note),
+            None => m
+                .chronology
+                .unknown_reason
+                .clone()
+                .unwrap_or_else(|| m.chronology.causation_note.to_string()),
+        }),
+    });
+    if let Some(from) = m.chronology.recorded_from.as_ref() {
+        entries.push(DiagnosticEntry {
+            label: "History starts".into(),
+            value: from.clone(),
+            note: Some("Nothing before this date is recorded, which is different from nothing having changed.".into()),
+        });
+    }
+
+    // 3. What did Compy change?
+    let c = &m.compy_changes;
+    entries.push(DiagnosticEntry {
+        label: "Changes Compy applied".into(),
+        value: format!(
+            "{} recorded · {} active now · {} rolled back · {} reverted outside Compy",
+            c.total_recorded, c.active_now, c.rolled_back, c.applied_but_not_in_effect
+        ),
+        note: Some(c.ledger_note.into()),
+    });
+    entries.push(DiagnosticEntry {
+        label: "Applied on this machine".into(),
+        value: format!(
+            "{} elsewhere · {} unknown",
+            c.not_on_this_rig, c.rig_unknown
+        ),
+        note: Some("Rows written before rig stamping existed stay unknown rather than being assumed to be this machine.".into()),
+    });
+
+    // 4. What evidence can we trust right now?
+    entries.push(DiagnosticEntry {
+        label: "Evidence not available".into(),
+        value: if m.evidence.unknowns.is_empty() {
+            "None".into()
+        } else {
+            format!("{} facts", m.evidence.unknowns.len())
+        },
+        note: m
+            .evidence
+            .unknowns
+            .iter()
+            .take(4)
+            .map(|u| format!("{}: {}", u.field, u.reason))
+            .reduce(|a, b| format!("{a} — {b}")),
+    });
+    entries.push(DiagnosticEntry {
+        label: "Model built".into(),
+        value: m.built_at.clone(),
+        note: Some(format!(
+            "Schema v{}. This is when the model was composed, not when any fact in it was observed.",
+            m.schema_version
+        )),
+    });
+
+    DiagnosticSection { name: "Machine Model".into(), entries }
 }
 
 // ─── Apply / Rollback ────────────────────────────────────────────────────

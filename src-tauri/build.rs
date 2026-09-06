@@ -70,6 +70,7 @@ const APP_COMMANDS: &[&str] = &[
     "get_ledger_health",
     "get_leftovers",
     "get_license_status",
+    "get_machine_model",
     "get_memory_pressure",
     "get_nic_driver_info",
     "get_pending_care_incident",

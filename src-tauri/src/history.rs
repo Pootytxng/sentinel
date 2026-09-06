@@ -98,23 +98,27 @@ pub(crate) struct AppliedChange {
 // this flag (state changes outside Compy can revert what we applied), so it
 // has to be recomputed every time history is read.
 #[derive(Serialize)]
+/// The Machine Model (`machine_model.rs`) reads the marked fields so it can present applied-change
+/// truth without re-deriving `is_still_active` / `on_this_rig`, which would create a second, drifting
+/// answer to the same question. Visibility only — no field here changes meaning, and this stays the
+/// canonical producer.
 pub(crate) struct AppliedChangeView {
-    id: String,
+    pub(crate) id: String,
     rec_id: String,
-    rec_title: String,
-    applied_at: String,
+    pub(crate) rec_title: String,
+    pub(crate) applied_at: String,
     snapshot: serde_json::Value,
-    status: String,
-    is_still_active: bool,
+    pub(crate) status: String,
+    pub(crate) is_still_active: bool,
     applied_action: Option<AppliedAction>,
-    rollback_action: Option<RollbackAction>,
+    pub(crate) rollback_action: Option<RollbackAction>,
     app_version_at_apply: Option<String>,
     ruleset_version_at_apply: Option<String>,
     elevation_used: Option<bool>,
     // Read-only, computed-at-read enrichment (never persisted): a human-readable description of the
     // state a rollback restores, for the Fix surface trust-switch. Derived only from the captured
     // typed snapshot; None → the UI shows the generic "your previous setting".
-    restores_label: Option<String>,
+    pub(crate) restores_label: Option<String>,
     // The "after" half of the before/after pair: the state Compy's change set things TO, derived
     // from the typed AppliedAction. Read-only, computed-at-read, never persisted. None for legacy
     // entries with no captured action → the UI shows just the prior ("before").
@@ -132,10 +136,10 @@ pub(crate) struct AppliedChangeView {
     // Compared on the stable identity fields only (gpu · ram_gb · display) — deliberately
     // driver-INsensitive, unlike the session hash: a driver update must not make your own
     // ledger read "different hardware". None = legacy entry with no stamp (honest unknown).
-    on_this_rig: Option<bool>,
+    pub(crate) on_this_rig: Option<bool>,
     // Pass-through of the persisted rollback stamp. None = still applied, or rolled back
     // before the stamp existed — the UI must render that as "date unknown", never a guess.
-    rolled_back_at: Option<String>,
+    pub(crate) rolled_back_at: Option<String>,
 }
 
 impl AppliedChangeView {
@@ -297,6 +301,44 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         hw_fingerprint: c.hw_fingerprint,
         on_this_rig,
         rolled_back_at: c.rolled_back_at,
+    }
+}
+
+/// Test-only constructor for a ledger VIEW with the computed-at-read fields set directly, so a
+/// consumer's tests can exercise active / rolled-back / other-rig rows without a real ledger, a
+/// real registry, or a real rig. Never compiled into the shipped binary.
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn test_view(
+    id: &str,
+    rec_id: &str,
+    rec_title: &str,
+    applied_at: &str,
+    status: &str,
+    is_still_active: bool,
+    on_this_rig: Option<bool>,
+    rolled_back_at: Option<String>,
+    reversible: bool,
+) -> AppliedChangeView {
+    AppliedChangeView {
+        id: id.into(),
+        rec_id: rec_id.into(),
+        rec_title: rec_title.into(),
+        applied_at: applied_at.into(),
+        snapshot: serde_json::Value::Null,
+        status: status.into(),
+        is_still_active,
+        applied_action: None,
+        rollback_action: reversible.then_some(RollbackAction::RestoreGameModeFromSnapshot),
+        app_version_at_apply: None,
+        ruleset_version_at_apply: None,
+        elevation_used: None,
+        restores_label: None,
+        applied_label: None,
+        payoff_label: None,
+        hw_fingerprint: None,
+        on_this_rig,
+        rolled_back_at,
     }
 }
 
