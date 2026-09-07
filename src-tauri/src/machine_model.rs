@@ -1952,15 +1952,46 @@ mod machine_model_tests {
             true,
         ));
         let m = f.model();
-        let section = crate::diagnostics::machine_model_section(&m);
-        let rendered = serde_json::to_string(&section).unwrap();
 
-        // The section is a pure render of &MachineModel, so it cannot be a second implementation.
-        // Every value it shows has to trace back to the model it was handed.
-        assert!(rendered.contains(m.identity.gpu.value.as_deref().unwrap()));
-        assert!(rendered.contains(m.identity.rig_hash.value.as_deref().unwrap()));
-        assert!(rendered.contains(&m.compy_changes.active_now.to_string()));
-        assert!(rendered.contains(&m.built_at));
+        // Pinned EXHAUSTIVELY and by exact string, not by substring over four of eleven entries.
+        // Containment could not tell "1 on this PC" from "1 elsewhere", and a section that grew a
+        // twelfth entry — or quietly dropped one — still passed. Every value below is a claim, so
+        // every value is pinned; changing one has to be a deliberate edit here too (#385 review).
+        let expected: Vec<(&str, &str)> = vec![
+            ("Processor", "AMD Ryzen 7 7800X3D"),
+            ("Graphics", "Radeon RX 9070 XT"),
+            ("Graphics driver", "25.5.1"),
+            ("Display", "2560x1440@250"),
+            ("Windows", "Windows 11 Pro 24H2 (build 26100.1742)"),
+            ("Rig identity", "abc123"),
+            ("Memory", "32 GB"),
+            ("Identity producers disagree", "No"),
+            ("Recorded changes", "0 recorded · 1 identity snapshots"),
+            ("Earliest dated record", "2026-07-01T00:00:00Z"),
+            (
+                "Changes Compy applied",
+                "1 recorded · 1 active on this PC · 0 rolled back · 0 reverted outside Compy",
+            ),
+            ("In effect, other or unknown PC", "0 recorded on another PC · 0 unattributed"),
+            ("Applied on this machine", "1 on this PC · 0 elsewhere · 0 unknown"),
+            ("Evidence not available", "1 facts"),
+            ("Model built", "2026-09-06T12:00:00Z"),
+        ];
+        let actual: Vec<(String, String)> = rendered_entries(&m)
+            .into_iter()
+            .map(|(l, v, _)| (l, v))
+            .collect();
+        let actual_refs: Vec<(&str, &str)> =
+            actual.iter().map(|(l, v)| (l.as_str(), v.as_str())).collect();
+        assert_eq!(actual_refs, expected);
+
+        // And the pinned strings are the MODEL's, not a second implementation's.
+        assert_eq!(m.identity.gpu.value.as_deref(), Some("Radeon RX 9070 XT"));
+        assert_eq!(m.compy_changes.active_now, 1);
+        assert_eq!(m.compy_changes.on_this_rig, 1);
+        assert_eq!(m.built_at, "2026-09-06T12:00:00Z");
+        // Every entry carries a note: a bare value with no explanation is not a receipt.
+        assert!(rendered_entries(&m).iter().all(|(_, _, note)| !note.is_empty()));
     }
 
     // ── 7b. The RENDERED text is held to the same truth standard as the model ──
