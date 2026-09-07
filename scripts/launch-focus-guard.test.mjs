@@ -289,12 +289,69 @@ export function classifyForegroundReading({
  *     → in-process (tao's set_focus, an activating ShowWindow, the window-state plugin);
  *   the family takes the foreground with NO family focus event near it
  *     → something outside the launched tree fronted it (the launcher, the shell);
- *   a MINIMIZESTART on a window OUTSIDE the family is the owner's window going down: the harm itself.
+ *   a MINIMIZESTART on a window OUTSIDE the family is the owner's window going down: the harm itself
+ *     — unless the window is this test run's OWN tooling console, see `isRunnerTooling` below.
  *
  * Pure, so it runs on every machine against recorded traces. It summarises; the gate's verdict is
  * still `classifyForegroundReading` until a measured trace has been read — a summary is not a law.
  */
-export function summarizeTrace({ events = [], launchedPid, familyPids = [] } = {}) {
+/** Windows' own class name for a console window. A CLASS, assigned by the OS — not a title. */
+export const CONSOLE_WINDOW_CLASS = "ConsoleWindowClass";
+/** A pid chain longer than this is a cycle or a lie; stop rather than spin. */
+export const ANCESTRY_MAX_HOPS = 24;
+
+/**
+ * THE TEST RUN'S OWN CONSOLES ARE NOT THE OWNER'S WINDOW (2026-09-07).
+ *
+ * The `minimized` assertion below rejected two of six pushes on 2026-09-07 — one of them a diff of
+ * two Rust files that touches no window or focus code — on this event:
+ *
+ *   {"ms":1682,"kind":"MINIMIZESTART","pid":20548,"proc":null,"family":false,
+ *    "cls":"ConsoleWindowClass","title":"C:\\Program Files\\nodejs\\node.exe","fgPid":null}
+ *
+ * A node child's console blinking shut during the 2-second measurement. `proc` is null because the
+ * process was already gone when the trace was resolved, and `fgPid` is null because no foreground
+ * change was attributed to it at all. A 428-file vitest run produces hundreds of these.
+ *
+ * TWO CONDITIONS, BOTH REQUIRED, AND NEITHER IS THE TITLE:
+ *   1. the window's CLASS is ConsoleWindowClass — assigned by Windows, not by the process; and
+ *   2. the owning process's ancestry reaches THIS RUN's own runner tree (`runnerPids`, walked up
+ *      from the probe and bounded to node/npm — see Get-RunnerAncestry in foreground-probe.ps1).
+ *
+ * The title is deliberately never read. It is the one field a process picks for itself, so a guard
+ * that excused a window because its title said "node.exe" could be talked out of firing by any
+ * window that cared to say so. Ancestry cannot be set by the window being judged.
+ *
+ * FAIL-CLOSED, EVERY WAY IT CAN FAIL. An empty `runnerPids` (an old trace, a fixture, a probe that
+ * could not walk its own parents) excludes NOTHING and the assertion behaves exactly as it did
+ * before this existed. An unresolvable ancestry — a dead intermediate, a protected process, a pid
+ * chain that runs out — is likewise not a match. Unknown provenance is scored as harm.
+ *
+ * The first link of the chain can only come from the hook's event-time `ppid` read: by the time
+ * anything else runs, the console's process is gone. See foreground-events.cs.
+ */
+export function isRunnerTooling(event, { runnerPids = [], parents = {} } = {}) {
+  const runner = new Set((runnerPids ?? []).filter((p) => Number.isInteger(p) && p > 0));
+  if (!runner.size) return false;
+  if (String(event?.cls ?? "") !== CONSOLE_WINDOW_CLASS) return false;
+  const parentOf = (pid) => {
+    const raw = parents?.[pid] ?? parents?.[String(pid)] ?? 0;
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : 0;
+  };
+  const seeded = Number(event?.ppid);
+  let cur = Number(event?.pid) || 0;
+  const seen = new Set();
+  for (let hop = 0; hop < ANCESTRY_MAX_HOPS && cur > 0 && !seen.has(cur); hop++) {
+    seen.add(cur);
+    if (runner.has(cur)) return true;
+    // The event's own ppid wins for the FIRST link — it was read while the process still existed.
+    cur = hop === 0 && Number.isInteger(seeded) && seeded > 0 ? seeded : parentOf(cur);
+  }
+  return false;
+}
+
+export function summarizeTrace({ events = [], launchedPid, familyPids = [], runnerPids = [], parents = {} } = {}) {
   const family = new Set([launchedPid, ...familyPids].filter((p) => Number.isInteger(p)));
   const inFamily = (e) => e.family === true || family.has(e.pid) || family.has(e.rootPid);
   const show =
@@ -334,9 +391,17 @@ export function summarizeTrace({ events = [], launchedPid, familyPids = [] } = {
     else if (taker.pid === launchedPid) raisedBy = "in-process";
     else raisedBy = "family-child";
   }
-  const minimized = events
-    .filter((e) => e.kind === "MINIMIZESTART" && !inFamily(e))
-    .map((e) => ({ ms: e.ms, proc: e.proc ?? null, title: e.title ?? "" }));
+  // NOTE the handoff read above is deliberately NOT filtered this way. "Did a user window go down"
+  // and "could Windows have handed the foreground to the next window in Z-order" are different
+  // questions: any window leaving the foreground moves the Z-order, tooling included. Narrowing the
+  // handoff would turn genuine in-process raises into unmeasurable skips — the wrong direction.
+  const outsideMinimized = events.filter((e) => e.kind === "MINIMIZESTART" && !inFamily(e));
+  const row = (e) => ({ ms: e.ms, pid: e.pid ?? null, proc: e.proc ?? null, cls: e.cls ?? "", title: e.title ?? "" });
+  const toolingCtx = { runnerPids, parents };
+  const minimized = outsideMinimized.filter((e) => !isRunnerTooling(e, toolingCtx)).map(row);
+  // Kept and reported rather than dropped: an exclusion nobody can see is an exclusion nobody can
+  // catch being wrong. Every discounted window is printed with the run that discounted it.
+  const minimizedTooling = outsideMinimized.filter((e) => isRunnerTooling(e, toolingCtx)).map(row);
   return {
     firstShowMs: show ? show.ms : -1,
     firstForegroundMs: foreground ? foreground.ms : -1,
@@ -345,6 +410,7 @@ export function summarizeTrace({ events = [], launchedPid, familyPids = [] } = {
     handoff: handoff ? { ms: handoff.ms, kind: handoff.kind, proc: handoff.proc ?? null, title: handoff.title ?? "" } : null,
     priorForeground: priorForeground ? { ms: priorForeground.ms, proc: priorForeground.proc ?? null, title: priorForeground.title ?? "" } : null,
     minimized,
+    minimizedTooling,
   };
 }
 
@@ -548,6 +614,10 @@ function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, gr
     ...parsed.initial,
     launchedPid: parsed.launchedPid,
     familyPids: parsed.familyPids ?? [],
+    // This run's own tooling tree and the pid->parent chains that reach it. Without these, every
+    // `summarizeTrace(result)` call site silently falls back to excluding nothing.
+    runnerPids: parsed.runnerPids ?? [],
+    parents: parsed.parents ?? {},
     rightsGranted: parsed.rightsGranted,
   };
 }
@@ -558,12 +628,16 @@ function describeTrace(result) {
   const taker = s.taker ? `${s.taker.cls} owned by ${s.taker.proc ?? `pid ${s.taker.pid}`} at ${s.taker.ms}ms` : "no focus event in the launched family";
   const handoff = s.handoff ? `; ${s.handoff.proc ?? "?"} "${s.handoff.title}" ${s.handoff.kind} at ${s.handoff.ms}ms just before` : "";
   const prior = s.priorForeground ? `; foreground before that: ${s.priorForeground.proc ?? "?"} "${s.priorForeground.title}" at ${s.priorForeground.ms}ms` : "";
-  const minimized = s.minimized.length
-    ? s.minimized.map((m) => `${m.proc ?? "?"} "${m.title}" at ${m.ms}ms`).join(", ")
-    : "none";
+  const name = (m) => `${m.proc ?? "?"}(${m.pid ?? "?"}) ${m.cls ?? ""} "${m.title}" at ${m.ms}ms`;
+  const minimized = s.minimized.length ? s.minimized.map(name).join(", ") : "none";
+  // Printed on EVERY run, green or red: an exclusion nobody can see is an exclusion nobody can
+  // catch being wrong.
+  const discounted = s.minimizedTooling?.length
+    ? `; DISCOUNTED as this run's own tooling consoles (class ${CONSOLE_WINDOW_CLASS}, ancestry inside runnerPids): ${s.minimizedTooling.map(name).join(", ")}`
+    : "";
   return (
     `trace: first SHOW ${s.firstShowMs}ms, first FOREGROUND ${s.firstForegroundMs}ms, raised by ${s.raisedBy} (${taker}${handoff}${prior}); ` +
-    `windows outside the launch minimised: ${minimized}; ` +
+    `windows outside the launch minimised: ${minimized}${discounted}; ` +
     `${result.eventsKept ?? 0}/${result.eventsTotal ?? 0} events kept${result.eventsDroppedAtCap ? `, ${result.eventsDroppedAtCap} dropped at the hook cap` : ""}\n` +
     formatTrace(result.events ?? []) +
     // Where the RAW reading is, so a message truncated by a wrapper (verify-local.ps1 did
@@ -782,7 +856,126 @@ describe("the trace names WHAT raised the window (#121)", () => {
         ev(132, "FOCUS"),
       ],
     });
-    expect(s.minimized).toEqual([{ ms: 130, proc: "game", title: "The Game" }]);
+    expect(s.minimized).toEqual([{ ms: 130, pid: 7, proc: "game", cls: "UnrealWindow", title: "The Game" }]);
+  });
+
+  // -- THE TEST RUN'S OWN CONSOLES ARE NOT THE OWNER'S WINDOW (2026-09-07) ----------------------
+  // Recorded in .claude/worktrees/resume-385-lease-repair-33429b while pushing a diff of two Rust
+  // files that touches no window or focus code: three verify-local.ps1 runs went FAIL, PASS, FAIL
+  // on the SAME assertion, at 37ms and at 1682ms. Both readings were a node child's console
+  // blinking shut inside the 2-second measurement. `proc` is null on both because the process was
+  // already gone when the trace was resolved -- which is why the parent has to be read at EVENT
+  // time (foreground-events.cs `ppid`), and why every fixture below carries one.
+  //
+  // Each test pins one half of the rule: the exclusion stays narrow enough to still catch the harm,
+  // and it attributes by ANCESTRY so that no window TITLE can buy its way out of the assertion.
+  describe("this run's own tooling consoles are discounted, and nothing else is (2026-09-07)", () => {
+    // 20548 = the node child whose console blinked; 21100 = the vitest worker that spawned it;
+    // 21000 = vitest; 20900 = npm's node; 20800 = the probe's own powershell -- the runner tree the
+    // probe walks up into. 7 is the owner's game, which is in none of it.
+    const RUNNER = [20800, 20900, 21000, 21100];
+    const PARENTS = { 20548: 21100, 21100: 21000, 21000: 20900, 20900: 20800 };
+    const consoleBlink = (over = {}) => ({
+      ms: 1682,
+      kind: "MINIMIZESTART",
+      pid: 20548,
+      ppid: 21100,
+      proc: null,
+      family: false,
+      cls: "ConsoleWindowClass",
+      title: "C:\\Program Files\\nodejs\\node.exe",
+      rootPid: 20548,
+      ...over,
+    });
+    const trace = (events, over = {}) =>
+      summarizeTrace({ launchedPid: 100, familyPids: [100], runnerPids: RUNNER, parents: PARENTS, events, ...over });
+
+    it("RECORDED 2026-09-07: the console blink that rejected the #385 push is no longer read as harm", () => {
+      const s = trace([ev(12, "SHOW"), consoleBlink()]);
+      expect(s.minimized, "a node child's console is not the owner's primary monitor").toEqual([]);
+      // Discounted, never disappeared: describeTrace prints this list on every run.
+      expect(s.minimizedTooling).toEqual([
+        { ms: 1682, pid: 20548, proc: null, cls: "ConsoleWindowClass", title: "C:\\Program Files\\nodejs\\node.exe" },
+      ]);
+    });
+
+    it("THE HARM STILL FAILS: a real out-of-family window going down is untouched by the exclusion", () => {
+      // The fixture this guard has always used, now measured WITH a populated runner tree -- a live
+      // proof that arming the exclusion did not disarm the assertion it lives inside.
+      const game = ev(130, "MINIMIZESTART", { pid: 7, ppid: 4, proc: "game", family: false, cls: "UnrealWindow", title: "The Game", rootPid: 7 });
+      const s = trace([ev(12, "SHOW"), game, consoleBlink()]);
+      expect(s.minimized).toEqual([{ ms: 130, pid: 7, proc: "game", cls: "UnrealWindow", title: "The Game" }]);
+      expect(s.minimizedTooling.map((m) => m.pid)).toEqual([20548]);
+    });
+
+    it("a console that is NOT in this run's tree is still the harm -- the owner has consoles too", () => {
+      // Same class, same shape, ancestry that never reaches the runner. The class alone excuses nothing.
+      const his = consoleBlink({ pid: 5000, ppid: 4000, proc: "cmd", title: "Administrator: C:\\Windows\\system32\\cmd.exe" });
+      expect(trace([ev(12, "SHOW"), his]).minimized.map((m) => m.pid)).toEqual([5000]);
+      expect(trace([ev(12, "SHOW"), his]).minimizedTooling).toEqual([]);
+    });
+
+    it("A TITLE CANNOT BUY AN EXCLUSION: the owner's game claiming to be node.exe still fails", () => {
+      // This is why attribution is by pid ancestry. The window says every word the real tooling
+      // console said; it is not in the runner tree, so it is still reported as the harm.
+      const liar = ev(130, "MINIMIZESTART", { pid: 7, ppid: 4, proc: "game", family: false, cls: "UnrealWindow", title: "C:\\Program Files\\nodejs\\node.exe", rootPid: 7 });
+      expect(trace([liar]).minimized.map((m) => m.pid)).toEqual([7]);
+    });
+
+    it("...and neither can the class alone, when the pid chain does not reach the runner", () => {
+      // ConsoleWindowClass AND the node.exe title AND a plausible parent -- but the chain dead-ends
+      // outside the runner tree. Unknown provenance is scored as harm, never as noise.
+      expect(trace([consoleBlink({ pid: 9001, ppid: 9000 })]).minimized.map((m) => m.pid)).toEqual([9001]);
+    });
+
+    it("FAIL-CLOSED: with no runner tree recorded, nothing is excluded at all", () => {
+      // An old trace, a fixture, or a probe that could not walk its own parents. The assertion must
+      // behave exactly as it did before this exclusion existed.
+      const s = summarizeTrace({ launchedPid: 100, familyPids: [100], events: [consoleBlink()] });
+      expect(s.minimized.map((m) => m.pid)).toEqual([20548]);
+      expect(s.minimizedTooling).toEqual([]);
+    });
+
+    it("FAIL-CLOSED: an unreadable parent (ppid 0, no map entry) is not a match", () => {
+      // foreground-events.cs returns 0 when the process is already gone or the query is refused.
+      expect(trace([consoleBlink({ ppid: 0 })], { parents: {} }).minimized.map((m) => m.pid)).toEqual([20548]);
+    });
+
+    it("a console owned DIRECTLY by a runner process is discounted without walking anywhere", () => {
+      expect(trace([consoleBlink({ pid: 21100, ppid: 21000 })]).minimized).toEqual([]);
+    });
+
+    it("a multi-hop chain through a dead intermediate still resolves, via the parent map", () => {
+      // 20548 -> 30000 (a node child that also died) -> 21100 (a live vitest worker in the tree).
+      const s = summarizeTrace({
+        launchedPid: 100,
+        familyPids: [100],
+        runnerPids: RUNNER,
+        parents: { 30000: 21100, ...PARENTS },
+        events: [consoleBlink({ ppid: 30000 })],
+      });
+      expect(s.minimized).toEqual([]);
+      expect(s.minimizedTooling.map((m) => m.pid)).toEqual([20548]);
+    });
+
+    it("a cyclic or runaway pid chain terminates instead of hanging the guard", () => {
+      const cyclic = { 20548: 40001, 40001: 40002, 40002: 40001 };
+      expect(isRunnerTooling(consoleBlink({ ppid: 40001 }), { runnerPids: RUNNER, parents: cyclic })).toBe(false);
+      // A chain longer than the hop cap is refused rather than followed forever.
+      const long = Object.fromEntries(Array.from({ length: 200 }, (_, i) => [50000 + i, 50001 + i]));
+      expect(
+        isRunnerTooling(consoleBlink({ pid: 50000, ppid: 50001 }), { runnerPids: [50000 + ANCESTRY_MAX_HOPS + 5], parents: long }),
+      ).toBe(false);
+    });
+
+    it("the predicate never reads the window title -- pinned in the source, not just in behaviour", () => {
+      // A behavioural test can be satisfied by a title check that happens to agree today. This one
+      // cannot: the function's own text must not mention the field at all.
+      const src = isRunnerTooling.toString();
+      expect(src, "isRunnerTooling must attribute by class and pid ancestry, never by title").not.toMatch(/title/i);
+      expect(src, "the class compared is the OS-assigned one").toContain("CONSOLE_WINDOW_CLASS");
+      expect(src, "an empty runner tree must return early and exclude nothing").toMatch(/runner\.size/);
+    });
   });
 
   it("RECORDED 2026-08-20: a launch the POLL would call clean, because the window that came forward was not the launched one", () => {
@@ -802,7 +995,9 @@ describe("the trace names WHAT raised the window (#121)", () => {
     ];
     const s = summarizeTrace({ launchedPid: 14968, familyPids: [14968], events: recorded });
     expect(s.raisedBy).toBe("none");
-    expect(s.minimized).toEqual([{ ms: 307, proc: "WindowsTerminal", title: "Windows PowerShell" }]);
+    expect(s.minimized).toEqual([
+      { ms: 307, pid: 14724, proc: "WindowsTerminal", cls: "CASCADIA_HOSTING_WINDOW_CLASS", title: "Windows PowerShell" },
+    ]);
     const text = formatTrace(recorded);
     expect(text).toContain("FOREGROUND");
     expect(text).toContain("WindowsTerminal(14724)");
@@ -874,6 +1069,58 @@ describe("the probe carries the event hook (#121)", () => {
   it("the poll PUMPS instead of sleeping, or out-of-context events never arrive", () => {
     expect(PROBE_SRC).toMatch(/\$Hook\.Pump\(\$IntervalMs\)/);
     expect(PROBE_SRC, "a Start-Sleep in the poll loop would stall event delivery for the whole interval").not.toMatch(/Start-Sleep -Milliseconds \$IntervalMs/);
+  });
+
+  // The exclusion added on 2026-09-07 is only as good as the fields it reads. If the probe stops
+  // emitting them, `isRunnerTooling` silently degrades to "exclude nothing" -- which is the SAFE
+  // direction, but it also brings the false positive back, so the wiring is pinned rather than
+  // trusted. Pinned in the SOURCE because the runtime tier that would exercise it skips on any
+  // machine where a compy is already running.
+  it("the parent of every event's process is read AT EVENT TIME, not reconstructed later", () => {
+    // A transient console's process is gone by the time Resolve-Trace runs (recorded 2026-09-07:
+    // `proc` was null on every one of them), so this read has no second chance.
+    expect(HOOK_SRC, "WinEvent must carry a ppid field").toMatch(/public int ppid;/);
+    expect(HOOK_SRC, "the hook must fill it inside the callback").toMatch(/e\.ppid = ParentOf\(e\.pid\);/);
+    expect(HOOK_SRC, "0 is the fail-closed answer -- an unresolvable ancestry must never match").toMatch(
+      /if \(pid <= 0\) return 0;/,
+    );
+    expect(HOOK_SRC, "the query needs only PROCESS_QUERY_LIMITED_INFORMATION, never elevation").toContain(
+      "PROCESS_QUERY_LIMITED_INFORMATION = 0x1000",
+    );
+    const add = HOOK_SRC.indexOf("Events.Add(e);");
+    const fill = HOOK_SRC.indexOf("e.ppid = ParentOf(e.pid);");
+    expect(fill, "the ppid must be set before the event is recorded").toBeLessThan(add);
+  });
+
+  it("the probe reports its OWN tree, and stops before it reaches the owner's shell", () => {
+    expect(PROBE_SRC, "runnerPids is what makes the exclusion attributable").toMatch(/runnerPids\s+= \$runnerPids/);
+    expect(PROBE_SRC, "parents is how a dead console's chain is still walkable").toMatch(/parents\s+= \$parents/);
+    expect(PROBE_SRC, "the trace must carry the event-time parent through to the caller").toMatch(/ppid\s+= \$e\.ppid/);
+    // The bound is the whole safety argument. Walk one hop further -- into the interactive shell,
+    // or worse into explorer.exe -- and the owner's own windows land inside the "tooling" set,
+    // which is exactly the harm this guard exists to catch.
+    const ancestry = PROBE_SRC.slice(PROBE_SRC.indexOf("function Get-RunnerAncestry"), PROBE_SRC.indexOf("function Get-ParentMap"));
+    const body = ancestry.slice(ancestry.indexOf("param("));
+    expect(ancestry, "the walk must stop at the first non-tooling ancestor").toMatch(/\$sawRunner/);
+    expect(body, "the runner set is node/npm-family IMAGE names, not window titles").toMatch(/node = \$true/);
+    expect(body, "a hop cap keeps a lying or cyclic chain from spinning").toMatch(/MaxHops/);
+    // The shell hop exists only to cross from the probe's own powershell into the node tree. Once a
+    // node ancestor has been seen it must NOT be taken again, or the walk climbs out through the
+    // interactive shell that ran `npm test` and swallows the owner's own windows.
+    expect(body, "the shell hop must be gated on not having seen the runner yet").toMatch(
+      /\$shellHop\.ContainsKey\(\$name\) -and -not \$sawRunner/,
+    );
+    expect(body, "no desktop shell may be walked into -- that is the whole bound").not.toMatch(/explorer|dwm|winlogon/i);
+  });
+
+  it("the runner tree is walked while the tree is still alive -- the kill destroys the evidence", () => {
+    const walk = PROBE_SRC.indexOf("$runnerPids = @(Get-RunnerAncestry");
+    const map = PROBE_SRC.indexOf("$parents = Get-ParentMap");
+    const kill = PROBE_SRC.indexOf("Stop-Process -Id $p.Id -Force");
+    expect(walk).toBeGreaterThan(-1);
+    expect(map).toBeGreaterThan(-1);
+    expect(kill, "walk the ancestry before the finally block kills anything").toBeGreaterThan(walk);
+    expect(kill).toBeGreaterThan(map);
   });
 
   it("the hook is up BEFORE the launch and the trace is resolved BEFORE the kill", () => {
@@ -1015,9 +1262,19 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
       // not: a MINIMIZESTART on a window outside the launched family is his window going down.
       // Asserted here, above every skip below, so the 27% of runs that cannot name a cause still
       // prove the harm did not happen. All 15 runs recorded none.
+      //
+      // ── AND THIS TEST RUN'S OWN CONSOLES ARE NOT THAT WINDOW (2026-09-07) ────────────────────
+      // Measured: three verify-local.ps1 runs, FAIL/PASS/FAIL, against a diff of two Rust files
+      // that touches no window or focus code. Both failures were a node child's console blinking
+      // shut mid-measurement (class ConsoleWindowClass, `proc` already null, `fgPid` null -- no
+      // foreground change attributed to it at all). `isRunnerTooling` discounts exactly those:
+      // console CLASS plus an ancestry that reaches this run's own node/npm tree. The title is
+      // never read, so nothing can excuse itself by claiming to be node.exe, and an ancestry that
+      // cannot be resolved is still scored as harm. What was discounted is printed by
+      // describeTrace on every run, so a wrong exclusion is visible rather than silent.
       const { minimized } = summarizeTrace(result);
       expect(
-        minimized.map((m) => `${m.proc ?? "?"} "${m.title}" at ${m.ms}ms`),
+        minimized.map((m) => `${m.proc ?? "?"}(${m.pid ?? "?"}) ${m.cls ?? ""} "${m.title}" at ${m.ms}ms`),
         `a window OUTSIDE the launched app was MINIMISED during the launch. This is the owner's ` +
           `game going down -- the harm this guard exists for -- and it is asserted whether or not ` +
           `the cause of the foreground change can be attributed.\n` + describeTrace(result),
