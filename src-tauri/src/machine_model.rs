@@ -404,7 +404,9 @@ pub(crate) struct ChangeChronology {
     /// identity snapshots, the assembled timeline, and dated Trust-Ledger rows. Deriving it from
     /// identity snapshots alone dated "history starts" later than evidence already in hand, which
     /// would report a machine as unrecorded during a period Compy can still show (#385 review).
-    /// Before this boundary there is no record, which is different from nothing having changed.
+    /// Undated records are not candidates (see [`earliest_retained_evidence`]), so this bounds the
+    /// DATED evidence only. It is not a claim that nothing earlier is retained, still less that
+    /// nothing changed before it (#385 review).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recorded_from: Option<String>,
     /// Which retained source that boundary came from, so the claim is checkable rather than taken
@@ -1204,6 +1206,9 @@ mod machine_model_tests {
         }
     }
 
+    /// One rendered diagnostics entry as the frontend receives it: (label, value, note).
+    type RenderedEntry = (String, String, String);
+
     struct Fixture {
         hardware: HardwareInfo,
         fingerprint: HwFingerprint,
@@ -1922,6 +1927,148 @@ mod machine_model_tests {
         assert!(rendered.contains(m.identity.rig_hash.value.as_deref().unwrap()));
         assert!(rendered.contains(&m.compy_changes.active_now.to_string()));
         assert!(rendered.contains(&m.built_at));
+    }
+
+    // ── 7b. The RENDERED text is held to the same truth standard as the model ──
+    //
+    // The #385 review found two headings that asserted what the model deliberately refuses to
+    // establish, and noted the real defect underneath: no test asserted either string, so changing
+    // them broke nothing — and so would changing them back. A model-only count test cannot see a
+    // heading. These three go through the exact serialization the frontend receives.
+
+    /// Every rendered entry as (label, value, note), taken from the SERIALIZED section rather than
+    /// the struct: `DiagnosticEntry`'s fields are private to `diagnostics`, and the serialized form
+    /// is what a user actually reads.
+    fn rendered_entries(m: &MachineModel) -> Vec<RenderedEntry> {
+        let section = crate::diagnostics::machine_model_section(m);
+        let v = serde_json::to_value(&section).expect("the section serializes");
+        v["entries"]
+            .as_array()
+            .expect("the section renders an entries array")
+            .iter()
+            .map(|e| {
+                (
+                    e["label"].as_str().unwrap_or_default().to_string(),
+                    e["value"].as_str().unwrap_or_default().to_string(),
+                    e["note"].as_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    fn entry_by_label<'a>(entries: &'a [RenderedEntry], label: &str) -> &'a RenderedEntry {
+        entries.iter().find(|(l, _, _)| l == label).unwrap_or_else(|| {
+            let all: Vec<&str> = entries.iter().map(|(l, _, _)| l.as_str()).collect();
+            panic!("no rendered entry labelled {label:?}; rendered labels were {all:?}")
+        })
+    }
+
+    fn entry_whose_value_contains<'a>(entries: &'a [RenderedEntry], needle: &str) -> &'a RenderedEntry {
+        entries.iter().find(|(_, v, _)| v.contains(needle)).unwrap_or_else(|| {
+            panic!("no rendered entry whose value contains {needle:?}")
+        })
+    }
+
+    /// same-PC / other-PC / unknown-PC, all three in effect at once. The unknown row must not be
+    /// rendered under a heading that asserts it was NOT applied here: `on_this_rig: None` is the
+    /// model refusing to answer that question, and the presentation may not answer it instead.
+    #[test]
+    fn the_rendered_attribution_never_calls_an_unattributed_row_not_applied_here() {
+        let mut f = Fixture::new();
+        f.changes.push(crate::history::test_view(
+            "same", "game-mode", "Enable Game Mode", "2026-07-01T00:00:00Z", "applied", true,
+            Some(true), None, true,
+        ));
+        f.changes.push(crate::history::test_view(
+            "other", "hags-enable", "Enable HAGS", "2026-07-02T00:00:00Z", "applied", true,
+            Some(false), None, true,
+        ));
+        f.changes.push(crate::history::test_view(
+            "nostamp", "power-plan", "High performance", "2026-07-03T00:00:00Z", "applied", true,
+            None, None, true,
+        ));
+        let m = f.model();
+        // The model itself keeps the three buckets apart; this test is about the render.
+        assert_eq!(
+            (m.compy_changes.active_now, m.compy_changes.in_effect_other_rig, m.compy_changes.in_effect_rig_unknown),
+            (1, 1, 1)
+        );
+
+        let entries = rendered_entries(&m);
+        let (label, value, note) = entry_whose_value_contains(&entries, "unattributed");
+
+        // FALSIFIER: restore the pre-repair heading "In effect but not applied here" and this reds.
+        assert!(
+            !label.contains("not applied here"),
+            "the heading over the unattributed count asserts a negative the model refuses to establish: {label:?}"
+        );
+        assert!(
+            label.to_lowercase().contains("unknown"),
+            "the heading does not name the unknown case, so the count reads as another PC's: {label:?}"
+        );
+        assert!(value.contains("1 recorded on another PC"), "{value:?}");
+        assert!(value.contains("1 unattributed"), "{value:?}");
+        assert!(
+            note.contains("missing stamp"),
+            "the note does not say a missing stamp is what makes the row unattributed: {note:?}"
+        );
+
+        // And the same-PC claim stays confined to the one row the rig stamp supports.
+        let (_, applied, _) = entry_by_label(&entries, "Changes Compy applied");
+        assert!(applied.contains("3 recorded"), "{applied:?}");
+        assert!(applied.contains("1 active on this PC"), "{applied:?}");
+    }
+
+    /// An undated ledger row alongside a dated snapshot. The boundary is computed from dated
+    /// records only, so the rendered note may not claim a boundary for ALL retained evidence.
+    #[test]
+    fn the_rendered_history_boundary_bounds_dated_evidence_only() {
+        let mut f = Fixture::new();
+        f.changes.push(crate::history::test_view(
+            "undated", "hags-enable", "Enable HAGS", "", "applied", true, Some(true), None, true,
+        ));
+        let m = f.model();
+        assert_eq!(m.chronology.recorded_from.as_deref(), Some("2026-08-01T10:00:00Z"));
+
+        let entries = rendered_entries(&m);
+        let (label, value, note) = entry_by_label(&entries, "Earliest dated record");
+        assert_eq!(value, "2026-08-01T10:00:00Z");
+        assert!(
+            label.to_lowercase().contains("dated"),
+            "the heading does not qualify the boundary as dated-only: {label:?}"
+        );
+        // FALSIFIER: restore "Nothing before this date is recorded" and this reds.
+        assert!(
+            !note.contains("Nothing before this date is recorded"),
+            "the note asserts an absence of earlier records the boundary cannot establish: {note:?}"
+        );
+        assert!(
+            note.contains("Undated records cannot be placed in time"),
+            "the note does not say why undated evidence is outside the boundary: {note:?}"
+        );
+    }
+
+    /// Only undated history. No boundary may be invented — and the undated row must still be
+    /// reported, because dropping it would trade one false claim for another.
+    #[test]
+    fn an_only_undated_history_renders_no_boundary_and_is_not_erased() {
+        let mut f = Fixture::new();
+        f.snapshots.clear();
+        f.timeline.clear();
+        f.changes.push(crate::history::test_view(
+            "undated", "hags-enable", "Enable HAGS", "", "applied", true, None, None, true,
+        ));
+        let m = f.model();
+        assert!(m.chronology.recorded_from.is_none(), "an undated row cannot bound anything");
+
+        let entries = rendered_entries(&m);
+        assert!(
+            !entries.iter().any(|(l, _, _)| l.contains("dated record") || l == "History starts"),
+            "a boundary was rendered with nothing dated retained: {:?}",
+            entries.iter().map(|(l, _, _)| l.as_str()).collect::<Vec<_>>()
+        );
+        let (_, applied, _) = entry_by_label(&entries, "Changes Compy applied");
+        assert!(applied.starts_with("1 recorded"), "the undated row was erased: {applied:?}");
     }
 
     // ── 8. Existing producers keep their own vocabularies ─────────────────
