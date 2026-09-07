@@ -44,17 +44,32 @@ static GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 #[must_use = "the seam is armed only while this guard is alive; bind it, e.g. `let _seam = ...`"]
 pub(crate) struct Widened(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
 
+/// Takes [`GATE`], recovering it rather than panicking: a test that failed while armed must not take
+/// every other seam test down with it — they would then fail for the wrong reason.
+#[cfg(test)]
+fn gate() -> std::sync::MutexGuard<'static, ()> {
+    GATE.lock().unwrap_or_else(|poisoned| {
+        GATE.clear_poison();
+        poisoned.into_inner()
+    })
+}
+
+/// [`GATE`] with nothing armed, for a test that asserts on process-global lock state rather than on
+/// a seam. Two tests deliberately poison `COMPARISON_LOCK`; this is what stops one of them from
+/// clearing the flag the other is reading. It does NOT exclude the ~20 ordinary tests that take that
+/// lock, which is why a test may never assert the flag is SET — see the note in `comparison.rs`.
+#[cfg(test)]
+#[must_use = "the exclusion lasts only while this guard is alive; bind it, e.g. `let _x = ...`"]
+pub(crate) fn exclusive() -> std::sync::MutexGuard<'static, ()> {
+    gate()
+}
+
 #[cfg(test)]
 impl Widened {
     pub(crate) fn arm() -> Self {
-        // Recover a poisoned gate rather than panicking: a test that failed while armed must not
-        // take every other seam test down with it — they would then fail for the wrong reason.
-        let gate = GATE.lock().unwrap_or_else(|poisoned| {
-            GATE.clear_poison();
-            poisoned.into_inner()
-        });
+        let g = gate();
         WIDENED.store(true, std::sync::atomic::Ordering::Release);
-        Widened(gate)
+        Widened(g)
     }
 }
 
@@ -109,12 +124,9 @@ pub(crate) struct PanicAt(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>
 #[cfg(test)]
 impl PanicAt {
     pub(crate) fn arm(seam: u8) -> Self {
-        let gate = GATE.lock().unwrap_or_else(|poisoned| {
-            GATE.clear_poison();
-            poisoned.into_inner()
-        });
+        let g = gate();
         PANIC_SEAM.store(seam, std::sync::atomic::Ordering::Release);
-        PanicAt(gate)
+        PanicAt(g)
     }
 }
 

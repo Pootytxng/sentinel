@@ -1002,6 +1002,12 @@ mod comparison_race_tests {
     fn a_panic_under_the_lock_does_not_permanently_break_arming() {
         let armed = scratch("poison").join("compy_comparison.json");
 
+        // The other poisoning test must not be inside its own recovery window while this one reads
+        // the flag, and vice versa. They are the only two things in the crate that panic under this
+        // lock, so excluding them from each other is enough to make `!is_poisoned()` below mean
+        // something. It does NOT make `is_poisoned() == true` assertable — see the note there.
+        let _exclusive = crate::race_seam::exclusive();
+
         let died = std::thread::spawn(|| {
             let _held = lock_comparison();
             panic!("deliberate: poisoning COMPARISON_LOCK for the assertion below");
@@ -1058,14 +1064,17 @@ mod comparison_race_tests {
             "the disarm happens AFTER the seam, so the original arm must still be there, intact and not half-written. THIS is the split the poison-clearing does not repair: a one-shot comparison whose result exists and which is still armed."
         );
 
-        // Order matters, and getting it wrong is how this test first failed: `clear_poison` runs on
-        // the NEXT acquisition, not at the panic, so the flag is legitimately still set here. The
-        // claim is that the next caller succeeds and leaves the flag clear behind it — not that a
-        // panic never sets it.
-        assert!(
-            COMPARISON_LOCK.is_poisoned(),
-            "a panic under the lock does set the flag; if it no longer does, the recovery path below is being exercised by nothing and this test has stopped meaning anything"
-        );
+        // There is deliberately NO `assert!(COMPARISON_LOCK.is_poisoned())` here, and the reason is
+        // worth writing down because the assertion is the obvious thing to add back.
+        //
+        // The flag is process-global and libtest runs tests in parallel. Every one of the ~20 test
+        // call sites in this file that takes COMPARISON_LOCK CLEARS the flag on its way in, so a
+        // test asserting the flag is SET is asserting that no unrelated test ran in the microseconds
+        // between the panic above and the assertion — which is not true, and cost a red gate run to
+        // learn. What CAN be asserted is what this test asserts instead: the arm below still works
+        // (so the recovery path did run — a lock that propagated instead would fail here) and the
+        // flag is clear afterwards. `exclusive()` keeps the only other poisoning test out of that
+        // window; nothing else in the crate panics under this lock.
         arm_at(&armed, armed_of(ComparisonKind::Fix, "after-split"))
             .expect("the store must still be usable after a panic split the pair");
         assert_eq!(load_armed_from(&armed).unwrap().rec_id, "after-split");
