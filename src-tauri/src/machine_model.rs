@@ -33,7 +33,8 @@ pub(crate) const SCHEMA_VERSION: u32 = 1;
 /// Chronology entries returned. Bounded on purpose — MACHINE_MODEL.md §9 forbids turning the model
 /// into a telemetry lake, and a consumer that needs the full history reads the timeline directly.
 const MAX_CHRONOLOGY: usize = 25;
-/// Compy-change rows returned. Same bound, same reason. The COUNTS above them are never truncated.
+/// Compy-change rows returned. Same bound, same reason. The COUNTS above them are never truncated,
+/// and neither is the evidence pass: this caps what is SHOWN, never what is accounted for.
 const MAX_CHANGES: usize = 25;
 
 // ─── Evidence vocabulary (MACHINE_MODEL.md §3) ───────────────────────────
@@ -486,11 +487,18 @@ pub(crate) struct CompyChangeTruth {
     /// attribution; `not_on_this_rig` and `rig_unknown` below cover the whole ledger the same way.
     pub applied_but_not_in_effect: usize,
     pub rolled_back: usize,
+    /// Stamped with a fingerprint `history::same_rig` matches to today's machine. Carried so a
+    /// consumer rendering rig attribution can name the on-this-PC count instead of showing only
+    /// the two complements and heading them as if they were it (#385 review).
+    /// `on_this_rig + not_on_this_rig + rig_unknown == total_recorded`, always.
+    pub on_this_rig: usize,
     /// Stamped with a fingerprint that `history::same_rig` does not match to today's machine.
     pub not_on_this_rig: usize,
     /// Written before rig stamping existed. Honestly unknown, never assumed to be this rig.
     pub rig_unknown: usize,
-    /// Newest first, capped at [`MAX_CHANGES`]. The counts above cover every row.
+    /// Newest first, capped at [`MAX_CHANGES`] for DISPLAY only. The counts above cover every row,
+    /// and so does the evidence pass: [`compose_evidence`] walks the uncapped projection, never this
+    /// list, so a gap in a row too old to show still gets both counted and named (#385 review).
     pub changes: Vec<CompyChangeFact>,
     pub ledger_note: &'static str,
 }
@@ -576,12 +584,12 @@ pub(crate) struct MachineModelInputs<'a> {
 pub(crate) fn compose(inp: &MachineModelInputs) -> MachineModel {
     let identity = compose_identity(inp);
     let chronology = compose_chronology(inp);
-    let compy_changes = compose_compy_changes(inp);
+    let (compy_changes, all_change_facts) = compose_compy_changes(inp);
     // The unknown LIST and the unknown COUNTS are built by the same pass, deliberately. They were
     // built by two — scattered `note_unknown` calls and a separate tally — and drifted apart:
     // a fact could be counted as unknown and never listed, or listed and never counted (#385
     // review). One pass makes them agree by construction rather than by remembering to.
-    let evidence = compose_evidence(&inp.built_at, &identity, &chronology, &compy_changes);
+    let evidence = compose_evidence(&inp.built_at, &identity, &chronology, &all_change_facts);
 
     MachineModel {
         schema_version: SCHEMA_VERSION,
@@ -722,11 +730,14 @@ pub(crate) fn identity_disagreements(inp: &MachineModelInputs) -> Vec<IdentityDi
 
     // 2) Live identity vs the hardware-change baseline the user last acknowledged.
     if let Some(base) = inp.hw_baseline {
+        // The baseline is a PERSISTED record with no time in it, not something read this session.
+        // `UnstampedCache` says "read now, no timestamp"; this is "recorded once, timeless", which
+        // is exactly what `UndatedHistorical` means everywhere else in this file (#385 review).
         let baseline = |value: String| IdentityClaim {
             producer: PRODUCER_HWCHANGE,
             value,
             observed_at: None,
-            freshness: Freshness::UnstampedCache,
+            freshness: Freshness::UndatedHistorical,
         };
         if !fp.gpu.is_empty()
             && !base.gpus.is_empty()
@@ -852,12 +863,16 @@ fn compose_chronology(inp: &MachineModelInputs) -> ChangeChronology {
     }
 }
 
-fn compose_compy_changes(inp: &MachineModelInputs) -> CompyChangeTruth {
+/// Returns the wire struct AND the uncapped fact projection behind it. The struct's `changes` list
+/// is capped for display; the evidence pass must still cover every row the counts cover, so the
+/// full projection is handed to [`compose_evidence`] and dropped after (#385 review).
+fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<CompyChangeFact>) {
     let mut active_now = 0usize;
     let mut in_effect_other_rig = 0usize;
     let mut in_effect_rig_unknown = 0usize;
     let mut applied_but_not_in_effect = 0usize;
     let mut rolled_back = 0usize;
+    let mut on_this_rig = 0usize;
     let mut not_on_this_rig = 0usize;
     let mut rig_unknown = 0usize;
 
@@ -877,17 +892,20 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> CompyChangeTruth {
             applied_but_not_in_effect += 1;
         }
         match c.on_this_rig {
+            Some(true) => on_this_rig += 1,
             Some(false) => not_on_this_rig += 1,
             None => rig_unknown += 1,
-            Some(true) => {}
         }
     }
 
-    let changes: Vec<CompyChangeFact> = inp
+    // EVERY row, newest first — deliberately NOT the capped display list. Capping here made the
+    // evidence pass walk 25 rows while the counts above walked the whole ledger, so a ledger whose
+    // newest 25 rows happen to be clean rendered "Evidence not available: None" beside a nonzero
+    // unattributed count in the same section (#385 review).
+    let all_facts: Vec<CompyChangeFact> = inp
         .applied_changes
         .iter()
         .rev()
-        .take(MAX_CHANGES)
         .map(|c| {
             let applied_at = if c.applied_at.is_empty() {
                 Fact::unknown(
@@ -897,8 +915,17 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> CompyChangeTruth {
             } else {
                 Fact::historical(c.applied_at.clone(), PRODUCER_LEDGER, c.applied_at.clone())
             };
-            let status = match applied_at.observed_at.as_ref() {
-                Some(at) => Fact::historical(c.status.clone(), PRODUCER_LEDGER, at.clone()),
+            // A status is stamped with the moment it BECAME true: the rollback time for a
+            // rolled-back row, the apply time for an applied one. Stamping every status with
+            // applied_at dated the wrong event and made a rollback look as old as its apply
+            // (#385 review). An untimed rollback stays undated rather than borrowing a date.
+            let status_at = if c.status == "rolled_back" {
+                c.rolled_back_at.clone()
+            } else {
+                applied_at.observed_at.clone()
+            };
+            let status = match status_at {
+                Some(at) => Fact::historical(c.status.clone(), PRODUCER_LEDGER, at),
                 // An undated row still HAS a status; it just cannot be placed in time.
                 None => Fact::known_undated(c.status.clone(), PRODUCER_LEDGER),
             }
@@ -943,7 +970,9 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> CompyChangeTruth {
         })
         .collect();
 
-    CompyChangeTruth {
+    let changes: Vec<CompyChangeFact> = all_facts.iter().take(MAX_CHANGES).cloned().collect();
+
+    let truth = CompyChangeTruth {
         total_recorded: inp.applied_changes.len(),
         active_now,
         in_effect_other_rig,
@@ -951,11 +980,13 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> CompyChangeTruth {
         in_effect_total: active_now + in_effect_other_rig + in_effect_rig_unknown,
         applied_but_not_in_effect,
         rolled_back,
+        on_this_rig,
         not_on_this_rig,
         rig_unknown,
         changes,
         ledger_note: LEDGER_NOTE,
-    }
+    };
+    (truth, all_facts)
 }
 
 /// Fold one fact into an answer's roll-up AND, when it is missing, into the model's single unknown
@@ -1033,11 +1064,14 @@ fn empty_answer(answer: &'static str) -> AnswerEvidence {
     }
 }
 
+/// `all_changes` is the UNCAPPED projection from [`compose_compy_changes`], never
+/// `CompyChangeTruth::changes`. The answer it summarises is reported over the whole ledger, so its
+/// evidence has to be too, or the same screen can show a count with nothing named behind it.
 fn compose_evidence(
     built_at: &str,
     identity: &MachineIdentity,
     chronology: &ChangeChronology,
-    changes: &CompyChangeTruth,
+    all_changes: &[CompyChangeFact],
 ) -> EvidenceSummary {
     let mut unknowns: Vec<UnknownFact> = Vec::new();
 
@@ -1076,7 +1110,7 @@ fn compose_evidence(
     }
 
     let mut c = empty_answer("What did Compy change?");
-    for ch in &changes.changes {
+    for ch in all_changes {
         let at = |f: &str| format!("compy_changes[{}].{}", ch.id, f);
         tally(&mut c, &at("applied_at"), &ch.applied_at, &mut unknowns);
         tally(&mut c, &at("status"), &ch.status, &mut unknowns);
@@ -1085,7 +1119,7 @@ fn compose_evidence(
         tally(&mut c, &at("on_this_rig"), &ch.on_this_rig, &mut unknowns);
         tally(&mut c, &at("reversible"), &ch.reversible, &mut unknowns);
     }
-    if changes.changes.is_empty() {
+    if all_changes.is_empty() {
         tally_absent(
             &mut c,
             "compy_changes.changes",
@@ -2069,6 +2103,304 @@ mod machine_model_tests {
         );
         let (_, applied, _) = entry_by_label(&entries, "Changes Compy applied");
         assert!(applied.starts_with("1 recorded"), "the undated row was erased: {applied:?}");
+    }
+
+    // ── 7c. The evidence pass covers every row the counts cover ───────────
+
+    /// A ledger whose newest [`MAX_CHANGES`] rows are clean and whose older rows are not. This is
+    /// the exact shape that let the display cap leak into the truth: the roll-up counts walk the
+    /// whole ledger, so an evidence pass walking only the shown rows finds nothing to report.
+    fn ledger_gappy_only_beyond_the_cap() -> Vec<AppliedChangeView> {
+        let mut changes = Vec::new();
+        // Oldest first — these five are pushed first, so they are the five the display cap drops.
+        for i in 0..5 {
+            changes.push(crate::history::test_view(
+                &format!("old-{i}"),
+                "rec-old",
+                "An undated, unattributed row",
+                "",
+                "applied",
+                true,
+                None,
+                None,
+                true,
+            ));
+        }
+        for i in 0..MAX_CHANGES {
+            changes.push(crate::history::test_view(
+                &format!("new-{i}"),
+                "rec-new",
+                "A stamped, attributed row",
+                &format!("2026-08-{:02}T10:00:00Z", i + 1),
+                "applied",
+                true,
+                Some(true),
+                None,
+                true,
+            ));
+        }
+        changes
+    }
+
+    /// That ledger in a fixture whose identity and chronology are otherwise complete, so the ONLY
+    /// evidence gaps anywhere in the model are the ones the display cap drops. Without the timeline
+    /// event the empty-chronology unknown would mask the very contradiction under test.
+    fn fixture_gappy_only_beyond_the_cap() -> Fixture {
+        let mut f = Fixture::new();
+        f.changes = ledger_gappy_only_beyond_the_cap();
+        f.timeline.push(crate::intelligence::EventRecord {
+            id: "applied:new-0".into(),
+            timestamp: "2026-08-01T10:00:00Z".into(),
+            event_type: "change-applied".into(),
+            source: "history".into(),
+            scope: EventScope::CompyApplied,
+            game: None,
+            summary: "A stamped, attributed row".into(),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: false,
+            rec_id: Some("rec-new".into()),
+        });
+        f
+    }
+
+    #[test]
+    fn evidence_covers_rows_the_display_cap_drops() {
+        let m = fixture_gappy_only_beyond_the_cap().model();
+
+        // The display list is still capped, and every row IN it is clean — so a tally that walked
+        // `compy_changes.changes` would legitimately find zero gaps.
+        assert_eq!(m.compy_changes.changes.len(), MAX_CHANGES);
+        assert!(
+            m.compy_changes
+                .changes
+                .iter()
+                .all(|c| c.on_this_rig.value == Some(true) && c.applied_at.value.is_some()),
+            "the fixture's point is that the SHOWN rows carry no gaps"
+        );
+
+        // The counts, which walk the whole ledger, do see them.
+        assert_eq!(m.compy_changes.total_recorded, MAX_CHANGES + 5);
+        assert_eq!(m.compy_changes.rig_unknown, 5);
+        assert_eq!(m.compy_changes.in_effect_rig_unknown, 5);
+
+        // So the evidence must too: five unattributed rows and five undated ones, each named.
+        let unattributed: Vec<&str> = m
+            .evidence
+            .unknowns
+            .iter()
+            .map(|u| u.field.as_str())
+            .filter(|f| f.ends_with(".on_this_rig"))
+            .collect();
+        assert_eq!(
+            unattributed.len(),
+            5,
+            "every unattributed row the count reports must be named: {:?}",
+            m.evidence.unknowns.iter().map(|u| &u.field).collect::<Vec<_>>()
+        );
+        for i in 0..5 {
+            assert!(
+                unattributed.contains(&format!("compy_changes[old-{i}].on_this_rig").as_str()),
+                "row old-{i} is counted as unattributed but never named"
+            );
+        }
+        assert_eq!(
+            m.evidence
+                .unknowns
+                .iter()
+                .filter(|u| u.field.ends_with(".applied_at"))
+                .count(),
+            5
+        );
+
+        // And the roll-up counter and the list still cannot disagree — nor may anything else in
+        // this fixture contribute a gap, or the rendered assertion below would prove nothing.
+        let counted: usize = m.evidence.answers.iter().map(|a| a.unknown_facts).sum();
+        assert_eq!(counted, m.evidence.unknowns.len());
+        assert_eq!(m.evidence.unknowns.len(), 10);
+    }
+
+    #[test]
+    fn the_rendered_evidence_line_never_reads_none_while_a_count_reports_gaps() {
+        let m = fixture_gappy_only_beyond_the_cap().model();
+        let entries = rendered_entries(&m);
+
+        let (_, attribution, _) = entry_by_label(&entries, "Applied on this machine");
+        assert!(
+            attribution.contains("5 unknown"),
+            "the attribution row reports the gaps: {attribution}"
+        );
+
+        let (_, evidence, note) = entry_by_label(&entries, "Evidence not available");
+        assert_ne!(
+            evidence.as_str(),
+            "None",
+            "the same section reports 5 unknown attributions — 'None' contradicts it on one screen"
+        );
+        assert_eq!(evidence.as_str(), "10 facts");
+        assert!(
+            note.contains("old-"),
+            "the named reasons must reach the rows the count is about: {note}"
+        );
+    }
+
+    // ── 7d. Every disagreement branch, and every stamp, is exercised ──────
+
+    #[test]
+    fn a_snapshot_ram_mismatch_is_reported_against_the_stamped_snapshot() {
+        let mut f = Fixture::new();
+        // Live reads 32 GB; the snapshot Compy stamped says 16. No baseline, so this can only
+        // come from the identity-snapshot branch.
+        f.snapshots[0].ram_gb = 16;
+        let m = f.model();
+        let d = m
+            .identity
+            .disagreements
+            .iter()
+            .find(|d| d.field == "ram_gb")
+            .expect("a 16 GB gap against the stamped snapshot is a disagreement");
+        assert_eq!(d.left.producer, PRODUCER_HARDWARE);
+        assert_eq!(d.left.value, "32");
+        assert_eq!(d.right.producer, PRODUCER_SNAPSHOT);
+        assert_eq!(d.right.value, "16");
+        // A stamped snapshot keeps its own time — that is what makes it historical evidence.
+        assert_eq!(d.right.observed_at.as_deref(), Some("2026-08-01T10:00:00Z"));
+        assert_eq!(d.right.freshness, Freshness::Stamped);
+        assert_eq!(d.interpretation, DISAGREE_HISTORICAL);
+    }
+
+    #[test]
+    fn a_baseline_gpu_mismatch_is_reported_as_an_undated_baseline_record() {
+        let mut f = Fixture::new();
+        f.baseline = Some(crate::hwchange::test_fingerprint(
+            "AMD Ryzen 7 7800X3D",
+            &["GeForce RTX 4090"],
+            32,
+        ));
+        let m = f.model();
+        let d = m
+            .identity
+            .disagreements
+            .iter()
+            .find(|d| d.field == "gpu")
+            .expect("the acknowledged baseline names a GPU this machine does not have");
+        assert_eq!(d.right.producer, PRODUCER_HWCHANGE);
+        assert_eq!(d.right.value, "GeForce RTX 4090");
+        assert_eq!(d.interpretation, DISAGREE_BASELINE);
+        // The baseline is a persisted record with no time in it. Calling that an unstamped CACHE
+        // would say it was read this session, which is a different and stronger claim.
+        assert!(d.right.observed_at.is_none());
+        assert_eq!(d.right.freshness, Freshness::UndatedHistorical);
+        assert_ne!(d.right.freshness, Freshness::UnstampedCache);
+    }
+
+    #[test]
+    fn a_rolled_back_status_is_stamped_at_the_rollback_not_at_the_apply() {
+        let mut f = Fixture::new();
+        f.changes.push(crate::history::test_view(
+            "chg-timed",
+            "game-mode",
+            "Enable Game Mode",
+            "2026-07-01T00:00:00Z",
+            "rolled_back",
+            false,
+            Some(true),
+            Some("2026-08-15T00:00:00Z".into()),
+            true,
+        ));
+        f.changes.push(crate::history::test_view(
+            "chg-untimed",
+            "game-mode",
+            "Enable Game Mode",
+            "2026-07-02T00:00:00Z",
+            "rolled_back",
+            false,
+            Some(true),
+            None,
+            true,
+        ));
+        let m = f.model();
+        let by_id = |id: &str| {
+            m.compy_changes
+                .changes
+                .iter()
+                .find(|c| c.id == id)
+                .unwrap_or_else(|| panic!("row {id} is missing"))
+        };
+
+        let timed = by_id("chg-timed");
+        assert_eq!(timed.applied_at.observed_at.as_deref(), Some("2026-07-01T00:00:00Z"));
+        assert_eq!(
+            timed.status.observed_at.as_deref(),
+            Some("2026-08-15T00:00:00Z"),
+            "the status became 'rolled_back' at the rollback, six weeks after the apply"
+        );
+
+        // An untimed rollback has a real status and no knowable time. It must not borrow the
+        // apply time to look dated.
+        let untimed = by_id("chg-untimed");
+        assert_eq!(untimed.status.value.as_deref(), Some("rolled_back"));
+        assert!(untimed.status.observed_at.is_none());
+        assert_eq!(untimed.status.freshness, Freshness::UndatedHistorical);
+    }
+
+    #[test]
+    fn rig_attribution_names_the_on_this_pc_count_and_accounts_for_every_row() {
+        let mut f = Fixture::new();
+        for (id, rig) in [
+            ("here-1", Some(true)),
+            ("here-2", Some(true)),
+            ("elsewhere", Some(false)),
+            ("unstamped", None),
+        ] {
+            f.changes.push(crate::history::test_view(
+                id,
+                "game-mode",
+                "Enable Game Mode",
+                "2026-07-01T00:00:00Z",
+                "applied",
+                true,
+                rig,
+                None,
+                true,
+            ));
+        }
+        let m = f.model();
+        let c = &m.compy_changes;
+        assert_eq!(c.on_this_rig, 2);
+        assert_eq!(c.not_on_this_rig, 1);
+        assert_eq!(c.rig_unknown, 1);
+        assert_eq!(
+            c.on_this_rig + c.not_on_this_rig + c.rig_unknown,
+            c.total_recorded,
+            "rig attribution must account for every recorded row, with no fourth bucket"
+        );
+
+        // The heading says "Applied on this machine", so the value has to contain that count and
+        // not only its two complements.
+        let entries = rendered_entries(&m);
+        let (_, value, _) = entry_by_label(&entries, "Applied on this machine");
+        assert_eq!(value.as_str(), "2 on this PC · 1 elsewhere · 1 unknown");
+    }
+
+    #[test]
+    fn the_agreement_line_claims_only_the_fields_that_were_compared() {
+        let m = Fixture::new().model();
+        assert!(
+            m.identity.disagreements.is_empty(),
+            "this fixture is the all-agree case"
+        );
+        let entries = rendered_entries(&m);
+        let (_, value, note) = entry_by_label(&entries, "Identity producers disagree");
+        assert_eq!(value.as_str(), "No");
+        // Windows build and CPU are never compared, so agreement across "every producer" is a
+        // claim the model cannot support (#385 review).
+        assert!(
+            !note.contains("Every producer that contributes"),
+            "the note must not generalise past what identity_disagreements actually reads: {note}"
+        );
+        assert!(note.contains("GPU, driver, display, memory and the rig hash"));
+        assert!(note.contains("Windows build are not compared"));
     }
 
     // ── 8. Existing producers keep their own vocabularies ─────────────────

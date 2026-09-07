@@ -564,7 +564,7 @@ pub(crate) fn machine_model_section(
                 .join(" · ")
         },
         note: Some(if m.identity.disagreements.is_empty() {
-            "Every producer that contributes to rig identity currently agrees.".into()
+            "Every identity field Compy actually compares — GPU, driver, display, memory and the rig hash — agrees. CPU and Windows build are not compared, so this is not a claim that every producer of rig identity agrees.".into()
         } else {
             format!(
                 "{} A difference is not proof that either reading is wrong.",
@@ -629,8 +629,8 @@ pub(crate) fn machine_model_section(
     entries.push(DiagnosticEntry {
         label: "Applied on this machine".into(),
         value: format!(
-            "{} elsewhere · {} unknown",
-            c.not_on_this_rig, c.rig_unknown
+            "{} on this PC · {} elsewhere · {} unknown",
+            c.on_this_rig, c.not_on_this_rig, c.rig_unknown
         ),
         note: Some("Rows written before rig stamping existed stay unknown rather than being assumed to be this machine.".into()),
     });
