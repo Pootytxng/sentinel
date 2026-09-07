@@ -44,7 +44,7 @@ One source owns each kind of truth:
 | Current executor, worktree, claim, status, next action | Kuya Work Control Project + linked issue |
 | Product priority and completion | `docs/BACKLOG.md` + the named train spec |
 | Gates, artifacts, installed build, publication | `docs/RELEASE_STATE.md` + release receipts |
-| Active Lab recovery requirements | `docs/USER_FEEDBACK_PRODUCT_RECOVERY.md` on `feat/user-feedback-lab-recovery` |
+| Active Lab recovery requirements | ARCHIVED — `docs/archive/USER_FEEDBACK_PRODUCT_RECOVERY.md`; the branch train is abandoned, see its disposition |
 | Owner UI direction | `docs/UI_VISION_BACKLOG.md` + issue #14 owner verdict |
 | Product and safety laws | `CLAUDE.md`, `docs/ARCHITECTURE_LOCKS.md`, `docs/RECEIPTS_DOCTRINE.md` |
 | Implementation truth | Code, commits, tests, native captures, receipts |
