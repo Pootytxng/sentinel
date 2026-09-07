@@ -144,7 +144,16 @@ const HISTORICAL_DOC_PREFIXES = [
 // Citations that are correct as they stand and cannot phrase the disclosure inline. Key is
 // "<live doc>:<superseded basename>"; the value is why it is allowed. Adding an entry is a
 // deliberate act with a reason attached — that is the point.
-const CLASSIFIED: Record<string, string> = {};
+const CLASSIFIED: Record<string, string> = {
+  // The usage audit's "first prompt" column is a machine-truncated verbatim copy of what someone
+  // typed to open a session (scripts/usage-audit.mjs: `firstPrompt = c.text.slice(0, 70)`, emitted
+  // by the table writer). This cell records that a session on 2026-08-21 was opened by asking to
+  // read the comprehensibility sweep. It is a log of a keystroke, not a doc recommending a plan —
+  // the failure mode this guard exists to stop. It also cannot carry an inline disclosure: the
+  // report is generated, so the next run would overwrite one.
+  "docs/usage-audit/REPORT-2026-08-24.md:2026-08-20-comprehensibility-sweep.md":
+    "generated usage-audit row quoting a past opening prompt verbatim; not a live pointer, and regeneration would drop an inline note",
+};
 
 /** True when the file's own header banner says the file is no longer current direction. */
 export function declaresItselfSuperseded(text: string): boolean {

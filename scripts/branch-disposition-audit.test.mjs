@@ -717,6 +717,11 @@ describe("PR-to-merge-commit citations", () => {
     // which record is read first is the filesystem's business, and a pin on that order would fail
     // on a rename that changed nothing about the citations.
     expect(squashOnlyCitations(cited, live, landedOnRecordMain).sort((a, b) => a.pr - b.pr)).toEqual([
+      // Confirmed by hand 2026-09-07: `gh pr view 78` reports state MERGED with mergeCommit
+      // 1ab831fb, so #78 is a PR and not an issue. Cited by the
+      // feat/user-feedback-lab-recovery row as the landing that deleted the Lab surfaces that
+      // branch was built on -- the fact that makes it abandoned rather than pending.
+      { pr: 78, sha: "1ab831fb" },
       { pr: 273, sha: "e26108f7" },
       { pr: 275, sha: "29fb8009" },
     ]);
