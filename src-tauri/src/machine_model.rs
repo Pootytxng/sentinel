@@ -88,7 +88,13 @@ pub(crate) enum Freshness {
     /// Served from a cache filled once per process with no capture time recorded. This is NOT
     /// proof of a read at `built_at`; treat it as durable identity, not as a live reading.
     UnstampedCache,
-    /// There is no value, so there is no freshness.
+    /// Compy's own earlier record whose source row carries no usable time. The VALUE is real and
+    /// historical; only its position in time is unknowable. Kept distinct from `NotApplicable`
+    /// because collapsing the two lets a KNOWN historical fact be read as an absence, and a fact
+    /// that HAS a value must never share a freshness state with one that has none (#385 review).
+    UndatedHistorical,
+    /// There is no value at all, so there is no freshness. Reserved for the absent facts built by
+    /// [`Fact::unknown`] and [`Fact::not_applicable`]. A fact carrying a value never uses it.
     NotApplicable,
 }
 
@@ -116,9 +122,15 @@ pub(crate) struct Fact<T> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub observed_at: Option<String>,
     pub freshness: Freshness,
-    /// Why there is no value. Present exactly when `class` is `Unavailable`.
+    /// Why the value is MISSING: this fact could exist for this subject and Compy does not have
+    /// it. Present exactly when the fact is unknown, and never alongside `not_applicable_reason`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unknown_reason: Option<String>,
+    /// Why the field does not apply to THIS subject, so there is nothing to know. A change that
+    /// was never rolled back has no rollback time; that is not a gap in Compy's evidence, and
+    /// counting it as one would inflate the unknown total with non-facts (#385 review).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub not_applicable_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<DomainVocabulary>,
 }
@@ -138,6 +150,7 @@ impl<T> Fact<T> {
             observed_at,
             freshness,
             unknown_reason: None,
+            not_applicable_reason: None,
             domain: None,
         }
     }
@@ -184,7 +197,7 @@ impl<T> Fact<T> {
             EvidenceClass::RecordedHistorically,
             source,
             None,
-            Freshness::NotApplicable,
+            Freshness::UndatedHistorical,
         )
     }
 
@@ -219,6 +232,24 @@ impl<T> Fact<T> {
             observed_at: None,
             freshness: Freshness::NotApplicable,
             unknown_reason: Some(reason.into()),
+            not_applicable_reason: None,
+            domain: None,
+        }
+    }
+
+    /// No value because the field does not APPLY to this subject, and why. Distinct from
+    /// [`Fact::unknown`] in the one way that matters to a reader: nothing is missing here, so it
+    /// never enters [`EvidenceSummary::unknowns`] and never contributes an evidence class to a
+    /// roll-up. Conflating the two makes Compy report gaps it does not have (#385 review).
+    pub(crate) fn not_applicable(source: &'static str, reason: impl Into<String>) -> Self {
+        Fact {
+            value: None,
+            class: EvidenceClass::Unavailable,
+            source,
+            observed_at: None,
+            freshness: Freshness::NotApplicable,
+            unknown_reason: None,
+            not_applicable_reason: Some(reason.into()),
             domain: None,
         }
     }
@@ -231,8 +262,31 @@ impl<T> Fact<T> {
         self
     }
 
+    /// Absent because Compy does not have it. NOT the same as absent because the field cannot
+    /// apply, and only this one belongs in [`EvidenceSummary::unknowns`].
+    #[cfg(test)]
     pub(crate) fn is_unknown(&self) -> bool {
-        self.class == EvidenceClass::Unavailable
+        self.unknown_reason.is_some()
+    }
+
+    /// Absent because the field does not apply to this subject.
+    pub(crate) fn is_not_applicable(&self) -> bool {
+        self.not_applicable_reason.is_some()
+    }
+
+    /// A fact is in exactly one of three states: it has a value, it is missing, or it does not
+    /// apply. Checked in tests over real composed models rather than assumed, so a future
+    /// constructor cannot quietly introduce a fourth.
+    #[cfg(test)]
+    pub(crate) fn absence_is_well_formed(&self) -> bool {
+        matches!(
+            (
+                self.value.is_some(),
+                self.unknown_reason.is_some(),
+                self.not_applicable_reason.is_some(),
+            ),
+            (true, false, false) | (false, true, false) | (false, false, true)
+        )
     }
 }
 
@@ -346,10 +400,21 @@ pub(crate) struct ChronologyEntry {
 /// Answer B: the chronology Compy already recorded — nothing back-filled, nothing inferred.
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct ChangeChronology {
-    /// Oldest retained identity snapshot. History starts when recording started; before that there
-    /// is no record, which is different from nothing having changed.
+    /// The earliest evidence Compy STILL RETAINS, across every retained chronology source: the
+    /// identity snapshots, the assembled timeline, and dated Trust-Ledger rows. Deriving it from
+    /// identity snapshots alone dated "history starts" later than evidence already in hand, which
+    /// would report a machine as unrecorded during a period Compy can still show (#385 review).
+    /// Before this boundary there is no record, which is different from nothing having changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recorded_from: Option<String>,
+    /// Which retained source that boundary came from, so the claim is checkable rather than taken
+    /// on trust. `None` exactly when `recorded_from` is `None`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_from_source: Option<&'static str>,
+    /// When IDENTITY recording specifically started. A narrower question than the boundary above,
+    /// kept as its own field rather than allowed to stand in for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_history_from: Option<String>,
     pub identity_snapshots: usize,
     pub total_events: usize,
     /// Newest first, capped at [`MAX_CHRONOLOGY`].
@@ -362,6 +427,8 @@ pub(crate) struct ChangeChronology {
 }
 
 const CAUSATION_NOTE: &str = "Chronology never implies causation by itself. These entries say what was recorded and when, not what caused what.";
+const CHRONOLOGY_EMPTY: &str = "Nothing is recorded yet. Chronology starts when recording starts; an empty record is not evidence that nothing changed.";
+const LEDGER_EMPTY: &str = "The Trust Ledger has no rows, so Compy has recorded no change on this machine.";
 
 // ─── C. What did Compy change? ───────────────────────────────────────────
 
@@ -395,10 +462,26 @@ pub(crate) struct CompyChangeFact {
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct CompyChangeTruth {
     pub total_recorded: usize,
-    /// Status `"applied"` AND still verified active against the live machine.
+    /// Status `"applied"`, still verified in effect against the live machine, AND matched to this
+    /// machine by `history::same_rig`. This is the ONLY count that may be read as "Compy changed
+    /// this on this PC and it is still that way". A row stamped for another rig, or one written
+    /// before rig stamping existed, is NOT counted here even when the state reads as in effect:
+    /// the live check proves the STATE is present, never that Compy is who applied it (#385
+    /// review).
     pub active_now: usize,
+    /// In effect on this machine now, but the row is stamped for a DIFFERENT rig. Compy did not
+    /// apply it here; something else put the machine in that state, or the row travelled.
+    pub in_effect_other_rig: usize,
+    /// In effect on this machine now, but the row predates rig stamping, so which machine Compy
+    /// applied it on is unknown. Neither this rig nor another one — honestly unattributed.
+    pub in_effect_rig_unknown: usize,
+    /// `active_now + in_effect_other_rig + in_effect_rig_unknown`. Carried so a consumer that
+    /// genuinely wants "in effect, whoever applied it and wherever" reads one field instead of
+    /// re-adding them and re-creating the conflation this split exists to remove.
+    pub in_effect_total: usize,
     /// Status `"applied"` but the live check says the state is no longer in effect — something
-    /// outside Compy reverted it. Distinct from a rollback Compy performed.
+    /// outside Compy reverted it. Distinct from a rollback Compy performed. Spans every rig
+    /// attribution; `not_on_this_rig` and `rig_unknown` below cover the whole ledger the same way.
     pub applied_but_not_in_effect: usize,
     pub rolled_back: usize,
     /// Stamped with a fingerprint that `history::same_rig` does not match to today's machine.
@@ -434,7 +517,12 @@ pub(crate) struct AnswerEvidence {
     pub newest_observed_at: Option<String>,
     /// Facts whose producer records no time at all. A consumer must not treat these as re-read now.
     pub unstamped_facts: usize,
+    /// Facts Compy could have and does not. Equal, across all answers, to `unknowns.len()` —
+    /// they are produced by the same pass, so the count and the list cannot disagree.
     pub unknown_facts: usize,
+    /// Fields that do not apply to their subject. Counted, never folded into `unknown_facts`,
+    /// and contributing no evidence class: nothing here was observed, inferred, or failed to read.
+    pub not_applicable_facts: usize,
 }
 
 /// Answer D: enough for a consumer to decide what it may claim, without re-deriving any of it.
@@ -484,18 +572,14 @@ pub(crate) struct MachineModelInputs<'a> {
 
 /// Compose the model. Pure: no I/O, no probe, no clock, no write.
 pub(crate) fn compose(inp: &MachineModelInputs) -> MachineModel {
-    let mut unknowns: Vec<UnknownFact> = Vec::new();
-
-    let identity = compose_identity(inp, &mut unknowns);
-    let chronology = compose_chronology(inp, &mut unknowns);
-    let compy_changes = compose_compy_changes(inp, &mut unknowns);
-    let evidence = compose_evidence(
-        &inp.built_at,
-        &identity,
-        &chronology,
-        &compy_changes,
-        unknowns,
-    );
+    let identity = compose_identity(inp);
+    let chronology = compose_chronology(inp);
+    let compy_changes = compose_compy_changes(inp);
+    // The unknown LIST and the unknown COUNTS are built by the same pass, deliberately. They were
+    // built by two — scattered `note_unknown` calls and a separate tally — and drifted apart:
+    // a fact could be counted as unknown and never listed, or listed and never counted (#385
+    // review). One pass makes them agree by construction rather than by remembering to.
+    let evidence = compose_evidence(&inp.built_at, &identity, &chronology, &compy_changes);
 
     MachineModel {
         schema_version: SCHEMA_VERSION,
@@ -507,17 +591,7 @@ pub(crate) fn compose(inp: &MachineModelInputs) -> MachineModel {
     }
 }
 
-fn note_unknown<T>(unknowns: &mut Vec<UnknownFact>, field: &str, fact: &Fact<T>) {
-    if let Some(reason) = fact.unknown_reason.as_ref() {
-        unknowns.push(UnknownFact {
-            field: field.to_string(),
-            source: fact.source,
-            reason: reason.clone(),
-        });
-    }
-}
-
-fn compose_identity(inp: &MachineModelInputs, unknowns: &mut Vec<UnknownFact>) -> MachineIdentity {
+fn compose_identity(inp: &MachineModelInputs) -> MachineIdentity {
     let fp = inp.live_fingerprint;
 
     let cpu = cached_str(
@@ -571,18 +645,6 @@ fn compose_identity(inp: &MachineModelInputs, unknowns: &mut Vec<UnknownFact>) -
             Freshness::UnstampedCache,
         )
     };
-
-    for (field, fact) in [
-        ("identity.cpu", &cpu),
-        ("identity.gpu", &gpu),
-        ("identity.gpu_driver", &gpu_driver),
-        ("identity.display", &display),
-        ("identity.windows", &windows),
-        ("identity.rig_hash", &rig_hash),
-    ] {
-        note_unknown(unknowns, field, fact);
-    }
-    note_unknown(unknowns, "identity.ram_gb", &ram_gb);
 
     MachineIdentity {
         cpu,
@@ -690,23 +752,69 @@ pub(crate) fn identity_disagreements(inp: &MachineModelInputs) -> Vec<IdentityDi
     out
 }
 
-fn compose_chronology(
-    inp: &MachineModelInputs,
-    unknowns: &mut Vec<UnknownFact>,
-) -> ChangeChronology {
-    let recorded_from = inp
+/// The earliest timestamp any retained chronology source still holds, and which source it came
+/// from. Identity snapshots are ONE of those sources, not the boundary: a Trust-Ledger row or a
+/// timeline event written before the first snapshot is retained evidence too, and dating history
+/// from the snapshot alone would report the machine as unrecorded during a stretch Compy can still
+/// show (#385 review).
+///
+/// Candidates are compared as strings, which is the ordering convention this whole module already
+/// uses for the RFC3339 UTC stamps its producers write. Empty stamps are not candidates: an undated
+/// row cannot bound anything. Ties keep the first source listed, so the result is deterministic.
+fn earliest_retained_evidence(inp: &MachineModelInputs) -> (Option<String>, Option<&'static str>) {
+    let candidates: [(&'static str, Option<&str>); 3] = [
+        (
+            PRODUCER_TIMELINE,
+            inp.timeline
+                .iter()
+                .map(|e| e.timestamp.as_str())
+                .filter(|t| !t.is_empty())
+                .min(),
+        ),
+        (
+            PRODUCER_LEDGER,
+            inp.applied_changes
+                .iter()
+                .map(|c| c.applied_at.as_str())
+                .filter(|t| !t.is_empty())
+                .min(),
+        ),
+        (
+            PRODUCER_SNAPSHOT,
+            inp.identity_snapshots
+                .iter()
+                .map(|s| s.observed_at.as_str())
+                .filter(|t| !t.is_empty())
+                .min(),
+        ),
+    ];
+
+    let mut best: Option<(&str, &'static str)> = None;
+    for (source, candidate) in candidates {
+        if let Some(at) = candidate {
+            if best.is_none_or(|(b, _)| at < b) {
+                best = Some((at, source));
+            }
+        }
+    }
+    match best {
+        Some((at, source)) => (Some(at.to_string()), Some(source)),
+        None => (None, None),
+    }
+}
+
+fn compose_chronology(inp: &MachineModelInputs) -> ChangeChronology {
+    let (recorded_from, recorded_from_source) = earliest_retained_evidence(inp);
+    let identity_history_from = inp
         .identity_snapshots
-        .first()
-        .map(|s| s.observed_at.clone());
+        .iter()
+        .map(|s| s.observed_at.as_str())
+        .filter(|t| !t.is_empty())
+        .min()
+        .map(str::to_string);
 
     let unknown_reason = if inp.timeline.is_empty() {
-        let reason = "Nothing is recorded yet. Chronology starts when recording starts; an empty record is not evidence that nothing changed.";
-        unknowns.push(UnknownFact {
-            field: "chronology.entries".to_string(),
-            source: PRODUCER_TIMELINE,
-            reason: reason.to_string(),
-        });
-        Some(reason.to_string())
+        Some(CHRONOLOGY_EMPTY.to_string())
     } else {
         None
     };
@@ -731,6 +839,8 @@ fn compose_chronology(
 
     ChangeChronology {
         recorded_from,
+        recorded_from_source,
+        identity_history_from,
         identity_snapshots: inp.identity_snapshots.len(),
         total_events: inp.timeline.len(),
         entries,
@@ -740,11 +850,10 @@ fn compose_chronology(
     }
 }
 
-fn compose_compy_changes(
-    inp: &MachineModelInputs,
-    unknowns: &mut Vec<UnknownFact>,
-) -> CompyChangeTruth {
+fn compose_compy_changes(inp: &MachineModelInputs) -> CompyChangeTruth {
     let mut active_now = 0usize;
+    let mut in_effect_other_rig = 0usize;
+    let mut in_effect_rig_unknown = 0usize;
     let mut applied_but_not_in_effect = 0usize;
     let mut rolled_back = 0usize;
     let mut not_on_this_rig = 0usize;
@@ -754,7 +863,14 @@ fn compose_compy_changes(
         if c.status == "rolled_back" {
             rolled_back += 1;
         } else if c.is_still_active {
-            active_now += 1;
+            // `is_still_active` re-checks the live machine, so it proves the STATE is in effect
+            // here. It says nothing about who applied it or where, and `same_rig` is the only
+            // thing that does. Attribution is therefore carried, never collapsed (#385 review).
+            match c.on_this_rig {
+                Some(true) => active_now += 1,
+                Some(false) => in_effect_other_rig += 1,
+                None => in_effect_rig_unknown += 1,
+            }
         } else {
             applied_but_not_in_effect += 1;
         }
@@ -791,7 +907,14 @@ fn compose_compy_changes(
                     PRODUCER_LEDGER,
                     "This change was rolled back before rollback times were stamped. The date is unknown and must not be guessed.",
                 ),
-                None => Fact::unknown(PRODUCER_LEDGER, "Not rolled back, so there is no rollback time."),
+                // NOT an unknown: this change was never rolled back, so a rollback time does not
+                // exist to be missing. Reporting it as unknown made Compy count evidence gaps it
+                // does not have, and put a count in the roll-up with no matching entry in the
+                // unknown list (#385 review).
+                None => Fact::not_applicable(
+                    PRODUCER_LEDGER,
+                    "This change has not been rolled back, so there is no rollback time for it to have.",
+                ),
             };
             let stamp = applied_at.observed_at.clone();
             let on_this_rig = match c.on_this_rig {
@@ -818,28 +941,12 @@ fn compose_compy_changes(
         })
         .collect();
 
-    if inp.applied_changes.is_empty() {
-        unknowns.push(UnknownFact {
-            field: "compy_changes.changes".to_string(),
-            source: PRODUCER_LEDGER,
-            reason: "The Trust Ledger has no rows, so Compy has recorded no change on this machine."
-                .to_string(),
-        });
-    }
-    for c in &changes {
-        note_unknown(unknowns, &format!("compy_changes[{}].on_this_rig", c.id), &c.on_this_rig);
-        if c.status.value.as_deref() == Some("rolled_back") {
-            note_unknown(
-                unknowns,
-                &format!("compy_changes[{}].rolled_back_at", c.id),
-                &c.rolled_back_at,
-            );
-        }
-    }
-
     CompyChangeTruth {
         total_recorded: inp.applied_changes.len(),
         active_now,
+        in_effect_other_rig,
+        in_effect_rig_unknown,
+        in_effect_total: active_now + in_effect_other_rig + in_effect_rig_unknown,
         applied_but_not_in_effect,
         rolled_back,
         not_on_this_rig,
@@ -849,8 +956,20 @@ fn compose_compy_changes(
     }
 }
 
-/// Fold one fact's class + freshness into an answer's roll-up.
-fn tally<T>(ev: &mut AnswerEvidence, fact: &Fact<T>) {
+/// Fold one fact into an answer's roll-up AND, when it is missing, into the model's single unknown
+/// list. Both happen here so a count can never exist without its matching entry (#385 review).
+fn tally<T>(
+    ev: &mut AnswerEvidence,
+    field: &str,
+    fact: &Fact<T>,
+    unknowns: &mut Vec<UnknownFact>,
+) {
+    // A field that does not apply is not evidence: it contributes no class, no freshness and no
+    // unknown. It is counted so the roll-up still accounts for every field it was handed.
+    if fact.is_not_applicable() {
+        ev.not_applicable_facts += 1;
+        return;
+    }
     if !ev.classes.contains(&fact.class) {
         ev.classes.push(fact.class);
     }
@@ -865,12 +984,39 @@ fn tally<T>(ev: &mut AnswerEvidence, fact: &Fact<T>) {
                 }
             }
         }
-        Freshness::LiveAtBuild | Freshness::UnstampedCache => ev.unstamped_facts += 1,
+        // An undated historical record has a real value and no knowable time, so it is unstamped
+        // for exactly the same reason a cached read is: a consumer must not treat it as re-read.
+        Freshness::LiveAtBuild | Freshness::UnstampedCache | Freshness::UndatedHistorical => {
+            ev.unstamped_facts += 1
+        }
         Freshness::NotApplicable => {}
     }
-    if fact.is_unknown() {
+    if let Some(reason) = fact.unknown_reason.as_ref() {
         ev.unknown_facts += 1;
+        unknowns.push(UnknownFact {
+            field: field.to_string(),
+            source: fact.source,
+            reason: reason.clone(),
+        });
     }
+}
+
+/// An absence with no `Fact` behind it — an empty timeline, an empty ledger. Recorded through the
+/// same list and the same counter as every other unknown, for the same reason.
+fn tally_absent(
+    ev: &mut AnswerEvidence,
+    field: &str,
+    source: &'static str,
+    reason: &str,
+    unknowns: &mut Vec<UnknownFact>,
+) {
+    ev.classes.push(EvidenceClass::Unavailable);
+    ev.unknown_facts += 1;
+    unknowns.push(UnknownFact {
+        field: field.to_string(),
+        source,
+        reason: reason.to_string(),
+    });
 }
 
 fn empty_answer(answer: &'static str) -> AnswerEvidence {
@@ -881,6 +1027,7 @@ fn empty_answer(answer: &'static str) -> AnswerEvidence {
         newest_observed_at: None,
         unstamped_facts: 0,
         unknown_facts: 0,
+        not_applicable_facts: 0,
     }
 }
 
@@ -889,16 +1036,17 @@ fn compose_evidence(
     identity: &MachineIdentity,
     chronology: &ChangeChronology,
     changes: &CompyChangeTruth,
-    unknowns: Vec<UnknownFact>,
 ) -> EvidenceSummary {
+    let mut unknowns: Vec<UnknownFact> = Vec::new();
+
     let mut a = empty_answer("What machine is this?");
-    tally(&mut a, &identity.cpu);
-    tally(&mut a, &identity.gpu);
-    tally(&mut a, &identity.gpu_driver);
-    tally(&mut a, &identity.ram_gb);
-    tally(&mut a, &identity.display);
-    tally(&mut a, &identity.windows);
-    tally(&mut a, &identity.rig_hash);
+    tally(&mut a, "identity.cpu", &identity.cpu, &mut unknowns);
+    tally(&mut a, "identity.gpu", &identity.gpu, &mut unknowns);
+    tally(&mut a, "identity.gpu_driver", &identity.gpu_driver, &mut unknowns);
+    tally(&mut a, "identity.ram_gb", &identity.ram_gb, &mut unknowns);
+    tally(&mut a, "identity.display", &identity.display, &mut unknowns);
+    tally(&mut a, "identity.windows", &identity.windows, &mut unknowns);
+    tally(&mut a, "identity.rig_hash", &identity.rig_hash, &mut unknowns);
 
     let mut b = empty_answer("What recently changed?");
     for e in &chronology.entries {
@@ -913,22 +1061,36 @@ fn compose_evidence(
         }
     }
     if chronology.entries.is_empty() {
-        b.classes.push(EvidenceClass::Unavailable);
-        b.unknown_facts += 1;
+        tally_absent(
+            &mut b,
+            "chronology.entries",
+            PRODUCER_TIMELINE,
+            chronology
+                .unknown_reason
+                .as_deref()
+                .unwrap_or(CHRONOLOGY_EMPTY),
+            &mut unknowns,
+        );
     }
 
     let mut c = empty_answer("What did Compy change?");
     for ch in &changes.changes {
-        tally(&mut c, &ch.applied_at);
-        tally(&mut c, &ch.status);
-        tally(&mut c, &ch.still_active);
-        tally(&mut c, &ch.rolled_back_at);
-        tally(&mut c, &ch.on_this_rig);
-        tally(&mut c, &ch.reversible);
+        let at = |f: &str| format!("compy_changes[{}].{}", ch.id, f);
+        tally(&mut c, &at("applied_at"), &ch.applied_at, &mut unknowns);
+        tally(&mut c, &at("status"), &ch.status, &mut unknowns);
+        tally(&mut c, &at("still_active"), &ch.still_active, &mut unknowns);
+        tally(&mut c, &at("rolled_back_at"), &ch.rolled_back_at, &mut unknowns);
+        tally(&mut c, &at("on_this_rig"), &ch.on_this_rig, &mut unknowns);
+        tally(&mut c, &at("reversible"), &ch.reversible, &mut unknowns);
     }
     if changes.changes.is_empty() {
-        c.classes.push(EvidenceClass::Unavailable);
-        c.unknown_facts += 1;
+        tally_absent(
+            &mut c,
+            "compy_changes.changes",
+            PRODUCER_LEDGER,
+            LEDGER_EMPTY,
+            &mut unknowns,
+        );
     }
 
     let answers = vec![a, b, c];
@@ -1328,7 +1490,12 @@ mod machine_model_tests {
         let m = f.model();
         let t = &m.compy_changes;
         assert_eq!(t.total_recorded, 4);
-        assert_eq!(t.active_now, 2);
+        // Rows "a" (this rig) and "c" (another rig) both read as in effect. Only "a" is Compy's
+        // change on THIS PC. Before the #385 review both were counted as `active_now`.
+        assert_eq!(t.active_now, 1);
+        assert_eq!(t.in_effect_other_rig, 1);
+        assert_eq!(t.in_effect_rig_unknown, 0);
+        assert_eq!(t.in_effect_total, 2);
         assert_eq!(t.rolled_back, 1);
         assert_eq!(t.not_on_this_rig, 1);
         assert_eq!(t.rig_unknown, 1);
@@ -1378,6 +1545,308 @@ mod machine_model_tests {
             .unknowns
             .iter()
             .any(|u| u.field == "compy_changes[old].rolled_back_at"));
+    }
+
+    // -- 5b. The four HQ review repairs, each with its own falsifiable proof (#385) --
+
+    /// REPAIR 1. `NotApplicable` means "there is no value". A record Compy really holds, whose row
+    /// simply carries no date, HAS a value -- so giving it that freshness let a known historical
+    /// fact be read as an absence. It now has a state of its own.
+    #[test]
+    fn a_known_historical_fact_never_carries_the_absent_facts_freshness() {
+        let undated: Fact<String> = Fact::known_undated("applied".into(), PRODUCER_LEDGER);
+        assert_eq!(undated.value.as_deref(), Some("applied"));
+        assert_eq!(undated.class, EvidenceClass::RecordedHistorically);
+        assert_eq!(undated.freshness, Freshness::UndatedHistorical);
+        assert_ne!(
+            undated.freshness,
+            Freshness::NotApplicable,
+            "a fact that HAS a value must not share a freshness state with facts that have none"
+        );
+        assert!(!undated.is_unknown());
+        assert!(!undated.is_not_applicable());
+
+        // And the two absent kinds keep NotApplicable, which is now only theirs.
+        assert_eq!(
+            Fact::<String>::unknown(PRODUCER_LEDGER, "why").freshness,
+            Freshness::NotApplicable
+        );
+        assert_eq!(
+            Fact::<String>::not_applicable(PRODUCER_LEDGER, "why").freshness,
+            Freshness::NotApplicable
+        );
+
+        // End to end: an undated ledger row reaches the model as undated-historical, and is
+        // rolled up as unstamped -- a consumer must not read it as re-read at build time.
+        let mut f = Fixture::new();
+        f.changes.push(crate::history::test_view(
+            "undated", "game-mode", "Enable Game Mode", "", "applied", true, Some(true), None, true,
+        ));
+        let m = f.model();
+        let c = &m.compy_changes.changes[0];
+        assert_eq!(c.status.value.as_deref(), Some("applied"));
+        assert_eq!(c.status.freshness, Freshness::UndatedHistorical);
+        assert_eq!(c.reversible.freshness, Freshness::UndatedHistorical);
+        let ev = m
+            .evidence
+            .answers
+            .iter()
+            .find(|a| a.answer == "What did Compy change?")
+            .unwrap();
+        assert!(
+            ev.unstamped_facts >= 2,
+            "undated historical facts are unstamped, not timeless"
+        );
+    }
+
+    /// REPAIR 2. A change that was never rolled back has no rollback time to be MISSING. Counting
+    /// it as unknown both invented an evidence gap and put a number in the roll-up with no
+    /// matching entry in the unknown list.
+    #[test]
+    fn a_change_never_rolled_back_has_no_rollback_time_to_be_missing() {
+        let mut f = Fixture::new();
+        f.changes.push(crate::history::test_view(
+            "active", "game-mode", "Enable Game Mode", "2026-07-01T00:00:00Z", "applied", true,
+            Some(true), None, true,
+        ));
+        let m = f.model();
+        let c = &m.compy_changes.changes[0];
+
+        assert!(c.rolled_back_at.is_not_applicable());
+        assert!(
+            !c.rolled_back_at.is_unknown(),
+            "not-applicable is not a missing fact"
+        );
+        assert!(c.rolled_back_at.value.is_none());
+        assert!(c.rolled_back_at.unknown_reason.is_none());
+        assert!(c
+            .rolled_back_at
+            .not_applicable_reason
+            .as_deref()
+            .unwrap()
+            .contains("has not been rolled back"));
+
+        // It must not appear in the unknown list, and must not inflate the unknown count.
+        assert!(
+            !m.evidence
+                .unknowns
+                .iter()
+                .any(|u| u.field == "compy_changes[active].rolled_back_at"),
+            "a field that cannot apply is not evidence Compy failed to gather"
+        );
+        let ev = m
+            .evidence
+            .answers
+            .iter()
+            .find(|a| a.answer == "What did Compy change?")
+            .unwrap();
+        assert_eq!(ev.not_applicable_facts, 1);
+        assert_eq!(ev.unknown_facts, 0);
+        // ... and it contributes no evidence class, so nothing reads as unavailable.
+        assert!(!ev.classes.contains(&EvidenceClass::Unavailable));
+
+        // A change that WAS rolled back with no stamp stays a genuine unknown -- the two are
+        // distinguished, not merged. Falsifies "everything absent became not-applicable".
+        let mut g = Fixture::new();
+        g.changes.push(crate::history::test_view(
+            "old", "sysmain-disable", "Disable SysMain", "2026-01-01T00:00:00Z", "rolled_back",
+            false, Some(true), None, true,
+        ));
+        let gm = g.model();
+        assert!(gm.compy_changes.changes[0].rolled_back_at.is_unknown());
+        assert!(!gm.compy_changes.changes[0].rolled_back_at.is_not_applicable());
+    }
+
+    /// REPAIR 2, the other half: the roll-up's unknown COUNT and the explicit unknown LIST are
+    /// produced by one pass, so they cannot disagree. They did.
+    #[test]
+    fn the_unknown_counts_and_the_explicit_unknown_list_always_agree() {
+        let mut hostile = Fixture::new();
+        // Every identity probe failed, an undated row, an unstamped rollback, an unattributed
+        // row: as many absences of as many kinds as the model can hold at once.
+        hostile.hardware.windows_version = None;
+        hostile.fingerprint = fp("", "", 0, "", "");
+        hostile.changes = vec![
+            crate::history::test_view("u1", "a", "A", "", "applied", true, None, None, false),
+            crate::history::test_view(
+                "u2", "b", "B", "2026-02-02T00:00:00Z", "rolled_back", false, Some(false), None,
+                true,
+            ),
+            crate::history::test_view(
+                "u3", "c", "C", "2026-03-03T00:00:00Z", "applied", false, Some(true), None, true,
+            ),
+        ];
+
+        for (i, f) in [Fixture::new(), hostile].iter().enumerate() {
+            let m = f.model();
+            let counted: usize = m.evidence.answers.iter().map(|a| a.unknown_facts).sum();
+            assert_eq!(
+                counted,
+                m.evidence.unknowns.len(),
+                "case {i}: the unknown count and the unknown list must be the same evidence"
+            );
+            assert!(m.evidence.unknowns.iter().all(|u| !u.reason.is_empty()));
+
+            // Every fact is in exactly one of the three states, never a fourth.
+            for c in &m.compy_changes.changes {
+                for ok in [
+                    c.applied_at.absence_is_well_formed(),
+                    c.status.absence_is_well_formed(),
+                    c.still_active.absence_is_well_formed(),
+                    c.rolled_back_at.absence_is_well_formed(),
+                    c.on_this_rig.absence_is_well_formed(),
+                    c.reversible.absence_is_well_formed(),
+                ] {
+                    assert!(ok, "case {i}: a fact has a value, a reason, or a non-applicability");
+                }
+            }
+            for ok in [
+                m.identity.cpu.absence_is_well_formed(),
+                m.identity.gpu.absence_is_well_formed(),
+                m.identity.gpu_driver.absence_is_well_formed(),
+                m.identity.ram_gb.absence_is_well_formed(),
+                m.identity.display.absence_is_well_formed(),
+                m.identity.windows.absence_is_well_formed(),
+                m.identity.rig_hash.absence_is_well_formed(),
+            ] {
+                assert!(ok, "case {i}: identity facts obey the same three-state rule");
+            }
+        }
+    }
+
+    /// REPAIR 3. `is_still_active` re-checks the LIVE machine, so it proves a setting is in
+    /// effect here. It never proves Compy applied it here. Counting an other-rig or unstamped row
+    /// as `active_now` claimed exactly that.
+    #[test]
+    fn active_now_never_claims_an_other_rig_or_unattributed_row_was_applied_here() {
+        let mut f = Fixture::new();
+        f.changes = vec![
+            // In effect, and same_rig matched: the one row Compy may claim for this PC.
+            crate::history::test_view(
+                "mine", "game-mode", "Enable Game Mode", "2026-07-01T00:00:00Z", "applied", true,
+                Some(true), None, true,
+            ),
+            // In effect, but stamped for a DIFFERENT rig.
+            crate::history::test_view(
+                "elsewhere", "nagle-disable", "Disable Nagle", "2026-07-02T00:00:00Z", "applied",
+                true, Some(false), None, true,
+            ),
+            // In effect, but written before rig stamping: attribution unknown, not "this PC".
+            crate::history::test_view(
+                "unstamped", "hags-enable", "Enable HAGS", "2026-07-03T00:00:00Z", "applied", true,
+                None, None, true,
+            ),
+            // Applied here and reverted outside Compy: in NO in-effect bucket.
+            crate::history::test_view(
+                "reverted", "mouse-accel-off", "Turn off mouse acceleration",
+                "2026-07-04T00:00:00Z", "applied", false, Some(true), None, true,
+            ),
+            crate::history::test_view(
+                "undone", "sysmain-disable", "Disable SysMain", "2026-07-05T00:00:00Z",
+                "rolled_back", false, Some(true), Some("2026-07-06T00:00:00Z".into()), true,
+            ),
+        ];
+        let t = &f.model().compy_changes;
+
+        assert_eq!(t.active_now, 1, "only the row same_rig matched may be claimed for this PC");
+        assert_eq!(t.in_effect_other_rig, 1);
+        assert_eq!(t.in_effect_rig_unknown, 1);
+        assert_eq!(t.in_effect_total, 3);
+        assert_eq!(
+            t.active_now + t.in_effect_other_rig + t.in_effect_rig_unknown,
+            t.in_effect_total,
+            "the three attributions partition the in-effect rows exactly"
+        );
+        // The whole ledger still partitions: in effect + reverted outside + rolled back.
+        assert_eq!(
+            t.in_effect_total + t.applied_but_not_in_effect + t.rolled_back,
+            t.total_recorded
+        );
+        assert_eq!(t.total_recorded, 5);
+        assert_eq!(t.applied_but_not_in_effect, 1);
+        assert_eq!(t.rolled_back, 1);
+        // Whole-ledger rig attribution is unchanged and still covers every row.
+        assert_eq!(t.not_on_this_rig, 1);
+        assert_eq!(t.rig_unknown, 1);
+
+        // The rows themselves keep their own attribution, so a consumer can check the counts.
+        let by_id = |id: &str| t.changes.iter().find(|c| c.id == id).unwrap();
+        assert_eq!(by_id("elsewhere").on_this_rig.value, Some(false));
+        assert!(by_id("unstamped").on_this_rig.is_unknown());
+        assert!(by_id("elsewhere").still_active.value == Some(true));
+    }
+
+    /// REPAIR 4. "History starts" is the earliest evidence Compy STILL RETAINS. Deriving it from
+    /// the first identity snapshot dated history later than records already in hand.
+    #[test]
+    fn history_starts_at_the_earliest_retained_evidence_not_the_first_identity_snapshot() {
+        let mut f = Fixture::new();
+        // The first identity snapshot is 2026-08-01 (from Fixture::new). A ledger row and a
+        // timeline event both predate it, and the ledger row is the oldest thing retained.
+        f.changes.push(crate::history::test_view(
+            "old", "game-mode", "Enable Game Mode", "2026-05-01T00:00:00Z", "applied", true,
+            Some(true), None, true,
+        ));
+        f.timeline.push(crate::intelligence::EventRecord {
+            id: "applied:old".into(),
+            timestamp: "2026-06-15T00:00:00Z".into(),
+            event_type: "change-applied".into(),
+            source: "history".into(),
+            scope: EventScope::CompyApplied,
+            game: None,
+            summary: "Enable Game Mode".into(),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: false,
+            rec_id: Some("game-mode".into()),
+        });
+        let m = f.model();
+
+        assert_eq!(
+            m.chronology.recorded_from.as_deref(),
+            Some("2026-05-01T00:00:00Z"),
+            "retained ledger evidence predates the first identity snapshot and bounds history"
+        );
+        assert_eq!(m.chronology.recorded_from_source, Some(PRODUCER_LEDGER));
+        assert_ne!(
+            m.chronology.recorded_from.as_deref(),
+            m.chronology.identity_history_from.as_deref(),
+            "the boundary must not silently be the identity-snapshot date"
+        );
+        // The narrower identity-only question keeps its own honest answer.
+        assert_eq!(
+            m.chronology.identity_history_from.as_deref(),
+            Some("2026-08-01T10:00:00Z")
+        );
+
+        // Drop the ledger row: the timeline event is now the oldest retained evidence, and the
+        // named source moves with it. Falsifies "the source label is hardcoded".
+        f.changes.clear();
+        let m = f.model();
+        assert_eq!(m.chronology.recorded_from.as_deref(), Some("2026-06-15T00:00:00Z"));
+        assert_eq!(m.chronology.recorded_from_source, Some(PRODUCER_TIMELINE));
+
+        // Drop that too, and identity snapshots are legitimately the earliest thing retained.
+        f.timeline.clear();
+        let m = f.model();
+        assert_eq!(m.chronology.recorded_from.as_deref(), Some("2026-08-01T10:00:00Z"));
+        assert_eq!(m.chronology.recorded_from_source, Some(PRODUCER_SNAPSHOT));
+
+        // An undated ledger row can bound nothing, and must not erase a real boundary.
+        f.changes.push(crate::history::test_view(
+            "undated", "hags-enable", "Enable HAGS", "", "applied", true, Some(true), None, true,
+        ));
+        let m = f.model();
+        assert_eq!(m.chronology.recorded_from.as_deref(), Some("2026-08-01T10:00:00Z"));
+        assert_eq!(m.chronology.recorded_from_source, Some(PRODUCER_SNAPSHOT));
+
+        // Nothing retained at all: no boundary is invented, and no source is named.
+        f.changes.clear();
+        f.snapshots.clear();
+        let m = f.model();
+        assert!(m.chronology.recorded_from.is_none());
+        assert!(m.chronology.recorded_from_source.is_none());
+        assert!(m.chronology.identity_history_from.is_none());
     }
 
     // ── 6. Composition performs no write, persistence or mutation ─────────

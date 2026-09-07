@@ -504,17 +504,25 @@ pub(crate) fn machine_model_section(
             Freshness::Stamped => "Compy recorded when it observed this.",
             Freshness::LiveAtBuild => "Read just now; the producer records no timestamp of its own.",
             Freshness::UnstampedCache => "Read once this session and remembered since. Not proof of a re-read just now.",
+            Freshness::UndatedHistorical => "Compy recorded this, but the record carries no date, so it cannot be placed in time.",
             Freshness::NotApplicable => "No value, so no freshness.",
         }
     };
+    // A field that does not apply must never render as "Unknown": that reads to a user as evidence
+    // Compy failed to gather, when in fact there is nothing there to gather (#385 review).
     let show = |f: &crate::machine_model::Fact<String>| -> (String, Option<String>) {
-        match (f.value.as_ref(), f.unknown_reason.as_ref()) {
-            (Some(v), _) => (
+        match (
+            f.value.as_ref(),
+            f.unknown_reason.as_ref(),
+            f.not_applicable_reason.as_ref(),
+        ) {
+            (Some(v), _, _) => (
                 v.clone(),
                 Some(format!("{} · {}", f.source, freshness_note(f.freshness))),
             ),
-            (None, Some(why)) => ("Unknown".into(), Some(why.clone())),
-            (None, None) => ("Unknown".into(), None),
+            (None, Some(why), _) => ("Unknown".into(), Some(why.clone())),
+            (None, None, Some(why)) => ("Not applicable".into(), Some(why.clone())),
+            (None, None, None) => ("Unknown".into(), None),
         }
     };
 
@@ -585,7 +593,15 @@ pub(crate) fn machine_model_section(
         entries.push(DiagnosticEntry {
             label: "History starts".into(),
             value: from.clone(),
-            note: Some("Nothing before this date is recorded, which is different from nothing having changed.".into()),
+            note: Some(format!(
+                "The earliest evidence still retained, from {}. Nothing before this date is recorded, which is different from nothing having changed.{}",
+                m.chronology.recorded_from_source.unwrap_or("an unnamed source"),
+                match m.chronology.identity_history_from.as_deref() {
+                    Some(id_from) if Some(id_from) != m.chronology.recorded_from.as_deref() =>
+                        format!(" Identity recording specifically starts later, at {id_from}."),
+                    _ => String::new(),
+                }
+            )),
         });
     }
 
@@ -594,10 +610,21 @@ pub(crate) fn machine_model_section(
     entries.push(DiagnosticEntry {
         label: "Changes Compy applied".into(),
         value: format!(
-            "{} recorded · {} active now · {} rolled back · {} reverted outside Compy",
+            "{} recorded · {} active on this PC · {} rolled back · {} reverted outside Compy",
             c.total_recorded, c.active_now, c.rolled_back, c.applied_but_not_in_effect
         ),
         note: Some(c.ledger_note.into()),
+    });
+    entries.push(DiagnosticEntry {
+        label: "In effect but not applied here".into(),
+        value: format!(
+            "{} recorded on another PC · {} unattributed",
+            c.in_effect_other_rig, c.in_effect_rig_unknown
+        ),
+        note: Some(format!(
+            "{} of {} settings that read as in effect are attributed to this PC. The live check proves the setting is in effect; only the rig stamp says Compy is who applied it here.",
+            c.active_now, c.in_effect_total
+        )),
     });
     entries.push(DiagnosticEntry {
         label: "Applied on this machine".into(),
