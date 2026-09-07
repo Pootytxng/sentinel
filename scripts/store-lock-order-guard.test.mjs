@@ -1,8 +1,8 @@
 // store-lock-order-guard.test.mjs — the acyclicity claim behind #283's store locks, mechanized.
 //
 // #283 put a `Mutex<()>` around the read-modify-write in comparison.rs, drift.rs and readiness.rs.
-// A lock is only safe if the lock GRAPH stays acyclic, and PR #395's independent review showed that
-// claim rotting in the exact way prose rots: the comment asserted the one call out of a locked
+// A lock is only safe if the lock GRAPH stays acyclic, and PR #395's first independent review showed
+// that claim rotting in the exact way prose rots: the comment asserted the one call out of a locked
 // section acquired nothing, when in fact `on_session_finalized` → `history::ledger_len_checked` →
 // `load_history` reaches `support_evidence::record`, which takes that module's own store lock. No
 // cycle — but a lock ORDER nobody had written down, defended by a sentence that was wrong.
@@ -10,8 +10,9 @@
 // Prose is the weakest tier of rule. This file is the guard that replaces it, and it checks the two
 // things the acyclicity argument actually rests on:
 //
-//   A. NO BACK EDGE. Nothing reachable from inside a store lock (`history.rs`, and
-//      `support_evidence.rs` behind it) may call back into a store module. That is what makes
+//   A. NO BACK EDGE, TRANSITIVELY. Nothing reachable from inside a store lock may call back into a
+//      store module. The reachable set is COMPUTED from one seed — `history`, the module actually
+//      called from inside a locked section — not listed by hand. That is what makes
 //      COMPARISON_LOCK ⊃ SUPPORT_EVIDENCE_LOCK an order rather than a cycle.
 //   B. NO NEW EDGE. The set of modules the three store modules reach at all is pinned. A new one is
 //      not assumed to be a defect — it is assumed to be UNDERIVED. Adding it here is the moment
@@ -33,12 +34,17 @@ const SRC = join(REPO, "src-tauri", "src");
 const STORE_MODULES = ["comparison", "drift", "readiness"];
 
 /**
- * Modules reachable from INSIDE one of those locked sections, and therefore forbidden from calling
- * back. `history` is called directly (`comparison::on_session_finalized_at`); `support_evidence` is
- * one hop behind it, on `load_history`'s corrupt-ledger branch, and is the module whose own lock
- * makes the order real.
+ * The module actually called from INSIDE one of those locked sections:
+ * `comparison::on_session_finalized_at` → `history::ledger_len_checked`.
+ *
+ * This is the one hand-derived fact in the file, and it is deliberately the only one. Everything
+ * else reachable from inside the lock — `support_evidence`, and whatever those two reach in turn —
+ * is COMPUTED below. The earlier version pinned `["history", "support_evidence"]` by hand and
+ * checked only their direct edges, which PR #395's third independent review flagged: a third hop
+ * back into a store module would never have been looked at. Measured at the time of writing, the
+ * closure is 9 of the crate's 52 modules and contains no store module.
  */
-const REACHABLE_FROM_INSIDE_A_LOCK = ["history", "support_evidence"];
+const LOCK_ENTRY_POINTS = ["history"];
 
 /**
  * What each store module is allowed to reach. Pinned, not discovered: an unlisted edge means the
@@ -81,18 +87,62 @@ const MODULES = new Set(
 );
 
 /**
+ * The inside of the `{...}` group whose opening brace is at `open`, honouring nesting. `null` if the
+ * group is never closed. Written as a scanner rather than a regex because a regex cannot match
+ * balanced braces, and pretending otherwise is what caused the defect this function exists to fix.
+ */
+function groupBody(src, open) {
+  let depth = 0;
+  for (let i = open; i < src.length; i += 1) {
+    if (src[i] === "{") depth += 1;
+    else if (src[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return src.slice(open + 1, i);
+    }
+  }
+  return null;
+}
+
+/** Split a use-group body on its TOP-LEVEL commas — a nested group's commas are not separators. */
+function topLevelParts(body) {
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < body.length; i += 1) {
+    const c = body[i];
+    if (c === "{") depth += 1;
+    else if (c === "}") depth -= 1;
+    else if (c === "," && depth === 0) {
+      parts.push(body.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(body.slice(start));
+  return parts;
+}
+
+/**
  * Every module a Rust source reaches, sorted and deduped. Pure over a string, so the shapes it
  * claims to recognize can be pinned directly instead of by mutating the tree to find out.
  *
- * The first version matched `crate::<mod>::` and nothing else, and PR #395's SECOND independent
- * review broke it in one line: `use crate::comparison; comparison::armed()` is completely ordinary
- * Rust, contains no `crate::comparison::` substring, and sailed past the back-edge assertion 6/6
- * green. A guard an idiomatic import can walk around is worse than no guard, because it reads as
- * proof. So the match now covers the three shapes that can actually introduce an edge:
+ * This function has now been broken by a reviewer TWICE, each time by ordinary Rust, and each break
+ * is why it looks the way it does:
  *
- *   1. a qualified path — `crate::history::ledger_len_checked()`, and `use crate::history::X;`
- *   2. a BARE module import — `use crate::history;` — the shape that defeated the first version
- *   3. a grouped import — `use crate::{history, support_evidence::record};`
+ *   - Review 2: it matched `crate::<mod>::` and nothing else, so `use crate::comparison;` followed
+ *     by `comparison::armed()` — a real back edge — passed every assertion green.
+ *   - Review 3: the replacement read a group with `\{([^}]*)\}`, which stops at the FIRST `}`. In
+ *     `use crate::{actions::{RollbackAction}, comparison};` the capture ended inside the nested
+ *     group, so `comparison` was never seen by the group reader and was not adjacent to `crate::`
+ *     for the plain matcher either. A real back edge again passed 12/12 green.
+ *
+ * Both were the same lesson: a regex cannot parse a nested use-tree. The group reader is now a
+ * brace-depth scanner, which can. The shapes covered:
+ *
+ *   1. a qualified path — `crate::history::ledger_len_checked()`, `use crate::history::X;`,
+ *      `use crate::history as h;` (the alias does not hide the segment before it)
+ *   2. a BARE module import — `use crate::history;`
+ *   3. a group, at any nesting depth — `use crate::{history, support_evidence::record};` and
+ *      `use crate::{actions::{A, B}, history};`
  *
  * `super::` is matched for the same reason, and is why every candidate is filtered against the real
  * module list: inside a `mod tests` block `super::` means THIS file, so `super::arm_at` must not
@@ -109,9 +159,12 @@ export function extractEdges(src, self) {
   // Shapes 1 and 2: any `crate::x` / `super::x`, whether or not a further `::` follows.
   for (const m of src.matchAll(/\b(?:crate|super)::([a-z][a-z0-9_]*)/g)) found.add(m[1]);
 
-  // Shape 3: the braces defeat the pattern above, so read the group's own first segments.
-  for (const m of src.matchAll(/\buse\s+(?:crate|super)::\{([^}]*)\}/g)) {
-    for (const part of m[1].split(",")) {
+  // Shape 3: a group. Only the TOP-LEVEL entries of a group hanging directly off `crate::`/`super::`
+  // are crate-level modules; anything deeper is an item inside one of them and is already counted.
+  for (const m of src.matchAll(/\b(?:crate|super)::\{/g)) {
+    const body = groupBody(src, m.index + m[0].length - 1);
+    if (body === null) continue; // unterminated group: read nothing rather than read wrongly
+    for (const part of topLevelParts(body)) {
       const name = part.trim().match(/^([a-z][a-z0-9_]*)/);
       if (name) found.add(name[1]);
     }
@@ -121,25 +174,50 @@ export function extractEdges(src, self) {
   return [...found].filter((m) => MODULES.has(m)).sort();
 }
 
+/**
+ * Everything reachable from `seeds`, mapped to the path that reached it. Pure over an `edgesOf`
+ * lookup so the walk can be falsified on a synthetic graph rather than only against the real tree —
+ * a walker that silently stopped at one hop would otherwise pass exactly as vacuously as the
+ * hand-pinned list it replaced.
+ */
+export function closureFrom(seeds, edgesOf) {
+  const via = new Map(seeds.map((s) => [s, [s]]));
+  const queue = [...seeds];
+  while (queue.length) {
+    const module = queue.shift();
+    for (const next of edgesOf(module)) {
+      if (via.has(next)) continue; // also what makes a cyclic graph terminate
+      via.set(next, [...via.get(module), next]);
+      queue.push(next);
+    }
+  }
+  return via;
+}
+
 /** Every module `module` reaches, comments stripped first. */
 function edgesFrom(module) {
   return extractEdges(code(module), module);
 }
 
 describe("#283 store locks: the lock graph stays acyclic", () => {
-  it.each(REACHABLE_FROM_INSIDE_A_LOCK)(
-    "%s.rs has no call back into a store module",
-    (module) => {
-      const reached = edgesFrom(module);
-      const back = STORE_MODULES.filter((store) => reached.includes(store));
-      expect(
-        back,
-        `${module}.rs is reachable from inside a store lock, so a call from it into ` +
-          `${back.join("/")} closes the loop into a deadlock. Break the edge, or move the call ` +
-          `that reaches ${module}.rs out of the locked section.`,
-      ).toEqual([]);
-    },
-  );
+  it("nothing reachable from inside a store lock reaches back into one", () => {
+    const via = closureFrom(LOCK_ENTRY_POINTS, edgesFrom);
+    const back = STORE_MODULES.filter((store) => via.has(store));
+    expect(
+      back.map((store) => via.get(store).join(" -> ")),
+      `a module reachable from inside a store lock calls back into ${back.join("/")}, which closes ` +
+        `the loop into a deadlock. Break an edge on the path above, or move the call that reaches ` +
+        `into that chain out of the locked section.`,
+    ).toEqual([]);
+  });
+
+  it("the reachable set is not vacuous — it still contains support_evidence", () => {
+    // `support_evidence` is the module whose OWN store lock makes COMPARISON_LOCK ⊃
+    // SUPPORT_EVIDENCE_LOCK an order rather than a triviality. If the walk stopped reaching it, the
+    // assertion above would be guarding an empty set and would still be green.
+    const via = closureFrom(LOCK_ENTRY_POINTS, edgesFrom);
+    expect([...via.keys()]).toContain("support_evidence");
+  });
 
   it.each(STORE_MODULES)("%s.rs reaches only modules the lock order was derived against", (store) => {
     const unexpected = edgesFrom(store).filter((m) => !ALLOWED_EDGES[store].includes(m));
@@ -157,21 +235,39 @@ describe("#283 store locks: the lock graph stays acyclic", () => {
     expect(edgesFrom("comparison")).toContain("history");
   });
 
-  // The three assertions above are only as good as what `extractEdges` can SEE, and its first
-  // version could not see a bare import — a reviewer demonstrated a real back edge passing 6/6
-  // green. That was a defect in the guard itself, so per `bug → guard` the capability is pinned
-  // here on synthetic sources: a future regression fails HERE, with a name that says which shape
-  // went blind, instead of quietly narrowing what the assertions above are able to notice.
+  // The assertions above are only as good as what `extractEdges` can SEE, and two reviewers have now
+  // broken it with ordinary Rust — first a bare import, then a nested use-group. Both times a real
+  // back edge passed every tree assertion green. That is a defect in the guard itself, so per
+  // `bug → guard` the capability is pinned here on synthetic sources: a future regression fails
+  // HERE, with a name that says which shape went blind, instead of quietly narrowing coverage.
   it.each([
     ["a qualified call", "fn f() { let _ = crate::history::ledger_len_checked(); }", ["history"]],
     ["a qualified import", "use crate::history::AppliedChange;", ["history"]],
     ["a BARE module import", "use crate::history;\nfn f() { history::load_history(); }", ["history"]],
+    ["an ALIASED import", "use crate::history as h;\nfn f() { h::load_history(); }", ["history"]],
     [
-      "a grouped import",
+      "a flat group",
       "use crate::{history, support_evidence::record};",
       ["history", "support_evidence"],
     ],
-    ["a `super::` module path", "fn f() { super::history::load_history(); }", ["history"]],
+    [
+      // Review 3's evasion, verbatim in shape: the old `\{([^}]*)\}` capture stopped at the nested
+      // group's `}`, so every sibling AFTER it was invisible to the group reader and not adjacent
+      // to `crate::` for the plain matcher either.
+      "a NESTED group with a sibling after it",
+      "use crate::{actions::{RollbackAction}, history};\nfn f() { history::load_history(); }",
+      ["actions", "history"],
+    ],
+    [
+      "a deeply nested group with siblings at two levels",
+      "use crate::{actions::{a::{b}, c}, history, support_evidence::record};",
+      ["actions", "history", "support_evidence"],
+    ],
+    [
+      "a multi-line group, which is how the real files write them",
+      "use crate::{\n    actions::{RollbackAction},\n    history,\n};",
+      ["actions", "history"],
+    ],
   ])("sees an edge hiding in %s", (_shape, src, expected) => {
     expect(extractEdges(src, "comparison")).toEqual(expected);
   });
@@ -182,5 +278,27 @@ describe("#283 store locks: the lock graph stays acyclic", () => {
     expect(extractEdges("fn t() { super::arm_at(&p, a); }", "comparison")).toEqual([]);
     // And the module's own name reached through `super::` is not an edge OUT of it either.
     expect(extractEdges("fn t() { super::comparison::x(); }", "comparison")).toEqual([]);
+  });
+
+  it("reads nothing rather than reading wrongly from an unterminated group", () => {
+    // Not a shape valid Rust produces — a defence against the scanner running off the end of a file
+    // and inventing edges out of whatever followed. `crate::history` on the same line is still seen.
+    expect(extractEdges("use crate::{history, drift", "comparison")).toEqual([]);
+    expect(extractEdges("use crate::history;\nuse crate::{drift", "comparison")).toEqual(["history"]);
+  });
+
+  // The walk itself can be wrong in a way that is invisible against the real tree: one that stopped
+  // after a single hop would give the same answer today, because today's closure happens to be
+  // clean. So it is pinned on a synthetic graph, where a two-hop back edge definitely exists.
+  it("follows a back edge that is more than one hop away", () => {
+    const graph = { history: ["actions"], actions: ["leftovers"], leftovers: ["comparison"] };
+    const via = closureFrom(["history"], (m) => graph[m] ?? []);
+    expect(via.has("comparison")).toBe(true);
+    expect(via.get("comparison").join(" -> ")).toBe("history -> actions -> leftovers -> comparison");
+  });
+
+  it("terminates on a cyclic graph instead of walking forever", () => {
+    const graph = { a: ["b"], b: ["c"], c: ["a"] };
+    expect([...closureFrom(["a"], (m) => graph[m] ?? []).keys()].sort()).toEqual(["a", "b", "c"]);
   });
 });
