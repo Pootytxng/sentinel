@@ -7,6 +7,7 @@
 //! existing apply / deep-link flow, nothing new here.
 
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +37,15 @@ pub(crate) struct Drift {
     pub noticed_at: String,
 }
 
+// #283 — serialized so two concurrent readiness scans can't interleave load → detect → save.
+// `get_game_readiness` is a plain `#[tauri::command]`, so two overlapping scans run on two pool
+// threads; without this the later save writes state folded from a stale read, and a `noticed_at`
+// stamp — which the whole point of this module is to keep STABLE — can be reset or dropped.
+//
+// `detect` is pure, and nothing inside the locked section acquires another store's lock, so this
+// adds no ordering constraint anywhere. Callers hold no lock when they reach here.
+static DRIFT_LOCK: Mutex<()> = Mutex::new(());
+
 fn state_path() -> std::path::PathBuf {
     crate::compy_data_dir().join("drift.json")
 }
@@ -51,10 +61,6 @@ fn load_state_from(path: &std::path::Path) -> DriftState {
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
-}
-
-fn save_state(s: &DriftState) {
-    save_state_to(&state_path(), s);
 }
 
 /// Deliberately best-effort and returning nothing, unchanged: drift is a convenience, and a failed
@@ -114,9 +120,24 @@ fn detect(
 
 /// Load → detect → persist. Returns the active drifts for the UI.
 pub(crate) fn detect_and_persist(checks: &[(String, String, String, String)]) -> Vec<Drift> {
-    let now = chrono::Utc::now().to_rfc3339();
-    let (drifts, new_state) = detect(checks, &load_state(), &now);
-    save_state(&new_state);
+    // Best-effort like everything else in this module: a poisoned lock means some other thread
+    // panicked mid-update, and drift is a convenience that must never become an error the user has
+    // to answer. Recovering the guard keeps the sequence serialized rather than silently
+    // un-serializing it, which is the failure this lock exists to prevent.
+    detect_and_persist_at(&state_path(), checks, &chrono::Utc::now().to_rfc3339())
+}
+
+/// The whole read-modify-write, lifted to a path so the #283 lock can be PROVEN against a scratch
+/// file instead of the real data root — and so the test exercises the same critical section the
+/// caller does, rather than a lookalike.
+fn detect_and_persist_at(
+    path: &std::path::Path,
+    checks: &[(String, String, String, String)],
+    now: &str,
+) -> Vec<Drift> {
+    let _lock = DRIFT_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let (drifts, new_state) = detect(checks, &load_state_from(path), now);
+    save_state_to(path, &new_state);
     drifts
 }
 
@@ -473,5 +494,99 @@ mod drift_tests {
         assert_eq!(d1[0].label, "VRR enabled");
         assert_eq!(d1[0].detail, "FreeSync turned off");
         assert_eq!(d1[0].noticed_at, "T1");
+    }
+}
+
+/// #283 — LOST UPDATE. `detect_and_persist` folds observations into the PRIOR state, so two
+/// overlapping readiness scans that both read the same prior each write a state missing the other's
+/// fold. The visible cost is this module's whole point: a `noticed_at` stamp that is supposed to be
+/// STABLE gets reset, so the user is told a drift was noticed just now when it was noticed hours ago.
+///
+/// FALSIFIED BEFORE TRUSTED. With `DRIFT_LOCK` removed from `detect_and_persist_at`, the test below
+/// fails, ending with 3 to 9 of the 12 ids recorded instead of all 12.
+#[cfg(test)]
+mod drift_race_tests {
+    use super::*;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "compy-drift-race-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Each writer folds in a DIFFERENT check id. Serialized, the final state names all of them,
+    /// because every fold started from the previous writer's result.
+    #[test]
+    fn concurrent_scans_do_not_drop_each_others_folded_state() {
+        let dir = scratch("fold");
+        let path = dir.join("drift.json");
+        const WRITERS: usize = 12;
+
+        std::thread::scope(|scope| {
+            for i in 0..WRITERS {
+                let path = path.clone();
+                scope.spawn(move || {
+                    let checks = vec![(
+                        format!("check-{i}"),
+                        format!("Check {i}"),
+                        "ready".to_string(),
+                        String::new(),
+                    )];
+                    detect_and_persist_at(&path, &checks, "T0");
+                });
+            }
+        });
+
+        let state = load_state_from(&path);
+        for i in 0..WRITERS {
+            assert!(
+                state.last_good.contains_key(&format!("check-{i}")),
+                "check-{i}'s fold was lost: {} of {WRITERS} survived",
+                state.last_good.len()
+            );
+        }
+    }
+
+    /// The stability guarantee itself: once a drift has been noticed, a concurrent scan of an
+    /// UNRELATED check must not reset that stamp by writing state folded from a stale read.
+    #[test]
+    fn a_concurrent_unrelated_scan_never_resets_a_noticed_at_stamp() {
+        let dir = scratch("stamp");
+        let path = dir.join("drift.json");
+
+        // Establish "was good", then regress it so `noticed_at` is stamped at T1 and only T1.
+        let good = vec![("vrr".to_string(), "VRR".to_string(), "ready".to_string(), String::new())];
+        detect_and_persist_at(&path, &good, "T0");
+        let bad = vec![("vrr".to_string(), "VRR".to_string(), "attention".to_string(), "off".to_string())];
+        detect_and_persist_at(&path, &bad, "T1");
+        assert_eq!(load_state_from(&path).noticed_at.get("vrr").map(String::as_str), Some("T1"));
+
+        std::thread::scope(|scope| {
+            for i in 0..8 {
+                let path = path.clone();
+                scope.spawn(move || {
+                    let other = vec![(
+                        format!("other-{i}"),
+                        format!("Other {i}"),
+                        "ready".to_string(),
+                        String::new(),
+                    )];
+                    detect_and_persist_at(&path, &other, "T9");
+                });
+            }
+        });
+
+        assert_eq!(
+            load_state_from(&path).noticed_at.get("vrr").map(String::as_str),
+            Some("T1"),
+            "an unrelated concurrent scan moved a noticed_at stamp, which is the one thing this \
+             module promises never happens"
+        );
     }
 }

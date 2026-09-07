@@ -8,6 +8,7 @@
 //! `get_game_readiness` command just gathers the live inputs and calls it.
 
 use std::sync::atomic::Ordering;
+use std::sync::Mutex;
 
 use serde::Serialize;
 
@@ -924,6 +925,18 @@ fn status_str(s: ReadinessStatus) -> &'static str {
 }
 
 // ── Dismissals: a tiny persisted set of check ids the user has chosen to silence ──────────────
+
+// #283 — serialized so two dismiss/restore calls can't interleave load → modify → save and lose
+// one of them. Tauri dispatches commands on a thread pool, so two clicks close together genuinely
+// run concurrently; without this the second save writes a list built from a stale read and the
+// user's first dismissal silently comes back.
+//
+// Held across the WHOLE read-modify-write, never across a call into another store's lock — nothing
+// inside these sections touches history/drift/comparison, so the lock graph stays acyclic. Read-only
+// paths deliberately do NOT take it: `atomic_write` already replaces the file whole, so a racing
+// reader sees the old list or the new one, never a torn one.
+static DISMISSALS_LOCK: Mutex<()> = Mutex::new(());
+
 fn dismissals_path() -> std::path::PathBuf {
     crate::compy_data_dir().join("readiness_dismissals.json")
 }
@@ -941,13 +954,6 @@ fn load_dismissals_from(path: &std::path::Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn save_dismissals(ids: &[String]) -> Result<(), String> {
-    // User-framed errors (match export.rs's house pattern) — never a raw OS string to the UI.
-    std::fs::create_dir_all(crate::compy_data_dir())
-        .map_err(|e| format!("could not create the Compy data folder: {e}"))?;
-    save_dismissals_to(&dismissals_path(), ids)
-}
-
 fn save_dismissals_to(path: &std::path::Path, ids: &[String]) -> Result<(), String> {
     let json = crate::atomic_write::serialize_pretty(ids)
         .map_err(|e| format!("could not save your dismissed-checks setting: {e}"))?;
@@ -960,10 +966,25 @@ fn save_dismissals_to(path: &std::path::Path, ids: &[String]) -> Result<(), Stri
 /// Dismiss a readiness check by id (idempotent) — the user has judged it and wants it silenced.
 #[tauri::command]
 pub(crate) fn dismiss_readiness_check(id: String) -> Result<(), String> {
-    let mut ids = load_dismissals();
+    // Directory creation is idempotent and is NOT part of the read-modify-write, so it stays
+    // outside the lock; the user-facing wording is unchanged.
+    std::fs::create_dir_all(crate::compy_data_dir())
+        .map_err(|e| format!("could not create the Compy data folder: {e}"))?;
+    dismiss_readiness_check_at(&dismissals_path(), id)
+}
+
+/// The whole read-modify-write, lifted to a path so the #283 lock can be PROVEN against a scratch
+/// file instead of the real data root. The lock lives here, not in the wrapper, so the test
+/// exercises the same critical section the command does — a guard that locked a different function
+/// than the one it tested would pass for the wrong reason.
+fn dismiss_readiness_check_at(path: &std::path::Path, id: String) -> Result<(), String> {
+    let _lock = DISMISSALS_LOCK
+        .lock()
+        .map_err(|_| "dismissed-checks lock poisoned".to_string())?;
+    let mut ids = load_dismissals_from(path);
     if !ids.contains(&id) {
         ids.push(id);
-        save_dismissals(&ids)?;
+        save_dismissals_to(path, &ids)?;
     }
     Ok(())
 }
@@ -971,9 +992,19 @@ pub(crate) fn dismiss_readiness_check(id: String) -> Result<(), String> {
 /// Restore a previously-dismissed check so it alerts again.
 #[tauri::command]
 pub(crate) fn restore_readiness_check(id: String) -> Result<(), String> {
-    let mut ids = load_dismissals();
+    std::fs::create_dir_all(crate::compy_data_dir())
+        .map_err(|e| format!("could not create the Compy data folder: {e}"))?;
+    restore_readiness_check_at(&dismissals_path(), id)
+}
+
+/// Path-parameterized for the same reason as [`dismiss_readiness_check_at`].
+fn restore_readiness_check_at(path: &std::path::Path, id: String) -> Result<(), String> {
+    let _lock = DISMISSALS_LOCK
+        .lock()
+        .map_err(|_| "dismissed-checks lock poisoned".to_string())?;
+    let mut ids = load_dismissals_from(path);
     ids.retain(|x| x != &id);
-    save_dismissals(&ids)
+    save_dismissals_to(path, &ids)
 }
 
 #[tauri::command]
@@ -1735,5 +1766,114 @@ mod readiness_tests {
         };
         let rg = evaluate_readiness(&good, None, false, false, &AppliedChangesSummary::default(), None);
         assert_eq!(find(&rg, "drive-health").status, ReadinessStatus::Ready);
+    }
+}
+
+/// #283 — LOST UPDATE. These prove the serialization itself, not a lookalike: they call the very
+/// `*_at` functions the two `#[tauri::command]` wrappers call, so the critical section under test is
+/// the one that ships.
+///
+/// FALSIFIED BEFORE TRUSTED. With `DISMISSALS_LOCK` removed from `dismiss_readiness_check_at`, the
+/// first test below fails, losing between 2 and 25 of the 32 ids across runs. That is the defect
+/// #283 describes, reproduced on demand — the pass is therefore evidence and not decoration.
+#[cfg(test)]
+mod readiness_dismissal_race_tests {
+    use super::*;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "compy-dismiss-race-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// The exact shape #283 reports: several dismissals issued close together. Every one the user
+    /// issued must survive; a lost update is a check the user silenced coming back on its own.
+    #[test]
+    fn concurrent_dismissals_all_survive_none_is_silently_lost() {
+        let dir = scratch("dismiss");
+        let path = dir.join("readiness_dismissals.json");
+        const WRITERS: usize = 32;
+
+        std::thread::scope(|scope| {
+            for i in 0..WRITERS {
+                let path = path.clone();
+                scope.spawn(move || {
+                    dismiss_readiness_check_at(&path, format!("check-{i}")).unwrap();
+                });
+            }
+        });
+
+        let mut got = load_dismissals_from(&path);
+        got.sort();
+        let mut want: Vec<String> = (0..WRITERS).map(|i| format!("check-{i}")).collect();
+        want.sort();
+        assert_eq!(
+            got, want,
+            "a dismissal the user issued was silently lost: {} of {WRITERS} survived",
+            got.len()
+        );
+    }
+
+    /// Restore races dismiss on the same list. The end state may legitimately contain or omit the
+    /// contested id depending on which landed last, but no OTHER id may be collateral damage —
+    /// that is the lost update, and it is what the assertion below pins.
+    #[test]
+    fn a_restore_racing_dismissals_never_drops_an_unrelated_id() {
+        let dir = scratch("mixed");
+        let path = dir.join("readiness_dismissals.json");
+        const WRITERS: usize = 24;
+
+        dismiss_readiness_check_at(&path, "contested".to_string()).unwrap();
+
+        std::thread::scope(|scope| {
+            for i in 0..WRITERS {
+                let path = path.clone();
+                scope.spawn(move || {
+                    dismiss_readiness_check_at(&path, format!("keep-{i}")).unwrap();
+                });
+            }
+            let path = path.clone();
+            scope.spawn(move || {
+                restore_readiness_check_at(&path, "contested".to_string()).unwrap();
+            });
+        });
+
+        let got = load_dismissals_from(&path);
+        for i in 0..WRITERS {
+            let id = format!("keep-{i}");
+            assert!(
+                got.contains(&id),
+                "{id} was never restored by anyone, so losing it can only be a lost update"
+            );
+        }
+    }
+
+    /// Dismiss is documented idempotent. Under contention that has to stay true, or the stored list
+    /// grows a duplicate every time two clicks land together.
+    #[test]
+    fn idempotent_dismiss_stays_idempotent_under_contention() {
+        let dir = scratch("idem");
+        let path = dir.join("readiness_dismissals.json");
+
+        std::thread::scope(|scope| {
+            for _ in 0..16 {
+                let path = path.clone();
+                scope.spawn(move || {
+                    dismiss_readiness_check_at(&path, "same-id".to_string()).unwrap();
+                });
+            }
+        });
+
+        assert_eq!(
+            load_dismissals_from(&path),
+            vec!["same-id".to_string()],
+            "concurrent idempotent dismissals must not accumulate duplicates"
+        );
     }
 }
