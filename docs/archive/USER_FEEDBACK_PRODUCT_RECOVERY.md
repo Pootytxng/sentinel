@@ -8,8 +8,8 @@
 >
 > **Why it is archived rather than executed.** The train's implementation targeted
 > `src/surfaces/Lab.tsx` and `src/surfaces/OptimizeV2.tsx`, which `main` deliberately deleted on
-> 2026-08-06 in `1ab831fb` ("delete five dead room generations, then guard reachability", #78), with
-> a reachability guard added to keep them gone. The Lab direction then moved to the Ops Console
+> 2026-08-06 by PR [#78](https://github.com/Pootytxng/sentinel/pull/78) -> `1ab831fb` ("delete five dead room generations, then guard
+> reachability"), with a reachability guard added to keep them gone. The Lab direction then moved to the Ops Console
 > (`LabConsole.tsx` / `LabGround.tsx`), and the 2026-09-04 constitutional rebirth (#369) made
 > pre-rebirth product-direction documents historical evidence only. The surfaces this matrix
 > describes no longer exist, so none of its rows are executable as written.
