@@ -42,6 +42,7 @@ mod license; // Compy Pro — offline Ed25519 license VERIFY only, DARK (all-zer
 mod monitoring;
 mod overlay_tools; // A4 read-only: detect third-party in-game overlay/OSD tools running (advisory, mutates nothing).
 mod priorities;
+mod race_seam; // Test-only deterministic race seam: holds a read-then-act window open from INSIDE a critical section so #283's lock tests fail on demand instead of once in a thousand runs. Compiled to an empty inline no-op in a release build.
 mod readiness;
 mod receipts; // Receipts telemetry GROUNDWORK — DARK (gate hard-false; payload logic only, the send path does not exist).
 mod recommendations;

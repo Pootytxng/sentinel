@@ -106,35 +106,43 @@ pub(crate) struct ComparisonResult {
 // `remove_file(armed_path())` would be deleted by a decision made about a DIFFERENT arm, which is
 // the same lost-write with an extra step.
 //
-// `arm_watermark` → `history::ledger_len_checked` → `load_history` is the one call out of a locked
-// section, and it is safe: `load_history` takes no lock, and `history.rs` calls nothing in this
-// module (or in drift/readiness), so there is no back edge and no cycle.
+// LOCK ORDER, corrected by PR #395's independent review. An earlier draft of this comment claimed
+// the one call out of a locked section was `arm_watermark` and that it acquired nothing. Both halves
+// were wrong. `arm_watermark` is evaluated by `arm`/`arm_tuning` BEFORE `arm_at` is called, so it is
+// not inside the lock at all. The call that IS inside the lock is `on_session_finalized_at`'s
+// `history::ledger_len_checked`, and it is not lock-free: on the corrupt-ledger branch `load_history`
+// calls `support_evidence::record`, which takes that module's own store lock.
+//
+// So this module establishes a real lock ORDER — COMPARISON_LOCK ⊃ SUPPORT_EVIDENCE_LOCK — rather
+// than "no nested lock". There is no cycle: neither `history.rs` nor `support_evidence.rs` calls
+// into comparison/drift/readiness, so the edge has no back edge. That claim is the whole basis of
+// the acyclicity argument, so it is MECHANIZED rather than asserted —
+// `scripts/store-lock-order-guard.test.mjs` fails if either module ever gains such a call, or if a
+// store module reaches out to somewhere this order has not been re-derived against.
+//
+// The cost is stated rather than hidden: on a machine whose Trust Ledger is corrupt, every session
+// finalize does a support-evidence read+write while holding this lock, which is that much longer
+// that `arm` and `clear_tuning` wait.
 static COMPARISON_LOCK: Mutex<()> = Mutex::new(());
 
-/// #283 — the read-then-act seams below are microseconds wide, so a test that merely races two
-/// threads at them passes whether or not the lock is there. That is the "green that is not
-/// evidence" shape, and it was caught here by falsifying: the first draft of these tests stayed
-/// green with every acquisition removed.
+/// Acquire, recovering from poison and CLEARING it.
 ///
-/// So the seam is widened DELIBERATELY, and only when a test arms it. `#[cfg(test)]`, default off,
-/// compiled out of production entirely. The widening does not create the race — it makes the race
-/// that is already there land every run instead of once in a thousand.
-#[cfg(test)]
-static WIDEN_RACE_SEAM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Called only from INSIDE a locked section, at the point between reading the armed store and
-/// acting on what was read. With the lock this merely delays the other thread; without it, the
-/// other thread's write lands squarely in the window and the assertion fires.
-#[cfg(test)]
-fn widen_race_seam() {
-    if WIDEN_RACE_SEAM.load(std::sync::atomic::Ordering::Acquire) {
-        std::thread::sleep(std::time::Duration::from_millis(60));
-    }
+/// PR #395's review: poisoning is sticky for the life of the process, and nothing in this crate ever
+/// calls `clear_poison`. A SPLIT policy — some callers propagating `Err`, some recovering — is
+/// therefore not a policy at all: one panic anywhere under this lock would make `arm` fail for the
+/// rest of the session while `clear_tuning` kept working, and the user would see "arming a
+/// comparison stopped working until I restarted" with nothing pointing at the cause.
+///
+/// Uniform recovery is safe here for a reason specific to this design, not as a general rule: the
+/// guarded value is `()`, not shared data, and every write goes through `atomic_write`, so a thread
+/// that panicked mid-section can only have left the PREVIOUS complete file plus an orphan temp. The
+/// recovering thread does its own fresh `load_armed_from` and inherits nothing from the dead one.
+fn lock_comparison() -> std::sync::MutexGuard<'static, ()> {
+    COMPARISON_LOCK.lock().unwrap_or_else(|poisoned| {
+        COMPARISON_LOCK.clear_poison();
+        poisoned.into_inner()
+    })
 }
-
-#[cfg(not(test))]
-#[inline(always)]
-fn widen_race_seam() {}
 
 fn armed_path() -> std::path::PathBuf {
     crate::compy_data_dir().join("compy_comparison.json")
@@ -206,9 +214,7 @@ pub(crate) fn arm(
 /// take the lock anyway so that `clear_tuning_at` and `on_session_finalized_at` cannot delete an arm
 /// that landed after they read. Lifted so #283's lock is proven against a scratch file.
 fn arm_at(path: &std::path::Path, a: ArmedComparison) -> Result<(), String> {
-    let _lock = COMPARISON_LOCK
-        .lock()
-        .map_err(|_| "comparison lock poisoned".to_string())?;
+    let _lock = lock_comparison();
     save_armed_to(path, &a)
 }
 
@@ -258,14 +264,12 @@ fn report_tuning_crash_at(
     armed: &std::path::Path,
     result: &std::path::Path,
 ) -> Result<(), String> {
-    let _lock = COMPARISON_LOCK
-        .lock()
-        .map_err(|_| "comparison lock poisoned".to_string())?;
+    let _lock = lock_comparison();
     let Some(mut a) = load_armed_from(armed) else { return Ok(()) };
     if a.kind != ComparisonKind::Tuning {
         return Ok(());
     }
-    widen_race_seam(); // compiled out of production; see WIDEN_RACE_SEAM
+    crate::race_seam::hold(); // no-op in a release build; see race_seam
     a.crash_reported = true;
     save_armed_to(armed, &a)?;
     if let Some(mut r) = latest_result_from(result) {
@@ -287,11 +291,9 @@ pub(crate) fn clear_tuning() {
 /// check-then-act, not a load-modify-save: without the lock an `arm` landing between the `matches!`
 /// and the `remove_file` is deleted by a decision made about a DIFFERENT arm.
 fn clear_tuning_at(armed: &std::path::Path, result: &std::path::Path) {
-    // Best-effort, returning nothing, unchanged: recover a poisoned guard rather than skip the
-    // lock, so a panic elsewhere cannot quietly un-serialize this check-then-delete.
-    let _lock = COMPARISON_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _lock = lock_comparison();
     let tuning_armed = matches!(load_armed_from(armed), Some(a) if a.kind == ComparisonKind::Tuning);
-    widen_race_seam(); // compiled out of production; see WIDEN_RACE_SEAM
+    crate::race_seam::hold(); // no-op in a release build; see race_seam
     if tuning_armed {
         let _ = std::fs::remove_file(armed);
     }
@@ -412,13 +414,11 @@ fn on_session_finalized_at(
     result_path_: &std::path::Path,
     s: &SessionSummary,
 ) {
-    // Same best-effort shape as the rest of this path (`let _ = save_result(..)`): a finalize must
-    // not fail because another thread panicked.
-    let _lock = COMPARISON_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _lock = lock_comparison();
     let Some(armed) = load_armed_from(armed_path_) else {
         return;
     };
-    widen_race_seam(); // compiled out of production; see WIDEN_RACE_SEAM
+    crate::race_seam::hold(); // no-op in a release build; see race_seam
     if s.process_name.is_empty() || armed.game != s.process_name {
         return;
     }
@@ -429,12 +429,19 @@ fn on_session_finalized_at(
         // `.ok()` here is the honest direction, not a collapse: an unreadable ledger becomes `None`,
         // which the guard above refuses to attribute. It is never silently treated as a count.
         //
-        // #283: this is the ONE call out of a locked section in this module. It is safe because
-        // `load_history` takes no lock and `history.rs` calls nothing here, so there is no back edge
-        // and the lock graph stays acyclic.
+        // #283 / #395 review: this is the ONE call out of a locked section in this module, and
+        // it is NOT lock-free — on the corrupt-ledger branch it reaches `support_evidence::record`,
+        // which takes that module's own lock. See COMPARISON_LOCK's comment for the resulting lock
+        // order and for why it is still acyclic.
         crate::history::ledger_len_checked().ok(),
         chrono::Utc::now(),
     );
+    // Restored after PR #395's review: the `save_result` wrapper this was lifted out of created
+    // the data folder first. Unreachable today — a `Some` arm above means the folder already exists
+    // — but "unreachable today" is a property of the current call sites, not of this function.
+    if let Some(dir) = result_path_.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
     let _ = save_result_to(result_path_, &result);
     if should_disarm(armed.kind) {
         let _ = std::fs::remove_file(armed_path_); // the one-shot fix comparison happened
@@ -837,35 +844,14 @@ mod comparison_tests {
 /// a comparison and it silently vanished.
 ///
 /// FALSIFIED BEFORE TRUSTED. With the `COMPARISON_LOCK` acquisitions removed, all three fail. They
-/// are deterministic rather than probabilistic: each arms `WIDEN_RACE_SEAM`, which holds the seam
-/// open for 60ms from inside the critical section, so the interleaving lands every run instead of
-/// once in a thousand. The widening does not create the defect — removing only the lock, with the
-/// widening left in place, is what turns these red.
+/// are deterministic rather than probabilistic: each arms [`crate::race_seam`], which holds the seam
+/// open from inside the critical section, so the interleaving lands every run instead of once in a
+/// thousand. The widening does not create the defect — removing only the lock, with the widening
+/// left in place, is what turns these red.
 #[cfg(test)]
 mod comparison_race_tests {
     use super::*;
     use std::sync::atomic::Ordering;
-
-    /// Arms the deliberate seam for one test and disarms it on the way out even if the test panics,
-    /// so a failure can never leave another test's timing altered.
-    /// The flag is process-global and the harness runs these three in parallel, so they take turns:
-    /// without the gate, one test's `drop` could disarm the seam while another is still inside it,
-    /// and that test would then pass for the wrong reason — with or without the lock.
-    static SEAM_GATE: Mutex<()> = Mutex::new(());
-
-    struct WidenedSeam(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
-    impl WidenedSeam {
-        fn arm() -> Self {
-            let gate = SEAM_GATE.lock().unwrap_or_else(|p| p.into_inner());
-            WIDEN_RACE_SEAM.store(true, Ordering::Release);
-            WidenedSeam(gate)
-        }
-    }
-    impl Drop for WidenedSeam {
-        fn drop(&mut self) {
-            WIDEN_RACE_SEAM.store(false, Ordering::Release);
-        }
-    }
 
     fn scratch(tag: &str) -> std::path::PathBuf {
         use std::sync::atomic::AtomicUsize;
@@ -901,7 +887,7 @@ mod comparison_race_tests {
         armed: &std::path::Path,
         first: impl FnOnce() + Send,
     ) -> Option<ArmedComparison> {
-        let _seam = WidenedSeam::arm();
+        let _seam = crate::race_seam::Widened::arm();
         std::thread::scope(|scope| {
             scope.spawn(first);
             std::thread::sleep(std::time::Duration::from_millis(20));
@@ -976,5 +962,32 @@ mod comparison_race_tests {
             report_tuning_crash_at(&a, &r).unwrap();
         });
         assert_survived(left, "crash report");
+    }
+
+    /// PR #395's review: poisoning is sticky and nothing else in this crate clears it, so a lock
+    /// that only propagated `Err` would fail every later `arm` after ONE panic anywhere under it —
+    /// for the rest of the process, with no diagnostic pointing at the cause. The panic below is
+    /// deliberate; the message libtest prints for it is expected output, not a failure.
+    ///
+    /// FALSIFIED BEFORE TRUSTED: put `COMPARISON_LOCK.lock().map_err(..)?` back in `arm_at` and this
+    /// fails with "comparison lock poisoned".
+    #[test]
+    fn a_panic_under_the_lock_does_not_permanently_break_arming() {
+        let armed = scratch("poison").join("compy_comparison.json");
+
+        let died = std::thread::spawn(|| {
+            let _held = lock_comparison();
+            panic!("deliberate: poisoning COMPARISON_LOCK for the assertion below");
+        })
+        .join();
+        assert!(died.is_err(), "the helper thread was supposed to panic");
+
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "after-poison"))
+            .expect("arming must still work after an unrelated panic under the same lock");
+        assert_eq!(load_armed_from(&armed).unwrap().rec_id, "after-poison");
+        assert!(
+            !COMPARISON_LOCK.is_poisoned(),
+            "recovering without clearing leaves the flag set for the life of the process, so the              first caller that ever decides to propagate inherits a panic from hours earlier"
+        );
     }
 }

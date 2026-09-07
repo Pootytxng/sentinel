@@ -42,9 +42,21 @@ pub(crate) struct Drift {
 // threads; without this the later save writes state folded from a stale read, and a `noticed_at`
 // stamp — which the whole point of this module is to keep STABLE — can be reset or dropped.
 //
-// `detect` is pure, and nothing inside the locked section acquires another store's lock, so this
-// adds no ordering constraint anywhere. Callers hold no lock when they reach here.
+// `detect` is pure, and nothing inside the locked section acquires another store's lock or calls
+// out of this module at all, so this adds no ordering constraint anywhere. Callers hold no lock when
+// they reach here. `scripts/store-lock-order-guard.test.mjs` is what keeps that true.
 static DRIFT_LOCK: Mutex<()> = Mutex::new(());
+
+/// Acquire, recovering from poison and CLEARING it. Same reasoning as `comparison::lock_comparison`
+/// — see there for why recovery is safe rather than merely convenient. Recovering without clearing
+/// (what this did before PR #395's review) leaves the lock permanently poisoned for anyone who ever
+/// decides to propagate instead.
+fn lock_drift() -> std::sync::MutexGuard<'static, ()> {
+    DRIFT_LOCK.lock().unwrap_or_else(|poisoned| {
+        DRIFT_LOCK.clear_poison();
+        poisoned.into_inner()
+    })
+}
 
 fn state_path() -> std::path::PathBuf {
     crate::compy_data_dir().join("drift.json")
@@ -135,8 +147,10 @@ fn detect_and_persist_at(
     checks: &[(String, String, String, String)],
     now: &str,
 ) -> Vec<Drift> {
-    let _lock = DRIFT_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let (drifts, new_state) = detect(checks, &load_state_from(path), now);
+    let _lock = lock_drift();
+    let prior = load_state_from(path);
+    crate::race_seam::hold(); // no-op in a release build; see race_seam
+    let (drifts, new_state) = detect(checks, &prior, now);
     save_state_to(path, &new_state);
     drifts
 }
@@ -502,8 +516,9 @@ mod drift_tests {
 /// fold. The visible cost is this module's whole point: a `noticed_at` stamp that is supposed to be
 /// STABLE gets reset, so the user is told a drift was noticed just now when it was noticed hours ago.
 ///
-/// FALSIFIED BEFORE TRUSTED. With `DRIFT_LOCK` removed from `detect_and_persist_at`, the test below
-/// fails, ending with 3 to 9 of the 12 ids recorded instead of all 12.
+/// FALSIFIED BEFORE TRUSTED — each test below individually, not the module as a whole. With
+/// `DRIFT_LOCK` removed from `detect_and_persist_at`, the fold test ends with as few as 1 of the 12
+/// ids recorded instead of all 12, and the stamp test loses the notice entirely.
 #[cfg(test)]
 mod drift_race_tests {
     use super::*;
@@ -553,40 +568,58 @@ mod drift_race_tests {
         }
     }
 
-    /// The stability guarantee itself: once a drift has been noticed, a concurrent scan of an
-    /// UNRELATED check must not reset that stamp by writing state folded from a stale read.
+    /// The stability guarantee itself: once a drift is noticed, a concurrent scan of an UNRELATED
+    /// check must not save state folded from a read it took before that notice landed.
+    ///
+    /// PR #395's review caught the first version of this test passing 5/5 with `DRIFT_LOCK` deleted,
+    /// and it was right — but the cause was structural, not narrow timing. That version stamped
+    /// `noticed_at` BEFORE starting any thread, so every racing writer read a state that already
+    /// contained the stamp and wrote it straight back. No interleaving could lose it, lock or no
+    /// lock. The notice is now one of the two racers, which is the situation the module actually
+    /// promises to survive, and the seam makes the losing interleaving land every run.
     #[test]
-    fn a_concurrent_unrelated_scan_never_resets_a_noticed_at_stamp() {
+    fn an_unrelated_scan_cannot_land_on_top_of_a_notice_it_read_past() {
         let dir = scratch("stamp");
         let path = dir.join("drift.json");
 
-        // Establish "was good", then regress it so `noticed_at` is stamped at T1 and only T1.
-        let good = vec![("vrr".to_string(), "VRR".to_string(), "ready".to_string(), String::new())];
+        // "was good" only — the regression that stamps `noticed_at` happens INSIDE the race.
+        let good =
+            vec![("vrr".to_string(), "VRR".to_string(), "ready".to_string(), String::new())];
         detect_and_persist_at(&path, &good, "T0");
-        let bad = vec![("vrr".to_string(), "VRR".to_string(), "attention".to_string(), "off".to_string())];
-        detect_and_persist_at(&path, &bad, "T1");
-        assert_eq!(load_state_from(&path).noticed_at.get("vrr").map(String::as_str), Some("T1"));
+        assert!(load_state_from(&path).noticed_at.is_empty(), "nothing is noticed yet");
 
+        let _seam = crate::race_seam::Widened::arm();
         std::thread::scope(|scope| {
-            for i in 0..8 {
-                let path = path.clone();
-                scope.spawn(move || {
-                    let other = vec![(
-                        format!("other-{i}"),
-                        format!("Other {i}"),
-                        "ready".to_string(),
-                        String::new(),
-                    )];
-                    detect_and_persist_at(&path, &other, "T9");
-                });
-            }
+            let p = path.clone();
+            scope.spawn(move || {
+                let bad = vec![(
+                    "vrr".to_string(),
+                    "VRR".to_string(),
+                    "attention".to_string(),
+                    "off".to_string(),
+                )];
+                detect_and_persist_at(&p, &bad, "T1");
+            });
+            // Comfortably inside the seam the first scan is sitting in, and comfortably after it
+            // entered: the second scan's READ is guaranteed to predate the first scan's WRITE.
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            let p = path.clone();
+            scope.spawn(move || {
+                let other = vec![(
+                    "other".to_string(),
+                    "Other".to_string(),
+                    "ready".to_string(),
+                    String::new(),
+                )];
+                detect_and_persist_at(&p, &other, "T9");
+            });
         });
 
         assert_eq!(
             load_state_from(&path).noticed_at.get("vrr").map(String::as_str),
             Some("T1"),
-            "an unrelated concurrent scan moved a noticed_at stamp, which is the one thing this \
-             module promises never happens"
+            "an unrelated concurrent scan erased a drift notice by saving state folded from a read \
+             it took before that notice landed — the one thing this module promises never happens"
         );
     }
 }
