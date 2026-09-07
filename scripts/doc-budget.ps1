@@ -101,7 +101,22 @@ $byteBudgets = @{
   "docs/BACKLOG.md" = 12288
   "docs/RELEASE_STATE.md" = 43008
   "docs/OWNER_ACTION_CHECKLIST.md" = 32256
-  "src-tauri/CLAUDE.md" = 10240
+  # 10240 -> 7680 on 2026-09-07 (#396). The map's three Compy Care entries -- case_intelligence,
+  # case_evidence_upload and incident_observer -- had grown to 4,650 bytes, 47% of a 55-line file,
+  # and two of the three describe DARK modules whose gates are hard-false. That is long-form
+  # CONTRACT prose, not the one-line "what is this module, and is it a mutation boundary" the map
+  # exists to answer, and every src-tauri/ session was paying for it. It moved to
+  # docs/CARE_TIER_MODULE_CONTRACTS.md (nothing deleted; the #259 redactor residuals, the Tier 1
+  # trust-root separation, the contract §4 never-imports list and the arming notes all carried
+  # over), leaving a compact line plus a pointer each: 9,895 -> 6,903 bytes.
+  #
+  # The ratchet is what makes the move worth doing -- without it the file just refills to 10KB and
+  # the archive move bought nothing. 7,680 leaves 777 bytes, and that allowance is SIZED, not
+  # guessed: PR #387's pending machine_model.rs entry is 281 of it (measured at that branch's head,
+  # where this file sits at 10,176/10,240 -- 64 bytes spare, which is what triggered this pass).
+  # The remaining ~496 is one ordinary entry's worth. Lower this again once #387 lands and the
+  # real post-merge size is known.
+  "src-tauri/CLAUDE.md" = 7680
 }
 # CLAUDE.md is deliberately NOT in the table above. Its byte ceiling already exists and predates
 # this one: src/claude-md-laws-guard.test.ts, "is under 25000 bytes (re-bloat guard)". Restating it
