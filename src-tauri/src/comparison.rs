@@ -135,8 +135,22 @@ static COMPARISON_LOCK: Mutex<()> = Mutex::new(());
 ///
 /// Uniform recovery is safe here for a reason specific to this design, not as a general rule: the
 /// guarded value is `()`, not shared data, and every write goes through `atomic_write`, so a thread
-/// that panicked mid-section can only have left the PREVIOUS complete file plus an orphan temp. The
+/// that panicked mid-section can only have left the PREVIOUS complete FILE plus an orphan temp. The
 /// recovering thread does its own fresh `load_armed_from` and inherits nothing from the dead one.
+///
+/// The scope of that sentence is exact, and PR #395's second review was right to press on it: it is
+/// per-FILE, and this lock spans TWO. `report_tuning_crash_at` writes the armed baseline then the
+/// surfaced result; `on_session_finalized_at` writes the result then deletes the arm. A panic
+/// BETWEEN either pair leaves them disagreeing, and `clear_poison` unblocks the lock without
+/// reconciling that — it makes the store usable again, which is not the same as making it correct.
+///
+/// That window is latent rather than live: no `unwrap`, `expect`, indexing or overflow-prone
+/// arithmetic sits in either gap today, so nothing currently panics there. Rather than build a
+/// reconciler for a failure that cannot happen, the window is made TESTABLE —
+/// `crate::race_seam::panic_at` sits in both gaps and
+/// `a_panic_between_the_two_writes_splits_the_pair_and_leaves_the_store_usable` pins exactly what
+/// survives. If a future change adds a panic surface there, that test is where the argument
+/// restarts.
 fn lock_comparison() -> std::sync::MutexGuard<'static, ()> {
     COMPARISON_LOCK.lock().unwrap_or_else(|poisoned| {
         COMPARISON_LOCK.clear_poison();
@@ -272,6 +286,9 @@ fn report_tuning_crash_at(
     crate::race_seam::hold(); // no-op in a release build; see race_seam
     a.crash_reported = true;
     save_armed_to(armed, &a)?;
+    // Two files, one lock acquisition. A panic here leaves the baseline flagged and the surfaced
+    // result not — see race_seam's panic-seam note and the test that pins it.
+    crate::race_seam::panic_at(crate::race_seam::AFTER_ARMED_WRITE);
     if let Some(mut r) = latest_result_from(result) {
         if r.kind == ComparisonKind::Tuning {
             r.crash_reported = true;
@@ -429,10 +446,18 @@ fn on_session_finalized_at(
         // `.ok()` here is the honest direction, not a collapse: an unreadable ledger becomes `None`,
         // which the guard above refuses to attribute. It is never silently treated as a count.
         //
-        // #283 / #395 review: this is the ONE call out of a locked section in this module, and
-        // it is NOT lock-free — on the corrupt-ledger branch it reaches `support_evidence::record`,
-        // which takes that module's own lock. See COMPARISON_LOCK's comment for the resulting lock
-        // order and for why it is still acyclic.
+        // #283 / #395 review: this is the one call into ANOTHER MODULE from inside this module's
+        // locked section, and it is not lock-free — on the corrupt-ledger branch it reaches
+        // `support_evidence::record`, which takes that module's own lock.
+        //
+        // Corrected after the second review, which caught the earlier wording claiming this was the
+        // only impurity reached under the lock: `ledger_len_checked` also resolves `history_path()`
+        // → `compy_data_dir()`, and that goes through two `OnceLock` initializers — `data_root`'s
+        // decision, and on a first-ever canonical-root resolution `migrate_legacy_data_once`'s
+        // recursive copy of the legacy `Sentinel` folder. Neither reaches back into
+        // comparison/drift/readiness, so the order below still holds; in practice both are warmed
+        // by startup long before any session finalizes. Named here because "the one call" was the
+        // kind of tidy sentence that stops anyone looking.
         crate::history::ledger_len_checked().ok(),
         chrono::Utc::now(),
     );
@@ -443,6 +468,8 @@ fn on_session_finalized_at(
         let _ = std::fs::create_dir_all(dir);
     }
     let _ = save_result_to(result_path_, &result);
+    // Same window as `report_tuning_crash_at`: the result is written, the arm is not yet gone.
+    crate::race_seam::panic_at(crate::race_seam::AFTER_RESULT_WRITE);
     if should_disarm(armed.kind) {
         let _ = std::fs::remove_file(armed_path_); // the one-shot fix comparison happened
     }
@@ -987,7 +1014,64 @@ mod comparison_race_tests {
         assert_eq!(load_armed_from(&armed).unwrap().rec_id, "after-poison");
         assert!(
             !COMPARISON_LOCK.is_poisoned(),
-            "recovering without clearing leaves the flag set for the life of the process, so the              first caller that ever decides to propagate inherits a panic from hours earlier"
+            "recovering without clearing leaves the flag set for the life of the process, so the first caller that ever decides to propagate inherits a panic from hours earlier"
+        );
+    }
+
+    /// COMPARISON_LOCK spans TWO files, and `clear_poison` reconciles neither.
+    ///
+    /// PR #395's second independent review pressed on `lock_comparison`'s justification — "a thread
+    /// that panicked mid-section can only have left the PREVIOUS complete file" — and was right that
+    /// it is a per-FILE statement standing in for a pair. `on_session_finalized_at` writes the
+    /// result and THEN deletes the arm; a panic between them leaves a finished comparison that never
+    /// disarmed, so the next session would be measured against a baseline the user already consumed.
+    ///
+    /// Nothing panics in that gap today — the review checked, and so did I — so this test does not
+    /// claim a live defect. It pins the window's actual shape, which is the part a future change can
+    /// silently alter: what survives, that the lock is usable afterwards, and that the surviving arm
+    /// is the ORIGINAL one rather than something half-written. If a reconciler is ever added, this
+    /// test is what has to change, and changing it is the moment someone re-derives the argument.
+    #[test]
+    fn a_panic_between_the_two_writes_splits_the_pair_and_leaves_the_store_usable() {
+        let dir = scratch("split-pair");
+        let (armed, result) = (
+            dir.join("compy_comparison.json"),
+            dir.join("compy_comparison_result.json"),
+        );
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "one-shot")).unwrap();
+
+        let (a, r) = (armed.clone(), result.clone());
+        let _seam = crate::race_seam::PanicAt::arm(crate::race_seam::AFTER_RESULT_WRITE);
+        let died = std::thread::spawn(move || {
+            on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None))
+        })
+        .join();
+        assert!(died.is_err(), "the armed seam was supposed to panic mid-sequence");
+
+        assert!(
+            result.exists(),
+            "the result write happens BEFORE the seam, so it must have landed — if this fails the seam moved and this test is no longer measuring the window it names"
+        );
+        assert_eq!(
+            load_armed_from(&armed).map(|x| x.rec_id),
+            Some("one-shot".to_string()),
+            "the disarm happens AFTER the seam, so the original arm must still be there, intact and not half-written. THIS is the split the poison-clearing does not repair: a one-shot comparison whose result exists and which is still armed."
+        );
+
+        // Order matters, and getting it wrong is how this test first failed: `clear_poison` runs on
+        // the NEXT acquisition, not at the panic, so the flag is legitimately still set here. The
+        // claim is that the next caller succeeds and leaves the flag clear behind it — not that a
+        // panic never sets it.
+        assert!(
+            COMPARISON_LOCK.is_poisoned(),
+            "a panic under the lock does set the flag; if it no longer does, the recovery path below is being exercised by nothing and this test has stopped meaning anything"
+        );
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "after-split"))
+            .expect("the store must still be usable after a panic split the pair");
+        assert_eq!(load_armed_from(&armed).unwrap().rec_id, "after-split");
+        assert!(
+            !COMPARISON_LOCK.is_poisoned(),
+            "the caller that recovered must also have cleared, or every later caller inherits it"
         );
     }
 }

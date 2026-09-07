@@ -22,7 +22,7 @@
 // Rust parsing and would fail for the wrong reasons; a coarser one would pass vacuously. Sibling of
 // scripts/data-root-guard.test.mjs (same shape: read the tree, assert a boundary, no fixtures).
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -69,20 +69,69 @@ function code(module) {
     .join("\n");
 }
 
-/** Every `crate::<module>::` target referenced by `module`, sorted and deduped. */
-function edgesFrom(module) {
+/**
+ * Every module in the crate, taken from the tree rather than from a list kept in this file.
+ * A path segment only counts as an edge if it names a real module here, which is what stops
+ * `super::arm_at(..)` — a function in the SAME file — from being read as an edge to a module.
+ */
+const MODULES = new Set(
+  readdirSync(SRC)
+    .filter((f) => f.endsWith(".rs"))
+    .map((f) => f.slice(0, -3)),
+);
+
+/**
+ * Every module a Rust source reaches, sorted and deduped. Pure over a string, so the shapes it
+ * claims to recognize can be pinned directly instead of by mutating the tree to find out.
+ *
+ * The first version matched `crate::<mod>::` and nothing else, and PR #395's SECOND independent
+ * review broke it in one line: `use crate::comparison; comparison::armed()` is completely ordinary
+ * Rust, contains no `crate::comparison::` substring, and sailed past the back-edge assertion 6/6
+ * green. A guard an idiomatic import can walk around is worse than no guard, because it reads as
+ * proof. So the match now covers the three shapes that can actually introduce an edge:
+ *
+ *   1. a qualified path — `crate::history::ledger_len_checked()`, and `use crate::history::X;`
+ *   2. a BARE module import — `use crate::history;` — the shape that defeated the first version
+ *   3. a grouped import — `use crate::{history, support_evidence::record};`
+ *
+ * `super::` is matched for the same reason, and is why every candidate is filtered against the real
+ * module list: inside a `mod tests` block `super::` means THIS file, so `super::arm_at` must not
+ * read as an edge to a module named `arm_at`. The filter is deliberately conservative in the other
+ * direction too — a same-file call that happens to share a name with a module file WILL be counted
+ * and this test will fail asking someone to re-derive. Failing that way round is the point.
+ *
+ * Still syntactic, and still honest about the rest of its limits: it checks module EDGES, not
+ * whether a call sits inside a critical section, and a path assembled by a macro can hide from it.
+ */
+export function extractEdges(src, self) {
   const found = new Set();
-  for (const m of code(module).matchAll(/crate::([a-z][a-z0-9_]*)::/g)) found.add(m[1]);
-  return [...found].sort();
+
+  // Shapes 1 and 2: any `crate::x` / `super::x`, whether or not a further `::` follows.
+  for (const m of src.matchAll(/\b(?:crate|super)::([a-z][a-z0-9_]*)/g)) found.add(m[1]);
+
+  // Shape 3: the braces defeat the pattern above, so read the group's own first segments.
+  for (const m of src.matchAll(/\buse\s+(?:crate|super)::\{([^}]*)\}/g)) {
+    for (const part of m[1].split(",")) {
+      const name = part.trim().match(/^([a-z][a-z0-9_]*)/);
+      if (name) found.add(name[1]);
+    }
+  }
+
+  if (self) found.delete(self); // `super::` inside this file's own tests is not an edge out of it
+  return [...found].filter((m) => MODULES.has(m)).sort();
+}
+
+/** Every module `module` reaches, comments stripped first. */
+function edgesFrom(module) {
+  return extractEdges(code(module), module);
 }
 
 describe("#283 store locks: the lock graph stays acyclic", () => {
   it.each(REACHABLE_FROM_INSIDE_A_LOCK)(
     "%s.rs has no call back into a store module",
     (module) => {
-      const back = STORE_MODULES.filter((store) =>
-        new RegExp(`crate::${store}::`).test(code(module)),
-      );
+      const reached = edgesFrom(module);
+      const back = STORE_MODULES.filter((store) => reached.includes(store));
       expect(
         back,
         `${module}.rs is reachable from inside a store lock, so a call from it into ` +
@@ -106,5 +155,32 @@ describe("#283 store locks: the lock graph stays acyclic", () => {
     // If comparison.rs stopped calling history.rs entirely, the back-edge assertion above would be
     // guarding nothing and would still be green. This pins the edge the whole order is about.
     expect(edgesFrom("comparison")).toContain("history");
+  });
+
+  // The three assertions above are only as good as what `extractEdges` can SEE, and its first
+  // version could not see a bare import — a reviewer demonstrated a real back edge passing 6/6
+  // green. That was a defect in the guard itself, so per `bug → guard` the capability is pinned
+  // here on synthetic sources: a future regression fails HERE, with a name that says which shape
+  // went blind, instead of quietly narrowing what the assertions above are able to notice.
+  it.each([
+    ["a qualified call", "fn f() { let _ = crate::history::ledger_len_checked(); }", ["history"]],
+    ["a qualified import", "use crate::history::AppliedChange;", ["history"]],
+    ["a BARE module import", "use crate::history;\nfn f() { history::load_history(); }", ["history"]],
+    [
+      "a grouped import",
+      "use crate::{history, support_evidence::record};",
+      ["history", "support_evidence"],
+    ],
+    ["a `super::` module path", "fn f() { super::history::load_history(); }", ["history"]],
+  ])("sees an edge hiding in %s", (_shape, src, expected) => {
+    expect(extractEdges(src, "comparison")).toEqual(expected);
+  });
+
+  it("does not read a same-file `super::` call as an edge to a module", () => {
+    // `super::` inside `mod tests` is the containing file. `arm_at` is a function in comparison.rs,
+    // not a module, so filtering candidates against the real module list is what keeps this quiet.
+    expect(extractEdges("fn t() { super::arm_at(&p, a); }", "comparison")).toEqual([]);
+    // And the module's own name reached through `super::` is not an edge OUT of it either.
+    expect(extractEdges("fn t() { super::comparison::x(); }", "comparison")).toEqual([]);
   });
 });

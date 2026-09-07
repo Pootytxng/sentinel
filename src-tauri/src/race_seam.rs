@@ -77,3 +77,68 @@ pub(crate) fn hold() {
 #[cfg(not(test))]
 #[inline(always)]
 pub(crate) fn hold() {}
+
+// ---------------------------------------------------------------------------------------------
+// A seam a test can make PANIC, so a claim about what a half-finished sequence leaves behind can
+// be checked instead of asserted.
+//
+// PR #395's second independent review found that `lock_comparison`'s doc justified clearing poison
+// with "a thread that panicked mid-section can only have left the PREVIOUS complete file plus an
+// orphan temp". True per FILE, and `comparison.rs` holds ONE lock across TWO files: a panic between
+// the two writes leaves the pair split, and `clear_poison` unblocks the lock without reconciling
+// anything. The review's verdict was "latent, not an active bug" — no `unwrap`/`expect`/indexing
+// sits in either window today — so the repair is not to invent a reconciler for a failure that
+// cannot currently happen. It is to stop the doc claiming more than it proves, and to make the
+// window itself testable so the day someone adds a panic surface there is the day a test says so.
+// ---------------------------------------------------------------------------------------------
+
+/// Seam ids. `const`, so a release build carries the identifier and no state.
+pub(crate) const AFTER_ARMED_WRITE: u8 = 1;
+pub(crate) const AFTER_RESULT_WRITE: u8 = 2;
+
+/// Which seam, if any, is armed to panic. `0` is none.
+#[cfg(test)]
+static PANIC_SEAM: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Arms one panic seam for one test, under the same [`GATE`] as [`Widened`] so an armed panic and
+/// an armed widening can never overlap. Disarms on the way out even if the test panics.
+#[cfg(test)]
+#[must_use = "the seam is armed only while this guard is alive; bind it, e.g. `let _seam = ...`"]
+pub(crate) struct PanicAt(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
+
+#[cfg(test)]
+impl PanicAt {
+    pub(crate) fn arm(seam: u8) -> Self {
+        let gate = GATE.lock().unwrap_or_else(|poisoned| {
+            GATE.clear_poison();
+            poisoned.into_inner()
+        });
+        PANIC_SEAM.store(seam, std::sync::atomic::Ordering::Release);
+        PanicAt(gate)
+    }
+}
+
+#[cfg(test)]
+impl Drop for PanicAt {
+    fn drop(&mut self) {
+        PANIC_SEAM.store(0, std::sync::atomic::Ordering::Release);
+    }
+}
+
+/// Call from inside a locked section at a point where a panic would leave work half-done. Fires at
+/// most ONCE per arming — the recovering caller must not walk into the same panic again.
+#[cfg(test)]
+pub(crate) fn panic_at(seam: u8) {
+    use std::sync::atomic::Ordering;
+    if PANIC_SEAM.load(Ordering::Acquire) == seam
+        && PANIC_SEAM
+            .compare_exchange(seam, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    {
+        panic!("deliberate: race_seam panic at seam {seam}, armed by a test");
+    }
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+pub(crate) fn panic_at(_seam: u8) {}
