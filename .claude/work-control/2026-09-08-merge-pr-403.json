@@ -1,0 +1,75 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Test-only guard-hardening lane, opened against the non-blocking finding the #387 landing review carried forward (receipt 2026-09-08-merge-pr-387.json, reviewerNote: `the_slice_projection_is_the_same_projection_row_for_row` cannot detect drift in the on_this_rig field). The same actor authored all three commits in the proof delta; the reviews were performed by a separate REVIEWER_ONLY identity that authored none of them.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/385#issuecomment-5580104986",
+  "leaseEvidenceNote": "Ownership claim for this folder and branch, posted before any write. Amended at 5580883600 to add .claude/work-control/ and docs/dispositions/ for this landing, leaving the code scope at the single file. No lease was held when this lane opened: the prior holder released at 5579892855.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Exclusive for the bounded scope this lane actually mutates, and the one known path-level overlap is measured rather than asserted away. Issue #398 (PR #400, claude/398-runtime-lock-order) holds a live claim naming src-tauri/src/history.rs and has real unmerged edits to it. Measured at this head: PR #400 hunks that file at lines 27-983, all production (restore_leftover, apply_recommendation, suspend_known_service, set_startup_entry_enabled, disable_known_bloat_task, remove_known_preload_app, apply_recommendations_batch, rollback_change); this branch hunks it at 2207-2397 only, entirely inside `#[cfg(test)] mod history_tests`, every hunk a pure insertion with no deletion to collide with. PR #400 also targets claude/persistent-marathon-bulk-work-9b5c95, not main. The overlap was surfaced to the owner before any write rather than self-authorized, and the owner chose to proceed with it recorded. It is recorded on both threads: #385 comment 5580104986 and #398 comment 5580108506, the latter offering to yield the test module on request. That offer stands.",
+  "inheritedWork": false,
+  "transition": "merge-pr",
+  "currentHead": "9483411ba581cbb4c0185e93594ec911001ec0a2",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "9483411ba581cbb4c0185e93594ec911001ec0a2",
+      "evidence": "logs/verify-local-2026-09-08T07-01-43Z.log:39-40",
+      "summary": "438 frontend test files passed (438); 6546 tests passed | 4 skipped (6550); 0 failed"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "9483411ba581cbb4c0185e93594ec911001ec0a2",
+      "evidence": "logs/verify-local-2026-09-08T07-01-43Z.log:45-70",
+      "summary": "tsc clean; vite build succeeded, built in 5.57s. The only warning is the pre-existing >500kB chunk-size advisory, unchanged by this PR."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "9483411ba581cbb4c0185e93594ec911001ec0a2",
+      "evidence": "logs/verify-local-2026-09-08T07-01-43Z.log:1394",
+      "summary": "1291 passed; 0 failed; 24 ignored; 0 filtered out. history_tests alone: 25 passed / 0 failed."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "9483411ba581cbb4c0185e93594ec911001ec0a2",
+      "evidence": "logs/verify-local-2026-09-08T07-01-43Z.log:1409-end",
+      "summary": "clippy stage clean under -D warnings: zero lines in the stage begin with warning or error (measured, count 0)."
+    }
+  ],
+  "gateEvidenceNote": "RUN BY THIS LANE at this exact head with an empty git status, producing the cited log. Exit 0 was NOT treated as the verdict -- this gate is known to exit 0 while red -- so all six stages were read individually at their line ranges: git diff check (:3), write-scope drift (:5-7), frontend tests (:9-40), frontend type-check and build (:45-70), Rust tests (:72-1394), Rust clippy (:1409-end). The pre-push hook independently re-ran the full gate at this head during the push and passed. Provisioning was checked before the first push from this folder and one fault was found and cured: this worktree's core.hooksPath resolved into the main clone rather than this folder, which silently disarms the pre-push gate, so every PASS reported from this folder before that point was unproven; cured with `git config --worktree core.hooksPath .githooks` and verified by reading the value back. core.autocrlf was set false; the CRLF count was already 0, so no file was rewritten and no content was edited to satisfy a byte budget.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "passed",
+    "reconciled": true,
+    "measurement": "Gate stage at logs/verify-local-2026-09-08T07-01-43Z.log:5-7 -- \"OK: every changed path is inside `src-tauri/src/history.rs`\".",
+    "reconciliationNote": "MEASURED IN THE GATE RUN ITSELF, not re-run afterwards and not waived. The code delta is one file. The receipt and the disposition row are written under .claude/work-control/ and docs/dispositions/, both added to the claim at 5580883600 BEFORE this receipt was written; the disposition row is added after the merge, because a row naming a ref that does not yet exist fails the very gate that would create it."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "9483411ba581cbb4c0185e93594ec911001ec0a2",
+    "verdict": "APPROVE",
+    "evidence": "Non-author subagent review dispatched against this exact head; it confirmed the head with git rev-parse before reviewing, and finished with an empty `git status --porcelain` proving it left nothing behind. REVIEWER_ONLY identity: it authored none of the three commits in the proof delta.",
+    "reviewerNote": "THIRD review of this branch, and the first to find nothing. It verified by MUTATION, not by reading. (1) No serde attribute can hide a field from the new whole-row catch-all: it read AppliedChangeView (bare derive(Serialize), no field-level attributes) plus HwFingerprint / Snapshot / AppliedAction / RollbackAction, then proved the claim by drifting a NESTED sub-field this lane never mutated -- hw_fingerprint.gpu_driver, chosen because same_rig deliberately ignores it so on_this_rig stays identical on both sides -- RED, caught by the catch-all with the gpu_driver value visible in the assertion diff. (2) The catch-all does not relocate a computed-field failure: forcing restores_label to Some(\"MUTATED-LABEL\") still failed at its own named assert, not at the catch-all. (3) `expected` (loop) and `reference` (canary) are both derived from `rows` via into_view directly, never from the projection's own output, so neither can answer a question about itself. (4) Fixture: every row still earns its place; visual-effects/rolled_back is the only row proving the not-applied short-circuit of check_change_active. Two non-blocking observations, neither owed a fix: three rows incidentally share the unknown-rec-id arm of is_still_active while keeping distinct primary purposes, and a pre-existing pattern -- not introduced here -- where game-mode and now fast-startup-off read live OS state inside a unit test.",
+    "orchestratorCorroboration": "This lane did not take the APPROVE on trust, and did not take the two CHANGES REQUIRED verdicts on trust either. Round 2 (restores_label / applied_label / payoff_label vacuous) was confirmed against the code before acting -- record() sets applied_action None and a snapshot that cannot deserialize to any Snapshot variant, so both label derivations short-circuit at `action.as_ref()?` -- and reproduced by mutation. Round 3 (ten carried-across fields unguarded) was likewise reproduced. Round 2's OTHER finding was NOT accepted: it asked for a fixture row to catch a narrowed same_rig; this lane built that row, measured that it does not discriminate, deleted it rather than keep a row that looks like coverage without being coverage, and recorded the structural reason instead -- both sides of the loop reach same_rig through the same into_view call, so no fixture row can catch it. The third reviewer independently confirmed that, and further showed a total collapse of same_rig to constant true IS caught by the canary. Falsification counts for all 14 fields are posted on the PR at comments 5580599540 and 5580799217."
+  },
+  "falsificationNote": "The bug-to-guard law was satisfied by measurement in both directions at every head, never by a green run alone. Pre-patch, the original blind spot was reproduced independently: forcing on_this_rig = None inside applied_change_views left the guard GREEN at 2 passed / 0 failed. At this head all 14 fields of the projection go RED when mutated one at a time inside applied_change_views -- the four computed-at-read fields each at their own named assert (history.rs:2343 restores_label, :2344 applied_label, :2345 payoff_label, :2346 on_this_rig), and the ten carried-across fields (rec_title, applied_at, snapshot, applied_action, rollback_action, app_version_at_apply, ruleset_version_at_apply, elevation_used, hw_fingerprint, rolled_back_at) at the whole-row catch-all -- each 0 passed / 1 failed, the file restored between every mutation and the tree verified clean after. Two methodological corrections are recorded rather than buried. A first falsification script used `git checkout --` to clean up while its subject patch was still uncommitted, so three of its four results measured an unpatched file; it was caught from a line-number mismatch, the patch was committed first, and the run repeated with a dirty-tree abort guard. A first rec_title mutation also failed to COMPILE (Some(x) written for a String field), which prints no test result at all and would have read as not-caught in the table; re-run with the correct type, it went RED.",
+  "mutationBoundaryNote": "history.rs is a starred mutation/rollback-boundary module, so the boundary was checked explicitly even though this change is test-only. `git diff main...HEAD --stat` is one file, 99 insertions and 0 deletions, every hunk between `#[cfg(test)]` (line 2183) and the end of mod history_tests. No production line changed, no apply_ / rollback_ / dispatch_rollback / resolve_rollback / run_elevated / save_history call site added or altered, no new #[tauri::command], no capability change, and no derive added to a production struct -- the catch-all compares the serialized form precisely because adding PartialEq to AppliedChangeView would have been a production change this lane is not scoped for.",
+  "issueStaysOpenNote": "Issue #385 remains OPEN. This is a merge-pr receipt only; it does not authorize closing the issue, and no close-issue receipt has been written. The commit messages deliberately reference (#385) without any closing keyword, so the closing-keyword guard has nothing to refuse.",
+  "pr": 403,
+  "issue": 385,
+  "kind": "lane",
+  "branch": "claude/gallant-brattain-1b9380"
+}
