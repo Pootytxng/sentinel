@@ -63,16 +63,138 @@ const ALLOWED_EDGES = {
   readiness: ["atomic_write", "drift", "hardware", "history", "monitoring", "race_seam"],
 };
 
-// Strip line comments and block comments so a module merely NAMED in prose is not read as a call.
-// (Written as a line comment on purpose: a block comment here would have to contain a literal
-// block-comment terminator, which closes it early and makes the whole file unparseable. That is
-// exactly how this file first shipped, and vitest reported it as `no tests` — a guard nobody runs.)
+// The end of a string, byte string, raw string or char literal starting at `i`, or null if nothing
+// starts there. Exported only so `stripNonCode` can be read as one thing; the interesting cases are
+// pinned through `stripNonCode` itself.
+//
+// The `'` case is the one worth reading twice. Rust spells a char literal and a LIFETIME with the
+// same character, and mistaking `&'static str` for an opening quote would swallow the rest of the
+// file — turning a guard into a rubber stamp far more thoroughly than the defect this fixes.
+function literalAt(src, i) {
+  const prev = src[i - 1];
+  const identBefore = prev !== undefined && /[A-Za-z0-9_]/.test(prev);
+
+  // Raw / byte-raw string: r"..", r#".."#, br##".."##. The HASH COUNT decides the terminator, which
+  // is the whole point of the form: a raw string may contain `"` and `//` and means neither.
+  let j = i;
+  if (src[j] === "b") j += 1;
+  if (src[j] === "r" && !identBefore) {
+    let k = j + 1;
+    let hashes = 0;
+    while (src[k] === "#") {
+      hashes += 1;
+      k += 1;
+    }
+    if (src[k] === '"') {
+      const close = `"${"#".repeat(hashes)}`;
+      const end = src.indexOf(close, k + 1);
+      return end === -1 ? src.length : end + close.length;
+    }
+  }
+
+  // Ordinary / byte string.
+  j = i;
+  if (src[j] === "b" && !identBefore) j += 1;
+  if (src[j] === '"') {
+    let k = j + 1;
+    while (k < src.length) {
+      if (src[k] === "\\") {
+        k += 2; // an escaped character, `\"` included, cannot end the string
+        continue;
+      }
+      if (src[k] === '"') return k + 1;
+      k += 1;
+    }
+    return src.length; // unterminated: consume the rest rather than fall back into code mid-string
+  }
+
+  if (src[i] === "'") {
+    if (src[i + 1] === "\\") {
+      // '\n', '\'', '\u{1F600}' — start past the backslash AND the character it escapes.
+      let k = i + 3;
+      while (k < src.length && src[k] !== "'" && src[k] !== "\n") k += 1;
+      return src[k] === "'" ? k + 1 : null;
+    }
+    if (src[i + 2] === "'") return i + 3; // 'a'
+    // '😀' is two UTF-16 units in a JS string, so the closing quote sits one further out. Requiring
+    // a high surrogate is what keeps `Foo<'a,'b>` from being read as the char literal `'a,'`.
+    if (src[i + 3] === "'" && /[\uD800-\uDBFF]/.test(src[i + 1] ?? "")) return i + 4;
+    return null; // a lifetime or a loop label: 'static, 'a, 'outer
+  }
+
+  return null;
+}
+
+/**
+ * Rust source with COMMENTS removed and every literal left verbatim, so a module named in prose is
+ * not read as a call and a call is not deleted by punctuation inside a string.
+ *
+ * Written as a scanner, not as the two regexes it replaces, because PR #395's FOURTH independent
+ * review broke those with ordinary Rust — twice, each verified by mutating the real tree and
+ * watching the guard stay 18/18 GREEN with a genuine `history -> comparison` back edge present:
+ *
+ *   1. `let _tip = "see https://example.com/ledger"; let _ = crate::comparison::armed();`
+ *      Line comments were stripped with `/\/\/.*$/` per line. The `//` inside the URL matched
+ *      first, so the rest of the line — the real call included — was deleted before anything read
+ *      it. Any string holding a URL does this, which is not an exotic construct.
+ *   2. `let _weird = "/* not a real comment"; let _ = crate::comparison::armed();` plus any
+ *      ordinary block comment later in the file. Block comments were stripped with
+ *      `/\/\*[\s\S]*?\*\//g`, which opened at the fake `/*` inside the string and closed at the
+ *      first REAL terminator later in the file — swallowing everything in between. Same green,
+ *      wider blast radius.
+ *
+ * That is the same lesson as `groupBody`, for the third time in this file: a regex cannot parse a
+ * quoted or nested construct, and widening it again would be the same weak fix again. This tracks
+ * the states Rust actually has — code, line comment, NESTING block comment, and the four literal
+ * forms — which is what the regexes were pretending they did not need to.
+ *
+ * Literals are kept VERBATIM rather than blanked, deliberately. This file's stated bias is to fail
+ * loudly rather than quietly: a module name written inside a string still counts as an edge and
+ * still asks someone to re-derive. Blanking them would be the direction that fails silent.
+ *
+ * Block comments nest in Rust, so this counts depth. A terminator inside a string that is itself
+ * inside a block comment still closes that comment — which is what rustc does too, because a
+ * comment is lexed before anything knows what a string is.
+ */
+export function stripNonCode(src) {
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    const literal = literalAt(src, i);
+    if (literal !== null) {
+      out += src.slice(i, literal); // verbatim, including its quotes — see the note above
+      i = literal;
+      continue;
+    }
+    if (src[i] === "/" && src[i + 1] === "/") {
+      while (i < src.length && src[i] !== "\n") i += 1;
+      continue;
+    }
+    if (src[i] === "/" && src[i + 1] === "*") {
+      let depth = 0;
+      while (i < src.length) {
+        if (src[i] === "/" && src[i + 1] === "*") {
+          depth += 1;
+          i += 2;
+        } else if (src[i] === "*" && src[i + 1] === "/") {
+          depth -= 1;
+          i += 2;
+          if (depth === 0) break;
+        } else {
+          if (src[i] === "\n") out += "\n"; // keep the line structure a reader would expect
+          i += 1;
+        }
+      }
+      continue;
+    }
+    out += src[i];
+    i += 1;
+  }
+  return out;
+}
+
 function code(module) {
-  return readFileSync(join(SRC, `${module}.rs`), "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .split("\n")
-    .map((line) => line.replace(/\/\/.*$/, ""))
-    .join("\n");
+  return stripNonCode(readFileSync(join(SRC, `${module}.rs`), "utf8"));
 }
 
 /**
@@ -270,6 +392,78 @@ describe("#283 store locks: the lock graph stays acyclic", () => {
     ],
   ])("sees an edge hiding in %s", (_shape, src, expected) => {
     expect(extractEdges(src, "comparison")).toEqual(expected);
+  });
+
+  // Review 4 broke the COMMENT STRIPPER rather than the edge extractor: both regexes it used were
+  // blind to string literals, so ordinary Rust deleted a real call before `extractEdges` ever saw
+  // it. Same `bug → guard` treatment — the stripper is a pure function now, and what it must and
+  // must not remove is pinned here rather than discovered by the next reviewer.
+  it.each([
+    [
+      // Review 4's finding 1, verbatim in shape.
+      "a URL in a string, whose `//` used to delete the rest of the line",
+      'fn f() {\n    let _tip = "see https://example.com/ledger"; let _ = crate::comparison::armed();\n}',
+      ["comparison"],
+    ],
+    [
+      // Review 4's finding 2: the fake opener pairs with a REAL terminator later in the file.
+      "a `/*` inside a string, which used to swallow everything up to the next real `*/`",
+      'fn f() {\n    let _w = "/* not a comment"; let _ = crate::comparison::armed();\n}\n/* an ordinary comment */',
+      ["comparison"],
+    ],
+    [
+      "a raw string, where `//` and `\"` are content and the hash count is the terminator",
+      'fn f() {\n    let _s = r#"a // b " c"#; let _ = crate::comparison::armed();\n}',
+      ["comparison"],
+    ],
+    [
+      "a byte-raw string",
+      'fn f() {\n    let _s = br#"// not a comment"#; let _ = crate::comparison::armed();\n}',
+      ["comparison"],
+    ],
+    [
+      "an escaped quote, which does not end the string it is inside",
+      'fn f() {\n    let _s = "he said \\" // still a string"; let _ = crate::comparison::armed();\n}',
+      ["comparison"],
+    ],
+    [
+      // The one that would have been catastrophic rather than merely blind: `'` opening a literal
+      // that never closes would blank every remaining edge in the file.
+      "a LIFETIME, which is not a char literal however much it looks like one",
+      'fn f() -> &\'static str { "x" }\nfn g() { let _ = crate::comparison::armed(); }',
+      ["comparison"],
+    ],
+    [
+      "a char literal that contains a quote",
+      "fn f() { let _q = '\"'; let _ = crate::comparison::armed(); }",
+      ["comparison"],
+    ],
+    [
+      "a char literal that contains an escaped quote",
+      "fn f() { let _q = '\\''; let _ = crate::comparison::armed(); }",
+      ["comparison"],
+    ],
+    [
+      "a generic with two lifetimes, which is not the char literal `'a,'`",
+      "fn f<'a,'b>(x: &'a str, y: &'b str) { let _ = crate::comparison::armed(); }",
+      ["comparison"],
+    ],
+  ])("still sees an edge past %s", (_shape, src, expected) => {
+    expect(extractEdges(stripNonCode(src), "history")).toEqual(expected);
+  });
+
+  it.each([
+    ["a line comment", "// use crate::comparison;\nfn f() {}"],
+    ["a block comment", "/* let _ = crate::comparison::armed(); */"],
+    ["a doc comment", "/// See crate::comparison::armed for the shape.\nfn f() {}"],
+    [
+      // Rust nests block comments; a first-`*/` match would end the outer one early and expose the
+      // text after it as code.
+      "a NESTED block comment",
+      "/* outer /* inner */ let _ = crate::comparison::armed(); */",
+    ],
+  ])("still removes an edge written in %s", (_shape, src) => {
+    expect(extractEdges(stripNonCode(src), "history")).toEqual([]);
   });
 
   it("does not read a same-file `super::` call as an edge to a module", () => {
