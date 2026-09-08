@@ -2344,6 +2344,22 @@ mod history_tests {
             assert_eq!(view.applied_label, expected.applied_label);
             assert_eq!(view.payoff_label, expected.payoff_label);
             assert_eq!(view.on_this_rig, expected.on_this_rig);
+            // The named asserts above cover the computed-at-read fields, and each names the field it
+            // broke. They say nothing about the ten fields `into_view` merely carries across --
+            // rec_title, applied_at, snapshot, applied_action, rollback_action, the two version
+            // stamps, elevation_used, hw_fingerprint, rolled_back_at — so a reimplementation that
+            // dropped `rollback_action` (the Fix surface's rollback affordance) or `hw_fingerprint`
+            // (what on_this_rig is DERIVED from) passed this guard. Measured, not assumed: mutating
+            // each of the ten inside applied_change_views left the test at 1 passed / 0 failed
+            // (PR #403 review). This catch-all closes all ten and every field added after today.
+            // It compares the serialized form because AppliedChangeView derives Serialize alone, and
+            // this lane may not add a derive to a production struct. It runs LAST so a computed field
+            // still fails by name above.
+            assert_eq!(
+                serde_json::to_value(view).expect("the projection must serialize"),
+                serde_json::to_value(&expected).expect("the reference must serialize"),
+                "every field must come from into_view, including the ones it only carries across"
+            );
         }
 
         // The fixture is load-bearing: if a later edit drops the stamped rows, the loop above goes
