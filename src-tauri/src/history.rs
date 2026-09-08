@@ -2319,13 +2319,6 @@ mod history_tests {
 
         assert_eq!(views.len(), rows.len(), "the projection is 1:1 — it drops and invents nothing");
 
-        // The fixture itself is load-bearing: if a later edit drops the stamped rows, the row-for-row
-        // comparison below goes back to comparing None with None and silently stops guarding
-        // `on_this_rig`. Assert the coverage so that regression fails here instead of going unnoticed.
-        let rig_values: Vec<Option<bool>> = views.iter().map(|v| v.on_this_rig).collect();
-        assert!(rig_values.contains(&Some(true)), "the fixture must exercise an on-this-rig row");
-        assert!(rig_values.contains(&Some(false)), "the fixture must exercise an other-rig row");
-        assert!(rig_values.contains(&None), "and the legacy unstamped row stays covered too");
         for (view, row) in views.iter().zip(rows.iter()) {
             let expected = into_view(row.clone());
             assert_eq!(view.id, expected.id, "row order must be preserved");
@@ -2340,6 +2333,19 @@ mod history_tests {
             assert_eq!(view.payoff_label, expected.payoff_label);
             assert_eq!(view.on_this_rig, expected.on_this_rig);
         }
+
+        // The fixture is load-bearing: if a later edit drops the stamped rows, the loop above goes
+        // back to comparing None with None and silently stops guarding `on_this_rig`. This canary
+        // fails if that coverage is ever lost — and it is derived from `into_view` over the rows
+        // DIRECTLY, never from `views`, for two reasons. Reading the projection's own output would
+        // let it answer a question about itself; and it would make a real collapse in the projection
+        // (every row to one value) fail HERE, wearing a fixture-authoring message, instead of at the
+        // precise per-field assert above. Independent source + last position keeps each failure
+        // saying what actually broke (PR #403 review).
+        let rig_values: Vec<Option<bool>> = rows.iter().cloned().map(into_view).map(|v| v.on_this_rig).collect();
+        assert!(rig_values.contains(&Some(true)), "the fixture must exercise an on-this-rig row");
+        assert!(rig_values.contains(&Some(false)), "the fixture must exercise an other-rig row");
+        assert!(rig_values.contains(&None), "and the legacy unstamped row stays covered too");
     }
 
     /// Borrowing must leave the caller's rows intact: the whole point is that `build()` keeps the
