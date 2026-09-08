@@ -2204,6 +2204,33 @@ mod history_tests {
         }
     }
 
+    /// A ledger row stamped with a rig fingerprint. `record` deliberately leaves `hw_fingerprint`
+    /// unset, which is the honest legacy shape — but it also means every row built from it computes
+    /// `on_this_rig = None`, so a projection guard fed only `record` rows compares None with None and
+    /// cannot see that field drift at all. Rows built here carry a real Some(_) instead.
+    fn record_on_rig(
+        rec_id: &str,
+        status: &str,
+        rig: crate::hardware::HwFingerprint,
+    ) -> AppliedChange {
+        AppliedChange { hw_fingerprint: Some(rig), ..record(rec_id, status) }
+    }
+
+    /// A fingerprint that is NOT this machine, whichever machine runs the suite. `same_rig` compares
+    /// gpu / ram_gb / display, so all three are displaced from the live values. Derived from the real
+    /// rig rather than hard-coded, because a hard-coded "other" rig would collide with the live one on
+    /// a bare box whose hardware fields all read empty — and would then silently assert Some(true).
+    fn a_rig_that_is_not_this_one() -> crate::hardware::HwFingerprint {
+        let now = crate::hardware::current_fingerprint();
+        crate::hardware::HwFingerprint {
+            hash: format!("{}-elsewhere", now.hash),
+            gpu: format!("{} (some other machine)", now.gpu),
+            gpu_driver: now.gpu_driver,
+            ram_gb: now.ram_gb.wrapping_add(7),
+            display: format!("{}-elsewhere", now.display),
+        }
+    }
+
     #[test]
     fn rig_tagging_stamps_new_receipts_and_stays_backcompat() {
         // A5 rig tagging: build_applied_change (the ONE receipt funnel) stamps the apply-time
@@ -2271,17 +2298,39 @@ mod history_tests {
     /// It is only safe to use for that if it is the SAME projection — not a re-implementation that
     /// can drift from `into_view` and quietly give the Machine Model a different set of computed
     /// fields than the ledger's own command gives every other consumer.
+    ///
+    /// Every computed-at-read field is compared row for row, and the row set is built so each one can
+    /// actually diverge: `on_this_rig` in particular needs stamped rows, because an unstamped row
+    /// projects to None whatever the projection does (#385 follow-up to review 5135765472).
     #[test]
     fn the_slice_projection_is_the_same_projection_row_for_row() {
         let rows = vec![
             record("game-mode", "applied"),
             record("a-rec-we-do-not-track", "applied"),
             record("visual-effects", "rolled_back"),
+            // The three rows above are unstamped, so `on_this_rig` is None on BOTH sides of every
+            // comparison below and a projection that hard-coded the field would still pass. These two
+            // carry a real Some(true) / Some(false), which is what makes that field falsifiable here.
+            record_on_rig("power-plan", "applied", crate::hardware::current_fingerprint()),
+            record_on_rig("startup-app", "applied", a_rig_that_is_not_this_one()),
+            // Every row above leaves restores_label / applied_label / payoff_label vacuously None on
+            // BOTH sides: `record`'s snapshot does not deserialize to a Snapshot, and its
+            // applied_action is None, which short-circuits both label derivations. That is the same
+            // structural gap this test just closed for on_this_rig, left open in three more fields.
+            // This row deserializes, so those three carry real values (PR #403 review).
+            AppliedChange {
+                snapshot: serde_json::to_value(Snapshot::FastStartup { prior_hiberboot: Some(1) })
+                    .expect("the snapshot fixture must serialize"),
+                applied_action: Some(AppliedAction::DisableFastStartup),
+                rollback_action: Some(RollbackAction::RestoreFastStartupFromSnapshot),
+                ..record_on_rig("fast-startup-off", "applied", crate::hardware::current_fingerprint())
+            },
         ];
 
         let views = applied_change_views(&rows);
 
         assert_eq!(views.len(), rows.len(), "the projection is 1:1 — it drops and invents nothing");
+
         for (view, row) in views.iter().zip(rows.iter()) {
             let expected = into_view(row.clone());
             assert_eq!(view.id, expected.id, "row order must be preserved");
@@ -2295,7 +2344,57 @@ mod history_tests {
             assert_eq!(view.applied_label, expected.applied_label);
             assert_eq!(view.payoff_label, expected.payoff_label);
             assert_eq!(view.on_this_rig, expected.on_this_rig);
+            // The named asserts above cover the computed-at-read fields, and each names the field it
+            // broke. They say nothing about the ten fields `into_view` merely carries across --
+            // rec_title, applied_at, snapshot, applied_action, rollback_action, the two version
+            // stamps, elevation_used, hw_fingerprint, rolled_back_at — so a reimplementation that
+            // dropped `rollback_action` (the Fix surface's rollback affordance) or `hw_fingerprint`
+            // (what on_this_rig is DERIVED from) passed this guard. Measured, not assumed: mutating
+            // each of the ten inside applied_change_views left the test at 1 passed / 0 failed
+            // (PR #403 review). This catch-all closes all ten and every field added after today.
+            // It compares the serialized form because AppliedChangeView derives Serialize alone, and
+            // this lane may not add a derive to a production struct. It runs LAST so a computed field
+            // still fails by name above.
+            assert_eq!(
+                serde_json::to_value(view).expect("the projection must serialize"),
+                serde_json::to_value(&expected).expect("the reference must serialize"),
+                "every field must come from into_view, including the ones it only carries across"
+            );
         }
+
+        // The fixture is load-bearing: if a later edit drops the stamped rows, the loop above goes
+        // back to comparing None with None and silently stops guarding `on_this_rig`. This canary
+        // fails if that coverage is ever lost — and it is derived from `into_view` over the rows
+        // DIRECTLY, never from `views`, for two reasons. Reading the projection's own output would
+        // let it answer a question about itself; and it would make a real collapse in the projection
+        // (every row to one value) fail HERE, wearing a fixture-authoring message, instead of at the
+        // precise per-field assert above. Independent source + last position keeps each failure
+        // saying what actually broke (PR #403 review).
+        let reference: Vec<AppliedChangeView> = rows.iter().cloned().map(into_view).collect();
+        let rig_values: Vec<Option<bool>> = reference.iter().map(|v| v.on_this_rig).collect();
+        assert!(rig_values.contains(&Some(true)), "the fixture must exercise an on-this-rig row");
+        assert!(rig_values.contains(&Some(false)), "the fixture must exercise an other-rig row");
+        assert!(rig_values.contains(&None), "and the legacy unstamped row stays covered too");
+        // Same argument, three more fields: a label that is None for every row is compared
+        // None-to-None and guards nothing, which is exactly how they stood before this row landed.
+        assert!(
+            reference.iter().any(|v| v.restores_label.is_some()),
+            "the fixture must exercise a row whose snapshot yields a restores label"
+        );
+        assert!(
+            reference.iter().any(|v| v.applied_label.is_some()),
+            "the fixture must exercise a row whose action yields an applied label"
+        );
+        assert!(
+            reference.iter().any(|v| v.payoff_label.is_some()),
+            "the fixture must exercise a row whose action yields a payoff label"
+        );
+        // What this test does NOT guard, deliberately: the FIELD SEMANTICS of `same_rig`. Both sides
+        // of the loop above reach it through `into_view`, so narrowing `same_rig` to any non-empty
+        // subset of {gpu, ram_gb, display} moves both sides together and stays green — measured, not
+        // assumed. No fixture row can change that; it is what comparing two paths through one
+        // function means. That subset is pinned by `same_rig_ignores_driver_but_not_hardware`
+        // below, which calls `same_rig` directly. Keep the two tests together (PR #403 review).
     }
 
     /// Borrowing must leave the caller's rows intact: the whole point is that `build()` keeps the
