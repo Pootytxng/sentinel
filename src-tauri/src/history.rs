@@ -2204,6 +2204,33 @@ mod history_tests {
         }
     }
 
+    /// A ledger row stamped with a rig fingerprint. `record` deliberately leaves `hw_fingerprint`
+    /// unset, which is the honest legacy shape — but it also means every row built from it computes
+    /// `on_this_rig = None`, so a projection guard fed only `record` rows compares None with None and
+    /// cannot see that field drift at all. Rows built here carry a real Some(_) instead.
+    fn record_on_rig(
+        rec_id: &str,
+        status: &str,
+        rig: crate::hardware::HwFingerprint,
+    ) -> AppliedChange {
+        AppliedChange { hw_fingerprint: Some(rig), ..record(rec_id, status) }
+    }
+
+    /// A fingerprint that is NOT this machine, whichever machine runs the suite. `same_rig` compares
+    /// gpu / ram_gb / display, so all three are displaced from the live values. Derived from the real
+    /// rig rather than hard-coded, because a hard-coded "other" rig would collide with the live one on
+    /// a bare box whose hardware fields all read empty — and would then silently assert Some(true).
+    fn a_rig_that_is_not_this_one() -> crate::hardware::HwFingerprint {
+        let now = crate::hardware::current_fingerprint();
+        crate::hardware::HwFingerprint {
+            hash: format!("{}-elsewhere", now.hash),
+            gpu: format!("{} (some other machine)", now.gpu),
+            gpu_driver: now.gpu_driver,
+            ram_gb: now.ram_gb.wrapping_add(7),
+            display: format!("{}-elsewhere", now.display),
+        }
+    }
+
     #[test]
     fn rig_tagging_stamps_new_receipts_and_stays_backcompat() {
         // A5 rig tagging: build_applied_change (the ONE receipt funnel) stamps the apply-time
@@ -2271,17 +2298,34 @@ mod history_tests {
     /// It is only safe to use for that if it is the SAME projection — not a re-implementation that
     /// can drift from `into_view` and quietly give the Machine Model a different set of computed
     /// fields than the ledger's own command gives every other consumer.
+    ///
+    /// Every computed-at-read field is compared row for row, and the row set is built so each one can
+    /// actually diverge: `on_this_rig` in particular needs stamped rows, because an unstamped row
+    /// projects to None whatever the projection does (#385 follow-up to review 5135765472).
     #[test]
     fn the_slice_projection_is_the_same_projection_row_for_row() {
         let rows = vec![
             record("game-mode", "applied"),
             record("a-rec-we-do-not-track", "applied"),
             record("visual-effects", "rolled_back"),
+            // The three rows above are unstamped, so `on_this_rig` is None on BOTH sides of every
+            // comparison below and a projection that hard-coded the field would still pass. These two
+            // carry a real Some(true) / Some(false), which is what makes that field falsifiable here.
+            record_on_rig("power-plan", "applied", crate::hardware::current_fingerprint()),
+            record_on_rig("startup-app", "applied", a_rig_that_is_not_this_one()),
         ];
 
         let views = applied_change_views(&rows);
 
         assert_eq!(views.len(), rows.len(), "the projection is 1:1 — it drops and invents nothing");
+
+        // The fixture itself is load-bearing: if a later edit drops the stamped rows, the row-for-row
+        // comparison below goes back to comparing None with None and silently stops guarding
+        // `on_this_rig`. Assert the coverage so that regression fails here instead of going unnoticed.
+        let rig_values: Vec<Option<bool>> = views.iter().map(|v| v.on_this_rig).collect();
+        assert!(rig_values.contains(&Some(true)), "the fixture must exercise an on-this-rig row");
+        assert!(rig_values.contains(&Some(false)), "the fixture must exercise an other-rig row");
+        assert!(rig_values.contains(&None), "and the legacy unstamped row stays covered too");
         for (view, row) in views.iter().zip(rows.iter()) {
             let expected = into_view(row.clone());
             assert_eq!(view.id, expected.id, "row order must be preserved");
