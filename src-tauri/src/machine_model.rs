@@ -355,6 +355,32 @@ const DISAGREE_HISTORICAL: &str = "The recorded reading is older than the live o
 const DISAGREE_BASELINE: &str = "The hardware-change baseline was written at a different time and is only re-baselined when the user acknowledges a change. A difference here is what the Re-Run Setup signal exists to report; it does not make the baseline incorrect.";
 const DISAGREE_UNITS: &str = "These producers use different rounding conventions for RAM, so a gap of 1 GB is a unit-convention difference rather than a hardware disagreement. Only a gap larger than the tolerance hwchange::diff_fingerprint itself applies is reported here.";
 
+/// One identity field a comparison ACTUALLY RAN over: today's live reading held a value, and the
+/// named second producer held one to check it against.
+///
+/// This list exists because an empty [`MachineIdentity::disagreements`] is ambiguous on its own.
+/// It is produced in two completely different situations: every compared field agreed, or NOTHING
+/// WAS COMPARED — a fresh machine with no stamped identity snapshot and no acknowledged hardware
+/// baseline has no second reading to differ from, and a snapshot whose fields all read empty is a
+/// failed probe rather than a comparison. Rendering that absence as "No, they agree" turns missing
+/// comparative evidence into a passing result (#385 review). `compared_fields` is what separates
+/// the two cases: agreement may only be claimed when this list is non-empty, and it names exactly
+/// which fields the claim covers.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ComparedField {
+    pub field: &'static str,
+    /// The producer today's live reading was checked against.
+    pub against: &'static str,
+}
+
+/// The outcome of the identity cross-check: what was compared, and where it differed. Returned as
+/// one value so the two can never be gathered by separate passes and drift apart — the same reason
+/// [`compose_evidence`] builds the unknown list and the unknown counts together.
+pub(crate) struct IdentityComparison {
+    pub compared_fields: Vec<ComparedField>,
+    pub disagreements: Vec<IdentityDisagreement>,
+}
+
 /// Answer A: the minimum useful identity, each field with provenance and freshness.
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct MachineIdentity {
@@ -371,8 +397,14 @@ pub(crate) struct MachineIdentity {
     pub contributing_producers: Vec<&'static str>,
     /// Existing fingerprints deliberately left out of canonical identity, with reasons.
     pub excluded_producers: Vec<ExcludedProducer>,
-    /// Empty means the contributing producers currently agree on every compared field — which is a
-    /// finding, not an absence of one.
+    /// Every field a real comparison ran over, and which producer it ran against. Read this BEFORE
+    /// [`Self::disagreements`]: an empty `disagreements` is only a finding when this list is
+    /// non-empty. Empty here means nothing was compared at all, which is an absence of comparative
+    /// evidence and must never be presented as agreement (#385 review).
+    pub compared_fields: Vec<ComparedField>,
+    /// Where the compared producers differ. Empty means they agreed ON THE FIELDS NAMED IN
+    /// [`Self::compared_fields`] — and, when that list is empty, means only that there was nothing
+    /// to disagree about. It is never on its own a claim that the producers agree.
     pub disagreements: Vec<IdentityDisagreement>,
 }
 
@@ -420,7 +452,10 @@ pub(crate) struct ChangeChronology {
     pub identity_history_from: Option<String>,
     pub identity_snapshots: usize,
     pub total_events: usize,
-    /// Newest first, capped at [`MAX_CHRONOLOGY`].
+    /// Newest first, capped at [`MAX_CHRONOLOGY`] for DISPLAY only. `total_events` and
+    /// `recorded_from` above cover the whole retained record, and so does the evidence pass:
+    /// [`compose_evidence`] walks the uncapped projection, never this list, so Answer B's span can
+    /// never be narrower than the boundary reported beside it (#385 review).
     pub entries: Vec<ChronologyEntry>,
     /// Source records whose timestamps did not parse. Dropped, never guessed at.
     pub dropped_unparseable: usize,
@@ -520,7 +555,8 @@ pub(crate) struct UnknownFact {
 pub(crate) struct AnswerEvidence {
     pub answer: &'static str,
     pub classes: Vec<EvidenceClass>,
-    /// Oldest producer-stamped time contributing to this answer.
+    /// Oldest producer-stamped time contributing to this answer, computed over every contributing
+    /// record — never over a list a display cap has already truncated (#385 review).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oldest_observed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -583,13 +619,19 @@ pub(crate) struct MachineModelInputs<'a> {
 /// Compose the model. Pure: no I/O, no probe, no clock, no write.
 pub(crate) fn compose(inp: &MachineModelInputs) -> MachineModel {
     let identity = compose_identity(inp);
-    let chronology = compose_chronology(inp);
+    let (chronology, all_chronology) = compose_chronology(inp);
     let (compy_changes, all_change_facts) = compose_compy_changes(inp);
     // The unknown LIST and the unknown COUNTS are built by the same pass, deliberately. They were
     // built by two — scattered `note_unknown` calls and a separate tally — and drifted apart:
     // a fact could be counted as unknown and never listed, or listed and never counted (#385
     // review). One pass makes them agree by construction rather than by remembering to.
-    let evidence = compose_evidence(&inp.built_at, &identity, &chronology, &all_change_facts);
+    let evidence = compose_evidence(
+        &inp.built_at,
+        &identity,
+        &chronology,
+        &all_chronology,
+        &all_change_facts,
+    );
 
     MachineModel {
         schema_version: SCHEMA_VERSION,
@@ -603,6 +645,7 @@ pub(crate) fn compose(inp: &MachineModelInputs) -> MachineModel {
 
 fn compose_identity(inp: &MachineModelInputs) -> MachineIdentity {
     let fp = inp.live_fingerprint;
+    let comparison = compare_identity_producers(inp);
 
     let cpu = cached_str(
         &inp.hardware.cpu_brand,
@@ -676,14 +719,24 @@ fn compose_identity(inp: &MachineModelInputs) -> MachineIdentity {
                 reason: "A comparison RULE the model applies to ledger rows, not a producer of an identity value of its own.",
             },
         ],
-        disagreements: identity_disagreements(inp),
+        compared_fields: comparison.compared_fields,
+        disagreements: comparison.disagreements,
     }
 }
 
-/// Report where the contributing identity producers currently differ. Pure and total: it never
-/// selects a winner, and it never reports a difference it cannot attribute to a real comparison.
-pub(crate) fn identity_disagreements(inp: &MachineModelInputs) -> Vec<IdentityDisagreement> {
+/// Report which identity fields were compared and where the contributing producers currently
+/// differ. Pure and total: it never selects a winner, and it never reports a difference it cannot
+/// attribute to a real comparison.
+///
+/// A field is COMPARED when both sides hold a value. An empty string or a zero RAM reading is a
+/// failed probe, not a value — the same rule `intelligence::str_changed` applies when deciding
+/// whether to record a snapshot at all — so such a field is neither a disagreement nor evidence of
+/// agreement. Recording that distinction is the whole point: without it, "no snapshot and no
+/// baseline exist" and "every compared field agreed" produce byte-identical output, and a consumer
+/// reads a fresh machine as having passed a check that never ran (#385 review).
+pub(crate) fn compare_identity_producers(inp: &MachineModelInputs) -> IdentityComparison {
     let mut out = Vec::new();
+    let mut compared = Vec::new();
     let fp = inp.live_fingerprint;
     let live = |value: &str| IdentityClaim {
         producer: PRODUCER_HARDWARE,
@@ -702,14 +755,20 @@ pub(crate) fn identity_disagreements(inp: &MachineModelInputs) -> Vec<IdentityDi
         };
         // An empty side is a failed probe, never evidence of a change — the same rule
         // `intelligence::str_changed` applies when deciding whether to record a snapshot at all.
-        let differs = |a: &str, b: &str| !a.is_empty() && !b.is_empty() && a != b;
+        // It is equally not evidence of AGREEMENT, so a field only enters `compared` when both
+        // sides actually held a value to compare.
+        let ran = |a: &str, b: &str| !a.is_empty() && !b.is_empty();
         for (field, a, b) in [
             ("gpu", fp.gpu.as_str(), snap.gpu.as_str()),
             ("gpu_driver", fp.gpu_driver.as_str(), snap.gpu_driver.as_str()),
             ("display", fp.display.as_str(), snap.display.as_str()),
             ("rig_hash", fp.hash.as_str(), snap.hw_hash.as_str()),
         ] {
-            if differs(a, b) {
+            if !ran(a, b) {
+                continue;
+            }
+            compared.push(ComparedField { field, against: PRODUCER_SNAPSHOT });
+            if a != b {
                 out.push(IdentityDisagreement {
                     field,
                     left: live(a),
@@ -718,13 +777,16 @@ pub(crate) fn identity_disagreements(inp: &MachineModelInputs) -> Vec<IdentityDi
                 });
             }
         }
-        if fp.ram_gb > 0 && snap.ram_gb > 0 && fp.ram_gb != snap.ram_gb {
-            out.push(IdentityDisagreement {
-                field: "ram_gb",
-                left: live(&fp.ram_gb.to_string()),
-                right: recorded(&snap.ram_gb.to_string()),
-                interpretation: DISAGREE_HISTORICAL,
-            });
+        if fp.ram_gb > 0 && snap.ram_gb > 0 {
+            compared.push(ComparedField { field: "ram_gb", against: PRODUCER_SNAPSHOT });
+            if fp.ram_gb != snap.ram_gb {
+                out.push(IdentityDisagreement {
+                    field: "ram_gb",
+                    left: live(&fp.ram_gb.to_string()),
+                    right: recorded(&snap.ram_gb.to_string()),
+                    interpretation: DISAGREE_HISTORICAL,
+                });
+            }
         }
     }
 
@@ -739,30 +801,34 @@ pub(crate) fn identity_disagreements(inp: &MachineModelInputs) -> Vec<IdentityDi
             observed_at: None,
             freshness: Freshness::UndatedHistorical,
         };
-        if !fp.gpu.is_empty()
-            && !base.gpus.is_empty()
-            && !base.gpus.iter().any(|g| g == &fp.gpu)
-        {
-            out.push(IdentityDisagreement {
-                field: "gpu",
-                left: live(&fp.gpu),
-                right: baseline(base.gpus.join(", ")),
-                interpretation: DISAGREE_BASELINE,
-            });
+        if !fp.gpu.is_empty() && !base.gpus.is_empty() {
+            compared.push(ComparedField { field: "gpu", against: PRODUCER_HWCHANGE });
+            if !base.gpus.iter().any(|g| g == &fp.gpu) {
+                out.push(IdentityDisagreement {
+                    field: "gpu",
+                    left: live(&fp.gpu),
+                    right: baseline(base.gpus.join(", ")),
+                    interpretation: DISAGREE_BASELINE,
+                });
+            }
         }
         // hardware rounds GiB, hwchange truncates. Reuse hwchange's own +/-1 tolerance rather than
         // inventing a second rule, so a rounding artefact never reads as a hardware disagreement.
-        if fp.ram_gb > 0 && base.ram_gb > 0 && u64::from(fp.ram_gb).abs_diff(base.ram_gb) > 1 {
-            out.push(IdentityDisagreement {
-                field: "ram_gb",
-                left: live(&fp.ram_gb.to_string()),
-                right: baseline(base.ram_gb.to_string()),
-                interpretation: DISAGREE_UNITS,
-            });
+        // The comparison still RAN — the tolerance decides the verdict, not whether it happened.
+        if fp.ram_gb > 0 && base.ram_gb > 0 {
+            compared.push(ComparedField { field: "ram_gb", against: PRODUCER_HWCHANGE });
+            if u64::from(fp.ram_gb).abs_diff(base.ram_gb) > 1 {
+                out.push(IdentityDisagreement {
+                    field: "ram_gb",
+                    left: live(&fp.ram_gb.to_string()),
+                    right: baseline(base.ram_gb.to_string()),
+                    interpretation: DISAGREE_UNITS,
+                });
+            }
         }
     }
 
-    out
+    IdentityComparison { compared_fields: compared, disagreements: out }
 }
 
 /// The earliest timestamp any retained chronology source still holds, and which source it came
@@ -816,7 +882,12 @@ fn earliest_retained_evidence(inp: &MachineModelInputs) -> (Option<String>, Opti
     }
 }
 
-fn compose_chronology(inp: &MachineModelInputs) -> ChangeChronology {
+/// Returns the wire struct AND the uncapped entry projection behind it, on the same contract as
+/// [`compose_compy_changes`]: `entries` is capped for DISPLAY, while `recorded_from` and the
+/// evidence pass both speak for the whole retained record. Handing [`compose_evidence`] the capped
+/// list made Answer B report an oldest-evidence time NEWER than the model's own retained-history
+/// boundary as soon as the record outgrew the cap — one model contradicting itself (#385 review).
+fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<ChronologyEntry>) {
     let (recorded_from, recorded_from_source) = earliest_retained_evidence(inp);
     let identity_history_from = inp
         .identity_snapshots
@@ -832,12 +903,13 @@ fn compose_chronology(inp: &MachineModelInputs) -> ChangeChronology {
         None
     };
 
-    // The assembler emits ascending; consumers want newest first.
-    let entries = inp
+    // The assembler emits ascending; consumers want newest first. Projected in full FIRST, so the
+    // cap below is a display decision taken over a complete list rather than a limit baked into
+    // the only projection that exists.
+    let all_entries: Vec<ChronologyEntry> = inp
         .timeline
         .iter()
         .rev()
-        .take(MAX_CHRONOLOGY)
         .map(|e| ChronologyEntry {
             observed_at: e.timestamp.clone(),
             summary: e.summary.clone(),
@@ -849,18 +921,22 @@ fn compose_chronology(inp: &MachineModelInputs) -> ChangeChronology {
             class: EvidenceClass::RecordedHistorically,
         })
         .collect();
+    let entries: Vec<ChronologyEntry> = all_entries.iter().take(MAX_CHRONOLOGY).cloned().collect();
 
-    ChangeChronology {
-        recorded_from,
-        recorded_from_source,
-        identity_history_from,
-        identity_snapshots: inp.identity_snapshots.len(),
-        total_events: inp.timeline.len(),
-        entries,
-        dropped_unparseable: inp.timeline_dropped,
-        causation_note: CAUSATION_NOTE,
-        unknown_reason,
-    }
+    (
+        ChangeChronology {
+            recorded_from,
+            recorded_from_source,
+            identity_history_from,
+            identity_snapshots: inp.identity_snapshots.len(),
+            total_events: inp.timeline.len(),
+            entries,
+            dropped_unparseable: inp.timeline_dropped,
+            causation_note: CAUSATION_NOTE,
+            unknown_reason,
+        },
+        all_entries,
+    )
 }
 
 /// Returns the wire struct AND the uncapped fact projection behind it. The struct's `changes` list
@@ -1064,13 +1140,16 @@ fn empty_answer(answer: &'static str) -> AnswerEvidence {
     }
 }
 
-/// `all_changes` is the UNCAPPED projection from [`compose_compy_changes`], never
-/// `CompyChangeTruth::changes`. The answer it summarises is reported over the whole ledger, so its
-/// evidence has to be too, or the same screen can show a count with nothing named behind it.
+/// `all_chronology` and `all_changes` are the UNCAPPED projections from [`compose_chronology`] and
+/// [`compose_compy_changes`], never `ChangeChronology::entries` or `CompyChangeTruth::changes`. The
+/// answers they summarise are reported over the whole record, so their evidence has to be too, or
+/// the same screen can show a count with nothing named behind it — and, for the chronology, an
+/// evidence span narrower than the retained-history boundary printed beside it (#385 review).
 fn compose_evidence(
     built_at: &str,
     identity: &MachineIdentity,
     chronology: &ChangeChronology,
+    all_chronology: &[ChronologyEntry],
     all_changes: &[CompyChangeFact],
 ) -> EvidenceSummary {
     let mut unknowns: Vec<UnknownFact> = Vec::new();
@@ -1085,7 +1164,7 @@ fn compose_evidence(
     tally(&mut a, "identity.rig_hash", &identity.rig_hash, &mut unknowns);
 
     let mut b = empty_answer("What recently changed?");
-    for e in &chronology.entries {
+    for e in all_chronology {
         if !b.classes.contains(&e.class) {
             b.classes.push(e.class);
         }
@@ -1096,7 +1175,7 @@ fn compose_evidence(
             b.newest_observed_at = Some(e.observed_at.clone());
         }
     }
-    if chronology.entries.is_empty() {
+    if all_chronology.is_empty() {
         tally_absent(
             &mut b,
             "chronology.entries",
@@ -2432,6 +2511,180 @@ mod machine_model_tests {
         );
         assert!(note.contains("GPU, driver, display, memory and the rig hash"));
         assert!(note.contains("Windows build are not compared"));
+        // And that phrase must be MEASURED, not recited: it names exactly the fields the model
+        // says it compared, so the note cannot outlive a change to what actually gets compared.
+        let compared: Vec<&str> = m.identity.compared_fields.iter().map(|c| c.field).collect();
+        for field in ["gpu", "gpu_driver", "display", "ram_gb", "rig_hash"] {
+            assert!(
+                compared.contains(&field),
+                "{field} is named in the note, so it must have been compared"
+            );
+        }
+    }
+
+    // ── 7e. Nothing compared is not agreement (#385 review, finding 1) ────
+
+    #[test]
+    fn a_machine_with_nothing_to_compare_never_renders_as_producers_agreeing() {
+        let mut f = Fixture::new();
+        // A fresh install: Compy has stamped no identity snapshot, and the user has acknowledged
+        // no hardware baseline. There is no second reading in existence to compare against.
+        f.snapshots.clear();
+        f.baseline = None;
+        let m = f.model();
+        assert!(
+            m.identity.compared_fields.is_empty(),
+            "with no snapshot and no baseline, no comparison can have run"
+        );
+        assert!(
+            m.identity.disagreements.is_empty(),
+            "and so nothing can have disagreed — this is the ambiguity being fixed"
+        );
+
+        let entries = rendered_entries(&m);
+        let (_, value, note) = entry_by_label(&entries, "Identity producers disagree");
+        assert_ne!(
+            value.as_str(),
+            "No",
+            "an absence of comparative evidence must never render as a passing check"
+        );
+        assert_eq!(value.as_str(), "Not compared");
+        assert!(
+            note.contains("absence of comparative evidence, not agreement"),
+            "the note must say why there is no answer rather than implying one: {note}"
+        );
+        assert!(
+            !note.contains("agree."),
+            "no branch of the zero-comparison note may assert agreement: {note}"
+        );
+    }
+
+    #[test]
+    fn a_snapshot_whose_fields_all_failed_to_read_is_not_a_comparison() {
+        let mut f = Fixture::new();
+        // A snapshot row exists, but its fields came back empty — failed probes, not readings. An
+        // empty side is already excluded from DISAGREEING; it must be excluded from AGREEING for
+        // the same reason, or a broken probe reads as a clean bill of health.
+        f.baseline = None;
+
+        // First the partial case, which proves the rule is applied PER FIELD: only `display` came
+        // back, so only `display` may be spoken for.
+        f.snapshots = vec![snap("2026-08-01T10:00:00Z", "", "", 0, "")];
+        let m = f.model();
+        assert_eq!(
+            m.identity
+                .compared_fields
+                .iter()
+                .map(|c| c.field)
+                .collect::<Vec<_>>(),
+            vec!["display"],
+            "only the one field that actually read back is comparable"
+        );
+        let entries = rendered_entries(&m);
+        let (_, _, note) = entry_by_label(&entries, "Identity producers disagree");
+        assert!(
+            note.contains("compared — display — agree"),
+            "the note may claim only the field that was read: {note}"
+        );
+
+        // Then the total case: nothing in the snapshot read back at all.
+        f.snapshots[0].display = String::new();
+        let m = f.model();
+        assert!(
+            m.identity.compared_fields.is_empty(),
+            "a snapshot whose every field failed to read compares nothing"
+        );
+        let entries = rendered_entries(&m);
+        let (_, value, _) = entry_by_label(&entries, "Identity producers disagree");
+        assert_eq!(
+            value.as_str(),
+            "Not compared",
+            "a broken probe must not read as a clean bill of health"
+        );
+    }
+
+    #[test]
+    fn a_baseline_with_no_snapshot_is_still_a_real_comparison() {
+        // The positive control for the two guards above: the "Not compared" branch must be
+        // reachable ONLY by an actual absence. A machine with no snapshot but an acknowledged
+        // baseline HAS been compared, and must still be able to report agreement.
+        let mut f = Fixture::new();
+        f.snapshots.clear();
+        f.baseline = Some(crate::hwchange::test_fingerprint(
+            "AMD Ryzen 7 7800X3D",
+            &["Radeon RX 9070 XT"],
+            32,
+        ));
+        let m = f.model();
+        assert_eq!(
+            m.identity
+                .compared_fields
+                .iter()
+                .map(|c| (c.field, c.against))
+                .collect::<Vec<_>>(),
+            vec![("gpu", PRODUCER_HWCHANGE), ("ram_gb", PRODUCER_HWCHANGE)],
+            "the baseline compares GPU and memory, and only those"
+        );
+        assert!(m.identity.disagreements.is_empty(), "and they match");
+        let entries = rendered_entries(&m);
+        let (_, value, note) = entry_by_label(&entries, "Identity producers disagree");
+        assert_eq!(value.as_str(), "No");
+        assert!(
+            note.contains("compared — GPU and memory — agree"),
+            "the note must claim only the two fields the baseline actually compared, not the five \
+             a snapshot would have: {note}"
+        );
+    }
+
+    // ── 7f. The evidence span is not the display cap (#385 review, finding 3) ──
+
+    #[test]
+    fn the_answer_b_evidence_span_covers_chronology_the_display_cap_drops() {
+        let mut f = Fixture::new();
+        f.snapshots.clear();
+        // MAX_CHRONOLOGY + 5 dated events, ascending exactly as the assembler emits them, so the
+        // display cap must drop the five OLDEST.
+        f.timeline = (0..MAX_CHRONOLOGY + 5)
+            .map(|i| crate::intelligence::EventRecord {
+                id: format!("applied:evt-{i}"),
+                timestamp: format!("2026-01-{:02}T00:00:00Z", i + 1),
+                event_type: "change-applied".into(),
+                source: "history".into(),
+                scope: EventScope::CompyApplied,
+                game: None,
+                summary: format!("Event {i}"),
+                detail: None,
+                observed_between: None,
+                since_rolled_back: false,
+                rec_id: None,
+            })
+            .collect();
+        let m = f.model();
+        assert_eq!(m.chronology.entries.len(), MAX_CHRONOLOGY, "display is capped");
+        assert_eq!(m.chronology.total_events, MAX_CHRONOLOGY + 5, "the record is not");
+
+        let b = m
+            .evidence
+            .answers
+            .iter()
+            .find(|a| a.answer == "What recently changed?")
+            .expect("Answer B is always present");
+        assert_eq!(
+            b.oldest_observed_at.as_deref(),
+            Some("2026-01-01T00:00:00Z"),
+            "the span must reach the oldest RETAINED event, not the oldest SHOWN one"
+        );
+        // The contract the review named: these two signals describe the same retained record and
+        // are printed on the same screen, so they may not disagree.
+        assert_eq!(
+            b.oldest_observed_at.as_deref(),
+            m.chronology.recorded_from.as_deref(),
+            "the evidence span and the model's own retained-history boundary must agree"
+        );
+        assert_eq!(
+            b.newest_observed_at.as_deref(),
+            Some(format!("2026-01-{:02}T00:00:00Z", MAX_CHRONOLOGY + 5).as_str())
+        );
     }
 
     // ── 8. Existing producers keep their own vocabularies ─────────────────

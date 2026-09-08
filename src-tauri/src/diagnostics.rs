@@ -551,9 +551,33 @@ pub(crate) fn machine_model_section(
     };
     entries.push(DiagnosticEntry { label: "Memory".into(), value: ram_value, note: ram_note });
 
+    // "No disagreements" is only a finding when a comparison actually RAN. With no stamped
+    // snapshot and no acknowledged baseline nothing is compared, and the model returns the same
+    // empty list it returns when everything agreed. Rendering both as "No" turned an absence of
+    // comparative evidence into a passing result on exactly the machines least able to afford it —
+    // fresh ones (#385 review). The compared list is read first, and it also supplies the field
+    // names, so the agreement note can no longer claim more than the comparison covered.
+    let compared_labels: Vec<&'static str> = [
+        ("gpu", "GPU"),
+        ("gpu_driver", "driver"),
+        ("display", "display"),
+        ("ram_gb", "memory"),
+        ("rig_hash", "the rig hash"),
+    ]
+    .into_iter()
+    .filter(|(id, _)| m.identity.compared_fields.iter().any(|c| c.field == *id))
+    .map(|(_, label)| label)
+    .collect();
+    let compared_phrase = match compared_labels.split_last() {
+        None => String::new(),
+        Some((last, [])) => (*last).to_string(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+    };
     entries.push(DiagnosticEntry {
         label: "Identity producers disagree".into(),
-        value: if m.identity.disagreements.is_empty() {
+        value: if m.identity.compared_fields.is_empty() {
+            "Not compared".into()
+        } else if m.identity.disagreements.is_empty() {
             "No".into()
         } else {
             m.identity
@@ -563,8 +587,12 @@ pub(crate) fn machine_model_section(
                 .collect::<Vec<_>>()
                 .join(" · ")
         },
-        note: Some(if m.identity.disagreements.is_empty() {
-            "Every identity field Compy actually compares — GPU, driver, display, memory and the rig hash — agrees. CPU and Windows build are not compared, so this is not a claim that every producer of rig identity agrees.".into()
+        note: Some(if m.identity.compared_fields.is_empty() {
+            "Nothing was compared. Compy holds no stamped identity snapshot and no acknowledged hardware baseline to check today's reading against, so no second producer exists to agree or disagree with it. That is an absence of comparative evidence, not agreement.".into()
+        } else if m.identity.disagreements.is_empty() {
+            format!(
+                "The identity fields Compy actually compared — {compared_phrase} — agree. CPU and Windows build are not compared, and neither is any field whose second reading was missing, so this is not a claim that every producer of rig identity agrees."
+            )
         } else {
             format!(
                 "{} A difference is not proof that either reading is wrong.",
