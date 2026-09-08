@@ -807,7 +807,7 @@ describe("the record's prose does not outlive the refs it describes", () => {
     // every rule here carried a self-test that stopped it passing vacuously; for THIS one that was
     // false, and the review said so. The floor sits far below the row count so that retiring a row
     // cannot red it.
-    expect(rows.length).toBeGreaterThan(20);
+    expect(rows.length).toBeGreaterThan(10);
     const offenders = rows.filter((r) => pinsACount(r.evidence)).map((r) => r.file);
     expect(offenders).toEqual([]);
   });

@@ -8,15 +8,15 @@
 
 ## Where the train is standing
 
-**The desk build is `090bc58b`** (Mission 2 landing, #238; version debt — batch the next cut).
+**The desk build is `d7fed835`** (Wave 1 Lane B landing, #224/#225 via PR #401; version debt — batch the next cut).
 
 | | |
 |---|---|
-| Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
+| Installed | `d7fed835`, stamp byte-found in the installed exe (`d7fed835 · release · shell 0.9.26`, ship-reinstall OK), one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
 | Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
 | Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
-| Harvest | Wave 1 Lane B (#224/#225): PR #294's content harvested onto this branch (39 files as-is, 7 docs re-derived); the visual gate is pending at the installed build, acceptance stays the owner's (#224 proof boundary, #225 step 7). The source lane's own ref still exists and still carries 29 commits `main` lacks — the CONTENT is on `main`, the commits are not; the live set is a git question (`node scripts/fleet-snapshot.mjs`), never a name stored here. |
+| Harvest | Wave 1 Lane B (#224/#225) LANDED: PR #401 merged to `main` at `3fe7a029` (receipt `.claude/work-control/2026-09-07-merge-pr-401.json`, independent review APPROVE at `aed5bcac`); PR #294 closed as superseded and its ref pruned, so its content is on `main` and no ref carries it. Acceptance stays the owner's: look at Health/Test in the installed `d7fed835` build, accept or veto (#224 proof boundary, #225 step 7). |
 
 ## The rule that came out of the walk — read this before touching Health
 
