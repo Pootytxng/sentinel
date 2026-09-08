@@ -1,5 +1,11 @@
 # Spec — the Test room's "Your rig" reading set (the last open intimidation-pass item)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical design record, not current
+> product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Its shipped-fact and honesty claims must be
+> re-verified against code and [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 **Status:** SPEC, not built. Written before touching `src/surfaces/LabConsole.tsx`, per the
 2026-08-21 handoff ("spec it before touching it").
 **Owner ask:** `docs/UI_VISION_BACKLOG.md` STANDING DIRECTIVE → the one 🔴 left after TEST

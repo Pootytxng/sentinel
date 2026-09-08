@@ -320,15 +320,24 @@ export function invalidateBoardCache({ dir = TOKEN_DIR } = {}) {
   }
 }
 
+/**
+ * `gh project item-list` returns at most `--limit` rows and says nothing when the board has more.
+ * This copy stayed at 100 after #339 raised the launcher's (`tools/entry/gather.mjs`) to 1000, so on
+ * a 136-item board every claim past row 100 — every NEW lane — read as FOLDER_UNCLAIMED here while
+ * the launcher saw it fine (#368). Same limit, same truncation check: a short read is not a read.
+ */
+export const BOARD_READ_LIMIT = 1000;
+
 /** One `gh` call. Returns null when the board could not be read — which is never "empty board". */
-export function fetchBoardRows() {
+export function fetchBoardRows({ run = null } = {}) {
   try {
-    const raw = execFileSync(
-      "gh",
-      ["project", "item-list", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json", "--limit", "100"],
-      { encoding: "utf8", timeout: 20_000, stdio: ["ignore", "pipe", "ignore"] },
-    );
-    const items = JSON.parse(raw).items ?? [];
+    const argv = ["project", "item-list", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json", "--limit", String(BOARD_READ_LIMIT)];
+    const raw = run
+      ? run(argv)
+      : execFileSync("gh", argv, { encoding: "utf8", timeout: 20_000, stdio: ["ignore", "pipe", "ignore"] });
+    const parsed = JSON.parse(raw);
+    const items = parsed.items ?? [];
+    if (Number.isInteger(parsed.totalCount) && parsed.totalCount > items.length) return null;
     return boardRows(items.map((it) => ({ ...it, number: it.content?.number })));
   } catch {
     return null;
@@ -468,6 +477,63 @@ export function observeLive(root) {
     branch: branch === "HEAD" ? null : branch,
     repo: normalizeRepo(git(root, ["remote", "get-url", "origin"])),
   };
+}
+
+// -- executor identity ---------------------------------------------------------------------------
+// docs/WORK_CONTROL.md "Executor identity": every executor commits under its own name, so the gate's
+// mutationAuthors list and the reviewer-not-author rule can be read off `git log` instead of trusted
+// on assertion. A Claude Code session that writes lives in a LINKED worktree (`git worktree add`),
+// so the identity is set per worktree (`extensions.worktreeConfig` is on in this repository) the
+// first time a session opens there. The main checkout (git-dir == common-dir) is never touched, and
+// neither is a worktree that already carries a `--worktree` identity. Every failure is one logged
+// line and otherwise ignored: this step can never change the verdict or the exit code.
+
+export const WORKTREE_IDENTITY = Object.freeze({ name: "claude-code", email: "claude-code@desk.local" });
+
+/** Like `git` above, but the caller learns WHETHER it ran - a set has no output to read success from. */
+const gitResult = (root, args) => {
+  try {
+    const out = execFileSync("git", ["-C", root, ...args], {
+      encoding: "utf8",
+      timeout: 5_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { ok: true, out: String(out).trim(), status: 0 };
+  } catch (err) {
+    const detail = String(err?.stderr || err?.message || err).trim().split(/\r?\n/)[0];
+    return { ok: false, out: detail, status: typeof err?.status === "number" ? err.status : null };
+  }
+};
+
+/**
+ * @returns {{action: "set"|"kept"|"main"|"skipped"|"failed", line: string|null, detail?: string}}
+ *   `line` is the one advisory line to print: set on "set" and "failed", null otherwise.
+ */
+export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKTREE_IDENTITY } = {}) {
+  if (!root) return { action: "skipped", line: null, detail: "no root" };
+  const gitDir = run(root, ["rev-parse", "--git-dir"]);
+  const commonDir = run(root, ["rev-parse", "--git-common-dir"]);
+  if (!gitDir.ok || !commonDir.ok) {
+    return { action: "skipped", line: null, detail: gitDir.out || commonDir.out || "not a git checkout" };
+  }
+  // The main checkout answers ".git" to both (relative to the root); a linked worktree's git-dir is
+  // an absolute path under the host's .git/worktrees/. Resolve both against the root before comparing.
+  if (samePath(resolve(root, gitDir.out), resolve(root, commonDir.out))) return { action: "main", line: null };
+
+  const existing = run(root, ["config", "--worktree", "user.name"]);
+  if (existing.ok && existing.out) return { action: "kept", line: null, detail: existing.out };
+  // Exit 1 is "unset", the case this step exists for. Anything else (no worktreeConfig extension,
+  // not a repository, git missing) is a failure to log, not a reason to write.
+  if (!existing.ok && existing.status !== 1) {
+    return { action: "failed", line: `compy-entry: worktree identity not set - ${existing.out}`, detail: existing.out };
+  }
+  const setName = run(root, ["config", "--worktree", "user.name", identity.name]);
+  const setEmail = setName.ok ? run(root, ["config", "--worktree", "user.email", identity.email]) : setName;
+  if (!setName.ok || !setEmail.ok) {
+    const failed = setName.ok ? setEmail : setName;
+    return { action: "failed", line: `compy-entry: worktree identity not set - ${failed.out}`, detail: failed.out };
+  }
+  return { action: "set", line: `compy-entry: worktree identity set to ${identity.name}` };
 }
 
 // ── the assertion ────────────────────────────────────────────────────────────────────────────────
@@ -893,11 +959,23 @@ export async function main() {
     return verdict.exit;
   }
 
+  // Executor identity (docs/WORK_CONTROL.md) - only once the verdict lets the session proceed: a STOP
+  // says "do not write anything", and this writes. Isolated: a failure is one stderr line, and the
+  // exit code and the stdout shape below are not its to change.
+  let identity;
+  try {
+    identity = ensureWorktreeIdentity(result?.root ?? null);
+  } catch (err) {
+    identity = { action: "failed", line: `compy-entry: worktree identity not set - ${err?.message ?? err}` };
+  }
+  if (identity.action === "failed") console.error(identity.line);
+  const message = identity.action === "set" ? `${verdict.message}\n${identity.line}` : verdict.message;
+
   const payload = sessionStartOutput(result, { source: hookInput?.source ?? null });
   // Plain text when there is no brief: stdout alone is still added to the session, and a folder with
   // no launch of its own must not be handed someone else's instructions.
-  if (payload) console.log(JSON.stringify({ systemMessage: verdict.message, hookSpecificOutput: payload }));
-  else console.log(verdict.message);
+  if (payload) console.log(JSON.stringify({ systemMessage: message, hookSpecificOutput: payload }));
+  else console.log(message);
 
   return 0;
 }

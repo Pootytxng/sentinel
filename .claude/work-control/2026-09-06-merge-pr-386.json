@@ -1,0 +1,71 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Lease holder and sole mutation author of the proof delta (commit 47f325f9 is authored claude-code). The transition itself was executed by Cowork HQ (cowork-hq, canonical executor cowork) as the independent reviewer and lander, the same shape as the #380 landing; HQ authored no mutation in the proof delta.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/384#issuecomment-5555968420",
+  "overlapExclusive": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Executed from C:/Users/Kuya/code/sentinel-hq-desk-fix detached at exact head 47f325f9b3bb04d312fe678290c8e23180909756, git status --short empty. Live origin head of claude/post-constitution-reconciliation-d5df83 and the PR head both 47f325f9; origin/main 901f090c; PR #386 OPEN, not draft, MERGEABLE/CLEAN; one commit past main touching exactly the four paths of the #384 claim. Native review 5124829236 bound to this exact head, APPROVE by cowork-hq, posted 2026-09-06T09:10:28Z; no PR commit or ref event after it. Author worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83 clean at 47f325f9 with worktree-scoped core.hooksPath=.githooks. Win32_Process sweep: no node/cargo/vitest/npm/codex/claude process with sentinel in its command line other than the sweep itself. Disjoint claims: #384's scope excludes docs/RELEASE_STATE.md (#224/#225 lane); no other open claim overlaps the four paths.",
+  "transition": "merge-pr",
+  "currentHead": "47f325f9b3bb04d312fe678290c8e23180909756",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83/logs/verify-local-2026-09-06T01-11-24Z.log",
+      "summary": "428 frontend files passed; 6482 tests passed / 4 skipped (6486); same result in verify-local-2026-09-06T01-07-05Z.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83/logs/verify-local-2026-09-06T01-11-24Z.log",
+      "summary": "TypeScript and Vite production build PASS"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83/logs/verify-local-2026-09-06T01-11-24Z.log",
+      "summary": "1254 passed; 0 failed; 24 ignored"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83/logs/verify-local-2026-09-06T01-11-24Z.log",
+      "summary": "clippy clean under -D warnings"
+    }
+  ],
+  "gateEvidenceNote": "Author's protected-push verification, not rerun in full by the transition executor. Head binding: commit 47f325f9 is timestamped 2026-09-06T01:07:05Z, the same second the by-hand log verify-local-2026-09-06T01-07-05Z.log starts; the pre-push hook run at 01:11:24Z precedes the push and PR creation (01:13:52Z) in the same worktree; no HEAD movement since. The independent reviewer re-ran 7 guard files at this exact head (work-control-gate 55, receipt-preservation, doc-budget-guard, product-constitution-guard 77, doc-truth, hookspath-fleet-guard, claude-md-laws-guard: 230/230), scripts/doc-budget.ps1 ALL PASS, and branch-disposition-audit OK.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "cowork-hq",
+    "status": "passed",
+    "head": "47f325f9b3bb04d312fe678290c8e23180909756",
+    "verdict": "APPROVE",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/386#pullrequestreview-5124829236",
+    "reviewerNote": "Fresh nonauthor Cowork HQ review (cowork-hq, canonical cowork) from a separate context; the delta's only mutation author is claude-code. GitHub refuses the APPROVED event from the PR-author account, so the COMMENTED-state native review carries the APPROVE verdict anchored to this exact full head. Each of the author's four review asks was measured: receipt copy equal after CRLF normalization and sameReceipt() normalizes CRLF; doc-budget cap re-pointed at 1024 unchanged (971/1024); P0 items bound to #371/#380/#383 and existing guard files; RELEASE_STATE exclusion consistent with the #225 lane and 3ab9b010's own anchors already stale against main."
+  },
+  "pr": 386,
+  "issue": 384,
+  "kind": "lane",
+  "branch": "claude/post-constitution-reconciliation-d5df83"
+}

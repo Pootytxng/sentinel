@@ -1,5 +1,10 @@
 # Decision: Capability Exception Gate + outbound case intelligence
 
+> **POLICY AND PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The Care-primary product framing
+> below is retired by `docs/PRODUCT_CONSTITUTION.md`. The capability, consent, rollback, injection,
+> kill-switch, and origin-control rules remain technical safety authority only where they conform to
+> current `docs/ARCHITECTURE_LOCKS.md`; this record cannot independently authorize runtime changes.
+
 - **Date:** 2026-08-09
 - **Owner:** Kuya
 - **Work Control:** [issue #91](https://github.com/Pootytxng/sentinel/issues/91)
@@ -9,6 +14,11 @@
   remote-rules gate, or the third-party game/process injection prohibition
 
 ## Decision
+
+> **Product framing superseded 2026-09-04 (#369):** the Care-primary / optimization-second hierarchy
+> in the next paragraph is retired by `docs/PRODUCT_CONSTITUTION.md` (two equal flagship journeys
+> through one machine model). The Capability Exception Gate decision itself, and every tier,
+> kill-switch and origin rule in this record, remain in force.
 
 Compy's primary identity is **Compy Care: the PC doctor users open after any crash, freeze, slowdown,
 or unexplained hiccup.** Measured optimization remains its second specialty. Care owns the continuing
@@ -89,9 +99,15 @@ knowledge. Removing all boundaries would create a silent uploader and kernel-ris
 the old blanket prohibition would block capabilities before their benefit could be judged. The
 exception gate makes both mistakes reviewable.
 
-## Canonical detail
+## Canonical technical detail
+
+The two pre-rebirth spec/plan records below have superseded product framing; their conforming
+capability, consent, rollback, injection, and origin-control details remain bounded technical
+provenance under current `docs/ARCHITECTURE_LOCKS.md`.
 
 - `docs/ARCHITECTURE_LOCKS.md` §1.8
-- `docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md`
-- `docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md`
+- `docs/superpowers/specs/2026-08-09-compy-care-capability-exception-gate.md` — historical product
+  framing; bounded technical safety provenance only
+- `docs/superpowers/plans/2026-08-09-capability-exception-policy-rails.md` — historical execution
+  direction; bounded technical safety provenance only
 - `docs/superpowers/plans/2026-08-09-outbound-case-intelligence-tier1.md`

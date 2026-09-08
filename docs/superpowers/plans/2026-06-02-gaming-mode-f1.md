@@ -1,5 +1,11 @@
 # F1 Gaming Mode v1 — Implementation Plan
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical implementation record, not
+> current product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Conforming technical safety and rollback
+> provenance remains useful under [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a session-scoped "Gaming Mode" that applies a small bundle of already-audited settings on start and restores the exact prior state on stop (crash-safe), shipped **dark** behind a default-off `GAMING_MODE_ENABLED` flag.
@@ -666,7 +672,7 @@ export function summarizeChanges(changes: SessionChange[]) {
 - [ ] **Step 2:** Re-run Task 12 verification on the rebased branch.
 - [ ] **Step 3:** ff-merge `f1-gaming-mode` → `main`; push `origin main`.
 - [ ] **Step 4:** Update `CLAUDE.md` CURRENT STATE + `docs/PARALLEL_WORKTREE_OPS.md`: "F1 Gaming Mode built + merged DARK (`GAMING_MODE_ENABLED=false`); awaiting owner mutation QA (spec §7) + sign-off to flip the gate." Commit + push.
-- [ ] **Step 5:** Remove the `f1-gaming-mode` worktree + delete the merged branch.
+- [ ] **Step 5:** Remove the dedicated checkout + delete the integrated `f1-gaming-mode` branch.
 
 ---
 

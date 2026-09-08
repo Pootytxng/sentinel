@@ -1,5 +1,11 @@
 # 2026-07-02 — External audit #2 (council review)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This point-in-time council verdict contains
+> product and telemetry rulings that predate the Constitution and later privacy decisions. It is
+> historical evidence only. Current product direction comes from `docs/PRODUCT_CONSTITUTION.md`;
+> current runtime and capability truth remain in `docs/RELEASE_STATE.md` and
+> `docs/ARCHITECTURE_LOCKS.md`.
+>
 Owner pasted a second external audit (other-model critique of product scope, docs, and CC token
 usage). This doc persists the fact-check + council verdict. Full council ran in Cowork chat same day.
 

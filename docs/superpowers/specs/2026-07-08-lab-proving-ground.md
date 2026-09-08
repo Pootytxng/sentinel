@@ -1,5 +1,12 @@
 # The Lab as a Proving Ground — architecture, linear pathing + the telemetry gallery
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** All product-direction, priority, approval, and work-
+> authorization claims in this historical spec are retired, including portions previously described
+> below as still standing. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Conforming mutation and evidence constraints
+> remain safety provenance under [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 > **STATUS (2026-07-09): UI/layout direction is SUPERSEDED.** §2 ("one linear spine"), §3 (telemetry
 > gallery), and §8 (blended-spine build) are REJECTED by the owner — see
 > `docs/superpowers/specs/2026-07-09-lab-redesign-COURSE-CORRECTION.md` and the APPROVED replacement

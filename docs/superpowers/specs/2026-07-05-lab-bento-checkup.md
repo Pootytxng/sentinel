@@ -1,5 +1,10 @@
 # Lab bento checkup — the Lab as a checkup room (owner directive 2026-07-05)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This pre-rebirth Lab product/UI directive is
+> historical and cannot independently authorize redesign or implementation. Current experience and
+> journey law come from `docs/PRODUCT_CONSTITUTION.md`; useful implementation observations below are
+> bounded provenance only.
+>
 **Owner ask (verbatim intent):** rework the Lab's face into a bento-style menu (React Bits
 MagicBento, already vendored) ordered **chronologically left→right in the proper execution
 order** for benchmarking/assessment; annotate everything into a **summary the user can easily

@@ -1,5 +1,11 @@
 # Consumer-Panel Overhaul — Master Build Plan (CC/Fable execution)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical implementation record, not
+> current product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Conforming evidence, privacy, and safety
+> provenance remains useful under [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 > **🔄 RESUME STATE (CC session refresh, 2026-07-11 ~20:55):** ALL build work for this train is DONE
 > in the working tree on `main`, **UNCOMMITTED** (deliberately — a self-reviewer pass was in flight
 > at session end; its verdict never landed, so re-dispatch it). Verified: tsc 0 · full vitest

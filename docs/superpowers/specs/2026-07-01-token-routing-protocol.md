@@ -1,5 +1,10 @@
 # Token-routing protocol — Cowork × CC on Fable 5 (2026-07-01)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This expired tool-routing record is historical only;
+> it is not current product authority, priority, model policy, or work authorization. Current product
+> direction is [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), current execution law
+> is [`docs/WORK_CONTROL.md`](../../WORK_CONTROL.md), and current local agent instructions outrank it.
+
 > Owner directive: use Cowork (2× promo) in conjunction with CC to burn fewer Fable tokens.
 > Source blend: Nate Herk, "How Anthropic Engineers Actually Prompt Fable 5" (YouTube,
 > 2026-07-01, owner-supplied) + Anthropic promo terms (web-verified 2026-07-01) + our existing

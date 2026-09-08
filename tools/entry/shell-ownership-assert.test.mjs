@@ -12,7 +12,8 @@
 // the resolver is injected and the fixtures are strings. Nothing in this file touches a live
 // checkout, the real `~/.claude`, the Work Control board, or the verification store.
 
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
@@ -31,6 +32,9 @@ import {
   segments,
   stripHeredocs,
 } from "../../.claude/hooks/shell-ownership-assert.mjs";
+// Namespace import as well: `expandKnownVars` (#373) is owner-hands until he applies the patch, and a
+// named import of an export that is not there yet would refuse to load the whole file.
+import * as hook from "../../.claude/hooks/shell-ownership-assert.mjs";
 
 // `/home/...` so the fixture paths match the embedded-path scan on BOTH platforms: on Windows
 // `resolve` gives `C:\home\…` (drive-letter form) and on Linux the literal `/home/…` form.
@@ -80,14 +84,88 @@ const ask = (command, over = {}) =>
   });
 
 describe("the proof matrix — the same target gets the same answer through the shell", () => {
-  it("denies a write inside its own folder when the session is not verified", () => {
+  it("lets a write inside its own UNCLAIMED folder proceed, with the cure as context (#368)", () => {
+    // Spec 2026-08-21 §8/§9: the owner ruled "never again" to writes refused in an unclaimed
+    // desktop-app session. Not `ask` — a hook ask is a real prompt in every mode, and this fires on
+    // every write — so it is allow plus one line naming what the push gate will require.
     const d = ask(`printf 'x' > ${inRoot("src/App.css")}`, { verify: UNCLAIMED });
-    expect(d.permission).toBe("deny");
+    expect(d.permission).toBe("allow");
     expect(d.zone).toBe(ZONES.OWN);
     expect(d.code).toBe("FOLDER_UNCLAIMED");
-    // The cure has to be in the refusal, or a blocked session has nowhere to go.
-    expect(d.reason).toContain("tools/entry/cli.mjs adopt");
-    expect(d.reason).toContain("the shell is not a way around it");
+    expect(d.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(d.additionalContext).toContain("Ownership claim");
+    expect(d.additionalContext).toContain("push gate");
+    expect(d.additionalContext).not.toContain("\n");
+  });
+
+  it("proceeds the same way when the board could not be read - the lapsed code (#368)", () => {
+    const UNREACHABLE = () => ({ ok: false, code: "BOARD_UNREACHABLE", reason: "board read failed", issue: 278 });
+    const d = ask(`printf 'x' > ${inRoot("src/App.css")}`, { verify: UNREACHABLE });
+    expect(d.permission).toBe("allow");
+    expect(d.code).toBe("BOARD_UNREACHABLE");
+    expect(d.additionalContext).toContain("BOARD_UNREACHABLE");
+    // The issue number a previous read left behind is named, so the cure is concrete.
+    expect(d.additionalContext).toContain("#278");
+  });
+
+  it("still DENIES its own folder when a live record contradicts the session (#368 keeps deny)", () => {
+    for (const code of ["WRITER_LIVE", "BRANCH_NOT_THE_BOARDS", "REPO_MISMATCH"]) {
+      const verify = () => ({ ok: false, code, reason: `fixture: ${code} disagrees` });
+      const d = ask(`printf 'x' > ${inRoot("src/App.css")}`, { verify });
+      expect(d.permission, code).toBe("deny");
+      expect(d.code, code).toBe(code);
+      expect(d.reason, code).toContain(`fixture: ${code} disagrees`);
+      expect(d.reason, code).toContain("the shell is not a way around it");
+      expect(d.additionalContext, code).toBeUndefined();
+    }
+  });
+
+  it("still DENIES a sibling checkout from an unclaimed session - the advisory code excuses nothing there", () => {
+    const d = ask(`rm -rf ${inSib("src")}`, { verify: UNCLAIMED });
+    expect(d.permission).toBe("deny");
+    expect(d.zone).toBe(ZONES.SIBLING);
+  });
+
+  // FOUND BY INDEPENDENT REVIEW (2026-09-04). The advisory branch RETURNED before the global,
+  // unknown-zone and unresolved-operand checks, so a compound command that touched its own folder
+  // AND something stricter rode the unclaimed folder past them: `cp ./x.json ~/.claude/settings.json`
+  // was allow from an unclaimed session and deny from a verified one. The advisory is carried, not
+  // decided on; every stricter check runs exactly as it would for a verified session.
+  it("a compound command that also reaches the owner's global config is DENIED from an unclaimed session, as from a verified one", () => {
+    const cmd = `cp ${inRoot("x.json")} ${fwd(join(HOME_CLAUDE, "settings.json"))}`;
+    const verified = ask(cmd);
+    expect(verified.permission).toBe("deny");
+    expect(verified.zone).toBe(ZONES.GLOBAL);
+    const unclaimed = ask(cmd, { verify: UNCLAIMED });
+    expect(unclaimed.permission).toBe("deny");
+    expect(unclaimed.zone).toBe(ZONES.GLOBAL);
+    expect(unclaimed.reason).toBe(verified.reason);
+    // The advisory line rides beside the refusal; it never replaces it.
+    expect(unclaimed.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(verified.additionalContext).toBeUndefined();
+  });
+
+  it("a compound command that also names an unresolvable operand ASKS from an unclaimed session, as from a verified one", () => {
+    const cmd = `printf x > ${inRoot("own.txt")}; rm -rf $TARGET`;
+    const verified = ask(cmd);
+    expect(verified.permission).toBe("ask");
+    const unclaimed = ask(cmd, { verify: UNCLAIMED });
+    expect(unclaimed.permission).toBe("ask");
+    expect(unclaimed.zone).toBe(ZONES.UNKNOWN);
+    expect(unclaimed.reason).toBe(verified.reason);
+    expect(unclaimed.additionalContext).toContain("FOLDER_UNCLAIMED");
+    // The same for a target the checker cannot place, and for an opaque verb standing in a sibling.
+    expect(ask(`printf x > ${inRoot("own.txt")}; cd $D && rm x.txt`, { verify: UNCLAIMED }).permission).toBe("ask");
+    const opaque = `printf x > ${inRoot("own.txt")}; cd ${fwd(SIB)} && node build.mjs`;
+    expect(ask(opaque).permission).toBe("ask");
+    expect(ask(opaque, { verify: UNCLAIMED }).permission).toBe("ask");
+  });
+
+  it("the advisory is the whole answer ONLY when nothing stricter objects", () => {
+    const d = ask(`printf x > ${inRoot("own.txt")}; mkdir -p ${inRoot("notes")}`, { verify: UNCLAIMED });
+    expect(d.permission).toBe("allow");
+    expect(d.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(d.reason).toBeUndefined();
   });
 
   it("denies a write into a SIBLING checkout even when the session IS verified", () => {
@@ -133,10 +211,11 @@ describe("the proof matrix — the same target gets the same answer through the 
   it("refuses a SHELL write into the owner's global configuration outright", () => {
     // `project-write-assert` asks for the same zone and that is not a contradiction: the memory
     // store under `~/.claude/projects/**` is written with `Write` on purpose, so the tool path has a
-    // legitimate case and routes. A shell has none. It matters which one this is, because `ask` is a
-    // ROUTING decision and this machine runs `permissions.defaultMode: "auto"`, where a routed
-    // decision degrades to allow — leaving the folder that holds the rules about what agents may do
-    // exactly as writable as before the guard existed.
+    // legitimate case and routes. A shell has none. (A hook `ask` is a real prompt in every mode,
+    // `defaultMode: "auto"` included — it does not degrade to allow, as this comment once claimed —
+    // so the distinction is not about safety but about whether there is anything to put in front of
+    // the owner. For a shell write into the folder that holds the rules about what agents may do,
+    // there is not, so positive knowledge of the zone is enough to refuse.)
     const d = ask(`cp ${fwd(join(SCRATCH, "settings.json"))} ${fwd(join(HOME_CLAUDE, "settings.json"))}`);
     expect(d.permission).toBe("deny");
     expect(d.zone).toBe(ZONES.GLOBAL);
@@ -359,14 +438,23 @@ describe("a target the verb hides, and a read the verb does not", () => {
     // `git tag -l 'v*'` and `git show-ref --heads` were refused as mutations in an unverified
     // session. Requiring every word after the verb to be a flag made the listing PATTERN look like
     // a tag being created; `show-ref` was simply missing from the read-only set.
-    expect(ask("git tag -l 'v*'", { verify: UNCLAIMED }).permission).toBe("allow");
-    expect(ask("git branch --list 'lane/*'", { verify: UNCLAIMED }).permission).toBe("allow");
-    expect(ask("git show-ref --heads", { verify: UNCLAIMED }).permission).toBe("allow");
-    expect(ask("git branch", { verify: UNCLAIMED }).permission).toBe("allow");
+    for (const cmd of ["git tag -l 'v*'", "git branch --list 'lane/*'", "git show-ref --heads", "git branch"]) {
+      const d = ask(cmd, { verify: UNCLAIMED });
+      expect(d.permission, cmd).toBe("allow");
+      // A listing never reaches verification, so it carries no advisory either.
+      expect(d.additionalContext, cmd).toBeUndefined();
+    }
 
     // Without a listing flag the positional is a name being CREATED, and `-d` deletes: still writes.
-    expect(ask("git tag v1.0", { verify: UNCLAIMED }).permission).not.toBe("allow");
-    expect(ask("git branch -d old", { verify: UNCLAIMED }).permission).not.toBe("allow");
+    // A write in an unclaimed folder proceeds with the advisory (#368), so "still a write" is
+    // proved by the advisory being there - and by the same command being DENIED when a live record
+    // contradicts the session.
+    for (const cmd of ["git tag v1.0", "git branch -d old"]) {
+      const d = ask(cmd, { verify: UNCLAIMED });
+      expect(d.code, cmd).toBe("FOLDER_UNCLAIMED");
+      expect(d.additionalContext, cmd).toContain("FOLDER_UNCLAIMED");
+      expect(ask(cmd, { verify: MISMATCH }).permission, cmd).toBe("deny");
+    }
   });
 });
 
@@ -458,10 +546,39 @@ describe("what it must never do: persist, log, or leak the session", () => {
     expect(payload.hookSpecificOutput.permissionDecision).toBe("deny");
   });
 
-  it("says nothing at all on an allow", () => {
+  it("says nothing at all on a plain allow", () => {
     let wrote = "";
     expect(emit({ permission: "allow" }, { write: (s) => (wrote += s) })).toBe(0);
     expect(wrote).toBe("");
+  });
+
+  it("puts an advisory on the wire as additionalContext ALONE - no permissionDecision - and still leaks nothing (#368)", () => {
+    // hooks-guide: exit 0 with hookSpecificOutput carrying only additionalContext is "no decision;
+    // the normal permission flow still applies", and the context reaches the model. Writing
+    // `permissionDecision: "allow"` instead would skip the interactive prompt and the auto-mode
+    // classifier for the call - broader than an advisory means (review 2026-09-04).
+    let wrote = "";
+    const own = { ...hookInput, tool_input: { command: `printf 'x' > ${inRoot("x.txt")}` } };
+    const decision = run({ hookInput: own, env: { CLAUDE_PROJECT_DIR: ROOT }, verify: UNCLAIMED, zone: fakeZone, home: HOME });
+    expect(emit(decision, { write: (s) => (wrote += s) })).toBe(0);
+    const payload = JSON.parse(wrote);
+    expect(Object.keys(payload)).toEqual(["hookSpecificOutput"]);
+    expect(Object.keys(payload.hookSpecificOutput).sort()).toEqual(["additionalContext", "hookEventName"]);
+    expect("permissionDecision" in payload.hookSpecificOutput).toBe(false);
+    expect(payload.hookSpecificOutput.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(wrote).not.toContain("sess-secret-01");
+    expect(wrote).not.toContain("transcript");
+  });
+
+  it("keeps a deny that carries the advisory line as a deny on the wire, with the line beside it", () => {
+    let wrote = "";
+    const compound = { ...hookInput, tool_input: { command: `cp ${inRoot("x.json")} ${fwd(join(HOME_CLAUDE, "settings.json"))}` } };
+    const decision = run({ hookInput: compound, env: { CLAUDE_PROJECT_DIR: ROOT }, verify: UNCLAIMED, zone: fakeZone, home: HOME });
+    expect(emit(decision, { write: (s) => (wrote += s) })).toBe(0);
+    const out = JSON.parse(wrote).hookSpecificOutput;
+    expect(out.permissionDecision).toBe("deny");
+    expect(out.permissionDecisionReason).toContain("global configuration");
+    expect(out.additionalContext).toContain("FOLDER_UNCLAIMED");
   });
 });
 
@@ -944,5 +1061,119 @@ describe("the wrapper table is an allowlist, and the spec says which ones are st
     for (const name of PREFIX_VERBS.keys()) {
       expect(OPEN, `${name} is carried by the table now, so §6 must not mark it open`).not.toContain(name);
     }
+  });
+});
+
+describe("operands whose value the text or the environment already states are literals (#373)", () => {
+  // Measured 2026-09-04: 33 of the 40 approval prompts in one day were `"$S/…"`, `"$TEMP/…"` and
+  // `"$LOCALAPPDATA/…"` operands — values stated on the same line or in the process environment,
+  // refused as "not knowable" because the lexer reads `$` and stops. The hook change shipped as a
+  // patch beside its spec (a session may not edit a hook that gates its own authority without the
+  // owner's say), and the assertions below stayed visibly SKIPPED, never vacuously green (memory:
+  // green-that-is-not-evidence), until it was applied. APPLIED 2026-09-04 by Cowork HQ under the
+  // owner's explicit in-session authorization; the gate below now demands the patch's absence.
+  const REPO = join(import.meta.dirname, "../..");
+  const PATCH = join(REPO, "docs/superpowers/specs/2026-09-04-shell-guard-knowable-vars-373.patch");
+  const applied = typeof hook.expandKnownVars === "function";
+
+  it("the owner-hand patch still applies to the hook as it is — and is gone once applied", () => {
+    if (applied) {
+      expect(existsSync(PATCH), "the patch is spent: delete it in the same commit that applies it").toBe(false);
+      return;
+    }
+    expect(existsSync(PATCH), "the patch the spec points at must exist").toBe(true);
+    expect(() => execFileSync("git", ["apply", "--check", PATCH], { cwd: REPO, stdio: "pipe" })).not.toThrow();
+  });
+
+  describe.skipIf(!applied)("once applied", () => {
+    const scratch = fwd(SCRATCH);
+
+    it("a same-command assignment makes a redirect target knowable", () => {
+      expect(ask(`S="${scratch}"; cat > "$S/a.md" <<'EOF'\nhi\nEOF`).permission).toBe("allow");
+      const { ops, unresolved } = analyze(`S="${scratch}"; cat > "$S/a.md"`, { cwd: ROOT, env: {} });
+      expect(unresolved).toEqual([]);
+      expect(toComparable(ops[0].target)).toBe(toComparable(join(SCRATCH, "a.md")));
+    });
+
+    it("a well-known environment directory is knowable", () => {
+      const d = ask(`mkdir -p "$TEMP/p" && cp a.txt "\${TEMP}/p/b.txt"`, { env: { TEMP: scratch } });
+      expect(d.permission).toBe("allow");
+      expect(d.why).toBe("nothing protected is reached");
+    });
+
+    it("a name the text does not bind still asks — the one case that matters", () => {
+      const d = ask("rm -rf $TARGET");
+      expect(d.permission).toBe("ask");
+      expect(d.reason).toContain("not knowable from the text");
+    });
+
+// FOUND BY INDEPENDENT REVIEW, so it is guarded rather than written down. The first version of
+    // this pass treated `(` as an ordinary statement break, so a subshell taught its parent a name:
+    // `(S=/scratch); rm $S/x` was judged as `rm /scratch/x` when the shell really runs `rm /x`.
+    // Reasoning about a path the command never touches is a FALSE ALLOW, and `X=$(S=…; …)` makes it
+    // easy to hit by accident — so a binding is learned only in the outermost scope.
+    it("a subshell does not teach its parent a name", () => {
+      expect(ask(`(S="${fwd(SIB)}"); rm "$S/package.json"`).permission).toBe("ask");
+      expect(ask(`X=$(S="${fwd(SIB)}"; echo hi); rm "$S/package.json"`).permission).toBe("ask");
+      expect(ask(`S=\`D="${fwd(SIB)}"; echo x\`; rm "$D/package.json"`).permission).toBe("ask");
+      // A value still flows INTO a subshell — inheritance runs one way.
+      const inner = analyze(`S="${scratch}"; (cd /tmp; printf x > "$S/a")`, { cwd: ROOT, env: {} });
+      expect(toComparable(inner.ops.at(-1).target)).toBe(toComparable(join(SCRATCH, "a")));
+    });
+
+    // Same review: the expanded text is RE-LEXED, so a value carrying shell punctuation could invent
+    // a statement that never runs. A value is spliced only when it re-lexes as one plain word.
+    it("an expansion cannot fabricate shell structure", () => {
+      const { ops } = analyze('S="/a;rm -rf /b"; echo $S', { cwd: ROOT, env: {} });
+      expect(ops.some((o) => String(o.target).includes("/b"))).toBe(false);
+      expect(ask('S="/a b"; rm $S/x').permission).toBe("ask");
+      expect(hook.expandKnownVars("S='<<EOF'; echo $S", { env: {} })).toBe("S='<<EOF'; echo $S");
+    });
+
+    it("the environment teaches directories only, never an arbitrary name", () => {
+      expect(ask("rm -rf $TARGET", { env: { TARGET: scratch, PATH: scratch } }).permission).toBe("ask");
+    });
+
+    it("a bound name pointing into a sibling checkout is denied, exactly as the literal is", () => {
+      const d = ask(`WT="${fwd(SIB)}"; rm "$WT/package.json"`);
+      expect(d.permission).toBe("deny");
+      expect(d.zone).toBe(ZONES.SIBLING);
+    });
+
+    it("a value the text does not fully state does not teach a name", () => {
+      expect(ask('S=$(pwd); rm "$S/x"').permission).toBe("ask");
+      expect(ask('S=$OTHER/sub; rm "$S/x"').permission).toBe("ask");
+    });
+
+    // FOUND BY INDEPENDENT REVIEW (2026-09-04, second round). `S=/x rm -rf $S/y` has no `;` after
+    // the assignment: it is a PREFIX assignment, scoped to rm's environment, and POSIX expands `$S`
+    // in that same command with S's PRIOR value. Learning it judged a path the command never
+    // touches. Only a command that is nothing but assignments teaches a name.
+    it("a prefix assignment teaches nothing - the judged path must be the touched path", () => {
+      const d = ask(`S=${scratch} rm -rf $S/y`);
+      expect(d.permission).toBe("ask");
+      expect(d.reason).toContain("not knowable from the text");
+      expect(ask(`S=${scratch} T=${scratch} rm -rf $T/y`).permission).toBe("ask");
+      // The prior value is what `$S` expands to, and it stands after the prefixed command.
+      const { ops } = analyze(`S="${scratch}"; S="${fwd(SIB)}" printf x > "$S/a"; printf y > "$S/b"`, { cwd: ROOT, env: {} });
+      expect(ops.map((o) => toComparable(o.target))).toEqual([toComparable(join(SCRATCH, "a")), toComparable(join(SCRATCH, "b"))]);
+      // ...while a command that is NOTHING BUT assignments still teaches every one of them.
+      const two = analyze(`S="${scratch}" T="${scratch}/t"; printf x > "$T/a"`, { cwd: ROOT, env: {} });
+      expect(toComparable(two.ops[0].target)).toBe(toComparable(join(SCRATCH, "t", "a")));
+      expect(ask(`S="${scratch}" && printf x > "$S/a"`).permission).toBe("allow");
+    });
+
+    it("single quotes are honoured — '$S' is the text, not the value", () => {
+      const { ops } = analyze(`S="${scratch}"; printf x > '$S/a'`, { cwd: ROOT, env: {} });
+      expect(ops[0].target.endsWith("$S/a")).toBe(true);
+    });
+
+    it("a heredoc body cannot teach a name", () => {
+      expect(ask(`cat > note.txt <<'EOF'\nS=${fwd(SIB)}\nEOF\nrm "$S/package.json"`).permission).toBe("ask");
+    });
+
+    it("leaves PowerShell alone", () => {
+      expect(hook.expandKnownVars("$env:TEMP", { env: { TEMP: scratch }, dialect: "powershell" })).toBe("$env:TEMP");
+    });
   });
 });

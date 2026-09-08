@@ -1,5 +1,10 @@
 # Monetization model + free/Pro split — COUNCIL PROPOSAL (ratify-ready, 2026-06-15)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This Receipts-era proposal and its former
+> owner-directed analysis are historical evidence, not pricing or product authority. Current product
+> direction is `docs/PRODUCT_CONSTITUTION.md`; current monetization hypotheses are in
+> `docs/product/MONETIZATION.md`, and all money/external actions remain owner-gated.
+>
 > Owner directive: "DO … the monetization model + free/Pro split (I build the rest of licensing)."
 > The council was asked to PROPOSE a concrete, ratify-ready model + split under the Receipts Doctrine +
 > the zero-budget law. **This is a proposal for the owner to ratify (price + the exact split are owner

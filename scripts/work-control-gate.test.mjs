@@ -149,6 +149,100 @@ describe("proof-gated GitHub transitions", () => {
     expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
   });
 
+  // bug->guard #382: reviewer spelling, aliases, or prose cannot manufacture independence.
+  it.each(
+    ["claude-code", "codex", "chatgpt-hq", "cowork"].flatMap((author) => [
+      [author, author],
+      [author.toUpperCase(), author],
+      [` ${author} `, author],
+    ]),
+  )("blocks reviewer spelling %j when %s authored the mutation", (reviewer, author) => {
+    const result = evaluateWorkControl(record({
+      actor: author,
+      mutationAuthors: [author],
+      independentReview: { practical: true, reviewer, writer: author, status: "passed", head: HEAD },
+    }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
+  });
+
+  it("treats cowork-hq as the cowork executor identity, not an independent alias", () => {
+    const result = evaluateWorkControl(record({
+      actor: "cowork",
+      mutationAuthors: ["codex", "cowork"],
+      independentReview: {
+        practical: true,
+        reviewer: " COWORK-HQ ",
+        writer: "cowork",
+        status: "passed",
+        head: HEAD,
+      },
+    }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
+  });
+
+  it.each(["mystery-reviewer", "codex (fresh read-only context)"])(
+    "rejects undeclared reviewer identity %j",
+    (reviewer) => {
+      const result = evaluateWorkControl(record({
+        independentReview: { practical: true, reviewer, writer: "codex", status: "passed", head: HEAD },
+      }));
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/reviewer identity/i);
+    },
+  );
+
+  it("accepts a declared reviewer-only identity and retains separate context evidence", () => {
+    const result = evaluateWorkControl(record({
+      independentReview: {
+        practical: true,
+        reviewer: "rust-tauri-reviewer",
+        reviewerNote: "fresh read-only context that authored no mutation",
+        evidence: "https://github.com/Pootytxng/sentinel/pull/1#pullrequestreview-1",
+        writer: "codex",
+        status: "passed",
+        head: HEAD,
+      },
+    }));
+    expect(result.decision).toBe("PASS");
+  });
+
+  // bug->guard #379: a supplied author list must never erase the current lease holder.
+  it.each([undefined, "cowork"])("blocks omitted-actor self-review with writer %s", (writer) => {
+    const result = evaluateWorkControl(record({
+      actor: "cowork",
+      mutationAuthors: ["codex"],
+      independentReview: { practical: true, reviewer: "cowork", writer, status: "passed", head: HEAD },
+    }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
+  });
+
+  it("rejects an explicit author list that omits the receipt actor even with an independent reviewer", () => {
+    const result = evaluateWorkControl(record({
+      actor: "cowork", mutationAuthors: ["codex"],
+      independentReview: { practical: true, reviewer: "claude-code", status: "passed", head: HEAD },
+    }));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/mutationAuthors.*receipt actor/i);
+  });
+
+  it.each(["codex", null, {}])("rejects malformed declared mutationAuthors %j", (mutationAuthors) => {
+    expect(evaluateWorkControl(record({ mutationAuthors })).decision).toBe("BLOCKED");
+  });
+
+  it("retains every declared earlier writer and permits a separate final reviewer", () => {
+    const receipt = record({
+      actor: "cowork", mutationAuthors: [" codex ", "cowork", "codex"],
+      independentReview: { practical: true, reviewer: "claude-code", status: "passed", head: HEAD },
+    });
+    expect(evaluateWorkControl(receipt).decision).toBe("PASS");
+    expect(evaluateWorkControl({ ...receipt, independentReview: {
+      ...receipt.independentReview, reviewer: "codex",
+    }}).decision).toBe("BLOCKED");
+  });
+
   it("binds the independent review to the actor who actually wrote the change", () => {
     const result = evaluateWorkControl(
       record({
@@ -504,41 +598,51 @@ describe("work-control receipt CLI", () => {
   });
 });
 
-describe("the role and proof law stays loaded in both model lanes", () => {
+describe("the lease and proof law stays loaded in every model bootstrap", () => {
   const flat = (path) => readFileSync(path, "utf8").replace(/\s+/g, " ");
+  // Owner-ratified 2026-09-04 (#369 / PR #375): the permanent "Claude implements, Codex reviews"
+  // split is retired. Lane labels are informational; a mutation lease per overlapping scope is the
+  // only ownership. A bootstrap that restores the old split fails here and in
+  // src/dynamic-mutation-lease-guard.test.ts, so the two guards agree on one law.
+  const retired = [
+    "Claude Code is the default implementation owner",
+    "Codex is the default independent reviewer",
+  ];
   const required = {
     "docs/WORK_CONTROL.md": [
-      "Claude Code is the default implementation owner",
-      "Codex is the default independent reviewer",
-      "explicit handoff",
-      "one active implementation writer per scope",
+      "one active mutation lease per overlapping scope",
+      "A handoff transfers only mutation authority",
       "required gates cannot be substituted",
-      "environment inability is a blocker, not a pass",
+      "environment inability is **BLOCKED**, not PASS",
       "proof-dependent GitHub transition",
-      "non-writing model performs the final independent review whenever practical",
+      "must not be one of the mutation authors",
       "node scripts/work-control-gate.mjs <receipt.json>",
     ],
     "AGENTS.md": [
-      "Claude Code is the default implementation owner",
-      "Codex is the default independent reviewer",
-      "explicit handoff",
+      "one active mutation lease per overlapping scope",
+      "a handoff transfers mutation authority only",
+      "required gates cannot be substituted",
+      "environment inability is BLOCKED, not PASS",
+      "must not be one of the mutation authors",
       "scripts/work-control-gate.mjs",
     ],
     "CLAUDE.md": [
-      "Claude Code is the default implementation owner",
-      "Codex is the default independent reviewer",
-      "explicit handoff",
+      "one active mutation lease per overlapping scope",
+      "Handoffs transfer mutation authority only",
       "required gates cannot be substituted",
       "environment inability is a blocker, not a pass",
+      "a reviewer who did not author the mutation being approved",
       "scripts/work-control-gate.mjs",
     ],
   };
 
   for (const [path, markers] of Object.entries(required)) {
-    it(`${path} carries the canonical role/proof contract`, () => {
+    it(`${path} carries the canonical lease/proof contract and not the retired role split`, () => {
       const text = flat(path);
       const missing = markers.filter((marker) => !text.includes(marker));
-      expect(missing, `${path} dropped role/proof law markers`).toEqual([]);
+      expect(missing, `${path} dropped lease/proof law markers`).toEqual([]);
+      const restored = retired.filter((sentence) => text.includes(sentence));
+      expect(restored, `${path} restored the retired permanent role split`).toEqual([]);
     });
   }
 });

@@ -1,5 +1,12 @@
 # Decision — usage analytics ON, in-app feedback, and the CPU-temperature route
 
+> **POLICY AND PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The `ACTIVE` label and Tier 2
+> default-ON instruction below are historical. The owner reversed that default on 2026-08-24 in
+> #207: Tier 2 is opt-in, default OFF, and stays OFF after arming. Current safety/privacy authority
+> is `docs/ARCHITECTURE_LOCKS.md`; product direction is `docs/PRODUCT_CONSTITUTION.md`. This record
+> preserves decision provenance but cannot authorize runtime, endpoint, capability, CSP, consent,
+> distribution, or implementation changes.
+>
 **Date:** 2026-08-18 · **Decided by:** the product owner, in session · **Status:** ACTIVE
 
 > Supersedes nothing in `2026-08-09-capability-exception-gate.md` except where stated below. The

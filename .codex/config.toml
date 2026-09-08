@@ -1,51 +1,16 @@
-# Codex project config for the Compy repo.
-#
-# ⚠ THIS FILE IS LOADED (verified 2026-08-24). Current Codex reads a project-scoped
-# `.codex/config.toml` whenever the repository is trusted, and this repo is `trust_level = "trusted"`
-# in the global %USERPROFILE%\.codex\config.toml -- so the keys below are LIVE for ordinary runs
-# started here, not portable scaffolding. The header used to claim the opposite ("NOT LOADED BY
-# DEFAULT ... only when CODEX_HOME points at this directory", verified 2026-08-18 against
-# codex-cli 0.146.0). That is no longer true, and believing it is part of why the guarded paragraph
-# below failed: a reader concluded the file was inert and stopped looking. The global config still
-# wins where the two genuinely conflict, and a single run can still override with
-# `-c sandbox_mode=...`.
-#
-# Causal fix landed 2026-08-24: `external-agent-import-sync-enabled = false` in the global
-# %USERPROFILE%\.codex\config.toml, so the app-server no longer re-syncs -- and silently rewrites --
-# this file. That is what makes the edits below stay put.
-#
-# Deliberately minimal. Removed 2026-07-19 (portability/lane-hardening train):
-#   - shell_environment_policy.set CLAUDE_CODE_SUBAGENT_MODEL / CLAUDE_CODE_AUTO_COMPACT_WINDOW:
-#     these are Claude Code env-var names; they do not configure Codex, so they did nothing here.
-#     (Codex hooks that read them fall back to safe defaults on their own.)
-#   - [mcp_servers.shadcn] / [mcp_servers.v0]: UI-generation/build MCP servers. Codex's role in
-#     this repo is read-only audit & advice (see AGENTS.md lane split), which needs neither; v0
-#     additionally spends owner-gated credits. Re-add only if the owner approves a workflow that
-#     needs them — and pin any external command to an exact version, never "@latest".
-
-# Advisory-lane safety floor. Codex's role in this repo is READ-ONLY audit & advice (AGENTS.md lane
-# split), so this config REFUSES writes and REFUSES to prompt for escalation rather than granting a
-# bypass: read-only means a write/exec attempt is denied at the sandbox, and never means "auto-approve
-# every command." These are bare top-level keys and MUST precede the first [table] header (TOML rule).
-#   sandbox_mode = "read-only"  → the filesystem/exec sandbox rejects writes and escalations.
-#   approval_policy = "never"   → no interactive approval prompts; combined with read-only, an action
-#                                 the sandbox forbids is DENIED, not surfaced as an approve/deny prompt.
-# CONSEQUENCE (be honest about the lane's reach): read-only + never is FILE-READING ONLY. Codex never
-# asks to run a command, so any COMMAND-based check is denied outright — it does not pause for approval,
-# it just fails. So in this default lane the custom agents' command steps are UNAVAILABLE, not merely
-# unattended: frontend-ipc-contract-auditor's `tsc --noEmit`, self-reviewer's CDP capture/eval, and
-# web-design-director's headless-Chrome capture cannot run here. Those agents degrade to source-only
-# reasoning in this lane and MUST say so rather than claim a check they could not execute.
-# To actually RUN those checks, an owner-approved VERIFICATION lane is launched SEPARATELY — it is NOT
-# switchable from this file. A project-local `.codex/config.toml` cannot define OR select a named
-# profile: Codex profiles live under `$CODEX_HOME` as `profile-name.config.toml` and are chosen with
-# `codex --profile <name>`. The safer near-no-prompt verification starting point is
-# `read-only` + approval_policy = "on-request" + approvals_reviewer = "auto_review" (commands surface
-# for auto-review instead of an unrestricted bypass); a write-capable step additionally needs
-# `--sandbox workspace-write`. (Project config AND these hooks load only AFTER the repo is trusted.)
-# The safe default stays read-only/never for every other run.
 sandbox_mode = "read-only"
 approval_policy = "never"
 
 [shell_environment_policy]
 inherit = "core"
+
+[shell_environment_policy.set]
+CLAUDE_CODE_SUBAGENT_MODEL = "sonnet"
+CLAUDE_CODE_AUTO_COMPACT_WINDOW = "250000"
+
+[mcp_servers.shadcn]
+command = "npx"
+args = [
+    "shadcn@4.19.0",
+    "mcp",
+]

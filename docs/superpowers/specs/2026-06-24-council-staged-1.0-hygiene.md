@@ -1,5 +1,10 @@
 # Staged pre-announce hygiene bundle — Council-directed, OWNER-APPROVAL-GATED
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** These pre-rebirth launch, legal, monetization,
+> and execution proposals are historical and do not authorize spending, publication, release, or
+> product work. Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; all owner-only and legal
+> approval boundaries remain intact.
+
 **Status: PROPOSED DRAFTS — nothing applied, announced, or spent.** Produced 2026-06-24 by CC as the
 Council's Executor-approved next move (full three-stage five-lens council on the road-to-1.0,
 run `wf_872cee5b-700`). Every item below is staged for owner sign-off. The legal text is a **draft,

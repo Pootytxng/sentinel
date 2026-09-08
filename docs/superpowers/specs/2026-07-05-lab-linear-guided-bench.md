@@ -1,5 +1,10 @@
 # Lab → linear guided "instrument bench" — spec for owner review (Cowork, 2026-07-05)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The approved “build it all” status and Lab
+> product/UI direction below are historical, not current execution authority. Current experience and
+> journey law come from `docs/PRODUCT_CONSTITUTION.md`; technical and accessibility details remain
+> bounded provenance subject to current code, release truth, and Work Control.
+>
 > **Owner directive (verbatim intent, 2026-07-05):** Lab should be set up so all the tools are
 > **linear** — the user easily understands the use-case for each tool, is **hand-held through
 > them all in order**, comprehends **how they coincide with each other**, and each tool

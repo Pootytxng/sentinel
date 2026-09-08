@@ -1,5 +1,12 @@
 # Compy Product Quality Stabilization Program
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This pre-rebirth program no longer controls
+> product sequence, priority, completion, or product law. Those now come from
+> `docs/PRODUCT_CONSTITUTION.md` and its derived `docs/product/ROADMAP.md`; `docs/BACKLOG.md` is an
+> execution-status ledger only. The remaining train descriptions are historical or bounded
+> implementation/safety provenance and may be reused only after revalidation against the current
+> Constitution, `docs/ARCHITECTURE_LOCKS.md`, release truth, and Work Control.
+>
 > **Status:** owner-requested program blueprint, 2026-07-29. This document defines sequencing,
 > dependencies, acceptance, and stop boundaries. It does not authorize implementation by itself.
 > Live execution ownership remains in [Kuya Work Control](../../WORK_CONTROL.md); product priority and
@@ -37,7 +44,7 @@ One source owns each kind of truth:
 | Current executor, worktree, claim, status, next action | Kuya Work Control Project + linked issue |
 | Product priority and completion | `docs/BACKLOG.md` + the named train spec |
 | Gates, artifacts, installed build, publication | `docs/RELEASE_STATE.md` + release receipts |
-| Active Lab recovery requirements | `docs/USER_FEEDBACK_PRODUCT_RECOVERY.md` on `feat/user-feedback-lab-recovery` |
+| Active Lab recovery requirements | ARCHIVED — `docs/archive/USER_FEEDBACK_PRODUCT_RECOVERY.md`; the branch train is abandoned, see its disposition |
 | Owner UI direction | `docs/UI_VISION_BACKLOG.md` + issue #14 owner verdict |
 | Product and safety laws | `CLAUDE.md`, `docs/ARCHITECTURE_LOCKS.md`, `docs/RECEIPTS_DOCTRINE.md` |
 | Implementation truth | Code, commits, tests, native captures, receipts |

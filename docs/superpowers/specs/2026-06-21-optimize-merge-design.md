@@ -1,5 +1,11 @@
 # Design — Merge Check + Tune → "Optimize" (the restructure pattern-setter)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical design record, not current
+> product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Conforming honesty, accessibility, and safety
+> provenance remains useful under [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 **Date:** 2026-06-21 · **Status:** approved design (owner) + council-reviewed · **Next:** writing-plans
 
 ## Context

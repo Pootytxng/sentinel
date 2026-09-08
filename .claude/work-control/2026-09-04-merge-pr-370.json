@@ -1,0 +1,40 @@
+{
+  "actor": "claude-code",
+  "explicitHandoff": "https://github.com/Pootytxng/sentinel/issues/368#issuecomment-5537499085",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "transition": "merge-pr",
+  "currentHead": "ae7f692f211e154620cb34c9f60c0de1d8c1d4d2",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    { "command": "npm test", "status": "passed", "head": "ae7f692f211e154620cb34c9f60c0de1d8c1d4d2", "evidence": "C:/Users/Kuya/AppData/Local/Temp/push-368b.log" },
+    { "command": "npm run build", "status": "passed", "head": "ae7f692f211e154620cb34c9f60c0de1d8c1d4d2", "evidence": "C:/Users/Kuya/AppData/Local/Temp/push-368b.log" },
+    { "command": "cargo test --manifest-path src-tauri/Cargo.toml", "status": "passed", "head": "ae7f692f211e154620cb34c9f60c0de1d8c1d4d2", "evidence": "C:/Users/Kuya/AppData/Local/Temp/push-368b.log" },
+    { "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings", "status": "passed", "head": "ae7f692f211e154620cb34c9f60c0de1d8c1d4d2", "evidence": "C:/Users/Kuya/AppData/Local/Temp/push-368b.log" }
+  ],
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "claude-sonnet-5 (independent read-only subagent, no Codex lane live)",
+    "status": "passed",
+    "head": "ae7f692f211e154620cb34c9f60c0de1d8c1d4d2",
+    "summary": "REVIEW: PASS at ae7f692f211e154620cb34c9f60c0de1d8c1d4d2. The truncation test was shown to fail on the old fetchBoardRows; no other board read below 1000 remains; the allow block is read/verify only; the spec's inline diff matches the live hook code. One cosmetic note: the short-read toBeNull assertion would also pass on the old code for an unrelated reason, the second assertion is what catches the regression."
+  },
+  "pr": 370,
+  "issue": 368,
+  "kind": "lane",
+  "branch": "claude/settings-json-permissions-36af09"
+}

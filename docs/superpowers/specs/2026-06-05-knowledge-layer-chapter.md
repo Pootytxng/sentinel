@@ -1,5 +1,10 @@
 # Knowledge Layer Chapter — owner directive (pinned spec)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The “canonical,” “source of truth,” and
+> execution instructions below are historical and no longer route current work. Current product
+> direction comes from `docs/PRODUCT_CONSTITUTION.md`; current sequence and ownership require the
+> Roadmap and Work Control. The knowledge-layer content is bounded implementation provenance only.
+>
 *2026-06-05. This directive was delivered to the executing session by paste; this file is the
 canonical, compaction-proof copy. If you are the executing session: treat THIS FILE as the source
 of truth, and re-read it after any context compaction or restart. If anything in your memory of

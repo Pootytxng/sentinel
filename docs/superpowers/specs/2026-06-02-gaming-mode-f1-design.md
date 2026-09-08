@@ -1,5 +1,12 @@
 # Gaming Mode (F1) — v1 Implementation Design
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** Product-priority, approval, and work-authorization
+> claims in this historical design are retired. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). The rollback, mutation, elevation, and
+> default-off technical constraints remain safety provenance under
+> [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 **Date:** 2026-06-02
 **Status:** Design **APPROVED by owner** 2026-06-02. Implementation authorized: build + push to repo
 **behind a default-off gate**. The feature **stays GATED (dark)** until its own mutation QA (§7) passes

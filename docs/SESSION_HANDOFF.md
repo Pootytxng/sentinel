@@ -1,10 +1,10 @@
 # SESSION HANDOFF — paste-ready prompt for the next session
 
-> Live pointer only. Gate truth: [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue:
-> [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP. Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
-> Budget 120 lines; this file and `BACKLOG.md::Conformance queue` are AT cap — trim before adding a
-> line. Replace this file, never append. **Durable instructions only**: no fleet counts, no lane
-> names, nothing another lane has to come back and repair (#291).
+> Live pointer only. Product truth: [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md). Gate truth:
+> [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue: [`BACKLOG.md`](BACKLOG.md) (ledger, P0 first, derived
+> from `product/ROADMAP.md`). Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
+> Budget 120 lines; this file is AT cap — trim before adding a line. Replace this file, never append.
+> **Durable instructions only**: no fleet counts, no lane names, nothing another lane must repair (#291).
 
 ## Where the train is standing
 
@@ -22,9 +22,9 @@
 
 **DIR-1a: offering help is conditional on evidence** — a front door built only out of symptoms tells
 a healthy PC's owner they are in the wrong place, and *"i want more fps"* is a legitimate reason to be
-here. **A STANDING lens, not a closed row**: every new Health affordance must answer *"is this framing
-earned?"* first. The direction is authoritative at `docs/UI_VISION_BACKLOG.md` §"⭐ DIR-1a" — read it
-THERE, never from a paraphrase, this line included. Shipped `b21bc18b`; guard
+here. The shipped implementation must still answer *"is this framing earned?"* because the evidence-first and no-scareware laws in `docs/PRODUCT_CONSTITUTION.md` now supply the product authority.
+Historical rationale is preserved at `docs/UI_VISION_BACKLOG.md` §"⭐ DIR-1a"; it is evidence, not
+priority or work authorization. Shipped `b21bc18b`; guard
 `src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **DIR-1b:** the attention
 state carries a one-line ROUTE to the room that acts on it (#180 §C untouched — the detail paragraph
 still does not render on Health).
@@ -89,9 +89,9 @@ Console (`LabConsole`), and its proving bench already ships armed as `Experiment
 **Do NOT touch** Tier 1 plan tasks 10–11 (independent security review + arming). Owner territory,
 filed in `docs/OWNER_ACTION_CHECKLIST.md` §C so arming can never happen quietly. Still dark, three
 independent locks, none touched: `case_intelligence_gate()` hard-false · `CASE_SIGNING_PUBKEY` all
-zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **Before any UI work:**
-read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
-and **§G** (the site). Read them THERE, never from a paraphrase.
+zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. Before UI work, read `docs/PRODUCT_CONSTITUTION.md`, derive sequence from `docs/product/ROADMAP.md`, and reconcile the
+historical `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — including **DIR-1** and **§G** — as evidence;
+they do not independently establish priority, approval, or authorization.
 
 - **The fleet is measured, never written down.** `node scripts/fleet-snapshot.mjs` prints every
   checkout on this machine: its branch, how far past `origin/main` it sits, and whether anything it

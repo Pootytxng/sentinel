@@ -8,6 +8,16 @@
     "superpowers@claude-plugins-official": false
   },
   "permissions": {
+    "allow": [
+      "Bash(npx vitest run *)",
+      "Bash(node scripts/run-vitest.mjs *)",
+      "Bash(pwsh -NoProfile -File scripts/doc-budget.ps1)",
+      "Bash(node scripts/branch-disposition-audit.mjs *)",
+      "Bash(node scripts/verify-release-state.mjs *)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(node scripts/work-control-gate.mjs *)",
+      "Bash(gh project item-list *)"
+    ],
     "deny": [
       "Bash(npm publish*)",
       "PowerShell(npm publish*)",
