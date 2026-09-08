@@ -536,6 +536,251 @@ export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKT
   return { action: "set", line: `compy-entry: worktree identity set to ${identity.name}` };
 }
 
+// ── worktree provisioning (#405) ─────────────────────────────────────────────────────────────────
+// A worktree the Claude Desktop harness made, rather than `compy-entry`, never traverses
+// `tools/entry/launch.mjs`, so `createWorktree`'s guarantees have never applied to any of them. Two
+// things arrive broken and stay broken, both already reported by guards that nothing acts on:
+//
+//   1. `core.hooksPath` resolving OUTSIDE the folder. The repository config holds the correct
+//      RELATIVE `.githooks`, which resolves per worktree; a worktree-scoped ABSOLUTE override sends
+//      the lookup to another checkout. Git reports no error at all — the folder simply pushes with
+//      no pre-push hook, which since hosted CI went off is the only proof gate that exists.
+//   2. Tracked files sitting on disk as CRLF over an LF blob. `core.autocrlf=true` is still set
+//      here, so a checkout writes CRLF for any path whose attributes do not pin `eol` — and git
+//      caches the size of what IT wrote, which is why `git status` stays clean over such a file and
+//      never re-reads it. Widening `eol=lf` later changed what a checkout WOULD write without
+//      touching the folders already made. Every byte-budget guard is then inflated one byte a line.
+//
+// This lives HERE, and inside this file rather than in a library beside it, for one reason:
+// reachability. The affected sessions never execute `tools/entry`, but they do execute this tracked
+// SessionStart hook, and `tracked-hooks.test.mjs` pins this file to `node:` imports because it is
+// copied ALONE into folders where `tools/entry` does not exist — which is exactly where the repair
+// is needed. `ensureWorktreeIdentity` above is here for the same reason.
+//
+// The refusals are the load-bearing part, not the repair. This runs unattended at the start of every
+// session, so it repairs only the folder it is in, only after that folder has proved itself, and —
+// per file — only when dropping CR reproduces the blob git already has, byte for byte. It never
+// normalises, never edits content, never sweeps the fleet, and never widens its own permissions.
+// Anything it cannot prove it leaves alone and says so. `tools/entry/worktree-provisioning.test.mjs`
+// holds one test per refusal.
+
+/** The root to repair, or null. The gate is a function so "unclaimed folders are never repaired" is
+ *  testable rather than asserted: Kuya's own windows, Cowork and Codex all run unverified here, and
+ *  a folder Work Control has not verified must be left exactly as it is, however broken it looks. */
+export function provisioningRootFor(result) {
+  return result?.ok ? (result.root ?? null) : null;
+}
+
+/** CRLF -> LF, byte-wise. A CR that is not part of a CRLF is content, and stays exactly where it is. */
+function stripCrlf(bytes) {
+  const out = Buffer.alloc(bytes.length);
+  let n = 0;
+  for (let i = 0; i < bytes.length; i += 1) {
+    if (bytes[i] === 0x0d && bytes[i + 1] === 0x0a) continue;
+    out[n] = bytes[i];
+    n += 1;
+  }
+  return out.subarray(0, n);
+}
+
+/** Git's own blob id for these exact bytes. The only thing allowed to license a write. */
+function blobIdOf(bytes) {
+  return createHash("sha1")
+    .update(Buffer.concat([Buffer.from(`blob ${bytes.length}\0`, "utf8"), bytes]))
+    .digest("hex");
+}
+
+function insideFolder(root, candidate) {
+  const base = canonicalizePath(root).toLowerCase();
+  const path = canonicalizePath(candidate).toLowerCase();
+  return path === base || path.startsWith(`${base}\\`);
+}
+
+/** `git ls-files -z` records: everything up to the first tab is fields, the rest is the path. */
+function* zRecords(out) {
+  for (const record of String(out ?? "").split("\0")) {
+    if (!record) continue;
+    const tab = record.indexOf("\t");
+    if (tab < 0) continue;
+    yield [record.slice(0, tab), record.slice(tab + 1)];
+  }
+}
+
+function repairHooksPath(root, { run }) {
+  const configured = run(root, ["config", "core.hooksPath"]);
+  // Unset is CORRECT, not a defect: git then uses this worktree's own `.git/hooks`.
+  if (!configured.ok || !configured.out) return { action: "ok", from: null };
+
+  const resolved = resolve(root, configured.out);
+  if (insideFolder(root, resolved)) return { action: "ok", from: configured.out };
+
+  // It escapes. Repairing means pointing the folder at its own `.githooks` — which is only an
+  // improvement if the folder HAS one. Escaping-but-reaching-a-hook beats correct-but-reaching-none,
+  // so an empty or absent `.githooks` is a refusal, not a repair.
+  let own = [];
+  try {
+    own = readdirSync(join(root, ".githooks"));
+  } catch {
+    own = [];
+  }
+  if (!own.length) {
+    return {
+      action: "refused",
+      from: configured.out,
+      reason: "this folder has no .githooks of its own — pointing at it would remove the last hook it still reaches",
+    };
+  }
+
+  // Writing this per worktree is the whole point; turning the extension on would be a
+  // repository-wide config change, which is not this folder's to make.
+  const extension = run(root, ["config", "--get", "extensions.worktreeConfig"]);
+  if (!extension.ok || extension.out !== "true") {
+    return {
+      action: "refused",
+      from: configured.out,
+      reason: "extensions.worktreeConfig is not true — enabling it is a repository-wide change, not this folder's to make",
+    };
+  }
+
+  const set = run(root, ["config", "--worktree", "core.hooksPath", ".githooks"]);
+  if (!set.ok) return { action: "failed", from: configured.out, reason: set.out };
+  return { action: "set", from: configured.out, to: ".githooks" };
+}
+
+function repairLineEndings(root, { run, readFile, writeFile }) {
+  const empty = { repaired: [], left: [] };
+
+  // Without sha1 the blob comparison below is not the comparison git would make, and an unprovable
+  // write is exactly what this must not do.
+  const format = run(root, ["rev-parse", "--show-object-format"]);
+  if (!format.ok || format.out !== "sha1") {
+    return { action: "refused", ...empty, reason: `object format is ${format.ok ? format.out : "unreadable"}, not sha1 — the blob comparison cannot be made` };
+  }
+
+  const eol = run(root, ["ls-files", "--eol", "-z"]);
+  if (!eol.ok) return { action: "failed", ...empty, reason: eol.out };
+
+  // `eol=lf` must be RESOLVED, not assumed: with `core.autocrlf=true` a merely-`text` file is
+  // supposed to be CRLF here, and rewriting it would be breaking the folder, not fixing it.
+  const candidates = [];
+  for (const [fields, path] of zRecords(eol.out)) {
+    if (!/(?:^|\s)i\/lf(?:\s|$)/.test(fields)) continue;
+    if (!/(?:^|\s)w\/crlf(?:\s|$)/.test(fields)) continue;
+    if (!/\beol=lf\b/.test(fields)) continue;
+    candidates.push(path);
+  }
+  if (!candidates.length) return { action: "ok", ...empty };
+
+  // One listing for the whole index rather than a call per file: 200-odd paths on an argv is a
+  // Windows command-line limit waiting to be hit, and this runs at every session start.
+  const staged = run(root, ["ls-files", "-s", "-z"]);
+  if (!staged.ok) return { action: "failed", ...empty, reason: staged.out };
+  const blobOf = new Map();
+  for (const [fields, path] of zRecords(staged.out)) blobOf.set(path, fields.split(/\s+/)[1]);
+
+  const repaired = [];
+  const left = [];
+  for (const rel of candidates) {
+    const blob = blobOf.get(rel);
+    if (!blob) {
+      left.push(rel);
+      continue;
+    }
+    let bytes;
+    try {
+      bytes = readFile(join(root, rel));
+    } catch {
+      left.push(rel);
+      continue;
+    }
+    const lf = stripCrlf(bytes);
+    // The proof, and the only one accepted: these bytes ARE the blob. Not "look like text", not
+    // "the attribute says so" — the same id git has in its own index.
+    if (lf.length === bytes.length || blobIdOf(lf) !== blob) {
+      left.push(rel);
+      continue;
+    }
+    try {
+      writeFile(join(root, rel), lf);
+      repaired.push(rel);
+    } catch {
+      left.push(rel);
+    }
+  }
+
+  // The stat cache still describes the CRLF file this just replaced, so without a refresh the folder
+  // reports phantom modifications from here on — `git status` decides on the cached size and never
+  // re-reads. Content already equals the blob, so this rewrites cached stat information and nothing
+  // else. PATH-SCOPED deliberately, and measured: the bare `--refresh` reports "needs update" and
+  // leaves the entry alone, and it would also touch paths this repair never wrote. Chunked because
+  // 200-odd paths on one Windows command line is a limit waiting to be hit.
+  for (let i = 0; i < repaired.length; i += 100) {
+    run(root, ["update-index", "-q", "--refresh", "--", ...repaired.slice(i, i + 100)]);
+  }
+
+  return { action: repaired.length ? "repaired" : left.length ? "left" : "ok", repaired, left };
+}
+
+/**
+ * Repair the provisioning of the folder this session is rooted in — and no other folder, ever.
+ *
+ * @returns {{action: "repaired"|"reported"|"clean"|"main"|"skipped"|"refused"|"failed",
+ *            line: string|null, reason?: string, hooksPath: object, lineEndings: object}}
+ *   `line` is the one advisory line to print, or null when there is nothing to say.
+ */
+export function repairWorktreeProvisioning(
+  root,
+  { run = gitResult, expectedBranch = null, readFile = readFileSync, writeFile = writeFileSync } = {},
+) {
+  const idle = (action, reason) => ({
+    action,
+    line: action === "refused" || action === "failed" ? `compy-entry: worktree provisioning not repaired — ${reason}` : null,
+    reason,
+    hooksPath: { action: "skipped" },
+    lineEndings: { action: "skipped", repaired: [], left: [] },
+  });
+
+  if (!root) return idle("skipped", "no root");
+
+  const gitDir = run(root, ["rev-parse", "--git-dir"]);
+  const commonDir = run(root, ["rev-parse", "--git-common-dir"]);
+  if (!gitDir.ok || !commonDir.ok) return idle("skipped", gitDir.out || commonDir.out || "not a git checkout");
+  // The main checkout is shared by every worktree and every other executor. Never.
+  if (samePath(resolve(root, gitDir.out), resolve(root, commonDir.out))) return idle("main", "main checkout");
+
+  if (!expectedBranch) return idle("refused", "no verified branch for this folder");
+  const head = run(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (!head.ok) return idle("refused", `HEAD unreadable — ${head.out}`);
+  if (head.out !== expectedBranch) return idle("refused", `checked out on ${head.out}, not the claimed ${expectedBranch}`);
+
+  // Tracked paths only. An untracked scratch file cannot be harmed by either repair — one writes a
+  // worktree config key, the other writes only over tracked bytes it has proved are already the blob
+  // — and refusing on untracked files would make this inert in every folder anyone actually works
+  // in. A modified or staged TRACKED path is the real signal that somebody is mid-edit, and it stops
+  // the repair dead.
+  const status = run(root, ["status", "--porcelain", "--untracked-files=no"]);
+  if (!status.ok) return idle("refused", `working tree state unreadable — ${status.out}`);
+  if (status.out) return idle("refused", "a tracked file is modified — this folder is not clean");
+
+  const hooksPath = repairHooksPath(root, { run });
+  const lineEndings = repairLineEndings(root, { run, readFile, writeFile });
+
+  const notes = [];
+  if (hooksPath.action === "set") notes.push(`core.hooksPath ${hooksPath.from} -> .githooks`);
+  if (hooksPath.action === "refused" || hooksPath.action === "failed") notes.push(`core.hooksPath left as ${hooksPath.from} — ${hooksPath.reason}`);
+  if (lineEndings.action === "repaired") notes.push(`${lineEndings.repaired.length} file(s) restored to LF`);
+  if (lineEndings.action === "refused" || lineEndings.action === "failed") notes.push(`line endings untouched — ${lineEndings.reason}`);
+  if (lineEndings.left.length) notes.push(`${lineEndings.left.length} CRLF file(s) left alone — dropping CR does not reproduce their blob`);
+
+  const action = hooksPath.action === "set" || lineEndings.action === "repaired" ? "repaired" : notes.length ? "reported" : "clean";
+  return {
+    action,
+    line: notes.length ? `compy-entry: worktree provisioning — ${notes.join("; ")}` : null,
+    hooksPath,
+    lineEndings,
+  };
+}
+
 // ── the assertion ────────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -969,7 +1214,21 @@ export async function main() {
     identity = { action: "failed", line: `compy-entry: worktree identity not set - ${err?.message ?? err}` };
   }
   if (identity.action === "failed") console.error(identity.line);
-  const message = identity.action === "set" ? `${verdict.message}\n${identity.line}` : verdict.message;
+
+  // Worktree provisioning (#405) - the folder the harness made, repaired only once Work Control has
+  // verified it, and only ever this folder. Isolated the same way: whatever happens here, the exit
+  // code and the stdout shape below are not its to change.
+  let provisioning;
+  try {
+    provisioning = repairWorktreeProvisioning(provisioningRootFor(result), { expectedBranch: result?.branch ?? null });
+  } catch (err) {
+    provisioning = { action: "failed", line: `compy-entry: worktree provisioning failed - ${err?.message ?? err}` };
+  }
+  if (provisioning.action === "failed") console.error(provisioning.line);
+
+  const message = [verdict.message, identity.action === "set" ? identity.line : null, provisioning.action === "failed" ? null : provisioning.line]
+    .filter(Boolean)
+    .join("\n");
 
   const payload = sessionStartOutput(result, { source: hookInput?.source ?? null });
   // Plain text when there is no brief: stdout alone is still added to the session, and a folder with
