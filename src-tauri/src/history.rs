@@ -2313,6 +2313,18 @@ mod history_tests {
             // carry a real Some(true) / Some(false), which is what makes that field falsifiable here.
             record_on_rig("power-plan", "applied", crate::hardware::current_fingerprint()),
             record_on_rig("startup-app", "applied", a_rig_that_is_not_this_one()),
+            // Every row above leaves restores_label / applied_label / payoff_label vacuously None on
+            // BOTH sides: `record`'s snapshot does not deserialize to a Snapshot, and its
+            // applied_action is None, which short-circuits both label derivations. That is the same
+            // structural gap this test just closed for on_this_rig, left open in three more fields.
+            // This row deserializes, so those three carry real values (PR #403 review).
+            AppliedChange {
+                snapshot: serde_json::to_value(Snapshot::FastStartup { prior_hiberboot: Some(1) })
+                    .expect("the snapshot fixture must serialize"),
+                applied_action: Some(AppliedAction::DisableFastStartup),
+                rollback_action: Some(RollbackAction::RestoreFastStartupFromSnapshot),
+                ..record_on_rig("fast-startup-off", "applied", crate::hardware::current_fingerprint())
+            },
         ];
 
         let views = applied_change_views(&rows);
@@ -2342,10 +2354,31 @@ mod history_tests {
         // (every row to one value) fail HERE, wearing a fixture-authoring message, instead of at the
         // precise per-field assert above. Independent source + last position keeps each failure
         // saying what actually broke (PR #403 review).
-        let rig_values: Vec<Option<bool>> = rows.iter().cloned().map(into_view).map(|v| v.on_this_rig).collect();
+        let reference: Vec<AppliedChangeView> = rows.iter().cloned().map(into_view).collect();
+        let rig_values: Vec<Option<bool>> = reference.iter().map(|v| v.on_this_rig).collect();
         assert!(rig_values.contains(&Some(true)), "the fixture must exercise an on-this-rig row");
         assert!(rig_values.contains(&Some(false)), "the fixture must exercise an other-rig row");
         assert!(rig_values.contains(&None), "and the legacy unstamped row stays covered too");
+        // Same argument, three more fields: a label that is None for every row is compared
+        // None-to-None and guards nothing, which is exactly how they stood before this row landed.
+        assert!(
+            reference.iter().any(|v| v.restores_label.is_some()),
+            "the fixture must exercise a row whose snapshot yields a restores label"
+        );
+        assert!(
+            reference.iter().any(|v| v.applied_label.is_some()),
+            "the fixture must exercise a row whose action yields an applied label"
+        );
+        assert!(
+            reference.iter().any(|v| v.payoff_label.is_some()),
+            "the fixture must exercise a row whose action yields a payoff label"
+        );
+        // What this test does NOT guard, deliberately: the FIELD SEMANTICS of `same_rig`. Both sides
+        // of the loop above reach it through `into_view`, so narrowing `same_rig` to any non-empty
+        // subset of {gpu, ram_gb, display} moves both sides together and stays green — measured, not
+        // assumed. No fixture row can change that; it is what comparing two paths through one
+        // function means. That subset is pinned by `same_rig_ignores_driver_but_not_hardware`
+        // below, which calls `same_rig` directly. Keep the two tests together (PR #403 review).
     }
 
     /// Borrowing must leave the caller's rows intact: the whole point is that `build()` keeps the
