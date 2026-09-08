@@ -68,6 +68,7 @@
     "allow-get-ledger-health",
     "allow-get-leftovers",
     "allow-get-license-status",
+    "allow-get-machine-model",
     "allow-get-memory-pressure",
     "allow-get-nic-driver-info",
     "allow-get-pending-care-incident",

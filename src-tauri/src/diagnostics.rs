@@ -479,7 +479,216 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         sections.push(DiagnosticSection { name: "On-screen overlays".into(), entries });
     }
 
+    // ─── Shared Machine Model (Roadmap Phase 2, #385) ─────────────────
+    //
+    // ONE bounded section, rendered from the SAME value `get_machine_model` returns. It is built
+    // here and rendered by a pure function of that value, so this surface can never become a
+    // second implementation of the same truth (MACHINE_MODEL.md §8).
+    sections.push(machine_model_section(&crate::machine_model::build()));
+
     sections
+}
+
+/// Render the Machine Model as one diagnostics section. PURE in `m`: it reads nothing else, so
+/// every value below traces to the model the command returns.
+pub(crate) fn machine_model_section(
+    m: &crate::machine_model::MachineModel,
+) -> DiagnosticSection {
+    use crate::machine_model::Freshness;
+
+    let mut entries = Vec::<DiagnosticEntry>::new();
+
+    // Freshness in plain English, so a reader can tell a live read from a remembered one.
+    let freshness_note = |f: Freshness| -> &'static str {
+        match f {
+            Freshness::Stamped => "Compy recorded when it observed this.",
+            Freshness::LiveAtBuild => "Read just now; the producer records no timestamp of its own.",
+            Freshness::UnstampedCache => "Read once this session and remembered since. Not proof of a re-read just now.",
+            Freshness::UndatedHistorical => "Compy recorded this, but the record carries no date, so it cannot be placed in time.",
+            Freshness::NotApplicable => "No value, so no freshness.",
+        }
+    };
+    // A field that does not apply must never render as "Unknown": that reads to a user as evidence
+    // Compy failed to gather, when in fact there is nothing there to gather (#385 review).
+    let show = |f: &crate::machine_model::Fact<String>| -> (String, Option<String>) {
+        match (
+            f.value.as_ref(),
+            f.unknown_reason.as_ref(),
+            f.not_applicable_reason.as_ref(),
+        ) {
+            (Some(v), _, _) => (
+                v.clone(),
+                Some(format!("{} · {}", f.source, freshness_note(f.freshness))),
+            ),
+            (None, Some(why), _) => ("Unknown".into(), Some(why.clone())),
+            (None, None, Some(why)) => ("Not applicable".into(), Some(why.clone())),
+            (None, None, None) => ("Unknown".into(), None),
+        }
+    };
+
+    // 1. What machine is this?
+    for (label, fact) in [
+        ("Processor", &m.identity.cpu),
+        ("Graphics", &m.identity.gpu),
+        ("Graphics driver", &m.identity.gpu_driver),
+        ("Display", &m.identity.display),
+        ("Windows", &m.identity.windows),
+        ("Rig identity", &m.identity.rig_hash),
+    ] {
+        let (value, note) = show(fact);
+        entries.push(DiagnosticEntry { label: label.into(), value, note });
+    }
+    let (ram_value, ram_note) = match m.identity.ram_gb.value {
+        Some(gb) => (
+            format!("{gb} GB"),
+            Some(format!(
+                "{} · {}",
+                m.identity.ram_gb.source,
+                freshness_note(m.identity.ram_gb.freshness)
+            )),
+        ),
+        None => ("Unknown".into(), m.identity.ram_gb.unknown_reason.clone()),
+    };
+    entries.push(DiagnosticEntry { label: "Memory".into(), value: ram_value, note: ram_note });
+
+    // "No disagreements" is only a finding when a comparison actually RAN. With no stamped
+    // snapshot and no acknowledged baseline nothing is compared, and the model returns the same
+    // empty list it returns when everything agreed. Rendering both as "No" turned an absence of
+    // comparative evidence into a passing result on exactly the machines least able to afford it —
+    // fresh ones (#385 review). The compared list is read first, and it also supplies the field
+    // names, so the agreement note can no longer claim more than the comparison covered.
+    let compared_labels: Vec<&'static str> = [
+        ("gpu", "GPU"),
+        ("gpu_driver", "driver"),
+        ("display", "display"),
+        ("ram_gb", "memory"),
+        ("rig_hash", "the rig hash"),
+    ]
+    .into_iter()
+    .filter(|(id, _)| m.identity.compared_fields.iter().any(|c| c.field == *id))
+    .map(|(_, label)| label)
+    .collect();
+    let compared_phrase = match compared_labels.split_last() {
+        None => String::new(),
+        Some((last, [])) => (*last).to_string(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+    };
+    entries.push(DiagnosticEntry {
+        label: "Identity producers disagree".into(),
+        value: if m.identity.compared_fields.is_empty() {
+            "Not compared".into()
+        } else if m.identity.disagreements.is_empty() {
+            "No".into()
+        } else {
+            m.identity
+                .disagreements
+                .iter()
+                .map(|d| format!("{}: {} vs {}", d.field, d.left.value, d.right.value))
+                .collect::<Vec<_>>()
+                .join(" · ")
+        },
+        note: Some(if m.identity.compared_fields.is_empty() {
+            "Nothing was compared. Compy holds no stamped identity snapshot and no acknowledged hardware baseline to check today's reading against, so no second producer exists to agree or disagree with it. That is an absence of comparative evidence, not agreement.".into()
+        } else if m.identity.disagreements.is_empty() {
+            format!(
+                "The identity fields Compy actually compared — {compared_phrase} — agree. CPU and Windows build are not compared, and neither is any field whose second reading was missing, so this is not a claim that every producer of rig identity agrees."
+            )
+        } else {
+            format!(
+                "{} A difference is not proof that either reading is wrong.",
+                m.identity.canonical_rule
+            )
+        }),
+    });
+
+    // 2. What recently changed?
+    entries.push(DiagnosticEntry {
+        label: "Recorded changes".into(),
+        value: format!(
+            "{} recorded · {} identity snapshots",
+            m.chronology.total_events, m.chronology.identity_snapshots
+        ),
+        note: Some(match m.chronology.entries.first() {
+            Some(e) => format!("Most recent: {} ({}). {}", e.summary, e.observed_at, m.chronology.causation_note),
+            None => m
+                .chronology
+                .unknown_reason
+                .clone()
+                .unwrap_or_else(|| m.chronology.causation_note.to_string()),
+        }),
+    });
+    if let Some(from) = m.chronology.recorded_from.as_ref() {
+        entries.push(DiagnosticEntry {
+            label: "Earliest dated record".into(),
+            value: from.clone(),
+            note: Some(format!(
+                "The earliest DATED evidence still retained, from {}. Undated records cannot be placed in time, so this is not a claim that nothing earlier is retained — still less that nothing changed before it.{}",
+                m.chronology.recorded_from_source.unwrap_or("an unnamed source"),
+                match m.chronology.identity_history_from.as_deref() {
+                    Some(id_from) if Some(id_from) != m.chronology.recorded_from.as_deref() =>
+                        format!(" Identity recording specifically starts later, at {id_from}."),
+                    _ => String::new(),
+                }
+            )),
+        });
+    }
+
+    // 3. What did Compy change?
+    let c = &m.compy_changes;
+    entries.push(DiagnosticEntry {
+        label: "Changes Compy applied".into(),
+        value: format!(
+            "{} recorded · {} active on this PC · {} rolled back · {} reverted outside Compy",
+            c.total_recorded, c.active_now, c.rolled_back, c.applied_but_not_in_effect
+        ),
+        note: Some(c.ledger_note.into()),
+    });
+    entries.push(DiagnosticEntry {
+        label: "In effect, other or unknown PC".into(),
+        value: format!(
+            "{} recorded on another PC · {} unattributed",
+            c.in_effect_other_rig, c.in_effect_rig_unknown
+        ),
+        note: Some(format!(
+            "{} of {} settings that read as in effect are attributed to this PC. The live check proves the setting is in effect; only the rig stamp says Compy is who applied it here. An unattributed row is one Compy cannot place on any PC — that is a missing stamp, not evidence it was applied somewhere else.",
+            c.active_now, c.in_effect_total
+        )),
+    });
+    entries.push(DiagnosticEntry {
+        label: "Applied on this machine".into(),
+        value: format!(
+            "{} on this PC · {} elsewhere · {} unknown",
+            c.on_this_rig, c.not_on_this_rig, c.rig_unknown
+        ),
+        note: Some("Rows written before rig stamping existed stay unknown rather than being assumed to be this machine.".into()),
+    });
+
+    // 4. What evidence can we trust right now?
+    entries.push(DiagnosticEntry {
+        label: "Evidence not available".into(),
+        value: if m.evidence.unknowns.is_empty() {
+            "None".into()
+        } else {
+            format!("{} facts", m.evidence.unknowns.len())
+        },
+        note: m
+            .evidence
+            .unknowns
+            .iter()
+            .take(4)
+            .map(|u| format!("{}: {}", u.field, u.reason))
+            .reduce(|a, b| format!("{a} — {b}")),
+    });
+    entries.push(DiagnosticEntry {
+        label: "Model built".into(),
+        value: m.built_at.clone(),
+        note: Some(format!(
+            "Schema v{}. This is when the model was composed, not when any fact in it was observed.",
+            m.schema_version
+        )),
+    });
+
+    DiagnosticSection { name: "Machine Model".into(), entries }
 }
 
 // ─── Apply / Rollback ────────────────────────────────────────────────────
@@ -529,12 +738,25 @@ mod diagnostics_tests {
             "Peripherals",
             "Background services",
         ];
-        assert!(names.len() >= fixed.len(), "expected at least the fixed set, got {names:?}");
+        // "Machine Model" is a fixed SUFFIX, not part of the rig-dependent middle: it is pushed
+        // unconditionally, so a build where it is absent or merely optional is a build where a
+        // consumer cannot rely on it being there. Asserted separately from the prefix so the
+        // existing eight keep their exact contract order (#385).
+        assert!(
+            names.len() > fixed.len(),
+            "expected at least the fixed set plus the Machine Model summary, got {names:?}"
+        );
         assert_eq!(&names[..fixed.len()], &fixed, "the fixed section set/order is a UI + Export contract");
-        // The tail is rig-dependent + condition-gated: the per-category "Services · …" inventory
+        assert_eq!(
+            names.last().map(String::as_str),
+            Some("Machine Model"),
+            "the Machine Model summary is always the LAST section, so a reader reaches it from a known place"
+        );
+        // The middle is rig-dependent + condition-gated: the per-category "Services · …" inventory
         // groups (which appear depends on the live services), plus the drift-only recovery guide and
-        // the (scan-gated) overlay-tools advisory. Every trailing section must be one of these.
-        for extra in &names[fixed.len()..] {
+        // the (scan-gated) overlay-tools advisory. Every section between the prefix and the Machine
+        // Model suffix must be one of these.
+        for extra in &names[fixed.len()..names.len() - 1] {
             assert!(
                 extra.starts_with("Services · ")
                     || extra == "Background services · How to restore"

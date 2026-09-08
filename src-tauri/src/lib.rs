@@ -39,6 +39,10 @@ mod component_evidence; // Intelligence Phase 4 — READ-ONLY projection of Inte
 mod latency; // Diagnostics WIRED (Latency tab: MSI/timer/CCD/USB/mouse). Stage 1-2 ETW capture + Correlate engine still DARK (unwired).
 mod leftovers; // Leftovers v1 — READ-ONLY pre-existing optimizer-rot detection (pure evaluator + on-demand probe; no restore wired).
 mod license; // Compy Pro — offline Ed25519 license VERIFY only, DARK (all-zeros placeholder pubkey → always free; private key never in repo). No outbound, no Windows mutation.
+mod machine_model; // Shared Machine Model v1 (Roadmap Phase 2, #385) — READ-ONLY composition of the
+                   // existing canonical producers into ONE answer to "what machine is this / what recently
+                   // changed / what did Compy change / what evidence can we trust". Owns no data, probes
+                   // nothing, persists nothing; `compose` is pure over borrowed inputs.
 mod monitoring;
 mod overlay_tools; // A4 read-only: detect third-party in-game overlay/OSD tools running (advisory, mutates nothing).
 mod priorities;
@@ -1215,6 +1219,7 @@ pub fn run() {
             get_recommendations,
             get_diagnostics,
             hwchange::get_hardware_changes,
+            machine_model::get_machine_model,
             hwchange::acknowledge_hardware_changes,
             blackbox::get_crash_blackbox,
             incident_observer::get_pending_care_incident,

@@ -157,7 +157,7 @@ installers → stage only the new NSIS → silent install → launch). Verify li
 
 ### Rust module map (`lib.rs` carved into safety-boundary modules)
 
-Complete 2026-08-29 (51 `.rs` files; line counts rough). **Mutation/rollback +
+Complete 2026-08-29 (52 `.rs` files; line counts rough). **Mutation/rollback +
 gate-relevant modules are starred ★ — scope any mutation-gate change against these first.** The
 read-only remainder (hardware/sensors, monitoring/FPS, benchmark/Lab, advisory/ranking/export,
 intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads only when work touches
