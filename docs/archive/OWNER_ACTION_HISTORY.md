@@ -71,6 +71,22 @@
   Your eyeball is optional — you'll only see these on a first run / tour re-trigger; the main app's live
   look is unchanged.
 
+> Two more moved 2026-09-03 for the same reason (BYTE budget) — both already fully ruled and shipped.
+
+- ✅ **The wordmark reading `©ompy` — RULED AND SHIPPED 2026-08-26** ([#213](https://github.com/Pootytxng/sentinel/issues/213) A1)
+  You chose "drop the inner ring when tiny". Done: below 22px the heartbeat inside the C is not drawn,
+  so the rail mark reads **Compy**. The threshold is 22 rather than the ~24 I proposed because a
+  capture at 16/19/20/22/24 measured the pulse legible at 22 — Settings → About draws it at exactly
+  that size and keeps its flourish. Your triple-click egg still plays at rail size: the pulse appears
+  for the beat, then tucks away. Nothing else about the mark moved. Before/after sent to you.
+- ✅ **The verdict headline's "· and 3 more" tail — RULED AND SHIPPED 2026-08-26** ([#219](https://github.com/Pootytxng/sentinel/issues/219))
+  You chose "drop the count from the headline". Done: the big line names the one flagged thing and
+  stops. Nothing is hidden — the line under it still prints the honest proportion ("15 of 16 checks
+  look good.") and the rest are one press away in Check and Fix. **Correction:** I first told you
+  "the rest are still visible in the list below" — on Home they are not, they are one click away.
+  Nothing is hidden either way, but you ruled on a slightly wrong description of the screen and you
+  should know that. Say the word and Home can name them all inline. The retired translation
+  string is deleted in both languages so it cannot be wired back up by accident.
 
 ---
 
@@ -503,7 +519,7 @@ is reachable from `origin/main` now fails `scripts/shelter-tag-guard.test.mjs`.
 
 > Decided on the owner's own verdicts (2026-08-18 and 2026-08-22) and kept verbatim. `B_land` still carries one residual — a single site deploy once the Q9b endpoints exist — which is why the live checklist's pointer names it rather than merely filing it away. `B_eu` has a trigger rather than a date: revisit when Compy is downloadable by Europeans.
 
-### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record below in this file
+### B_land. Where feedback and analytics land — ✅ DECIDED 2026-08-18  ·  full record above in this file
 No email, no inbox: both features post to your own site like the waitlist already does, into Cloudflare D1 `compy_reports`. **Your one residual:** when the endpoints are built (Q9b) the site needs one deploy — one command, or one word to let me run it.
 
 ### B_eu. Analytics default-ON in the EU — ✅ DECIDED 2026-08-22 as **(a) US-first**

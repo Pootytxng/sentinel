@@ -94,15 +94,25 @@
   pointer-events: none;
 }
 
-/* The 13px indent used to live on the app-name caption (#213 A5 removed it — the rail's Wordmark
-   is the one that stays). It moves here so the gear keeps the same optical left margin it had when
-   it followed the text: 6px of padding plus the button's own ~7px of icon inset. */
 .wc-left {
   display: flex;
   align-items: center;
   gap: 6px;
   height: 100%;
   padding-left: 6px;
+}
+
+/* The app-name caption — removed by #213 A5, restored under the owner's literal-parity instruction
+   for the approved comps (#224 round 3, 2026-08-27; the later ruling supersedes, confirmed by the
+   round-2 Codex review). The comps draw it small and near-white, text first, gear after. 7px own
+   padding + the container's 6px restores the 13px optical indent the caption carried before A5.
+   It is a label, not a control: no title attr (A4 still stands), drag-region like the bar. */
+.wc-title {
+  padding-left: 7px;
+  font-size: var(--type-label); /* 13px — the caption is a label, and the scale is law (TYPE-1) */
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--ix-text-1, #e8eaf0);
 }
 
 /* Settings gear in the titlebar — the app-wide Settings entry (always visible, every tab). */

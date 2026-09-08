@@ -49,11 +49,10 @@
 :root[data-jarvis="on"][data-v2="on"] .home-console[data-motion="full"] .hc-stage {
   perspective: 900px;
 }
-:root[data-jarvis="on"][data-v2="on"] .home-console[data-motion="full"] .hc-brk,
-:root[data-jarvis="on"][data-v2="on"] .home-console[data-motion="full"] .hc-corner {
-  transform: rotateY(calc(var(--hc-px, 0) * 2.4deg)) rotateX(calc(var(--hc-py, 0) * -2.4deg));
-  transition: transform 0.12s linear;
-}
+/* The bracket/corner-gauge parallax rule is GONE (#225). It named `.hc-brk` and `.hc-corner`;
+   `.hc-corner` went with the corner gauges (issue #49) and `.hc-brk` went with the corner elbows
+   (#225), so the rule matched nothing and only cost parse time. The `perspective` above stays —
+   it belongs to the stage, and `.hc-ann` still parallaxes on the same --hc-px/--hc-py vars. */
 
 /* ── §A.2 measured data-tick ring (ArcGauge) ───────────────────────────────────────────────
    The ring GSAP flashes when a REAL reading CHANGES (real→real only — arrival is the

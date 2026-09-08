@@ -114,7 +114,10 @@
   row-gap: 2px;
   width: 100%;
   min-width: 0;
-  padding: 14px 2px;
+  /* 63 app px per row -- the rhythm 04-test-approved.png rules the station list to (65 comp px at
+     the 1550/1500 render scale). At 14 the rows measured 72, and seven of them pushed the room's
+     safety line 62 px past the fold of a 1500x980 window. */
+  padding: 10px 2px;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--ix-glass-border);
@@ -160,10 +163,13 @@
   margin-right: 8px;
   color: var(--v2-faint);
 }
+/* NO PER-STATION DOT IN THE LIST. The comp draws none, and the owner rejected the green pips on
+   sight: a dot beside every row reads as a status light the reader cannot act on, and the same
+   `stationHasReading` fact is already spoken in words by the INSTRUMENTS READ reading. The node
+   stays in the DOM (the grid layout owns only its presentation) so nothing about Dock's shared
+   behaviour changes for the rooms that do draw it. */
 :root[data-v2="on"] .dock[data-layout="list"] .dock-led {
-  grid-area: 1 / 4 / 2 / 5;
-  justify-self: start;
-  align-self: center;
+  display: none;
 }
 :root[data-v2="on"] .dock[data-layout="list"] .dock-hint {
   grid-area: 2 / 2 / 3 / 5;

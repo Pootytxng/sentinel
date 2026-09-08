@@ -14,6 +14,15 @@
   --v2-bg: #0a0c10;
   --v2-panel: #10131a;
   --v2-panel-2: #141824;
+  /* THE COMP'S CARD SURFACE (#225, measured off 01-health-approved.png). A card sitting on a room's
+     own ground, rather than inside a panel, samples #15181F-#161920 there against a #0C0E12 ground.
+     --v2-panel is a step darker (#10131A) and reads as the same surface as the big rig panel
+     opposite it; --v2-panel-2 is the right lightness but the wrong hue -- its blue cast is visible
+     next to the comp's neutral grey. Hence a third surface step, neutral, one notch above panel.
+     -hover is DERIVED, not measured: a static comp has no hover state, so it takes the same
+     lift the panel -> panel-2 pair carries, re-expressed neutrally (+5/+6/+7 per channel). */
+  --v2-panel-card: #15191f;
+  --v2-panel-card-hover: #1a1f26;
   --v2-line: rgba(255, 255, 255, 0.07);
   --v2-line-strong: rgba(255, 255, 255, 0.12);
 

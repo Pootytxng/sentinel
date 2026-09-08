@@ -133,6 +133,7 @@
     "more": "More in History →"
   },
   "windowChrome": {
+    "title": "Compy",
     "settings": "Settings",
     "minimize": "Minimize",
     "restore": "Restore",

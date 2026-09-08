@@ -328,11 +328,20 @@ These gate **public** release only (not the local app you use daily). Full list:
 ---
 
 ## §D — Taste / visual sign-offs (as they come up)
+
+### D_health. Health room parity — judged at the DEFAULT accent unless you veto  ·  ⏳ 2026-09-01, corrected same day  ·  [#225](https://github.com/Pootytxng/sentinel/issues/225)
+
+**This row asked the wrong question, and is corrected rather than deleted so the mistake is legible.** It said your desk ran theme `midnight` with the Health accent set to a bare Sky `#46a8ff` — a value the picker no longer offers, so the app drops it and the room falls back. **Measured 2026-09-01** by an independent session reading the live app rather than the code — theme `violet`, accent `#b6f24a+#35e0e8` (Lime / Cyan), on all five rooms. That is a **reading, not a setting**: one click on an accent dot makes this line stale and nothing re-measures it for you.
+
+**The call I am taking, so it is not parked on you: judge Health against the comp's DEFAULT accent.** The comp is the contract and it was shot there; your picks are yours and I change nothing. **Veto on sight** if you would rather I re-shoot the comp at Lime / Cyan — the only other honest option, and it costs a re-shoot, not code.
+
+**I will never write your theme or accent to match a comp.** No code changes either way. Round 3 (`b4bf26bc`) was rejected for an incomplete difference list; that gap is fixed.
 **Nothing aesthetic is parked on you by default** (CLAUDE.md, "TASTE IS MINE TO EXERCISE, HIS TO
 OVERRULE"). Claude decides the look, ships it, and hands you a before/after to veto on sight. Only
 brand — the product name, logo, price presentation — and reversals of a call you already made land
 here as decisions. **Closed §D sign-offs (the interview default, the title-foil sweep, version
-numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
+numbering, the motion default, the sibling-slop sweep) moved 2026-08-22, plus the wordmark reading
+and the verdict-headline tail moved 2026-09-03, to
 [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md) §D — nothing in them is on you.**
 - 🔨 **Home front door — the clutter you flagged 2026-08-18.** You saw Home on `555e2996` and called
   the stacked wording, the "What are you here to do?" question, the drop-down and the
@@ -350,21 +359,6 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
   rename on 2026-08-19; the rail ships it (`src/design/homeRail.ts:17`). Everything else in that queue
   is taste and therefore mine — I ship it and hand you a before/after to veto on sight, per the
   2026-08-07 decree.
-- ✅ **The wordmark reading `©ompy` — RULED AND SHIPPED 2026-08-26** ([#213](https://github.com/Pootytxng/sentinel/issues/213) A1)
-  You chose "drop the inner ring when tiny". Done: below 22px the heartbeat inside the C is not drawn,
-  so the rail mark reads **Compy**. The threshold is 22 rather than the ~24 I proposed because a
-  capture at 16/19/20/22/24 measured the pulse legible at 22 — Settings → About draws it at exactly
-  that size and keeps its flourish. Your triple-click egg still plays at rail size: the pulse appears
-  for the beat, then tucks away. Nothing else about the mark moved. Before/after sent to you.
-- ✅ **The verdict headline's "· and 3 more" tail — RULED AND SHIPPED 2026-08-26** ([#219](https://github.com/Pootytxng/sentinel/issues/219))
-  You chose "drop the count from the headline". Done: the big line names the one flagged thing and
-  stops. Nothing is hidden — the line under it still prints the honest proportion ("15 of 16 checks
-  look good.") and the rest are one press away in Check and Fix. **Correction:** I first told you
-  "the rest are still visible in the list below" — on Home they are not, they are one click away.
-  Nothing is hidden either way, but you ruled on a slightly wrong description of the screen and you
-  should know that. Say the word and Home can name them all inline. The retired translation
-  string is deleted in both languages so it cannot be wired back up by accident.
-
 ---
 
 ## Where the full lists live (so nothing is buried again)

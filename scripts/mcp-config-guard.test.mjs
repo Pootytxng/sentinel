@@ -28,7 +28,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -61,6 +61,7 @@ const RUNNERS = { npx: null, bunx: null, pnpx: null, pnpm: "dlx", yarn: "dlx" };
  */
 export function discoverCandidates(root, list = trackedFiles) {
   return list(root)
+    .filter((p) => !isUnder(p, ".claude/worktrees"))
     .filter((p) => p.endsWith(".mcp.json") || (isUnder(p, ".claude") && p.endsWith(".json")))
     .map((p) => join(root, p));
 }
@@ -276,13 +277,23 @@ describe("MCP declaration guard: it fires on the shapes that were actually shipp
     expect(found).not.toContain(join(repoRoot, "src", "main.tsx"));
   });
 
-  it("discovery ignores an untracked nested worktree's own checkout of .mcp.json", () => {
+  it("discovery ignores a nested worktree's own checkout of .mcp.json", () => {
     // The finding that shaped `discoverCandidates`: a parked worktree under `.claude/worktrees/`
-    // holds the pre-fix file, and `git ls-files` never lists it because this repo does not track it.
-    const listed = [".mcp.json", ".claude/settings.json"];
-    const found = discoverCandidates(repoRoot, () => listed);
-    // Judge the path INSIDE the repo, not the absolute one — a checkout that itself lives under
-    // `.claude/worktrees/<name>/` would otherwise fail this on its own address.
-    expect(found.some((p) => relative(repoRoot, p).includes("worktrees"))).toBe(false);
+    // holds the pre-fix file. `git ls-files` normally never lists it -- but "normally" is not a
+    // rule, so the exclusion is now enforced here rather than inherited from git's behaviour.
+    const listed = [
+      ".mcp.json",
+      ".claude/settings.json",
+      ".claude/worktrees/parked-lane/.mcp.json",
+      ".claude/worktrees/parked-lane/.claude/settings.json",
+    ];
+    const found = discoverCandidates(repoRoot, () => listed).map((p) =>
+      relative(repoRoot, p).split(sep).join("/"),
+    );
+    // Compared RELATIVE to the root on purpose. This suite ran red for a whole gate cycle because
+    // it matched "worktrees" against the ABSOLUTE path, and a runner living in
+    // `.claude/worktrees/<lane>/` has that substring in every path it produces -- the guard was
+    // failing on its own address rather than on anything in the repo.
+    expect(found).toEqual([".mcp.json", ".claude/settings.json"]);
   });
 });
