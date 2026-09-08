@@ -1,6 +1,0 @@
-{
-  "ref": "origin/claude/385-machine-model-v1",
-  "disposition": "CLAIMED",
-  "issue": 385,
-  "evidence": "The live PR [#387](https://github.com/Pootytxng/sentinel/pull/387) head — Phase 2 Shared Machine Model v1, issue [#385](https://github.com/Pootytxng/sentinel/issues/385). Open, unmerged, and actively written by the `claude-code` lane whose ownership claim is recorded on #385. The ref carries the repairs for HQ review `5135765472`; it is deliberately NOT merge-provable and is not claimed as such — an APPROVE-equivalent non-author exact-head review, then a receipt passing `scripts/work-control-gate.mjs`, are what decide it, and neither has returned. This row exists because a lane that pushes owes a row for its own live ref; it retires when #387 lands or is abandoned, not on a schedule."
-}

@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Landing lane. This actor wrote no Machine Model code: the entire proof delta (11 commits, merge-base 8d4e90a1..8e6c3bb8) is authored claude-code by the three earlier holders of the #385 implementation lease. This lane took the pen at the stop boundary the last holder declared in its own evidence bundle (comment 5579131555: 'This lane stops here', explicitly not self-approving), and its only writes are this receipt and the disposition row retirement.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/385#issuecomment-5579701929",
+  "leaseEvidenceNote": "Verified takeover + ownership claim for the landing folder, posted before any write. It supersedes claim 5578863478 (amended 5578981446), whose holder had stopped for review; that holder's work was fully pushed, its worktree clean, and nothing was preserved or seized.",
+  "overlapExclusive": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Executed from C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a at exact head 8e6c3bb80635b5cd0e028bbbcf0cad118afcb791; git status --short empty at checkout and again after the review agent restored its falsification edits. PR #387 OPEN, not draft, MERGEABLE/CLEAN; headRefOid == origin/claude/385-machine-model-v1 == this checkout's HEAD. No open PR is based on claude/385-machine-model-v1 (checked against all 9 open PRs), so the post-merge prune closes nothing (#337). docs/dispositions/claude__385-machine-model-v1.json is CLAIMED, not LANDED/PRESERVE, so land-pr does not refuse. PREFLIGHT DEFECT FOUND AND CURED BEFORE ANY WRITE: this worktree's core.hooksPath resolved to the MAIN clone's C:/Users/Kuya/code/sentinel/.githooks, so a push from here would have run no pre-push gate and been indistinguishable from a verified one; cured with git config --worktree core.hooksPath .githooks. That is the third consecutive folder on this lane with the same provisioning fault.",
+  "transition": "merge-pr",
+  "currentHead": "8e6c3bb80635b5cd0e028bbbcf0cad118afcb791",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "8e6c3bb80635b5cd0e028bbbcf0cad118afcb791",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-08T05-26-34Z.log:150",
+      "summary": "428 frontend test files passed (428); 6481 tests passed | 4 skipped (6485); 0 failed"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "8e6c3bb80635b5cd0e028bbbcf0cad118afcb791",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-08T05-26-34Z.log:156-182",
+      "summary": "tsc clean; vite build succeeded, 7523 modules transformed, built in 7.83s. The only warning is the pre-existing >500kB chunk-size advisory, unchanged by this PR."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "8e6c3bb80635b5cd0e028bbbcf0cad118afcb791",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-08T05-26-34Z.log:1505",
+      "summary": "1291 passed; 0 failed; 24 ignored; 0 filtered out"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "8e6c3bb80635b5cd0e028bbbcf0cad118afcb791",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-08T05-26-34Z.log:1520-1804",
+      "summary": "clippy stage clean under -D warnings: zero lines in the stage begin with 'warning' or 'error'"
+    }
+  ],
+  "gateEvidenceNote": "RUN BY THIS LANE, NOT TRANSCRIBED FROM THE AUTHOR. HQ review 5135765472 objected that the author's log format does not bind itself to a SHA; this run does. scripts/verify-local.ps1 was executed in THIS worktree while it was detached at 8e6c3bb8 with an empty git status, producing logs/verify-local-2026-09-08T05-26-34Z.log. The gate is known to exit 0 while red (recorded by the author earlier in this same lane), so exit 0 was NOT treated as the verdict: all eight stages were read individually at their line ranges -- install root deps, install site-app deps, git diff check, write-scope drift (#356), frontend tests, frontend type-check and build, Rust tests, Rust clippy. Full-suite Rust count rose 1274 -> 1291 across the repair rounds, consistent with the added guards.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "node scripts/scope-drift-gate.mjs --issue 385 -> 13 changed paths since origin/main; 11 reported outside the claim on #385.",
+    "reconciliationNote": "MEASURED, NOT WAIVED. The gate stage self-reported 'not measured -- no session record for this folder' because this session was launched from the desktop app rather than through tools/entry, so no local session record exists; the stage was therefore re-run explicitly against the issue. It reports 11 paths outside 'the claim on #385' because it compares the ACCUMULATED branch against the NEWEST claim on the thread, which is now this landing lane's deliberately narrow scope (.claude/work-control, docs/dispositions). Each of those 11 paths -- CLAUDE.md, docs/RELEASE_STATE.md, src-tauri/CLAUDE.md, src-tauri/build.rs, src-tauri/capabilities/default.json, diagnostics.rs, history.rs, hwchange.rs, intelligence.rs, lib.rs, machine_model.rs -- was inside the write scope declared by claim 5566124874 (2026-09-07T06:37:07Z) at the time it was written, and history.rs additionally under the owner-granted widening recorded in 5578863478. Nothing was written outside a declared scope. This lane did NOT widen its own claim to absorb paths it does not write; declaring paths one will not touch would make the gate green by assertion and weaken the guard. This lane's own carrier commit touches only .claude/work-control/ and docs/dispositions/, both declared."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "8e6c3bb80635b5cd0e028bbbcf0cad118afcb791",
+    "verdict": "PASS",
+    "evidence": "Subagent review dispatched by the landing lane against the exact head; verdict block reproduced in this receipt's reviewerNote. Non-author: rust-tauri-reviewer is a REVIEWER_ONLY identity and authored none of the 11 commits in the proof delta, all of which are authored claude-code.",
+    "reviewerNote": "MANDATE: prove the three guards for HQ review 5135765472's three blocking findings ACTUALLY FALSIFY at this exact head -- a guard that stays green when its defect is reinstated is not a guard. All three falsified, each by reinstating the original defect AND by an independent mutation the author never rehearsed. (1) Identity: replacing the compared_fields emptiness test with false in diagnostics.rs restored the 'empty disagreements => No' collapse -> two guards RED ('No' vs 'Not compared'), positive control correctly stayed green; independent mutation at the DATA layer (synthesizing a trivial self-comparison in compare_identity_producers) also RED, so the guard pins the property, not one call site. (2) Single ledger read: restoring get_applied_changes() in build() -> RED (1 vs 0); independent mutation adding a SECOND load_history() -- a genuinely different shape from the author's -> RED (2 vs 1). The source-scanning guard is real, not tautological: its needles are assembled via format! at runtime so the test cannot satisfy its own count. (3) Evidence span: passing the capped chronology.entries -> RED; independent mutation re-capping inside compose_chronology itself -> RED, so the guard pins the end-to-end property. Focused suites at head: machine_model 35 passed / 0 failed; history 58 passed / 0 failed / 5 ignored. Mutation boundary: actions.rs, gaming_orchestrator.rs, gaming_session.rs untouched. Read-only confirmed: no new #[tauri::command] beyond the read-only get_machine_model, no new save_/write_/fs::/apply_/rollback_/run_elevated call site, and the module's own composition_module_contains_no_write_or_mutation_call source guard passes. Panic paths: none new in production code; the one new .expect is inside #[cfg(test)]. Projection identity: one definition -- into_view remains the sole row->view mapping, applied_change_views delegates to it, and get_applied_changes itself now routes through applied_change_views. Tree clean after review, HEAD unmoved. ONE NON-BLOCKING FINDING carried forward, not waived: the_slice_projection_is_the_same_projection_row_for_row cannot detect drift in the on_this_rig field because its record() fixture never stamps hw_fingerprint, so that field is None on both sides regardless of what the projection computes; every other computed field is genuinely exercised. Guard-hardening item for the #385 follow-up, not a defect in shipped code.",
+    "orchestratorCorroboration": "The landing lane did not take the subagent's word for the structural claims. Independently verified at this head: machine_model.rs contains exactly ONE load_history() (line 1245) and ZERO get_applied_changes; history.rs:1060 shows get_applied_changes() routing through applied_change_views, so there is one projection and not two; all six cited guard functions exist by name (machine_model.rs:2040, 2570, 2605, 2649, 2684; history.rs:2275, 2304) -- a reviewer citing a test that does not exist being the specific failure mode checked for; the history.rs diff contains no apply_/rollback_/dispatch_rollback/resolve_rollback/synthesize_legacy/run_elevated/save_history line; and the only new IPC surface across the whole PR is get_machine_model plus its allow-get-machine-model capability entry."
+  },
+  "reviewHistoryNote": "Three prior HQ reviews on this PR, each CHANGES REQUIRED and each at a head older than this one: 5125759253 at a8f92477 (4 truth-model defects), 5129939237 at 6b7be6e7 (2 diagnostics statements contradicting their evidence), 5135765472 at 9fd5698a (3 blockers). None of them approved any head. This receipt does not inherit their verdicts; it rests on the fresh non-author review at 8e6c3bb8 recorded above, which is the first review of this exact head.",
+  "pr": 387,
+  "issue": 385,
+  "kind": "lane",
+  "branch": "claude/385-machine-model-v1"
+}
