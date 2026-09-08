@@ -57,11 +57,46 @@ function Get-HarnessRequests {
   return @(Get-Content -LiteralPath $logPath | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
 }
 
+# A previous run that was hard-killed cannot have cleaned up after itself: `finally` is a language
+# construct and never runs when the interpreter is killed from outside, which is exactly how these
+# harnesses die when the worktree that spawned them goes silent. Measured 2026-08-27: two servers
+# from this file alive for 110.5 hours, parents long dead, sandboxes deleted, still holding ports.
+# The forward fix (the child watches its parent, below) cannot help a machine that has ALREADY
+# leaked, so each run sweeps the previous run's garbage before adding a process of its own.
+#
+# Selection is on a DEAD parent, never on the name alone: a concurrent lane's live harness is not
+# this run's garbage, and killing it would turn a leak into a flake.
+function Stop-OrphanedAliasServer {
+  try {
+    $live = @{}
+    foreach ($id in (Get-CimInstance Win32_Process -ErrorAction Stop).ProcessId) { $live[[int]$id] = $true }
+    $servers = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction Stop |
+      Where-Object { $_.CommandLine -and $_.CommandLine -like "*alias-server.mjs*" }
+    foreach ($server in $servers) {
+      if (-not $live.ContainsKey([int]$server.ParentProcessId)) {
+        Stop-Process -Id $server.ProcessId -Force -ErrorAction SilentlyContinue
+      }
+    }
+  } catch {
+    # Reaping is opportunistic hygiene, never a reason to fail the run it is protecting.
+  }
+}
+
 function Start-HarnessServer {
+  Stop-OrphanedAliasServer
   Write-HarnessUtf8 $serverPath @'
 import { createServer } from "node:http";
 import { appendFileSync, writeFileSync } from "node:fs";
-const [logPath, portPath] = process.argv.slice(2);
+const [logPath, portPath, parentPid] = process.argv.slice(2);
+// The child owns its own lifetime. The caller's `finally` covers a graceful exit; nothing in the
+// caller can cover its own hard kill, so the only guarantee that survives one has to live HERE, in
+// the process that would otherwise outlive it. `process.kill(pid, 0)` signals nothing and throws
+// ESRCH once the parent is gone. Unref'd so the watchdog itself never keeps the server alive.
+if (parentPid) {
+  setInterval(() => {
+    try { process.kill(Number(parentPid), 0); } catch { process.exit(0); }
+  }, 1000).unref();
+}
 const server = createServer((request, response) => {
   appendFileSync(logPath, `${JSON.stringify({url: request.url, headers: request.headers})}\n`);
   if (request.url.startsWith("/absent/")) { response.writeHead(404); response.end("not found"); return; }
@@ -72,7 +107,7 @@ const server = createServer((request, response) => {
 server.listen(0, "127.0.0.1", () => writeFileSync(portPath, String(server.address().port)));
 '@
   $node = (Resolve-NativeExecutable "node").Source
-  $process = Start-Process -FilePath $node -ArgumentList @($serverPath, $logPath, $portPath) `
+  $process = Start-Process -FilePath $node -ArgumentList @($serverPath, $logPath, $portPath, $PID) `
     -PassThru -WindowStyle Hidden
   for ($attempt = 0; $attempt -lt 200; $attempt++) {
     if (Test-Path -LiteralPath $portPath -PathType Leaf) {
