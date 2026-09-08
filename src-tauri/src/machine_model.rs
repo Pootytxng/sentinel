@@ -1236,8 +1236,14 @@ pub(crate) fn build() -> MachineModel {
     let live_fingerprint = crate::hardware::current_fingerprint();
     let snapshots = crate::intelligence::load_store().identity_snapshots;
     let baseline = crate::hwchange::persisted_baseline();
+    // ONE ledger read, both projections derived from it. Reading twice — raw rows here, the view
+    // through the ledger's own command — let an apply or rollback land BETWEEN the reads and compose
+    // a single model from two ledger states: the change count could include a row the chronology
+    // never saw. One shared answer that contradicts itself is the exact failure this slice exists to
+    // remove (#385 review 5135765472, blocker 2). The view projection still lives in `history`, so
+    // this module gains no second definition of what a ledger row means.
     let raw_changes = crate::history::load_history().unwrap_or_default();
-    let applied_changes = crate::history::get_applied_changes();
+    let applied_changes = crate::history::applied_change_views(&raw_changes);
 
     let assembly = crate::intelligence::assemble_timeline(&crate::intelligence::TimelineInputs {
         applied: &raw_changes,
@@ -2012,6 +2018,42 @@ mod machine_model_tests {
         let a = serde_json::to_string(&f.model()).unwrap();
         let b = serde_json::to_string(&f.model()).unwrap();
         assert_eq!(a, b, "composition is a pure function of its inputs");
+    }
+
+    /// Blocker 2 of review 5135765472: `build()` read the Trust Ledger TWICE — once for the raw
+    /// rows that feed the timeline and chronology, and again through the ledger's own view command,
+    /// which performs its own load. An apply or rollback landing BETWEEN those two reads composes
+    /// one `MachineModel` from two ledger states: the Compy-change count can include a row the
+    /// chronology never saw. One shared answer contradicting itself is precisely what this slice
+    /// exists to remove.
+    ///
+    /// A runtime assertion cannot establish this. Both reads return identical rows on a quiet disk,
+    /// and provoking the race needs a mutation to interleave between two calls inside one function —
+    /// so a runtime guard would be nondeterministic and could not be causally falsified. The
+    /// property is STRUCTURAL — the ledger is read exactly once and the self-loading producer is not
+    /// called — so it is checked structurally, which makes split-state composition impossible rather
+    /// than merely unlikely. Reinstating either shape turns this red.
+    ///
+    /// Needles are assembled at runtime for the reason the read-only scan above states: a scanner
+    /// that matches its own source is a scanner that can never fail.
+    #[test]
+    fn the_model_is_composed_from_exactly_one_trust_ledger_read() {
+        let self_loading_producer = format!("get_applied_{}", "changes");
+        assert_eq!(
+            OWN_SOURCE.match_indices(self_loading_producer.as_str()).count(),
+            0,
+            "machine_model.rs must not call {self_loading_producer}: it performs its OWN ledger \
+             load, and that second read is what lets one model be composed from two ledger states. \
+             Derive the view from rows already loaded instead."
+        );
+
+        let ledger_read = format!("load_{}", "history");
+        assert_eq!(
+            OWN_SOURCE.match_indices(ledger_read.as_str()).count(),
+            1,
+            "the Trust Ledger must be read EXACTLY once per model, with every ledger-derived \
+             projection taken from that one snapshot"
+        );
     }
 
     // ── 7. The command and the diagnostics section share ONE model ────────

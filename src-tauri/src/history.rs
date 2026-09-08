@@ -304,6 +304,21 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
     }
 }
 
+/// The ledger VIEW projection over rows a caller has ALREADY LOADED.
+///
+/// Exists so a consumer that must derive SEVERAL projections from ONE ledger snapshot cannot be
+/// forced into a second `load_history()` to get the view — the shape that let `machine_model::build`
+/// compose one model from two ledger states, an apply or rollback landing between the reads (#385
+/// review 5135765472, blocker 2).
+///
+/// This is not a second implementation of the projection: it delegates to `into_view`, which stays
+/// the single place a row becomes a view, so `check_change_active` / `same_rig` / the label
+/// derivations keep exactly one definition. Callers that own their rows should keep using
+/// `get_applied_changes`; this borrows so the raw rows survive for the caller's other projections.
+pub(crate) fn applied_change_views(history: &[AppliedChange]) -> Vec<AppliedChangeView> {
+    history.iter().cloned().map(into_view).collect()
+}
+
 /// Test-only constructor for a ledger VIEW with the computed-at-read fields set directly, so a
 /// consumer's tests can exercise active / rolled-back / other-rig rows without a real ledger, a
 /// real registry, or a real rig. Never compiled into the shipped binary.
@@ -1042,7 +1057,7 @@ pub(crate) fn get_applied_changes() -> Vec<AppliedChangeView> {
     // The empty view is never left to speak for itself: `get_ledger_health` is the companion read
     // that tells the surface whether this list is the whole story, so "nothing is active" can only
     // render when that is a fact.
-    load_history().unwrap_or_default().into_iter().map(into_view).collect()
+    applied_change_views(&load_history().unwrap_or_default())
 }
 
 /// Whether the LATEST Trust-Ledger entry for `rec_id` is an active apply (status "applied", not
@@ -2249,6 +2264,52 @@ mod history_tests {
         assert_eq!(v.rec_id, c.rec_id);
         assert_eq!(v.status, "applied");
         assert!(v.is_still_active, "unknown rec must default to still-active");
+    }
+
+    /// The slice projection added for #385 review 5135765472 blocker 2 exists so a consumer can
+    /// derive the VIEW from rows it has ALREADY loaded instead of forcing a second `load_history`.
+    /// It is only safe to use for that if it is the SAME projection — not a re-implementation that
+    /// can drift from `into_view` and quietly give the Machine Model a different set of computed
+    /// fields than the ledger's own command gives every other consumer.
+    #[test]
+    fn the_slice_projection_is_the_same_projection_row_for_row() {
+        let rows = vec![
+            record("game-mode", "applied"),
+            record("a-rec-we-do-not-track", "applied"),
+            record("visual-effects", "rolled_back"),
+        ];
+
+        let views = applied_change_views(&rows);
+
+        assert_eq!(views.len(), rows.len(), "the projection is 1:1 — it drops and invents nothing");
+        for (view, row) in views.iter().zip(rows.iter()) {
+            let expected = into_view(row.clone());
+            assert_eq!(view.id, expected.id, "row order must be preserved");
+            assert_eq!(view.rec_id, expected.rec_id);
+            assert_eq!(view.status, expected.status);
+            assert_eq!(
+                view.is_still_active, expected.is_still_active,
+                "the computed-at-read fields must come from into_view, not a second definition"
+            );
+            assert_eq!(view.restores_label, expected.restores_label);
+            assert_eq!(view.applied_label, expected.applied_label);
+            assert_eq!(view.payoff_label, expected.payoff_label);
+            assert_eq!(view.on_this_rig, expected.on_this_rig);
+        }
+    }
+
+    /// Borrowing must leave the caller's rows intact: the whole point is that `build()` keeps the
+    /// raw rows for its timeline/chronology projection AFTER taking the view from the same snapshot.
+    #[test]
+    fn the_slice_projection_leaves_the_callers_rows_usable() {
+        let rows = vec![record("game-mode", "applied"), record("visual-effects", "applied")];
+        let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
+
+        let views = applied_change_views(&rows);
+
+        assert_eq!(views.len(), 2);
+        let still_there: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
+        assert_eq!(still_there, ids, "the rows the caller still needs must survive the projection");
     }
 
     #[test]
