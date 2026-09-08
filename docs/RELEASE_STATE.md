@@ -25,7 +25,7 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=3fe7a029 -->
+<!-- STATE:source_main_commit=f8c5f9d1 -->
 <!-- STATE:latest_release_version=0.9.26 -->
 <!-- STATE:candidate_version=0.9.26 -->
 <!-- STATE:candidate_branch=main -->
@@ -118,7 +118,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
 
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
-| **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:558` | Flipped 2026-06-18 w/ owner sign-off. §7 QA harness passed; **GAMING_MODE_QA.md 10/10 PASSED 2026-07-14**; **owner SIGNED OFF 2026-07-14** — field-proven for 1.0. |
+| **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:565` | Flipped 2026-06-18 w/ owner sign-off. §7 QA harness passed; **GAMING_MODE_QA.md 10/10 PASSED 2026-07-14**; **owner SIGNED OFF 2026-07-14** — field-proven for 1.0. |
 | **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2054` | Armed 2026-06-25. Live exact-restore + UAC-cancel=no-partial + critical-service block proven. Session start/restore ride the ONE batched elevation (T6/T6b). |
 | **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2127` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. |
 | **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:170` | REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
