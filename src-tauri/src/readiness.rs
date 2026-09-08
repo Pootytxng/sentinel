@@ -948,10 +948,15 @@ static DISMISSALS_LOCK: Mutex<()> = Mutex::new(());
 /// nothing on screen explaining why. See `comparison::lock_comparison` for why recovering is safe
 /// here rather than merely convenient: the guarded value is `()`, and every write is a whole-file
 /// `atomic_write`, so the recovering thread re-reads from disk and inherits nothing.
-fn lock_dismissals() -> std::sync::MutexGuard<'static, ()> {
-    DISMISSALS_LOCK.lock().unwrap_or_else(|poisoned| {
-        DISMISSALS_LOCK.clear_poison();
-        poisoned.into_inner()
+fn lock_dismissals() -> crate::race_seam::StoreGuard {
+    // #398 — see `comparison::lock_comparison`. The paragraph above claims nothing inside these
+    // sections touches another store; that claim is now OBSERVED at runtime rather than asserted in
+    // prose, and it fails by name if it ever stops being true. No-op in a release build.
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::Readiness, || {
+        DISMISSALS_LOCK.lock().unwrap_or_else(|poisoned| {
+            DISMISSALS_LOCK.clear_poison();
+            poisoned.into_inner()
+        })
     })
 }
 

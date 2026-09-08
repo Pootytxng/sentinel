@@ -147,6 +147,18 @@ fn store_path() -> std::path::PathBuf {
 /// take it — a slightly stale read is harmless, a lost award is not.
 static SCOREBOARD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// Take it, with the acquisition recorded (#398).
+///
+/// Nothing under this lock reaches another store today, so it appears in no pair of
+/// `race_seam::ALLOWED_NESTING`. That is the point: the first time a change here nests it with
+/// anything, the recorder names the pair and asks for it to be re-derived, rather than the nesting
+/// arriving silently. No-op in a release build.
+fn lock_scoreboard() -> crate::race_seam::StoreGuard {
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::BenchmarkScoreboard, || {
+        SCOREBOARD_LOCK.lock().unwrap_or_else(|p| p.into_inner())
+    })
+}
+
 fn load_store() -> ScoreStore {
     let path = store_path();
     match std::fs::read_to_string(&path) {
@@ -189,7 +201,7 @@ pub(crate) fn record_result(rec_id: &str, rec_title: &str, verdict: &Verdict) ->
         ci_hi_pct: a.ci_hi_pct,
         at: chrono::Utc::now().to_rfc3339(),
     };
-    let _guard = SCOREBOARD_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _guard = lock_scoreboard();
     let mut store = load_store();
     store.awards.push(entry.clone());
     let _ = save_store(&store);
@@ -206,7 +218,7 @@ pub(crate) fn scoreboard() -> ScoreboardView {
 }
 
 pub(crate) fn clear_scoreboard() -> Result<(), String> {
-    let _guard = SCOREBOARD_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _guard = lock_scoreboard();
     save_store(&ScoreStore::default())
 }
 

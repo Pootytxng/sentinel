@@ -516,8 +516,13 @@ static SAVE_SEQ: AtomicU64 = AtomicU64::new(0);
 /// Take the state lock, ignoring poisoning. A previous panic mid-mutation is not a reason to stop
 /// noticing crashes — the state is re-read from disk on every entry, so a poisoned lock guards
 /// nothing that a fresh read does not already fix.
-fn lock_state() -> std::sync::MutexGuard<'static, ()> {
-    STATE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+fn lock_state() -> crate::race_seam::StoreGuard {
+    // #398 — see `comparison::lock_comparison`. Two paths take this lock (`with_state` writes,
+    // `read_state` reads); the recorder is what makes "one of them never runs inside the other"
+    // an observation rather than an assumption. No-op in a release build.
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::IncidentObserver, || {
+        STATE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    })
 }
 
 /// Read → apply → save, under the lock. The single writer path.

@@ -51,10 +51,14 @@ static DRIFT_LOCK: Mutex<()> = Mutex::new(());
 /// — see there for why recovery is safe rather than merely convenient. Recovering without clearing
 /// (what this did before PR #395's review) leaves the lock permanently poisoned for anyone who ever
 /// decides to propagate instead.
-fn lock_drift() -> std::sync::MutexGuard<'static, ()> {
-    DRIFT_LOCK.lock().unwrap_or_else(|poisoned| {
-        DRIFT_LOCK.clear_poison();
-        poisoned.into_inner()
+fn lock_drift() -> crate::race_seam::StoreGuard {
+    // #398 — see `comparison::lock_comparison`. Recorded before the block, so a re-entrant or
+    // undeclared nesting panics by name rather than hanging. No-op in a release build.
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::Drift, || {
+        DRIFT_LOCK.lock().unwrap_or_else(|poisoned| {
+            DRIFT_LOCK.clear_poison();
+            poisoned.into_inner()
+        })
     })
 }
 

@@ -151,10 +151,17 @@ static COMPARISON_LOCK: Mutex<()> = Mutex::new(());
 /// `a_panic_between_the_two_writes_splits_the_pair_and_leaves_the_store_usable` pins exactly what
 /// survives. If a future change adds a panic surface there, that test is where the argument
 /// restarts.
-fn lock_comparison() -> std::sync::MutexGuard<'static, ()> {
-    COMPARISON_LOCK.lock().unwrap_or_else(|poisoned| {
-        COMPARISON_LOCK.clear_poison();
-        poisoned.into_inner()
+fn lock_comparison() -> crate::race_seam::StoreGuard {
+    // #398: the acquisition is RECORDED before the block. `on_session_finalized_at` calls out of
+    // this section into `history`, and a path from there back into any `lock_comparison` caller is a
+    // self-deadlock — `std::sync::Mutex` is not reentrant. The recorder turns that into a named
+    // panic instead of a silent hang, and unlike the text scanner it does not care how the call was
+    // spelled. Compiled out entirely in a release build.
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::Comparison, || {
+        COMPARISON_LOCK.lock().unwrap_or_else(|poisoned| {
+            COMPARISON_LOCK.clear_poison();
+            poisoned.into_inner()
+        })
     })
 }
 

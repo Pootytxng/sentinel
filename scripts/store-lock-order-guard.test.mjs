@@ -7,8 +7,32 @@
 // `load_history` reaches `support_evidence::record`, which takes that module's own store lock. No
 // cycle — but a lock ORDER nobody had written down, defended by a sentence that was wrong.
 //
-// Prose is the weakest tier of rule. This file is the guard that replaces it, and it checks the two
-// things the acyclicity argument actually rests on:
+// WHAT THIS FILE IS, AFTER #398 — read this before trusting a green run.
+//
+// This is a CHANGE DETECTOR over statically-resolvable source text. It is NOT a proof that the lock
+// graph is acyclic, and it never was; #398 measured that directly. A real self-deadlocking back edge
+// was planted as a crate-root re-export —
+//
+//     lib.rs:      pub(crate) use comparison::report_tuning_crash as _r5_reexport;
+//     history.rs:  fn ledger_len_checked() { let _ = crate::_r5_reexport(); ... }
+//
+// — and every assertion in this file stayed GREEN, 31/31, while `cargo test` deadlocked into
+// `race_seam`'s runtime recorder with `RE-ENTRANT acquisition of COMPARISON_LOCK`. That is not a bug
+// to fix here. Resolving `crate::_r5_reexport` to `comparison::report_tuning_crash` is NAME
+// RESOLUTION, not parsing, so swapping this scanner for `syn` or tree-sitter would not close it
+// either — only rustc's own resolver knows what that alias points at.
+//
+// The authority on lock ORDER is now `src-tauri/src/race_seam.rs`: a `#[cfg(test)]` thread-local
+// stack of held store locks that panics on a re-entrant or undeclared nesting AS IT HAPPENS, so
+// re-exports, macro-generated paths, trait-object dispatch and function pointers in structs are all
+// caught by construction — it sees acquisitions, not text.
+//
+// This file is kept because the recorder does NOT subsume it. The recorder only sees nestings the
+// suite actually EXECUTES, and rule B below fires on a new module edge whether or not any test
+// drives it. The two are complementary; neither alone is sufficient. What this file may claim is
+// bounded to that, and the assertion names below say so.
+//
+// It checks two things, both syntactic:
 //
 //   A. NO BACK EDGE, TRANSITIVELY. Nothing reachable from inside a store lock may call back into a
 //      store module. The reachable set is COMPUTED from one seed — `history`, the module actually
@@ -321,15 +345,18 @@ function edgesFrom(module) {
   return extractEdges(code(module), module);
 }
 
-describe("#283 store locks: the lock graph stays acyclic", () => {
-  it("nothing reachable from inside a store lock reaches back into one", () => {
+describe("#283 store locks: no back edge is VISIBLE IN THE SOURCE TEXT (a change detector, not a proof)", () => {
+  // NOT "nothing reaches back into a store lock" — #398 planted a real one and this stayed green.
+  // The claim is bounded to what `extractEdges` can resolve without a name resolver.
+  it("no back edge into a store module is visible in statically-resolvable call and import text", () => {
     const via = closureFrom(LOCK_ENTRY_POINTS, edgesFrom);
     const back = STORE_MODULES.filter((store) => via.has(store));
     expect(
       back.map((store) => via.get(store).join(" -> ")),
       `a module reachable from inside a store lock calls back into ${back.join("/")}, which closes ` +
         `the loop into a deadlock. Break an edge on the path above, or move the call that reaches ` +
-        `into that chain out of the locked section.`,
+        `into that chain out of the locked section. (This firing is conclusive; this assertion ` +
+        `passing is not — see the header, and race_seam.rs for the check that is.)`,
     ).toEqual([]);
   });
 
