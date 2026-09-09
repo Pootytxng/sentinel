@@ -17,7 +17,7 @@
 // in the row, and refused only when the paths it did declare overlap — the board's staleness is a
 // hygiene finding, not a licence to double-write.
 
-import { overlappingFiles, overlappingPairs, parseWriteScope } from "../../scripts/lib/claim-scope.mjs";
+import { joinScopeBullet, overlappingFiles, overlappingPairs, parseWriteScope, scopeBulletLines } from "../../scripts/lib/claim-scope.mjs";
 
 /** The paths a scope sentence declares, through the one parser every reader shares. */
 export function scopeFromText(text) {
@@ -29,21 +29,19 @@ export function scopeFromText(text) {
  * The `Write scope` bullet of an issue body, as the text after the colon (continuation lines
  * included, up to the next bullet, heading or blank line) — or null when the body has no such
  * bullet. This is where a task's scope lives before its first claim is posted.
+ *
+ * The continuation rule itself is `joinScopeBullet`, shared with `parseClaim` since #399: this
+ * reader's rule was already documented and correct, and the claim reader's was one line, so a
+ * wrapped bullet meant the two disagreed about the same text. Neither owns the rule now.
  */
 export function scopeTextFromBody(body) {
   if (!body || typeof body !== "string") return null;
-  const lines = body.replace(/\r\n/g, "\n").split("\n");
+  const lines = scopeBulletLines(body);
   // `- Write scope: …`, `- **Write scope:** …` and `- **Write scope**: …` are all the same bullet.
   const bullet = /^\s*[-*]\s*(?:\*\*|__)?\s*Write scope\s*:?\s*(?:\*\*|__)?\s*:?\s*/i;
   const start = lines.findIndex((l) => bullet.test(l) && /:/.test(l));
   if (start < 0) return null;
-  const out = [lines[start].replace(bullet, "")];
-  for (let i = start + 1; i < lines.length; i += 1) {
-    const l = lines[i];
-    if (!l.trim() || /^\s*(?:[-*]\s|#|\|)/.test(l)) break;
-    out.push(l.trim());
-  }
-  const text = out.join(" ").trim();
+  const text = joinScopeBullet(lines, start, lines[start].replace(bullet, ""));
   return text || null;
 }
 
