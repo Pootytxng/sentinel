@@ -26,6 +26,15 @@ export function normalizePattern(pattern) {
 }
 
 /**
+ * A thematic break, in the form CommonMark actually defines it: three or more of the SAME marker,
+ * spaces allowed between and after them, and nothing else on the line. `_ _ _` is as valid a break
+ * as `___`, and the review of 242f3de8 measured the spaced underscore form swallowing the paragraph
+ * below it into the scope. `- - -` and `* * *` were already caught by the bullet rule above; the
+ * underscore had no other alternative to fall back on.
+ */
+const THEMATIC_BREAK = /^\s*(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+
+/**
  * A line that ENDS the `Write scope` text. Decided ONCE, here, and applied by the one extractor
  * (#408): the next list item (bulleted or numbered), a heading, a table row, a fenced code block,
  * or a thematic break. A blank line ends it too and is checked separately, because "" matches
@@ -39,23 +48,56 @@ export function normalizePattern(pattern) {
  * `parseWriteScope` that stopped only at a blank line or a `-`/`*` bullet, so the same body read
  * through the two paths granted different paths.
  */
-export const ENDS_SCOPE_BULLET = /^\s*(?:[-*+]\s|\d{1,9}[.)]\s|#|\||```|~~~|(?:-{3,}|\*{3,}|_{3,})\s*$)/;
+export const ENDS_SCOPE_BULLET = new RegExp(
+  `^\\s*(?:[-*+]\\s|\\d{1,9}[.)]\\s|#|\\||\`\`\`|~~~)|${THEMATIC_BREAK.source}`,
+);
 
-const FENCE = /^\s*(?:```|~~~)/;
+/**
+ * A fence OPENER: three or more backticks or tildes. Deliberately liberal about indentation, because
+ * the two directions of error are not symmetric. Opening a fence that CommonMark would not open only
+ * hides a declaration, and a hidden declaration reads as no scope at all, which every consumer
+ * already fails closed on. Failing to open one grants whatever the block contains.
+ */
+const FENCE_OPEN = /^\s*(`{3,}|~{3,})/;
+
+/**
+ * A fence CLOSER, held to the real rule instead: at most three spaces of indent, no info string, and
+ * -- checked against the opener in `fencedLines` -- the SAME marker with a run at least as long.
+ * This is the strict side for the same asymmetry: a line wrongly accepted as a closer re-opens label
+ * parsing inside code, which is exactly how 242f3de8 granted a scope written in a code sample.
+ */
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
 
 /**
  * Which lines sit inside a fenced code block (the fence lines themselves included). A label found in
  * there is a code sample, not a declaration -- #405's own claim quoted a `js` fence above its scope
  * bullet -- and reading one as the scope would let quoted text declare write authority.
+ *
+ * The scanner tracks the OPEN fence's marker and run length. A `toggle on anything fence-shaped`
+ * scanner is fail-open, and the exact-head review of 242f3de8 measured it: a ``` line inside a ````
+ * block, or a ~~~ line inside a ``` block, ended the block early and let the next `- Write scope:`
+ * line -- sitting in what is still code -- become the declaration. It did not merely ADD the path;
+ * extraction returns the FIRST match, so the code sample REPLACED the writer's real scope.
+ *
+ * Limitation, stated rather than implied: indented code blocks are not modelled. A fence indented
+ * four or more spaces is still treated as an opener here, which is the safe direction, but a `Write
+ * scope` label inside a four-space indented block with no fence around it is read as a declaration.
  */
 function fencedLines(lines) {
   const mask = new Array(lines.length).fill(false);
-  let open = false;
+  let open = null;
   for (let i = 0; i < lines.length; i += 1) {
-    if (FENCE.test(lines[i])) {
+    if (open) {
       mask[i] = true;
-      open = !open;
-    } else mask[i] = open;
+      const close = FENCE_CLOSE.exec(lines[i]);
+      if (close && close[1][0] === open.marker && close[1].length >= open.length) open = null;
+      continue;
+    }
+    const start = FENCE_OPEN.exec(lines[i]);
+    if (start) {
+      mask[i] = true;
+      open = { marker: start[1][0], length: start[1].length };
+    }
   }
   return mask;
 }

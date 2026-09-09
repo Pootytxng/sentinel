@@ -26,6 +26,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ENDS_SCOPE_BULLET,
   normalizePattern,
   parseScopePatterns,
   parseWriteScope,
@@ -216,6 +217,51 @@ const CASES = [
     wraps: true,
     beyond: "b/nope.rs",
   },
+  // The two fenced-code shapes the independent exact-head review of 242f3de8 measured. A fence
+  // scanner that toggles on anything fence-shaped is fail-open: the inner line ends the block early
+  // and the `- Write scope:` line below it -- still inside code -- becomes the declaration. It does
+  // not merely ADD a path. Extraction returns the FIRST match, so the code sample REPLACES the real
+  // scope, which is why `text` here is the real bullet and `beyond` is the path written in code.
+  {
+    name: "an inner ``` line does not close a ```` block, so the label inside it is still code",
+    body: claim(
+      "````md",
+      "```",
+      "- Write scope: `evil/inside.md`",
+      "````",
+      "- Write scope: `a/one.rs`,",
+      "  `a/two.rs`",
+      "- Started: 2026-09-09",
+    ),
+    text: TEXT_TWO,
+    paths: TWO,
+    wraps: true,
+    beyond: "evil/inside.md",
+  },
+  {
+    name: "a ~~~ line does not close a ``` block, so the label inside it is still code",
+    body: claim(
+      "```md",
+      "~~~",
+      "- Write scope: `evil/mismatch.md`",
+      "```",
+      "- Write scope: `a/one.rs`,",
+      "  `a/two.rs`",
+      "- Started: 2026-09-09",
+    ),
+    text: TEXT_TWO,
+    paths: TWO,
+    wraps: true,
+    beyond: "evil/mismatch.md",
+  },
+  {
+    name: "terminates at a spaced underscore thematic break `_ _ _`",
+    body: claim("- Write scope: `a/one.rs`,", "  `a/two.rs`", "_ _ _", "prose about `evil/thematic.rs`"),
+    text: TEXT_TWO,
+    paths: TWO,
+    wraps: true,
+    beyond: "evil/thematic.rs",
+  },
 ];
 
 /** Every production reader of a write scope, and how each is asked for the same two answers. */
@@ -223,6 +269,8 @@ const READERS = [
   { name: "the posted-claim reader (parseClaim)", text: (b) => parseClaim(b)?.scope ?? null },
   { name: "the issue-body reader (scopeTextFromMarkdown)", text: (b) => scopeTextFromMarkdown(b) },
 ];
+
+const reader0 = (b) => READERS[0].text(b);
 
 describe("#408 — one extraction contract, exercised through every production reader", () => {
   for (const reader of READERS) {
@@ -248,6 +296,24 @@ describe("#408 — one extraction contract, exercised through every production r
       expect(parseWriteScope(c.body)).not.toContain(c.beyond);
     },
   );
+
+
+  // A thematic break is 3+ of the SAME marker with spaces allowed between them. `- - -` and `* * *`
+  // were already caught by the bullet rule; `_ _ _` had nothing to fall back on and swallowed the
+  // paragraph below it (the review's P2). Pinned in both directions so the widening stays narrow.
+  it("recognizes every valid spaced thematic break, and nothing that merely resembles one", () => {
+    const after = (line) => parseWriteScope(["- Write scope: `a/one.rs`", line, "prose `evil/after.rs`"].join("\n"));
+    for (const brk of ["___", "_ _ _", "_  _  _", "----", "- - -", "***", "* * *", "-- -", "_ _ _   "]) {
+      expect(after(brk), `should have ended the scope: ${JSON.stringify(brk)}`).toEqual(["a/one.rs"]);
+    }
+    // Not thematic breaks, and still not granted -- they end the bullet for other reasons or are
+    // prose. The point of listing them is that the new rule did not start matching them.
+    for (const notBreak of ["_ _", "__", "_ _ _ x", "- _ -"]) {
+      expect(ENDS_SCOPE_BULLET.test(notBreak), `not a thematic break: ${JSON.stringify(notBreak)}`).toBe(
+        notBreak.startsWith("- "),
+      );
+    }
+  });
 
   it("a wrapped scope and its one-line equivalent declare the same paths", () => {
     const wrapped = CASES.find((c) => c.name.startsWith("wrapped across two lines"));
@@ -373,6 +439,41 @@ const preFixPatternRead = (scopeText) => {
   return declared.filter((p, i, a) => p && a.indexOf(p) === i);
 };
 
+/**
+ * Extraction exactly as it stood at 242f3de8 -- the head the independent exact-head review measured,
+ * and the reason this file has three more cases than it did. Two fail-open rules are reproduced:
+ * a fence scanner that TOGGLED on any fence-shaped line regardless of marker or run length, and a
+ * thematic-break rule that knew only the contiguous forms. Neither could be falsified by the matrix
+ * as it stood, which is the whole finding: the full-gate PASS was true and proved less than it read.
+ */
+const PRE_REPAIR_ENDS = /^\s*(?:[-*+]\s|\d{1,9}[.)]\s|#|\||```|~~~|(?:-{3,}|\*{3,}|_{3,})\s*$)/;
+const PRE_REPAIR_FENCE = /^\s*(?:```|~~~)/;
+
+const preRepairRead = (body) => {
+  const lines = String(body).replace(/\r\n/g, "\n").split("\n");
+  const fenced = new Array(lines.length).fill(false);
+  let open = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (PRE_REPAIR_FENCE.test(lines[i])) {
+      fenced[i] = true;
+      open = !open;
+    } else fenced[i] = open;
+  }
+  const label = /^\s*[-*+]\s*(?:\*\*|__)?\s*Write scope\s*(?::\s*(?:\*\*|__)|(?:\*\*|__)\s*:|:)\s*(.*)$/i;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (fenced[i]) continue;
+    const m = label.exec(lines[i]);
+    if (!m) continue;
+    const out = [m[1]];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      if (!lines[j].trim() || PRE_REPAIR_ENDS.test(lines[j])) break;
+      out.push(lines[j].trim());
+    }
+    return out.join(" ").trim() || null;
+  }
+  return null;
+};
+
 describe("#408 — the case list can fail", () => {
   it("has cases that wrap, cases that do not, and cases with prose past the boundary", () => {
     expect(CASES.filter((c) => c.wraps).length).toBeGreaterThan(0);
@@ -409,13 +510,16 @@ describe("#408 — the case list can fail", () => {
       "terminates at a `~~~` fence",
       "terminates at a thematic break",
       "the label inside a fenced block is a code sample, not a declaration",
+      "an inner ``` line does not close a ```` block, so the label inside it is still code",
+      "a ~~~ line does not close a ``` block, so the label inside it is still code",
+      "terminates at a spaced underscore thematic break `_ _ _`",
     ]);
-    // On six of the seven the over-read becomes real write authority: a path from the next block is
-    // GRANTED. The seventh is the ```js fence, where the code line's own backticks re-pair and the
+    // On nine of the ten the over-read becomes real write authority: a path from the next block is
+    // GRANTED. The tenth is the ```js fence, where the code line's own backticks re-pair and the
     // old read declares junk patterns ("js const p =") instead — a different failure, not a safer one.
     const granted = overRead.filter((c) => parseScopePatterns(preFixBoundaryRead(c.body)).includes(c.beyond));
     expect(granted.map((c) => c.name)).not.toContain("terminates at a fenced code block");
-    expect(granted).toHaveLength(6);
+    expect(granted).toHaveLength(9);
     for (const c of granted) {
       expect(parseScopePatterns(preFixBoundaryRead(c.body)), c.name).toContain(c.beyond);
       expect(parseScopePatterns(scopeTextFromMarkdown(c.body)), c.name).not.toContain(c.beyond);
@@ -455,6 +559,35 @@ describe("#408 — the case list can fail", () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+
+describe("#408 — the three cases added for the exact-head review can fail", () => {
+  const REVIEW_CASES = [
+    "an inner ``` line does not close a ```` block, so the label inside it is still code",
+    "a ~~~ line does not close a ``` block, so the label inside it is still code",
+    "terminates at a spaced underscore thematic break `_ _ _`",
+  ];
+
+  it("the 242f3de8 extractor is wrong on exactly the three cases this repair added", () => {
+    const wrong = CASES.filter((c) => preRepairRead(c.body) !== c.text).map((c) => c.name);
+    expect(wrong).toEqual(REVIEW_CASES);
+  });
+
+  it("and on each of them it GRANTS the path that was written inside the block it should have skipped", () => {
+    for (const name of REVIEW_CASES) {
+      const c = CASES.find((x) => x.name === name);
+      expect(parseScopePatterns(preRepairRead(c.body)), c.name).toContain(c.beyond);
+      expect(parseScopePatterns(reader0(c.body)), c.name).not.toContain(c.beyond);
+    }
+  });
+
+  it("on the two fence cases the old read did not merely add a path — it replaced the whole scope", () => {
+    for (const name of REVIEW_CASES.slice(0, 2)) {
+      const c = CASES.find((x) => x.name === name);
+      expect(parseScopePatterns(preRepairRead(c.body)), c.name).toEqual([c.beyond]);
+      expect(parseScopePatterns(preRepairRead(c.body)), c.name).not.toContain("a/one.rs");
+    }
+  });
+});
 
 describe("#408 — what deliberately did NOT change", () => {
   it("`- scope:` remains a claim-only alias: the body reader still requires the full label", () => {
