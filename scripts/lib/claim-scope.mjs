@@ -26,43 +26,163 @@ export function normalizePattern(pattern) {
 }
 
 /**
- * The paths a claim comment declares it will write, out of the `- Write scope:` bullet the claim
- * template prescribes. Only backticked paths count as declarations: the bullet also carries prose
- * ("nothing else", "this lane does not edit ..."), and prose is not a scope.
+ * A line that ENDS the `Write scope` text. Decided ONCE, here, and applied by the one extractor
+ * (#408): the next list item (bulleted or numbered), a heading, a table row, a fenced code block,
+ * or a thematic break. A blank line ends it too and is checked separately, because "" matches
+ * nothing.
  *
- * Reads to the end of the bullet, which is the next `- ` at the start of a line or a blank line --
- * a scope wrapped across lines is still one bullet.
+ * The property this protects: prose belonging to the NEXT Markdown structure must never silently
+ * become additional write authority. A scope that swallowed the numbered list under it would grant
+ * every path that list names, and the grant would read as the writer's own words.
+ *
+ * Before #408 there were three of these rules -- this one, and a private one inside
+ * `parseWriteScope` that stopped only at a blank line or a `-`/`*` bullet, so the same body read
+ * through the two paths granted different paths.
  */
-export function parseWriteScope(markdown) {
-  const text = String(markdown ?? "").replace(/\r\n/g, "\n");
-  const start = text.search(/^[-*]\s*Write scope:/im);
-  if (start < 0) return [];
-  const rest = text.slice(start).replace(/^[-*]\s*Write scope:/i, "");
-  const end = rest.search(/\n\s*\n|\n[-*]\s/);
-  const bullet = end < 0 ? rest : rest.slice(0, end);
+export const ENDS_SCOPE_BULLET = /^\s*(?:[-*+]\s|\d{1,9}[.)]\s|#|\||```|~~~|(?:-{3,}|\*{3,}|_{3,})\s*$)/;
 
-  // A path a sentence DISCLAIMS is not a path the lane claimed. Without this, the bullet
-  // "this lane does not edit `docs/SESSION_HANDOFF.md`" grants the handoff -- exactly backwards
-  // for the one file #291 exists about, and the drift check would then wave through the edit it
-  // was built to catch. Judged per path rather than per sentence, so `a` survives "`a` but not
-  // `b`": the text between one path and the next is what decides it.
-  //
-  // A bare conjunction carries the previous verdict (2026-09-02): in "No other `src/` or
-  // `src-tauri/` writes" the second path is disclaimed by the same "no" as the first, and a reading
-  // that resets at "or" grants `src-tauri/` to a lane that just said it would not touch it -- the
-  // hole this repo's own closeout claim fell through. "no" joins the disclaimers for the same bullet.
+const FENCE = /^\s*(?:```|~~~)/;
+
+/**
+ * Which lines sit inside a fenced code block (the fence lines themselves included). A label found in
+ * there is a code sample, not a declaration -- #405's own claim quoted a `js` fence above its scope
+ * bullet -- and reading one as the scope would let quoted text declare write authority.
+ */
+function fencedLines(lines) {
+  const mask = new Array(lines.length).fill(false);
+  let open = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (FENCE.test(lines[i])) {
+      mask[i] = true;
+      open = !open;
+    } else mask[i] = open;
+  }
+  return mask;
+}
+
+/**
+ * A bullet's own line plus its continuation lines, joined by a single space. The head is not trimmed
+ * on its own: it is joined first and the whole is trimmed once, so a bullet that does not wrap
+ * returns exactly what a single-line read returns.
+ */
+function joinBullet(lines, start, head) {
+  const out = [String(head ?? "")];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const l = lines[i];
+    if (!l.trim() || ENDS_SCOPE_BULLET.test(l)) break;
+    out.push(l.trim());
+  }
+  return out.join(" ").trim();
+}
+
+const escLabel = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** `- Write scope: ...`, `- **Write scope:** ...`, `- **Write scope**: ...`, `+ __Write scope__: ...`. */
+const labelBullet = (name) =>
+  new RegExp(
+    `^\\s*[-*+]\\s*(?:\\*\\*|__)?\\s*${escLabel(name)}\\s*(?::\\s*(?:\\*\\*|__)|(?:\\*\\*|__)\\s*:|:)\\s*(.*)$`,
+    "i",
+  );
+
+/** `| **Write scope** | ... |` -- a two-column row, one line by construction. */
+const labelRow = (name) =>
+  new RegExp(`^\\s*\\|\\s*(?:\\*\\*|__)?\\s*${escLabel(name)}\\s*(?:\\*\\*|__)?\\s*\\|\\s*(.*?)\\s*\\|\\s*$`, "i");
+
+/**
+ * A. EXTRACT: raw Markdown -> the exact `Write scope` text, or null.
+ *
+ * The ONE extraction contract (#408). Every reader of a write scope goes through it: the issue body,
+ * the posted claim, and `parseWriteScope` below. #399 had already collapsed two of the three
+ * continuation rules into one shared helper, but each reader still owned its own label matching and
+ * `parseWriteScope` still owned a third boundary rule, so "the same Markdown means the same scope"
+ * was still not true of this repo. It is now, because there is one function.
+ *
+ * `aliases` are the other labels a writer might use for the same field. The posted claim accepts
+ * `scope`; an issue body does not, because an issue body is prose and `- scope:` in it is as likely
+ * to be a sentence as a declaration.
+ *
+ * @param {string} markdown
+ * @param {{aliases?: string[]}} [opts]
+ * @returns {string|null}
+ */
+export function scopeTextFromMarkdown(markdown, { aliases = [] } = {}) {
+  if (!markdown || typeof markdown !== "string") return null;
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const fenced = fencedLines(lines);
+  for (const name of ["Write scope", ...aliases]) {
+    const bullet = labelBullet(name);
+    for (let i = 0; i < lines.length; i += 1) {
+      if (fenced[i]) continue;
+      const m = bullet.exec(lines[i]);
+      if (m) return joinBullet(lines, i, m[1]) || null;
+    }
+    const row = labelRow(name);
+    for (let i = 0; i < lines.length; i += 1) {
+      if (fenced[i]) continue;
+      const m = row.exec(lines[i]);
+      if (m) return m[1].trim() || null;
+    }
+  }
+  return null;
+}
+
+/**
+ * A path a sentence DISCLAIMS is not a path the lane claimed. Inflections of the two stems that were
+ * already here, not a synonym dictionary: `excluding` matched and `excluded` did not, and on #405
+ * the phrase "Still excluded, unchanged:" GRANTED the paths it was written to withhold.
+ */
+const DISCLAIMS = /\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b/i;
+
+/** A clause boundary. Only this re-opens granting after a disclaimer -- see `parseScopePatterns`. */
+const ENDS_CLAUSE = /[.;!?]/;
+
+/**
+ * B. PARSE: exact scope text -> normalized path patterns.
+ *
+ * Knows nothing about Markdown structure -- where the scope text ends was decided by A, and asking
+ * this layer to re-decide it is what produced two fake `- Write scope: ` wrappers whose only purpose
+ * was to reach this loop.
+ *
+ * Only backticked paths count as declarations: the text also carries prose ("nothing else", "this
+ * lane does not edit ..."), and prose is not a scope. The verdict is judged per path rather than per
+ * sentence, so `a` survives "`a` but not `b`": the text between one path and the next decides it.
+ *
+ * A disclaimer governs the REST OF ITS CLAUSE, which is the half #405 proved was missing. Two kinds
+ * of gap carry it forward:
+ *   - a bare conjunction ("no other `src/` or `src-tauri/`" -- a reading that resets at "or" grants
+ *     `src-tauri/` to a lane that just said it would not touch it, the hole this repo's own closeout
+ *     claim fell through, 2026-09-02);
+ *   - any gap that does not end a clause (", every other living status doc, " sits INSIDE the
+ *     exclusion list it continues; resetting there granted three test files on #405).
+ * A gap that ends a clause re-opens granting, so "`a` but not `b`; also `c`" still declares `c`.
+ */
+export function parseScopePatterns(scopeText) {
+  const text = String(scopeText ?? "");
   const declared = [];
   let cursor = 0;
   let disclaimed = false;
-  for (const match of bullet.matchAll(/`([^`]+)`/g)) {
-    const gap = bullet.slice(cursor, match.index);
+  for (const match of text.matchAll(/`([^`]+)`/g)) {
+    const gap = text.slice(cursor, match.index);
     cursor = match.index + match[0].length;
     const bare = /^[\s,;/]*(?:or|and|nor)?[\s,;/]*$/i.test(gap);
-    if (!bare) disclaimed = /\b(?:no|not|never|except|excluding|outside|other than)\b/i.test(gap);
+    if (!bare) {
+      if (DISCLAIMS.test(gap)) disclaimed = true;
+      else if (ENDS_CLAUSE.test(gap)) disclaimed = false;
+    }
     if (disclaimed) continue;
     declared.push(normalizePattern(match[1]));
   }
   return declared.filter((p, i, a) => p && a.indexOf(p) === i);
+}
+
+/**
+ * The paths a `Write scope` bullet declares, read straight out of raw Markdown: A then B, and
+ * nothing of its own. It used to carry a third boundary rule, and the two callers that wanted only B
+ * used to reach it by pasting their already-extracted text into a fake `- Write scope: ` bullet.
+ * Both are gone (#408) -- a caller holding scope text calls `parseScopePatterns` directly.
+ */
+export function parseWriteScope(markdown) {
+  return parseScopePatterns(scopeTextFromMarkdown(markdown) ?? "");
 }
 
 /** `**` crosses separators, `*` and `?` do not. Anything else is literal. */
@@ -84,43 +204,6 @@ function toRegExp(pattern) {
   return new RegExp(`^${out}$`, "i");
 }
 
-/**
- * A line that ENDS a wrapped `- Write scope:` bullet: the next bullet, a heading, or a table row.
- * A blank line ends it too and is tested separately, because "" matches nothing.
- */
-export const ENDS_SCOPE_BULLET = /^\s*(?:[-*]\s|#|\|)/;
-
-/**
- * A scope bullet's own line plus its continuation lines, joined by a single space (#399).
- *
- * This is the ONE continuation rule. Both readers of `- Write scope:` call it -- the issue-body
- * reader (`scopeTextFromBody`) and the posted-claim reader (`parseClaim`) -- because each keeping
- * its own is precisely how they came to disagree: the claim reader ended its capture at the line
- * break, so a claim whose scope wrapped declared a silent PREFIX of what a human reads in it. On
- * #398 that was 3 paths where the writer had listed 12, and the dangerous direction is the
- * collision check, where an under-read claim makes a live lane look like it holds fewer paths than
- * it does and a second writer can be dispatched onto the difference.
- *
- * The head is not trimmed on its own: it is joined first and the whole is trimmed once, so a bullet
- * that does not wrap returns exactly what a single-line read returned before.
- *
- * @param {string[]} lines the body, already normalized to "\n" and split
- * @param {number} start   index of the line the bullet's label sits on
- * @param {string} head    that line's text after the label
- * @returns {string}
- */
-export function joinScopeBullet(lines, start, head) {
-  const out = [String(head ?? "")];
-  for (let i = start + 1; i < (lines?.length ?? 0); i += 1) {
-    const l = lines[i];
-    if (!l.trim() || ENDS_SCOPE_BULLET.test(l)) break;
-    out.push(l.trim());
-  }
-  return out.join(" ").trim();
-}
-
-/** Body text as the shared continuation rule expects it: CRLF normalized, split into lines. */
-export const scopeBulletLines = (body) => String(body ?? "").replace(/\r\n/g, "\n").split("\n");
 
 /**
  * Does `pattern` cover `path`? True when the pattern names the path, matches it as a glob, or is a

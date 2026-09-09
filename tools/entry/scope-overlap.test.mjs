@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { REMEDIATION_ORDER, reconcile } from "./preflight.mjs";
-import { overlapRemediation, scopeFromText, scopeOverlapVerdict, scopeTextFromBody } from "./scope-overlap.mjs";
+import { overlapRemediation, scopeOverlapVerdict } from "./scope-overlap.mjs";
 
 const read = (rel) => readFileSync(rel, "utf8");
 const TRACKED = [
@@ -138,21 +138,11 @@ describe("unknown means locked (collision rule 4)", () => {
   });
 });
 
-describe("where a scope is read from", () => {
-  it("parses the claim's own sentence through the shared parser, disclaimers included", () => {
-    expect(scopeFromText("`scripts/`, `tools/entry/`. No other `src/` or `src-tauri/` writes.")).toEqual(["scripts", "tools/entry"]);
-    expect(scopeFromText("")).toEqual([]);
-    expect(scopeFromText(null)).toEqual([]);
-  });
-
-  it("finds the Write scope bullet in an issue body, continuation lines included, and nothing else", () => {
-    const body = ["## Task", "", "- Lane: Claude Code", "- **Write scope:** `scripts/foo.mjs`,", "  `scripts/foo.test.mjs`. Nothing else.", "- Next action: start", "", "`docs/BACKLOG.md` is mentioned here and is not a scope."].join("\n");
-    expect(scopeTextFromBody(body)).toBe("`scripts/foo.mjs`, `scripts/foo.test.mjs`. Nothing else.");
-    expect(scopeFromText(scopeTextFromBody(body))).toEqual(["scripts/foo.mjs", "scripts/foo.test.mjs"]);
-    expect(scopeTextFromBody("no bullet here")).toBeNull();
-    expect(scopeTextFromBody("- Write scope:\n- Next: x")).toBeNull();
-  });
-});
+// Where a scope is READ from is no longer this module's contract (#408): it holds no Markdown
+// reader and no pattern parser, and pinning either one here is what let two readers drift apart.
+// Both live in scripts/lib/claim-scope.mjs and are pinned once, through every production entry
+// point, in tools/entry/scope-continuation.test.mjs. What this file still owns is below: the
+// decision, and the wiring that feeds it.
 
 describe("the wiring — the decision is called, ranked, and fed", () => {
   const FOLDER = "C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\x";
