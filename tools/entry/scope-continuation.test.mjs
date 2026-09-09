@@ -274,6 +274,16 @@ const CASES = [
     paths: ["a/one.rs", "a/three.rs"],
     wraps: true,
   },
+  // The P1 of the exact-head review of 2c30f3b1. Both a disclaimer and a clause boundary sit in the
+  // gap before `a/three.rs`, and the boundary is the LATER of the two. Precedence by presence rather
+  // than by position kept the disclaimer in force past the sentence that ended it.
+  {
+    name: "a sentence boundary after a disclaimer re-opens granting",
+    body: claim("- Write scope: `a/one.rs`. Excluded from legacy cleanup.", "  `a/three.rs`", "- Started: 2026-09-09"),
+    text: "`a/one.rs`. Excluded from legacy cleanup. `a/three.rs`",
+    paths: ["a/one.rs", "a/three.rs"],
+    wraps: true,
+  },
 ];
 
 /** Every production reader of a write scope, and how each is asked for the same two answers. */
@@ -371,6 +381,18 @@ const DISCLAIMER_CASES = [
   { name: "a bare `;` re-opens granting, with no conjunction to carry", text: "`a` but not `b`; `c`", paths: ["a", "c"] },
   { name: "`;` then a bare conjunction re-opens granting", text: "`a` but not `b`; and `c`", paths: ["a", "c"] },
   { name: "`;` then a disclaimer disclaims again", text: "`a`; no `b` writes", paths: ["a"] },
+  // Order inside ONE gap. A disclaimer governs the rest of ITS clause, so the rightmost of the two
+  // event kinds decides: a boundary after a disclaimer re-opens, a disclaimer after a boundary closes
+  // again, and a disclaimer with no later boundary still governs everything that follows it.
+  { name: "a boundary AFTER a disclaimer re-opens granting", text: "`a`. Excluded from legacy cleanup. `c`", paths: ["a", "c"] },
+  { name: "the same order with `not`, so it is the class and not one phrase", text: "`a`. Not for this lane. `c`", paths: ["a", "c"] },
+  { name: "a disclaimer with no later boundary governs its whole list", text: "`a`. Excluded: `b`, `c`", paths: ["a"] },
+  { name: "boundary, disclaimer, boundary -- the rightmost event decides", text: "`a`; no `b`; `c`", paths: ["a", "c"] },
+  // The exception position does NOT decide, distilled from the real #405 bullet below: a quantifier
+  // over the whole set seals it, and the next sentence cannot hand back a path the writer struck out.
+  { name: "`no others` seals the scope against every later sentence", text: "`a`, `b`. Two paths, no others. `c` is withdrawn", paths: ["a", "b"] },
+  { name: "`no other` seals it too, before the paths it refuses", text: "`a`. No other writes. `b`, `c`", paths: ["a"] },
+  { name: "`other than` is still a clause-scoped aside, not a seal", text: "`a`, other than `b`. Also `c`", paths: ["a", "c"] },
   {
     name: "a mid-list aside carries the disclaimer instead of resetting it",
     text: "`a`. Excluded, unchanged: `b`, every other living status doc, `c`",
@@ -513,6 +535,31 @@ const preSemicolonRead = (scopeText) => {
   return declared.filter((p, i, a) => p && a.indexOf(p) === i);
 };
 
+/**
+ * The pattern parser exactly as it stood at 2c30f3b1 -- the head the independent exact-head review
+ * measured -- differing from the current one only in how it resolves a gap holding BOTH kinds of
+ * event. It asked "is a disclaimer present?" before "is a boundary present?", so presence beat
+ * position and a disclaimer survived the sentence that ended it.
+ */
+const preOrderRead = (scopeText) => {
+  const text = String(scopeText ?? "");
+  const declared = [];
+  let cursor = 0;
+  let disclaimed = false;
+  for (const match of text.matchAll(/`([^`]+)`/g)) {
+    const gap = text.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+    const bare = /^[\s,/]*(?:or|and|nor)?[\s,/]*$/i.test(gap);
+    if (!bare) {
+      if (/\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b/i.test(gap)) disclaimed = true;
+      else if (/[.;!?]/.test(gap)) disclaimed = false;
+    }
+    if (disclaimed) continue;
+    declared.push(normalizePattern(match[1]));
+  }
+  return declared.filter((p, i, a) => p && a.indexOf(p) === i);
+};
+
 describe("#408 — the case list can fail", () => {
   it("has cases that wrap, cases that do not, and cases with prose past the boundary", () => {
     expect(CASES.filter((c) => c.wraps).length).toBeGreaterThan(0);
@@ -594,6 +641,9 @@ describe("#408 — the case list can fail", () => {
       "`excepting` disclaims",
       "a bare `;` re-opens granting, with no conjunction to carry",
       "`;` then a bare conjunction re-opens granting",
+      "the same order with `not`, so it is the class and not one phrase",
+      "a disclaimer with no later boundary governs its whole list",
+      "boundary, disclaimer, boundary -- the rightmost event decides",
       "a mid-list aside carries the disclaimer instead of resetting it",
     ]);
   });
@@ -631,12 +681,17 @@ describe("#408 — the three cases added for the exact-head review can fail", ()
 });
 
 describe("#408 — the semicolon case can fail, and the under-read reaches the collision check", () => {
+  // It carries this lane's later ordering defect too, so the list is not only the two cases the
+  // semicolon repair added -- a control is pinned to what it actually does, not to one round of it.
   const SEMI = [
     "a bare `;` re-opens granting, with no conjunction to carry",
     "`;` then a bare conjunction re-opens granting",
+    "a boundary AFTER a disclaimer re-opens granting",
+    "the same order with `not`, so it is the class and not one phrase",
+    "boundary, disclaimer, boundary -- the rightmost event decides",
   ];
 
-  it("the f52fb5bb parser is wrong on exactly the two parse cases this repair added", () => {
+  it("the f52fb5bb parser is wrong on exactly those five parse cases", () => {
     const wrong = DISCLAIMER_CASES.filter((c) => JSON.stringify(preSemicolonRead(c.text)) !== JSON.stringify(c.paths));
     expect(wrong.map((c) => c.name)).toEqual(SEMI);
   });
@@ -658,6 +713,108 @@ describe("#408 — the semicolon case can fail, and the under-read reaches the c
     const proposed = { mine: ["a/three.rs"], files: ["a/one.rs", "a/two.rs", "a/three.rs"] };
 
     const stale = scopeOverlapVerdict({ ...proposed, others: live(preSemicolonRead) });
+    expect(stale.ok).toBe(true);
+    expect(stale.reason).toContain("disjoint from #408 (Claude Code)");
+
+    const now = scopeOverlapVerdict({ ...proposed, others: live(parseScopePatterns) });
+    expect(now.ok).toBe(false);
+    expect(now.findings[0].pairs).toEqual([["a/three.rs", "a/three.rs"]]);
+  });
+});
+
+/**
+ * The rightmost-event rule WITHOUT the seal -- the exact-head review's stated repair, taken literally.
+ * It satisfies every ordering case the review required and still over-reads #405's real bullet: "Two
+ * paths, no others." is followed by a period, so by position alone the next sentence re-opens granting
+ * and hands the lane the third path its writer had struck out. Over-read is the #405 failure class,
+ * which is why "no others" seals instead of disclaiming one clause.
+ */
+const unsealedRead = (scopeText) => {
+  const text = String(scopeText ?? "");
+  const declared = [];
+  let cursor = 0;
+  let disclaimed = false;
+  for (const match of text.matchAll(/`([^`]+)`/g)) {
+    const gap = text.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+    const events = [...gap.matchAll(/(\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b)|[.;!?]/gi)];
+    if (events.length) disclaimed = Boolean(events[events.length - 1][1]);
+    if (disclaimed) continue;
+    declared.push(normalizePattern(match[1]));
+  }
+  return declared.filter((p, i, a) => p && a.indexOf(p) === i);
+};
+
+describe("#408 — the ordering case can fail, and the under-read reaches the collision check", () => {
+  const ORDER = [
+    "a boundary AFTER a disclaimer re-opens granting",
+    "the same order with `not`, so it is the class and not one phrase",
+  ];
+  const GREEN_ORDER = [
+    "a disclaimer with no later boundary governs its whole list",
+    "boundary, disclaimer, boundary -- the rightmost event decides",
+  ];
+  const MATRIX = "a sentence boundary after a disclaimer re-opens granting";
+
+  it("the 2c30f3b1 parser is wrong on exactly the ordering cases this repair added", () => {
+    const wrong = DISCLAIMER_CASES.filter((c) => JSON.stringify(preOrderRead(c.text)) !== JSON.stringify(c.paths));
+    expect(wrong.map((c) => c.name)).toEqual(ORDER);
+  });
+
+  // The other two ordering cases are already green at 2c30f3b1, and they stay pinned anyway: a repair
+  // that made a boundary ALWAYS re-open granting would satisfy the two red cases and break these two,
+  // which are the only thing that would notice.
+  it("and it is right on the two ordering cases that do not turn on this precedence", () => {
+    for (const name of GREEN_ORDER) {
+      const c = DISCLAIMER_CASES.find((x) => x.name === name);
+      expect(preOrderRead(c.text), name).toEqual(c.paths);
+    }
+  });
+
+  // The bare-carry branch the ordering rule REPLACED, kept as a pin rather than as a claim about
+  // deleted code: it skipped any gap of whitespace/comma/slash plus an optional or/and/nor, and no
+  // such gap holds an event at all, so carrying the state across it is what the rightmost-event rule
+  // already does. Deleting the branch could therefore change no answer -- and this is what would
+  // notice if some later vocabulary made the two classes overlap.
+  it("the deleted bare-carry branch was unreachable: no bare gap holds an event", () => {
+    const BARE = /^[\s,/]*(?:or|and|nor)?[\s,/]*$/i;
+    const EVENTS = /(\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b)|[.;!?]/gi;
+    const gaps = new Set();
+    for (const c of DISCLAIMER_CASES) for (const g of c.text.split(/`[^`]+`/)) gaps.add(g);
+    for (const g of ["", " ", ", ", " or ", " and ", " nor ", ",", "/", " , / and "]) gaps.add(g);
+    const bare = [...gaps].filter((g) => BARE.test(g));
+    expect(bare.length).toBeGreaterThan(3);
+    for (const g of bare) expect([...g.matchAll(EVENTS)], JSON.stringify(g)).toEqual([]);
+  });
+
+  // Why the ordering rule is not the WHOLE rule. This is the falsification for the seal: the six
+  // required ordering cases cannot detect its absence, and #405's real bullet is the only thing that
+  // can -- so the seal is pinned by the case that produced it, not by an argument.
+  it("the seal earns its place: without it the same rule hands #405 back the withdrawn path", () => {
+    const text = REAL_405_BULLET.replace(/^- Write scope: /, "");
+    expect(unsealedRead(text)).toContain(".claude/hooks/worktree-provisioning.mjs");
+    expect(parseScopePatterns(text)).toEqual(REAL_405_PATHS);
+
+    for (const c of DISCLAIMER_CASES.filter((x) => [...ORDER, ...GREEN_ORDER].includes(x.name))) {
+      expect(unsealedRead(c.text), `unsealed is right on ${c.name}`).toEqual(c.paths);
+    }
+  });
+
+  it("on the matrix case it drops the path the writer declared after the sentence boundary", () => {
+    const c = CASES.find((x) => x.name === MATRIX);
+    expect(preOrderRead(c.text)).toEqual(["a/one.rs"]);
+    for (const reader of READERS) expect(parseScopePatterns(reader.text(c.body)), reader.name).toEqual(c.paths);
+    expect(parseWriteScope(c.body)).toEqual(c.paths);
+  });
+
+  // Same consequence as the semicolon case, reached by a different route: the claim reads short, so
+  // the collision check clears a SECOND writer onto a path the first writer actually declared.
+  it("under the 2c30f3b1 read the collision check calls a second writer on the dropped path disjoint", () => {
+    const c = CASES.find((x) => x.name === MATRIX);
+    const live = (parse) => [{ number: 408, lane: "Claude Code", scope: parse(c.text) }];
+    const proposed = { mine: ["a/three.rs"], files: ["a/one.rs", "a/three.rs"] };
+
+    const stale = scopeOverlapVerdict({ ...proposed, others: live(preOrderRead) });
     expect(stale.ok).toBe(true);
     expect(stale.reason).toContain("disjoint from #408 (Claude Code)");
 
@@ -694,6 +851,23 @@ describe("#408 — what deliberately did NOT change", () => {
     expect(scopeTextFromMarkdown("- Write scope:\n- Next: x")).toBeNull();
     expect(parseClaim(claim("- Write scope:", "- Next: x"))?.scope).toBeNull();
     expect(parseWriteScope("- Write scope:\n- Next: x")).toEqual([]);
+  });
+
+  // The seal's price, measured rather than argued. "no other <thing>" names what it refuses, so a
+  // later sentence arguably still grants -- but the seal cannot tell that shape from #405's bare
+  // "no others.", and no claim anyone has actually written uses it, so nothing here is built for it.
+  // This is an UNDER-read, the direction that can call a second writer disjoint; it is pinned so the
+  // cost is visible and so a narrower seal would visibly flip it, not so it is treated as correct.
+  it("KNOWN LIMIT: a seal phrase that names its object still seals the whole scope", () => {
+    expect(parseScopePatterns("`x/`, no other `src/` subtrees. Also `y/`")).toEqual(["x"]);
+    expect(parseScopePatterns("`x/` and `y/`. No other subtrees.")).toEqual(["x", "y"]);
+  });
+
+  // Also unchanged and also not a claim of correctness: an indented code block has no fence, so a
+  // label inside one still reads as a declaration. Non-blocking for #408 by explicit HQ ruling.
+  it("KNOWN LIMIT: an indented code block is not a fence, so a label inside it still declares", () => {
+    const body = [CLAIM_HEADER, "", "Example:", "", "    - Write scope: `a/one.rs`", ""].join("\n");
+    expect(scopeTextFromMarkdown(body)).toBe("`a/one.rs`");
   });
 
   it("nothing but a backticked path is a declaration", () => {

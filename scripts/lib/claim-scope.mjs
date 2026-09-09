@@ -95,36 +95,44 @@ export function scopeTextFromMarkdown(markdown, { aliases = [] } = {}) {
 }
 
 /**
+ * Everything that changes granting mid-sentence, in ONE pattern so their ORDER is what decides.
+ * Group 1 SEALS: "no others" is a claim about the completed set, so nothing after it can add to it.
+ * Group 2 disclaims the rest of its clause. The bare alternative is the boundary that ends a clause.
  * Inflections of the stems already here, not a synonym dictionary: `excluding` matched and `excluded`
- * did not, so on #405 "Still excluded, unchanged:" GRANTED the seven paths written to withhold them.
+ * did not, so on #405 "Still excluded, unchanged:" GRANTED the seven paths it was written to withhold.
  */
-const DISCLAIMS = /\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b/i;
-
-/** A clause boundary, and the ONLY thing that re-opens granting after a disclaimer. */
-const ENDS_CLAUSE = /[.;!?]/;
+const EVENTS = /(\bno\s+others?\b)|(\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b)|[.;!?]/gi;
 
 /**
  * B. PARSE: exact scope text -> normalized path patterns. Knows nothing about Markdown structure; A
  * decided where the text ends. Only backticked paths count, each judged by the gap BEFORE it, so `a`
- * survives "`a` but not `b`". A disclaimer then governs the REST OF ITS CLAUSE (the half #405 proved
- * was missing), carried across a bare separator ("no other `src/` or `src-tauri/`") and across any
- * gap that does not end one. So a separator is never also a clause terminator: while `;` was in that
- * class it short-circuited its own boundary and "`a` but not `b`; `c`" silently dropped `c`.
+ * survives "`a` but not `b`". A disclaimer governs the REST OF ITS CLAUSE -- the half #405 proved was
+ * missing -- and the RIGHTMOST event in a gap is the one still in force when the path arrives: a
+ * boundary after a disclaimer re-opens, a disclaimer after a boundary closes again, and a gap holding
+ * neither carries the state across ("no other `src/` or `src-tauri/`"). Asking "is a disclaimer
+ * present?" before "is a boundary present?" is not that rule, and dropped the `c` in "`a`. Excluded
+ * from legacy cleanup. `c`" -- an under-read claim, which is what lets a second writer be dispatched
+ * onto the difference.
+ *
+ * The one thing position does NOT decide is a seal. #405's real bullet reads "Two paths, no others."
+ * and then names the withdrawn third path in the NEXT sentence; by position that period re-opens
+ * granting and hands the lane a path its writer struck out. A quantifier over the whole set is not a
+ * clause-scoped aside, so it is not treated as one.
  */
 export function parseScopePatterns(scopeText) {
   const text = String(scopeText ?? "");
   const declared = [];
   let cursor = 0;
   let disclaimed = false;
+  let sealed = false;
   for (const match of text.matchAll(/`([^`]+)`/g)) {
     const gap = text.slice(cursor, match.index);
     cursor = match.index + match[0].length;
-    const bare = /^[\s,/]*(?:or|and|nor)?[\s,/]*$/i.test(gap);
-    if (!bare) {
-      if (DISCLAIMS.test(gap)) disclaimed = true;
-      else if (ENDS_CLAUSE.test(gap)) disclaimed = false;
-    }
-    if (disclaimed) continue;
+    const events = [...gap.matchAll(EVENTS)];
+    const last = events[events.length - 1];
+    sealed ||= events.some((e) => e[1]);
+    if (last) disclaimed = Boolean(last[1] ?? last[2]);
+    if (sealed || disclaimed) continue;
     declared.push(normalizePattern(match[1]));
   }
   return declared.filter((p, i, a) => p && a.indexOf(p) === i);
