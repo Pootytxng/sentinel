@@ -606,49 +606,199 @@ function* zRecords(out) {
   }
 }
 
-function repairHooksPath(root, { run }) {
-  const configured = run(root, ["config", "core.hooksPath"]);
-  // Unset is CORRECT, not a defect: git then uses this worktree's own `.git/hooks`.
-  if (!configured.ok || !configured.out) return { action: "ok", from: null };
+/**
+ * The verifier every pre-push gate must actually RUN. Pinned equal to `VERIFIER` in
+ * `scripts/lib/prepush-hook-contract.mjs` by `tools/entry/worktree-provisioning.test.mjs`.
+ */
+export const PREPUSH_VERIFIER = "verify-local.ps1";
 
-  const resolved = resolve(root, configured.out);
-  if (insideFolder(root, resolved)) return { action: "ok", from: configured.out };
+/** Commands that can only PRINT their arguments. A mention inside one of these is never a run. */
+const PREPUSH_PRINTERS = new Set(["echo", "printf", ":"]);
 
-  // It escapes. Repairing means pointing the folder at its own `.githooks` — which is only an
-  // improvement if the folder HAS one. Escaping-but-reaching-a-hook beats correct-but-reaching-none,
-  // so an empty or absent `.githooks` is a refusal, not a repair.
-  let own = [];
-  try {
-    own = readdirSync(join(root, ".githooks"));
-  } catch {
-    own = [];
+/**
+ * Is this pre-push text a hook that can be trusted to gate a push?
+ *
+ * This repository already answers that question properly and in one place —
+ * `scripts/lib/prepush-hook-contract.mjs` — and this file may not import it: `tracked-hooks.test.mjs`
+ * pins this hook to `node:` imports because it is copied ALONE into folders where nothing else
+ * exists. So this is a second, deliberately smaller implementation, and
+ * `tools/entry/worktree-provisioning.test.mjs` pins the two together over a seeded corpus rather
+ * than trusting them to stay in step.
+ *
+ * Smaller in the SAFE direction only. Every rule below is one the canonical contract also applies;
+ * the canonical one applies several this does not (quote-aware comment stripping, block-depth
+ * counting for reachability). The consequence is that this can refuse a hook the contract would
+ * accept, which costs a repair that is not made — never the reverse, which would cost a gate.
+ *
+ * Why it exists at all: independent review of 6a446c9b found the hooks repair accepting any
+ * NON-EMPTY `.githooks` directory. A folder holding one unrelated file passed, and the repair then
+ * pointed it away from an escaping path that may have held the only working hook. Path identity is
+ * not protection — the same sentence `prepush-hook-contract.mjs` was written to make true.
+ */
+export function prePushRunsVerifier(text) {
+  const body = String(text ?? "");
+  if (!body.trim()) return false;
+  let armed = false;
+  let runs = false;
+  for (const raw of body.split(/\r?\n/)) {
+    // A trailing comment is not code. This strip is blind to quoting, and that is the safe blindness:
+    // truncating a quoted `#` truncates real code, which can only turn a running line into a silent
+    // one — a refusal, never a false accept.
+    const line = raw.replace(/(^|\s)#.*$/, "$1");
+    const toggle = /^\s*set\s+([-+])[a-z]*e/.exec(line);
+    if (toggle) armed = toggle[1] === "-";
+    if (!line.includes(PREPUSH_VERIFIER)) {
+      // An UNCONDITIONAL `exit 0` above the verifier makes everything below it dead code — the shape
+      // a debugging session leaves behind. Indentation is the tell: the legitimate early exits in a
+      // real hook are nested inside an `if`, and a bare `exit 0` at column zero is not.
+      if (!runs && /^exit\s+0\s*$/.test(line)) return false;
+      continue;
+    }
+    if (/\|\|\s*(?::|true\b|exit\s+0\b)/.test(line)) continue; // the failure is swallowed
+    if (/(^|[^&])&\s*$/.test(line)) continue; // backgrounded: nobody waits for the answer
+    for (const segment of line.split(/\|\||&&|[;|&]/)) {
+      if (!segment.includes(PREPUSH_VERIFIER)) continue;
+      if (!PREPUSH_PRINTERS.has(segment.trim().split(/\s+/)[0] ?? "")) runs = true;
+    }
   }
-  if (!own.length) {
+  return armed && runs;
+}
+
+/**
+ * Every OTHER session a lineage record still shows live in this same folder.
+ *
+ * `docs/WORK_CONTROL.md`'s first collision rule is "one folder, one writer", and #405's fail-closed
+ * list names "no other live session holds an overlapping scope". Two sessions cannot write one
+ * folder safely, and a lineage record is the only machine-readable statement that another is there.
+ *
+ * "unknown" counts as present. A session that cannot be measured is not a session that is gone, and
+ * the direction of the error decides which way to be wrong: counting it costs a repair, ignoring it
+ * costs a collision. A directory that exists but cannot be read THROWS rather than answering [] —
+ * "I could not look" must never reach the caller as "I looked and there was nobody".
+ */
+export function otherLiveSessionsIn(
+  root,
+  { sessionId = null, dir = TOKEN_DIR, now = new Date(), observe = observeLiveness } = {},
+) {
+  const folder = join(dir, LINEAGE_DIR_NAME);
+  if (!existsSync(folder)) return [];
+  const out = [];
+  for (const name of readdirSync(folder)) {
+    if (!name.endsWith(".json")) continue;
+    let record = null;
+    try {
+      record = JSON.parse(readFileSync(join(folder, name), "utf8"));
+    } catch {
+      continue; // readLineage treats an unreadable record as absent; so does this.
+    }
+    if (!record || typeof record !== "object") continue;
+    if (!samePath(record.folder, root)) continue;
+    if (sessionId && record.sessionId === sessionId) continue;
+    const { liveness } = observe(record, { now });
+    if (liveness === "live" || liveness === "unknown") {
+      out.push({ folder: record.folder, sessionId: record.sessionId ?? null, liveness });
+    }
+  }
+  return out;
+}
+
+/**
+ * What is wrong with this provisioning authorization, or null when nothing is.
+ *
+ * Every field is checked against something MEASURED — the folder this call is about, the branch the
+ * board verified — because an authorization that could describe any folder would be a licence rather
+ * than a scope. The two lists are required to exist and are allowed to be empty: an authorization
+ * that names no scope is valid and authorizes nothing, which is the answer that makes "folder plus
+ * branch is not write authority" true rather than merely stated.
+ */
+function authorizationProblem(root, auth, expectedBranch) {
+  if (!auth || typeof auth !== "object") return "the provisioning authorization is not an object";
+  if (!Number.isInteger(auth.issue) || auth.issue <= 0) return "the provisioning authorization names no issue";
+  if (!samePath(auth.folder, root)) return `the provisioning authorization names ${auth.folder ?? "no folder"}, not this folder`;
+  if (!auth.branch || auth.branch !== expectedBranch) {
+    return `the provisioning authorization names branch ${auth.branch ?? "none"}, not the verified ${expectedBranch}`;
+  }
+  if (!Array.isArray(auth.paths) || !Array.isArray(auth.config)) {
+    return "the provisioning authorization does not state its scope as a list of paths and a list of config keys";
+  }
+  return null;
+}
+
+function repairHooksPath(root, { run, allowConfig }) {
+  // GIT's pathname expansion, not Node's. `~/x` is a home-relative path to git and an ordinary
+  // directory name to `resolve()`, so reading the raw value made an escaping hooksPath look in-tree
+  // and the folder was reported "ok" while it reached no hook at all. Measured 2026-09-08:
+  // `git config --path --get core.hooksPath` on `~/outside-gate` answers `C:/Users/Kuya/outside-gate`;
+  // `resolve(root, "~/outside-gate")` answers `<root>\~\outside-gate`, which is inside the folder.
+  const raw = run(root, ["config", "--get", "core.hooksPath"]);
+  // Unset is CORRECT, not a defect: git then uses this worktree's own `.git/hooks`.
+  if (!raw.ok || !raw.out) return { action: "ok", from: null };
+
+  const expanded = run(root, ["config", "--path", "--get", "core.hooksPath"]);
+  // `--path` fails on a value git cannot expand (`~nosuchuser/...`). Unresolvable is not in-tree.
+  if (!expanded.ok || !expanded.out) {
     return {
       action: "refused",
-      from: configured.out,
-      reason: "this folder has no .githooks of its own — pointing at it would remove the last hook it still reaches",
+      from: raw.out,
+      reason: `git cannot resolve core.hooksPath — ${expanded.out || "it expanded to nothing"}`,
+    };
+  }
+  if (insideFolder(root, resolve(root, expanded.out))) return { action: "ok", from: raw.out };
+
+  // It escapes. Repairing means pointing the folder at its own `.githooks` — an improvement only if
+  // that directory holds a pre-push that is a REAL gate. Escaping-but-reaching-a-gate beats
+  // correct-but-reaching-none, so anything less than a working hook is a refusal, not a repair.
+  // Directory non-emptiness was the previous test and it is not the same question: a folder holding
+  // one unrelated file passed it.
+  let hook = null;
+  try {
+    const own = join(root, ".githooks", "pre-push");
+    hook = statSync(own).isFile() ? readFileSync(own, "utf8") : null;
+  } catch {
+    hook = null;
+  }
+  if (hook === null) {
+    return {
+      action: "refused",
+      from: raw.out,
+      reason: "this folder has no .githooks/pre-push of its own — pointing at it would remove the last hook it still reaches",
+    };
+  }
+  if (!prePushRunsVerifier(hook)) {
+    return {
+      action: "refused",
+      from: raw.out,
+      reason: `this folder's .githooks/pre-push never runs ${PREPUSH_VERIFIER} — pointing at it would replace a gate with a stub`,
     };
   }
 
-  // Writing this per worktree is the whole point; turning the extension on would be a
-  // repository-wide config change, which is not this folder's to make.
   const extension = run(root, ["config", "--get", "extensions.worktreeConfig"]);
   if (!extension.ok || extension.out !== "true") {
     return {
       action: "refused",
-      from: configured.out,
+      from: raw.out,
       reason: "extensions.worktreeConfig is not true — enabling it is a repository-wide change, not this folder's to make",
     };
   }
 
+  // Everything above is a fact about the folder. THIS is the question of authority, and it is asked
+  // last so the diagnosis still tells the truth about what would happen if the answer were yes.
+  if (!allowConfig("core.hooksPath")) {
+    return {
+      action: "withheld",
+      from: raw.out,
+      to: ".githooks",
+      reason: "core.hooksPath is not in the authorized provisioning scope",
+    };
+  }
+
   const set = run(root, ["config", "--worktree", "core.hooksPath", ".githooks"]);
-  if (!set.ok) return { action: "failed", from: configured.out, reason: set.out };
-  return { action: "set", from: configured.out, to: ".githooks" };
+  if (!set.ok) return { action: "failed", from: raw.out, reason: set.out };
+  return { action: "set", from: raw.out, to: ".githooks" };
 }
 
-function repairLineEndings(root, { run, readFile, writeFile }) {
-  const empty = { repaired: [], left: [] };
+function repairLineEndings(root, { run, readFile, writeFile, allowPath }) {
+  const empty = { repaired: [], left: [], withheld: [], refreshFailed: [] };
 
   // Without sha1 the blob comparison below is not the comparison git would make, and an unprovable
   // write is exactly what this must not do.
@@ -680,7 +830,15 @@ function repairLineEndings(root, { run, readFile, writeFile }) {
 
   const repaired = [];
   const left = [];
+  const withheld = [];
   for (const rel of candidates) {
+    // Scope is enforced HERE, per path, rather than assumed from the fact that the folder is claimed.
+    // The defect independent review found in 6a446c9b was precisely this loop having no such gate:
+    // a claim naming two files licensed a rewrite of all 203 matching paths in the folder.
+    if (!allowPath(rel)) {
+      withheld.push(rel);
+      continue;
+    }
     const blob = blobOf.get(rel);
     if (!blob) {
       left.push(rel);
@@ -714,30 +872,71 @@ function repairLineEndings(root, { run, readFile, writeFile }) {
   // else. PATH-SCOPED deliberately, and measured: the bare `--refresh` reports "needs update" and
   // leaves the entry alone, and it would also touch paths this repair never wrote. Chunked because
   // 200-odd paths on one Windows command line is a limit waiting to be hit.
+  //
+  // The RESULT is read, which it was not before. Discarding it reported a clean folder that is not
+  // clean: the bytes are already written, so a failed refresh leaves a phantom modification for
+  // every path in the batch, and calling that "repaired" is the overclaim this lane exists to avoid.
+  const refreshFailed = [];
+  let refreshError = null;
   for (let i = 0; i < repaired.length; i += 100) {
-    run(root, ["update-index", "-q", "--refresh", "--", ...repaired.slice(i, i + 100)]);
+    const batch = repaired.slice(i, i + 100);
+    const refreshed = run(root, ["update-index", "-q", "--refresh", "--", ...batch]);
+    if (refreshed.ok) continue;
+    refreshFailed.push(...batch);
+    refreshError ??= refreshed.out;
+  }
+  if (refreshFailed.length) {
+    return {
+      action: "failed",
+      repaired,
+      left,
+      withheld,
+      refreshFailed,
+      reason: `the index refresh failed for ${refreshFailed.length} path(s) — ${refreshError || "no error text"} — their bytes are written but the folder now reports them modified`,
+    };
   }
 
-  return { action: repaired.length ? "repaired" : left.length ? "left" : "ok", repaired, left };
+  const action = repaired.length ? "repaired" : withheld.length ? "withheld" : left.length ? "left" : "ok";
+  return { action, repaired, left, withheld, refreshFailed };
 }
 
 /**
- * Repair the provisioning of the folder this session is rooted in — and no other folder, ever.
+ * Diagnose the provisioning of the folder this session is rooted in — and no other folder, ever —
+ * and repair only what an explicit authorization names.
  *
- * @returns {{action: "repaired"|"reported"|"clean"|"main"|"skipped"|"refused"|"failed",
+ * DIAGNOSTIC IS THE DEFAULT, and that is the whole of #406 finding 1. The previous version treated
+ * "Work Control verified this folder and this branch" as write authority. It is not: the board row
+ * that verification reads carries issue, folder and branch and NO SCOPE AT ALL, so a narrow claim on
+ * two files was enough to license rewriting every matching tracked path in the folder — 203 of them
+ * in the folder this was written in. `docs/WORK_CONTROL.md:143-150` requires the exact scope to be
+ * recorded before a write, and `:162` says scope is measured, not trusted. A hook that runs
+ * unattended at every session start cannot name a scope, so it does not get to write one.
+ *
+ * A caller that CAN name its scope passes `authorization`, and even then the scope is enforced item
+ * by item — `paths` for file content, `config` for config keys — so an authorization that names
+ * nothing authorizes nothing, and the identity fields alone never license a byte.
+ *
+ * @returns {{action: "repaired"|"diagnosed"|"reported"|"clean"|"main"|"skipped"|"refused"|"failed",
  *            line: string|null, reason?: string, hooksPath: object, lineEndings: object}}
  *   `line` is the one advisory line to print, or null when there is nothing to say.
  */
 export function repairWorktreeProvisioning(
   root,
-  { run = gitResult, expectedBranch = null, readFile = readFileSync, writeFile = writeFileSync } = {},
+  {
+    run = gitResult,
+    expectedBranch = null,
+    readFile = readFileSync,
+    writeFile = writeFileSync,
+    authorization = null,
+    liveSessions = otherLiveSessionsIn,
+  } = {},
 ) {
   const idle = (action, reason) => ({
     action,
     line: action === "refused" || action === "failed" ? `compy-entry: worktree provisioning not repaired — ${reason}` : null,
     reason,
     hooksPath: { action: "skipped" },
-    lineEndings: { action: "skipped", repaired: [], left: [] },
+    lineEndings: { action: "skipped", repaired: [], left: [], withheld: [], refreshFailed: [] },
   });
 
   if (!root) return idle("skipped", "no root");
@@ -762,20 +961,47 @@ export function repairWorktreeProvisioning(
   if (!status.ok) return idle("refused", `working tree state unreadable — ${status.out}`);
   if (status.out) return idle("refused", "a tracked file is modified — this folder is not clean");
 
-  const hooksPath = repairHooksPath(root, { run });
-  const lineEndings = repairLineEndings(root, { run, readFile, writeFile });
+  // Authority, checked before anything is written and never inferred from the folder or the branch.
+  let scope = null;
+  if (authorization !== null) {
+    const problem = authorizationProblem(root, authorization, expectedBranch);
+    if (problem) return idle("refused", problem);
+    let others;
+    try {
+      others = liveSessions(root, { sessionId: authorization.sessionId ?? null });
+    } catch (err) {
+      // #405's fail-closed list requires proven non-overlap. Unmeasurable is not proven.
+      return idle("refused", `overlap with other live sessions could not be measured — ${err?.message ?? err}`);
+    }
+    if (others.length) {
+      return idle("refused", `another live session holds this folder (${others.map((o) => o.sessionId ?? "unknown session").join(", ")})`);
+    }
+    scope = authorization;
+  }
+  const allowPath = (rel) => Boolean(scope) && scope.paths.includes(rel);
+  const allowConfig = (key) => Boolean(scope) && scope.config.includes(key);
+
+  const hooksPath = repairHooksPath(root, { run, allowConfig });
+  const lineEndings = repairLineEndings(root, { run, readFile, writeFile, allowPath });
 
   const notes = [];
   if (hooksPath.action === "set") notes.push(`core.hooksPath ${hooksPath.from} -> .githooks`);
+  if (hooksPath.action === "withheld") notes.push(`core.hooksPath ${hooksPath.from} escapes this folder — ${hooksPath.reason}`);
   if (hooksPath.action === "refused" || hooksPath.action === "failed") notes.push(`core.hooksPath left as ${hooksPath.from} — ${hooksPath.reason}`);
   if (lineEndings.action === "repaired") notes.push(`${lineEndings.repaired.length} file(s) restored to LF`);
-  if (lineEndings.action === "refused" || lineEndings.action === "failed") notes.push(`line endings untouched — ${lineEndings.reason}`);
+  if (lineEndings.action === "refused") notes.push(`line endings untouched — ${lineEndings.reason}`);
+  if (lineEndings.action === "failed") notes.push(lineEndings.reason);
+  if (lineEndings.withheld.length) notes.push(`${lineEndings.withheld.length} CRLF file(s) outside the authorized scope, left alone`);
   if (lineEndings.left.length) notes.push(`${lineEndings.left.length} CRLF file(s) left alone — dropping CR does not reproduce their blob`);
 
-  const action = hooksPath.action === "set" || lineEndings.action === "repaired" ? "repaired" : notes.length ? "reported" : "clean";
+  const wrote = hooksPath.action === "set" || lineEndings.repaired.length > 0;
+  const failed = hooksPath.action === "failed" || lineEndings.action === "failed";
+  const withheld = hooksPath.action === "withheld" || lineEndings.withheld.length > 0;
+  const action = failed ? "failed" : wrote ? "repaired" : withheld ? "diagnosed" : notes.length ? "reported" : "clean";
+  const prefix = action === "diagnosed" ? "compy-entry: worktree provisioning DIAGNOSED, nothing written — " : "compy-entry: worktree provisioning — ";
   return {
     action,
-    line: notes.length ? `compy-entry: worktree provisioning — ${notes.join("; ")}` : null,
+    line: notes.length ? prefix + notes.join("; ") : null,
     hooksPath,
     lineEndings,
   };

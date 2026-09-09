@@ -33,10 +33,21 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { provisioningRootFor, repairWorktreeProvisioning } from "../../.claude/hooks/session-root-assert.mjs";
+import {
+  PREPUSH_VERIFIER,
+  prePushRunsVerifier,
+  provisioningRootFor,
+  repairWorktreeProvisioning,
+} from "../../.claude/hooks/session-root-assert.mjs";
+import { VERIFIER, prePushContractViolations } from "../../scripts/lib/prepush-hook-contract.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const HOOK_FILE = join(ROOT, ".claude", "hooks", "session-root-assert.mjs");
+const REAL_PREPUSH = join(ROOT, ".githooks", "pre-push");
 
 const git = (cwd, ...args) =>
   execFileSync("git", ["-c", "user.name=guard", "-c", "user.email=guard@test", ...args], {
@@ -97,7 +108,21 @@ const realRun = (cwd, args) => {
  * The attributes deliberately start WITHOUT an `eol` pin, because that is the state these folders
  * were checked out under. `makeBroken` widens them afterwards, exactly as this repository did.
  */
-const makeHost = (tag, { withHooks = true, worktreeConfig = true } = {}) => {
+/**
+ * A pre-push hook that is a REAL gate: it arms `set -e` and it actually runs the verifier. The
+ * fixtures use this rather than a stub because #406's independent review found the repair accepting
+ * any non-empty `.githooks` directory — so a fixture whose hook was `exit 0` proved nothing about
+ * whether repointing at it preserves a gate. `makeHost({ hookBody })` seeds the broken shapes.
+ */
+export const GATE_HOOK = [
+  "#!/bin/sh",
+  "set -e",
+  "repo=$(git rev-parse --show-toplevel)",
+  'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo/scripts/verify-local.ps1"',
+  "",
+].join("\n");
+
+const makeHost = (tag, { withHooks = true, worktreeConfig = true, hookBody = GATE_HOOK } = {}) => {
   const bed = newBed(tag);
   const host = join(bed, "host");
   execFileSync("git", ["init", "-q", "-b", "main", host], { stdio: "ignore" });
@@ -109,12 +134,32 @@ const makeHost = (tag, { withHooks = true, worktreeConfig = true } = {}) => {
   writeFileSync(join(host, "doc.md"), "one\ntwo\nthree\n");
   if (withHooks) {
     mkdirSync(join(host, ".githooks"), { recursive: true });
-    writeFileSync(join(host, ".githooks", "pre-push"), "#!/bin/sh\nexit 0\n");
+    writeFileSync(join(host, ".githooks", "pre-push"), hookBody);
   }
   git(host, "add", "-A");
   git(host, "commit", "-q", "-m", "fixture");
   return { bed, host };
 };
+
+/**
+ * A complete, valid provisioning authorization for `linked` — the exact shape a caller must supply
+ * before `repairWorktreeProvisioning` writes ANYTHING. Tests narrow it field by field, because the
+ * point of #406 finding 1 is that folder + branch is not write authority: the scope has to be named,
+ * and it is enforced per item rather than trusted.
+ */
+const authFor = (linked, branch, over = {}) => ({
+  issue: 405,
+  folder: linked,
+  branch,
+  sessionId: "session-under-test",
+  paths: [".gitattributes", "README.md", "doc.md", ".githooks/pre-push"],
+  config: ["core.hooksPath"],
+  ...over,
+});
+
+/** The non-overlap seam, proving nothing else holds this folder. Injected so the overlap refusal is
+ *  a test rather than a claim; the production default reads the real lineage records. */
+const noOtherSessions = () => [];
 
 /**
  * A linked worktree carrying both defects, in the exact shape measured in
@@ -190,7 +235,11 @@ describe("#405 the repair — positive controls", () => {
     const bed = makeHost("fix-hooks");
     const linked = makeBroken(bed, "linked-hooks", "lane/hooks");
 
-    const r = repairWorktreeProvisioning(linked, { expectedBranch: "lane/hooks" });
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/hooks",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/hooks"),
+    });
 
     expect(r.action).toBe("repaired");
     expect(r.hooksPath.action).toBe("set");
@@ -200,7 +249,12 @@ describe("#405 the repair — positive controls", () => {
     expect(git(bed.host, "config", "--local", "core.hooksPath")).toBe(".githooks");
     expect(git(linked, "config", "--worktree", "core.hooksPath")).toBe(".githooks");
     // Idempotent — the next session in the same folder finds nothing to do.
-    expect(repairWorktreeProvisioning(linked, { expectedBranch: "lane/hooks" }).hooksPath.action).toBe("ok");
+    const again = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/hooks",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/hooks"),
+    });
+    expect(again.hooksPath.action).toBe("ok");
   }, 30_000);
 
   it("(B) drops CR bytes only where the result reproduces the blob git already has", () => {
@@ -210,7 +264,11 @@ describe("#405 the repair — positive controls", () => {
     const sha = indexShaOf(linked, "doc.md");
     expect(crCount(readFileSync(file))).toBe(3);
 
-    const r = repairWorktreeProvisioning(linked, { expectedBranch: "lane/eol" });
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/eol",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/eol"),
+    });
 
     expect(r.action).toBe("repaired");
     expect(r.lineEndings.repaired).toContain("doc.md");
@@ -261,7 +319,11 @@ describe("#405 the repair fails CLOSED — every refusal is its own test", () =>
     writeFileSync(join(linked, "scratch.tmp"), "notes to self\n");
     expect(git(linked, "status", "--porcelain")).toBe("?? scratch.tmp");
 
-    const r = repairWorktreeProvisioning(linked, { expectedBranch: "lane/untracked" });
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/untracked",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/untracked"),
+    });
 
     expect(r.action).toBe("repaired");
     expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(0);
@@ -311,6 +373,8 @@ describe("#405 the repair fails CLOSED — every refusal is its own test", () =>
     // repair must not "fix" a file it cannot prove, and must not fall back to a textual rule.
     const r = repairWorktreeProvisioning(linked, {
       expectedBranch: "lane/liar",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/liar"),
       readFile: () => Buffer.from("one\r\ntwo\r\nDIFFERENT\r\n", "utf8"),
     });
 
@@ -402,4 +466,359 @@ describe("#405 the gate — only a folder Work Control has verified is repaired"
     expect(provisioningRootFor(null)).toBeNull();
     expect(provisioningRootFor(undefined)).toBeNull();
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// #406 — the four findings of the independent review of 6a446c9b, one describe each.
+//
+// The first is the structural one and it changed the default. `provisioningRootFor` gated only on
+// "Work Control verified this folder", and the board row it verifies against carries nothing but
+// issue / folder / branch — no write scope at all. So a valid, NARROW claim (say, two files on
+// #405) was enough to license rewriting every matching tracked path in the folder, which is exactly
+// what `docs/WORK_CONTROL.md:143-150` forbids and what its ":162" collision rule means by "one
+// active mutation lease per overlapping scope". Scope is measured, not trusted.
+//
+// The repair is not a tighter gate on the same behaviour. It is a different default: SessionStart
+// DIAGNOSES and writes nothing. A write needs an explicit provisioning authorization that names its
+// exact scope, and that scope is then enforced per path and per config key rather than believed.
+// Folder + branch remain necessary and are no longer sufficient.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("#406 finding 1 — SessionStart is diagnostic-only; folder + branch is not write authority", () => {
+  it("with no authorization it reports both defects and writes nothing at all", () => {
+    const bed = makeHost("diag");
+    const linked = makeBroken(bed, "linked-diag", "lane/diag");
+    const before = readFileSync(join(linked, "doc.md"));
+
+    const r = repairWorktreeProvisioning(linked, { expectedBranch: "lane/diag", liveSessions: noOtherSessions });
+
+    expect(r.action).toBe("diagnosed");
+    expect(r.line).toMatch(/diagnos/i);
+    // It SAW both defects — this is not a silent skip that happens to write nothing.
+    expect(r.hooksPath.action).toBe("withheld");
+    expect(r.hooksPath.to).toBe(".githooks");
+    expect(r.lineEndings.action).toBe("withheld");
+    expect(r.lineEndings.withheld).toContain("doc.md");
+    expect(r.lineEndings.repaired).toEqual([]);
+    // ...and changed neither of them.
+    expect(resolve(linked, git(linked, "config", "core.hooksPath"))).toBe(join(bed.host, ".githooks"));
+    expect(readFileSync(join(linked, "doc.md")).equals(before)).toBe(true);
+    expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(3);
+  }, 30_000);
+
+  it("a valid claim whose scope is DISJOINT from the defects performs zero config and zero file writes", () => {
+    // The review's exact case: the claim on #405 covers two files under `.claude/` and `tools/`, and
+    // the CRLF repair wanted to rewrite 203 paths. A narrow claim is not a wide licence.
+    const bed = makeHost("disjoint");
+    const linked = makeBroken(bed, "linked-disjoint", "lane/disjoint");
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/disjoint",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/disjoint", { paths: ["some/other/file.md"], config: [] }),
+    });
+
+    expect(r.action).toBe("diagnosed");
+    expect(r.lineEndings.repaired).toEqual([]);
+    expect(r.lineEndings.withheld).toContain("doc.md");
+    expect(r.hooksPath.action).toBe("withheld");
+    expect(resolve(linked, git(linked, "config", "core.hooksPath"))).toBe(join(bed.host, ".githooks"));
+    expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(3);
+    expect(crCount(readFileSync(join(linked, "README.md")))).toBe(1);
+  }, 30_000);
+
+  it("a NARROW scope repairs exactly the paths it names, and withholds every other one", () => {
+    const bed = makeHost("narrow");
+    const linked = makeBroken(bed, "linked-narrow", "lane/narrow");
+    expect(crCount(readFileSync(join(linked, "README.md")))).toBe(1);
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/narrow",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/narrow", { paths: ["doc.md"], config: [] }),
+    });
+
+    expect(r.action).toBe("repaired");
+    expect(r.lineEndings.repaired).toEqual(["doc.md"]);
+    expect(r.lineEndings.withheld).toContain("README.md");
+    expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(0);
+    // Unnamed, therefore untouched — including the config key, which this authorization omits.
+    expect(crCount(readFileSync(join(linked, "README.md")))).toBe(1);
+    expect(resolve(linked, git(linked, "config", "core.hooksPath"))).toBe(join(bed.host, ".githooks"));
+  }, 30_000);
+
+  it("an authorization that names NO scope authorizes nothing — the identity fields are not a licence", () => {
+    const bed = makeHost("noscope");
+    const linked = makeBroken(bed, "linked-noscope", "lane/noscope");
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/noscope",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/noscope", { paths: [], config: [] }),
+    });
+
+    expect(r.action).toBe("diagnosed");
+    expect(r.lineEndings.repaired).toEqual([]);
+    expect(resolve(linked, git(linked, "config", "core.hooksPath"))).toBe(join(bed.host, ".githooks"));
+    expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(3);
+  }, 30_000);
+
+  it("refuses outright when another live session holds this same folder", () => {
+    // #405's own fail-closed list: "no other live session holds an overlapping scope". Two writers
+    // in one folder is the collision `docs/WORK_CONTROL.md` calls "one folder, one writer".
+    const bed = makeHost("overlap");
+    const linked = makeBroken(bed, "linked-overlap", "lane/overlap");
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/overlap",
+      authorization: authFor(linked, "lane/overlap"),
+      liveSessions: () => [{ folder: linked, sessionId: "some-other-session", liveness: "live" }],
+    });
+
+    expect(r.action).toBe("refused");
+    expect(r.reason).toMatch(/another live session/i);
+    expect(resolve(linked, git(linked, "config", "core.hooksPath"))).toBe(join(bed.host, ".githooks"));
+    expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(3);
+  }, 30_000);
+
+  it("refuses when non-overlap cannot be measured at all — unprovable is not proven", () => {
+    const bed = makeHost("unmeasurable");
+    const linked = makeBroken(bed, "linked-unmeasurable", "lane/unmeasurable");
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/unmeasurable",
+      authorization: authFor(linked, "lane/unmeasurable"),
+      liveSessions: () => {
+        throw new Error("lineage directory unreadable");
+      },
+    });
+
+    expect(r.action).toBe("refused");
+    expect(r.reason).toMatch(/overlap|lineage|unreadable/i);
+    expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(3);
+  }, 30_000);
+
+  it("refuses an authorization that names another folder, or another branch", () => {
+    const bed = makeHost("mismatch");
+    const linked = makeBroken(bed, "linked-mismatch", "lane/mismatch");
+    const call = (over) =>
+      repairWorktreeProvisioning(linked, {
+        expectedBranch: "lane/mismatch",
+        liveSessions: noOtherSessions,
+        authorization: authFor(linked, "lane/mismatch", over),
+      });
+
+    expect(call({ folder: join(bed.bed, "somewhere-else") }).action).toBe("refused");
+    expect(call({ branch: "lane/other" }).action).toBe("refused");
+    expect(call({ issue: 0 }).action).toBe("refused");
+    expect(call({ paths: "doc.md" }).action).toBe("refused");
+
+    expect(resolve(linked, git(linked, "config", "core.hooksPath"))).toBe(join(bed.host, ".githooks"));
+    expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(3);
+  }, 30_000);
+
+  it("the SessionStart call site passes no authorization, so the hook itself can never write", () => {
+    // The reachability claim in one assertion, read off the file rather than asserted in prose: the
+    // only in-repo caller is `main()`, and it must not hand this function a write licence.
+    const src = readFileSync(HOOK_FILE, "utf8");
+    const call = src.slice(src.indexOf("repairWorktreeProvisioning(provisioningRootFor("));
+    expect(call.length).toBeGreaterThan(0);
+    expect(call.slice(0, call.indexOf(");") + 2)).not.toMatch(/authorization/);
+  });
+});
+
+describe("#406 finding 2 — repointing hooksPath must prove the folder's own hook is a real gate", () => {
+  const brokenGate = (tag, hookBody) => {
+    const bed = makeHost(tag, { hookBody });
+    const linked = makeBroken(bed, `linked-${tag}`, `lane/${tag}`);
+    return { bed, linked, branch: `lane/${tag}` };
+  };
+
+  const attempt = ({ linked, branch }) =>
+    repairWorktreeProvisioning(linked, {
+      expectedBranch: branch,
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, branch),
+    });
+
+  it("refuses when .githooks exists but holds no pre-push — a non-empty directory is not a gate", () => {
+    // The defect exactly: the old check asked `readdirSync(".githooks").length`, so a directory
+    // holding one unrelated file passed, and the folder was repointed away from the escaping path
+    // that may have held the only working hook.
+    const bed = makeHost("nopush", { withHooks: false });
+    const elsewhere = join(bed.bed, "elsewhere", ".githooks");
+    mkdirSync(elsewhere, { recursive: true });
+    writeFileSync(join(elsewhere, "pre-push"), GATE_HOOK);
+    const linked = join(bed.bed, "linked-nopush");
+    git(bed.host, "worktree", "add", "-q", "-b", "lane/nopush", linked);
+    git(linked, "config", "--worktree", "core.hooksPath", elsewhere);
+    mkdirSync(join(linked, ".githooks"), { recursive: true });
+    writeFileSync(join(linked, ".githooks", "NOTES.md"), "not a hook\n");
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/nopush",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/nopush"),
+    });
+
+    expect(r.hooksPath.action).toBe("refused");
+    expect(r.hooksPath.reason).toMatch(/pre-push/i);
+    expect(resolve(linked, git(linked, "config", "core.hooksPath"))).toBe(elsewhere);
+  }, 30_000);
+
+  it("refuses a pre-push that exists but gates nothing — a forgotten `exit 0` stub", () => {
+    const f = brokenGate("stub", "#!/bin/sh\nexit 0\n");
+    const r = attempt(f);
+
+    expect(r.hooksPath.action).toBe("refused");
+    expect(r.hooksPath.reason).toMatch(/verify-local/i);
+    expect(resolve(f.linked, git(f.linked, "config", "core.hooksPath"))).toBe(join(f.bed.host, ".githooks"));
+  }, 30_000);
+
+  it("refuses a pre-push that only NAMES the verifier, in a comment or an echo", () => {
+    const commented = brokenGate("commented", "#!/bin/sh\nset -e\n# powershell -File verify-local.ps1\n");
+    expect(attempt(commented).hooksPath.action).toBe("refused");
+
+    const echoed = brokenGate("echoed", '#!/bin/sh\nset -e\necho "running verify-local.ps1"\n');
+    expect(attempt(echoed).hooksPath.action).toBe("refused");
+  }, 60_000);
+
+  it("refuses a pre-push that runs the verifier but swallows its answer", () => {
+    const swallowed = brokenGate(
+      "swallowed",
+      '#!/bin/sh\nset -e\npowershell.exe -File "$repo/scripts/verify-local.ps1" || :\n',
+    );
+    expect(attempt(swallowed).hooksPath.action).toBe("refused");
+
+    const unarmed = brokenGate("unarmed", '#!/bin/sh\npowershell.exe -File "$repo/scripts/verify-local.ps1"\n');
+    expect(attempt(unarmed).hooksPath.action).toBe("refused");
+  }, 60_000);
+
+  it("accepts a hook that arms `set -e` and actually runs the verifier", () => {
+    const good = brokenGate("realgate", GATE_HOOK);
+    const r = attempt(good);
+
+    expect(r.hooksPath.action).toBe("set");
+    expect(resolve(good.linked, git(good.linked, "config", "core.hooksPath"))).toBe(join(good.linked, ".githooks"));
+  }, 30_000);
+
+  it("agrees with scripts/lib/prepush-hook-contract.mjs — the hook may not import it, so it is pinned instead", () => {
+    // `tracked-hooks.test.mjs` pins the hook to `node:` imports, so the check inside it is a second
+    // implementation of a question this repository already answers in one place. Two implementations
+    // drift; this is the pin that says when they have. The hook's copy is deliberately the NARROWER
+    // one: everything below that it rejects, the canonical contract rejects too.
+    expect(PREPUSH_VERIFIER).toBe(VERIFIER);
+
+    const real = readFileSync(REAL_PREPUSH, "utf8");
+    expect(prePushContractViolations(real)).toEqual([]);
+    expect(prePushRunsVerifier(real)).toBe(true);
+
+    const seeds = [
+      "",
+      "# nothing but a comment\n",
+      "#!/bin/sh\nexit 0\n",
+      "#!/bin/sh\nset -e\n# powershell -File verify-local.ps1\n",
+      '#!/bin/sh\nset -e\necho "running verify-local.ps1"\n',
+      "#!/bin/sh\nset -e\n: # verify-local.ps1\n",
+      '#!/bin/sh\npowershell -File "verify-local.ps1"\n',
+      '#!/bin/sh\nset -e\npowershell -File "verify-local.ps1" || true\n',
+      '#!/bin/sh\nset -e\nexit 0\npowershell -File "verify-local.ps1"\n',
+      '#!/bin/sh\nset -e\nset +e\npowershell -File "verify-local.ps1"\n',
+      GATE_HOOK,
+    ];
+    for (const seed of seeds) {
+      const canonical = prePushContractViolations(seed).length === 0;
+      const inlined = prePushRunsVerifier(seed);
+      // Narrower in the SAFE direction only: the hook may refuse a hook the contract accepts, but it
+      // must never accept one the contract rejects.
+      expect(!inlined || canonical, `disagreement on: ${JSON.stringify(seed)}`).toBe(true);
+      expect(inlined).toBe(canonical);
+    }
+  });
+});
+
+describe("#406 finding 3 — Git's own pathname expansion decides whether a hooksPath escapes", () => {
+  it("a `~/` hooksPath escapes the folder, and Node's resolve() cannot see that", () => {
+    const bed = makeHost("tilde");
+    const linked = makeBroken(bed, "linked-tilde", "lane/tilde", { escape: false });
+    git(linked, "config", "--worktree", "core.hooksPath", "~/outside-gate");
+
+    // The mechanism, measured rather than asserted. Git expands `~`; `resolve()` treats it as an
+    // ordinary directory name and lands INSIDE the worktree, which is why the escape read as "ok".
+    const raw = git(linked, "config", "--get", "core.hooksPath");
+    expect(raw).toBe("~/outside-gate");
+    expect(resolve(linked, raw).startsWith(linked)).toBe(true);
+    const expanded = git(linked, "config", "--path", "--get", "core.hooksPath");
+    expect(expanded.startsWith(linked)).toBe(false);
+    expect(expanded).toMatch(/outside-gate$/);
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/tilde",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/tilde"),
+    });
+
+    expect(r.hooksPath.action).toBe("set");
+    expect(r.hooksPath.from).toBe("~/outside-gate");
+    expect(resolve(linked, git(linked, "config", "core.hooksPath"))).toBe(join(linked, ".githooks"));
+  }, 30_000);
+
+  it("still leaves an in-tree relative hooksPath exactly as it is", () => {
+    // The mirror of the fix: reading through `--path` must not turn a correct folder into a rewrite.
+    const bed = makeHost("intree");
+    const linked = makeBroken(bed, "linked-intree", "lane/intree", { escape: false });
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/intree",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/intree"),
+    });
+
+    expect(r.hooksPath.action).toBe("ok");
+    expect(git(linked, "config", "--get", "core.hooksPath")).toBe(".githooks");
+  }, 30_000);
+});
+
+describe("#406 finding 4 — a failed index refresh is never reported as repaired", () => {
+  it("surfaces the failed paths and the git error instead of claiming success", () => {
+    const bed = makeHost("refresh");
+    const linked = makeBroken(bed, "linked-refresh", "lane/refresh");
+    const locked = "fatal: Unable to create '.git/index.lock': File exists.";
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/refresh",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/refresh"),
+      run: (cwd, args) => (args[0] === "update-index" ? { ok: false, out: locked, status: 128 } : realRun(cwd, args)),
+    });
+
+    expect(r.lineEndings.action).toBe("failed");
+    expect(r.lineEndings.refreshFailed).toContain("doc.md");
+    expect(r.lineEndings.reason).toContain("index.lock");
+    expect(r.action).toBe("failed");
+    expect(r.line).toMatch(/refresh|index/i);
+
+    // The bytes WERE rewritten — saying otherwise would be the mirror overclaim. What is false is
+    // the postcondition: without the refresh the folder now reports phantom modifications, and the
+    // report has to say so rather than leave the next reader to discover it.
+    expect(r.lineEndings.repaired).toContain("doc.md");
+    expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(0);
+    expect(git(linked, "status", "--porcelain")).not.toBe("");
+  }, 30_000);
+
+  it("a refresh that succeeds reports no failures, and the folder really is clean", () => {
+    const bed = makeHost("refresh-ok");
+    const linked = makeBroken(bed, "linked-refresh-ok", "lane/refresh-ok");
+
+    const r = repairWorktreeProvisioning(linked, {
+      expectedBranch: "lane/refresh-ok",
+      liveSessions: noOtherSessions,
+      authorization: authFor(linked, "lane/refresh-ok"),
+    });
+
+    expect(r.action).toBe("repaired");
+    expect(r.lineEndings.action).toBe("repaired");
+    expect(r.lineEndings.refreshFailed).toEqual([]);
+    expect(git(linked, "status", "--porcelain")).toBe("");
+  }, 30_000);
 });
