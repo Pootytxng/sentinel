@@ -1,0 +1,84 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Two-file diagnostic-only lane on #405: SessionStart's worktree-provisioning check. Four review rounds; rounds 1-3 were REQUEST CHANGES and round 4 is PASS. Every commit in the proof delta was authored by this actor alone; the reviewer authored none of them.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/405#issuecomment-5596228413",
+  "leaseEvidenceNote": "The operative Ownership claim for this folder and branch. Original claim 5592598279/5592618121 posted before the first write; refreshed for round 2 (5594555396) and round 3 (5595382154); amended for this landing at 5596219346, corrected at 5596226213, and finalised at 5596228413. The amendment adds ONLY the two transition-receipt paths this landing writes and widens no source scope. The two source files stay byte-frozen at fdb57c03 because the independent PASS is bound to those exact bytes.",
+  "claimCorrectionNote": "The first amendment parsed wider than it read, and that is recorded on the thread rather than quietly re-posted. `parseWriteScope` (scripts/lib/claim-scope.mjs:38-42) reads to the end of the `- Write scope:` bullet, and its disclaimer detector at :59 matches `no|not|never|except|excluding|outside|other than` -- my phrase was \"Still excluded, unchanged:\", and `excluded` is not `excluding`, so seven paths written down to DISCLAIM them were granted instead. Measured, not guessed: the refreshed gate listed docs/BRANCH_DISPOSITIONS.md, docs/SESSION_HANDOFF.md, docs/RELEASE_STATE.md, docs/BACKLOG.md and three test files inside the scope. The same phrasing sat in every earlier claim on this issue, so the scope was inflated for every round of this lane; nothing was ever written outside the two source files (the gate measured \"2 changed paths\" each round), but the grant was wider than the text read. Cured by moving the exclusions into their own bullet and restating the scope with backticks around paths and nothing else; a second pass removed a backticked commit sha the reader had taken as a fifth path. The parser's blind spot is RECORDED here, not repaired here -- scripts/lib/claim-scope.mjs is shared governance and outside this landing lane.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Exclusive for the bounded scope this lane mutates, measured rather than asserted. Every open PR was read file-by-file at this head -- #404, #400, #397, #395, #394, #391, #317, #306, #297 -- and neither `.claude/hooks/session-root-assert.mjs` nor `tools/entry/worktree-provisioning.test.mjs` appears in any of them. Three open PRs do add files under `.claude/work-control/`: #317 (2026-09-01-mark-pr-ready-313.json, 2026-09-01-open-draft-pr-313.json), #306 (2026-09-01-merge-pr-288.json, -289.json) and #297 (six 2026-09-01 receipts). All are DIFFERENT FILENAMES; directory co-occupancy is not file overlap, and neither name this landing writes collides with any of them. No open PR is based on this branch, so the prune closes nothing (#337). No competing claim exists on this issue or these paths.",
+  "inheritedWork": false,
+  "transition": "merge-pr",
+  "currentHead": "fdb57c03eac41581a20ba363c92754296dbc4dde",
+  "pr": 406,
+  "issue": 405,
+  "kind": "lane",
+  "branch": "claude/sentinel-audit-recovery-dadd85",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/post-constitution-reconciliation-d5df83, canonical remote `origin` git@github.com:Pootytxng/sentinel.git.",
+    "remoteState": "origin/main f8c5f9d186a302d82f2cf23187f02a1c1433102c, unmoved since round 2. origin/claude/sentinel-audit-recovery-dadd85 = fdb57c03eac41581a20ba363c92754296dbc4dde, equal to local HEAD and to the PR head. Re-derived again immediately before the merge is executed.",
+    "worktree": "Linked worktree, one writer, its own index at <common-dir>/worktrees/post-constitution-reconciliation-d5df83/index. core.hooksPath resolves inside this folder, so the pre-push gate is armed here. Eleven other worktrees exist in the fleet; none is touched by this landing and no fleet sweep is performed.",
+    "branch": "claude/sentinel-audit-recovery-dadd85, PR #406 -> main, OPEN, MERGEABLE / CLEAN, 0 closingIssuesReferences. Draft until the mark-pr-ready transition authorized by 2026-09-08-mark-pr-ready-406.json.",
+    "dirtyState": "No tracked file is modified. `git status --porcelain` shows only the two UNTRACKED transition receipts under .claude/work-control/ -- this receipt and the mark-pr-ready one. That is the receipt chain's documented steady state, not a lapse: a receipt binds to the head it authorizes, so it cannot ride inside that same commit (.claude/work-control/README.md). Both are inside the amended claim scope, and both are committed after the landing.",
+    "liveProcesses": "None relevant: compy.exe, cargo.exe and rustc.exe all absent from tasklist. No build, install or dev server running against this folder."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "fdb57c03eac41581a20ba363c92754296dbc4dde",
+      "evidence": "logs/verify-local-2026-09-09T04-47-07Z.log:38-39",
+      "summary": "439 frontend test files passed (439); 6582 tests passed | 3 skipped (6585); 0 failed. The lane's own suite tools/entry/worktree-provisioning.test.mjs is 33/33 inside that total."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "fdb57c03eac41581a20ba363c92754296dbc4dde",
+      "evidence": "logs/verify-local-2026-09-09T04-47-07Z.log:44-69",
+      "summary": "tsc clean; vite v7.3.5 production build succeeded, built in 8.51s. Only the pre-existing >500kB chunk-size advisory, unchanged by this PR."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "fdb57c03eac41581a20ba363c92754296dbc4dde",
+      "evidence": "logs/verify-local-2026-09-09T04-47-07Z.log:1393",
+      "summary": "1291 passed; 0 failed; 24 ignored; 0 filtered out. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "fdb57c03eac41581a20ba363c92754296dbc4dde",
+      "evidence": "logs/verify-local-2026-09-09T04-47-07Z.log:1408-1410",
+      "summary": "clippy stage clean under -D warnings: the stage compiles and reports `Finished` with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "RUN BY THIS LANE at this exact head, by the pre-push hook itself, with an empty git status; the push that carried fdb57c03 is the run that produced this log. Exit 0 was NOT treated as the verdict -- this gate is known to exit 0 while red -- so every stage was read at its own line range. The log carries SIX `LOCAL CHECK:` stages, not eight: git diff check (:3), write-scope drift #356 (:5-6), frontend tests (:8-39), frontend type-check and build (:44-69), Rust tests (:71-1405), Rust clippy (:1408-1410). Earlier comments on this lane said \"all 8 stages\"; that number was wrong and is corrected here -- scripts/verify-local.ps1 invokes six checks (:232-244) plus a conditional dependency install. `LOCAL CHECK RESULT: PASS` is printed to the console rather than into the log, and it is recorded in the push transcript together with `7f7744ff..fdb57c03`. The round-4 push passed on the FIRST attempt; the round-3 push had needed one retry for the known #390 launch-focus-guard flake, retried and never bypassed. No `--no-verify` at any point in this lane.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "The in-gate stage could not measure: logs/verify-local-2026-09-09T04-47-07Z.log:6 reads \"scope drift (#356): not measured -- no session record for this folder (launch through tools/entry, or pass --issue)\". This folder carries no compy-entry session record, so the stage has no claim to compare against and passes honestly rather than pretending. It was therefore measured EXPLICITLY instead: `node scripts/scope-drift-gate.mjs --issue 405 --refresh` -> \"2 changed paths since origin/main measured against the claim on #405 (thread) / OK: every changed path is inside `.claude/hooks/session-root-assert.mjs`, `tools/entry/worktree-provisioning.test.mjs`, `.claude/work-control/2026-09-08-mark-pr-ready-406.json`, `.claude/work-control/2026-09-08-merge-pr-406.json`\".",
+    "reconciliationNote": "The explicit run is what makes the claim checkable, and it is the run that exposed the parser hole recorded in claimCorrectionNote -- the first two amendments were re-posted precisely because this command printed a scope wider than the words meant. The final parse is exactly the four claimed paths and nothing else. The code delta remains two files; the two receipts are written under .claude/work-control/, both added to the claim BEFORE either was written. No disposition record is written by this lane: `node scripts/branch-disposition-audit.mjs` answers OK before the landing, and the landing PRUNES this ref, so no record is owed for a ref that no longer exists. docs/BRANCH_DISPOSITIONS.md is excluded from this claim and is not touched.",
+    "landingOrderNote": "The landing runs through `node scripts/land-pr.mjs --pr 406 --receipt .claude/work-control/2026-09-08-merge-pr-406.json`, so merge -> prune -> fetch -> disposition audit stay guarded and in that order and the LANDED-and-UNRECORDED window measured on #364/#362 stays seconds wide. `gh pr merge --delete-branch` is NOT used: it set core.bare=true repo-wide once and corrupted every worktree, and it closes dependent PRs (#337). No squash -- a squash would orphan this lane's commits from main."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "fdb57c03eac41581a20ba363c92754296dbc4dde",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/406#issuecomment-5596136017 (2026-09-09T05:08:05Z). Round 4 of 4. Rounds 1-3 were REQUEST CHANGES at 6a446c9b, 881fa8eb and 7f7744ff respectively; this is the first PASS. The reviewer authored none of the commits in the proof delta -- mutationAuthors is claude-code alone.",
+    "reviewerNote": "PASS on both Standards and Spec, and it VERIFIED BY MUTATION rather than by reading. Independent falsification on this exact head: after changing only one tracked file's mtime, diagnoseWorktreeProvisioning returned `clean` and the linked-worktree index stayed byte-identical (sha256 49602fdb... before and after) -- and the same probe FAILED on the reviewed predecessor, so the check can distinguish the fix from its absence. It confirmed remote branch, local HEAD and PR head all equal fdb57c03; base still f8c5f9d1; the diff still the two claimed paths; six directly relevant suites 6 files / 171 tests; `git diff --check` clean; scope-drift with --issue 405 measuring 2 changed paths inside the claim; and the full-gate log's own numbers. Spec PASS is explicitly for a bounded diagnostic slice: no repair entry point, no mutating authorization escape hatch, the SessionStart call site diagnostic-only, zero closing-issue references, and #405 open because its auto-repair criterion is unmet. Two binding conditions carried forward verbatim: \"This PASS is bound only to fdb57c03eac41581a20ba363c92754296dbc4dde; any content change invalidates it\" and \"Keep #405 open and do not represent this PR as the automatic repair.\" Both are honoured -- the head merged is that exact sha, and no close-issue receipt exists."
+  },
+  "whatLandsNote": "What lands is a DIAGNOSIS, not the repair #405 asks for. Two files: `.claude/hooks/session-root-assert.mjs` gains a diagnostic-only worktree-provisioning check whose every git observation disables optional locks both ways (`--no-optional-locks` survives a stripped environment, `GIT_OPTIONAL_LOCKS=0` survives a call path that does not carry the flag), and `tools/entry/worktree-provisioning.test.mjs` is its 33-test guard. Across four rounds the lane deleted every write path it started with: round 2 removed the caller-invented authorization object, the corrupt-lineage fail-open and both repair functions, because the caller was writing its own licence and docs/WORK_CONTROL.md's board carries no scope field to check it against; round 3 removed the last hidden write, `git status`'s opportunistic index refresh, which was rewriting the linked worktree's own index while the function reported clean.",
+  "issueStaysOpenNote": "Issue #405 stays OPEN and is NOT marked Done. Its acceptance criterion -- SessionStart repairs the folder it is entering -- is unmet BY DESIGN. Automatic repair remains blocked on a machine-verifiable Work Control scope-and-overlap capability that does not exist yet: something that can measure a lane's real scope and its overlap with OTHER worktrees from Work Control itself. That is shared governance (docs/WORK_CONTROL.md and the board schema) and a different lane's change, deliberately not widened into this one. No close-issue receipt has been written, no commit in this branch carries a closing keyword, and `gh pr view 406 --json closingIssuesReferences` measures 0.",
+  "carriedForwardNote": "Two findings observed by this lane and deliberately left unfixed, both outside the two-file claim and both owed their own issue: (1) scripts/lib/prepush-hook-contract.mjs has two fail-open shapes the differential corpus exposed -- `>&2 echo verify-local.ps1`, where the [;|&] segment split cuts the `&` inside `>&2` so the command word becomes `2`, and a multi-line quoted diagnostic containing the verifier name; (2) scripts/lib/claim-scope.mjs's disclaimer vocabulary knows `excluding` but not `excluded`, which is what inflated this lane's own claim scope for four rounds. Neither is repaired here."
+}
