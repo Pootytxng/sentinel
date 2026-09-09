@@ -35,7 +35,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,6 +78,19 @@ const stripCrlf = (buf) => {
 };
 
 const indexShaOf = (dir, path) => git(dir, "ls-files", "-s", "--", path).split(/\s+/)[1];
+
+/**
+ * A LINKED worktree keeps its own index, at `<common-dir>/worktrees/<name>/index` — so a write into
+ * it is a write into that worktree's state, invisible to anyone hashing the host's.
+ */
+const indexFileOf = (dir) => join(git(dir, "rev-parse", "--absolute-git-dir"), "index");
+
+/** Dirty ONLY stat metadata: identical bytes, a future mtime. Nothing about the content changes. */
+const touchOnly = (file) => {
+  writeFileSync(file, readFileSync(file));
+  const future = new Date(Date.now() + 60_000);
+  utimesSync(file, future, future);
+};
 
 const beds = [];
 const newBed = (tag) => {
@@ -682,4 +695,91 @@ describe("round-2 finding 4 — the code says what it does, so the PR can be che
     expect(resolve(linked, git(linked, "config", "core.hooksPath")).startsWith(linked)).toBe(false);
     expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(3);
   }, 30_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// ROUND-3 REVIEW OF 7f7744ff — one finding, and it is the difference between "runs only read-only
+// subcommands" and "writes nothing".
+//
+// `git status` opportunistically REFRESHES the index: it re-stats the working tree and rewrites the
+// stat cache so the next reader is faster. That is a write, into the index of whichever worktree it
+// was pointed at, performed by a command every one of these tests called read-only. Review measured
+// it: touch one tracked file's mtime, call the diagnosis, and the linked worktree's index file
+// changed (sha256 2c4cb550… -> 0e8a003a… on their fixture, 36b8765f… -> c1212ece… on mine) while the
+// function returned a clean-looking answer and reported nothing.
+//
+// The round-2 tests could not see it. They snapshot tracked file BYTES and `core.hooksPath`, and the
+// index is neither. So the guard here is the index file itself, and it is written to be able to
+// fail: the second half of the first test performs the same stat-only dirt with optional locks left
+// ON and requires the index to change, because a byte-identity assertion over a probe that cannot
+// detect a write would be green for the wrong reason forever.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("round-3 finding — the diagnosis does not write the linked worktree's index either", () => {
+  it("leaves the index byte-identical when only a tracked file's mtime moved", () => {
+    const bed = makeHost("index");
+    const linked = makeBroken(bed, "linked-index", "lane/index");
+    const indexFile = indexFileOf(linked);
+
+    // Settle first, so whatever follows is attributable to the diagnosis and not to the fixture.
+    git(linked, "status", "--porcelain");
+    touchOnly(join(linked, "README.md"));
+
+    const before = readFileSync(indexFile);
+    // No injected `run`: the SHIPPED path is the claim, and an injected runner would prove nothing
+    // about what a real SessionStart does.
+    const r = diagnoseWorktreeProvisioning(linked, { expectedBranch: "lane/index" });
+    const after = readFileSync(indexFile);
+
+    expect(r.action).toBe("reported"); // it really did the whole diagnosis over this folder
+    expect(after.equals(before)).toBe(true);
+
+    // ...and the probe can actually detect a write. Same stat-only dirt, optional locks left on.
+    touchOnly(join(linked, "doc.md"));
+    const beforeLoose = readFileSync(indexFile);
+    execFileSync("git", ["-C", linked, "status", "--porcelain", "--untracked-files=no"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const afterLoose = readFileSync(indexFile);
+    expect(afterLoose.equals(beforeLoose)).toBe(false);
+  }, 30_000);
+
+  it("leaves it identical on the refusal paths too, which run git before deciding to stop", () => {
+    const bed = makeHost("index-refuse");
+    const linked = makeBroken(bed, "linked-index-refuse", "lane/index-refuse");
+    const indexFile = indexFileOf(linked);
+
+    git(linked, "status", "--porcelain");
+    touchOnly(join(linked, "README.md"));
+    const before = readFileSync(indexFile);
+
+    // Wrong branch: refused — but only AFTER `rev-parse` and `status` have already run.
+    const refused = diagnoseWorktreeProvisioning(linked, { expectedBranch: "lane/not-this-one" });
+    expect(refused.action).toBe("refused");
+    expect(readFileSync(indexFile).equals(before)).toBe(true);
+
+    // And the clean-folder path, which runs the full measurement and simply has nothing to say.
+    const okBed = makeHost("index-clean");
+    const okLinked = makeBroken(okBed, "linked-index-clean", "lane/index-clean", { escape: false, crlf: false });
+    const okIndex = indexFileOf(okLinked);
+    git(okLinked, "status", "--porcelain");
+    touchOnly(join(okLinked, "README.md"));
+    const okBefore = readFileSync(okIndex);
+    expect(diagnoseWorktreeProvisioning(okLinked, { expectedBranch: "lane/index-clean" }).action).toBe("clean");
+    expect(readFileSync(okIndex).equals(okBefore)).toBe(true);
+  }, 30_000);
+
+  it("routes every observation through the lock-free runner, not the shared one", () => {
+    const src = readFileSync(HOOK_FILE, "utf8");
+    const module_ = src.slice(
+      src.indexOf("// \u2500\u2500 worktree provisioning (#405)"),
+      src.indexOf("// \u2500\u2500 the assertion"),
+    );
+    // Both mechanisms: the flag survives a stripped environment, the variable survives a call path
+    // that does not carry the flag. Either alone would be a guarantee with a hole in it.
+    expect(module_).toContain('gitResult(root, ["--no-optional-locks", ...args], { env: { GIT_OPTIONAL_LOCKS: "0" } })');
+    expect(module_).toContain("run = provisioningGit");
+    expect(module_).not.toContain("run = gitResult");
+  });
 });

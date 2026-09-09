@@ -490,13 +490,15 @@ export function observeLive(root) {
 
 export const WORKTREE_IDENTITY = Object.freeze({ name: "claude-code", email: "claude-code@desk.local" });
 
-/** Like `git` above, but the caller learns WHETHER it ran - a set has no output to read success from. */
-const gitResult = (root, args) => {
+/** Like `git` above, but the caller learns WHETHER it ran - a set has no output to read success from.
+ *  `env` overlays the inherited environment; callers that pass nothing keep the environment as-is. */
+const gitResult = (root, args, { env = null } = {}) => {
   try {
     const out = execFileSync("git", ["-C", root, ...args], {
       encoding: "utf8",
       timeout: 5_000,
       stdio: ["ignore", "pipe", "pipe"],
+      ...(env ? { env: { ...process.env, ...env } } : {}),
     });
     return { ok: true, out: String(out).trim(), status: 0 };
   } catch (err) {
@@ -557,12 +559,33 @@ export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKT
 // copied ALONE into folders where `tools/entry` does not exist — which is exactly where the repair
 // is needed. `ensureWorktreeIdentity` above is here for the same reason.
 //
-// The refusals are the load-bearing part, not the repair. This runs unattended at the start of every
-// session, so it repairs only the folder it is in, only after that folder has proved itself, and —
-// per file — only when dropping CR reproduces the blob git already has, byte for byte. It never
-// normalises, never edits content, never sweeps the fleet, and never widens its own permissions.
-// Anything it cannot prove it leaves alone and says so. `tools/entry/worktree-provisioning.test.mjs`
-// holds one test per refusal.
+// The refusals are the load-bearing part. This runs unattended at the start of every session, so it
+// looks at the folder it is in and no other, only after that folder has proved itself, and it writes
+// nothing whatever it finds — see `diagnoseWorktreeProvisioning` for why the write side was removed
+// rather than gated harder. It never normalises, never edits content, never sweeps the fleet, and
+// never widens its own permissions. Anything it cannot prove it leaves alone and says so.
+// `tools/entry/worktree-provisioning.test.mjs` holds one test per refusal.
+
+/**
+ * Every git observation in this diagnosis, with git's own OPTIONAL WRITES turned off.
+ *
+ * "Read-only subcommand" is not the same claim as "writes nothing". `git status` opportunistically
+ * REFRESHES the index — it re-stats the working tree and rewrites the stat cache so the next caller
+ * is faster — and a linked worktree has its own index, at `<common-dir>/worktrees/<name>/index`.
+ * Measured on a real fixture: touching one tracked file's mtime and then calling this diagnosis
+ * changed that index file (sha256 36b8765f… -> c1212ece…, same 411 bytes) while the diagnosis
+ * returned `reported` and said nothing about having written anything. Round-3 review found it; the
+ * byte and config tests did not, because they snapshotted tracked files and `core.hooksPath` and not
+ * the index.
+ *
+ * That is a real write into another writer's worktree state, and it contradicts this module's whole
+ * contract, so it is disabled at the only place that can disable it: the process git runs in.
+ * BOTH mechanisms, deliberately — `--no-optional-locks` in case the environment is stripped by a
+ * wrapper, `GIT_OPTIONAL_LOCKS=0` in case a subcommand is reached by a path that does not carry the
+ * flag. The same fixture with optional locks off leaves the index byte-identical.
+ */
+const provisioningGit = (root, args) =>
+  gitResult(root, ["--no-optional-locks", ...args], { env: { GIT_OPTIONAL_LOCKS: "0" } });
 
 /** The root to repair, or null. The gate is a function so "unclaimed folders are never repaired" is
  *  testable rather than asserted: Kuya's own windows, Cowork and Codex all run unverified here, and
@@ -870,7 +893,9 @@ function diagnoseLineEndings(root, { run, readFile }) {
 /**
  * Diagnose the provisioning of the folder this session is rooted in — and no other folder, ever.
  *
- * THIS MODULE WRITES NOTHING. Not to a file, not to a git config key, not to the index. That is the
+ * THIS MODULE WRITES NOTHING. Not to a file, not to a git config key, and not to the index — not
+ * even the opportunistic refresh `git status` performs on its own, which is why every observation
+ * goes through `provisioningGit` rather than `gitResult`. That is the
  * whole of round-2 finding 1, and it is a deletion rather than a stricter guard for a reason worth
  * stating: the previous version accepted an `authorization` object naming an issue, a folder, a
  * branch and two scope lists, and checked the shape of all five. What it could not do is check that
@@ -894,7 +919,7 @@ function diagnoseLineEndings(root, { run, readFile }) {
  */
 export function diagnoseWorktreeProvisioning(
   root,
-  { run = gitResult, expectedBranch = null, readFile = readFileSync } = {},
+  { run = provisioningGit, expectedBranch = null, readFile = readFileSync } = {},
 ) {
   const idle = (action, reason) => ({
     action,
