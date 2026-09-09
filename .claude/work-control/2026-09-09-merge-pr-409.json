@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Parser-consolidation lane on #408 (PR #409). Round 5 repaired the round-4 P1 named by the exact-head review of a0cec166: the completed-set seal was spelled `no others?`, so it also fired on the SINGULAR `no other <named thing>` and made every path declared after one vanish from the writer's own claim -- an UNDER-read, the direction that lets scopeOverlapVerdict clear a second writer onto a path this lane already holds. All five commits in the proof delta (89f04c32, a0cec166, 2c30f3b1, f52fb5bb, 242f3de8) were authored by this actor alone; the reviewer authored none of them.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/408#issuecomment-5609029115",
+  "leaseEvidenceNote": "The operative Ownership claim for this folder and branch, as amended. The base claim (5608470984, expires 2026-09-10T08:45Z) covered the ten source paths; the amendment adds ONLY the five transition-receipt filenames this landing writes and widens no source scope. Measured, not read: the amended bullet parses to exactly the fifteen intended paths through all three production readers, and `node scripts/scope-drift-gate.mjs --issue 408 --refresh` reports OK on 8 changed paths against the amended claim on the thread.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Exclusive for the bounded scope this lane mutates, re-checked immediately before the amendment was posted. No open PR adds a file of any of the five receipt names claimed here (only #317, #306 and #297 touch `.claude/work-control/` at all, and every file among them is dated 2026-09-01; directory co-occupancy is not file overlap). The one live-looking competing claim, #225's `.claude/work-control/**`, is not live: expired 2026-09-04 and released by a `### Handoff` on 2026-09-08T03:59:03Z. The ten source paths carry no competing claim and no other open PR touches any of them.",
+  "inheritedWork": false,
+  "currentHead": "89f04c327ba3af0de6e36b1087288568743ad16a",
+  "pr": 409,
+  "issue": 408,
+  "kind": "lane",
+  "branch": "claude/sentinel-408-parser-consolidation-c31f7a",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/machine-model-defects-115554, canonical remote `origin` git@github.com:Pootytxng/sentinel.git.",
+    "remoteState": "origin/main 5eb06971f71f24221bb647aa59454f68f62d86f0, unmoved since the branch was cut and since the independent review. origin/claude/sentinel-408-parser-consolidation-c31f7a = 89f04c327ba3af0de6e36b1087288568743ad16a, equal to local HEAD and to the PR head.",
+    "worktree": "Linked worktree, one writer, its own index. core.hooksPath is worktree-scoped to `.githooks`, so the pre-push gate is armed here.",
+    "branch": "claude/sentinel-408-parser-consolidation-c31f7a, PR #409 -> main, OPEN, MERGEABLE / CLEAN, 0 closingIssuesReferences.",
+    "dirtyState": "Clean except this lane's own transition receipts, all five of which are inside the amended claim scope. `git status --porcelain --untracked-files=all` was empty immediately before the first of them was written.",
+    "liveProcesses": "node x46 (MCP servers and peer Claude Code sessions across the fleet). compy.exe x0, cargo x0, rustc x0, npm x0, msbuild x0, link x0. Measured with Get-Process, not WMI, because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "89f04c327ba3af0de6e36b1087288568743ad16a",
+      "evidence": "logs/verify-local-2026-09-09T20-57-53Z.log:9-44",
+      "summary": "440 frontend test files passed (440); 6763 tests passed | 4 skipped (6767); 0 failed. Results at :39-40."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "89f04c327ba3af0de6e36b1087288568743ad16a",
+      "evidence": "logs/verify-local-2026-09-09T20-57-53Z.log:45-71",
+      "summary": "tsc clean; vite production build succeeded, `built in 7.06s` at :70. Only the pre-existing >500 kB chunk-size advisory, unchanged by this PR."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "89f04c327ba3af0de6e36b1087288568743ad16a",
+      "evidence": "logs/verify-local-2026-09-09T20-57-53Z.log:1394",
+      "summary": "1291 passed; 0 failed; 24 ignored; 0 filtered out, plus two 0-test targets at :1400 and :1406. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "89f04c327ba3af0de6e36b1087288568743ad16a",
+      "evidence": "logs/verify-local-2026-09-09T20-57-53Z.log:1409-1411",
+      "summary": "clippy stage clean under -D warnings: the stage compiles and reports `Finished` at :1411 with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "RUN BY THIS LANE at this exact head, by the pre-push hook itself, with an empty git status; the push that carried 89f04c32 is the run that produced this log. Exit code was NOT treated as the verdict -- this gate is known to exit 0 while red -- so every stage was read at its own line range. The log carries six `LOCAL CHECK:` stages: git diff check (:3), write-scope drift #356 (:5-6), frontend tests (:9-44), frontend type-check and build (:45-71), Rust tests (:72-1408), Rust clippy (:1409-1411). Zero lines in the 1411-line log match `test result: FAILED`, `panicked` or `error[E`. `LOCAL CHECK RESULT: PASS` is printed to the console rather than into the log and is recorded in the push transcript. No `--no-verify` at any point in this lane. The log itself is gitignored (.gitignore:2 `logs`), so it is not a tracked write and never counts as scope drift.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "The in-gate stage MEASURED this time and passed: log:6 reads \"scope drift (#356): 8 changed paths since origin/main measured against the claim on #408 (cache)\" followed by OK. In round 4 the same stage read \"not measured -- no session record for this folder\" and was refused as evidence; it measures now because the ownership renewal wrote the claim cache for this folder, a side effect of the renewal rather than of this code change. Re-measured after the scope amendment with `node scripts/scope-drift-gate.mjs --issue 408 --refresh`: the same 8 changed paths, now read against the amended fifteen-path claim on the thread, OK.",
+    "reconciliationNote": "The code delta is 8 paths and has not moved since the independent review. The five receipts were added to the claim BEFORE any of them was written."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "89f04c327ba3af0de6e36b1087288568743ad16a",
+    "verdict": "APPROVE-EQUIVALENT",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/409#issuecomment-5608760418 (2026-09-09T21:07:28Z), naming exact head 89f04c327ba3af0de6e36b1087288568743ad16a against base 5eb06971f71f24221bb647aa59454f68f62d86f0.",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq, which authored no commit in the proof delta -- mutationAuthors is claude-code alone, confirmed by `git log --format=%an 5eb06971..89f04c32 | sort -u` returning the single author `claude-code <claude-code@desk.local>`. GitHub cannot record a formal approval event because both executors use the owner account, so this durable exact-head comment is the independent verdict, in the same APPROVE-EQUIVALENT shape as review 5151177996 on PR #407. Verdict verbatim: \"Findings: none. This head is approved for the proof-dependent landing sequence, subject to fresh native Work Control receipts and a PASS from scripts/work-control-gate.mjs at each transition.\" The reviewer independently ran the focused suite (5 files / 270 passed), inspected the gate log stage by stage, confirmed the net -2 deletion across the three named production files, and confirmed both prior under-read reproductions now return the later declared path through the production parser while scopeOverlapVerdict refuses the second writer on `y/`. Binding condition honoured: the PASS goes stale if the PR head changes, and the head has not moved -- local HEAD, `git ls-remote` and `gh pr view --json headRefOid` all read 89f04c32 at the moment of each transition below."
+  },
+  "transition": "merge-pr",
+  "mergeMethodNote": "Landed with `node scripts/land-pr.mjs --pr 409 --receipt .claude/work-control/2026-09-09-merge-pr-409.json`, which is the repository-required sequence: `gh pr merge 409 --repo Pootytxng/sentinel --merge` (a true merge commit, never a squash), then `git push origin --delete claude/sentinel-408-parser-consolidation-c31f7a`, then `git fetch origin --prune`, then `node scripts/branch-disposition-audit.mjs`. `gh pr merge --delete-branch` is NOT used and was not used: that flag set `core.bare=true` repo-wide once and corrupted every worktree on this machine. No worktree is removed by hand.",
+  "dependentsNote": "No dependent PR is based on this head: `gh pr list --state open --base claude/sentinel-408-parser-consolidation-c31f7a` returns []. Nothing needs retargeting before the ref is pruned. No disposition record exists for this ref in docs/dispositions/, so land-pr's PRESERVE/LANDED refusal does not fire; `node scripts/branch-disposition-audit.mjs` exits 0 before the landing, reporting this ref as measured-but-unrecorded, which the audit treats as owed only once a judgment exists.",
+  "fileOverlapNote": "Zero file overlap between this delta's 8 paths and any of the nine other open PRs (404, 400, 397, 395, 394, 391, 317, 306, 297), measured file list by file list rather than assumed."
+}
