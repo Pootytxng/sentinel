@@ -1,14 +1,7 @@
-// Write scopes, compared mechanically (#291).
-//
-// A claim already declares "Write scope" in prose, and until now nothing read it. Two lanes could
-// declare overlapping folders and both be dispatched, and the collision would surface later as a
-// conflict, a lost edit, or -- worst, because it is silent -- one lane quietly reverting the other's
-// work while rebasing. "Disjoint scope" was a thing sessions asserted about themselves.
-//
-// So the scope becomes data. The parser reads the bullet the claim template already prescribes, the
-// comparison is a set question, and the answer is checkable by someone who was not there. Nothing
-// here talks to GitHub or to git: the caller gathers, this decides, so every case below is provable
-// from a string.
+// Write scopes, compared mechanically (#291). A claim declares "Write scope" in prose; this reads it,
+// so "disjoint scope" stops being a thing sessions assert about themselves. Nothing here talks to
+// GitHub or to git -- the caller gathers, this decides -- so every case below is provable from a
+// string.
 //
 // The one judgement worth stating: a directory scope and a file inside it OVERLAP. `scripts/` and
 // `scripts/foo.mjs` are not disjoint just because they are spelled differently, and a comparison
@@ -25,44 +18,129 @@ export function normalizePattern(pattern) {
     .trim();
 }
 
-/**
- * The paths a claim comment declares it will write, out of the `- Write scope:` bullet the claim
- * template prescribes. Only backticked paths count as declarations: the bullet also carries prose
- * ("nothing else", "this lane does not edit ..."), and prose is not a scope.
- *
- * Reads to the end of the bullet, which is the next `- ` at the start of a line or a blank line --
- * a scope wrapped across lines is still one bullet.
- */
-export function parseWriteScope(markdown) {
-  const text = String(markdown ?? "").replace(/\r\n/g, "\n");
-  const start = text.search(/^[-*]\s*Write scope:/im);
-  if (start < 0) return [];
-  const rest = text.slice(start).replace(/^[-*]\s*Write scope:/i, "");
-  const end = rest.search(/\n\s*\n|\n[-*]\s/);
-  const bullet = end < 0 ? rest : rest.slice(0, end);
+const norm = (list) => list.map(normalizePattern).filter(Boolean);
 
-  // A path a sentence DISCLAIMS is not a path the lane claimed. Without this, the bullet
-  // "this lane does not edit `docs/SESSION_HANDOFF.md`" grants the handoff -- exactly backwards
-  // for the one file #291 exists about, and the drift check would then wave through the edit it
-  // was built to catch. Judged per path rather than per sentence, so `a` survives "`a` but not
-  // `b`": the text between one path and the next is what decides it.
-  //
-  // A bare conjunction carries the previous verdict (2026-09-02): in "No other `src/` or
-  // `src-tauri/` writes" the second path is disclaimed by the same "no" as the first, and a reading
-  // that resets at "or" grants `src-tauri/` to a lane that just said it would not touch it -- the
-  // hole this repo's own closeout claim fell through. "no" joins the disclaimers for the same bullet.
+/**
+ * A line that ENDS the `Write scope` text: the next list item, heading, table row, fence, or thematic
+ * break (3+ of the SAME marker, spaces allowed between). Decided ONCE here and applied by the one
+ * extractor (#408), so prose belonging to the NEXT structure never becomes write authority. A blank
+ * line ends it too and is checked separately, because "" matches nothing.
+ */
+export const ENDS_SCOPE_BULLET =
+  /^\s*(?:[-*+]\s|\d{1,9}[.)]\s|#|\||```|~~~)|^\s*(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+
+/**
+ * Which lines sit inside a fenced code block, fence lines included: a label in there is a code sample,
+ * not a declaration. The sides are asymmetric because the errors are -- a wrongly OPENED fence only
+ * hides a declaration, which every consumer fails closed on, while a wrongly accepted CLOSER re-opens
+ * label parsing inside code, so the closer is held to the real rule (same marker, run at least as
+ * long, no info string). Not modelled: an indented block with no fence still reads as a declaration.
+ */
+function fencedLines(lines) {
+  let open = null;
+  return lines.map((line) => {
+    if (open) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
+      if (close && close[1][0] === open[0] && close[1].length >= open.length) open = null;
+      return true;
+    }
+    const start = /^\s*(`{3,}|~{3,})/.exec(line);
+    if (start) open = start[1];
+    return Boolean(start);
+  });
+}
+
+/** A bullet plus its continuations, joined then trimmed ONCE, so an unwrapped bullet reads as one line. */
+function joinBullet(lines, start, head) {
+  const out = [String(head ?? "")];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const l = lines[i];
+    if (!l.trim() || ENDS_SCOPE_BULLET.test(l)) break;
+    out.push(l.trim());
+  }
+  return out.join(" ").trim();
+}
+
+const escLabel = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** `- Write scope: ...`, `- **Write scope:** ...`, `- **Write scope**: ...`, `+ __Write scope__: ...`. */
+const labelBullet = (name) =>
+  new RegExp(`^\\s*[-*+]\\s*(?:\\*\\*|__)?\\s*${escLabel(name)}\\s*(?::\\s*(?:\\*\\*|__)|(?:\\*\\*|__)\\s*:|:)\\s*(.*)$`, "i");
+
+/** `| **Write scope** | ... |` -- a two-column row, one line by construction. */
+const labelRow = (name) =>
+  new RegExp(`^\\s*\\|\\s*(?:\\*\\*|__)?\\s*${escLabel(name)}\\s*(?:\\*\\*|__)?\\s*\\|\\s*(.*?)\\s*\\|\\s*$`, "i");
+
+/**
+ * A. EXTRACT: raw Markdown -> the exact `Write scope` text, or null. The ONE extraction contract
+ * (#408): every reader comes through here, so the same Markdown means the same scope. `aliases` are
+ * the field's other spellings -- a posted claim accepts `scope`, an issue body does not.
+ */
+export function scopeTextFromMarkdown(markdown, { aliases = [] } = {}) {
+  if (!markdown || typeof markdown !== "string") return null;
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const fenced = fencedLines(lines);
+  for (const name of ["Write scope", ...aliases]) {
+    for (const [label, read] of [
+      [labelBullet(name), (m, i) => joinBullet(lines, i, m[1])],
+      [labelRow(name), (m) => m[1].trim()],
+    ]) {
+      for (let i = 0; i < lines.length; i += 1) {
+        const m = fenced[i] ? null : label.exec(lines[i]);
+        if (m) return read(m, i) || null;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Everything that changes granting mid-sentence, in ONE pattern so their ORDER is what decides.
+ * Group 1 SEALS and is PLURAL on purpose: "no others" takes no object, so it can only be a claim
+ * about the whole set; singular "no other <thing>" names what it refuses and is group 2, which
+ * disclaims the rest of ITS clause and ends at the bare alternative. Stems inflect, no synonyms:
+ * `excluding` matched and `excluded` did not, so #405 GRANTED the seven paths it meant to withhold.
+ */
+const EVENTS = /(\bno\s+others\b)|(\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b)|[.;!?]/gi;
+
+/**
+ * B. PARSE: exact scope text -> normalized path patterns. Knows nothing about Markdown structure; A
+ * decided where the text ends. Only backticked paths count, each judged by the gap BEFORE it, so `a`
+ * survives "`a` but not `b`". A disclaimer governs the REST OF ITS CLAUSE -- the half #405 proved was
+ * missing -- and the RIGHTMOST event in a gap is the one still in force when the path arrives: a
+ * boundary after a disclaimer re-opens, a disclaimer after a boundary closes again, and a gap holding
+ * neither carries the state across ("no other `src/` or `src-tauri/`"). Asking "is a disclaimer
+ * present?" before "is a boundary present?" is not that rule, and dropped the `c` in "`a`. Excluded
+ * from legacy cleanup. `c`" -- an under-read claim, which is what lets a second writer be dispatched
+ * onto the difference.
+ *
+ * The one thing position does NOT decide is a seal, and it is the narrowest phrase that needed one.
+ * #405 reads "Two paths, no others." and names the withdrawn path in the NEXT sentence, which by
+ * position re-opens granting. Sealing on a SINGULAR "no other `src/` subtrees." too was worse than
+ * the bug: it swallowed every later declaration, and an under-read is what dispatches a rival writer.
+ */
+export function parseScopePatterns(scopeText) {
+  const text = String(scopeText ?? "");
   const declared = [];
   let cursor = 0;
   let disclaimed = false;
-  for (const match of bullet.matchAll(/`([^`]+)`/g)) {
-    const gap = bullet.slice(cursor, match.index);
+  let sealed = false;
+  for (const match of text.matchAll(/`([^`]+)`/g)) {
+    const gap = text.slice(cursor, match.index);
     cursor = match.index + match[0].length;
-    const bare = /^[\s,;/]*(?:or|and|nor)?[\s,;/]*$/i.test(gap);
-    if (!bare) disclaimed = /\b(?:no|not|never|except|excluding|outside|other than)\b/i.test(gap);
-    if (disclaimed) continue;
+    const events = [...gap.matchAll(EVENTS)];
+    const last = events[events.length - 1];
+    sealed ||= events.some((e) => e[1]);
+    if (last) disclaimed = Boolean(last[1] ?? last[2]);
+    if (sealed || disclaimed) continue;
     declared.push(normalizePattern(match[1]));
   }
   return declared.filter((p, i, a) => p && a.indexOf(p) === i);
+}
+
+/** A then B, and nothing of its own: the paths a `Write scope` bullet declares out of raw Markdown. */
+export function parseWriteScope(markdown) {
+  return parseScopePatterns(scopeTextFromMarkdown(markdown) ?? "");
 }
 
 /** `**` crosses separators, `*` and `?` do not. Anything else is literal. */
@@ -85,44 +163,6 @@ function toRegExp(pattern) {
 }
 
 /**
- * A line that ENDS a wrapped `- Write scope:` bullet: the next bullet, a heading, or a table row.
- * A blank line ends it too and is tested separately, because "" matches nothing.
- */
-export const ENDS_SCOPE_BULLET = /^\s*(?:[-*]\s|#|\|)/;
-
-/**
- * A scope bullet's own line plus its continuation lines, joined by a single space (#399).
- *
- * This is the ONE continuation rule. Both readers of `- Write scope:` call it -- the issue-body
- * reader (`scopeTextFromBody`) and the posted-claim reader (`parseClaim`) -- because each keeping
- * its own is precisely how they came to disagree: the claim reader ended its capture at the line
- * break, so a claim whose scope wrapped declared a silent PREFIX of what a human reads in it. On
- * #398 that was 3 paths where the writer had listed 12, and the dangerous direction is the
- * collision check, where an under-read claim makes a live lane look like it holds fewer paths than
- * it does and a second writer can be dispatched onto the difference.
- *
- * The head is not trimmed on its own: it is joined first and the whole is trimmed once, so a bullet
- * that does not wrap returns exactly what a single-line read returned before.
- *
- * @param {string[]} lines the body, already normalized to "\n" and split
- * @param {number} start   index of the line the bullet's label sits on
- * @param {string} head    that line's text after the label
- * @returns {string}
- */
-export function joinScopeBullet(lines, start, head) {
-  const out = [String(head ?? "")];
-  for (let i = start + 1; i < (lines?.length ?? 0); i += 1) {
-    const l = lines[i];
-    if (!l.trim() || ENDS_SCOPE_BULLET.test(l)) break;
-    out.push(l.trim());
-  }
-  return out.join(" ").trim();
-}
-
-/** Body text as the shared continuation rule expects it: CRLF normalized, split into lines. */
-export const scopeBulletLines = (body) => String(body ?? "").replace(/\r\n/g, "\n").split("\n");
-
-/**
  * Does `pattern` cover `path`? True when the pattern names the path, matches it as a glob, or is a
  * directory the path sits under. The directory case is the one that matters: a lane claiming
  * `scripts/` has claimed every file in it, whether or not it listed them.
@@ -142,23 +182,19 @@ function isLiteral(pattern) {
 }
 
 /**
- * The pairs on which two scopes are not disjoint -- reported as pairs rather than a boolean
- * because "they overlap" is not actionable and "`scripts/` contains `scripts/foo.mjs`" is.
+ * The pairs on which two scopes are not disjoint -- pairs rather than a boolean, because "they
+ * overlap" is not actionable and "`scripts/` contains `scripts/foo.mjs`" is.
  *
  * Containment runs both ways on purpose: a one-directional check would call `scripts/` and
- * `scripts/foo.mjs` disjoint depending on which lane was asked first, which is worse than not
- * checking. But containment is only asked when the OTHER side is a literal path, because a glob
- * matched against a glob is a category error -- `scripts/*` appears to match the string
- * "scripts/*.mjs" only because `*` is an ordinary character to a regex, and an answer that arrives
- * by that route is right by luck and wrong as often.
- *
- * So two globs are NOT decided here. `overlappingFiles` decides them, exactly, against the paths
- * that actually exist.
+ * `scripts/foo.mjs` disjoint depending on which lane was asked first. But it is only asked when the
+ * OTHER side is a literal path, because glob-versus-glob is a category error -- `scripts/*` appears
+ * to match the string "scripts/*.mjs" only because `*` is ordinary to a regex, and an answer got
+ * that way is right by luck. Two globs are decided by `overlappingFiles` instead.
  */
 export function overlappingPairs(scopeA, scopeB) {
   const pairs = [];
-  for (const a of scopeA.map(normalizePattern).filter(Boolean)) {
-    for (const b of scopeB.map(normalizePattern).filter(Boolean)) {
+  for (const a of norm(scopeA)) {
+    for (const b of norm(scopeB)) {
       const overlaps =
         a === b || (isLiteral(b) && coversPath(a, b)) || (isLiteral(a) && coversPath(b, a));
       if (overlaps) pairs.push([a, b]);
@@ -168,22 +204,15 @@ export function overlappingPairs(scopeA, scopeB) {
 }
 
 /**
- * The files two scopes both claim, decided against a real list of paths rather than by comparing
- * the patterns to each other. This is the tier that settles globs: `scripts/*.mjs` and
- * `scripts/work-*` share no common string and both claim `scripts/work-control-gate.mjs`, and no
- * amount of pattern-versus-pattern cleverness sees that without knowing the file exists.
- *
- * The caller supplies the paths -- `git ls-files`, a diff, whatever the question is about -- so
- * this stays a decision over strings and the answer names the file, which is the sentence a lane
- * refused dispatch deserves to be given.
+ * The tier that settles globs, decided against a real list of paths: `scripts/*.mjs` and
+ * `scripts/work-*` share no common string and both claim `scripts/work-control-gate.mjs`. The caller
+ * supplies the paths -- `git ls-files`, a diff, whatever the question is about -- so this stays a
+ * decision over strings, and the answer names the file, which is the sentence a refused lane deserves.
  */
 export function overlappingFiles(scopeA, scopeB, files) {
-  const a = scopeA.map(normalizePattern).filter(Boolean);
-  const b = scopeB.map(normalizePattern).filter(Boolean);
-  return files
-    .map(normalizePattern)
-    .filter(Boolean)
-    .filter((f) => a.some((p) => coversPath(p, f)) && b.some((p) => coversPath(p, f)));
+  const a = norm(scopeA);
+  const b = norm(scopeB);
+  return norm(files).filter((f) => a.some((p) => coversPath(p, f)) && b.some((p) => coversPath(p, f)));
 }
 
 /**
@@ -192,9 +221,6 @@ export function overlappingFiles(scopeA, scopeB, files) {
  * nobody claimed, which is the same collision arriving late.
  */
 export function outsideScope(changedPaths, scope) {
-  const patterns = scope.map(normalizePattern).filter(Boolean);
-  return changedPaths
-    .map(normalizePattern)
-    .filter(Boolean)
-    .filter((path) => !patterns.some((p) => coversPath(p, path)));
+  const patterns = norm(scope);
+  return norm(changedPaths).filter((path) => !patterns.some((p) => coversPath(p, path)));
 }

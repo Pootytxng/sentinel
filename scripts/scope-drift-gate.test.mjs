@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { parseWriteScope } from "./lib/claim-scope.mjs";
+import { parseScopePatterns, parseWriteScope } from "./lib/claim-scope.mjs";
 import {
   CACHE_TTL_MS,
   changedPaths,
@@ -25,7 +25,6 @@ import {
   readClaimCache,
   renderDrift,
   samePath,
-  scopeFromClaimText,
   writeClaimCache,
 } from "./lib/scope-drift.mjs";
 import { gate, parseArgs, render, resolveClaim } from "./scope-drift-gate.mjs";
@@ -61,13 +60,16 @@ describe("driftReport — the decision, over strings", () => {
   });
 });
 
+// The drift reader holds scope TEXT already extracted from the claim, so it calls the pattern
+// parser directly (#408). It used to reach that parser by pasting the text into a fake
+// `- Write scope: ` bullet, which made a boundary rule it did not want part of its own contract.
 describe("the claim's scope field, parsed as the claim template writes it", () => {
   it("reads backticked paths and drops the ones a sentence disclaims", () => {
     const text =
       "`scripts/`, `tools/entry/`, `.claude/hooks/`, and two src guards only: `src/claude-md-laws-guard.test.ts`. " +
       "No other `src/` or `src-tauri/` writes.";
     // Patterns come back normalized: no trailing slash, so `scripts/` and `scripts` are one pattern.
-    const scope = scopeFromClaimText(text);
+    const scope = parseScopePatterns(text);
     expect(scope).toContain("scripts");
     expect(scope).toContain("tools/entry");
     expect(scope).toContain("src/claude-md-laws-guard.test.ts");
@@ -76,7 +78,7 @@ describe("the claim's scope field, parsed as the claim template writes it", () =
   });
 
   it("a field that wrapped across lines in the thread is still one bullet", () => {
-    expect(scopeFromClaimText("`a/`,\n`b/`")).toEqual(["a", "b"]);
+    expect(parseScopePatterns("`a/`,\n`b/`")).toEqual(["a", "b"]);
   });
 
   // bug->guard (2026-09-02): the per-path disclaimer reset at every path, so "no other `src/` or

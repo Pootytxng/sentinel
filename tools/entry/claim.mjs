@@ -9,7 +9,7 @@
 // `--date` (`--text` fails with "Did not receive a date value") and clearing an expiry needs `--clear`.
 
 import { execFileSync } from "node:child_process";
-import { joinScopeBullet, scopeBulletLines } from "../../scripts/lib/claim-scope.mjs";
+import { scopeTextFromMarkdown } from "../../scripts/lib/claim-scope.mjs";
 import { writeClaimCache } from "../../scripts/lib/scope-drift.mjs";
 
 export const CLAIM_HEADER = "### Ownership claim";
@@ -80,18 +80,18 @@ const plain = (v) => (v && /^`[^`]*`$/.test(v) ? v.slice(1, -1) : v);
  * (collision rule 4: a refusal the other side could not cure). Aliases are the labels other writers
  * use for the same fact.
  *
- * `continued` opts one label into the shared bullet-continuation rule (#399). It is set for
- * `Write scope` and nothing else: a wrapped scope silently declared a prefix of itself, and the
- * fix is that both readers of THAT bullet use one rule — not that every field changes meaning.
- * A two-column table row is one line by construction, so continuation never applies to it.
+ * Every field here is read ONE LINE at a time. The one field that is not — `Write scope`, which
+ * wraps — is not read here at all: it goes through `scopeTextFromMarkdown` (#408), the one
+ * extraction contract in this repo, so a claim and an issue body cannot disagree about the same
+ * Markdown. This function keeping its own copy of that rule is how they came to disagree.
  */
-const field = (body, label, aliases = [], { continued = false } = {}) => {
-  const lines = scopeBulletLines(body);
+const field = (body, label, aliases = []) => {
+  const lines = String(body ?? "").replace(/\r\n/g, "\n").split("\n");
   for (const name of [label, ...aliases]) {
     const bullet = new RegExp("^[-*]\\s*(?:\\*\\*)?" + esc(name) + "(?::\\s*\\*\\*|\\*\\*\\s*:|:)\\s*(.*)$", "i");
     for (let i = 0; i < lines.length; i += 1) {
       const m = bullet.exec(lines[i]);
-      if (m) return continued ? joinScopeBullet(lines, i, m[1]) : m[1].trim();
+      if (m) return m[1].trim();
     }
     const row = new RegExp("^\\|\\s*(?:\\*\\*)?" + esc(name) + "(?:\\*\\*)?\\s*\\|\\s*(.*?)\\s*\\|\\s*$", "i");
     for (const l of lines) {
@@ -136,8 +136,10 @@ export function parseClaim(body) {
     repository: plain(field(body, "Repository", ["repo"])),
     folder: plain(field(body, "Worktree folder", ["worktree", "folder"])),
     branch: plain(field(body, "Branch")),
-    // The one field read with continuations: a wrapped scope is still one bullet (#399).
-    scope: field(body, "Write scope", ["scope"], { continued: true }),
+    // The one field NOT read here: extraction is one contract, shared with the issue-body reader
+    // (#408). `scope` stays a claim-only alias — an issue body is prose, and `- scope:` in prose is
+    // as likely to be a sentence as a declaration.
+    scope: scopeTextFromMarkdown(body, { aliases: ["scope"] }),
     started: field(body, "Started"),
     expires: field(body, "Claim expires", ["expiry", "expires"]),
     nextAction: field(body, "Next action"),

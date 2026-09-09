@@ -22,7 +22,7 @@ import {
 } from "./settings-resolve.mjs";
 import { envWindowOf, planTier, readLocalLayer, readProjectWindow, readTierRecord } from "./tier.mjs";
 import { parseWorktreeField } from "./worktree-field.mjs";
-import { scopeFromText, scopeTextFromBody } from "./scope-overlap.mjs";
+import { parseScopePatterns, scopeTextFromMarkdown } from "../../scripts/lib/claim-scope.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
 export const PROJECT = { number: 1, owner: "Pootytxng" };
@@ -169,13 +169,13 @@ export function gatherScopeFacts({ task, items = [], claim = null, scopeText = n
     text = claim.scope;
     source = "claim";
   } else if (task?.number) {
-    const fromBody = scopeTextFromBody(body(task.number));
+    const fromBody = scopeTextFromMarkdown(body(task.number));
     if (fromBody) {
       text = fromBody;
       source = "issue";
     }
   }
-  const mine = text ? scopeFromText(text) : [];
+  const mine = parseScopePatterns(text);
   const others = (items ?? [])
     .filter((i) => i.status === "Active" && Number(i.number) !== Number(task?.number))
     .map((i) => {
@@ -187,7 +187,7 @@ export function gatherScopeFacts({ task, items = [], claim = null, scopeText = n
       return {
         number: i.number,
         lane: i.lane ?? null,
-        scope: live ? scopeFromText(live.scope) : null,
+        scope: live ? parseScopePatterns(live.scope) : null,
         live: Boolean(live),
         expired: Boolean(expiry && expiry < now),
         expires: expiry ? expiry.toISOString().slice(0, 10) : (live?.expires ?? null),

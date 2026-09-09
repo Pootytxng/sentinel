@@ -10,6 +10,9 @@
 // actually exist. A dispatch has no changed set yet, so the exact tier is fed the tracked paths of
 // the base commit — `git ls-tree -r --name-only origin/main` — which is the set a glob can claim.
 //
+// Nothing here reads a scope out of Markdown any more (#408): extraction and pattern parsing both
+// live in claim-scope.mjs, and the fake `- Write scope: ` wrapper that reached the parser is gone.
+//
 // Unknown means locked (collision rule 4): a task with no readable scope while another writer is
 // live is refused, and so is a live writer whose claim declares no paths, because "we could not
 // tell" and "they are disjoint" must not print the same verdict. A board row that says Active with
@@ -17,33 +20,7 @@
 // in the row, and refused only when the paths it did declare overlap — the board's staleness is a
 // hygiene finding, not a licence to double-write.
 
-import { joinScopeBullet, overlappingFiles, overlappingPairs, parseWriteScope, scopeBulletLines } from "../../scripts/lib/claim-scope.mjs";
-
-/** The paths a scope sentence declares, through the one parser every reader shares. */
-export function scopeFromText(text) {
-  if (!text || typeof text !== "string") return [];
-  return parseWriteScope(`- Write scope: ${text.trim()}`);
-}
-
-/**
- * The `Write scope` bullet of an issue body, as the text after the colon (continuation lines
- * included, up to the next bullet, heading or blank line) — or null when the body has no such
- * bullet. This is where a task's scope lives before its first claim is posted.
- *
- * The continuation rule itself is `joinScopeBullet`, shared with `parseClaim` since #399: this
- * reader's rule was already documented and correct, and the claim reader's was one line, so a
- * wrapped bullet meant the two disagreed about the same text. Neither owns the rule now.
- */
-export function scopeTextFromBody(body) {
-  if (!body || typeof body !== "string") return null;
-  const lines = scopeBulletLines(body);
-  // `- Write scope: …`, `- **Write scope:** …` and `- **Write scope**: …` are all the same bullet.
-  const bullet = /^\s*[-*]\s*(?:\*\*|__)?\s*Write scope\s*:?\s*(?:\*\*|__)?\s*:?\s*/i;
-  const start = lines.findIndex((l) => bullet.test(l) && /:/.test(l));
-  if (start < 0) return null;
-  const text = joinScopeBullet(lines, start, lines[start].replace(bullet, ""));
-  return text || null;
-}
+import { overlappingFiles, overlappingPairs } from "../../scripts/lib/claim-scope.mjs";
 
 const hasGlob = (p) => /[*?]/.test(p);
 const who = (o) => `#${o.number}${o.lane ? ` (${o.lane})` : ""}`;

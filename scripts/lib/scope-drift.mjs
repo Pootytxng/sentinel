@@ -21,7 +21,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { normalizePattern, outsideScope, parseWriteScope } from "./claim-scope.mjs";
+import { normalizePattern, outsideScope, parseScopePatterns } from "./claim-scope.mjs";
 
 /** How long a cached claim is trusted without re-reading the thread. */
 export const CACHE_TTL_MS = 10 * 60_000;
@@ -36,11 +36,6 @@ export function claimCacheDir({ env = process.env } = {}) {
 
 function cacheFile({ issue, dir }) {
   return join(dir, `${Number(issue)}.json`);
-}
-
-/** The claim's `Write scope` field, as the path patterns it declares. */
-export function scopeFromClaimText(scopeText) {
-  return parseWriteScope(`- Write scope: ${String(scopeText ?? "").replace(/\r?\n/g, " ")}`);
 }
 
 /**
@@ -71,7 +66,7 @@ export function writeClaimCache(
   const record = {
     issue: Number(issue),
     scopeText: String(scopeText ?? ""),
-    scope: scopeFromClaimText(scopeText),
+    scope: parseScopePatterns(scopeText),
     folder,
     branch,
     postedAt,
