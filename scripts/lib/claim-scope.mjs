@@ -85,6 +85,44 @@ function toRegExp(pattern) {
 }
 
 /**
+ * A line that ENDS a wrapped `- Write scope:` bullet: the next bullet, a heading, or a table row.
+ * A blank line ends it too and is tested separately, because "" matches nothing.
+ */
+export const ENDS_SCOPE_BULLET = /^\s*(?:[-*]\s|#|\|)/;
+
+/**
+ * A scope bullet's own line plus its continuation lines, joined by a single space (#399).
+ *
+ * This is the ONE continuation rule. Both readers of `- Write scope:` call it -- the issue-body
+ * reader (`scopeTextFromBody`) and the posted-claim reader (`parseClaim`) -- because each keeping
+ * its own is precisely how they came to disagree: the claim reader ended its capture at the line
+ * break, so a claim whose scope wrapped declared a silent PREFIX of what a human reads in it. On
+ * #398 that was 3 paths where the writer had listed 12, and the dangerous direction is the
+ * collision check, where an under-read claim makes a live lane look like it holds fewer paths than
+ * it does and a second writer can be dispatched onto the difference.
+ *
+ * The head is not trimmed on its own: it is joined first and the whole is trimmed once, so a bullet
+ * that does not wrap returns exactly what a single-line read returned before.
+ *
+ * @param {string[]} lines the body, already normalized to "\n" and split
+ * @param {number} start   index of the line the bullet's label sits on
+ * @param {string} head    that line's text after the label
+ * @returns {string}
+ */
+export function joinScopeBullet(lines, start, head) {
+  const out = [String(head ?? "")];
+  for (let i = start + 1; i < (lines?.length ?? 0); i += 1) {
+    const l = lines[i];
+    if (!l.trim() || ENDS_SCOPE_BULLET.test(l)) break;
+    out.push(l.trim());
+  }
+  return out.join(" ").trim();
+}
+
+/** Body text as the shared continuation rule expects it: CRLF normalized, split into lines. */
+export const scopeBulletLines = (body) => String(body ?? "").replace(/\r\n/g, "\n").split("\n");
+
+/**
  * Does `pattern` cover `path`? True when the pattern names the path, matches it as a glob, or is a
  * directory the path sits under. The directory case is the one that matters: a lane claiming
  * `scripts/` has claimed every file in it, whether or not it listed them.
