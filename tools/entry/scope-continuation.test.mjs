@@ -284,6 +284,17 @@ const CASES = [
     paths: ["a/one.rs", "a/three.rs"],
     wraps: true,
   },
+  // The P1 of the exact-head review of a0cec166. The seal added there was spelled `no others?`, so it
+  // also fired on the SINGULAR "no other <named thing>" -- a phrase that refuses one thing rather
+  // than closing the set -- and made the scope permanent from that word on. Everything the writer
+  // declared afterwards vanished from their own claim.
+  {
+    name: "a named refusal does not seal the paths declared after it",
+    body: claim("- Write scope: `a/one.rs`, no other `src/` subtrees.", "  Also `a/three.rs`", "- Started: 2026-09-09"),
+    text: "`a/one.rs`, no other `src/` subtrees. Also `a/three.rs`",
+    paths: ["a/one.rs", "a/three.rs"],
+    wraps: true,
+  },
 ];
 
 /** Every production reader of a write scope, and how each is asked for the same two answers. */
@@ -390,8 +401,14 @@ const DISCLAIMER_CASES = [
   { name: "boundary, disclaimer, boundary -- the rightmost event decides", text: "`a`; no `b`; `c`", paths: ["a", "c"] },
   // The exception position does NOT decide, distilled from the real #405 bullet below: a quantifier
   // over the whole set seals it, and the next sentence cannot hand back a path the writer struck out.
+  // The PLURAL is what quantifies. Round 4 sealed on `no others?` and so sealed on the singular too,
+  // where the phrase NAMES the thing it refuses and closes nothing -- and every path declared after
+  // one was swallowed. That is an under-read, the direction that clears a second writer onto a path
+  // this lane declared. The next three are the exact texts the a0cec166 review reproduced.
   { name: "`no others` seals the scope against every later sentence", text: "`a`, `b`. Two paths, no others. `c` is withdrawn", paths: ["a", "b"] },
-  { name: "`no other` seals it too, before the paths it refuses", text: "`a`. No other writes. `b`, `c`", paths: ["a"] },
+  { name: "singular `no other` names its object, so its own clause boundary ends it", text: "`a`. No other writes. `b`, `c`", paths: ["a", "b", "c"] },
+  { name: "a named refusal, a period, then what the lane does own", text: "No other `src/` or `src-tauri/` writes. This lane owns `docs/`.", paths: ["docs"] },
+  { name: "a named refusal mid-list does not seal the paths after it", text: "`x/`, no other `src/` subtrees. Also `y/`.", paths: ["x", "y"] },
   { name: "`other than` is still a clause-scoped aside, not a seal", text: "`a`, other than `b`. Also `c`", paths: ["a", "c"] },
   {
     name: "a mid-list aside carries the disclaimer instead of resetting it",
@@ -644,6 +661,7 @@ describe("#408 — the case list can fail", () => {
       "the same order with `not`, so it is the class and not one phrase",
       "a disclaimer with no later boundary governs its whole list",
       "boundary, disclaimer, boundary -- the rightmost event decides",
+      "singular `no other` names its object, so its own clause boundary ends it",
       "a mid-list aside carries the disclaimer instead of resetting it",
     ]);
   });
@@ -681,17 +699,19 @@ describe("#408 — the three cases added for the exact-head review can fail", ()
 });
 
 describe("#408 — the semicolon case can fail, and the under-read reaches the collision check", () => {
-  // It carries this lane's later ordering defect too, so the list is not only the two cases the
+  // It carries this lane's later ordering defects too, so the list is not only the two cases the
   // semicolon repair added -- a control is pinned to what it actually does, not to one round of it.
+  // It is nonetheless RIGHT on both texts the a0cec166 review reproduced: it has no seal to over-fire.
   const SEMI = [
     "a bare `;` re-opens granting, with no conjunction to carry",
     "`;` then a bare conjunction re-opens granting",
     "a boundary AFTER a disclaimer re-opens granting",
     "the same order with `not`, so it is the class and not one phrase",
     "boundary, disclaimer, boundary -- the rightmost event decides",
+    "singular `no other` names its object, so its own clause boundary ends it",
   ];
 
-  it("the f52fb5bb parser is wrong on exactly those five parse cases", () => {
+  it("the f52fb5bb parser is wrong on exactly those six parse cases", () => {
     const wrong = DISCLAIMER_CASES.filter((c) => JSON.stringify(preSemicolonRead(c.text)) !== JSON.stringify(c.paths));
     expect(wrong.map((c) => c.name)).toEqual(SEMI);
   });
@@ -745,18 +765,49 @@ const unsealedRead = (scopeText) => {
   return declared.filter((p, i, a) => p && a.indexOf(p) === i);
 };
 
+/**
+ * The parser exactly as it stood at a0cec166, differing from production in ONE character: its seal
+ * group was `no others?`. That optional `s` is the whole round-4 P1. Kept as the sensitivity control
+ * that proves the narrowing is what moved the answer -- wrong on every named-refusal case and right
+ * on everything else, #405's own bullet included, so this is a narrowing and not a removal.
+ */
+const preNarrowRead = (scopeText) => {
+  const text = String(scopeText ?? "");
+  const declared = [];
+  let cursor = 0;
+  let disclaimed = false;
+  let sealed = false;
+  for (const match of text.matchAll(/`([^`]+)`/g)) {
+    const gap = text.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+    const events = [...gap.matchAll(/(\bno\s+others?\b)|(\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b)|[.;!?]/gi)];
+    const last = events[events.length - 1];
+    sealed ||= events.some((e) => e[1]);
+    if (last) disclaimed = Boolean(last[1] ?? last[2]);
+    if (sealed || disclaimed) continue;
+    declared.push(normalizePattern(match[1]));
+  }
+  return declared.filter((p, i, a) => p && a.indexOf(p) === i);
+};
+
 describe("#408 — the ordering case can fail, and the under-read reaches the collision check", () => {
   const ORDER = [
     "a boundary AFTER a disclaimer re-opens granting",
     "the same order with `not`, so it is the class and not one phrase",
+    "singular `no other` names its object, so its own clause boundary ends it",
   ];
   const GREEN_ORDER = [
     "a disclaimer with no later boundary governs its whole list",
     "boundary, disclaimer, boundary -- the rightmost event decides",
   ];
   const MATRIX = "a sentence boundary after a disclaimer re-opens granting";
+  const NARROW = [
+    "singular `no other` names its object, so its own clause boundary ends it",
+    "a named refusal, a period, then what the lane does own",
+    "a named refusal mid-list does not seal the paths after it",
+  ];
 
-  it("the 2c30f3b1 parser is wrong on exactly the ordering cases this repair added", () => {
+  it("the 2c30f3b1 parser is wrong on exactly those three precedence cases", () => {
     const wrong = DISCLAIMER_CASES.filter((c) => JSON.stringify(preOrderRead(c.text)) !== JSON.stringify(c.paths));
     expect(wrong.map((c) => c.name)).toEqual(ORDER);
   });
@@ -798,6 +849,49 @@ describe("#408 — the ordering case can fail, and the under-read reaches the co
     for (const c of DISCLAIMER_CASES.filter((x) => [...ORDER, ...GREEN_ORDER].includes(x.name))) {
       expect(unsealedRead(c.text), `unsealed is right on ${c.name}`).toEqual(c.paths);
     }
+  });
+
+  // What the seal must NOT cost, and the replacement for the KNOWN LIMIT that round 4 froze here. A
+  // seal phrase that NAMES its object refuses that object and nothing else, so an ordinary clause
+  // boundary ends it; only the bare plural quantifies the completed set. Both directions are pinned,
+  // because a repair that simply deleted the seal would satisfy the first line and fail the last.
+  it("a named refusal disclaims its clause and no further, while the plural still seals", () => {
+    expect(parseScopePatterns("`x/`, no other `src/` subtrees. Also `y/`.")).toEqual(["x", "y"]);
+    expect(parseScopePatterns("No other `src/` or `src-tauri/` writes. This lane owns `docs/`.")).toEqual(["docs"]);
+    expect(parseScopePatterns("`x/` and `y/`. No other subtrees.")).toEqual(["x", "y"]);
+    expect(parseScopePatterns("`x/` and `y/`. No others. `z/`")).toEqual(["x", "y"]);
+    expect(parseScopePatterns(REAL_405_BULLET.replace(/^- Write scope: /, ""))).toEqual(REAL_405_PATHS);
+  });
+
+  it("the a0cec166 parser is wrong on exactly the named-refusal cases, and right on the rest", () => {
+    const wrong = DISCLAIMER_CASES.filter((c) => JSON.stringify(preNarrowRead(c.text)) !== JSON.stringify(c.paths));
+    expect(wrong.map((c) => c.name)).toEqual(NARROW);
+  });
+
+  // The half that makes it a control rather than a diff: it is still RIGHT where the seal is doing
+  // the work it was added for. If the narrowing had removed the seal instead, both of these flip.
+  it("and it is right on #405 and on the plural seal, so the narrowing is a narrowing", () => {
+    const text = REAL_405_BULLET.replace(/^- Write scope: /, "");
+    expect(preNarrowRead(text)).toEqual(REAL_405_PATHS);
+    expect(preNarrowRead("`a`, `b`. Two paths, no others. `c` is withdrawn")).toEqual(["a", "b"]);
+    expect(unsealedRead(text)).toContain(".claude/hooks/worktree-provisioning.mjs");
+  });
+
+  // The consequence, end to end, and why the review called this a P1 rather than a phrasing quibble.
+  // `y/` is declared by this lane in the exact shape the review reproduced; under a0cec166 the claim
+  // read short and the collision check cleared a second writer straight onto it.
+  it("under the a0cec166 seal the collision check calls a second writer on `y/` disjoint", () => {
+    const text = "`x/`, no other `src/` subtrees. Also `y/`.";
+    const live = (parse) => [{ number: 408, lane: "Claude Code", scope: parse(text) }];
+    const proposed = { mine: ["y/one.rs"], files: ["x/a.rs", "y/one.rs"] };
+
+    const stale = scopeOverlapVerdict({ ...proposed, others: live(preNarrowRead) });
+    expect(stale.ok).toBe(true);
+    expect(stale.reason).toContain("disjoint from #408 (Claude Code)");
+
+    const now = scopeOverlapVerdict({ ...proposed, others: live(parseScopePatterns) });
+    expect(now.ok).toBe(false);
+    expect(now.findings[0].pairs).toEqual([["y/one.rs", "y"]]);
   });
 
   it("on the matrix case it drops the path the writer declared after the sentence boundary", () => {
@@ -853,17 +947,7 @@ describe("#408 — what deliberately did NOT change", () => {
     expect(parseWriteScope("- Write scope:\n- Next: x")).toEqual([]);
   });
 
-  // The seal's price, measured rather than argued. "no other <thing>" names what it refuses, so a
-  // later sentence arguably still grants -- but the seal cannot tell that shape from #405's bare
-  // "no others.", and no claim anyone has actually written uses it, so nothing here is built for it.
-  // This is an UNDER-read, the direction that can call a second writer disjoint; it is pinned so the
-  // cost is visible and so a narrower seal would visibly flip it, not so it is treated as correct.
-  it("KNOWN LIMIT: a seal phrase that names its object still seals the whole scope", () => {
-    expect(parseScopePatterns("`x/`, no other `src/` subtrees. Also `y/`")).toEqual(["x"]);
-    expect(parseScopePatterns("`x/` and `y/`. No other subtrees.")).toEqual(["x", "y"]);
-  });
-
-  // Also unchanged and also not a claim of correctness: an indented code block has no fence, so a
+  // Unchanged and also not a claim of correctness: an indented code block has no fence, so a
   // label inside one still reads as a declaration. Non-blocking for #408 by explicit HQ ruling.
   it("KNOWN LIMIT: an indented code block is not a fence, so a label inside it still declares", () => {
     const body = [CLAIM_HEADER, "", "Example:", "", "    - Write scope: `a/one.rs`", ""].join("\n");

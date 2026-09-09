@@ -96,12 +96,12 @@ export function scopeTextFromMarkdown(markdown, { aliases = [] } = {}) {
 
 /**
  * Everything that changes granting mid-sentence, in ONE pattern so their ORDER is what decides.
- * Group 1 SEALS: "no others" is a claim about the completed set, so nothing after it can add to it.
- * Group 2 disclaims the rest of its clause. The bare alternative is the boundary that ends a clause.
- * Inflections of the stems already here, not a synonym dictionary: `excluding` matched and `excluded`
- * did not, so on #405 "Still excluded, unchanged:" GRANTED the seven paths it was written to withhold.
+ * Group 1 SEALS and is PLURAL on purpose: "no others" takes no object, so it can only be a claim
+ * about the whole set; singular "no other <thing>" names what it refuses and is group 2, which
+ * disclaims the rest of ITS clause and ends at the bare alternative. Stems inflect, no synonyms:
+ * `excluding` matched and `excluded` did not, so #405 GRANTED the seven paths it meant to withhold.
  */
-const EVENTS = /(\bno\s+others?\b)|(\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b)|[.;!?]/gi;
+const EVENTS = /(\bno\s+others\b)|(\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b)|[.;!?]/gi;
 
 /**
  * B. PARSE: exact scope text -> normalized path patterns. Knows nothing about Markdown structure; A
@@ -114,10 +114,10 @@ const EVENTS = /(\bno\s+others?\b)|(\b(?:no|not|never|exclud\w*|except\w*|outsid
  * from legacy cleanup. `c`" -- an under-read claim, which is what lets a second writer be dispatched
  * onto the difference.
  *
- * The one thing position does NOT decide is a seal. #405's real bullet reads "Two paths, no others."
- * and then names the withdrawn third path in the NEXT sentence; by position that period re-opens
- * granting and hands the lane a path its writer struck out. A quantifier over the whole set is not a
- * clause-scoped aside, so it is not treated as one.
+ * The one thing position does NOT decide is a seal, and it is the narrowest phrase that needed one.
+ * #405 reads "Two paths, no others." and names the withdrawn path in the NEXT sentence, which by
+ * position re-opens granting. Sealing on a SINGULAR "no other `src/` subtrees." too was worse than
+ * the bug: it swallowed every later declaration, and an under-read is what dispatches a rival writer.
  */
 export function parseScopePatterns(scopeText) {
   const text = String(scopeText ?? "");
