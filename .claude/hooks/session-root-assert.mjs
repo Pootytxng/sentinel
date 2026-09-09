@@ -616,35 +616,87 @@ export const PREPUSH_VERIFIER = "verify-local.ps1";
 const PREPUSH_PRINTERS = new Set(["echo", "printf", ":"]);
 
 /**
+ * The same text with every QUOTED span blanked to spaces, character for character, so offsets into
+ * it match offsets into the original exactly.
+ *
+ * A transcription of `blankQuoted` in `scripts/lib/prepush-hook-contract.mjs`, which this hook may
+ * not import: it is copied ALONE into folders where `scripts/` does not exist. Round-2 independent
+ * review of 881fa8eb found the previous hand-rolled twin accepting hooks the canonical checker
+ * refuses, and the corpus probe written for that finding put the count at SEVEN, in two classes:
+ * environment assignments read as command words, and shell operators inside a quoted string read as
+ * real operators. Both classes are fixed by asking the questions the way the canonical file asks
+ * them rather than by patching one seed at a time.
+ */
+function prePushBlankQuoted(text) {
+  const src = String(text ?? "");
+  let out = "";
+  let quote = null;
+  for (let i = 0; i < src.length; i += 1) {
+    const c = src[i];
+    if (c === "\n") {
+      out += c;
+      continue;
+    }
+    const escapable = i + 1 < src.length && src[i + 1] !== "\n";
+    if (quote) {
+      out += " ";
+      if (c === "\\" && quote === '"' && escapable) {
+        out += " ";
+        i += 1;
+      } else if (c === quote) quote = null;
+    } else if (c === "'" || c === '"') {
+      quote = c;
+      out += " ";
+    } else if (c === "\\" && escapable) {
+      out += "  ";
+      i += 1;
+    } else out += c;
+  }
+  return out;
+}
+
+/**
+ * The command word of one shell segment, read off the BLANKED view. Leading redirections and
+ * environment assignments are prefixes, not commands: `FOO=1 echo x` is still an echo. Missing that
+ * was finding 3 of the round-2 review — `set -e` plus `FOO=1 echo verify-local.ps1` was accepted
+ * here and refused by the canonical contract, which is the one direction this may never be wrong in.
+ */
+function prePushCommandWord(maskedSegment) {
+  for (const token of maskedSegment.trim().split(/\s+/)) {
+    if (!token) continue;
+    if (/^\d*[<>]+&?\S*$/.test(token)) continue; // a redirection
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) continue; // an env assignment
+    return token;
+  }
+  return "";
+}
+
+/**
  * Is this pre-push text a hook that can be trusted to gate a push?
  *
- * This repository already answers that question properly and in one place —
- * `scripts/lib/prepush-hook-contract.mjs` — and this file may not import it: `tracked-hooks.test.mjs`
- * pins this hook to `node:` imports because it is copied ALONE into folders where nothing else
- * exists. So this is a second, deliberately smaller implementation, and
- * `tools/entry/worktree-provisioning.test.mjs` pins the two together over a seeded corpus rather
- * than trusting them to stay in step.
+ * DELIBERATELY NARROWER than `prePushContractViolations`, and pinned that way by a differential
+ * corpus in `tools/entry/worktree-provisioning.test.mjs`: every text this accepts must also be
+ * accepted there. The consequence of being wrong in the permitted direction is a diagnosis that
+ * calls a working gate unusable; the consequence in the other direction is calling a stub a gate.
  *
- * Smaller in the SAFE direction only. Every rule below is one the canonical contract also applies;
- * the canonical one applies several this does not (quote-aware comment stripping, block-depth
- * counting for reachability). The consequence is that this can refuse a hook the contract would
- * accept, which costs a repair that is not made — never the reverse, which would cost a gate.
- *
- * Why it exists at all: independent review of 6a446c9b found the hooks repair accepting any
- * NON-EMPTY `.githooks` directory. A folder holding one unrelated file passed, and the repair then
- * pointed it away from an escaping path that may have held the only working hook. Path identity is
- * not protection — the same sentence `prepush-hook-contract.mjs` was written to make true.
+ * Nothing here decides a write any more — this module writes nothing at all. It decides what the
+ * diagnosis SAYS about a folder whose `core.hooksPath` escapes: whether the folder has a real local
+ * gate to be repointed at, or whether repointing it would replace a gate with a stub.
  */
 export function prePushRunsVerifier(text) {
   const body = String(text ?? "");
   if (!body.trim()) return false;
+  const masked = prePushBlankQuoted(body);
+  const lines = body.split(/\r?\n/);
+  const maskedLines = masked.split(/\r?\n/);
   let armed = false;
   let runs = false;
-  for (const raw of body.split(/\r?\n/)) {
+  for (let i = 0; i < lines.length; i += 1) {
     // A trailing comment is not code. This strip is blind to quoting, and that is the safe blindness:
     // truncating a quoted `#` truncates real code, which can only turn a running line into a silent
     // one — a refusal, never a false accept.
-    const line = raw.replace(/(^|\s)#.*$/, "$1");
+    const line = lines[i].replace(/(^|\s)#.*$/, "$1");
+    const maskedLine = (maskedLines[i] ?? "").slice(0, line.length);
     const toggle = /^\s*set\s+([-+])[a-z]*e/.exec(line);
     if (toggle) armed = toggle[1] === "-";
     if (!line.includes(PREPUSH_VERIFIER)) {
@@ -656,75 +708,38 @@ export function prePushRunsVerifier(text) {
     }
     if (/\|\|\s*(?::|true\b|exit\s+0\b)/.test(line)) continue; // the failure is swallowed
     if (/(^|[^&])&\s*$/.test(line)) continue; // backgrounded: nobody waits for the answer
-    for (const segment of line.split(/\|\||&&|[;|&]/)) {
-      if (!segment.includes(PREPUSH_VERIFIER)) continue;
-      if (!PREPUSH_PRINTERS.has(segment.trim().split(/\s+/)[0] ?? "")) runs = true;
+    // Segment boundaries come from the MASKED line, so an operator inside a diagnostic string is
+    // spaces and splits nothing. Reading them off the raw line was the second half of finding 3.
+    const SPLIT = /\|\||&&|[;|&]/g;
+    const bounds = [];
+    let at = 0;
+    let m;
+    while ((m = SPLIT.exec(maskedLine))) {
+      bounds.push([at, m.index]);
+      at = m.index + m[0].length;
+    }
+    bounds.push([at, maskedLine.length]);
+    for (const [s, e] of bounds) {
+      if (!line.slice(s, e).includes(PREPUSH_VERIFIER)) continue;
+      if (!PREPUSH_PRINTERS.has(prePushCommandWord(maskedLine.slice(s, e)))) runs = true;
     }
   }
   return armed && runs;
 }
 
 /**
- * Every OTHER session a lineage record still shows live in this same folder.
+ * What is wrong with this folder's `core.hooksPath`, and whether anything could be done about it.
  *
- * `docs/WORK_CONTROL.md`'s first collision rule is "one folder, one writer", and #405's fail-closed
- * list names "no other live session holds an overlapping scope". Two sessions cannot write one
- * folder safely, and a lineage record is the only machine-readable statement that another is there.
+ * READ ONLY. `repairHooksPath` used to end by running `git config --worktree core.hooksPath`; that
+ * write is gone, along with the `allowConfig` scope closure that guarded it. Round-2 review found
+ * the authorization behind that closure to be caller-authored data rather than verified authority —
+ * shape-checked, never bound to the live Work Control claim, and blind to a writer in another
+ * worktree holding an overlapping path scope. A licence that a caller can write for itself is not a
+ * licence, so the write it guarded is removed rather than guarded harder.
  *
- * "unknown" counts as present. A session that cannot be measured is not a session that is gone, and
- * the direction of the error decides which way to be wrong: counting it costs a repair, ignoring it
- * costs a collision. A directory that exists but cannot be read THROWS rather than answering [] —
- * "I could not look" must never reach the caller as "I looked and there was nobody".
+ * `repairable` means every fact needed for a repoint is true and this module still will not do it.
  */
-export function otherLiveSessionsIn(
-  root,
-  { sessionId = null, dir = TOKEN_DIR, now = new Date(), observe = observeLiveness } = {},
-) {
-  const folder = join(dir, LINEAGE_DIR_NAME);
-  if (!existsSync(folder)) return [];
-  const out = [];
-  for (const name of readdirSync(folder)) {
-    if (!name.endsWith(".json")) continue;
-    let record = null;
-    try {
-      record = JSON.parse(readFileSync(join(folder, name), "utf8"));
-    } catch {
-      continue; // readLineage treats an unreadable record as absent; so does this.
-    }
-    if (!record || typeof record !== "object") continue;
-    if (!samePath(record.folder, root)) continue;
-    if (sessionId && record.sessionId === sessionId) continue;
-    const { liveness } = observe(record, { now });
-    if (liveness === "live" || liveness === "unknown") {
-      out.push({ folder: record.folder, sessionId: record.sessionId ?? null, liveness });
-    }
-  }
-  return out;
-}
-
-/**
- * What is wrong with this provisioning authorization, or null when nothing is.
- *
- * Every field is checked against something MEASURED — the folder this call is about, the branch the
- * board verified — because an authorization that could describe any folder would be a licence rather
- * than a scope. The two lists are required to exist and are allowed to be empty: an authorization
- * that names no scope is valid and authorizes nothing, which is the answer that makes "folder plus
- * branch is not write authority" true rather than merely stated.
- */
-function authorizationProblem(root, auth, expectedBranch) {
-  if (!auth || typeof auth !== "object") return "the provisioning authorization is not an object";
-  if (!Number.isInteger(auth.issue) || auth.issue <= 0) return "the provisioning authorization names no issue";
-  if (!samePath(auth.folder, root)) return `the provisioning authorization names ${auth.folder ?? "no folder"}, not this folder`;
-  if (!auth.branch || auth.branch !== expectedBranch) {
-    return `the provisioning authorization names branch ${auth.branch ?? "none"}, not the verified ${expectedBranch}`;
-  }
-  if (!Array.isArray(auth.paths) || !Array.isArray(auth.config)) {
-    return "the provisioning authorization does not state its scope as a list of paths and a list of config keys";
-  }
-  return null;
-}
-
-function repairHooksPath(root, { run, allowConfig }) {
+function diagnoseHooksPath(root, { run }) {
   // GIT's pathname expansion, not Node's. `~/x` is a home-relative path to git and an ordinary
   // directory name to `resolve()`, so reading the raw value made an escaping hooksPath look in-tree
   // and the folder was reported "ok" while it reached no hook at all. Measured 2026-09-08:
@@ -738,18 +753,17 @@ function repairHooksPath(root, { run, allowConfig }) {
   // `--path` fails on a value git cannot expand (`~nosuchuser/...`). Unresolvable is not in-tree.
   if (!expanded.ok || !expanded.out) {
     return {
-      action: "refused",
+      action: "unresolvable",
       from: raw.out,
       reason: `git cannot resolve core.hooksPath — ${expanded.out || "it expanded to nothing"}`,
     };
   }
   if (insideFolder(root, resolve(root, expanded.out))) return { action: "ok", from: raw.out };
 
-  // It escapes. Repairing means pointing the folder at its own `.githooks` — an improvement only if
-  // that directory holds a pre-push that is a REAL gate. Escaping-but-reaching-a-gate beats
-  // correct-but-reaching-none, so anything less than a working hook is a refusal, not a repair.
-  // Directory non-emptiness was the previous test and it is not the same question: a folder holding
-  // one unrelated file passed it.
+  // It escapes. A repoint would only be an improvement if this folder's own `.githooks` holds a
+  // pre-push that is a REAL gate: escaping-but-reaching-a-gate beats correct-but-reaching-none.
+  // Directory non-emptiness was the test before round 1 and it is not the same question — a folder
+  // holding one unrelated file passed it.
   let hook = null;
   try {
     const own = join(root, ".githooks", "pre-push");
@@ -759,59 +773,62 @@ function repairHooksPath(root, { run, allowConfig }) {
   }
   if (hook === null) {
     return {
-      action: "refused",
+      action: "escapes",
       from: raw.out,
-      reason: "this folder has no .githooks/pre-push of its own — pointing at it would remove the last hook it still reaches",
+      reason: "and this folder has no .githooks/pre-push of its own, so there is nothing safe to point it at",
     };
   }
   if (!prePushRunsVerifier(hook)) {
     return {
-      action: "refused",
+      action: "escapes",
       from: raw.out,
-      reason: `this folder's .githooks/pre-push never runs ${PREPUSH_VERIFIER} — pointing at it would replace a gate with a stub`,
+      reason: `and this folder's own .githooks/pre-push never runs ${PREPUSH_VERIFIER}, so pointing at it would replace a gate with a stub`,
     };
   }
 
   const extension = run(root, ["config", "--get", "extensions.worktreeConfig"]);
   if (!extension.ok || extension.out !== "true") {
     return {
-      action: "refused",
+      action: "escapes",
       from: raw.out,
-      reason: "extensions.worktreeConfig is not true — enabling it is a repository-wide change, not this folder's to make",
+      reason: "and extensions.worktreeConfig is not true, so a per-worktree repoint is not available here",
     };
   }
 
-  // Everything above is a fact about the folder. THIS is the question of authority, and it is asked
-  // last so the diagnosis still tells the truth about what would happen if the answer were yes.
-  if (!allowConfig("core.hooksPath")) {
-    return {
-      action: "withheld",
-      from: raw.out,
-      to: ".githooks",
-      reason: "core.hooksPath is not in the authorized provisioning scope",
-    };
-  }
-
-  const set = run(root, ["config", "--worktree", "core.hooksPath", ".githooks"]);
-  if (!set.ok) return { action: "failed", from: raw.out, reason: set.out };
-  return { action: "set", from: raw.out, to: ".githooks" };
+  return {
+    action: "repairable",
+    from: raw.out,
+    to: ".githooks",
+    reason: "this folder has a working .githooks/pre-push and worktree config is enabled, so a repoint would fix it",
+  };
 }
 
-function repairLineEndings(root, { run, readFile, writeFile, allowPath }) {
-  const empty = { repaired: [], left: [], withheld: [], refreshFailed: [] };
+/**
+ * Which tracked files are sitting on disk as CRLF over an LF blob, and which of those could be
+ * restored by dropping CR alone.
+ *
+ * READ ONLY. `repairLineEndings` used to write the stripped bytes and then rebuild the index's stat
+ * cache with `update-index --refresh`; both are gone. Round 1's finding 4 — a failed refresh
+ * reported as a repair — is answered by removing the refresh rather than by reporting it better,
+ * and the tests that pinned that reporting are removed with the code they described.
+ *
+ * The blob proof stays, because it is what makes the count trustworthy: "203 files are provably
+ * restorable by dropping CR" is a different and much more useful sentence than "203 files look wrong".
+ */
+function diagnoseLineEndings(root, { run, readFile }) {
+  const empty = { provable: [], unprovable: [] };
 
-  // Without sha1 the blob comparison below is not the comparison git would make, and an unprovable
-  // write is exactly what this must not do.
+  // Without sha1 the blob comparison below is not the comparison git would make.
   const format = run(root, ["rev-parse", "--show-object-format"]);
   if (!format.ok || format.out !== "sha1") {
-    return { action: "refused", ...empty, reason: `object format is ${format.ok ? format.out : "unreadable"}, not sha1 — the blob comparison cannot be made` };
+    return { action: "unmeasurable", ...empty, reason: `object format is ${format.ok ? format.out : "unreadable"}, not sha1 — the blob comparison cannot be made` };
   }
 
   const eol = run(root, ["ls-files", "--eol", "-z"]);
-  if (!eol.ok) return { action: "failed", ...empty, reason: eol.out };
+  if (!eol.ok) return { action: "unmeasurable", ...empty, reason: eol.out };
 
   // `eol=lf` must be RESOLVED, not assumed: with `core.autocrlf=true` a merely-`text` file is
-  // supposed to be CRLF here, and rewriting it would be breaking the folder, not fixing it.
+  // supposed to be CRLF here, and calling it broken would be the diagnosis being wrong.
   const candidates = [];
   for (const [fields, path] of zRecords(eol.out)) {
     if (!/(?:^|\s)i\/lf(?:\s|$)/.test(fields)) continue;
@@ -824,119 +841,67 @@ function repairLineEndings(root, { run, readFile, writeFile, allowPath }) {
   // One listing for the whole index rather than a call per file: 200-odd paths on an argv is a
   // Windows command-line limit waiting to be hit, and this runs at every session start.
   const staged = run(root, ["ls-files", "-s", "-z"]);
-  if (!staged.ok) return { action: "failed", ...empty, reason: staged.out };
+  if (!staged.ok) return { action: "unmeasurable", ...empty, reason: staged.out };
   const blobOf = new Map();
   for (const [fields, path] of zRecords(staged.out)) blobOf.set(path, fields.split(/\s+/)[1]);
 
-  const repaired = [];
-  const left = [];
-  const withheld = [];
+  const provable = [];
+  const unprovable = [];
   for (const rel of candidates) {
-    // Scope is enforced HERE, per path, rather than assumed from the fact that the folder is claimed.
-    // The defect independent review found in 6a446c9b was precisely this loop having no such gate:
-    // a claim naming two files licensed a rewrite of all 203 matching paths in the folder.
-    if (!allowPath(rel)) {
-      withheld.push(rel);
-      continue;
-    }
-    const blob = blobOf.get(rel);
-    if (!blob) {
-      left.push(rel);
+    const want = blobOf.get(rel);
+    if (!want) {
+      unprovable.push(rel);
       continue;
     }
     let bytes;
     try {
       bytes = readFile(join(root, rel));
     } catch {
-      left.push(rel);
+      unprovable.push(rel);
       continue;
     }
-    const lf = stripCrlf(bytes);
-    // The proof, and the only one accepted: these bytes ARE the blob. Not "look like text", not
-    // "the attribute says so" — the same id git has in its own index.
-    if (lf.length === bytes.length || blobIdOf(lf) !== blob) {
-      left.push(rel);
-      continue;
-    }
-    try {
-      writeFile(join(root, rel), lf);
-      repaired.push(rel);
-    } catch {
-      left.push(rel);
-    }
+    const stripped = stripCrlf(bytes);
+    if (blobIdOf(stripped) === want) provable.push(rel);
+    else unprovable.push(rel);
   }
-
-  // The stat cache still describes the CRLF file this just replaced, so without a refresh the folder
-  // reports phantom modifications from here on — `git status` decides on the cached size and never
-  // re-reads. Content already equals the blob, so this rewrites cached stat information and nothing
-  // else. PATH-SCOPED deliberately, and measured: the bare `--refresh` reports "needs update" and
-  // leaves the entry alone, and it would also touch paths this repair never wrote. Chunked because
-  // 200-odd paths on one Windows command line is a limit waiting to be hit.
-  //
-  // The RESULT is read, which it was not before. Discarding it reported a clean folder that is not
-  // clean: the bytes are already written, so a failed refresh leaves a phantom modification for
-  // every path in the batch, and calling that "repaired" is the overclaim this lane exists to avoid.
-  const refreshFailed = [];
-  let refreshError = null;
-  for (let i = 0; i < repaired.length; i += 100) {
-    const batch = repaired.slice(i, i + 100);
-    const refreshed = run(root, ["update-index", "-q", "--refresh", "--", ...batch]);
-    if (refreshed.ok) continue;
-    refreshFailed.push(...batch);
-    refreshError ??= refreshed.out;
-  }
-  if (refreshFailed.length) {
-    return {
-      action: "failed",
-      repaired,
-      left,
-      withheld,
-      refreshFailed,
-      reason: `the index refresh failed for ${refreshFailed.length} path(s) — ${refreshError || "no error text"} — their bytes are written but the folder now reports them modified`,
-    };
-  }
-
-  const action = repaired.length ? "repaired" : withheld.length ? "withheld" : left.length ? "left" : "ok";
-  return { action, repaired, left, withheld, refreshFailed };
+  return { action: provable.length || unprovable.length ? "found" : "ok", provable, unprovable };
 }
 
 /**
- * Diagnose the provisioning of the folder this session is rooted in — and no other folder, ever —
- * and repair only what an explicit authorization names.
+ * Diagnose the provisioning of the folder this session is rooted in — and no other folder, ever.
  *
- * DIAGNOSTIC IS THE DEFAULT, and that is the whole of #406 finding 1. The previous version treated
- * "Work Control verified this folder and this branch" as write authority. It is not: the board row
- * that verification reads carries issue, folder and branch and NO SCOPE AT ALL, so a narrow claim on
- * two files was enough to license rewriting every matching tracked path in the folder — 203 of them
- * in the folder this was written in. `docs/WORK_CONTROL.md:143-150` requires the exact scope to be
- * recorded before a write, and `:162` says scope is measured, not trusted. A hook that runs
- * unattended at every session start cannot name a scope, so it does not get to write one.
+ * THIS MODULE WRITES NOTHING. Not to a file, not to a git config key, not to the index. That is the
+ * whole of round-2 finding 1, and it is a deletion rather than a stricter guard for a reason worth
+ * stating: the previous version accepted an `authorization` object naming an issue, a folder, a
+ * branch and two scope lists, and checked the shape of all five. What it could not do is check that
+ * any of it was TRUE. The Work Control board carries no scope field, so there was nothing to compare
+ * `paths` and `config` against; overlap was measured only against other sessions in the SAME folder,
+ * so a live writer in another worktree holding an overlapping path scope was invisible; and the
+ * caller supplied its own `sessionId`, so it could exclude whichever record it liked. Every one of
+ * those is the same defect: the caller wrote its own licence.
  *
- * A caller that CAN name its scope passes `authorization`, and even then the scope is enforced item
- * by item — `paths` for file content, `config` for config keys — so an authorization that names
- * nothing authorizes nothing, and the identity fields alone never license a byte.
+ * `docs/WORK_CONTROL.md:143-150` requires the exact scope to be recorded before a write and `:166`
+ * says scope is measured, not trusted. Until something can measure scope and cross-worktree overlap
+ * — a shared Work Control capability, which is a different lane's change to make — the honest amount
+ * of writing this hook may do is none.
  *
- * @returns {{action: "repaired"|"diagnosed"|"reported"|"clean"|"main"|"skipped"|"refused"|"failed",
+ * So it reports. A session start in a verified folder says what is wrong with the folder, and a
+ * human or a claimed lane fixes it.
+ *
+ * @returns {{action: "reported"|"clean"|"main"|"skipped"|"refused",
  *            line: string|null, reason?: string, hooksPath: object, lineEndings: object}}
  *   `line` is the one advisory line to print, or null when there is nothing to say.
  */
-export function repairWorktreeProvisioning(
+export function diagnoseWorktreeProvisioning(
   root,
-  {
-    run = gitResult,
-    expectedBranch = null,
-    readFile = readFileSync,
-    writeFile = writeFileSync,
-    authorization = null,
-    liveSessions = otherLiveSessionsIn,
-  } = {},
+  { run = gitResult, expectedBranch = null, readFile = readFileSync } = {},
 ) {
   const idle = (action, reason) => ({
     action,
-    line: action === "refused" || action === "failed" ? `compy-entry: worktree provisioning not repaired — ${reason}` : null,
+    line: action === "refused" ? `compy-entry: worktree provisioning not diagnosed — ${reason}` : null,
     reason,
     hooksPath: { action: "skipped" },
-    lineEndings: { action: "skipped", repaired: [], left: [], withheld: [], refreshFailed: [] },
+    lineEndings: { action: "skipped", provable: [], unprovable: [] },
   });
 
   if (!root) return idle("skipped", "no root");
@@ -944,7 +909,8 @@ export function repairWorktreeProvisioning(
   const gitDir = run(root, ["rev-parse", "--git-dir"]);
   const commonDir = run(root, ["rev-parse", "--git-common-dir"]);
   if (!gitDir.ok || !commonDir.ok) return idle("skipped", gitDir.out || commonDir.out || "not a git checkout");
-  // The main checkout is shared by every worktree and every other executor. Never.
+  // The main checkout is shared by every worktree and every other executor. Nothing to say about it
+  // here, and nothing this was written for.
   if (samePath(resolve(root, gitDir.out), resolve(root, commonDir.out))) return idle("main", "main checkout");
 
   if (!expectedBranch) return idle("refused", "no verified branch for this folder");
@@ -952,56 +918,28 @@ export function repairWorktreeProvisioning(
   if (!head.ok) return idle("refused", `HEAD unreadable — ${head.out}`);
   if (head.out !== expectedBranch) return idle("refused", `checked out on ${head.out}, not the claimed ${expectedBranch}`);
 
-  // Tracked paths only. An untracked scratch file cannot be harmed by either repair — one writes a
-  // worktree config key, the other writes only over tracked bytes it has proved are already the blob
-  // — and refusing on untracked files would make this inert in every folder anyone actually works
-  // in. A modified or staged TRACKED path is the real signal that somebody is mid-edit, and it stops
-  // the repair dead.
+  // Kept from the version that could write, and now for a different reason. A modified tracked file
+  // is one whose worktree bytes are NOT its blob, which is exactly the comparison the line-ending
+  // diagnosis makes — so mid-edit the count it would report is about a state somebody is still
+  // changing. Untracked files cannot affect either question and are ignored.
   const status = run(root, ["status", "--porcelain", "--untracked-files=no"]);
   if (!status.ok) return idle("refused", `working tree state unreadable — ${status.out}`);
-  if (status.out) return idle("refused", "a tracked file is modified — this folder is not clean");
+  if (status.out) return idle("refused", "a tracked file is modified — this folder is mid-edit, so the count would be about a moving target");
 
-  // Authority, checked before anything is written and never inferred from the folder or the branch.
-  let scope = null;
-  if (authorization !== null) {
-    const problem = authorizationProblem(root, authorization, expectedBranch);
-    if (problem) return idle("refused", problem);
-    let others;
-    try {
-      others = liveSessions(root, { sessionId: authorization.sessionId ?? null });
-    } catch (err) {
-      // #405's fail-closed list requires proven non-overlap. Unmeasurable is not proven.
-      return idle("refused", `overlap with other live sessions could not be measured — ${err?.message ?? err}`);
-    }
-    if (others.length) {
-      return idle("refused", `another live session holds this folder (${others.map((o) => o.sessionId ?? "unknown session").join(", ")})`);
-    }
-    scope = authorization;
-  }
-  const allowPath = (rel) => Boolean(scope) && scope.paths.includes(rel);
-  const allowConfig = (key) => Boolean(scope) && scope.config.includes(key);
-
-  const hooksPath = repairHooksPath(root, { run, allowConfig });
-  const lineEndings = repairLineEndings(root, { run, readFile, writeFile, allowPath });
+  const hooksPath = diagnoseHooksPath(root, { run });
+  const lineEndings = diagnoseLineEndings(root, { run, readFile });
 
   const notes = [];
-  if (hooksPath.action === "set") notes.push(`core.hooksPath ${hooksPath.from} -> .githooks`);
-  if (hooksPath.action === "withheld") notes.push(`core.hooksPath ${hooksPath.from} escapes this folder — ${hooksPath.reason}`);
-  if (hooksPath.action === "refused" || hooksPath.action === "failed") notes.push(`core.hooksPath left as ${hooksPath.from} — ${hooksPath.reason}`);
-  if (lineEndings.action === "repaired") notes.push(`${lineEndings.repaired.length} file(s) restored to LF`);
-  if (lineEndings.action === "refused") notes.push(`line endings untouched — ${lineEndings.reason}`);
-  if (lineEndings.action === "failed") notes.push(lineEndings.reason);
-  if (lineEndings.withheld.length) notes.push(`${lineEndings.withheld.length} CRLF file(s) outside the authorized scope, left alone`);
-  if (lineEndings.left.length) notes.push(`${lineEndings.left.length} CRLF file(s) left alone — dropping CR does not reproduce their blob`);
+  if (hooksPath.action === "repairable") notes.push(`core.hooksPath ${hooksPath.from} escapes this folder — ${hooksPath.reason}`);
+  if (hooksPath.action === "escapes") notes.push(`core.hooksPath ${hooksPath.from} escapes this folder ${hooksPath.reason}`);
+  if (hooksPath.action === "unresolvable") notes.push(`core.hooksPath ${hooksPath.from} — ${hooksPath.reason}`);
+  if (lineEndings.action === "unmeasurable") notes.push(`line endings not measured — ${lineEndings.reason}`);
+  if (lineEndings.provable.length) notes.push(`${lineEndings.provable.length} tracked file(s) are CRLF on disk over an LF blob and dropping CR reproduces the blob exactly`);
+  if (lineEndings.unprovable.length) notes.push(`${lineEndings.unprovable.length} further CRLF file(s) whose bytes are NOT explained by CR alone`);
 
-  const wrote = hooksPath.action === "set" || lineEndings.repaired.length > 0;
-  const failed = hooksPath.action === "failed" || lineEndings.action === "failed";
-  const withheld = hooksPath.action === "withheld" || lineEndings.withheld.length > 0;
-  const action = failed ? "failed" : wrote ? "repaired" : withheld ? "diagnosed" : notes.length ? "reported" : "clean";
-  const prefix = action === "diagnosed" ? "compy-entry: worktree provisioning DIAGNOSED, nothing written — " : "compy-entry: worktree provisioning — ";
   return {
-    action,
-    line: notes.length ? prefix + notes.join("; ") : null,
+    action: notes.length ? "reported" : "clean",
+    line: notes.length ? `compy-entry: worktree provisioning DIAGNOSED, nothing written — ${notes.join("; ")}` : null,
     hooksPath,
     lineEndings,
   };
@@ -1441,12 +1379,14 @@ export async function main() {
   }
   if (identity.action === "failed") console.error(identity.line);
 
-  // Worktree provisioning (#405) - the folder the harness made, repaired only once Work Control has
-  // verified it, and only ever this folder. Isolated the same way: whatever happens here, the exit
-  // code and the stdout shape below are not its to change.
+  // Worktree provisioning (#405) - what is WRONG with the folder the harness made, reported once
+  // Work Control has verified it, and only ever about this folder. It repairs nothing: there is no
+  // argument that would make it, because nothing here can measure the scope and cross-worktree
+  // overlap a write would have to prove. Isolated the same way: whatever happens here, the exit code
+  // and the stdout shape below are not its to change.
   let provisioning;
   try {
-    provisioning = repairWorktreeProvisioning(provisioningRootFor(result), { expectedBranch: result?.branch ?? null });
+    provisioning = diagnoseWorktreeProvisioning(provisioningRootFor(result), { expectedBranch: result?.branch ?? null });
   } catch (err) {
     provisioning = { action: "failed", line: `compy-entry: worktree provisioning failed - ${err?.message ?? err}` };
   }
