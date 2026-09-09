@@ -33,6 +33,7 @@ import {
   scopeTextFromMarkdown,
 } from "../../scripts/lib/claim-scope.mjs";
 import { CLAIM_HEADER, parseClaim } from "./claim.mjs";
+import { scopeOverlapVerdict } from "./scope-overlap.mjs";
 
 const FIVE = ["a/one.rs", "a/two.rs", "a/three.rs", "a/four.rs", "a/five.rs"];
 const TEXT_FIVE = "`a/one.rs`, `a/two.rs`, `a/three.rs`, `a/four.rs`, `a/five.rs`";
@@ -262,6 +263,17 @@ const CASES = [
     wraps: true,
     beyond: "evil/thematic.rs",
   },
+  // The P1 of the exact-head review of f52fb5bb. A semicolon ENDS a clause, so the disclaimer that
+  // governed `a/two.rs` stops there and the path after it is declared again. While `;` sat in the
+  // bare-carry character class the gap "; " was read as a plain separator, the clause boundary never
+  // fired, and everything after the semicolon was silently dropped from the lane's own scope.
+  {
+    name: "a semicolon re-opens granting after a disclaimed clause",
+    body: claim("- Write scope: `a/one.rs` but not `a/two.rs`;", "  `a/three.rs`", "- Started: 2026-09-09"),
+    text: "`a/one.rs` but not `a/two.rs`; `a/three.rs`",
+    paths: ["a/one.rs", "a/three.rs"],
+    wraps: true,
+  },
 ];
 
 /** Every production reader of a write scope, and how each is asked for the same two answers. */
@@ -356,6 +368,8 @@ const DISCLAIMER_CASES = [
   { name: "a bare `,` carries the disclaimer", text: "`a` but not `b`, `c`", paths: ["a"] },
   { name: "a bare `or` carries the disclaimer", text: "No other `src/` or `src-tauri/` writes.", paths: [] },
   { name: "a clause boundary re-opens granting", text: "`a` but not `b`; also `c`", paths: ["a", "c"] },
+  { name: "a bare `;` re-opens granting, with no conjunction to carry", text: "`a` but not `b`; `c`", paths: ["a", "c"] },
+  { name: "`;` then a bare conjunction re-opens granting", text: "`a` but not `b`; and `c`", paths: ["a", "c"] },
   { name: "`;` then a disclaimer disclaims again", text: "`a`; no `b` writes", paths: ["a"] },
   {
     name: "a mid-list aside carries the disclaimer instead of resetting it",
@@ -474,6 +488,31 @@ const preRepairRead = (body) => {
   return null;
 };
 
+/**
+ * The pattern parser exactly as it stood at f52fb5bb -- the head the independent exact-head review
+ * measured -- differing from the current one by the single character `;` inside the bare-carry class.
+ * That one character made a semicolon a plain separator, which short-circuited the clause boundary
+ * it is: a disclaimer opened before it was carried past it forever.
+ */
+const preSemicolonRead = (scopeText) => {
+  const text = String(scopeText ?? "");
+  const declared = [];
+  let cursor = 0;
+  let disclaimed = false;
+  for (const match of text.matchAll(/`([^`]+)`/g)) {
+    const gap = text.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+    const bare = /^[\s,;/]*(?:or|and|nor)?[\s,;/]*$/i.test(gap);
+    if (!bare) {
+      if (/\b(?:no|not|never|exclud\w*|except\w*|outside|other than)\b/i.test(gap)) disclaimed = true;
+      else if (/[.;!?]/.test(gap)) disclaimed = false;
+    }
+    if (disclaimed) continue;
+    declared.push(normalizePattern(match[1]));
+  }
+  return declared.filter((p, i, a) => p && a.indexOf(p) === i);
+};
+
 describe("#408 — the case list can fail", () => {
   it("has cases that wrap, cases that do not, and cases with prose past the boundary", () => {
     expect(CASES.filter((c) => c.wraps).length).toBeGreaterThan(0);
@@ -553,6 +592,8 @@ describe("#408 — the case list can fail", () => {
       "`excluded` disclaims, which is the defect #405 proved",
       "`excludes` disclaims",
       "`excepting` disclaims",
+      "a bare `;` re-opens granting, with no conjunction to carry",
+      "`;` then a bare conjunction re-opens granting",
       "a mid-list aside carries the disclaimer instead of resetting it",
     ]);
   });
@@ -586,6 +627,43 @@ describe("#408 — the three cases added for the exact-head review can fail", ()
       expect(parseScopePatterns(preRepairRead(c.body)), c.name).toEqual([c.beyond]);
       expect(parseScopePatterns(preRepairRead(c.body)), c.name).not.toContain("a/one.rs");
     }
+  });
+});
+
+describe("#408 — the semicolon case can fail, and the under-read reaches the collision check", () => {
+  const SEMI = [
+    "a bare `;` re-opens granting, with no conjunction to carry",
+    "`;` then a bare conjunction re-opens granting",
+  ];
+
+  it("the f52fb5bb parser is wrong on exactly the two parse cases this repair added", () => {
+    const wrong = DISCLAIMER_CASES.filter((c) => JSON.stringify(preSemicolonRead(c.text)) !== JSON.stringify(c.paths));
+    expect(wrong.map((c) => c.name)).toEqual(SEMI);
+  });
+
+  it("and on the matrix case it drops the path the writer declared after the semicolon", () => {
+    const c = CASES.find((x) => x.name === "a semicolon re-opens granting after a disclaimed clause");
+    expect(preSemicolonRead(c.text)).toEqual(["a/one.rs"]);
+    for (const reader of READERS) expect(parseScopePatterns(reader.text(c.body)), reader.name).toEqual(c.paths);
+    expect(parseWriteScope(c.body)).toEqual(c.paths);
+  });
+
+  // The consequence, end to end, and the reason this is a P1 rather than a parsing curiosity: an
+  // under-read claim makes a live lane look like it holds fewer paths than its writer declared, and
+  // the collision check then clears a SECOND writer onto the difference. Failing open, in the one
+  // direction the whole mechanism exists to fail closed in.
+  it("under the f52fb5bb read the collision check calls a second writer on the dropped path disjoint", () => {
+    const c = CASES.find((x) => x.name === "a semicolon re-opens granting after a disclaimed clause");
+    const live = (parse) => [{ number: 408, lane: "Claude Code", scope: parse(c.text) }];
+    const proposed = { mine: ["a/three.rs"], files: ["a/one.rs", "a/two.rs", "a/three.rs"] };
+
+    const stale = scopeOverlapVerdict({ ...proposed, others: live(preSemicolonRead) });
+    expect(stale.ok).toBe(true);
+    expect(stale.reason).toContain("disjoint from #408 (Claude Code)");
+
+    const now = scopeOverlapVerdict({ ...proposed, others: live(parseScopePatterns) });
+    expect(now.ok).toBe(false);
+    expect(now.findings[0].pairs).toEqual([["a/three.rs", "a/three.rs"]]);
   });
 });
 

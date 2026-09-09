@@ -10,10 +10,8 @@
 // actually exist. A dispatch has no changed set yet, so the exact tier is fed the tracked paths of
 // the base commit — `git ls-tree -r --name-only origin/main` — which is the set a glob can claim.
 //
-// Nothing here reads a scope out of Markdown any more (#408). Extraction (`scopeTextFromMarkdown`)
-// and pattern parsing (`parseScopePatterns`) both live in claim-scope.mjs, because this module used
-// to reach the pattern parser by pasting already-extracted text into a fake `- Write scope: ` bullet
-// -- a wrapper whose only purpose was to satisfy a boundary rule it did not want.
+// Nothing here reads a scope out of Markdown any more (#408): extraction and pattern parsing both
+// live in claim-scope.mjs, and the fake `- Write scope: ` wrapper that reached the parser is gone.
 //
 // Unknown means locked (collision rule 4): a task with no readable scope while another writer is
 // live is refused, and so is a live writer whose claim declares no paths, because "we could not
