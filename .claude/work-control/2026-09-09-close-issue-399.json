@@ -1,0 +1,77 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Four-file lane on #399: one shared continuation rule for the `- Write scope:` bullet, used by both extraction readers. The proof delta is a single commit, 4420ff9b, authored by this actor alone; the reviewer authored none of it.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/399#issuecomment-5598146811",
+  "leaseEvidenceNote": "Same operative claim as the mark-pr-ready and merge receipts for this lane.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Exclusive for the bounded scope this lane mutates; no competing claim on the four source paths or the three receipt filenames.",
+  "inheritedWork": false,
+  "transition": "close-issue",
+  "currentHead": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+  "pr": 407,
+  "issue": 399,
+  "kind": "lane",
+  "branch": "claude/sentinel-399-scope-parsing-a68e04",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "headBindingNote": "Bound to 4420ff9b rather than to the merge commit ON PURPOSE. The gate requires every named gate to have passed at `currentHead`, and the full local gate ran at 4420ff9b -- there is no gate run at the merge commit, and inventing one would be a substitute gate. It also requires `currentHead` to be reachable as a live remote head, which 4420ff9b is until `scripts/land-pr.mjs` prunes the ref; this receipt is therefore written and gated to a literal PASS BEFORE the landing runs. The close itself is executed only AFTER the merge commit and the new origin/main are verified, so the receipt exists before the transition it authorizes and the transition happens after the merge is proven.",
+  "inspection": {
+    "repository": "Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/machine-model-defects-115554, canonical remote `origin` git@github.com:Pootytxng/sentinel.git.",
+    "remoteState": "origin/main 0c97c6d959e3448db88a8b1b2ecf54eb0806b206 at the time of writing. origin/claude/sentinel-399-scope-parsing-a68e04 = 4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f, equal to local HEAD and to the PR head.",
+    "worktree": "Linked worktree, one writer, its own index, core.hooksPath worktree-scoped to `.githooks`.",
+    "branch": "claude/sentinel-399-scope-parsing-a68e04, PR #407 -> main, OPEN, NOT draft, MERGEABLE / CLEAN, 0 closingIssuesReferences.",
+    "dirtyState": "Clean except this lane's three transition receipts, all inside the amended claim scope.",
+    "liveProcesses": "node x34 (MCP servers and peer Claude Code sessions). No compy.exe, cargo, rustc, npm, msbuild or link process."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:38-39",
+      "summary": "440 frontend test files passed (440); 6631 tests passed | 4 skipped (6635); 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:44-70",
+      "summary": "tsc clean; vite production build succeeded, `built in 17.29s`."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:1393",
+      "summary": "1291 passed; 0 failed; 24 ignored; 0 filtered out."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:1408-1410",
+      "summary": "clippy stage clean under -D warnings."
+    }
+  ],
+  "gateEvidenceNote": "See 2026-09-09-merge-pr-407.json gateEvidenceNote: the lane's own protected-push run at this exact head, read stage by stage rather than by exit code, plus the three checkout-state guards re-run by hand at this head (3 files / 46 tests).",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+    "verdict": "APPROVE-EQUIVALENT",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/407#pullrequestreview-5151177996 (2026-09-09T07:36:40Z), commit_id 4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f.",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq, which authored no commit in the proof delta. The reviewer's verdict was that #399's actual defect is repaired: both extraction readers call the same joinScopeBullet rule, the continuation opt-in is confined to the claim `Write scope` field, table rows remain one-line, unwrapped bullets preserve their old trim semantics, and the shared case matrix plus the pre-fix sensitivity control is appropriate regression evidence."
+  },
+  "acceptanceNote": "#399's acceptance is met at this head and is checkable from strings alone. (1) `parseClaim` and `scopeTextFromBody` use ONE shared continuation rule -- `joinScopeBullet` in scripts/lib/claim-scope.mjs -- so a wrapped `- Write scope:` bullet can no longer silently declare only a prefix. (2) A shared case list, tools/entry/scope-continuation.test.mjs, is exercised through BOTH readers: 13 cases covering wrapped and one-line-equivalent scopes, termination at the next `-` bullet, `*` bullet, blank line, heading and table row, both bold label spellings, end-of-body, and CRLF in both shapes. (3) A sensitivity control, `preFixOneLineRead`, reproduces the pre-#399 one-line reader and is asserted WRONG on every wrapped case and RIGHT on every unwrapped one, with a further assertion that the old read yields a strict PREFIX rather than an error -- so the guard can fail. Falsifiability verified by mutation, not by reading: temporarily flipping `continued: true` to `false` fails 23 assertions. (4) Behaviour outside the contract is preserved and pinned: `- scope:` stays a claim-only alias, table rows stay one line, every other parseClaim/parseHandoff field stays one line, and missing or empty bullets stay null in both readers.",
+  "scopeHonestyNote": "What #407 proves is narrower than \"one continuation parser everywhere\", and this receipt states the limit rather than letting a later reader over-read it. Only the TWO scope-bullet extraction readers implicated by #399 now share `joinScopeBullet`. `parseWriteScope` in scripts/lib/claim-scope.mjs still contains a third, raw-markdown bullet-boundary rule; it is unreachable through the two repaired paths because both feed it already-extracted one-line scope text, which is why it does not block this closure. Separately, `ENDS_SCOPE_BULLET` does not terminate on numbered-list items or fenced code blocks. Both are the reviewer's non-blocking findings, both are queued for the parser-consolidation lane, and neither is repaired here because a repair would invalidate review 5151177996.",
+  "excludedFromThisLaneNote": "Named in the dispatch as out of contract and untouched by this lane, each still open on its own terms: the disclaimer-vocabulary defect (`excluded` is not `excluding`), #405 auto-repair, the pre-push canonical-checker fail-open shapes, the board-schema redesign, and docs cleanup.",
+  "closureConditionNote": "This receipt authorizes closing issue #399 ONLY after the merge is proven: the PR reports MERGED with a merge commit SHA, that merge commit is an ancestor of the new origin/main, and the four source paths on origin/main are byte-identical to their 4420ff9b versions. If any of those fails, the close does not happen and this receipt authorizes nothing."
+}
