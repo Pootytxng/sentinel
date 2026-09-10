@@ -301,6 +301,13 @@ GitHub, or a plausible-looking URL never clears recovery automatically.
 Closing an issue means Done. Reopening returns it to Ready. Do not close merely because a session
 ended, a test passed, or one slice shipped.
 
+On this board the two are one transition: the project's "Item closed" workflow sets Done when an issue
+closes, and "Auto-close issue" closes it when Done is set. So the lease ends first: post the
+`### Handoff` ending `Claim: released`, then close. `scripts/work-control-gate.mjs` refuses
+`close-issue` and `mark-done` while the issue's thread reads a live lease or cannot be read (#411). A
+merge whose PR carries a closing keyword closes the issue too, so release before that merge; the gate
+does not check that route yet.
+
 ## Anti-staleness
 
 GitHub/native state wins over chat and remembered assignments. On every resume, handoff, review, or
