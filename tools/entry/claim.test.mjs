@@ -611,6 +611,7 @@ describe("threadLease: is a lease still live on this thread?", () => {
   describe("a Handoff reads its fields only from its own section", () => {
     const NOTES = ["### Notes", "- Claim: released", ""];
     const OWN = ["### Handoff", "- Outcome: review requested", "- Exact next action: independent review"];
+    const TEMPLATE = renderHandoff({ outcome: "merged", nextAction: "none", claim: "released" });
 
     it.each([
       ["above its header, in a Handoff with no Claim line", [...NOTES, ...OWN]],
@@ -624,6 +625,12 @@ describe("threadLease: is a lease still live on this thread?", () => {
       ["under a heading in a quote", [...OWN, "", "> ### Notes", "", "- Claim: released"]],
       ["under an HTML heading", [...OWN, "", "<h3>Notes</h3>", "", "- Claim: released"]],
       ["past an HTML rule", [...OWN, "", "<hr>", "", "- Claim: released"]],
+      ["that an underline indented into its list item makes a heading", [...OWN, "- Claim: released", "  ---"]],
+      ["that === indented into its list item makes a heading", [...OWN, "- Claim: released", "  ==="]],
+      ["that an underline four columns in makes a heading", [...OWN, "- Claim: released", "    ---"]],
+      ["that an underline after a tab makes a heading", [...OWN, "- Claim: released", "\t---"]],
+      ["that an underline makes a heading with the line after it", [...OWN, "- Claim: released", "  (lane)", "  ---"]],
+      ["in the template, that an underline indented into its item makes a heading", [TEMPLATE, "  ---"]],
     ])("does not release on a Claim line %s, so the claim before it stays live", (_, lines) => {
       expect(parseHandoff(lines.join("\n"))).toMatchObject({ released: false });
       expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...lines)]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
@@ -658,6 +665,16 @@ describe("threadLease: is a lease still live on this thread?", () => {
       expect(parseHandoff([body, "", "### Notes", "- Claim: HELD. Another lane's."].join("\n")).released).toBe(true);
       expect(parseHandoff([body, "---", "Posted by the lane."].join("\n")).released).toBe(true);
       expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", body)]).claim).toBeNull();
+    });
+
+    // GitHub reads each underline here as a rule, or as the heading of another item, so the Claim line
+    // stays the Handoff's own.
+    it("still releases when an underline below its Claim line is a rule, or takes another item", () => {
+      const claim = [...OWN, "- Claim: released"];
+      expect(parseHandoff([...claim, " ---"].join("\n")).released).toBe(true);
+      expect(parseHandoff([...claim, "", "  ---"].join("\n")).released).toBe(true);
+      expect(parseHandoff([...claim, "  ***"].join("\n")).released).toBe(true);
+      expect(parseHandoff(["### Handoff", "- Claim: released", "- Outcome: review requested", "  ---"].join("\n")).released).toBe(true);
     });
   });
 });

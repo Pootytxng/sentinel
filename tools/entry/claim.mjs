@@ -337,32 +337,39 @@ export function parseClaim(body) {
 // heading or rule, on the line as written, outside code spans.
 const SECTION = /^[ \t]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+|>[ \t]*)*(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|(?:=+|-+)[ \t]*$)/;
 const HTML_SECTION = /<(?:h[1-6]|hr)(?:[\s/>]|$)/i;
+// An underline two columns in or more (a tab reaches four) may be inside a list item and make the
+// item's text a heading: `- Claim: released` over `  ---` is an h2 in the item, not a Claim line.
+const ITEM_UNDERLINE = /^(?: {2}| ?\t)[ \t]*(?:=+|-+)[ \t]*$/;
 
 /**
  * The lines of a comment's Handoff sections, or null when it has none. A Handoff reads its fields only
  * from these: on afc6dfc7 it read them from the whole comment, so a `- Claim: released` above its
  * header, or under a later heading, released a live lease (HQ review 5172037615). A section opens at a
  * Handoff header (`headed`) and ends before the next line that may open another section (`SECTION`),
- * and a setext underline also takes back the lines above it that it may make a heading. Another
- * Handoff header opens a section of its own. Where a line may open a section it ends one, so a release
- * after it is not read and the lease stays live.
+ * and a setext underline also takes back the lines above it that it may make a heading, a list item's
+ * text among them when the underline is indented into the item (`ITEM_UNDERLINE`). Another Handoff
+ * header opens a section of its own. Where a line may open a section it ends one, so a release after
+ * it is not read and the lease stays live.
  */
 const handoffLines = (body) => {
   const raw = String(body ?? "").replace(/\r\n?/g, "\n").split("\n");
   let own = null; // what the Handoff sections hold so far
   let open = false; // whether this line is in one
   let text = 0; // how many of their last lines are a paragraph, which a setext underline makes a heading
+  let item = 0; // how many are a list item's text, which an underline indented into the item makes one
   authored(body, true).forEach((l, i) => {
     if (headed([l], HANDOFF_HEADER, 0)) {
       own ??= [];
       open = true;
-      text = 0;
+      text = item = 0;
     } else if (SECTION.test(l) || HTML_SECTION.test(raw[i].replace(/`[^`]*`/g, ""))) {
-      if (open && SETEXT.test(l)) own.splice(own.length - text, text);
+      const heading = item && ITEM_UNDERLINE.test(l) ? item : SETEXT.test(l) ? text : 0;
+      if (open) own.splice(own.length - heading, heading);
       open = false;
     } else if (open) {
       own.push(l);
       text = /\S/.test(l) && !LIST_ITEM.test(l) ? text + 1 : 0;
+      item = !/\S/.test(l) ? 0 : LIST_ITEM.test(l) ? 1 : item && item + 1;
     }
   });
   return own;

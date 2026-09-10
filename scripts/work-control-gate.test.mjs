@@ -463,6 +463,7 @@ describe("a close ends the lease, so the lease has to end first (#411)", () => {
     ["above the Handoff's header", ["### Notes", "- Claim: released", "", "### Handoff", "- Outcome: review requested", "- Exact next action: independent review"]],
     ["above a Handoff that says HELD", ["### Notes", "- Claim: released", "", "### Handoff", "- Claim: HELD. Review pending."]],
     ["under a heading after the Handoff", ["### Handoff", "- Outcome: review requested", "", "### Notes", "- Claim: released"]],
+    ["made a heading by an underline indented into its list item", ["### Handoff", "- Outcome: review requested", "- Claim: released", "  ---"]],
   ];
   it.each(["close-issue", "mark-done"].flatMap((t) => OUTSIDE.map(([where, lines]) => [t, where, lines])))(
     "blocks %s when the only released Claim line is %s",
