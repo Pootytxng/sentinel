@@ -200,7 +200,7 @@ pub(crate) fn panic_at(_seam: u8) {}
 /// The first version of this enum claimed to enumerate every process-wide store lock and did not —
 /// `experiment::store_write_gate`, `intelligence::store_write_gate` and `benchmark::state_cache`
 /// were all missing, and the Experiment gate is held across three entries into `HISTORY_LOCK`
-/// (`experiment.rs` 660, 779, 833). With the outer lock unrecorded the recorder saw an empty stack
+/// (`experiment.rs` 679, 798, 852). With the outer lock unrecorded the recorder saw an empty stack
 /// and could not have detected Experiment re-entry, an inverted `History -> Experiment` edge, or a
 /// cycle through Experiment at all. A false "all locks" claim is worse than an honest partial one,
 /// because it tells a reader not to look.
@@ -225,9 +225,12 @@ pub(crate) enum StoreLock {
     Readiness,
     /// `incident_observer::STATE_LOCK`.
     IncidentObserver,
-    /// `history::HISTORY_LOCK` — the Trust Ledger. Taken inline at eight sites, two poison policies.
+    /// `history::HISTORY_LOCK` — the Trust Ledger. Taken at eight sites, every one of them through
+    /// `history::lock_history`, which propagates poison as an `Err` at all eight. One policy, not two.
     History,
-    /// `support_evidence`'s `LOCK`. The innermost lock in the only nesting this crate performs.
+    /// `support_evidence`'s `LOCK`. A leaf, and the innermost lock of THREE declared nestings, not
+    /// one: `Comparison`, `History` and `Experiment` each reach it. `record` appends and
+    /// `clear_support_evidence` deletes; neither takes another store lock, so every chain ends here.
     SupportEvidence,
     /// `benchmark_scoreboard::SCOREBOARD_LOCK`.
     BenchmarkScoreboard,
@@ -293,9 +296,9 @@ impl StoreLock {
 ///   lock across those calls.
 /// - `Experiment -> History` — the live one, and the one the first version of this table missed
 ///   entirely because the Experiment gate was not recorded. `start_experiment` holds
-///   `experiment::store_write_gate` from `experiment.rs:646` and calls `history::apply_recommendation`
-///   at `660`; `conclude_experiment` holds it from `729` and calls `history::rollback_change` at
-///   `779`; `restore_experiment` holds it from `821` and calls `rollback_change` at `833`. Each of
+///   `experiment::store_write_gate` from `experiment.rs:665` and calls `history::apply_recommendation`
+///   at `679`; `conclude_experiment` holds it from `748` and calls `history::rollback_change` at
+///   `798`; `restore_experiment` holds it from `840` and calls `rollback_change` at `852`. Each of
 ///   those enters `HISTORY_LOCK`. **Direction matters and is asserted, not assumed:** nothing in the
 ///   crate calls into `experiment` at all except `lib.rs`'s command registration, so no production
 ///   path takes `History` and then `Experiment` — which is why
@@ -305,8 +308,8 @@ impl StoreLock {
 ///   paths. **Two-deep:** `apply_recommendation` and `rollback_change` call
 ///   `record_operation_failure` on their error branch, and that call happens after the inner
 ///   function has released `HISTORY_LOCK` but while `start_experiment` still holds the Experiment
-///   gate; likewise `active_change_count` (`experiment.rs:654`), `comparison::arm_watermark`
-///   (`667`) and `ledger_len_checked` (`748`) each run `load_history` under the Experiment gate and
+///   gate; likewise `active_change_count` (`experiment.rs:673`), `comparison::arm_watermark`
+///   (`686`) and `ledger_len_checked` (`767`) each run `load_history` under the Experiment gate and
 ///   reach `support_evidence::record` on the corrupt-ledger branch. **Three-deep:** inside
 ///   `apply_recommendation_inner`, `HISTORY_LOCK` is held and `begin_mutation` → `load_history_for`
 ///   takes the same corrupt-ledger branch, so the thread holds `[Experiment, History]` and takes
@@ -342,9 +345,13 @@ impl StoreLock {
 /// panics on the inverse; they do not prove that `start_experiment` really calls
 /// `apply_recommendation`, because they call the lock helpers directly rather than the lifecycle
 /// commands. That second half is a source fact, and it is checked as a source fact:
-/// `scripts/store-lock-order-guard.test.mjs` pins the call sites (`experiment.rs` 660, 779, 833)
-/// and fails if they move or disappear. Two bounded checks, each honest about its half; neither is
-/// upgraded into a claim about the whole.
+/// `scripts/store-lock-order-guard.test.mjs` slices the three `let _g = lock_store()?;` sections out
+/// of `experiment.rs` and fails unless all three still reach `history::apply_recommendation` or
+/// `history::rollback_change` inside the gate. It matches on structure, not on line numbers: a call
+/// that MOVES inside its own section keeps it green, while a call that leaves the gate — or an
+/// acquisition that bypasses `lock_store()` — turns it red. The line numbers quoted in this file are
+/// therefore documentation, point-in-time and NOT enforced; the section shape is what is pinned.
+/// Two bounded checks, each honest about its half; neither is upgraded into a claim about the whole.
 ///
 /// **UNVERIFIED COVERAGE — `Comparison -> SupportEvidence` and `History -> SupportEvidence`.**
 /// Unchanged from the previous candidate, and still not a passed guarantee. Both sit on failure
