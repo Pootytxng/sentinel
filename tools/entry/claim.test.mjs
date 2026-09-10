@@ -493,6 +493,117 @@ describe("threadLease: is a lease still live on this thread?", () => {
       expect(parseClaim(["| a | b |", "|---|---|", "| x | y |", "<br>", ...C].join("\n"))).toMatchObject({ lane: "Codex" });
     });
   });
+
+  // HQ review 5171061412 on c71c6d3c: a fence left open inside a list item hid a genuine claim after the
+  // item to the end of the comment, though GitHub ends the fence with the item. Every shape below was
+  // rendered by GitHub's /markdown endpoint on 2026-09-10, and each expectation is what that page showed,
+  // except the ones named at the end: each of those fails closed, and says so.
+  describe("a block left open inside a list item ends with the item", () => {
+    const ITEM_FENCE = ["- Example:", "  ```", "  npm test"];
+    const H = ["### Handoff", "- Claim: released"];
+    const C = ["### Ownership claim", "- Lane: Codex"];
+
+    it("parseClaim reads a genuine claim after a fence left open inside a list item", () => {
+      expect(parseClaim([...ITEM_FENCE, ...C].join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+
+    it("threadLease reads that claim as live, and after a release as a new lease", () => {
+      const claim = at("2026-09-10T08:00:00Z", ...ITEM_FENCE, ...C);
+      expect(threadLease([claim]).claim).toMatchObject({ lane: "Codex", postedAt: claim.createdAt });
+      expect(threadLease([CLAIM, RELEASE, claim]).claim).toMatchObject({ lane: "Codex", postedAt: claim.createdAt });
+    });
+
+    it("reads no Handoff still inside that fence, so the claim before it stays live", () => {
+      const inside = ["- Example:", "  ```", "  ### Handoff", "  - Claim: released"];
+      expect(parseHandoff(inside.join("\n"))).toBeNull();
+      const lease = threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...inside)]);
+      expect(lease.claim).toMatchObject({ postedAt: CLAIM.createdAt });
+      expect(lease.handoff).toBeNull();
+    });
+
+    it.each([
+      ["after a tilde fence", ["- Example:", "  ~~~", "  x", ...C]],
+      ["after a fence left open in an ordered item", ["1. Run:", "   ```", "   x", ...C]],
+      ["after a fence with an info string", ["- Example:", "  ```sh", "  x", ...C]],
+      ["after a blank line inside the fence", ["- Example:", "  ```", "  x", "", ...C]],
+      ["after a fence left open in an outer item, under a nested one", ["- a", "  - b", "  ```", "  x", ...C]],
+      ["indented one space, short of the item's text", ["- Example:", "  ```", "  x", " ### Ownership claim", "- Lane: Codex"]],
+      ["after a closer indented three past the item's text", ["- Example:", "  ```", "  x", "     ```", "  ### Ownership claim", "- Lane: Codex"]],
+      ["after a fence indented past the item's text, closed there", ["- Example:", "   ```", "  x", "   ```", "   ### Ownership claim", "- Lane: Codex"]],
+      ["after a line that only looks like its closer, four past the item's text", ["- Example:", "   ```", "  x", "      ```", "   ```", "   ### Ownership claim", "- Lane: Codex"]],
+      ["after a fence under an ordered item's number, short of its text: a top-level fence, closed", ["1. Run this:", "  ```", "git status", "  ```", ...C]],
+      ["after a fence under a two-space marker, short of its text: a top-level fence, closed", ["-  Example:", "  ```", "x", "  ```", ...C]],
+      ["after a <pre> under a two-space marker, short of its text: a top-level block, closed", ["-  Example:", "  <pre>", "x", "", "</pre>", ...C]],
+      ["after a fence closed at column 0, which GitHub reads as opening another, and a fence closing that", ["- Example:", "  ```", "  x", "```", "Then:", "```", ...C]],
+    ])("still reads a claim %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+
+    // The repair reaches only a block inside a list item: a top-level one still runs to its own end.
+    it.each([
+      ["a fence never closed", ["```", "x", ...C]],
+      ["a fence still inside its list item", ["- Example:", "  ```", "  ### Ownership claim", "  - Lane: Codex"]],
+      ["a fence after a list, indented one space", ["- item", "", " ```", "x", ...C]],
+      ["a fence under an ordered item's number, short of its text", ["1. Run this:", "  ```", "git status", ...C]],
+      ["a fence after a list and a paragraph", ["- item", "", "Text", "  ```", "x", ...C]],
+      ["a fence that ends a list item", ["- item", "```", "x", ...C]],
+      ["a fence after a closed one under a two-space marker", ["-  Example:", "  ```", "x", "  ```", "", "```text", ...C]],
+      ["a <pre> under an ordered item's number, short of its text", ["1. item", "  <pre>", "  x", ...C]],
+      ["a <pre> after a list item, indented one space", ["- item", " <pre>", "x", ...C]],
+      ["an HTML comment left open inside a list item, which GitHub never closes", ["- Example:", "  <!--", "  x", ...C]],
+    ])("reads no claim inside %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toBeNull();
+    });
+
+    it("reads no Handoff inside a top-level fence never closed", () => {
+      expect(parseHandoff(["```", "x", ...H].join("\n"))).toBeNull();
+    });
+
+    // The line that ends the item can open a block of its own, and a Handoff after it is then code: on
+    // c71c6d3c each of these released the claim above it.
+    it.each([
+      ["a fence closed at column 0, which GitHub reads as opening another", ["- Example:", "  ```", "  npm test", "```", ...H]],
+      ["a fence opened after a list item's fence ended", ["- Example:", "  ```", "  x", "Then:", "  ```", ...H]],
+      ["a fence opened at column 0 inside a list item's <pre>", ["- Example:", "  <pre>", "  x", "```", "</pre>", ...H]],
+      ["a fence opened at column 0 inside a list item's <div>", ["- Example:", "  <div>", "```", "", ...H]],
+      ["an HTML comment its list item ended before its `-->`", ["- Example:", "  <!--", "x", "-->", ...H]],
+    ])("reads no Handoff GitHub hides after %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...lines)]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+    });
+
+    it.each([
+      ["a fence closed under the item's text", ["- Example:", "  ```", "  x", "  ```", ...H]],
+      ["a fence closed a space deeper", ["- Example:", "  ```", "  x", "   ```", ...H]],
+      ["a <pre> closed under the item's text", ["- Example:", "  <pre>", "  x", "  </pre>", ...H]],
+      ["a <div> and a blank line", ["- Example:", "  <div>", "  x", "", ...H]],
+    ])("still reads a Handoff after a list item's block that ends inside the item: %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toMatchObject({ released: true });
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...lines)]).claim).toBeNull();
+    });
+
+    // Where GitHub settles it the other way, each fails closed: past a line that may have ended a list
+    // item under an open block, a claim is read and a Handoff is not.
+    it.each([
+      ["a fence left open inside a list item", [...ITEM_FENCE, ...H]],
+      ["a fence closed at column 0 and a later pair of fences", ["- Example:", "  ```", "  x", "```", "Then:", "```", ...H]],
+      ["a fence indented past the item's text, closed under it", ["- Example:", "   ```", "  x", "  ```", ...H]],
+      ["a fence after a list GitHub has ended, closed at column 0", ["- item", "", " text", "  ```", "  x", "```", ...H]],
+    ])("reads no Handoff after %s, though GitHub shows one: the lease stays live", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    it.each([
+      ["in a fence opened after a list item's fence ended", ["- Example:", "  ```", "  x", "Then:", "  ```", ...C]],
+      ["after a lone tag that ends a list item's <pre>", ["- Example:", "  <pre>", "  x", "<br>", ...C]],
+      ["in a fence opened by a list item's fence closed at column 0", ["- Example:", "  ```", "  npm test", "```", ...C]],
+      ["in a fence opened at column 0 inside a list item's <pre>", ["- Example:", "  <pre>", "  x", "```", "</pre>", ...C]],
+      ["in a fence opened at column 0 inside a list item's <div>", ["- Example:", "  <div>", "```", "", ...C]],
+      ["after an HTML comment its list item ended before its `-->`", ["- Example:", "  <!--", "x", "-->", ...C]],
+    ])("still reads a claim GitHub hides %s: the lease holds", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+  });
 });
 
 describe("the gh plan pins the field quirks that cost real time", () => {

@@ -431,6 +431,32 @@ describe("a close ends the lease, so the lease has to end first (#411)", () => {
     expect(evaluateWorkControl(close(), thread(CLAIM_283, released))).toEqual(PASSED);
   });
 
+  // HQ review 5171061412 on c71c6d3c: a fence left open inside a list item hid the claim after the item,
+  // so this close passed while #283's lease was live.
+  it.each(["close-issue", "mark-done"])("blocks %s when the claim follows a fence left open inside a list item", (transition) => {
+    const claim = at("2026-09-10T06:41:51Z", "- Plan:", "  ```sh", "  npm test", "### Ownership claim", "- Lane: Claude Code", "- Write scope: `src-tauri/src/race_seam.rs`");
+    const result = evaluateWorkControl(close({ transition }), thread(claim));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/#283 still has a live lease/);
+    expect(evaluateWorkControl(close({ transition }), thread(claim, handoff("released")))).toEqual(PASSED);
+  });
+
+  it("stays blocked when the only release is a Handoff still inside a list item's fence", () => {
+    const example = at("2026-09-10T07:52:00Z", "- The release will read:", "  ```", "  ### Handoff", "  - Claim: released");
+    const result = evaluateWorkControl(close(), thread(CLAIM_283, example));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/#283 still has a live lease/);
+  });
+
+  // GitHub reads a list item's fence closed at column 0 as opening another fence, so the Handoff after
+  // it is code: c71c6d3c read it as a release, and this close passed with #283's lease live.
+  it("stays blocked when the only release follows a list item's fence closed at column 0", () => {
+    const example = at("2026-09-10T07:52:00Z", "- Run:", "  ```", "  npm test", "```", "### Handoff", "- Exact next action: none", "- Claim: released");
+    const result = evaluateWorkControl(close(), thread(CLAIM_283, example));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/#283 still has a live lease/);
+  });
+
   it("leaves merge-pr alone: that transition reads no thread", () => {
     expect(evaluateWorkControl(record({ transition: "merge-pr", issue: 283 }))).toEqual(PASSED);
   });

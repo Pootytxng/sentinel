@@ -73,7 +73,7 @@ const esc = (s) => s.replace(/[.*+?^{}()|[\]\\/$]/g, "\\$&");
 const plain = (v) => (v && /^`[^`]*`$/.test(v) ? v.slice(1, -1) : v);
 
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
+const FENCE_CLOSE = /^[ \t]*(`{3,}|~{3,})[ \t]*$/; // as deep as its fence allows: see `authored`
 // Raw HTML blocks that end at a marker, by opener and end: CommonMark's kinds 1 and 3 to 5 (2 is a comment).
 const HTML_ENDS = [
   [/^ {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)/i, /<\/(?:pre|script|style|textarea)>/i],
@@ -115,44 +115,60 @@ const indent = (l) => [.../^[ \t]*/.exec(l)[0]].reduce((n, c) => (c === "\t" ? n
  * spaces (a tab makes it indented code), and a field only at the start of its line.
  *
  * Whether a lone tag continues a paragraph turns on list, quote, footnote and table context, which is
- * followed only as far as the next line needs, and an HTML block inside a list item ends with the
- * item. Where either is in doubt, `strict` settles it toward keeping a lease live: for a Handoff
- * (`strict`) the block is open, and for a claim it is not. Every shape GitHub settles the other way
- * fails closed. Among them: a Handoff after a lone tag indented into a list item's paragraph, or after
- * an HTML block left open inside a list item, is not read; a claim after a table and a lone tag, or
- * after an HTML block indented deeper than its list item's text, is. A Handoff header also counts only
- * at the very start of its line (`headed`), where nothing a list item holds can be. Not modelled:
- * list items' fences, which are read as though they stood alone (the renderer differs only on a line
- * indented less than the item, which it moves out of the list). None of the 851 comments here on
- * 2026-09-10 put a lease header inside any of these.
+ * followed only as far as the next line needs. Where it is in doubt, `strict` settles it toward
+ * keeping a lease live: for a Handoff (`strict`) the block is open, and for a claim it is not.
+ *
+ * A block opened inside a list item ends with the item, at a line indented less than the item's text,
+ * and that line may open a block of its own: on c71c6d3c a fence left open in an item hid the claim
+ * after it (HQ review 5171061412), and a fence closed at column 0 released the claim above it, though
+ * GitHub reads that line as opening a fence. Where an item's text starts is known only to within a
+ * few columns, so past a line that may have ended the item, blocks are no longer followed: a claim is
+ * read from the rest of the comment, and a Handoff from none of it (`within`).
+ *
+ * Every shape GitHub settles the other way fails closed. Among them: a Handoff after a lone tag
+ * indented into a list item's paragraph, or anywhere after a block left open inside a list item, is
+ * not read; a claim after a table and a lone tag, or in a block opened after a list item's block
+ * ended, is. A Handoff header also counts only at the very start of its line (`headed`), where
+ * nothing a list item holds can be. None of the 851 comments here on 2026-09-10 reads differently for
+ * any of this.
  *
  * `Write scope` is not read through this: `scopeTextFromMarkdown` (#408) skips fenced lines by its own
  * rule. That rule is not reused here, because its opener is looser (`/^\s*```/`): safe for a scope,
  * which fails closed when hidden, and unsafe for a header, because a hidden claim lets a close through.
  */
 const authored = (body, strict = false) => {
-  let fence = null; // the opening run, e.g. "````"
-  let comment = false;
-  let html = null; // the raw HTML block open: its `end` (null: a blank line), and in a list its `dedent`
+  let fence = null; // the fence open: its opening `run`, e.g. "````", and its `deep`
+  let comment = null; // the HTML comment open: its `deep`
+  let html = null; // the raw HTML block open: its `end` (null: a blank line), and its `deep`
   let para = null; // what the last line left open for a lone tag on this one: see `lone`
-  let list = false; // whether a list item may still be open
-  const code = (l) => {
+  let list = false; // false, or the least column a list item's text can start at since the last reset
+  let lost = false; // whether a line may have ended the list item a block was open in: see `within`
+  // A block opened no shallower than a list item's text may be inside the item, and then GitHub ends
+  // it with the item, at a later line indented less than the block's opener: its `deep`. Past such a
+  // line, what GitHub has open is no longer followed: the block may run on, or that very line may open
+  // another. So a claim is read from the rest of the comment, and a Handoff from none of it. For a
+  // claim a comment has no `deep`: GitHub hides everything after one that its item ended.
+  const within = (n) => (list && n >= list ? n : 0);
+  const code = (l, n) => {
     if (fence) {
       const close = FENCE_CLOSE.exec(l);
-      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
+      if (close && close[1][0] === fence.run[0] && close[1].length >= fence.run.length && n <= (strict ? 3 : fence.deep + 3)) {
+        fence = null;
+        if (n > 3) lost = true; // a closer only as deep as an item's text allows: GitHub may read it as code
+      }
       return "";
     }
     if (comment) {
-      comment = !l.includes("-->");
+      if (l.includes("-->")) comment = null;
       return "";
     }
     const open = FENCE_OPEN.exec(l);
     if (open && !(open[1][0] === "`" && open[2].includes("`"))) {
-      fence = open[1];
+      fence = { run: open[1], deep: within(n) };
       return "";
     }
     if (/^ {0,3}<!--/.test(l)) {
-      comment = !l.includes("-->");
+      if (!l.includes("-->")) comment = { deep: strict ? within(n) : 0 };
       return "";
     }
     return l;
@@ -173,7 +189,11 @@ const authored = (body, strict = false) => {
       const empty = !/\S/.test(l.slice(item[0].length));
       // A paragraph runs on through a marker that cannot interrupt it: an empty item, or a number but 1.
       if (para === "top" && (empty || (item[1] !== undefined && Number(item[1]) !== 1))) return "top";
-      list = true;
+      // Its text starts past the marker and one to four spaces, or else (nothing after the marker, a
+      // tab, or five spaces, which start indented code) no nearer than one past the marker.
+      const mark = item[0].trimEnd().length;
+      const lead = mark + (/^ {1,4}(?=[^ \t])/.exec(l.slice(mark))?.[0].length ?? 1);
+      list = list ? Math.min(list, lead) : lead;
       if (!empty) return "container";
       return n === 0 || para === null ? null : "maybe";
     }
@@ -195,24 +215,25 @@ const authored = (body, strict = false) => {
     return "top";
   };
   return String(body ?? "").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n").map((l) => {
-    if (html) {
-      // Not strict: an HTML block opened inside a list item ends with the item, at a shallower line.
-      if (html.dedent && /\S/.test(l) && indent(l) < html.dedent) html = null;
-      else {
-        if (html.end ? html.end.test(l) : !/\S/.test(l)) html = null;
-        return "";
-      }
+    if (lost) return strict ? "" : l;
+    const n = indent(l);
+    if ((fence ?? comment ?? html)?.deep > n && /\S/.test(l)) {
+      lost = true;
+      return strict ? "" : l;
     }
-    const out = code(l);
+    if (html) {
+      if (html.end ? html.end.test(l) : !/\S/.test(l)) html = null;
+      return "";
+    }
+    const out = code(l, n);
     if (!/\S/.test(out)) {
       para = null;
       return out;
     }
-    const n = indent(l);
     const ends = HTML_ENDS.find(([open]) => open.test(l));
     if (ends || HTML_BLOCK_TAG.test(l) || (HTML_LONE_TAG.test(l) && lone(n))) {
       const end = ends ? ends[1] : null;
-      if (!end || !end.test(l)) html = { end, dedent: !strict && list ? n : 0 };
+      if (!end || !end.test(l)) html = { end, deep: within(n) };
       para = null;
       if (n === 0) list = false;
       return "";
