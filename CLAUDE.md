@@ -157,7 +157,7 @@ installers → stage only the new NSIS → silent install → launch). Verify li
 
 ### Rust module map (`lib.rs` carved into safety-boundary modules)
 
-Complete 2026-08-29 (52 `.rs` files; line counts rough). **Mutation/rollback +
+Complete 2026-08-29 (53 `.rs` files; line counts rough). **Mutation/rollback +
 gate-relevant modules are starred ★ — scope any mutation-gate change against these first.** The
 read-only remainder (hardware/sensors, monitoring/FPS, benchmark/Lab, advisory/ranking/export,
 intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads only when work touches
@@ -180,6 +180,7 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
 - ★ `license.rs` (~519) — Compy Pro license gate (built dark).
 - ★ `drift.rs` (~477) — applied-change drift detection vs live machine state.
 - ★ `data_root.rs` (~1050) — canonical data-root resolver (#130): measures where the root LANDS, not the `APPDATA` string; halts on a split; issues `MutationRoot`, the capability `history.rs`/`actions.rs` now require. Guard: `scripts/data-root-guard.test.mjs`.
+- ★ `race_seam.rs` (~584) — test-only store-lock instrumentation, an empty `#[inline(always)]` no-op in release: `hold()`/`panic_at()` hold a read-then-act window open from inside a critical section so #283's lock tests fail on demand, and `acquiring()`/`ALLOWED_NESTING` record every store-lock acquisition so a re-entrant or undeclared nesting panics by name instead of hanging (#398). It observes only the nestings a test actually runs — `scripts/store-lock-order-guard.test.mjs` is a source-text change detector, not a proof, and neither is a proof that the lock graph is acyclic.
 
 ## LOCKED safety rules — do not cross without explicit product-owner decision
 

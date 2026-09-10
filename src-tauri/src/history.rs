@@ -27,6 +27,26 @@ use crate::{
 
 // Serialized so concurrent apply/rollback calls can't interleave reads and
 // writes of history.json.
+//
+// #398: each of the EIGHT acquisitions below is preceded by
+// `race_seam::acquiring(StoreLock::History)` — a `#[cfg(test)]`-only thread-local record, an empty
+// `#[inline(always)]` no-op in release. It is a line ABOVE each `.lock()` rather than a wrapper
+// because `hold_lock` — the wrapper the other six store modules use — takes an INFALLIBLE
+// `impl FnOnce() -> MutexGuard`, and all eight sites here propagate a poisoned lock instead of
+// recovering from it (`map_err(|_| "history lock poisoned".to_string())?`, identical at all eight;
+// this module recovers from poison nowhere). Wrapping them would mean either adding a fallible
+// variant to `race_seam` or changing this module's poison policy, and #398 changes neither.
+// Recording on its own line keeps the existing policy, control flow and `?` shape byte-for-byte
+// identical while still putting the record in place BEFORE the block — which is the half that
+// matters, since a re-entrant acquisition must panic by name instead of hanging.
+//
+// Locals drop in reverse declaration order, so `_lock` releases the mutex and `_order` then leaves
+// the stack. On the `?` early return where the lock was never taken, `_order` still drops correctly.
+//
+// This lock is the OUTER half of one declared nesting: `History -> SupportEvidence`, because
+// `load_history` / `save_history` report a damaged or unwritable ledger through
+// `support_evidence::record`, which takes that module's own store lock, and these sections hold the
+// ledger lock across those calls. See `race_seam::ALLOWED_NESTING`.
 static HISTORY_LOCK: Mutex<()> = Mutex::new(());
 
 /// The rec_ids `apply_recommendation` can one-click apply (anything else is
@@ -614,6 +634,7 @@ pub(crate) fn restore_leftover(
     if !gate_open {
         return Err("Leftovers restore is not enabled in this build.".to_string());
     }
+    let _order = crate::race_seam::acquiring(crate::race_seam::StoreLock::History);
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
@@ -671,6 +692,7 @@ pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<
 }
 
 fn apply_recommendation_inner(rec_id: &str, rec_title: &str) -> Result<AppliedChangeView, String> {
+    let _order = crate::race_seam::acquiring(crate::race_seam::StoreLock::History);
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
@@ -701,6 +723,7 @@ pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChang
     }
     let service = crate::actions::KnownService::from_name(&service_name)
         .ok_or_else(|| format!("'{}' isn't a Compy-suspendable service.", service_name))?;
+    let _order = crate::race_seam::acquiring(crate::race_seam::StoreLock::History);
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_service_suspend(service)?;
@@ -729,6 +752,7 @@ pub(crate) fn set_startup_entry_enabled(
     name: String,
     enabled: bool,
 ) -> Result<AppliedChangeView, String> {
+    let _order = crate::race_seam::acquiring(crate::race_seam::StoreLock::History);
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_startup_entry_enabled(&name, enabled)?;
@@ -758,6 +782,7 @@ pub(crate) fn disable_known_bloat_task(task_id: String) -> Result<AppliedChangeV
     }
     let task = crate::actions::KnownBloatTask::from_id(&task_id)
         .ok_or_else(|| format!("'{}' isn't a Compy-removable telemetry task.", task_id))?;
+    let _order = crate::race_seam::acquiring(crate::race_seam::StoreLock::History);
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_disable_scheduled_task(task)?;
@@ -784,6 +809,7 @@ pub(crate) fn remove_known_preload_app(app_id: String) -> Result<AppliedChangeVi
     }
     let app = crate::actions::KnownPreloadApp::from_id(&app_id)
         .ok_or_else(|| format!("'{}' isn't a Compy-removable preinstalled app.", app_id))?;
+    let _order = crate::race_seam::acquiring(crate::race_seam::StoreLock::History);
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_remove_preload_app(app)?;
@@ -883,6 +909,7 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         }
     }
 
+    let _order = crate::race_seam::acquiring(crate::race_seam::StoreLock::History);
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
@@ -1016,6 +1043,7 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
 }
 
 fn rollback_change_inner(change_id: &str) -> Result<(), String> {
+    let _order = crate::race_seam::acquiring(crate::race_seam::StoreLock::History);
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
