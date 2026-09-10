@@ -915,6 +915,27 @@ fn state_cache() -> &'static Mutex<BenchmarkState> {
     })
 }
 
+/// The only way this crate takes the benchmark state cache. Records the acquisition, then blocks.
+///
+/// #398 classifies this lock as IN class, not out. It guards `BenchmarkState` in memory, which
+/// reads like a cache — but `set_baseline` and `clear_baseline` hold it **across `save_store`**, so
+/// two concurrent baseline writes tear `benchmark.json`, not just a struct. That is the same defect
+/// #283 names for the other secondary stores.
+///
+/// All FIVE sites go through here, including the three that only touch memory. A lock with four
+/// recorded acquisitions and one bare `.lock()` cannot detect its own re-entrancy: the unrecorded
+/// site is invisible to the thread-local stack, so the second acquisition looks like the first and
+/// the release build deadlocks with no output. Partial instrumentation of one mutex is worse than
+/// none, because it reads as covered.
+///
+/// Returns `Err(())` on a poisoned lock, which each caller maps to its own existing policy —
+/// unchanged from the five sites this replaces.
+fn lock_state() -> Result<crate::race_seam::StoreGuard<BenchmarkState>, ()> {
+    crate::race_seam::try_hold_lock(crate::race_seam::StoreLock::Benchmark, || {
+        state_cache().lock().map_err(|_| ())
+    })
+}
+
 /// Recompute `efficacy` from the current baseline + latest (both must exist).
 fn recompute_efficacy(state: &mut BenchmarkState) {
     state.efficacy = match (&state.baseline, &state.latest) {
@@ -925,7 +946,7 @@ fn recompute_efficacy(state: &mut BenchmarkState) {
 
 /// Current benchmark state for the UI.
 pub(crate) fn benchmark_state() -> BenchmarkState {
-    state_cache().lock().map(|s| s.clone()).unwrap_or_default()
+    lock_state().map(|s| (*s).clone()).unwrap_or_default()
 }
 
 /// Shared cancel flag for the in-flight run — `cancel_benchmark` sets it, the runner checks it.
@@ -938,7 +959,7 @@ fn cancel_flag() -> &'static AtomicBool {
 /// The lock is NOT held during the multi-second run, so `benchmark_state` stays responsive.
 pub(crate) fn start_benchmark() {
     {
-        let Ok(mut s) = state_cache().lock() else { return };
+        let Ok(mut s) = lock_state() else { return };
         if s.running {
             return;
         }
@@ -951,7 +972,7 @@ pub(crate) fn start_benchmark() {
         .spawn(|| {
             let report = run_benchmark(&RunConfig::default(), cancel_flag());
             let cancelled = cancel_flag().load(Ordering::Relaxed);
-            if let Ok(mut s) = state_cache().lock() {
+            if let Ok(mut s) = lock_state() {
                 s.running = false;
                 if cancelled {
                     // Don't store a partial/aborted run as a real result.
@@ -972,7 +993,7 @@ pub(crate) fn cancel_benchmark() {
 
 /// Save the latest run as the baseline (persisted). Errors if there's no run yet.
 pub(crate) fn set_baseline() -> Result<(), String> {
-    let mut s = state_cache().lock().map_err(|_| "benchmark state lock poisoned".to_string())?;
+    let mut s = lock_state().map_err(|_| "benchmark state lock poisoned".to_string())?;
     let Some(latest) = s.latest.clone() else {
         return Err("Run a benchmark first, then set it as the baseline.".into());
     };
@@ -985,7 +1006,7 @@ pub(crate) fn set_baseline() -> Result<(), String> {
 
 /// Clear the saved baseline (memory + disk).
 pub(crate) fn clear_baseline() -> Result<(), String> {
-    let mut s = state_cache().lock().map_err(|_| "benchmark state lock poisoned".to_string())?;
+    let mut s = lock_state().map_err(|_| "benchmark state lock poisoned".to_string())?;
     s.baseline = None;
     s.baseline_at = None;
     s.efficacy = None;

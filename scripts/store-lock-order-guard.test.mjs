@@ -16,7 +16,7 @@
 //     lib.rs:      pub(crate) use comparison::report_tuning_crash as _r5_reexport;
 //     history.rs:  fn ledger_len_checked() { let _ = crate::_r5_reexport(); ... }
 //
-// — and every assertion in this file stayed GREEN, 31/31, while `cargo test` deadlocked into
+// — and every assertion in this file stayed GREEN (31/31 at the time; 41/41 now) while `cargo test` deadlocked into
 // `race_seam`'s runtime recorder with `RE-ENTRANT acquisition of COMPARISON_LOCK`. That is not a bug
 // to fix here. Resolving `crate::_r5_reexport` to `comparison::report_tuning_crash` is NAME
 // RESOLUTION, not parsing, so swapping this scanner for `syn` or tree-sitter would not close it
@@ -32,7 +32,7 @@
 // drives it. The two are complementary; neither alone is sufficient. What this file may claim is
 // bounded to that, and the assertion names below say so.
 //
-// It checks two things, both syntactic:
+// It checks three things, all syntactic:
 //
 //   A. NO BACK EDGE, TRANSITIVELY. Nothing reachable from inside a store lock may call back into a
 //      store module. The reachable set is COMPUTED from one seed — `history`, the module actually
@@ -41,6 +41,13 @@
 //   B. NO NEW EDGE. The set of modules the three store modules reach at all is pinned. A new one is
 //      not assumed to be a defect — it is assumed to be UNDERIVED. Adding it here is the moment
 //      someone re-derives the order, which is the whole point.
+//   C. NO UNCLASSIFIED LOCK (added in #398's second round). Rules A and B are about lock ORDER and
+//      both presuppose that the set of locks is known. It was not: `race_seam::StoreLock` claimed
+//      to enumerate every process-wide store lock while three were missing, including the
+//      experiment gate that is the OUTER half of a live nesting into the Trust Ledger. `LOCK_CENSUS`
+//      at the foot of this file now names every `static` mutex in `src-tauri/src` with a verdict,
+//      and fails on a lock with no verdict, a verdict with no lock, or any drift between the
+//      persistence-class rows and the release variants of `StoreLock`.
 //
 // Deliberately syntactic, and deliberately conservative about what it can prove: this checks module
 // EDGES, not whether a given call sits inside a critical section. A finer analysis would need real
@@ -218,7 +225,38 @@ export function stripNonCode(src) {
 }
 
 function code(module) {
-  return stripNonCode(readFileSync(join(SRC, `${module}.rs`), "utf8"));
+  return stripTestModules(stripNonCode(readFileSync(join(SRC, `${module}.rs`), "utf8")));
+}
+
+/**
+ * Blank out every `#[cfg(test)] mod name { ... }`, keeping length so nothing else shifts.
+ *
+ * A call that exists only in a test module is not a production edge and must not be read as one.
+ * This is not a convenience: without it, #398's own `race_seam::production_nesting_tests` — whose
+ * entire job is to take `experiment`'s lock and then `history`'s — made `race_seam` look like it
+ * calls into `experiment`, and the back-edge rule reported `history -> race_seam -> experiment ->
+ * comparison` as a deadlock. That path cannot exist in a release build, where the whole module is
+ * `#[inline(always)]` no-ops.
+ *
+ * It is also not a loophole. A back edge hidden inside a test module cannot deadlock a shipped
+ * Compy, because the code is not in the binary; and if it deadlocks the SUITE, `race_seam`'s
+ * recorder panics by name on the nesting, which is the check this file defers to anyway. What is
+ * removed here is strictly `#[cfg(test)]`-gated, and `a_cfg_test_module_hides_no_production_code`
+ * pins that the surrounding production text survives intact.
+ */
+function stripTestModules(src) {
+  let out = src;
+  for (;;) {
+    const m = out.match(/#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{/);
+    if (!m) return out;
+    const open = m.index + m[0].length - 1;
+    const body = groupBody(out, open);
+    // An unterminated group means the file is not what this scanner thinks it is. Stop rather than
+    // guess — reading nothing beats reading wrongly, the same rule the rest of this file follows.
+    if (body === null) return out.slice(0, m.index);
+    const end = open + 1 + body.length + 1;
+    out = out.slice(0, m.index) + " ".repeat(end - m.index) + out.slice(end);
+  }
 }
 
 /**
@@ -501,6 +539,38 @@ describe("#283 store locks: no back edge is VISIBLE IN THE SOURCE TEXT (a change
     expect(extractEdges("fn t() { super::comparison::x(); }", "comparison")).toEqual([]);
   });
 
+  // `bug → guard` for the narrowing `stripTestModules` performs. It removes text, so if it removed
+  // the wrong text this file would go blind exactly where it looks safest. Both directions pinned.
+  it("a cfg(test) module hides no production code", () => {
+    const src = [
+      "fn prod() { let _ = crate::history::load_history(); }",
+      "#[cfg(test)]",
+      "mod tests {",
+      "    fn t() { let _ = crate::comparison::armed(); }",
+      "    fn nested() { if true { let _ = crate::drift::x(); } }",
+      "}",
+      "fn after() { let _ = crate::support_evidence::record(); }",
+    ].join("\n");
+    // The test module's calls are gone; the production calls on BOTH sides of it survive.
+    expect(extractEdges(stripTestModules(src), "readiness")).toEqual(["history", "support_evidence"]);
+    // Unstripped, the same source reads as four edges — so the assertion above is measuring the
+    // strip, not a source that never had them.
+    expect(extractEdges(src, "readiness")).toEqual([
+      "comparison",
+      "drift",
+      "history",
+      "support_evidence",
+    ]);
+  });
+
+  it("strips only cfg(test) modules, never an ordinary one", () => {
+    const src = "mod helpers { fn t() { let _ = crate::comparison::armed(); } }";
+    expect(extractEdges(stripTestModules(src), "history")).toEqual(["comparison"]);
+    // A different cfg is not a test cfg.
+    const dbg = '#[cfg(debug_assertions)]\nmod d { fn t() { crate::drift::x(); } }';
+    expect(extractEdges(stripTestModules(dbg), "history")).toEqual(["drift"]);
+  });
+
   it("reads nothing rather than reading wrongly from an unterminated group", () => {
     // Not a shape valid Rust produces — a defence against the scanner running off the end of a file
     // and inventing edges out of whatever followed. `crate::history` on the same line is still seen.
@@ -521,5 +591,312 @@ describe("#283 store locks: no back edge is VISIBLE IN THE SOURCE TEXT (a change
   it("terminates on a cyclic graph instead of walking forever", () => {
     const graph = { a: ["b"], b: ["c"], c: ["a"] };
     expect([...closureFrom(["a"], (m) => graph[m] ?? []).keys()].sort()).toEqual(["a", "b", "c"]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// #398 round 2 — THE COMPLETENESS TRIPWIRE
+//
+// Everything above is about lock ORDER. This block is about lock EXISTENCE, and it exists because
+// the ordering work was built on a census that was silently wrong. `race_seam::StoreLock` claimed
+// to enumerate every process-wide store lock and omitted three: `experiment::store_write_gate`,
+// `intelligence::store_write_gate` and `benchmark::state_cache`. The Experiment gate is the outer
+// half of a live nesting into the Trust Ledger, so the recorder was blessing a two-deep chain while
+// seeing only its inner half. Nothing failed. Nothing could fail — no check compared the enum
+// against the tree.
+//
+// So this is not another ordering rule. It is the check that the ordering rules are being applied
+// to all the locks there are. It is deliberately a source scan, and deliberately dumb: it finds
+// `static NAME: ...Mutex<..>/RwLock<..>...` and demands a written verdict for each one. A lock with
+// no verdict fails. A verdict with no lock fails. A verdict of "persistence" that names no
+// `StoreLock` variant fails, and a `StoreLock` variant no verdict claims fails.
+//
+// Same limits as the rest of this file: it reads text, not semantics. It cannot see a lock behind a
+// macro or a type alias, and it is not a proof that the classifications below are CORRECT — those
+// are arguments, written out so a reviewer can attack them. What it does is make silence
+// impossible, which is the specific failure that happened.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Every `static` mutex/rwlock in `src-tauri/src`, keyed `module::NAME: TYPE`.
+ *
+ * The type is part of the key because names repeat — `intelligence` has two `GATE`s and
+ * `monitoring` has three `CACHE`s — and their types are what tell them apart. Line numbers are
+ * deliberately NOT part of the key: a census that fails when a lock moves down a file trains people
+ * to update it without reading it.
+ *
+ * `class: "persistence"` means the lock serializes a read-modify-write of state that reaches disk.
+ * Those, and only those, must appear in `race_seam::StoreLock`; the bijection is asserted below.
+ * `class: "out"` means it does not, and `why` has to say what it guards instead.
+ */
+const LOCK_CENSUS = {
+  // ── persistence: instrumented, one `StoreLock` variant each ────────────────────────────────
+  "comparison::COMPARISON_LOCK: Mutex<()>": {
+    class: "persistence",
+    variant: "Comparison",
+    why: "the armed baseline and the surfaced result — #283's original lost update",
+  },
+  "drift::DRIFT_LOCK: Mutex<()>": {
+    class: "persistence",
+    variant: "Drift",
+    why: "load_state_from -> detect -> save_state_to of the drift store",
+  },
+  "readiness::DISMISSALS_LOCK: Mutex<()>": {
+    class: "persistence",
+    variant: "Readiness",
+    why: "dismiss/restore read-modify-write of the readiness dismissals store",
+  },
+  "history::HISTORY_LOCK: Mutex<()>": {
+    class: "persistence",
+    variant: "History",
+    why: "the Trust Ledger; every apply and every rollback runs under it",
+  },
+  "support_evidence::LOCK: OnceLock<Mutex<()>>": {
+    class: "persistence",
+    variant: "SupportEvidence",
+    why: "append/clear of the support record — the leaf of every declared nesting",
+  },
+  "incident_observer::STATE_LOCK: Mutex<()>": {
+    class: "persistence",
+    variant: "IncidentObserver",
+    why: "the persisted observer watermark and remembered incident rows",
+  },
+  "benchmark_scoreboard::SCOREBOARD_LOCK: Mutex<()>": {
+    class: "persistence",
+    variant: "BenchmarkScoreboard",
+    why: "read-modify-write of the awards scoreboard",
+  },
+  "experiment::GATE: OnceLock<Mutex<()>>": {
+    class: "persistence",
+    variant: "Experiment",
+    why:
+      "the store gate the three lifecycle commands hold across their whole read-modify-write of " +
+      "the experiment store — and, being held across history::apply_recommendation and " +
+      "history::rollback_change, the outermost lock the crate takes. Missing from the first " +
+      "version of StoreLock; this census exists because of it.",
+  },
+  "intelligence::GATE: OnceLock<Mutex<()>>": {
+    class: "persistence",
+    variant: "Intelligence",
+    why: "load_store -> append_if_changed -> save_store on the identity log",
+  },
+  "benchmark::CACHE: OnceLock<Mutex<BenchmarkState>>": {
+    class: "persistence",
+    variant: "Benchmark",
+    why:
+      "reads as an in-memory cache and is not one: set_baseline and clear_baseline hold it ACROSS " +
+      "save_store, so a torn window here is a torn benchmark store",
+  },
+
+  // ── out of class ───────────────────────────────────────────────────────────────────────────
+  "gaming_orchestrator::SESSION_OP: Mutex<()>": {
+    class: "out",
+    why:
+      "guards persisted session operations, but is taken ONLY through try_lock: contention returns " +
+      "a user-facing 'try again' and a poisoned lock is taken over. It never waits, and a lock " +
+      "that never waits can neither deadlock nor be an edge of a cycle — which is the only hazard " +
+      "race_seam measures. It also reaches no other store: gaming_orchestrator.rs contains no call " +
+      "into history, comparison or support_evidence at all. The try_lock property is what this " +
+      "verdict rests on, so it is asserted below rather than left as prose.",
+  },
+  "gaming_orchestrator::LIVE_SESSION: Mutex<Option<String>>": {
+    class: "out",
+    why: "an in-memory session-id marker; nothing is persisted under it",
+  },
+  "benchmark_trial::S: OnceLock<Mutex<TrialState>>": {
+    class: "out",
+    why:
+      "in-memory trial state. Measured, not assumed: benchmark_trial.rs contains no save_*, no " +
+      "write_atomic, no store_path and no compy_data_dir — it persists nothing at all.",
+  },
+  "intelligence::GATE: OnceLock<Mutex<Option<Instant>>>": {
+    class: "out",
+    why: "refresh_gate — a throttle timestamp whose scope closes before the work is spawned",
+  },
+  "cpu_temp::TEMP_CACHE: Mutex<Option<(std::time::Instant, Option<CpuTemp>)>>": {
+    class: "out",
+    why: "a sensor read cache; sensors are read-only and nothing is written back to disk",
+  },
+  "monitoring::CACHE: OnceLock<Mutex<CpuSensorSnapshot>>": {
+    class: "out",
+    why: "CPU sensor snapshot cache; a probe result, not a store",
+  },
+  "monitoring::CACHE: OnceLock<Mutex<Vec<GpuSensorSnapshot>>>": {
+    class: "out",
+    why: "AMD GPU sensor snapshot cache; a probe result, not a store",
+  },
+  "monitoring::CACHE: OnceLock<Mutex<Option<bool>>>": {
+    class: "out",
+    why: "FreeSync detection cache; a probe result, not a store",
+  },
+  "monitoring::S: OnceLock<Mutex<String>>": {
+    class: "out",
+    why: "the FPS status string the UI renders; in-memory only",
+  },
+  "monitoring::SYS: OnceLock<Mutex<System>>": {
+    class: "out",
+    why: "the sysinfo handle used for memory-pressure reads; a probe handle, not a store",
+  },
+  "lib::UPDATE_RESTART_BARRIER: Mutex<bool>": {
+    class: "out",
+    why: "a one-shot restart barrier flag guarding no persisted state",
+  },
+  "race_seam::GATE: Mutex<()>": {
+    class: "out",
+    why:
+      "the seam's OWN arming gate, cfg(test) only and absent from a release build. It serializes " +
+      "armed tests against each other; instrumenting the recorder with itself would be circular.",
+  },
+};
+
+/** `static NAME: <type containing Mutex< or RwLock<> =` — comments and string literals stripped. */
+function scanLocks() {
+  const out = new Map();
+  for (const file of readdirSync(SRC).filter((f) => f.endsWith(".rs"))) {
+    const module = file.slice(0, -3);
+    const src = stripNonCode(readFileSync(join(SRC, file), "utf8"));
+    for (const m of src.matchAll(/\bstatic\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^=;]*?)\s*=/g)) {
+      const type = m[2].replace(/\s+/g, " ").replace(/\bstd::sync::/g, "").trim();
+      if (!/\b(Mutex|RwLock)\s*</.test(type)) continue;
+      out.set(`${module}::${m[1]}: ${type}`, { module, name: m[1], type });
+    }
+  }
+  return out;
+}
+
+/** The `StoreLock` variants that exist in a RELEASE build (the cfg(test) ones are synthetic). */
+function productionStoreLockVariants() {
+  const src = stripNonCode(readFileSync(join(SRC, "race_seam.rs"), "utf8"));
+  const open = src.indexOf("{", src.indexOf("enum StoreLock"));
+  const body = groupBody(src, open);
+  if (body === null) return [];
+  const variants = [];
+  for (const part of body.split(",")) {
+    if (/#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/.test(part)) continue;
+    const m = part.match(/(?:^|\])\s*([A-Z][A-Za-z0-9_]*)\s*$/);
+    if (m) variants.push(m[1]);
+  }
+  return variants;
+}
+
+describe("#398 completeness: no process-wide lock can be left out of the lock model silently", () => {
+  it("finds locks at all, so the set comparisons below cannot pass vacuously", () => {
+    const found = scanLocks();
+    // A scanner that found nothing would make every assertion below trivially true, which is how
+    // the omission this block exists to catch survived in the first place: no check, no failure.
+    expect(found.size).toBeGreaterThanOrEqual(20);
+    expect([...found.keys()]).toContain("history::HISTORY_LOCK: Mutex<()>");
+    expect([...found.keys()]).toContain("experiment::GATE: OnceLock<Mutex<()>>");
+  });
+
+  it("every static mutex in the tree carries a written verdict", () => {
+    const missing = [...scanLocks().keys()].filter((k) => !(k in LOCK_CENSUS)).sort();
+    expect(
+      missing,
+      `a process-wide lock exists that LOCK_CENSUS does not classify: ${missing.join(", ")}. ` +
+        `Decide whether it serializes a read-modify-write that reaches disk. If it does, it is ` +
+        `"persistence": add a StoreLock variant, route EVERY acquisition site through one ` +
+        `recorded helper, and derive its nestings. If it does not, add it as "out" with the ` +
+        `reason. Do not add it as "out" to make this green — that is the exact move that made ` +
+        `this block necessary.`,
+    ).toEqual([]);
+  });
+
+  it("every verdict still names a lock that exists", () => {
+    const found = scanLocks();
+    const ghosts = Object.keys(LOCK_CENSUS)
+      .filter((k) => !found.has(k))
+      .sort();
+    expect(
+      ghosts,
+      `LOCK_CENSUS classifies locks that are no longer in the tree: ${ghosts.join(", ")}. A stale ` +
+        `census reads as coverage it does not have — delete the rows, and the StoreLock variants ` +
+        `they claim if nothing else uses them.`,
+    ).toEqual([]);
+  });
+
+  it("persistence locks and production StoreLock variants are a bijection", () => {
+    const claimed = Object.values(LOCK_CENSUS)
+      .filter((v) => v.class === "persistence")
+      .map((v) => v.variant);
+    const declared = productionStoreLockVariants();
+
+    // Not vacuous, and not silently truncated by a parse failure.
+    expect(declared.length).toBeGreaterThanOrEqual(10);
+    expect(declared).toContain("Experiment");
+
+    expect(new Set(claimed).size, "two census rows claim the same StoreLock variant").toBe(
+      claimed.length,
+    );
+    expect(
+      [...claimed].sort(),
+      `the persistence locks in LOCK_CENSUS and the release variants of race_seam::StoreLock have ` +
+        `drifted apart. A variant with no lock is dead; a lock with no variant is exactly the ` +
+        `omission #398's second review found.`,
+    ).toEqual([...declared].sort());
+  });
+
+  it("every census verdict actually says something", () => {
+    for (const [key, v] of Object.entries(LOCK_CENSUS)) {
+      expect(["persistence", "out"], `${key} has no class`).toContain(v.class);
+      expect(v.why.length, `${key}'s verdict carries no reasoning`).toBeGreaterThan(30);
+      if (v.class === "persistence") {
+        expect(typeof v.variant, `${key} names no StoreLock variant`).toBe("string");
+      }
+    }
+  });
+
+  it("SESSION_OP is still try_lock-only, which is the whole basis of its out-of-class verdict", () => {
+    const src = code("gaming_orchestrator");
+    expect(src).toContain("SESSION_OP.try_lock()");
+    // A blocking acquisition would make it a waiting lock, and a waiting lock CAN deadlock — at
+    // which point the verdict above is wrong and it needs instrumenting like the rest.
+    const calls = [...src.matchAll(/SESSION_OP\s*\.\s*([a-z_]+)\s*\(/g)]
+      .map((m) => m[1])
+      .filter((f) => f !== "try_lock");
+    expect(
+      calls,
+      "SESSION_OP gained a blocking acquisition; re-derive its classification in LOCK_CENSUS",
+    ).toEqual([]);
+  });
+});
+
+describe("#398: the source half of the Experiment -> History claim", () => {
+  // race_seam.rs's production_nesting_tests prove the recorder BLESSES Experiment -> History and
+  // panics on the inverse. They cannot prove production actually nests them that way, because
+  // walking start_experiment in a test build reaches the owner's real %APPDATA%\Compy. That half is
+  // a source fact, so it is checked as a source fact — here, where a moved or deleted call site
+  // fails by name instead of quietly turning the runtime tests into a claim about nothing.
+  const experimentGateSections = () => {
+    const src = code("experiment");
+    const sections = [];
+    for (const m of src.matchAll(/let\s+_g\s*=\s*lock_store\(\)\?;/g)) {
+      const rest = src.slice(m.index);
+      const end = rest.slice(1).search(/\n(?:pub\(crate\) |pub )?fn\s/);
+      sections.push(end === -1 ? rest : rest.slice(0, end + 1));
+    }
+    return sections;
+  };
+
+  it("all three experiment lifecycle sections take the gate through the recorded helper", () => {
+    expect(experimentGateSections()).toHaveLength(3);
+    const src = code("experiment");
+    expect(
+      [...src.matchAll(/store_write_gate\s*\(\s*\)\s*\.\s*lock\s*\(/g)].length,
+      "an experiment acquisition bypasses lock_store(), so it is unrecorded",
+    ).toBe(1); // exactly one: the acquisition inside lock_store() itself
+  });
+
+  it("each of those sections still enters the Trust Ledger under the gate", () => {
+    const entering = experimentGateSections().filter((s) =>
+      /crate::history::(apply_recommendation|rollback_change)\s*\(/.test(s),
+    );
+    expect(
+      entering,
+      "Experiment -> History is declared in race_seam::ALLOWED_NESTING and exercised by " +
+        "race_seam::production_nesting_tests, but no experiment section reaches history any more. " +
+        "Either the call moved (re-derive it), or the nesting is gone (delete the pair and the " +
+        "tests that assert it).",
+    ).toHaveLength(3);
   });
 });

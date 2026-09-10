@@ -193,8 +193,24 @@ pub(crate) fn panic_at(_seam: u8) {}
 // run on the one case this exists to catch.
 // ---------------------------------------------------------------------------------------------
 
-/// Every process-wide store lock in the crate. Kept as one enum so a lock added without an entry
-/// here is a visible gap rather than a silent hole.
+/// Every process-wide **persistence** lock in the crate: each `static` mutex that serializes a
+/// read-modify-write of state that reaches disk under the data root.
+///
+/// **That boundary is narrower than "every process-wide lock", and the narrowing is the point.**
+/// The first version of this enum claimed to enumerate every process-wide store lock and did not —
+/// `experiment::store_write_gate`, `intelligence::store_write_gate` and `benchmark::state_cache`
+/// were all missing, and the Experiment gate is held across three entries into `HISTORY_LOCK`
+/// (`experiment.rs` 660, 779, 833). With the outer lock unrecorded the recorder saw an empty stack
+/// and could not have detected Experiment re-entry, an inverted `History -> Experiment` edge, or a
+/// cycle through Experiment at all. A false "all locks" claim is worse than an honest partial one,
+/// because it tells a reader not to look.
+///
+/// Locks deliberately OUT of class — in-memory caches, throttles, one-shot inits and session
+/// markers that never write a store — are not listed here, but they are not merely unlisted either:
+/// `scripts/store-lock-order-guard.test.mjs` carries a census of **every** `Mutex`/`RwLock` in
+/// `src-tauri/src` with a per-lock verdict, and fails when a lock exists that the census does not
+/// name or when the census names one that no longer exists. That tripwire is what stops the next
+/// persistence lock from being added silently, which is exactly how these three were missed.
 ///
 /// This is NOT a rank. The permitted nestings are the explicit pairs in [`ALLOWED_NESTING`]; there
 /// is deliberately no total order, because a total order needs constraints between locks that have
@@ -215,6 +231,17 @@ pub(crate) enum StoreLock {
     SupportEvidence,
     /// `benchmark_scoreboard::SCOREBOARD_LOCK`.
     BenchmarkScoreboard,
+    /// `experiment::store_write_gate`'s `GATE` — the outermost lock this crate takes. Held across
+    /// `history::apply_recommendation` and `history::rollback_change`, so it sits above `History`.
+    Experiment,
+    /// `intelligence::store_write_gate`'s `GATE` — guards `load_store` → `append_if_changed` →
+    /// `save_store` on the identity log. A leaf: nothing inside reaches another store.
+    Intelligence,
+    /// `benchmark::state_cache`'s `CACHE`. In class, not out: it guards `BenchmarkState` in memory,
+    /// but `set_baseline` and `clear_baseline` hold it **across `save_store`**, so a torn window
+    /// here is a torn `benchmark.json`. All five acquisition sites are recorded, not just the two
+    /// that persist — an unrecorded site of the same mutex would make re-entrancy detection unsound.
+    Benchmark,
     /// Not real locks. Three synthetic ids, so the recorder's own behaviour can be pinned without
     /// borrowing a production lock's id.
     ///
@@ -243,6 +270,9 @@ impl StoreLock {
             StoreLock::History => "HISTORY_LOCK",
             StoreLock::SupportEvidence => "support_evidence::LOCK",
             StoreLock::BenchmarkScoreboard => "SCOREBOARD_LOCK",
+            StoreLock::Experiment => "experiment::store_write_gate",
+            StoreLock::Intelligence => "intelligence::store_write_gate",
+            StoreLock::Benchmark => "benchmark::state_cache",
             StoreLock::TestOuter => "TEST_OUTER",
             StoreLock::TestMiddle => "TEST_MIDDLE",
             StoreLock::TestInner => "TEST_INNER",
@@ -261,40 +291,80 @@ impl StoreLock {
 /// - `History -> SupportEvidence` — `load_history` / `save_history` report a damaged or unwritable
 ///   ledger through `support_evidence::record`, and the eight `HISTORY_LOCK` sites hold the ledger
 ///   lock across those calls.
+/// - `Experiment -> History` — the live one, and the one the first version of this table missed
+///   entirely because the Experiment gate was not recorded. `start_experiment` holds
+///   `experiment::store_write_gate` from `experiment.rs:646` and calls `history::apply_recommendation`
+///   at `660`; `conclude_experiment` holds it from `729` and calls `history::rollback_change` at
+///   `779`; `restore_experiment` holds it from `821` and calls `rollback_change` at `833`. Each of
+///   those enters `HISTORY_LOCK`. **Direction matters and is asserted, not assumed:** nothing in the
+///   crate calls into `experiment` at all except `lib.rs`'s command registration, so no production
+///   path takes `History` and then `Experiment` — which is why
+///   `the_inverted_history_to_experiment_edge_is_undeclared_and_panics` can use that direction as a
+///   live positive control.
+/// - `Experiment -> SupportEvidence` — required by the all-held-lock rule, on two distinct real
+///   paths. **Two-deep:** `apply_recommendation` and `rollback_change` call
+///   `record_operation_failure` on their error branch, and that call happens after the inner
+///   function has released `HISTORY_LOCK` but while `start_experiment` still holds the Experiment
+///   gate; likewise `active_change_count` (`experiment.rs:654`), `comparison::arm_watermark`
+///   (`667`) and `ledger_len_checked` (`748`) each run `load_history` under the Experiment gate and
+///   reach `support_evidence::record` on the corrupt-ledger branch. **Three-deep:** inside
+///   `apply_recommendation_inner`, `HISTORY_LOCK` is held and `begin_mutation` → `load_history_for`
+///   takes the same corrupt-ledger branch, so the thread holds `[Experiment, History]` and takes
+///   `SupportEvidence`. Because every held lock is checked, that needs `Experiment -> SupportEvidence`
+///   as well as the already-declared `History -> SupportEvidence`; omitting it would panic on a real
+///   failure path in a release-shaped scenario the recorder is supposed to bless.
 ///
-/// **An allowed pair claims the nesting is SAFE, not merely that it happens.** It is safe here for
-/// one reason: `support_evidence` is a leaf — `record` appends and `clear_support_evidence` deletes,
-/// and neither reaches another store — so these pairs cannot close a cycle. That property is
-/// asserted rather than assumed: `declared_nestings_are_acyclic` fails if a future entry makes this
-/// graph cyclic, because a cycle in THIS table would let a real deadlock through while the recorder
-/// stayed green.
+/// **An allowed pair claims the nesting is SAFE, not merely that it happens.** Safety here rests on
+/// two facts, not on the ordering looking sensible. `support_evidence` is a leaf — `record` appends
+/// and `clear_support_evidence` deletes, and neither reaches another store — so every `-> SupportEvidence`
+/// pair terminates. And `Experiment` is a root: `lib.rs`'s command registration is the only caller
+/// of the module, so no store lock is ever held when the Experiment gate is taken. A root, a middle
+/// and a leaf cannot close a cycle. That property is asserted rather than assumed:
+/// `declared_nestings_are_acyclic` fails if a future entry makes this graph cyclic, because a cycle
+/// in THIS table would let a real deadlock through while the recorder stayed green.
 ///
 /// A nesting missing from this table is a prompt to re-derive, which is why the panic names the pair
 /// instead of suggesting the table be widened.
 ///
-/// **Neither production pair is exercised by any test in this suite, and this table is therefore
-/// unverified against the running code.** Re-measured on this tree (not inherited from PR #400's,
-/// which was several dozen commits behind): instrumenting `acquiring` to log every nesting and
-/// running the whole suite single-threaded produced exactly nine nested acquisitions, all nine from
-/// `recorder_tests`; and deleting both production pairs from this table leaves the suite at 1312
-/// passed / 0 failed. Both pairs sit on failure branches — a damaged ledger, a ledger that will not
-/// save — and nothing drives those branches through a locked gateway.
+/// # Coverage — which entries this suite actually exercises
 ///
-/// It is not fixable from here without doing something worse. The one production entry point a test
-/// could reach the branch through is `begin_mutation`, and in a `#[cfg(test)]` build
+/// Read this before treating a green run as a proof. The four production entries do NOT have equal
+/// standing.
+///
+/// **EXERCISED — `Experiment -> History` and `Experiment -> SupportEvidence`.**
+/// `production_nesting_tests` drives the real acquisition helpers — `experiment::lock_store`,
+/// `history::lock_history`, `support_evidence::lock_store` — in the real order, and each is the
+/// exact function the shipping code paths call. Deleting either entry from this table turns a named
+/// test red, and deleting the `acquiring` call inside `experiment::lock_store` turns a different
+/// named test red without hanging. Those are the falsifications #398 asks for.
+///
+/// **What that pair of tests does NOT prove.** They prove the recorder blesses this order and
+/// panics on the inverse; they do not prove that `start_experiment` really calls
+/// `apply_recommendation`, because they call the lock helpers directly rather than the lifecycle
+/// commands. That second half is a source fact, and it is checked as a source fact:
+/// `scripts/store-lock-order-guard.test.mjs` pins the call sites (`experiment.rs` 660, 779, 833)
+/// and fails if they move or disappear. Two bounded checks, each honest about its half; neither is
+/// upgraded into a claim about the whole.
+///
+/// **UNVERIFIED COVERAGE — `Comparison -> SupportEvidence` and `History -> SupportEvidence`.**
+/// Unchanged from the previous candidate, and still not a passed guarantee. Both sit on failure
+/// branches — a damaged ledger, a ledger that will not save — and nothing in the suite drives those
+/// branches through a locked gateway. Deleting both still leaves the suite green.
+///
+/// They are not fixable from here without doing something worse. The one production entry point a
+/// test could reach the branch through is `begin_mutation`, and in a `#[cfg(test)]` build
 /// `data_root::mutation_root()` resolves to the machine's REAL `%APPDATA%\Compy` root, so reaching
 /// it would mean corrupting the owner's actual ledger. Entering lower, at `load_history_for` with a
 /// temp root, reaches the real `support_evidence::record`, which has no path seam and appends to the
 /// real support store — a test would be writing "your ledger was unreadable" into the record support
-/// reads to answer that exact question. Neither is worth a green tick.
-///
-/// So what this recorder is proven to do is catch a nesting WHEN ONE HAPPENS, which the falsification
-/// matrix on #398 demonstrates against a real back edge. What it does not do is confirm these two
-/// entries, and no reader should take the suite passing as evidence that it has.
+/// reads to answer that exact question. Neither is worth a green tick. This is the same limitation
+/// PR #400 reported, still true, still reported as UNVERIFIED rather than dressed up.
 #[cfg(test)]
 const ALLOWED_NESTING: &[(StoreLock, StoreLock)] = &[
     (StoreLock::Comparison, StoreLock::SupportEvidence),
     (StoreLock::History, StoreLock::SupportEvidence),
+    (StoreLock::Experiment, StoreLock::History),
+    (StoreLock::Experiment, StoreLock::SupportEvidence),
     // The recorder's own tests. Disjoint from every production id on purpose (see `TestOuter`), and
     // deliberately NOT transitively closed: `TestOuter -> TestInner` is absent even though
     // `TestOuter -> TestMiddle -> TestInner` is declared, which is what
@@ -318,11 +388,13 @@ pub(crate) struct Acquisition {
     lock: StoreLock,
 }
 
-/// The same type in a release build: an empty struct with no `Drop`. The thread-local, the table and
-/// the checks do not exist there at all.
-#[cfg(not(test))]
-#[must_use = "kept for signature parity with the test build; bind it, e.g. `let _order = ...`"]
-pub(crate) struct Acquisition;
+// There is deliberately no `#[cfg(not(test))]` twin of `Acquisition` or `acquiring`. There used to
+// be — an empty struct and an `#[inline(always)]` no-op kept for signature parity — because
+// `history.rs` open-coded `acquiring(..)` above a bare `.lock()` at eight sites. Every production
+// acquisition now goes through `hold_lock`/`try_hold_lock` instead, whose release-build bodies do
+// not mention the recorder at all, so both items became dead code that only `-D warnings` noticed.
+// They are deleted rather than `#[allow(dead_code)]`-ed: a release build that cannot even NAME the
+// recorder is a stronger statement of "no test instrumentation ships" than a comment claiming it.
 
 /// Record that this thread is about to take `lock`. **Call before blocking on it**, never after.
 ///
@@ -366,12 +438,6 @@ pub(crate) fn acquiring(lock: StoreLock) -> Acquisition {
     Acquisition { lock }
 }
 
-#[cfg(not(test))]
-#[inline(always)]
-pub(crate) fn acquiring(_lock: StoreLock) -> Acquisition {
-    Acquisition
-}
-
 #[cfg(test)]
 impl Drop for Acquisition {
     fn drop(&mut self) {
@@ -396,18 +462,56 @@ impl Drop for Acquisition {
 /// The field order is load-bearing: Rust drops struct fields in declaration order, so `guard`
 /// releases the mutex and only then does `order` leave the thread-local stack. The reverse would
 /// leave a window in which the lock is held but no longer recorded.
+/// Generic over the guarded value, defaulting to `()`. Most store locks guard nothing but the right
+/// to run a critical section, but `benchmark::state_cache` guards real state, and it has to go
+/// through the same recorded path as every other persistence lock — a lock with one recorded and
+/// four unrecorded acquisition sites cannot detect its own re-entrancy.
 #[cfg(test)]
-pub(crate) struct StoreGuard {
+pub(crate) struct StoreGuard<T: 'static = ()> {
     #[allow(dead_code)]
-    guard: std::sync::MutexGuard<'static, ()>,
+    guard: std::sync::MutexGuard<'static, T>,
     #[allow(dead_code)]
     order: Acquisition,
 }
 
 #[cfg(not(test))]
-pub(crate) struct StoreGuard {
+pub(crate) struct StoreGuard<T: 'static = ()> {
     #[allow(dead_code)]
-    guard: std::sync::MutexGuard<'static, ()>,
+    guard: std::sync::MutexGuard<'static, T>,
+}
+
+// `Deref`/`DerefMut` so a caller reads and writes the guarded value exactly as it did through the
+// bare `MutexGuard`, and the swap to a recorded guard is a type change with no behaviour change.
+#[cfg(test)]
+impl<T: 'static> std::ops::Deref for StoreGuard<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.guard
+    }
+}
+
+#[cfg(test)]
+impl<T: 'static> std::ops::DerefMut for StoreGuard<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.guard
+    }
+}
+
+#[cfg(not(test))]
+impl<T: 'static> std::ops::Deref for StoreGuard<T> {
+    type Target = T;
+    #[inline(always)]
+    fn deref(&self) -> &T {
+        &self.guard
+    }
+}
+
+#[cfg(not(test))]
+impl<T: 'static> std::ops::DerefMut for StoreGuard<T> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.guard
+    }
 }
 
 /// Record, then acquire, then bundle the two so they are released together.
@@ -416,27 +520,191 @@ pub(crate) struct StoreGuard {
 /// above: the record has to exist BEFORE the caller blocks, or a self-deadlock hangs instead of
 /// panicking.
 #[cfg(test)]
-pub(crate) fn hold_lock(
+pub(crate) fn hold_lock<T: 'static>(
     lock: StoreLock,
-    acquire: impl FnOnce() -> std::sync::MutexGuard<'static, ()>,
-) -> StoreGuard {
+    acquire: impl FnOnce() -> std::sync::MutexGuard<'static, T>,
+) -> StoreGuard<T> {
     let order = acquiring(lock);
     StoreGuard { guard: acquire(), order }
 }
 
 #[cfg(not(test))]
 #[inline(always)]
-pub(crate) fn hold_lock(
+pub(crate) fn hold_lock<T: 'static>(
     _lock: StoreLock,
-    acquire: impl FnOnce() -> std::sync::MutexGuard<'static, ()>,
-) -> StoreGuard {
+    acquire: impl FnOnce() -> std::sync::MutexGuard<'static, T>,
+) -> StoreGuard<T> {
     StoreGuard { guard: acquire() }
+}
+
+/// [`hold_lock`] for the modules whose poison policy is to REFUSE rather than recover.
+///
+/// `history`, `experiment`, `intelligence` and `benchmark` all propagate a poisoned lock instead of
+/// clearing it, so their acquisition is fallible and cannot use `hold_lock`'s infallible closure.
+/// Before this existed those sites open-coded `acquiring(...)` plus a bare `.lock()`, which is how
+/// `experiment` came to have three acquisition sites and zero records: nothing tied the two lines
+/// together. Here the record and the guard are one value, and a site that forgets the record does
+/// not type-check.
+///
+/// The record is taken **before** `acquire` runs and dropped with the guard on the error path, so a
+/// refused acquisition leaves the thread-local stack exactly as it found it.
+#[cfg(test)]
+pub(crate) fn try_hold_lock<T: 'static, E>(
+    lock: StoreLock,
+    acquire: impl FnOnce() -> Result<std::sync::MutexGuard<'static, T>, E>,
+) -> Result<StoreGuard<T>, E> {
+    let order = acquiring(lock);
+    Ok(StoreGuard { guard: acquire()?, order })
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+pub(crate) fn try_hold_lock<T: 'static, E>(
+    _lock: StoreLock,
+    acquire: impl FnOnce() -> Result<std::sync::MutexGuard<'static, T>, E>,
+) -> Result<StoreGuard<T>, E> {
+    Ok(StoreGuard { guard: acquire()? })
 }
 
 /// What this thread holds, for the recorder's own tests. Not a production surface.
 #[cfg(test)]
 pub(crate) fn held_now() -> Vec<StoreLock> {
     HELD.with(|cell| cell.borrow().clone())
+}
+
+/// The production nestings, driven through the shipping lock helpers.
+///
+/// # What these tests are, and what they are not
+///
+/// Every acquisition below goes through the exact function the shipping code calls —
+/// `experiment::lock_store`, `history::lock_history`, `support_evidence::lock_store`. None of them
+/// is reimplemented here, because a lookalike passes while the real path is broken; that is the
+/// failure #395's review caught in a different guard and it is not worth repeating.
+///
+/// They do NOT drive `start_experiment`/`conclude_experiment`/`restore_experiment`, and the reason
+/// is a hard constraint rather than a shortcut. In a `#[cfg(test)]` build
+/// `data_root::mutation_root()` resolves to the machine's REAL `%APPDATA%\Compy` root; every one of
+/// those commands enters `history::apply_recommendation` or `history::rollback_change`, which read
+/// the owner's real ledger, mutate real Windows state on the success branch, and call
+/// `record_operation_failure` — a real write to the real support store — on the failure branch.
+/// There is no seam that lets a test walk that call chain without touching the owner's data, and
+/// manufacturing one would be a larger and riskier change to the mutation boundary than #398 is
+/// allowed to make.
+///
+/// So the claim is split in two, each half checked by something that can actually fail:
+///
+/// - **"these locks may be nested in this order, and the reverse panics"** — here, on the real
+///   locks, hermetically. Taking a mutex writes nothing.
+/// - **"production really nests them in this order"** — a source fact, checked as a source fact by
+///   `scripts/store-lock-order-guard.test.mjs`, which pins the three call sites in `experiment.rs`
+///   that enter `history` under the gate and fails when one moves or disappears.
+///
+/// Neither half is presented as the whole. That is the honest shape of what is measurable here.
+#[cfg(test)]
+mod production_nesting_tests {
+    use super::*;
+
+    /// `Experiment -> History`, the live nesting the previous candidate could not see at all.
+    ///
+    /// Falsifies the `(Experiment, History)` entry: delete it from `ALLOWED_NESTING` and the
+    /// recorder panics `UNDECLARED nesting experiment::store_write_gate -> HISTORY_LOCK` here.
+    #[test]
+    fn the_experiment_gate_may_be_held_while_entering_the_trust_ledger() {
+        let _experiment = crate::experiment::lock_store().expect("experiment gate");
+        assert_eq!(held_now(), vec![StoreLock::Experiment]);
+        let _history = crate::history::lock_history().expect("history lock");
+        assert_eq!(held_now(), vec![StoreLock::Experiment, StoreLock::History]);
+    }
+
+    /// `[Experiment, History] -> SupportEvidence`, the three-deep chain a corrupt ledger produces
+    /// inside `apply_recommendation_inner`.
+    ///
+    /// Falsifies the `(Experiment, SupportEvidence)` entry specifically. `History -> SupportEvidence`
+    /// was already declared, so before this pair existed the all-held-lock rule would have panicked
+    /// on the OUTER lock — which is the whole point of checking every held lock rather than the
+    /// innermost one.
+    #[test]
+    fn a_damaged_ledger_may_report_itself_from_under_both_outer_locks() {
+        let _experiment = crate::experiment::lock_store().expect("experiment gate");
+        let _history = crate::history::lock_history().expect("history lock");
+        let _support = crate::support_evidence::lock_store();
+        assert_eq!(
+            held_now(),
+            vec![StoreLock::Experiment, StoreLock::History, StoreLock::SupportEvidence]
+        );
+    }
+
+    // ── The two rejection tests, and why their OUTER hold is a bare record ──
+    //
+    // Both of the tests below expect a panic, and in both the lock under test is the real
+    // `experiment::lock_store`. What their outer hold must NOT be is a real mutex guard.
+    //
+    // Panicking with a `MutexGuard` alive POISONS that mutex for the whole process, and `cargo
+    // test` runs every test in one process. The first version of these two tests held
+    // `HISTORY_LOCK` and the experiment gate for real, and the measured result was three unrelated
+    // failures — `history::leftover_restore_tests` twice and the green nesting test above — all
+    // reporting a poisoned lock they never touched. `history` and `experiment` both REFUSE on
+    // poison by design and this lane does not change that policy, so the poison is permanent for
+    // the run.
+    //
+    // The record is the thing under test in both cases: the recorder decides from the thread-local
+    // stack, and it decides BEFORE the inner mutex is taken. So the outer hold is
+    // `acquiring(...)` — the same function the production helper calls, one layer down, holding no
+    // mutex — and the inner acquisition stays the real shipping helper. The panic then fires with
+    // nothing locked, and no test that did not opt in pays for it.
+
+    /// The inverse edge, as a live positive control on the RECORD itself.
+    ///
+    /// This is the test that falsifies `acquiring(StoreLock::Experiment)` inside
+    /// `experiment::lock_store`: remove that call and the helper takes its mutex silently, no panic
+    /// happens, and this `#[should_panic]` test goes RED. It cannot hang — the recorder reports the
+    /// undeclared direction before anything blocks.
+    ///
+    /// `History -> Experiment` is genuinely undeclared, not merely omitted: `lib.rs`'s command
+    /// registration is the only thing in the crate that calls into `experiment` at all, so no
+    /// production path can hold the ledger lock and then take the experiment gate.
+    #[test]
+    #[should_panic(expected = "UNDECLARED nesting HISTORY_LOCK -> experiment::store_write_gate")]
+    fn the_ledger_may_not_be_held_while_taking_the_experiment_gate() {
+        let _history = acquiring(StoreLock::History);
+        let _experiment = crate::experiment::lock_store().expect("experiment gate");
+    }
+
+    /// Re-entering the experiment gate panics by name instead of deadlocking — the exact hazard
+    /// HQ's review named as undetectable while this gate was unrecorded.
+    ///
+    /// Also a second falsification of the record: the re-entrancy check reads the thread-local
+    /// stack, so it fires only if `experiment::lock_store` puts `Experiment` on it. Remove that and
+    /// the helper simply takes its mutex and this test goes RED rather than hanging, because the
+    /// outer hold is a record and not the mutex itself.
+    #[test]
+    #[should_panic(expected = "RE-ENTRANT acquisition of experiment::store_write_gate")]
+    fn the_experiment_gate_is_not_reentrant() {
+        let _first = acquiring(StoreLock::Experiment);
+        let _second = crate::experiment::lock_store();
+    }
+
+    /// `intelligence::store_write_gate` is a leaf: it may be entered with nothing held, and nothing
+    /// inside it reaches another store. A negative control for the falsification matrix — it must
+    /// stay GREEN while the deliberate breakages above go red, or the matrix is measuring the suite
+    /// rather than the change.
+    ///
+    /// **`benchmark::state_cache` is deliberately NOT driven here, and that is a real gap, not an
+    /// oversight.** Its `OnceLock` hydrates from `load_store()` on first access, which calls
+    /// `compy_data_dir()`, which in turn can run `migrate_legacy_data_once` — a recursive COPY of
+    /// the owner's entire pre-rename `%APPDATA%\Sentinel` into `%APPDATA%\Compy`. Taking that lock
+    /// from a test would reach into the owner's real data to manufacture a green tick, which is
+    /// exactly what this lane is forbidden to do. The lock IS instrumented at all five sites and the
+    /// census in `scripts/store-lock-order-guard.test.mjs` fails if a sixth appears unrecorded; what
+    /// is NOT proven at runtime is that those records fire. Recorded as UNVERIFIED COVERAGE.
+    #[test]
+    fn the_intelligence_gate_is_a_leaf_taken_alone() {
+        {
+            let _i = crate::intelligence::lock_store().expect("intelligence gate");
+            assert_eq!(held_now(), vec![StoreLock::Intelligence]);
+        }
+        assert!(held_now().is_empty(), "the stack must unwind exactly");
+    }
 }
 
 #[cfg(test)]
