@@ -72,21 +72,70 @@ const esc = (s) => s.replace(/[.*+?^{}()|[\]\\/$]/g, "\\$&");
 // One enclosing backtick pair, trimmed — a hand-written claim quotes its folder or branch as code.
 const plain = (v) => (v && /^`[^`]*`$/.test(v) ? v.slice(1, -1) : v);
 
+const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
+
 /**
- * One field of a claim or handoff, by label. Reads the block this module renders (`- Label: value`),
- * the bold variants a hand-written comment uses (`- **Label:** value`, `- **Label**: value`), and a
- * two-column table row (`| **label** | value |`) — the form another session posted on #224, which
- * read as a claim with no fields and so, under #358, as a live writer whose scope nobody could see
- * (collision rule 4: a refusal the other side could not cure). Aliases are the labels other writers
- * use for the same fact.
+ * A comment's lines with everything that does not render as Markdown blanked. Headers and fields are
+ * read only from these, so an example is never an event: on e56c6395 a `### Handoff` / `- Claim:
+ * released` quoted inside a fence released the live claim above it (HQ review 5165670535). Blanked,
+ * as CommonMark 0.31 renders them:
+ * - fenced code, from an opener of three or more backticks or tildes indented at most three spaces
+ *   (a backtick opener whose info string holds a backtick is inline code, not a fence) to a closer of
+ *   the same character, at least as long, with only spaces or tabs after it, or to the comment's end;
+ * - an HTML comment, from a line opening `<!--` through the line carrying `-->`. It renders as
+ *   nothing, which makes it the worst place for a release to hide.
+ * Indented code, blockquotes and mentions need no blanking: a header counts only after at most three
+ * spaces (a tab makes it indented code), and a field only at the start of its line. Not modelled:
+ * list items, whose fences are read as though they stood alone (the renderer differs only on a line
+ * indented less than the item, which it moves out of the list), and raw HTML blocks other than
+ * comments (`<pre>`, or `<details>` with no blank line after it), whose lines are read. None of the
+ * 846 comments here on 2026-09-10 put a header inside either.
+ *
+ * `Write scope` is not read through this: `scopeTextFromMarkdown` (#408) skips fenced lines by its own
+ * rule. That rule is not reused here, because its opener is looser (`/^\s*```/`): safe for a scope,
+ * which fails closed when hidden, and unsafe for a header, because a hidden claim lets a close through.
+ */
+const authored = (body) => {
+  let fence = null; // the opening run, e.g. "````"
+  let comment = false;
+  return String(body ?? "").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n").map((l) => {
+    if (fence) {
+      const close = FENCE_CLOSE.exec(l);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
+      return "";
+    }
+    if (comment) {
+      comment = !l.includes("-->");
+      return "";
+    }
+    const open = FENCE_OPEN.exec(l);
+    if (open && !(open[1][0] === "`" && open[2].includes("`"))) {
+      fence = open[1];
+      return "";
+    }
+    if (/^ {0,3}<!--/.test(l)) {
+      comment = !l.includes("-->");
+      return "";
+    }
+    return l;
+  });
+};
+
+/**
+ * One field of a claim or handoff, by label, from its `authored` lines. Reads the block this module
+ * renders (`- Label: value`), the bold variants a hand-written comment uses (`- **Label:** value`,
+ * `- **Label**: value`), and a two-column table row (`| **label** | value |`) — the form another
+ * session posted on #224, which read as a claim with no fields and so, under #358, as a live writer
+ * whose scope nobody could see (collision rule 4: a refusal the other side could not cure). Aliases
+ * are the labels other writers use for the same fact.
  *
  * Every field here is read ONE LINE at a time. The one field that is not — `Write scope`, which
  * wraps — is not read here at all: it goes through `scopeTextFromMarkdown` (#408), the one
  * extraction contract in this repo, so a claim and an issue body cannot disagree about the same
  * Markdown. This function keeping its own copy of that rule is how they came to disagree.
  */
-const field = (body, label, aliases = []) => {
-  const lines = String(body ?? "").replace(/\r\n/g, "\n").split("\n");
+const field = (lines, label, aliases = []) => {
   for (const name of [label, ...aliases]) {
     const bullet = new RegExp("^[-*]\\s*(?:\\*\\*)?" + esc(name) + "(?::\\s*\\*\\*|\\*\\*\\s*:|:)\\s*(.*)$", "i");
     for (let i = 0; i < lines.length; i += 1) {
@@ -128,45 +177,50 @@ export function claimExpiry(text, { anchor = null } = {}) {
 }
 
 /**
- * Whether a comment carries a header, read the way Markdown renders one: at the start of a line, after
- * at most a byte-order mark and three spaces. A sentence that mentions `### Handoff` is not a handoff.
- * Ten of the 840 comments in this repository on 2026-09-10 did exactly that, and each one read as a
- * lease event: #283's close comment as a handoff, and #408's and #409's retellings as fresh claims (#411).
+ * Whether a comment's `authored` lines carry a header: at the start of a line, after at most three
+ * spaces. A sentence that mentions `### Handoff` is not a handoff. Ten of the 840 comments in this
+ * repository on 2026-09-10 did exactly that, and each one read as a lease event: #283's close comment
+ * as a handoff, and #408's and #409's retellings as fresh claims (#411).
  */
-const headed = (body, header) => new RegExp(`^\\uFEFF?[ \\t]{0,3}${esc(header)}`, "m").test(String(body ?? ""));
+const headed = (lines, header) => {
+  const at = new RegExp(`^ {0,3}${esc(header)}`);
+  return lines.some((l) => at.test(l));
+};
 
 /** Parse a claim comment back into facts. Returns null when the comment is not a claim. */
 export function parseClaim(body) {
-  if (!headed(body, CLAIM_HEADER)) return null;
+  const lines = authored(body);
+  if (!headed(lines, CLAIM_HEADER)) return null;
   return {
-    lane: field(body, "Lane"),
-    executor: field(body, "Executor/tool", ["executor", "writer"]),
-    repository: plain(field(body, "Repository", ["repo"])),
-    folder: plain(field(body, "Worktree folder", ["worktree", "folder"])),
-    branch: plain(field(body, "Branch")),
+    lane: field(lines, "Lane"),
+    executor: field(lines, "Executor/tool", ["executor", "writer"]),
+    repository: plain(field(lines, "Repository", ["repo"])),
+    folder: plain(field(lines, "Worktree folder", ["worktree", "folder"])),
+    branch: plain(field(lines, "Branch")),
     // The one field NOT read here: extraction is one contract, shared with the issue-body reader
     // (#408). `scope` stays a claim-only alias — an issue body is prose, and `- scope:` in prose is
     // as likely to be a sentence as a declaration.
     scope: scopeTextFromMarkdown(body, { aliases: ["scope"] }),
-    started: field(body, "Started"),
-    expires: field(body, "Claim expires", ["expiry", "expires"]),
-    nextAction: field(body, "Next action"),
+    started: field(lines, "Started"),
+    expires: field(lines, "Claim expires", ["expiry", "expires"]),
+    nextAction: field(lines, "Next action"),
   };
 }
 
 /** Parse a handoff comment. `nextAction` is the durable record guard 7 checks the board against. */
 export function parseHandoff(body) {
-  if (!headed(body, HANDOFF_HEADER)) return null;
-  const claim = field(body, "Claim");
+  const lines = authored(body);
+  if (!headed(lines, HANDOFF_HEADER)) return null;
+  const claim = field(lines, "Claim");
   return {
-    outcome: field(body, "Outcome"),
-    files: field(body, "Files/commits/PR"),
-    verification: field(body, "Verification"),
-    remaining: field(body, "Remaining work"),
-    gates: field(body, "Gates or owner actions"),
-    worktreeState: field(body, "Worktree state"),
-    processes: field(body, "Active processes"),
-    nextAction: field(body, "Exact next action"),
+    outcome: field(lines, "Outcome"),
+    files: field(lines, "Files/commits/PR"),
+    verification: field(lines, "Verification"),
+    remaining: field(lines, "Remaining work"),
+    gates: field(lines, "Gates or owner actions"),
+    worktreeState: field(lines, "Worktree state"),
+    processes: field(lines, "Active processes"),
+    nextAction: field(lines, "Exact next action"),
     // The Claim line has to open with "released". "**HELD.** ... Released only when a review verdict
     // lands" (#399, #407) is a held lease that mentions its release; read as released, it would let a
     // close through while the lease was live (#411).
@@ -175,23 +229,29 @@ export function parseHandoff(body) {
 }
 
 /**
- * Is a lease still live on this thread? The newest claim is, unless the newest handoff was posted
- * after it and says released. One fold, shared by `gather.readIssueThread` and the work-control
- * gate's close check (#411), so the board reader and the gate cannot disagree about when a lease
- * ended. `comments` is the thread in posting order, as `gh issue view --json comments` returns it.
+ * Is a lease still live on this thread? The thread is folded once, in posting order, one transition
+ * per comment: a Handoff whose Claim line releases ends the lease, and a claim starts one. A Handoff
+ * that does not release changes nothing — a transfer or a HELD keeps the lease it names, and a later
+ * Handoff that says nothing of the claim cannot bring a released one back (HQ review 5165670535). A
+ * comment carrying both is read release first, so its claim stands. One fold, shared by
+ * `gather.readIssueThread` and the work-control gate's close check (#411), so the board reader and the
+ * gate cannot disagree about when a lease ended. `comments` is the thread in posting order, as
+ * `gh issue view --json comments` returns it; `handoff` is the newest one, released or not, because
+ * guard 7 reads its next action.
  */
 export function threadLease(comments) {
   let claim = null;
   let handoff = null;
   for (const c of comments ?? []) {
+    const asHandoff = parseHandoff(c.body);
+    if (asHandoff) {
+      handoff = { ...asHandoff, postedAt: c.createdAt };
+      if (asHandoff.released) claim = null;
+    }
     const asClaim = parseClaim(c.body);
     if (asClaim) claim = { ...asClaim, postedAt: c.createdAt };
-    const asHandoff = parseHandoff(c.body);
-    if (asHandoff) handoff = { ...asHandoff, postedAt: c.createdAt };
   }
-  // A released claim is not a live claim.
-  const released = Boolean(handoff?.released && claim && new Date(handoff.postedAt) > new Date(claim.postedAt));
-  return { claim: released ? null : claim, handoff };
+  return { claim, handoff };
 }
 
 const REPO = ["--repo", "Pootytxng/sentinel"];

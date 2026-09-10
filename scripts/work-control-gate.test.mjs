@@ -404,6 +404,23 @@ describe("a close ends the lease, so the lease has to end first (#411)", () => {
     expect(result.blockers.join("\n")).not.toMatch(/#324/);
   });
 
+  // HQ review 5165670535 on e56c6395. Finding 1: a release quoted inside fenced code read as a real
+  // one, so this close passed while #283's claim was live. Finding 2: a later Handoff that said nothing
+  // of the claim brought a released one back, so this close was refused after a real release.
+  it("stays blocked when the only release on the thread is an example inside fenced code", () => {
+    const example = at("2026-09-10T07:52:00Z", "The release will read:", "", "```text", "### Handoff", "- Exact next action: none", "- Claim: released", "```");
+    const result = evaluateWorkControl(close(), thread(CLAIM_283, example));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/#283 still has a live lease/);
+  });
+
+  it("folds the thread in order: a release holds through a later Handoff, until a new claim", () => {
+    const later = at("2026-09-10T08:10:00Z", "### Handoff", "- Outcome: review requested", "- Exact next action: independent review");
+    const reclaim = at("2026-09-10T08:20:00Z", "### Ownership claim", "- Lane: Codex", "- Write scope: `docs/`");
+    expect(evaluateWorkControl(close(), thread(CLAIM_283, handoff("released"), later))).toEqual(PASSED);
+    expect(evaluateWorkControl(close(), thread(CLAIM_283, handoff("released"), later, reclaim)).decision).toBe("BLOCKED");
+  });
+
   it("leaves merge-pr alone: that transition reads no thread", () => {
     expect(evaluateWorkControl(record({ transition: "merge-pr", issue: 283 }))).toEqual(PASSED);
   });

@@ -240,6 +240,88 @@ describe("threadLease: is a lease still live on this thread?", () => {
     const both = at("2026-09-10T07:52:00Z", "### Handoff", "- Claim: released", "", "### Ownership claim", "- Lane: Codex");
     expect(threadLease([both]).claim).not.toBeNull();
   });
+
+  // HQ review 5165670535 on e56c6395, finding 2: comparing the newest claim with the newest handoff let
+  // a later Handoff that says nothing of the claim bring a released one back. The thread is folded
+  // once, in posting order, one transition per comment.
+  describe("folded in posting order: a release holds until a new claim", () => {
+    const LATER = at("2026-09-10T08:10:00Z", "### Handoff", "- Outcome: review requested", "- Exact next action: independent review");
+    const RECLAIM = at("2026-09-10T08:20:00Z", "### Ownership claim", "- Lane: Codex", "- Write scope: `docs/`");
+
+    it("claim: live; release: none; a handoff that does not release: still none; a new claim: live", () => {
+      expect(threadLease([CLAIM]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+      expect(threadLease([CLAIM, RELEASE]).claim).toBeNull();
+      expect(threadLease([CLAIM, RELEASE, LATER]).claim).toBeNull();
+      expect(threadLease([CLAIM, RELEASE, LATER, RECLAIM]).claim).toMatchObject({ lane: "Codex", postedAt: RECLAIM.createdAt });
+    });
+
+    it("still reports the newest handoff, released or not: guard 7 reads its next action", () => {
+      expect(threadLease([CLAIM, RELEASE, LATER]).handoff).toMatchObject({ nextAction: "independent review", released: false, postedAt: LATER.createdAt });
+    });
+
+    it.each(["transferred to codex until 2026-09-11T08:00Z", "**HELD.** Scope unchanged. Released only when a review verdict lands."])(
+      "keeps the lease through a handoff that preserves it (%s), and through a later one that says nothing, until a release",
+      (kept) => {
+        const hold = at("2026-09-10T07:52:00Z", "### Handoff", `- Claim: ${kept}`);
+        const release = { ...RELEASE, createdAt: "2026-09-10T08:30:00Z" };
+        expect(threadLease([CLAIM, hold]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+        expect(threadLease([CLAIM, hold, LATER]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+        expect(threadLease([CLAIM, hold, LATER, release]).claim).toBeNull();
+      },
+    );
+  });
+
+  // HQ review 5165670535 on e56c6395, finding 1: a line-start regex read a release quoted inside fenced
+  // code as a real one, and let a close through while the claim above it was live.
+  describe("an example is not an event: nothing inside fenced code or an HTML comment is read", () => {
+    const HANDOFF_EXAMPLE = ["The release will read:", "", "```text", "### Handoff", "- Exact next action: none", "- Claim: released", "```"];
+    const CLAIM_EXAMPLE = ["WORK_CONTROL's template, for the next writer:", "", "```text", "### Ownership claim", "- Lane: <coordination label; informational>", "- Write scope: <exact paths/globs>", "```"];
+
+    it("parseHandoff does not recognize a fenced Handoff example", () => {
+      expect(parseHandoff(HANDOFF_EXAMPLE.join("\n"))).toBeNull();
+    });
+
+    it("parseClaim does not recognize a fenced Ownership claim example", () => {
+      expect(parseClaim(CLAIM_EXAMPLE.join("\n"))).toBeNull();
+    });
+
+    it("threadLease keeps the genuine claim before the example live, and raises no claim from one", () => {
+      const lease = threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...HANDOFF_EXAMPLE)]);
+      expect(lease.claim).toMatchObject({ postedAt: CLAIM.createdAt });
+      expect(lease.handoff).toBeNull();
+      expect(threadLease([CLAIM, RELEASE, at("2026-09-10T08:00:00Z", ...CLAIM_EXAMPLE)]).claim).toBeNull();
+    });
+
+    it("reads a genuine block's own fields, not the example it quotes", () => {
+      const held = ["### Handoff", "- Outcome: held for review", "When the lease ends, this line reads:", "```", "- Claim: released", "```", "- Claim: transferred to codex until 2026-09-11T08:00Z"];
+      expect(parseHandoff(held.join("\n")).released).toBe(false);
+      const claim = ["### Ownership claim", "~~~", "- Lane: <coordination label>", "~~~", "- Lane: Claude Code"];
+      expect(parseClaim(claim.join("\n")).lane).toBe("Claude Code");
+    });
+
+    // The contexts it models, each read the way CommonMark 0.31 renders it.
+    it.each([
+      ["a tilde fence", ["~~~", "### Handoff", "- Claim: released", "~~~"]],
+      ["a fence indented three spaces", ["   ```", "### Handoff", "- Claim: released", "   ```"]],
+      ["a fence a shorter run cannot close", ["````md", "```", "### Handoff", "- Claim: released", "```", "````"]],
+      ["a fence the other character cannot close", ["```", "~~~", "### Handoff", "- Claim: released", "```"]],
+      ["a fence never closed, which runs to the end of the comment", ["```text", "### Handoff", "- Claim: released"]],
+      ["an HTML comment, which renders as nothing at all", ["<!--", "### Handoff", "- Claim: released", "-->"]],
+      ["a tab's indentation, which makes it indented code", ["\t### Handoff", "- Claim: released"]],
+    ])("reads no Handoff inside %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    // And what it must not over-read: hiding a genuine claim would let a close through.
+    it.each([
+      ["after a closed fence", ["```", "npm test", "```", "### Ownership claim", "- Lane: Codex"]],
+      ["after a one-line HTML comment", ["<!-- claim below -->", "### Ownership claim", "- Lane: Codex"]],
+      ["after three backticks whose info string holds a backtick: inline code, not a fence", ["```js``` opened the example", "### Ownership claim", "- Lane: Codex"]],
+      ["after three backticks indented four spaces: indented code, not a fence", ["    ```", "### Ownership claim", "- Lane: Codex"]],
+    ])("still reads a claim %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+  });
 });
 
 describe("the gh plan pins the field quirks that cost real time", () => {

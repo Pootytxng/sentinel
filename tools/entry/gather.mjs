@@ -123,7 +123,7 @@ export function readBoard({ run = gh } = {}) {
   }
 }
 
-/** The newest claim and the newest handoff on an issue — the durable record guard 7 compares to. */
+/** The issue's live claim, as threadLease folds it, and its newest handoff — the record guard 7 compares to. */
 export function readIssueThread(issue) {
   try {
     const raw = gh(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]);
