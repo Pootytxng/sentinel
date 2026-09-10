@@ -74,32 +74,69 @@ const plain = (v) => (v && /^`[^`]*`$/.test(v) ? v.slice(1, -1) : v);
 
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
+// Raw HTML blocks that end at a marker, by opener and end: CommonMark's kinds 1 and 3 to 5 (2 is a comment).
+const HTML_ENDS = [
+  [/^ {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)/i, /<\/(?:pre|script|style|textarea)>/i],
+  [/^ {0,3}<\?/, /\?>/],
+  [/^ {0,3}<![A-Z]/, />/],
+  [/^ {0,3}<!\[CDATA\[/, /\]\]>/],
+];
+// Kind 6: a block-level tag, opening or closing, which a blank line ends. GitHub's list: no `search`.
+const HTML_BLOCK_TAG = /^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|section|source|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t>]|\/>|$)/i;
+// Kind 7: any other complete tag alone on its line, which a blank line ends. It cannot interrupt a paragraph.
+const HTML_LONE_TAG = /^ {0,3}(?:<[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t]*\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t]*>)[ \t]*$/;
+// What `authored` tells apart to know whether a lone tag continues a paragraph.
+const ATX = /^ {0,3}#{1,6}(?:[ \t]|$)/;
+const BREAK = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+const SETEXT = /^ {0,3}(?:=+|-+)[ \t]*$/;
+const LIST_ITEM = /^ {0,3}(?:[-+*]|(\d{1,9})[.)])(?:[ \t]|$)/;
+const QUOTE = /^ {0,3}>/;
+const FOOTNOTE = /^ {0,3}\[\^[^\]\s]+\]:/;
+const indent = (l) => [.../^[ \t]*/.exec(l)[0]].reduce((n, c) => (c === "\t" ? n + 4 - (n % 4) : n + 1), 0);
 
 /**
  * A comment's lines with everything that does not render as Markdown blanked. Headers and fields are
  * read only from these, so an example is never an event: on e56c6395 a `### Handoff` / `- Claim:
- * released` quoted inside a fence released the live claim above it (HQ review 5165670535). Blanked,
- * as CommonMark 0.31 renders them:
+ * released` quoted inside a fence released the live claim above it (HQ review 5165670535), and on
+ * 3ce1beb9 one quoted inside `<pre>` still did (HQ review 5167660647). Blanked, as GitHub renders
+ * them (checked against its /markdown endpoint on 2026-09-10):
  * - fenced code, from an opener of three or more backticks or tildes indented at most three spaces
  *   (a backtick opener whose info string holds a backtick is inline code, not a fence) to a closer of
  *   the same character, at least as long, with only spaces or tabs after it, or to the comment's end;
  * - an HTML comment, from a line opening `<!--` through the line carrying `-->`. It renders as
- *   nothing, which makes it the worst place for a release to hide.
+ *   nothing, which makes it the worst place for a release to hide;
+ * - every other raw HTML block, by CommonMark's rules with GitHub's list of tags (`<textarea>` and
+ *   `<source>` on it, `<search>` not, and `<!` a declaration only before a capital letter): `<pre>`,
+ *   `<script>`, `<style>` or `<textarea>` through the line carrying any of their end tags, blank
+ *   lines and all; `<?` through `?>`; `<!X` through `>`; `<![CDATA[` through `]]>`; a block-level tag
+ *   (`<div>`, `<details>`, `</p>`) up to a blank line; and any other complete tag alone on its line
+ *   (`<span>`, `</pre>`) up to a blank line, unless it continues a paragraph.
  * Indented code, blockquotes and mentions need no blanking: a header counts only after at most three
- * spaces (a tab makes it indented code), and a field only at the start of its line. Not modelled:
- * list items, whose fences are read as though they stood alone (the renderer differs only on a line
- * indented less than the item, which it moves out of the list), and raw HTML blocks other than
- * comments (`<pre>`, or `<details>` with no blank line after it), whose lines are read. None of the
- * 846 comments here on 2026-09-10 put a header inside either.
+ * spaces (a tab makes it indented code), and a field only at the start of its line.
+ *
+ * Whether a lone tag continues a paragraph turns on list, quote, footnote and table context, which is
+ * followed only as far as the next line needs, and an HTML block inside a list item ends with the
+ * item. Where either is in doubt, `strict` settles it toward keeping a lease live: for a Handoff
+ * (`strict`) the block is open, and for a claim it is not. Every shape GitHub settles the other way
+ * fails closed. Among them: a Handoff after a lone tag indented into a list item's paragraph, or after
+ * an HTML block left open inside a list item, is not read; a claim after a table and a lone tag, or
+ * after an HTML block indented deeper than its list item's text, is. A Handoff header also counts only
+ * at the very start of its line (`headed`), where nothing a list item holds can be. Not modelled:
+ * list items' fences, which are read as though they stood alone (the renderer differs only on a line
+ * indented less than the item, which it moves out of the list). None of the 851 comments here on
+ * 2026-09-10 put a lease header inside any of these.
  *
  * `Write scope` is not read through this: `scopeTextFromMarkdown` (#408) skips fenced lines by its own
  * rule. That rule is not reused here, because its opener is looser (`/^\s*```/`): safe for a scope,
  * which fails closed when hidden, and unsafe for a header, because a hidden claim lets a close through.
  */
-const authored = (body) => {
+const authored = (body, strict = false) => {
   let fence = null; // the opening run, e.g. "````"
   let comment = false;
-  return String(body ?? "").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n").map((l) => {
+  let html = null; // the raw HTML block open: its `end` (null: a blank line), and in a list its `dedent`
+  let para = null; // what the last line left open for a lone tag on this one: see `lone`
+  let list = false; // whether a list item may still be open
+  const code = (l) => {
     if (fence) {
       const close = FENCE_CLOSE.exec(l);
       if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
@@ -118,6 +155,69 @@ const authored = (body) => {
       comment = !l.includes("-->");
       return "";
     }
+    return l;
+  };
+  // A lone tag opens a block unless it continues a paragraph. `para` is null where nothing is open,
+  // "top" in a paragraph outside any list or quote, "container" after a line inside one (a lone tag
+  // opens a block at the start of its line, and continues the item's paragraph indented under it),
+  // and "maybe" where this cannot tell. Doubt goes to `strict`.
+  const lone = (n) => para === null || (para === "container" && n === 0) || (para !== "top" && strict);
+  // What a visible line leaves open for the next one.
+  const track = (l, n) => {
+    if (ATX.test(l) || BREAK.test(l) || (para === "top" && SETEXT.test(l))) {
+      if (n === 0) list = false;
+      return null;
+    }
+    const item = LIST_ITEM.exec(l);
+    if (item) {
+      const empty = !/\S/.test(l.slice(item[0].length));
+      // A paragraph runs on through a marker that cannot interrupt it: an empty item, or a number but 1.
+      if (para === "top" && (empty || (item[1] !== undefined && Number(item[1]) !== 1))) return "top";
+      list = true;
+      if (!empty) return "container";
+      return n === 0 || para === null ? null : "maybe";
+    }
+    const quote = QUOTE.exec(l);
+    if (quote) {
+      if (n === 0) list = false;
+      return /\S/.test(l.slice(quote[0].length)) ? "container" : null;
+    }
+    if (FOOTNOTE.test(l)) {
+      if (n === 0) list = false;
+      return "container"; // GitHub's footnote definitions hold their text like a list item, and interrupt a paragraph
+    }
+    if (l.includes("|")) return "maybe"; // a table, or not
+    if (para === "container") return n === 0 ? "maybe" : "container"; // a lazy line, or a new paragraph
+    if (para !== null) return para;
+    if (list && n > 0) return "maybe"; // the item's next paragraph, or not
+    if (n >= 4) return null; // indented code
+    if (n === 0) list = false;
+    return "top";
+  };
+  return String(body ?? "").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n").map((l) => {
+    if (html) {
+      // Not strict: an HTML block opened inside a list item ends with the item, at a shallower line.
+      if (html.dedent && /\S/.test(l) && indent(l) < html.dedent) html = null;
+      else {
+        if (html.end ? html.end.test(l) : !/\S/.test(l)) html = null;
+        return "";
+      }
+    }
+    const out = code(l);
+    if (!/\S/.test(out)) {
+      para = null;
+      return out;
+    }
+    const n = indent(l);
+    const ends = HTML_ENDS.find(([open]) => open.test(l));
+    if (ends || HTML_BLOCK_TAG.test(l) || (HTML_LONE_TAG.test(l) && lone(n))) {
+      const end = ends ? ends[1] : null;
+      if (!end || !end.test(l)) html = { end, dedent: !strict && list ? n : 0 };
+      para = null;
+      if (n === 0) list = false;
+      return "";
+    }
+    para = track(l, n);
     return l;
   });
 };
@@ -180,10 +280,14 @@ export function claimExpiry(text, { anchor = null } = {}) {
  * Whether a comment's `authored` lines carry a header: at the start of a line, after at most three
  * spaces. A sentence that mentions `### Handoff` is not a handoff. Ten of the 840 comments in this
  * repository on 2026-09-10 did exactly that, and each one read as a lease event: #283's close comment
- * as a handoff, and #408's and #409's retellings as fresh claims (#411).
+ * as a handoff, and #408's and #409's retellings as fresh claims (#411). A Handoff counts only at the
+ * very start of its line (`spaces` 0), which no list item or quote reaches: an example nested in one,
+ * in a block `authored` does not follow there, cannot release (HQ review 5167660647). GitHub shows a
+ * Handoff indented one to three spaces too; none of the 851 comments here indents one, and not reading
+ * it keeps a lease live.
  */
-const headed = (lines, header) => {
-  const at = new RegExp(`^ {0,3}${esc(header)}`);
+const headed = (lines, header, spaces = 3) => {
+  const at = new RegExp(`^ {0,${spaces}}${esc(header)}`);
   return lines.some((l) => at.test(l));
 };
 
@@ -209,8 +313,8 @@ export function parseClaim(body) {
 
 /** Parse a handoff comment. `nextAction` is the durable record guard 7 checks the board against. */
 export function parseHandoff(body) {
-  const lines = authored(body);
-  if (!headed(lines, HANDOFF_HEADER)) return null;
+  const lines = authored(body, true);
+  if (!headed(lines, HANDOFF_HEADER, 0)) return null;
   const claim = field(lines, "Claim");
   return {
     outcome: field(lines, "Outcome"),

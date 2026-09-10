@@ -421,6 +421,16 @@ describe("a close ends the lease, so the lease has to end first (#411)", () => {
     expect(evaluateWorkControl(close(), thread(CLAIM_283, handoff("released"), later, reclaim)).decision).toBe("BLOCKED");
   });
 
+  // HQ review 5167660647 on 3ce1beb9: a release quoted inside a raw HTML block read as a real one too.
+  it("stays blocked when the only release on the thread is an example inside a raw HTML block", () => {
+    const example = at("2026-09-10T07:52:00Z", "The release will read:", "", "<pre>", "### Handoff", "- Exact next action: none", "- Claim: released", "</pre>");
+    const result = evaluateWorkControl(close(), thread(CLAIM_283, example));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/#283 still has a live lease/);
+    const released = at("2026-09-10T07:52:00Z", ...example.body.split("\n"), "", "### Handoff", "- Exact next action: none", "- Claim: released");
+    expect(evaluateWorkControl(close(), thread(CLAIM_283, released))).toEqual(PASSED);
+  });
+
   it("leaves merge-pr alone: that transition reads no thread", () => {
     expect(evaluateWorkControl(record({ transition: "merge-pr", issue: 283 }))).toEqual(PASSED);
   });

@@ -322,6 +322,177 @@ describe("threadLease: is a lease still live on this thread?", () => {
       expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
     });
   });
+
+  // HQ review 5167660647 on 3ce1beb9: a raw HTML block is not Markdown either, and a release quoted in
+  // a `<pre>` still released the claim above it. Every shape below was rendered by GitHub's own
+  // /markdown endpoint on 2026-09-10, and each expectation is what that page showed, except the ones
+  // named at the end: each of those fails closed, and says so.
+  describe("an example is not an event: nothing inside a raw HTML block is read", () => {
+    const PRE_EXAMPLE = ["The release will read:", "", "<pre>", "### Handoff", "- Exact next action: none", "- Claim: released", "</pre>"];
+    const H = ["### Handoff", "- Claim: released"];
+    const C = ["### Ownership claim", "- Lane: Codex"];
+
+    it("parseHandoff does not recognize a Handoff inside a <pre> block", () => {
+      expect(parseHandoff(PRE_EXAMPLE.join("\n"))).toBeNull();
+    });
+
+    it("threadLease keeps the genuine claim before the example live", () => {
+      const lease = threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...PRE_EXAMPLE)]);
+      expect(lease.claim).toMatchObject({ postedAt: CLAIM.createdAt });
+      expect(lease.handoff).toBeNull();
+      // The review's own shape. At 3ce1beb9 its claim survived only because a comment is read release
+      // first, and the example still stood as the thread's newest Handoff.
+      const own = threadLease([at("2026-09-10T06:41:51Z", "### Ownership claim", "- Lane: Claude Code", "", "<pre>", ...H, "</pre>")]);
+      expect(own.claim).toMatchObject({ lane: "Claude Code" });
+      expect(own.handoff).toBeNull();
+    });
+
+    it("still reads a genuine Handoff after the block, in the same comment or a later one", () => {
+      const same = [...PRE_EXAMPLE, "", "### Handoff", "- Exact next action: independent review", "- Claim: released"];
+      expect(parseHandoff(same.join("\n"))).toMatchObject({ nextAction: "independent review", released: true });
+      const lease = threadLease([CLAIM, at("2026-09-10T07:51:00Z", ...PRE_EXAMPLE), RELEASE]);
+      expect(lease.claim).toBeNull();
+      expect(lease.handoff).toMatchObject({ postedAt: RELEASE.createdAt, released: true });
+    });
+
+    it("raises no claim from a <pre> example, and does not revive a released lease with one", () => {
+      const example = ["WORK_CONTROL's template:", "", "<pre>", "### Ownership claim", "- Lane: <coordination label>", "</pre>"];
+      expect(parseClaim(example.join("\n"))).toBeNull();
+      expect(threadLease([CLAIM, RELEASE, at("2026-09-10T08:00:00Z", ...example)]).claim).toBeNull();
+    });
+
+    // Every kind the renderer starts, by GitHub's list of tags: `<textarea>` and `<source>` are on it,
+    // `<search>` is not, and a declaration needs a capital letter.
+    it.each([
+      ["a <pre> never closed, which runs to the end", ["<pre>", ...H]],
+      ["a <PRE> with attributes", ['<PRE class="x">', ...H, "</PRE>"]],
+      ["a <textarea>, across a blank line", ["<textarea>", "x", "", ...H, "</textarea>"]],
+      ["a <script>", ["<script>", ...H, "</script>"]],
+      ["a <style>", ["<style>", ...H, "</style>"]],
+      ["a <pre> that interrupts a paragraph", ["Example:", "<pre>", ...H, "</pre>"]],
+      ["a <pre> indented three spaces", ["   <pre>", ...H, "</pre>"]],
+      ["a <pre> indented two spaces, which a less indented line does not end", ["  <pre>", ...H, "</pre>"]],
+      ["a processing instruction", ["<?php", ...H, "?>"]],
+      ["a declaration", ["<!EXAMPLE", ...H, ">"]],
+      ["CDATA", ["<![CDATA[", ...H, "]]>"]],
+      ["a <details> with no blank line after it", ["<details>", "<summary>Example</summary>", ...H, "</details>"]],
+      ["a <div>", ["<div>", ...H, "</div>"]],
+      ["a <DIV>", ["<DIV>", ...H]],
+      ["a closing </div>", ["</div>", ...H]],
+      ["a <source>", ['<source src="x">', ...H]],
+      ["a <div> that interrupts a paragraph", ["Example:", "<div>", ...H]],
+      ["a lone open tag", ["<code>", ...H, "</code>"]],
+      ["a lone tag with attributes", ['<a href="https://example.com" title=\'x\'>', ...H]],
+      ["a lone closing tag", ["</span>", ...H]],
+      ["a lone self-closing tag", ["<br/>", ...H]],
+      ["a lone custom element", ["<my-tag>", ...H]],
+      ["a lone tag whose name only starts like pre", ["<prefix>", ...H]],
+      ["a lone tag after a blank line", ["Example:", "", "<span>", ...H]],
+      ["a lone tag after a heading", ["### Notes", "<span>", ...H]],
+      ["a lone tag after closed fenced code", ["```", "x", "```", "<span>", ...H]],
+      ["a lone tag after indented code", ["    code", "<span>", ...H]],
+      ["a lone tag after a setext heading", ["Notes", "---", "<span>", ...H]],
+      ["a lone tag after an empty list item", ["-", "<span>", ...H]],
+      ["a lone tag after a list item's lazy line", ["- item", "lazy text", "<br>", ...H]],
+      ["a lone tag after a loose list item", ["- item", "", "  more", "<br>", ...H]],
+      ["a lone tag after a quote's lazy line", ["> quoted", "lazy", "<br>", ...H]],
+      ["a lone tag after a table", ["| a | b |", "|---|---|", "| x | y |", "<span>", ...H]],
+      ["a lone tag indented less than its ordered item", ["1. item", "  <br>", ...H]],
+      ["a lone tag after a footnote definition", ["Text[^1]", "", "[^1]: note", "<br>", ...H]],
+      ["a lone tag after a footnote definition's lazy line", ["Text[^1]", "", "[^1]: note", "lazy", "<br>", ...H]],
+      ["a lone tag after a footnote definition that interrupts a paragraph", ["Text[^1]", "[^1]: note", "<br>", ...H]],
+    ])("reads no Handoff inside %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    it.each([
+      ["after a closed <pre>", ["<pre>", "x", "</pre>", ...H]],
+      ["after a one-line <pre>", ["<pre>x</pre>", ...H]],
+      ["after a <pre> that ends mid-line", ["<pre>", "x</pre> tail", ...H]],
+      ["after a <pre> ended by another tag of its kind", ["<pre>", "x", "</textarea>", ...H]],
+      ["after a <div> ended by a blank line", ["<div>", "x", "", ...H]],
+      ["after a <div> ended by a line of spaces", ["<div>", "   ", ...H]],
+      ["after a lone tag ended by a blank line", ["<span>", "x", "", ...H]],
+      ["after a closed declaration", ["<!EXAMPLE", "x", ">", ...H]],
+      ["after a closed processing instruction", ["<?x", "?>", ...H]],
+      ["after closed CDATA", ["<![CDATA[", "x", "]]>", ...H]],
+      ["after a one-line declaration", ["<!DOCTYPE html>", ...H]],
+      ["after `<!` and a lowercase letter, not a declaration here", ["<!example", ...H, ">"]],
+      ["after a paragraph, which a lone tag cannot interrupt", ["Taking this over.", "<br>", ...H]],
+      ["after a paragraph and <search>, only a lone tag here", ["Text", "<search>", ...H]],
+      ["after a tag with text after it", ["<span> text", ...H]],
+      ["after an unfinished tag", ['<a href="x"', ...H]],
+      ["after a tag indented four spaces: indented code", ["    <span>", ...H]],
+      ["after a <pre> closed inside its list item", ["- Example:", "  <pre>", "  x", "  </pre>", ...H]],
+      ["that ends a list item holding a <pre>", ["- <pre>", "### Handoff", "- Claim: released", "</pre>"]],
+      ["after a link reference definition, which a lone tag cannot interrupt", ["[x]: https://example.com", "<br>", ...H]],
+    ])("still reads a Handoff %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toMatchObject({ released: true });
+    });
+
+    it.each([
+      ["a <details> with no blank line after it", ["<details>", "<summary>Old claim</summary>", ...C, "</details>"]],
+      ["a lone </pre>", ["</pre>", ...C]],
+      ["a lone tag after a list item", ["- Taking this over.", "<br>", ...C]],
+      ["a lone tag after a quote", ["> quoted", "<br>", ...C]],
+      ["a <pre> indented two spaces, which a less indented line does not end", ["  <pre>", ...C, "</pre>"]],
+      ["a lone tag after a footnote definition", ["Text[^1]", "", "[^1]: note", "<br>", ...C]],
+      ["a lone tag after a footnote definition that interrupts a paragraph", ["Text[^1]", "[^1]: note", "<br>", ...C]],
+    ])("reads no claim inside %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toBeNull();
+    });
+
+    // And what it must not over-read: hiding a genuine claim would let a close through.
+    it.each([
+      ["after a closed <pre>", ["<pre>", "npm test", "</pre>", ...C]],
+      ["after a one-line <pre>", ["<pre>npm test</pre>", ...C]],
+      ["after a <pre> that ends mid-line", ["<pre>", "x</pre> tail", ...C]],
+      ["after a <details> block ended by a blank line", ["<details>", "", ...C, "", "</details>"]],
+      ["after a lone tag ended by a blank line", ["<br>", "", ...C]],
+      ["after a paragraph, which a lone tag cannot interrupt", ["Taking this over.", "<br>", ...C]],
+      ["after a paragraph whose next line only looks like a list item", ["Text", "*", "<br>", ...C]],
+      ["after a paragraph whose next line only looks like an ordered item", ["Text", "2. x", "<br>", ...C]],
+      ["after a paragraph and <search>, only a lone tag here", ["Text", "<search>", ...C]],
+      ["after a tag with text after it", ["<span> text", ...C]],
+      ["after an unfinished tag", ['<a href="x"', ...C]],
+      ["after a <pre> indented four spaces: indented code", ["    <pre>", ...C]],
+      ["after a sentence that mentions <pre>", ["See <pre> below", ...C]],
+      ["after `<!` and a lowercase letter", ["<!example", ...C, ">"]],
+      ["after a lone tag indented into its list item's paragraph", ["- item", "  <br>", ...C]],
+      ["after an unclosed <pre> inside a list item, which the item's end closes", ["- Example:", "  <pre>", "  x", ...C]],
+      ["after a <div> inside a list item", ["- x", "  <div>", "  y", ...C]],
+      ["after a <div> on a list item's own line", ["- <div>", ...C]],
+      ["after a list, a blank line and a paragraph", ["- item", "", "Text", "<br>", ...C]],
+      ["after an empty list item and a paragraph", ["-", "Text", "<br>", ...C]],
+    ])("still reads a claim %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+
+    // Where the renderer's reading turns on list or table context this module does not track, a Handoff
+    // is read as hidden and a claim as shown: a mistake keeps a lease live, never ends one. A Handoff
+    // header counts only at the start of its line, where no list item can hold it.
+    it.each([
+      ["a <pre> opened on a list item's line", ["- <pre>", "  ### Handoff", "- Claim: released"]],
+      ["a <pre> indented under a list item", ["- Example:", "  <pre>", "  ### Handoff", "- Claim: released"]],
+      ["a <pre> indented four spaces under a list item", ["- x", "    <pre>", "  ### Handoff", "- Claim: released"]],
+      ["a fence opened on a list item's line", ["- ```", "  ### Handoff", "- Claim: released"]],
+    ])("reads no Handoff inside %s, which only a list item's indentation puts there", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    it.each([
+      ["an indented header", ["  ### Handoff", "- Claim: released"]],
+      ["a lone tag indented into its list item's paragraph", ["- item", "  <br>", ...H]],
+      ["a lone tag indented into its ordered item's paragraph", ["1. item", "   <br>", ...H]],
+    ])("reads no Handoff after %s, though GitHub shows one: the lease stays live", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    it("still reads an indented claim header, and a claim GitHub hides after a table: the lease holds", () => {
+      expect(parseClaim(["  ### Ownership claim", "- Lane: Codex"].join("\n"))).toMatchObject({ lane: "Codex" });
+      expect(parseClaim(["| a | b |", "|---|---|", "| x | y |", "<br>", ...C].join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+  });
 });
 
 describe("the gh plan pins the field quirks that cost real time", () => {
