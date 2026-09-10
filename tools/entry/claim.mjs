@@ -332,11 +332,47 @@ export function parseClaim(body) {
   };
 }
 
+// What opens another section of a comment, even under a list or quote marker: a heading, a thematic
+// break or a setext underline, on `authored` lines, where code and raw HTML are blank. And an HTML
+// heading or rule, on the line as written, outside code spans.
+const SECTION = /^[ \t]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+|>[ \t]*)*(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|(?:=+|-+)[ \t]*$)/;
+const HTML_SECTION = /<(?:h[1-6]|hr)(?:[\s/>]|$)/i;
+
+/**
+ * The lines of a comment's Handoff sections, or null when it has none. A Handoff reads its fields only
+ * from these: on afc6dfc7 it read them from the whole comment, so a `- Claim: released` above its
+ * header, or under a later heading, released a live lease (HQ review 5172037615). A section opens at a
+ * Handoff header (`headed`) and ends before the next line that may open another section (`SECTION`),
+ * and a setext underline also takes back the lines above it that it may make a heading. Another
+ * Handoff header opens a section of its own. Where a line may open a section it ends one, so a release
+ * after it is not read and the lease stays live.
+ */
+const handoffLines = (body) => {
+  const raw = String(body ?? "").replace(/\r\n?/g, "\n").split("\n");
+  let own = null; // what the Handoff sections hold so far
+  let open = false; // whether this line is in one
+  let text = 0; // how many of their last lines are a paragraph, which a setext underline makes a heading
+  authored(body, true).forEach((l, i) => {
+    if (headed([l], HANDOFF_HEADER, 0)) {
+      own ??= [];
+      open = true;
+      text = 0;
+    } else if (SECTION.test(l) || HTML_SECTION.test(raw[i].replace(/`[^`]*`/g, ""))) {
+      if (open && SETEXT.test(l)) own.splice(own.length - text, text);
+      open = false;
+    } else if (open) {
+      own.push(l);
+      text = /\S/.test(l) && !LIST_ITEM.test(l) ? text + 1 : 0;
+    }
+  });
+  return own;
+};
+
 /** Parse a handoff comment. `nextAction` is the durable record guard 7 checks the board against. */
 export function parseHandoff(body) {
-  const lines = authored(body, true);
-  if (!headed(lines, HANDOFF_HEADER, 0)) return null;
-  const claim = field(lines, "Claim");
+  const lines = handoffLines(body);
+  if (!lines) return null;
+  const claims = lines.flatMap((l) => field([l], "Claim") ?? []);
   return {
     outcome: field(lines, "Outcome"),
     files: field(lines, "Files/commits/PR"),
@@ -348,8 +384,9 @@ export function parseHandoff(body) {
     nextAction: field(lines, "Exact next action"),
     // The Claim line has to open with "released". "**HELD.** ... Released only when a review verdict
     // lands" (#399, #407) is a held lease that mentions its release; read as released, it would let a
-    // close through while the lease was live (#411).
-    released: /^[^a-z0-9]*released\b/i.test(claim ?? ""),
+    // close through while the lease was live (#411). So does every other Claim line in the Handoff's
+    // sections: one that holds, beside one that releases, keeps the lease live.
+    released: claims.length > 0 && claims.every((c) => /^[^a-z0-9]*released\b/i.test(c)),
   };
 }
 

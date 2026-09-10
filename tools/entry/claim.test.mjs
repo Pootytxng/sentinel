@@ -604,6 +604,62 @@ describe("threadLease: is a lease still live on this thread?", () => {
       expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
     });
   });
+
+  // HQ review 5172037615 on afc6dfc7: a Handoff read its fields from the whole comment, so a Claim line
+  // above its header, or under a later heading, released the claim before it. A Handoff's section runs
+  // from its header to the next line that opens another section.
+  describe("a Handoff reads its fields only from its own section", () => {
+    const NOTES = ["### Notes", "- Claim: released", ""];
+    const OWN = ["### Handoff", "- Outcome: review requested", "- Exact next action: independent review"];
+
+    it.each([
+      ["above its header, in a Handoff with no Claim line", [...NOTES, ...OWN]],
+      ["above its header, over the Handoff's own HELD", [...NOTES, "### Handoff", "- Claim: HELD. Review pending."]],
+      ["under a later heading", [...OWN, "", "### Notes", "- Claim: released"]],
+      ["under a later heading of another level", [...OWN, "", "# Notes", "- Claim: released"]],
+      ["under a later setext heading", [...OWN, "", "Notes", "-----", "- Claim: released"]],
+      ["that is the text of a later setext heading", [...OWN, "", "| Claim | released |", "==="]],
+      ["past a thematic break", [...OWN, "", "***", "- Claim: released"]],
+      ["under a heading in a later list item", [...OWN, "- ### Notes", "- Claim: released"]],
+      ["under a heading in a quote", [...OWN, "", "> ### Notes", "", "- Claim: released"]],
+      ["under an HTML heading", [...OWN, "", "<h3>Notes</h3>", "", "- Claim: released"]],
+      ["past an HTML rule", [...OWN, "", "<hr>", "", "- Claim: released"]],
+    ])("does not release on a Claim line %s, so the claim before it stays live", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toMatchObject({ released: false });
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...lines)]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+    });
+
+    it.each([
+      ["released", "HELD. Review pending.", false],
+      ["HELD. Review pending.", "released", false],
+      ["released", "released", true],
+    ])("releases on two Handoffs in one comment only when both do: %j, then %j", (first, second, released) => {
+      const body = ["### Handoff", `- Claim: ${first}`, "", "### Handoff", `- Claim: ${second}`].join("\n");
+      expect(parseHandoff(body).released).toBe(released);
+    });
+
+    it("does not release when a Handoff's own Claim lines disagree", () => {
+      expect(parseHandoff("### Handoff\n- Claim: released\n- Claim: HELD. Review pending.").released).toBe(false);
+    });
+
+    it("reads no field from above its header or under a later heading", () => {
+      const body = ["### Notes", "- Exact next action: stale", "- Outcome: stale", "", ...OWN, "", "### Next", "- Verification: elsewhere"];
+      expect(parseHandoff(body.join("\n"))).toMatchObject({
+        outcome: "review requested",
+        nextAction: "independent review",
+        verification: null,
+        released: false,
+      });
+    });
+
+    it("still reads the rendered template as a release, with a section or a rule after it", () => {
+      const body = renderHandoff({ outcome: "merged", nextAction: "none", claim: "released" });
+      expect(parseHandoff(body)).toMatchObject({ outcome: "merged", nextAction: "none", released: true });
+      expect(parseHandoff([body, "", "### Notes", "- Claim: HELD. Another lane's."].join("\n")).released).toBe(true);
+      expect(parseHandoff([body, "---", "Posted by the lane."].join("\n")).released).toBe(true);
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", body)]).claim).toBeNull();
+    });
+  });
 });
 
 describe("the gh plan pins the field quirks that cost real time", () => {

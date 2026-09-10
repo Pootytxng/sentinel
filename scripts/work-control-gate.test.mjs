@@ -457,6 +457,24 @@ describe("a close ends the lease, so the lease has to end first (#411)", () => {
     expect(result.blockers.join("\n")).toMatch(/#283 still has a live lease/);
   });
 
+  // HQ review 5172037615 on afc6dfc7: a Handoff took its Claim line from anywhere in its comment, so a
+  // `- Claim: released` above its header, or under a later heading, released #283's live claim.
+  const OUTSIDE = [
+    ["above the Handoff's header", ["### Notes", "- Claim: released", "", "### Handoff", "- Outcome: review requested", "- Exact next action: independent review"]],
+    ["above a Handoff that says HELD", ["### Notes", "- Claim: released", "", "### Handoff", "- Claim: HELD. Review pending."]],
+    ["under a heading after the Handoff", ["### Handoff", "- Outcome: review requested", "", "### Notes", "- Claim: released"]],
+  ];
+  it.each(["close-issue", "mark-done"].flatMap((t) => OUTSIDE.map(([where, lines]) => [t, where, lines])))(
+    "blocks %s when the only released Claim line is %s",
+    (transition, _, lines) => {
+      const outside = at("2026-09-10T07:52:00Z", ...lines);
+      const result = evaluateWorkControl(close({ transition }), thread(CLAIM_283, outside));
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/#283 still has a live lease/);
+      expect(evaluateWorkControl(close({ transition }), thread(CLAIM_283, outside, handoff("released")))).toEqual(PASSED);
+    },
+  );
+
   it("leaves merge-pr alone: that transition reads no thread", () => {
     expect(evaluateWorkControl(record({ transition: "merge-pr", issue: 283 }))).toEqual(PASSED);
   });
