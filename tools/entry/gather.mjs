@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { discoverCheckouts } from "./checkouts.mjs";
 import { inspectGitState } from "./git-state.mjs";
 import { verifyHooks } from "./hooks-verify.mjs";
-import { claimExpiry, parseClaim, parseHandoff } from "./claim.mjs";
+import { claimExpiry, threadLease } from "./claim.mjs";
 import { inspectProcesses } from "./processes.mjs";
 import {
   intendedWindow,
@@ -127,18 +127,8 @@ export function readBoard({ run = gh } = {}) {
 export function readIssueThread(issue) {
   try {
     const raw = gh(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]);
-    const comments = JSON.parse(raw).comments ?? [];
-    let claim = null;
-    let handoff = null;
-    for (const c of comments) {
-      const asClaim = parseClaim(c.body);
-      if (asClaim) claim = { ...asClaim, issue, postedAt: c.createdAt };
-      const asHandoff = parseHandoff(c.body);
-      if (asHandoff) handoff = { ...asHandoff, postedAt: c.createdAt };
-    }
-    // A released claim is not a live claim.
-    if (handoff?.released && claim && new Date(handoff.postedAt) > new Date(claim.postedAt)) claim = null;
-    return { claim, handoff };
+    const { claim, handoff } = threadLease(JSON.parse(raw).comments ?? []);
+    return { claim: claim ? { ...claim, issue } : null, handoff };
   } catch {
     return { claim: null, handoff: null };
   }

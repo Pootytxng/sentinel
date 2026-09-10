@@ -15,9 +15,17 @@ import {
 
 // Provenance has its own describe block below, with its own falsifications. Every case in the
 // blocks before it is about what the receipt itself proves, so they run against a remote that
-// says yes: a test that silently depended on the network would be measuring the network.
+// says yes: a test that silently depended on the network would be measuring the network. The same
+// holds for the issue thread a close reads (#411): a case that needs one hands it in, and any other
+// read is refused here rather than sent to GitHub.
 const evaluateWorkControl = (receipt, options = {}) =>
-  evaluateRaw(receipt, { headProvenance: () => ({ ok: true, why: "stubbed" }), ...options });
+  evaluateRaw(receipt, {
+    headProvenance: () => ({ ok: true, why: "stubbed" }),
+    issueComments: () => {
+      throw new Error("stubbed: this case reads no issue thread");
+    },
+    ...options,
+  });
 
 // The REAL head of this worktree. Fixtures used to say HEAD, and the gate accepted it — which
 // is precisely the hole this file now guards: a receipt is written by the actor asking for
@@ -326,6 +334,81 @@ describe("proof-gated GitHub transitions", () => {
 // origin is a bare repo on disk, because a stale remote-tracking ref is not a thing a stub can
 // honestly imitate: it is a specific disagreement between what git cached and what origin has.
 // ---------------------------------------------------------------------------------------------
+// Bug -> guard (2026-09-10, #411): `gh issue close 283` ran while #283's lease was live, and two
+// seconds later the project's "Item closed" workflow set the item Done, before any Handoff. On this
+// board a close IS a Done ("Auto-close issue" runs the other way), so both transitions now read the
+// issue's thread first and refuse while a lease is live on it. The threads are the shapes #283 had.
+describe("a close ends the lease, so the lease has to end first (#411)", () => {
+  const at = (createdAt, ...lines) => ({ createdAt, body: lines.join("\n") });
+  const CLAIM_283 = at(
+    "2026-09-10T06:41:51Z",
+    "### Ownership claim",
+    "- Lane: Claude Code",
+    "- Write scope: `src-tauri/src/race_seam.rs`",
+    "- Next action: land #410, close #283 and #398. The last step is a `### Handoff` that releases this lease.",
+  );
+  const CLOSE_NOTE = at(
+    "2026-09-10T07:50:16Z",
+    "Closing: #410 merged. The lease stays held until the carrier lands. Then the `### Handoff` and Done follow.",
+  );
+  const handoff = (claimLine) => at("2026-09-10T07:52:00Z", "### Handoff", "- Exact next action: none", `- Claim: ${claimLine}`);
+  const thread = (...comments) => ({ issueComments: (issue) => (issue === 283 ? comments : []) });
+  const close = (overrides = {}) => record({ transition: "close-issue", issue: 283, ...overrides });
+  const PASSED = { decision: "PASS", blockers: [], warnings: [] };
+
+  it.each(["close-issue", "mark-done"])("blocks %s while the issue's lease is live, as #283's was at 07:50:17Z", (transition) => {
+    const result = evaluateWorkControl(close({ transition }), thread(CLAIM_283, CLOSE_NOTE));
+    expect(result.decision).toBe("BLOCKED");
+    const said = result.blockers.join("\n");
+    expect(said).toMatch(/#283 still has a live lease/);
+    expect(said).toMatch(/2026-09-10T06:41:51Z/);
+    expect(said).toMatch(/Item closed/);
+    expect(said).toMatch(/Handoff first/);
+  });
+
+  it("passes once a newer Handoff releases the lease", () => {
+    expect(evaluateWorkControl(close(), thread(CLAIM_283, handoff("released")))).toEqual(PASSED);
+    expect(evaluateWorkControl(close({ transition: "mark-done" }), thread(CLAIM_283, handoff("released")))).toEqual(PASSED);
+  });
+
+  it.each([
+    ["a transfer", "transferred to codex until 2026-09-11T08:00Z"],
+    ["a HELD lease that mentions its release (#399)", "**HELD.** Scope unchanged. Released only when a review verdict lands."],
+  ])("stays blocked after %s", (_, claimLine) => {
+    expect(evaluateWorkControl(close(), thread(CLAIM_283, handoff(claimLine))).decision).toBe("BLOCKED");
+  });
+
+  it("blocks when the thread cannot be read, because an unknown lease is not a released one", () => {
+    const result = evaluateWorkControl(close(), {
+      issueComments: () => {
+        throw new Error("gh: HTTP 502");
+      },
+    });
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/#283's thread could not be read \(gh: HTTP 502\)/);
+    expect(result.blockers.join("\n")).toMatch(/blocker, not a pass/);
+  });
+
+  // One-element rows: it.each spreads an array row into arguments, so a bare [] would arrive as nothing.
+  it.each([[undefined], [null], [0], ["283"], [[]], [[283, "x"]]])("blocks a receipt that does not name its issue plainly: %j", (issue) => {
+    const result = evaluateWorkControl(close({ issue }), thread(CLAIM_283, handoff("released")));
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/must name its issue/);
+  });
+
+  it("reads every issue a receipt closes, and names only the one still leased", () => {
+    const threads = { 324: [CLAIM_283, handoff("released")], 339: [CLAIM_283] };
+    const result = evaluateWorkControl(close({ issue: [324, 339] }), { issueComments: (n) => threads[n] });
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/#339 still has a live lease/);
+    expect(result.blockers.join("\n")).not.toMatch(/#324/);
+  });
+
+  it("leaves merge-pr alone: that transition reads no thread", () => {
+    expect(evaluateWorkControl(record({ transition: "merge-pr", issue: 283 }))).toEqual(PASSED);
+  });
+});
+
 describe("receipt provenance", () => {
   const ONE = "1".repeat(40);
   const TWO = "2".repeat(40);

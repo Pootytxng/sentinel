@@ -127,9 +127,17 @@ export function claimExpiry(text, { anchor = null } = {}) {
   return new Date(at.getTime() + n * (/^d/i.test(rel[2]) ? 86_400_000 : 3_600_000));
 }
 
+/**
+ * Whether a comment carries a header, read the way Markdown renders one: at the start of a line, after
+ * at most a byte-order mark and three spaces. A sentence that mentions `### Handoff` is not a handoff.
+ * Ten of the 840 comments in this repository on 2026-09-10 did exactly that, and each one read as a
+ * lease event: #283's close comment as a handoff, and #408's and #409's retellings as fresh claims (#411).
+ */
+const headed = (body, header) => new RegExp(`^\\uFEFF?[ \\t]{0,3}${esc(header)}`, "m").test(String(body ?? ""));
+
 /** Parse a claim comment back into facts. Returns null when the comment is not a claim. */
 export function parseClaim(body) {
-  if (!body?.includes(CLAIM_HEADER)) return null;
+  if (!headed(body, CLAIM_HEADER)) return null;
   return {
     lane: field(body, "Lane"),
     executor: field(body, "Executor/tool", ["executor", "writer"]),
@@ -148,7 +156,7 @@ export function parseClaim(body) {
 
 /** Parse a handoff comment. `nextAction` is the durable record guard 7 checks the board against. */
 export function parseHandoff(body) {
-  if (!body?.includes(HANDOFF_HEADER)) return null;
+  if (!headed(body, HANDOFF_HEADER)) return null;
   const claim = field(body, "Claim");
   return {
     outcome: field(body, "Outcome"),
@@ -159,8 +167,31 @@ export function parseHandoff(body) {
     worktreeState: field(body, "Worktree state"),
     processes: field(body, "Active processes"),
     nextAction: field(body, "Exact next action"),
-    released: /released/i.test(claim ?? ""),
+    // The Claim line has to open with "released". "**HELD.** ... Released only when a review verdict
+    // lands" (#399, #407) is a held lease that mentions its release; read as released, it would let a
+    // close through while the lease was live (#411).
+    released: /^[^a-z0-9]*released\b/i.test(claim ?? ""),
   };
+}
+
+/**
+ * Is a lease still live on this thread? The newest claim is, unless the newest handoff was posted
+ * after it and says released. One fold, shared by `gather.readIssueThread` and the work-control
+ * gate's close check (#411), so the board reader and the gate cannot disagree about when a lease
+ * ended. `comments` is the thread in posting order, as `gh issue view --json comments` returns it.
+ */
+export function threadLease(comments) {
+  let claim = null;
+  let handoff = null;
+  for (const c of comments ?? []) {
+    const asClaim = parseClaim(c.body);
+    if (asClaim) claim = { ...asClaim, postedAt: c.createdAt };
+    const asHandoff = parseHandoff(c.body);
+    if (asHandoff) handoff = { ...asHandoff, postedAt: c.createdAt };
+  }
+  // A released claim is not a live claim.
+  const released = Boolean(handoff?.released && claim && new Date(handoff.postedAt) > new Date(claim.postedAt));
+  return { claim: released ? null : claim, handoff };
 }
 
 const REPO = ["--repo", "Pootytxng/sentinel"];

@@ -18,6 +18,7 @@ import {
   postClaim,
   renderClaim,
   renderHandoff,
+  threadLease,
 } from "./claim.mjs";
 
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-workflow";
@@ -181,6 +182,63 @@ describe("the handoff, and guard 7's other half", () => {
 
   it("returns null for a comment that is not a handoff", () => {
     expect(parseHandoff("### Ownership claim\n- Lane: Codex")).toBeNull();
+  });
+});
+
+// #411: the work-control gate asks one question of an issue thread before a close (is a lease still
+// live?) and answers it through this fold, the same one gather.readIssueThread uses, so the two
+// cannot disagree. Each case is the shape of a real comment found by reading all 840 comments in the
+// repository on 2026-09-10.
+describe("threadLease: is a lease still live on this thread?", () => {
+  const at = (createdAt, ...lines) => ({ createdAt, body: lines.join("\n") });
+  const CLAIM = at("2026-09-10T06:41:51Z", "### Ownership claim", "- Lane: Claude Code", "- Write scope: `src-tauri/src/race_seam.rs`");
+  const RELEASE = at("2026-09-10T07:52:00Z", "### Handoff", "- Exact next action: none", "- Claim: released");
+
+  it("reads the newest claim as live until a newer handoff releases it", () => {
+    expect(threadLease([CLAIM]).claim).toMatchObject({ lane: "Claude Code", postedAt: "2026-09-10T06:41:51Z" });
+    expect(threadLease([CLAIM, RELEASE]).claim).toBeNull();
+    expect(threadLease([RELEASE, { ...CLAIM, createdAt: "2026-09-10T08:00:00Z" }]).claim).not.toBeNull();
+    expect(threadLease([]).claim).toBeNull();
+  });
+
+  it.each(["- Claim: transferred to codex until 2026-09-11T08:00Z", "- Claim: renewed until 2026-08-04.", "- Outcome: merged"])(
+    "keeps the lease live after a handoff whose last line is %j",
+    (last) => {
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", "### Handoff", last)]).claim).not.toBeNull();
+    },
+  );
+
+  it("does not read a HELD lease as released because its Claim line mentions the release (#399, #407)", () => {
+    const held = at("2026-09-10T07:52:00Z", "### Handoff", "- Claim: **HELD.** Comment `IC_x`, scope unchanged. Released only when a review verdict lands.");
+    expect(parseHandoff(held.body).released).toBe(false);
+    expect(threadLease([CLAIM, held]).claim).not.toBeNull();
+  });
+
+  it.each(["released", "Released.", "**released.**", "RELEASED** by Cowork.", "Released 2026-09-03; lane complete.", "`released`"])(
+    "reads a release as writers spell it: %s",
+    (value) => {
+      expect(parseHandoff(`### Handoff\n- Claim: ${value}`).released).toBe(true);
+    },
+  );
+
+  it("does not count a sentence that merely mentions a header as a lease event", () => {
+    // #283's close comment (2026-09-10T07:50:16Z) named the Handoff still to come. It is not one.
+    const mention = at("2026-09-10T07:50:16Z", "Closing. The lease stays held until the carrier lands. Then the `### Handoff` and Done follow.");
+    expect(parseHandoff(mention.body)).toBeNull();
+    // #408 and #409 (2026-09-09) retold "a fresh **`### Ownership claim`**" after the lease was released.
+    const retelling = at("2026-09-10T08:00:00Z", "The measurements that licensed it, followed by a fresh **`### Ownership claim`** (20:43).");
+    expect(parseClaim(retelling.body)).toBeNull();
+    expect(threadLease([CLAIM, RELEASE, retelling]).claim).toBeNull();
+  });
+
+  it("still reads a header that opens its line after a byte-order mark, or carries a suffix (#49)", () => {
+    expect(parseClaim("\uFEFF### Ownership claim\n- Lane: Codex")).toMatchObject({ lane: "Codex" });
+    expect(parseHandoff("### Handoff — Phase B step 3 complete\n- Claim: released.").released).toBe(true);
+  });
+
+  it("reads a claim and a release in one comment as a live lease: the release has to come after", () => {
+    const both = at("2026-09-10T07:52:00Z", "### Handoff", "- Claim: released", "", "### Ownership claim", "- Lane: Codex");
+    expect(threadLease([both]).claim).not.toBeNull();
   });
 });
 

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { threadLease } from "../tools/entry/claim.mjs";
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
 
@@ -115,6 +116,70 @@ export const canonicalHeadProvenance = headProvenanceVia((args) =>
   }),
 );
 
+// ---------------------------------------------------------------------------------------------
+// A CLOSE ENDS THE LEASE (#411)
+// On this board, closing an issue and marking its item Done are one transition: the project's
+// "Item closed" workflow sets Done when the issue closes, and "Auto-close issue" closes the issue
+// when Done is set. Done tells every reader that no writer holds the item. On 2026-09-10 #283 was
+// closed while its lease was live, and it read Done for three and a half minutes before any
+// Handoff. So both transitions read the issue's thread first and refuse while a lease is live on
+// it. A thread that cannot be read refuses too, because an unknown lease is not a released one.
+// ---------------------------------------------------------------------------------------------
+
+const LEASE_ENDING_TRANSITIONS = new Set(["close-issue", "mark-done"]);
+
+/** The issue's comments in posting order, straight from GitHub. Throws when they cannot be read. */
+function readIssueComments(issue) {
+  const raw = execFileSync("gh", ["issue", "view", String(issue), "--repo", CANONICAL_REPO, "--json", "comments"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 20_000,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  const comments = JSON.parse(raw).comments;
+  if (!Array.isArray(comments)) throw new Error("gh returned no comment list");
+  return comments;
+}
+
+/** The issues a close names: one positive issue number, or a list of them. Anything else is null. */
+function issuesClosedBy(record) {
+  const named = Array.isArray(record?.issue) ? record.issue : [record?.issue];
+  return named.length > 0 && named.every((n) => Number.isInteger(n) && n > 0) ? named : null;
+}
+
+function leaseBlockers(record, issueComments) {
+  const issues = issuesClosedBy(record);
+  if (!issues) {
+    return [
+      `A ${record?.transition} receipt must name its issue (a positive issue number, or a list of them): ` +
+        "on this board that transition closes the issue and marks it Done, so the gate reads the issue's lease first.",
+    ];
+  }
+  const blockers = [];
+  for (const issue of issues) {
+    let lease;
+    try {
+      lease = threadLease(issueComments(issue));
+    } catch (error) {
+      const why = String(error instanceof Error ? error.message : error).split("\n")[0];
+      blockers.push(
+        `#${issue}'s thread could not be read (${why}), so whether its lease was released is unknown; ` +
+          "environment inability is a blocker, not a pass.",
+      );
+      continue;
+    }
+    if (lease.claim) {
+      blockers.push(
+        `#${issue} still has a live lease: the ownership claim posted ${lease.claim.postedAt} has no newer ` +
+          `Handoff releasing it. Closing the issue sets its item Done (the project's "Item closed" workflow), ` +
+          "which tells every reader that no writer holds it; #283 read Done that way on 2026-09-10. Post the " +
+          'Handoff first, ending "- Claim: released" (planRelease moves the item to Review), then close.',
+      );
+    }
+  }
+  return blockers;
+}
+
 const PROOF_DEPENDENT_TRANSITIONS = new Set([
   "mark-pr-ready",
   "close-superseded-pr",
@@ -195,7 +260,11 @@ export function mutationAuthorsFor(record) {
 
 export function evaluateWorkControl(
   record,
-  { resolveHead = resolveRepoHead, headProvenance = canonicalHeadProvenance } = {},
+  {
+    resolveHead = resolveRepoHead,
+    headProvenance = canonicalHeadProvenance,
+    issueComments = readIssueComments,
+  } = {},
 ) {
   const blockers = [];
   const warnings = [];
@@ -365,6 +434,10 @@ export function evaluateWorkControl(
         );
       }
     }
+  }
+
+  if (LEASE_ENDING_TRANSITIONS.has(record?.transition)) {
+    blockers.push(...leaseBlockers(record, issueComments));
   }
 
   return blockers.length > 0
