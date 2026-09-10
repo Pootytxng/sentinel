@@ -271,6 +271,21 @@ fn store_write_gate() -> &'static Mutex<()> {
     GATE.get_or_init(|| Mutex::new(()))
 }
 
+/// The only way this crate takes the identity-log gate. Records the acquisition, then blocks.
+///
+/// #398: a process-wide gate around a persisted read-modify-write (`load_store` →
+/// `append_if_changed` → `save_store`) is a store lock and belongs in `race_seam::StoreLock`, even
+/// though it happens to be a leaf — nothing inside this critical section reaches another store, and
+/// `capture_identity_snapshot` runs BEFORE the gate is taken, deliberately, so the probe never runs
+/// under the lock. Recording it is what makes that leaf claim falsifiable rather than asserted: if a
+/// future edit calls into another store from in here, the recorder panics by name instead of the
+/// nesting going unnoticed. Poison policy unchanged: refuse to write, never recover.
+pub(crate) fn lock_store() -> Result<crate::race_seam::StoreGuard, ()> {
+    crate::race_seam::try_hold_lock(crate::race_seam::StoreLock::Intelligence, || {
+        store_write_gate().lock().map_err(|_| ())
+    })
+}
+
 fn refresh_gate() -> &'static Mutex<Option<Instant>> {
     static GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
     GATE.get_or_init(|| Mutex::new(None))
@@ -279,7 +294,7 @@ fn refresh_gate() -> &'static Mutex<Option<Instant>> {
 /// Probe + append synchronously (called from a background thread / app start).
 pub(crate) fn record_identity_snapshot_now() {
     let snap = capture_identity_snapshot();
-    let Ok(_g) = store_write_gate().lock() else {
+    let Ok(_g) = lock_store() else {
         return; // poisoned lock: refuse to write rather than risk a torn read-modify-write
     };
     let mut store = load_store();
