@@ -1,0 +1,83 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #411 writer lane (PR #412): a close before the Handoff let project automation mark a still-leased item Done. Round 5 (2ae0aff3, then 3d6c1921) answered HQ review 5172037615, and review 5172956911 passed 3d6c1921. All six commits in the proof delta d9d65904..3d6c1921 were authored by this actor alone: `git log --format='%an <%ae>' d9d65904..3d6c1921 | sort -u` returns only claude-code <claude-code@desk.local>. The reviewer authored none of them.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/411#issuecomment-5626901050",
+  "leaseEvidenceNote": "The landing's Ownership claim on #411 as amended (5626901050, 2026-09-10T23:33:56Z). The first landing claim (5626837138, 23:28:26Z) was posted after the lane's round-5 claim (5625353575) was released by the Handoff 5625867895, and named only the four transition receipts; the scope-drift gate then measured the six changed paths outside it. The amendment names those six paths and the four receipts, and was posted before any receipt was written. The landing edits none of the six paths: it makes no code change. Its scope parses to exactly those ten paths, and `node scripts/scope-drift-gate.mjs --issue 411 --refresh` reads OK against it.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured live when this receipt was written (2026-09-10T23:36:16Z): none of the 9 other open PRs (404, 400, 397, 395, 394, 391, 317, 306, 297) touches any of the six changed paths or any receipt this landing writes, compared file list by file list from `gh pr list --json files`, and none is based on claude/sleepy-ramanujan-3010b5. #411 had no live lease when the first landing claim was posted; the amendment superseded only the landing's own lease.",
+  "inheritedWork": false,
+  "currentHead": "3d6c19216d7479185f27aaa1f9b0b7d0e3d53561",
+  "pr": 412,
+  "issue": 411,
+  "kind": "lane",
+  "branch": "claude/sleepy-ramanujan-3010b5",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/resume-385-lease-repair-33429b, canonical remote `origin`.",
+    "remoteState": "origin/main d9d6590493bd0d8d7d2e93969bba0240e36b6db2, unmoved since the branch was cut and since the independent review. origin/claude/sleepy-ramanujan-3010b5 = 3d6c19216d7479185f27aaa1f9b0b7d0e3d53561, equal to local HEAD and to the PR head.",
+    "worktree": "Linked worktree, one writer, its own index. core.hooksPath is worktree-scoped to `.githooks` (config.worktree), so the pre-push gate is armed here.",
+    "branch": "claude/sleepy-ramanujan-3010b5, PR #412 -> main, OPEN, MERGEABLE / CLEAN, 0 closingIssuesReferences.",
+    "dirtyState": "Clean except this landing's own receipts, each inside the landing claim's scope: .claude/work-control/2026-09-10-mark-pr-ready-412.json. `git status --porcelain --untracked-files=all` was empty before the first was written.",
+    "liveProcesses": "node x32, compy x0, cargo x0, rustc x0, npm x0, msbuild x0, link x0. The node processes are MCP servers and peer Claude Code sessions; no build, install or app process. Measured with Get-Process, not WMI, because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "3d6c19216d7479185f27aaa1f9b0b7d0e3d53561",
+      "evidence": "logs/verify-local-2026-09-10T21-36-24Z.log:9-44",
+      "summary": "441 frontend test files passed (441); 7035 tests passed | 4 skipped (7039); 0 failed. Results at :39-40."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "3d6c19216d7479185f27aaa1f9b0b7d0e3d53561",
+      "evidence": "logs/verify-local-2026-09-10T21-36-24Z.log:45-71",
+      "summary": "tsc clean; vite production build succeeded, `built in 6.73s` at :70. Only the pre-existing >500 kB chunk-size advisory, unchanged by this PR."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "3d6c19216d7479185f27aaa1f9b0b7d0e3d53561",
+      "evidence": "logs/verify-local-2026-09-10T21-36-24Z.log:1420",
+      "summary": "1317 passed; 0 failed; 24 ignored; 0 filtered out, plus two 0-test targets at :1426 and :1432. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "3d6c19216d7479185f27aaa1f9b0b7d0e3d53561",
+      "evidence": "logs/verify-local-2026-09-10T21-36-24Z.log:1435-1437",
+      "summary": "clippy stage clean under -D warnings: `Finished` at :1437 with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "Run by the pre-push hook itself at this exact head with an empty git status: the push that carried 3d6c1921 (`2ae0aff3..3d6c1921`, first attempt, 2026-09-10T21:36:24Z) produced this log, and the push transcript prints `LOCAL CHECK RESULT: PASS`. Exit code was not treated as the verdict; every stage was read at its own line range. Six `LOCAL CHECK:` stages: git diff check (:3), write-scope drift #356 (:5-7), frontend tests (:9-44), frontend type-check and build (:45-71), Rust tests (:72-1434), Rust clippy (:1435-1437). Zero lines in the 1437-line log match `test result: FAILED`, `panicked` or `error[E`. No `--no-verify` at any point in this lane. The log is gitignored (`logs`), so it is not a tracked write.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "log:6-7: \"6 changed paths since origin/main measured against the claim on #411 (cache)\", then OK: every changed path is inside that claim's scope.",
+    "reconciliationNote": "The code delta is 6 paths and has not moved since the independent review. The gate run measured them against the round-5 claim. The landing claim as amended (5626901050) names the same six paths and the four receipts this landing writes; it was posted before any receipt was written, and `scripts/scope-drift-gate.mjs --issue 411 --refresh` reads OK against it."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "3d6c19216d7479185f27aaa1f9b0b7d0e3d53561",
+    "verdict": "APPROVE-EQUIVALENT",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/412#pullrequestreview-5172956911 (2026-09-10T22:41:27Z), naming reviewed head 3d6c19216d7479185f27aaa1f9b0b7d0e3d53561 against base d9d6590493bd0d8d7d2e93969bba0240e36b6db2.",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq, which authored no commit in the proof delta: mutationAuthors is claude-code alone. GitHub records it as COMMENTED because both executors use the owner account, so this durable exact-head review is the verdict, in the APPROVE-EQUIVALENT shape of earlier landings. It says it covers no new commit and is not merge authority by itself, so each transition here has its own receipt and its own gate PASS. It goes stale if the PR head changes; the PR head read 3d6c1921 when this receipt was written."
+  },
+  "transition": "merge-pr",
+  "mergeMethodNote": "Landed with `node scripts/land-pr.mjs --pr 412 --receipt .claude/work-control/2026-09-10-merge-pr-412.json`, the repository's landing sequence: `gh pr merge 412 --repo Pootytxng/sentinel --merge` (a true merge commit, never a squash), then `git push origin --delete claude/sleepy-ramanujan-3010b5`, then `git fetch origin --prune`, then `node scripts/branch-disposition-audit.mjs`. `--delete-branch` is not used, and no worktree is removed.",
+  "dependentsNote": "No open PR is based on this head (baseRefName across `gh pr list --state open`), so nothing needs retargeting before the prune. No record in docs/dispositions/ names this ref, so land-pr's PRESERVE/LANDED refusal does not fire.",
+  "fileOverlapNote": "Zero file overlap between the six changed paths and the 9 other open PRs (404, 400, 397, 395, 394, 391, 317, 306, 297), measured file list by file list when this receipt was written.",
+  "closingNote": "PR #412 only references #411 (closingIssuesReferences is []), so the merge does not close the issue. The close is its own transition, under its own receipt, after this landing's lease is released."
+}
