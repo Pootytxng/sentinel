@@ -24,8 +24,20 @@ describe("a folder another Active task is writing in", () => {
     const ready = item({ number: 23, worktreeBranch: at("sentinel-marathon", "tooling/y") });
     const v = availability(ready, { items: [ready, occupied], codeRoot: ROOT });
     expect(v.available).toBe(false);
-    expect(v.reason).toMatch(/#41 is already working in/);
+    expect(v.reason).toMatch(/#41 already has an active mutation lease in/);
     expect(v.reason).toMatch(/one folder, one writer/);
+  });
+
+  // Dynamic mutation leases (#369 / PR #375): a Lane label reserves nothing, but a folder held by a
+  // live lease still does — whoever holds it. The occupant's Lane must not change the verdict.
+  it("holds whichever executor's live lease occupies the folder — Lane labels do not soften it", () => {
+    const ready = item({ number: 23, worktreeBranch: at("sentinel-marathon", "tooling/y") });
+    for (const lane of ["Claude Code", "Codex", "ChatGPT HQ", null]) {
+      const holder = item({ number: 41, status: "Active", lane, worktreeBranch: at("sentinel-marathon", "tooling/x") });
+      const v = availability(ready, { self: { lane: "Claude Code" }, items: [ready, holder], codeRoot: ROOT });
+      expect(v.available, `occupant lane ${lane}`).toBe(false);
+      expect(v.reason).toMatch(/one folder, one writer/);
+    }
   });
 
   it("leaves a Ready task in a different folder alone", () => {
@@ -64,6 +76,6 @@ describe("the menu the owner actually sees", () => {
     const menu = buildMenu([ready, occupied], { policy: POLICY, codeRoot: ROOT });
 
     expect(menu.options.map((o) => o.number)).not.toContain(23);
-    expect(menu.unavailable.find((u) => u.number === 23).reason).toMatch(/already working in/);
+    expect(menu.unavailable.find((u) => u.number === 23).reason).toMatch(/#41 already has an active mutation lease in/);
   });
 });

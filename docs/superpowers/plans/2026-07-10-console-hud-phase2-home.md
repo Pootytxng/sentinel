@@ -1,5 +1,11 @@
 # Compy Console HUD — Phase 2 (Home: the console cold-open) Implementation Plan
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical implementation record, not
+> current product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Conforming evidence and telemetry-honesty
+> provenance remains useful under [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 > **Design source of truth:** `docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md` (owner-

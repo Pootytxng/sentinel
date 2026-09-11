@@ -1,5 +1,10 @@
 # Intuitiveness Sweep — comprehensive UX audit (owner mandate 2026-06-20)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This mandate, governing-law language, wave
+> sequence, and build status are historical and no longer authorize work. Current experience
+> direction comes from `docs/PRODUCT_CONSTITUTION.md`; validated usability and technical evidence
+> remains bounded by current architecture, release truth, and Work Control.
+
 **Mandate (owner, verbatim intent):** be *very diligent* weeding through everything with even the
 slightest potential to be more intuitive — improve navigation, word things more comprehensibly and
 easily interpreted, make information easily navigable + accessible, and make every UI option /

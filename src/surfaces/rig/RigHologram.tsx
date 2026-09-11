@@ -52,7 +52,7 @@ const GLITCH_DURATION = new Vector2(0.15, 0.35);
 const GLITCH_DELAY = new Vector2(0, 0.1);
 const GLITCH_STRENGTH = new Vector2(0.15, 0.4);
 
-export function FitCamera({ baseDist }: { baseDist: number }) {
+export function FitCamera({ baseDist, targetY = 0.2 }: { baseDist: number; targetY?: number }) {
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
   const controls = useThree((s) => s.controls) as { update?: () => void } | null;
@@ -62,7 +62,7 @@ export function FitCamera({ baseDist }: { baseDist: number }) {
     const dist = fitCameraDistance(baseDist, aspect);
     // OrbitControls target — scale the camera's offset from it to `dist`, preserving orbit angle.
     const tx = 0,
-      ty = 0.2,
+      ty = targetY,
       tz = 0;
     const dx = camera.position.x - tx;
     const dy = camera.position.y - ty;
@@ -74,7 +74,7 @@ export function FitCamera({ baseDist }: { baseDist: number }) {
     camera.position.set(tx + dx * k, ty + dy * k, tz + dz * k);
     controls?.update?.();
     invalidate();
-  }, [size.width, size.height, baseDist, camera, controls, invalidate]);
+  }, [size.width, size.height, baseDist, targetY, camera, controls, invalidate]);
   return null;
 }
 
@@ -102,6 +102,12 @@ interface Props {
   /** Initial camera distance. Default = the classic framing; the V2 hero stage pulls in closer
       so the model fills its bigger stage (additive — existing callers are untouched). */
   cameraDist?: number;
+  /** Where the camera aims vertically (world y). Default 0.2 = the classic framing, which centers
+      the CASE and leaves the floor ring — the lowest silhouette element — hugging the frame's
+      bottom edge. A host whose comp wants bottom air under the ring aims lower: the composition
+      rides up in frame, trading top margin for bottom (#224 round-4 correction). Additive —
+      existing callers are untouched. */
+  cameraTargetY?: number;
   /** Evidence-map mode (the Lab console). Clicking a part is the ONLY way to open its readings
       there — the orbit/explode chrome is hidden — so any ghost standing in front of a real part
       becomes transparent to the pointer. Off everywhere else: the Gaming rig viewer keeps its
@@ -126,6 +132,7 @@ export const RigHologram = memo(function RigHologram({
   manualParts,
   cardsSuppressed = false,
   cameraDist = 9.5,
+  cameraTargetY = 0.2,
   evidenceMap = false,
 }: Props) {
   const { t } = useTranslation();
@@ -497,11 +504,11 @@ export const RigHologram = memo(function RigHologram({
         maxPolarAngle={Math.PI / 1.9}
         autoRotate={orbiting}
         autoRotateSpeed={0.5}
-        target={[0, 0.2, 0]}
+        target={[0, cameraTargetY, 0]}
       />
       {/* Fit the model to whatever container it's in (must sit AFTER OrbitControls so
           useThree().controls is registered via makeDefault). */}
-      <FitCamera baseDist={cameraDist} />
+      <FitCamera baseDist={cameraDist} targetY={cameraTargetY} />
 
       {/* V2 post stack — restrained Bloom lifts the holo shell + accent lights; Glitch fires
           ONLY during the explode/reassemble burst (event-driven, never ambient). */}

@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { discoverCheckouts } from "./checkouts.mjs";
 import { inspectGitState } from "./git-state.mjs";
 import { verifyHooks } from "./hooks-verify.mjs";
-import { parseClaim, parseHandoff } from "./claim.mjs";
+import { claimExpiry, threadLease } from "./claim.mjs";
 import { inspectProcesses } from "./processes.mjs";
 import {
   intendedWindow,
@@ -22,6 +22,7 @@ import {
 } from "./settings-resolve.mjs";
 import { envWindowOf, planTier, readLocalLayer, readProjectWindow, readTierRecord } from "./tier.mjs";
 import { parseWorktreeField } from "./worktree-field.mjs";
+import { parseScopePatterns, scopeTextFromMarkdown } from "../../scripts/lib/claim-scope.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
 export const PROJECT = { number: 1, owner: "Pootytxng" };
@@ -83,11 +84,28 @@ export function loadPolicy(file = join(HERE, "context-policy.json")) {
   return JSON.parse(readFileSync(file, "utf8"));
 }
 
+// `gh project item-list` returns at most `--limit` rows and says nothing when the board has more: the
+// read is truncated silently, and every issue past the cut reads as "not on the board" -- a refusal
+// with a false reason (#339 on a 135-item board, under the old limit of 100). The limit is generous,
+// and the count gh reports alongside the rows is compared to what arrived: a short read is not a read.
+export const BOARD_READ_LIMIT = 1000;
+
+/** gh's item-list payload -> rows, or a throw when the payload is a truncated board. */
+export function parseBoardItems(raw) {
+  const parsed = JSON.parse(raw);
+  const items = parsed.items ?? [];
+  const total = parsed.totalCount;
+  if (Number.isInteger(total) && total > items.length) {
+    throw new Error(`board read truncated: ${items.length} of ${total} items arrived (BOARD_READ_LIMIT=${BOARD_READ_LIMIT})`);
+  }
+  return items;
+}
+
 /** Board items in the shape the reconciler expects. `reachable:false` is a verdict input, not a crash. */
-export function readBoard() {
+export function readBoard({ run = gh } = {}) {
   try {
-    const raw = gh(["project", "item-list", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json", "--limit", "100"]);
-    const items = JSON.parse(raw).items.map((it) => ({
+    const raw = run(["project", "item-list", String(PROJECT.number), "--owner", PROJECT.owner, "--format", "json", "--limit", String(BOARD_READ_LIMIT)]);
+    const items = parseBoardItems(raw).map((it) => ({
       number: it.content?.number,
       title: it.title,
       itemId: it.id,
@@ -105,25 +123,74 @@ export function readBoard() {
   }
 }
 
-/** The newest claim and the newest handoff on an issue — the durable record guard 7 compares to. */
+/** The issue's live claim, as threadLease folds it, and its newest handoff — the record guard 7 compares to. */
 export function readIssueThread(issue) {
   try {
     const raw = gh(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]);
-    const comments = JSON.parse(raw).comments ?? [];
-    let claim = null;
-    let handoff = null;
-    for (const c of comments) {
-      const asClaim = parseClaim(c.body);
-      if (asClaim) claim = { ...asClaim, issue, postedAt: c.createdAt };
-      const asHandoff = parseHandoff(c.body);
-      if (asHandoff) handoff = { ...asHandoff, postedAt: c.createdAt };
-    }
-    // A released claim is not a live claim.
-    if (handoff?.released && claim && new Date(handoff.postedAt) > new Date(claim.postedAt)) claim = null;
-    return { claim, handoff };
+    const { claim, handoff } = threadLease(JSON.parse(raw).comments ?? []);
+    return { claim: claim ? { ...claim, issue } : null, handoff };
   } catch {
     return { claim: null, handoff: null };
   }
+}
+
+/** The issue body — where a task's Write scope lives before its first claim. Null when unreadable. */
+export function readIssueBody(issue) {
+  try {
+    return JSON.parse(gh(["issue", "view", String(issue), "--repo", REPO, "--json", "body"])).body ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The facts `scope.overlap` decides over (#358): this task's declared paths (from --scope, else its
+ * own live claim, else the issue body's "Write scope" bullet), every OTHER Active item's declared
+ * paths from its live claim, and the tracked paths of the base commit — the set a glob can claim.
+ * The readers are injected so the guards can drive this without GitHub or git.
+ */
+export function gatherScopeFacts({ task, items = [], claim = null, scopeText = null, base = null, now = new Date(), hostDir = HOST_DIR, git = gitIn, thread = readIssueThread, body = readIssueBody }) {
+  let text = null;
+  let source = null;
+  if (scopeText) {
+    text = scopeText;
+    source = "cli";
+  } else if (claim?.scope) {
+    text = claim.scope;
+    source = "claim";
+  } else if (task?.number) {
+    const fromBody = scopeTextFromMarkdown(body(task.number));
+    if (fromBody) {
+      text = fromBody;
+      source = "issue";
+    }
+  }
+  const mine = parseScopePatterns(text);
+  const others = (items ?? [])
+    .filter((i) => i.status === "Active" && Number(i.number) !== Number(task?.number))
+    .map((i) => {
+      // A released claim already reads as null; an expired one is read as stale here, so the
+      // verdict can name it without treating it as a writer (and still refuse if its paths overlap).
+      const live = thread(i.number)?.claim ?? null;
+      // Anchored on the posting time, so a bare "12 hours" reads as the writer meant it.
+      const expiry = live ? claimExpiry(live.expires, { anchor: live.postedAt }) : null;
+      return {
+        number: i.number,
+        lane: i.lane ?? null,
+        scope: live ? parseScopePatterns(live.scope) : null,
+        live: Boolean(live),
+        expired: Boolean(expiry && expiry < now),
+        expires: expiry ? expiry.toISOString().slice(0, 10) : (live?.expires ?? null),
+      };
+    });
+  let files = null;
+  try {
+    const ref = base?.ok && base.sha ? base.sha : CREATE_BASE_REF;
+    files = git(hostDir, ["ls-tree", "-r", "--name-only", ref]).split("\n").map((l) => l.trim()).filter(Boolean);
+  } catch {
+    files = null;
+  }
+  return { mine, text, source, others, files };
 }
 
 /** The field ids claim.mjs needs to write. Read once, passed in, never guessed. */
@@ -211,7 +278,7 @@ export function refetchSnapshotFacts({ facts, base, hostDir = HOST_DIR, env = pr
  * Everything `reconcile()` needs, measured.
  * @returns {{facts: object, target: {path, branch}|null, board: object}}
  */
-export function gatherFacts({ issue, task, self = { lane: "Claude Code" }, now = new Date(), board = null, policy = null, base = null }) {
+export function gatherFacts({ issue, task, self = { lane: "Claude Code" }, now = new Date(), board = null, policy = null, base = null, scopeText = null }) {
   const theBoard = board ?? readBoard();
   const theTask = task ?? theBoard.items.find((i) => Number(i.number) === Number(issue)) ?? null;
 
@@ -251,6 +318,7 @@ export function gatherFacts({ issue, task, self = { lane: "Claude Code" }, now =
       task: theTask,
       claim: thread.claim,
       handoff: thread.handoff,
+      scope: gatherScopeFacts({ task: theTask, items: theBoard.items, claim: thread.claim, scopeText, base: createBase, now }),
       checkouts,
       gitState,
       expectedCommonDir: EXPECTED_COMMON_DIR,

@@ -13,7 +13,11 @@
 //    that had already been made and posted to the board. => ONE valid owned Active task resumes with
 //    no question asked.
 //
-// Both hold at once because the line between them is OWNERSHIP, not count. On top of that:
+// Both hold at once because the line between them is OWNERSHIP, not count. Since the owner-ratified
+// dynamic mutation leases (#369 / PR #375, 2026-09-04) ownership means a LIVE LEASE: a row's Lane
+// label is informational and never reserves Ready work; only an unexpired Active lease held by
+// another executor blocks, a live lease held by this executor auto-resumes, and an unidentified
+// caller inherits nothing. On top of that:
 //   - work that cannot be started is still shown, each line saying plainly why, and typing its number
 //     returns that reason;
 //   - menu position and issue number both select, and the prompt says so;
@@ -85,7 +89,14 @@ describe("GUARD 3: one task already ours resumes without asking", () => {
     expect(picked.kind).toBe("task");
     expect(picked.task.number).toBe(18);
     expect(picked.auto).toBe(true);
-    expect(picked.reason).toMatch(/already yours|still claimed/i);
+    expect(picked.reason).toMatch(/already leased to this executor/i);
+  });
+
+  it("an unidentified caller never inherits a live lease — no auto-resume without an executor identity", () => {
+    const m = menu(BOARD, { self: { lane: null } });
+    expect(m.autoResume).toBe(null);
+    expect(m.options.map((o) => o.number)).not.toContain(18);
+    expect(selectTask(BOARD, { self: { lane: null }, now: NOW, policy: POLICY }).kind).not.toBe("task");
   });
 
   it("a restarted editor changes nothing: the claim lives on the board, not in a window", () => {
@@ -117,7 +128,7 @@ describe("GUARD 3: one task already ours resumes without asking", () => {
 });
 
 describe("GUARD 4: nothing else is ever selected for us", () => {
-  it("several Ready tasks and nothing of ours → a choice, never a start", () => {
+  it("several Ready tasks and no live lease of ours → a choice, never a start (a Codex Lane label hides nothing)", () => {
     const many = [
       ...NO_CLAIM_OF_OURS,
       { number: 20, title: "[OPS] Another ready one", status: "Ready", lane: "Claude Code", gate: "None" },
@@ -125,7 +136,9 @@ describe("GUARD 4: nothing else is ever selected for us", () => {
     const picked = selectTask(many, { self: SELF, now: NOW, policy: POLICY });
     expect(picked.kind).toBe("choice");
     expect(picked.task).toBeUndefined();
-    expect(picked.options.map((o) => o.number)).toEqual([19, 20]);
+    // #13 carries Lane: Codex. Under dynamic mutation leases that label is informational, so the
+    // row is offered alongside the Claude-labelled ones — offered, still never started.
+    expect(picked.options.map((o) => o.number)).toEqual([13, 19, 20]);
   });
 
   it("ONE Ready task and nothing of ours is still a choice — this is defect (1) exactly", () => {
@@ -160,12 +173,12 @@ describe("GUARD 4: nothing else is ever selected for us", () => {
 });
 
 describe("what is ours, what is not, and why", () => {
-  it("another lane's Active task is unavailable and says whose it is", () => {
+  it("another executor's live Active lease is unavailable and says whose it is", () => {
     const theirs = BOARD.map((i) => (i.number === 18 ? { ...i, lane: "Codex" } : i));
     const m = menu(theirs);
     expect(m.autoResume).toBe(null);
     expect(m.options.map((o) => o.number)).not.toContain(18);
-    expect(m.unavailable.find((u) => u.number === 18).reason).toMatch(/Codex lane is working on it/);
+    expect(m.unavailable.find((u) => u.number === 18).reason).toMatch(/the Codex executor currently holds its mutation lease/);
   });
 
   it("an expired claim is unavailable, not silently resumed — a takeover is verified first", () => {
@@ -181,10 +194,22 @@ describe("what is ours, what is not, and why", () => {
     expect(menu(noExpiry).autoResume).toBe(null);
   });
 
-  it("a Ready task assigned to another lane is not ours to take", () => {
+  it("another model's Lane label alone does not reserve a Ready task; a live lease by another executor does", () => {
+    // Half one: #13 is Ready with Lane: Codex. Lane is informational under dynamic mutation
+    // leases, so the row is offered to this executor as a Start — never hidden, never auto-started.
     const m = menu();
-    expect(m.options.map((o) => o.number)).not.toContain(13);
-    expect(m.unavailable.find((u) => u.number === 13).reason).toMatch(/assigned to the Codex lane/);
+    const offered = m.options.find((o) => o.number === 13);
+    expect(offered).toBeDefined();
+    expect(offered.action).toBe("Start");
+    expect(m.unavailable.map((u) => u.number)).not.toContain(13);
+    expect(m.autoResume).toBe(18);
+
+    // Half two: the same row under a live, unexpired Active lease held by Codex is reserved, and
+    // the reason names the holder.
+    const leased = BOARD.map((i) => (i.number === 13 ? { ...i, status: "Active", claimExpires: "2026-07-31" } : i));
+    const held = menu(leased);
+    expect(held.options.map((o) => o.number)).not.toContain(13);
+    expect(held.unavailable.find((u) => u.number === 13).reason).toMatch(/the Codex executor currently holds its mutation lease/);
   });
 
   it("an unassigned Ready task is open to whoever asks for it", () => {
@@ -240,22 +265,33 @@ describe("the displayed context policy", () => {
 });
 
 describe("the menu Kuya reads", () => {
+  // No live lease of ours: #13 (Lane: Codex, Ready) and #19 (Ready) are both on offer, in board
+  // order, because a Lane label does not reserve Ready work. 1 => #13, 2 => #19.
   const picker = () => menu(NO_CLAIM_OF_OURS);
+  /** The same picker with #13 under a live Codex lease — the one thing that does reserve it. */
+  const pickerWithCodexLease = () =>
+    menu(NO_CLAIM_OF_OURS.map((i) => (i.number === 13 ? { ...i, status: "Active", claimExpires: "2026-07-31" } : i)));
 
   it("states what to type, both ways, in plain words", () => {
     const text = renderMenu(picker());
     expect(text).toMatch(/Which task would you like to work on\?/);
-    expect(text).toMatch(/1\.  Start #19/);
-    expect(text).toMatch(/Type the number on the left \(1\)/);
-    expect(text).toMatch(/issue\s*\n?\s*number \(#19\)/);
-    expect(picker().question).toMatch(/Type a number from the list \(1\) or an issue number \(#19\), or Q to cancel/);
+    expect(text).toMatch(/1\.  Start #13/);
+    expect(text).toMatch(/2\.  Start #19/);
+    expect(text).toMatch(/Type the number on the left \(1 or 2\)/);
+    expect(text).toMatch(/issue\s*\n?\s*number \(#13 or #19\)/);
+    expect(picker().question).toMatch(/Type a number from the list \(1 or 2\) or an issue number \(#13 or #19\), or Q to cancel/);
   });
 
   it("shows what cannot be started, with the reason on the line", () => {
     const text = renderMenu(picker());
     expect(text).toMatch(/Not available right now:/);
-    expect(text).toMatch(/#13 —.*\n\s+it is assigned to the Codex lane\./);
+    // A Lane label is not a reason: #13 is offered above the line, never listed below it.
+    expect(text).not.toMatch(/#13 —.*\n\s+it is assigned/);
     expect(text).toMatch(/#14 —.*\n\s+it is gated on Kuya/);
+    // A live lease held by another executor is a reason, and the line names the holder.
+    const held = renderMenu(pickerWithCodexLease());
+    expect(held).not.toMatch(/Start #13/);
+    expect(held).toMatch(/#13 —.*\n\s+the Codex executor currently holds its mutation lease\./);
   });
 
   it("never advertises an Enter shortcut, because there is no longer one", () => {
@@ -275,19 +311,24 @@ describe("the menu Kuya reads", () => {
 });
 
 describe("what the picker accepts", () => {
-  const m = () => menu(NO_CLAIM_OF_OURS); // 1 => #19
+  const m = () => menu(NO_CLAIM_OF_OURS); // 1 => #13 (Lane: Codex, not reserved), 2 => #19
+  /** #13 under a live Codex lease: the only thing that takes it off the menu. */
+  const held = () =>
+    menu(NO_CLAIM_OF_OURS.map((i) => (i.number === 13 ? { ...i, status: "Active", claimExpires: "2026-07-31" } : i)));
 
   it("the ordinal and the issue number both select, in the same run", () => {
-    expect(resolveChoice("1", m())).toMatchObject({ kind: "task", number: 19 });
+    expect(resolveChoice("1", m())).toMatchObject({ kind: "task", number: 13 });
+    expect(resolveChoice("2", m())).toMatchObject({ kind: "task", number: 19 });
     expect(resolveChoice("19", m())).toMatchObject({ kind: "task", number: 19 });
     expect(resolveChoice("#19", m())).toMatchObject({ kind: "task", number: 19 });
     expect(resolveChoice(" 19 ", m())).toMatchObject({ kind: "task", number: 19 });
+    expect(resolveChoice("13", m())).toMatchObject({ kind: "task", number: 13 });
   });
 
   it("typing an UNAVAILABLE issue returns that row's reason, not a shrug", () => {
-    const r = resolveChoice("13", m());
+    const r = resolveChoice("13", held());
     expect(r.kind).toBe("invalid");
-    expect(r.reason).toMatch(/#13 cannot be started: it is assigned to the Codex lane/);
+    expect(r.reason).toMatch(/#13 cannot be started: the Codex executor currently holds its mutation lease/);
     expect(resolveChoice("14", m()).reason).toMatch(/gated on Kuya/);
   });
 
@@ -369,8 +410,11 @@ describe("cmdChoose: the command the shortcut runs when it is given no issue", (
   });
 
   it("the ordinal does the same thing as the issue number", async () => {
-    const { out } = await run(["1"]);
-    expect(JSON.parse(out.join("")).issue).toBe(19);
+    // 1 => #13 (Ready, Lane: Codex — a label, not a reservation), 2 => #19.
+    const second = await run(["2"]);
+    expect(JSON.parse(second.out.join("")).issue).toBe(19);
+    const first = await run(["1"]);
+    expect(JSON.parse(first.out.join("")).issue).toBe(13);
   });
 
   it("Q exits 2 with nothing on stdout — the launcher then writes nothing at all", async () => {
@@ -381,10 +425,14 @@ describe("cmdChoose: the command the shortcut runs when it is given no issue", (
   });
 
   it("nothing available exits 2 and prints the reasons, not an empty screen", async () => {
-    const { code, out, said } = await run([""], { board: { reachable: true, items: [BOARD[0], BOARD[1]] } });
+    // #13 under a live Codex lease and #14 gated on Kuya: nothing to offer, two reasons to print.
+    // (#13 merely labelled Codex would be offered — a Lane label is not a reason.)
+    const codexHolds13 = { ...BOARD[0], status: "Active", claimExpires: "2026-07-31" };
+    const { code, out, said } = await run([""], { board: { reachable: true, items: [codexHolds13, BOARD[1]] } });
     expect(code).toBe(2);
     expect(out).toEqual([]);
-    expect(said.join("\n")).toMatch(/Codex lane/);
+    expect(said.join("\n")).toMatch(/the Codex executor currently holds its mutation lease/);
+    expect(said.join("\n")).toMatch(/gated on Kuya/);
   });
 
   it("an unreachable board refuses instead of offering a menu it cannot vouch for", async () => {

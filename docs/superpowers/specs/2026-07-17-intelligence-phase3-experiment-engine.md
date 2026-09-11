@@ -1,5 +1,10 @@
 # Intelligence Phase 3 — User-Started Experiment Engine + Optimization Simulator (DARK)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This pre-rebirth product train no longer
+> supplies current product priority or implementation authority. Current direction comes from
+> `docs/PRODUCT_CONSTITUTION.md`; the experiment, rollback, and dark-gate details below remain
+> bounded technical provenance only where they conform to current architecture and release truth.
+>
 > Decision record for the §4F/§4G train of the owner directive
 > (`docs/reviews/2026-07-16-owner-directive-intelligence-platform.md`). Phases 1 & 2 shipped
 > (`8f612d2`/`d45bb1c`, `9c6af4b`/`094d834`). This is Intelligence Phase 3 (namespace rule §6 —

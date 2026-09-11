@@ -22,6 +22,28 @@ function Write-Ready {
   [System.IO.File]::WriteAllText($ReadyFile, "ready", [System.Text.Encoding]::UTF8)
 }
 
+# UTC, millisecond precision, one format both sides parse: the stamps below are how a test proves
+# the contender's attempt fell INSIDE the holder's ownership window (#324).
+function Get-Stamp {
+  return [DateTime]::UtcNow.ToString('yyyy-MM-dd\THH:mm:ss.fff\Z')
+}
+
+# Holding for a FIXED number of milliseconds races the caller's next powershell.exe spawn, which
+# measured >15s under the full 357-file pool on 2026-08-21 and again on 2026-09-02 (#324: a 1500ms
+# hold, and the contender arrived after the holder had already released, so the assertion read a
+# start-up delay as the mutex letting a second process in). Hold until the caller says it is done;
+# HoldMs survives only as the hang stop.
+function Wait-Release {
+  if ($ReleaseFile) {
+    $deadline = (Get-Date).AddMilliseconds($HoldMs)
+    while (-not (Test-Path -LiteralPath $ReleaseFile) -and ((Get-Date) -lt $deadline)) {
+      [System.Threading.Thread]::Sleep(50)
+    }
+  } else {
+    [System.Threading.Thread]::Sleep($HoldMs)
+  }
+}
+
 try {
   if ($Action -eq "raw-hold") {
     $raw = New-Object System.Threading.Mutex($false, $MutexName)
@@ -30,19 +52,7 @@ try {
       $ownsRaw = $raw.WaitOne(0)
       if (-not $ownsRaw) { throw "raw test holder could not acquire $MutexName" }
       Write-Ready
-      if ($ReleaseFile) {
-        # Holding for a FIXED number of milliseconds races the caller's next powershell.exe spawn,
-        # which measured >15s under the full 357-file pool on 2026-08-21. The holder released before
-        # the collision it exists to cause, and the test then failed asserting that recovery refused
-        # to clear while a holder was active -- a security-shaped red flag with no defect behind it.
-        # Hold until the caller says it is done; HoldMs survives only as a hang stop.
-        $deadline = (Get-Date).AddMilliseconds($HoldMs)
-        while (-not (Test-Path -LiteralPath $ReleaseFile) -and ((Get-Date) -lt $deadline)) {
-          [System.Threading.Thread]::Sleep(50)
-        }
-      } else {
-        [System.Threading.Thread]::Sleep($HoldMs)
-      }
+      Wait-Release
     } finally {
       if ($ownsRaw) { $raw.ReleaseMutex() }
       $raw.Dispose()
@@ -83,18 +93,25 @@ try {
     exit 0
   }
 
+  # Stamped BEFORE the attempt, so a refused contender still reports when it tried.
+  Write-Output "ATTEMPT $(Get-Stamp)"
   $guard = Enter-CompyProcessMutex `
     -Name $MutexName `
     -Resource $Resource `
     -StateRoot $StateRoot
+  $acquiredAt = Get-Stamp
+  $releasedAt = $null
   try {
     Write-Ready
     if ($Action -eq "exit") { exit 0 }
     if ($Action -eq "throw") { throw "synthetic protected failure" }
-    if ($Action -eq "hold") { [System.Threading.Thread]::Sleep($HoldMs) }
+    if ($Action -eq "hold") { Wait-Release }
   } finally {
     Exit-CompyProcessMutex $guard
+    $releasedAt = Get-Stamp
   }
+  Write-Output "ACQUIRED $acquiredAt"
+  Write-Output "RELEASED $releasedAt"
   Write-Output "MUTEX ACQUIRED AND RELEASED: $Resource"
   exit 0
 } catch {

@@ -56,6 +56,7 @@ function baseWorld(overrides = {}) {
     subagentModel: { value: "sonnet", source: `${FOLDER}\\.claude\\settings.json` },
     hooks: { ok: true, checked: new Array(7).fill({}), missing: [], remediation: null },
     processes: [],
+    scope: { mine: ["tools/entry"], text: "`tools/entry/`", source: "claim", others: [], files: [] },
     ...overrides,
   };
 }
@@ -383,7 +384,9 @@ describe("selectTask", () => {
   // Rewritten 2026-07-30 (owner addendum on #18), narrowed 2026-07-31 (#23). It once asserted that
   // one Ready task selects itself — exactly how the shortcut skipped Kuya's own Active #18 and
   // silently launched #13. Now: READY work is only ever a choice, and a task that is already OURS,
-  // Active and claimed resumes with no question. Menu shape and reasons live in select.test.mjs.
+  // Active and claimed resumes with no question. Re-pinned 2026-09-05 (#369 / PR #375, dynamic
+  // mutation leases): a row's Lane label is informational and reserves nothing; only a live lease
+  // held by another executor blocks. Menu shape and reasons live in select.test.mjs.
   const items = [
     { number: 13, status: "Ready", lane: "Codex", gate: "None" },
     { number: 14, status: "Needs Kuya", lane: "Kuya", gate: "Kuya" },
@@ -396,19 +399,33 @@ describe("selectTask", () => {
     expect(r.reason).toMatch(/nothing is available|no .*ready/i);
   });
 
-  it("several Ready tasks → a numbered choice", () => {
+  it("several Ready tasks → a numbered choice; a Codex Lane label does not reserve #13", () => {
+    // Dynamic mutation leases (#369 / PR #375): Lane is informational. Ready #13 labelled Codex is
+    // offered like any other Ready row; only a live lease held by another executor reserves it.
     const r = selectTask([...items, { number: 19, status: "Ready", lane: "Claude Code", gate: "None" }], {});
     expect(r.kind).toBe("choice");
-    expect(r.options.map((o) => o.number)).toEqual([19]); // #13 is Codex's — offered to Codex, not to us
-    expect(r.unavailable.map((o) => o.number)).toContain(13);
+    expect(r.options.map((o) => o.number)).toEqual([13, 19]);
+    expect(r.unavailable.map((o) => o.number)).not.toContain(13);
     expect(r.task).toBeUndefined();
+
+    const codexHolds13 = items.map((i) => (i.number === 13 ? { ...i, status: "Active", claimExpires: "2026-07-31" } : i));
+    const held = selectTask([...codexHolds13, { number: 19, status: "Ready", lane: "Claude Code", gate: "None" }], {
+      self: { lane: "Claude Code" },
+      now: new Date("2026-07-30T23:30:00Z"),
+    });
+    expect(held.options.map((o) => o.number)).toEqual([19]);
+    expect(held.unavailable.find((o) => o.number === 13).reason).toMatch(/Codex executor currently holds its mutation lease/);
   });
 
-  it("exactly one Ready task in our lane → still a choice: the shortcut asks, it does not pick", () => {
+  it("Ready work with no live lease of ours → still a choice: the shortcut asks, it does not pick", () => {
     const r = selectTask([...items, { number: 19, status: "Ready", lane: "Claude Code", gate: "None" }], { self: { lane: "Claude Code" } });
     expect(r.kind).toBe("choice");
     expect(r.task).toBeUndefined();
-    expect(r.options.map((o) => o.number)).toEqual([19]);
+    expect(r.options.map((o) => o.number)).toEqual([13, 19]);
+    // Even a single Ready row is offered, never started.
+    const single = selectTask([{ number: 19, status: "Ready", lane: "Claude Code", gate: "None" }], { self: { lane: "Claude Code" } });
+    expect(single.kind).toBe("choice");
+    expect(single.options.map((o) => o.number)).toEqual([19]);
   });
 
   it("our own unexpired Active resumes itself — the claim on the board IS the decision", () => {

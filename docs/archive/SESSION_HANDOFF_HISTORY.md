@@ -4,6 +4,14 @@
 > THE LIVE POINTER lives in docs/SESSION_HANDOFF.md; this file is the reverse-chron record.
 > APPEND new dated sections at the TOP, directly below this header.
 
+### 2026-09-03 — #304 control-character incident detail, moved verbatim (line budget)
+
+`docs/SESSION_HANDOFF.md`'s gate-traps bullet kept the full incident narrative for #304 alongside
+the rule it produced. The rule stays live; the incident is preserved here. Six literal 0x08 bytes
+stood in for `\b` in two test regexes, so both assertions matched a byte no tracked file contains
+and could never fail; a separate `sed -i` `\U`/`\c` escape wrote a raw 0x0F into a doc.
+`scripts/source-control-characters.test.mjs` ROOTS now covers `src`, `docs` and `src-tauri/src` too,
+not just `scripts`/`tools`.
 
 ## Slice 2 (Health) — the eleven self-review rounds, moved verbatim 2026-08-23
 
@@ -61,3 +69,13 @@ Landed and reported: pricing evidence + the owner's **$4.99/mo · $39/yr · $89 
 is the Codex lane's. **Compy Pro itself is unbuilt.** Recorded closed but not *solved*: #121's cause
 stays unattributable at 100 ms poll resolution, and #128's **release** mutex has never been held
 during a real publish.
+
+### 2026-09-03 — #291's price for the old fleet bullet, moved verbatim (line budget)
+
+`docs/SESSION_HANDOFF.md` used to carry a live worktree/branch inventory — every checkout on the
+machine, every lane still ahead of `main`, spelled out by name. #291 measured what that cost:
+**eight of eight open PRs on 2026-09-02 edited this file, almost none of them about their own
+subject** — one lane adding a worktree made the stated total false for every other lane's gate, so
+whoever pushed next paid for it, then rebased because someone else had just paid for it too. The
+live file now only states the rule (`node scripts/fleet-snapshot.mjs` measures the fleet; nothing
+is stored here); this paragraph is the incident that justified it.

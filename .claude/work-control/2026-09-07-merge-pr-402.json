@@ -1,0 +1,72 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Lease holder on #225 and sole author of the closeout delta (two commits, both claude-code <claude-code@desk.local>): PR #401's merge receipt, SESSION_HANDOFF rows, the retired #294 disposition record, the RELEASE_STATE source stamp, and a one-line guard floor. Landed by the same lane on the owner's 2026-09-07 order; acceptance of #224/#225 stays the owner's — the PR says Part of, never Closes.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/225#issuecomment-5533306640",
+  "leaseNote": "Claim renewed until 2026-09-09 (https://github.com/Pootytxng/sentinel/issues/225#issuecomment-5578148417); re-posted for the closeout branch with one path added to the Write scope (https://github.com/Pootytxng/sentinel/issues/225#issuecomment-5578842270); board 'Worktree / branch' moved to claude/225-closeout; scope-drift-gate --refresh OK (5 changed paths, all inside the claim).",
+  "overlapExclusive": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Executed from C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb on claude/225-closeout (branched from origin/main 3fe7a029 after land-pr pruned the lane head) at exact head a0035d68cb0e5abc13418faa0ba89731898f0f72, git status --short empty; origin/claude/225-closeout == HEAD after the gated push. PR #402 OPEN, base main, head a0035d68; no open PR is based on this branch; no disposition record for this ref. The session-root hook binds this folder to #225 on this branch. Live-process sweep via Get-Process (WMI hung, owner item A_wmi): no cargo/vitest/rustc left running by this lane. Delta touches nothing under src/ or src-tauri/.",
+  "transition": "merge-pr",
+  "currentHead": "a0035d68cb0e5abc13418faa0ba89731898f0f72",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "a0035d68cb0e5abc13418faa0ba89731898f0f72",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb/logs/verify-local-2026-09-08T03-49-07Z.log",
+      "summary": "438 frontend files passed; 6544 tests passed / 5 skipped (6549)"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "a0035d68cb0e5abc13418faa0ba89731898f0f72",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb/logs/verify-local-2026-09-08T03-49-07Z.log",
+      "summary": "TypeScript type-check and Vite production build PASS"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "a0035d68cb0e5abc13418faa0ba89731898f0f72",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb/logs/verify-local-2026-09-08T03-49-07Z.log",
+      "summary": "1254 passed; 0 failed; 24 ignored"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "a0035d68cb0e5abc13418faa0ba89731898f0f72",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb/logs/verify-local-2026-09-08T03-49-07Z.log",
+      "summary": "clippy clean under -D warnings; LOCAL CHECK RESULT: PASS"
+    }
+  ],
+  "gateEvidenceNote": "The pre-push gate (scripts/verify-local.ps1 via .githooks/pre-push) ran at exact head a0035d68 immediately before the push that created origin/claude/225-closeout: deps, diff check, scope-drift OK, vitest 438/438, tsc+vite build PASS, cargo test 1254 passed / 24 ignored, clippy clean, LOCAL CHECK RESULT: PASS. An earlier push at 02cd8a8c failed that gate on three items (disposition-record floor, a peer worktree's absolute hooksPath that its own session then corrected, CRLF in the receipt) — all repaired in a0035d68, none waived. Standalone at a0035d68: doc-budget ALL PASS; verify-release-state 31 ok / 0 state-drift; doc-truth 11/11; handoff-worktree-truth 7/7; branch-disposition-audit OK. No UI change, so no visual gate applies.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "a0035d68cb0e5abc13418faa0ba89731898f0f72",
+    "verdict": "APPROVE",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/402#issuecomment-5578947431",
+    "reviewerNote": "Fresh non-author read-only review at the exact pushed head from a separate context. Measured: head == origin head, tree clean; exactly five changed paths, none under src/, src-tauri/, .codex/, .claude/settings.json or .claude/hooks/; RELEASE_STATE diff is only the source stamp 8d4e90a1->3fe7a029 (== origin/main); test diff is only the floor 20->10 with 20 records on disk; handoff rows replaced not added (119/120), no Closes language; receipt blob byte-counted LF; verify-release-state 31 ok / 0 state-drift; doc-budget ALL PASS; disposition audit OK; targeted vitest 5 files / 82 tests pass; both commits authored claude-code. FINDINGS: none in the content."
+  },
+  "pr": 402,
+  "issue": 225,
+  "kind": "lane",
+  "branch": "claude/225-closeout"
+}

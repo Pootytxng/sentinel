@@ -23,8 +23,6 @@ import {
   isNoop,
   listRemoteRefs,
   mergeCitations,
-  parseDispositions,
-  parseRow,
   pruneCommand,
   refSplit,
   refSetCoverage,
@@ -32,35 +30,23 @@ import {
   squashOnlyCitations,
   uncitedLandings,
   NON_CITATION_LANDINGS,
+  auditReport,
 } from "./branch-disposition-audit.mjs";
+import { DIR, readAll, slugOf, write } from "./lib/dispositions.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const git = (dir, args) =>
   execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 
-/** A record with the given rows, in the real document's shape. */
-const doc = (rows) =>
-  [
-    "# fixture",
-    "",
-    "## How a disposition is proven",
-    "",
-    "| disposition | meaning | action |",
-    "| --- | --- | --- |",
-    "| `MERGED` | prose about the vocabulary, not a ref row | prunable |",
-    "",
-    "## The refs",
-    "",
-    "| ref | disposition | evidence |",
-    "| --- | --- | --- |",
-    ...rows.map(([ref, disposition, evidence = "because"]) => `| \`${ref}\` | ${disposition} | ${evidence} |`),
-    "",
-    "## Standing rule",
-    "",
-    "unrelated tail",
-    "",
-  ].join("\n");
+/** Lay the given rows down as records, replacing whatever the previous run left behind. */
+const layRecords = (repo, rows) => {
+  rmSync(join(repo, DIR), { recursive: true, force: true });
+  mkdirSync(join(repo, DIR), { recursive: true });
+  for (const [ref, disposition, evidence = "because"] of rows) {
+    write(repo, { ref, disposition, issue: null, evidence });
+  }
+};
 
 let root;
 let fixture;
@@ -114,43 +100,69 @@ afterAll(() => {
 });
 
 const run = (rows, extra = {}) => {
-  const docPath = join(root, `record-${Math.abs(rows.length * 7 + rows.join("").length)}.md`);
-  writeFileSync(docPath, doc(rows));
-  return audit({ repoRoot: fixture, docPath, ...extra });
+  layRecords(fixture, rows);
+  return audit({ repoRoot: fixture, ...extra });
 };
 
-describe("parsing", () => {
-  it("reads only the ref table, not the vocabulary table above it", () => {
-    const rows = parseDispositions(doc([["origin/landed", "MERGED"]]));
-    expect(rows).toEqual([{ ref: "origin/landed", disposition: "MERGED", evidence: "because" }]);
+describe("the record store", () => {
+  // The store replaced a Markdown table (#291). These rules are the table's parsing rules restated
+  // against files: what used to be "is this line a row" is now "is this file a record", and the
+  // failure modes that used to be malformed rows are malformed files.
+  const store = () => {
+    const repo = mkdtempSync(join(root, "store-"));
+    mkdirSync(join(repo, DIR), { recursive: true });
+    return repo;
+  };
+
+  it("round-trips a ref through its filename, so one ref can have only one record", () => {
+    expect(slugOf("origin/lane/foo-1")).toBe("lane__foo-1");
+    expect(slugOf("lane/foo-1")).toBe("lane__foo-1");
   });
 
-  it("keeps evidence text that itself contains a pipe", () => {
-    const rows = parseDispositions(doc([["origin/landed", "MERGED", "`a | b` held"]]));
-    expect(rows[0].evidence).toBe("`a | b` held");
+  it("keeps evidence text that itself contains a pipe — JSON has no cell to break out of", () => {
+    const repo = store();
+    write(repo, { ref: "origin/landed", disposition: "MERGED", issue: null, evidence: "`a | b` held" });
+    expect(readAll(repo).records[0].evidence).toBe("`a | b` held");
   });
 
-  it("returns nothing when the section is absent, rather than guessing", () => {
-    expect(parseDispositions("# doc\n\nno table here\n")).toEqual([]);
+  it("REPORTS a malformed record instead of skipping it — a broken file is not a green gate", () => {
+    const repo = store();
+    writeFileSync(join(repo, DIR, "lane__x.json"), "{ not json");
+    const { records, problems } = readAll(repo);
+    expect(records).toEqual([]);
+    expect(problems[0]).toMatch(/not valid JSON/);
+  });
+
+  it("reports a record missing a required field rather than treating it as dispositioned", () => {
+    const repo = store();
+    writeFileSync(join(repo, DIR, "lane__x.json"), JSON.stringify({ ref: "origin/lane/x" }));
+    expect(readAll(repo).problems[0]).toMatch(/missing required field\(s\): disposition, evidence/);
+  });
+
+  // This is what makes duplicates structurally impossible, and it replaces the old "appears twice"
+  // scan: two records for one ref cannot both exist, because the filename IS the ref.
+  it("refuses a record filed under a name that is not its own ref", () => {
+    const repo = store();
+    writeFileSync(join(repo, DIR, "lane__wrong.json"), JSON.stringify({ ref: "origin/lane/right", disposition: "CLAIMED", evidence: "e" }));
+    const { records, problems } = readAll(repo);
+    expect(records).toEqual([]);
+    expect(problems[0]).toMatch(/belongs in docs\/dispositions\/lane__right\.json/);
   });
 
   it("counts the split the doc used to pin by hand", () => {
     // #309/#312. docs/BRANCH_DISPOSITIONS.md carried `Twenty-five non-PRESERVE refs remain` in prose,
     // and it was wrong twice on 2026-09-01 alone -- both times written stale by the very lane that
-    // added the row it failed to count. A number beside an append-only table is wrong by the next
+    // added the row it failed to count. A number beside an append-only record is wrong by the next
     // commit, so the audit computes it and the doc points at the audit.
-    const rows = parseDispositions(
-      doc([
-        ["origin/keep", "PRESERVE"],
-        ["origin/also-keep", "PRESERVE"],
-        ["origin/live", "CLAIMED"],
-      ]),
-    );
-    expect(refSplit(rows)).toEqual({ total: 3, preserve: 2, other: 1 });
-    // Empty is a real answer, not a crash: a fresh repo with one branch has no rows to count.
+    const repo = store();
+    for (const [ref, disposition] of [["origin/keep", "PRESERVE"], ["origin/also-keep", "PRESERVE"], ["origin/live", "CLAIMED"]]) {
+      write(repo, { ref, disposition, issue: null, evidence: "because" });
+    }
+    expect(refSplit(readAll(repo).records)).toEqual({ total: 3, preserve: 2, other: 1 });
+    // Empty is a real answer, not a crash: a fresh repo with one branch has no records to count.
     expect(refSplit([])).toEqual({ total: 0, preserve: 0, other: 0 });
-    // Only an exact PRESERVE counts. A row that merely mentions the word in its evidence does not,
-    // which is the shape that would quietly inflate the protected count as the table grows.
+    // Only an exact PRESERVE counts. A record that merely mentions the word in its evidence does
+    // not, which is the shape that would quietly inflate the protected count as the store grows.
     expect(refSplit([{ ref: "origin/x", disposition: "CLAIMED", evidence: "never PRESERVE this" }]))
       .toEqual({ total: 1, preserve: 0, other: 1 });
   });
@@ -202,25 +214,58 @@ describe("what the audit refuses to pass", () => {
     expect(run([["origin/landed", "PRESERVE"], ["origin/ahead", "UNLANDED"]])).toEqual([]);
   });
 
-  it("fails when a live ref has no row — the original defect", () => {
-    const problems = run([["origin/landed", "PRESERVE"]]);
+  // #355 narrowed the original defect (#65: "every branch has a verified disposition" while nothing
+  // checked one) to the half a machine cannot settle. A landed ref with no record needs a HUMAN
+  // call — LANDED (kept, for a reason) or MERGED (pruned) — so its absence is still the defect.
+  it("fails when a LANDED ref has no row — the original defect, narrowed by #355", () => {
+    const problems = run([["origin/ahead", "UNLANDED"]]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("origin/landed");
+    expect(problems[0]).toMatch(/no record/);
+    expect(problems[0]).toMatch(/already a no-op/);
+    expect(problems[0]).toMatch(/LANDED .*or MERGED/);
+  });
+
+  // The other half needs no human: merge-tree says the ref carries work main lacks, and "UNLANDED"
+  // is exactly that sentence. Blocking every lane on a record that merely repeats the measurement
+  // was the rule that made each pushed branch every other lane's red gate (#355).
+  it("reports — does not fail — a DIVERGED ref with no row, as a measured UNLANDED (#355)", () => {
+    layRecords(fixture, [["origin/landed", "PRESERVE"]]);
+    const { problems, derived } = auditReport({ repoRoot: fixture });
+    expect(problems).toEqual([]);
+    expect(derived).toHaveLength(1);
+    expect(derived[0]).toMatchObject({ ref: "origin/ahead", disposition: "UNLANDED" });
+    expect(derived[0].note).toMatch(/no record/);
+    expect(derived[0].note).toMatch(/[Mm]easured, not recorded/);
+    // The array-shaped audit() is the derived-blind view every existing caller keeps.
+    expect(audit({ repoRoot: fixture })).toEqual([]);
+  });
+
+  // Without ancestry the two halves cannot be told apart, so a shallow checkout keeps the pre-#355
+  // rule: every unrecorded ref is a problem. A degraded checkout must not hand out the full one's pass.
+  it("still fails an unrowed DIVERGED ref on a shallow checkout — it cannot measure the difference", () => {
+    const problems = run([["origin/landed", "PRESERVE"]], {
+      coverage: { tracksEveryBranch: true, shallow: true, reason: "test" },
+    });
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("origin/ahead");
-    expect(problems[0]).toMatch(/no row/);
+    expect(problems[0]).toMatch(/shallow/);
+    expect(problems[0]).toMatch(/cannot be measured/);
+    expect(problems[0].indexOf("git fetch origin --prune")).toBeLessThan(problems[0].indexOf("--delete"));
   });
 
   // A stale ref and an undispositioned one are the same bytes in refs/remotes/origin, so this
   // message is read by lanes that did nothing wrong. It has to send them to the local, reversible
   // cure BEFORE it names a command that deletes a branch on the shared remote.
   it("sends an unrowed ref to `fetch --prune` before it names a destructive command", () => {
-    const [problem] = run([["origin/landed", "PRESERVE"]]);
+    const [problem] = run([["origin/ahead", "UNLANDED"]]);
     expect(problem).toMatch(/git fetch origin --prune/);
     expect(problem.indexOf("git fetch origin --prune")).toBeLessThan(problem.indexOf("--delete"));
   });
 
   // It also may not assert that the ref is live on origin: a cache is the only thing it read.
   it("does not claim an unrowed ref exists on origin", () => {
-    expect(run([["origin/landed", "PRESERVE"]])[0]).not.toMatch(/exists on origin/);
+    expect(run([["origin/ahead", "UNLANDED"]])[0]).not.toMatch(/exists on origin/);
   });
 
   it("fails when a row names a ref that is gone", () => {
@@ -244,7 +289,7 @@ describe("what the audit refuses to pass", () => {
     // three-way merge became a conflict and the proof could never be produced again. Re-proving is
     // not the fix there; pruning is. A diagnosis without a remedy sends the next reader looking for
     // a merge that cannot exist.
-    expect(problems[0]).toMatch(/prune the ref and drop the row/);
+    expect(problems[0]).toMatch(/prune the ref and delete the record/);
   });
 
   it("fails when an UNLANDED row has quietly landed", () => {
@@ -259,13 +304,17 @@ describe("what the audit refuses to pass", () => {
     expect(problems[0]).toContain("PROBABLY FINE");
   });
 
-  it("fails on a duplicated ref, so two rows cannot disagree", () => {
-    const problems = run([
-      ["origin/landed", "MERGED"],
-      ["origin/ahead", "UNLANDED"],
-      ["origin/ahead", "MERGED"],
-    ]);
-    expect(problems.some((p) => /appears twice/.test(p))).toBe(true);
+  // Two records for one ref used to be possible and had to be scanned for. It is now structurally
+  // impossible -- the filename is the slug of the ref, so the second write lands on the first --
+  // and what remains checkable is the way a record could still be reachable under the wrong name.
+  it("fails on a record filed under a name that is not its ref, so two records cannot disagree", () => {
+    layRecords(fixture, [["origin/landed", "MERGED"]]);
+    writeFileSync(
+      join(fixture, DIR, "landed.json"),
+      JSON.stringify({ ref: "origin/ahead", disposition: "MERGED", evidence: "e" }),
+    );
+    const problems = audit({ repoRoot: fixture });
+    expect(problems.some((p) => /belongs in docs\/dispositions\/ahead\.json/.test(p))).toBe(true);
   });
 
   // PRESERVE and CLAIMED make no merge-tree claim, so neither shape may be flagged. beta/private-beta-001
@@ -290,9 +339,31 @@ describe("what the audit refuses to pass", () => {
     expect(problems[0]).toContain("git push origin --delete ahead");
   });
 
-  it("makes no merge-tree demand of PRESERVE or CLAIMED rows", () => {
+  it("makes no merge-tree demand of PRESERVE rows, in either slot", () => {
+    expect(run([["origin/landed", "PRESERVE"], ["origin/ahead", "PRESERVE"]])).toEqual([]);
+  });
+
+  // #350: CLAIMED used to share PRESERVE's skip -- "claims nothing" -- so a CLAIMED row could assert
+  // its own ref had merged and the audit would never contradict it. The live instance the issue was
+  // filed over: `lane/docs-path-not-branch-310`, disposition CLAIMED, whose own prose says "Merged as
+  // PR #316" with nothing ever re-checking it. CLAIMED now gets re-proven in the one direction that
+  // matters -- has the ref, in fact, already landed -- while still making no demand in the other:
+  // a genuinely still-diverged CLAIMED ref is exactly what "a lane is actively working this" looks
+  // like, and must not be flagged.
+  it("tolerates a CLAIMED row whose ref genuinely has not landed yet", () => {
     expect(run([["origin/landed", "PRESERVE"], ["origin/ahead", "CLAIMED"]])).toEqual([]);
-    expect(run([["origin/landed", "CLAIMED"], ["origin/ahead", "PRESERVE"]])).toEqual([]);
+  });
+
+  it("fails a CLAIMED row whose ref has already landed -- the claim is dead", () => {
+    const problems = run([["origin/landed", "CLAIMED"], ["origin/ahead", "UNLANDED"]]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(
+      /origin\/landed is recorded CLAIMED, but merging it into main is already a no-op — the work has landed/,
+    );
+    // The remedy names BOTH legitimate outcomes -- unlike a stale MERGED row, landing does not by
+    // itself mean prunable, because the ref may be deliberately kept (LANDED).
+    expect(problems[0]).toMatch(/LANDED if this ref is deliberately kept/);
+    expect(problems[0]).toContain("git push origin --delete landed");
   });
 });
 
@@ -311,11 +382,12 @@ describe("every request for a ref to go carries the command that works", () => {
 
   it("names it in every failure that asks for a deletion, and never names `gh api`", () => {
     const asksForDeletion = [
-      run([["origin/landed", "PRESERVE"]]), // a live ref with no row at all
+      run([["origin/ahead", "UNLANDED"]]), // a LANDED ref with no row at all (#355: a diverged one is reported, not deleted)
       run([["origin/landed", "MERGED"], ["origin/ahead", "UNLANDED"]]), // prunable, still standing
       run([["origin/landed", "PRESERVE"], ["origin/ahead", "MERGED"]]), // a MERGED proof gone stale
+      run([["origin/landed", "CLAIMED"], ["origin/ahead", "UNLANDED"]]), // a CLAIMED ref that landed
     ].flat();
-    expect(asksForDeletion).toHaveLength(3);
+    expect(asksForDeletion).toHaveLength(4);
     for (const problem of asksForDeletion) {
       expect(problem).toContain("git push origin --delete");
       expect(problem).not.toMatch(/gh api/);
@@ -363,17 +435,15 @@ describe("what a checkout is entitled to say about origin", () => {
     const problems = run(
       [
         ["origin/landed", "MERGED"],
-        ["origin/landed", "UNLANDED"],
         ["origin/ahead", "PROBABLY FINE"],
       ],
       { coverage: blind },
     );
-    expect(problems.some((p) => /appears twice/.test(p))).toBe(true);
     expect(problems.some((p) => /PROBABLY FINE/.test(p))).toBe(true);
   });
 
   it("still fails an empty table without origin — a record with no rows is broken on any clone", () => {
-    expect(run([], { coverage: blind })[0]).toMatch(/no disposition rows/);
+    expect(run([], { coverage: blind })[0]).toMatch(/holds no disposition records/);
   });
 
   // The two axes are independent, so they silence different halves.
@@ -397,12 +467,11 @@ describe("what a checkout is entitled to say about origin", () => {
 // docs/archive/** is exempt: those are point-in-time records of what was true when written, and
 // editing them to match today is falsifying them. A live doc with a real reason to name the call can
 // carry a greppable `blocked-prune-allow` on the line — the same escape hatch the mutation-boundary
-// and outbound guards use. Exactly one live line carries it today, in docs/BRANCH_DISPOSITIONS.md,
-// naming the call to record that it is BLOCKED here -- the exact wall the sessions above kept
-// hitting, and the opposite of prescribing it. Deliberately not named by row: rows are retired
-// when their ref is pruned, so a row name here would rot the way the docblock below this file's
-// own review did. Count it with `git grep -c blocked-prune-allow -- '*.md' ':!docs/archive'`, and
-// do not read the row here. The exclusion is not cosmetic: this rule exempts the archive, so a
+// and outbound guards use. No live line carries it today: the one that did was a table row, and
+// #291 moved the rows out of Markdown into docs/dispositions/*.json, which this rule does not scan
+// because a mechanical record is not prose that can prescribe anything. Count the live hits with
+// `git grep -c blocked-prune-allow -- '*.md' ':!docs/archive'`. The exclusion is not cosmetic: this
+// rule exempts the archive, so a
 // count that includes it answers a different question than the one the rule asks -- zero hits
 // there today, which is the right number reached over the wrong corpus.
 describe("the live docs do not prescribe the blocked prune", () => {
@@ -432,6 +501,8 @@ describe("the live docs do not prescribe the blocked prune", () => {
 });
 
 describe("this repository", () => {
+  // The 13 CLAIMED rows #350 found already landed were swept on 2026-09-02 (#355): MERGED, pruned,
+  // records deleted. Nothing is filtered here any more; a stale CLAIMED row reds this outright.
   it("has a true branch-disposition record right now", () => {
     expect(audit({ repoRoot })).toEqual([]);
   });
@@ -605,7 +676,12 @@ describe("PR-to-merge-commit citations", () => {
   });
 
   it("holds for THIS repository's record, and proves it read something", () => {
-    const record = readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8");
+    // The record is the store now, not one table (#291). Citations live in the evidence text of the
+    // per-ref files, so the corpus is every record's own prose joined -- the same bytes the table
+    // used to hold, minus the shared file that made every lane collide on it.
+    const record = readAll(repoRoot)
+      .records.map((r) => `${r.ref} ${r.issue ?? ""} ${r.evidence}`)
+      .join("\n");
     const cited = mergeCitations(record);
     // Without this, a reworded document would make every assertion below vacuous.
     expect(cited.length).toBeGreaterThan(0);
@@ -637,7 +713,15 @@ describe("PR-to-merge-commit citations", () => {
     expect(Object.keys(NON_CITATION_LANDINGS).every((sha) => record.includes(sha))).toBe(true);
     // Pinned, because the squash shape cannot prove #N is a PR rather than an issue. A NEW
     // squash-only citation reds here until somebody confirms it by hand -- that is the design.
-    expect(squashOnlyCitations(cited, live, landedOnRecordMain)).toEqual([
+    // Sorted, because the corpus is now a directory listing rather than one hand-ordered table:
+    // which record is read first is the filesystem's business, and a pin on that order would fail
+    // on a rename that changed nothing about the citations.
+    expect(squashOnlyCitations(cited, live, landedOnRecordMain).sort((a, b) => a.pr - b.pr)).toEqual([
+      // Confirmed by hand 2026-09-07: `gh pr view 78` reports state MERGED with mergeCommit
+      // 1ab831fb, so #78 is a PR and not an issue. Cited by the
+      // feat/user-feedback-lab-recovery row as the landing that deleted the Lab surfaces that
+      // branch was built on -- the fact that makes it abandoned rather than pending.
+      { pr: 78, sha: "1ab831fb" },
       { pr: 273, sha: "e26108f7" },
       { pr: 275, sha: "29fb8009" },
     ]);
@@ -656,26 +740,16 @@ describe("PR-to-merge-commit citations", () => {
 // and reddened the whole gate. A rule that can only fail for a real reason is worth more than a
 // rule that is one round-trip more thorough.
 describe("the record's prose does not outlive the refs it describes", () => {
-  const record = () => readFileSync(join(repoRoot, "docs/BRANCH_DISPOSITIONS.md"), "utf8");
+  // The corpus is the records themselves. What used to be "every line the audit calls a row" is
+  // now "every record the audit reads", which is the same agreement one layer stronger: there is no
+  // parsing left to drift between guard and audit, because `readAll` IS the definition of a record.
+  const records = () => readAll(repoRoot).records;
 
-  // The predicate is the audit's OWN, imported rather than copied: a line is a row here exactly
-  // when `parseRow` calls it a row there, because it is the same function. Two rounds of review
-  // went into learning that a copy drifts -- round 1 widened the copy for indentation, and round 4
-  // found it still required backticks around the ref where `parseRow` only strips them if present,
-  // so `| origin/lane/x | CLAIMED | 5 commits past origin/main |` was a row to the audit and
-  // invisible to both rules below. Neither miss needed a hostile author: they are what a guard that
-  // paraphrases someone else's definition does on its own. Not copying it is the only fix that does
-  // not need a third round. These rules apply that predicate to the whole file where
-  // `parseDispositions` applies it to the `## The refs` section alone, which can only ever check
-  // more lines, never fewer.
-  const isRow = (line) => parseRow(line) !== null;
-  const rowKeys = (md) =>
-    new Set(
-      md
-        .split("\n")
-        .filter(isRow)
-        .map((line) => parseRow(line).ref.replace(/^origin\//, "")),
-    );
+  // The predicate used to be the audit's own row parser, imported rather than copied, because two
+  // rounds of review showed a copied one drifts. That whole hazard is gone with the table: there is
+  // no line-shape to agree on any more. What remains is the ref set, taken straight from the store.
+  const bareRef = (ref) => ref.replace(/^origin\//, "");
+  const recordKeys = (rs) => new Set(rs.map((r) => bareRef(r.ref)));
 
   // A count is measured against a branch tip, and a branch tip moves on every merge -- so the
   // number is stale the moment any other lane lands, without a word of this file changing. The
@@ -727,26 +801,21 @@ describe("the record's prose does not outlive the refs it describes", () => {
   const pinsACount = (line) => PINNED_COUNT.test(stripMarkup(line));
 
   it("pins no commit count against a baseline that moves", () => {
-    const rows = record()
-      .split("\n")
-      .map((line, i) => ({ line, n: i + 1 }))
-      .filter(({ line }) => isRow(line));
+    const rows = records();
     // Without this the ban passes on a document the rule never found: rename a column, reformat the
     // table, and "no offenders" means "no rows read". The commit that shipped this rule claimed
     // every rule here carried a self-test that stopped it passing vacuously; for THIS one that was
     // false, and the review said so. The floor sits far below the row count so that retiring a row
     // cannot red it.
-    expect(rows.length).toBeGreaterThan(20);
-    const offenders = rows
-      .filter(({ line }) => pinsACount(line))
-      .map(({ n }) => `docs/BRANCH_DISPOSITIONS.md:${n}`);
+    expect(rows.length).toBeGreaterThan(10);
+    const offenders = rows.filter((r) => pinsACount(r.evidence)).map((r) => r.file);
     expect(offenders).toEqual([]);
   });
 
   // Without this the rule above passes on a document it never understood -- a reworded table, or a
   // regex that quietly stopped matching, and the ban reads as satisfied because nothing matched.
   it("would catch a pinned count however it is spelled or formatted", () => {
-    const row = (evidence) => `| \`origin/lane/x\` | CLAIMED | ${evidence} |`;
+    const row = (evidence) => evidence;
 
     // Round 1's own cases.
     expect(pinsACount(row("— 14 commits past `origin/main`."))).toBe(true);
@@ -777,9 +846,7 @@ describe("the record's prose does not outlive the refs it describes", () => {
     // them, so a row written without them is a row to the audit and must be one here.
     expect(pinsACount(row("eighty commits behind `main`"))).toBe(true);
     expect(pinsACount(row("a hundred commits past `main`"))).toBe(true);
-    expect(isRow("| origin/lane/x | CLAIMED | 5 commits past origin/main |")).toBe(true);
-    expect(pinsACount("| origin/lane/x | CLAIMED | 5 commits past origin/main |")).toBe(true);
-    expect(isRow("| Ref | Disposition | Evidence |")).toBe(false);
+    expect(pinsACount("5 commits past origin/main")).toBe(true);
 
     // The two example outsiders, pinned so that nobody reads this rule as covering them, and the
     // wording the alternation does not reach, pinned so that the sentence above is measured.
@@ -801,21 +868,19 @@ describe("the record's prose does not outlive the refs it describes", () => {
   // here precisely so it does not get deleted. Failing those would be #295 again, a guard reading
   // true prose as a lie.
   const STACK_CLAIM = /stacked\s+(?:\w+\s+deep\s+)?on\s+`((?:origin\/)?[A-Za-z0-9._/-]+)`/gi;
-  const stackClaims = (md) =>
-    md
-      .split("\n")
-      .flatMap((line, i) =>
-        isRow(line)
-          ? [...line.matchAll(STACK_CLAIM)].map((m) => ({ n: i + 1, base: m[1].replace(/^origin\//, "") }))
-          : [],
-      );
+  const stackClaims = (rs) =>
+    rs.flatMap((r) =>
+      [...String(r.evidence).matchAll(STACK_CLAIM)].map((m) => ({ file: r.file, base: bareRef(m[1]) })),
+    );
 
-  it("claims no live stack on a ref the table no longer rows", () => {
-    const md = record();
-    const claims = stackClaims(md);
-    // Vacuous otherwise: a table that stopped using the word would pass this without being read.
-    expect(claims.length).toBeGreaterThan(0);
-    const keys = rowKeys(md);
+  it("claims no live stack on a ref the store no longer records", () => {
+    const rs = records();
+    const claims = stackClaims(rs);
+    // Anti-vacuity is the sibling test below, on a fixture. A store that has stopped using the word
+    // is a legal state, not a vacuous one: since 2026-09-03 no live record claims a stack at all --
+    // the last stacked lane (#311 on #289's ref) was harvested onto main and both refs pruned -- and
+    // a floor of "at least one live stack claim" would red that honest store forever.
+    const keys = recordKeys(rs);
     // The direction this needs is the CONVERSE of the cover check, and the first version of this
     // comment cited the wrong one. Not "every live ref has a row" -- that would leave a row for a
     // pruned ref perfectly legal -- but "every ROW has a live ref", which the audit also enforces:
@@ -828,16 +893,16 @@ describe("the record's prose does not outlive the refs it describes", () => {
     // quieter -- the safe direction, but not the one the bare sentence above implied.
     const dangling = claims
       .filter(({ base }) => !keys.has(base))
-      .map(({ n, base }) => `docs/BRANCH_DISPOSITIONS.md:${n} claims a live stack on \`${base}\`, which has no row`);
+      .map(({ file, base }) => `${file} claims a live stack on \`${base}\`, which has no record`);
     expect(dangling).toEqual([]);
   });
 
   it("would catch the row that prompted it, and spares the past tense", () => {
-    const dead = "| `origin/lane/a` | CLAIMED | PR #316, stacked on `lane/receipt-modified-309` — 14 commits. |";
-    const alive = "| `origin/lane/a` | CLAIMED | stacked two deep on `lane/b` |";
-    const history = "| `origin/lane/a` | CLAIMED | its base `lane/receipt-modified-309` landed as PR #315. |";
-    const md = ["| `origin/lane/a` | X | y |", "| `origin/lane/b` | X | y |"].join("\n");
-    const keys = rowKeys(md);
+    const rec = (evidence) => [{ file: "docs/dispositions/lane__a.json", ref: "origin/lane/a", evidence }];
+    const dead = rec("PR #316, stacked on `lane/receipt-modified-309` — 14 commits.");
+    const alive = rec("stacked two deep on `lane/b`");
+    const history = rec("its base `lane/receipt-modified-309` landed as PR #315.");
+    const keys = recordKeys([{ ref: "origin/lane/a" }, { ref: "origin/lane/b" }]);
     expect(stackClaims(dead).map((c) => keys.has(c.base))).toEqual([false]);
     expect(stackClaims(alive).map((c) => keys.has(c.base))).toEqual([true]);
     expect(stackClaims(history)).toEqual([]);

@@ -963,10 +963,42 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     // WORD, never the longest string. Sentence-length strings wrap, and a wrapped line only makes
     // the strip taller, which the panel now absorbs by shrinking the stage (see the fluid-
     // composition guard) instead of by clipping anything.
-    const CLIENT = 565; // .hc-readout clientWidth at 1280x720, the narrowest supported size
+    // ROUND 11 (#225, 2026-08-27) -- THIS CONSTANT WAS THE BUG. It said 565 and the strip is 547,
+    // so every budget below was checked against 18px that do not exist and the guard stayed green
+    // while the CPU-temp cell hung 10.7px off the strip's right edge, printing "CPU TEM". That is
+    // rounds 6-9's own root cause -- a number nobody re-measured -- moved onto the guard itself.
+    // Re-measured on the INSTALLED build 98653732 over CDP, Health room, OS window 1296x729 (the
+    // window chrome is 16x9, so that is the CLIENT 1280x720 this line names):
+    //   .hc-readout clientWidth 547, padding 16 each side => 515px content box.
+    // To re-take it: launch with the WebView2 debug port, go to Health, size the OS window to
+    // 1296x729, and read document.querySelector(".hc-readout").clientWidth. Do NOT copy a number
+    // from an OS window of 1280x720 -- that is a 1264px client, NARROWER than the supported floor.
+    const CLIENT = 547; // .hc-readout clientWidth at CLIENT 1280x720, the narrowest supported size
     const READS = [73, 73, 76, 76]; // widest UNBREAKABLE child of each reading cell, measured there
     const HAIRLINE = 1;
     const LABEL = 84; // "Readiness" at the 13px type floor -- one word, so it cannot wrap
+
+    // ROUND 12 (Wave 1 Lane B self-review at 5ee0de97, 2026-09-03): READS are the VALUES, and the
+    // widest unbreakable child of a measured cell is not its value -- it is the MEASURED pill. Read
+    // on the installed build at CLIENT 1280x720: .rd-tag 92.6px wide inside a 74.3px content box,
+    // three pills overlapping their neighbours' hairlines by 3.6-5.3px. Green the whole time,
+    // because READS never counted the pill. Its width is derived from reading.css so a change to
+    // its tracking or padding moves this floor with it; only the glyph run is a measured constant.
+    const PILL_GLYPHS = 70.2; // "MEASURED", Geist Sans uppercase at the 13px label size, 2026-09-03
+    const readingCss = stripComments(
+      readFileSync(join("src", "design", "console", "reading.css"), "utf8"),
+    );
+    const tag = /\.rd-tag\s*\{([^}]*)\}/.exec(readingCss)?.[1] ?? "";
+    const typeScale = readFileSync(join("src", "design", "type-scale.css"), "utf8");
+    const labelPx = Number(/--type-label:\s*(\d+(?:\.\d+)?)px/.exec(typeScale)?.[1]);
+    const tracking = Number(/letter-spacing:\s*(\d*\.?\d+)em/.exec(tag)?.[1]);
+    const padX = Number(/padding:\s*\d+px\s+(\d+)px/.exec(tag)?.[1]);
+    const borderPx = Number(/border:\s*(\d+)px/.exec(tag)?.[1]);
+    expect(
+      [labelPx, tracking, padX, borderPx].every(Number.isFinite),
+      ".rd-tag must declare em tracking, px padding and a px border at the --type-label size",
+    ).toBe(true);
+    const PILL = PILL_GLYPHS + "MEASURED".length * tracking * labelPx + 2 * padX + 2 * borderPx;
 
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
     const tokens = readFileSync(join("src", "design", "tokens-v2.css"), "utf8");
@@ -985,7 +1017,24 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       Number.isFinite(ring) && Number.isFinite(kitGap),
       "arc-gauge.css must still declare the ring width and its label gap",
     ).toBe(true);
-    const GAUGE_MIN = ring + kitGap + LABEL;
+    // ROUND 12: five pill-wide floors do not fit beside a 150px instrument in 515px, and the type
+    // floor, the pill's one appearance and the single row are all fixed -- so the INSTRUMENT gives.
+    // Health's cell lets the gauge's label wrap UNDER the ring (flex-wrap, the browser measuring,
+    // no breakpoint), so its floor is the wider of the ring and the word "Readiness", not their
+    // sum. Accepted only when the wrap is declared and the label keeps its whole word as its basis.
+    const plain = stripComments(css);
+    const arcCell = /\.hc-read-arc\s+\.ag-as-ring\s*\{([^}]*)\}/.exec(plain)?.[1] ?? "";
+    const arcLabel = /\.hc-read-arc\s+\.ag-as-ring\s*>\s*\.ag-label\s*\{([^}]*)\}/.exec(plain)?.[1] ?? "";
+    const wraps = /flex-wrap:\s*wrap/.test(arcCell);
+    if (wraps) {
+      const basis = Number(/flex:\s*1\s+1\s+(\d+)px/.exec(arcLabel)?.[1]);
+      expect(
+        basis,
+        "the wrapped label's flex-basis must be at least the word \"Readiness\" (" + LABEL +
+          "px), or it is squeezed before it wraps",
+      ).toBeGreaterThanOrEqual(LABEL);
+    }
+    const GAUGE_MIN = wraps ? Math.max(ring, LABEL) : ring + kitGap + LABEL;
 
     // A length here may be a px literal, a v2 token, or the strip's own local variable. Resolve it,
     // so the budget is checked against what the browser will actually use.
@@ -1048,11 +1097,13 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
         "px) -- a starved instrument prints its label over the reading beside it",
     ).toBeGreaterThanOrEqual(GAUGE_MIN);
     READS.forEach((w, i) => {
+      const widest = Math.max(w, PILL);
       expect(
         floors[i + 1],
-        "reading " + (i + 1) + " must fit its value (" + w + "px, mono, never wraps) plus the " +
-          "hairline and its padding: a value clipped by its neighbour is a reading nobody can read",
-      ).toBeGreaterThanOrEqual(w + HAIRLINE + sep);
+        "reading " + (i + 1) + " must fit its widest unbreakable child (" + widest.toFixed(1) +
+          "px: its value, or the MEASURED pill, whichever is wider) plus the hairline and its " +
+          "padding: a reading clipped by its neighbour is a reading nobody can read",
+      ).toBeGreaterThanOrEqual(widest + HAIRLINE + sep);
     });
 
     // (4) ...and all five together still fit the narrowest supported strip, or the browser
@@ -1167,6 +1218,7 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       "hc-stage-min": "the rig's usable floor",
       "hc-stage-max": "the approved comp's stage height",
       "hc-chrome-top": "46px shell topbar + 26px .v2-content padding-top",
+      "hc-comp-drop": "the approved comp's offset of this card below the row top",
       "hc-hud-reserve": "hud-frame.css's own band height",
       "hc-stage-slack": "margin above the lane's clip",
     };
@@ -1194,9 +1246,20 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     const cap = /max-height:\s*calc\(([\s\S]*?)\)\s*;/.exec(panel);
     expect(cap, ".hc-panel must cap itself at the viewport minus its chrome").not.toBeNull();
     expect(cap![1], "the cap must track the VIEWPORT, not a breakpoint").toContain("100vh");
-    for (const key of ["hc-chrome-top", "hc-hud-reserve", "hc-stage-slack"]) {
+    for (const key of ["hc-chrome-top", "hc-comp-drop", "hc-hud-reserve", "hc-stage-slack"]) {
       expect(cap![1], "--" + key + " must be part of the cap").toContain("var(--" + key + ")");
     }
+    // #225 round 2 dropped the panel --hc-comp-drop below the row top to match the approved comp.
+    // A drop that is NOT also subtracted from the cap is the same arithmetic defect rounds 3-9
+    // paid for, one level up: the panel would still believe it may fill the lane from the top, so
+    // at 1280x720 its bottom would land ~48px under the clip and a reading would go with it. The
+    // margin and the cap must therefore spend the SAME token -- pinned here so neither can drift
+    // from the other, and so the literal can never be restated as a second number.
+    expect(
+      panel,
+      "the drop must be applied as margin-top: var(--hc-comp-drop) -- a second literal here is " +
+        "how the cap and the offset stop agreeing",
+    ).toMatch(/margin-top:\s*var\(--hc-comp-drop\)\s*;/);
     expect(
       cap![1],
       "the cap may not subtract the stage's own bounds -- the stage is INSIDE the panel, and " +
@@ -1216,12 +1279,36 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     // and the fact that only the stage shrinks.
     const SHORT = 720;
     const capAt = (viewport: number) =>
-      viewport - px["hc-chrome-top"] - px["hc-hud-reserve"] - px["hc-stage-slack"];
+      viewport -
+      px["hc-chrome-top"] -
+      px["hc-comp-drop"] -
+      px["hc-hud-reserve"] -
+      px["hc-stage-slack"];
     expect(
       capAt(SHORT),
       "at 1280x720 the cap must still leave the rig its usable floor -- inflate the named chrome " +
         "past this and the stage has nowhere left to stand",
     ).toBeGreaterThan(px["hc-stage-min"]);
+    // ROUND 12b (Wave 1 Lane B self-review round 2 at 1dd701b1, 2026-09-03): the floor must ALSO
+    // leave the readout its WRAPPED height. Round 12 let the readiness label wrap under its ring
+    // below 150px, which at an exact 1280x720 makes the strip 83px taller than inline -- and the
+    // stage was already standing on its floor, so the panel overflowed by 41px and "14 of 16 checks
+    // passed" was reachable only by a scroll nobody was shown. The horizontal budget was re-derived
+    // to the pixel and the vertical one was never looked at. The panel's non-stage content at that
+    // size -- control row + wrapped readout + padding -- measured 269px on the installed 1dd701b1
+    // (scrollHeight 589 with the stage at 320). That is a CONTENT measurement, so it is not the
+    // authority: the self-reviewer's live `.hc-panel` scrollHeight === clientHeight check at all
+    // three sizes is (rubric item 5). This pin only refuses the floor being raised back past the
+    // last measured budget, and asks one more wrapped 13px line of room beyond it.
+    const NON_STAGE_720 = 269; // measured 2026-09-03, installed 1dd701b1, 1280x720, English
+    const BORDERS = 2; // .hc-panel's own 1px top + bottom border, inside its border-box max-height
+    const LINE = 18; // one wrapped line at the 13px label floor, line-height 1.35 -> 17.55
+    expect(
+      capAt(SHORT) - BORDERS - NON_STAGE_720 - px["hc-stage-min"],
+      "at 1280x720 the wrapped readout plus the rig's floor must fit the panel's cap with one more " +
+        "wrapped line to spare -- lower --hc-stage-min or shrink the strip; a note nobody can see " +
+        "is the clipped reading rounds 3-9 paid for",
+    ).toBeGreaterThanOrEqual(LINE);
     // ...and the owner's real window and 1080p must still be able to give the comp its full stage.
     for (const v of [980, 1080]) {
       expect(

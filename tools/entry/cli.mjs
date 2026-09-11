@@ -1,6 +1,6 @@
 // The command line the launcher calls. Prints a verdict; writes nothing.
 //
-//   node tools/entry/cli.mjs preflight [--issue N] [--json]
+//   node tools/entry/cli.mjs preflight [--issue N] [--scope "<backticked paths>"] [--json]
 //   node tools/entry/cli.mjs choose                        (asks which task, prints the answer)
 //   node tools/entry/cli.mjs assert                        (runs inside the session)
 //   node tools/entry/cli.mjs adopt --issue N --session <id> (verifies a session nobody launched)
@@ -37,6 +37,7 @@ const printVerdict = (task, result) => console.log(verdictLines(task, result).jo
 
 function cmdPreflight(argv) {
   const issueArg = argv.includes("--issue") ? Number(argv[argv.indexOf("--issue") + 1]) : null;
+  const scopeArg = argv.includes("--scope") ? argv[argv.indexOf("--scope") + 1] : null;
   const asJson = argv.includes("--json");
 
   const board = readBoard();
@@ -60,7 +61,7 @@ function cmdPreflight(argv) {
     return 2;
   }
 
-  const { facts } = gatherFacts({ issue: picked.task.number, task: picked.task, board });
+  const { facts } = gatherFacts({ issue: picked.task.number, task: picked.task, board, scopeText: scopeArg });
   const result = reconcile(facts);
   if (asJson) console.log(JSON.stringify({ task: picked.task, ...result }, null, 2));
   else printVerdict(picked.task, result);

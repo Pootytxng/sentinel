@@ -20,7 +20,8 @@
 //     saying two folders match while the other says they differ is precisely a wrong root passing
 //     for a right one. This pins the two copies together.
 
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -192,18 +193,23 @@ describe("the assert fails closed when a FACT disagrees", () => {
   });
 
   // #125 step 5 (2026-08-22, the owner armed the write refusal). These two are a PAIR and must stay
-  // one: session START still advises, because a session that only reads is not broken and making it
-  // fatal would close windows for nothing; the WRITE path is the half that refuses. Deleting the
-  // advisory assertion is how the next change silently makes session start fatal, which is exactly
-  // what the spec's rollout order (§4 step 5) says not to let happen.
+  // one: session START advises, because a session that only reads is not broken and making it
+  // fatal would close windows for nothing. The WRITE path was the half that refused until #368
+  // (spec §8, corrected in §9): an UNCLAIMED folder's write now PROCEEDS with one line of context
+  // naming the cure the push gate enforces - no objection (context, no decision), not ask, because
+  // a hook ask is a real prompt in every mode and this fires on every write - and not a
+  // `permissionDecision: "allow"` either, which would skip the prompt and the auto-mode classifier.
+  // Deleting the advisory assertion is how the next change
+  // silently makes session start fatal, which is exactly what the spec's rollout order (§4 step 5)
+  // says not to let happen; deleting the write assertion is how a refusal quietly comes back.
   it("only advises in a folder no issue on the board claims", () => {
     const r = facts({ board: { reachable: true, rows: [] } });
     expect(r.code).toBe("FOLDER_UNCLAIMED");
     expect(verdictOf(r).exit).toBe(0);
   });
 
-  it("but REFUSES the project write that same unverified session tries to make", async () => {
-    const { decide } = await import("../../.claude/hooks/project-write-assert.mjs");
+  it("and the project write that same unclaimed session makes PROCEEDS, carrying its cure (#368)", async () => {
+    const { decide, emit } = await import("../../.claude/hooks/project-write-assert.mjs");
     // A root that EXISTS on disk: isInsideRoot canonicalizes both sides, so a fabricated folder
     // resolves to nothing and would make this pass for the wrong reason.
     const here = join(HERE, "..", "..");
@@ -220,9 +226,42 @@ describe("the assert fails closed when a FACT disagrees", () => {
       root: here,
       sessionId: "11111111-2222-3333-4444-555555555555",
     });
+    expect(d.allow).toBe(true);
+    // No objection, not a decision (spec section 9 as corrected 2026-09-04): the wire carries the context
+    // and NO `permissionDecision`, so the normal permission flow still applies to the call.
+    expect(d.permission).toBeUndefined();
+    let wrote = "";
+    emit(d, { write: (s) => (wrote += s) });
+    const out = JSON.parse(wrote).hookSpecificOutput;
+    expect("permissionDecision" in out).toBe(false);
+    // The answer ships with its own cure, or it is just a silent pass (spec §3a, §9).
+    expect(d.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(d.additionalContext).toMatch(/Ownership claim/);
+    expect(out.additionalContext).toBe(d.additionalContext);
+  });
+
+  it("but still REFUSES that write when the board's claim on the folder contradicts the session", async () => {
+    const { decide } = await import("../../.claude/hooks/project-write-assert.mjs");
+    const here = join(HERE, "..", "..");
+    // A real verdict from the assert with a claim that names a different branch: a contradiction,
+    // not an unclaimed folder, so #368's allow does not apply.
+    const r = facts({
+      board: { reachable: true, rows: [{ issue: 18, folder: here, branch: "somebody-elses-branch" }] },
+      env: { CLAUDE_PROJECT_DIR: here },
+      hookInput: { session_id: SESSION, cwd: here },
+      cwd: here,
+    });
+    expect(r.ok).toBe(false);
+    expect(tracked.ADVISORY_CODES.has(r.code)).toBe(false);
+    const d = decide({
+      toolName: "Write",
+      toolInput: { file_path: join(here, "src", "App.tsx") },
+      verdict: r,
+      root: here,
+      sessionId: "11111111-2222-3333-4444-555555555555",
+    });
     expect(d.allow).toBe(false);
-    // The refusal ships with its own cure, or it is just a closed window (spec §3a).
-    expect(d.reason).toMatch(/adopt/);
+    expect(d.additionalContext).toBeUndefined();
   });
 
   it("and still lets that same session write OUTSIDE the project — the gate is scoped, not total", async () => {
@@ -293,5 +332,137 @@ describe("one implementation, two entry points", () => {
     for (const a of cases) {
       for (const b of cases) expect(tracked.samePath(a, b)).toBe(fieldSamePath(a, b));
     }
+  });
+});
+
+// #368 — the hook's board read stayed at `--limit 100` after #339 raised the launcher's to 1000. On
+// a 136-item board every claim past row 100 (every NEW lane) read as FOLDER_UNCLAIMED here while the
+// launcher saw it, so the owner's "fixed" claim path was never visible to the guard that refuses.
+describe("the board read is not truncated (#368)", () => {
+  const item = (n) => ({ id: `I${n}`, content: { number: n }, status: "Active", "worktree / branch": `C:\\Users\\Kuya\\code\\sentinel-${n} @ lane/${n}` });
+
+  it("asks gh for the same limit the launcher does, never the old 100", async () => {
+    const { BOARD_READ_LIMIT } = await import("./gather.mjs");
+    expect(tracked.BOARD_READ_LIMIT).toBe(BOARD_READ_LIMIT);
+    expect(tracked.BOARD_READ_LIMIT).toBeGreaterThanOrEqual(1000);
+    let argv = null;
+    tracked.fetchBoardRows({ run: (a) => ((argv = a), JSON.stringify({ items: [], totalCount: 0 })) });
+    expect(argv.slice(-2)).toEqual(["--limit", String(tracked.BOARD_READ_LIMIT)]);
+  });
+
+  it("treats a short read as no read — a truncated board must not turn issue 101+ into 'unclaimed'", () => {
+    const short = JSON.stringify({ items: Array.from({ length: 100 }, (_, i) => item(i + 1)), totalCount: 136 });
+    expect(tracked.fetchBoardRows({ run: () => short })).toBeNull();
+    const full = JSON.stringify({ items: Array.from({ length: 136 }, (_, i) => item(i + 1)), totalCount: 136 });
+    const rows = tracked.fetchBoardRows({ run: () => full });
+    expect(rows.some((r) => r.issue === 136)).toBe(true);
+  });
+});
+
+// docs/WORK_CONTROL.md "Executor identity" - every executor commits under its own name so the gate's
+// mutationAuthors and the reviewer-not-author rule can be read off `git log`. Claude Code sets its
+// own at SessionStart, per LINKED worktree, and only where nothing is set yet. The fixtures are real
+// (`git init`, a real `git worktree add`, real `git config --worktree`) - the rule being guarded is
+// about what git actually stores, so a mock would only reproduce the assumption.
+describe("executor identity - the hook sets claude-code on a linked worktree it opens, and nowhere else", () => {
+  const git = (cwd, ...args) =>
+    execFileSync("git", ["-c", "user.name=guard", "-c", "user.email=guard@test", ...args], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  const worktreeName = (dir) => {
+    try {
+      return git(dir, "config", "--worktree", "user.name");
+    } catch {
+      return null; // exit 1: unset
+    }
+  };
+
+  let bed = null;
+  let host = null;
+  const setup = () => {
+    if (bed) return;
+    bed = mkdtempSync(join(tmpdir(), "compy-entry-identity-"));
+    host = join(bed, "host");
+    execFileSync("git", ["init", "-q", "-b", "main", host], { stdio: "ignore" });
+    git(host, "config", "extensions.worktreeConfig", "true");
+    writeFileSync(join(host, "README.md"), "fixture\n");
+    git(host, "add", "-A");
+    git(host, "commit", "-q", "-m", "fixture");
+  };
+  afterAll(() => {
+    if (!bed) return;
+    try {
+      rmSync(bed, { recursive: true, force: true });
+    } catch {
+      /* a locked file on Windows must not fail the suite */
+    }
+  });
+
+  it("(a) a linked worktree with no --worktree identity gets claude-code, and says so in one line", () => {
+    setup();
+    const linked = join(bed, "linked-fresh");
+    git(host, "worktree", "add", "-q", "-b", "lane/fresh", linked);
+    expect(worktreeName(linked)).toBeNull();
+
+    const r = tracked.ensureWorktreeIdentity(linked);
+    expect(r.action).toBe("set");
+    expect(r.line).toBe("compy-entry: worktree identity set to claude-code");
+    expect(worktreeName(linked)).toBe(tracked.WORKTREE_IDENTITY.name);
+    expect(git(linked, "config", "--worktree", "user.email")).toBe(tracked.WORKTREE_IDENTITY.email);
+    // Per worktree, not per repository: the host's own config did not gain it.
+    expect(worktreeName(host)).toBeNull();
+    expect(() => git(host, "config", "--local", "user.name")).toThrow();
+    // Idempotent: the second session in the same folder keeps what the first set.
+    expect(tracked.ensureWorktreeIdentity(linked).action).toBe("kept");
+  }, 30_000);
+
+  it("(b) a linked worktree that already carries a --worktree identity is left exactly as it was", () => {
+    setup();
+    const linked = join(bed, "linked-owned");
+    git(host, "worktree", "add", "-q", "-b", "lane/owned", linked);
+    git(linked, "config", "--worktree", "user.name", "codex");
+    git(linked, "config", "--worktree", "user.email", "codex@desk.local");
+
+    const r = tracked.ensureWorktreeIdentity(linked);
+    expect(r.action).toBe("kept");
+    expect(r.line).toBeNull();
+    expect(worktreeName(linked)).toBe("codex");
+    expect(git(linked, "config", "--worktree", "user.email")).toBe("codex@desk.local");
+  }, 30_000);
+
+  it("(c) the main checkout is never touched, even with nothing set", () => {
+    setup();
+    expect(worktreeName(host)).toBeNull();
+    const r = tracked.ensureWorktreeIdentity(host);
+    expect(r.action).toBe("main");
+    expect(r.line).toBeNull();
+    expect(worktreeName(host)).toBeNull();
+    expect(() => git(host, "config", "--local", "user.name")).toThrow();
+  }, 30_000);
+
+  it("a folder that is not a checkout, or no root at all, is skipped without a line - never a throw", () => {
+    setup();
+    const plain = mkdtempSync(join(bed, "not-a-repo-"));
+    // Keep git's discovery from walking up into an ancestor repository (the temp dir is not one, but
+    // the rule is "skip quietly", so it must hold wherever the temp dir happens to be).
+    expect(tracked.ensureWorktreeIdentity(plain, { run: () => ({ ok: false, out: "fatal: not a git repository", status: 128 }) }).action).toBe("skipped");
+    expect(tracked.ensureWorktreeIdentity(null).action).toBe("skipped");
+    expect(tracked.ensureWorktreeIdentity("").action).toBe("skipped");
+  });
+
+  it("a git failure past the checkout test is one logged line, not a write and not a throw", () => {
+    const calls = [];
+    const run = (_root, args) => {
+      calls.push(args.join(" "));
+      if (args[0] === "rev-parse") return { ok: true, out: args[1] === "--git-dir" ? "C:\\host\\.git\\worktrees\\x" : "C:\\host\\.git", status: 0 };
+      // `git config --worktree` without extensions.worktreeConfig: exit 128, not the "unset" exit 1.
+      return { ok: false, out: "fatal: --worktree cannot be used with multiple working trees", status: 128 };
+    };
+    const r = tracked.ensureWorktreeIdentity("C:\\host\\x", { run });
+    expect(r.action).toBe("failed");
+    expect(r.line).toMatch(/^compy-entry: worktree identity not set - fatal: --worktree/);
+    expect(calls.filter((c) => c.startsWith("config --worktree user.name claude-code"))).toEqual([]);
   });
 });

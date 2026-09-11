@@ -5,6 +5,13 @@
 > narratives of sweeps whose refs are all long gone; the live file keeps only the CURRENT sweep and
 > the CURRENT rows. Back to the live file: [`../BRANCH_DISPOSITIONS.md`](../BRANCH_DISPOSITIONS.md).
 
+## Why the table left the live file (2026-09-02, #291)
+
+Moved here 2026-09-03 to pay for the #337 prune-order paragraph. On 2026-09-02 all eight open PRs
+edited the one disposition table that used to sit in the live file, so every lane conflicted with
+every other lane merely by existing, whatever its subject. The table became one JSON record per ref
+under `docs/dispositions/`, named by the ref's slug, so two lanes can never write the same file.
+
 ## Sweeps of 2026-08-04, 2026-08-05 and 2026-08-12
 
 Swept 2026-08-04 against `main` @ `1a513cb`; the `origin/claude/*` rows added 2026-08-05 against
@@ -172,3 +179,24 @@ refs went stale twice on 2026-09-01 alone, both times by the very lane that adde
 all: `node scripts/branch-disposition-audit.mjs` prints the live split on OK, *after* it has
 proven the rows and origin's refs are one-to-one. That ordering is what makes the printed
 number trustworthy rather than merely current.
+
+## 2026-09-01 — spent-at-zero checkout inventory, moved out of `docs/SESSION_HANDOFF.md`
+
+Moved here to pay a doc-budget FAIL (122/120) from the ARCHIVE rather than from the cap, which is
+the standing rule. Nothing in this list is a live obligation: `handoff-worktree-truth` rule C
+requires every checkout that CARRIES commits `origin/main` cannot reach to be named in the handoff,
+and every entry below carries zero, so rule C credits none of them. It is kept as a record of what
+was spent at that moment, not as a claim about what is spent now — re-derive with
+`git worktree list` + `git rev-list --count origin/main..<ref>` before relying on any line of it.
+
+> Spent, at zero: `sentinel-fleet-guard-276`, `sentinel-segmented-237`, `sentinel-release-truth-256`,
+> `sentinel-q9b-redactor-259`, `sentinel-q9b-stage2-258` (#258/#264 landed out of it), four of the SIX
+> under `.claude/worktrees/` (seven entries; `data-root-integrity-432797` is not one), parked
+> `sentinel-mission0-accent-landing`, `sentinel-mission1-test-workspace` (Mission 1 is ON main,
+> #231/#233), `sentinel-q9b-stage2`. Every detached checkout carries zero, so rule C credits none.
+
+One entry was already stale when it moved: `sentinel-segmented-237` stopped being spent the same day.
+It was REUSED for `lane/vacuous-guards-304` (#304) instead of adding a 34th worktree. **Since
+superseded**: `docs/SESSION_HANDOFF.md` no longer carries a worktree/fleet bullet at all — #291's
+policy change replaced it with `node scripts/fleet-snapshot.mjs`, measured rather than written down —
+so no live bullet names this checkout as a carrier today.

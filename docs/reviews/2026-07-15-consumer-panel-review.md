@@ -1,5 +1,10 @@
 # Consumer Panel Review — 2026-07-15 (owner-authored)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This verbatim panel record remains historical
+> research and owner-context evidence, but its product hierarchy, priorities, names, monetization,
+> and execution instructions are not current authority. Current direction comes from
+> `docs/PRODUCT_CONSTITUTION.md`; current sequence comes from its derived roadmap.
+
 > **Provenance.** Written by the owner (Kuya), delivered to Cowork verbatim on 2026-07-15 as a
 > single complete document (12 consumer/stakeholder personas + panel-wide findings + 12 original
 > recommendations + a revised consumer hierarchy + final verdict). Archived here **verbatim, in

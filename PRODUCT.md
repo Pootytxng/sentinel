@@ -15,14 +15,15 @@ leaves them stranded.
 
 ## Product Purpose
 
-Compy is an all-in-one **PC optimization & safety dashboard** — positioned as *"a
-rollback-first Windows configuration safety layer that happens to optimize."* Its core
-differentiator is **hardware-aware, per-rig** guidance: it reads the actual machine and
-tailors safe, reversible settings to it, instead of generic internet tweaks that break
-things. Under the Receipts Doctrine its broader identity is **the measurement brand that
-proves everything** — the free app is the trust engine: it measures honestly, amplifies
-real gains, and never fabricates a claim. Success = the user trusts what Compy tells them,
-acts with confidence, and can always undo.
+Compy helps a non-technical gamer **make this PC better** or **figure out what went wrong**.
+Those are equal flagship journeys built on the same machine model, evidence, history, Trial
+system, and rollback machinery. The user chooses the destination; Compy handles the technical
+route, proves the result, explains the tradeoffs, and never hides the way back. Its core
+differentiator is **hardware-aware, per-rig** guidance: it reads the actual machine and tailors
+safe, reversible tests and explanations to it instead of applying generic internet tweaks.
+Under the Product Constitution (`docs/PRODUCT_CONSTITUTION.md`) it optimizes outcomes, not
+settings: it measures honestly, amplifies real gains, and never fabricates a claim. Success =
+the user trusts what Compy tells them, acts with confidence, and can always undo.
 
 ## Brand Personality
 

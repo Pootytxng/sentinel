@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  claimExpiry,
   parseClaim,
   parseHandoff,
   planPostClaim,
@@ -17,6 +18,7 @@ import {
   postClaim,
   renderClaim,
   renderHandoff,
+  threadLease,
 } from "./claim.mjs";
 
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-workflow";
@@ -112,6 +114,46 @@ describe("round-tripping a claim off the issue", () => {
   it("returns null for a comment that is not a claim", () => {
     expect(parseClaim("just a normal comment")).toBeNull();
   });
+
+  it("reads the bold-bullet and two-column-table forms other writers post by hand", () => {
+    // #224's claim (2026-09-01) was a table. It parsed as a claim with no fields — and under #358 a
+    // live writer with no readable scope is a refusal the other side cannot cure.
+    const table = [
+      "### Ownership claim — exclusive write owner, issue #224",
+      "",
+      "| field | value |",
+      "|---|---|",
+      "| **writer** | Claude Code session `sentinel-63` |",
+      "| **worktree** | `C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\compy-visual-recovery-kit-6fd074` |",
+      "| **branch** | `claude/compy-visual-recovery-kit-6fd074` |",
+      "| **head at claim** | `cdd976f3` |",
+      "| **expiry** | 2026-09-02T12:00:00Z |",
+    ].join("\n");
+    expect(parseClaim(table)).toMatchObject({
+      executor: "Claude Code session `sentinel-63`",
+      folder: "C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\compy-visual-recovery-kit-6fd074",
+      branch: "claude/compy-visual-recovery-kit-6fd074",
+      expires: "2026-09-02T12:00:00Z",
+      scope: null,
+      lane: null,
+    });
+    const bold = "### Ownership claim\n- **Lane:** Codex\n- **Write scope**: `scripts/x.mjs`, `docs/`\n- **Claim expires:** 2026-09-03\n";
+    expect(parseClaim(bold)).toMatchObject({ lane: "Codex", scope: "`scripts/x.mjs`, `docs/`", expires: "2026-09-03" });
+  });
+});
+
+describe("claimExpiry — the expiry as writers actually spell it", () => {
+  it("reads a date, a timestamp, and either with prose after it", () => {
+    expect(claimExpiry("2026-09-03").toISOString()).toBe("2026-09-03T23:59:59.000Z");
+    expect(claimExpiry("2026-09-02T04:55Z (12 hours)").toISOString()).toBe("2026-09-02T04:55:00.000Z");
+    expect(claimExpiry("2026-09-02T12:00:00Z").toISOString()).toBe("2026-09-02T12:00:00.000Z");
+    expect(claimExpiry("2026-08-03 (12-hour alarm; no automatic takeover)").toISOString()).toBe("2026-08-03T23:59:59.000Z");
+  });
+
+  it("is null, never a guess, for anything else — a claim stays live until its expiry is read as past", () => {
+    expect(claimExpiry(null)).toBeNull();
+    expect(claimExpiry("next Tuesday")).toBeNull();
+  });
 });
 
 describe("the handoff, and guard 7's other half", () => {
@@ -140,6 +182,500 @@ describe("the handoff, and guard 7's other half", () => {
 
   it("returns null for a comment that is not a handoff", () => {
     expect(parseHandoff("### Ownership claim\n- Lane: Codex")).toBeNull();
+  });
+});
+
+// #411: the work-control gate asks one question of an issue thread before a close (is a lease still
+// live?) and answers it through this fold, the same one gather.readIssueThread uses, so the two
+// cannot disagree. Each case is the shape of a real comment found by reading all 840 comments in the
+// repository on 2026-09-10.
+describe("threadLease: is a lease still live on this thread?", () => {
+  const at = (createdAt, ...lines) => ({ createdAt, body: lines.join("\n") });
+  const CLAIM = at("2026-09-10T06:41:51Z", "### Ownership claim", "- Lane: Claude Code", "- Write scope: `src-tauri/src/race_seam.rs`");
+  const RELEASE = at("2026-09-10T07:52:00Z", "### Handoff", "- Exact next action: none", "- Claim: released");
+
+  it("reads the newest claim as live until a newer handoff releases it", () => {
+    expect(threadLease([CLAIM]).claim).toMatchObject({ lane: "Claude Code", postedAt: "2026-09-10T06:41:51Z" });
+    expect(threadLease([CLAIM, RELEASE]).claim).toBeNull();
+    expect(threadLease([RELEASE, { ...CLAIM, createdAt: "2026-09-10T08:00:00Z" }]).claim).not.toBeNull();
+    expect(threadLease([]).claim).toBeNull();
+  });
+
+  it.each(["- Claim: transferred to codex until 2026-09-11T08:00Z", "- Claim: renewed until 2026-08-04.", "- Outcome: merged"])(
+    "keeps the lease live after a handoff whose last line is %j",
+    (last) => {
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", "### Handoff", last)]).claim).not.toBeNull();
+    },
+  );
+
+  it("does not read a HELD lease as released because its Claim line mentions the release (#399, #407)", () => {
+    const held = at("2026-09-10T07:52:00Z", "### Handoff", "- Claim: **HELD.** Comment `IC_x`, scope unchanged. Released only when a review verdict lands.");
+    expect(parseHandoff(held.body).released).toBe(false);
+    expect(threadLease([CLAIM, held]).claim).not.toBeNull();
+  });
+
+  it.each(["released", "Released.", "**released.**", "RELEASED** by Cowork.", "Released 2026-09-03; lane complete.", "`released`"])(
+    "reads a release as writers spell it: %s",
+    (value) => {
+      expect(parseHandoff(`### Handoff\n- Claim: ${value}`).released).toBe(true);
+    },
+  );
+
+  it("does not count a sentence that merely mentions a header as a lease event", () => {
+    // #283's close comment (2026-09-10T07:50:16Z) named the Handoff still to come. It is not one.
+    const mention = at("2026-09-10T07:50:16Z", "Closing. The lease stays held until the carrier lands. Then the `### Handoff` and Done follow.");
+    expect(parseHandoff(mention.body)).toBeNull();
+    // #408 and #409 (2026-09-09) retold "a fresh **`### Ownership claim`**" after the lease was released.
+    const retelling = at("2026-09-10T08:00:00Z", "The measurements that licensed it, followed by a fresh **`### Ownership claim`** (20:43).");
+    expect(parseClaim(retelling.body)).toBeNull();
+    expect(threadLease([CLAIM, RELEASE, retelling]).claim).toBeNull();
+  });
+
+  it("still reads a header that opens its line after a byte-order mark, or carries a suffix (#49)", () => {
+    expect(parseClaim("\uFEFF### Ownership claim\n- Lane: Codex")).toMatchObject({ lane: "Codex" });
+    expect(parseHandoff("### Handoff — Phase B step 3 complete\n- Claim: released.").released).toBe(true);
+  });
+
+  it("reads a claim and a release in one comment as a live lease: the release has to come after", () => {
+    const both = at("2026-09-10T07:52:00Z", "### Handoff", "- Claim: released", "", "### Ownership claim", "- Lane: Codex");
+    expect(threadLease([both]).claim).not.toBeNull();
+  });
+
+  // HQ review 5165670535 on e56c6395, finding 2: comparing the newest claim with the newest handoff let
+  // a later Handoff that says nothing of the claim bring a released one back. The thread is folded
+  // once, in posting order, one transition per comment.
+  describe("folded in posting order: a release holds until a new claim", () => {
+    const LATER = at("2026-09-10T08:10:00Z", "### Handoff", "- Outcome: review requested", "- Exact next action: independent review");
+    const RECLAIM = at("2026-09-10T08:20:00Z", "### Ownership claim", "- Lane: Codex", "- Write scope: `docs/`");
+
+    it("claim: live; release: none; a handoff that does not release: still none; a new claim: live", () => {
+      expect(threadLease([CLAIM]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+      expect(threadLease([CLAIM, RELEASE]).claim).toBeNull();
+      expect(threadLease([CLAIM, RELEASE, LATER]).claim).toBeNull();
+      expect(threadLease([CLAIM, RELEASE, LATER, RECLAIM]).claim).toMatchObject({ lane: "Codex", postedAt: RECLAIM.createdAt });
+    });
+
+    it("still reports the newest handoff, released or not: guard 7 reads its next action", () => {
+      expect(threadLease([CLAIM, RELEASE, LATER]).handoff).toMatchObject({ nextAction: "independent review", released: false, postedAt: LATER.createdAt });
+    });
+
+    it.each(["transferred to codex until 2026-09-11T08:00Z", "**HELD.** Scope unchanged. Released only when a review verdict lands."])(
+      "keeps the lease through a handoff that preserves it (%s), and through a later one that says nothing, until a release",
+      (kept) => {
+        const hold = at("2026-09-10T07:52:00Z", "### Handoff", `- Claim: ${kept}`);
+        const release = { ...RELEASE, createdAt: "2026-09-10T08:30:00Z" };
+        expect(threadLease([CLAIM, hold]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+        expect(threadLease([CLAIM, hold, LATER]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+        expect(threadLease([CLAIM, hold, LATER, release]).claim).toBeNull();
+      },
+    );
+  });
+
+  // HQ review 5165670535 on e56c6395, finding 1: a line-start regex read a release quoted inside fenced
+  // code as a real one, and let a close through while the claim above it was live.
+  describe("an example is not an event: nothing inside fenced code or an HTML comment is read", () => {
+    const HANDOFF_EXAMPLE = ["The release will read:", "", "```text", "### Handoff", "- Exact next action: none", "- Claim: released", "```"];
+    const CLAIM_EXAMPLE = ["WORK_CONTROL's template, for the next writer:", "", "```text", "### Ownership claim", "- Lane: <coordination label; informational>", "- Write scope: <exact paths/globs>", "```"];
+
+    it("parseHandoff does not recognize a fenced Handoff example", () => {
+      expect(parseHandoff(HANDOFF_EXAMPLE.join("\n"))).toBeNull();
+    });
+
+    it("parseClaim does not recognize a fenced Ownership claim example", () => {
+      expect(parseClaim(CLAIM_EXAMPLE.join("\n"))).toBeNull();
+    });
+
+    it("threadLease keeps the genuine claim before the example live, and raises no claim from one", () => {
+      const lease = threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...HANDOFF_EXAMPLE)]);
+      expect(lease.claim).toMatchObject({ postedAt: CLAIM.createdAt });
+      expect(lease.handoff).toBeNull();
+      expect(threadLease([CLAIM, RELEASE, at("2026-09-10T08:00:00Z", ...CLAIM_EXAMPLE)]).claim).toBeNull();
+    });
+
+    it("reads a genuine block's own fields, not the example it quotes", () => {
+      const held = ["### Handoff", "- Outcome: held for review", "When the lease ends, this line reads:", "```", "- Claim: released", "```", "- Claim: transferred to codex until 2026-09-11T08:00Z"];
+      expect(parseHandoff(held.join("\n")).released).toBe(false);
+      const claim = ["### Ownership claim", "~~~", "- Lane: <coordination label>", "~~~", "- Lane: Claude Code"];
+      expect(parseClaim(claim.join("\n")).lane).toBe("Claude Code");
+    });
+
+    // The contexts it models, each read the way CommonMark 0.31 renders it.
+    it.each([
+      ["a tilde fence", ["~~~", "### Handoff", "- Claim: released", "~~~"]],
+      ["a fence indented three spaces", ["   ```", "### Handoff", "- Claim: released", "   ```"]],
+      ["a fence a shorter run cannot close", ["````md", "```", "### Handoff", "- Claim: released", "```", "````"]],
+      ["a fence the other character cannot close", ["```", "~~~", "### Handoff", "- Claim: released", "```"]],
+      ["a fence never closed, which runs to the end of the comment", ["```text", "### Handoff", "- Claim: released"]],
+      ["an HTML comment, which renders as nothing at all", ["<!--", "### Handoff", "- Claim: released", "-->"]],
+      ["a tab's indentation, which makes it indented code", ["\t### Handoff", "- Claim: released"]],
+    ])("reads no Handoff inside %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    // And what it must not over-read: hiding a genuine claim would let a close through.
+    it.each([
+      ["after a closed fence", ["```", "npm test", "```", "### Ownership claim", "- Lane: Codex"]],
+      ["after a one-line HTML comment", ["<!-- claim below -->", "### Ownership claim", "- Lane: Codex"]],
+      ["after three backticks whose info string holds a backtick: inline code, not a fence", ["```js``` opened the example", "### Ownership claim", "- Lane: Codex"]],
+      ["after three backticks indented four spaces: indented code, not a fence", ["    ```", "### Ownership claim", "- Lane: Codex"]],
+    ])("still reads a claim %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+  });
+
+  // HQ review 5167660647 on 3ce1beb9: a raw HTML block is not Markdown either, and a release quoted in
+  // a `<pre>` still released the claim above it. Every shape below was rendered by GitHub's own
+  // /markdown endpoint on 2026-09-10, and each expectation is what that page showed, except the ones
+  // named at the end: each of those fails closed, and says so.
+  describe("an example is not an event: nothing inside a raw HTML block is read", () => {
+    const PRE_EXAMPLE = ["The release will read:", "", "<pre>", "### Handoff", "- Exact next action: none", "- Claim: released", "</pre>"];
+    const H = ["### Handoff", "- Claim: released"];
+    const C = ["### Ownership claim", "- Lane: Codex"];
+
+    it("parseHandoff does not recognize a Handoff inside a <pre> block", () => {
+      expect(parseHandoff(PRE_EXAMPLE.join("\n"))).toBeNull();
+    });
+
+    it("threadLease keeps the genuine claim before the example live", () => {
+      const lease = threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...PRE_EXAMPLE)]);
+      expect(lease.claim).toMatchObject({ postedAt: CLAIM.createdAt });
+      expect(lease.handoff).toBeNull();
+      // The review's own shape. At 3ce1beb9 its claim survived only because a comment is read release
+      // first, and the example still stood as the thread's newest Handoff.
+      const own = threadLease([at("2026-09-10T06:41:51Z", "### Ownership claim", "- Lane: Claude Code", "", "<pre>", ...H, "</pre>")]);
+      expect(own.claim).toMatchObject({ lane: "Claude Code" });
+      expect(own.handoff).toBeNull();
+    });
+
+    it("still reads a genuine Handoff after the block, in the same comment or a later one", () => {
+      const same = [...PRE_EXAMPLE, "", "### Handoff", "- Exact next action: independent review", "- Claim: released"];
+      expect(parseHandoff(same.join("\n"))).toMatchObject({ nextAction: "independent review", released: true });
+      const lease = threadLease([CLAIM, at("2026-09-10T07:51:00Z", ...PRE_EXAMPLE), RELEASE]);
+      expect(lease.claim).toBeNull();
+      expect(lease.handoff).toMatchObject({ postedAt: RELEASE.createdAt, released: true });
+    });
+
+    it("raises no claim from a <pre> example, and does not revive a released lease with one", () => {
+      const example = ["WORK_CONTROL's template:", "", "<pre>", "### Ownership claim", "- Lane: <coordination label>", "</pre>"];
+      expect(parseClaim(example.join("\n"))).toBeNull();
+      expect(threadLease([CLAIM, RELEASE, at("2026-09-10T08:00:00Z", ...example)]).claim).toBeNull();
+    });
+
+    // Every kind the renderer starts, by GitHub's list of tags: `<textarea>` and `<source>` are on it,
+    // `<search>` is not, and a declaration needs a capital letter.
+    it.each([
+      ["a <pre> never closed, which runs to the end", ["<pre>", ...H]],
+      ["a <PRE> with attributes", ['<PRE class="x">', ...H, "</PRE>"]],
+      ["a <textarea>, across a blank line", ["<textarea>", "x", "", ...H, "</textarea>"]],
+      ["a <script>", ["<script>", ...H, "</script>"]],
+      ["a <style>", ["<style>", ...H, "</style>"]],
+      ["a <pre> that interrupts a paragraph", ["Example:", "<pre>", ...H, "</pre>"]],
+      ["a <pre> indented three spaces", ["   <pre>", ...H, "</pre>"]],
+      ["a <pre> indented two spaces, which a less indented line does not end", ["  <pre>", ...H, "</pre>"]],
+      ["a processing instruction", ["<?php", ...H, "?>"]],
+      ["a declaration", ["<!EXAMPLE", ...H, ">"]],
+      ["CDATA", ["<![CDATA[", ...H, "]]>"]],
+      ["a <details> with no blank line after it", ["<details>", "<summary>Example</summary>", ...H, "</details>"]],
+      ["a <div>", ["<div>", ...H, "</div>"]],
+      ["a <DIV>", ["<DIV>", ...H]],
+      ["a closing </div>", ["</div>", ...H]],
+      ["a <source>", ['<source src="x">', ...H]],
+      ["a <div> that interrupts a paragraph", ["Example:", "<div>", ...H]],
+      ["a lone open tag", ["<code>", ...H, "</code>"]],
+      ["a lone tag with attributes", ['<a href="https://example.com" title=\'x\'>', ...H]],
+      ["a lone closing tag", ["</span>", ...H]],
+      ["a lone self-closing tag", ["<br/>", ...H]],
+      ["a lone custom element", ["<my-tag>", ...H]],
+      ["a lone tag whose name only starts like pre", ["<prefix>", ...H]],
+      ["a lone tag after a blank line", ["Example:", "", "<span>", ...H]],
+      ["a lone tag after a heading", ["### Notes", "<span>", ...H]],
+      ["a lone tag after closed fenced code", ["```", "x", "```", "<span>", ...H]],
+      ["a lone tag after indented code", ["    code", "<span>", ...H]],
+      ["a lone tag after a setext heading", ["Notes", "---", "<span>", ...H]],
+      ["a lone tag after an empty list item", ["-", "<span>", ...H]],
+      ["a lone tag after a list item's lazy line", ["- item", "lazy text", "<br>", ...H]],
+      ["a lone tag after a loose list item", ["- item", "", "  more", "<br>", ...H]],
+      ["a lone tag after a quote's lazy line", ["> quoted", "lazy", "<br>", ...H]],
+      ["a lone tag after a table", ["| a | b |", "|---|---|", "| x | y |", "<span>", ...H]],
+      ["a lone tag indented less than its ordered item", ["1. item", "  <br>", ...H]],
+      ["a lone tag after a footnote definition", ["Text[^1]", "", "[^1]: note", "<br>", ...H]],
+      ["a lone tag after a footnote definition's lazy line", ["Text[^1]", "", "[^1]: note", "lazy", "<br>", ...H]],
+      ["a lone tag after a footnote definition that interrupts a paragraph", ["Text[^1]", "[^1]: note", "<br>", ...H]],
+    ])("reads no Handoff inside %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    it.each([
+      ["after a closed <pre>", ["<pre>", "x", "</pre>", ...H]],
+      ["after a one-line <pre>", ["<pre>x</pre>", ...H]],
+      ["after a <pre> that ends mid-line", ["<pre>", "x</pre> tail", ...H]],
+      ["after a <pre> ended by another tag of its kind", ["<pre>", "x", "</textarea>", ...H]],
+      ["after a <div> ended by a blank line", ["<div>", "x", "", ...H]],
+      ["after a <div> ended by a line of spaces", ["<div>", "   ", ...H]],
+      ["after a lone tag ended by a blank line", ["<span>", "x", "", ...H]],
+      ["after a closed declaration", ["<!EXAMPLE", "x", ">", ...H]],
+      ["after a closed processing instruction", ["<?x", "?>", ...H]],
+      ["after closed CDATA", ["<![CDATA[", "x", "]]>", ...H]],
+      ["after a one-line declaration", ["<!DOCTYPE html>", ...H]],
+      ["after `<!` and a lowercase letter, not a declaration here", ["<!example", ...H, ">"]],
+      ["after a paragraph, which a lone tag cannot interrupt", ["Taking this over.", "<br>", ...H]],
+      ["after a paragraph and <search>, only a lone tag here", ["Text", "<search>", ...H]],
+      ["after a tag with text after it", ["<span> text", ...H]],
+      ["after an unfinished tag", ['<a href="x"', ...H]],
+      ["after a tag indented four spaces: indented code", ["    <span>", ...H]],
+      ["after a <pre> closed inside its list item", ["- Example:", "  <pre>", "  x", "  </pre>", ...H]],
+      ["that ends a list item holding a <pre>", ["- <pre>", "### Handoff", "- Claim: released", "</pre>"]],
+      ["after a link reference definition, which a lone tag cannot interrupt", ["[x]: https://example.com", "<br>", ...H]],
+    ])("still reads a Handoff %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toMatchObject({ released: true });
+    });
+
+    it.each([
+      ["a <details> with no blank line after it", ["<details>", "<summary>Old claim</summary>", ...C, "</details>"]],
+      ["a lone </pre>", ["</pre>", ...C]],
+      ["a lone tag after a list item", ["- Taking this over.", "<br>", ...C]],
+      ["a lone tag after a quote", ["> quoted", "<br>", ...C]],
+      ["a <pre> indented two spaces, which a less indented line does not end", ["  <pre>", ...C, "</pre>"]],
+      ["a lone tag after a footnote definition", ["Text[^1]", "", "[^1]: note", "<br>", ...C]],
+      ["a lone tag after a footnote definition that interrupts a paragraph", ["Text[^1]", "[^1]: note", "<br>", ...C]],
+    ])("reads no claim inside %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toBeNull();
+    });
+
+    // And what it must not over-read: hiding a genuine claim would let a close through.
+    it.each([
+      ["after a closed <pre>", ["<pre>", "npm test", "</pre>", ...C]],
+      ["after a one-line <pre>", ["<pre>npm test</pre>", ...C]],
+      ["after a <pre> that ends mid-line", ["<pre>", "x</pre> tail", ...C]],
+      ["after a <details> block ended by a blank line", ["<details>", "", ...C, "", "</details>"]],
+      ["after a lone tag ended by a blank line", ["<br>", "", ...C]],
+      ["after a paragraph, which a lone tag cannot interrupt", ["Taking this over.", "<br>", ...C]],
+      ["after a paragraph whose next line only looks like a list item", ["Text", "*", "<br>", ...C]],
+      ["after a paragraph whose next line only looks like an ordered item", ["Text", "2. x", "<br>", ...C]],
+      ["after a paragraph and <search>, only a lone tag here", ["Text", "<search>", ...C]],
+      ["after a tag with text after it", ["<span> text", ...C]],
+      ["after an unfinished tag", ['<a href="x"', ...C]],
+      ["after a <pre> indented four spaces: indented code", ["    <pre>", ...C]],
+      ["after a sentence that mentions <pre>", ["See <pre> below", ...C]],
+      ["after `<!` and a lowercase letter", ["<!example", ...C, ">"]],
+      ["after a lone tag indented into its list item's paragraph", ["- item", "  <br>", ...C]],
+      ["after an unclosed <pre> inside a list item, which the item's end closes", ["- Example:", "  <pre>", "  x", ...C]],
+      ["after a <div> inside a list item", ["- x", "  <div>", "  y", ...C]],
+      ["after a <div> on a list item's own line", ["- <div>", ...C]],
+      ["after a list, a blank line and a paragraph", ["- item", "", "Text", "<br>", ...C]],
+      ["after an empty list item and a paragraph", ["-", "Text", "<br>", ...C]],
+    ])("still reads a claim %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+
+    // Where the renderer's reading turns on list or table context this module does not track, a Handoff
+    // is read as hidden and a claim as shown: a mistake keeps a lease live, never ends one. A Handoff
+    // header counts only at the start of its line, where no list item can hold it.
+    it.each([
+      ["a <pre> opened on a list item's line", ["- <pre>", "  ### Handoff", "- Claim: released"]],
+      ["a <pre> indented under a list item", ["- Example:", "  <pre>", "  ### Handoff", "- Claim: released"]],
+      ["a <pre> indented four spaces under a list item", ["- x", "    <pre>", "  ### Handoff", "- Claim: released"]],
+      ["a fence opened on a list item's line", ["- ```", "  ### Handoff", "- Claim: released"]],
+    ])("reads no Handoff inside %s, which only a list item's indentation puts there", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    it.each([
+      ["an indented header", ["  ### Handoff", "- Claim: released"]],
+      ["a lone tag indented into its list item's paragraph", ["- item", "  <br>", ...H]],
+      ["a lone tag indented into its ordered item's paragraph", ["1. item", "   <br>", ...H]],
+    ])("reads no Handoff after %s, though GitHub shows one: the lease stays live", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    it("still reads an indented claim header, and a claim GitHub hides after a table: the lease holds", () => {
+      expect(parseClaim(["  ### Ownership claim", "- Lane: Codex"].join("\n"))).toMatchObject({ lane: "Codex" });
+      expect(parseClaim(["| a | b |", "|---|---|", "| x | y |", "<br>", ...C].join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+  });
+
+  // HQ review 5171061412 on c71c6d3c: a fence left open inside a list item hid a genuine claim after the
+  // item to the end of the comment, though GitHub ends the fence with the item. Every shape below was
+  // rendered by GitHub's /markdown endpoint on 2026-09-10, and each expectation is what that page showed,
+  // except the ones named at the end: each of those fails closed, and says so.
+  describe("a block left open inside a list item ends with the item", () => {
+    const ITEM_FENCE = ["- Example:", "  ```", "  npm test"];
+    const H = ["### Handoff", "- Claim: released"];
+    const C = ["### Ownership claim", "- Lane: Codex"];
+
+    it("parseClaim reads a genuine claim after a fence left open inside a list item", () => {
+      expect(parseClaim([...ITEM_FENCE, ...C].join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+
+    it("threadLease reads that claim as live, and after a release as a new lease", () => {
+      const claim = at("2026-09-10T08:00:00Z", ...ITEM_FENCE, ...C);
+      expect(threadLease([claim]).claim).toMatchObject({ lane: "Codex", postedAt: claim.createdAt });
+      expect(threadLease([CLAIM, RELEASE, claim]).claim).toMatchObject({ lane: "Codex", postedAt: claim.createdAt });
+    });
+
+    it("reads no Handoff still inside that fence, so the claim before it stays live", () => {
+      const inside = ["- Example:", "  ```", "  ### Handoff", "  - Claim: released"];
+      expect(parseHandoff(inside.join("\n"))).toBeNull();
+      const lease = threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...inside)]);
+      expect(lease.claim).toMatchObject({ postedAt: CLAIM.createdAt });
+      expect(lease.handoff).toBeNull();
+    });
+
+    it.each([
+      ["after a tilde fence", ["- Example:", "  ~~~", "  x", ...C]],
+      ["after a fence left open in an ordered item", ["1. Run:", "   ```", "   x", ...C]],
+      ["after a fence with an info string", ["- Example:", "  ```sh", "  x", ...C]],
+      ["after a blank line inside the fence", ["- Example:", "  ```", "  x", "", ...C]],
+      ["after a fence left open in an outer item, under a nested one", ["- a", "  - b", "  ```", "  x", ...C]],
+      ["indented one space, short of the item's text", ["- Example:", "  ```", "  x", " ### Ownership claim", "- Lane: Codex"]],
+      ["after a closer indented three past the item's text", ["- Example:", "  ```", "  x", "     ```", "  ### Ownership claim", "- Lane: Codex"]],
+      ["after a fence indented past the item's text, closed there", ["- Example:", "   ```", "  x", "   ```", "   ### Ownership claim", "- Lane: Codex"]],
+      ["after a line that only looks like its closer, four past the item's text", ["- Example:", "   ```", "  x", "      ```", "   ```", "   ### Ownership claim", "- Lane: Codex"]],
+      ["after a fence under an ordered item's number, short of its text: a top-level fence, closed", ["1. Run this:", "  ```", "git status", "  ```", ...C]],
+      ["after a fence under a two-space marker, short of its text: a top-level fence, closed", ["-  Example:", "  ```", "x", "  ```", ...C]],
+      ["after a <pre> under a two-space marker, short of its text: a top-level block, closed", ["-  Example:", "  <pre>", "x", "", "</pre>", ...C]],
+      ["after a fence closed at column 0, which GitHub reads as opening another, and a fence closing that", ["- Example:", "  ```", "  x", "```", "Then:", "```", ...C]],
+    ])("still reads a claim %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+
+    // The repair reaches only a block inside a list item: a top-level one still runs to its own end.
+    it.each([
+      ["a fence never closed", ["```", "x", ...C]],
+      ["a fence still inside its list item", ["- Example:", "  ```", "  ### Ownership claim", "  - Lane: Codex"]],
+      ["a fence after a list, indented one space", ["- item", "", " ```", "x", ...C]],
+      ["a fence under an ordered item's number, short of its text", ["1. Run this:", "  ```", "git status", ...C]],
+      ["a fence after a list and a paragraph", ["- item", "", "Text", "  ```", "x", ...C]],
+      ["a fence that ends a list item", ["- item", "```", "x", ...C]],
+      ["a fence after a closed one under a two-space marker", ["-  Example:", "  ```", "x", "  ```", "", "```text", ...C]],
+      ["a <pre> under an ordered item's number, short of its text", ["1. item", "  <pre>", "  x", ...C]],
+      ["a <pre> after a list item, indented one space", ["- item", " <pre>", "x", ...C]],
+      ["an HTML comment left open inside a list item, which GitHub never closes", ["- Example:", "  <!--", "  x", ...C]],
+    ])("reads no claim inside %s", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toBeNull();
+    });
+
+    it("reads no Handoff inside a top-level fence never closed", () => {
+      expect(parseHandoff(["```", "x", ...H].join("\n"))).toBeNull();
+    });
+
+    // The line that ends the item can open a block of its own, and a Handoff after it is then code: on
+    // c71c6d3c each of these released the claim above it.
+    it.each([
+      ["a fence closed at column 0, which GitHub reads as opening another", ["- Example:", "  ```", "  npm test", "```", ...H]],
+      ["a fence opened after a list item's fence ended", ["- Example:", "  ```", "  x", "Then:", "  ```", ...H]],
+      ["a fence opened at column 0 inside a list item's <pre>", ["- Example:", "  <pre>", "  x", "```", "</pre>", ...H]],
+      ["a fence opened at column 0 inside a list item's <div>", ["- Example:", "  <div>", "```", "", ...H]],
+      ["an HTML comment its list item ended before its `-->`", ["- Example:", "  <!--", "x", "-->", ...H]],
+    ])("reads no Handoff GitHub hides after %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...lines)]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+    });
+
+    it.each([
+      ["a fence closed under the item's text", ["- Example:", "  ```", "  x", "  ```", ...H]],
+      ["a fence closed a space deeper", ["- Example:", "  ```", "  x", "   ```", ...H]],
+      ["a <pre> closed under the item's text", ["- Example:", "  <pre>", "  x", "  </pre>", ...H]],
+      ["a <div> and a blank line", ["- Example:", "  <div>", "  x", "", ...H]],
+    ])("still reads a Handoff after a list item's block that ends inside the item: %s", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toMatchObject({ released: true });
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...lines)]).claim).toBeNull();
+    });
+
+    // Where GitHub settles it the other way, each fails closed: past a line that may have ended a list
+    // item under an open block, a claim is read and a Handoff is not.
+    it.each([
+      ["a fence left open inside a list item", [...ITEM_FENCE, ...H]],
+      ["a fence closed at column 0 and a later pair of fences", ["- Example:", "  ```", "  x", "```", "Then:", "```", ...H]],
+      ["a fence indented past the item's text, closed under it", ["- Example:", "   ```", "  x", "  ```", ...H]],
+      ["a fence after a list GitHub has ended, closed at column 0", ["- item", "", " text", "  ```", "  x", "```", ...H]],
+    ])("reads no Handoff after %s, though GitHub shows one: the lease stays live", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toBeNull();
+    });
+
+    it.each([
+      ["in a fence opened after a list item's fence ended", ["- Example:", "  ```", "  x", "Then:", "  ```", ...C]],
+      ["after a lone tag that ends a list item's <pre>", ["- Example:", "  <pre>", "  x", "<br>", ...C]],
+      ["in a fence opened by a list item's fence closed at column 0", ["- Example:", "  ```", "  npm test", "```", ...C]],
+      ["in a fence opened at column 0 inside a list item's <pre>", ["- Example:", "  <pre>", "  x", "```", "</pre>", ...C]],
+      ["in a fence opened at column 0 inside a list item's <div>", ["- Example:", "  <div>", "```", "", ...C]],
+      ["after an HTML comment its list item ended before its `-->`", ["- Example:", "  <!--", "x", "-->", ...C]],
+    ])("still reads a claim GitHub hides %s: the lease holds", (_, lines) => {
+      expect(parseClaim(lines.join("\n"))).toMatchObject({ lane: "Codex" });
+    });
+  });
+
+  // HQ review 5172037615 on afc6dfc7: a Handoff read its fields from the whole comment, so a Claim line
+  // above its header, or under a later heading, released the claim before it. A Handoff's section runs
+  // from its header to the next line that opens another section.
+  describe("a Handoff reads its fields only from its own section", () => {
+    const NOTES = ["### Notes", "- Claim: released", ""];
+    const OWN = ["### Handoff", "- Outcome: review requested", "- Exact next action: independent review"];
+    const TEMPLATE = renderHandoff({ outcome: "merged", nextAction: "none", claim: "released" });
+
+    it.each([
+      ["above its header, in a Handoff with no Claim line", [...NOTES, ...OWN]],
+      ["above its header, over the Handoff's own HELD", [...NOTES, "### Handoff", "- Claim: HELD. Review pending."]],
+      ["under a later heading", [...OWN, "", "### Notes", "- Claim: released"]],
+      ["under a later heading of another level", [...OWN, "", "# Notes", "- Claim: released"]],
+      ["under a later setext heading", [...OWN, "", "Notes", "-----", "- Claim: released"]],
+      ["that is the text of a later setext heading", [...OWN, "", "| Claim | released |", "==="]],
+      ["past a thematic break", [...OWN, "", "***", "- Claim: released"]],
+      ["under a heading in a later list item", [...OWN, "- ### Notes", "- Claim: released"]],
+      ["under a heading in a quote", [...OWN, "", "> ### Notes", "", "- Claim: released"]],
+      ["under an HTML heading", [...OWN, "", "<h3>Notes</h3>", "", "- Claim: released"]],
+      ["past an HTML rule", [...OWN, "", "<hr>", "", "- Claim: released"]],
+      ["that an underline indented into its list item makes a heading", [...OWN, "- Claim: released", "  ---"]],
+      ["that === indented into its list item makes a heading", [...OWN, "- Claim: released", "  ==="]],
+      ["that an underline four columns in makes a heading", [...OWN, "- Claim: released", "    ---"]],
+      ["that an underline after a tab makes a heading", [...OWN, "- Claim: released", "\t---"]],
+      ["that an underline makes a heading with the line after it", [...OWN, "- Claim: released", "  (lane)", "  ---"]],
+      ["in the template, that an underline indented into its item makes a heading", [TEMPLATE, "  ---"]],
+    ])("does not release on a Claim line %s, so the claim before it stays live", (_, lines) => {
+      expect(parseHandoff(lines.join("\n"))).toMatchObject({ released: false });
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", ...lines)]).claim).toMatchObject({ postedAt: CLAIM.createdAt });
+    });
+
+    it.each([
+      ["released", "HELD. Review pending.", false],
+      ["HELD. Review pending.", "released", false],
+      ["released", "released", true],
+    ])("releases on two Handoffs in one comment only when both do: %j, then %j", (first, second, released) => {
+      const body = ["### Handoff", `- Claim: ${first}`, "", "### Handoff", `- Claim: ${second}`].join("\n");
+      expect(parseHandoff(body).released).toBe(released);
+    });
+
+    it("does not release when a Handoff's own Claim lines disagree", () => {
+      expect(parseHandoff("### Handoff\n- Claim: released\n- Claim: HELD. Review pending.").released).toBe(false);
+    });
+
+    it("reads no field from above its header or under a later heading", () => {
+      const body = ["### Notes", "- Exact next action: stale", "- Outcome: stale", "", ...OWN, "", "### Next", "- Verification: elsewhere"];
+      expect(parseHandoff(body.join("\n"))).toMatchObject({
+        outcome: "review requested",
+        nextAction: "independent review",
+        verification: null,
+        released: false,
+      });
+    });
+
+    it("still reads the rendered template as a release, with a section or a rule after it", () => {
+      const body = renderHandoff({ outcome: "merged", nextAction: "none", claim: "released" });
+      expect(parseHandoff(body)).toMatchObject({ outcome: "merged", nextAction: "none", released: true });
+      expect(parseHandoff([body, "", "### Notes", "- Claim: HELD. Another lane's."].join("\n")).released).toBe(true);
+      expect(parseHandoff([body, "---", "Posted by the lane."].join("\n")).released).toBe(true);
+      expect(threadLease([CLAIM, at("2026-09-10T07:52:00Z", body)]).claim).toBeNull();
+    });
+
+    // GitHub reads each underline here as a rule, or as the heading of another item, so the Claim line
+    // stays the Handoff's own.
+    it("still releases when an underline below its Claim line is a rule, or takes another item", () => {
+      const claim = [...OWN, "- Claim: released"];
+      expect(parseHandoff([...claim, " ---"].join("\n")).released).toBe(true);
+      expect(parseHandoff([...claim, "", "  ---"].join("\n")).released).toBe(true);
+      expect(parseHandoff([...claim, "  ***"].join("\n")).released).toBe(true);
+      expect(parseHandoff(["### Handoff", "- Claim: released", "- Outcome: review requested", "  ---"].join("\n")).released).toBe(true);
+    });
   });
 });
 

@@ -1,5 +1,11 @@
 # Lab "Instrument Bench" — Phase 1 Implementation Plan
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** The rejection and implementation history below is
+> retained, but neither this plan nor the former replacement it names supplies current product
+> authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md).
+
 > **⚠️ NOT THE CURRENT LAB PLAN (updated 2026-07-09).** This bento "Instrument Bench" Phase 1 was built
 > (`403be45`) and the owner rejected it **as the Lab**; its Phases 2–4 are not being built. The Lab's
 > live plan is the Ops Console — spec `../specs/2026-07-09-compy-console-hud-direction.md` + its Phase-1

@@ -46,8 +46,9 @@ worker's context; only the verdict returns.
 6. **A rendering defect is NOT a taste call and never takes route 5** (Cowork lane amendment
    2026-08-24, adopted by the owner): *"a clipped element, an overlapping glyph, or an unstyled
    native control is a correctness failure, not a matter of taste."* Fix it, guard it, report it
-   — do not hand him a before/after asking which he prefers, and do not file it in
-   `docs/UI_VISION_BACKLOG.md`. Rubric item 12 is where the reviewer catches it. The narrow
+   — do not hand him a before/after asking which he prefers, and do not file it as a product order in
+   historical `docs/UI_VISION_BACKLOG.md`; product direction comes from
+   `docs/PRODUCT_CONSTITUTION.md`. Rubric item 12 is where the reviewer catches it. The narrow
    exception is the one thing the taste decree already reserves to him regardless of cause: the
    **product name, logo, and price presentation**. So the wordmark reading `©ompy` (#213 A1) is a
    real defect AND still his call to approve — fix candidates go to him with a recommendation

@@ -1,0 +1,85 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Four-file lane on #399: one shared continuation rule for the `- Write scope:` bullet, used by both extraction readers. Every commit in the proof delta (a single commit, 4420ff9b) was authored by this actor alone; the reviewer authored none of them.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/399#issuecomment-5598146811",
+  "leaseEvidenceNote": "The operative Ownership claim for this folder and branch. The original claim (5596434288) was posted before the first write and covered the four source paths. This amendment adds ONLY the three transition-receipt files this landing writes and widens no source scope. Following the #405 precedent, the `Write scope` bullet is one line of backticked PATHS ONLY -- no commit SHA, no exclusion sentence, no disclaimer vocabulary at all, because `excluded` is not `excluding` to the current parser and that hole is a queued defect rather than something to lean on. Verified by measurement, not by reading: `node scripts/scope-drift-gate.mjs --issue 399 --refresh` parses exactly the seven intended paths and nothing else.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Exclusive for the bounded scope this lane mutates. The four source paths carry no competing claim: no other open issue claims `scripts/lib/claim-scope.mjs`, `tools/entry/claim.mjs`, `tools/entry/scope-overlap.mjs` or `tools/entry/scope-continuation.test.mjs`, and no open PR other than #407 touches any of them. The three receipt filenames are dated 2026-09-09 and PR-numbered 407/399; no other open PR adds a file of any of those names. Directory co-occupancy under `.claude/work-control/` is not file overlap.",
+  "inheritedWork": false,
+  "transition": "mark-pr-ready",
+  "currentHead": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+  "pr": 407,
+  "issue": 399,
+  "kind": "lane",
+  "branch": "claude/sentinel-399-scope-parsing-a68e04",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/machine-model-defects-115554, canonical remote `origin` git@github.com:Pootytxng/sentinel.git.",
+    "remoteState": "origin/main 0c97c6d959e3448db88a8b1b2ecf54eb0806b206, unmoved since the branch was cut and since the independent review. origin/claude/sentinel-399-scope-parsing-a68e04 = 4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f, equal to local HEAD and to the PR head. Re-derived by `git fetch origin --prune` immediately before this receipt.",
+    "worktree": "Linked worktree, one writer, its own index. core.hooksPath is worktree-scoped to `.githooks`, so the pre-push gate is armed here.",
+    "branch": "claude/sentinel-399-scope-parsing-a68e04, PR #407 -> main, OPEN, draft, MERGEABLE / CLEAN, 0 closingIssuesReferences.",
+    "dirtyState": "Clean. `git status --porcelain` empty immediately before this receipt was written.",
+    "liveProcesses": "node x34 (MCP servers and peer Claude Code sessions across the fleet). No compy.exe, cargo, rustc, npm, msbuild or link process. Measured with Get-Process, not WMI, because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:38-39",
+      "summary": "440 frontend test files passed (440); 6631 tests passed | 4 skipped (6635); 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:44-70",
+      "summary": "tsc clean; vite production build succeeded, `built in 17.29s`. Only the pre-existing >500kB chunk-size advisory, unchanged by this PR."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:1393",
+      "summary": "1291 passed; 0 failed; 24 ignored; 0 filtered out. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:1408-1410",
+      "summary": "clippy stage clean under -D warnings: the stage compiles and reports `Finished` with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "RUN BY THIS LANE at this exact head, by the pre-push hook itself, with an empty git status; the push that carried 4420ff9b is the run that produced this log. Exit code was NOT treated as the verdict -- this gate is known to exit 0 while red -- so every stage was read at its own line range. The log carries six `LOCAL CHECK:` stages: git diff check (:3), write-scope drift #356 (:5-6), frontend tests (:8-39), frontend type-check and build (:44-70), Rust tests (:71-1405), Rust clippy (:1408-1410). `LOCAL CHECK RESULT: PASS` is printed to the console rather than into the log, and it is recorded in the push transcript together with the `[new branch]` line for this ref. No `--no-verify` at any point in this lane.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "The in-gate stage could not measure: logs/verify-local-2026-09-09T06-00-02Z.log:6 reads \"scope drift (#356): not measured -- no session record for this folder (launch through tools/entry, or pass --issue)\". This folder carries no compy-entry session record, so the stage has no claim to compare against and passes honestly rather than pretending. It was therefore measured EXPLICITLY: `node scripts/scope-drift-gate.mjs --issue 399` before the push -> \"4 changed paths since origin/main measured against the claim on #399 (thread) / OK: every changed path is inside\" the four source paths; and again with `--refresh` after the claim amendment -> the same four changed paths, now inside the seven claimed paths.",
+    "reconciliationNote": "The code delta is four files and has not moved since the review. The three receipts were added to the claim BEFORE any of them was written."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+    "verdict": "APPROVE-EQUIVALENT",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/407#pullrequestreview-5151177996 (2026-09-09T07:36:40Z), commit_id 4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f.",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq, which authored no commit in the proof delta -- mutationAuthors is claude-code alone. GitHub refuses the APPROVED event from the PR-author account, so the COMMENTED-state native review carries the APPROVE-EQUIVALENT verdict anchored to this exact full head. The reviewer re-derived the live PR/base/head, inspected all four changed paths and the shared parser flow, and confirmed: both extraction readers now call the same joinScopeBullet rule, the continuation opt-in is confined to the claim `Write scope` field, table rows remain one-line, unwrapped bullets preserve their old trim semantics, and the single shared case matrix plus the pre-fix sensitivity control is appropriate regression evidence. Two NON-BLOCKING findings carried forward verbatim below. Binding condition honoured: \"Any code commit after this review invalidates it\" -- no commit has been made since, and the source stays byte-frozen at this head.",
+    "nonBlockingFindings": [
+      "Wording/scope: describing this as the \"ONE continuation rule\" is true only for the two extraction readers implicated by #399. `parseWriteScope` still contains a separate raw-markdown bullet-boundary rule, unreachable through the two repaired paths because both feed it already-extracted one-line scope text. #407 must NOT be described as having eliminated every continuation parser repo-wide.",
+      "Next-slice boundary: `ENDS_SCOPE_BULLET` does not terminate on numbered-list items or fenced code blocks. A real parsing boundary, but no current Work Control claim uses those forms for scope continuation, and expanding #407 now would widen the accepted issue contract. Carried into the parser-consolidation follow-up lane."
+    ]
+  },
+  "readinessNote": "This is the mark-pr-ready receipt only. It authorizes taking PR #407 out of draft at 4420ff9b and authorizes nothing further; the merge and the issue closure are separate transitions with their own receipts.",
+  "noClosingKeywordNote": "PR #407 deliberately carries NO closing keyword and `gh pr view 407 --json closingIssuesReferences` measures 0. Issue #399 therefore does not close on merge and requires its own close-issue transition after the merge is proven."
+}

@@ -1,189 +1,163 @@
 # CLAUDE.md — Compy project brief & resume point
 
-<!-- Every byte loads on EVERY boot. `src/claude-md-laws-guard.test.ts` enforces the law markers,
-     the byte budget and dead pointers, and its failure message says how to respond. -->
+<!-- Every byte loads on EVERY boot. `src/claude-md-laws-guard.test.ts` enforces law markers,
+     the byte budget, and dead pointers. Keep product philosophy in docs/PRODUCT_CONSTITUTION.md. -->
 
-> **Auto-loads into every Claude Code session rooted in this repo** — durable, in-git, portable.
-> Fresh session: read this, then `docs/RELEASE_STATE.md` (live gate state) + `docs/BACKLOG.md` (next).
-> Treat every file/line claim here as point-in-time — verify against current code before asserting.
+> **Auto-loads into every Claude Code session rooted in this repo.** Fresh session: read
+> `docs/PRODUCT_CONSTITUTION.md` first for product truth, then `docs/RELEASE_STATE.md` for current
+> build/gate truth, `docs/WORK_CONTROL.md` before any write, and `docs/BACKLOG.md` for execution status.
+> Treat every state/file/line claim as point-in-time and re-derive native state before asserting it.
 >
-> **Universal behavioral laws live in `~/.claude/CLAUDE.md`** (challenge duty · response shape ·
-> autonomy floor · tracking · §6 toolchain-over-prose · §7 token economy). They load every session and
-> are NOT repeated here. This file carries only what is true of *Compy specifically*.
+> Universal behavioral laws live in `~/.claude/CLAUDE.md`; do not duplicate them here.
 
-> **📍 LIVE GATE STATE → `docs/RELEASE_STATE.md` is authoritative.** Single current-truth matrix for
-> every gate, artifact, and release blocker (each row carries a `file:line`). **Where any older text
-> in this file or any other doc disagrees about *current* gate state, RELEASE_STATE.md wins.** Deep
-> legacy strata live in `docs/CHANGELOG.md` and are point-in-time records.
+> **Authority is domain-specific, not one giant hierarchy.**
+> - `docs/PRODUCT_CONSTITUTION.md` — SUPREME PRODUCT AUTHORITY.
+> - **`docs/RELEASE_STATE.md` is authoritative** for what is built, armed, installed, verified, or blocked.
+> - `docs/ARCHITECTURE_LOCKS.md` — safety/architecture authority.
+> - `docs/WORK_CONTROL.md` — mutation-lease, scope, handoff, and proof-transition authority.
+> - `docs/product/ROADMAP.md` — derived product execution sequence.
+> - `docs/BACKLOG.md` — execution ledger only; never a source of product philosophy.
 
 > **RENAMED Sentinel → Compy (2026-06-04).** `gg.compy.app` · `compy.exe` · crate `compy`/`compy_lib`
-> · `%APPDATA%\Compy` · `compy.gg`. First launch COPY-migrates `%APPDATA%\Sentinel` → `%APPDATA%\Compy`
-> (`migrate_legacy_data_once` in `lib.rs`; **the legacy literal MUST stay "Sentinel"** — it is the
-> source). Pre-rename history, the WSL path and the old data dir still say "sentinel" — expected.
+> · `%APPDATA%\Compy`. First launch COPY-migrates `%APPDATA%\Sentinel` → `%APPDATA%\Compy`
+> (`migrate_legacy_data_once` in `lib.rs`); the **legacy literal MUST stay "Sentinel"** because it is
+> the migration source. Historical repo/path references to sentinel are expected.
 
-## What Compy is
+## What Compy is — constitutional bootstrap
 
-Compy is the **PC doctor for everyday, non-technical Windows gamers**: the first place a user goes
-after a crash, freeze, slowdown, or unexplained hiccup. It gathers local evidence, explains what is
-known versus only suspected, and guides the safest next test or recovery. Optimization remains a major
-specialty, but it is secondary to diagnosis and recovery. The durable engineering identity is
-still *"a rollback-first Windows configuration safety layer that happens to optimize."* UX stays
-plain-English, hardware-aware, safe + reversible by default. **Never invent or assume hardware
-specs.**
+Compy is one guided PC performance, optimization, health, diagnosis, recovery, experimentation, and
+education system. Its two equal flagship journeys are **MAKE THIS PC BETTER** and
+**FIGURE OUT WHAT WENT WRONG**. Neither is subordinate to the other.
 
-## 💰 Receipts Doctrine — canonical: `docs/RECEIPTS_DOCTRINE.md`
+Product laws:
 
-Compy's mission includes generating real income for the owner. **Read the doctrine doc for phases,
-gates and KPIs; where older product-direction text conflicts, the doctrine wins.** The parts that
-must be in context at all times:
+- **The user chooses the destination. Compy handles the technical route, proves the result, explains
+  the tradeoffs, and never hides the way back.**
+- **Compy optimizes outcomes, not settings.**
+- Users choose understandable outcomes and risk tolerance; Compy translates them into relevant
+  technical candidates using the shared Machine Model and Trial system.
+- Simple outside, deep inside: Answer → Explanation → Technical receipt.
+- Average FPS alone is never enough evidence for optimization quality.
+- No measurable benefit beyond credible noise means the default/current state wins.
+- The target is the smallest validated configuration that best serves the user's goal, not the
+  largest tweak count or lowest process count.
+- Care and Performance share the same history, evidence, machine model, rollback, confidence, and
+  experiment machinery.
+- User freedom does not obligate Compy to automate unsupported or indefensible operations.
+- Never invent or assume hardware specs.
 
-- **Identity:** Compy Care is the primary product: *"the PC doctor that explains what happened,
-  what likely contributed, and what to do next."* Optimization/proving is the second specialty.
-  Measurement remains the trust engine; money stack build order and KPIs: doctrine doc.
-- **Honest-measurement law (REFRAMED):** **never fabricate, never claim unmeasured — and amplify
-  measured wins loudly.** "Never promise" was a vow of silence and is retired, as is the "your PC is
-  probably fine" defensive copy.
-- **Outbound + Capability Exception Gate (owner decision 2026-08-09):** zero-outbound absolutism <!-- outbound-claim-allow -->
-  is retired; the signed updater is live. New capabilities stay local/user-mode by default and cross
-  a boundary only through a named, reviewed exception. Outbound has three distinct tiers: **Tier 1
-  signed advisory download / no machine-data upload; Tier 2 scrubbed incident fingerprint; Tier 3
-  explicit per-case evidence upload.** Never merge their consent or transport. Receipts' send path
-  is built dark and refusing (Q9a); **ruled 2026-08-24 (#207): opt-in, default OFF and it stays OFF
-  after arming, disclosed at first run, with a real off switch** — the shipped description and
-  download page promise "No telemetry", which outranks the 2026-08-18 §2 amendment.
-  `src/outbound-claim-guard.test.ts` rejects absolute offline claims.
-- **ONE MUTATION BOUNDARY (mechanical, 2026-08-03):** Compy changes Windows from
-  `src-tauri/src/actions.rs` and **nowhere else** — snapshot → apply → verify → receipt → rollback.
-  `src/mutation-boundary-guard.test.ts` fails the build on a registry write, service/task change,
-  power-plan switch or package removal anywhere else in `src-tauri/src`. Line-level escape hatch for
-  copy that merely NAMES a command: `mutation-boundary-allow` (greppable).
-- **ZERO-BUDGET LAW:** every phase ships $0-first on free tiers; any spend is owner-gated with named
-  payback + KPI trigger. **Paid ads: never before 1.0.** Every money phase defines ONE metric before
-  build.
-- **UNTOUCHABLE (business-critical):** rollback-first · no fabricated claims · no third-party
-  game/process injection · the Capability Exception Gate · the tweak rails · signed-remote-rules
-  triple gate · every LOCKED rule below. One Reddit thread of brand damage kills the funnel —
-  **the gates ARE the moat.**
-- **Council oversight:** `docs/COUNCIL_PROTOCOL.md` — five-lens council (Contrarian · First-Principles
-  · Expansionist · Outsider · Executor). 6-line COUNCIL STRIP closes every marathon log + Cowork
-  audit; full council at money gates and on the owner's "council it." Advises, never overrides.
+**Full law:** `docs/PRODUCT_CONSTITUTION.md`. Derived implementation: `docs/product/ROADMAP.md`,
+`docs/product/OPTIMIZATION_ENGINE.md`, `docs/product/MACHINE_MODEL.md`,
+`docs/product/TRIAL_PROTOCOL.md`, `docs/product/RISK_MODEL.md`, `docs/product/CARE_ENGINE.md`, and
+`docs/product/UX_SYSTEM.md`.
+
+`docs/RECEIPTS_DOCTRINE.md`, old PRDs, old Product Direction documents, historical monetization plans,
+and pre-rebirth strategy specs are historical evidence only. They cannot restore old product hierarchy
+or pricing doctrine without an explicit constitutional amendment.
+
+## Standing product-integrity laws
+
+- **Honest measurement:** **never fabricate, never claim unmeasured**. Measured wins may be amplified
+  clearly; measured losses/nulls are equally valid evidence. Unavailable stays unknown, **never fabricated**.
+- **Outbound + Capability Exception Gate:** new capabilities remain local/user-mode by default and
+  cross a boundary only through a named reviewed exception. Keep the three distinct outbound tiers:
+  **Tier 1 signed advisory download / no machine-data upload** · **Tier 2 scrubbed incident fingerprint**
+  · **Tier 3 explicit per-case evidence upload**. Never merge their consent/transport. Tier 2 is
+  opt-in, default OFF and it stays OFF after arming, disclosed at first run, with a real off switch
+  (owner ruling 2026-08-24, #207); only a later explicit owner architecture decision changes that.
+- **ONE MUTATION BOUNDARY:** Compy changes Windows from `src-tauri/src/actions.rs` and **nowhere else**.
+  Snapshot → apply → verify → receipt → rollback. `src/mutation-boundary-guard.test.ts` protects this.
+  `mutation-boundary-allow` is only the greppable line-level escape for prose that names a command.
+- **ZERO-BUDGET LAW:** product/research phases use $0-first paths where practical; spend remains
+  owner-gated with a named reason/payback. Paid ads: **never before 1.0** unless the owner explicitly
+  amends that decision.
+- No scareware, fabricated issue counts, fake certainty, dark-pattern monetization, or affiliate-biased
+  technical recommendations.
 
 ## Working mode
 
-**Authoritative policy: [`docs/RELEASE_AUTONOMY.md`](docs/RELEASE_AUTONOMY.md)** — one owner
-authorization covers the complete reversible release-engineering train, and it binds Claude Code,
-Cowork, Codex, and future agents in this repo. It **overrides the superpowers brainstorm → spec →
-plan → TDD ceremony** for greenlit or clearly-scoped work: build → verify → commit → push → next,
-batching questions to the end. A failed gate triggers repair, not owner escalation. Preserve every
-failed candidate before reset or abandonment. `AskUserQuestion` is for genuine forks in **owner
-territory** only; engineering forks you resolve yourself and record the reasoning.
+**Authoritative release policy:** `docs/RELEASE_AUTONOMY.md`. For greenlit/reversible engineering,
+build → verify → commit → push → next; failed gates trigger repair, not wishful pass. Preserve failed
+candidates before reset/abandonment. Questions are for genuine owner forks, not routine engineering.
 
-**Role specialization + proof order:** Claude Code is the default implementation owner; Codex is the
-default independent reviewer. Either becomes the one active writer only by explicit handoff under
-`docs/WORK_CONTROL.md`, after inspecting inherited repo, remote, worktree, dirty-state and process
-truth. Exact required gates cannot be substituted; environment inability is a blocker, not a pass.
-Run `scripts/work-control-gate.mjs` before any proof-dependent GitHub state transition. **One
-worktree per writer**, shared checkouts read-only; the release/install mutexes enforce exclusion,
-they never grant ownership.
+**Dynamic executor routing + proof order:** Claude Code, Codex, and ChatGPT HQ are all eligible
+executors. There is no permanent implementation department. For each bounded slice, choose the model
+with the best current context, remaining capacity, local/tool access, and ability to reach the next
+proof boundary. The hard invariant is **one active mutation lease per overlapping scope**, recorded
+under `docs/WORK_CONTROL.md`; non-holders may keep reading, coordinating, and reviewing in parallel.
+Handoffs transfer mutation authority only and should be cheap when another executor is the better fit.
+Exact required gates cannot be substituted; environment inability is a blocker, not a pass. Run
+`scripts/work-control-gate.mjs` before proof-dependent GitHub transitions. Independent review is a
+transition gate and must cover the exact head by a reviewer who did not author the mutation being
+approved. One worktree per writer; mutexes enforce exclusion but never grant ownership. Commit under
+the executor identity named in `docs/WORK_CONTROL.md` "Executor identity" so authorship is checkable.
 
-**Owner-bound in this repo** (on top of the universal floor in `~/.claude/CLAUDE.md` §3):
-1. **Secrets / signing** — the Ed25519 private key or any secret never enters the repo / `.env*` / CI.
-2. **Shared or irreversible git** — never move the frozen beta refs (`16069fa`).
-3. **Ships to OTHER people's machines** — shipping unverified *mutation* code to beta/public, arming
-   remote-fetch, enabling the updater, or loosening capabilities/CSP.
-4. **Money.** (Aesthetic taste is NOT on this list — see the decree below.)
-5. **Security / system settings** — the standing rule below.
-6. **The LOCKED gates** below, and **reshaping a core feature outside the discussed topic** — send a
-   one-message **WELFARE CHECK** (*what / why / blast radius*). Gauge: *would this leave the owner
-   upset if he saw it without warning?* If no → proceed, report after.
+**Owner-bound in this repo** (in addition to `~/.claude/CLAUDE.md`):
+1. Secrets/signing: the Ed25519 private key or any secret never enters repo / `.env*` / CI.
+2. Shared/irreversible Git: never move frozen beta refs (`16069fa`).
+3. Shipping mutation code to other people's machines, arming remote-fetch/updater/capabilities/CSP.
+4. Money/spend and material price/publication decisions.
+5. Security/system settings: standing rule below.
+6. LOCKED architecture gates or an undisclosed core-feature reshaping: send one **WELFARE CHECK**
+   (what / why / blast radius) first.
 
-**If a task CAN be done by us, DO IT** — never redirect to the owner anything we can handle. These
-stops are **cumulative, not a ceiling**: "reversible" never licenses crossing a security or
-ship-to-others boundary. Rigor is unchanged — verification is never skipped.
+If a task can be safely done by us within authority, do it. Reversibility never licenses crossing a
+security, secrets, ship-to-others, or ownership boundary. Verification is never skipped.
 
 ### TASTE IS MINE TO EXERCISE, HIS TO OVERRULE (owner decree 2026-08-07)
 
 Aesthetic calls are **not** owner-gated and must never be parked on him by default — his words:
 *"i do not want taste calls to exclusively fall on me id like to see your ideas and consider your
-taste calls as well."* Make the call, ship it, and hand him a **viewable before/after**
-(`SendUserFile`, per `.claude/skills/self-review`) so he can veto on sight — deciding is mine,
-seeing is his, and prose describing a look is neither. Ask first only where taste stops being taste:
-the **product name, logo, and price presentation** (brand/money), and anything that reaches other
-people's machines. A fork genuinely worth his eye ships **with a recommendation attached**, never as
-a menu. Guarded by `scripts/taste-autonomy-guard.test.mjs` — this decree cannot silently re-close.
+taste calls as well."* Make the call, verify visually, and hand him a **viewable before/after**
+(`SendUserFile`, per `.claude/skills/self-review`) so he can veto on sight. Ask first only where
+taste becomes brand/money/publication (product name, logo, price presentation, fleet-visible
+distribution). A genuine fork ships **with a recommendation attached**, never as a menu.
+`scripts/taste-autonomy-guard.test.mjs` protects this decree.
 
-### SECURITY / SYSTEM SETTINGS — OWNER-GATED, never autonomous (standing, 2026-06-10)
+### SECURITY / SYSTEM SETTINGS — OWNER-GATED, never autonomous
 
-Modifying **security or system settings** — UAC keys (`EnableLUA`, `ConsentPromptBehaviorAdmin`,
-`PromptOnSecureDesktop`), Defender, firewall, access controls, anything under
-`HKLM\...\Policies\System` — is **owner territory: welfare-check FIRST, never flip it solo — not even
-to diagnose, not even reversibly.** Reversibility is NOT the license here (the one exception to the
-rule above): the *window* of weakened security is itself the risk, regardless of how clean the
-restore is. **Diagnose elevation behavior with read-only probes only** (read the policy keys, check
-token integrity level, time a hands-off elevation, read the ledger); if a setting genuinely must
-change to proceed, that is a welfare-check, full stop. Mirrored in `docs/COWORK_HANDOFF.md`.
-
-**Precedent:** a session flipped `ConsentPromptBehaviorAdmin` to diagnose and its safety layer
-auto-switched mid-work: **treat a model auto-switch on security-sensitive work as a STOP signal** —
-halt and involve the owner.
+Modifying security/system settings — UAC keys (`EnableLUA`, `ConsentPromptBehaviorAdmin`,
+`PromptOnSecureDesktop`), Defender, firewall, access controls, or `HKLM\...\Policies\System` — is
+owner territory: **welfare-check FIRST, never flip it solo**, not even reversibly. **Reversibility is NOT
+the license here** because the weakened-security window is itself the risk. Diagnose with **read-only
+probes only**. Treat a model **auto-switch on security-sensitive work as a STOP signal** and involve the
+owner.
 
 ### Reports, subagents, self-review
 
-- **PLAIN + SHORT TO THE OWNER (owner decree 2026-08-11, standing).** Every reply to him is as short,
-  simple and plain-English as the content allows — no jargon, no walls, no tables he didn't ask for.
-  Lead with what happened and what he must do; detail goes in the commit/PR, not the chat. He asked
-  for this globally: mirror it into `~/.claude/CLAUDE.md` wherever reachable (a cloud container's
-  copy is ephemeral and does NOT count). This line is the in-git backstop.
-- **End every session with a HANDOFF BLOCK** — a paste-ready next task, the lane it runs on, and
-  whether his VS Code tab is safe to close. Guarded: `scripts/handoff-block.test.mjs`.
-- **Terse reports** (chat is pasted into Cowork, so verbosity bills twice): commit hash(es) · 1–2 line
-  what-changed · **one** verification line (cargo/npm/clippy/tsc) · flags / owner-decisions. Mechanism
-  and design detail go in the commit message + spec. Cite `path#section`, don't restate docs.
+- Owner replies: plain, short, outcome first; implementation detail belongs in commit/PR/spec.
+- End implementation sessions with a HANDOFF BLOCK: paste-ready next action, lane, tab-close verdict.
 - **Subagent routing:** `.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` — **the
   setting is the guard, do not add per-session routing instructions.** Pin a stronger `model:` in
-  agent frontmatter only where adversarial judgment is provably the point. Cowork lane: always set
-  the `Agent` `model` param explicitly, never inherit (table in `docs/COWORK_HANDOFF.md`). Effort:
-  default high; x-high only at the mutation/rollback boundary. Cheaper workers, never lazier checks.
-- **SELF-REVIEW before claiming ANY UI change done (standing LAW, 2026-06-20).** Run the `self-review`
-  project skill — a forced, evidence-required rubric. Green tsc/vitest are NOT a visual review.
-  Execution belongs in the `.claude/agents/self-reviewer.md` subagent; **never capture or cdp-eval
-  inline in the orchestrator**. No done-claim without a quoted PASS verdict.
-  Memory: [[always-self-review-visual-work]].
-- **`bug → guard` (LAW):** every defect the owner catches becomes a permanent guard *before the fix
-  counts* — a vitest/cargo test if mechanizable, else a `self-review` rubric item. Tiers: automated
-  guard > forced rubric item > memory > prose. Memory: [[bug-becomes-guard]].
-- **Skills:** `.claude/skills/INDEX.md` maps every project skill to its trigger + cheapest executor.
-  Consult it before mutation-boundary diffs, ships, state assertions, or bug fixes.
-  `scripts/verify-release-state.mjs` mechanizes the RELEASE_STATE citation audit;
-  `scripts/usage-audit.mjs` mechanizes the session/token audit (weekly report auto-written Mondays by
-  the `CompyUsageAudit` scheduled task, zero tokens).
+  agent frontmatter only where adversarial judgment is provably the point (`web-design-director` is
+  the one documented exception). Effort: default high; x-high at the mutation/rollback boundary.
+- **SELF-REVIEW before claiming ANY UI change done.** Run the `self-review` project skill through the
+  self-reviewer agent; green unit tests are not visual proof. **never capture or cdp-eval inline** in
+  the orchestrator. No done-claim without a **quoted PASS verdict**.
+- **`bug → guard`**: every owner-caught defect earns a permanent test or forced rubric item **before the
+  fix counts**.
+- `.claude/skills/INDEX.md` maps project skills. `scripts/verify-release-state.mjs` checks release-state
+  citations; `scripts/usage-audit.mjs` checks usage economics.
 
-### SILENT REINSTALL IS MINE, NOT THE OWNER'S (standing LAW, 2026-06-26)
+### SILENT REINSTALL IS MINE, NOT THE OWNER'S
 
-The owner must **NEVER** run an installer himself and must never have more than the ONE current build
-on his Desktop. After **any** `npm run tauri build`, immediately run **`scripts/ship-reinstall.ps1`**
-(stop running compy → delete all Desktop installers → stage ONLY the new NSIS → silent `/S` install →
-launch). Then **verify live == build via the build STAMP** (`get_build_stamp` over a CDP port →
-`"<commit> · release"`), **not an exe hash** — the installed exe is not byte-identical to
-`target/release/compy.exe` (NSIS packaging). Report it as *"your live app is now `<commit>`, one
-installer on the Desktop, nothing for you to do."* His ONLY job is verification (does it feel right).
-A `ship-reminder` PostToolUse hook nudges this after any `tauri build`.
+After any `npm run tauri build`, run `scripts/ship-reinstall.ps1` (stop Compy → remove stale Desktop
+installers → stage only the new NSIS → silent install → launch). Verify live == build via the embedded
+**build STAMP**, **not an exe hash**. The owner should not need to run the installer himself.
 
 ## Stack & where things live
 
-- **Tauri 2** desktop app: Rust core (`src-tauri/`) + React/TypeScript frontend (`src/`).
-- **Single source of truth: `C:\Users\Kuya\code\sentinel\`.** The `\\wsl.localhost\...\var\www\compy`
-  WSL/FastAPI scaffold is **superseded/stale** — do not use it (WSL also breaks anti-cheat via Hyper-V).
-- Remote `Pootytxng/sentinel`, branch `main` (resolves directly, not a redirect).
-- Dev loop: `npm run tauri dev` from repo root. Tests: `cargo test --manifest-path src-tauri/Cargo.toml`.
-  Fresh shells may need `export PATH="$HOME/.cargo/bin:$PATH"`. Git CRLF warnings are benign.
-- Runtime data: Trust Ledger `%APPDATA%\Compy\history.json`; FPS IPC (`fps.json`/`fps.alive`) at
-  `%APPDATA%\Compy\runtime\`. `%LOCALAPPDATA%\Compy\` is the NSIS per-user INSTALL dir (exe +
-  `launch-debug.log`, debug only) — **never IPC**.
+- Tauri 2 desktop app: Rust core `src-tauri/` + React/TypeScript `src/`.
+- Canonical Windows repo is typically `C:\Users\Kuya\code\sentinel\`; always resolve active repo root
+  rather than trusting a hardcoded worktree path.
+- Remote `Pootytxng/sentinel`, default branch `main`.
+- Dev: `npm run tauri dev`; Rust tests: `cargo test --manifest-path src-tauri/Cargo.toml`.
+- Trust Ledger: `%APPDATA%\Compy\history.json`; runtime FPS IPC under `%APPDATA%\Compy\runtime\`.
+- `%LOCALAPPDATA%\Compy\` is the installed app directory, never the IPC directory.
 
 ### Rust module map (`lib.rs` carved into safety-boundary modules)
 
-Complete 2026-08-29 (51 `.rs` files; line counts rough). **Mutation/rollback +
+Complete 2026-08-29 (53 `.rs` files; line counts rough). **Mutation/rollback +
 gate-relevant modules are starred ★ — scope any mutation-gate change against these first.** The
 read-only remainder (hardware/sensors, monitoring/FPS, benchmark/Lab, advisory/ranking/export,
 intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads only when work touches
@@ -206,54 +180,81 @@ intelligence/measurement) lives in **`src-tauri/CLAUDE.md`**, which auto-loads o
 - ★ `license.rs` (~519) — Compy Pro license gate (built dark).
 - ★ `drift.rs` (~477) — applied-change drift detection vs live machine state.
 - ★ `data_root.rs` (~1050) — canonical data-root resolver (#130): measures where the root LANDS, not the `APPDATA` string; halts on a split; issues `MutationRoot`, the capability `history.rs`/`actions.rs` now require. Guard: `scripts/data-root-guard.test.mjs`.
+- ★ `race_seam.rs` (~856) — test-only store-lock instrumentation, an empty `#[inline(always)]` no-op in release: `hold()`/`panic_at()` hold a read-then-act window open from inside a critical section so #283's lock tests fail on demand, and `acquiring()`/`hold_lock`/`try_hold_lock`/`ALLOWED_NESTING` record every acquisition of the ten process-wide PERSISTENCE locks so a re-entrant or undeclared nesting panics by name instead of hanging (#398). Boundary is persistence, not "all locks" — in-memory caches, throttles and the `try_lock`-only session gate are out, and `LOCK_CENSUS` in `scripts/store-lock-order-guard.test.mjs` fails if any `static` mutex in the tree lacks a written verdict. It observes only the nestings a test actually runs; the scanner is a source-text change detector; neither is a proof that the lock graph is acyclic.
 
-## LOCKED safety rules — do not cross without an explicit product-owner decision
+## LOCKED safety rules — do not cross without explicit product-owner decision
 
-1. **Capability Exception Gate (owner decision 2026-08-09).** Default remains local, user-mode, least-privilege and non-invasive. An exception must be named and capability-specific, prove the outcome cannot be reached by a lower-risk path, and define exact privilege/data surface, consent, rollback/uninstall, signing/update, kill switch, staged proof, independent security + anti-cheat review, abort metrics and owner sign-off; full record in `docs/ARCHITECTURE_LOCKS.md` §1.8. A Compy driver is no longer categorically forbidden, but **the current build ships no driver** and no driver may be built before its own approved record. No vulnerable third-party driver and no generic physical-memory/MSR/PCI/device-register access. CPU temp remains external-monitor-only unless a separately approved driver capability ships; unavailable stays unknown, never fabricated.
-2. **No third-party game/process injection.** This remains absolute: no DLL injection, game-memory access, runtime hooks, or code inside a game/anti-cheat process. FPS/frametime stays external ETW; sensors use documented Windows/vendor interfaces. Overlay draws over borderless/windowed, never exclusive fullscreen.
-3. **Rollback-first integrity.** Apply captures the full typed rollback contract + snapshot **at apply time**; rollback resolves from `history.json` ALONE (never the live catalog), so a removed/deprecated rec stays undoable. **Never apply a change you can't roll back.**
-4. **Signed remote rules — triple-gated OFF.** Privileged remote mutation policy remains disabled (placeholder key, `remote_fetch_enabled()==false`, no CDN URL). **Unsigned remote rules must never ship, even in beta.** The Ed25519 private key NEVER lives in the repo. **Case intelligence is not remote rules:** Tier 1 uses a separate key, schema, domain, cache and hard-false runtime gate; it downloads public advisory knowledge and uploads no machine data.
-5. **GPU vendor honesty.** AMD = **verified**. NVIDIA (refined 2026-06-06 from the first NVIDIA tester export, RTX 3060 Ti / Win11 25H2): GPU **detection + NVIDIA-specific recs + their applies (HAGS, Container telemetry) = hardware-verified**, but **NVML sensor + session/FPS monitoring is STILL "implemented, not yet hardware-verified"** (tester had 0 sessions). The "GPU sensor coverage" line — **MonitorConsole**, under the sensor strip — is rule 5's ONE user-visible surface and stays "not yet hardware-verified": **do NOT flip those.** `vendor-honesty-line-guard.test.ts` pins its render ROUTE, not just its nesting. Intel = planned. Never silently upgrade NVIDIA *sensor* confidence past what a monitored session proves.
-6. **Tweak catalog — OPEN under measurable-benefit-under-rails** (owner decision 2026-07-09; the pre-2026-07-09 freeze is LIFTED). A tweak earns inclusion by **measurable benefit**, even individually-negligible — the **cumulative measured stack** is the point, and the honest vehicle is aggregate before/after A/B, not per-tweak claims below the noise floor. "Measurable benefit" is an **ADD criterion ON TOP OF** the permanent rails, never instead of them: every catalog tweak MUST still be **reversible** (typed rollback contract + snapshot captured at apply time, rule 3 — no rollback, no catalog) · **no ungated kernel capability / no injection / anti-cheat-safe** (rules 1–2) · **non-security-weakening** (the owner gate above stands) · **stability-safe**. Opening the catalog is a POLICY change, not a license to skip proof: every new tweak rides the full **mutation-gate** (its own apply/rollback QA + welfare-check) before it ships.
-   - **(a) Stays barred regardless of measured fps** — timer/HPET hacks · bcdedit boot params · MMCSS abuse · **core-parking writes** · Defender disable · MPO disable · fixed pagefile forcing · ungated kernel-level capability · anything that trips EAC/BattlEye. Excluded for SAFETY / STABILITY / SECURITY / ANTI-CHEAT; **measurement does NOT make these safe.**
-   - **(b) Becomes a candidate** once it proves measurable benefit AND clears the rails — anything previously excluded merely as unmeasured "optimizer-rot / snake-oil."
-   - **Structurally impossible (don't attempt):** GPU-profile apply — AMD profile state isn't user-mode readable, so rollback-first cannot be satisfied.
-   - The Lab's proving loop is the qualifying pipeline (candidate → proves benefit on the bench → clears the rails → mutation-gate QA → joins the catalog). The bench is LIVE: `experiment_gate()` armed, `ExperimentBench` ships in the Lab. Blueprint: `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` (UI direction superseded). **Live Lab UI = the Ops Console**, `docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md` → `LabConsole`; the bento "Instrument Bench" was built and REJECTED — reference, never a next step.
-   - Product value also grows *upward* (gaming readiness, monitoring, session summaries, priority ranking, export) — see `docs/PRODUCT_DIRECTION.md`. **Any new feature that is not a catalog tweak stays read-only / advisory / reversible / session-scoped by default; an exception requires rule 1.**
+1. **Capability Exception Gate (owner decision 2026-08-09).** Default local, user-mode,
+   least-privilege, non-invasive. Any exception must be named/capability-specific and prove a lower-risk
+   route cannot achieve the outcome; define privilege/data surface, consent, rollback/uninstall,
+   signing/update, kill switch, staged proof, independent security/anti-cheat review, abort metrics,
+   and owner sign-off. Full process: `docs/ARCHITECTURE_LOCKS.md` §1.8. A Compy driver is no longer categorically
+   forbidden, but **the current build ships no driver** and none may be built before its own record.
+   **No vulnerable third-party driver** and no generic physical-memory/MSR/PCI/device-register surface.
+   CPU temperature stays **external-monitor-only** unless a separately approved supported capability
+   ships; unavailable remains unknown, never fabricated.
 
-## Dev machine (for hardware-specific work)
+2. **No third-party game/process injection.** This remains absolute: **no DLL injection**, **game-memory access**,
+   runtime hooks, or code inside game/anti-cheat processes. FPS/frametime remains external ETW; overlays
+   are limited to **borderless/windowed**, never exclusive-fullscreen injection.
 
-Fully **AMD**: **Radeon RX 9070 XT (RDNA4)**, Ryzen X3D-class CPU, 16 logical cores (~5.1 GHz),
-~29.4 GB RAM. **Build & test the AMD path first** — NVIDIA is unverifiable here. **UAC:** re-enabled
-to `EnableLUA=1` and rebooted 2026-05-30 so the `runas` elevation path is testable; `uac_disabled()`
-returns false, so the real `runas` branch is live (not the direct-spawn fallback).
+3. **Rollback-first integrity.** Capture complete typed rollback contract + snapshot **at apply time**.
+   Rollback resolves from `history.json` ALONE, never from the live catalog. **Never apply a change you
+   can't roll back.**
+
+4. **Signed remote rules — triple-gated OFF.** Privileged remote mutation policy remains disabled by
+   placeholder key / `remote_fetch_enabled()==false` / no production URL unless explicitly armed.
+   **Unsigned remote rules must never ship, even in beta.** **The Ed25519 private key NEVER lives in the
+   repo**. Case intelligence is a separate signed advisory capability and must not be conflated with
+   remote mutation rules.
+
+5. **GPU vendor honesty.** AMD path is verified on owner hardware. NVIDIA detection/specific recs have
+   partial hardware proof, but NVML sensor/session monitoring remains **not yet hardware-verified**;
+   **do NOT flip those** claims without real monitored-session evidence. Intel remains planned where
+   unsupported. Missing sensor values stay unknown.
+
+6. **Tweak catalog — OPEN under measurable-benefit-under-rails.** Measurement is an ADD criterion on
+   top of permanent safety/stability/security/anti-cheat/rollback rails. Every new automated candidate
+   must fit the constitutional Trial/Optimization Engine and the existing mutation gate. The old rule
+   that individually-negligible tweaks may accumulate into a stack does not authorize keeping a change
+   when a per-rig Trial says it has no measurable value for that user/workload.
+
+   Permanent blocklist: **timer/HPET** hacks · **bcdedit** boot params · **MMCSS** abuse ·
+   **core-parking writes** · **Defender disable** · **MPO disable** · **fixed pagefile** forcing ·
+   **ungated kernel-level capability** · anything that trips **EAC/BattlEye**. These remain barred for
+   safety/stability/security/anti-cheat reasons; **measurement does NOT make these safe**.
+
+   **GPU-profile apply** remains structurally impossible while prior AMD profile state is not reliably
+   readable enough to satisfy rollback-first.
+
+## Dev machine notes
+
+Owner's primary known test machine is AMD (Radeon RX 9070 XT and Ryzen X3D-class CPU). Never generalize
+that machine's benchmark result into universal product evidence. Re-read actual detected hardware when
+hardware-specific work begins.
 
 ## Current state, history, and how to resume
 
-1. **`docs/WORK_CONTROL.md`** — before any write, claim the linked issue with the exact worktree,
-   branch, scope, expiry, and next action. An overlapping or unknown live claim means stay read-only
-   or use a truly separate worktree. It coordinates execution; it never overrides product truth.
-2. **`docs/RELEASE_STATE.md`** — the authoritative gate/build/release matrix. All other docs defer to
-   it on current state; update it in the same commit a gate flips.
-3. **`docs/BACKLOG.md`** — the living status ledger; take the next non-gated `[ ]` item. **Per the
-   false-done protocol, never declare "done" without enumerating remaining + gated items.**
-4. **`docs/OWNER_ACTION_CHECKLIST.md`** — the ONE consolidated index of everything waiting on the
-   owner (his hands, eyes, input, money/legal calls). Surface it when he asks "show my checklist" and
-   at the end of every train; never let an item silently drop.
-5. **`docs/UI_VISION_BACKLOG.md`** — the ONE home for every owner-authored UI/design ask. For anything
-   UI/visual, read its 🔴 OPEN rows — today DIR-1 (the standing intuitive-UI lens) and §G (the site);
-   `src/ui-vision-status-guard.test.ts` rule D pins this line to those headings. **Do NOT report UI
-   as "done" off RELEASE_STATE alone, and do NOT re-queue a row from a paraphrase** — the July motion
-   stack (§A) shipped and the panoramic gallery was deleted on his order. **A "COMPLETE" redesign
-   checkbox that leaves 🔴 items is a false-done — a reskin is not the vision.** Log substitutions.
-6. **`docs/RECEIPTS_DOCTRINE.md`** (money/product direction) · **`docs/CHANGELOG.md`** (dated banners +
-   full change history, point-in-time). Treat any file:line claim as point-in-time.
+1. `docs/PRODUCT_CONSTITUTION.md` — product truth; read before product/design/prioritization work.
+2. `docs/WORK_CONTROL.md` — before any write, derive current mutation lease/worktree/scope/expiry/process truth.
+3. `docs/RELEASE_STATE.md` — current build/gate/release truth; same-commit updates when state changes.
+4. `docs/product/ROADMAP.md` — derived product sequence.
+5. `docs/BACKLOG.md` — living execution ledger. Per **false-done** protocol, never claim completion
+   without naming remaining/gated work.
+6. `docs/OWNER_ACTION_CHECKLIST.md` — consolidated owner-only actions. Never let an owner item drop.
+7. `docs/UI_VISION_BACKLOG.md` — historical owner-request and shipped-state evidence, not product
+   authority, priority, approval, or a work queue. For UI/visual work, start with the Constitution and
+   roadmap; reconcile relevant 🔴 OPEN rows (currently DIR-1 and §G) as evidence without inheriting
+   their priority or treating them as authorization. `src/ui-vision-status-guard.test.ts` prevents stale row paraphrases from
+   becoming work again. **a reskin is not the vision** by itself; scope and completion still require
+   current constitutional and execution evidence.
+8. `docs/CHANGELOG.md` — historical dated record only.
 
-## TOKEN LAW (rebuilt on a cost model 2026-08-18)
+Legacy `docs/RECEIPTS_DOCTRINE.md`, `docs/PRODUCT_DIRECTION.md`, `docs/PRD.md`, and old monetization
+files are tombstones/history. Do not derive current product law from them.
 
-**Full policy: `claude/TOKEN_ECONOMY_LAW.md` — a Cowork project doc, NOT on disk; it wins over this
-and `.claude/USAGE_ECONOMICS.md`.** Carried context is **85% of measured spend**, output 15%.
+## TOKEN LAW
 
-1. **Current state only** — history to `docs/archive/*`: move, never delete, leave a pointer.
-   `scripts/doc-budget.ps1` enforces LINE and BYTE budgets; a FAIL means archive first.
-2. **`scripts/usage-audit.mjs` is the authority.** Extend that audit; never build a parallel monitor.
+Keep always-loaded context compact. **Current state only** here; move history/rationale to docs and
+link it. `scripts/doc-budget.ps1` enforces document budgets. `scripts/usage-audit.mjs` remains the
+usage authority; extend it, **never build a parallel monitor**.

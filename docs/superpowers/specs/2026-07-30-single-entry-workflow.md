@@ -1,5 +1,11 @@
 # Single-entry Compy workflow — design specification
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical design record, not current
+> product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Current workflow and claim law is
+> [`docs/WORK_CONTROL.md`](../../WORK_CONTROL.md).
+
 **Issue:** [#18](https://github.com/Pootytxng/sentinel/issues/18) · **Status:** design approved by Kuya
 2026-07-30, implementation not started · **Branch:** `feat/single-entry-workflow` ·
 **Worktree:** `C:\Users\Kuya\code\sentinel-workflow`

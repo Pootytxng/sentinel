@@ -27,7 +27,39 @@ use crate::{
 
 // Serialized so concurrent apply/rollback calls can't interleave reads and
 // writes of history.json.
+//
+// #398: the EIGHT acquisitions below all go through `lock_history`, which records the acquisition
+// with `race_seam::try_hold_lock` — a `#[cfg(test)]`-only thread-local record, an empty
+// `#[inline(always)]` no-op in release — and then takes the mutex. The poison policy is unchanged
+// and is still this module's own: every site propagates (`map_err(|_| "history lock poisoned")?`),
+// this module recovers from poison nowhere.
+//
+// One helper rather than eight open-coded pairs of lines, for two reasons. It is what makes the
+// record impossible to forget at a ninth site — `experiment` had three acquisitions and zero
+// records precisely because nothing tied the record to the `.lock()`. And it gives the recorder's
+// own tests a production entry point to this lock that performs no data-root I/O, which is what
+// lets `race_seam::production_nesting_tests` falsify the `Experiment -> History` nesting without
+// touching the real `%APPDATA%\Compy` ledger.
+//
+// `StoreGuard` drops its mutex guard before its acquisition record, so the lock is never held
+// unrecorded. On the `?` early return where the lock was never taken, nothing is left on the stack.
+//
+// This lock is the OUTER half of one declared nesting: `History -> SupportEvidence`, because
+// `load_history` / `save_history` report a damaged or unwritable ledger through
+// `support_evidence::record`, which takes that module's own store lock, and these sections hold the
+// ledger lock across those calls. See `race_seam::ALLOWED_NESTING`.
 static HISTORY_LOCK: Mutex<()> = Mutex::new(());
+
+/// The only way this crate takes `HISTORY_LOCK`. Records first, then blocks.
+///
+/// `pub(crate)` so `race_seam`'s production-nesting tests can enter the real lock the real way
+/// instead of reimplementing these two lines — a lookalike would pass while the shipping path was
+/// broken, which is the exact failure mode #395's review caught elsewhere.
+pub(crate) fn lock_history() -> Result<crate::race_seam::StoreGuard, String> {
+    crate::race_seam::try_hold_lock(crate::race_seam::StoreLock::History, || {
+        HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())
+    })
+}
 
 /// The rec_ids `apply_recommendation` can one-click apply (anything else is
 /// advisory-only). Single backend source of truth — `export` and `priorities`
@@ -98,23 +130,27 @@ pub(crate) struct AppliedChange {
 // this flag (state changes outside Compy can revert what we applied), so it
 // has to be recomputed every time history is read.
 #[derive(Serialize)]
+/// The Machine Model (`machine_model.rs`) reads the marked fields so it can present applied-change
+/// truth without re-deriving `is_still_active` / `on_this_rig`, which would create a second, drifting
+/// answer to the same question. Visibility only — no field here changes meaning, and this stays the
+/// canonical producer.
 pub(crate) struct AppliedChangeView {
-    id: String,
+    pub(crate) id: String,
     rec_id: String,
-    rec_title: String,
-    applied_at: String,
+    pub(crate) rec_title: String,
+    pub(crate) applied_at: String,
     snapshot: serde_json::Value,
-    status: String,
-    is_still_active: bool,
+    pub(crate) status: String,
+    pub(crate) is_still_active: bool,
     applied_action: Option<AppliedAction>,
-    rollback_action: Option<RollbackAction>,
+    pub(crate) rollback_action: Option<RollbackAction>,
     app_version_at_apply: Option<String>,
     ruleset_version_at_apply: Option<String>,
     elevation_used: Option<bool>,
     // Read-only, computed-at-read enrichment (never persisted): a human-readable description of the
     // state a rollback restores, for the Fix surface trust-switch. Derived only from the captured
     // typed snapshot; None → the UI shows the generic "your previous setting".
-    restores_label: Option<String>,
+    pub(crate) restores_label: Option<String>,
     // The "after" half of the before/after pair: the state Compy's change set things TO, derived
     // from the typed AppliedAction. Read-only, computed-at-read, never persisted. None for legacy
     // entries with no captured action → the UI shows just the prior ("before").
@@ -132,10 +168,10 @@ pub(crate) struct AppliedChangeView {
     // Compared on the stable identity fields only (gpu · ram_gb · display) — deliberately
     // driver-INsensitive, unlike the session hash: a driver update must not make your own
     // ledger read "different hardware". None = legacy entry with no stamp (honest unknown).
-    on_this_rig: Option<bool>,
+    pub(crate) on_this_rig: Option<bool>,
     // Pass-through of the persisted rollback stamp. None = still applied, or rolled back
     // before the stamp existed — the UI must render that as "date unknown", never a guess.
-    rolled_back_at: Option<String>,
+    pub(crate) rolled_back_at: Option<String>,
 }
 
 impl AppliedChangeView {
@@ -297,6 +333,59 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         hw_fingerprint: c.hw_fingerprint,
         on_this_rig,
         rolled_back_at: c.rolled_back_at,
+    }
+}
+
+/// The ledger VIEW projection over rows a caller has ALREADY LOADED.
+///
+/// Exists so a consumer that must derive SEVERAL projections from ONE ledger snapshot cannot be
+/// forced into a second `load_history()` to get the view — the shape that let `machine_model::build`
+/// compose one model from two ledger states, an apply or rollback landing between the reads (#385
+/// review 5135765472, blocker 2).
+///
+/// This is not a second implementation of the projection: it delegates to `into_view`, which stays
+/// the single place a row becomes a view, so `check_change_active` / `same_rig` / the label
+/// derivations keep exactly one definition. Callers that own their rows should keep using
+/// `get_applied_changes`; this borrows so the raw rows survive for the caller's other projections.
+pub(crate) fn applied_change_views(history: &[AppliedChange]) -> Vec<AppliedChangeView> {
+    history.iter().cloned().map(into_view).collect()
+}
+
+/// Test-only constructor for a ledger VIEW with the computed-at-read fields set directly, so a
+/// consumer's tests can exercise active / rolled-back / other-rig rows without a real ledger, a
+/// real registry, or a real rig. Never compiled into the shipped binary.
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn test_view(
+    id: &str,
+    rec_id: &str,
+    rec_title: &str,
+    applied_at: &str,
+    status: &str,
+    is_still_active: bool,
+    on_this_rig: Option<bool>,
+    rolled_back_at: Option<String>,
+    reversible: bool,
+) -> AppliedChangeView {
+    AppliedChangeView {
+        id: id.into(),
+        rec_id: rec_id.into(),
+        rec_title: rec_title.into(),
+        applied_at: applied_at.into(),
+        snapshot: serde_json::Value::Null,
+        status: status.into(),
+        is_still_active,
+        applied_action: None,
+        rollback_action: reversible.then_some(RollbackAction::RestoreGameModeFromSnapshot),
+        app_version_at_apply: None,
+        ruleset_version_at_apply: None,
+        elevation_used: None,
+        restores_label: None,
+        applied_label: None,
+        payoff_label: None,
+        hw_fingerprint: None,
+        on_this_rig,
+        rolled_back_at,
     }
 }
 
@@ -557,9 +646,7 @@ pub(crate) fn restore_leftover(
     if !gate_open {
         return Err("Leftovers restore is not enabled in this build.".to_string());
     }
-    let _lock = HISTORY_LOCK
-        .lock()
-        .map_err(|_| "history lock poisoned".to_string())?;
+    let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = match detector_id {
         "memory-compression-off" => crate::actions::restore_memory_compression(),
@@ -614,9 +701,7 @@ pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<
 }
 
 fn apply_recommendation_inner(rec_id: &str, rec_title: &str) -> Result<AppliedChangeView, String> {
-    let _lock = HISTORY_LOCK
-        .lock()
-        .map_err(|_| "history lock poisoned".to_string())?;
+    let _lock = lock_history()?;
     // Load BEFORE dispatching (H1): if the ledger can't record a receipt, the change must not
     // happen at all — never mutate what can't be written down. Same audited dispatch + receipt
     // as before; only the refusal moved ahead of the mutation.
@@ -644,7 +729,7 @@ pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChang
     }
     let service = crate::actions::KnownService::from_name(&service_name)
         .ok_or_else(|| format!("'{}' isn't a Compy-suspendable service.", service_name))?;
-    let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
+    let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_service_suspend(service)?;
     let change = build_applied_change(
@@ -672,7 +757,7 @@ pub(crate) fn set_startup_entry_enabled(
     name: String,
     enabled: bool,
 ) -> Result<AppliedChangeView, String> {
-    let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
+    let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_startup_entry_enabled(&name, enabled)?;
     let change = build_applied_change(
@@ -701,7 +786,7 @@ pub(crate) fn disable_known_bloat_task(task_id: String) -> Result<AppliedChangeV
     }
     let task = crate::actions::KnownBloatTask::from_id(&task_id)
         .ok_or_else(|| format!("'{}' isn't a Compy-removable telemetry task.", task_id))?;
-    let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
+    let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_disable_scheduled_task(task)?;
     let change = build_applied_change(
@@ -727,7 +812,7 @@ pub(crate) fn remove_known_preload_app(app_id: String) -> Result<AppliedChangeVi
     }
     let app = crate::actions::KnownPreloadApp::from_id(&app_id)
         .ok_or_else(|| format!("'{}' isn't a Compy-removable preinstalled app.", app_id))?;
-    let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
+    let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_remove_preload_app(app)?;
     let change = build_applied_change(
@@ -826,9 +911,7 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         }
     }
 
-    let _lock = HISTORY_LOCK
-        .lock()
-        .map_err(|_| "history lock poisoned".to_string())?;
+    let _lock = lock_history()?;
     // H1: refuse the whole batch before phase 1 if the ledger can't record receipts — readable
     // (load) AND writable (canary), so a readable-but-unwritable ledger can't let phase-1 mutations
     // (HKCU, immediate) succeed and then orphan their receipts.
@@ -959,9 +1042,7 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
 }
 
 fn rollback_change_inner(change_id: &str) -> Result<(), String> {
-    let _lock = HISTORY_LOCK
-        .lock()
-        .map_err(|_| "history lock poisoned".to_string())?;
+    let _lock = lock_history()?;
     // #130: prove the root before anything else — a rollback dispatched against a redirected
     // ledger would undo a change the receipt in front of us does not actually describe.
     let root = crate::data_root::mutation_root()?;
@@ -1000,7 +1081,7 @@ pub(crate) fn get_applied_changes() -> Vec<AppliedChangeView> {
     // The empty view is never left to speak for itself: `get_ledger_health` is the companion read
     // that tells the surface whether this list is the whole story, so "nothing is active" can only
     // render when that is a fact.
-    load_history().unwrap_or_default().into_iter().map(into_view).collect()
+    applied_change_views(&load_history().unwrap_or_default())
 }
 
 /// Whether the LATEST Trust-Ledger entry for `rec_id` is an active apply (status "applied", not
@@ -2147,6 +2228,33 @@ mod history_tests {
         }
     }
 
+    /// A ledger row stamped with a rig fingerprint. `record` deliberately leaves `hw_fingerprint`
+    /// unset, which is the honest legacy shape — but it also means every row built from it computes
+    /// `on_this_rig = None`, so a projection guard fed only `record` rows compares None with None and
+    /// cannot see that field drift at all. Rows built here carry a real Some(_) instead.
+    fn record_on_rig(
+        rec_id: &str,
+        status: &str,
+        rig: crate::hardware::HwFingerprint,
+    ) -> AppliedChange {
+        AppliedChange { hw_fingerprint: Some(rig), ..record(rec_id, status) }
+    }
+
+    /// A fingerprint that is NOT this machine, whichever machine runs the suite. `same_rig` compares
+    /// gpu / ram_gb / display, so all three are displaced from the live values. Derived from the real
+    /// rig rather than hard-coded, because a hard-coded "other" rig would collide with the live one on
+    /// a bare box whose hardware fields all read empty — and would then silently assert Some(true).
+    fn a_rig_that_is_not_this_one() -> crate::hardware::HwFingerprint {
+        let now = crate::hardware::current_fingerprint();
+        crate::hardware::HwFingerprint {
+            hash: format!("{}-elsewhere", now.hash),
+            gpu: format!("{} (some other machine)", now.gpu),
+            gpu_driver: now.gpu_driver,
+            ram_gb: now.ram_gb.wrapping_add(7),
+            display: format!("{}-elsewhere", now.display),
+        }
+    }
+
     #[test]
     fn rig_tagging_stamps_new_receipts_and_stays_backcompat() {
         // A5 rig tagging: build_applied_change (the ONE receipt funnel) stamps the apply-time
@@ -2207,6 +2315,124 @@ mod history_tests {
         assert_eq!(v.rec_id, c.rec_id);
         assert_eq!(v.status, "applied");
         assert!(v.is_still_active, "unknown rec must default to still-active");
+    }
+
+    /// The slice projection added for #385 review 5135765472 blocker 2 exists so a consumer can
+    /// derive the VIEW from rows it has ALREADY loaded instead of forcing a second `load_history`.
+    /// It is only safe to use for that if it is the SAME projection — not a re-implementation that
+    /// can drift from `into_view` and quietly give the Machine Model a different set of computed
+    /// fields than the ledger's own command gives every other consumer.
+    ///
+    /// Every computed-at-read field is compared row for row, and the row set is built so each one can
+    /// actually diverge: `on_this_rig` in particular needs stamped rows, because an unstamped row
+    /// projects to None whatever the projection does (#385 follow-up to review 5135765472).
+    #[test]
+    fn the_slice_projection_is_the_same_projection_row_for_row() {
+        let rows = vec![
+            record("game-mode", "applied"),
+            record("a-rec-we-do-not-track", "applied"),
+            record("visual-effects", "rolled_back"),
+            // The three rows above are unstamped, so `on_this_rig` is None on BOTH sides of every
+            // comparison below and a projection that hard-coded the field would still pass. These two
+            // carry a real Some(true) / Some(false), which is what makes that field falsifiable here.
+            record_on_rig("power-plan", "applied", crate::hardware::current_fingerprint()),
+            record_on_rig("startup-app", "applied", a_rig_that_is_not_this_one()),
+            // Every row above leaves restores_label / applied_label / payoff_label vacuously None on
+            // BOTH sides: `record`'s snapshot does not deserialize to a Snapshot, and its
+            // applied_action is None, which short-circuits both label derivations. That is the same
+            // structural gap this test just closed for on_this_rig, left open in three more fields.
+            // This row deserializes, so those three carry real values (PR #403 review).
+            AppliedChange {
+                snapshot: serde_json::to_value(Snapshot::FastStartup { prior_hiberboot: Some(1) })
+                    .expect("the snapshot fixture must serialize"),
+                applied_action: Some(AppliedAction::DisableFastStartup),
+                rollback_action: Some(RollbackAction::RestoreFastStartupFromSnapshot),
+                ..record_on_rig("fast-startup-off", "applied", crate::hardware::current_fingerprint())
+            },
+        ];
+
+        let views = applied_change_views(&rows);
+
+        assert_eq!(views.len(), rows.len(), "the projection is 1:1 — it drops and invents nothing");
+
+        for (view, row) in views.iter().zip(rows.iter()) {
+            let expected = into_view(row.clone());
+            assert_eq!(view.id, expected.id, "row order must be preserved");
+            assert_eq!(view.rec_id, expected.rec_id);
+            assert_eq!(view.status, expected.status);
+            assert_eq!(
+                view.is_still_active, expected.is_still_active,
+                "the computed-at-read fields must come from into_view, not a second definition"
+            );
+            assert_eq!(view.restores_label, expected.restores_label);
+            assert_eq!(view.applied_label, expected.applied_label);
+            assert_eq!(view.payoff_label, expected.payoff_label);
+            assert_eq!(view.on_this_rig, expected.on_this_rig);
+            // The named asserts above cover the computed-at-read fields, and each names the field it
+            // broke. They say nothing about the ten fields `into_view` merely carries across --
+            // rec_title, applied_at, snapshot, applied_action, rollback_action, the two version
+            // stamps, elevation_used, hw_fingerprint, rolled_back_at — so a reimplementation that
+            // dropped `rollback_action` (the Fix surface's rollback affordance) or `hw_fingerprint`
+            // (what on_this_rig is DERIVED from) passed this guard. Measured, not assumed: mutating
+            // each of the ten inside applied_change_views left the test at 1 passed / 0 failed
+            // (PR #403 review). This catch-all closes all ten and every field added after today.
+            // It compares the serialized form because AppliedChangeView derives Serialize alone, and
+            // this lane may not add a derive to a production struct. It runs LAST so a computed field
+            // still fails by name above.
+            assert_eq!(
+                serde_json::to_value(view).expect("the projection must serialize"),
+                serde_json::to_value(&expected).expect("the reference must serialize"),
+                "every field must come from into_view, including the ones it only carries across"
+            );
+        }
+
+        // The fixture is load-bearing: if a later edit drops the stamped rows, the loop above goes
+        // back to comparing None with None and silently stops guarding `on_this_rig`. This canary
+        // fails if that coverage is ever lost — and it is derived from `into_view` over the rows
+        // DIRECTLY, never from `views`, for two reasons. Reading the projection's own output would
+        // let it answer a question about itself; and it would make a real collapse in the projection
+        // (every row to one value) fail HERE, wearing a fixture-authoring message, instead of at the
+        // precise per-field assert above. Independent source + last position keeps each failure
+        // saying what actually broke (PR #403 review).
+        let reference: Vec<AppliedChangeView> = rows.iter().cloned().map(into_view).collect();
+        let rig_values: Vec<Option<bool>> = reference.iter().map(|v| v.on_this_rig).collect();
+        assert!(rig_values.contains(&Some(true)), "the fixture must exercise an on-this-rig row");
+        assert!(rig_values.contains(&Some(false)), "the fixture must exercise an other-rig row");
+        assert!(rig_values.contains(&None), "and the legacy unstamped row stays covered too");
+        // Same argument, three more fields: a label that is None for every row is compared
+        // None-to-None and guards nothing, which is exactly how they stood before this row landed.
+        assert!(
+            reference.iter().any(|v| v.restores_label.is_some()),
+            "the fixture must exercise a row whose snapshot yields a restores label"
+        );
+        assert!(
+            reference.iter().any(|v| v.applied_label.is_some()),
+            "the fixture must exercise a row whose action yields an applied label"
+        );
+        assert!(
+            reference.iter().any(|v| v.payoff_label.is_some()),
+            "the fixture must exercise a row whose action yields a payoff label"
+        );
+        // What this test does NOT guard, deliberately: the FIELD SEMANTICS of `same_rig`. Both sides
+        // of the loop above reach it through `into_view`, so narrowing `same_rig` to any non-empty
+        // subset of {gpu, ram_gb, display} moves both sides together and stays green — measured, not
+        // assumed. No fixture row can change that; it is what comparing two paths through one
+        // function means. That subset is pinned by `same_rig_ignores_driver_but_not_hardware`
+        // below, which calls `same_rig` directly. Keep the two tests together (PR #403 review).
+    }
+
+    /// Borrowing must leave the caller's rows intact: the whole point is that `build()` keeps the
+    /// raw rows for its timeline/chronology projection AFTER taking the view from the same snapshot.
+    #[test]
+    fn the_slice_projection_leaves_the_callers_rows_usable() {
+        let rows = vec![record("game-mode", "applied"), record("visual-effects", "applied")];
+        let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
+
+        let views = applied_change_views(&rows);
+
+        assert_eq!(views.len(), 2);
+        let still_there: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
+        assert_eq!(still_there, ids, "the rows the caller still needs must survive the projection");
     }
 
     #[test]

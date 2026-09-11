@@ -1,5 +1,11 @@
 # 2026-06-12 — Transformation plan: Compy → passive-income machine ("Receipts Doctrine")
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This pre-rebirth monetization/product
+> directive is historical and cannot authorize product identity, pricing, telemetry, affiliate,
+> licensing, or implementation work. Current product authority is `docs/PRODUCT_CONSTITUTION.md`;
+> current monetization hypotheses live in `docs/product/MONETIZATION.md`, with money and external
+> actions still owner-gated. The original analysis remains historical evidence only.
+>
 > Owner directive: play capitalist, drop the honesty policy if needed, dirty is allowed short of
 > integrity-branding damage. Council roundup distilled into one plan. Companion to
 > `2026-06-12-monetization-council.md`.

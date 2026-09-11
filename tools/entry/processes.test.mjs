@@ -6,6 +6,7 @@
 //
 // Collision rule 6: never stop another tool's build, helper, editor or session to clear a claim.
 
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { classifyProcesses } from "./processes.mjs";
 
@@ -61,5 +62,14 @@ describe("classification", () => {
   it("returns an empty list rather than throwing when nothing is running", () => {
     expect(classifyProcesses([], { folder: FOLDER })).toEqual([]);
     expect(classifyProcesses(null, { folder: FOLDER })).toEqual([]);
+  });
+});
+
+// bug->guard (2026-09-02): the CIM read is bounded. A hung WMI provider (measured: Win32_Process never
+// answered on the dev machine) must cost one timeout, not an open-ended stall of every preflight.
+describe("listProcesses is bounded", () => {
+  it("passes a timeout to the CIM read", () => {
+    const src = readFileSync("tools/entry/processes.mjs", "utf8");
+    expect(src).toMatch(/Get-CimInstance Win32_Process[\s\S]*timeout:\s*\d{4,}/);
   });
 });

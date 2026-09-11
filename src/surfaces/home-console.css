@@ -281,7 +281,7 @@
      size and would have to be cut. So the stage absorbs the whole viewport difference, between a
      floor and the approved comp's ceiling, continuously:
 
-       stage → the comp's 500px when the room allows it, never below 320px, and the whole
+       stage → the comp's 530px when the room allows it, never below its floor, and the whole
                 difference in between — with nothing else on the panel giving up a pixel.
 
      ROUND 9 DELETED THE CONSTANT THAT KEPT BEING WRONG. The stage used to be
@@ -293,9 +293,10 @@
      under-reserving clips a reading, which is an honest-measurement failure.
      So nothing here measures content any more. The PANEL is capped at the space the room actually
      has; the control row and the readout take exactly what they need (`flex: none` below); and the
-     stage is the only shrinkable child — it asks for the comp's 500px and gives ground, never below
-     320px, when the panel runs out of room. The browser does the measuring, so it cannot go stale.
+     stage is the only shrinkable child — it asks for the comp's 530px and gives ground, never below
+     its floor, when the panel runs out of room. The browser does the measuring, so it cannot go stale.
        --hc-chrome-top    72px  = 46px shell topbar + 26px .v2-content padding-top
+       --hc-comp-drop     48px  = the approved comp's own offset of this card below the row top
        --hc-hud-reserve   36px  = .v2-content's margin-bottom in the HUD shell (self-review round 2;
                                   hud-frame.css owns it, and hud-frame-clearance-guard.test.ts
                                   pins it — this must never be smaller than that value)
@@ -303,14 +304,38 @@
      All three are FIXED chrome. None of them is content whose height can change under a
      translation, which is the whole point. Guard: home-console.test.tsx rejects any content-derived
      height constant here, and any `@media` in this file. */
-  --hc-stage-min: 320px;
-  --hc-stage-max: 500px;
+  /* --hc-stage-min 320 -> 261 (ROUND 12b, Wave 1 Lane B self-review round 2 at 1dd701b1, 2026-09-03).
+     Round 12 let the readiness label wrap under its ring below 150px so the readout's pills could
+     have their width; that wrap costs the strip 83px of HEIGHT at an exact 1280x720, and the stage
+     was already standing on 320, so the panel overflowed by 41px and "14 of 16 checks passed" was
+     reachable only by a scroll nobody was shown. The horizontal budget was re-derived to the pixel
+     and the vertical one was never looked at. The stage is the one elastic here by design, so the
+     floor pays: 320 - 41 (the measured overflow) - 18 (one more wrapped 13px line, the guard's
+     headroom) = 261. At 720p the stage now settles at ~279 and nothing is clipped; at the owner's
+     1500x980 and at 1080p the floor does not bind and nothing moves. Guard: home-console.test.tsx
+     ROUND 12b pins cap - borders - the measured non-stage content - this floor >= one line, and
+     the self-reviewer measures .hc-panel scrollHeight against clientHeight at all three sizes. */
+  --hc-stage-min: 261px;
+  --hc-stage-max: 530px;
   --hc-chrome-top: 72px;
   --hc-hud-reserve: 36px;
   --hc-stage-slack: 14px;
+  /* --hc-comp-drop 48px = the approved comp starts this evidence card BELOW the narrative column's
+     top rather than flush with it, and #225's round-2 review named the exact landing: stage top
+     111 -> ~159 app px. Measured off assets/approved/health.png at 1500x980 (comp 1550x1015, so
+     comp px / 1.0333): the card's top border sits at comp y 160 = 154.8 app px and its bottom at
+     comp y 900 = 871.0. The app's own stage top was 111, so the drop is 48.
+     It is FIXED chrome in the same sense --hc-stage-max is: a bound read off the approved
+     composition, not a height measured off content, so no translation can move it. It is declared
+     ONCE and spent twice -- as the margin that does the dropping, and as a subtrahend in the cap
+     below, because a panel that starts 48px lower has 48px less lane to stand in. Restating it as
+     a second literal is exactly the drift rounds 3-9 paid for. */
+  --hc-comp-drop: 48px;
 
+  margin-top: var(--hc-comp-drop);
   max-height: calc(
-    100vh - var(--hc-chrome-top) - var(--hc-hud-reserve) - var(--hc-stage-slack)
+    100vh - var(--hc-chrome-top) - var(--hc-comp-drop) - var(--hc-hud-reserve) -
+      var(--hc-stage-slack)
   );
   /* A CEILING, NOT A FIT (self-review round 11). This bounds the panel to the lane's VISIBLE
      height; it does not promise the panel fits INSIDE the lane, because the panel starts below the
@@ -321,7 +346,7 @@
      growing --hc-chrome-top to the headline's height. That is the constant this all replaced.
 
      The net, not the plan. The stage gives ground first — it is the only shrinkable child — and
-     only if it reaches its 320px floor and the panel STILL cannot fit does the leftover become a
+     only if it reaches its floor and the panel STILL cannot fit does the leftover become a
      scroll. Round 3's failure was five labels on screen with none of their five values, silently
      eaten by the lane's clip. A scrollbar is ugly; a reading nobody can reach is dishonest. */
   overflow-y: auto;
@@ -347,12 +372,16 @@
    content); they are in .hc-readout below, and NOT ONE of them was dropped. ── */
 :root[data-v2="on"] .hc-stage {
   position: relative;
-  /* 540 → 500 with the gauges and the control row off the glass. The VISIBLE rig grew even though
-     the box shrank: the old 540px box lost ~100px of usable height to the top and bottom gauge
-     reserve and another ~40px at the bottom to the floating control row, so the rig's real
-     clearance went from ~400px to the full 460px content box. Measured off the approved Health
-     comp, whose canvas is ~500 tall in a ~620 column. The .hc-stage-cards ceiling below is now
-     simply 100% of the box it is laid into, so it follows this value without restating it. */
+  /* 540 → 500 with the gauges and the control row off the glass, then 500 → 530 for #225 round 2.
+     The VISIBLE rig grew even though the box first shrank: the old 540px box lost ~100px of usable
+     height to the top and bottom gauge reserve and another ~40px at the bottom to the floating
+     control row, so the rig's real clearance went from ~400px to the full 460px content box.
+     The 530 is the approved comp's own stage, re-measured for round 2 rather than restated: on
+     assets/approved/health.png the evidence card's top border is comp y 160 and the rig's stage
+     ends at comp y ~712, which at 1550/1500 = 1.0333 is 154.8 → 689.0 app px. Round 1 shipped 500
+     and the independent review named the 30px as a material gap; it is item 6 of
+     REVIEW_HEALTH_CANDIDATE_6bf99c8c.md. The .hc-stage-cards ceiling below is simply 100% of the
+     box it is laid into, so it follows this value without restating it. */
   /* `height`, not only `min-height` — round 4's lesson, still load-bearing. The rig is an r3f
      <Canvas> that measures its PARENT and writes its own inline pixel size; a parent with only a
      floor is in turn sized by that canvas, and that circle has no bottom. Round 4 set a lower floor
@@ -365,8 +394,8 @@
   min-height: var(--hc-stage-min);
   display: grid;
   /* stretch, not center: the rig must INHERIT the stage's resolved height instead of asking for one
-     of its own. The four corner brackets are absolutely positioned, so the rig is the only in-flow
-     item here, and it centres its own content anyway. */
+     of its own. Nothing else is in flow here since #225 took the corner brackets out, and the rig
+     centres its own content anyway. */
   place-items: stretch;
   padding: 20px;
 }
@@ -390,8 +419,8 @@
      carry existed for one reason: four always-present, z-index:2 corner ArcGauges pinned 22px from
      the stage edge, which a tall HardwareGrid could scroll its rows under mid-scroll (padding
      cannot help — a scroll container only protects its extremes). Those gauges are no longer on the
-     canvas, and the control row left with them, so nothing overlays this viewport any more except
-     the decorative corner brackets, which are 22px, pointer-events:none and outside the padding.
+     canvas, and the control row left with them, so nothing overlays this viewport any more at all —
+     the decorative corner brackets that were the last overlay went with #225.
      The bound used to be restated as a number — 460, then --hc-rig-h — and a restated number is a
      number that can drift. It is now simply the box this viewport is laid into, which the stage
      sizes; there is nothing left to keep in step (self-reviewer 2026-07-18; derivation 2026-07-23;
@@ -408,39 +437,11 @@
   font-size: var(--type-label);
 }
 
-/* Corner brackets — the HUD framing device, two 1px edges per corner. */
-:root[data-v2="on"] .hc-brk {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border-color: var(--ix-accent);
-  opacity: 0.55;
-  pointer-events: none;
-}
-:root[data-v2="on"] .hc-brk-tl {
-  top: 10px;
-  left: 10px;
-  border-top: 2px solid;
-  border-left: 2px solid;
-}
-:root[data-v2="on"] .hc-brk-tr {
-  top: 10px;
-  right: 10px;
-  border-top: 2px solid;
-  border-right: 2px solid;
-}
-:root[data-v2="on"] .hc-brk-bl {
-  bottom: 10px;
-  left: 10px;
-  border-bottom: 2px solid;
-  border-left: 2px solid;
-}
-:root[data-v2="on"] .hc-brk-br {
-  bottom: 10px;
-  right: 10px;
-  border-bottom: 2px solid;
-  border-right: 2px solid;
-}
+/* .hc-brk / .hc-brk-tl / -tr / -bl / -br — DELETED (#225). The four 22px HUD corner elbows on the
+   stage. The approved Health comp draws that stage as one uninterrupted surface, and the rejection
+   named added visual language as the fault, so the elbows went rather than being dimmed. They were
+   aria-hidden and pointer-events:none, so no behaviour, no data and no reading left with them.
+   The markup went in the same commit (HomeConsole.tsx); pinned by home-console-parity-225.test.tsx. */
 
 /* .hc-corner / .hc-tl / .hc-tr / .hc-bl / .hc-br — DELETED (issue #49). They pinned the four
    ArcGauges to the canvas corners. The approved direction says gauges may not cover rig content,
@@ -701,21 +702,47 @@
    string. Long strings wrap, and wrapping is free because the panel's geometry measures itself
    (see --hc-stage-max above); it is no longer paid for out of a hand-written constant.
      readiness 150px = 56px ring + 10px .arc-gauge gap + 84px "Readiness" (one word, cannot wrap)
-     readings   88px = 76px value (mono + its MEASURED pill, never wraps) + 1px hairline + 6px pad
+     readings    80px = 73px value (mono + its MEASURED pill, never wraps) + 1px hairline + 6px pad
+                 83px for the two that carry a 76px value — the floor IS the derivation, per cell
    Sentence-length strings — the gauge's note, and the CPU cell's "no CPU temp — see below" offer
    line (#134/Q9c) — are NOT in these floors. They wrap, and a wrapped line simply makes the strip
    taller, which the panel now absorbs by shrinking the stage instead of by clipping anything.
-   Budget at 1280×720 (533px content box): 150 + 4×88 + 4×6px gap = 526 ≤ 533. At that size the
-   four readings take their floors and the readiness cell is guaranteed the 157px left over, which
-   still clears its own 150. Guarded in home-console.test.tsx.
-   Round 10 spent the 4px it could find (separator 8 → 6px, floor 85 → 88px) on the two longest
-   labels, "GPU TEMP" and "CPU TEMP", which were wrapping by a hair at 720p. That is COSMETIC only —
-   it is not what keeps the strip correct, because the next translation will wrap something anyway.
-   What keeps it correct is the shared row grid below. */
+   ROUND 11 (#225): THE BUDGET WAS BEING CHECKED AGAINST A STRIP 18px WIDER THAN THE REAL ONE. The
+   guard's CLIENT constant said .hc-readout is 565px at 1280×720; measured on the installed build it
+   is 547, so the true content box is 515px, not 533. The sum 150 + 4×88 + 4×6 = 526 therefore did
+   not fit and never had — the CPU-temp cell hung 10.7px past the strip's right edge and its label
+   printed as "CPU TEM". Green the whole time, because the number it was measured against was one
+   nobody had re-taken: rounds 6-9's own root cause, one axis over. This is NOT a regression from
+   #225's round-2 geometry — emulating the pre-round-2 constants leaves the same overflow.
+   The 20px is bought back where the guard says to buy it, from padding that carries no reading:
+   round 10's floors were 88px across, 5-8px ABOVE each cell's own derivation, and the floors are
+   now that derivation exactly. Budget at 1280×720 (515px content box): 150 + 80 + 80 + 83 + 83 +
+   4×6px gap = 500 ≤ 515, so 15px of real margin where there used to be a 11px deficit.
+   Nothing moves at the owner's 1500×980 or in the approved comp: at that width every track is
+   above its floor and sized by its fr share, so these floors do not bind and the strip renders
+   byte-identically. Only 720p changes.
+   What round 10 bought with those 5-8px was cosmetic — "GPU TEMP" and "CPU TEMP" not wrapping by a
+   hair at 720p. They may wrap again now, and that is harmless BY CONSTRUCTION: the shared row grid
+   below makes row 1 as tall as the tallest label, so every value still starts on the same line. A
+   wrapped label is not a defect; a reading hanging off the edge is. Guarded in home-console.test.tsx,
+   whose CLIENT constant now carries how and when it was measured.
+   ROUND 12 (Wave 1 Lane B self-review at 5ee0de97, 2026-09-03): THE FLOORS WERE DERIVED FROM THE
+   VALUES, AND THE WIDEST UNBREAKABLE CHILD OF A MEASURED CELL IS ITS PILL. "MEASURED" at the 13px
+   label size, tracked 0.1em and padded 5px, is 92.6px wide; round 11's 80/83px floors left it a
+   74.3px content box, and at 720p three pills crossed their neighbours' hairlines by 3.6-5.3px.
+   Green the whole time, because the guard's READS never counted the pill. Every reading floor is
+   now the pill plus hairline plus padding (99.6 -> 100px), and since 150 + 4x100 + 4x6 = 574 does
+   not fit in 515 -- with the type floor, the pill's one appearance and the single row all fixed --
+   the INSTRUMENT is what gives: its floor drops to the word "Readiness" (84 -> 86px) because its
+   label wraps under the ring below 150px (.hc-read-arc rules below). Budget at 1280x720:
+   86 + 4x100 + 4x6 = 510 <= 515. At the owner's 1500x980 every track is above its floor and
+   fr-sized exactly as before, so nothing there moves. Guard: home-console.test.tsx derives the pill
+   from reading.css, so a change to its tracking or padding moves these floors with it. */
 :root[data-v2="on"] .hc-readout {
   --hc-readout-sep: 6px;
   display: grid;
-  grid-template-columns: minmax(150px, 2fr) repeat(4, minmax(88px, 1fr));
+  grid-template-columns: minmax(86px, 2fr) minmax(100px, 1fr) minmax(100px, 1fr)
+    minmax(100px, 1fr) minmax(100px, 1fr);
   /* THE FIVE CELLS SHARE THESE THREE ROWS (self-review round 10). Every reading is label · value ·
      attestation, and each cell used to size those three rows for ITSELF. At 1280×720 "GPU TEMP" and
      "CPU TEMP" wrap to two lines where "AVG FPS" and "1% LOW" do not, so their values sat 17px
@@ -749,6 +776,32 @@
   min-width: 0;
   grid-row: span 3;
 }
+/* ROUND 12 (see the readout budget above): below 150px the instrument's label wraps UNDER the ring
+   instead of beside it -- the browser measuring, no breakpoint (the handoff's "one composition
+   that flexes"). The ring, its centre readout and the label are the kit's own children; only
+   their flow changes, and only in this cell. Above 150px -- the owner's 1500x980 and the comp --
+   the line never wraps and the layout is the kit's grid to the pixel: ring, 10px, label, the ring
+   centred on the label. The centre readout rides the ring: pulled back over it by its own width,
+   then the kit's 10px gap on its far side. */
+:root[data-v2="on"] .hc-read-arc .ag-as-ring {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 0;
+}
+:root[data-v2="on"] .hc-read-arc .ag-as-ring > svg {
+  flex: none;
+}
+:root[data-v2="on"] .hc-read-arc .ag-as-ring > .ag-ctr {
+  flex: none;
+  width: 56px;
+  margin-left: -56px;
+  margin-right: 10px;
+}
+:root[data-v2="on"] .hc-read-arc .ag-as-ring > .ag-label {
+  flex: 1 1 84px;
+  min-width: 0;
+}
 
 /* ── WHAT HAS BEEN HAPPENING (issue #49) — the three shortcuts into the interview. Row buttons, not
    cards: they are one list of answers to one question, and a grid of boxes here would compete with
@@ -757,7 +810,15 @@
   display: flex;
   flex-direction: column;
   gap: var(--v2-pad-sm);
-  padding-top: var(--v2-pad);
+  /* THE RULE'S RHYTHM IS THE COMP'S (#225). The hairline itself was never missing -- this
+     border-top has always drawn it, and it computes to the comp's colour (--v2-line, 0.07 white,
+     lands on #1B1D21 over the page ground; the comp samples #1F2227). What was wrong is the air
+     around it: the rule sat flush against the button above it with 16px underneath, where the
+     comp gives it 36 comp px above (button edge y410 -> rule y446) and 33 below (rule -> the
+     label's box top, backing the cap-top at y483 out by its line-height leading). Divided by the
+     1.0333 comp:app scale that is 35 and 32. */
+  margin-top: 35px;
+  padding-top: 32px;
   border-top: 1px solid var(--v2-line);
 }
 :root[data-v2="on"] .hc-happening-q {
@@ -782,7 +843,9 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* 12, not 8 (#225): the comp's cards sit 12 comp px apart border-to-border (bottom border
+     y619 -> next top border y631, and again y709 -> y721) = 11.6 app px. */
+  gap: 12px;
 }
 /* THE COMP'S CARD (owner ruling 2026-08-23): glyph · title over one grey line · chevron.
    A three-column grid rather than flex with space-between, because the middle column is the
@@ -796,14 +859,26 @@
   gap: 14px;
   text-align: left;
   padding: 14px var(--v2-pad);
-  background: var(--v2-panel);
+  /* #225, both measured off the comp. FILL: the cards sample #15181F-#161920 against a #0C0E12
+     ground -- a step lighter than --v2-panel (#10131A), which is the panel token and made these
+     rows read as the same surface as the rig panel opposite them. --v2-panel-2 (#141824) is the
+     nearest token and it is the wrong hue: it carries a blue cast the comp's neutral grey does
+     not. So it is a third surface step in tokens-v2.css (--v2-panel-card), declared with its
+     measurement, rather than a literal here or a bend to a token four rooms read.
+     RADIUS: the corner arc reaches the card's left border 10 comp px below its top border
+     (y631 x298, y633 x293, y636 x290, flush by y641) = 9.7 app px, which is --v2-r, not the
+     --v2-r-sm these were carrying. */
+  background: var(--v2-panel-card);
   border: 1px solid var(--v2-line);
-  border-radius: var(--v2-r-sm);
+  border-radius: var(--v2-r);
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
+/* The hover lift follows the new card surface. --v2-panel-2 was the right lift over --v2-panel;
+   over --v2-panel-card it is not a lift at all -- #141824 is DARKER than #15191F on red and green
+   and only brighter on blue, so hovering would have shifted the hue instead of raising the card. */
 :root[data-v2="on"] .hc-happening-row:hover {
-  background: var(--v2-panel-2);
+  background: var(--v2-panel-card-hover);
   border-color: var(--v2-accent-line);
 }
 :root[data-v2="on"] .hc-happening-row:focus-visible {
@@ -1041,8 +1116,13 @@
 }
 :root[data-v2="on"] .hc-care {
   display: flex;
-  margin: var(--v2-pad) 0 0;
-  padding-top: var(--v2-pad);
+  /* The comp's air around the second hairline (#225), same method as .hc-happening above: the
+     last card's bottom border is at comp y799 and the rule at y829 (30 comp = 29 app), and the
+     row's text below it starts at y858, ~29 comp with the label's leading inside it (24 app to
+     the box top). This rule was also always drawn -- --v2-line over the ground is #1B1D21 and
+     the comp samples #1B1D23 -- it was 16/16 of air instead of 29/24. */
+  margin: 29px 0 0;
+  padding-top: 24px;
   background: transparent;
   border: 0;
   border-top: 1px solid var(--v2-line);

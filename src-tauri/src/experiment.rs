@@ -196,6 +196,25 @@ fn store_write_gate() -> &'static Mutex<()> {
     GATE.get_or_init(|| Mutex::new(()))
 }
 
+/// The only way this crate takes the experiment store gate. Records the acquisition, then blocks.
+///
+/// #398: this gate is the OUTERMOST lock the crate takes. The three lifecycle commands hold it and
+/// then enter `HISTORY_LOCK` — `start_experiment` through `history::apply_recommendation`,
+/// `conclude_experiment` and `restore_experiment` through `history::rollback_change` — so it is the
+/// outer half of `Experiment -> History` and, on the failure branches that record support evidence,
+/// of `Experiment -> SupportEvidence`. Until this helper existed the three sites open-coded
+/// `.lock()` with no record at all, which meant the recorder saw an empty stack on entering the
+/// ledger lock and could not have detected Experiment re-entry, an inverted edge, or a cycle.
+///
+/// The poison policy is unchanged and byte-identical to the three sites it replaces: refuse, never
+/// recover. A poisoned gate means some other thread panicked mid-write of `experiments.json`; this
+/// module has no reconciler for that and will not pretend to.
+pub(crate) fn lock_store() -> Result<crate::race_seam::StoreGuard, String> {
+    crate::race_seam::try_hold_lock(crate::race_seam::StoreLock::Experiment, || {
+        store_write_gate().lock().map_err(|_| "experiment store lock poisoned".to_string())
+    })
+}
+
 // ─── Pure decision core (injected clock/ledger → unit-testable, anti-fabrication) ──
 
 /// The single-variable attribution note (§4F "warn when multiple changes active"). `None` when the
@@ -643,7 +662,7 @@ pub(crate) fn start_experiment(
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
     }
-    let _g = store_write_gate().lock().map_err(|_| "experiment store lock poisoned".to_string())?;
+    let _g = lock_store()?;
 
     // Cap the persisted free-text at the trust boundary (see MAX_TEXT_LEN). Truncate, don't reject.
     let rec_title: String = rec_title.chars().take(MAX_TEXT_LEN).collect();
@@ -726,7 +745,7 @@ pub(crate) fn conclude_experiment(
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
     }
-    let _g = store_write_gate().lock().map_err(|_| "experiment store lock poisoned".to_string())?;
+    let _g = lock_store()?;
     let mut store = load_store();
     let idx = store
         .experiments
@@ -818,7 +837,7 @@ pub(crate) fn restore_experiment(experiment_id: String) -> Result<ExperimentReco
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
     }
-    let _g = store_write_gate().lock().map_err(|_| "experiment store lock poisoned".to_string())?;
+    let _g = lock_store()?;
     let mut store = load_store();
     let idx = store
         .experiments

@@ -1,0 +1,56 @@
+{
+  "actor": "claude-code",
+  "explicitHandoff": "https://github.com/Pootytxng/sentinel/issues/362#issuecomment-5524495271",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "transition": "merge-pr",
+  "currentHead": "c77995c2a077321c1fc306c81e40822d7d320da4",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "c77995c2a077321c1fc306c81e40822d7d320da4",
+      "evidence": "C:/Users/Kuya/AppData/Local/Temp/claude/C--Users-Kuya-code-sentinel--claude-worktrees-priority-order-parallel-productivity-ae19bb/3a586081-6268-4fa1-b3b0-2f91a0dac2fd/scratchpad/push-p0h.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "c77995c2a077321c1fc306c81e40822d7d320da4",
+      "evidence": "C:/Users/Kuya/AppData/Local/Temp/claude/C--Users-Kuya-code-sentinel--claude-worktrees-priority-order-parallel-productivity-ae19bb/3a586081-6268-4fa1-b3b0-2f91a0dac2fd/scratchpad/push-p0h.log"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "c77995c2a077321c1fc306c81e40822d7d320da4",
+      "evidence": "C:/Users/Kuya/AppData/Local/Temp/claude/C--Users-Kuya-code-sentinel--claude-worktrees-priority-order-parallel-productivity-ae19bb/3a586081-6268-4fa1-b3b0-2f91a0dac2fd/scratchpad/push-p0h.log"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "c77995c2a077321c1fc306c81e40822d7d320da4",
+      "evidence": "C:/Users/Kuya/AppData/Local/Temp/claude/C--Users-Kuya-code-sentinel--claude-worktrees-priority-order-parallel-productivity-ae19bb/3a586081-6268-4fa1-b3b0-2f91a0dac2fd/scratchpad/push-p0h.log"
+    }
+  ],
+  "independentReview": {
+    "practical": false,
+    "reason": "No Codex lane is live on this machine this session and the owner serialized the P0 closeout into this single Claude Code lane; opening a Codex review lane is the owner's call. The full local pre-push gate passed at this exact head (see gateResults)."
+  },
+  "pr": 364,
+  "issue": 362,
+  "kind": "pilot",
+  "branch": "claude/priority-order-parallel-productivity-ae19bb"
+}

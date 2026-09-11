@@ -1453,13 +1453,28 @@ function App() {
                 isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                 onChanged={refresh}
               />
-              {/* The other half of that journey (P2 / issue #49): TrustMoment rehearses the loop on
-                  a demo setting while the ledger is EMPTY; FirstWin follows through on the user's
-                  own first live change. The two gate on exact complements (`changes.length === 0`
-                  vs at least one still-active entry), so they can never both be on screen. */}
-              <FirstWin changes={changes} onChanged={refresh} />
             <HomeRoom
               hw={hw}
+              /* THE LATEST-CHANGE FOLLOW-THROUGH, NOW SUBORDINATE (#225 finding 1). FirstWin is
+                 the other half of the first-win journey (P2 / issue #49): TrustMoment rehearses
+                 apply→receipt→rollback on a demo setting while the ledger is EMPTY, FirstWin
+                 follows through on the user's own first live change. The two gate on exact
+                 complements (`changes.length === 0` vs at least one still-active entry), so they
+                 can never both be on screen.
+
+                 It used to render as a sibling ABOVE <HomeRoom>, which put a 147px bordered
+                 banner — carrying its own accented button — at the top of the room and pushed the
+                 eyebrow from the comp's y127 to y269. Measured: every element below it moved 142px
+                 down, and at 1280x720 that alone cropped the rig before its readout strip. The
+                 approved comp draws nothing in that position.
+
+                 So it moves into RoomShell's `below` slot, whose contract is exactly this case:
+                 full-width content beneath both columns, where a split room keeps what is real but
+                 below the fold — content moves down, it is never deleted to make a comp fit. Every
+                 handler, phase, verdict, aria-live region and localisation key is untouched; only
+                 the mount point moves. Passed as a NODE rather than as data so App keeps owning
+                 `changes`/`refresh` and HomeRoom stays presentation-only. */
+              latestChange={<FirstWin changes={changes} onChanged={refresh} />}
               readiness={readiness}
               priorities={priorities}
               sessions={sessions}

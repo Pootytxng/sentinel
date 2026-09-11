@@ -10,8 +10,12 @@ use crate::hardware::HardwareInfo;
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
 pub(crate) struct HardwareFingerprint {
     cpu: String,
-    gpus: Vec<String>,
-    ram_gb: u64,
+    /// Read by `machine_model.rs` to report where this baseline and the live hardware read
+    /// disagree. Visibility only; this stays the canonical producer of the baseline.
+    pub(crate) gpus: Vec<String>,
+    /// Truncated GiB, deliberately — `diff_fingerprint` applies its own +/-1 tolerance. The
+    /// Machine Model reuses that tolerance rather than inventing a second rounding rule.
+    pub(crate) ram_gb: u64,
     disks: Vec<String>,
 }
 
@@ -75,6 +79,24 @@ fn write_fingerprint(path: &std::path::Path, fp: &HardwareFingerprint) -> Result
     }
     let j = serde_json::to_string_pretty(fp).map_err(|e| e.to_string())?;
     std::fs::write(path, j).map_err(|e| e.to_string())
+}
+
+/// The persisted baseline, read without writing one. `get_hardware_changes` records a first-run
+/// baseline as a side effect; a read-only consumer must never trigger that, so it comes here.
+/// None means no baseline has been recorded yet, which is honestly different from "no change".
+pub(crate) fn persisted_baseline() -> Option<HardwareFingerprint> {
+    load_fingerprint(&fingerprint_path())
+}
+
+/// Test-only baseline constructor for consumers that compare against one. Never shipped.
+#[cfg(test)]
+pub(crate) fn test_fingerprint(cpu: &str, gpus: &[&str], ram_gb: u64) -> HardwareFingerprint {
+    HardwareFingerprint {
+        cpu: cpu.into(),
+        gpus: gpus.iter().map(|s| s.to_string()).collect(),
+        ram_gb,
+        disks: Vec::new(),
+    }
 }
 
 #[derive(Serialize)]

@@ -1,10 +1,10 @@
 # Parallel Worktree Operations — HQ / Air-Traffic-Control model
 
-> **⚠️ SUPERSEDED (2026-06-27) — HISTORICAL.** This 2026-06-01 model ("only HQ writes `main`"; lanes
-> Design/Backend-spike/Benchmark at `code\compy-*` paths that no longer exist) has been replaced by
-> **`docs/LANE_BUS.md` + `docs/LANE_WORKFLOW.md`** (lanes rebase + push `HEAD:main` themselves; bounded
-> `compy-burst`, no perpetual loops). Use those for the current model. Kept only as a record of how the
-> HQ/air-traffic-control approach worked. Current live state always lives in `docs/RELEASE_STATE.md`.
+> **⚠️ SUPERSEDED — HISTORICAL (reclassified 2026-09-04).** This 2026-06-01 model ("only HQ writes
+> `main`"; lanes at paths that no longer exist) is not current execution law. Its former replacements,
+> `docs/LANE_BUS.md` and `docs/LANE_WORKFLOW.md`, are also dormant historical designs. Current claims,
+> worktrees, writers, gates, and transitions are governed only by `docs/WORK_CONTROL.md`; current
+> release state lives in `docs/RELEASE_STATE.md`.
 
 **Set 2026-06-01.** Compy is worked by multiple Claude sessions ("lanes") at once. This is the
 rule of the road. **HQ owns this doc.** Any lane: read this before touching the repo.
@@ -13,9 +13,9 @@ rule of the road. **HQ owns this doc.** Any lane: read this before touching the 
 
 | Lane | Folder | Branch | Domain it may edit |
 |---|---|---|---|
-| **HQ (integration)** | `C:\Users\Kuya\code\compy` | `main` | merges, QA, this doc, `CLAUDE.md`, beta-ref guard |
-| **Design** | (idle — `experience-pass` MERGED 2026-06-02; fresh worktree+branch off `main` when next staffed) | — | `src/` (frontend) + frontend build config |
-| **Backend agent (SPIKE)** | `C:\Users\Kuya\code\compy-agent` | `spike/backend-agent` | `src-tauri/` exploration — **speculative, may never merge** |
+| **HQ (integration)** | `C:\Users\Kuya\code\compy` | `main` | integration, QA, this doc, `CLAUDE.md`, beta-ref guard |
+| **Design** | (idle — `experience-pass` INTEGRATED 2026-06-02; fresh checkout+branch off `main` when next staffed) | — | `src/` (frontend) + frontend build config |
+| **Backend agent (SPIKE)** | `C:\Users\Kuya\code\compy-agent` | `spike/backend-agent` | `src-tauri/` exploration — **speculative, may never land** |
 | **Benchmark** | `C:\Users\Kuya\code\compy-benchmark` | `benchmark` | F6 proof/benchmark **design** (docs first) |
 
 ## Rules of the road (so it's not a 5-car pileup)
@@ -28,7 +28,10 @@ rule of the road. **HQ owns this doc.** Any lane: read this before touching the 
 6. **Push discipline** — push branches frequently so HQ + the owner see them; no long-lived local-only commits.
 7. **Beta refs frozen** (`private-beta-001` / `beta/*` @ `16069fa`). **No force-push, ever** (`main` or beta).
 8. **`CLAUDE.md` + shared config = single-owner (HQ).** `package.json`/lock owned by the frontend (design) lane only.
-9. **Build-ahead, ship-on-schedule.** A feature slotted "later" in `docs/PRODUCT_DIRECTION.md` (e.g. F6 benchmark) may be built **in isolation** but stays **PARKED** (not merged to `main`) and **DARK** (backend unregistered / flag-gated; no UI wired into surfaces the design lane is rewriting) until the owner says the plan reached its slot. `PRODUCT_DIRECTION.md` sequence is authoritative.
+9. **Historical rule only — retired.** The former build-ahead rule used the now-superseded
+   `docs/PRODUCT_DIRECTION.md` sequence. It is not authoritative and cannot authorize isolated work.
+   Current product sequence derives from `docs/PRODUCT_CONSTITUTION.md` through
+   `docs/product/ROADMAP.md`; execution requires a current `docs/WORK_CONTROL.md` claim.
 
 ## Merge protocol (lane → `main`)
 1. Lane finishes a unit, verifies in its own worktree, pushes its branch.
@@ -56,7 +59,7 @@ direction is in hand. Until then: benchmark lane holds.
   `npm test` 39/39 · /check + /security clean. **Gated until the owner's mutation QA (spec §7) + sign-off
   flip the gate.** Built by HQ in a throwaway `compy-gaming` worktree (now removed). Spec +
   plan under `docs/superpowers/`.
-- **`experience-pass`** — ✅ **MERGED to `main` 2026-06-02** (ff `fcba42b..60daf3a`); branch + worktree
+- **`experience-pass`** — ✅ **INTEGRATED to `main` 2026-06-02** (ff `fcba42b..60daf3a`); branch + checkout
   **retired**. The de-gamified honest command-center is now live on `main`: SystemPosture hero,
   Tune/Garage/theme-unlock/Surprise removed, themes curated, design-system primitives, ~290 lines dead
   CSS purged. HQ-verified (34 tests, tsc+build clean, npm audit 0, frontend-only diff) + owner sign-off

@@ -1,5 +1,10 @@
 # 2026-06-12 — RECEIPTS MARATHON R3 (CC autonomous long-run, owner GO)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The autonomous owner-GO work order and claim
+> that the Receipts Doctrine governs every item are historical, not current execution authority.
+> Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; current work must derive through the
+> Roadmap and an active Work Control claim. The body remains historical implementation evidence.
+>
 > The first marathon under the Receipts Doctrine (`docs/RECEIPTS_DOCTRINE.md` — governs every
 > item; Zero-Budget Law §6 — nothing requiring an account or a dollar; placeholders + single-
 > constant swap points instead). Protocol = R1/R2 precedent (`AUTONOMOUS_SPRINT_2026-06-11*.md`):

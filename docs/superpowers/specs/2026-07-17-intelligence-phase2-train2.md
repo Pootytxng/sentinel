@@ -1,5 +1,11 @@
 # Intelligence Phase 2 — patterns, good-vs-bad, evidence graph (decision record)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical implementation record, not
+> current product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Its read-only, privacy, and evidence limits
+> remain technical provenance under [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 **Status:** BUILT 2026-07-17 (`9c6af4b` backend · `094d834` frontend). **Provenance:** owner directive
 `docs/reviews/2026-07-16-owner-directive-intelligence-platform.md` §6 (Cowork-lane artifact — executed
 from, never committed). Continues [[2026-07-16-intelligence-foundation-train1]]. **Namespace law (§6):**

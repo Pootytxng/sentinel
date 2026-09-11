@@ -8,6 +8,7 @@
 //! `get_game_readiness` command just gathers the live inputs and calls it.
 
 use std::sync::atomic::Ordering;
+use std::sync::Mutex;
 
 use serde::Serialize;
 
@@ -924,6 +925,41 @@ fn status_str(s: ReadinessStatus) -> &'static str {
 }
 
 // ── Dismissals: a tiny persisted set of check ids the user has chosen to silence ──────────────
+
+// #283 — serialized so two dismiss/restore calls can't interleave load → modify → save and lose
+// one of them. Tauri dispatches commands on a thread pool, so two clicks close together genuinely
+// run concurrently; without this the second save writes a list built from a stale read and the
+// user's first dismissal silently comes back.
+//
+// Held across the WHOLE read-modify-write, never across a call into another store's lock — nothing
+// inside these sections touches history/drift/comparison, so the lock graph stays acyclic, and
+// `scripts/store-lock-order-guard.test.mjs` is what keeps that from quietly stopping being true.
+// (`get_game_readiness` DOES call `drift::detect_and_persist`, which takes DRIFT_LOCK — but it holds
+// no dismissals lock when it does, so the two never nest.) Read-only paths deliberately do NOT take
+// it: `atomic_write` already replaces the file whole, so a racing reader sees the old list or the
+// new one, never a torn one.
+static DISMISSALS_LOCK: Mutex<()> = Mutex::new(());
+
+/// Acquire, recovering from poison and CLEARING it.
+///
+/// PR #395's review: both sequences under this lock used to PROPAGATE poison, so a single panic
+/// anywhere under it would permanently break dismiss AND restore for the rest of the process — the
+/// user's silenced checks would come back and refuse to be silenced again until they restarted, with
+/// nothing on screen explaining why. See `comparison::lock_comparison` for why recovering is safe
+/// here rather than merely convenient: the guarded value is `()`, and every write is a whole-file
+/// `atomic_write`, so the recovering thread re-reads from disk and inherits nothing.
+fn lock_dismissals() -> crate::race_seam::StoreGuard {
+    // #398 — see `comparison::lock_comparison`. The paragraph above claims nothing inside these
+    // sections touches another store; that claim is now OBSERVED at runtime rather than asserted in
+    // prose, and it fails by name if it ever stops being true. No-op in a release build.
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::Readiness, || {
+        DISMISSALS_LOCK.lock().unwrap_or_else(|poisoned| {
+            DISMISSALS_LOCK.clear_poison();
+            poisoned.into_inner()
+        })
+    })
+}
+
 fn dismissals_path() -> std::path::PathBuf {
     crate::compy_data_dir().join("readiness_dismissals.json")
 }
@@ -941,13 +977,6 @@ fn load_dismissals_from(path: &std::path::Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn save_dismissals(ids: &[String]) -> Result<(), String> {
-    // User-framed errors (match export.rs's house pattern) — never a raw OS string to the UI.
-    std::fs::create_dir_all(crate::compy_data_dir())
-        .map_err(|e| format!("could not create the Compy data folder: {e}"))?;
-    save_dismissals_to(&dismissals_path(), ids)
-}
-
 fn save_dismissals_to(path: &std::path::Path, ids: &[String]) -> Result<(), String> {
     let json = crate::atomic_write::serialize_pretty(ids)
         .map_err(|e| format!("could not save your dismissed-checks setting: {e}"))?;
@@ -960,10 +989,24 @@ fn save_dismissals_to(path: &std::path::Path, ids: &[String]) -> Result<(), Stri
 /// Dismiss a readiness check by id (idempotent) — the user has judged it and wants it silenced.
 #[tauri::command]
 pub(crate) fn dismiss_readiness_check(id: String) -> Result<(), String> {
-    let mut ids = load_dismissals();
+    // Directory creation is idempotent and is NOT part of the read-modify-write, so it stays
+    // outside the lock; the user-facing wording is unchanged.
+    std::fs::create_dir_all(crate::compy_data_dir())
+        .map_err(|e| format!("could not create the Compy data folder: {e}"))?;
+    dismiss_readiness_check_at(&dismissals_path(), id)
+}
+
+/// The whole read-modify-write, lifted to a path so the #283 lock can be PROVEN against a scratch
+/// file instead of the real data root. The lock lives here, not in the wrapper, so the test
+/// exercises the same critical section the command does — a guard that locked a different function
+/// than the one it tested would pass for the wrong reason.
+fn dismiss_readiness_check_at(path: &std::path::Path, id: String) -> Result<(), String> {
+    let _lock = lock_dismissals();
+    let mut ids = load_dismissals_from(path);
+    crate::race_seam::hold(); // no-op in a release build; see race_seam
     if !ids.contains(&id) {
         ids.push(id);
-        save_dismissals(&ids)?;
+        save_dismissals_to(path, &ids)?;
     }
     Ok(())
 }
@@ -971,9 +1014,18 @@ pub(crate) fn dismiss_readiness_check(id: String) -> Result<(), String> {
 /// Restore a previously-dismissed check so it alerts again.
 #[tauri::command]
 pub(crate) fn restore_readiness_check(id: String) -> Result<(), String> {
-    let mut ids = load_dismissals();
+    std::fs::create_dir_all(crate::compy_data_dir())
+        .map_err(|e| format!("could not create the Compy data folder: {e}"))?;
+    restore_readiness_check_at(&dismissals_path(), id)
+}
+
+/// Path-parameterized for the same reason as [`dismiss_readiness_check_at`].
+fn restore_readiness_check_at(path: &std::path::Path, id: String) -> Result<(), String> {
+    let _lock = lock_dismissals();
+    let mut ids = load_dismissals_from(path);
+    crate::race_seam::hold(); // no-op in a release build; see race_seam
     ids.retain(|x| x != &id);
-    save_dismissals(&ids)
+    save_dismissals_to(path, &ids)
 }
 
 #[tauri::command]
@@ -1735,5 +1787,162 @@ mod readiness_tests {
         };
         let rg = evaluate_readiness(&good, None, false, false, &AppliedChangesSummary::default(), None);
         assert_eq!(find(&rg, "drive-health").status, ReadinessStatus::Ready);
+    }
+}
+
+/// #283 — LOST UPDATE. These prove the serialization itself, not a lookalike: they call the very
+/// `*_at` functions the two `#[tauri::command]` wrappers call, so the critical section under test is
+/// the one that ships.
+///
+/// FALSIFIED BEFORE TRUSTED — each test below individually, which is a stricter claim than the
+/// module as a whole and the one PR #395's review showed actually matters. With `DISMISSALS_LOCK`
+/// removed from `dismiss_readiness_check_at`, the first test loses as many as 31 of the 32 ids and
+/// the second loses unrelated ids it never restored. That is the defect #283 describes, reproduced
+/// on demand — the pass is therefore evidence and not decoration.
+///
+/// A third test lived here and was DELETED rather than repaired: it raced 16 dismissals of the SAME
+/// id and asserted no duplicates accumulated. Every writer computed the identical output list, so no
+/// interleaving could ever produce a different one — it passed with the lock physically removed, and
+/// would have passed against any implementation at all. Idempotence is still covered, single-
+/// threaded, where it can actually fail.
+#[cfg(test)]
+mod readiness_dismissal_race_tests {
+    use super::*;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "compy-dismiss-race-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// The exact shape #283 reports: several dismissals issued close together. Every one the user
+    /// issued must survive; a lost update is a check the user silenced coming back on its own.
+    #[test]
+    fn concurrent_dismissals_all_survive_none_is_silently_lost() {
+        let dir = scratch("dismiss");
+        let path = dir.join("readiness_dismissals.json");
+        const WRITERS: usize = 32;
+
+        std::thread::scope(|scope| {
+            for i in 0..WRITERS {
+                let path = path.clone();
+                scope.spawn(move || {
+                    dismiss_readiness_check_at(&path, format!("check-{i}")).unwrap();
+                });
+            }
+        });
+
+        let mut got = load_dismissals_from(&path);
+        got.sort();
+        let mut want: Vec<String> = (0..WRITERS).map(|i| format!("check-{i}")).collect();
+        want.sort();
+        assert_eq!(
+            got, want,
+            "a dismissal the user issued was silently lost: {} of {WRITERS} survived",
+            got.len()
+        );
+    }
+
+    /// Restore races dismiss on the same list. The end state may legitimately contain or omit the
+    /// contested id depending on which landed last, but no OTHER id may be collateral damage —
+    /// that is the lost update, and it is what the assertion below pins.
+    #[test]
+    fn a_restore_racing_dismissals_never_drops_an_unrelated_id() {
+        let dir = scratch("mixed");
+        let path = dir.join("readiness_dismissals.json");
+        const WRITERS: usize = 24;
+
+        dismiss_readiness_check_at(&path, "contested".to_string()).unwrap();
+
+        std::thread::scope(|scope| {
+            for i in 0..WRITERS {
+                let path = path.clone();
+                scope.spawn(move || {
+                    dismiss_readiness_check_at(&path, format!("keep-{i}")).unwrap();
+                });
+            }
+            let path = path.clone();
+            scope.spawn(move || {
+                restore_readiness_check_at(&path, "contested".to_string()).unwrap();
+            });
+        });
+
+        let got = load_dismissals_from(&path);
+        for i in 0..WRITERS {
+            let id = format!("keep-{i}");
+            assert!(
+                got.contains(&id),
+                "{id} was never restored by anyone, so losing it can only be a lost update"
+            );
+        }
+    }
+
+    /// The same harm as the two tests above, forced rather than hoped for. Those race 32 and 24
+    /// writers and do reproduce the loss on this machine every run — but PR #395's review was right
+    /// that "reliably on this machine" is a weaker claim than a forced interleaving, and a slower or
+    /// faster filesystem could move where they land. Two threads, the second entering the window by
+    /// construction, is the claim that travels.
+    ///
+    /// It races a RESTORE against a dismissal on purpose: a restore of something that is not on the
+    /// list is a no-op the user can genuinely trigger, and it still SAVES — which is exactly what
+    /// makes acting on a stale read destructive rather than merely wasteful.
+    #[test]
+    fn a_restore_cannot_erase_a_dismissal_that_landed_after_it_read() {
+        let path = scratch("mid-window").join("readiness_dismissals.json");
+
+        let _seam = crate::race_seam::Widened::arm();
+        std::thread::scope(|scope| {
+            let p = path.clone();
+            scope.spawn(move || {
+                dismiss_readiness_check_at(&p, "silenced".to_string()).unwrap();
+            });
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            let p = path.clone();
+            scope.spawn(move || {
+                restore_readiness_check_at(&p, "unrelated".to_string()).unwrap();
+            });
+        });
+
+        assert_eq!(
+            load_dismissals_from(&path),
+            vec!["silenced".to_string()],
+            "a restore of an UNRELATED check erased a dismissal that landed after the restore read \
+             the list — the user silenced a check and it came back on its own"
+        );
+    }
+
+    /// PR #395's review: BOTH sequences under this lock propagated poison, and poisoning is sticky
+    /// for the life of the process. One panic anywhere under it therefore broke dismiss and restore
+    /// permanently — the user's silenced checks come back and cannot be silenced again until they
+    /// restart Compy. The panic below is deliberate; the message libtest prints for it is expected.
+    ///
+    /// FALSIFIED BEFORE TRUSTED: put the `.map_err(|_| "dismissed-checks lock poisoned")?` form back
+    /// and this fails.
+    #[test]
+    fn a_panic_under_the_lock_does_not_permanently_break_dismissing() {
+        let path = scratch("poison").join("readiness_dismissals.json");
+
+        let died = std::thread::spawn(|| {
+            let _held = lock_dismissals();
+            panic!("deliberate: poisoning DISMISSALS_LOCK for the assertion below");
+        })
+        .join();
+        assert!(died.is_err(), "the helper thread was supposed to panic");
+
+        dismiss_readiness_check_at(&path, "after-poison".to_string())
+            .expect("dismissing must still work after an unrelated panic under the same lock");
+        restore_readiness_check_at(&path, "after-poison".to_string())
+            .expect("restoring must still work either");
+        assert!(load_dismissals_from(&path).is_empty());
+        assert!(
+            !DISMISSALS_LOCK.is_poisoned(),
+            "recovering without clearing leaves the flag set for the life of the process"
+        );
     }
 }

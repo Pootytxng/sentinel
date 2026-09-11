@@ -44,6 +44,7 @@ Line counts drift — treat as rough and verify against current code before asse
 - `tray.rs` (~177) — system-tray integration.
 
 **Intelligence & Measurement Platform (read-only, additive — no mutation markers, verified 2026-08-02)**
+- `machine_model.rs` (~1494) — Phase 2 (#385): the shared Machine Model. Composes ONE read-only `Fact<T>` view (value + evidence class + source + honest unknown) from the producers above; owns no store and probes nothing itself. Reports identity disagreement, never resolves it.
 - `intelligence.rs` (~3614) — Phase 1: canonical intelligence types, local event timeline, deterministic "What changed?" engine. READ-ONLY by doctrine; never mutates Windows, never networks.
 - `intelligence_patterns.rs` (~903) — Phase 2: cross-session pattern detection over `sessions.json`.
 - `experiment.rs` (~1420) — Phase 3: single-variable experiment engine + optimization simulator. **ARMED** (`experiment_gate()` returns true, owner sign-off 2026-07-17) — the bench renders live. It APPLIES via `history::apply_recommendation`, so an already-active rec simulates to `already-configured`; do not route a rollback-shaped next test here.

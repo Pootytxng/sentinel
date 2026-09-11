@@ -465,11 +465,29 @@ fn store_lock() -> &'static Mutex<()> {
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
+/// Take it, with the acquisition recorded (#398).
+///
+/// This is the INNERMOST lock in every nesting this crate performs: `history.rs`, `comparison.rs`
+/// and — through both of those — `experiment.rs` reach `record` from inside their own store locks,
+/// on the branch where a damaged ledger has to be reported. All three pairs are declared in
+/// `race_seam::ALLOWED_NESTING`, and they are safe only because this module is a leaf — `record`
+/// appends and `clear_support_evidence` deletes, and neither reaches another store. If that ever
+/// stops being true, the recorder fails by name here rather than deadlocking in front of a user.
+/// No-op in a release build.
+///
+/// `pub(crate)` so `race_seam`'s production-nesting tests can take the real innermost lock rather
+/// than a lookalike; taking the lock writes nothing, so that costs no I/O.
+pub(crate) fn lock_store() -> crate::race_seam::StoreGuard {
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::SupportEvidence, || {
+        store_lock().lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    })
+}
+
 /// Emit one record. Fire-and-forget **by signature**: there is no error to ignore at the call site,
 /// so no caller can accidentally make a mutation depend on the support log succeeding.
 pub fn record(kind: EventKind, operation: &str, code: &str, outcome: Outcome, detail: &str) {
     let event = SupportEvent::new(kind, operation, code, outcome, detail);
-    let _guard = store_lock().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = lock_store();
     let _ = append_to(&evidence_path(), &event);
 }
 
@@ -763,7 +781,7 @@ pub fn export_support_evidence(projection: String) -> Result<SupportExport, Stri
 /// the copy next to the button, and in `docs/PRIVACY.md`.
 #[tauri::command]
 pub fn clear_support_evidence() -> Result<(), String> {
-    let _guard = store_lock().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = lock_store();
     match std::fs::remove_file(evidence_path()) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),

@@ -1,0 +1,161 @@
+// @vitest-environment node
+//
+// Tier 3 (Q9b) Stage 3 — the isolation proof.
+//
+// Contract §11: "Receiver + migration, local/staged ONLY — not public, not deployed." That is a
+// claim about where files sit and what reads them, so it is provable, and a claim that is provable
+// should never be left as a comment. Every assertion below reads the REAL file it is about; none
+// restates a boundary from memory.
+//
+// The one that matters most is the deploy-trigger check. It does not hard-code today's six trigger
+// globs — it reads them out of .github/workflows/deploy-site.yml and matches the owned files
+// against whatever is there. So the day someone widens the triggers to `scripts/**`, this file
+// goes red on that change, which is the only moment the widening is cheap to reconsider.
+
+import { describe, expect, it } from 'vitest';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, posix, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const read = (p) => readFileSync(join(ROOT, p), 'utf8');
+
+/** Everything this lane owns, repo-relative and forward-slashed. */
+const OWNED = [
+  'scripts/lib/case-endpoint/index.ts',
+  'scripts/lib/case-endpoint/validate.ts',
+  'scripts/lib/case-endpoint/migrations/0002_case.sql',
+  'scripts/case-endpoint.test.mjs',
+  'scripts/case-endpoint-isolation.test.mjs',
+];
+
+function walk(dir, out = []) {
+  const abs = join(ROOT, dir);
+  if (!existsSync(abs)) return out;
+  for (const entry of readdirSync(abs)) {
+    const rel = posix.join(dir, entry);
+    if (statSync(join(ROOT, rel)).isDirectory()) walk(rel, out);
+    else out.push(rel);
+  }
+  return out;
+}
+
+/** The subset of glob syntax the workflow actually uses: `**`, `*`, and literals. */
+function globToRegExp(glob) {
+  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  const body = escaped.replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*');
+  return new RegExp(`^${body}$`);
+}
+
+describe('every owned file exists where the boundary says it does', () => {
+  it('is exactly the five files, all under scripts/', () => {
+    for (const file of OWNED) {
+      expect(existsSync(join(ROOT, file)), `${file} is missing`).toBe(true);
+      expect(file.startsWith('scripts/')).toBe(true);
+    }
+  });
+
+  it('puts nothing under functions/, site/, site-app/ or src/data/', () => {
+    for (const file of OWNED) {
+      expect(file.startsWith('functions/')).toBe(false);
+      expect(file.startsWith('site/')).toBe(false);
+      expect(file.startsWith('site-app/')).toBe(false);
+      expect(file.startsWith('src/data/')).toBe(false);
+    }
+  });
+});
+
+describe('the site deploy cannot see this lane', () => {
+  it('matches no path trigger in deploy-site.yml — read from the workflow, not assumed', () => {
+    const workflow = read('.github/workflows/deploy-site.yml');
+    const block = workflow.match(/\n\s*paths:\n((?:\s*-\s*".*"\n)+)/);
+    expect(block, 'deploy-site.yml no longer declares a paths: block').not.toBeNull();
+    const globs = [...block[1].matchAll(/-\s*"([^"]+)"/g)].map((m) => m[1]);
+    // If this ever reads as empty, the parse broke and every assertion below is vacuous.
+    expect(globs.length).toBeGreaterThan(0);
+
+    for (const file of OWNED) {
+      for (const glob of globs) {
+        expect(
+          globToRegExp(glob).test(file),
+          `${file} matches deploy trigger "${glob}" — this lane would deploy`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('is never copied into the staged bundle', () => {
+    const stage = read('scripts/stage-dist-site.mjs');
+    expect(stage).not.toContain('case-endpoint');
+    // The only repo directories the stager copies wholesale. `site` and `functions` are the two
+    // it has always copied; anything else appearing here is a new deploy input.
+    const sources = [...stage.matchAll(/cpSync\(\s*join\(root,\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(sources)).toEqual(new Set(['site', 'functions']));
+  });
+
+  it('is not referenced from any deployed surface', () => {
+    for (const dir of ['functions', 'site', 'site-app/src', 'src']) {
+      for (const file of walk(dir)) {
+        if (!/\.(ts|tsx|js|mjs|jsx|html|json)$/.test(file)) continue;
+        expect(read(file).includes('case-endpoint'), `${file} references this lane`).toBe(false);
+      }
+    }
+  });
+});
+
+describe('the migration is not in a configured migrations directory', () => {
+  it('leaves both wrangler migration directories exactly as they were', () => {
+    const configured = [...read('wrangler.toml').matchAll(/migrations_dir\s*=\s*"([^"]+)"/g)].map(
+      (m) => m[1],
+    );
+    // Two databases, two directories: `migrations` (DB / compy_waitlist) and `migrations-reports`
+    // (REPORTS / compy_reports). A third would be a new deploy-time migration surface.
+    expect(configured).toEqual(['migrations', 'migrations-reports']);
+
+    for (const dir of configured) {
+      const relDir = posix.relative(dir, 'scripts/lib/case-endpoint/migrations');
+      expect(relDir.startsWith('..')).toBe(true); // ours is outside both
+      // And no copy of it landed in one of them.
+      for (const file of walk(dir)) {
+        expect(file.endsWith('0002_case.sql'), `${file} is this lane's migration, deployed`).toBe(
+          false,
+        );
+      }
+    }
+  });
+});
+
+describe('nothing about the app changed', () => {
+  it('leaves the Tier 3 gate a literal false', () => {
+    const rust = read('src-tauri/src/case_evidence_upload.rs');
+    expect(rust).toMatch(/fn case_evidence_gate\(\)\s*->\s*bool\s*\{\s*false\s*\}/);
+  });
+
+  it('adds no Rust path that could reach this endpoint', () => {
+    for (const file of walk('src-tauri/src')) {
+      if (!file.endsWith('.rs')) continue;
+      const source = read(file);
+      expect(source.includes('api/case'), `${file} names the case endpoint`).toBe(false);
+      expect(source.includes('case-endpoint'), `${file} names this lane`).toBe(false);
+    }
+  });
+
+  it('touches no capability, CSP or Tier 2 surface', () => {
+    // A receiver is not a permission. If this lane ever needs one of these edited, that is the
+    // arming conversation, not this stage.
+    for (const file of [...walk('src-tauri/capabilities'), 'src-tauri/tauri.conf.json']) {
+      if (!existsSync(join(ROOT, file))) continue;
+      expect(read(file).includes('case-endpoint')).toBe(false);
+    }
+    expect(read('functions/api/usage.ts').includes('case')).toBe(true); // Tier 2 only mentions it in prose
+    expect(read('functions/api/usage.ts').includes('case-endpoint')).toBe(false);
+  });
+});
+
+describe('the lane is where Work Control says it is', () => {
+  it('runs from its own worktree, not the shared checkout', () => {
+    // A cheap sanity line: these tests read the tree they live in, so a stale copy running from
+    // somewhere else would silently prove the wrong files.
+    expect(relative(ROOT, resolve(fileURLToPath(import.meta.url), '..', '..'))).toBe('');
+  });
+});

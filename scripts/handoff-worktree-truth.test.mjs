@@ -163,18 +163,33 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, inject, it } from "vitest";
+
+// The fleet measurement moved to scripts/fleet-snapshot.mjs (#291) so the report a session reads and
+// the rule that judges it are one implementation. It used to live here, which meant the only way to
+// see the fleet was to run the guard.
+import {
+  atRiskCarriers,
+  countAheadVia,
+  liveCarriers,
+  originHeads,
+  snapshot,
+  trustedExclusions,
+  unmeasuredCarriers,
+} from "./fleet-snapshot.mjs";
+import { ORIGIN_HEADS_KEY, providedLsRemote } from "./lib/vitest-global-setup.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const HANDOFF = join("docs", "SESSION_HANDOFF.md");
 
 const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
-// Reaching origin is the one thing in this file that leaves the machine, so it is the one call that
-// gets a deadline: a remote that hangs must read as unreachable, never as a slow guard.
-const TALK_TO_ORIGIN = { cwd: ROOT, encoding: "utf8", timeout: 10_000 };
-
-const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+// Spelled counts, to twenty. It stopped at twelve until 2026-08-27, when the machine reached
+// thirteen checkouts and rule B reported "states no worktree count" -- a FALSE diagnosis: the
+// doc stated one, in a word the map could not read, and the message sent the next reader looking
+// for a missing sentence instead of a stale number. A word list that silently returns null past
+// its own end is the defect, so the range is what got fixed.
+const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20 };
 
 /**
  * The one bullet that describes THIS machine's checkouts. Both rules read from it rather than from
@@ -221,13 +236,26 @@ export function statedWorktreeCount(markdown) {
  * would be dropped; that costs rule D one name and is the safe direction — the alternative is the
  * gate this defect already produced, red against a doc that is correct.
  */
-export function branchesClaimedUnmerged(markdown, isTrackedPath = () => false) {
-  const bullet = repoStateBullet(markdown);
-  if (!bullet) return [];
-  return [...bullet.matchAll(/`((?:lane|feat|fix|agent|docs|claude|codex|design|tooling|recovery)\/[A-Za-z0-9._/-]+)`/g)]
+/**
+ * Every branch-shaped code span in a piece of text, minus the ones that are really tracked paths.
+ *
+ * Split out of `branchesClaimedUnmerged` for #291, because the two callers now want different
+ * corpora: rule A still judges only what the repo-state bullet CLAIMS, while rule D bans a lane name
+ * anywhere in the handoff at all. Scoping D to the bullet would have left the ban trivially evadable
+ * — the bullet is found by the phrase "not on main", so a fleet database written without that
+ * sentence would be invisible to the rule that exists to stop fleet databases.
+ */
+export function laneNamesIn(text, isTrackedPath = () => false) {
+  return [...text.matchAll(/`((?:lane|feat|fix|agent|docs|claude|codex|design|tooling|recovery)\/[A-Za-z0-9._/-]+)`/g)]
     .map((m) => m[1])
     .filter((v, i, a) => a.indexOf(v) === i)
     .filter((name) => !isTrackedPath(name));
+}
+
+export function branchesClaimedUnmerged(markdown, isTrackedPath = () => false) {
+  const bullet = repoStateBullet(markdown);
+  if (!bullet) return [];
+  return laneNamesIn(bullet, isTrackedPath);
 }
 
 /**
@@ -313,40 +341,7 @@ export function carriersMissingFromBullet(bullet, carriers) {
 }
 
 
-/**
- * `countAhead` carrying the one semantic that matters: a count that could not be TAKEN is `null`,
- * not `0`. Built from an injected runner so the total-failure path is falsifiable through the same
- * seam the rule itself uses — a try/catch written inline in the test body could only ever be read,
- * never exercised.
- */
-export function countAheadVia(runner) {
-  return (committish) => {
-    try {
-      const raw = String(runner(committish)).trim();
-      const n = Number(raw);
-      return raw !== "" && Number.isFinite(n) ? n : null;
-    } catch {
-      return null;
-    }
-  };
-}
 
-/**
- * Checkouts EITHER of whose distances could not be measured. `null` is deliberately not `0`: an
- * unfetched or unresolvable ref makes every count throw at once, and a `catch { return 0 }` would
- * turn a total measurement failure into "nothing carries anything" — a green rule that never read
- * the handoff. These fail the build instead.
- *
- * The test is `typeof !== "number"`, not `=== null`, and that is not pedantry. Rule C now fails on
- * the `unpushed` count, so a carrier object built without one carries `undefined` there; against
- * `=== null` that reads as measured, and `undefined > 0` then quietly excuses it from being named.
- * Absent and unmeasurable are the same fact — nobody counted — and both have to fail here.
- */
-export function unmeasuredCarriers(carriers) {
-  return carriers
-    .filter((c) => typeof c.commits !== "number" || typeof c.unpushed !== "number")
-    .map((c) => c.name);
-}
 
 /**
  * #333. Whether a landed branch's own local tip is still the FRESHEST thing to have touched the
@@ -512,125 +507,9 @@ const landingCommitOnMain = (tip) => {
   }
 };
 
-/**
- * `git worktree list --porcelain` -> [{ name, commits, unpushed }]. TWO counts, because they answer
- * two different questions and rule C needs them apart: `commits` is distance from `origin/main`
- * (does this checkout still have a purpose), `unpushed` is distance from every remote (can this
- * work be LOST). Exported so the TOTAL-measurement-failure path can be falsified against the real
- * porcelain of this machine rather than only against a stub: pass a counter that throws and every
- * carrier must come back unmeasured, never zero.
- */
-export function liveCarriers(list, countAhead, countUnpushed) {
-  // Both runners are required, and the throw is the point. An optional second counter would arrive
-  // as `undefined` wherever a caller forgot it, `undefined > 0` is false, and rule C would then have
-  // nothing to name and go green — the exact inert shape a review already caught in this rule once.
-  if (typeof countAhead !== "function" || typeof countUnpushed !== "function") {
-    throw new Error("liveCarriers needs both an ahead-of-main and an unpushed counter");
-  }
-  return list
-    .split(/\r?\n\s*\r?\n/)
-    .map((block) => block.split(/\r?\n/).filter(Boolean))
-    .filter((lines) => lines.some((l) => l.startsWith("worktree ")))
-    .map((lines) => {
-      const path = lines.find((l) => l.startsWith("worktree ")).slice("worktree ".length);
-      const branchLine = lines.find((l) => l.startsWith("branch "));
-      const headLine = lines.find((l) => l.startsWith("HEAD "));
-      const branch = branchLine ? branchLine.slice("branch ".length).replace(/^refs\/heads\//, "") : null;
-      const committish = branch ?? (headLine ? headLine.slice("HEAD ".length) : null);
-      return {
-        path,
-        name: branch ?? path.split(/[\\/]/).filter(Boolean).pop(),
-        commits: committish ? countAhead(committish) : null,
-        unpushed: committish ? countUnpushed(committish) : null,
-      };
-    })
-    .filter((c) => c.name !== "main");
-}
 
-/**
- * The carriers rule C FAILS on: the ones holding commits that exist nowhere but this disk.
- *
- * `unpushed > 0` implies `commits > 0` — a commit no remote carries is not on `origin/main` either,
- * `origin/main` being a remote ref — so this is a strict subset of the reported carriers, and the
- * naming matcher's own `commits > 0` filter stays a harmless no-op over it rather than a second
- * opinion that could disagree with this one.
- */
-export function atRiskCarriers(carriers, trusted) {
-  // #312 F5. `null` means origin could not be asked, and the first cut of #312 answered that by
-  // falling back to "name every checkout ahead of origin/main". That is fail-closed in the strict
-  // sense — the peer review measured it as a superset, 14 names covering the 2 real ones — but it
-  // fails by blaming the handoff for names that are every one of them fully pushed. The refusal is
-  // the point: an unmeasured origin must not be convertible into a list of names, in this rule or
-  // in any later caller that no longer remembers why.
-  if (trusted !== null && !Array.isArray(trusted)) {
-    throw new Error("atRiskCarriers needs the trusted exclusion set, or an explicit null (#312 F5)");
-  }
-  if (trusted === null) {
-    throw new Error(
-      "atRiskCarriers refuses to name carriers without a trusted exclusion set (#312 F5): origin " +
-        "could not be asked, so nothing here distinguishes a commit that exists only on this disk " +
-        "from one origin already has. Report the unmeasured origin; do not name branches.",
-    );
-  }
-  return carriers.filter((c) => c.unpushed > 0);
-}
 
-/**
- * origin's branch names as origin currently reports them. `null` means origin could not be asked.
- *
- * WHY THIS EXISTS, and it is the correction that kept #312 from shipping a fail-OPEN rule. The
- * obvious way to ask "is this commit on a remote" is `rev-list --not --remotes`, but `--remotes`
- * reads `refs/remotes/*`, which is the last FETCH, not origin. A ref origin no longer has but the
- * local cache still holds excludes commits that exist nowhere else — the count comes back 0 and the
- * checkout holding the only copy reports clean.
- *
- * That is not a hypothetical: it is this repo's routine post-merge sequence. Land the PR, prune the
- * ref on origin, and any checkout still sitting on that lane is now laundered to zero until someone
- * fetches with `--prune`. Caught by the peer review on #312, which reproduced it in a scratch repo,
- * and it is the same confusion `scripts/branch-disposition-audit.mjs` names at its own line 122 —
- * reading an unfetched ref cache as the remote is what that whole file exists to stop.
- *
- * An empty answer is `null`, not "origin has no branches": origin always has at least `main`, so an
- * empty read is a broken measurement, and this file's standing rule is that those never read as
- * clean.
- */
-export function originHeads(runner) {
-  try {
-    const names = String(runner())
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => line.split(/\s+/)[1])
-      .filter(Boolean)
-      .map((ref) => ref.replace(/^refs\/heads\//, ""));
-    return names.length ? names : null;
-  } catch {
-    return null;
-  }
-}
 
-/**
- * The remote-tracking refs it is SOUND to exclude: the cached ones origin still has. `null` when
- * origin could not be asked, or when the intersection is empty — both mean "no trustworthy
- * exclusion set", and the caller REFUSES (fails the assertion rather than falling back to the
- * pre-#312 measurement or silently excluding nothing and calling every checkout at risk).
- *
- * Only the cache having a ref origin LACKS is dangerous. The cache being BEHIND origin is safe in
- * the other direction: an older cached sha excludes less, so the at-risk count over-reports, and
- * over-reporting only ever asks for another name in the bullet.
- *
- * Out of scope and stated rather than silently assumed: a cached ref whose sha origin has FORCE-
- * REPLACED shares a name with a live ref and passes this check while pointing at commits origin may
- * no longer reach. Nothing local can distinguish that from a stale-but-ancestral cache, and
- * force-pushing is owner-gated in this repo, so it is supervised rather than routine.
- */
-export function trustedExclusions(cachedTrackingRefs, liveOriginHeads) {
-  if (liveOriginHeads === null) return null;
-  const live = new Set(liveOriginHeads);
-  const trusted = cachedTrackingRefs
-    .filter((ref) => ref !== "origin" && ref !== "origin/HEAD")
-    .filter((ref) => live.has(ref.replace(/^origin\//, "")));
-  return trusted.length ? trusted : null;
-}
 
 /**
  * Test-only. Builds a real (if tiny) ancestor-or-equal check from an explicit descendant map, so a
@@ -708,6 +587,9 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(statedWorktreeCount("- **Seven worktrees, all spent.** None is mid-flight;")).toBe(7);
     expect(statedWorktreeCount("- **Eleven worktrees besides `main`; six are spent**")).toBe(11);
     expect(statedWorktreeCount("- **11 worktrees** besides main")).toBe(11);
+    // Past the old end of the word list — the case that reported "no count stated" in 2026-08-27.
+    expect(statedWorktreeCount("- **Thirteen worktrees besides `main`**")).toBe(13);
+    expect(statedWorktreeCount("- **Twenty worktrees besides `main`**")).toBe(20);
     expect(statedWorktreeCount("No claim about checkouts here.")).toBe(null);
     expect(
       branchesClaimedUnmerged("- **A; six are spent but FOUR still carry work that is not on main** —\n  `lane/a` and `feat/b`."),
@@ -954,12 +836,17 @@ describe("the handoff tells the truth about the worktrees", () => {
 
   it("A: every branch it calls unmerged is genuinely not on origin/main", () => {
     const claimed = branchesClaimedUnmerged(markdown, isTrackedPath);
-    expect(claimed.length, `${HANDOFF} names no unmerged branches — did the bullet get reworded?`).toBeGreaterThan(0);
-    // Not inert: at least one named branch must be a ref this checkout can actually judge.
-    expect(
-      claimed.filter(refExists).length,
-      `${HANDOFF} names ${claimed.length} unmerged branch(es) and this checkout resolves none of them on origin — the rule would pass without judging anything.`,
-    ).toBeGreaterThan(0);
+    // #291 removed the two floors that used to stand here ("names at least one branch", "resolves at
+    // least one of them"). They were insurance against the doc going quiet, and rule D is now that
+    // insurance pointing the other way: the handoff must name NO lane, so a floor demanding one
+    // could only be satisfied by reintroducing the fleet database this train deleted. A rule cannot
+    // require the thing its neighbour forbids. What A still does is unchanged and unweakened — any
+    // branch that does appear is judged — and its own judgment stays falsified below against stubs,
+    // which is where a green run's evidence actually comes from.
+    if (claimed.length === 0) {
+      console.log("rule A: the handoff names no branches (rule D's ban), so there is nothing to judge this run");
+      return;
+    }
     // #333: same one-cycle grace as rule D, derived the same way, off `origin/<b>` because that is
     // what THIS rule resolves landedness from — see `freshestDocEditOnMain` above for why a single
     // freshest-edit commit serves both rules.
@@ -987,200 +874,169 @@ describe("the handoff tells the truth about the worktrees", () => {
     ).toEqual([]);
   });
 
-  it("B: a stated worktree count matches this machine", () => {
-    const live = git("worktree", "list", "--porcelain").split(/\r?\n/).filter((l) => l.startsWith("worktree ")).length;
-    if (live <= 1) {
-      // Vacuous here by construction. Say it out loud rather than reporting a pass.
-      expect(live).toBe(1);
-      return;
-    }
+    // INVERTED by #291. It used to read "a stated worktree count matches this machine", and that was
+  // the single most expensive sentence in the repo. The fleet moves every few minutes: one lane
+  // adding a worktree turned the number red in every OTHER lane's pre-push gate, so the next lane to
+  // push had to edit global prose about a fleet it had not touched -- and then rebase, because
+  // someone else had just done the same. Eight of eight open PRs on 2026-09-02 carried an edit to
+  // this file, almost none of them about their own subject.
+  //
+  // The count was never wrong to WANT; it was wrong to STORE. `node scripts/fleet-snapshot.mjs`
+  // prints it on demand, from git, and cannot be stale. So the rule now bans the stored number
+  // rather than checking it, and what it protects is the same thing it always protected: nobody
+  // reading a total that was true for somebody else, some time ago.
+  it("B: the handoff stores no worktree count — it says how to take one", () => {
     const stated = statedWorktreeCount(repoStateBullet(markdown) ?? markdown);
-    expect(stated, `${HANDOFF} states no worktree count; nothing to check.`).not.toBe(null);
     expect(
       stated,
-      `${HANDOFF} says ${stated} worktrees; this machine has ${live - 1} besides main. Re-derive it — ` +
-        `the previous handoff's number is not evidence, and the same paragraph tells the reader to reset them.`,
-    ).toBe(live - 1);
+      `${HANDOFF} states a worktree count (${stated}). A number beside a fleet this volatile is a ` +
+        `race, not a record: every lane that adds or removes a checkout makes it false for every ` +
+        `other lane's gate, and the lane that pays is whichever one pushes next. Delete it and ` +
+        `point at \`node scripts/fleet-snapshot.mjs\`, which measures the fleet at the moment it is asked.`,
+    ).toBe(null);
+    // Not inert: the parser must still be able to FIND a count, or this rule would pass on a doc
+    // full of them simply because it had stopped reading. Proven against a string, not the doc.
+    expect(statedWorktreeCount("**11 worktrees** besides the canonical checkout")).toBe(11);
   });
 
-  it("C: every checkout carrying commits is named — including one with no branch at all", () => {
-    const list = git("worktree", "list", "--porcelain");
-    const live = list.split(/\r?\n/).filter((l) => l.startsWith("worktree ")).length;
-    if (live <= 1) {
+    // NARROWED by #291, and the narrowing is what closed the first-push trap. The rule used to demand
+  // that every checkout holding commits on no remote be NAMED in the handoff bullet. A lane about to
+  // make its very first push is exactly that checkout -- its branch is not on origin yet -- so the
+  // gate red-flagged the push that would have answered its own complaint, and the only way through
+  // was to write the lane's own name into global prose that every other lane also had to edit.
+  //
+  // What actually decides whether the work can be LOST is not prose, it is whether a shared ref can
+  // find it. A local branch lives in the common .git: `git worktree remove` deletes the checkout and
+  // the branch survives, so the commits are still reachable and still pushable. A DETACHED head
+  // lives only in that worktree's own directory -- remove the checkout and the last thing that knew
+  // those commits existed is gone. That second shape is the one this rule was written for, and it is
+  // still invisible to every other audit in this repo, because it has no ref for one to read.
+  //
+  // So the failure narrows to the branchless carrier, and the remedy narrows with it: give the work
+  // a ref (`git branch <name> <sha>`) or push it. Neither is a shared write. Everything else the old
+  // rule reported is still measured and still printed every run -- by scripts/fleet-snapshot.mjs,
+  // which is the same code -- it just no longer bills an unrelated lane for saying so.
+  it("C: work only a removable checkout can find must be given a ref", () => {
+    // #339: origin is asked ONCE, in the main process before the worker pool exists, by
+    // scripts/lib/vitest-global-setup.mjs; its answer arrives here through vitest's provide/inject.
+    // Asked from inside the pool, this file competed with 400 others for the same cores, and a
+    // `git ls-remote` that lost its slice read as an unreachable origin and redded the whole gate on
+    // a machine that was online throughout. null is the setup's refusal and stays one below;
+    // undefined means the setup did not run (a bare vitest pointed elsewhere), and then the snapshot
+    // measures for itself, exactly as before.
+    const s = snapshot({ git, lsRemote: providedLsRemote(inject(ORIGIN_HEADS_KEY)) });
+    if (s.total <= 1) {
       // A one-checkout clone has nothing to compare, exactly as in rule B. Say so; do not pass quietly.
-      expect(live).toBe(1);
+      expect(s.total).toBe(1);
       return;
     }
-    // Memoised because this rule counts the same committish up to three times — once for the live
-    // carriers, once for the unpushed shortcut, once for the half-blind falsification — and each
-    // repeat is a real subprocess on a 32-checkout fleet. Pure within a run: nothing here writes.
-    const aheadCache = new Map();
-    const countAheadOnce = countAheadVia((committish) => git("rev-list", "--count", `origin/main..${committish}`));
-    const countAhead = (committish) => {
-      if (!aheadCache.has(committish)) aheadCache.set(committish, countAheadOnce(committish));
-      return aheadCache.get(committish);
-    };
-
-    // The loss question, and the only one this rule fails on. The exclusion set is NOT `--remotes`:
-    // that is the last fetch, and a pruned-at-origin ref lingering in it laundries genuinely
-    // unpushed commits to zero — see `originHeads` above for the measured reproduction.
-    const cached = git("for-each-ref", "--format=%(refname:short)", "refs/remotes/origin")
-      .split(/\r?\n/)
-      .filter(Boolean);
-    // Bounded: an origin that hangs rather than refusing would otherwise eat this test's whole
-    // budget and time out, which reads as a broken guard instead of an unreachable remote.
-    const trusted = trustedExclusions(
-      cached,
-      originHeads(() => execFileSync("git", ["ls-remote", "--heads", "origin"], TALK_TO_ORIGIN).trim()),
-    );
-    // Offline, or no cached ref origin still has. The pre-#312 fallback named every checkout ahead
-    // of origin/main here; #312 F5 removed it. See the rule header — it is fail-closed but it fails
-    // by blaming the doc for names that cannot be lost, and a wrong cause costs more than a red.
+    // Offline, or no cached ref origin still has. Fail-closed, and deliberately NOT by falling back
+    // to naming every checkout ahead of origin/main (#312 F5): that is strictly more naming, but it
+    // reds while blaming the handoff for checkouts that are every one of them fully pushed.
     expect(
-      trusted,
+      s.trusted,
       `rule C cannot reach origin, so it cannot tell a commit that exists only on this disk from one ` +
-        `origin already has — which is the only question this rule asks. It deliberately does NOT ` +
-        `fall back to naming every checkout ahead of origin/main (#312 F5): that is strictly more ` +
-        `naming and so fail-closed, but it reds while blaming ${HANDOFF} for names that are every ` +
-        `one of them fully pushed. Fetch origin and re-run.`,
+        `origin already has -- which is the only question this rule asks. Fetch origin and re-run.`,
     ).not.toBeNull();
-    // The shortcut below is a theorem, not a guess, and this is its premise: origin/main is one of
-    // the trusted refs, so a checkout holding nothing beyond origin/main holds nothing beyond the
-    // superset either. Asserted rather than assumed — if it ever stops holding, the shortcut would
-    // silently start reporting unmeasured carriers as safe.
+    // The shortcut inside the snapshot is a theorem, not a guess, and this is its premise: origin/main
+    // is one of the trusted refs, so a checkout holding nothing beyond origin/main holds nothing
+    // beyond the superset either. Asserted rather than assumed -- if it ever stops holding, the
+    // shortcut would silently start reporting unmeasured carriers as safe.
     expect(
-      trusted,
+      s.trusted,
       "rule C's ahead-of-main shortcut is only sound while origin/main is trusted; it is not.",
     ).toContain("origin/main");
-    const countUnpushedVia = countAheadVia((committish) =>
-      git("rev-list", "--count", committish, "--not", ...trusted),
-    );
-    // Skip the second subprocess for the checkouts the first count already settled. On this fleet
-    // that is 18 of 32, and with the memoised ahead-count above it takes rule C from 96 git spawns
-    // to 46 — the cost that timed this test out at 18.2s against vitest's 15s default when the
-    // second counter was added, blocking the very push that carries the fix.
-    const countUnpushed = (committish) => (countAhead(committish) === 0 ? 0 : countUnpushedVia(committish));
-    const carriers = liveCarriers(list, countAhead, countUnpushed);
-    // The inert path, falsified LIVE rather than merely described: the same porcelain, counted by a
-    // runner that fails the way an unfetched ref fails, must come back unmeasured. The second line
-    // is the shape this rule shipped with and a review caught — every carrier reading as spent, so
-    // the rule names nothing and goes green without ever opening the handoff. BOTH counters are
-    // blinded in turn, because after #312 a working ahead-count with a broken unpushed-count would
-    // produce exactly that same green silence through the newer of the two seams.
+    // The inert path, falsified LIVE against the same porcelain rather than merely described: counted
+    // by a runner that fails the way an unfetched ref fails, every carrier must come back unmeasured.
+    // BOTH counters are blinded in turn, because a working ahead-count with a broken unpushed-count
+    // produces the same green silence through the newer of the two seams (#312).
     const throws = countAheadVia(() => { throw new Error("unknown revision"); });
-    const blind = liveCarriers(list, throws, throws);
+    const blind = liveCarriers(s.list, throws, throws);
     expect(blind.length).toBeGreaterThan(0);
     expect(unmeasuredCarriers(blind).length).toBe(blind.length);
-    expect(carriersMissingFromBullet("", blind)).toEqual([]);
-    expect(atRiskCarriers(blind, trusted)).toEqual([]);
-    const halfBlind = liveCarriers(list, countAhead, throws);
+    expect(atRiskCarriers(blind, s.trusted)).toEqual([]);
+    const halfBlind = liveCarriers(s.list, () => 1, throws);
     expect(unmeasuredCarriers(halfBlind).length).toBe(halfBlind.length);
-    expect(atRiskCarriers(halfBlind, trusted)).toEqual([]);
+    expect(atRiskCarriers(halfBlind, s.trusted)).toEqual([]);
     // The inert path FIRST. If origin/main cannot be resolved, every count fails at once and a rule
-    // that read that as zero would go green without ever opening the handoff.
-    const unmeasured = unmeasuredCarriers(carriers);
+    // that read that as zero would go green without ever looking at a checkout.
     expect(
-      unmeasured,
-      `rule C could not measure ${unmeasured.length} checkout(s) against origin/main: ${unmeasured.join(", ")}. ` +
-        `That is a broken measurement, not an empty result — fetch origin. Counting it as zero is how ` +
-        `this rule would grow the very blind spot it was added to close.`,
+      s.unmeasured,
+      `rule C could not measure ${s.unmeasured.length} checkout(s) against origin/main: ` +
+        `${s.unmeasured.join(", ")}. That is a broken measurement, not an empty result -- fetch ` +
+        `origin. Counting it as zero is how this rule would grow the very blind spot it closes.`,
     ).toEqual([]);
-    const atRisk = atRiskCarriers(carriers, trusted);
 
     // The exclusion set, falsified LIVE. Every exempt carrier is exempt BECAUSE some trusted ref
-    // covers it, and this proves that ref is doing the work rather than the count being zero for
-    // some unrelated reason: drop one carrier's own origin ref — exactly what pruning it at origin
-    // does — and its count must rise off zero. Measured 0 -> 5 on `lane/vacuous-guards-304` when
-    // this was written. Without this the F1 fix could rot into decoration and the fail-open would
-    // come back silently, which is how the first draft of this rule went wrong in the first place.
+    // covers it, and this proves that ref is doing the work rather than the count being zero for some
+    // unrelated reason: drop one carrier's own origin ref -- exactly what pruning it at origin does --
+    // and its count must rise off zero. Without this the #312 F1 fix could rot into decoration.
     {
-      const exempt = carriers.find((c) => c.commits > 0 && c.unpushed === 0 && trusted.includes(`origin/${c.name}`));
+      const exempt = s.checkouts.find(
+        (c) => c.commits > 0 && c.unpushed === 0 && s.trusted.includes(`origin/${c.name}`),
+      );
       if (exempt) {
-        const without = trusted.filter((ref) => ref !== `origin/${exempt.name}`);
+        const without = s.trusted.filter((ref) => ref !== `origin/${exempt.name}`);
         const raw = Number(String(git("rev-list", "--count", exempt.name, "--not", ...without)).trim());
         expect(
           raw,
           `dropping origin/${exempt.name} from the trusted set left its unpushed count at ${raw}. ` +
             `The exclusion set is not driving the verdict, so a ref pruned at origin would be ` +
-            `silently trusted anyway — the exact fail-open #312 F1 exists to prevent.`,
+            `silently trusted anyway -- the exact fail-open #312 F1 exists to prevent.`,
         ).toBeGreaterThan(0);
       } else {
         console.log("rule C: no exempt carrier on a named origin ref, so the exclusion set is unfalsified this run");
       }
     }
-    // Say what the rule DID, every run. A fully-pushed fleet makes the failing set empty, and after
-    // #312 that is the common case rather than the exception — an empty set reported as silence
-    // would be indistinguishable from a rule that had stopped looking.
-    const ahead = carriers.filter((c) => c.commits > 0);
+
+    // Say what the rule DID, every run. After #291 the common case is an empty failing set, and an
+    // empty set reported as silence is indistinguishable from a rule that had stopped looking.
+    const stranded = s.atRisk.filter((c) => !c.branch);
     console.log(
-      `rule C: ${carriers.length} checkout(s), ${ahead.length} ahead of origin/main, ` +
-        `${ahead.length - atRisk.length} of those fully pushed and exempt, ${atRisk.length} at risk` +
-        (atRisk.length ? `: ${atRisk.map((c) => `${c.name} (+${c.unpushed})`).join(", ")}` : ""),
+      `rule C: ${s.checkouts.length} checkout(s), ${s.ahead.length} ahead of origin/main, ` +
+        `${s.atRisk.length} holding commits on no remote ` +
+        `(${s.atRisk.length - stranded.length} of those on a branch, which survives worktree removal), ` +
+        `${stranded.length} stranded on a detached head`,
     );
-    if (!atRisk.length) {
-      // Genuinely nothing to name: every count succeeded, and everything any checkout holds is on a
-      // remote. Non-vacuity is still asserted — a carrier list that came back EMPTY would mean the
-      // porcelain parser broke, which is a different fact entirely and must not read as safety.
-      expect(carriers.length).toBeGreaterThan(0);
-      return;
-    }
-    const missing = carriersMissingFromBullet(repoStateBullet(markdown), atRisk);
+    // Non-vacuity: an EMPTY carrier list would mean the porcelain parser broke, which is a different
+    // fact entirely and must never read as safety.
+    expect(s.checkouts.length).toBeGreaterThan(0);
     expect(
-      missing,
-      `${HANDOFF} does not name ${missing.length} checkout(s) holding commits that exist on NO remote: ${missing.join(", ")}. \nThese are the ones that go with the worktree if it is deleted. A detached checkout has no ref, so no origin-facing audit can see it — this bullet is the only place it can be recorded.`,
+      stranded.map((c) => `${c.name} (+${c.unpushed}) at ${c.path}`),
+      `these checkouts hold commits that exist on NO remote AND on no branch, so the only thing that ` +
+        `knows they exist is the worktree directory itself. Deleting it loses them, and no ` +
+        `origin-facing audit can see them first. Give the work a ref -- \`git branch <name> <sha>\` ` +
+        `-- or push it. Recording it in prose is not a fix: prose does not make a commit reachable.`,
     ).toEqual([]);
     // Declared, not discovered. This rule walks every checkout on the machine and asks origin one
-    // question; under the full 407-file suite that is comfortably past vitest's 15s default, and
-    // finding that out from a timeout at the pre-push gate is how the fix nearly failed to ship.
+    // question; under the full suite that is comfortably past vitest's 15s default, and finding that
+    // out from a timeout at the pre-push gate is how the fix nearly failed to ship.
   }, 60_000);
 
-  it("D: every branch the bullet names still carries — a landed lane's name must leave with it", () => {
-    const live = git("worktree", "list", "--porcelain").split(/\r?\n/).filter((l) => l.startsWith("worktree ")).length;
-    if (live <= 1) {
-      // A one-checkout clone has no local lanes to resolve, exactly as in B and C. Say so out loud.
-      expect(live).toBe(1);
-      return;
-    }
-    const claimed = branchesClaimedUnmerged(markdown, isTrackedPath);
-    // Not inert: rule A already insists the bullet names at least one branch; if that ever loosens,
-    // this rule must not go quietly green on an empty list.
-    expect(claimed.length, `${HANDOFF} names no branches in the repo-state bullet — rule D has nothing to judge.`).toBeGreaterThan(0);
-    const countAhead = countAheadVia((committish) => git("rev-list", "--count", `origin/main..${committish}`));
-    // #333's grace, derived live the way rule C already derives its own trust: never from what the
-    // bullet claims, only from git. `freshestDocEditOnMain()` is the newest commit reachable from
-    // `origin/main` that touched the handoff at all — computed ONCE, because every claimed branch
-    // is judged against the same freshest editor. `null` if that history could not be read, which
-    // must fail closed (no grace handed out) rather than read as "everything is fresh".
-    const freshestDocEdit = freshestDocEditOnMain();
-    // Recorded from INSIDE the predicate, not re-derived after, so logging never costs a second
-    // round of git spawns per branch — this rule has no fleet-wide loop to amortize the way rule
-    // C does, but there is no reason to pay for it twice anyway.
-    const gracedNames = [];
-    const isGraced = (b) => {
-      if (freshestDocEdit === null) return false;
-      let tip = null;
-      try {
-        tip = git("rev-parse", `refs/heads/${b}`);
-      } catch { /* stays null: an unresolvable ref is staleNamedLanes' OWN earlier finding, not this one's to grace */ }
-      // Round 2: graced against the LANDING (`landingCommitOnMain`), not the raw tip — see that
-      // function's doc comment for why a conflict-resolving merge needs this.
-      const result = tip !== null && landedNameIsGraced(landingCommitOnMain(tip), freshestDocEdit, isAncestorOrEqual);
-      if (result) gracedNames.push(b);
-      return result;
-    };
-    const found = staleNamedLanes(claimed, localRefExists, countAhead, isGraced);
-    // Say what graced, every run — silence here would be indistinguishable from a grace mechanism
-    // that stopped being asked anything, exactly the concern #312's console.log lines exist to
-    // answer for rule C.
-    if (gracedNames.length) {
-      console.log(`rule D: ${gracedNames.length} landed name(s) graced this cycle (#333), remove on the next doc edit: ${gracedNames.join(", ")}`);
-    }
+    // INVERTED by #291, same reason as B and with a sharper edge. The old rule read "every branch the
+  // bullet names still carries", which is a maintenance contract: name your lane when it starts,
+  // remove it when it lands, and repair it when somebody ELSE lands. Every one of those writes hit
+  // one shared paragraph, so lanes with nothing in common serialized behind it.
+  //
+  // What the rule was protecting -- a next session told to preserve work that has already landed --
+  // is not protected by policing the names. It is protected by not carrying them: a name that is
+  // never written cannot go stale. Rule A stays as written and judges any name that does appear, so
+  // this ban and that rule fail in opposite directions and neither can be satisfied by silence.
+  it("D: the handoff names no lanes — a name here is a claim that rots", () => {
+    const claimed = laneNamesIn(markdown, isTrackedPath);
     expect(
-      found,
-      `${HANDOFF} presents these as lanes to preserve, but on this machine they are not:\n` +
-        found.map((f) => `  - ${f.name}: ${f.why}`).join("\n") +
-        `\nA landed writing lane is never work to preserve — remove its name from the bullet in the same train that lands it.`,
+      claimed,
+      `${HANDOFF} names ${claimed.length} branch(es): ${claimed.join(", ")}. ` +
+        `A lane name in global prose is a fact about somebody else's work that somebody else has to ` +
+        `come back and repair -- when it lands, when it is renamed, when it is abandoned. The live ` +
+        `set is a git question: \`node scripts/fleet-snapshot.mjs\`, or \`git worktree list\`. If a ` +
+        `specific branch genuinely needs owner attention, that belongs on its issue or in ` +
+        `docs/dispositions/, one file per ref, where only its own lane writes.`,
     ).toEqual([]);
+    // Not inert: the extractor must still be able to SEE a branch name, or the ban would read as
+    // satisfied by a parser that had stopped matching. Proven against a string, not the doc — and
+    // against a string with no bullet in it, which is the corpus this rule actually reads now.
+    expect(laneNamesIn("a paragraph mentioning `lane/example-1` in passing")).toEqual(["lane/example-1"]);
   });
   it("E: every containment claim between two branches is true by --is-ancestor", () => {
     const live = git("worktree", "list", "--porcelain").split(/\r?\n/).filter((l) => l.startsWith("worktree ")).length;

@@ -1,5 +1,11 @@
 # Knowledge Layer — implementation notes (2026-06-05)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical implementation record, not
+> current product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Shipped-fact and schema provenance must be
+> re-verified against code and [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 Companion to `2026-06-05-knowledge-layer-chapter.md` (the owner directive). Records the schema
 decisions, how the future gated tier slots in, debt knowingly taken, and edge cases the next
 session should know. Source of truth for facts remains `docs/ADVANCED_PERFORMANCE_BLACK_BOOK.md`

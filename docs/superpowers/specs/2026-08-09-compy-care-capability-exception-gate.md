@@ -1,5 +1,13 @@
 # Compy Care + Capability Exception Gate — Product and Architecture Specification
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The product hierarchy and priority claims in
+> this pre-rebirth specification — including “Compy Care” as the umbrella/primary product and
+> optimization as its secondary specialty — are historical, not current authority. Product identity
+> and direction now come from `docs/PRODUCT_CONSTITUTION.md`; its two flagship journeys are equal.
+> The capability, privacy, rollback, injection, and origin-control rules remain bounded technical
+> provenance only where they conform to the current supreme safety authority,
+> `docs/ARCHITECTURE_LOCKS.md`. Nothing below independently authorizes implementation or activation.
+>
 > **Status:** owner-approved direction; implementation-ready plan; runtime unchanged
 > **Date:** 2026-08-09
 > **Owner:** Kuya

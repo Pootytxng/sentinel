@@ -1,5 +1,10 @@
 # Design R&D options — Stark-HUD component sourcing (Cowork lane, 2026-07-06)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The instruction that picked options become
+> build tasks and the pre-rebirth design direction below are historical. Current experience law
+> comes from `docs/PRODUCT_CONSTITUTION.md`; research and license facts remain reference evidence,
+> not implementation authority.
+>
 > Owner directive: source WIDE, beyond React Bits. Two web-research agents surveyed the
 > 2025–26 landscape on 2026-07-06 (trending component libraries + the sci-fi/HUD/3D specialist
 > end), licenses verified where possible. Direction stays LOCKED (operator-console Stark-HUD,

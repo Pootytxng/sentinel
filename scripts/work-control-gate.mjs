@@ -1,20 +1,183 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { threadLease } from "../tools/entry/claim.mjs";
 
-// A commit id, not a label. `abc123` is neither — an abbreviated or invented head cannot be matched
-// against the repository, and every binding below is only as good as the head it binds to.
 const FULL_SHA = /^[0-9a-f]{40}$/;
 
-/** The head the repository is ACTUALLY on, or null when git can't answer. Never trust the receipt's
-    own `currentHead`: it is written by the same actor that is asking for authorization, so on its
-    own it authorizes a transition against a head that may not exist. */
+/** Resolve the repository head independently of the receipt asking for authorization. */
 export function resolveRepoHead() {
   try {
     return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// RECEIPT PROVENANCE
+// Proof is useful only when the exact head is reachable from the canonical remote right now.
+// Remote-tracking refs are intentionally not authority because they are only the last fetch.
+// ---------------------------------------------------------------------------------------------
+
+export const CANONICAL_REPO = "Pootytxng/sentinel";
+
+export function canonicalRemoteName(remotes, repo = CANONICAL_REPO) {
+  const want = repo.toLowerCase();
+  const match = remotes.find((r) => {
+    const url = String(r?.url ?? "")
+      .toLowerCase()
+      .replaceAll("\\", "/")
+      .replace(/\/+$/, "")
+      .replace(/\.git$/, "");
+    return url.endsWith(`/${want}`) || url.endsWith(`:${want}`);
+  });
+  return match ? match.name : null;
+}
+
+export function parseRemotes(text) {
+  const seen = new Map();
+  for (const line of String(text).split(/\r?\n/)) {
+    const m = line.match(/^(\S+)\s+(\S+)\s+\((?:fetch|push)\)$/);
+    if (m && !seen.has(m[1])) seen.set(m[1], { name: m[1], url: m[2] });
+  }
+  return [...seen.values()];
+}
+
+export function remoteHeadShas(text) {
+  return [...String(text).matchAll(/^([0-9a-f]{40})\s+refs\/heads\/\S+$/gm)].map((m) => m[1]);
+}
+
+export function headProvenanceVia(runner) {
+  return (head) => {
+    let remotes;
+    try {
+      remotes = parseRemotes(runner(["remote", "-v"]));
+    } catch {
+      return { ok: false, why: "the remote list could not be read" };
+    }
+
+    const remote = canonicalRemoteName(remotes);
+    if (!remote) {
+      return {
+        ok: false,
+        why: `no remote points at ${CANONICAL_REPO}, so there is no canonical evidence to be reachable from`,
+      };
+    }
+
+    let live;
+    try {
+      live = remoteHeadShas(runner(["ls-remote", "--heads", remote]));
+    } catch {
+      return { ok: false, why: `${remote} could not be asked what it has` };
+    }
+    if (live.length === 0) return { ok: false, why: `${remote} reports no branches` };
+
+    const known = live.filter((sha) => {
+      try {
+        runner(["cat-file", "-e", `${sha}^{commit}`]);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (known.length === 0) {
+      return {
+        ok: false,
+        why: `none of ${remote}'s current branch tips are in this checkout — fetch ${remote} and re-run`,
+      };
+    }
+
+    try {
+      const beyond = Number(String(runner(["rev-list", "--count", head, "--not", ...known])).trim());
+      if (!Number.isFinite(beyond)) {
+        return { ok: false, why: `the reachability count against ${remote} could not be read` };
+      }
+      return beyond === 0
+        ? { ok: true, why: `reachable from ${remote}` }
+        : {
+            ok: false,
+            why:
+              `${beyond} commit(s) up to and including this head exist on no branch ${remote} ` +
+              `currently has. A local-only, fork-only or stale-cached commit is not evidence a ` +
+              `reviewer can fetch. Push this branch to ${remote} before using it for a transition`,
+          };
+    } catch {
+      return { ok: false, why: `the reachability count against ${remote} could not be taken` };
+    }
+  };
+}
+
+export const canonicalHeadProvenance = headProvenanceVia((args) =>
+  execFileSync("git", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 20_000,
+  }),
+);
+
+// ---------------------------------------------------------------------------------------------
+// A CLOSE ENDS THE LEASE (#411)
+// On this board, closing an issue and marking its item Done are one transition: the project's
+// "Item closed" workflow sets Done when the issue closes, and "Auto-close issue" closes the issue
+// when Done is set. Done tells every reader that no writer holds the item. On 2026-09-10 #283 was
+// closed while its lease was live, and it read Done for three and a half minutes before any
+// Handoff. So both transitions read the issue's thread first and refuse while a lease is live on
+// it. A thread that cannot be read refuses too, because an unknown lease is not a released one.
+// ---------------------------------------------------------------------------------------------
+
+const LEASE_ENDING_TRANSITIONS = new Set(["close-issue", "mark-done"]);
+
+/** The issue's comments in posting order, straight from GitHub. Throws when they cannot be read. */
+function readIssueComments(issue) {
+  const raw = execFileSync("gh", ["issue", "view", String(issue), "--repo", CANONICAL_REPO, "--json", "comments"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 20_000,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  const comments = JSON.parse(raw).comments;
+  if (!Array.isArray(comments)) throw new Error("gh returned no comment list");
+  return comments;
+}
+
+/** The issues a close names: one positive issue number, or a list of them. Anything else is null. */
+function issuesClosedBy(record) {
+  const named = Array.isArray(record?.issue) ? record.issue : [record?.issue];
+  return named.length > 0 && named.every((n) => Number.isInteger(n) && n > 0) ? named : null;
+}
+
+function leaseBlockers(record, issueComments) {
+  const issues = issuesClosedBy(record);
+  if (!issues) {
+    return [
+      `A ${record?.transition} receipt must name its issue (a positive issue number, or a list of them): ` +
+        "on this board that transition closes the issue and marks it Done, so the gate reads the issue's lease first.",
+    ];
+  }
+  const blockers = [];
+  for (const issue of issues) {
+    let lease;
+    try {
+      lease = threadLease(issueComments(issue));
+    } catch (error) {
+      const why = String(error instanceof Error ? error.message : error).split("\n")[0];
+      blockers.push(
+        `#${issue}'s thread could not be read (${why}), so whether its lease was released is unknown; ` +
+          "environment inability is a blocker, not a pass.",
+      );
+      continue;
+    }
+    if (lease.claim) {
+      blockers.push(
+        `#${issue} still has a live lease: the ownership claim posted ${lease.claim.postedAt} has no newer ` +
+          `Handoff releasing it. Closing the issue sets its item Done (the project's "Item closed" workflow), ` +
+          "which tells every reader that no writer holds it; #283 read Done that way on 2026-09-10. Post the " +
+          'Handoff first, ending "- Claim: released" (planRelease moves the item to Review), then close.',
+      );
+    }
+  }
+  return blockers;
 }
 
 const PROOF_DEPENDENT_TRANSITIONS = new Set([
@@ -35,7 +198,35 @@ const NON_PROOF_TRANSITIONS = new Set([
   "update-pr-description",
 ]);
 
-const IMPLEMENTATION_ACTORS = new Set(["claude-code", "codex"]);
+/** Eligible mutation/transition actors. Tool specialization is not jurisdiction. */
+export const IMPLEMENTATION_ACTORS = new Set([
+  "claude-code",
+  "codex",
+  "chatgpt-hq",
+  "cowork",
+]);
+
+// Review-only seats are valid reviewer identities but can never be mutation authors. Human-readable
+// context and evidence stay in independentReview.reviewerNote/evidence instead of being smuggled into
+// this identity token. Aliases resolve to their executor identity so spelling cannot manufacture
+// independence (for example, cowork-hq reviewing cowork-authored mutation).
+export const REVIEWER_ONLY_IDENTITIES = new Set([
+  "frontend-ipc-contract-auditor",
+  "rust-tauri-reviewer",
+  "self-reviewer",
+  "web-design-director",
+]);
+
+const REVIEWER_ALIASES = new Map([
+  ["cowork-hq", "cowork"],
+]);
+
+export function reviewerIdentityFor(value) {
+  const token = String(value ?? "").trim().toLowerCase();
+  if (!token) return null;
+  if (IMPLEMENTATION_ACTORS.has(token) || REVIEWER_ONLY_IDENTITIES.has(token)) return token;
+  return REVIEWER_ALIASES.get(token) ?? null;
+}
 
 const REQUIRED_INSPECTION = [
   "repository",
@@ -46,18 +237,43 @@ const REQUIRED_INSPECTION = [
   "liveProcesses",
 ];
 
+/**
+ * @deprecated Compatibility only for historical receipts/tests. Production dispatch MUST NOT use
+ * this function to choose an executor. Current routing is live/capacity-based under WORK_CONTROL.
+ * Search/guards keep this function out of selector/preflight/launcher decisions.
+ */
 export function defaultOwnerFor(kind) {
   if (kind === "implementation") return "claude-code";
   if (kind === "independent-review") return "codex";
   throw new Error(`unknown work kind: ${kind}`);
 }
 
-export function evaluateWorkControl(record, { resolveHead = resolveRepoHead } = {}) {
+const uniq = (xs) => [...new Set(xs)];
+
+/** All executors that mutated the proof delta, not merely the holder of the final lease. */
+export function mutationAuthorsFor(record) {
+  const supplied = Array.isArray(record?.mutationAuthors)
+    ? record.mutationAuthors.map((x) => String(x).trim()).filter(Boolean)
+    : [];
+  return uniq([String(record?.actor ?? "").trim(), ...supplied].filter(Boolean));
+}
+
+export function evaluateWorkControl(
+  record,
+  {
+    resolveHead = resolveRepoHead,
+    headProvenance = canonicalHeadProvenance,
+    issueComments = readIssueComments,
+  } = {},
+) {
   const blockers = [];
   const warnings = [];
 
-  if (!IMPLEMENTATION_ACTORS.has(record?.actor)) {
-    blockers.push("The implementation actor must be either claude-code or codex.");
+  const actor = String(record?.actor ?? "").trim();
+  if (!IMPLEMENTATION_ACTORS.has(actor)) {
+    blockers.push(
+      "The implementation actor must be a declared executor (claude-code, codex, chatgpt-hq, or cowork).",
+    );
   }
 
   if (
@@ -67,11 +283,21 @@ export function evaluateWorkControl(record, { resolveHead = resolveRepoHead } = 
     blockers.push(`Unknown work-control transition: ${record?.transition ?? "(missing)"}.`);
   }
 
-  if (!String(record?.explicitHandoff ?? "").trim()) {
-    blockers.push("Implementation ownership requires an explicit handoff recorded on the task.");
+  // New receipts call this leaseEvidence. Historical receipts called the same durable task record an
+  // explicitHandoff, so both remain readable while the runtime semantics move to mutation leases.
+  const leaseEvidence = String(record?.leaseEvidence ?? record?.explicitHandoff ?? "").trim();
+  if (!leaseEvidence) {
+    blockers.push(
+      "Implementation ownership requires durable lease evidence (historical receipts: an explicit handoff) recorded on the task.",
+    );
   }
-  if (record?.exclusiveWriter !== true) {
-    blockers.push("Implementation ownership requires one exclusive writer for the bounded scope.");
+
+  // Historical receipts use exclusiveWriter. New receipts should use overlapExclusive, because the
+  // invariant is exclusivity of overlapping bounded mutation, not a permanent single-model department.
+  if (record?.overlapExclusive !== true && record?.exclusiveWriter !== true) {
+    blockers.push(
+      "Implementation ownership requires one exclusive writer for the overlapping bounded scope (overlapExclusive).",
+    );
   }
 
   if (record?.inheritedWork === true) {
@@ -82,15 +308,26 @@ export function evaluateWorkControl(record, { resolveHead = resolveRepoHead } = 
     }
   }
 
+  // A declaration supplements the known actor; it cannot remove that actor from review checks.
+  if (record?.mutationAuthors !== undefined) {
+    if (!Array.isArray(record.mutationAuthors)) {
+      blockers.push("mutationAuthors must be an array when supplied.");
+    } else if (!record.mutationAuthors.some((author) => String(author).trim() === actor)) {
+      blockers.push("mutationAuthors must include the receipt actor when supplied.");
+    }
+  }
+  const authors = mutationAuthorsFor(record);
+  for (const author of authors) {
+    if (!IMPLEMENTATION_ACTORS.has(author)) {
+      blockers.push(`Unknown mutation author "${author}" in mutationAuthors.`);
+    }
+  }
+
   if (PROOF_DEPENDENT_TRANSITIONS.has(record?.transition)) {
     const currentHead = String(record?.currentHead ?? "").trim();
     const requiredGates = Array.isArray(record?.requiredGates) ? record.requiredGates : [];
     const gateResults = Array.isArray(record?.gateResults) ? record.gateResults : [];
 
-    // The head is checked against the repository BEFORE anything is bound to it. Without this the
-    // gate only proves internal consistency: a receipt that writes the same made-up SHA into
-    // `currentHead` and into every gate result passes every binding below and authorizes a
-    // transition whose proof was never run anywhere.
     if (!currentHead) {
       blockers.push("A proof-dependent GitHub transition requires the current head SHA.");
     } else if (!FULL_SHA.test(currentHead)) {
@@ -106,9 +343,17 @@ export function evaluateWorkControl(record, { resolveHead = resolveRepoHead } = 
             "can be bound to it; environment inability is a blocker, not a pass.",
         );
       } else if (actualHead !== currentHead) {
-        blockers.push(
-          `The receipt claims head ${currentHead}, but the repository is at ${actualHead}.`,
-        );
+        blockers.push(`The receipt claims head ${currentHead}, but the repository is at ${actualHead}.`);
+      } else {
+        const provenance = headProvenance(currentHead);
+        if (!provenance?.ok) {
+          blockers.push(
+            `The receipt is not durably reachable: ` +
+              `${provenance?.why ?? "provenance could not be established"}. A merge or close ` +
+              `receipt authorizes a transition on the canonical repository, so its evidence has ` +
+              `to survive this checkout.`,
+          );
+        }
       }
     }
 
@@ -150,19 +395,38 @@ export function evaluateWorkControl(record, { resolveHead = resolveRepoHead } = 
         warnings.push(`Independent review not practical: ${review.reason}`);
       }
     } else {
-      if (review?.writer !== record?.actor) {
+      const reviewerToken = String(review?.reviewer ?? "").trim();
+      const reviewer = reviewerIdentityFor(reviewerToken);
+
+      // Historical receipts explicitly named the final lease holder in review.writer. Preserve that
+      // consistency check when the field exists; new multi-author receipts may omit it and rely on
+      // mutationAuthors instead.
+      if (review?.writer && String(review.writer).trim().toLowerCase() !== actor) {
         blockers.push("The independent-review writer must match the receipt actor.");
       }
-      if (
-        review?.practical !== true ||
-        review?.status !== "passed" ||
-        !review?.reviewer ||
-        review?.reviewer === review?.writer
-      ) {
-        blockers.push("Final review must pass with a non-writing model whenever that review is practical.");
+
+      if (review?.practical !== true || review?.status !== "passed" || !reviewerToken) {
+        blockers.push(
+          "Final review must pass with a non-writing model/reviewer whenever that review is practical.",
+        );
       }
-      // Gates were bound to the head; the review has to be too. A review of an earlier head is a
-      // review of different code — the commits that came after it are exactly the unreviewed ones.
+
+      if (reviewerToken && !reviewer) {
+        blockers.push(
+          `Unknown reviewer identity "${reviewerToken}". Use a declared executor or reviewer-only identity; ` +
+            "put context and evidence in reviewerNote/evidence.",
+        );
+      }
+
+      if (reviewer && authors.includes(reviewer)) {
+        const identity = reviewerToken.toLowerCase() === reviewer
+          ? reviewer
+          : `${reviewerToken} (canonical identity ${reviewer})`;
+        blockers.push(
+          `Final review must pass with a non-writing model/reviewer: ${identity} is one of the mutation authors (${authors.join(", ")}).`,
+        );
+      }
+
       if (currentHead && review?.head !== currentHead) {
         blockers.push(
           `The independent review is recorded at ${review?.head ?? "no head"}, not the current head ` +
@@ -170,6 +434,10 @@ export function evaluateWorkControl(record, { resolveHead = resolveRepoHead } = 
         );
       }
     }
+  }
+
+  if (LEASE_ENDING_TRANSITIONS.has(record?.transition)) {
+    blockers.push(...leaseBlockers(record, issueComments));
   }
 
   return blockers.length > 0

@@ -13,9 +13,11 @@ Stack facts:
   `src-tauri/capabilities/`; config in `src-tauri/tauri.conf.json`.
 - Frontend: React + TypeScript under `src/`. IPC types must stay in sync across the boundary.
 - Judge from the SOURCE. `cargo build` and `cargo test` write to `target/` (artifact-mutating) and
-  are OUT of this read-only lane — defer running them to the implementing lane (Claude Code) and, in
-  your report, name the exact command that lane should run to confirm a finding. Reason about clippy
-  smells from the code rather than invoking it. Never fetch dependencies or assume network access.
+  are OUT of this read-only review run - defer running them to the current mutation-lease holder
+  (whichever executor holds the lease per docs/WORK_CONTROL.md; Codex itself may, in a write lane)
+  and, in your report, name the exact command that executor should run to confirm a finding.
+  Reason about clippy smells from the code rather than invoking it. Never fetch dependencies or
+  assume network access.
 
 Review rubric (report only what you can evidence from the code):
 1. Panic safety — flag `unwrap()`, `expect()`, indexing, and `?` that can crash a command;
@@ -38,6 +40,6 @@ Output: a prioritized list (Critical / Warning / Nit), each with file path, line
 a concrete suggested fix. End with a one-line verdict (safe to proceed / fix-before-merge). If the
 diff is unclear, say what you could not verify rather than guessing. Any finding that touches the
 mutation/rollback boundary (`actions.rs`, `history.rs`, gate flips, elevation) is the `mutation-gate`
-skill's territory — name it in your verdict and let the implementing lane run that checklist; and any
+skill's territory — name it in your verdict and let the mutation-lease holder run that checklist; and any
 defect you confirm is owed a permanent guard via `guard-forge` before its fix counts. Defer deep
 security-only audits to the `security` skill."""

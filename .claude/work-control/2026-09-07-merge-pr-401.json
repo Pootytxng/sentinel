@@ -1,0 +1,72 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Lease holder on #225 and sole mutation author of the proof delta. The lane's seven earlier commits (5ee0de97..3ab9b010) were authored by this same Claude Code lane in its 2026-09-03 sessions under the repository's then-configured identity `t <t@t>` (the identity 807 commits on main carry); the four commits made 2026-09-07 (d7fed835, 04ecb8c7, aed5bcac and the recreated merge) are authored claude-code <claude-code@desk.local> after GitHub refused the private-email identity (GH007). No Codex, Cowork or HQ mutation is in the delta. Landed by the same lane on the owner's 2026-09-07 order ('literally do this all yourself'); acceptance of #224/#225 stays the owner's — the PR says Part of, never Closes.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/225#issuecomment-5533306640",
+  "leaseNote": "Claim renewed until 2026-09-09 at https://github.com/Pootytxng/sentinel/issues/225#issuecomment-5578148417 (planRenew/execPlan, board 'Claim expires' updated). Work Control names this folder for #225 alone after the 2026-09-07 bookkeeping cleared the stale 'Worktree / branch' field on #337, #339 and #362 (each carries a note).",
+  "overlapExclusive": true,
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Executed from C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb (a git worktree of Pootytxng/sentinel, restored 2026-09-07 with `git worktree add` on the surviving local branch; core.hooksPath=.githooks) on claude/priority-order-parallel-productivity-ae19bb at exact head aed5bcac5e5710b467d8b4865f153bafea8a5615, git status --short empty, `.codex/config.toml` clean (the +dirty of the c82440a1 build is gone). origin/claude/priority-order-parallel-productivity-ae19bb == HEAD after the gated push; origin/main fa47d319 is an ancestor of HEAD (merged in aed5bcac). PR #401 OPEN, not draft, MERGEABLE/CLEAN, base main, head aed5bcac; no open PR is based on this branch (#400 is based on claude/persistent-marathon-bulk-work-9b5c95). No disposition record for this ref; PR #294's ref claude/compy-health-parity has one and is retired in the closeout. The session-root hook verified this conversation as the only live writer in this folder (compy-entry: session verified — #225). Live-process sweep via Get-Process (WMI has been hung on this PC since 2026-09-02, owner item A_wmi, so command lines are not readable): no cargo/vitest/rustc process; the node processes are this session's tooling, other Claude conversations' MCP servers and two Codex app processes, none rooted here per the hook's live-conversation check. Scope: scripts/scope-drift-gate.mjs OK — 49 changed paths since origin/main, every one inside the #225 claim; the delta touches nothing under src-tauri/.",
+  "transition": "merge-pr",
+  "currentHead": "aed5bcac5e5710b467d8b4865f153bafea8a5615",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "aed5bcac5e5710b467d8b4865f153bafea8a5615",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb/logs/verify-local-2026-09-08T03-12-03Z.log",
+      "summary": "438 frontend files passed; 6545 tests passed / 5 skipped (6550)"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "aed5bcac5e5710b467d8b4865f153bafea8a5615",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb/logs/verify-local-2026-09-08T03-12-03Z.log",
+      "summary": "TypeScript type-check and Vite production build PASS"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "aed5bcac5e5710b467d8b4865f153bafea8a5615",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb/logs/verify-local-2026-09-08T03-12-03Z.log",
+      "summary": "1254 passed; 0 failed; 24 ignored"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "aed5bcac5e5710b467d8b4865f153bafea8a5615",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/priority-order-parallel-productivity-ae19bb/logs/verify-local-2026-09-08T03-12-03Z.log",
+      "summary": "clippy clean under -D warnings; LOCAL CHECK RESULT: PASS"
+    }
+  ],
+  "gateEvidenceNote": "The pre-push gate (scripts/verify-local.ps1 via .githooks/pre-push) ran at exact head aed5bcac immediately before the push that created origin/claude/priority-order-parallel-productivity-ae19bb; no HEAD movement since. Same gate had already passed at dd3aadf7 (identical trees before the identity re-make) before GitHub refused that push for GH007. Standalone at d7fed835 (the installed build's commit): tsc exit 0; vitest 438/438 files (three site suites re-run green after `npm ci` in site-app/, a fresh-worktree environment gap); doc-budget ALL PASS; verify-release-state 31 ok / 0 state-drift with STATE:owner_installed_stamp=d7fed835 equal to the installed exe's stamp; scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit d7fed835... → 'ship-reinstall OK', runtime proof 'd7fed835 · release · shell 0.9.26', installer SHA-256 9067E61434D27FA754ABBC7A55EF46B515A04EC63C40E02931FB9F8AF00189CE. Visual gate: capture-based self-review round 3 PASS at c82440a1 (548/548 at 720p) carries because `git diff c82440a1 HEAD -- src src-tauri` names only the four test files main added.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "aed5bcac5e5710b467d8b4865f153bafea8a5615",
+    "verdict": "APPROVE",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/401#issuecomment-5578644200",
+    "reviewerNote": "Fresh non-author read-only review by the frontend-ipc-contract-auditor agent (reviewer-only identity) at the exact pushed head, from a separate context. Measured: head == origin head, tree clean; 49 delta paths, none under src-tauri/, .codex/ or .claude/settings.json; product delta vs c82440a1 is four *.test.ts files; no invoke() line touched (App.tsx change is a JSX slot-move of FirstWin); tsc exit 0; vitest src/surfaces+src/design 189 files / 2153 tests / 0 failed; verify-release-state 31 ok / 0 state-drift; doc-budget ALL PASS; STATE:owner_installed_stamp=d7fed835 present and byte-present in the installed compy.exe; D_health row intact; no live @media block added. FINDINGS: none. The visual pass is the self-review round 3 PASS at c82440a1 recorded on #224/#225, not this seat."
+  },
+  "pr": 401,
+  "issue": 225,
+  "kind": "lane",
+  "branch": "claude/priority-order-parallel-productivity-ae19bb"
+}

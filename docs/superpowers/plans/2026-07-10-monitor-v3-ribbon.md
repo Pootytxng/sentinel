@@ -1,5 +1,11 @@
 # Monitor v3 — "Telemetry Ribbon" (owner-chosen concept, 2026-07-10) Implementation Plan
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical implementation record, not
+> current product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Historical owner evidence in the UI ledger
+> does not independently revive this plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or
 > superpowers:executing-plans, task-by-task. **Design source of truth:**
 > `docs/UI_VISION_BACKLOG.md` §A0 (the owner's FULL 2026-07-10 response, retained verbatim — every

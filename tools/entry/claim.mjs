@@ -9,6 +9,8 @@
 // `--date` (`--text` fails with "Did not receive a date value") and clearing an expiry needs `--clear`.
 
 import { execFileSync } from "node:child_process";
+import { scopeTextFromMarkdown } from "../../scripts/lib/claim-scope.mjs";
+import { writeClaimCache } from "../../scripts/lib/scope-drift.mjs";
 
 export const CLAIM_HEADER = "### Ownership claim";
 export const HANDOFF_HEADER = "### Handoff";
@@ -66,42 +68,359 @@ export function renderHandoff(h) {
   ].join("\n");
 }
 
-const field = (body, label) => {
-  const m = body.match(new RegExp(`^-\\s*${label.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}:\\s*(.*)$`, "mi"));
-  return m ? m[1].trim() : null;
+const esc = (s) => s.replace(/[.*+?^{}()|[\]\\/$]/g, "\\$&");
+// One enclosing backtick pair, trimmed — a hand-written claim quotes its folder or branch as code.
+const plain = (v) => (v && /^`[^`]*`$/.test(v) ? v.slice(1, -1) : v);
+
+const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const FENCE_CLOSE = /^[ \t]*(`{3,}|~{3,})[ \t]*$/; // as deep as its fence allows: see `authored`
+// Raw HTML blocks that end at a marker, by opener and end: CommonMark's kinds 1 and 3 to 5 (2 is a comment).
+const HTML_ENDS = [
+  [/^ {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)/i, /<\/(?:pre|script|style|textarea)>/i],
+  [/^ {0,3}<\?/, /\?>/],
+  [/^ {0,3}<![A-Z]/, />/],
+  [/^ {0,3}<!\[CDATA\[/, /\]\]>/],
+];
+// Kind 6: a block-level tag, opening or closing, which a blank line ends. GitHub's list: no `search`.
+const HTML_BLOCK_TAG = /^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|section|source|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t>]|\/>|$)/i;
+// Kind 7: any other complete tag alone on its line, which a blank line ends. It cannot interrupt a paragraph.
+const HTML_LONE_TAG = /^ {0,3}(?:<[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t]*\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t]*>)[ \t]*$/;
+// What `authored` tells apart to know whether a lone tag continues a paragraph.
+const ATX = /^ {0,3}#{1,6}(?:[ \t]|$)/;
+const BREAK = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+const SETEXT = /^ {0,3}(?:=+|-+)[ \t]*$/;
+const LIST_ITEM = /^ {0,3}(?:[-+*]|(\d{1,9})[.)])(?:[ \t]|$)/;
+const QUOTE = /^ {0,3}>/;
+const FOOTNOTE = /^ {0,3}\[\^[^\]\s]+\]:/;
+const indent = (l) => [.../^[ \t]*/.exec(l)[0]].reduce((n, c) => (c === "\t" ? n + 4 - (n % 4) : n + 1), 0);
+
+/**
+ * A comment's lines with everything that does not render as Markdown blanked. Headers and fields are
+ * read only from these, so an example is never an event: on e56c6395 a `### Handoff` / `- Claim:
+ * released` quoted inside a fence released the live claim above it (HQ review 5165670535), and on
+ * 3ce1beb9 one quoted inside `<pre>` still did (HQ review 5167660647). Blanked, as GitHub renders
+ * them (checked against its /markdown endpoint on 2026-09-10):
+ * - fenced code, from an opener of three or more backticks or tildes indented at most three spaces
+ *   (a backtick opener whose info string holds a backtick is inline code, not a fence) to a closer of
+ *   the same character, at least as long, with only spaces or tabs after it, or to the comment's end;
+ * - an HTML comment, from a line opening `<!--` through the line carrying `-->`. It renders as
+ *   nothing, which makes it the worst place for a release to hide;
+ * - every other raw HTML block, by CommonMark's rules with GitHub's list of tags (`<textarea>` and
+ *   `<source>` on it, `<search>` not, and `<!` a declaration only before a capital letter): `<pre>`,
+ *   `<script>`, `<style>` or `<textarea>` through the line carrying any of their end tags, blank
+ *   lines and all; `<?` through `?>`; `<!X` through `>`; `<![CDATA[` through `]]>`; a block-level tag
+ *   (`<div>`, `<details>`, `</p>`) up to a blank line; and any other complete tag alone on its line
+ *   (`<span>`, `</pre>`) up to a blank line, unless it continues a paragraph.
+ * Indented code, blockquotes and mentions need no blanking: a header counts only after at most three
+ * spaces (a tab makes it indented code), and a field only at the start of its line.
+ *
+ * Whether a lone tag continues a paragraph turns on list, quote, footnote and table context, which is
+ * followed only as far as the next line needs. Where it is in doubt, `strict` settles it toward
+ * keeping a lease live: for a Handoff (`strict`) the block is open, and for a claim it is not.
+ *
+ * A block opened inside a list item ends with the item, at a line indented less than the item's text,
+ * and that line may open a block of its own: on c71c6d3c a fence left open in an item hid the claim
+ * after it (HQ review 5171061412), and a fence closed at column 0 released the claim above it, though
+ * GitHub reads that line as opening a fence. Where an item's text starts is known only to within a
+ * few columns, so past a line that may have ended the item, blocks are no longer followed: a claim is
+ * read from the rest of the comment, and a Handoff from none of it (`within`).
+ *
+ * Every shape GitHub settles the other way fails closed. Among them: a Handoff after a lone tag
+ * indented into a list item's paragraph, or anywhere after a block left open inside a list item, is
+ * not read; a claim after a table and a lone tag, or in a block opened after a list item's block
+ * ended, is. A Handoff header also counts only at the very start of its line (`headed`), where
+ * nothing a list item holds can be. None of the 851 comments here on 2026-09-10 reads differently for
+ * any of this.
+ *
+ * `Write scope` is not read through this: `scopeTextFromMarkdown` (#408) skips fenced lines by its own
+ * rule. That rule is not reused here, because its opener is looser (`/^\s*```/`): safe for a scope,
+ * which fails closed when hidden, and unsafe for a header, because a hidden claim lets a close through.
+ */
+const authored = (body, strict = false) => {
+  let fence = null; // the fence open: its opening `run`, e.g. "````", and its `deep`
+  let comment = null; // the HTML comment open: its `deep`
+  let html = null; // the raw HTML block open: its `end` (null: a blank line), and its `deep`
+  let para = null; // what the last line left open for a lone tag on this one: see `lone`
+  let list = false; // false, or the least column a list item's text can start at since the last reset
+  let lost = false; // whether a line may have ended the list item a block was open in: see `within`
+  // A block opened no shallower than a list item's text may be inside the item, and then GitHub ends
+  // it with the item, at a later line indented less than the block's opener: its `deep`. Past such a
+  // line, what GitHub has open is no longer followed: the block may run on, or that very line may open
+  // another. So a claim is read from the rest of the comment, and a Handoff from none of it. For a
+  // claim a comment has no `deep`: GitHub hides everything after one that its item ended.
+  const within = (n) => (list && n >= list ? n : 0);
+  const code = (l, n) => {
+    if (fence) {
+      const close = FENCE_CLOSE.exec(l);
+      if (close && close[1][0] === fence.run[0] && close[1].length >= fence.run.length && n <= (strict ? 3 : fence.deep + 3)) {
+        fence = null;
+        if (n > 3) lost = true; // a closer only as deep as an item's text allows: GitHub may read it as code
+      }
+      return "";
+    }
+    if (comment) {
+      if (l.includes("-->")) comment = null;
+      return "";
+    }
+    const open = FENCE_OPEN.exec(l);
+    if (open && !(open[1][0] === "`" && open[2].includes("`"))) {
+      fence = { run: open[1], deep: within(n) };
+      return "";
+    }
+    if (/^ {0,3}<!--/.test(l)) {
+      if (!l.includes("-->")) comment = { deep: strict ? within(n) : 0 };
+      return "";
+    }
+    return l;
+  };
+  // A lone tag opens a block unless it continues a paragraph. `para` is null where nothing is open,
+  // "top" in a paragraph outside any list or quote, "container" after a line inside one (a lone tag
+  // opens a block at the start of its line, and continues the item's paragraph indented under it),
+  // and "maybe" where this cannot tell. Doubt goes to `strict`.
+  const lone = (n) => para === null || (para === "container" && n === 0) || (para !== "top" && strict);
+  // What a visible line leaves open for the next one.
+  const track = (l, n) => {
+    if (ATX.test(l) || BREAK.test(l) || (para === "top" && SETEXT.test(l))) {
+      if (n === 0) list = false;
+      return null;
+    }
+    const item = LIST_ITEM.exec(l);
+    if (item) {
+      const empty = !/\S/.test(l.slice(item[0].length));
+      // A paragraph runs on through a marker that cannot interrupt it: an empty item, or a number but 1.
+      if (para === "top" && (empty || (item[1] !== undefined && Number(item[1]) !== 1))) return "top";
+      // Its text starts past the marker and one to four spaces, or else (nothing after the marker, a
+      // tab, or five spaces, which start indented code) no nearer than one past the marker.
+      const mark = item[0].trimEnd().length;
+      const lead = mark + (/^ {1,4}(?=[^ \t])/.exec(l.slice(mark))?.[0].length ?? 1);
+      list = list ? Math.min(list, lead) : lead;
+      if (!empty) return "container";
+      return n === 0 || para === null ? null : "maybe";
+    }
+    const quote = QUOTE.exec(l);
+    if (quote) {
+      if (n === 0) list = false;
+      return /\S/.test(l.slice(quote[0].length)) ? "container" : null;
+    }
+    if (FOOTNOTE.test(l)) {
+      if (n === 0) list = false;
+      return "container"; // GitHub's footnote definitions hold their text like a list item, and interrupt a paragraph
+    }
+    if (l.includes("|")) return "maybe"; // a table, or not
+    if (para === "container") return n === 0 ? "maybe" : "container"; // a lazy line, or a new paragraph
+    if (para !== null) return para;
+    if (list && n > 0) return "maybe"; // the item's next paragraph, or not
+    if (n >= 4) return null; // indented code
+    if (n === 0) list = false;
+    return "top";
+  };
+  return String(body ?? "").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n").map((l) => {
+    if (lost) return strict ? "" : l;
+    const n = indent(l);
+    if ((fence ?? comment ?? html)?.deep > n && /\S/.test(l)) {
+      lost = true;
+      return strict ? "" : l;
+    }
+    if (html) {
+      if (html.end ? html.end.test(l) : !/\S/.test(l)) html = null;
+      return "";
+    }
+    const out = code(l, n);
+    if (!/\S/.test(out)) {
+      para = null;
+      return out;
+    }
+    const ends = HTML_ENDS.find(([open]) => open.test(l));
+    if (ends || HTML_BLOCK_TAG.test(l) || (HTML_LONE_TAG.test(l) && lone(n))) {
+      const end = ends ? ends[1] : null;
+      if (!end || !end.test(l)) html = { end, deep: within(n) };
+      para = null;
+      if (n === 0) list = false;
+      return "";
+    }
+    para = track(l, n);
+    return l;
+  });
+};
+
+/**
+ * One field of a claim or handoff, by label, from its `authored` lines. Reads the block this module
+ * renders (`- Label: value`), the bold variants a hand-written comment uses (`- **Label:** value`,
+ * `- **Label**: value`), and a two-column table row (`| **label** | value |`) — the form another
+ * session posted on #224, which read as a claim with no fields and so, under #358, as a live writer
+ * whose scope nobody could see (collision rule 4: a refusal the other side could not cure). Aliases
+ * are the labels other writers use for the same fact.
+ *
+ * Every field here is read ONE LINE at a time. The one field that is not — `Write scope`, which
+ * wraps — is not read here at all: it goes through `scopeTextFromMarkdown` (#408), the one
+ * extraction contract in this repo, so a claim and an issue body cannot disagree about the same
+ * Markdown. This function keeping its own copy of that rule is how they came to disagree.
+ */
+const field = (lines, label, aliases = []) => {
+  for (const name of [label, ...aliases]) {
+    const bullet = new RegExp("^[-*]\\s*(?:\\*\\*)?" + esc(name) + "(?::\\s*\\*\\*|\\*\\*\\s*:|:)\\s*(.*)$", "i");
+    for (let i = 0; i < lines.length; i += 1) {
+      const m = bullet.exec(lines[i]);
+      if (m) return m[1].trim();
+    }
+    const row = new RegExp("^\\|\\s*(?:\\*\\*)?" + esc(name) + "(?:\\*\\*)?\\s*\\|\\s*(.*?)\\s*\\|\\s*$", "i");
+    for (const l of lines) {
+      const m = row.exec(l);
+      if (m) return m[1].trim();
+    }
+  }
+  return null;
+};
+
+/**
+ * A claim's expiry as a Date. Writers spell it "2026-09-03", "2026-09-02T04:55Z (12 hours)",
+ * "2026-09-02T12:00:00Z" or "2026-08-03 (12-hour alarm; no automatic takeover)"; a date alone ends at
+ * the end of its day (UTC). A bare term — "12 hours", "12h", "2 days" — means that long after the
+ * claim was POSTED, and is readable only with the posting time (`anchor`) in hand: the claim on #313
+ * spelled it that way, and read without an anchor it never expired, so a lane that finished on
+ * 2026-09-01 refused every overlapping writer for good. Unparseable is null — a claim stays live
+ * until its expiry is READ as past, never assumed past.
+ */
+export function claimExpiry(text, { anchor = null } = {}) {
+  const s = String(text ?? "");
+  const m = /^\s*(\d{4}-\d{2}-\d{2})(T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?)?/.exec(s);
+  if (m) {
+    const time = m[2] ? (/(?:Z|[+-]\d{2}:?\d{2})$/.test(m[2]) ? m[2] : m[2] + "Z") : "T23:59:59Z";
+    const d = new Date(m[1] + time);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const rel = /^\s*[(~]?\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|d|day|days)\b/i.exec(s);
+  if (!rel || !anchor) return null;
+  const at = new Date(anchor);
+  if (Number.isNaN(at.getTime())) return null;
+  const n = Number(rel[1]);
+  return new Date(at.getTime() + n * (/^d/i.test(rel[2]) ? 86_400_000 : 3_600_000));
+}
+
+/**
+ * Whether a comment's `authored` lines carry a header: at the start of a line, after at most three
+ * spaces. A sentence that mentions `### Handoff` is not a handoff. Ten of the 840 comments in this
+ * repository on 2026-09-10 did exactly that, and each one read as a lease event: #283's close comment
+ * as a handoff, and #408's and #409's retellings as fresh claims (#411). A Handoff counts only at the
+ * very start of its line (`spaces` 0), which no list item or quote reaches: an example nested in one,
+ * in a block `authored` does not follow there, cannot release (HQ review 5167660647). GitHub shows a
+ * Handoff indented one to three spaces too; none of the 851 comments here indents one, and not reading
+ * it keeps a lease live.
+ */
+const headed = (lines, header, spaces = 3) => {
+  const at = new RegExp(`^ {0,${spaces}}${esc(header)}`);
+  return lines.some((l) => at.test(l));
 };
 
 /** Parse a claim comment back into facts. Returns null when the comment is not a claim. */
 export function parseClaim(body) {
-  if (!body?.includes(CLAIM_HEADER)) return null;
+  const lines = authored(body);
+  if (!headed(lines, CLAIM_HEADER)) return null;
   return {
-    lane: field(body, "Lane"),
-    executor: field(body, "Executor/tool"),
-    repository: field(body, "Repository"),
-    folder: field(body, "Worktree folder"),
-    branch: field(body, "Branch"),
-    scope: field(body, "Write scope"),
-    started: field(body, "Started"),
-    expires: field(body, "Claim expires"),
-    nextAction: field(body, "Next action"),
+    lane: field(lines, "Lane"),
+    executor: field(lines, "Executor/tool", ["executor", "writer"]),
+    repository: plain(field(lines, "Repository", ["repo"])),
+    folder: plain(field(lines, "Worktree folder", ["worktree", "folder"])),
+    branch: plain(field(lines, "Branch")),
+    // The one field NOT read here: extraction is one contract, shared with the issue-body reader
+    // (#408). `scope` stays a claim-only alias — an issue body is prose, and `- scope:` in prose is
+    // as likely to be a sentence as a declaration.
+    scope: scopeTextFromMarkdown(body, { aliases: ["scope"] }),
+    started: field(lines, "Started"),
+    expires: field(lines, "Claim expires", ["expiry", "expires"]),
+    nextAction: field(lines, "Next action"),
   };
 }
 
+// What opens another section of a comment, even under a list or quote marker: a heading, a thematic
+// break or a setext underline, on `authored` lines, where code and raw HTML are blank. And an HTML
+// heading or rule, on the line as written, outside code spans.
+const SECTION = /^[ \t]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+|>[ \t]*)*(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|(?:=+|-+)[ \t]*$)/;
+const HTML_SECTION = /<(?:h[1-6]|hr)(?:[\s/>]|$)/i;
+// An underline two columns in or more (a tab reaches four) may be inside a list item and make the
+// item's text a heading: `- Claim: released` over `  ---` is an h2 in the item, not a Claim line.
+const ITEM_UNDERLINE = /^(?: {2}| ?\t)[ \t]*(?:=+|-+)[ \t]*$/;
+
+/**
+ * The lines of a comment's Handoff sections, or null when it has none. A Handoff reads its fields only
+ * from these: on afc6dfc7 it read them from the whole comment, so a `- Claim: released` above its
+ * header, or under a later heading, released a live lease (HQ review 5172037615). A section opens at a
+ * Handoff header (`headed`) and ends before the next line that may open another section (`SECTION`),
+ * and a setext underline also takes back the lines above it that it may make a heading, a list item's
+ * text among them when the underline is indented into the item (`ITEM_UNDERLINE`). Another Handoff
+ * header opens a section of its own. Where a line may open a section it ends one, so a release after
+ * it is not read and the lease stays live.
+ */
+const handoffLines = (body) => {
+  const raw = String(body ?? "").replace(/\r\n?/g, "\n").split("\n");
+  let own = null; // what the Handoff sections hold so far
+  let open = false; // whether this line is in one
+  let text = 0; // how many of their last lines are a paragraph, which a setext underline makes a heading
+  let item = 0; // how many are a list item's text, which an underline indented into the item makes one
+  authored(body, true).forEach((l, i) => {
+    if (headed([l], HANDOFF_HEADER, 0)) {
+      own ??= [];
+      open = true;
+      text = item = 0;
+    } else if (SECTION.test(l) || HTML_SECTION.test(raw[i].replace(/`[^`]*`/g, ""))) {
+      const heading = item && ITEM_UNDERLINE.test(l) ? item : SETEXT.test(l) ? text : 0;
+      if (open) own.splice(own.length - heading, heading);
+      open = false;
+    } else if (open) {
+      own.push(l);
+      text = /\S/.test(l) && !LIST_ITEM.test(l) ? text + 1 : 0;
+      item = !/\S/.test(l) ? 0 : LIST_ITEM.test(l) ? 1 : item && item + 1;
+    }
+  });
+  return own;
+};
+
 /** Parse a handoff comment. `nextAction` is the durable record guard 7 checks the board against. */
 export function parseHandoff(body) {
-  if (!body?.includes(HANDOFF_HEADER)) return null;
-  const claim = field(body, "Claim");
+  const lines = handoffLines(body);
+  if (!lines) return null;
+  const claims = lines.flatMap((l) => field([l], "Claim") ?? []);
   return {
-    outcome: field(body, "Outcome"),
-    files: field(body, "Files/commits/PR"),
-    verification: field(body, "Verification"),
-    remaining: field(body, "Remaining work"),
-    gates: field(body, "Gates or owner actions"),
-    worktreeState: field(body, "Worktree state"),
-    processes: field(body, "Active processes"),
-    nextAction: field(body, "Exact next action"),
-    released: /released/i.test(claim ?? ""),
+    outcome: field(lines, "Outcome"),
+    files: field(lines, "Files/commits/PR"),
+    verification: field(lines, "Verification"),
+    remaining: field(lines, "Remaining work"),
+    gates: field(lines, "Gates or owner actions"),
+    worktreeState: field(lines, "Worktree state"),
+    processes: field(lines, "Active processes"),
+    nextAction: field(lines, "Exact next action"),
+    // The Claim line has to open with "released". "**HELD.** ... Released only when a review verdict
+    // lands" (#399, #407) is a held lease that mentions its release; read as released, it would let a
+    // close through while the lease was live (#411). So does every other Claim line in the Handoff's
+    // sections: one that holds, beside one that releases, keeps the lease live.
+    released: claims.length > 0 && claims.every((c) => /^[^a-z0-9]*released\b/i.test(c)),
   };
+}
+
+/**
+ * Is a lease still live on this thread? The thread is folded once, in posting order, one transition
+ * per comment: a Handoff whose Claim line releases ends the lease, and a claim starts one. A Handoff
+ * that does not release changes nothing — a transfer or a HELD keeps the lease it names, and a later
+ * Handoff that says nothing of the claim cannot bring a released one back (HQ review 5165670535). A
+ * comment carrying both is read release first, so its claim stands. One fold, shared by
+ * `gather.readIssueThread` and the work-control gate's close check (#411), so the board reader and the
+ * gate cannot disagree about when a lease ended. `comments` is the thread in posting order, as
+ * `gh issue view --json comments` returns it; `handoff` is the newest one, released or not, because
+ * guard 7 reads its next action.
+ */
+export function threadLease(comments) {
+  let claim = null;
+  let handoff = null;
+  for (const c of comments ?? []) {
+    const asHandoff = parseHandoff(c.body);
+    if (asHandoff) {
+      handoff = { ...asHandoff, postedAt: c.createdAt };
+      if (asHandoff.released) claim = null;
+    }
+    const asClaim = parseClaim(c.body);
+    if (asClaim) claim = { ...asClaim, postedAt: c.createdAt };
+  }
+  return { claim, handoff };
 }
 
 const REPO = ["--repo", "Pootytxng/sentinel"];
@@ -159,7 +478,7 @@ export function execPlan(plan, { dryRun = false } = {}) {
 }
 
 /** The refusal that makes a claim mean something. */
-export function postClaim({ issue, verdict, facts, ids, dryRun = false }) {
+export function postClaim({ issue, verdict, facts, ids, dryRun = false, cacheDir = undefined }) {
   if (verdict?.verdict !== "PASS") {
     throw new Error(
       `Refusing to post a claim on #${issue}: preflight verdict is ${verdict?.verdict ?? "(none)"}. ` +
@@ -167,5 +486,16 @@ export function postClaim({ issue, verdict, facts, ids, dryRun = false }) {
     );
   }
   const plan = planPostClaim({ issue, ids, facts, verdict });
-  return { plan, ran: execPlan(plan, { dryRun }) };
+  const ran = execPlan(plan, { dryRun });
+  if (!dryRun) {
+    // The scope this claim just declared, remembered locally for the drift readers (#356). A cache
+    // failure is not a claim failure: the thread is the record, the cache only saves a round trip.
+    try {
+      writeClaimCache(
+        { issue, scopeText: facts.scope, folder: facts.folder ?? null, branch: facts.branch ?? null, postedAt: new Date().toISOString(), source: "postClaim" },
+        cacheDir ? { dir: cacheDir } : {},
+      );
+    } catch {}
+  }
+  return { plan, ran };
 }

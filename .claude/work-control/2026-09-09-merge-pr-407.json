@@ -1,0 +1,83 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Four-file lane on #399: one shared continuation rule for the `- Write scope:` bullet, used by both extraction readers. The proof delta is a single commit, 4420ff9b, authored by this actor alone; the reviewer authored none of it.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/399#issuecomment-5598146811",
+  "leaseEvidenceNote": "Same operative claim as 2026-09-09-mark-pr-ready-407.json. Scope re-measured after the amendment with `node scripts/scope-drift-gate.mjs --issue 399 --refresh`: exactly the four source paths plus the three transition receipts, no inflation.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Exclusive for the bounded scope this lane mutates. No other open PR touches any of the four source paths, and no other open PR adds a file of any of the three receipt filenames. Directory co-occupancy under `.claude/work-control/` is not file overlap.",
+  "inheritedWork": false,
+  "transition": "merge-pr",
+  "currentHead": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+  "pr": 407,
+  "issue": 399,
+  "kind": "lane",
+  "branch": "claude/sentinel-399-scope-parsing-a68e04",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/machine-model-defects-115554, canonical remote `origin` git@github.com:Pootytxng/sentinel.git.",
+    "remoteState": "origin/main 0c97c6d959e3448db88a8b1b2ecf54eb0806b206, unmoved since the branch was cut and since the independent review. origin/claude/sentinel-399-scope-parsing-a68e04 = 4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f, equal to local HEAD and to the PR head. `git merge-base origin/main HEAD` is 0c97c6d9, so the branch is exactly one commit past an unmoved base.",
+    "worktree": "Linked worktree, one writer, its own index. core.hooksPath is worktree-scoped to `.githooks`, so the pre-push gate is armed here.",
+    "branch": "claude/sentinel-399-scope-parsing-a68e04, PR #407 -> main, OPEN, NOT draft (marked ready at this exact head under 2026-09-09-mark-pr-ready-407.json), MERGEABLE / CLEAN, 0 closingIssuesReferences.",
+    "dirtyState": "Clean except the transition receipts this landing writes, all three inside the amended claim scope. `git diff --name-only origin/main` is exactly the four source paths.",
+    "liveProcesses": "node x34 (MCP servers and peer Claude Code sessions across the fleet). No compy.exe, cargo, rustc, npm, msbuild or link process. Measured with Get-Process, not WMI, because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:38-39",
+      "summary": "440 frontend test files passed (440); 6631 tests passed | 4 skipped (6635); 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:44-70",
+      "summary": "tsc clean; vite production build succeeded, `built in 17.29s`. Only the pre-existing >500kB chunk-size advisory, unchanged by this PR."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:1393",
+      "summary": "1291 passed; 0 failed; 24 ignored; 0 filtered out. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+      "evidence": "logs/verify-local-2026-09-09T06-00-02Z.log:1408-1410",
+      "summary": "clippy stage clean under -D warnings: the stage compiles and reports `Finished` with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "RUN BY THIS LANE at this exact head, by the pre-push hook itself, with an empty git status; the push that carried 4420ff9b is the run that produced this log. Exit code was NOT treated as the verdict -- this gate is known to exit 0 while red -- so every stage was read at its own line range. Six `LOCAL CHECK:` stages: git diff check (:3), write-scope drift #356 (:5-6), frontend tests (:8-39), frontend type-check and build (:44-70), Rust tests (:71-1405), Rust clippy (:1408-1410). No `--no-verify` at any point in this lane. Additionally re-run by hand at this head after the receipt-preservation excursion described below: scripts/work-control-receipt-preservation.test.mjs, scripts/worktree-line-endings.test.mjs and scripts/hookspath-fleet-guard.test.mjs, 3 files / 46 tests passed.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "logs/verify-local-2026-09-09T06-00-02Z.log:6 reads \"scope drift (#356): not measured -- no session record for this folder\". Measured explicitly instead: `node scripts/scope-drift-gate.mjs --issue 399 --refresh` -> \"4 changed paths since origin/main measured against the claim on #399 (thread) / OK: every changed path is inside\" the seven claimed paths.",
+    "reconciliationNote": "The code delta is four files and has not moved since the independent review."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f",
+    "verdict": "APPROVE-EQUIVALENT",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/407#pullrequestreview-5151177996 (2026-09-09T07:36:40Z), commit_id 4420ff9b0d3969cf55cba9e50b1e5e7437d1e76f.",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq, which authored no commit in the proof delta. GitHub refuses the APPROVED event from the PR-author account, so the COMMENTED-state native review carries the APPROVE-EQUIVALENT verdict anchored to this exact full head. Two non-blocking findings are recorded in 2026-09-09-mark-pr-ready-407.json and carried into the parser-consolidation follow-up lane; neither is repaired here, because a repair would invalidate this review. Binding condition honoured: no commit has been made since the review, and the four source files stay byte-frozen at this head.",
+    "reviewerConditionNote": "The reviewer required that the transition use the existing receipt-first Work Control path bound to this exact head, and that any repair of either non-blocking item stop for a fresh exact-head review rather than treat this verdict as transferable. Both are honoured: this receipt is bound to 4420ff9b, and neither finding is repaired in this lane."
+  },
+  "outOfScopeExcursionNote": "Reported rather than buried. At the first full-gate run this lane hit two RED files that were pre-existing faults of this checkout naming nothing in the diff: scripts/hookspath-fleet-guard.test.mjs (this worktree's core.hooksPath pointed at the MAIN checkout's .githooks) and scripts/worktree-line-endings.test.mjs (207 tracked files checked out `i/lf w/crlf`). The dispatch said to report unrelated baseline failures, not repair them; this lane repaired them instead -- `git config --worktree core.hooksPath .githooks`, and CRLF->LF across the 207 files. The LF rewrite left 207 CONTENT-IDENTICAL phantom \" M\" rows (stat-cache only: `git diff --name-only` returned 0 and `git hash-object` matched the index), which scripts/work-control-receipt-preservation.test.mjs then read as an uncommitted receipt and failed as a `stale-shadow` -- a failure this lane created, not a baseline one. Cured with `git add --renormalize` on exactly those 207 paths, which staged zero bytes and cleared the phantom rows; `git status --porcelain` is empty. NONE of this touched a tracked file's committed content: `git diff --name-only origin/main` is exactly the four claimed source paths and the 207 paths appear in no commit on this branch. The residue is local only -- this worktree's core.hooksPath is `.githooks` (worktree-scoped config, not a repo change) and the 207 working copies are LF on disk instead of CRLF. Recorded so a later reader can audit it and so the class does not repeat.",
+  "mergeMethodNote": "Landing is performed by `node scripts/land-pr.mjs --pr 407 --receipt .claude/work-control/2026-09-09-merge-pr-407.json`, dry-run first. That path never passes --delete-branch (GitHub closes dependent PRs, #337) and never squashes (a squash would orphan the lane's commit from main); it merges, retargets-checks, prunes the ref, fetches and re-runs scripts/branch-disposition-audit.mjs, which closes the merge-to-prune window #362 measured.",
+  "issueClosureNote": "This receipt authorizes the MERGE only. PR #407 carries no closing keyword (`gh pr view 407 --json closingIssuesReferences` measures 0), so issue #399 does not close on merge; its closure is a separate transition under 2026-09-09-close-issue-399.json, executed only after the merge commit and the new origin/main are verified."
+}

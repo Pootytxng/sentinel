@@ -294,6 +294,7 @@ describe("time of check == time of use — the base is pinned to one commit", ()
     subagentModel: null,
     hooks: null,
     processes: [],
+    scope: { mine: ["tools/entry"], text: "`tools/entry/`", source: "claim", others: [], files: [] },
   });
 
   beforeAll(() => {
@@ -420,7 +421,8 @@ describe("time of check == time of use — the base is pinned to one commit", ()
     expect(b.error).toContain("origin/nope");
     const row = reconcile({ base: b }).checks.find((c) => c.name === "base.pinned");
     expect(row.ok).toBe(false);
-    expect(row.remediation).toMatch(/will not guess/i);
+    // Fails closed and says why: the ref, and that nothing is created from a guess.
+    expect(row.remediation).toMatch(/origin\/nope does not resolve to a commit .*nothing safe to create from/i);
   });
 
   it("the passing base row says which commit out loud, so a green report cannot hide it", () => {

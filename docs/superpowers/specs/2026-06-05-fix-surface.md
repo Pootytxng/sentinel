@@ -1,5 +1,10 @@
 # Fix — surface build spec (second live Instrument surface)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** This pre-rebirth surface specification does
+> not authorize current UI or product work. Current direction comes from
+> `docs/PRODUCT_CONSTITUTION.md`; useful honesty, rollback, and implementation evidence remains
+> bounded by current architecture and release truth.
+
 *2026-06-05, Cowork. Translates the approved Fix mock from the design tour into a buildable spec.
 Companion to the kernel (`2026-06-05-compy-design-system.md`) and the Command Center spec pattern.
 Data/flow reference: the existing Optimize tab (incl. its wave-2 grouping: outstanding leads,

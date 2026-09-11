@@ -1,5 +1,11 @@
 # Compy Console — app-wide HUD direction (owner-approved 2026-07-09)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04.** This is a historical design record, not current
+> product authority, priority, approval, or work authorization. Current product direction is
+> [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
+> [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Conforming telemetry-honesty and safety
+> provenance remains useful under [`docs/ARCHITECTURE_LOCKS.md`](../../ARCHITECTURE_LOCKS.md).
+
 > **Status: DIRECTION LOCKED (owner, 2026-07-09).** This is the summary interpretation the owner
 > signed off on after three rejected Lab attempts (drag gallery → linear spine → bento). It
 > **SUPERSEDES the Lab's visual/layout direction from** `2026-07-09-lab-redesign-direction-proposal.md`

@@ -46,6 +46,45 @@ import type { GpuVendor } from "./walkthroughs";
 import type { HardwareInfo } from "../App";
 import "./lab-console.css";
 
+/**
+ * HOW CLOSE THE BENCH SITS TO ITS RIG.
+ *
+ * Round 2's 6.3 was derived by measuring the BRIGHT CORE (the lit motherboard cluster) against the
+ * comp, and the round-2 Codex review (2026-08-27) rejected exactly that yardstick: the comp's
+ * subject is the COMPLETE visible silhouette — the outer holo case shell plus the floor ring — and
+ * at 6.3 that silhouette overflowed the stage on all four edges. The core parity the old comment
+ * claimed was real, and beside the point.
+ *
+ * 10.2 is measured against the complete silhouette instead. In the approved comp the silhouette
+ * spans 54.5% of the stage's width and 88.5% of its height, fully contained, side margins ~150 px.
+ * Iterating distance on the live stage (6.3 → 9.0 → 9.4 → 10.2 at 1500×980): the case body clears
+ * the sides by 9.0, but the floor ring stays cropped at the stage's bottom edge through 9.4 —
+ * the framing centers on the case, so the ring is the last thing to come inside — and first sits
+ * fully in frame near 10.0. At 10.2 the ring spans ~53.5% of the stage's width (comp 54.5%), side
+ * margins match the comp within ~10 px, and every part of the silhouette is inside the stage at
+ * 1280×720, 1500×980 and 1920×1080 (verified per-resolution, not assumed). Note this lands ABOVE
+ * the hologram's 9.5 bay default: the bench's dominance comes from its 58.2% panel share, not from
+ * a closer camera — round 1's "pull the camera in" theory is retired by measurement.
+ *
+ * The bench stage is pinned to aspect 1.2, which is `FIT_REF_ASPECT` exactly, so
+ * `fitCameraDistance` returns this untouched and the framing is identical at every window size. It
+ * is a Test-room value passed through one optional prop — no other caller's framing moves.
+ */
+const BENCH_CAMERA_DIST = 10.2;
+
+/* Round 4 (#224): containment alone was not the comp. At 10.2 the whole silhouette is inside the
+ * stage, but the default aim (target y 0.2, which centers the CASE) leaves the floor ring hugging
+ * the stage's bottom edge — ~0-5 px of air at 1500×980 where the comp draws ~45-50 px. Aiming the
+ * camera lower moves the composition UP in frame: bottom air grows, the top margin pays for it,
+ * and distance 10.2 (with everything measured above) is preserved.
+ *
+ * -0.45 is measured, not styled: ring-apex row-scan (5px-thick runs, so the grid's 1px lines don't
+ * count) puts the bottom air at 31 px of a 371-px stage at 1280×720, 46/561 at 1500×980, 60/732 at
+ * 1920×1080 — 8.2-8.4% everywhere (one aim, pinned 1.2 stage aspect), the comp's ~45-50/561 ≈ 8-9%.
+ * -0.35 measured 39/561, short of the comp band. Top air stays visible at every size (~15 px at
+ * 1280, ~28 px at 1500), nothing clips. */
+const BENCH_CAMERA_TARGET_Y = -0.45;
+
 // LabConsole — the Lab's face as THE OPS CONSOLE (spec 2026-07-09-lab-redesign-direction-proposal,
 // Phase 1, Task 4, owner-approved). Replaces the Instrument Bench bento (LabBench, deleted) with a
 // console room: a real 3D hologram center-stage, four corner arc gauges reading whatever this rig
@@ -595,52 +634,82 @@ export function LabConsole({
         hud && !ws ? (
           <section className="lc-bench" aria-label={t("lab.labConsole.bench.aria")}>
             <div className="lc-stage" data-motion={reduced ? "reduced" : "full"} ref={stageRef}>
-              <span className="lc-brk lc-brk-tl" />
-              <span className="lc-brk lc-brk-tr" />
-              <span className="lc-brk lc-brk-bl" />
-              <span className="lc-brk lc-brk-br" />
               <div className="lc-rig">
                 {/* chromeless — just the recognizable 3D hologram; the bench frames it, so the
                     viewer's own control bar / caption / "add a part" form stay hidden (that form
                     lives in the station list now, where the comp puts it). */}
-                <RigViewer hw={hw} chromeless onSelectedIdChange={(_id, what) => setSelectedRig(what)} />
+                <RigViewer
+                  hw={hw}
+                  chromeless
+                  cameraDist={BENCH_CAMERA_DIST}
+                  cameraTargetY={BENCH_CAMERA_TARGET_Y}
+                  onSelectedIdChange={(_id, what) => setSelectedRig(what)}
+                />
               </div>
               <ReticleCursor scopeRef={stageRef} />
             </div>
+            {/* THE APPROVED RHYTHM (2026-08-27, Codex REJECT of 9bef1cc2). Four cells: ARC, NUMERAL,
+                NUMERAL, ARC — and under each, exactly ONE supporting line. The rejected build drew
+                four heavy rings and stacked a unit line AND a stamp AND a gloss under every one of
+                them, which is why the strip read denser and taller than the composition it was
+                copying. The arcs stay where a scale genuinely exists (proven-out-of-proven,
+                applied-out-of-applicable); the raw magnitudes lose theirs, because any ceiling for
+                a noise floor is invented and an invented ceiling drawn as an arc is a claim.
+
+                One line, not two: a cell that has a FACT to state (`= all 8 applied`) states it, and
+                a cell that has only provenance to state stamps MEASURED. They never both appear —
+                `measured` is switched off exactly when a note is present. The label glosses the
+                rejected build printed as a permanent fifth line ("= a change must beat this to
+                count") are gone from the first viewport; the honest states they sat beside —
+                NOT YET, NO READING, MEASURED — all survive untouched. */}
             <div className="lc-readings">
               <div className="lc-reading">
                 {/* Proven — the room's entire payoff: how many changes this bench has verified
-                    before/after (awards ledger, Keep verdicts only). Full ring once N > 0. */}
+                    before/after (awards ledger, Keep verdicts only). Full ring once N > 0. No unit
+                    word: the label already says what the number counts, and the comp's arcs carry
+                    a bare number. */}
                 <ArcGauge
                   label={t("lab.labConsole.provenLabel")}
                   value={provenCount}
                   max={Math.max(1, provenCount ?? 1)}
-                  unit={t("lab.labConsole.unitKept")}
+                  unit=""
                   tone="accent"
                   measured={provenCount != null}
-                  note={
-                    provenCount != null
-                      ? t(provenCount > 0 ? "lab.labConsole.provenNoteSome" : "lab.labConsole.provenNoteNone")
-                      : undefined
-                  }
                 />
               </div>
               <div className="lc-reading">
                 {/* Noise floor — the bench's own instrument constant: how big an effect this rig can
-                    even resolve. Fixed 10% display ceiling (a typical noise floor is a few percent;
-                    this is a reading, not a graded score, so a rare spike just fills the ring). */}
+                    even resolve. A magnitude, so it prints as a numeral; the ± unit stays, because
+                    dropping it would turn a tolerance into a score. */}
                 <ArcGauge
                   label={t("lab.labConsole.noiseFloorLabel")}
                   value={noiseFloorPct}
                   max={10}
                   unit={t("lab.labConsole.unitPct")}
+                  variant="numeral"
                   measured={noiseFloorPct != null}
-                  note={noiseFloorPct != null ? t("lab.labConsole.noiseFloorNote") : undefined}
+                />
+              </div>
+              <div className="lc-reading">
+                {/* Instruments read — how far through the bench this rig has gone. Same
+                    stationHasReading the dock uses to mark nodes measured, so this and the dock can
+                    never disagree. Always defined (no probe to await), never NOT-YET. Its one line
+                    is the denominator, which says more than MEASURED could. */}
+                <ArcGauge
+                  label={t("lab.labConsole.instrumentsReadLabel")}
+                  value={instrumentsRead}
+                  max={Math.max(1, instrumentsTotal)}
+                  /* NO UNIT. The label already ends in the word "read", so a "read" unit printed
+                     INSTRUMENTS READ / READ under the ring -- the duplication the owner caught. */
+                  unit=""
+                  variant="numeral"
+                  measured={false}
+                  note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
                 />
               </div>
               <div className="lc-reading">
                 {/* Two honest states over the same recs: work left → "N ready" (as before); nothing
-                    left → "N on" with a full ring and an "= all N applied" note. recs not loaded →
+                    left → "N on" with a full ring and an "all N applied" note. recs not loaded →
                     NOT-YET, never a fabricated 0 (bug→guard 2026-07-09, unchanged). */}
                 <ArcGauge
                   label={t("lab.labConsole.safeStackLabel")}
@@ -648,7 +717,7 @@ export function LabConsole({
                   max={Math.max(1, safeReady > 0 ? safeReady : safeOn)}
                   unit={safeReady > 0 ? t("lab.labConsole.unitReady") : t("lab.labConsole.unitOn")}
                   tone="accent"
-                  measured={fast.recs != null}
+                  measured={fast.recs != null && safeReady > 0}
                   note={
                     fast.recs != null && safeReady === 0
                       ? safeOn > 0
@@ -656,18 +725,6 @@ export function LabConsole({
                         : t("lab.labConsole.safeStackNone")
                       : undefined
                   }
-                />
-              </div>
-              <div className="lc-reading">
-                {/* Instruments read — how far through the bench this rig has gone. Same
-                    stationHasReading the dock uses to mark nodes measured, so this and the dock can
-                    never disagree. Always defined (no probe to await), never NOT-YET. */}
-                <ArcGauge
-                  label={t("lab.labConsole.instrumentsReadLabel")}
-                  value={instrumentsRead}
-                  max={Math.max(1, instrumentsTotal)}
-                  unit={t("lab.labConsole.unitRead")}
-                  note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
                 />
               </div>
             </div>
@@ -731,9 +788,7 @@ export function LabConsole({
                       <p className="lc-evidence-empty">{evidenceFallback.note}</p>
                     )}
                   </>
-                ) : (
-                  <p className="lc-evidence-empty">{t("lab.labConsole.evidence.idle")}</p>
-                )}
+                ) : null}
               </div>
           </section>
         ) : undefined
@@ -858,17 +913,11 @@ export function LabConsole({
                     <p className="lc-evidence-empty">{evidenceFallback.note}</p>
                   )}
                 </>
-              ) : (
-                <p className="lc-evidence-empty">{t("lab.labConsole.evidence.idle")}</p>
-              )}
+              ) : null}
             </div>
           </BentoTile>
           <BentoTile span="hero" title={t("lab.labConsole.tiles.stage")}>
             <div className="lc-stage" data-motion={reduced ? "reduced" : "full"} ref={stageRef}>
-              <span className="lc-brk lc-brk-tl" />
-              <span className="lc-brk lc-brk-tr" />
-              <span className="lc-brk lc-brk-bl" />
-              <span className="lc-brk lc-brk-br" />
               <div className="lc-corner lc-tl">
                 {/* Proven — the room's entire payoff: how many changes this bench has verified
                     before/after (awards ledger, Keep verdicts only). Full ring once N > 0. */}
@@ -927,7 +976,10 @@ export function LabConsole({
                   label={t("lab.labConsole.instrumentsReadLabel")}
                   value={instrumentsRead}
                   max={Math.max(1, instrumentsTotal)}
-                  unit={t("lab.labConsole.unitRead")}
+                  /* NO UNIT. The label already ends in the word "read", so a "read" unit printed
+                     INSTRUMENTS READ / READ under the ring -- the duplication the owner caught.
+                     The note below still says how far through the bench this rig has gone. */
+                  unit=""
                   note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
                 />
               </div>
@@ -935,7 +987,13 @@ export function LabConsole({
                 {/* chromeless — just the recognizable 3D hologram; the console frames it (brackets +
                     corner gauges), so the viewer's own control bar / caption / "add a part" form are
                     hidden (they collided with the corner gauges). */}
-                <RigViewer hw={hw} chromeless onSelectedIdChange={(_id, what) => setSelectedRig(what)} />
+                <RigViewer
+                  hw={hw}
+                  chromeless
+                  cameraDist={BENCH_CAMERA_DIST}
+                  cameraTargetY={BENCH_CAMERA_TARGET_Y}
+                  onSelectedIdChange={(_id, what) => setSelectedRig(what)}
+                />
               </div>
               <ReticleCursor scopeRef={stageRef} />
             </div>

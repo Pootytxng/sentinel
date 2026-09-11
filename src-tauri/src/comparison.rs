@@ -9,6 +9,8 @@
 //! aggregates vs a noise floor, reusing the same verdict vocabulary + never-credit-inside-noise
 //! philosophy rather than the window bootstrap. Read-only beyond its own small JSON state.
 
+use std::sync::Mutex;
+
 use serde::{Deserialize, Serialize};
 
 use crate::sessions::SessionSummary;
@@ -94,6 +96,75 @@ pub(crate) struct ComparisonResult {
     pub crash_reported: bool,
 }
 
+// #283 — ONE lock for both of this module's files, because every racy sequence here spans them:
+// `report_tuning_crash` flips a flag on the armed baseline AND on the surfaced result, and
+// `on_session_finalized` / `clear_tuning` decide whether to DELETE the armed file based on what they
+// just read from it. Two locks could not make that decision atomic; one can.
+//
+// This covers the arm paths too even though `arm`/`arm_tuning` write unconditionally and so cannot
+// lose an update on their own — an arm landing between another caller's read and its
+// `remove_file(armed_path())` would be deleted by a decision made about a DIFFERENT arm, which is
+// the same lost-write with an extra step.
+//
+// LOCK ORDER, corrected by PR #395's independent review. An earlier draft of this comment claimed
+// the one call out of a locked section was `arm_watermark` and that it acquired nothing. Both halves
+// were wrong. `arm_watermark` is evaluated by `arm`/`arm_tuning` BEFORE `arm_at` is called, so it is
+// not inside the lock at all. The call that IS inside the lock is `on_session_finalized_at`'s
+// `history::ledger_len_checked`, and it is not lock-free: on the corrupt-ledger branch `load_history`
+// calls `support_evidence::record`, which takes that module's own store lock.
+//
+// So this module establishes a real lock ORDER — COMPARISON_LOCK ⊃ SUPPORT_EVIDENCE_LOCK — rather
+// than "no nested lock". There is no cycle: neither `history.rs` nor `support_evidence.rs` calls
+// into comparison/drift/readiness, so the edge has no back edge. That claim is the whole basis of
+// the acyclicity argument, so it is MECHANIZED rather than asserted —
+// `scripts/store-lock-order-guard.test.mjs` fails if either module ever gains such a call, or if a
+// store module reaches out to somewhere this order has not been re-derived against.
+//
+// The cost is stated rather than hidden: on a machine whose Trust Ledger is corrupt, every session
+// finalize does a support-evidence read+write while holding this lock, which is that much longer
+// that `arm` and `clear_tuning` wait.
+static COMPARISON_LOCK: Mutex<()> = Mutex::new(());
+
+/// Acquire, recovering from poison and CLEARING it.
+///
+/// PR #395's review: poisoning is sticky for the life of the process, and nothing in this crate ever
+/// calls `clear_poison`. A SPLIT policy — some callers propagating `Err`, some recovering — is
+/// therefore not a policy at all: one panic anywhere under this lock would make `arm` fail for the
+/// rest of the session while `clear_tuning` kept working, and the user would see "arming a
+/// comparison stopped working until I restarted" with nothing pointing at the cause.
+///
+/// Uniform recovery is safe here for a reason specific to this design, not as a general rule: the
+/// guarded value is `()`, not shared data, and every write goes through `atomic_write`, so a thread
+/// that panicked mid-section can only have left the PREVIOUS complete FILE plus an orphan temp. The
+/// recovering thread does its own fresh `load_armed_from` and inherits nothing from the dead one.
+///
+/// The scope of that sentence is exact, and PR #395's second review was right to press on it: it is
+/// per-FILE, and this lock spans TWO. `report_tuning_crash_at` writes the armed baseline then the
+/// surfaced result; `on_session_finalized_at` writes the result then deletes the arm. A panic
+/// BETWEEN either pair leaves them disagreeing, and `clear_poison` unblocks the lock without
+/// reconciling that — it makes the store usable again, which is not the same as making it correct.
+///
+/// That window is latent rather than live: no `unwrap`, `expect`, indexing or overflow-prone
+/// arithmetic sits in either gap today, so nothing currently panics there. Rather than build a
+/// reconciler for a failure that cannot happen, the window is made TESTABLE —
+/// `crate::race_seam::panic_at` sits in both gaps and
+/// `a_panic_between_the_two_writes_splits_the_pair_and_leaves_the_store_usable` pins exactly what
+/// survives. If a future change adds a panic surface there, that test is where the argument
+/// restarts.
+fn lock_comparison() -> crate::race_seam::StoreGuard {
+    // #398: the acquisition is RECORDED before the block. `on_session_finalized_at` calls out of
+    // this section into `history`, and a path from there back into any `lock_comparison` caller is a
+    // self-deadlock — `std::sync::Mutex` is not reentrant. The recorder turns that into a named
+    // panic instead of a silent hang, and unlike the text scanner it does not care how the call was
+    // spelled. Compiled out entirely in a release build.
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::Comparison, || {
+        COMPARISON_LOCK.lock().unwrap_or_else(|poisoned| {
+            COMPARISON_LOCK.clear_poison();
+            poisoned.into_inner()
+        })
+    })
+}
+
 fn armed_path() -> std::path::PathBuf {
     crate::compy_data_dir().join("compy_comparison.json")
 }
@@ -113,19 +184,9 @@ fn load_armed_from(path: &std::path::Path) -> Option<ArmedComparison> {
         .and_then(|s| serde_json::from_str(&s).ok())
 }
 
-fn save_armed(a: &ArmedComparison) -> Result<(), String> {
-    std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
-    save_armed_to(&armed_path(), a)
-}
-
 fn save_armed_to(path: &std::path::Path, a: &ArmedComparison) -> Result<(), String> {
     let json = crate::atomic_write::serialize_pretty(a).map_err(|e| e.to_string())?;
     crate::atomic_write::write_atomic(path, json.as_bytes()).map_err(|e| e.to_string())
-}
-
-fn save_result(r: &ComparisonResult) -> Result<(), String> {
-    std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
-    save_result_to(&result_path(), r)
 }
 
 fn save_result_to(path: &std::path::Path, r: &ComparisonResult) -> Result<(), String> {
@@ -151,18 +212,31 @@ pub(crate) fn arm(
     baseline_avg_fps: f64,
     baseline_low1_fps: f64,
 ) -> Result<(), String> {
-    save_armed(&ArmedComparison {
-        rec_id,
-        rec_title,
-        game,
-        baseline_avg_fps,
-        baseline_low1_fps,
-        armed_at: chrono::Utc::now().to_rfc3339(),
-        ledger_watermark: arm_watermark()?,
-        kind: ComparisonKind::Fix,
-        baseline_peak_temp_c: None,
-        crash_reported: false,
-    })
+    std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
+    arm_at(
+        &armed_path(),
+        ArmedComparison {
+            rec_id,
+            rec_title,
+            game,
+            baseline_avg_fps,
+            baseline_low1_fps,
+            armed_at: chrono::Utc::now().to_rfc3339(),
+            ledger_watermark: arm_watermark()?,
+            kind: ComparisonKind::Fix,
+            baseline_peak_temp_c: None,
+            crash_reported: false,
+        },
+    )
+}
+
+/// The armed-store write, lifted to a path and holding the same lock every other armed-store
+/// sequence holds. `arm` cannot lose an update on its own — it writes unconditionally — but it must
+/// take the lock anyway so that `clear_tuning_at` and `on_session_finalized_at` cannot delete an arm
+/// that landed after they read. Lifted so #283's lock is proven against a scratch file.
+fn arm_at(path: &std::path::Path, a: ArmedComparison) -> Result<(), String> {
+    let _lock = lock_comparison();
+    save_armed_to(path, &a)
 }
 
 /// Arm a TUNING baseline: the user changed something in a vendor tool (no Compy apply, no ledger
@@ -176,18 +250,22 @@ pub(crate) fn arm_tuning(
     baseline_low1_fps: f64,
     baseline_peak_temp_c: Option<u32>,
 ) -> Result<(), String> {
-    save_armed(&ArmedComparison {
-        rec_id: guide_id,
-        rec_title: label,
-        game,
-        baseline_avg_fps,
-        baseline_low1_fps,
-        armed_at: chrono::Utc::now().to_rfc3339(),
-        ledger_watermark: arm_watermark()?,
-        kind: ComparisonKind::Tuning,
-        baseline_peak_temp_c,
-        crash_reported: false,
-    })
+    std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
+    arm_at(
+        &armed_path(),
+        ArmedComparison {
+            rec_id: guide_id,
+            rec_title: label,
+            game,
+            baseline_avg_fps,
+            baseline_low1_fps,
+            armed_at: chrono::Utc::now().to_rfc3339(),
+            ledger_watermark: arm_watermark()?,
+            kind: ComparisonKind::Tuning,
+            baseline_peak_temp_c,
+            crash_reported: false,
+        },
+    )
 }
 
 /// Record the debrief's crash/hang/artifact self-check for the armed tuning baseline (honest-
@@ -195,16 +273,33 @@ pub(crate) fn arm_tuning(
 /// flips to "too aggressive" without waiting for another session. No-op unless a tuning baseline is
 /// armed. Never fabricates a crash — only the user's explicit "yes" lands here.
 pub(crate) fn report_tuning_crash() -> Result<(), String> {
-    let Some(mut a) = load_armed() else { return Ok(()) };
+    std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
+    report_tuning_crash_at(&armed_path(), &result_path())
+}
+
+/// Both paths, because this sequence spans both files: the flag must land on the armed baseline and
+/// on the surfaced result as ONE atomic step, or a reader between the two writes sees a crash
+/// reported on one and not the other. Lifted to paths so #283's lock is proven against scratch
+/// files rather than the real data root.
+fn report_tuning_crash_at(
+    armed: &std::path::Path,
+    result: &std::path::Path,
+) -> Result<(), String> {
+    let _lock = lock_comparison();
+    let Some(mut a) = load_armed_from(armed) else { return Ok(()) };
     if a.kind != ComparisonKind::Tuning {
         return Ok(());
     }
+    crate::race_seam::hold(); // no-op in a release build; see race_seam
     a.crash_reported = true;
-    save_armed(&a)?;
-    if let Some(mut r) = latest_result() {
+    save_armed_to(armed, &a)?;
+    // Two files, one lock acquisition. A panic here leaves the baseline flagged and the surfaced
+    // result not — see race_seam's panic-seam note and the test that pins it.
+    crate::race_seam::panic_at(crate::race_seam::AFTER_ARMED_WRITE);
+    if let Some(mut r) = latest_result_from(result) {
         if r.kind == ComparisonKind::Tuning {
             r.crash_reported = true;
-            let _ = save_result(&r);
+            let _ = save_result_to(result, &r);
         }
     }
     Ok(())
@@ -213,11 +308,21 @@ pub(crate) fn report_tuning_crash() -> Result<(), String> {
 /// Disarm a tuning baseline (the user reset/re-tuned). Only touches tuning state — a pending fix
 /// comparison is left intact.
 pub(crate) fn clear_tuning() {
-    if matches!(load_armed(), Some(a) if a.kind == ComparisonKind::Tuning) {
-        let _ = std::fs::remove_file(armed_path());
+    clear_tuning_at(&armed_path(), &result_path());
+}
+
+/// Path-parameterized for the same reason as [`report_tuning_crash_at`]. This one is a
+/// check-then-act, not a load-modify-save: without the lock an `arm` landing between the `matches!`
+/// and the `remove_file` is deleted by a decision made about a DIFFERENT arm.
+fn clear_tuning_at(armed: &std::path::Path, result: &std::path::Path) {
+    let _lock = lock_comparison();
+    let tuning_armed = matches!(load_armed_from(armed), Some(a) if a.kind == ComparisonKind::Tuning);
+    crate::race_seam::hold(); // no-op in a release build; see race_seam
+    if tuning_armed {
+        let _ = std::fs::remove_file(armed);
     }
-    if matches!(latest_result(), Some(r) if r.kind == ComparisonKind::Tuning) {
-        let _ = std::fs::remove_file(result_path());
+    if matches!(latest_result_from(result), Some(r) if r.kind == ComparisonKind::Tuning) {
+        let _ = std::fs::remove_file(result);
     }
 }
 
@@ -322,9 +427,22 @@ pub(crate) fn build_result(
 /// result. A fix comparison then disarms; a tuning baseline stays armed (keeps measuring). A
 /// different game leaves the arming intact for its own next session.
 pub(crate) fn on_session_finalized(s: &SessionSummary) {
-    let Some(armed) = load_armed() else {
+    on_session_finalized_at(&armed_path(), &result_path(), s);
+}
+
+/// Path-parameterized for the same reason as [`report_tuning_crash_at`]. The disarm at the end
+/// deletes the armed file based on what was read at the top, so the read and the delete have to be
+/// one step: an arm landing in between would otherwise be disarmed by a session it never measured.
+fn on_session_finalized_at(
+    armed_path_: &std::path::Path,
+    result_path_: &std::path::Path,
+    s: &SessionSummary,
+) {
+    let _lock = lock_comparison();
+    let Some(armed) = load_armed_from(armed_path_) else {
         return;
     };
+    crate::race_seam::hold(); // no-op in a release build; see race_seam
     if s.process_name.is_empty() || armed.game != s.process_name {
         return;
     }
@@ -334,12 +452,33 @@ pub(crate) fn on_session_finalized(s: &SessionSummary) {
         DEFAULT_NOISE_FLOOR_PCT,
         // `.ok()` here is the honest direction, not a collapse: an unreadable ledger becomes `None`,
         // which the guard above refuses to attribute. It is never silently treated as a count.
+        //
+        // #283 / #395 review: this is the one call into ANOTHER MODULE from inside this module's
+        // locked section, and it is not lock-free — on the corrupt-ledger branch it reaches
+        // `support_evidence::record`, which takes that module's own lock.
+        //
+        // Corrected after the second review, which caught the earlier wording claiming this was the
+        // only impurity reached under the lock: `ledger_len_checked` also resolves `history_path()`
+        // → `compy_data_dir()`, and that goes through two `OnceLock` initializers — `data_root`'s
+        // decision, and on a first-ever canonical-root resolution `migrate_legacy_data_once`'s
+        // recursive copy of the legacy `Sentinel` folder. Neither reaches back into
+        // comparison/drift/readiness, so the order below still holds; in practice both are warmed
+        // by startup long before any session finalizes. Named here because "the one call" was the
+        // kind of tidy sentence that stops anyone looking.
         crate::history::ledger_len_checked().ok(),
         chrono::Utc::now(),
     );
-    let _ = save_result(&result);
+    // Restored after PR #395's review: the `save_result` wrapper this was lifted out of created
+    // the data folder first. Unreachable today — a `Some` arm above means the folder already exists
+    // — but "unreachable today" is a property of the current call sites, not of this function.
+    if let Some(dir) = result_path_.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = save_result_to(result_path_, &result);
+    // Same window as `report_tuning_crash_at`: the result is written, the arm is not yet gone.
+    crate::race_seam::panic_at(crate::race_seam::AFTER_RESULT_WRITE);
     if should_disarm(armed.kind) {
-        let _ = std::fs::remove_file(armed_path()); // the one-shot fix comparison happened
+        let _ = std::fs::remove_file(armed_path_); // the one-shot fix comparison happened
     }
 }
 
@@ -626,7 +765,7 @@ mod comparison_tests {
 
     // ── Tuning baseline (spec 2026-06-08) ──────────────────────────────────────────────
 
-    fn session_fixture(low1: f64, peak_temp: Option<u32>) -> SessionSummary {
+    pub(super) fn session_fixture(low1: f64, peak_temp: Option<u32>) -> SessionSummary {
         SessionSummary {
             started_at: "t".into(),
             duration_secs: 3600,
@@ -727,5 +866,228 @@ mod comparison_tests {
         assert_eq!(a.kind, ComparisonKind::Fix); // default
         assert_eq!(a.baseline_peak_temp_c, None);
         assert!(!a.crash_reported);
+    }
+}
+
+/// #283 — LOST UPDATE / TOCTOU. Every racy sequence in this module reads the armed store and then
+/// acts on what it read — deleting it, or writing a modified copy of it back. An arm that lands in
+/// between is destroyed by a decision made about a DIFFERENT arm. These tests call the shipping
+/// `*_at` critical sections, not lookalikes.
+///
+/// All three assert the SAME user-visible harm, because it is the one #283 describes: the user armed
+/// a comparison and it silently vanished.
+///
+/// FALSIFIED BEFORE TRUSTED. With the `COMPARISON_LOCK` acquisitions removed, all three fail. They
+/// are deterministic rather than probabilistic: each arms [`crate::race_seam`], which holds the seam
+/// open from inside the critical section, so the interleaving lands every run instead of once in a
+/// thousand. The widening does not create the defect — removing only the lock, with the widening
+/// left in place, is what turns these red.
+#[cfg(test)]
+mod comparison_race_tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::AtomicUsize;
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "compy-cmp-race-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn armed_of(kind: ComparisonKind, tag: &str) -> ArmedComparison {
+        ArmedComparison {
+            rec_id: tag.to_string(),
+            rec_title: tag.to_string(),
+            game: "game.exe".to_string(),
+            baseline_avg_fps: 100.0,
+            baseline_low1_fps: 80.0,
+            armed_at: "2026-09-07T00:00:00Z".to_string(),
+            ledger_watermark: 0,
+            kind,
+            baseline_peak_temp_c: None,
+            crash_reported: false,
+        }
+    }
+
+    /// Runs `first` (which will sit in the widened seam) and, 20ms later, arms a Fix baseline, then
+    /// returns whatever arm is left on disk. 20ms is comfortably inside the 60ms seam and
+    /// comfortably after `first` has entered it.
+    fn arm_lands_mid_seam(
+        armed: &std::path::Path,
+        first: impl FnOnce() + Send,
+    ) -> Option<ArmedComparison> {
+        let _seam = crate::race_seam::Widened::arm();
+        std::thread::scope(|scope| {
+            scope.spawn(first);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            let a = armed.to_path_buf();
+            scope.spawn(move || {
+                arm_at(&a, armed_of(ComparisonKind::Fix, "landed-during")).unwrap();
+            });
+        });
+        load_armed_from(armed)
+    }
+
+    fn assert_survived(left: Option<ArmedComparison>, who: &str) {
+        let left = left.unwrap_or_else(|| {
+            panic!("the user's Fix arm was destroyed by a concurrent {who}: nothing is armed")
+        });
+        assert_eq!(
+            left.rec_id, "landed-during",
+            "the user's Fix arm was overwritten by a concurrent {who} acting on state it had \
+             already read"
+        );
+    }
+
+    /// `clear_tuning` is documented: "Only touches tuning state — a pending fix comparison is left
+    /// intact." Serialized, the arm either happens before the clear (which then sees a Fix and
+    /// leaves it) or after it. Unserialized, the clear removes an arm that did not exist when it
+    /// decided a removal was allowed.
+    #[test]
+    fn clear_tuning_never_deletes_a_fix_arm_that_landed_during_the_check() {
+        let dir = scratch("clear");
+        let (armed, result) = (
+            dir.join("compy_comparison.json"),
+            dir.join("compy_comparison_result.json"),
+        );
+        arm_at(&armed, armed_of(ComparisonKind::Tuning, "tuning")).unwrap();
+
+        let (a, r) = (armed.clone(), result.clone());
+        let left = arm_lands_mid_seam(&armed, move || clear_tuning_at(&a, &r));
+        assert_survived(left, "clear_tuning");
+    }
+
+    /// A finalize disarms the one-shot Fix comparison it just measured. An arm landing after that
+    /// read must not be disarmed by a session that never measured it.
+    #[test]
+    fn a_finalize_never_disarms_an_arm_that_landed_after_it_read() {
+        let dir = scratch("finalize");
+        let (armed, result) = (
+            dir.join("compy_comparison.json"),
+            dir.join("compy_comparison_result.json"),
+        );
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "measured")).unwrap();
+
+        let (a, r) = (armed.clone(), result.clone());
+        let left = arm_lands_mid_seam(&armed, move || {
+            on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None))
+        });
+        assert_survived(left, "session finalize");
+    }
+
+    /// `report_tuning_crash` is a load-modify-save on the armed store — the classic lost update. An
+    /// arm landing between its read and its write is overwritten by a stale copy carrying the flag.
+    #[test]
+    fn a_crash_report_never_writes_a_stale_arm_over_a_newer_one() {
+        let dir = scratch("crash");
+        let (armed, result) = (
+            dir.join("compy_comparison.json"),
+            dir.join("compy_comparison_result.json"),
+        );
+        arm_at(&armed, armed_of(ComparisonKind::Tuning, "tuning")).unwrap();
+
+        let (a, r) = (armed.clone(), result.clone());
+        let left = arm_lands_mid_seam(&armed, move || {
+            report_tuning_crash_at(&a, &r).unwrap();
+        });
+        assert_survived(left, "crash report");
+    }
+
+    /// PR #395's review: poisoning is sticky and nothing else in this crate clears it, so a lock
+    /// that only propagated `Err` would fail every later `arm` after ONE panic anywhere under it —
+    /// for the rest of the process, with no diagnostic pointing at the cause. The panic below is
+    /// deliberate; the message libtest prints for it is expected output, not a failure.
+    ///
+    /// FALSIFIED BEFORE TRUSTED: put `COMPARISON_LOCK.lock().map_err(..)?` back in `arm_at` and this
+    /// fails with "comparison lock poisoned".
+    #[test]
+    fn a_panic_under_the_lock_does_not_permanently_break_arming() {
+        let armed = scratch("poison").join("compy_comparison.json");
+
+        // The other poisoning test must not be inside its own recovery window while this one reads
+        // the flag, and vice versa. They are the only two things in the crate that panic under this
+        // lock, so excluding them from each other is enough to make `!is_poisoned()` below mean
+        // something. It does NOT make `is_poisoned() == true` assertable — see the note there.
+        let _exclusive = crate::race_seam::exclusive();
+
+        let died = std::thread::spawn(|| {
+            let _held = lock_comparison();
+            panic!("deliberate: poisoning COMPARISON_LOCK for the assertion below");
+        })
+        .join();
+        assert!(died.is_err(), "the helper thread was supposed to panic");
+
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "after-poison"))
+            .expect("arming must still work after an unrelated panic under the same lock");
+        assert_eq!(load_armed_from(&armed).unwrap().rec_id, "after-poison");
+        assert!(
+            !COMPARISON_LOCK.is_poisoned(),
+            "recovering without clearing leaves the flag set for the life of the process, so the first caller that ever decides to propagate inherits a panic from hours earlier"
+        );
+    }
+
+    /// COMPARISON_LOCK spans TWO files, and `clear_poison` reconciles neither.
+    ///
+    /// PR #395's second independent review pressed on `lock_comparison`'s justification — "a thread
+    /// that panicked mid-section can only have left the PREVIOUS complete file" — and was right that
+    /// it is a per-FILE statement standing in for a pair. `on_session_finalized_at` writes the
+    /// result and THEN deletes the arm; a panic between them leaves a finished comparison that never
+    /// disarmed, so the next session would be measured against a baseline the user already consumed.
+    ///
+    /// Nothing panics in that gap today — the review checked, and so did I — so this test does not
+    /// claim a live defect. It pins the window's actual shape, which is the part a future change can
+    /// silently alter: what survives, that the lock is usable afterwards, and that the surviving arm
+    /// is the ORIGINAL one rather than something half-written. If a reconciler is ever added, this
+    /// test is what has to change, and changing it is the moment someone re-derives the argument.
+    #[test]
+    fn a_panic_between_the_two_writes_splits_the_pair_and_leaves_the_store_usable() {
+        let dir = scratch("split-pair");
+        let (armed, result) = (
+            dir.join("compy_comparison.json"),
+            dir.join("compy_comparison_result.json"),
+        );
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "one-shot")).unwrap();
+
+        let (a, r) = (armed.clone(), result.clone());
+        let _seam = crate::race_seam::PanicAt::arm(crate::race_seam::AFTER_RESULT_WRITE);
+        let died = std::thread::spawn(move || {
+            on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None))
+        })
+        .join();
+        assert!(died.is_err(), "the armed seam was supposed to panic mid-sequence");
+
+        assert!(
+            result.exists(),
+            "the result write happens BEFORE the seam, so it must have landed — if this fails the seam moved and this test is no longer measuring the window it names"
+        );
+        assert_eq!(
+            load_armed_from(&armed).map(|x| x.rec_id),
+            Some("one-shot".to_string()),
+            "the disarm happens AFTER the seam, so the original arm must still be there, intact and not half-written. THIS is the split the poison-clearing does not repair: a one-shot comparison whose result exists and which is still armed."
+        );
+
+        // There is deliberately NO `assert!(COMPARISON_LOCK.is_poisoned())` here, and the reason is
+        // worth writing down because the assertion is the obvious thing to add back.
+        //
+        // The flag is process-global and libtest runs tests in parallel. Every one of the ~20 test
+        // call sites in this file that takes COMPARISON_LOCK CLEARS the flag on its way in, so a
+        // test asserting the flag is SET is asserting that no unrelated test ran in the microseconds
+        // between the panic above and the assertion — which is not true, and cost a red gate run to
+        // learn. What CAN be asserted is what this test asserts instead: the arm below still works
+        // (so the recovery path did run — a lock that propagated instead would fail here) and the
+        // flag is clear afterwards. `exclusive()` keeps the only other poisoning test out of that
+        // window; nothing else in the crate panics under this lock.
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "after-split"))
+            .expect("the store must still be usable after a panic split the pair");
+        assert_eq!(load_armed_from(&armed).unwrap().rec_id, "after-split");
+        assert!(
+            !COMPARISON_LOCK.is_poisoned(),
+            "the caller that recovered must also have cleared, or every later caller inherits it"
+        );
     }
 }

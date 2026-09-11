@@ -1,10 +1,11 @@
 # THE COUNCIL PROTOCOL — standing five-lens oversight (owner decree 2026-06-12)
 
-> The LLM Council that produced the Receipts Doctrine (`docs/superpowers/specs/
-> 2026-06-12-monetization-council.md`) is now a PERMANENT oversight body over all Compy work.
+> The LLM Council that produced the (now tombstoned) Receipts Doctrine (`docs/superpowers/specs/
+> 2026-06-12-monetization-council.md`) is a PERMANENT oversight body over all Compy work.
 > Both lanes honor it: Cowork chairs it; CC self-applies it in marathons. It ADVISES — it never
-> overrides the doctrine, the locked gates, or owner territory. Its job is to keep every train
-> inside the formula that built the money plan.
+> overrides `docs/PRODUCT_CONSTITUTION.md`, `docs/ARCHITECTURE_LOCKS.md`, or owner territory. Its
+> job is to keep every train inside the Constitution's laws; the money formula it once built is
+> history (superseded 2026-09-04, #369 — `docs/product/MONETIZATION.md` holds current hypotheses).
 
 ## The five seats
 

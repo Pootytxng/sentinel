@@ -90,54 +90,55 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_prune. Fifteen dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · 5th 2026-09-02
+### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · re-derived 2026-09-03
 
-**The ask:** one command, all fifteen at once — `git push origin --delete
-claude/exciting-robinson-0ce4d5 lane/agent-skills-config lane/atomic-json-281
-lane/fleet-guard-failclosed-276 lane/license-atomic-284 lane/receipt-preservation-298
-lane/remote-cache-design-286 lane/segmented-a11y-237 fix/green-main-after-314-332
-fix/handoff-grace-cycle-333 lane/docs-path-not-branch-310 lane/rule-c-at-risk-312
-lane/native-routing-271 lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. It said THREE
-until 2026-09-01 and ELEVEN until 2026-09-02
-([#305](https://github.com/Pootytxng/sentinel/issues/305)) — it goes stale every time a lane lands,
-so it is **re-derived, never carried over**. **`beta/private-beta-001` is deliberately NOT in it**:
-it answers YES to the same containment query every re-derivation runs, and it is the frozen beta ref
-(`16069fa`) that `CLAUDE.md` puts in owner territory. That exclusion is written down here so a later
-session cannot "complete the list", and `scripts/prune-candidates.test.mjs` fails if this command
-ever names it. The first twelve are **contained in `main`** — `git merge-base --is-ancestor` says
-yes for each, so deleting them cannot lose a commit; four (`332`, `333`, `310`, `312`) landed only
-today. The last three are not ancestors and still hold nothing you want: `271` (151 behind) and
-`274` (149 behind) landed by squash and would only reintroduce a stale copy of status docs. `274`'s
-delta now also shows `scripts/doc-budget.ps1`, which it did NOT at the last derivation — but that is
-`main` moving, not `274` holding work: `274` caps this very file at 450 lines where `main` has since
-ratcheted it to 385, and restoring a looser budget is what the ratchet forbids. PR
+**The ask:** one command — `git push origin --delete lane/native-routing-271
+lane/css-margin-separators-274 lane/cleanup-train-2026-08-20`. It named FIFTEEN this morning: the
+twelve that were **contained in `main`** went with the #355 sweep (P0-B, commit `f93a890e`), which a
+session may do because deleting a ref `main` already holds cannot lose a commit. These three are
+NOT ancestors, and that is exactly why they are yours: `271` (189 behind) and `274` (187 behind)
+landed by squash and would only reintroduce a stale copy of status docs; PR
 [#163](https://github.com/Pootytxng/sentinel/pull/163) closed unmerged, leaving
-`cleanup-train-2026-08-20` **590 commits behind with an OLDER `handoff-block` guard** — merging it
-would REGRESS `main`. Nothing is lost either way: the local refs and their clean worktrees still
-hold every commit, so any of the fifteen can be pushed back in one command — and
-`prune-candidates.test.mjs` measures that promise ref by ref. Deleting
-was **denied to this session**, and a denial is a stop — I did not reach the same effect another
-way. **Re-derive before running.** **Why it matters:** until the refs are gone, their rows and the
-handoff's branch list have to keep saying "landed but still here" — small residue, but it is exactly
-what makes the next session distrust the branch list. Nothing is broken while it waits.
+`cleanup-train-2026-08-20` **628 commits behind with an OLDER `handoff-block` guard** — merging it
+would REGRESS `main`. Nothing is lost either way: the local refs and their worktrees still hold every
+commit, and `scripts/prune-candidates.test.mjs` measures that promise ref by ref.
+**`beta/private-beta-001` is deliberately NOT in it** — the frozen beta ref (`16069fa`) that
+`CLAUDE.md` puts in owner territory; the same test fails if this command ever names it. It goes stale
+every time a lane lands, so it is **re-derived, never carried over — re-derive before running.**
+**Why it matters:** until the refs are gone their rows keep saying "landed but still here", which is
+exactly what makes the next session distrust the branch list. Nothing is broken while it waits.
+
+### A_wmi. Windows Management Instrumentation is hung on this PC  ·  ⏳ NEW 2026-09-02
+
+**The ask:** reboot when convenient — or restart the *Windows Management Instrumentation* service
+yourself; a system service is yours, not mine, under the standing security/system-settings rule.
+**Measured 2026-09-02:** `Get-CimInstance Win32_Process` never returns, and `taskkill` takes 61s
+and kills nothing, while `Get-Process` and the kernel's own process table answer in milliseconds.
+The toolchain no longer depends on it — the tree kill and its guard read the kernel table (commit
+`7aeff5f2`), and the preflight's process probe is bounded to 20s and reports nothing rather than
+stalling — but anything else on this PC that asks WMI will stay slow or empty until the service is
+back. **Why it matters:** two pre-push gates went red on a kill that had already happened; the fix
+removed the dependency, only you can remove the symptom.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
-None of them is waiting on you. **A0's key backup is CLOSED (2026-08-18)** — the signing key is
-backed up off this machine and verified. **§A now holds THREE things, and only one is a chore:**
-① A0's small residual — delete the redundant `Desktop\COMPY KEY\` copy (one command, 10 seconds);
-② A0's *"expand to the remaining invitees"* — not a chore but a **distribution call** that is yours
-by definition (who gets a build, and when); ③ **A_settings**, two copy-paste edits in a file only you may
-edit. Corrected 2026-08-20: this paragraph said "exactly ONE"
-while ② sat three bullets above it, still marked ⏳ — a checklist that miscounts itself is the same
-defect as one that lists non-asks.
-Archived 2026-08-20 by a self-checkup, because none of them ever needed you: **A_ci · A_rig ·
-A_ref2 · B1 · B7 · B_arc**. Each one's reason is in the archive under its own heading.
-Archived 2026-08-18 and 2026-08-04, each with its full record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**. The archive is the index; re-listing what each one was here was a second copy that only cost boot tax.
+None of them is waiting on you (A0's key backup closed 2026-08-18; record and the two count
+corrections in the archive). **§A holds FIVE things, three chores:** ① A0's residual — delete the
+redundant `Desktop\COMPY KEY\` copy; ② A0's *"expand to the remaining invitees"* — a **distribution call**,
+yours by definition; ③ **A_settings**, two copy-paste edits in a file only you may edit; ④ **A_prune**,
+one delete; ⑤ **A_wmi**, one reboot.
+Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_ci · A_rig · A_ref2 · B1 · B7 · B_arc · A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**.
 
 ---
 
 ## §B — Waiting on input only you can give
+
+### B8. Your #224 board row carries another lane's data — still yours?  ·  ⏳ NEW 2026-09-03
+
+**The ask:** one word. The Work Control row for [#224](https://github.com/Pootytxng/sentinel/issues/224) is Lane = **Kuya**, so no agent retires
+it — but its fields are #225's (worktree `compy-health-parity`, expiry 2026-08-27), while your newest claim on it
+names `compy-visual-recovery-kit-6fd074`, expiry 2026-09-02. Say **"mine"** and it stays; say **"release"** and the
+P0 lane retires it with the others. **Why it matters:** until then #224 blocks every lane touching its paths, on a claim nobody can tell is live.
 
 ### B2. Widening updater distribution past the canary — go / no-go  ·  ⏳
 
@@ -196,12 +197,12 @@ button) and ~~**(b) an explicit "deploy GO"** for the site refresh~~ — **(b) G
 ("deploy go looks good for now"); the site now deploys autonomously and is LIVE on
 `compy-bd6.pages.dev` (SEO plumbing + `/compare` shipped 2026-07-15). **Still open: only (a) the Ko-fi
 URL.**
-- **Ko-fi is the single most-ready money surface** ([`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md)
-  "Bridge"): `src/data/site.ts` `KOFI_URL` is empty by design (empty = no support link ships, **no
+- **Ko-fi is the single most-ready money surface** ([`product/MONETIZATION.md`](product/MONETIZATION.md);
+  Ko-fi bridge): `src/data/site.ts` `KOFI_URL` is empty by design (empty = no support link ships, **no
   dead link**), and two dormant slots — the footer and the waitlist section — light up the instant
   you give me the URL. One line, regenerate, deploy. **Result → tell Claude: your Ko-fi profile URL.**
 
-### B6. Monetization plan — money-surface unlocks  ·  ⏳  ·  [`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md)
+### B6. Monetization — money-surface unlocks  ·  ⏳  ·  [`product/MONETIZATION.md`](product/MONETIZATION.md)
 Drawn up 2026-07-15 at your ask ("draw up a monetization plan … and how best to set it up on the
 site"). The plan documents/sequences what the site is **already built to do** — nothing here is a new
 spend or a new outbound boundary. The layers, ranked by passivity, and the owner-only unlocks each
@@ -212,8 +213,8 @@ one waits on:
   Associates / Newegg — your signup, a money call) **② enough Receipts data** to make a web
   bottleneck-report say something true. Until accounts exist, verdicts use plain retailer links (no
   revenue, still honest).
-- **Compy Pro (Layer 3)** — built dark, correct posture. **Price ✅ SET 2026-08-22: $4.99/mo ·
-  $39/yr · $89 one-time lifetime** ([`PRICING_RESEARCH.md`](PRICING_RESEARCH.md) — every comparable
+- **Compy Pro (Layer 3)** — built dark, correct posture. **Price band 2026-08-22 (a hypothesis under Constitution §32): $4.99/mo ·
+  $39/yr · $89 lifetime** ([`PRICING_RESEARCH.md`](PRICING_RESEARCH.md) — every comparable
   charges more than the old $25/yr guess, and a shop charges $45–95 just to *look* at a PC). Still
   needs **a legal entity + merchant-of-record (Paddle route) + shipped Pro value.** The site's "in
   the works / no price yet" card stays until Pro is purchasable.
@@ -234,15 +235,16 @@ push:
 - **"Upgrade-path engine"** (your Optimize feedback, 2026-07-03): the advisory upgrade block exists,
   but the fuller engine was deferred to "its own spec" and never built. Want it built, or leave it?
 
-### B5. Your UI vision — what is still yours to call  ·  ⏳  ·  [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md)
+### B5. Historical UI evidence reconciled — no current owner action  ·  ✅  ·  [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md)
 The motion/interaction stack you were most excited about is **built and on by default** — magnetic
 cursor, Lenis spine, GSAP data-ticks and the room wipe shipped `1d310e12` (2026-07-12) and you
 approved them on sight ("everything looks good"). The panoramic drag gallery you rejected 2026-07-09
 and it was **deleted on your order** (`2de8d17c`); its drag/inertia feel lives on the rig hologram.
 Two doc lines kept paraphrasing all of that as unbuilt and sent a session at it on 2026-08-24;
 `src/ui-vision-status-guard.test.ts` rule D now fails the build on a pointer that names features
-instead of rows. What [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) still lists 🔴 OPEN: **DIR-1**
-(your standing intuitive-UI lens — mine to apply on every train, nothing for you to pick) and **§G**
+instead of rows. What historical [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) still labels 🔴 OPEN
+is evidence to reconcile against the Product Constitution and roadmap, not current product priority
+or authorization: **DIR-1** (your intuitive-UI lens) and **§G**
 (the site's mini playable demo, which you flagged "maybe later"). **Yours — BOTH are now answered, so nothing in this
 section is waiting on you:**
 1. ~~**Do you want a panoramic drag surface back**~~ — ✅ **ANSWERED "no", 2026-08-25.** You took the
@@ -253,10 +255,9 @@ section is waiting on you:**
    You approved four room comps on 2026-08-23 and they have been bundled and implementation-ready
    since. Three of my ledgers said you still owed me pictures. **Nothing on you here — B1/B3/B4/B5
    are mine to make and show you, and B2 is already your ruling.**
-- **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
-  the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument
-  Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
-  is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
+- **You said "there's more I'm missing" + "capture it first"** — preserved here as historical evidence. This record does not ask you to reconstruct a list and does not authorize its former
+  Instrument Bench build target. Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; current
+  sequence comes from `docs/product/ROADMAP.md`.
 
 ### A_stale. Fourteen dead checkouts and ten rewritten Codex configs  ·  ⏳ NEW 2026-09-01
 
@@ -327,11 +328,20 @@ These gate **public** release only (not the local app you use daily). Full list:
 ---
 
 ## §D — Taste / visual sign-offs (as they come up)
+
+### D_health. Health room parity — judged at the DEFAULT accent unless you veto  ·  ⏳ 2026-09-01, corrected same day  ·  [#225](https://github.com/Pootytxng/sentinel/issues/225)
+
+**This row asked the wrong question, and is corrected rather than deleted so the mistake is legible.** It said your desk ran theme `midnight` with the Health accent set to a bare Sky `#46a8ff` — a value the picker no longer offers, so the app drops it and the room falls back. **Measured 2026-09-01** by an independent session reading the live app rather than the code — theme `violet`, accent `#b6f24a+#35e0e8` (Lime / Cyan), on all five rooms. That is a **reading, not a setting**: one click on an accent dot makes this line stale and nothing re-measures it for you.
+
+**The call I am taking, so it is not parked on you: judge Health against the comp's DEFAULT accent.** The comp is the contract and it was shot there; your picks are yours and I change nothing. **Veto on sight** if you would rather I re-shoot the comp at Lime / Cyan — the only other honest option, and it costs a re-shoot, not code.
+
+**I will never write your theme or accent to match a comp.** No code changes either way. Round 3 (`b4bf26bc`) was rejected for an incomplete difference list; that gap is fixed.
 **Nothing aesthetic is parked on you by default** (CLAUDE.md, "TASTE IS MINE TO EXERCISE, HIS TO
 OVERRULE"). Claude decides the look, ships it, and hands you a before/after to veto on sight. Only
 brand — the product name, logo, price presentation — and reversals of a call you already made land
 here as decisions. **Closed §D sign-offs (the interview default, the title-foil sweep, version
-numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
+numbering, the motion default, the sibling-slop sweep) moved 2026-08-22, plus the wordmark reading
+and the verdict-headline tail moved 2026-09-03, to
 [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md) §D — nothing in them is on you.**
 - 🔨 **Home front door — the clutter you flagged 2026-08-18.** You saw Home on `555e2996` and called
   the stacked wording, the "What are you here to do?" question, the drop-down and the
@@ -349,21 +359,6 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
   rename on 2026-08-19; the rail ships it (`src/design/homeRail.ts:17`). Everything else in that queue
   is taste and therefore mine — I ship it and hand you a before/after to veto on sight, per the
   2026-08-07 decree.
-- ✅ **The wordmark reading `©ompy` — RULED AND SHIPPED 2026-08-26** ([#213](https://github.com/Pootytxng/sentinel/issues/213) A1)
-  You chose "drop the inner ring when tiny". Done: below 22px the heartbeat inside the C is not drawn,
-  so the rail mark reads **Compy**. The threshold is 22 rather than the ~24 I proposed because a
-  capture at 16/19/20/22/24 measured the pulse legible at 22 — Settings → About draws it at exactly
-  that size and keeps its flourish. Your triple-click egg still plays at rail size: the pulse appears
-  for the beat, then tucks away. Nothing else about the mark moved. Before/after sent to you.
-- ✅ **The verdict headline's "· and 3 more" tail — RULED AND SHIPPED 2026-08-26** ([#219](https://github.com/Pootytxng/sentinel/issues/219))
-  You chose "drop the count from the headline". Done: the big line names the one flagged thing and
-  stops. Nothing is hidden — the line under it still prints the honest proportion ("15 of 16 checks
-  look good.") and the rest are one press away in Check and Fix. **Correction:** I first told you
-  "the rest are still visible in the list below" — on Home they are not, they are one click away.
-  Nothing is hidden either way, but you ruled on a slightly wrong description of the screen and you
-  should know that. Say the word and Home can name them all inline. The retired translation
-  string is deleted in both languages so it cannot be wired back up by accident.
-
 ---
 
 ## Where the full lists live (so nothing is buried again)
@@ -372,7 +367,7 @@ numbering, the motion default, the sibling-slop sweep) moved 2026-08-22 to
 | Gaming Mode QA cases | [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md) |
 | Beta smoke pass | [`BETA_SMOKE_CHECKLIST.md`](BETA_SMOKE_CHECKLIST.md) |
 | What's next / status ledger | [`BACKLOG.md`](BACKLOG.md) |
-| **Owner's UI / design vision** | [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) |
+| Historical owner UI/design evidence (not product priority) | [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) |
 | Live gate/build state | [`RELEASE_STATE.md`](RELEASE_STATE.md) |
 | Funnel go-live steps | [`archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md`](archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md) |
 | NVIDIA validation (needs NVIDIA hardware) | [`NVIDIA_VALIDATION_PLAN.md`](NVIDIA_VALIDATION_PLAN.md) |

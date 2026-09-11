@@ -8,6 +8,16 @@
     "superpowers@claude-plugins-official": false
   },
   "permissions": {
+    "allow": [
+      "Bash(npx vitest run *)",
+      "Bash(node scripts/run-vitest.mjs *)",
+      "Bash(pwsh -NoProfile -File scripts/doc-budget.ps1)",
+      "Bash(node scripts/branch-disposition-audit.mjs *)",
+      "Bash(node scripts/verify-release-state.mjs *)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(node scripts/work-control-gate.mjs *)",
+      "Bash(gh project item-list *)"
+    ],
     "deny": [
       "Bash(npm publish*)",
       "PowerShell(npm publish*)",
@@ -69,6 +79,17 @@
         ]
       },
       {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/shell-ownership-assert.mjs\"",
+            "timeout": 10,
+            "statusMessage": "compy-entry:shell-ownership"
+          }
+        ]
+      },
+      {
         "matcher": "Workflow",
         "hooks": [
           {
@@ -93,6 +114,12 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-throttle.mjs\"",
             "timeout": 10,
             "statusMessage": "subagent spawn-count check"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/hookspath-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "isolation-worktree refusal (shared hooksPath, #362)"
           }
         ]
       },
@@ -109,6 +136,17 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/hookspath-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "shared hooksPath repair after an agent (#362)"
+          }
+        ]
+      },
       {
         "matcher": "Write|Edit",
         "hooks": [
@@ -128,6 +166,17 @@
             "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"",
             "timeout": 5,
             "statusMessage": "Checking UI changes"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/scope-drift-check.mjs\"",
+            "timeout": 10,
+            "statusMessage": "compy-entry:scope-drift"
           }
         ]
       },

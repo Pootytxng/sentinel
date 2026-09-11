@@ -1,28 +1,30 @@
 # SESSION HANDOFF — paste-ready prompt for the next session
 
-> Live pointer only. Gate truth: [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue:
-> [`BACKLOG.md`](BACKLOG.md) ▶ NEXT UP. Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
-> Budget 120 lines; this file, `BRANCH_DISPOSITIONS.md` and `BACKLOG.md::Conformance queue` are all
-> AT cap — trim before adding a line. Replace this file, never append.
+> Live pointer only. Product truth: [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md). Gate truth:
+> [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue: [`BACKLOG.md`](BACKLOG.md) (ledger, P0 first, derived
+> from `product/ROADMAP.md`). Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
+> Budget 120 lines; this file is AT cap — trim before adding a line. Replace this file, never append.
+> **Durable instructions only**: no fleet counts, no lane names, nothing another lane must repair (#291).
 
 ## Where the train is standing
 
-**The desk build is `090bc58b`** (Mission 2 landing, #238; version debt — batch the next cut).
+**The desk build is `d7fed835`** (Wave 1 Lane B landing, #224/#225 via PR #401; version debt — batch the next cut).
 
 | | |
 |---|---|
-| Installed | `090bc58b`, stamp byte-found in the installed exe and `73b629ed` byte-absent, one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
+| Installed | `d7fed835`, stamp byte-found in the installed exe (`d7fed835 · release · shell 0.9.26`, ship-reinstall OK), one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
 | Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
 | Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
+| Harvest | Wave 1 Lane B (#224/#225) LANDED: PR #401 merged to `main` at `3fe7a029` (receipt `.claude/work-control/2026-09-07-merge-pr-401.json`, independent review APPROVE at `aed5bcac`); PR #294 closed as superseded and its ref pruned, so its content is on `main` and no ref carries it. Acceptance stays the owner's: look at Health/Test in the installed `d7fed835` build, accept or veto (#224 proof boundary, #225 step 7). |
 
 ## The rule that came out of the walk — read this before touching Health
 
 **DIR-1a: offering help is conditional on evidence** — a front door built only out of symptoms tells
 a healthy PC's owner they are in the wrong place, and *"i want more fps"* is a legitimate reason to be
-here. **A STANDING lens, not a closed row**: every new Health affordance must answer *"is this framing
-earned?"* first. The direction is authoritative at `docs/UI_VISION_BACKLOG.md` §"⭐ DIR-1a" — read it
-THERE, never from a paraphrase, this line included. Shipped `b21bc18b`; guard
+here. The shipped implementation must still answer *"is this framing earned?"* because the evidence-first and no-scareware laws in `docs/PRODUCT_CONSTITUTION.md` now supply the product authority.
+Historical rationale is preserved at `docs/UI_VISION_BACKLOG.md` §"⭐ DIR-1a"; it is evidence, not
+priority or work authorization. Shipped `b21bc18b`; guard
 `src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **DIR-1b:** the attention
 state carries a one-line ROUTE to the room that acts on it (#180 §C untouched — the detail paragraph
 still does not render on Health).
@@ -69,12 +71,15 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
   paths break from `docs/archive/`; `markdown-link-guard` catches it at the push (`093f5600`).
 - **`git checkout <file>` on an uncommitted fix destroys it silently** — copy it to the scratchpad
   first, or commit.
+- **A raw control character inside a regex or a `sed` replacement is invisible and can vacate a
+  guard** (#304, incident detail archived 2026-09-03) — `scripts/source-control-characters.test.mjs`
+  ROOTS now covers `src`, `docs` and `src-tauri/src` too, not just `scripts`/`tools`.
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 2 (#258) LANDED** — `cfc0d21a` / PR #263, the consent screen renders the payload itself.
-**Stage 3 is NEXT**: receiver + migration, local/staged ONLY, never deployed — deployment is Stage 7
-and owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+**Q9b Stage 3 (#287) BUILT** — `scripts/lib/case-endpoint/` validator, handler and migration, proved
+local/staged ONLY, never deployed (§11), via PR #289. **Stage 4 is NEXT**: the Tauri send command;
+deployment is Stage 7, owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
 (`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
@@ -84,28 +89,24 @@ Console (`LabConsole`), and its proving bench already ships armed as `Experiment
 **Do NOT touch** Tier 1 plan tasks 10–11 (independent security review + arming). Owner territory,
 filed in `docs/OWNER_ACTION_CHECKLIST.md` §C so arming can never happen quietly. Still dark, three
 independent locks, none touched: `case_intelligence_gate()` hard-false · `CASE_SIGNING_PUBKEY` all
-zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. **Before any UI work:**
-read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — today **DIR-1** (§"⭐ DIR-1", now carrying DIR-1a)
-and **§G** (the site). Read them THERE, never from a paraphrase.
-- **33 worktrees besides the canonical checkout. Work that exists on no remote — do NOT delete or hard-reset these
-  before checking**: `claude/compy-visual-recovery-kit-6fd074`, holding a single commit (`cdd976f3`, docs on
-  RELEASE_STATE + SESSION_HANDOFF) that no `origin` ref reaches, `lane/receipt-carrier-345` (#346) whenever a push
-  lags — EVERY lane joins this list between a commit and its push, so no count is pinned here. Most checkouts ahead of
-  `origin/main` are **fully pushed**: deleting those loses nothing, each has a row in `docs/BRANCH_DISPOSITIONS.md`,
-  and rule C prints the live split every run. It stopped
-  demanding all be named on 2026-09-01 (#312): 92% of them could not be lost, and no two lanes could be green at once.
-  `claude/compy-health-parity` and `claude/compy-visual-recovery-kit-6fd074` **share 14 commits and diverge at
-  `c8366609` — neither contains the other** (`--is-ancestor` is NO both ways). Counted **not on main**: the kit has ONE
-  unique commit; health-parity's is unpinned, re-merging main — use the formula below. Backed up only to
-  `refs/backup/*`, so dropping either loses the other's work. **No depth/SHA pinned** — re-derive risk with `git
-  rev-list --count <ref> --not` over the origin refs `git ls-remote --heads origin` reports, distance with
-  `origin/main..<ref>`. **A landed lane's name still leaves with the train that lands it** (rule D, #243): naming a
-  zero-carry branch fails this bullet whether or not rule C wanted the name. Spent, at zero:
-  `sentinel-fleet-guard-276`, `sentinel-segmented-237`, `sentinel-q9b-redactor-259`,
-  `sentinel-q9b-stage2-258` (#258/#264 landed out of it), four of the SIX registered under `.claude/worktrees/` (seven
-  entries there; `data-root-integrity-432797` is not one), parked `sentinel-mission0-accent-landing`,
-  `sentinel-mission1-test-workspace` (Mission 1 is ON main, #231/#233), `sentinel-q9b-stage2`. Every detached checkout
-  carries zero, so rule C has nothing to credit.
+zeros · `CASE_CATALOG_ENDPOINTS` **and** `CASE_CATALOG_ORIGINS` both empty. Before UI work, read `docs/PRODUCT_CONSTITUTION.md`, derive sequence from `docs/product/ROADMAP.md`, and reconcile the
+historical `docs/UI_VISION_BACKLOG.md` 🔴 OPEN rows — including **DIR-1** and **§G** — as evidence;
+they do not independently establish priority, approval, or authorization.
+
+- **The fleet is measured, never written down.** `node scripts/fleet-snapshot.mjs` prints every
+  checkout on this machine: its branch, how far past `origin/main` it sits, and whether anything it
+  holds exists on no remote. No count, carrier list or lane name is stored in this file — #291's
+  price for the old way is archived in `docs/archive/SESSION_HANDOFF_HISTORY.md` §2026-09-03.
+- **The one shape that can still be LOST** is a checkout on a detached head holding commits no remote
+  has. `git worktree remove` deletes the folder, and nothing else knew those commits existed. Rule C
+  of `scripts/handoff-worktree-truth.test.mjs` fails on exactly that; the fix is to give the work a
+  ref (`git branch <name> <sha>`) or push it, never a line here — prose does not make a commit
+  reachable. A checkout on a branch is safe: local branches live in the common `.git` and outlive
+  their worktree, so deleting the folder loses nothing.
+- **Two lanes that overlap are a git question, not a remembered one.** Ask
+  `git merge-base --is-ancestor <inner> <outer>` before dropping either, both ways — "shares N
+  commits, diverging at `<sha>`" is what two lanes that merely overlap actually do, and neither
+  containing the other is the common answer. `refs/backup/*` is not a substitute for asking.
 
 ## Waiting on the owner — two arming gates, nothing else
 

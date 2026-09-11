@@ -1,5 +1,10 @@
 # TOP-PRIORITY DIRECTIVE — de-slop the UI, make it organic + unique (owner, 2026-07-05)
 
+> **PRODUCT DIRECTION SUPERSEDED 2026-09-04 (#369).** The “top-priority,” “highest priority,” and
+> creative-authority instructions below are historical, not current product authority. Current
+> experience direction comes from `docs/PRODUCT_CONSTITUTION.md`; historical owner taste evidence may
+> inform work only after it is reconciled with the current Constitution and active Work Control.
+>
 > **Owner directive (verbatim intent, persisted per PERSIST-TO-DISK).** After living with the
 > shipped V2 shell + guided Lab, the owner's verdict: the UI — though theme-consistent — reads as
 > **generic "AI-slop" template design**. He wants something **organic and unique**, concise, not

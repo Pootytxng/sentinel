@@ -45,6 +45,13 @@ The dev build runs two same-origin webviews + a small default window, so capture
 ## The rubric — one line of EVIDENCE each. No evidence = not reviewed.
 
 1. **Capture** — native, real-res, main window (state the size; confirm not the overlay).
+   **Name the COLOUR STATE with it (bug→guard 2026-08-27, #225 round 4).** Report `data-itheme`
+   and, for the captured room, its computed `--v2-accent` plus any persisted `compy_room_accents`
+   pick. A capture shows ONE user's colour state, never "the app": a supervisor rejected a Health
+   parity round whose difference list read "complete" while the desk rendered that room's accent
+   Sky `#46a8ff` against an approved violet comp. **Never write a theme or accent value to make a
+   capture match** — it is the user's data and the picker is a shipped feature; read it, name it,
+   and let the difference list carry it.
 2. **Legibility / contrast** — every text-on-fill touched: readable? On accent/colored fills the
    text MUST be `--ix-accent-ink` (dark), never `--muted`. STATE the computed color
    (`getComputedStyle(el).color` via `docs/ui-sweep/cdp-eval.mjs`) — direct proof, not a guess.
@@ -53,6 +60,11 @@ The dev build runs two same-origin webviews + a small default window, so capture
 4. **Interactive states** — hover / active / disabled don't break or mislead (no false danger-red
    on a primary action). Say which you checked.
 5. **Layout** — alignment, spacing, no clipping/overflow; empty + loading states hold.
+   **Panel overflow is MEASURED, never assumed (bug→guard, #225 round 2 at 1dd701b1, 2026-09-03):**
+   for every scroll-container panel the diff can reach (Health's `.hc-panel` at minimum), report
+   `scrollHeight` vs `clientHeight` at 1280×720, 1500×980 and 1920×1080. Equal is PASS; any
+   surplus is FAIL even though `overflow-y: auto` would let a scrollbar reach it — the jsdom guard
+   only proves the net exists, and a note nobody sees is the clipped reading rounds 3–9 paid for.
    **Bento tile hygiene (bug→guard, Blackbook 2026-08-12 — caught twice in one commit):** when a
    block moves INSIDE a `<BentoTile>`, its old wrapper's frame and gap must be re-homed, not
    assumed. MEASURE, don't eyeball: (a) no direct child of `.v2-tile-body` may keep its own
@@ -101,7 +113,9 @@ The dev build runs two same-origin webviews + a small default window, so capture
    he made last week. **Evidence required: name the surfaces the diff touches, then `git log -S`
    the flag/class/string behind each one and quote the most recent owner-decision commit you find,
    or state "searched <terms>, no prior owner decision found".** A `docs/UI_VISION_BACKLOG.md`
-   decision or a commit whose message quotes the owner both count.
+   entry is historical evidence, not current product authority; reconcile it with
+   `docs/PRODUCT_CONSTITUTION.md`, the roadmap, current issues, and code. A commit whose message
+   quotes the owner is likewise evidence to reconcile, not standalone work authorization.
    **Precedent (2026-08-18, the defect that created this item):** the owner removed the "What are
    you here to do?" box on sight on 2026-08-12 (`4d1afa92`, his words: *"the what are you here to
    do text box was ugly looks cleaner without it"*). Six days later UX-1 (`f1766e86`) promoted that
@@ -126,7 +140,8 @@ The dev build runs two same-origin webviews + a small default window, so capture
     element, an overlapping glyph, or an unstyled native control is a correctness failure, not a
     matter of taste"* (Cowork lane amendment, 2026-08-24, adopted by the owner in the same message
     that handed this lane #49). Those three classes FAIL this item on sight. They may not be
-    deferred to the owner as a taste question, parked in `docs/UI_VISION_BACKLOG.md`, or reported
+    deferred to the owner as a taste question, parked as product direction in historical
+    `docs/UI_VISION_BACKLOG.md`, or reported
     as "cosmetic" — the taste decree (CLAUDE.md, 2026-08-07) governs *choices between defensible
     looks*, and a glyph colliding with its neighbour is not one of those. Scan the capture for
     them explicitly and say what you looked at; "nothing clipped" with no named region is a FAIL.
