@@ -123,15 +123,68 @@ export function readBoard({ run = gh } = {}) {
   }
 }
 
-/** The issue's live claim, as threadLease folds it, and its newest handoff — the record guard 7 compares to. */
-export function readIssueThread(issue) {
+const leaseOf = (issue, comments) => {
+  const { claim, handoff } = threadLease(comments ?? []);
+  return { claim: claim ? { ...claim, issue } : null, handoff, unreadable: false };
+};
+const UNREADABLE = Object.freeze({ claim: null, handoff: null, unreadable: true });
+
+/**
+ * The issue's live claim, as threadLease folds it, and its newest handoff — the record guard 7 compares to.
+ * A thread that could not be read says so (`unreadable: true`): it is not the same fact as a thread with
+ * no claim in it, and a reader that needs the difference (collision rule 5) must be able to see it (#414).
+ */
+export function readIssueThread(issue, { run = gh } = {}) {
   try {
-    const raw = gh(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]);
-    const { claim, handoff } = threadLease(JSON.parse(raw).comments ?? []);
-    return { claim: claim ? { ...claim, issue } : null, handoff };
+    const raw = run(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]);
+    return leaseOf(issue, JSON.parse(raw).comments);
   } catch {
-    return { claim: null, handoff: null };
+    return { ...UNREADABLE };
   }
+}
+
+/** Aliases per GraphQL request, and comments per thread in it. A longer thread is read on its own. */
+export const THREAD_BATCH = 100;
+const THREAD_PAGE = 100;
+
+/**
+ * Many threads' leases in one GraphQL request per THREAD_BATCH issues, instead of one `gh` process per
+ * issue (#414: every item that is not Done is read, about 57 on 2026-09-11). Returns a Map from issue
+ * number to readIssueThread's shape. An alias GitHub will not answer (gh exits non-zero, the rest of the
+ * data still on stdout) is unreadable for that issue only; a request that returns nothing is unreadable
+ * for every issue in it. A thread longer than one page is read whole through readIssueThread, because a
+ * claim or a Handoff past the first page is exactly the part that decides the lease.
+ */
+export function readIssueThreads(numbers, { run = gh } = {}) {
+  const out = new Map();
+  const wanted = [...new Set((numbers ?? []).map(Number))].filter((n) => Number.isSafeInteger(n) && n > 0);
+  const [owner, name] = REPO.split("/");
+  const page = `comments(first: ${THREAD_PAGE}) { totalCount nodes { body createdAt } }`;
+  for (let i = 0; i < wanted.length; i += THREAD_BATCH) {
+    const chunk = wanted.slice(i, i + THREAD_BATCH);
+    const aliases = chunk.map((n) => `i${n}: issueOrPullRequest(number: ${n}) { ... on Issue { ${page} } ... on PullRequest { ${page} } }`);
+    const query = `query { repository(owner: "${owner}", name: "${name}") { ${aliases.join(" ")} } }`;
+    const repositoryOf = (raw) => {
+      try {
+        return JSON.parse(String(raw ?? "")).data?.repository ?? null;
+      } catch {
+        return null;
+      }
+    };
+    let repository;
+    try {
+      repository = repositoryOf(run(["api", "graphql", "-f", `query=${query}`]));
+    } catch (e) {
+      repository = repositoryOf(e?.stdout);
+    }
+    for (const n of chunk) {
+      const comments = repository?.[`i${n}`]?.comments;
+      if (!comments || !Array.isArray(comments.nodes)) out.set(n, { ...UNREADABLE });
+      else if (Number(comments.totalCount) > comments.nodes.length) out.set(n, readIssueThread(n, { run }));
+      else out.set(n, leaseOf(n, comments.nodes));
+    }
+  }
+  return out;
 }
 
 /** The issue body — where a task's Write scope lives before its first claim. Null when unreadable. */
@@ -145,11 +198,18 @@ export function readIssueBody(issue) {
 
 /**
  * The facts `scope.overlap` decides over (#358): this task's declared paths (from --scope, else its
- * own live claim, else the issue body's "Write scope" bullet), every OTHER Active item's declared
- * paths from its live claim, and the tracked paths of the base commit — the set a glob can claim.
+ * own live claim, else the issue body's "Write scope" bullet), the declared paths of every OTHER live
+ * lease, and the tracked paths of the base commit — the set a glob can claim.
+ *
+ * A lease lives in the issue thread, not in the board column (#414): a claim held through review sits
+ * in Review, and one parked on the owner sits in Needs Kuya. So every item that is not Done is read,
+ * whatever its column. Done is skipped because the board's "Item closed" workflow puts a closed issue
+ * there, and #411/#413 refuse the close and the merge while a lease is live; reading those threads
+ * would only cost time. A thread that cannot be read is an unknown lease, which locks (rule 5). An
+ * Active row with no live claim is kept as stale, so the verdict can name the hygiene finding.
  * The readers are injected so the guards can drive this without GitHub or git.
  */
-export function gatherScopeFacts({ task, items = [], claim = null, scopeText = null, base = null, now = new Date(), hostDir = HOST_DIR, git = gitIn, thread = readIssueThread, body = readIssueBody }) {
+export function gatherScopeFacts({ task, items = [], claim = null, scopeText = null, base = null, now = new Date(), hostDir = HOST_DIR, git = gitIn, run = gh, threads = (ns) => readIssueThreads(ns, { run }), body = readIssueBody }) {
   let text = null;
   let source = null;
   if (scopeText) {
@@ -166,23 +226,37 @@ export function gatherScopeFacts({ task, items = [], claim = null, scopeText = n
     }
   }
   const mine = parseScopePatterns(text);
-  const others = (items ?? [])
-    .filter((i) => i.status === "Active" && Number(i.number) !== Number(task?.number))
-    .map((i) => {
-      // A released claim already reads as null; an expired one is read as stale here, so the
-      // verdict can name it without treating it as a writer (and still refuse if its paths overlap).
-      const live = thread(i.number)?.claim ?? null;
-      // Anchored on the posting time, so a bare "12 hours" reads as the writer meant it.
-      const expiry = live ? claimExpiry(live.expires, { anchor: live.postedAt }) : null;
-      return {
-        number: i.number,
-        lane: i.lane ?? null,
+  const read = (items ?? []).filter((i) => {
+    const n = Number(i?.number);
+    return Number.isSafeInteger(n) && n > 0 && i.status !== "Done" && n !== Number(task?.number);
+  });
+  let leases;
+  try {
+    leases = threads(read.map((i) => Number(i.number)));
+  } catch {
+    leases = null;
+  }
+  const others = read.flatMap((i) => {
+    const column = i.status ?? null;
+    const at = { number: i.number, lane: i.lane ?? null, column };
+    const t = leases instanceof Map ? leases.get(Number(i.number)) : null;
+    if (!t || t.unreadable) return [{ ...at, scope: null, live: true, expired: false, expires: null, unreadable: true }];
+    // A released claim already reads as null; an expired one is read as stale here, so the
+    // verdict can name it without treating it as a writer (and still refuse if its paths overlap).
+    const live = t.claim ?? null;
+    if (!live && column !== "Active") return [];
+    // Anchored on the posting time, so a bare "12 hours" reads as the writer meant it.
+    const expiry = live ? claimExpiry(live.expires, { anchor: live.postedAt }) : null;
+    return [
+      {
+        ...at,
         scope: live ? parseScopePatterns(live.scope) : null,
         live: Boolean(live),
         expired: Boolean(expiry && expiry < now),
         expires: expiry ? expiry.toISOString().slice(0, 10) : (live?.expires ?? null),
-      };
-    });
+      },
+    ];
+  });
   let files = null;
   try {
     const ref = base?.ok && base.sha ? base.sha : CREATE_BASE_REF;

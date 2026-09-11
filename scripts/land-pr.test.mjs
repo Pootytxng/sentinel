@@ -4,10 +4,11 @@
 // gate in the repository, and a merge leaves exactly that ref behind until someone prunes it. The
 // pilot measured the window on PR #364: audit FAIL while the ref lingered, OK the moment it was
 // pruned. These tests pin the plan's order and its refusals; the network reads are injected.
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { main, planLanding, readOpenPullRequests, readView, renderPlan, retargetCommand } from "./land-pr.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -114,6 +115,78 @@ describe("main: a merge is proof-dependent, so the receipt is not optional", () 
     expect(main(["--pr", "364"], io)).toBe(2);
     expect(lines.join("\n")).toContain("--receipt <path> is required");
     expect(lines.join("\n")).toContain("docs/WORK_CONTROL.md");
+  });
+
+  // Bug -> guard (#413): the gate checks the closing references of the PR its receipt names. A receipt
+  // copied from another landing would have it check the wrong PR, so land-pr refuses one that does not
+  // name the PR it was asked to land, before the gate runs. The gate's spawn is injected, and every
+  // refusal case stubs it FAILING: a regression that reached it would stop at "did not PASS" instead
+  // of going on to read the PR from GitHub (a PASS stub would send the old code to gh for PR #395).
+  describe("the receipt has to be for the PR being landed (#413)", () => {
+    const MERGE = { transition: "merge-pr" };
+    const dirs = [];
+    afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
+    const receiptFile = (body) => {
+      const dir = mkdtempSync(join(tmpdir(), "compy-land-pr-"));
+      dirs.push(dir);
+      const path = join(dir, "receipt.json");
+      writeFileSync(path, typeof body === "string" ? body : JSON.stringify(body), "utf8");
+      return path;
+    };
+    /** The gate's spawn, injected and recorded, so a case can prove the gate never ran. */
+    const withSpawn = (status) => {
+      const q = quiet();
+      const spawned = [];
+      q.io.spawn = (...args) => {
+        spawned.push(args);
+        return { status, stdout: "" };
+      };
+      return { ...q, spawned };
+    };
+
+    it("refuses a receipt that names a different PR, and never runs the gate", () => {
+      const { io, lines, spawned } = withSpawn(1);
+      expect(main(["--pr", "395", "--receipt", receiptFile({ ...MERGE, pr: 397 })], io)).toBe(1);
+      expect(lines.join("\n")).toMatch(/names PR #397, not #395/);
+      expect(spawned).toEqual([]);
+    });
+
+    it.each([[undefined], [null], ["395"], [0], [-395], [395.5]])("refuses a receipt whose pr is not a plain PR number: %j", (pr) => {
+      const { io, lines, spawned } = withSpawn(1);
+      expect(main(["--pr", "395", "--receipt", receiptFile({ ...MERGE, pr })], io)).toBe(1);
+      expect(lines.join("\n")).toMatch(/not #395/);
+      expect(spawned).toEqual([]);
+    });
+
+    it("refuses a receipt it cannot read, and never runs the gate", () => {
+      const { io, lines, spawned } = withSpawn(1);
+      expect(main(["--pr", "395", "--receipt", receiptFile("{not json")], io)).toBe(1);
+      expect(lines.join("\n")).toMatch(/could not be read/);
+      expect(spawned).toEqual([]);
+    });
+
+    // HQ review 5178030363: the gate judges a receipt by its OWN transition. A close-issue receipt that
+    // carries this PR's number passed the PR check, reached the gate, was judged as a close, and never
+    // had this PR's closingIssuesReferences read; land-pr would then merge. Only merge-pr may land.
+    it.each([["close-issue"], ["mark-done"], ["mark-pr-ready"], ["close-superseded-pr"], ["MERGE-PR"], [" merge-pr"], [undefined], [null], [["merge-pr"]]])(
+      "refuses a same-PR receipt whose transition is %j, not merge-pr, and never runs the gate",
+      (transition) => {
+        const { io, lines, spawned } = withSpawn(1);
+        expect(main(["--pr", "395", "--receipt", receiptFile({ transition, pr: 395, issue: 283 })], io)).toBe(1);
+        expect(lines.join("\n")).toMatch(/is not a merge-pr receipt/);
+        expect(lines.join("\n")).not.toMatch(/did not PASS/);
+        expect(spawned).toEqual([]);
+      },
+    );
+
+    it("hands a same-PR merge-pr receipt to the gate, and stops when the gate does not PASS", () => {
+      const { io, lines, spawned } = withSpawn(1);
+      const path = receiptFile({ ...MERGE, pr: 395 });
+      expect(main(["--pr", "395", "--receipt", path], io)).toBe(1);
+      expect(spawned).toHaveLength(1);
+      expect(spawned[0][1]).toEqual(["scripts/work-control-gate.mjs", path]);
+      expect(lines.join("\n")).toMatch(/did not PASS/);
+    });
   });
 });
 

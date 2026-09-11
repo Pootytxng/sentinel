@@ -165,7 +165,9 @@ A separate worktree or clone is mandatory for every active writer. Shared checko
    a collision; overlapping paths do.
 4. **Scope is measured, not trusted.** `scripts/scope-drift-gate.mjs` and
    `.claude/hooks/scope-drift-check.mjs` enforce the claimed write set. Dispatch must refuse a new
-   slice whose scope overlaps another live mutation lease.
+   slice whose scope overlaps another live mutation lease. It reads the thread of every item that is
+   not Done, whatever its column, since a lease held through review sits in Review; Done is skipped
+   because closing and merging refuse while a lease is live (#411, #413), and an unreadable thread locks.
 5. **Unknown means locked.** Unknown folder, scope, dirty state, or live-process ownership is not a
    permission to proceed.
 6. **Expiry is an alarm, not a takeover.** A stale board claim never authorizes reset, stash, discard,
@@ -305,8 +307,10 @@ On this board the two are one transition: the project's "Item closed" workflow s
 closes, and "Auto-close issue" closes it when Done is set. So the lease ends first: post the
 `### Handoff` ending `Claim: released`, then close. `scripts/work-control-gate.mjs` refuses
 `close-issue` and `mark-done` while the issue's thread reads a live lease or cannot be read (#411). A
-merge whose PR carries a closing keyword closes the issue too, so release before that merge; the gate
-does not check that route yet.
+merge closes every issue its PR lists in `closingIssuesReferences` (a keyword in the body or in any
+commit), so release before that merge: a `merge-pr` receipt must name its `pr`, and the gate refuses it
+while any issue that PR lists reads a live lease, or when the PR, a thread, or a reference outside this
+repository cannot be read (#413). `scripts/land-pr.mjs` refuses a receipt that names another PR.
 
 ## Anti-staleness
 

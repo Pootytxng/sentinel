@@ -12,7 +12,11 @@
 //
 //   node scripts/land-pr.mjs --pr N --receipt .claude/work-control/<transition>.json [--dry-run]
 //
-// It refuses, in this order: a receipt the work-control gate does not PASS; a PR that is not OPEN;
+// It refuses, in this order: a receipt whose `transition` is not "merge-pr" (the gate judges a receipt
+// by its own transition, so a same-PR close-issue receipt would never have this PR's closing references
+// read -- HQ review 5178030363); a receipt whose `pr` is not the PR being landed (#413: the gate checks
+// the closing references of the PR the receipt names, so a receipt copied from another landing would
+// have it check the wrong PR); a receipt the work-control gate does not PASS; a PR that is not OPEN;
 // a PR from a fork (its head is not ours to prune); a head that is `main`; a head another open PR is
 // based on (names the retarget, never the delete); a head a disposition record says to keep
 // (PRESERVE / LANDED). It never passes --delete-branch (GitHub closes dependent PRs, #337) and never
@@ -20,7 +24,8 @@
 // fails is said out loud with the exact command left to run, because that is the window this exists
 // to close.
 import { execFileSync, spawnSync } from "node:child_process";
-import { basename, dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readAll } from "./lib/dispositions.mjs";
 
@@ -97,6 +102,19 @@ export function readOpenPullRequests(exec = run) {
   );
 }
 
+/**
+ * The `transition` and `pr` a receipt names, read the way the gate will read it (relative to ROOT,
+ * where the gate runs). `{ ok: false }` when the file cannot be read or parsed.
+ */
+export function receiptPr(receipt, root = ROOT) {
+  try {
+    const record = JSON.parse(readFileSync(resolve(root, receipt), "utf8"));
+    return { ok: true, transition: record?.transition, pr: record?.pr };
+  } catch (e) {
+    return { ok: false, why: String(e?.message ?? e).split("\n")[0] };
+  }
+}
+
 const USAGE = "usage: node scripts/land-pr.mjs --pr N --receipt .claude/work-control/<transition>.json [--dry-run]";
 
 export function main(argv = process.argv.slice(2), io = { log: console.log, error: console.error }) {
@@ -116,7 +134,30 @@ export function main(argv = process.argv.slice(2), io = { log: console.log, erro
     return 2;
   }
   if (receipt) {
-    const gate = spawnSync("node", ["scripts/work-control-gate.mjs", receipt], { cwd: ROOT, encoding: "utf8" });
+    const named = receiptPr(receipt);
+    if (!named.ok) {
+      io.error(`land-pr: the receipt ${receipt} could not be read (${named.why}) -- refusing to merge.`);
+      return 1;
+    }
+    // Exactly "merge-pr": the gate runs the checks of the receipt's own transition, and only a merge-pr
+    // receipt has this PR's closingIssuesReferences held to the lease check (HQ review 5178030363).
+    if (named.transition !== "merge-pr") {
+      io.error(
+        `land-pr: the receipt ${receipt} has transition ${JSON.stringify(named.transition ?? null)}, so it is not a merge-pr receipt -- ` +
+          "refusing to merge. The gate judges a receipt by its own transition, so only a merge-pr receipt has this PR's " +
+          "closing references held to the lease check (#413).",
+      );
+      return 1;
+    }
+    // `pr` was checked a plain positive integer above; strict equality refuses "395", 395.5 and a missing pr.
+    if (named.pr !== pr) {
+      io.error(
+        `land-pr: the receipt ${receipt} names PR #${named.pr ?? "(none)"}, not #${pr} -- refusing to merge. The gate ` +
+          "checks the closing references of the PR its receipt names (#413), so a receipt for another PR proves nothing here.",
+      );
+      return 1;
+    }
+    const gate = (io.spawn ?? spawnSync)("node", ["scripts/work-control-gate.mjs", receipt], { cwd: ROOT, encoding: "utf8" });
     if (gate.stdout) process.stdout.write(gate.stdout);
     if (gate.status !== 0) {
       io.error(`land-pr: the work-control gate did not PASS ${receipt} (exit ${gate.status}) -- refusing to merge.`);

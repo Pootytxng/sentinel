@@ -147,23 +147,21 @@ function issuesClosedBy(record) {
   return named.length > 0 && named.every((n) => Number.isInteger(n) && n > 0) ? named : null;
 }
 
-function leaseBlockers(record, issueComments) {
-  const issues = issuesClosedBy(record);
-  if (!issues) {
-    return [
-      `A ${record?.transition} receipt must name its issue (a positive issue number, or a list of them): ` +
-        "on this board that transition closes the issue and marks it Done, so the gate reads the issue's lease first.",
-    ];
-  }
+const firstLineOf = (error) => String(error instanceof Error ? error.message : error).split("\n")[0];
+
+/**
+ * The per-issue thread read both routes share. `how` says why the transition ends the issue's lease,
+ * and `then` names the step the Handoff has to come before.
+ */
+function leaseBlockers(issues, issueComments, { how, then }) {
   const blockers = [];
   for (const issue of issues) {
     let lease;
     try {
       lease = threadLease(issueComments(issue));
     } catch (error) {
-      const why = String(error instanceof Error ? error.message : error).split("\n")[0];
       blockers.push(
-        `#${issue}'s thread could not be read (${why}), so whether its lease was released is unknown; ` +
+        `#${issue}'s thread could not be read (${firstLineOf(error)}), so whether its lease was released is unknown; ` +
           "environment inability is a blocker, not a pass.",
       );
       continue;
@@ -171,12 +169,98 @@ function leaseBlockers(record, issueComments) {
     if (lease.claim) {
       blockers.push(
         `#${issue} still has a live lease: the ownership claim posted ${lease.claim.postedAt} has no newer ` +
-          `Handoff releasing it. Closing the issue sets its item Done (the project's "Item closed" workflow), ` +
-          "which tells every reader that no writer holds it; #283 read Done that way on 2026-09-10. Post the " +
-          'Handoff first, ending "- Claim: released" (planRelease moves the item to Review), then close.',
+          `Handoff releasing it. ${how ? `${how} ` : ""}Closing the issue sets its item Done (the project's "Item closed" ` +
+          "workflow), which tells every reader that no writer holds it; #283 read Done that way on 2026-09-10. " +
+          `Post the Handoff first, ending "- Claim: released" (planRelease moves the item to Review), then ${then}.`,
       );
     }
   }
+  return blockers;
+}
+
+function closeLeaseBlockers(record, issueComments) {
+  const issues = issuesClosedBy(record);
+  if (!issues) {
+    return [
+      `A ${record?.transition} receipt must name its issue (a positive issue number, or a list of them): ` +
+        "on this board that transition closes the issue and marks it Done, so the gate reads the issue's lease first.",
+    ];
+  }
+  return leaseBlockers(issues, issueComments, { how: "", then: "close" });
+}
+
+// ---------------------------------------------------------------------------------------------
+// A MERGE CLOSES WHAT ITS PR LISTS (#413)
+// Merging a PR closes every issue in its closingIssuesReferences, which GitHub fills from a closing
+// keyword in the body or in any of its commits, and "Item closed" then sets Done. So a merge-pr
+// receipt is held to the same lease check, over the issues the PR lists, never over the receipt's own
+// `issue`. Every reference must be a plain issue number in this repository: a lease the gate cannot
+// read is not a released one.
+// ---------------------------------------------------------------------------------------------
+
+/** A reader of a PR's closingIssuesReferences through `gh` (injected). Throws when they cannot be read. */
+export function closingIssuesVia(runner) {
+  return (pr) => {
+    const refs = JSON.parse(runner(["pr", "view", String(pr), "--repo", CANONICAL_REPO, "--json", "closingIssuesReferences"]))
+      .closingIssuesReferences;
+    if (!Array.isArray(refs)) throw new Error("gh returned no closingIssuesReferences list");
+    return refs;
+  };
+}
+
+const readClosingIssues = closingIssuesVia((args) =>
+  execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20_000 }),
+);
+
+const repoOf = (reference) => {
+  const owner = reference?.repository?.owner?.login;
+  const name = reference?.repository?.name;
+  return owner && name ? `${owner}/${name}` : null;
+};
+
+function mergeLeaseBlockers(record, { closingIssues, issueComments }) {
+  const pr = record?.pr;
+  if (!Number.isInteger(pr) || pr <= 0) {
+    return [
+      "A merge-pr receipt must name its PR (a positive PR number in `pr`): merging closes every issue the PR " +
+        "lists in closingIssuesReferences, so the gate reads those issues' leases first.",
+    ];
+  }
+  let refs;
+  try {
+    refs = closingIssues(pr);
+    if (!Array.isArray(refs)) throw new Error("the reader returned no list of references");
+  } catch (error) {
+    return [
+      `PR #${pr}'s closing references could not be read (${firstLineOf(error)}), so which issues its merge ` +
+        "closes is unknown; environment inability is a blocker, not a pass.",
+    ];
+  }
+  const blockers = [];
+  const issues = [];
+  for (const reference of refs) {
+    const number = reference?.number;
+    const repo = repoOf(reference);
+    if (!Number.isInteger(number) || number <= 0) {
+      blockers.push(
+        `PR #${pr} lists a reference with no plain issue number (${JSON.stringify(number ?? null)}), so its lease ` +
+          "cannot be read.",
+      );
+    } else if (!repo || repo.toLowerCase() !== CANONICAL_REPO.toLowerCase()) {
+      blockers.push(
+        `PR #${pr} lists an issue outside ${CANONICAL_REPO} (${repo ?? "no repository named"}#${number}); this gate ` +
+          "reads leases only in this repository, and a lease it cannot read is not a released one.",
+      );
+    } else {
+      issues.push(number);
+    }
+  }
+  blockers.push(
+    ...leaseBlockers(issues, issueComments, {
+      how: `PR #${pr} lists it as an issue its merge closes (closingIssuesReferences).`,
+      then: "merge",
+    }),
+  );
   return blockers;
 }
 
@@ -264,6 +348,7 @@ export function evaluateWorkControl(
     resolveHead = resolveRepoHead,
     headProvenance = canonicalHeadProvenance,
     issueComments = readIssueComments,
+    closingIssues = readClosingIssues,
   } = {},
 ) {
   const blockers = [];
@@ -437,7 +522,10 @@ export function evaluateWorkControl(
   }
 
   if (LEASE_ENDING_TRANSITIONS.has(record?.transition)) {
-    blockers.push(...leaseBlockers(record, issueComments));
+    blockers.push(...closeLeaseBlockers(record, issueComments));
+  }
+  if (record?.transition === "merge-pr") {
+    blockers.push(...mergeLeaseBlockers(record, { closingIssues, issueComments }));
   }
 
   return blockers.length > 0
