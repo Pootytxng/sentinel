@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Archive-only lane on #415 (PR #416). Both commits in the proof delta (c8a3eda6, c29fbf0e) were authored by claude-code alone, under sequential claude-code leases on #415 (claims 5632619895 and 5633279140, each released by Handoff: 5632745214 and 5633363808). The reviewer, chatgpt-hq, authored none of them.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/415#issuecomment-5633846702",
+  "leaseEvidenceNote": "The operative fresh Ownership claim for this folder and branch, preflight PASS. Write scope: docs/archive/claude-hq/** plus exactly these four receipt files (.claude/work-control/2026-09-11-mark-pr-ready-416.json, .claude/work-control/2026-09-11-merge-pr-416.json, .claude/work-control/2026-09-11-close-issue-415.json, .claude/work-control/2026-09-11-mark-done-415.json), declared BEFORE any of them was written. The earlier overlap with closed #373's expired claim on .claude/work-control/*.json was cleared by GPT HQ's administrative Handoff https://github.com/Pootytxng/sentinel/issues/373#issuecomment-5633516688 (#373 landed via PR #377, merge 1aae437a).",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Preflight scope.overlap row ok for the full scope at claim time. No other open PR touches docs/archive/claude-hq/ or adds any of the four receipt filenames (directory co-occupancy of .claude/work-control/ is not file overlap).",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Resumed across a released handoff, so every field was re-derived before the claim: repository Pootytxng/sentinel via canonical remote origin; origin/main 012a389b28d64802f061abb02d65141a26dc99ae; PR #416 OPEN draft, base main@012a389b28d64802f061abb02d65141a26dc99ae, head == local == origin branch == c29fbf0e5686bd2fe52439d48ff4b18a656694ca, mergeable_state clean; worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/claude-hq-archive-415 (linked, one writer) on claude/claude-hq-archive-415; git status --porcelain empty before the first receipt was written; processes: compy/cargo/rustc/npm x0; the claim's preflight processes row (ok, nothing contending with this folder) measured claude.exe x22, node.exe x35, Code.exe x15 (peer sessions, MCP servers, editors).",
+  "currentHead": "c29fbf0e5686bd2fe52439d48ff4b18a656694ca",
+  "pr": 416,
+  "issue": 415,
+  "kind": "lane",
+  "branch": "claude/claude-hq-archive-415",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "c29fbf0e5686bd2fe52439d48ff4b18a656694ca",
+      "evidence": "logs/verify-local-2026-09-11T10-45-48Z.log:8-43",
+      "summary": "441 frontend test files passed (441); 7030 tests passed | 5 skipped (7035); 0 failed. Results at :38-39."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "c29fbf0e5686bd2fe52439d48ff4b18a656694ca",
+      "evidence": "logs/verify-local-2026-09-11T10-45-48Z.log:44-70",
+      "summary": "tsc clean; vite production build succeeded (`built in 8.29s` at :69)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "c29fbf0e5686bd2fe52439d48ff4b18a656694ca",
+      "evidence": "logs/verify-local-2026-09-11T10-45-48Z.log:71-1433",
+      "summary": "1317 passed; 0 failed; 24 ignored at :1419. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "c29fbf0e5686bd2fe52439d48ff4b18a656694ca",
+      "evidence": "logs/verify-local-2026-09-11T10-45-48Z.log:1434-1436",
+      "summary": "clippy stage clean under -D warnings: `Finished` at :1436 with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "scripts/verify-local.ps1 run explicitly at this exact head (logs/verify-local-2026-09-11T10-45-48Z.log, 1436 lines; console LOCAL CHECK RESULT: PASS), then re-run by .githooks/pre-push on the push that carried c29fbf0e5686bd2fe52439d48ff4b18a656694ca (logs/verify-local-2026-09-11T10-48-55Z.log; LOCAL CHECK RESULT: PASS; 441 files / 7030 passed; Rust 1317 passed / 0 failed). Exit code not treated as the verdict: every stage read at its own line range; 0 lines match test result: FAILED / panicked / error[E in either log. Logs are gitignored. No --no-verify.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured (no session record for this folder)",
+    "reconciled": true,
+    "measurement": "Explicit `node scripts/scope-drift-gate.mjs --issue 415` at this head: 31 changed paths since origin/main, OK, every path inside `docs/archive/claude-hq/**`."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "c29fbf0e5686bd2fe52439d48ff4b18a656694ca",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/416#pullrequestreview-5178026016 (2026-09-11T11:15:23Z, review commit_id c29fbf0e5686bd2fe52439d48ff4b18a656694ca, base 012a389b28d64802f061abb02d65141a26dc99ae).",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq, which authored no commit in the proof delta (git log --format=%an base..head | sort -u = claude-code). GitHub cannot record a formal approval because both executors act through the owner account, so this durable exact-head COMMENTED review is the verdict. Verbatim: \"Findings: none. This head is approved for the proof-dependent landing sequence, subject to fresh native Work Control receipts and a literal PASS from scripts/work-control-gate.mjs at each transition.\" Its stated evidence boundary: it could not re-read the machine-local exports; the author-side staged/committed blob equality to the export hashes stands unrefuted. Codex was attempted first and was unavailable (usage limit)."
+  },
+  "transition": "mark-done",
+  "headBindingNote": "Same binding and reason as the close-issue receipt.",
+  "doneConditionNote": "Done = named evidence exists and no required work remains: independent exact-head PASS 5178026016, both gate runs at c29fbf0e, landed-main archive verification, and the released final Handoff. On this board, closing the issue sets Done through the Item-closed workflow; this receipt authorizes that state.",
+  "residualDebtNote": "These four receipts are written UNTRACKED in the lane worktree, because committing them would move the PR head and stale the review. Carrying them to main is a separate receipt-carrier slice, not part of #415."
+}
