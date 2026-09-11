@@ -305,8 +305,10 @@ On this board the two are one transition: the project's "Item closed" workflow s
 closes, and "Auto-close issue" closes it when Done is set. So the lease ends first: post the
 `### Handoff` ending `Claim: released`, then close. `scripts/work-control-gate.mjs` refuses
 `close-issue` and `mark-done` while the issue's thread reads a live lease or cannot be read (#411). A
-merge whose PR carries a closing keyword closes the issue too, so release before that merge; the gate
-does not check that route yet.
+merge closes every issue its PR lists in `closingIssuesReferences` (a keyword in the body or in any
+commit), so release before that merge: a `merge-pr` receipt must name its `pr`, and the gate refuses it
+while any issue that PR lists reads a live lease, or when the PR, a thread, or a reference outside this
+repository cannot be read (#413). `scripts/land-pr.mjs` refuses a receipt that names another PR.
 
 ## Anti-staleness
 

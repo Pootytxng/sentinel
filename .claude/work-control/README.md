@@ -17,6 +17,10 @@ invented head cannot be matched against the repository.
 
 Required inspection fields: `repository`, `remoteState`, `worktree`, `branch`, `dirtyState`.
 
+A `close-issue` or `mark-done` receipt names its `issue`, and a `merge-pr` receipt names its `pr`: the
+gate refuses while an issue that transition closes still reads a live lease (#411, #413). For a merge
+that means every issue the PR lists in `closingIssuesReferences`, not the receipt's own `issue`.
+
 ```json
 {
   "transition": "merge-pr",

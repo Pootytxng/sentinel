@@ -12,17 +12,22 @@ import {
   parseRemotes,
   remoteHeadShas,
 } from "./work-control-gate.mjs";
+// Read through the namespace so a missing export fails its own case, not every case in this file.
+import * as gate from "./work-control-gate.mjs";
 
 // Provenance has its own describe block below, with its own falsifications. Every case in the
 // blocks before it is about what the receipt itself proves, so they run against a remote that
 // says yes: a test that silently depended on the network would be measuring the network. The same
-// holds for the issue thread a close reads (#411): a case that needs one hands it in, and any other
-// read is refused here rather than sent to GitHub.
+// holds for the issue thread a close reads (#411) and the closing references a merge reads (#413): a
+// case that needs one hands it in, and any other read is refused here rather than sent to GitHub.
 const evaluateWorkControl = (receipt, options = {}) =>
   evaluateRaw(receipt, {
     headProvenance: () => ({ ok: true, why: "stubbed" }),
     issueComments: () => {
       throw new Error("stubbed: this case reads no issue thread");
+    },
+    closingIssues: () => {
+      throw new Error("stubbed: this case reads no PR");
     },
     ...options,
   });
@@ -476,8 +481,140 @@ describe("a close ends the lease, so the lease has to end first (#411)", () => {
     },
   );
 
-  it("leaves merge-pr alone: that transition reads no thread", () => {
-    expect(evaluateWorkControl(record({ transition: "merge-pr", issue: 283 }))).toEqual(PASSED);
+  // Bug -> guard (#413): a merge reaches Done by another route. Merging a PR closes every issue in its
+  // closingIssuesReferences (a keyword in the body or in any commit), and "Item closed" then sets Done.
+  // Open PR #395 lists #283. So a merge-pr receipt is held to the same lease check, over those issues.
+  describe("a merge closes the issues its PR lists, so their leases have to end first (#413)", () => {
+    const ref = (number, repo = "Pootytxng/sentinel") => {
+      const [login, name] = repo.split("/");
+      return { number, repository: { name, owner: { login } }, url: `https://github.com/${repo}/issues/${number}` };
+    };
+    const merge = (overrides = {}) => record({ transition: "merge-pr", pr: 395, ...overrides });
+    /** Both reads injected, and every read recorded, so a case can say what the gate did NOT read. */
+    const reads = (refs, threads = {}) => {
+      const asked = [];
+      return {
+        asked,
+        options: {
+          closingIssues: (pr) => {
+            asked.push(`pr ${pr}`);
+            if (refs instanceof Error) throw refs;
+            return refs;
+          },
+          issueComments: (issue) => {
+            asked.push(`#${issue}`);
+            if (threads[issue] instanceof Error) throw threads[issue];
+            if (!threads[issue]) throw new Error(`no thread stubbed for #${issue}`);
+            return threads[issue];
+          },
+        },
+      };
+    };
+
+    it("blocks while an issue the PR lists still has a live lease, as #283's was under #395", () => {
+      const { asked, options } = reads([ref(283)], { 283: [CLAIM_283, CLOSE_NOTE] });
+      const result = evaluateWorkControl(merge(), options);
+      expect(result.decision).toBe("BLOCKED");
+      const said = result.blockers.join("\n");
+      expect(said).toMatch(/#283 still has a live lease/);
+      expect(said).toMatch(/2026-09-10T06:41:51Z/);
+      expect(said).toMatch(/PR #395 lists it as an issue its merge closes/);
+      expect(said).toMatch(/Handoff first/);
+      expect(asked).toEqual(["pr 395", "#283"]);
+    });
+
+    it("passes once a newer Handoff releases that lease", () => {
+      const { options } = reads([ref(283)], { 283: [CLAIM_283, handoff("released")] });
+      expect(evaluateWorkControl(merge(), options)).toEqual(PASSED);
+    });
+
+    it("passes a PR with no closing references without reading any thread", () => {
+      const { asked, options } = reads([]);
+      expect(evaluateWorkControl(merge(), options)).toEqual(PASSED);
+      expect(asked).toEqual(["pr 395"]);
+    });
+
+    it("reads only the PR's closing references, never the receipt's own issue", () => {
+      const { asked, options } = reads([], { 283: [CLAIM_283] });
+      expect(evaluateWorkControl(merge({ issue: 283 }), options)).toEqual(PASSED);
+      expect(asked).toEqual(["pr 395"]);
+    });
+
+    it("reads every issue the PR lists, and names only the one still leased", () => {
+      const { options } = reads([ref(318), ref(323)], { 318: [CLAIM_283], 323: [CLAIM_283, handoff("released")] });
+      const result = evaluateWorkControl(merge(), options);
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/#318 still has a live lease/);
+      expect(result.blockers.join("\n")).not.toMatch(/#323/);
+    });
+
+    it("blocks when the PR cannot be read, because unknown references are not none", () => {
+      const { asked, options } = reads(new Error("gh: HTTP 502"));
+      const result = evaluateWorkControl(merge(), options);
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/PR #395's closing references could not be read \(gh: HTTP 502\)/);
+      expect(result.blockers.join("\n")).toMatch(/blocker, not a pass/);
+      expect(asked).toEqual(["pr 395"]);
+    });
+
+    it("blocks when the reader hands back something that is not a list of references", () => {
+      const { options } = reads({ closingIssuesReferences: [] });
+      const result = evaluateWorkControl(merge(), options);
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/PR #395's closing references could not be read/);
+    });
+
+    it("blocks when a listed issue's thread cannot be read", () => {
+      const { options } = reads([ref(283)], { 283: new Error("gh: HTTP 502") });
+      const result = evaluateWorkControl(merge(), options);
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/#283's thread could not be read \(gh: HTTP 502\)/);
+    });
+
+    it.each([
+      ["another repository's issue", { ...ref(12, "SomeoneElse/sentinel") }],
+      ["a reference that names no repository", { number: 12 }],
+    ])("blocks on %s, whose lease this gate cannot read, and reads no thread for it", (_, reference) => {
+      const { asked, options } = reads([reference]);
+      const result = evaluateWorkControl(merge(), options);
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/PR #395 lists an issue outside Pootytxng\/sentinel/);
+      expect(asked).toEqual(["pr 395"]);
+    });
+
+    it.each([["283"], [0], [-1], [2.5], [null]])("blocks a reference without a plain issue number: %j", (number) => {
+      const { asked, options } = reads([{ ...ref(283), number }]);
+      const result = evaluateWorkControl(merge(), options);
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/PR #395 lists a reference with no plain issue number/);
+      expect(asked).toEqual(["pr 395"]);
+    });
+
+    // One-element rows: it.each spreads an array row into arguments.
+    it.each([[undefined], [null], [0], ["395"], [-1], [1.5]])("blocks a receipt that does not name its PR plainly: %j", (pr) => {
+      const { asked, options } = reads([]);
+      const result = evaluateWorkControl(merge({ pr }), options);
+      expect(result.decision).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/A merge-pr receipt must name its PR/);
+      expect(asked).toEqual([]);
+    });
+
+    it("the production reader asks gh for the PR's closingIssuesReferences in the canonical repository", () => {
+      const calls = [];
+      const read = gate.closingIssuesVia((argv) => {
+        calls.push(argv.join(" "));
+        return JSON.stringify({ closingIssuesReferences: [ref(283)] });
+      });
+      expect(read(395)).toEqual([ref(283)]);
+      expect(calls).toEqual(["pr view 395 --repo Pootytxng/sentinel --json closingIssuesReferences"]);
+      expect(() => gate.closingIssuesVia(() => "{}")(395)).toThrow(/no closingIssuesReferences list/);
+    });
+
+    it("leaves the other proof transitions' PR alone: only a merge closes what a PR lists", () => {
+      for (const transition of ["mark-pr-ready", "close-superseded-pr"]) {
+        expect(evaluateWorkControl(record({ transition, pr: 395 }))).toEqual(PASSED);
+      }
+    });
   });
 });
 
