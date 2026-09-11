@@ -51,3 +51,13 @@ were cut down and their history moved out:
 - `ARCHIVE_HQ_RESUME_2026-09-11.md` (Project path `claude/ARCHIVE_HQ_RESUME_2026-09-11.md`)
 
 Kept verbatim under their Project filenames.
+
+- Source: `C:\Users\Kuya\Documents\Compy-HQ-Archive\2026-09-11-ledger-split\`, exported from the
+  Claude Project on 2026-09-11.
+- Copied byte-for-byte; the staged Git blobs were checked against the export before commit. Both are
+  LF with no CR and no BOM, so no path-specific `.gitattributes` rule is needed.
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `ARCHIVE_HQ_DECISION_LEDGER_2026-09-11.md` | 80827 | `ebb56f8bda58a041adcac76a8c57a29245f1d363a563d62459dde408139682b5` |
+| `ARCHIVE_HQ_RESUME_2026-09-11.md` | 10995 | `9fb4d070bf7e0046065b89128a07d3493a83936fe40a05106516fcdd6118cdb5` |
