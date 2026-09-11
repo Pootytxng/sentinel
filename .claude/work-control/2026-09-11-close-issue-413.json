@@ -1,0 +1,83 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #413 writer lane (PR #417, which also carries #414 under #413's single lease). HQ review 5178030363 asked for one repair; 3892b005 made it, and review 5182717487 passed 3892b005. All three commits in the proof delta 012a389b..3892b005 (4316b4bd, 574c71fa, 3892b005) were authored by this actor alone: `git log --format='%an <%ae>' 012a389b..3892b005 | sort -u` returns only claude-code <claude-code@desk.local>. The reviewer authored none of them.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/413#issuecomment-5639884256",
+  "leaseEvidenceNote": "The landing's Ownership claim on #413 (5639884256, 2026-09-11T19:53Z), which named PR #417's ten changed paths and this landing's three receipts before any receipt was written. It was released by the Handoff 5639933774 before this receipt was gated.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured live before the landing claim (2026-09-11T19:50Z): none of the 9 other open PRs (404, 400, 397, 395, 394, 391, 317, 306, 297) touches any of the ten changed paths or any receipt this landing writes. #346, the receipt-carrier issue, reads released (Handoff 5634213429).",
+  "inheritedWork": false,
+  "currentHead": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+  "pr": 417,
+  "issue": 413,
+  "kind": "lane",
+  "branch": "claude/413-414-lease-guard",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/413-414-lease-guard, canonical remote `origin`.",
+    "remoteState": "origin/main 2e10d16a55be4b913577ea8c5c5e9f013e0ee82d, the merge commit of PR #417. origin/claude/413-414-lease-guard is pruned (land-pr); 3892b00576184aa2bb30a8949e9673c414fed4cd stays reachable from origin as the merge commit's second parent.",
+    "worktree": "Linked worktree, one writer, its own index. core.hooksPath is `.githooks`, which resolves inside this worktree, so the pre-push gate is armed here.",
+    "branch": "claude/413-414-lease-guard at the reviewed head, PR #417 -> main, MERGED, 0 closingIssuesReferences.",
+    "dirtyState": "Clean except this landing's own receipts, each inside the landing claim's scope: .claude/work-control/2026-09-11-merge-pr-417.json, and this receipt and the #414 close-issue receipt. `git status --porcelain --untracked-files=all` was empty before the first was written.",
+    "liveProcesses": "node x32, compy x0, cargo x0, rustc x0, npm x0, msbuild x0, link x0. The node processes are MCP servers and peer Claude Code sessions; no build, install or app process. Measured with Get-Process, not WMI, because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+      "evidence": "logs/verify-local-2026-09-11T19-54-13Z.log:9-44",
+      "summary": "442 frontend test files passed (442); 7100 tests passed | 5 skipped (7105); 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+      "evidence": "logs/verify-local-2026-09-11T19-54-13Z.log:45-71",
+      "summary": "tsc clean; vite production build succeeded, `built in 5.99s` at :70."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+      "evidence": "logs/verify-local-2026-09-11T19-54-13Z.log:1420",
+      "summary": "1317 passed; 0 failed; 24 ignored; 0 filtered out, plus two 0-test targets at :1426 and :1432. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+      "evidence": "logs/verify-local-2026-09-11T19-54-13Z.log:1435-1437",
+      "summary": "clippy stage clean under -D warnings: `Finished` at :1437 with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "A fresh run of the full local gate, `pwsh -NoProfile -File scripts/verify-local.ps1` (the script the pre-push hook runs), at this exact head with an empty git status, after fetching origin/main at 067e2185. Its stdout ends `LOCAL CHECK RESULT: PASS` with exit 0. Every stage was read at its own line range: git diff check (:3), write-scope drift #356 (:5-7), frontend tests (:9-44), frontend type-check and build (:45-71), Rust tests (:72-1434), Rust clippy (:1435-1437). Zero lines in the 1437-line log match `test result: FAILED`, `panicked` or `error[E`. No `--no-verify` at any point in this lane.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "log:6-7: \"10 changed paths since origin/main measured against the claim on #413 (cache)\", then OK: every changed path is inside the landing claim's thirteen-path scope.",
+    "reconciliationNote": "The landing claim 5639884256 names PR #417's ten paths and the three receipts this landing writes."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+    "verdict": "APPROVE-EQUIVALENT",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/417#pullrequestreview-5182717487 (2026-09-11T19:33:38Z), naming reviewed head 3892b00576184aa2bb30a8949e9673c414fed4cd with verdict PASS / APPROVE-EQUIVALENT.",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq, which authored no commit in the proof delta. GitHub records it as COMMENTED because both executors use the owner account. It is not merge or close authority by itself, so each transition here has its own receipt and its own gate PASS."
+  },
+  "transition": "close-issue",
+  "headBindingNote": "Bound to the reviewed head 3892b00576184aa2bb30a8949e9673c414fed4cd, not to the merge commit: every named gate ran at 3892b005 and none ran at the merge commit, so binding to it would be a substitute gate. After land-pr pruned the branch, 3892b005 is still reachable from origin as the second parent of origin/main's tip.",
+  "mergeNote": "PR #417 reports MERGED (2026-09-11T19:58:07Z) as 2e10d16a55be4b913577ea8c5c5e9f013e0ee82d. Its parents are 067e2185 (main at landing) and 3892b005 (the reviewed head), it is origin/main's tip, and its tree 72406c16 equals `git merge-tree --write-tree 067e2185 3892b005`. `git diff 3892b005 2e10d16a` over the ten PR paths is empty, so main carries exactly the reviewed code.",
+  "releaseNote": "The landing lease was released by the Handoff https://github.com/Pootytxng/sentinel/issues/413#issuecomment-5639933774, ending `- Claim: released`, before this receipt was gated. The gate reads #413's thread and refuses close-issue while a lease is live on it.",
+  "closureConditionNote": "This receipt authorizes closing #413 only because the merge is proven and the lease is released. #413's fix is 4316b4bd (merge-pr holds its PR's closing references to the lease check) and 3892b005 (land-pr refuses a non-merge-pr or other-PR receipt before the gate), both on main now. The project's \"Item closed\" workflow then sets Done; the Done is read back from the board, not assumed."
+}
