@@ -119,9 +119,11 @@ describe("main: a merge is proof-dependent, so the receipt is not optional", () 
 
   // Bug -> guard (#413): the gate checks the closing references of the PR its receipt names. A receipt
   // copied from another landing would have it check the wrong PR, so land-pr refuses one that does not
-  // name the PR it was asked to land, before the gate runs. These receipts carry no transition, so even
-  // a regression that reached the real gate would be refused there without a call to gh.
+  // name the PR it was asked to land, before the gate runs. The gate's spawn is injected, and every
+  // refusal case stubs it FAILING: a regression that reached it would stop at "did not PASS" instead
+  // of going on to read the PR from GitHub (a PASS stub would send the old code to gh for PR #395).
   describe("the receipt has to be for the PR being landed (#413)", () => {
+    const MERGE = { transition: "merge-pr" };
     const dirs = [];
     afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
     const receiptFile = (body) => {
@@ -143,29 +145,43 @@ describe("main: a merge is proof-dependent, so the receipt is not optional", () 
     };
 
     it("refuses a receipt that names a different PR, and never runs the gate", () => {
-      const { io, lines, spawned } = withSpawn(0);
-      expect(main(["--pr", "395", "--receipt", receiptFile({ pr: 397 })], io)).toBe(1);
+      const { io, lines, spawned } = withSpawn(1);
+      expect(main(["--pr", "395", "--receipt", receiptFile({ ...MERGE, pr: 397 })], io)).toBe(1);
       expect(lines.join("\n")).toMatch(/names PR #397, not #395/);
       expect(spawned).toEqual([]);
     });
 
-    it.each([[undefined], [null], ["395"], [0]])("refuses a receipt whose pr is not a plain PR number: %j", (pr) => {
-      const { io, lines, spawned } = withSpawn(0);
-      expect(main(["--pr", "395", "--receipt", receiptFile({ pr })], io)).toBe(1);
+    it.each([[undefined], [null], ["395"], [0], [-395], [395.5]])("refuses a receipt whose pr is not a plain PR number: %j", (pr) => {
+      const { io, lines, spawned } = withSpawn(1);
+      expect(main(["--pr", "395", "--receipt", receiptFile({ ...MERGE, pr })], io)).toBe(1);
       expect(lines.join("\n")).toMatch(/not #395/);
       expect(spawned).toEqual([]);
     });
 
     it("refuses a receipt it cannot read, and never runs the gate", () => {
-      const { io, lines, spawned } = withSpawn(0);
+      const { io, lines, spawned } = withSpawn(1);
       expect(main(["--pr", "395", "--receipt", receiptFile("{not json")], io)).toBe(1);
       expect(lines.join("\n")).toMatch(/could not be read/);
       expect(spawned).toEqual([]);
     });
 
-    it("hands a receipt that names this PR to the gate, and stops when the gate does not PASS", () => {
+    // HQ review 5178030363: the gate judges a receipt by its OWN transition. A close-issue receipt that
+    // carries this PR's number passed the PR check, reached the gate, was judged as a close, and never
+    // had this PR's closingIssuesReferences read; land-pr would then merge. Only merge-pr may land.
+    it.each([["close-issue"], ["mark-done"], ["mark-pr-ready"], ["close-superseded-pr"], ["MERGE-PR"], [" merge-pr"], [undefined], [null], [["merge-pr"]]])(
+      "refuses a same-PR receipt whose transition is %j, not merge-pr, and never runs the gate",
+      (transition) => {
+        const { io, lines, spawned } = withSpawn(1);
+        expect(main(["--pr", "395", "--receipt", receiptFile({ transition, pr: 395, issue: 283 })], io)).toBe(1);
+        expect(lines.join("\n")).toMatch(/is not a merge-pr receipt/);
+        expect(lines.join("\n")).not.toMatch(/did not PASS/);
+        expect(spawned).toEqual([]);
+      },
+    );
+
+    it("hands a same-PR merge-pr receipt to the gate, and stops when the gate does not PASS", () => {
       const { io, lines, spawned } = withSpawn(1);
-      const path = receiptFile({ pr: 395 });
+      const path = receiptFile({ ...MERGE, pr: 395 });
       expect(main(["--pr", "395", "--receipt", path], io)).toBe(1);
       expect(spawned).toHaveLength(1);
       expect(spawned[0][1]).toEqual(["scripts/work-control-gate.mjs", path]);
