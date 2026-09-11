@@ -136,6 +136,31 @@ describe("unknown means locked (collision rule 4)", () => {
     expect(scopeOverlapVerdict({ mine: ["scripts"], others: [{ number: 13, scope: ["scripts/x.mjs"] }], files: null }).ok).toBe(false);
     expect(scopeOverlapVerdict({ mine: ["scripts"], others: [{ number: 13, scope: ["docs"] }], files: null }).ok).toBe(true);
   });
+
+  it("refuses an item whose thread could not be read, says so, and does not ask it to renew a claim (#414)", () => {
+    // Unreadable is not "no claim" (collision rule 5): the lease is unknown, so it is locked. The
+    // reason and the cure are its own, because "renew its claim" is wrong advice for a GitHub outage.
+    const v = scopeOverlapVerdict({ mine: ["scripts"], others: [{ number: 318, lane: "Claude Code", column: "Review", scope: null, live: true, expired: false, unreadable: true }], files: TRACKED });
+    expect(v.ok).toBe(false);
+    expect(v.unknown).toEqual([{ number: 318, lane: "Claude Code", column: "Review", why: "its thread could not be read, so its lease is unknown (collision rule 5)", unreadable: true }]);
+    expect(v.reason).toBe("#318 (Claude Code) in Review — its thread could not be read, so its lease is unknown (collision rule 5)");
+    expect(overlapRemediation(v)).toMatch(/#318 .*could not be read.*re-run/);
+    expect(overlapRemediation(v)).not.toMatch(/renew its claim/);
+  });
+
+  it("groups many unreadable threads into one line rather than one per item", () => {
+    const others = [201, 318, 372].map((number) => ({ number, lane: "Claude Code", scope: null, unreadable: true }));
+    const v = scopeOverlapVerdict({ mine: ["scripts"], others, files: TRACKED });
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe("#201 (Claude Code), #318 (Claude Code), #372 (Claude Code) — 3 leases could not be read, so they are unknown (collision rule 5)");
+  });
+
+  it("names a writer's column when it is not Active, and calls a stale row stale wherever it sits", () => {
+    const pass = scopeOverlapVerdict({ mine: ["docs"], others: [{ number: 372, lane: "Codex", column: "Blocked", scope: ["scripts"] }, { number: 13, lane: "Codex", column: "Active", scope: ["src"] }], files: TRACKED });
+    expect(pass.reason).toBe("disjoint from #372 (Codex) in Blocked, #13 (Codex)");
+    const stale = scopeOverlapVerdict({ mine: ["docs"], others: [{ number: 283, lane: "Claude Code", column: "Review", scope: ["scripts"], expired: true, expires: "2026-09-10" }], files: TRACKED });
+    expect(stale.reason).toBe("no other live writer; stale on the board, not a writer: #283 (Claude Code) in Review (claim expired 2026-09-10)");
+  });
 });
 
 // Where a scope is READ from is no longer this module's contract (#408): it holds no Markdown
