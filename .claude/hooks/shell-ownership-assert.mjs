@@ -846,20 +846,41 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
       // is how a guard watches the folder you are standing in while the write lands somewhere else.
       let repoDir = here;
       let repoUnknown = cwdUnknown;
+      /**
+       * Through the shared resolver, exactly as the `cd` branch above, and for the same measured
+       * reason (#420): `git -C /c/Users/…/sibling checkout -- x` was ALLOWED, because plain
+       * `resolve` reads that Git-Bash drive path as `C:\c\Users\…` — a folder under no checkout,
+       * which zones as unprotected — while the identical write spelled `C:\…`, or reached through
+       * `cd`, was denied. One resolver knew the spelling and the other did not, so the guard was off
+       * in the spelling the Bash tool uses by default. `--git-dir` and `--work-tree` leaked the same
+       * way, joined and separate.
+       *
+       * It also answers null rather than confidently wrong for an operand it cannot place — a bare
+       * `C:foo` names a per-drive cwd this process does not have — and an unplaceable repository is
+       * the honest `ask` this branch already reaches for one line later.
+       */
+      const moveRepo = (value, dynamic) => {
+        if (dynamic) {
+          repoUnknown = true;
+          return;
+        }
+        const landed = resolveAbsolute(expandHome(value, home), here);
+        if (landed) repoDir = landed;
+        else repoUnknown = true;
+      };
       const args = [];
       for (let i = 0; i < rest.length; i += 1) {
         const w = rest[i];
         const eq = w.value.match(/^(--git-dir|--work-tree)=(.*)$/);
         if (eq) {
-          if (w.dynamic) repoUnknown = true;
-          else repoDir = here ? resolve(here, expandHome(eq[2], home)) : expandHome(eq[2], home);
+          moveRepo(eq[2], w.dynamic);
           continue;
         }
         if (GIT_DIR_FLAGS.has(w.value)) {
           const next = rest[i + 1];
           i += 1;
-          if (!next || next.dynamic) repoUnknown = true;
-          else repoDir = here ? resolve(here, expandHome(next.value, home)) : expandHome(next.value, home);
+          if (!next) repoUnknown = true;
+          else moveRepo(next.value, next.dynamic);
           continue;
         }
         args.push(w.value);

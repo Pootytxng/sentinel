@@ -1177,3 +1177,135 @@ describe("operands whose value the text or the environment already states are li
     });
   });
 });
+
+// A repository-location operand spelled the way the Bash tool spells paths on Windows (#420).
+//
+// Measured at 8dbb6473 against the shipped hook, with nothing executed: `git -C /c/…/r413 checkout
+// -- scripts/land-pr.test.mjs` and `git -C /c/Users/Kuya/code/sentinel-release-truth-256 checkout
+// -- package.json` were both ALLOWED, "nothing protected is reached", while the same two writes
+// spelled `C:\…` or reached through `cd` were DENIED. Both folders are registered worktrees of this
+// repository, so those were writes into a checkout the session does not own. `--git-dir` and
+// `--work-tree` escaped the same way, in their joined AND separate forms.
+//
+// The `cd` branch had already been taught this spelling — `resolveAbsolute`, which calls
+// `fromPosixDrive`. The git branch resolved with plain `resolve`, which reads `/c/Users/…` as
+// `C:\c\Users\…`: a folder under no checkout, which zones as unprotected. One resolver knew, the
+// other did not, and a guard that answers differently per spelling is off.
+//
+// The repair is "the same resolver, not a second one", so the structural assertion compares the
+// operand's landing against `resolveAbsolute` ITSELF rather than a hard-coded string — a second
+// ad-hoc translator would satisfy a string and fail this. The decision assertions go through
+// `posix()`, which is the drive spelling on Windows and an ordinary absolute path elsewhere: the
+// defect exists only where a drive letter does, and `fromPosixDrive` says so by returning null off
+// Windows.
+describe("a git repository-location operand goes through the shared resolver (#420)", () => {
+  /** `C:\home\compy-fixture\sentinel` → `/c/home/compy-fixture/sentinel`; unchanged off Windows. */
+  const posix = (p) => {
+    const m = /^([A-Za-z]):[\\/](.*)$/.exec(p);
+    return m ? `/${m[1].toLowerCase()}/${m[2].replace(/\\/g, "/")}` : fwd(p);
+  };
+  const repoOp = (command, over = {}) => {
+    const { ops } = analyze(command, { cwd: ROOT, env: {}, ...over });
+    return ops.find((o) => o.kind === "git-repo") ?? null;
+  };
+
+  it("denies the two writes #420 measured as allowed, in the spelling that allowed them", () => {
+    // The issue's two rows, re-spelled onto the fixture sibling: same operand shape, same verb,
+    // same pathspecs, and the fixture stands in for the two registered worktrees it named.
+    for (const pathspec of ["scripts/land-pr.test.mjs", "package.json"]) {
+      const d = ask(`git -C ${posix(SIB)} checkout -- ${pathspec}`);
+      expect(d.permission, pathspec).toBe("deny");
+      expect(d.zone, pathspec).toBe(ZONES.SIBLING);
+    }
+  });
+
+  it("closes the same escape through --git-dir and --work-tree, joined and separate", () => {
+    const gitDir = posix(join(SIB, ".git"));
+    const workTree = posix(SIB);
+    for (const cmd of [
+      `git --git-dir=${gitDir} gc`,
+      `git --git-dir ${gitDir} gc`,
+      `git --work-tree=${workTree} checkout -- package.json`,
+      `git --work-tree ${workTree} checkout -- package.json`,
+    ]) {
+      const d = ask(cmd);
+      expect(d.permission, cmd).toBe("deny");
+      expect(d.zone, cmd).toBe(ZONES.SIBLING);
+    }
+  });
+
+  it("survives the quoting, and a space inside the folder name", () => {
+    const spaced = posix(join(SIB, "a b"));
+    for (const cmd of [
+      `git -C "${posix(SIB)}" checkout -- package.json`,
+      `git -C "${spaced}" checkout -- package.json`,
+      `git -C '${spaced}' checkout -- package.json`,
+      `git --git-dir="${posix(join(SIB, "a b", ".git"))}" gc`,
+    ]) {
+      const d = ask(cmd);
+      expect(d.permission, cmd).toBe("deny");
+      expect(d.zone, cmd).toBe(ZONES.SIBLING);
+    }
+  });
+
+  it("leaves the Windows and `C:/` spellings denied, exactly as they already were", () => {
+    // These are the rows #420 recorded as correct. The repair must not buy the new spelling by
+    // losing an old one.
+    for (const [tool, cmd] of [
+      ["Bash", `git -C ${fwd(SIB)} checkout -- package.json`],
+      ["Bash", `git -C "${fwd(SIB)}" checkout -- package.json`],
+      ["Bash", `git -C "${SIB}" checkout -- package.json`],
+      ["PowerShell", `git -C "${SIB}" checkout -- package.json`],
+      ["PowerShell", `git --git-dir="${join(SIB, ".git")}" gc`],
+    ]) {
+      const d = ask(cmd, { toolName: tool });
+      expect(d.permission, `${tool}: ${cmd}`).toBe("deny");
+      expect(d.zone, `${tool}: ${cmd}`).toBe(ZONES.SIBLING);
+    }
+  });
+
+  it("lands the operand exactly where `resolveAbsolute` lands it — one resolver, not two", () => {
+    for (const spelled of [posix(SIB), fwd(SIB), fwd(join(SIB, "a b")), fwd(join(SIB, ".git")), "sub", "../sentinel"]) {
+      const op = repoOp(`git -C "${spelled}" checkout -- x.txt`);
+      expect(op, spelled).not.toBeNull();
+      expect(toComparable(op.target), spelled).toBe(toComparable(resolveAbsolute(spelled, ROOT)));
+    }
+  });
+
+  it("keeps a relative operand resolving against the directory the command is actually in", () => {
+    // Standing in its own claim, `sub` is its own — a false deny here would be the failure mode
+    // that gets a guard removed.
+    expect(ask("git -C sub checkout -- x.txt").permission).toBe("allow");
+    // After a `cd` this checker CAN follow, the same relative operand is a sibling write.
+    const d = ask(`cd ${posix(SIB)} && git -C sub checkout -- x.txt`);
+    expect(d.permission).toBe("deny");
+    expect(d.zone).toBe(ZONES.SIBLING);
+  });
+
+  it("asks when the repository operand is not knowable, and never quietly allows", () => {
+    for (const cmd of [
+      'git -C "$TARGET" checkout -- x.txt',
+      "git --git-dir=$D gc",
+      "git --work-tree $W checkout -- x.txt",
+      // A bare drive-relative form names a per-drive cwd this process does not have. It is
+      // unresolvable, not relative-to-here, and saying so is the difference between an honest
+      // `ask` and a confident wrong answer.
+      "git -C C:notadrivepath checkout -- x.txt",
+    ]) {
+      const d = ask(cmd);
+      expect(d.permission, cmd).toBe("ask");
+      expect(d.reason, cmd).toContain("not knowable from the text");
+    }
+  });
+
+  it("leaves ordinary read-only git alone, in every spelling", () => {
+    for (const cmd of [
+      `git -C ${posix(SIB)} status --porcelain`,
+      `git -C ${posix(SIB)} log --oneline -5`,
+      `git -C ${fwd(SIB)} worktree list`,
+      `git --git-dir=${posix(join(SIB, ".git"))} rev-parse --git-dir`,
+    ]) {
+      expect(ask(cmd).permission, cmd).toBe("allow");
+    }
+  });
+});
