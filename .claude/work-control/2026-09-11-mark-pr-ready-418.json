@@ -1,0 +1,85 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #346 receipt-carrier lane. The six newest commits in this PR's content (653651c8, 580ce321, 7ff69db9, 2234da34, edadae45, f5425a0b) are authored claude-code <claude-code@desk.local>. `git log --format='%an <%ae>' origin/main..HEAD | sort -u` also returns `t <t@t>` for four older carrier commits (80f96c72, 5a960c6f, bd486a64, 72896429, made 2026-09-02 and 2026-09-04): that is the bare desk identity which docs/WORK_CONTROL.md:138 names as a configuration defect to be corrected by the next lease holder, not a separate executor, and it is the identity 814 commits on main already carry. Disclosed rather than smoothed over, because two of those commits are what first wrote .claude/work-control/2026-09-02-merge-pr-349.json and .claude/work-control/2026-09-02-merge-pr-319.json, which this PR still carries. They appear in `origin/main..HEAD` at all only because this ref reaches main through a squash, so its earlier cycles are not ancestors of main even where their content landed. Receipt 2026-09-07-merge-pr-401.json records the same disclosure for the same identity defect. No chatgpt-hq, codex or cowork mutation is in this delta: the reviewer authored none of it.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/346#issuecomment-5641904141",
+  "leaseEvidenceNote": "The fresh #346 landing claim, posted 2026-09-11T23:44:43Z after a preflight PASS on all 18 checks, and posted BEFORE this receipt was written. It declares the write scope as exactly the two landing receipts (.claude/work-control/2026-09-11-mark-pr-ready-418.json and .claude/work-control/2026-09-11-merge-pr-418.json) plus PR #418's own body metadata, lists PR #418's ten already-pushed paths as not-modified so the drift reader can resolve them, and names the two transition authorities this landing exercises. The two earlier #346 claims that built this head (5641388826 and 5641731628) were each released by a Handoff (5641538206 and 5641797050), so no overlapping lease is live.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured live at 2026-09-11T23:56Z, file list by file list through `gh api repos/Pootytxng/sentinel/pulls/<n>/files`: none of the nine other open PRs (404, 400, 397, 395, 394, 391, 317, 306, 297) touches any of PR #418's ten paths or either of the two landing receipt filenames. PRs 317, 306 and 297 do add files under .claude/work-control/, which is directory co-occupancy and not file overlap. The preflight scope.overlap row read ok: disjoint from the two other live-claim issues (#396, #405).",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Resumed across two released handoffs, so every field was re-derived before this receipt. repository: Pootytxng/sentinel through canonical remote `origin`, worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/receipt-carrier-346, git-dir C:/Users/Kuya/code/sentinel/.git/worktrees/receipt-carrier-346, committing identity claude-code <claude-code@desk.local>. remoteState: fetched 2026-09-11T23:41Z; origin/main 2e10d16a55be4b913577ea8c5c5e9f013e0ee82d, which has NOT moved since the reviewed base, so the reviewed head is neither rebased nor amended; origin/lane/receipt-carrier-345 = f5425a0b715597bf359178b718a25ec704e4684d, equal to local HEAD and to the PR head; `git merge-base origin/main HEAD` is 2e10d16a, so main is already an ancestor through the reconciliation merge 7ff69db9, and `git merge-tree --write-tree origin/main HEAD` returns a single tree line (b179abb7f537fd5a07ef915f8778601e55e934d6) with no conflict. worktree: linked, one writer, its own index; core.hooksPath is `.githooks`, which resolves inside this worktree, so the pre-push gate is armed here. branch: local carrier/346-pr416-receipts pushed to refs/heads/lane/receipt-carrier-345; PR #418 -> main, OPEN, draft, MERGEABLE / clean, 10 files, 0 closingIssuesReferences. dirtyState: `git status --porcelain=v1 --untracked-files=all` was EMPTY at 2026-09-11T23:58:54Z, after the full local gate and before this receipt was written; this receipt is the only addition and it is inside the landing claim's scope. liveProcesses: compy x0, cargo x0, rustc x0, npm x0, msbuild x0, link x0; node x14, claude x18, Code x15 are MCP servers, peer sessions and editors, with no build, install or app process. Measured with Get-Process, not WMI, because Win32_Process is hung on this machine.",
+  "currentHead": "f5425a0b715597bf359178b718a25ec704e4684d",
+  "pr": 418,
+  "issue": 346,
+  "kind": "lane",
+  "branch": "lane/receipt-carrier-345",
+  "branchNote": "The persistent receipt carrier. Its local checkout is carrier/346-pr416-receipts in the worktree above; the pushed ref it serves, and the ref PR #418 is opened from, is refs/heads/lane/receipt-carrier-345. docs/dispositions/lane__receipt-carrier-345.json records it PRESERVE, so it is deliberately retained across carrier cycles and is NOT pruned by this landing.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "f5425a0b715597bf359178b718a25ec704e4684d",
+      "evidence": "logs/verify-local-2026-09-11T23-41-00Z.log:8-43",
+      "summary": "442 frontend test files passed (442) at :38; 7099 tests passed | 5 skipped (7104) at :39; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "f5425a0b715597bf359178b718a25ec704e4684d",
+      "evidence": "logs/verify-local-2026-09-11T23-41-00Z.log:44-70",
+      "summary": "tsc clean; vite production build succeeded, `built in 6.11s` at :69."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "f5425a0b715597bf359178b718a25ec704e4684d",
+      "evidence": "logs/verify-local-2026-09-11T23-41-00Z.log:71-1433",
+      "summary": "test result: ok. 1317 passed; 0 failed; 24 ignored at :1419, plus two 0-test targets at :1425 and :1431. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "f5425a0b715597bf359178b718a25ec704e4684d",
+      "evidence": "logs/verify-local-2026-09-11T23-41-00Z.log:1434-1436",
+      "summary": "clippy stage clean under -D warnings: `Finished` at :1436 with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "A fresh full run of `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-local.ps1` (the script the pre-push hook runs) at this exact head, started 2026-09-11T23:41:00Z, BEFORE any landing receipt existed, with `git status --porcelain --untracked-files=all` empty. Console stdout ends `LOCAL CHECK RESULT: PASS`, exit 0, and HEAD read f5425a0b715597bf359178b718a25ec704e4684d both before and after. The exit code was not treated as the verdict: every stage was read at its own line range in the 1436-line log -- git diff check :3, write-scope drift (#356) :5-6, frontend tests :8-43, frontend type-check and build :44-70, Rust tests :71-1433, Rust clippy :1434-1436. Zero lines in that log match `test result: FAILED`, `panicked` or `error[E`. No --no-verify anywhere in this lane. The log is gitignored (`logs`), so it is not a tracked write. The same gate also ran green at this head through .githooks/pre-push on the push that created it (logs/verify-local-2026-09-11T23-18-53Z.log).",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured (no session record for this folder)",
+    "reconciled": true,
+    "measurement": "log:6 reads `scope drift (#356): not measured -- no session record for this folder (launch through tools/entry, or pass --issue)`, so the embedded stage is not the proof here. The explicit run is: `node scripts/scope-drift-gate.mjs --issue 346 --refresh` at this head returned OK with all 10 changed paths inside the then-current claim's declared scope (recorded in #346 evidence 5641789607).",
+    "reconciliationNote": "The code delta has not moved since that measurement: `git diff --name-only origin/main...HEAD` still returns exactly those 10 paths, and PR #418 still reports 10 changed files. This receipt adds an eleventh path, itself, which the landing claim 5641904141 names explicitly."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "f5425a0b715597bf359178b718a25ec704e4684d",
+    "verdict": "PASS / APPROVE-EQUIVALENT",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/418#pullrequestreview-5184232357, relayed to this lane by the owner through Cowork HQ at 2026-09-11T23:40Z as PASS / APPROVE-EQUIVALENT at exactly f5425a0b715597bf359178b718a25ec704e4684d.",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq, which authored no commit in this delta: mutationAuthors is claude-code alone and the only other identity in the history is the bare desk identity named in actorNote. GitHub records these reviews as COMMENTED because both executors act through the owner account, so the durable exact-head review is the verdict, in the APPROVE-EQUIVALENT shape of the earlier landings (#416, #417). It supersedes review 5184068615, which was CHANGES REQUIRED on edadae45 and is stale because the head moved; the one change it asked for is the CLAIMED -> PRESERVE flip that f5425a0b makes. This review goes stale if the head changes: the head read f5425a0b715597bf359178b718a25ec704e4684d when this receipt was written, and marking ready does not move it.",
+    "reviewScope": "The review covers the ten-path delta: nine Work Control transition receipts that exist on no branch of main, carried byte-for-byte, plus docs/dispositions/lane__receipt-carrier-345.json. It does not cover this receipt or the merge-pr receipt, which are the landing's own artifacts and are each gated separately by scripts/work-control-gate.mjs."
+  },
+  "transition": "mark-pr-ready",
+  "readinessNote": "Authorizes taking PR #418 out of draft at f5425a0b715597bf359178b718a25ec704e4684d and nothing further. The merge carries its own receipt, .claude/work-control/2026-09-11-merge-pr-418.json, written after this transition succeeds and gated on its own. PR #418 was opened as a draft deliberately: opening a PR is not a proof-dependent transition, while marking ready is, and writing this receipt before an independent review existed would have stranded a tenth uncommitted receipt and redded scripts/work-control-receipt-preservation.test.mjs for every writer in the repository.",
+  "strandedReceiptNote": "This receipt is uncommitted by construction and therefore stranded while the landing runs: the branch it belongs on is the branch being merged, and committing it would move the reviewed head and invalidate review 5184232357. The strand is closed immediately after the landing by a second fresh #346 claim, which fast-forwards the persistent carrier to the new main and commits this receipt and the merge receipt onto lane/receipt-carrier-345. scripts/work-control-receipt-preservation.test.mjs resolves counterparts with `git rev-list --all -- <file>`, across any ref, so the carrier commit satisfies it without a trip through main.",
+  "noClosingKeywordNote": "PR #418's body references issue 346 without a closing keyword, and `closingIssuesReferences` reads totalCount 0 as of 2026-09-11T23:57Z, so neither this transition nor the merge closes #346. #346 stays open: the carrier is standing infrastructure and its issue outlives any single cycle."
+}
