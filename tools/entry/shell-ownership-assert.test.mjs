@@ -1192,12 +1192,17 @@ describe("operands whose value the text or the environment already states are li
 // `C:\c\Users\…`: a folder under no checkout, which zones as unprotected. One resolver knew, the
 // other did not, and a guard that answers differently per spelling is off.
 //
-// The repair is "the same resolver, not a second one", so the structural assertion compares the
-// operand's landing against `resolveAbsolute` ITSELF rather than a hard-coded string — a second
-// ad-hoc translator would satisfy a string and fail this. The decision assertions go through
-// `posix()`, which is the drive spelling on Windows and an ordinary absolute path elsewhere: the
-// defect exists only where a drive letter does, and `fromPosixDrive` says so by returning null off
-// Windows.
+// The repair is "the same resolver, not a second one". These tests do NOT prove that structurally.
+// The agreement assertion compares the operand's landing against `resolveAbsolute` ITSELF rather
+// than a hard-coded string, which is worth more than a string — the expected value tracks the shared
+// resolver instead of freezing today's answer — but it is still a SAMPLE of inputs. An independent
+// translator that agreed on those inputs would pass. What the sample actually catches is the
+// realistic regression: a hand-rolled path branch that DIVERGES on one of these spellings. Nothing
+// here reads the implementation, and nothing here should be cited as forbidding a second one.
+//
+// The decision assertions go through `posix()`, which is the drive spelling on Windows and an
+// ordinary absolute path elsewhere: the defect exists only where a drive letter does, and
+// `fromPosixDrive` says so by returning null off Windows.
 describe("a git repository-location operand goes through the shared resolver (#420)", () => {
   /** `C:\home\compy-fixture\sentinel` → `/c/home/compy-fixture/sentinel`; unchanged off Windows. */
   const posix = (p) => {
@@ -1264,7 +1269,11 @@ describe("a git repository-location operand goes through the shared resolver (#4
     }
   });
 
-  it("lands the operand exactly where `resolveAbsolute` lands it — one resolver, not two", () => {
+  it("agrees with `resolveAbsolute` on every spelling sampled here, so a divergent resolver shows up", () => {
+    // Sampled agreement, not a structural proof of reuse. The expected value is `resolveAbsolute`
+    // itself, so it moves when the shared resolver moves rather than freezing a string; but an
+    // independent implementation that happened to agree on these six inputs would pass. This
+    // detects divergence, not duplication.
     for (const spelled of [posix(SIB), fwd(SIB), fwd(join(SIB, "a b")), fwd(join(SIB, ".git")), "sub", "../sentinel"]) {
       const op = repoOp(`git -C "${spelled}" checkout -- x.txt`);
       expect(op, spelled).not.toBeNull();
