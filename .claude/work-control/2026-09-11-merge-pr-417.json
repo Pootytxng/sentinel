@@ -1,0 +1,83 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #413 writer lane (PR #417, which also carries #414 under #413's single lease). HQ review 5178030363 asked for one repair; 3892b005 made it, and review 5182717487 passed 3892b005. All three commits in the proof delta 012a389b..3892b005 (4316b4bd, 574c71fa, 3892b005) were authored by this actor alone: `git log --format='%an <%ae>' 012a389b..3892b005 | sort -u` returns only claude-code <claude-code@desk.local>. The reviewer authored none of them. The foreign commit 3d370073 from another session was saved as a patch and never adopted, so it is not in the delta.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/413#issuecomment-5639884256",
+  "leaseEvidenceNote": "The landing's Ownership claim on #413 (5639884256, started 2026-09-11T19:53Z). It was posted after the lane's repair claim (5639536404) was released by the Handoff 5639607083. It names PR #417's ten changed paths and the three receipts this landing writes, and it was posted before any receipt was written. The landing edits none of the ten paths: it makes no code change. `node scripts/scope-drift-gate.mjs --issue 413 --refresh` read OK against it. #414 has no lease: its thread holds only pointer comments to #413.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured live before the landing claim (2026-09-11T19:50Z): none of the 9 other open PRs (404, 400, 397, 395, 394, 391, 317, 306, 297) touches any of the ten changed paths or any receipt this landing writes, compared file list by file list from `gh pr view --json files`, and none is based on claude/413-414-lease-guard. #346, the receipt-carrier issue, reads released (Handoff 5634213429), and this landing writes none of the receipts it carries.",
+  "inheritedWork": false,
+  "currentHead": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+  "pr": 417,
+  "issue": 413,
+  "kind": "lane",
+  "branch": "claude/413-414-lease-guard",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel, worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/413-414-lease-guard, canonical remote `origin`.",
+    "remoteState": "origin/main 067e218579cb79403cb79f83116b47e53a6edb16, fetched 2026-09-11T19:50Z. It moved after the branch was cut at 012a389b, through PR #416 only (31 paths, all under docs/archive/claude-hq/), none shared with this PR. `git merge-tree --write-tree origin/main 3892b005` is clean. origin/claude/413-414-lease-guard = 3892b00576184aa2bb30a8949e9673c414fed4cd, equal to local HEAD and to the PR head.",
+    "worktree": "Linked worktree, one writer, its own index. core.hooksPath is `.githooks`, which resolves inside this worktree, so the pre-push gate is armed here.",
+    "branch": "claude/413-414-lease-guard, PR #417 -> main, OPEN, not draft, MERGEABLE / CLEAN, 0 closingIssuesReferences.",
+    "dirtyState": "Clean except this receipt, inside the landing claim's scope. `git status --porcelain --untracked-files=all` was empty at 2026-09-11T19:56:39Z, after the full local gate and before this receipt was written.",
+    "liveProcesses": "node x32, compy x0, cargo x0, rustc x0, npm x0, msbuild x0, link x0. The node processes are MCP servers and peer Claude Code sessions; no build, install or app process. Measured with Get-Process, not WMI, because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+      "evidence": "logs/verify-local-2026-09-11T19-54-13Z.log:9-44",
+      "summary": "442 frontend test files passed (442); 7100 tests passed | 5 skipped (7105); 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+      "evidence": "logs/verify-local-2026-09-11T19-54-13Z.log:45-71",
+      "summary": "tsc clean; vite production build succeeded, `built in 5.99s` at :70. The Node exit abort 0xC0000409 seen on the previous push did not occur in this run."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+      "evidence": "logs/verify-local-2026-09-11T19-54-13Z.log:1420",
+      "summary": "1317 passed; 0 failed; 24 ignored; 0 filtered out, plus two 0-test targets at :1426 and :1432. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+      "evidence": "logs/verify-local-2026-09-11T19-54-13Z.log:1435-1437",
+      "summary": "clippy stage clean under -D warnings: `Finished` at :1437 with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "A fresh run of the full local gate, `pwsh -NoProfile -File scripts/verify-local.ps1` (the script the pre-push hook runs), at this exact head with an empty git status, after fetching origin/main at 067e2185, as the landing dispatch required because main moved after the review. Its stdout ends `LOCAL CHECK RESULT: PASS` with exit 0, and HEAD read 3892b005 before and after. Exit code was not treated as the verdict: every stage was read at its own line range. Six `LOCAL CHECK:` stages: git diff check (:3), write-scope drift #356 (:5-7), frontend tests (:9-44), frontend type-check and build (:45-71), Rust tests (:72-1434), Rust clippy (:1435-1437). Zero lines in the 1437-line log match `test result: FAILED`, `panicked` or `error[E`. The gate ran on the reviewed head, not on a merge of it with main; main's only new paths are archive docs this PR does not touch, and the merge-tree is conflict-free. No `--no-verify` at any point in this lane. The log is gitignored (`logs`), so it is not a tracked write.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "log:6-7: \"10 changed paths since origin/main measured against the claim on #413 (cache)\", then OK: every changed path is inside the landing claim's thirteen-path scope.",
+    "reconciliationNote": "The code delta is 10 paths and has not moved since the independent review. The gate run measured them against the landing claim 5639884256, which names the same ten paths and the three receipts this landing writes."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "3892b00576184aa2bb30a8949e9673c414fed4cd",
+    "verdict": "APPROVE-EQUIVALENT",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/417#pullrequestreview-5182717487 (2026-09-11T19:33:38Z), naming reviewed head 3892b00576184aa2bb30a8949e9673c414fed4cd, live main 067e218579cb79403cb79f83116b47e53a6edb16 and previous reviewed head 574c71fa3f981d33f3d3ae73e44bdc3c84e25a16, with verdict PASS / APPROVE-EQUIVALENT.",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq, which authored no commit in the proof delta: mutationAuthors is claude-code alone. GitHub records it as COMMENTED because both executors use the owner account, so this durable exact-head review is the verdict, in the APPROVE-EQUIVALENT shape of earlier landings. It supersedes the CHANGES REQUIRED review 5178030363 on 574c71fa. It goes stale if the PR head changes; the PR head read 3892b005 when this receipt was written. The owner's GO for this landing was relayed through Cowork HQ at 2026-09-11T19:50Z."
+  },
+  "transition": "merge-pr",
+  "mergeMethodNote": "To be landed with `node scripts/land-pr.mjs --pr 417 --receipt .claude/work-control/2026-09-11-merge-pr-417.json`, the repository's landing sequence: the merge-pr / same-PR precheck this PR adds, the work-control gate, `gh pr merge 417 --repo Pootytxng/sentinel --merge` (a true merge commit, never a squash), then `git push origin --delete claude/413-414-lease-guard`, then `git fetch origin --prune`, then `node scripts/branch-disposition-audit.mjs`. `--delete-branch` is not used, and no worktree is removed.",
+  "dependentsNote": "No open PR is based on this head (baseRefName across `gh pr list --state open`), so nothing needs retargeting before the prune. No record in docs/dispositions/ names this ref, so land-pr's PRESERVE/LANDED refusal does not fire.",
+  "fileOverlapNote": "Zero file overlap between the ten changed paths and the 9 other open PRs, measured file list by file list before the landing claim.",
+  "closingNote": "PR #417 only references #413 and #414 (closingIssuesReferences is []), so the merge closes neither issue. Each close is its own transition, under its own receipt, after this landing's lease is released."
+}

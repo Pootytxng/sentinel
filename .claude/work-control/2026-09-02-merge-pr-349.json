@@ -1,0 +1,85 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "implementation",
+  "pr": 349,
+  "issue": 346,
+  "branch": "lane/receipt-carrier-345",
+  "currentHead": "bebb176861115ab5d7f2407585f17492d2556bb7",
+  "explicitHandoff": "Owner turn authorizing this train: a marathon safe-throughput workflow to maximize verified completed work while preserving ownership, exact-head review, release, evidence and documentation law. Its PROCEED instructions bind this transition: on APPROVE, re-fetch, verify exact head, base and mergeability, save this receipt, run the exact full gate and scripts/work-control-gate.mjs, and merge ONLY on PASS; on REQUEST CHANGES, repair at a new head under a fresh independent review, and never let the writer self-review. No batch merge, no self-approval, no reuse of a stale review, and mergeable is not reviewed. This lane is claimed on issue #346. This particular merge also unblocks the whole repository: main is red for every writer until it lands.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspectionNotes": {
+    "repository": "github.com:Pootytxng/sentinel. Run from C:/Users/Kuya/code/sentinel-release-truth-256, the worktree holding the #346 claim. GitHub Actions has started no job in this repository since 2026-08-11 for billing (#321), so MERGEABLE/CLEAN on PR #349 means no merge conflict and says NOTHING about tests. The reviewer confirmed statusCheckRollup is literally the empty list. The only proof that exists is the local gate scripts/verify-local.ps1, run whole by .githooks/pre-push.",
+    "remoteState": "git fetch origin --prune run immediately before this transition. origin/main = c4b44eb06e0b07a6d0986f253b2928497b608bf1, PR #348's merge commit, unmoved. git ls-remote origin lane/receipt-carrier-345 = bebb176861115ab5d7f2407585f17492d2556bb7, identical to git rev-parse HEAD in this worktree AND to the head the independent reviewer confirmed by ls-remote as its own first action. PR #349 reads OPEN, base main, MERGEABLE/CLEAN at that head.",
+    "worktree": "This writer holds C:/Users/Kuya/code/sentinel-release-truth-256 alone. No second writer was started. PR #319 remains CONFLICTING/DIRTY against main and edits docs/BRANCH_DISPOSITIONS.md and docs/SESSION_HANDOFF.md, the same capped documents this PR edits, which the parallelism law names explicitly as a case to serialize; it was left untouched. The reviewer worked outside every registered worktree, in its own scratch clone under %TEMP%/pr349-review.",
+    "branch": "lane/receipt-carrier-345, the receipt CARRIER, third run. Two commits ahead of main: 1c226151 carries PR #348's merge receipt, and bebb1768 is the repair itself. No rebase and no force-push at any point.",
+    "dirtyState": "git status --porcelain in the writer's worktree was EMPTY at the head being merged, apart from this receipt itself, which is untracked at merge time by construction. It will be committed onto this same carrier immediately after the merge -- which is also what restores the handoff sentence this merge transiently falsifies, see reArmDisclosure below.",
+    "liveProcesses": "No dev server on port 1420 and no cargo or rustc build in flight at merge time. Nothing was built, installed, launched or shipped by this lane.",
+    "otherWriters": "No competing writer on this lane and no open PR is based on this ref. --delete-branch is not passed: the carrier is kept on purpose."
+  },
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "scripts/verify-local.ps1"
+  ],
+  "gateResults": [
+    {
+      "command": "scripts/verify-local.ps1",
+      "status": "passed",
+      "head": "bebb176861115ab5d7f2407585f17492d2556bb7",
+      "detail": "Run whole and unnarrowed by .githooks/pre-push on the push that created this exact head. LOCAL CHECK RESULT: PASS -- tsc, vite build, the full vitest suite at 407/407 test files, cargo test at 1254 passed / 0 failed / 24 ignored, and clippy with -D warnings. Nothing skipped, no .only, no narrowed selection, no raised threshold.",
+      "headNote": "This lane is the clearest evidence in the train that the push wrapper's exit code is not the verdict, because BOTH directions were observed on the same branch within minutes. The push of 1c226151 exited 1 and the ref did not move; the push of bebb1768 exited 0 and the ref moved to bebb1768. Judged in both cases by comparing git ls-remote against git rev-parse HEAD.",
+      "firstPushFailure": "The push of 1c226151 was correctly REFUSED by the gate: handoff-worktree-truth rules A and D both failed because docs/SESSION_HANDOFF.md still named lane/docs-path-not-branch-310, which had landed with PR #316. That is the defect this PR repairs, and the guard that caught it is one this same session shipped -- it caught its own author. Recorded as a gate failure rather than omitted."
+    }
+  ],
+  "docGates": [
+    "scripts/doc-budget.ps1 - ALL PASS at this head, NO CAP RAISED. The reviewer confirmed by numstat that scripts/doc-budget.ps1 is not in the diff at all, then ran it live and reproduced 119/120 exactly.",
+    "docs/SESSION_HANDOFF.md - 119 lines against a cap of 120, net-zero: 5 lines rewrapped in place, +5/-5. The removal was asserted in the edit to cost no line rather than checked afterwards.",
+    "node scripts/branch-disposition-audit.mjs - OK across 36 refs, 3 PRESERVE, reproduced by the reviewer to the exact numbers.",
+    "npx vitest run scripts/handoff-worktree-truth.test.mjs - 7/7 at this head, and the reviewer additionally proved the fix NON-VACUOUSLY by manufacturing a second worktree, since rule D bails out unconditionally at live <= 1."
+  ],
+  "shipProof": {
+    "verdict": "n/a",
+    "reason": "Nothing was built, reinstalled or shipped. The diff is one Work Control receipt and one living document. No installer was produced and the owner's installed build is untouched."
+  },
+  "selfReview": {
+    "verdict": "n/a",
+    "reason": "The self-review law covers UI change under src/**/*.{tsx,css}. The reviewer confirmed by git diff --numstat that the diff against main is exactly two files, neither under src/ nor src-tauri/."
+  },
+  "independentReview": {
+    "practical": true,
+    "writer": "claude-code",
+    "reviewer": "One read-only review subagent with its own fresh context, having written no part of this branch, working in its own scratch clone at %TEMP%/pr349-review outside every registered worktree. It made no edit, comment, claim or merge, and spawned no subagent of its own.",
+    "status": "passed",
+    "head": "bebb176861115ab5d7f2407585f17492d2556bb7",
+    "reason": "APPROVE, no blocking findings, seventeen checks reproduced by running commands. The assignment's central question was whether main is genuinely red or whether this PR overstates its own urgency, and the reviewer answered it the hard way. Rule A failed for real in a plain clone, verbatim. Rule D PASSED in that same clone -- and rather than report a pass, the reviewer read the source, found the unconditional bail-out at live <= 1, MANUFACTURED the missing condition with git worktree add --detach plus a local branch, reran, and only then confirmed the failure with an exact-text match. It then repeated that manufactured condition at the fixed head to prove the repair is not itself vacuous. It applied the same treatment to work-control-receipt-preservation, whose live sweep also skips on a single-worktree clone: it built an untracked receipt fixture in a second worktree and confirmed the [stranded] failure mode fires exactly as the receipt describes. It hand-traced the #333 grace mechanism through landedNameIsGraced, freshestDocEditOnMain and landingCommitOnMain against the real commit graph rather than accepting the story, and confirmed 874eaf6e really did edit the document without removing the name. It read branch-disposition-audit.mjs:59 directly and confirmed the for-each-ref premise correction. And it inspected the one superficial closing-keyword grep hit in the PR body, established it is the literal scan pattern inside backticks with a literal #N rather than a real issue number, and cleared it in context rather than either ignoring or over-reporting it.",
+    "writerSession": "claude-code, the implementation writer holding the #346 claim in C:/Users/Kuya/code/sentinel-release-truth-256.",
+    "writerNote": "The gate requires writer === actor, and actor is a fixed token (claude-code | codex). The separation that matters is enforced above it: the reviewer is a distinct context that wrote none of this branch and reached its verdict by running commands, including two where it had to build the conditions under which the check could fail at all.",
+    "premiseCorrected": "The assignment treated a single-worktree pass as something to JUDGE as possibly vacuous. The reviewer corrected that to something requiring ACTION: rule D and the receipt-preservation live sweep both bail out unconditionally at live <= 1, with an explicit source comment saying to say so rather than pass silently, so a bare single-clone run can NEVER exercise either check for real. Confirming both the defect and the fix required manufacturing a second worktree in each case. This is the third time in this train that a reviewer has had to build the failing condition before its evidence meant anything, and it is the reason a green run is not accepted here as proof on its own.",
+    "nonBlockingNotesAccepted": [
+      "REPAIRED BEFORE MERGE, in the PR body, without moving the head: the body's opening claimed 'the first commit here is the whole repair'. That is backwards. The first commit 1c226151 is the carrier's ordinary receipt-carrying job; the LAST commit bebb1768 is the repair. A narrative inversion affecting no gate, diff or merge, but this train's entire subject is the accuracy of a document's self-description, so it was corrected rather than left. Editing the PR body changes no commit and does not move the reviewed head; the merge commit message is drawn from the PR TITLE, not the body, so nothing about the landing changed either.",
+      "DISCLOSED IN THE PR BODY, ALSO WITHOUT MOVING THE HEAD, and carried in reArmDisclosure below: the reviewer flagged that merging this PR transiently falsifies the very sentence it keeps."
+    ]
+  },
+  "reArmDisclosure": {
+    "finding": "The instant this merge lands, lane/receipt-carrier-345 itself carries zero commits origin/main cannot reach, so the at-risk bullet's retained sentence -- that the carrier stays named because it holds a commit on no remote -- goes transiently false. That is the IDENTICAL failure shape this PR repairs for lane/docs-path-not-branch-310, on this very branch. The reviewer found it; the PR body did not say it until the reviewer did.",
+    "whyItIsNotShippingADefect": "Rule D's #333 grace exists for exactly this gap. Grace is spent only by a later edit to docs/SESSION_HANDOFF.md landing on main, never by an ordinary commit, and the carrier receives its next receipt commit within minutes of every merge -- 1c226151 landed on it immediately after PR #348 merged, before anything could observe it. The same is planned here: this receipt is committed and pushed to the carrier directly after the merge, which restores the sentence to true.",
+    "whyItStillNeedsAGuard": "It is structural, not a one-off. It re-arms on every carrier merge for as long as the bullet names the carrier statically while rule C demands that name during the commit-to-push window. Two prose corrections in one day is the signal the toolchain-over-prose law is about. Filed as its own issue with a proposed direction rather than hand-patched each cycle.",
+    "relatedFilings": "#350 filed this session from PR #348's review -- CLAIMED rows are never re-proven because the audit skips them on the same noop === null path as PRESERVE. #341 carries the three known holes in work-control-receipt-preservation's --all shape. Same family in each case: a check that resolves a question in a way that can silently stop being true."
+  },
+  "boundaryProof": {
+    "actionsRs": "git diff origin/main...bebb1768 -- src-tauri/src/actions.rs is 0 lines, and the reviewer independently confirmed by numstat that no path under src/ or src-tauri/ appears at all. The ONE Windows mutation boundary does not move.",
+    "locks": "Untouched. This PR changes no shipped runtime code, so no LOCKED gate can move. Remote-rules fetch stays triple-gated off, the Receipts send path stays hard-false and default-OFF, the updater is not armed, no capability or CSP is loosened, and no driver, injection or kernel surface is involved.",
+    "scopeConstraint": "The frozen beta refs (16069fa) are not moved. Nothing here publishes, tags, arms the updater, reaches another person's machine, spends money, or changes a security or system setting. No secret and no signing key is read, written or referenced. No force-push and no history rewrite. The claim on #346 is a carrier for merge receipts plus the living documents a receipt's row touches; the two files here are exactly that.",
+    "commandAuthority": "No Tauri command was added, removed or renamed; no #[tauri::command] exists anywhere in this diff.",
+    "mergeMethod": "A MERGE COMMIT, not a squash, and --delete-branch is NOT passed. Every commit message was scanned for the close/fix/resolve adjacent to #N pattern before it was written, and the reviewer re-ran that scan independently over both the commit bodies and the PR body: zero real matches, and the single superficial hit in the body was inspected in context and cleared as the literal scan pattern itself inside backticks with a literal placeholder, not an issue number. The only issue references are Refs #346 and Refs #341, which carry no closing semantics. merge_commit_title is MERGE_MESSAGE and merge_commit_message is PR_TITLE, so the landing commit carries the PR title and NOT concatenated commit messages, and its subject takes the 'Merge pull request #349' shape citationVerdict already accepts -- no new squashOnlyCitations pin is needed. A merge commit is also what keeps this carrier reusable rather than forcing a new ref or a force-push next time.",
+    "deletionOrder": "Not applicable: no ref is deleted here, and the carrier ref is kept on purpose so the next merge's receipt has somewhere to land. Actual pruning remains deferred to PR #319, which owns prune-list truth."
+  }
+}
