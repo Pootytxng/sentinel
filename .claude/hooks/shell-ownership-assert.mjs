@@ -879,6 +879,10 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
         if (GIT_DIR_FLAGS.has(w.value)) {
           const next = rest[i + 1];
           i += 1;
+          // git documents an empty `-C ""` as leaving the working directory unchanged, so it moves
+          // nothing. `-C` only, and only exactly empty: no such rule is established for --git-dir or
+          // --work-tree, and `-C " "` is a path git tries to enter (#420 review).
+          if (w.value === "-C" && next && !next.dynamic && next.value === "") continue;
           if (!next) repoUnknown = true;
           else moveRepo(next.value, next.dynamic);
           continue;

@@ -1307,6 +1307,54 @@ describe("a git repository-location operand goes through the shared resolver (#4
     }
   });
 
+  it("keeps a literal empty `-C` on the directory the command is already in, as git defines it", () => {
+    // git documents an empty `-C ""` as leaving the working directory unchanged. The shared resolver
+    // rightly calls "" unplaceable, so routing an empty `-C` through it turned a command whose
+    // repository IS the effective directory into an `ask` (#420 review).
+    for (const empty of ['""', "''"]) {
+      // Own checkout: standing in the claim, the repository is the claim's own and the write allowed.
+      const own = `git -C ${empty} checkout -- x.txt`;
+      expect(ask(own).permission, own).toBe("allow");
+      const ownOp = repoOp(own);
+      expect(ownOp, own).not.toBeNull();
+      expect(toComparable(ownOp.target), own).toBe(toComparable(ROOT));
+      // Sibling checkout: after a `cd` this checker can follow, the same no-op stays in the sibling.
+      // Unchanged means unchanged; resetting to the session root would name the wrong checkout.
+      const sibling = `cd ${posix(SIB)} && git -C ${empty} checkout -- x.txt`;
+      const d = ask(sibling);
+      expect(d.permission, sibling).toBe("deny");
+      expect(d.zone, sibling).toBe(ZONES.SIBLING);
+      const sibOp = repoOp(sibling);
+      expect(sibOp, sibling).not.toBeNull();
+      expect(toComparable(sibOp.target), sibling).toBe(toComparable(SIB));
+      // After an earlier `-C`, unchanged is that earlier repository, not the directory before it.
+      const chained = `git -C ${posix(SIB)} -C ${empty} checkout -- x.txt`;
+      expect(ask(chained).permission, chained).toBe("deny");
+      const chainOp = repoOp(chained);
+      expect(chainOp, chained).not.toBeNull();
+      expect(toComparable(chainOp.target), chained).toBe(toComparable(SIB));
+    }
+  });
+
+  it("does not stretch that rule to anything else that looks empty", () => {
+    // `-C` only, and only exactly empty. No such rule is established here for an empty `--git-dir` or
+    // `--work-tree`, so those stay unresolved rather than borrowing `-C`'s. A whitespace-only `-C " "`
+    // is not the empty case: git tries to change into it (measured: `cannot change to ' '`). A quoted
+    // variable may or may not be empty, and after a `cd` this checker cannot follow there is no known
+    // directory for "unchanged" to keep.
+    for (const cmd of [
+      'git --git-dir="" checkout -- x.txt',
+      'git --git-dir "" checkout -- x.txt',
+      'git --work-tree="" checkout -- x.txt',
+      'git --work-tree "" checkout -- x.txt',
+      'git -C " " checkout -- x.txt',
+      'git -C "$EMPTY" checkout -- x.txt',
+      'cd "$X" && git -C "" checkout -- x.txt',
+    ]) {
+      expect(ask(cmd).permission, cmd).toBe("ask");
+    }
+  });
+
   it("leaves ordinary read-only git alone, in every spelling", () => {
     for (const cmd of [
       `git -C ${posix(SIB)} status --porcelain`,
