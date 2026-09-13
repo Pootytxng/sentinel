@@ -19,10 +19,11 @@
 // to explicit approval. Treating "I could not tell" as "allow" is the fail-open shape this whole
 // train keeps finding.
 //
-// IT NEVER RUNS GIT UNLESS IT HAS TO. The zone of a path inside the session root, or inside the
-// owner's global config, or under no checkout at all, is decided from the filesystem alone. `git` is
-// spawned only when the target sits inside SOME OTHER checkout and the question "is that a checkout
-// of this repository" is genuinely open. That matters because a PreToolUse hook on the shell runs
+// IT NEVER RUNS GIT UNLESS IT HAS TO. The zone of a path in the session's own checkout, or inside
+// the owner's global config, or under no checkout at all, is decided from the filesystem alone.
+// `git` is spawned only when the target sits inside SOME OTHER checkout — beside the session root,
+// or registered beneath it (#425) — and the question "is that a checkout of this repository" is
+// genuinely open. That matters because a PreToolUse hook on the shell runs
 // before every command, and a guard that costs two subprocesses per `ls` would be removed within a
 // day — which is the same outcome as not having one.
 //
@@ -198,6 +199,20 @@ export function sameRepository(a, b) {
 }
 
 /**
+ * How the checkout at `owner` stands to the session's at `root`: "unreadable" when git will not
+ * report the owner's identity, "sessionless" when the session is in no checkout, else "same" or
+ * "unrelated". Up to four git subprocesses, so it is asked only once a checkout other than the
+ * session's own has been found.
+ */
+function identityRelation(root, owner, { git }) {
+  const mine = repoIdentity(root, { git });
+  const theirs = repoIdentity(owner, { git });
+  if (!theirs) return "unreadable";
+  if (!mine) return "sessionless";
+  return sameRepository(mine, theirs) ? "same" : "unrelated";
+}
+
+/**
  * The owner's configuration, which lives outside every repository and therefore outside every
  * repository-shaped guard. `~/.claude` holds the settings and hooks that decide what agents may do
  * on this machine; `~/.codex` is the same thing for the other tool, and is already recorded as
@@ -238,7 +253,31 @@ export function zoneOf({ target, sessionRoot, cwd = null, deps = {} } = {}) {
     }
   }
 
-  if (root && isWithin(abs, root)) return { zone: ZONES.OWN, abs, owner: root, why: "inside the session root" };
+  if (root && isWithin(abs, root)) {
+    // Inside the root is not the same as inside this checkout (#425). A lane registered beneath the
+    // root (`.claude/worktrees/<lane>`) is a checkout of its own, so the target answers to the
+    // nearest checkout that holds it. Git runs only when that checkout sits strictly inside the
+    // root; every other target here costs a walk of existence checks and no subprocess.
+    const inner = checkoutRootOf(abs, { exists });
+    if (!inner || !isWithin(inner, root) || isWithin(root, inner)) {
+      return { zone: ZONES.OWN, abs, owner: root, why: "inside the session root" };
+    }
+    const relation = identityRelation(root, inner, { git });
+    if (relation === "unreadable") {
+      return { zone: ZONES.UNKNOWN, abs, owner: inner, why: "a checkout inside the session root whose identity git would not report" };
+    }
+    if (relation === "unrelated") {
+      // Not a lane of this repository: it stays under the root's protection and its verification,
+      // rather than dropping to `unprotected` the way an unrelated checkout outside the root does.
+      return { zone: ZONES.OWN, abs, owner: root, why: "inside the session root, in a checkout of an unrelated repository" };
+    }
+    return {
+      zone: ZONES.SIBLING,
+      abs,
+      owner: inner,
+      why: relation === "same" ? "another checkout of this repository, nested inside the session root" : "a checkout inside the session root, from a session that is in none",
+    };
+  }
 
   for (const g of protectedGlobals({ home })) {
     if (isWithin(abs, g)) return { zone: ZONES.GLOBAL, abs, owner: g, why: "inside the owner's global configuration" };
@@ -251,18 +290,16 @@ export function zoneOf({ target, sessionRoot, cwd = null, deps = {} } = {}) {
     return { zone: ZONES.UNKNOWN, abs, owner: null, why: "the target's checkout could not be determined" };
   }
   if (!owner) return { zone: ZONES.UNPROTECTED, abs, owner: null, why: "under no checkout, and outside the session root" };
-  if (root && isWithin(owner, root)) return { zone: ZONES.OWN, abs, owner, why: "inside the session root" };
 
   // Only now is git worth a subprocess: the target is inside SOME checkout that is not this one.
-  const mine = repoIdentity(root, { git });
-  const theirs = repoIdentity(owner, { git });
-  if (!theirs) return { zone: ZONES.UNKNOWN, abs, owner, why: "a checkout whose identity git would not report" };
-  if (!mine) {
+  const relation = identityRelation(root, owner, { git });
+  if (relation === "unreadable") return { zone: ZONES.UNKNOWN, abs, owner, why: "a checkout whose identity git would not report" };
+  if (relation === "sessionless") {
     // This session is not in a checkout at all, so "sibling" has no meaning — but the target IS in
     // somebody's repository, and this session has no claim on it.
     return { zone: ZONES.SIBLING, abs, owner, why: "a checkout, from a session that is in none" };
   }
-  return sameRepository(mine, theirs)
+  return relation === "same"
     ? { zone: ZONES.SIBLING, abs, owner, why: "another checkout of this repository" }
     : { zone: ZONES.UNPROTECTED, abs, owner, why: "a checkout of an unrelated repository" };
 }
