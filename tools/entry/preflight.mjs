@@ -12,6 +12,7 @@ import { LOCAL_SETTINGS_PATH } from "./tier.mjs";
 import { parseWorktreeField, samePath } from "./worktree-field.mjs";
 import { overlapRemediation, scopeOverlapVerdict } from "./scope-overlap.mjs";
 import { claimExpiry } from "./claim.mjs";
+import { normalizeRepo } from "../../.claude/hooks/session-root-assert.mjs";
 
 export const STARTABLE_STATUS = ["Ready", "Active"];
 export { BLOCKING_GATES };
@@ -245,9 +246,28 @@ export function reconcile(facts) {
   );
 
   const existing = (checkouts ?? []).find((c) => targetPath && samePath(c.path, targetPath)) ?? null;
-  const branchElsewhere = (checkouts ?? []).find(
+  // A branch name means one branch only inside one repository (#421), so another project using the
+  // same name is no collision. This repository is the expected common dir and the target folder's
+  // own, with every origin a checkout in them reports, so a separate clone of the same remote still
+  // counts. A checkout is set aside as another repository's only when its common dir and origin are
+  // both known, this repository's origin is known too, and neither matches. Anything less is unknown
+  // identity, and unknown stays locked.
+  const repoDirs = [expectedCommonDir, existing?.commonDir].filter(Boolean);
+  const inRepoDirs = (c) => Boolean(c.commonDir) && repoDirs.some((d) => samePath(c.commonDir, d));
+  const repoOrigins = new Set((checkouts ?? []).filter(inRepoDirs).map((c) => normalizeRepo(c.remote)).filter(Boolean));
+  const identity = (c) => {
+    const origin = normalizeRepo(c.remote);
+    if (inRepoDirs(c) || (origin && repoOrigins.has(origin))) return "same";
+    return c.commonDir && origin && repoOrigins.size ? "other" : "unknown";
+  };
+  const onBranch = (checkouts ?? []).filter(
     (c) => targetBranch && c.branch === targetBranch && !(targetPath && samePath(c.path, targetPath)),
   );
+  const otherRepos = onBranch.filter((c) => identity(c) === "other");
+  const holders = onBranch.filter((c) => identity(c) !== "other");
+  // A definite conflict is named before an unidentified one, whatever order discovery found them in.
+  const branchElsewhere = holders.find((c) => identity(c) === "same") ?? holders[0] ?? null;
+  const unidentified = Boolean(branchElsewhere) && identity(branchElsewhere) === "unknown";
 
   if (!existing && targetPath && !branchElsewhere) actions.push("create-worktree");
   checks.push(
@@ -279,10 +299,19 @@ export function reconcile(facts) {
   checks.push(
     mk(
       "git.branchElsewhere",
-      "branch checked out nowhere else",
-      branchElsewhere ? `${targetBranch} is checked out in ${branchElsewhere.path}` : "nowhere else",
+      "branch checked out nowhere else in this repository",
+      branchElsewhere
+        ? `${targetBranch} is checked out in ${branchElsewhere.path}${unidentified ? ", a checkout whose repository could not be told apart from this one" : ""}`
+        : "nowhere else",
       !branchElsewhere,
-      branchElsewhere ? "Git would refuse this too, but later and less legibly." : null,
+      !branchElsewhere
+        ? null
+        : unidentified
+          ? "Without a common dir and an origin on both sides to compare, it is treated as this repository: unknown identity stays locked."
+          : "Git would refuse this too, but later and less legibly.",
+      otherRepos.length
+        ? `also on ${targetBranch} in another repository, so not a conflict: ${otherRepos.map((c) => c.path).join(", ")}`
+        : null,
     ),
   );
 

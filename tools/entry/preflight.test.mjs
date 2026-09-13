@@ -7,9 +7,15 @@
 //
 // Pure over injected facts, so every edge case is a data fixture rather than a machine state.
 
-import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { discoverCheckouts } from "./checkouts.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
 import { verdictLines } from "./render.mjs";
+import { samePath } from "./worktree-field.mjs";
 
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-workflow";
 const BRANCH = "feat/single-entry-workflow";
@@ -377,6 +383,208 @@ describe("edge cases (spec §7)", () => {
   it("never proposes killing another tool's process (collision rule 6)", () => {
     const w = baseWorld({ processes: [{ name: "node.exe", count: 8, contends: true, note: "another session" }] });
     expect(JSON.stringify(reconcile(w))).not.toMatch(/taskkill|Stop-Process|kill -9/i);
+  });
+});
+
+describe("git.branchElsewhere — a branch name belongs to one repository (#421)", () => {
+  // Git keeps one branch namespace per repository, so the same name in another project is no
+  // collision. Counting it refused the host on `main` because holoforge was on `main` too (#419).
+  const HOST = baseWorld().checkouts[1];
+  const holding = (path, commonDir, remote) => ({ path, branch: BRANCH, kind: "clone", commonDir, remote });
+  const HOLOFORGE = holding("C:\\Users\\Kuya\\code\\holoforge", "C:\\Users\\Kuya\\code\\holoforge\\.git", "git@github.com:Pootytxng/holoforge.git");
+  const SISTER = holding("C:\\Users\\Kuya\\code\\sister-site", "C:\\Users\\Kuya\\code\\sister-site\\.git", "https://github.com/Pootytxng/sister-site.git");
+  const SCRATCH = holding("C:\\Users\\Kuya\\scratch", "C:\\Users\\Kuya\\scratch\\.git", null);
+  const absent = (checkouts, overrides = {}) => baseWorld({ checkouts, gitState: null, ...overrides });
+
+  it("another project on the same branch does not block the task's folder", () => {
+    const w = baseWorld();
+    w.checkouts = [...w.checkouts, HOLOFORGE];
+    const r = reconcile(w);
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(true);
+    expect(c.note).toBe(`also on ${BRANCH} in another repository, so not a conflict: ${HOLOFORGE.path}`);
+    expect(r.verdict).toBe("PASS");
+  });
+
+  it("nor does it stop the folder being created", () => {
+    const r = reconcile(absent([HOST, SISTER]));
+    expect(check(r, "git.branchElsewhere").ok).toBe(true);
+    expect(check(r, "folder.exists").actual).toBe("absent (creatable)");
+    expect(r.actions).toContain("create-worktree");
+    expect(r.verdict).toBe("PASS");
+  });
+
+  it("a separate clone of this repository still refuses, however its origin is spelled", () => {
+    // The host's origin is ssh; this clone's is https without `.git`. normalizeRepo makes them one.
+    const clone = holding("C:\\Users\\Kuya\\code\\sentinel-work-control-codex", "C:\\Users\\Kuya\\code\\sentinel-work-control-codex\\.git", "https://github.com/Pootytxng/sentinel");
+    const r = reconcile(absent([HOST, SISTER, clone]));
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${clone.path}`);
+    expect(c.remediation).toMatch(/Git would refuse/);
+    expect(r.actions).not.toContain("create-worktree");
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("a checkout with no origin cannot be told apart, so it stays locked and says why", () => {
+    const r = reconcile(absent([HOST, SCRATCH]));
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${SCRATCH.path}, a checkout whose repository could not be told apart from this one`);
+    expect(c.remediation).toMatch(/unknown identity stays locked/);
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("this repository without an origin cannot rule another project out either", () => {
+    const r = reconcile(absent([{ ...HOST, remote: null }, HOLOFORGE]));
+    expect(check(r, "git.branchElsewhere").ok).toBe(false);
+    expect(check(r, "git.branchElsewhere").actual).toMatch(/holoforge, a checkout whose repository could not be told apart/);
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("with no expected repository and no folder to read one from, every holder stays locked", () => {
+    const r = reconcile(absent([HOLOFORGE], { expectedCommonDir: null }));
+    expect(check(r, "git.branchElsewhere").ok).toBe(false);
+    expect(check(r, "git.branchElsewhere").actual).toMatch(/holoforge, a checkout whose repository could not be told apart/);
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("a definite conflict is named before an unidentified one, whatever the discovery order", () => {
+    const lane = { path: "C:\\Users\\Kuya\\code\\sentinel-rel091", branch: BRANCH, kind: "linked", commonDir: HOST.commonDir, remote: HOST.remote };
+    const r = reconcile(absent([HOST, SCRATCH, SISTER, lane]));
+    expect(check(r, "git.branchElsewhere").actual).toBe(`${BRANCH} is checked out in ${lane.path}`);
+    expect(check(r, "git.branchElsewhere").note).toBe(`also on ${BRANCH} in another repository, so not a conflict: ${SISTER.path}`);
+  });
+});
+
+describe("git.branchElsewhere on real repositories — git discovers, reconcile() decides (#421)", () => {
+  // The same cases over the checkouts discoverCheckouts finds on disk: a host with a linked worktree,
+  // a separate clone of its remote, two other projects beside them, and a repository with no origin
+  // in a second root. Only the fixture runs git; reconcile() stays pure over what discovery reported.
+  const git = (cwd, ...args) =>
+    execFileSync("git", ["-c", "user.name=guard", "-c", "user.email=guard@test", ...args], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  let root;
+  let code;
+  let inCode;
+  let inBoth;
+  let hostCommonDir;
+  const found = (name) => inBoth.find((c) => basename(c.path) === name);
+
+  // The launch as gather.mjs assembles it, over what discovery found.
+  const launch = (folder, branch, checkouts, expectedCommonDir) => {
+    const w = baseWorld();
+    const field = `${folder} @ ${branch}`;
+    const settings = join(folder, ".claude", "settings.json");
+    return {
+      ...w,
+      task: { ...w.task, worktreeBranch: field },
+      items: [{ number: 18, status: "Active", lane: "Claude Code", worktreeBranch: field }],
+      claim: { ...w.claim, folder, branch },
+      checkouts,
+      gitState: checkouts.some((c) => samePath(c.path, folder)) ? { ...w.gitState, branch } : null,
+      expectedCommonDir,
+      window: { ...w.window, effective: { ...w.window.effective, file: settings } },
+      subagentModel: { ...w.subagentModel, source: settings },
+    };
+  };
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), "compy-entry-branch-identity-"));
+    code = join(root, "code");
+    const extra = join(root, "extra");
+    mkdirSync(code);
+    mkdirSync(extra);
+    const repo = (dir, branch) => {
+      git(root, "init", "-q", "-b", branch, dir);
+      writeFileSync(join(dir, "README.md"), "fixture\n");
+      git(dir, "add", "-A");
+      git(dir, "commit", "-q", "-m", "fixture");
+    };
+
+    // This repository: a host with a linked worktree, and a separate clone of the same remote.
+    const bare = join(root, "sentinel.git");
+    git(root, "init", "-q", "--bare", "-b", "main", bare);
+    const host = join(code, "sentinel");
+    repo(host, "main");
+    git(host, "remote", "add", "origin", bare);
+    git(host, "push", "-q", "-u", "origin", "main");
+    git(host, "worktree", "add", "-b", "feat/lane", join(code, "sentinel-lane"));
+    const clone = join(code, "sentinel-clone");
+    git(root, "clone", "-q", bare, clone);
+    git(clone, "switch", "-q", "-c", "feat/clone-lane");
+    // One GitHub repository, spelled the two ways its https and ssh remotes are.
+    git(host, "remote", "set-url", "origin", "https://github.com/Pootytxng/sentinel.git");
+    git(clone, "remote", "set-url", "origin", "git@github.com:Pootytxng/sentinel.git");
+
+    // Other projects beside it, as on the real machine, and one repository nothing can identify.
+    repo(join(code, "holoforge"), "main");
+    git(join(code, "holoforge"), "remote", "add", "origin", "git@github.com:Pootytxng/holoforge.git");
+    repo(join(code, "sister-site"), "release/next");
+    git(join(code, "sister-site"), "remote", "add", "origin", "https://github.com/Pootytxng/sister-site.git");
+    repo(join(extra, "scratch"), "release/next");
+
+    inCode = discoverCheckouts({ roots: [code] });
+    inBoth = discoverCheckouts({ roots: [code, extra] });
+    hostCommonDir = inCode.find((c) => c.kind === "host").commonDir;
+  }, 60_000);
+
+  afterAll(() => {
+    try {
+      rmSync(root, { recursive: true, force: true });
+    } catch {
+      /* a locked file on Windows must not fail the suite */
+    }
+  });
+
+  it("another project on main does not block Sentinel's host on main (the #419 launch)", () => {
+    const r = reconcile(launch(found("sentinel").path, "main", inCode, hostCommonDir));
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(true);
+    expect(c.note).toBe(`also on main in another repository, so not a conflict: ${found("holoforge").path}`);
+    expect(r.verdict).toBe("PASS");
+  });
+
+  it("another project on release/next does not stop a new lane on release/next being created", () => {
+    const r = reconcile(launch(join(code, "sentinel-next"), "release/next", inCode, hostCommonDir));
+    expect(check(r, "git.branchElsewhere").ok).toBe(true);
+    expect(check(r, "folder.exists").actual).toBe("absent (creatable)");
+    expect(r.actions).toContain("create-worktree");
+    expect(r.verdict).toBe("PASS");
+  });
+
+  it("a linked worktree of this repository still refuses, naming it", () => {
+    const r = reconcile(launch(join(code, "sentinel-next"), "feat/lane", inCode, hostCommonDir));
+    expect(check(r, "git.branchElsewhere").ok).toBe(false);
+    expect(check(r, "git.branchElsewhere").actual).toBe(`feat/lane is checked out in ${found("sentinel-lane").path}`);
+    expect(r.actions).not.toContain("create-worktree");
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("a separate clone of this repository, its origin over ssh where the host's is https, still refuses", () => {
+    const r = reconcile(launch(join(code, "sentinel-next"), "feat/clone-lane", inCode, hostCommonDir));
+    expect(check(r, "git.branchElsewhere").ok).toBe(false);
+    expect(check(r, "git.branchElsewhere").actual).toBe(`feat/clone-lane is checked out in ${found("sentinel-clone").path}`);
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("a repository with no origin stays locked, and it is the one named", () => {
+    const r = reconcile(launch(join(code, "sentinel-next"), "release/next", inBoth, hostCommonDir));
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`release/next is checked out in ${found("scratch").path}, a checkout whose repository could not be told apart from this one`);
+    expect(c.note).toBe(`also on release/next in another repository, so not a conflict: ${found("sister-site").path}`);
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("with no expected repository and no folder to read one from, another project stays locked", () => {
+    const r = reconcile(launch(join(code, "sentinel-next"), "release/next", inCode, null));
+    expect(check(r, "git.branchElsewhere").ok).toBe(false);
+    expect(check(r, "git.branchElsewhere").actual).toBe(`release/next is checked out in ${found("sister-site").path}, a checkout whose repository could not be told apart from this one`);
+    expect(r.verdict).toBe("REFUSE");
   });
 });
 
