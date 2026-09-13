@@ -168,6 +168,45 @@ describe("what is and is not a project write", () => {
     expect(d.code).toBe("TARGET_UNRESOLVED");
   });
 
+  it("refuses an in-root target that another checkout owns: a lane registered inside the root (#425)", () => {
+    // Inside the root is no proof of ownership. `.claude/worktrees/<lane>` is another writer's checkout,
+    // the zone names that owner, and the answer does not change once this session is verified.
+    const LANE = `${ROOT}\\.claude\\worktrees\\lane`;
+    const target = `${LANE}\\src\\App.css`;
+    const nested = ({ target: t }) =>
+      under(LANE, t) ? { zone: ZONES.SIBLING, abs: t, owner: LANE, why: "another checkout of this repository, nested inside the session root" } : FAKE_ZONE({ target: t });
+    expect(isInsideRoot(target, ROOT, { cwd: ROOT })).toBe(true);
+    for (const verdict of [{ ok: false, code: "FOLDER_UNCLAIMED", reason: "…" }, { ok: true, mode: "launch" }]) {
+      const d = decide(write({ toolInput: { file_path: target }, verdict, zone: nested }));
+      expect(d.allow).toBe(false);
+      expect(d.permission).toBe("deny");
+      expect(d.code).toBe("TARGET_NOT_OURS");
+    }
+  });
+
+  it("asks about an in-root checkout whose identity git would not report, rather than calling it ours", () => {
+    const STALE = `${ROOT}\\.claude\\worktrees\\stale`;
+    const unreadable = ({ target: t }) =>
+      under(STALE, t) ? { zone: ZONES.UNKNOWN, abs: t, owner: STALE, why: "a checkout inside the session root whose identity git would not report" } : FAKE_ZONE({ target: t });
+    const d = decide(write({ toolInput: { file_path: `${STALE}\\notes.md` }, verdict: { ok: true, mode: "launch" }, zone: unreadable }));
+    expect(d.allow).toBe(false);
+    expect(d.permission).toBe("ask");
+    expect(d.code).toBe("TARGET_UNRESOLVED");
+  });
+
+  it("keeps every other in-root target on the verdict path, exactly where it was", () => {
+    // Zoning in-root targets decides only the answers that name another owner. An own file, a
+    // same-drive drive-relative path (unknown, but owned by no one) and an unprotected answer all get
+    // the outcome an ordinary in-root write gets.
+    const outcome = (d) => ({ allow: d.allow, permission: d.permission ?? null, code: d.code ?? null });
+    const own = ({ target: t }) => ({ zone: ZONES.OWN, abs: t, owner: ROOT, why: "inside the session root" });
+    for (const verdict of [{ ok: false, code: "FOLDER_UNCLAIMED", reason: "…" }, { ok: true, mode: "launch" }]) {
+      const plain = outcome(decide(write({ verdict })));
+      expect(outcome(decide(write({ verdict, zone: own })))).toEqual(plain);
+      expect(outcome(decide(write({ verdict, toolInput: { file_path: "C:notapath\\x.md" } })))).toEqual(plain);
+    }
+  });
+
   it("emits `ask` as `ask`, a refusal as `deny`, and an advisory as context with NO decision", () => {
     const wire = (target, over = {}) => {
       let wrote = "";

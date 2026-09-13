@@ -140,9 +140,13 @@ export function decide({ toolName, toolInput, verdict, root, sessionId = null, c
   if (!target) return { allow: true, why: "no target path in the tool input" };
 
   // Outside the root is where the second hole was (#278). Ask which zone the target is in rather
-  // than reading distance-from-root as safety.
-  if (!isInsideRoot(target, root, { cwd })) {
-    const z = zone({ target, sessionRoot: root, cwd });
+  // than reading distance-from-root as safety. Inside is no proof either (#425): a lane registered
+  // beneath the root is another checkout, so every target is zoned. Inside the root, only an answer
+  // naming another checkout as its owner is decided here; the rest keep the verdict path below.
+  const inside = isInsideRoot(target, root, { cwd });
+  const z = zone({ target, sessionRoot: root, cwd });
+  const ownedElsewhere = Boolean(z.owner) && (z.zone === ZONES.SIBLING || z.zone === ZONES.UNKNOWN);
+  if (!inside || ownedElsewhere) {
     if (z.zone === ZONES.SIBLING) {
       return {
         allow: false,

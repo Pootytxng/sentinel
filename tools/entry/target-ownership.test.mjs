@@ -8,11 +8,13 @@
 // machine's `~/.claude`, or any live checkout — the home directory is a fixture too.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { decide } from "../../.claude/hooks/project-write-assert.mjs";
+import { decideShell } from "../../.claude/hooks/shell-ownership-assert.mjs";
 import {
   ZONES,
   checkoutRootOf,
@@ -222,5 +224,230 @@ describe("a Git-Bash drive path names the same place a Windows one does", () => 
     // `cd /c/…/sibling && rm -f package.json` is the reachable form: the destination is the write
     // target one operand later, so reading it loosely loses the target itself.
     expect(zone("App.css", { cwd: msys(join(LANE, "src")) }).zone).toBe(ZONES.SIBLING);
+  });
+});
+
+describe("a checkout registered INSIDE another checkout answers to itself (#425)", () => {
+  // The lanes this repository runs sit at `.claude/worktrees/<lane>`, inside the main checkout's own
+  // folder. Distance from the root is not ownership in either direction: a lane nested under the root
+  // is another writer's checkout, and the checkout a lane sits inside is another owner to that lane.
+  // A fixture of its own, so the one above keeps the flat layout its cases were written against.
+  const windows = process.platform === "win32";
+  const msys = (p) => (windows ? p.replace(/^([A-Za-z]):/, (_, d) => `/${d.toLowerCase()}`).split(sep).join("/") : p);
+  const same = (a, b) => Boolean(a) && toComparable(a) === toComparable(b);
+
+  let nest = null;
+  let NMAIN = null;
+  let LANE_A = null;
+  let LANE_B = null;
+  let TOP = null;
+  let VENDOR = null;
+  let STALE = null;
+  let NHOME = null;
+
+  beforeAll(() => {
+    nest = mkdtempSync(join(tmpdir(), "compy-nested-"));
+    NHOME = join(nest, "home");
+    mkdirSync(join(NHOME, ".claude"), { recursive: true });
+    writeFileSync(join(NHOME, ".claude", "settings.json"), "{}");
+
+    const seed = (dir, origin) => {
+      mkdirSync(join(dir, "src"), { recursive: true });
+      git(dir, "init", "-q", "-b", "main");
+      git(dir, "config", "user.email", "fixture@example.invalid");
+      git(dir, "config", "user.name", "fixture");
+      git(dir, "remote", "add", "origin", origin);
+      writeFileSync(join(dir, "src", "App.css"), "a{}");
+      git(dir, "add", "-A");
+      git(dir, "commit", "-qm", "seed");
+    };
+
+    NMAIN = join(nest, "main");
+    seed(NMAIN, "https://example.invalid/pootytxng/nested.git");
+    LANE_A = join(NMAIN, ".claude", "worktrees", "laneA");
+    LANE_B = join(NMAIN, ".claude", "worktrees", "laneB");
+    TOP = join(nest, "main-top");
+    git(NMAIN, "worktree", "add", "-q", "-b", "laneA", LANE_A);
+    git(NMAIN, "worktree", "add", "-q", "-b", "laneB", LANE_B);
+    git(NMAIN, "worktree", "add", "-q", "-b", "top", TOP);
+
+    // Not a lane: an unrelated repository that happens to sit inside the root.
+    VENDOR = join(NMAIN, "vendor", "other");
+    seed(VENDOR, "https://example.invalid/someone/other.git");
+
+    // A lane whose registration is gone: its `.git` file names a git dir that no longer exists.
+    STALE = join(NMAIN, ".claude", "worktrees", "stale");
+    mkdirSync(STALE, { recursive: true });
+    writeFileSync(join(STALE, ".git"), `gitdir: ${join(nest, "missing", "worktrees", "stale")}`);
+
+    // Reparse points, which the resolver follows before anything is decided. Every one of them
+    // points inside this fixture.
+    symlinkSync(LANE_A, join(NMAIN, "link-laneA"), "junction");
+    symlinkSync(TOP, join(NMAIN, "link-top"), "junction");
+    symlinkSync(join(NMAIN, "src"), join(LANE_A, "link-main-src"), "junction");
+    symlinkSync(LANE_B, join(LANE_A, "link-peer"), "junction");
+    symlinkSync(TOP, join(LANE_A, "link-top"), "junction");
+  });
+
+  afterAll(() => {
+    if (nest) {
+      try {
+        rmSync(nest, { recursive: true, force: true });
+      } catch {
+        /* a locked file on Windows must not fail the suite */
+      }
+    }
+  });
+
+  const nz = (target, { root = NMAIN, cwd = root } = {}) => zoneOf({ target, sessionRoot: root, cwd, deps: { home: NHOME } });
+
+  it("from the main checkout, a file in a registered nested lane is the lane's, however it is spelled", () => {
+    const file = join(LANE_A, "src", "App.css");
+    for (const target of [file, LANE_A, join(LANE_A, ".git"), ".claude/worktrees/laneA/src/App.css", msys(file), join(NMAIN, "link-laneA", "src", "App.css")]) {
+      const z = nz(target);
+      expect(z.zone, target).toBe(ZONES.SIBLING);
+      expect(same(z.owner, LANE_A), target).toBe(true);
+    }
+  });
+
+  it("from the main checkout, a file that does not exist yet inside the lane is still the lane's", () => {
+    const unborn = join(LANE_A, "src", "deep", "New.tsx");
+    expect(existsSync(unborn)).toBe(false);
+    expect(nz(unborn).zone).toBe(ZONES.SIBLING);
+  });
+
+  it("from the main checkout, its own files, its unborn files and the folder that holds the lanes stay its own", () => {
+    for (const target of [join(NMAIN, "src", "App.css"), join(NMAIN, "src", "new", "deep.css"), "src/App.css", join(NMAIN, ".claude", "worktrees"), NMAIN]) {
+      expect(nz(target).zone, target).toBe(ZONES.OWN);
+    }
+  });
+
+  it("from a nested lane, its peer, the checkout it sits inside and a top-level sibling all belong to someone else", () => {
+    // Each owner is reached directly, relatively where that applies, and through a junction that sits
+    // inside the lane itself.
+    const cases = [
+      [LANE_B, [join(LANE_B, "src", "App.css"), "../laneB/src/App.css", join(LANE_A, "link-peer", "src", "App.css")]],
+      [NMAIN, [join(NMAIN, "src", "App.css"), "../../../src/App.css", join(LANE_A, "link-main-src", "App.css")]],
+      [TOP, [join(TOP, "src", "App.css"), join(LANE_A, "link-top", "src", "App.css")]],
+    ];
+    for (const [owner, targets] of cases) {
+      for (const target of targets) {
+        const z = nz(target, { root: LANE_A });
+        expect(z.zone, target).toBe(ZONES.SIBLING);
+        expect(same(z.owner, owner), target).toBe(true);
+      }
+    }
+    expect(nz(join(LANE_A, "src", "App.css"), { root: LANE_A }).zone).toBe(ZONES.OWN);
+    expect(nz(join(LANE_A, "src", "deep", "New.tsx"), { root: LANE_A }).zone).toBe(ZONES.OWN);
+  });
+
+  it("does not guess at a lane whose registration is gone: it is unknown, not the root's", () => {
+    const z = nz(join(STALE, "notes.md"));
+    expect(z.zone).toBe(ZONES.UNKNOWN);
+    expect(same(z.owner, STALE)).toBe(true);
+  });
+
+  it("keeps an unrelated repository inside the root under the root's own protection, not outside it", () => {
+    // Outside the root an unrelated checkout is unprotected. Inside it, dropping to unprotected would
+    // open a hole this repair has no business opening, so it stays with the checkout that holds it.
+    const z = nz(join(VENDOR, "src", "App.css"));
+    expect(z.zone).toBe(ZONES.OWN);
+    expect(same(z.owner, NMAIN)).toBe(true);
+  });
+
+  it("spawns git only once a checkout other than the session's own is found", () => {
+    let calls = 0;
+    const counting = (cwd, args) => {
+      calls += 1;
+      try {
+        return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      } catch {
+        return null;
+      }
+    };
+    const counted = (target) => zoneOf({ target, sessionRoot: NMAIN, cwd: NMAIN, deps: { home: NHOME, git: counting } });
+    for (const target of [join(NMAIN, "src", "App.css"), join(NMAIN, "src", "new", "deep.css"), join(NMAIN, ".claude", "worktrees"), NMAIN]) {
+      expect(counted(target).zone, target).toBe(ZONES.OWN);
+    }
+    expect(calls).toBe(0);
+    expect(counted(join(LANE_A, "src", "App.css")).zone).toBe(ZONES.SIBLING);
+    expect(calls).toBeGreaterThan(0);
+    expect(calls).toBeLessThanOrEqual(4);
+  });
+
+  describe("through the entry points that consume the decision", () => {
+    // Each guard gets the verdict shape its own suite uses; an unclaimed folder reads the same to both.
+    const VERIFIED = { ok: true, mode: "launch" };
+    const UNCLAIMED = { ok: false, code: "FOLDER_UNCLAIMED", reason: "fixture" };
+    const shell = (command, { root = NMAIN, verdict = null } = {}) =>
+      decideShell({
+        toolName: "Bash",
+        toolInput: { command },
+        sessionRoot: root,
+        cwd: root,
+        verify: () => verdict ?? { ok: true, root, issue: 425, branch: "lane/fixture-425" },
+        home: NHOME,
+        env: {},
+      });
+    const write = (file_path, { root = NMAIN, verdict = VERIFIED } = {}) =>
+      decide({ toolName: "Write", toolInput: { file_path, content: "x" }, verdict, root, cwd: root, zone: (q) => zoneOf({ ...q, deps: { home: NHOME } }) });
+
+    it("the shell guard refuses a main-rooted command that reaches into a nested lane, verified or not", () => {
+      for (const verdict of [null, UNCLAIMED]) {
+        for (const command of [
+          `rm "${msys(join(LANE_A, "src", "App.css"))}"`,
+          `rm -rf "${msys(LANE_A)}"`,
+          `git -C "${msys(LANE_A)}" checkout -- src/App.css`,
+          `cd "${msys(LANE_A)}" && git checkout -- src/App.css`,
+        ]) {
+          const d = shell(command, { verdict });
+          expect(d.permission, command).toBe("deny");
+          expect(d.zone, command).toBe(ZONES.SIBLING);
+        }
+      }
+      expect(shell(`rm "${msys(join(STALE, "notes.md"))}"`).permission).toBe("ask");
+      expect(shell(`rm "${msys(join(NMAIN, "src", "App.css"))}"`).permission).toBe("allow");
+    });
+
+    it("the shell guard, from a nested lane, refuses its peer, its parent checkout and a top-level sibling, and not its own files", () => {
+      for (const target of [join(LANE_B, "src", "App.css"), join(NMAIN, "src", "App.css"), join(TOP, "src", "App.css")]) {
+        expect(shell(`rm "${msys(target)}"`, { root: LANE_A }).permission, target).toBe("deny");
+      }
+      expect(shell(`rm "${msys(join(LANE_A, "src", "App.css"))}"`, { root: LANE_A }).permission).toBe("allow");
+    });
+
+    it("the direct-write guard refuses a Write into a nested lane, verified or not, and asks about a stale one", () => {
+      for (const verdict of [VERIFIED, UNCLAIMED]) {
+        for (const target of [join(LANE_A, "src", "App.css"), join(LANE_A, "src", "deep", "New.tsx"), join(NMAIN, "link-top", "src", "App.css")]) {
+          const d = write(target, { verdict });
+          expect(d.allow, target).toBe(false);
+          expect(d.code, target).toBe("TARGET_NOT_OURS");
+        }
+      }
+      const stale = write(join(STALE, "notes.md"));
+      expect(stale.permission).toBe("ask");
+      expect(stale.code).toBe("TARGET_UNRESOLVED");
+    });
+
+    it("the direct-write guard leaves the main checkout's own files, new ones included, to the normal verdict", () => {
+      for (const target of [join(NMAIN, "src", "App.css"), join(NMAIN, "src", "new", "deep.css"), join(VENDOR, "src", "App.css")]) {
+        expect(write(target).allow, target).toBe(true);
+      }
+    });
+
+    it("the direct-write guard, from a nested lane, refuses its peer, its parent checkout and a top-level sibling, and not its own files", () => {
+      // The junctions are the spellings this guard used to wave through: lexically, they are inside the lane.
+      for (const target of [
+        join(LANE_B, "src", "App.css"),
+        join(NMAIN, "src", "App.css"),
+        join(TOP, "src", "App.css"),
+        join(LANE_A, "link-peer", "src", "App.css"),
+        join(LANE_A, "link-main-src", "App.css"),
+        join(LANE_A, "link-top", "src", "App.css"),
+      ]) {
+        expect(write(target, { root: LANE_A }).code, target).toBe("TARGET_NOT_OURS");
+      }
+      expect(write(join(LANE_A, "src", "App.css"), { root: LANE_A }).allow).toBe(true);
+    });
   });
 });
