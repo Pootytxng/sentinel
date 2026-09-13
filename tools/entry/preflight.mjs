@@ -12,7 +12,6 @@ import { LOCAL_SETTINGS_PATH } from "./tier.mjs";
 import { parseWorktreeField, samePath } from "./worktree-field.mjs";
 import { overlapRemediation, scopeOverlapVerdict } from "./scope-overlap.mjs";
 import { claimExpiry } from "./claim.mjs";
-import { normalizeRepo } from "../../.claude/hooks/session-root-assert.mjs";
 
 export const STARTABLE_STATUS = ["Ready", "Active"];
 export { BLOCKING_GATES };
@@ -88,6 +87,43 @@ const remediationRank = (name) => {
   const i = REMEDIATION_ORDER.indexOf(name);
   return i === -1 ? REMEDIATION_ORDER.length : i;
 };
+
+// GitHub serves SSH on port 443 as ssh.github.com, so an origin spelled that way names github.com.
+const SSH_OVER_HTTPS_HOSTS = new Map([["ssh.github.com", "github.com"]]);
+
+/**
+ * The host and repository path an origin URL names, lowercased with the user, port, a trailing `.git`
+ * and stray slashes dropped, so one repository's https, ssh:// and scp-style spellings agree (#421).
+ * A local path, a file:// URL or anything unparseable names no host, and returns null.
+ */
+function originIdentity(url) {
+  const raw = String(url ?? "").trim();
+  let host;
+  let path;
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(raw);
+  if (scheme) {
+    if (!/^(?:https?|ssh|git|git\+ssh|ssh\+git)$/i.test(scheme[1])) return null;
+    try {
+      ({ hostname: host, pathname: path } = new URL(raw));
+    } catch {
+      return null;
+    }
+  } else {
+    // Git reads `[user@]host:path` as scp-style only when no slash comes before the colon, and one
+    // letter before it is a Windows drive.
+    const scp = /^(?:[^@/\\]+@)?([^:/\\]+):(.+)$/.exec(raw);
+    if (!scp || scp[1].length === 1) return null;
+    [, host, path] = scp;
+  }
+  host = host.toLowerCase().replace(/\.$/, "");
+  host = SSH_OVER_HTTPS_HOSTS.get(host) ?? host;
+  path = path.split(/[/\\]/).filter(Boolean).join("/").replace(/\.git$/i, "").toLowerCase();
+  return /^[a-z0-9._-]+$/.test(host) && path ? { host, path } : null;
+}
+
+// A dotted name ending in an alphabetic label. Anything else, such as `github-work`, `github.com-work`
+// or an IP address, may be an SSH config alias whose real host the URL does not name.
+const isDnsName = (host) => /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}$/.test(host);
 
 /**
  * @returns {{verdict: "PASS"|"REFUSE", checks: Array, remediation: string[], actions: string[], takeoverDraft: string|null}}
@@ -249,16 +285,20 @@ export function reconcile(facts) {
   // A branch name means one branch only inside one repository (#421), so another project using the
   // same name is no collision. This repository is the expected common dir and the target folder's
   // own, with every origin a checkout in them reports, so a separate clone of the same remote still
-  // counts. A checkout is set aside as another repository's only when its common dir and origin are
-  // both known, this repository's origin is known too, and neither matches. Anything less is unknown
-  // identity, and unknown stays locked.
+  // counts. Origins compare by host and path, so one repository's https, ssh:// and scp-style
+  // spellings agree while the same owner/name on another host is another repository. A checkout is
+  // set aside as another repository's only when its common dir and origin are both known, this
+  // repository's origin is known too, and neither matches, unless the path matches behind a host an
+  // SSH config alias could be standing in for. Anything less is unknown identity, and unknown stays
+  // locked.
   const repoDirs = [expectedCommonDir, existing?.commonDir].filter(Boolean);
   const inRepoDirs = (c) => Boolean(c.commonDir) && repoDirs.some((d) => samePath(c.commonDir, d));
-  const repoOrigins = new Set((checkouts ?? []).filter(inRepoDirs).map((c) => normalizeRepo(c.remote)).filter(Boolean));
+  const repoOrigins = (checkouts ?? []).filter(inRepoDirs).map((c) => originIdentity(c.remote)).filter(Boolean);
   const identity = (c) => {
-    const origin = normalizeRepo(c.remote);
-    if (inRepoDirs(c) || (origin && repoOrigins.has(origin))) return "same";
-    return c.commonDir && origin && repoOrigins.size ? "other" : "unknown";
+    const origin = originIdentity(c.remote);
+    if (inRepoDirs(c) || (origin && repoOrigins.some((r) => r.host === origin.host && r.path === origin.path))) return "same";
+    if (!c.commonDir || !origin || !repoOrigins.length) return "unknown";
+    return repoOrigins.some((r) => r.path === origin.path && !(isDnsName(r.host) && isDnsName(origin.host))) ? "alias" : "other";
   };
   const onBranch = (checkouts ?? []).filter(
     (c) => targetBranch && c.branch === targetBranch && !(targetPath && samePath(c.path, targetPath)),
@@ -267,7 +307,15 @@ export function reconcile(facts) {
   const holders = onBranch.filter((c) => identity(c) !== "other");
   // A definite conflict is named before an unidentified one, whatever order discovery found them in.
   const branchElsewhere = holders.find((c) => identity(c) === "same") ?? holders[0] ?? null;
-  const unidentified = Boolean(branchElsewhere) && identity(branchElsewhere) === "unknown";
+  const holderIdentity = branchElsewhere ? identity(branchElsewhere) : null;
+  const unidentified = holderIdentity === "unknown" || holderIdentity === "alias";
+  // Git refuses a branch only while a worktree of the same common dir holds it: the task folder's
+  // own, or the expected one a new folder is created from. A separate clone keeps its own branches,
+  // so a conflict with one is this project's rule alone. With either common dir unknown, so is what
+  // Git would do.
+  const folderCommonDir = existing ? existing.commonDir : expectedCommonDir;
+  const commonDirsKnown = holderIdentity === "same" && Boolean(folderCommonDir && branchElsewhere.commonDir);
+  const gitRefuses = commonDirsKnown && samePath(branchElsewhere.commonDir, folderCommonDir);
 
   if (!existing && targetPath && !branchElsewhere) actions.push("create-worktree");
   checks.push(
@@ -306,9 +354,15 @@ export function reconcile(facts) {
       !branchElsewhere,
       !branchElsewhere
         ? null
-        : unidentified
-          ? "Without a common dir and an origin on both sides to compare, it is treated as this repository: unknown identity stays locked."
-          : "Git would refuse this too, but later and less legibly.",
+        : holderIdentity === "alias"
+          ? "Its origin has this repository's path on another host, but one of the two hosts does not read as a DNS name, so it may be the same server under another name, such as an SSH config alias. It is treated as this repository: unknown identity stays locked."
+          : unidentified
+            ? "Without a common dir and a hosted origin on both sides to compare, it is treated as this repository: unknown identity stays locked."
+            : gitRefuses
+              ? "Git would refuse this too, but later and less legibly."
+              : commonDirsKnown
+                ? "Git itself would not refuse this: a separate clone keeps its own branches. This project does: a branch of this repository is checked out in one folder at a time, across all its clones."
+                : "This project refuses it: a branch of this repository is checked out in one folder at a time, across all its clones. Whether Git would too is not known without both common dirs.",
       otherRepos.length
         ? `also on ${targetBranch} in another repository, so not a conflict: ${otherRepos.map((c) => c.path).join(", ")}`
         : null,

@@ -22,6 +22,8 @@ const BRANCH = "feat/single-entry-workflow";
 const NOW = new Date("2026-07-30T12:00:00Z");
 
 const check = (r, name) => r.checks.find((c) => c.name === name);
+// A definite conflict with a separate clone is this project's rule; Git refuses only within one common dir (#421).
+const PROJECT_RULE = /^Git itself would not refuse this: a separate clone keeps its own branches\. This project does/;
 
 function baseWorld(overrides = {}) {
   return {
@@ -415,14 +417,115 @@ describe("git.branchElsewhere — a branch name belongs to one repository (#421)
   });
 
   it("a separate clone of this repository still refuses, however its origin is spelled", () => {
-    // The host's origin is ssh; this clone's is https without `.git`. normalizeRepo makes them one.
+    // The host's origin is ssh; this clone's is https without `.git`. Both name github.com/pootytxng/sentinel.
     const clone = holding("C:\\Users\\Kuya\\code\\sentinel-work-control-codex", "C:\\Users\\Kuya\\code\\sentinel-work-control-codex\\.git", "https://github.com/Pootytxng/sentinel");
     const r = reconcile(absent([HOST, SISTER, clone]));
     const c = check(r, "git.branchElsewhere");
     expect(c.ok).toBe(false);
     expect(c.actual).toBe(`${BRANCH} is checked out in ${clone.path}`);
-    expect(c.remediation).toMatch(/Git would refuse/);
+    // Git keeps a separate clone's branches apart, so the refusal is this project's rule, not Git's.
+    expect(c.remediation).toMatch(PROJECT_RULE);
+    expect(c.remediation).not.toMatch(/Git would refuse/);
     expect(r.actions).not.toContain("create-worktree");
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("a worktree of this repository refuses, and there Git would refuse too", () => {
+    const lane = { path: "C:\\Users\\Kuya\\code\\sentinel-rel091", branch: BRANCH, kind: "linked", commonDir: HOST.commonDir, remote: HOST.remote };
+    const c = check(reconcile(absent([HOST, lane])), "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${lane.path}`);
+    expect(c.remediation).toBe("Git would refuse this too, but later and less legibly.");
+  });
+
+  it("says Git would refuse only when the holder shares the common dir of the task's folder", () => {
+    // The task's folder is a separate clone and a worktree of the host holds the branch. Git in the
+    // clone cannot see that worktree, so the refusal is this project's rule alone.
+    const folder = { path: FOLDER, branch: BRANCH, kind: "clone", commonDir: `${FOLDER}\\.git`, remote: "https://github.com/Pootytxng/sentinel.git" };
+    const lane = { path: "C:\\Users\\Kuya\\code\\sentinel-rel091", branch: BRANCH, kind: "linked", commonDir: HOST.commonDir, remote: HOST.remote };
+    const c = check(reconcile(baseWorld({ checkouts: [folder, HOST, lane] })), "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${lane.path}`);
+    expect(c.remediation).toMatch(PROJECT_RULE);
+  });
+
+  it("does not say what Git would do when the holder's common dir is unknown", () => {
+    // Matched by origin alone: the project's rule still refuses, but whether the holder shares the
+    // task folder's common dir, and so whether Git would refuse, cannot be told.
+    const clone = holding("C:\\Users\\Kuya\\code\\sentinel-clone", null, HOST.remote);
+    const c = check(reconcile(absent([HOST, clone])), "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${clone.path}`);
+    expect(c.remediation).toMatch(/^This project refuses it: .*Whether Git would too is not known/);
+    expect(c.remediation).not.toMatch(/Git would refuse|Git itself would not/);
+  });
+
+  it("the same owner and name on another host is another repository (a GitLab mirror)", () => {
+    const mirror = holding("C:\\Users\\Kuya\\code\\sentinel-gitlab", "C:\\Users\\Kuya\\code\\sentinel-gitlab\\.git", "https://gitlab.com/Pootytxng/sentinel.git");
+    const r = reconcile(absent([HOST, mirror]));
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(true);
+    expect(c.note).toBe(`also on ${BRANCH} in another repository, so not a conflict: ${mirror.path}`);
+    expect(r.actions).toContain("create-worktree");
+    expect(r.verdict).toBe("PASS");
+  });
+
+  it.each([
+    ["scp-style ssh", "git@github.com:Pootytxng/sentinel.git"],
+    ["ssh://", "ssh://git@github.com/Pootytxng/sentinel.git"],
+    ["ssh on port 443", "ssh://git@ssh.github.com:443/Pootytxng/sentinel.git"],
+    ["git+ssh:// without .git", "git+ssh://git@github.com/Pootytxng/sentinel"],
+    ["https with a user, capitals and a trailing slash", "https://ci-bot@GitHub.com/POOTYTXNG/Sentinel.git/"],
+    ["scp-style with a host in capitals and a trailing dot", "git@GitHub.COM.:Pootytxng/sentinel.git"],
+  ])("a clone of this repository spelled as %s is the same host and path, so it refuses", (_, remote) => {
+    const clone = holding("C:\\Users\\Kuya\\code\\sentinel-clone", "C:\\Users\\Kuya\\code\\sentinel-clone\\.git", remote);
+    const c = check(reconcile(absent([HOST, clone])), "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${clone.path}`);
+    expect(c.remediation).toMatch(PROJECT_RULE);
+  });
+
+  it.each([
+    ["a Windows path", "C:\\Users\\Kuya\\code\\sentinel"],
+    ["a file:// URL", "file:///C:/Users/Kuya/code/sentinel.git"],
+    ["a file:// URL on a network share", "file://nas/git/sentinel.git"],
+    ["a relative path", "../sentinel.git"],
+    ["an scp-style address whose host has a space in it", "git@build server:Pootytxng/holoforge.git"],
+  ])("an origin that is %s names no host, so the clone stays locked", (_, remote) => {
+    const clone = holding("C:\\Users\\Kuya\\code\\sentinel-local", "C:\\Users\\Kuya\\code\\sentinel-local\\.git", remote);
+    const c = check(reconcile(absent([HOST, clone])), "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${clone.path}, a checkout whose repository could not be told apart from this one`);
+    expect(c.remediation).toMatch(/hosted origin on both sides to compare.*unknown identity stays locked/);
+  });
+
+  it.each([
+    ["a bare alias", "git@github-work:Pootytxng/sentinel.git"],
+    ["an alias dressed as a domain", "git@github.com-work:Pootytxng/sentinel.git"],
+  ])("this repository's path behind %s may be this host under another name, so it stays locked", (_, remote) => {
+    const clone = holding("C:\\Users\\Kuya\\code\\sentinel-work", "C:\\Users\\Kuya\\code\\sentinel-work\\.git", remote);
+    const c = check(reconcile(absent([HOST, clone])), "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${clone.path}, a checkout whose repository could not be told apart from this one`);
+    expect(c.remediation).toMatch(/SSH config alias.*unknown identity stays locked/);
+  });
+
+  it("another path behind an SSH alias is still another repository", () => {
+    const other = holding("C:\\Users\\Kuya\\code\\holoforge-work", "C:\\Users\\Kuya\\code\\holoforge-work\\.git", "git@github-work:Pootytxng/holoforge.git");
+    const r = reconcile(absent([HOST, other]));
+    expect(check(r, "git.branchElsewhere").ok).toBe(true);
+    expect(r.verdict).toBe("PASS");
+  });
+
+  it("a holder whose common dir is unknown stays locked, even when its origin names another project", () => {
+    // Setting a checkout aside needs its common dir as well as its origin, so holoforge with its
+    // common dir unknown still refuses.
+    const other = { ...HOLOFORGE, commonDir: null };
+    const r = reconcile(absent([HOST, other]));
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${other.path}, a checkout whose repository could not be told apart from this one`);
+    expect(c.remediation).toMatch(/unknown identity stays locked/);
     expect(r.verdict).toBe("REFUSE");
   });
 
@@ -459,8 +562,10 @@ describe("git.branchElsewhere — a branch name belongs to one repository (#421)
 
 describe("git.branchElsewhere on real repositories — git discovers, reconcile() decides (#421)", () => {
   // The same cases over the checkouts discoverCheckouts finds on disk: a host with a linked worktree,
-  // a separate clone of its remote, two other projects beside them, and a repository with no origin
-  // in a second root. Only the fixture runs git; reconcile() stays pure over what discovery reported.
+  // a separate clone of its remote, a mirror whose origin names the same owner and name on GitLab, a
+  // clone whose origin is a local path, two other projects beside them, and a repository with no
+  // origin in a second root. Only the fixture runs git; reconcile() stays pure over what discovery
+  // reported.
   const git = (cwd, ...args) =>
     execFileSync("git", ["-c", "user.name=guard", "-c", "user.email=guard@test", ...args], {
       cwd,
@@ -519,6 +624,15 @@ describe("git.branchElsewhere on real repositories — git discovers, reconcile(
     // One GitHub repository, spelled the two ways its https and ssh remotes are.
     git(host, "remote", "set-url", "origin", "https://github.com/Pootytxng/sentinel.git");
     git(clone, "remote", "set-url", "origin", "git@github.com:Pootytxng/sentinel.git");
+    // The same history mirrored to GitLab under the same owner and name: another repository.
+    const mirror = join(code, "sentinel-gitlab");
+    git(root, "clone", "-q", bare, mirror);
+    git(mirror, "switch", "-q", "-c", "feat/mirror-lane");
+    git(mirror, "remote", "set-url", "origin", "https://gitlab.com/Pootytxng/sentinel.git");
+    // The same history cloned from its local path, which names no host to compare.
+    const local = join(code, "sentinel-local");
+    git(root, "clone", "-q", bare, local);
+    git(local, "switch", "-q", "-c", "feat/local-lane");
 
     // Other projects beside it, as on the real machine, and one repository nothing can identify.
     repo(join(code, "holoforge"), "main");
@@ -560,6 +674,7 @@ describe("git.branchElsewhere on real repositories — git discovers, reconcile(
     const r = reconcile(launch(join(code, "sentinel-next"), "feat/lane", inCode, hostCommonDir));
     expect(check(r, "git.branchElsewhere").ok).toBe(false);
     expect(check(r, "git.branchElsewhere").actual).toBe(`feat/lane is checked out in ${found("sentinel-lane").path}`);
+    expect(check(r, "git.branchElsewhere").remediation).toBe("Git would refuse this too, but later and less legibly.");
     expect(r.actions).not.toContain("create-worktree");
     expect(r.verdict).toBe("REFUSE");
   });
@@ -568,6 +683,28 @@ describe("git.branchElsewhere on real repositories — git discovers, reconcile(
     const r = reconcile(launch(join(code, "sentinel-next"), "feat/clone-lane", inCode, hostCommonDir));
     expect(check(r, "git.branchElsewhere").ok).toBe(false);
     expect(check(r, "git.branchElsewhere").actual).toBe(`feat/clone-lane is checked out in ${found("sentinel-clone").path}`);
+    expect(check(r, "git.branchElsewhere").remediation).toMatch(PROJECT_RULE);
+    expect(check(r, "git.branchElsewhere").remediation).not.toMatch(/Git would refuse/);
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("a mirror under the same owner and name on GitLab does not block a lane on its branch", () => {
+    const r = reconcile(launch(join(code, "sentinel-next"), "feat/mirror-lane", inCode, hostCommonDir));
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(true);
+    expect(c.note).toBe(`also on feat/mirror-lane in another repository, so not a conflict: ${found("sentinel-gitlab").path}`);
+    expect(r.actions).toContain("create-worktree");
+    expect(r.verdict).toBe("PASS");
+  });
+
+  it("a clone whose origin is a local path names no host, so it stays locked, and it is the one named", () => {
+    // Discovery reports the bare repository's own path as the origin.
+    expect(samePath(found("sentinel-local").remote, join(root, "sentinel.git"))).toBe(true);
+    const r = reconcile(launch(join(code, "sentinel-next"), "feat/local-lane", inCode, hostCommonDir));
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`feat/local-lane is checked out in ${found("sentinel-local").path}, a checkout whose repository could not be told apart from this one`);
+    expect(r.actions).not.toContain("create-worktree");
     expect(r.verdict).toBe("REFUSE");
   });
 
