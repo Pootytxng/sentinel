@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #420 writer lane (PR #424). This actor alone authored all three commits in the proof delta 8dbb6473..bd18832d (90ffc4cd, 8fcbe064 and bd18832d): `git log --format='%an <%ae>' origin/main..HEAD | sort -u` returns only claude-code <claude-code@desk.local>. They were made under one continuous claude-code lease on #420, with no Handoff in between: claim 5645800238, renewed by 5649374309 and amended for landing by 5649532716. The reviewer, chatgpt-hq, authored none of them.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/420#issuecomment-5649532716",
+  "leaseEvidenceNote": "The landing's Ownership claim on #420 (5649532716). It started 2026-09-12T23:58Z and expires 2026-09-13T05:58Z; the expiry is an alarm only. The executor, folder and branch are the same as in the lane's claim 5645800238 and its renewal 5649374309. The write scope is the PR's two code paths plus exactly the three receipts this landing writes: .claude/work-control/2026-09-12-mark-pr-ready-424.json, .claude/work-control/2026-09-12-merge-pr-424.json and .claude/work-control/2026-09-12-close-issue-420.json. The landing edits neither code path. Before any receipt was written, `node tools/entry/cli.mjs preflight --issue 420` returned PASS for those five paths, with all 17 rows ok, processes included, and then the claim was posted. At 2026-09-12T23:59Z, threadLease (tools/entry/claim.mjs) read the claim back as the live lease with the five-path scope and no Handoff after it.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured live at 2026-09-13T00:03Z by comparing each PR's file list from `gh pr view --json files`: none of the 9 other open PRs (404, 400, 397, 395, 394, 391, 317, 306, 297) touches any of the five claimed paths. None is based on claude/sentinel-420-posix-paths-db6487: #400 is based on claude/persistent-marathon-bulk-work-9b5c95 and the rest on main. At claim time, preflight found the scope disjoint from the only live leases, #396 and #405. #425 stays open and outside this lease. receipt-carrier-346, lane/receipt-carrier-345 and #346 are neither used nor touched.",
+  "inheritedWork": false,
+  "currentHead": "bd18832dd97e3451801aeff5b034ef513c35063c",
+  "pr": 424,
+  "issue": 420,
+  "kind": "lane",
+  "branch": "claude/sentinel-420-posix-paths-db6487",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel. Worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/machine-model-defects-115554 (from git rev-parse --show-toplevel); canonical remote `origin`.",
+    "remoteState": "Fetched 2026-09-13T00:03:49Z. origin/main and `git ls-remote origin refs/heads/main` both read 8dbb6473131adc79adeec2a04a2070359dbbed2f. That is the PR base and the merge-base, and it has not moved since the branch was cut or since the review. origin/claude/sentinel-420-posix-paths-db6487 and its ls-remote both read bd18832dd97e3451801aeff5b034ef513c35063c, the same as local HEAD and the PR head. `git merge-tree --write-tree origin/main HEAD` exits 0.",
+    "worktree": "Linked worktree with one writer and its own index. core.hooksPath is `.githooks` and resolves inside this worktree, so the pre-push gate is armed here. core.bare is false.",
+    "branch": "claude/sentinel-420-posix-paths-db6487 is the head of PR #424 -> main: OPEN, draft, MERGEABLE / CLEAN, with 0 closingIssuesReferences. The delta is three commits (90ffc4cd, 8fcbe064, bd18832d) touching two paths: .claude/hooks/shell-ownership-assert.mjs and tools/entry/shell-ownership-assert.test.mjs.",
+    "dirtyState": "Clean except for this receipt, which is inside the landing claim's scope. `git status --porcelain --untracked-files=all` was empty at 2026-09-13T00:03:49Z, before this receipt was written.",
+    "liveProcesses": "Get-Process at 2026-09-12T23:59:31Z showed compy, cargo, rustc, msbuild, link, git and gh at x0: no Rust build, app run or git/gh operation was live. It also showed node x29, pwsh x7 and msedgewebview2 x6, not attributed one by one. npm and vitest run as node.exe, so the node count alone does not rule them out. This session had no gate or background task running, and preflight's processes row was ok at claim time. Get-Process was used instead of WMI because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "bd18832dd97e3451801aeff5b034ef513c35063c",
+      "evidence": "logs/verify-local-2026-09-12T23-13-59Z.log:9-44",
+      "summary": "442 frontend test files passed (442); 7113 tests passed | 4 skipped (7117); 0 failed. Results at :39-40."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "bd18832dd97e3451801aeff5b034ef513c35063c",
+      "evidence": "logs/verify-local-2026-09-12T23-13-59Z.log:45-71",
+      "summary": "`tsc && vite build`: tsc clean; vite production build succeeded (`built in 7.08s` at :70)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "bd18832dd97e3451801aeff5b034ef513c35063c",
+      "evidence": "logs/verify-local-2026-09-12T23-13-59Z.log:72-1434",
+      "summary": "1317 passed; 0 failed; 24 ignored at :1420, plus two 0-test targets at :1426 and :1432. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "bd18832dd97e3451801aeff5b034ef513c35063c",
+      "evidence": "logs/verify-local-2026-09-12T23-13-59Z.log:1435-1437",
+      "summary": "Clippy stage clean under -D warnings: `Finished` at :1437, with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is a run of the full local gate, `scripts/verify-local.ps1`. `.githooks/pre-push` ran it on the push that carried bd18832dd97e3451801aeff5b034ef513c35063c. Log logs/verify-local-2026-09-12T23-13-59Z.log, 1437 lines; the console printed LOCAL CHECK RESULT: PASS and the push exited 0. The reflogs bind the log to the head: bd18832d was committed at 2026-09-12T23:11:51Z; the log opened at 23:13:59Z; the push moved origin/claude/sentinel-420-posix-paths-db6487 to bd18832d at 23:16:22Z; HEAD has not moved since the commit. The exit code was not taken as the verdict; every stage was read at its own line range. The log has six `LOCAL CHECK:` stages: git diff check (:3), write-scope drift #356 (:5-7), frontend tests (:9-44), frontend type-check and build (:45-71), Rust tests (:72-1434) and Rust clippy (:1435-1437). No line in the log matches `test result: FAILED`, `panicked` or `error[E`. No line in :9-71 matches `error TS`, `npm ERR!` or a nonzero failed count. origin/main is still the base, so the merge commit will carry exactly the tree this gate tested. `--no-verify` was never used in this lane. The log is gitignored (`logs`), so it is not a tracked write.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "log:6-7: '2 changed paths since origin/main measured against the claim on #420 (cache)', then OK. Every changed path was inside the two-path claim live at the time. Re-measured with `node scripts/scope-drift-gate.mjs --issue 420 --refresh` at 2026-09-12T23:59Z against the landing claim: 2 changed paths measured against the claim on #420 (thread), OK, every changed path inside the five-path landing scope.",
+    "reconciliationNote": "The code delta is the same two paths the review covered. The landing claim keeps both and adds only the three receipts, so the gate-run measurement and the fresh one agree."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "bd18832dd97e3451801aeff5b034ef513c35063c",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/424#issuecomment-5649537912 (2026-09-12T23:59:42Z) records the owner-relayed verdict verbatim on the PR. Its first line reads: GPT HQ independent code review: PASS at bd18832dd97e3451801aeff5b034ef513c35063c for the bounded #420 repair. The relay reached the author's session at 2026-09-12T23:36:05Z. It answered the exact-head request https://github.com/Pootytxng/sentinel/pull/424#issuecomment-5649379758.",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq. The reviewer authored no commit in the proof delta: mutationAuthors is claude-code alone. GitHub holds no review object for this verdict. It reached this session through the owner's relay, and the author's session, not the reviewer, posted the record on the PR. That provenance is weaker than the COMMENTED review objects cited by earlier landings, and it is stated here, not hidden. The reviewer reports: the three relevant suites passed 147/147; the diff check and the working tree were clean; the local and remote candidate SHAs agreed; the six-stage pre-push receipt was inspected; the installed Git's empty -C behaviour was confirmed directly. It accepts both requested corrections (the sampled-agreement wording and the literal empty -C semantics) and requests no further implementation repair. It does not certify nested-worktree isolation (#425, open) or any landing step. It goes stale if the PR head changes; the PR head read bd18832d when this receipt was written."
+  },
+  "transition": "mark-pr-ready",
+  "readinessNote": "Authorizes taking PR #424 out of draft at bd18832d and nothing further. The merge and the close of #420 each carry their own receipt. No mark-done receipt is planned: on this board, the project's Item closed workflow sets Done when the issue closes (docs/WORK_CONTROL.md:306).",
+  "noClosingKeywordNote": "PR #424 has no closing keyword. closingIssuesReferences read [] at 2026-09-13T00:03Z, and the body says the PR does not close #420, so merging closes nothing. Closing #420 is its own gated transition, after this lease is released."
+}
