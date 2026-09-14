@@ -91,18 +91,24 @@ const remediationRank = (name) => {
 // GitHub serves SSH on port 443 as ssh.github.com, so an origin spelled that way names github.com.
 const SSH_OVER_HTTPS_HOSTS = new Map([["ssh.github.com", "github.com"]]);
 
+// This repository's own server and path, whatever name a checkout's origin reaches it by.
+const THIS_REPOSITORY = { host: "github.com", path: "pootytxng/sentinel" };
+
 /**
  * The host and repository path an origin URL names, lowercased with the user, port, a trailing `.git`
- * and stray slashes dropped, so one repository's https, ssh:// and scp-style spellings agree (#421).
+ * and stray slashes dropped, so one repository's https, ssh:// and scp-style spellings agree (#421),
+ * and whether it is reached over SSH, where the host may be a name from the SSH config.
  * A local path, a file:// URL or anything unparseable names no host, and returns null.
  */
 function originIdentity(url) {
   const raw = String(url ?? "").trim();
   let host;
   let path;
+  let ssh = true;
   const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(raw);
   if (scheme) {
     if (!/^(?:https?|ssh|git|git\+ssh|ssh\+git)$/i.test(scheme[1])) return null;
+    ssh = /ssh/i.test(scheme[1]);
     try {
       ({ hostname: host, pathname: path } = new URL(raw));
     } catch {
@@ -118,12 +124,15 @@ function originIdentity(url) {
   host = host.toLowerCase().replace(/\.$/, "");
   host = SSH_OVER_HTTPS_HOSTS.get(host) ?? host;
   path = path.split(/[/\\]/).filter(Boolean).join("/").replace(/\.git$/i, "").toLowerCase();
-  return /^[a-z0-9._-]+$/.test(host) && path ? { host, path } : null;
+  return /^[a-z0-9._-]+$/.test(host) && path ? { host, path, ssh } : null;
 }
 
 // A dotted name ending in an alphabetic label. Anything else, such as `github-work`, `github.com-work`
 // or an IP address, may be an SSH config alias whose real host the URL does not name.
 const isDnsName = (host) => /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}$/.test(host);
+// Over SSH even a DNS name may be an alias (`Host work.example.com` with `HostName github.com`), so
+// only a DNS name reached without SSH says which server an origin is on.
+const namesItsServer = (origin) => !origin.ssh && isDnsName(origin.host);
 
 /**
  * @returns {{verdict: "PASS"|"REFUSE", checks: Array, remediation: string[], actions: string[], takeoverDraft: string|null}}
@@ -288,9 +297,10 @@ export function reconcile(facts) {
   // counts. Origins compare by host and path, so one repository's https, ssh:// and scp-style
   // spellings agree while the same owner/name on another host is another repository. A checkout is
   // set aside as another repository's only when its common dir and origin are both known, this
-  // repository's origin is known too, and neither matches, unless the path matches behind a host an
-  // SSH config alias could be standing in for. Anything less is unknown identity, and unknown stays
-  // locked.
+  // repository's origin is known too, and neither matches. With the same path on another host, that
+  // takes a holder whose origin names its server, and a known server for this repository that differs:
+  // its own address, or a checkout's origin that names its server too. A holder at this repository's
+  // own address is this repository. Anything less is unknown identity, and unknown stays locked.
   const repoDirs = [expectedCommonDir, existing?.commonDir].filter(Boolean);
   const inRepoDirs = (c) => Boolean(c.commonDir) && repoDirs.some((d) => samePath(c.commonDir, d));
   const repoOrigins = (checkouts ?? []).filter(inRepoDirs).map((c) => originIdentity(c.remote)).filter(Boolean);
@@ -298,7 +308,11 @@ export function reconcile(facts) {
     const origin = originIdentity(c.remote);
     if (inRepoDirs(c) || (origin && repoOrigins.some((r) => r.host === origin.host && r.path === origin.path))) return "same";
     if (!c.commonDir || !origin || !repoOrigins.length) return "unknown";
-    return repoOrigins.some((r) => r.path === origin.path && !(isDnsName(r.host) && isDnsName(origin.host))) ? "alias" : "other";
+    if (!repoOrigins.some((r) => r.path === origin.path)) return "other";
+    if (!namesItsServer(origin)) return "alias";
+    if (origin.host === THIS_REPOSITORY.host && origin.path === THIS_REPOSITORY.path) return "same";
+    const serverKnown = origin.path === THIS_REPOSITORY.path || repoOrigins.some((r) => r.path === origin.path && namesItsServer(r));
+    return serverKnown ? "other" : "alias";
   };
   const onBranch = (checkouts ?? []).filter(
     (c) => targetBranch && c.branch === targetBranch && !(targetPath && samePath(c.path, targetPath)),
@@ -355,7 +369,7 @@ export function reconcile(facts) {
       !branchElsewhere
         ? null
         : holderIdentity === "alias"
-          ? "Its origin has this repository's path on another host, but one of the two hosts does not read as a DNS name, so it may be the same server under another name, such as an SSH config alias. It is treated as this repository: unknown identity stays locked."
+          ? "Its origin has this repository's path on another host, but a host reached over SSH, or one that does not read as a DNS name, leaves the real server unnamed, so it may be the same server under another name, such as an SSH config alias. It is treated as this repository: unknown identity stays locked."
           : unidentified
             ? "Without a common dir and a hosted origin on both sides to compare, it is treated as this repository: unknown identity stays locked."
             : gitRefuses

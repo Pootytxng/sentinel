@@ -510,6 +510,39 @@ describe("git.branchElsewhere — a branch name belongs to one repository (#421)
     expect(c.remediation).toMatch(/SSH config alias.*unknown identity stays locked/);
   });
 
+  // OpenSSH's `Host work.example.com` with `HostName github.com` is valid, so over SSH even a DNS name
+  // may be an alias. Only a DNS name reached without SSH says which server it is.
+  it.each([
+    ["scp-style", "git@work.example.com:Pootytxng/sentinel.git"],
+    ["ssh://", "ssh://git@work.example.com/Pootytxng/sentinel.git"],
+    ["git+ssh:// on another port", "git+ssh://git@work.example.com:2222/Pootytxng/sentinel"],
+  ])("this repository's path over %s to a DNS-shaped host may be an SSH config alias, so it stays locked", (_, remote) => {
+    const clone = holding("C:\\Users\\Kuya\\code\\sentinel-work", "C:\\Users\\Kuya\\code\\sentinel-work\\.git", remote);
+    const r = reconcile(absent([HOST, clone]));
+    const c = check(r, "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${clone.path}, a checkout whose repository could not be told apart from this one`);
+    expect(c.remediation).toMatch(/SSH config alias.*unknown identity stays locked/);
+    expect(r.verdict).toBe("REFUSE");
+  });
+
+  it("a clone at this repository's own address is this repository, even when this checkout reaches it through an SSH alias", () => {
+    const aliased = { ...HOST, remote: "git@gh.example.com:Pootytxng/sentinel.git" };
+    const clone = holding("C:\\Users\\Kuya\\code\\sentinel-clone", "C:\\Users\\Kuya\\code\\sentinel-clone\\.git", "https://github.com/Pootytxng/sentinel.git");
+    const c = check(reconcile(absent([aliased, clone])), "git.branchElsewhere");
+    expect(c.ok).toBe(false);
+    expect(c.actual).toBe(`${BRANCH} is checked out in ${clone.path}`);
+    expect(c.remediation).toMatch(PROJECT_RULE);
+  });
+
+  it("a mirror on another host reached without SSH is another repository, even when this checkout's origin is an SSH alias", () => {
+    const aliased = { ...HOST, remote: "git@github-work:Pootytxng/sentinel.git" };
+    const mirror = holding("C:\\Users\\Kuya\\code\\sentinel-gitlab", "C:\\Users\\Kuya\\code\\sentinel-gitlab\\.git", "https://gitlab.com/Pootytxng/sentinel.git");
+    const r = reconcile(absent([aliased, mirror]));
+    expect(check(r, "git.branchElsewhere").ok).toBe(true);
+    expect(r.verdict).toBe("PASS");
+  });
+
   it("another path behind an SSH alias is still another repository", () => {
     const other = holding("C:\\Users\\Kuya\\code\\holoforge-work", "C:\\Users\\Kuya\\code\\holoforge-work\\.git", "git@github-work:Pootytxng/holoforge.git");
     const r = reconcile(absent([HOST, other]));
