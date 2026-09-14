@@ -341,6 +341,10 @@ const FILE_MUTATORS = new Map([
   ["new-item", "all"], ["set-itemproperty", "all"], ["remove-itemproperty", "all"],
 ]);
 
+// These operations can remove or relocate a directory as a whole. Inspect registered descendants
+// even without a recursive flag: PowerShell can prompt for recursion, and a move needs no flag.
+const DIRECTORY_DESTRUCTIVE = new Set(["rm", "rmdir", "mv", "remove-item", "move-item", "rename-item"]);
+
 /** Editors that rewrite a file in place only when a flag says so. */
 const INPLACE = new Map([
   ["sed", /^(-i.*|--in-place.*)$/],
@@ -1080,7 +1084,8 @@ export function decideShell({
   // given none and comes back `unknown`. An absolute target is unaffected.
   const zoned = ops.map((op) => ({
     op,
-    ...zone({ target: op.target, sessionRoot, cwd: op.cwdUnknown ? null : (op.cwd ?? cwd), deps: { home } }),
+    ...zone({ target: op.target, sessionRoot, cwd: op.cwdUnknown ? null : (op.cwd ?? cwd),
+      descendants: DIRECTORY_DESTRUCTIVE.has(op.verb), deps: { home } }),
   }));
   const protectedHits = zoned.filter((z) => PROTECTED_ZONES.has(z.zone));
   if (!protectedHits.length && !unresolved.length) return { permission: "allow", why: "every target is outside protection" };
@@ -1093,7 +1098,7 @@ export function decideShell({
       target: sibling.abs,
       reason:
         `${HEADER}\n\n` +
-        `\`${sibling.op.verb}\` would act on ${sibling.abs}, which belongs to ${sibling.owner} — ` +
+        `\`${sibling.op.verb}\` would act on ${sibling.abs}, which is protected for ${sibling.owner} — ` +
         `${sibling.why}. This session is working in ${sessionRoot}, and a claim covers one checkout.\n\n` +
         `Switching tools does not change who may write: the same edit through \`Write\` is refused ` +
         `for the same reason. Make the change in a session opened on ${sibling.owner}, or in this ` +

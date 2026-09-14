@@ -240,6 +240,7 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
   let NMAIN = null;
   let LANE_A = null;
   let LANE_B = null;
+  let CHILD = null;
   let TOP = null;
   let VENDOR = null;
   let STALE = null;
@@ -270,6 +271,8 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
     git(NMAIN, "worktree", "add", "-q", "-b", "laneA", LANE_A);
     git(NMAIN, "worktree", "add", "-q", "-b", "laneB", LANE_B);
     git(NMAIN, "worktree", "add", "-q", "-b", "top", TOP);
+    CHILD = join(LANE_A, "nested-child");
+    git(NMAIN, "worktree", "add", "-q", "-b", "child", CHILD);
 
     // Not a lane: an unrelated repository that happens to sit inside the root.
     VENDOR = join(NMAIN, "vendor", "other");
@@ -320,6 +323,32 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
     for (const target of [join(NMAIN, "src", "App.css"), join(NMAIN, "src", "new", "deep.css"), "src/App.css", join(NMAIN, ".claude", "worktrees"), NMAIN]) {
       expect(nz(target).zone, target).toBe(ZONES.OWN);
     }
+  });
+
+  it("protects registered descendants only for operations that can act on a whole directory (#428)", () => {
+    let gitCalls = 0;
+    const counted = (target) => zoneOf({ target, sessionRoot: NMAIN, cwd: NMAIN, descendants: true,
+      deps: { home: NHOME, git: () => { gitCalls += 1; throw new Error("ordinary ancestor check must not spawn git"); } } });
+    for (const target of [".claude/worktrees", join(NMAIN, ".claude"), NMAIN]) {
+      const result = counted(target);
+      expect(result.zone, target).toBe(ZONES.SIBLING);
+      expect([LANE_A, LANE_B, CHILD].some((lane) => same(result.owner, lane)), target).toBe(true);
+    }
+    expect(counted(join(NMAIN, "src")).zone).toBe(ZONES.OWN);
+    expect(counted(join(NMAIN, "src", "App.css")).zone).toBe(ZONES.OWN);
+    expect(gitCalls).toBe(0);
+    // An ordinary file write does not inspect the descendant registry.
+    expect(nz(join(NMAIN, ".claude", "worktrees")).zone).toBe(ZONES.OWN);
+  });
+
+  it("reads the common registration from a linked root and locks unreadable registrations (#428)", () => {
+    const child = zoneOf({ target: LANE_A, sessionRoot: LANE_A, cwd: LANE_A, descendants: true, deps: { home: NHOME } });
+    expect(child.zone).toBe(ZONES.SIBLING);
+    expect(same(child.owner, CHILD)).toBe(true);
+    const deniedRead = () => { throw Object.assign(new Error("fixture denied"), { code: "EACCES" }); };
+    const q = { target: join(NMAIN, "src"), sessionRoot: NMAIN, cwd: NMAIN, deps: { home: NHOME, list: deniedRead } };
+    expect(zoneOf({ ...q, descendants: true }).zone).toBe(ZONES.UNKNOWN);
+    expect(zoneOf(q).zone).toBe(ZONES.OWN);
   });
 
   it("from a nested lane, its peer, the checkout it sits inside and a top-level sibling all belong to someone else", () => {
@@ -391,6 +420,17 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
       });
     const write = (file_path, { root = NMAIN, verdict = VERIFIED } = {}) =>
       decide({ toolName: "Write", toolInput: { file_path, content: "x" }, verdict, root, cwd: root, zone: (q) => zoneOf({ ...q, deps: { home: NHOME } }) });
+
+    it("refuses deleting the container of registered lanes, but allows an ordinary folder (#428)", () => {
+      for (const target of [".claude/worktrees", ".claude", msys(join(NMAIN, ".claude", "worktrees"))]) {
+        expect(shell(`rm -rf "${target}"`), target).toMatchObject({ permission: "deny", zone: ZONES.SIBLING });
+      }
+      expect(shell("rm -rf src").permission).toBe("allow");
+      expect(shell('mv ".claude/worktrees" staging')).toMatchObject({ permission: "deny", zone: ZONES.SIBLING });
+      const ps = decideShell({ toolName: "PowerShell", toolInput: { command: 'Remove-Item -LiteralPath ".claude/worktrees" -Recurse -Force' },
+        sessionRoot: NMAIN, cwd: NMAIN, verify: () => VERIFIED, home: NHOME, env: {} });
+      expect(ps).toMatchObject({ permission: "deny", zone: ZONES.SIBLING });
+    });
 
     it("the shell guard refuses a main-rooted command that reaches into a nested lane, verified or not", () => {
       for (const verdict of [null, UNCLAIMED]) {
