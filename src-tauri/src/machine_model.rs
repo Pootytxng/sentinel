@@ -430,10 +430,12 @@ pub(crate) struct ChronologyEntry {
     pub class: EvidenceClass,
 }
 
-/// Answer B: the chronology Compy already recorded — nothing back-filled, nothing inferred.
+/// Answer B: the supplied chronology, not every history source Compy retains.
+/// Production build includes applied changes and identity snapshots only (#393); coverage travels
+/// with the serialized answer so totals and time boundaries cannot imply the omitted sources.
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct ChangeChronology {
-    /// The earliest evidence Compy STILL RETAINS, across every retained chronology source: the
+    /// The earliest evidence in the supplied sources: the
     /// identity snapshots, the assembled timeline, and dated Trust-Ledger rows. Deriving it from
     /// identity snapshots alone dated "history starts" later than evidence already in hand, which
     /// would report a machine as unrecorded during a period Compy can still show (#385 review).
@@ -452,8 +454,10 @@ pub(crate) struct ChangeChronology {
     pub identity_history_from: Option<String>,
     pub identity_snapshots: usize,
     pub total_events: usize,
+    /// Explicit production producer scope; also rendered beside counts and newest/oldest dates.
+    pub coverage_note: &'static str,
     /// Newest first, capped at [`MAX_CHRONOLOGY`] for DISPLAY only. `total_events` and
-    /// `recorded_from` above cover the whole retained record, and so does the evidence pass:
+    /// `recorded_from` above cover the whole supplied record, and so does the evidence pass:
     /// [`compose_evidence`] walks the uncapped projection, never this list, so Answer B's span can
     /// never be narrower than the boundary reported beside it (#385 review).
     pub entries: Vec<ChronologyEntry>,
@@ -465,7 +469,8 @@ pub(crate) struct ChangeChronology {
 }
 
 const CAUSATION_NOTE: &str = "Chronology never implies causation by itself. These entries say what was recorded and when, not what caused what.";
-const CHRONOLOGY_EMPTY: &str = "Nothing is recorded yet. Chronology starts when recording starts; an empty record is not evidence that nothing changed.";
+const CHRONOLOGY_COVERAGE: &str = "This view includes Compy-applied changes and identity snapshots only. It excludes sessions, gaming slots, awards, benchmark baselines, comparisons and drift notices.";
+const CHRONOLOGY_EMPTY: &str = "No events are recorded in this view. An empty view is not evidence that nothing changed or that other history is empty.";
 const LEDGER_EMPTY: &str = "The Trust Ledger has no rows, so Compy has recorded no change on this machine.";
 
 // ─── C. What did Compy change? ───────────────────────────────────────────
@@ -930,6 +935,7 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
             identity_history_from,
             identity_snapshots: inp.identity_snapshots.len(),
             total_events: inp.timeline.len(),
+            coverage_note: CHRONOLOGY_COVERAGE,
             entries,
             dropped_unparseable: inp.timeline_dropped,
             causation_note: CAUSATION_NOTE,
@@ -2059,6 +2065,38 @@ mod machine_model_tests {
     // ── 7. The command and the diagnostics section share ONE model ────────
 
     #[test]
+    fn partial_chronology_is_scoped_in_api_and_rendered_diagnostics() {
+        let mut f = Fixture::new();
+        for populated in [false, true] {
+            if populated {
+                f.timeline.push(crate::intelligence::EventRecord {
+                    id: "scoped-identity".into(), timestamp: "2026-08-20T00:00:00Z".into(),
+                    event_type: "gpu-driver-change".into(), source: "identity-snapshot".into(),
+                    scope: EventScope::Observed, game: None, summary: "GPU driver changed".into(),
+                    detail: None, observed_between: None, since_rolled_back: false, rec_id: None,
+                });
+            }
+            let m = f.model();
+            let wire = serde_json::to_value(&m).unwrap();
+            let coverage = wire["chronology"]["coverage_note"].as_str().unwrap_or("");
+            assert!(coverage.contains("Compy-applied changes and identity snapshots only"), "{coverage}");
+            assert!(coverage.contains("excludes sessions"), "{coverage}");
+            let entries = rendered_entries(&m);
+            let (_, value, note) = entry_by_label(&entries, "Recorded changes");
+            assert!(value.contains("events in this view"), "{value}");
+            assert!(note.contains(coverage), "{note}");
+            if populated {
+                assert!(note.contains("Most recent in this view:"), "{note}");
+                assert!(!note.contains("Most recent:"), "{note}");
+            } else {
+                assert!(!note.contains("Nothing is recorded yet"), "{note}");
+            }
+            let (_, _, boundary) = entry_by_label(&entries, "Earliest dated record");
+            assert!(boundary.contains("in this view"), "{boundary}");
+        }
+    }
+
+    #[test]
     fn the_diagnostics_section_renders_the_same_model_the_command_returns() {
         let mut f = Fixture::new();
         f.changes.push(crate::history::test_view(
@@ -2087,7 +2125,7 @@ mod machine_model_tests {
             ("Rig identity", "abc123"),
             ("Memory", "32 GB"),
             ("Identity producers disagree", "No"),
-            ("Recorded changes", "0 recorded · 1 identity snapshots"),
+            ("Recorded changes", "0 events in this view · 1 identity snapshots"),
             ("Earliest dated record", "2026-07-01T00:00:00Z"),
             (
                 "Changes Compy applied",
