@@ -265,7 +265,7 @@ function containedWorktree(abs, root, { exists, real, stat = statSync, read = re
  * @param {string|null} q.cwd      for a relative target
  * @returns {{zone: string, abs: string|null, owner: string|null, why: string}}
  */
-export function zoneOf({ target, sessionRoot, cwd = null, descendants = false, deps = {} } = {}) {
+export function zoneOf({ target, sessionRoot, cwd = null, descendants = false, wildcard = false, deps = {} } = {}) {
   const { exists = existsSync, real = realpathSync, git = runGit, home = homedir(), windows = process.platform === "win32" } = deps;
 
   const raw = resolveAbsolute(target, cwd, { windows });
@@ -287,6 +287,17 @@ export function zoneOf({ target, sessionRoot, cwd = null, descendants = false, d
     } catch {
       root = resolve(sessionRoot);
     }
+  }
+
+  if (descendants && wildcard) {
+    // The caller supplies the static directory prefix, not a literal filename containing '*'.
+    // A prefix already inside a sibling is a definite refusal. A prefix containing lanes only
+    // proves a possible match: do not guess shell matching rules or allow the destructive command.
+    const prefix = zoneOf({ target, sessionRoot, cwd, deps });
+    if (prefix.zone !== ZONES.OWN) return prefix;
+    const contained = containedWorktree(abs, root, { ...deps, exists, real });
+    return contained ? { ...contained, zone: ZONES.UNKNOWN,
+      why: "wildcard prefix contains registered worktrees or unreadable registration; matching is unresolved" } : prefix;
   }
 
   if (root && isWithin(abs, root)) {

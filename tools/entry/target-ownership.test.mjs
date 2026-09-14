@@ -336,6 +336,10 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
     }
     expect(counted(join(NMAIN, "src")).zone).toBe(ZONES.OWN);
     expect(counted(join(NMAIN, "src", "App.css")).zone).toBe(ZONES.OWN);
+    const wildcard = (target) => zoneOf({ target, sessionRoot: NMAIN, cwd: NMAIN, descendants: true, wildcard: true,
+      deps: { home: NHOME, git: () => { gitCalls += 1; throw new Error("wildcard prefix must not spawn git"); } } });
+    expect(wildcard(".claude/worktrees/").zone).toBe(ZONES.UNKNOWN);
+    expect(wildcard("src/").zone).toBe(ZONES.OWN);
     expect(gitCalls).toBe(0);
     // An ordinary file write does not inspect the descendant registry.
     expect(nz(join(NMAIN, ".claude", "worktrees")).zone).toBe(ZONES.OWN);
@@ -348,6 +352,7 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
     const deniedRead = () => { throw Object.assign(new Error("fixture denied"), { code: "EACCES" }); };
     const q = { target: join(NMAIN, "src"), sessionRoot: NMAIN, cwd: NMAIN, deps: { home: NHOME, list: deniedRead } };
     expect(zoneOf({ ...q, descendants: true }).zone).toBe(ZONES.UNKNOWN);
+    expect(zoneOf({ ...q, descendants: true, wildcard: true }).zone).toBe(ZONES.UNKNOWN);
     expect(zoneOf(q).zone).toBe(ZONES.OWN);
   });
 
@@ -430,6 +435,39 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
       const ps = decideShell({ toolName: "PowerShell", toolInput: { command: 'Remove-Item -LiteralPath ".claude/worktrees" -Recurse -Force' },
         sessionRoot: NMAIN, cwd: NMAIN, verify: () => VERIFIED, home: NHOME, env: {} });
       expect(ps).toMatchObject({ permission: "deny", zone: ZONES.SIBLING });
+    });
+    it.each([
+      ["rm -rf .claude/worktrees/*", "ask"],
+      ["rm -rf .cla*/worktrees/*", "ask"],
+      ["rm -rf .claude/worktrees/lane?", "ask"],
+      ["mv .claude/worktrees/* staging", "ask"],
+      ["rm -rf .claude/worktrees/laneA/*", "deny"],
+      ["rm -rf src/*.tmp", "allow"],
+      ['rm -rf ".claude/worktrees/*"', "allow"],
+      ["rm -rf '.claude/worktrees/*'", "allow"],
+      ["rm -rf .claude/worktrees/\\*", "allow"],
+      ['rm -rf ".claude"/worktrees/*', "ask"],
+    ])("preserves wildcard ownership and literal controls: %s (#428)", (command, permission) => {
+      expect(shell(command).permission).toBe(permission);
+    });
+
+    it("denies an absolute wildcard whose static prefix is already in a sibling (#428)", () => {
+      expect(shell('rm -rf ' + msys(LANE_A) + '/*').permission).toBe("deny");
+    });
+
+    it.each([
+      ["Remove-Item -Path '.claude/worktrees/*' -Recurse", "ask"],
+      ['Remove-Item -Path ".claude/worktrees/*" -Recurse', "ask"],
+      ['Remove-Item -LiteralPath ".claude/worktrees/*" -Recurse', "allow"],
+      ["Remove-Item -LiteralPath .claude/worktrees/* -Recurse", "allow"],
+      ["Move-Item -Path '.claude/worktrees/*' -Destination staging", "ask"],
+      ["Rename-Item -Path '.claude/worktrees/*' -NewName staging", "ask"],
+      ["Remove-Item -Path 'src/*.tmp'", "allow"],
+      ["Remove-Item -LiteralPath '.claude/worktrees/laneA' -Recurse", "deny"],
+    ])("distinguishes PowerShell provider wildcards from LiteralPath: %s (#428)", (command, permission) => {
+      const result = decideShell({ toolName: "PowerShell", toolInput: { command },
+        sessionRoot: NMAIN, cwd: NMAIN, verify: () => VERIFIED, home: NHOME, env: {} });
+      expect(result.permission).toBe(permission);
     });
 
     it("the shell guard refuses a main-rooted command that reaches into a nested lane, verified or not", () => {
