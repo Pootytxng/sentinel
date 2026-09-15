@@ -39,7 +39,8 @@ gate function body at source and compare against the row's State column:
   · `benchmark_trial::stack_trial_gate()` (§2a aggregate-stack A/B — DARK) — does the returned value
   match LIVE/ARMED/DARK/OFF as printed?
 - Outbound-network row: still no HTTP client in `Cargo.toml`, CSP still `connect-src 'self' ipc:`?
-- Updater row: still no updater plugin/dep?
+- Updater row: matches whatever RELEASE_STATE currently claims (signed updater shipped, v0.9.26) —
+  verify the row against source, do not carry forward a remembered value.
 
 **Dispatch layer 2 to a sonnet subagent** (read-only: Read/Grep) and have it return one line per row:
 `<gate> · cited <state> · source says <state> · MATCH/MISMATCH (file:line)`. Do not paste function

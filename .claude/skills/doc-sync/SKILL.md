@@ -26,8 +26,10 @@ silently patch — see gate-drift-audit).
    unblocks/gates. Item markers: `[x]` done · `[~]` partial · `[ ]` open · `[⛔]`/🪪/📡 gated.
 3. **`docs/CHANGELOG.md`** — dated stratum for what would once have been a CLAUDE.md state banner.
    Point-in-time records; they are never "fixed" retroactively, they accumulate.
-4. **`CLAUDE.md`** — ONLY when a standing law/working rule changes (new gate class, new lane rule,
-   renamed doctrine). Current state does NOT go here — that's what drifted before RELEASE_STATE existed.
+4. **`docs/PRODUCT_CONSTITUTION.md` / `docs/ARCHITECTURE_LOCKS.md`** — ONLY when a standing
+   law/working rule changes (new gate class, new lane rule, renamed doctrine); that is where law lives.
+   `CLAUDE.md` is bootstrap, not law — touch it only if the boot path itself changes. Current state
+   does NOT go in either — that's what drifted before RELEASE_STATE existed.
 
 ## Invariants
 

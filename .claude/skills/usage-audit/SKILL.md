@@ -26,11 +26,12 @@ message.id, and prints: token totals, avg carried context/turn, per-session peak
 skills, subagent model routing, boot-tax read paths, error classes — plus **health flags**:
 
 - 🔴 sessions past 200k peak context — this is a sanity-check red-flag, not a target: it should
-  never be reached if native auto-compact is working (see `.claude/USAGE_ECONOMICS.md` §5 for
-  the full reconciled number set; the owner's actual working target is 80–120k). Cache-read cost
-  per turn scales with carried context, and it is the #1 spend driver (measured 2026-07-13: 1.38B
-  cache-read vs 7.2M output over 80 sessions). Not to be confused with `docs/LANE_WORKFLOW.md`'s
-  unrelated ~200k-output-tokens-per-burst-item metric — same round number, different thing.
+  never be reached if native auto-compact is working (the owner's actual working target is
+  80–120k). Cache-read cost per turn scales with carried context, and it is the #1 spend driver;
+  the current measured figures are whatever `scripts/usage-audit.mjs` prints — flags defer to
+  that output, never to a remembered number. The standing law is `claude/TOKEN_ECONOMY_LAW.md`
+  (HQ). Not to be confused with `docs/LANE_WORKFLOW.md`'s unrelated
+  ~200k-output-tokens-per-burst-item metric — same round number, different thing.
 - 🟡 subagents on opus/fable — routing law says cheapest capable model (sonnet default via
   `settings.json`; pre-2026-07-05 runs explain historical hits).
 - 🟡 BACKLOG.md > 120 KB — boot tax; archive steering-log cycles to `docs/BACKLOG_ARCHIVE.md`
@@ -58,8 +59,8 @@ skills, subagent model routing, boot-tax read paths, error classes — plus **he
 ## Standing calibrations (2026-07-18 — single-source reconciliation)
 
 - **Context refresh is automatic.** The literal window value lives in exactly one place —
-  `.claude/settings.json`'s `CLAUDE_CODE_AUTO_COMPACT_WINDOW` — see `.claude/USAGE_ECONOMICS.md`
-  §5 for the reconciled number set; don't restate the literal value here, it drifts (this file
+  `.claude/settings.json`'s `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (law: `claude/TOKEN_ECONOMY_LAW.md`
+  at HQ); don't restate the literal value here, it drifts (this file
   itself used to quote a stale 160000 before the 2026-07-18 pass). The owner's /clear-paste job
   is retired; override per session by saying "NO REFRESH" in the driver prompt.
 - The context-size-advisor Stop hook (machine-local, gitignored) is v4: it parses the LAST
