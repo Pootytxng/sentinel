@@ -31,7 +31,7 @@
 // without a repository, and the real-repository behaviour is proved separately against temp fixtures.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
@@ -222,6 +222,42 @@ export function protectedGlobals({ home = homedir() } = {}) {
   return [join(home, ".claude"), join(home, ".codex")];
 }
 
+// A destructive directory operand can own its spelling while containing somebody else's lane.
+// Read Git's registration files rather than spawning git or walking the target's whole subtree.
+// Missing registration means none; unreadable registration means unknown, never permission.
+function containedWorktree(abs, root, { exists, real, stat = statSync, read = readFileSync, list = readdirSync }) {
+  try {
+    try { if (!stat(abs).isDirectory()) return null; }
+    catch (error) { if (error.code === "ENOENT") return null; throw error; }
+    const checkout = checkoutRootOf(root, { exists });
+    if (!checkout) return null;
+    let admin = join(checkout, ".git");
+    if (!stat(admin).isDirectory()) {
+      const pointer = /^gitdir:\s*(.+)\s*$/i.exec(read(admin, "utf8").trim());
+      if (!pointer) throw new Error("invalid gitdir pointer");
+      admin = resolve(checkout, pointer[1]);
+    }
+    const commonFile = join(admin, "commondir");
+    const common = exists(commonFile) ? resolve(admin, read(commonFile, "utf8").trim()) : admin;
+    const registry = join(common, "worktrees");
+    let entries;
+    try { entries = list(registry); }
+    catch (error) { if (error.code === "ENOENT") return null; throw error; }
+    for (const entry of entries) {
+      const registration = join(registry, entry);
+      const pointer = read(join(registration, "gitdir"), "utf8").trim();
+      if (!pointer) throw new Error("empty worktree pointer");
+      const owner = canonicalTarget(dirname(resolve(registration, pointer)), { exists, real });
+      if (toComparable(owner) !== toComparable(root) && isWithin(owner, abs)) {
+        return { zone: ZONES.SIBLING, abs, owner, why: "contains another registered worktree" };
+      }
+    }
+    return null;
+  } catch {
+    return { zone: ZONES.UNKNOWN, abs, owner: null, why: "contained worktree registrations could not be read" };
+  }
+}
+
 /**
  * @param {object} q
  * @param {string} q.target        as written by the tool or the command
@@ -229,7 +265,7 @@ export function protectedGlobals({ home = homedir() } = {}) {
  * @param {string|null} q.cwd      for a relative target
  * @returns {{zone: string, abs: string|null, owner: string|null, why: string}}
  */
-export function zoneOf({ target, sessionRoot, cwd = null, deps = {} } = {}) {
+export function zoneOf({ target, sessionRoot, cwd = null, descendants = false, wildcard = false, deps = {} } = {}) {
   const { exists = existsSync, real = realpathSync, git = runGit, home = homedir(), windows = process.platform === "win32" } = deps;
 
   const raw = resolveAbsolute(target, cwd, { windows });
@@ -253,7 +289,22 @@ export function zoneOf({ target, sessionRoot, cwd = null, deps = {} } = {}) {
     }
   }
 
+  if (descendants && wildcard) {
+    // The caller supplies the static directory prefix, not a literal filename containing '*'.
+    // A prefix already inside a sibling is a definite refusal. A prefix containing lanes only
+    // proves a possible match: do not guess shell matching rules or allow the destructive command.
+    const prefix = zoneOf({ target, sessionRoot, cwd, deps });
+    if (prefix.zone !== ZONES.OWN) return prefix;
+    const contained = containedWorktree(abs, root, { ...deps, exists, real });
+    return contained ? { ...contained, zone: ZONES.UNKNOWN,
+      why: "wildcard prefix contains registered worktrees or unreadable registration; matching is unresolved" } : prefix;
+  }
+
   if (root && isWithin(abs, root)) {
+    if (descendants) {
+      const contained = containedWorktree(abs, root, { ...deps, exists, real });
+      if (contained) return contained;
+    }
     // Inside the root is not the same as inside this checkout (#425). A lane registered beneath the
     // root (`.claude/worktrees/<lane>`) is a checkout of its own, so the target answers to the
     // nearest checkout that holds it. Git runs only when that checkout sits strictly inside the

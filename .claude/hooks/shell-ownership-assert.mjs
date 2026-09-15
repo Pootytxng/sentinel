@@ -103,10 +103,12 @@ export function lex(text, dialect = "posix") {
   const src = String(text ?? "");
   const out = [];
   let word = null;
+  let braces = [];
 
   const push = () => {
-    if (word !== null) out.push({ type: "word", value: word.value, dynamic: word.dynamic, raw: word.raw });
+    if (word !== null) out.push({ type: "word", ...word });
     word = null;
+    braces = [];
   };
   const add = (ch, { dynamic = false, raw = ch } = {}) => {
     if (word === null) word = { value: "", dynamic: false, raw: "" };
@@ -186,6 +188,36 @@ export function lex(text, dialect = "posix") {
       continue;
     }
 
+    if (dialect === "posix" && c === "~" && word === null && /[^/\s]/.test(src[i + 1] ?? "")) {
+      // ~+, ~- and ~user require shell/account state we do not have. Quoted/escaped forms
+      // were consumed above and stay literal; the existing ~ and ~/ home forms are unchanged.
+      add(c, { dynamic: true });
+      i += 1;
+      continue;
+    }
+    if (dialect === "posix" && c === "{") {
+      add(c);
+      braces.push({ start: word.value.length - 1, expands: false, dot: -1 });
+      i += 1;
+      continue;
+    }
+    if (dialect === "posix" && braces.length) {
+      const brace = braces.at(-1);
+      if (c === ",") brace.expands = true;
+      if (c === ".") {
+        if (brace.dot === word.value.length - 1) brace.expands = true;
+        brace.dot = word.value.length;
+      }
+      if (c === "}") {
+        braces.pop();
+        if (brace.expands) {
+          word.dynamic = true;
+          // Lists and ranges share the conservative static-prefix check used for globs.
+          // Empty {}, unclosed braces, and quoted/escaped separators never reach this branch.
+          word.globStart = Math.min(word.globStart ?? Infinity, brace.start);
+        }
+      }
+    }
     if (c === "$" || (dialect === "posix" && c === "`")) {
       add(c, { dynamic: true });
       i += 1;
@@ -193,6 +225,8 @@ export function lex(text, dialect = "posix") {
     }
     if (c === "*" || c === "?" || c === "[") {
       add(c, { dynamic: true });
+      // Keep the first expanding character's position; quoted/escaped wildcards above are literal.
+      word.globStart ??= word.value.length - 1;
       i += 1;
       continue;
     }
@@ -340,6 +374,10 @@ const FILE_MUTATORS = new Map([
   ["remove-item", "all"], ["move-item", "both"], ["copy-item", "both"], ["rename-item", "both"],
   ["new-item", "all"], ["set-itemproperty", "all"], ["remove-itemproperty", "all"],
 ]);
+
+// These operations can remove or relocate a directory as a whole. Inspect registered descendants
+// even without a recursive flag: PowerShell can prompt for recursion, and a move needs no flag.
+const DIRECTORY_DESTRUCTIVE = new Set(["rm", "rmdir", "mv", "remove-item", "move-item", "rename-item"]);
 
 /** Editors that rewrite a file in place only when a flag says so. */
 const INPLACE = new Map([
@@ -527,8 +565,8 @@ export function embeddedPaths(text) {
 const expandHome = (p, home) => (p === "~" || p.startsWith("~/") || p.startsWith("~\\") ? resolve(home, p.slice(2) || ".") : p);
 
 /** A word that is dynamic ONLY because of a glob, with no `..` and no absolute prefix, is bounded by
- *  the working directory — `rm *.log` cannot leave the folder it runs in. Saying so is what keeps
- *  the checker from asking about every ordinary wildcard. */
+ *  the working directory. That is a location bound, not ownership: directory-destructive globs must
+ *  still inspect the static prefix for contained lanes before allowing ordinary cleanup. */
 const globBounded = (w) => /^[^$`]*$/.test(w.raw ?? w.value) && !w.value.includes("..") && !/^([A-Za-z]:|[\\/]|~)/.test(w.value);
 
 /** Punctuation that would re-lex into something other than one plain word. `find -exec` hands its
@@ -760,7 +798,7 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
   let here = cwd;
   let cwdUnknown = false;
 
-  const at = (target, verb, kind = "literal") => ops.push({ verb, target, kind, cwd: here, cwdUnknown });
+  const at = (target, verb, kind = "literal", details = {}) => ops.push({ verb, target, kind, cwd: here, cwdUnknown, ...details });
   /**
    * `kind` separates the two reasons a target can be unknown, because they deserve different
    * answers. `"mutation"` is a RECOGNIZED write whose target is not knowable — that is the spec's
@@ -1014,6 +1052,7 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
     if (mutator || isInplace) {
       const operands = operandsOf(rest).filter((w) => !(inplaceFlag && inplaceFlag.test(w.value)));
       const targets = mutator === "dd" ? operands.filter((w) => w.value.startsWith("of=")) : operands;
+      const literalPath = dialect === "powershell" && rest.some((w) => /^-literalpath$/i.test(w.value));
       if (!targets.length) cannot(verb, "it names no target this checker can see");
       let anyUnresolved = false;
       for (const w of targets) {
@@ -1023,6 +1062,27 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
         // resolving it as a path answered confidently about a file named `@p` in the session's own
         // root — an ALLOW on a write into a sibling. Splatting is ordinary PowerShell, not evasion.
         const splat = dialect === "powershell" && /^@[A-Za-z_@]/.test(value);
+        // PowerShell's provider expands -Path even inside quotes; -LiteralPath never does.
+        // Bash expands only the unquoted wildcard recorded by the lexer. Keep the original operand
+        // for the explanation, but inspect the directory before its first expanding component.
+        const globStart = dialect === "powershell"
+          ? (literalPath ? -1 : value.search(/[*?\[]/)) : (w.globStart ?? -1);
+        if (DIRECTORY_DESTRUCTIVE.has(verb) && globStart >= 0) {
+          if (splat || /[$`]/.test(w.raw ?? value)) {
+            anyUnresolved = true;
+            cannot(verb, `the operand \`${value}\` is not knowable from the text`);
+            continue;
+          }
+          const before = value.slice(0, globStart);
+          const separator = Math.max(before.lastIndexOf("/"), before.lastIndexOf("\\"));
+          const prefix = separator < 0 ? "." : before.slice(0, separator + 1);
+          at(expandHome(value, home), verb, "glob", { wildcardPrefix: expandHome(prefix, home) });
+          if (!globBounded(w)) {
+            anyUnresolved = true;
+            cannot(verb, `the wildcard \`${value}\` is not bounded by the working directory`);
+          }
+          continue;
+        }
         if (splat || (w.dynamic && !globBounded(w))) {
           anyUnresolved = true;
           cannot(verb, `the operand \`${value}\` is not knowable from the text`);
@@ -1080,7 +1140,8 @@ export function decideShell({
   // given none and comes back `unknown`. An absolute target is unaffected.
   const zoned = ops.map((op) => ({
     op,
-    ...zone({ target: op.target, sessionRoot, cwd: op.cwdUnknown ? null : (op.cwd ?? cwd), deps: { home } }),
+    ...zone({ target: op.wildcardPrefix ?? op.target, sessionRoot, cwd: op.cwdUnknown ? null : (op.cwd ?? cwd),
+      descendants: DIRECTORY_DESTRUCTIVE.has(op.verb), wildcard: op.kind === "glob", deps: { home } }),
   }));
   const protectedHits = zoned.filter((z) => PROTECTED_ZONES.has(z.zone));
   if (!protectedHits.length && !unresolved.length) return { permission: "allow", why: "every target is outside protection" };
@@ -1093,11 +1154,10 @@ export function decideShell({
       target: sibling.abs,
       reason:
         `${HEADER}\n\n` +
-        `\`${sibling.op.verb}\` would act on ${sibling.abs}, which belongs to ${sibling.owner} — ` +
+        `\`${sibling.op.verb}\` would act on ${sibling.abs}, which is protected for ${sibling.owner} — ` +
         `${sibling.why}. This session is working in ${sessionRoot}, and a claim covers one checkout.\n\n` +
-        `Switching tools does not change who may write: the same edit through \`Write\` is refused ` +
-        `for the same reason. Make the change in a session opened on ${sibling.owner}, or in this ` +
-        `one against a path it owns.`,
+        `Switching tools does not change who may write. Another checkout and its contents remain protected. ` +
+        `Make the change in a session opened on ${sibling.owner}, or in this one against a path it owns.`,
     };
   }
 

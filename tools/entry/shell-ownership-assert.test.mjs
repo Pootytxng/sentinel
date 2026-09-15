@@ -268,6 +268,26 @@ describe("the proof matrix — the same target gets the same answer through the 
     expect(ask("rm -f ../*/dist/*.map").permission).toBe("ask");
   });
 
+
+  it("preserves the original wildcard and sends its static prefix to ownership (#428)", () => {
+    const zone = vi.fn((q) => q.wildcard && q.target === ".claude/worktrees/"
+      ? { zone: ZONES.UNKNOWN, abs: inRoot(".claude/worktrees"), owner: null, why: "contains a registered lane" }
+      : fakeZone(q));
+    const result = ask("rm -rf .claude/worktrees/*", { zone });
+    expect(result.permission).toBe("ask");
+    expect(result.reason).toContain(".claude/worktrees/*");
+    expect(zone).toHaveBeenCalledWith(expect.objectContaining({ target: ".claude/worktrees/", descendants: true, wildcard: true }));
+  });
+
+  it("keeps braces and unsupported tildes from becoming literal deletion targets (#428 review)", () => {
+    const zone = vi.fn((q) => q.wildcard && q.target === ".claude/"
+      ? { zone: ZONES.UNKNOWN, abs: inRoot(".claude"), owner: null, why: "contains a registered lane" }
+      : fakeZone(q));
+    expect(ask("rm -rf .claude/work{trees,}", { zone }).permission).toBe("ask");
+    expect(ask("rm -rf ~+/x").permission).toBe("ask");
+    expect(lex("find -exec rm {} \\;").find((w) => w.value === "{}").dynamic).toBe(false);
+  });
+
   it("never consults the board when nothing protected is in play", () => {
     const verify = vi.fn(VERIFIED);
     expect(ask("ls -la", { verify }).permission).toBe("allow");
