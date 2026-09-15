@@ -1,0 +1,83 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #425 writer lane (PR #426). This actor alone authored the one commit in the proof delta 8e9a5c2b..bfec5d4c: `git log --format='%an <%ae>' 8e9a5c2b..bfec5d4c | sort -u` returns only claude-code <claude-code@desk.local>. bfec5d4c was committed at 2026-09-13T02:13:37Z under claude-code's claim on #425, 5650087677 (posted 01:58:20Z). The Handoff 5650256717 (02:32:29Z) then released that lease to await review, and the landing claim 5651429958 (05:37:38Z) took it back for the same executor, folder and branch. The landing adds no commit to the delta. The reviewer, chatgpt-hq, authored none of it.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/425#issuecomment-5651429958",
+  "leaseEvidenceNote": "The landing's Ownership claim on #425 (5651429958, started 2026-09-13T05:37Z). Before any receipt was written, it named the PR's four code paths and this landing's three receipts. This receipt was written inside that scope while the lease was live, and at 2026-09-13T05:59Z the thread still had 4 comments with that claim last. The lease is released by a `### Handoff` ending `- Claim: released`. That Handoff is the first comment on #425 after the claim, posted after this receipt was written and before it was gated.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Re-measured live at 2026-09-13T05:59:34Z, after the merge, by comparing each open PR's file list from `gh pr list --json files`; no list reached the 100-file cap. None of the 10 open PRs (427, 404, 400, 397, 395, 394, 391, 317, 306, 297) touches any of the seven claimed paths, and none is based on claude/sentinel-425-nested-checkout-ownership. At claim time, preflight found the scope disjoint from the only live leases, #396 and #405. PR #427 (#421) holds no lease: #421's last comment is still the Handoff that released its lease to await review. #428 and #429 are unclaimed follow-ups that start only after this lease is released. receipt-carrier-346, lane/receipt-carrier-345, #346 and the #422 / #419 cleanup targets are neither used nor touched.",
+  "inheritedWork": false,
+  "currentHead": "bfec5d4cb2fd65a7ca2f4faffdb39d947370f248",
+  "pr": 426,
+  "issue": 425,
+  "kind": "lane",
+  "branch": "claude/sentinel-425-nested-checkout-ownership",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel. Worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/machine-model-defects-115554 (from git rev-parse --show-toplevel); canonical remote `origin`.",
+    "remoteState": "Fetched 2026-09-13T05:59:24Z. origin/main and `git ls-remote origin refs/heads/main` both read 1d35b8040edf84a4d7a55371e0ab25818223d12f, PR #426's merge commit, whose parents are 8e9a5c2bc6fa80fe33c0afb5035b2f7fda839e61 and bfec5d4cb2fd65a7ca2f4faffdb39d947370f248. The lane branch is gone from origin: `git ls-remote origin refs/heads/claude/sentinel-425-nested-checkout-ownership` returned no line, and no remote-tracking ref for it remains.",
+    "worktree": "Linked worktree with one writer and its own index. core.hooksPath is `.githooks` and resolves inside this worktree (.githooks/pre-push is present), so the pre-push gate is armed here. core.bare read false at 2026-09-13T05:59Z, after the landing.",
+    "branch": "The local branch claude/sentinel-425-nested-checkout-ownership is at bfec5d4c, the reviewed head, and HEAD has not moved since the commit. Re-read at 2026-09-13T05:59Z: PR #426 MERGED (mergedAt 2026-09-13T05:51:30Z) as 1d35b804, head bfec5d4c, 0 closingIssuesReferences; #425 OPEN. The delta the PR carried is one commit, bfec5d4c, touching four paths: .claude/hooks/target-ownership.mjs, .claude/hooks/project-write-assert.mjs, tools/entry/target-ownership.test.mjs and tools/entry/project-write-assert.test.mjs.",
+    "dirtyState": "No tracked changes. At 2026-09-13T05:59:25Z, `git status --porcelain --untracked-files=all` listed exactly three untracked files, all landing receipts inside the landing claim's scope: this receipt, .claude/work-control/2026-09-12-mark-pr-ready-426.json and .claude/work-control/2026-09-12-merge-pr-426.json. None of them is in any commit yet: scripts/work-control-receipt-preservation.test.mjs, run at 2026-09-13T06:01:53Z, reported all three as stranded (1 failed | 6 passed). The receipt carrier that follows this close commits them.",
+    "liveProcesses": "Get-Process at 2026-09-13T06:03:23Z showed compy, cargo, rustc, msbuild, link, git, gh and npm at x0: no Rust build, app run or git/gh operation was live. It also showed node x31, pwsh x7 and msedgewebview2 x6, not attributed one by one. vitest runs as node.exe, so the node count alone does not rule it out; this session's one vitest run, the receipt sweep above, had exited at 2026-09-13T06:01:53Z. This session had no gate or background task running. Get-Process was used instead of WMI because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "bfec5d4cb2fd65a7ca2f4faffdb39d947370f248",
+      "evidence": "logs/verify-local-2026-09-13T02-13-40Z.log:9-44",
+      "summary": "442 frontend test files passed (442); 7128 tests passed | 4 skipped (7132); 0 failed. Results at :39-40."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "bfec5d4cb2fd65a7ca2f4faffdb39d947370f248",
+      "evidence": "logs/verify-local-2026-09-13T02-13-40Z.log:45-71",
+      "summary": "`tsc && vite build`: tsc clean; vite production build succeeded (`built in 6.03s` at :70)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "bfec5d4cb2fd65a7ca2f4faffdb39d947370f248",
+      "evidence": "logs/verify-local-2026-09-13T02-13-40Z.log:72-1434",
+      "summary": "1317 passed; 0 failed; 24 ignored at :1420, plus two 0-test targets at :1426 and :1432. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "bfec5d4cb2fd65a7ca2f4faffdb39d947370f248",
+      "evidence": "logs/verify-local-2026-09-13T02-13-40Z.log:1435-1437",
+      "summary": "Clippy stage clean under -D warnings (scripts/verify-local.ps1:244 passes --all-targets --all-features -- -D warnings): `Finished` at :1437, with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is a run of the full local gate, `scripts/verify-local.ps1`. `.githooks/pre-push` ran it on the push that carried bfec5d4cb2fd65a7ca2f4faffdb39d947370f248. Log logs/verify-local-2026-09-13T02-13-40Z.log, 1437 lines. The console printed LOCAL CHECK RESULT: PASS, and the push created origin/claude/sentinel-425-nested-checkout-ownership at bfec5d4c (`* [new branch]`). The reflogs bind the log to the head: bfec5d4c was committed at 2026-09-13T02:13:37Z; the log opened at 02:13:40Z; the push moved origin/claude/sentinel-425-nested-checkout-ownership to bfec5d4c at 02:15:58Z; HEAD has not moved since the commit. The exit code was not taken as the verdict; every stage was read at its own line range. The log has six `LOCAL CHECK:` stages: git diff check (:3), write-scope drift #356 (:5-7), frontend tests (:9-44), frontend type-check and build (:45-71), Rust tests (:72-1434) and Rust clippy (:1435-1437). No line in the log matches `test result: FAILED`, `panicked` or `error[E`. No line in :9-71 matches `error TS`, `npm ERR!` or a nonzero failed count. origin/main's tip 1d35b804 has exactly the tree this gate tested, 810daf97. `--no-verify` was never used in this lane. The log is gitignored (`logs`), so it is not a tracked write.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "log:6-7: '4 changed paths since origin/main measured against the claim on #425 (cache)', then OK: every changed path was inside the write scope of the claim live at the time, 5650087677. Re-measured with `node scripts/scope-drift-gate.mjs --issue 425 --refresh` at 2026-09-13T06:00:32Z, after the merge and after this receipt was first written: '3 changed paths since origin/main measured against the claim on #425 (thread)', OK. With bfec5d4c now in origin/main the code delta is empty; the three paths are this landing's untracked receipts, all inside the seven-path landing scope.",
+    "reconciliationNote": "The four code paths the review covered are on main through 1d35b804, so they no longer show as changed. What remains is this landing's own receipts."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "bfec5d4cb2fd65a7ca2f4faffdb39d947370f248",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/426#issuecomment-5651436390 (2026-09-13T05:39:13Z) records the owner-relayed verdict verbatim on the PR. Its quoted #426 section opens: PR #426: code-review PASS at bfec5d4cb2fd65a7ca2f4faffdb39d947370f248 for the bounded nested-checkout repair. The relay reached the author's session at 2026-09-13T05:03:49Z. It answered the exact-head review request in https://github.com/Pootytxng/sentinel/issues/425#issuecomment-5650253887 (2026-09-13T02:32:06Z).",
+    "reviewerNote": "Independent exact-head review by chatgpt-hq. The reviewer authored no commit in the proof delta: mutationAuthors is claude-code alone. GitHub holds no review object for this verdict. It reached this session through the owner's relay, and the author's session, not the reviewer, posted the record on the PR. That provenance is weaker than a review object, and it is stated here, not hidden. The reviewer reports independent decision-function probes that confirmed denial for existing and nonexistent nested-lane files, and allowance for the main checkout's own file. It does not certify the recursive-parent gap (now #428) or the global-config-junction gap (now #429), and it covers no landing step. The same relay requested changes on PR #427 at ee4ed47d; that verdict is separate, and this PASS is not used for it. The head it covers, bfec5d4c, is the merge commit's second parent."
+  },
+  "transition": "close-issue",
+  "headBindingNote": "Bound to the reviewed head bfec5d4cb2fd65a7ca2f4faffdb39d947370f248, not to the merge commit 1d35b804: every named gate ran at bfec5d4c and none ran at the merge commit, so binding to the merge commit would substitute a gate. Both commits have the same tree (810daf972182ca787e7c5d67826d6203f6c82a35). After land-pr pruned the branch, bfec5d4c is still reachable from origin as the second parent of origin/main's tip.",
+  "mergeNote": "PR #426 reports MERGED (2026-09-13T05:51:30Z) as 1d35b8040edf84a4d7a55371e0ab25818223d12f. It was merged by `node scripts/land-pr.mjs --pr 426` under the merge-pr receipt: gate PASS; merge, prune, refresh and audit all done; audit OK; exit 0. Its parents are 8e9a5c2b (main at landing) and bfec5d4c (the reviewed head), and it is origin/main's tip. Its tree 810daf97 equals both bfec5d4c's tree and `git merge-tree --write-tree 8e9a5c2b bfec5d4c`, so main carries exactly the reviewed code.",
+  "releaseNote": "The landing lease (claim 5651429958) is released by a `### Handoff` on #425 ending `- Claim: released`. It is posted after this receipt was written and before this receipt is gated. The gate reads #425's thread and refuses close-issue while any lease there is live, so its PASS is itself a read-back of the release.",
+  "closureConditionNote": "#425 reported that a registered worktree nested under the session root zoned as own-claim, so every lane was writable from a main-rooted session. Its narrow question: is the target inside a registered worktree other than the session root. That is what landed, and all of it is on main through 1d35b804. In bfec5d4c, zoneOf (.claude/hooks/target-ownership.mjs) zones a target inside a checkout nested strictly inside the session root as that checkout's (ZONES.SIBLING), or ZONES.UNKNOWN with that checkout as owner when git would not report its identity. project-write-assert.mjs now zones every target, and inside the root it decides the answers that name another checkout as owner: a nested lane's file is denied (TARGET_NOT_OURS) whether or not the session is verified, and an in-root checkout whose identity git would not report asks (TARGET_UNRESOLVED) instead of being called ours (tools/entry/project-write-assert.test.mjs:171-195). The issue's Boundaries named target-ownership.mjs plus its test file; the lane's claim 5650087677 also named project-write-assert.mjs and its test, and the reviewed head changes all four. The candidate evidence (5650253887) shows the required cases red against the base hooks: 9 of 64 tests failed across the two changed suites. GPT HQ's PASS confirmed denial for existing and nonexistent nested-lane files and allowance for the main checkout's own file. The PASS does not certify two adjacent gaps, and neither is a condition of #425: #428 (a recursive delete of the folder that holds registered lanes reads own-claim) and #429 (a Write through a junction inside the session root into ~/.claude is allowed). Both are open, with their own work-control fields. Closing is authorized because the merge is proven and the lease is released. The project's Item closed workflow then sets Done, and the Done is read back from the board, not assumed."
+}

@@ -1,0 +1,83 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #433 writer lane (PR #434). This actor alone authored the two commits in the proof delta b1c26d6d..b112d6af: `git log --format='%an <%ae>' origin/main..HEAD` returns only claude-code <claude-code@desk.local>. 15fa49a4 was committed at 2026-09-15T00:58:44Z under claim 5672916548 (00:42:11Z), released by Handoff 5673140104 (01:10:48Z). b112d6af, the review repair, was committed at 06:06:11Z under claim 5675528109 (06:03:39Z), released by Handoff 5675617991 (06:13:01Z). The landing claim 5675944692 (06:41:46Z) took the lease back for the same executor, folder and branch and adds no commit. The reviewer, codex, authored none of it.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/433#issuecomment-5675944692",
+  "leaseEvidenceNote": "The landing's Ownership claim on #433 (5675944692, started 2026-09-15T06:41Z, expiry an alarm only). Before any receipt was written it named the one code path, scripts/site-build-collision-guard.test.mjs, and this landing's three receipts. This receipt was written inside that scope while the lease was live. The lease is released by a `### Handoff` ending `- Claim: released`, posted after this receipt was written and before it was gated.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured live at 2026-09-15T06:56:39Z from `gh pr list --state open --json files`; no list reached the 100-file cap. None of the 13 other open PRs (432, 431, 430, 427, 404, 400, 397, 395, 394, 391, 317, 306, 297) touches any of the four claimed paths. None is based on claude/sentinel-433-lock-order; #400 is based on claude/persistent-marathon-bulk-work-9b5c95, the rest on main. At claim time preflight found this scope disjoint from every live lease. PRs #427 (#421) and #431 (#428) are blocked on this prerequisite and incorporate it only after this landing and its receipt carrier, each under its own fresh claim.",
+  "inheritedWork": false,
+  "currentHead": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+  "pr": 434,
+  "issue": 433,
+  "kind": "lane",
+  "branch": "claude/sentinel-433-lock-order",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel. Worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a (git rev-parse --show-toplevel); canonical remote `origin`.",
+    "remoteState": "Fetched 2026-09-15T06:56:36Z. origin/main reads 2e891f597fd15739fa40b5c3cf29e796576b895d and `git ls-remote origin refs/heads/main` reads 2e891f597fd15739fa40b5c3cf29e796576b895d. PR #434's merge commit is 2e891f597fd15739fa40b5c3cf29e796576b895d, parents b1c26d6db92f60f8729c51a1bd35ece4863da44d and b112d6afe4d64d7a888b0be203151fddde093a6e; b112d6af is an ancestor of origin/main. The lane branch is gone from origin: `git ls-remote origin refs/heads/claude/sentinel-433-lock-order` returned no line.",
+    "worktree": "Linked worktree with one writer and its own index. core.hooksPath is `.githooks` and resolves inside this worktree (.githooks/pre-push is present), so the pre-push gate is armed here. core.bare read false at 2026-09-15T06:56:39Z.",
+    "branch": "The local branch claude/sentinel-433-lock-order is at b112d6af, the reviewed head; HEAD has not moved since the commit. Re-read at 2026-09-15T06:56:39Z: PR #434 MERGED (mergedAt 2026-09-15T06:55:52Z) as 2e891f59, head b112d6af, 0 closingIssuesReferences. mergedAt is GitHub's clock; every other timestamp in this receipt is this machine's clock, which reads behind GitHub's, since this re-read necessarily ran after the merge. The delta is two commits, 15fa49a4 and b112d6af, touching one path: scripts/site-build-collision-guard.test.mjs.",
+    "dirtyState": "No tracked changes. At 2026-09-15T06:56:39Z, before this receipt was (re)written, `git status --porcelain --untracked-files=all` listed only this landing's untracked receipts, inside the landing claim's scope: .claude/work-control/2026-09-14-close-issue-433.json, .claude/work-control/2026-09-14-mark-pr-ready-434.json, .claude/work-control/2026-09-14-merge-pr-434.json. They stay uncommitted until the receipt carrier that follows the close.",
+    "liveProcesses": "Get-Process at 2026-09-15T06:56:40Z: compy x0, cargo x0, rustc x0, msbuild x0, link x0, git x0, gh x0, npm x0, node x18, pwsh x3, msedgewebview2 x6. No Rust build, app run, npm or git/gh operation was live beyond this receipt writer's own measurement calls. node, pwsh and msedgewebview2 are not attributed one by one; vitest runs as node.exe, so the node count alone does not rule it out. This session had no gate or background task running. Get-Process is used instead of WMI because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+      "evidence": "logs/verify-local-2026-09-15T06-06-19Z.log:9-44",
+      "summary": "442 frontend test files passed (442); 7129 tests passed | 4 skipped (7133); 0 failed. Results at :39-40."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+      "evidence": "logs/verify-local-2026-09-15T06-06-19Z.log:45-71",
+      "summary": "`tsc && vite build`: tsc clean; vite production build succeeded (`built in 6.18s` at :70)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+      "evidence": "logs/verify-local-2026-09-15T06-06-19Z.log:72-1434",
+      "summary": "1317 passed; 0 failed; 24 ignored at :1420, plus two 0-test targets at :1426 and :1432. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+      "evidence": "logs/verify-local-2026-09-15T06-06-19Z.log:1435-1437",
+      "summary": "Clippy stage clean under -D warnings (scripts/verify-local.ps1:244 passes --all-targets --all-features -- -D warnings): `Finished` at :1437, with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is a run of the full local gate, `scripts/verify-local.ps1`, which `.githooks/pre-push` ran on the push that carried b112d6afe4d64d7a888b0be203151fddde093a6e. Log logs/verify-local-2026-09-15T06-06-19Z.log, 1437 lines. The console printed LOCAL CHECK RESULT: PASS and the push moved origin/claude/sentinel-433-lock-order 15fa49a4..b112d6af (GPT HQ evidence/433-sched-push.log). The reflogs bind the log to the head: b112d6af was committed at 2026-09-15T06:06:11Z, the log opened at 06:06:19Z, the push updated origin/claude/sentinel-433-lock-order at 06:12:14Z, and HEAD has not moved since the commit. The exit code was not taken as the verdict; this receipt's writer re-checked every stage at its own line: git diff check (:3), write-scope drift #356 (:5-7), frontend tests (:9-44), frontend type-check and build (:45-71), Rust tests (:72-1434) and Rust clippy (:1435-1437). No line matches `test result: FAILED`, `panicked` or `error[E`; no line in :9-71 matches `error TS` or `npm ERR!`. The merge commit 2e891f59 has tree a985651dbeca14fffe0d06732de2c0b4caadfe72, exactly the tree this gate tested. `--no-verify` was never used in this lane. The log is gitignored (`logs`).",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "log:6-7: '1 changed path since origin/main measured against the claim on #433 (cache)', then OK against the claim live at the time, 5675528109 (scope scripts/site-build-collision-guard.test.mjs). Re-measured with `node scripts/scope-drift-gate.mjs --issue 433 --refresh` at 2026-09-15T06:56:40Z: '3 changed paths since origin/main measured against the claim on #433 (thread)', OK against the four-path landing scope.",
+    "reconciliationNote": "scripts/site-build-collision-guard.test.mjs is on main through 2e891f59, so it no longer shows as changed; what remains is this landing's own receipts."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/434#issuecomment-5675836893 (2026-09-15T06:32:54Z), headed \"PR #434 independent re-review — PASS\", names reviewer Codex / Astra, non-author, at exact pushed head b112d6afe4d64d7a888b0be203151fddde093a6e. It answers the exact-head re-review request https://github.com/Pootytxng/sentinel/pull/434#issuecomment-5675617305 (06:12:57Z), and resolves the CHANGES REQUIRED finding on 15fa49a4 at https://github.com/Pootytxng/sentinel/pull/434#issuecomment-5675293644 (05:35:54Z). The owner relayed the same PASS to this session and authorized the landing.",
+    "reviewerNote": "Independent exact-head review by codex (Astra), which authored no commit in the proof delta: mutationAuthors is claude-code alone. GitHub holds no review object; the verdict is a PR comment posted from the shared Pootytxng account, which every executor uses, so the comment's author field does not identify the reviewer, and the body and the owner's relay do. The reviewer ran the unmodified exact-head archive (17/17), reproduced the injected id*700 ms delay in bypassed holders (17/17), and ran a stalled-child probe that failed at the 30 s Vitest timeout with no surviving probe child after runner exit. It inspected, without re-running, the author's full gate, broken-lock mutant, missing-holder probe and 10/10 repeats. Limits stated by the reviewer: `finally` alone does not guarantee cancellation on a Vitest timeout, and cleanup was verified at runner exit only. That the original gate failures were cross-process clock skew remains inferred, not proven. The PASS covers no landing step and goes stale if the PR head changes; the head it covers, b112d6af, is the merge commit's second parent."
+  },
+  "transition": "close-issue",
+  "headBindingNote": "Bound to the reviewed head b112d6afe4d64d7a888b0be203151fddde093a6e, not to the merge commit 2e891f59: every named gate ran at b112d6af and none at the merge commit, so binding to the merge commit would substitute a gate. Both commits have tree a985651dbeca14fffe0d06732de2c0b4caadfe72. With the branch pruned, b112d6af stays reachable from origin as the merge commit's second parent.",
+  "mergeNote": "PR #434 reports MERGED (2026-09-15T06:55:52Z) as 2e891f597fd15739fa40b5c3cf29e796576b895d, merged by `node scripts/land-pr.mjs --pr 434` under .claude/work-control/2026-09-14-merge-pr-434.json (gate PASS). Its parents are b1c26d6d (main at landing) and b112d6af (the reviewed head), and its tree a985651d equals the reviewed head's tree, so main carries exactly the reviewed code.",
+  "releaseNote": "The landing lease (claim 5675944692) is released by a `### Handoff` on #433 ending `- Claim: released`, posted after this receipt was written and before it is gated. The gate reads #433's thread and refuses close-issue while a lease there is live, so its PASS is itself a read-back of the release.",
+  "closureConditionNote": "#433 reported that the four-holder race test ordered holds by each process's own Date.now(). Those clocks disagreed by up to 11 ms across processes, and the full gate failed at #427 (35cb01f6) and #431 (834e4896) with no evidence of a double hold. Each success criterion is met at the reviewed head b112d6af and is on main through the merge commit: (1) The exclusion assertion stays, and it orders holds by one shared O_APPEND log written inside the lock. (2) There is no overlap tolerance and no retry. (3) A permanent negative control runs the same race with the lock bypassed and must report exactly three overlaps. Since the independent review of 15fa49a4, the overlap comes from a log-count rendezvous, not a timing window. (4) One-off red proof: mutant-433-broken-lock.mjs made a held lock read as free, and the repaired race failed its overlap assertion (GPT HQ evidence/433-sched-red-broken-lock.log). The file was restored byte-for-byte. (5) The other lock tests and the no-rebuild guards are unchanged and pass: 17/17 in the file, and the full native gate passed at b112d6af. (6) Scope: the only changed path is scripts/site-build-collision-guard.test.mjs; scripts/stage-dist-site.mjs is untouched. Codex passed that exact head on independent re-review. Not claimed: that the historical failures were clock skew stays inferred, as the issue said. After a Vitest timeout, cleanup relies on each holder's 12 s bound, and it was verified at runner exit only. The issue's last paragraph is not a closure condition: #427 and #431 must still incorporate this fix under their own claims, gates and reviews, tracked on #421 and #428. Closing is authorized because the merge is proven, the lease is released and the owner authorized this landing. The project's Item closed workflow then sets Done, which is read back from the board, not assumed."
+}

@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #433 writer lane (PR #434). This actor alone authored the two commits in the proof delta b1c26d6d..b112d6af: `git log --format='%an <%ae>' origin/main..HEAD` returns only claude-code <claude-code@desk.local>. 15fa49a4 was committed at 2026-09-15T00:58:44Z under claim 5672916548 (00:42:11Z), released by Handoff 5673140104 (01:10:48Z). b112d6af, the review repair, was committed at 06:06:11Z under claim 5675528109 (06:03:39Z), released by Handoff 5675617991 (06:13:01Z). The landing claim 5675944692 (06:41:46Z) took the lease back for the same executor, folder and branch and adds no commit. The reviewer, codex, authored none of it.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/433#issuecomment-5675944692",
+  "leaseEvidenceNote": "The landing's Ownership claim on #433 (5675944692). It started 2026-09-15T06:41Z with a 12-hour expiry that is an alarm only. The executor, folder and branch match the lane's claims 5672916548 and 5675528109. The write scope is scripts/site-build-collision-guard.test.mjs plus exactly the three receipts this landing writes: .claude/work-control/2026-09-14-mark-pr-ready-434.json, .claude/work-control/2026-09-14-merge-pr-434.json and .claude/work-control/2026-09-14-close-issue-433.json. The landing edits no code path. Before the claim was posted, the board row moved Review -> Ready (the independent review had ended), and preflight (tools/entry/preflight.mjs reconcile over gatherFacts) returned PASS on all 17 checks, processes included. At 2026-09-15T06:42:09Z readIssueThread (tools/entry/gather.mjs) read the claim back as #433's newest lease, with the four-path scope, matching folder and branch, and no newer Handoff.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured live at 2026-09-15T06:54:47Z from `gh pr list --state open --json files`; no list reached the 100-file cap. None of the 13 other open PRs (432, 431, 430, 427, 404, 400, 397, 395, 394, 391, 317, 306, 297) touches any of the four claimed paths. None is based on claude/sentinel-433-lock-order; #400 is based on claude/persistent-marathon-bulk-work-9b5c95, the rest on main. At claim time preflight found this scope disjoint from every live lease. PRs #427 (#421) and #431 (#428) are blocked on this prerequisite and incorporate it only after this landing and its receipt carrier, each under its own fresh claim.",
+  "inheritedWork": false,
+  "currentHead": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+  "pr": 434,
+  "issue": 433,
+  "kind": "lane",
+  "branch": "claude/sentinel-433-lock-order",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel. Worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a (git rev-parse --show-toplevel); canonical remote `origin`.",
+    "remoteState": "Fetched 2026-09-15T06:54:42Z. origin/main and `git ls-remote origin refs/heads/main` both read b1c26d6db92f60f8729c51a1bd35ece4863da44d, the PR base and merge-base. origin/claude/sentinel-433-lock-order and its ls-remote both read b112d6afe4d64d7a888b0be203151fddde093a6e, the same as local HEAD and the PR head. `git merge-tree --write-tree origin/main HEAD` exits 0 with tree a985651dbeca14fffe0d06732de2c0b4caadfe72, which is b112d6af's own tree.",
+    "worktree": "Linked worktree with one writer and its own index. core.hooksPath is `.githooks` and resolves inside this worktree (.githooks/pre-push is present), so the pre-push gate is armed here. core.bare read false at 2026-09-15T06:54:45Z.",
+    "branch": "claude/sentinel-433-lock-order is the head of PR #434 -> main. At 2026-09-15T06:54:45Z the PR read OPEN, draft, MERGEABLE / CLEAN, head b112d6af, with 0 closingIssuesReferences. The delta is two commits, 15fa49a4 and b112d6af, touching one path: scripts/site-build-collision-guard.test.mjs.",
+    "dirtyState": "Clean. `git status --porcelain --untracked-files=all` was empty at 2026-09-15T06:54:45Z, before this receipt was written.",
+    "liveProcesses": "Get-Process at 2026-09-15T06:54:48Z: compy x0, cargo x0, rustc x0, msbuild x0, link x0, git x0, gh x0, npm x0, node x18, pwsh x3, msedgewebview2 x6. No Rust build, app run, npm or git/gh operation was live beyond this receipt writer's own measurement calls. node, pwsh and msedgewebview2 are not attributed one by one; vitest runs as node.exe, so the node count alone does not rule it out. This session had no gate or background task running. Get-Process is used instead of WMI because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+      "evidence": "logs/verify-local-2026-09-15T06-06-19Z.log:9-44",
+      "summary": "442 frontend test files passed (442); 7129 tests passed | 4 skipped (7133); 0 failed. Results at :39-40."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+      "evidence": "logs/verify-local-2026-09-15T06-06-19Z.log:45-71",
+      "summary": "`tsc && vite build`: tsc clean; vite production build succeeded (`built in 6.18s` at :70)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+      "evidence": "logs/verify-local-2026-09-15T06-06-19Z.log:72-1434",
+      "summary": "1317 passed; 0 failed; 24 ignored at :1420, plus two 0-test targets at :1426 and :1432. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+      "evidence": "logs/verify-local-2026-09-15T06-06-19Z.log:1435-1437",
+      "summary": "Clippy stage clean under -D warnings (scripts/verify-local.ps1:244 passes --all-targets --all-features -- -D warnings): `Finished` at :1437, with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is a run of the full local gate, `scripts/verify-local.ps1`, which `.githooks/pre-push` ran on the push that carried b112d6afe4d64d7a888b0be203151fddde093a6e. Log logs/verify-local-2026-09-15T06-06-19Z.log, 1437 lines. The console printed LOCAL CHECK RESULT: PASS and the push moved origin/claude/sentinel-433-lock-order 15fa49a4..b112d6af (GPT HQ evidence/433-sched-push.log). The reflogs bind the log to the head: b112d6af was committed at 2026-09-15T06:06:11Z, the log opened at 06:06:19Z, the push updated origin/claude/sentinel-433-lock-order at 06:12:14Z, and HEAD has not moved since the commit. The exit code was not taken as the verdict; this receipt's writer re-checked every stage at its own line: git diff check (:3), write-scope drift #356 (:5-7), frontend tests (:9-44), frontend type-check and build (:45-71), Rust tests (:72-1434) and Rust clippy (:1435-1437). No line matches `test result: FAILED`, `panicked` or `error[E`; no line in :9-71 matches `error TS` or `npm ERR!`. origin/main is still the base and the merge-tree result equals b112d6af's tree, so the merge commit will carry exactly the tree this gate tested. `--no-verify` was never used in this lane. The log is gitignored (`logs`).",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "log:6-7: '1 changed path since origin/main measured against the claim on #433 (cache)', then OK against the claim live at the time, 5675528109 (scope scripts/site-build-collision-guard.test.mjs). Re-measured with `node scripts/scope-drift-gate.mjs --issue 433 --refresh` at 2026-09-15T06:54:48Z: '1 changed path since origin/main measured against the claim on #433 (thread)', OK against the four-path landing scope.",
+    "reconciliationNote": "The code delta is the one path the review covered. The landing claim keeps it and adds only the three receipts, so the gate-run measurement and the fresh one agree on the code."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "b112d6afe4d64d7a888b0be203151fddde093a6e",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/434#issuecomment-5675836893 (2026-09-15T06:32:54Z), headed \"PR #434 independent re-review — PASS\", names reviewer Codex / Astra, non-author, at exact pushed head b112d6afe4d64d7a888b0be203151fddde093a6e. It answers the exact-head re-review request https://github.com/Pootytxng/sentinel/pull/434#issuecomment-5675617305 (06:12:57Z), and resolves the CHANGES REQUIRED finding on 15fa49a4 at https://github.com/Pootytxng/sentinel/pull/434#issuecomment-5675293644 (05:35:54Z). The owner relayed the same PASS to this session and authorized the landing.",
+    "reviewerNote": "Independent exact-head review by codex (Astra), which authored no commit in the proof delta: mutationAuthors is claude-code alone. GitHub holds no review object; the verdict is a PR comment posted from the shared Pootytxng account, which every executor uses, so the comment's author field does not identify the reviewer, and the body and the owner's relay do. The reviewer ran the unmodified exact-head archive (17/17), reproduced the injected id*700 ms delay in bypassed holders (17/17), and ran a stalled-child probe that failed at the 30 s Vitest timeout with no surviving probe child after runner exit. It inspected, without re-running, the author's full gate, broken-lock mutant, missing-holder probe and 10/10 repeats. Limits stated by the reviewer: `finally` alone does not guarantee cancellation on a Vitest timeout, and cleanup was verified at runner exit only. That the original gate failures were cross-process clock skew remains inferred, not proven. The PASS covers no landing step and goes stale if the PR head changes; the PR head read b112d6af when this receipt was written."
+  },
+  "transition": "mark-pr-ready",
+  "readinessNote": "Authorizes taking PR #434 out of draft at b112d6af and nothing further, under the owner's explicit authorization to land this exact head. The merge and the close of #433 each carry their own receipt. No mark-done receipt is planned: the project's Item closed workflow sets Done when the issue closes (docs/WORK_CONTROL.md).",
+  "noClosingKeywordNote": "PR #434 has no closing keyword. closingIssuesReferences read 0 at 2026-09-15T06:54:45Z. No line of the PR body and no message of 15fa49a4 or b112d6af matches `(close[sd]?|fix(e[sd])?|resolve[sd]?)\\s*:?\\s*#\\d+`; the body's first line says there is no closing keyword and names #433 only as the tracking issue. Merging closes nothing. Closing #433 is its own gated transition, after this lease is released."
+}
