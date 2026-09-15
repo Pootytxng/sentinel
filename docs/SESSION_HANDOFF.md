@@ -3,7 +3,7 @@
 > Live pointer only. Product truth: [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md). Gate truth:
 > [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue: [`BACKLOG.md`](BACKLOG.md) (ledger, P0 first, derived
 > from `product/ROADMAP.md`). Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
-> Budget 120 lines; this file is AT cap — trim before adding a line. Replace this file, never append.
+> Budget 116 lines, 2 spare — trim before adding a line. Replace this file, never append.
 > **Durable instructions only**: no fleet counts, no lane names, nothing another lane must repair (#291).
 
 ## Where the train is standing
@@ -13,29 +13,24 @@
 | | |
 |---|---|
 | Installed | `d7fed835`, stamp byte-found in the installed exe (`d7fed835 · release · shell 0.9.26`, ship-reinstall OK), one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
-| Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
-| Harvest | Wave 1 Lane B (#224/#225) LANDED: PR #401 merged to `main` at `3fe7a029` (receipt `.claude/work-control/2026-09-07-merge-pr-401.json`, independent review APPROVE at `aed5bcac`); PR #294 closed as superseded and its ref pruned, so its content is on `main` and no ref carries it. Acceptance stays the owner's: look at Health/Test in the installed `d7fed835` build, accept or veto (#224 proof boundary, #225 step 7). |
+| Records | Q9b Stage 2 (#258), its 12/12 self-review and the Wave 1 Lane B landing (#224/#225, PR #401 at `3fe7a029`) are CLOSED and archived verbatim in [`archive/SESSION_HANDOFF_HISTORY.md`](archive/SESSION_HANDOFF_HISTORY.md) §2026-09-15; owner acceptance of Health/Test in the installed build is tracked in [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B8/§D_health, nowhere else |
 
 ## The rule that came out of the walk — read this before touching Health
 
 **DIR-1a: offering help is conditional on evidence** — a front door built only out of symptoms tells
 a healthy PC's owner they are in the wrong place, and *"i want more fps"* is a legitimate reason to be
-here. The shipped implementation must still answer *"is this framing earned?"* because the evidence-first and no-scareware laws in `docs/PRODUCT_CONSTITUTION.md` now supply the product authority.
-Historical rationale is preserved at `docs/UI_VISION_BACKLOG.md` §"⭐ DIR-1a"; it is evidence, not
-priority or work authorization. Shipped `b21bc18b`; guard
-`src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **DIR-1b:** the attention
-state carries a one-line ROUTE to the room that acts on it (#180 §C untouched — the detail paragraph
-still does not render on Health).
+here. Product authority is now the evidence-first and no-scareware laws in `docs/PRODUCT_CONSTITUTION.md`;
+shipped `b21bc18b`, guard `src/surfaces/home-console-front-door-gate.test.tsx`; the walk's rationale and
+falsification record are archived (§2026-09-15). **DIR-1b:** the attention state carries a one-line ROUTE
+to the room that acts on it (#180 §C untouched — the detail paragraph still does not render on Health).
 
 **Rooms are `Health · Live · History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are
 persistence keys). **Read the rail from `src/design/homeRail.ts`, never from a doc.**
 
 **SOURCE-reachability is not USER-reachability.** A component can be dark one level up while **three
-guards stay green** (vendor-honesty proved only "not wrapped in a condition"; the affordance census
-counted 80 unreachable strings as live; the mono census described CSS nothing rendered). When a guard
-certifies a surface, check a route reaches it — and **an audit is not a work order.**
+guards stay green** (three 2026-08 cases, archived §2026-09-15). When a guard certifies a surface, check
+a route reaches it — and **an audit is not a work order.**
 
 ## Before you touch the UI — the fixture route, and the guards already covering copy
 

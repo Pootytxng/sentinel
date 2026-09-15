@@ -35,10 +35,16 @@ $budgets = @{
   # exactly 107/107 -- passing, with nothing spare. The next row here does NOT have a free line to
   # take and must be paid from `archive/BRANCH_DISPOSITION_SWEEPS.md` before it is written. The cap
   # does not move for it; that is the whole point of the ratchet.
-  "docs/BRANCH_DISPOSITIONS.md" = 82
+  # 82 -> 79 on 2026-09-15, pre-emptive at 82/82 and with the row table long gone (#291): the #65 origin
+  # and the four incident narratives behind the live rules moved verbatim to
+  # archive/BRANCH_DISPOSITION_SWEEPS.md (82 -> 77); two lines of headroom kept.
+  "docs/BRANCH_DISPOSITIONS.md" = 79
   "docs/RELEASE_AUTONOMY.md" = 120
   "docs/RELEASE_TRANSACTION.md" = 120
-  "docs/SESSION_HANDOFF.md" = 120
+  # 120 -> 116 on 2026-09-15, pre-emptive at 119/120: the Shipped / Self-review / Harvest rows, the DIR-1a
+  # walk record and the three reachability cases moved verbatim to archive/SESSION_HANDOFF_HISTORY.md
+  # (119 -> 114); two lines of headroom kept, per the ratchet rule above.
+  "docs/SESSION_HANDOFF.md" = 116
   # Tightened 400 -> 380 on 2026-08-04, when the module map's read-only half moved to
   # src-tauri/CLAUDE.md. Without the tightening the root just refills to 400 and the split bought
   # nothing; the banked headroom is what keeps the always-loaded doc smaller.

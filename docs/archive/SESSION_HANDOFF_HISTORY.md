@@ -4,6 +4,36 @@
 > THE LIVE POINTER lives in docs/SESSION_HANDOFF.md; this file is the reverse-chron record.
 > APPEND new dated sections at the TOP, directly below this header.
 
+### 2026-09-15 — closed records moved out of the live pointer (line budget)
+
+Moved verbatim from `docs/SESSION_HANDOFF.md` when it stood at 119/120 lines; the cap ratcheted 120 -> 116 in the same commit. Rows and paragraphs below are exactly as they stood; only their live replacements were rewritten.
+
+**"Where the train is standing" — the three closed rows:**
+
+| | |
+|---|---|
+| Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
+| Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
+| Harvest | Wave 1 Lane B (#224/#225) LANDED: PR #401 merged to `main` at `3fe7a029` (receipt `.claude/work-control/2026-09-07-merge-pr-401.json`, independent review APPROVE at `aed5bcac`); PR #294 closed as superseded and its ref pruned, so its content is on `main` and no ref carries it. Acceptance stays the owner's: look at Health/Test in the installed `d7fed835` build, accept or veto (#224 proof boundary, #225 step 7). |
+
+**"The rule that came out of the walk" — the DIR-1a record:**
+
+**DIR-1a: offering help is conditional on evidence** — a front door built only out of symptoms tells
+a healthy PC's owner they are in the wrong place, and *"i want more fps"* is a legitimate reason to be
+here. The shipped implementation must still answer *"is this framing earned?"* because the evidence-first and no-scareware laws in `docs/PRODUCT_CONSTITUTION.md` now supply the product authority.
+Historical rationale is preserved at `docs/UI_VISION_BACKLOG.md` §"⭐ DIR-1a"; it is evidence, not
+priority or work authorization. Shipped `b21bc18b`; guard
+`src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **DIR-1b:** the attention
+state carries a one-line ROUTE to the room that acts on it (#180 §C untouched — the detail paragraph
+still does not render on Health).
+
+**"SOURCE-reachability is not USER-reachability" — the three cases:**
+
+**SOURCE-reachability is not USER-reachability.** A component can be dark one level up while **three
+guards stay green** (vendor-honesty proved only "not wrapped in a condition"; the affordance census
+counted 80 unreachable strings as live; the mono census described CSS nothing rendered). When a guard
+certifies a surface, check a route reaches it — and **an audit is not a work order.**
+
 ### 2026-09-03 — #304 control-character incident detail, moved verbatim (line budget)
 
 `docs/SESSION_HANDOFF.md`'s gate-traps bullet kept the full incident narrative for #304 alongside
