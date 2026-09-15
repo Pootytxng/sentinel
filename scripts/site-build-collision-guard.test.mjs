@@ -32,17 +32,28 @@ afterAll(() => {
   rmSync(scratch, { recursive: true, force: true });
 });
 
-/** A child that takes the lock, records [enter, exit] wall-clock ms into a per-child file while
- *  holding it for `holdMs`, then exits. Plain node, no vitest — the lock must work anywhere. */
-function lockHolderScript(lockDir, recordPath, holdMs) {
+/** A child that waits at a shared start line, then holds the lock for `holdMs`, appending
+ *  "enter <id>" once inside and "exit <id>" before letting go to ONE log every holder shares.
+ *  Each line is a single O_APPEND write, so the log's order is the order the writes happened.
+ *  #433: holds are ordered by that log, never by per-process `Date.now()` spans. On Windows
+ *  Node processes read that clock milliseconds apart (21 of 24 children disagreed with their
+ *  parent by up to 11 ms), and the old span comparison failed the gate on 1–8 ms "overlaps"
+ *  that a clock skew alone produces. `bypassLock` runs the same hold with no lock: the broken
+ *  lock the negative control needs. Plain node, no vitest — the lock must work anywhere. */
+function lockHolderScript({ lockDir, log, ready, start, id, holdMs, bypassLock = false }) {
+  const q = JSON.stringify;
   return `
-    import { withSiteBuildLock } from ${JSON.stringify(helperUrl)};
-    import { writeFileSync } from "node:fs";
-    withSiteBuildLock(() => {
-      const enter = Date.now();
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${holdMs});
-      writeFileSync(${JSON.stringify(recordPath)}, JSON.stringify([enter, Date.now()]));
-    }, { lockDir: ${JSON.stringify(lockDir)}, pollMs: 10 });
+    import { withSiteBuildLock } from ${q(helperUrl)};
+    import { appendFileSync, existsSync, writeFileSync } from "node:fs";
+    const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    writeFileSync(${q(ready)}, "");
+    while (!existsSync(${q(start)})) pause(2);
+    const hold = () => {
+      appendFileSync(${q(log)}, ${q(`enter ${id}\n`)});
+      pause(${holdMs});
+      appendFileSync(${q(log)}, ${q(`exit ${id}\n`)});
+    };
+    ${bypassLock ? "hold();" : `withSiteBuildLock(hold, { lockDir: ${q(lockDir)}, pollMs: 10 });`}
   `;
 }
 
@@ -55,20 +66,57 @@ function runNode(script) {
   });
 }
 
+/** Four holders, released together once all are waiting at the start line so every one contends,
+ *  instead of a slow spawn arriving after the others have left. Returns exits and the shared log. */
+async function raceFourHolders(name, { holdMs, bypassLock = false }) {
+  const dir = join(scratch, name);
+  mkdirSync(dir, { recursive: true });
+  const log = join(dir, "holds.log");
+  const start = join(dir, "start");
+  writeFileSync(log, "");
+  const ids = [0, 1, 2, 3];
+  const ready = ids.map((id) => join(dir, `ready-${id}`));
+  const lockDir = join(dir, "node_modules", ".lock");
+  let exited = 0;
+  const runs = ids.map((id) =>
+    runNode(lockHolderScript({ lockDir, log, ready: ready[id], start, id, holdMs, bypassLock })).then((r) => (exited++, r)),
+  );
+  while (!exited && !ready.every((r) => existsSync(r))) await new Promise((r) => setTimeout(r, 5));
+  writeFileSync(start, "");
+  const results = await Promise.all(runs);
+  return { results, lines: readFileSync(log, "utf8").split("\n").filter(Boolean) };
+}
+
+/** Every entry made while another holder had not yet written its exit. */
+function overlaps(lines) {
+  const inside = new Set();
+  const found = [];
+  for (const line of lines) {
+    const [event, id] = line.split(" ");
+    if (event === "enter") {
+      if (inside.size) found.push(`holder ${id} entered while holder ${[...inside].join(", ")} held the lock`);
+      inside.add(id);
+    } else inside.delete(id);
+  }
+  return found;
+}
+
 describe("the site build lock serialises across processes", () => {
   it("four processes contending for the lock never hold it at the same time, and all four get it", async () => {
-    const lockDir = join(scratch, "race", "node_modules", ".lock");
-    const records = [0, 1, 2, 3].map((i) => join(scratch, `race-${i}.json`));
-    const results = await Promise.all(records.map((r) => runNode(lockHolderScript(lockDir, r, 150))));
+    const { results, lines } = await raceFourHolders("race", { holdMs: 150 });
     for (const { code, err } of results) expect(code, err).toBe(0);
+    expect(lines.filter((l) => l.startsWith("enter ")).sort()).toEqual(["enter 0", "enter 1", "enter 2", "enter 3"]);
+    expect(lines.filter((l) => l.startsWith("exit ")).sort()).toEqual(["exit 0", "exit 1", "exit 2", "exit 3"]);
+    expect(overlaps(lines), "two holders inside the lock at once — two astro builds in one dist/").toEqual([]);
+  }, 30_000);
 
-    const spans = records.map((r) => JSON.parse(readFileSync(r, "utf8"))).sort((a, b) => a[0] - b[0]);
-    expect(spans).toHaveLength(4);
-    for (let i = 1; i < spans.length; i++) {
-      const [, prevExit] = spans[i - 1];
-      const [enter] = spans[i];
-      expect(enter, `holder ${i} entered before holder ${i - 1} left — two astro builds in one dist/`).toBeGreaterThanOrEqual(prevExit);
-    }
+  // The race above passes whenever it sees no overlap, so it has to be shown able to see one: the
+  // same four holders with the lock bypassed must be caught, on every run.
+  it("the same race with the lock bypassed is caught overlapping (the detector can fire)", async () => {
+    const { results, lines } = await raceFourHolders("bypassed", { holdMs: 400, bypassLock: true });
+    for (const { code, err } of results) expect(code, err).toBe(0);
+    expect(lines).toHaveLength(8);
+    expect(overlaps(lines).length).toBeGreaterThan(0);
   }, 30_000);
 
   it("releases the lock even when the protected build throws", () => {
