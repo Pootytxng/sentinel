@@ -456,6 +456,28 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
     });
 
     it.each([
+      ["rm -rf .claude/work{trees,}", "ask"],
+      ["rm -rf .claude/{worktrees,nothing}", "ask"],
+      ["rm -rf .claude/worktrees/{laneA,laneB}", "ask"],
+      ["rm -rf .claude/worktrees/laneA/{1..3}", "deny"],
+      ['rm -rf .claude/work{tr"ee"s,}', "ask"],
+      ["rm -rf .claude/{unused,{worktrees,other}}", "ask"],
+      ["mv .claude/work{trees,} staging", "ask"],
+      ["rm -rf src/{one,two}.tmp", "allow"],
+      ['rm -rf ".claude/work{trees,}"', "allow"],
+      ["rm -rf .claude/work\\{trees,\\}", "allow"],
+      ["rm -rf .claude/work{trees}", "allow"],
+      ["rm -rf .claude/work{}", "allow"],
+      ["rm -rf ~+/.claude/worktrees", "ask"],
+      ["rm -rf ~-/.claude/worktrees", "ask"],
+      ["rm -rf ~somebody/.claude/worktrees", "ask"],
+      ['rm -rf "~+/.claude/worktrees"', "allow"],
+      ["rm -rf \\~+/.claude/worktrees", "allow"],
+    ])("guards shell expansions without expanding literals: %s (#428 review)", (command, permission) => {
+      expect(shell(command).permission).toBe(permission);
+    });
+
+    it.each([
       ["Remove-Item -Path '.claude/worktrees/*' -Recurse", "ask"],
       ['Remove-Item -Path ".claude/worktrees/*" -Recurse', "ask"],
       ['Remove-Item -LiteralPath ".claude/worktrees/*" -Recurse', "allow"],

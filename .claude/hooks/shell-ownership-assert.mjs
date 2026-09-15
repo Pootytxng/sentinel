@@ -103,10 +103,12 @@ export function lex(text, dialect = "posix") {
   const src = String(text ?? "");
   const out = [];
   let word = null;
+  let braces = [];
 
   const push = () => {
     if (word !== null) out.push({ type: "word", ...word });
     word = null;
+    braces = [];
   };
   const add = (ch, { dynamic = false, raw = ch } = {}) => {
     if (word === null) word = { value: "", dynamic: false, raw: "" };
@@ -186,6 +188,36 @@ export function lex(text, dialect = "posix") {
       continue;
     }
 
+    if (dialect === "posix" && c === "~" && word === null && /[^/\s]/.test(src[i + 1] ?? "")) {
+      // ~+, ~- and ~user require shell/account state we do not have. Quoted/escaped forms
+      // were consumed above and stay literal; the existing ~ and ~/ home forms are unchanged.
+      add(c, { dynamic: true });
+      i += 1;
+      continue;
+    }
+    if (dialect === "posix" && c === "{") {
+      add(c);
+      braces.push({ start: word.value.length - 1, expands: false, dot: -1 });
+      i += 1;
+      continue;
+    }
+    if (dialect === "posix" && braces.length) {
+      const brace = braces.at(-1);
+      if (c === ",") brace.expands = true;
+      if (c === ".") {
+        if (brace.dot === word.value.length - 1) brace.expands = true;
+        brace.dot = word.value.length;
+      }
+      if (c === "}") {
+        braces.pop();
+        if (brace.expands) {
+          word.dynamic = true;
+          // Lists and ranges share the conservative static-prefix check used for globs.
+          // Empty {}, unclosed braces, and quoted/escaped separators never reach this branch.
+          word.globStart = Math.min(word.globStart ?? Infinity, brace.start);
+        }
+      }
+    }
     if (c === "$" || (dialect === "posix" && c === "`")) {
       add(c, { dynamic: true });
       i += 1;

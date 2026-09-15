@@ -279,6 +279,15 @@ describe("the proof matrix — the same target gets the same answer through the 
     expect(zone).toHaveBeenCalledWith(expect.objectContaining({ target: ".claude/worktrees/", descendants: true, wildcard: true }));
   });
 
+  it("keeps braces and unsupported tildes from becoming literal deletion targets (#428 review)", () => {
+    const zone = vi.fn((q) => q.wildcard && q.target === ".claude/"
+      ? { zone: ZONES.UNKNOWN, abs: inRoot(".claude"), owner: null, why: "contains a registered lane" }
+      : fakeZone(q));
+    expect(ask("rm -rf .claude/work{trees,}", { zone }).permission).toBe("ask");
+    expect(ask("rm -rf ~+/x").permission).toBe("ask");
+    expect(lex("find -exec rm {} \\;").find((w) => w.value === "{}").dynamic).toBe(false);
+  });
+
   it("never consults the board when nothing protected is in play", () => {
     const verify = vi.fn(VERIFIED);
     expect(ask("ls -la", { verify }).permission).toBe("allow");
