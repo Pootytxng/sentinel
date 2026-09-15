@@ -38,19 +38,33 @@ afterAll(() => {
  *  #433: holds are ordered by that log, never by per-process `Date.now()` spans. On Windows
  *  Node processes read that clock milliseconds apart (21 of 24 children disagreed with their
  *  parent by up to 11 ms), and the old span comparison failed the gate on 1–8 ms "overlaps"
- *  that a clock skew alone produces. `bypassLock` runs the same hold with no lock: the broken
- *  lock the negative control needs. Plain node, no vitest — the lock must work anywhere. */
-function lockHolderScript({ lockDir, log, ready, start, id, holdMs, bypassLock = false }) {
+ *  that a clock skew alone produces. `bypassLock` runs the hold with no lock: the broken lock the
+ *  negative control needs. A bypassed holder does not sleep for a fixed time. It stays inside
+ *  until the log shows all four holders entered, so the overlap is built by the rendezvous itself.
+ *  A start line only makes the holders runnable; it cannot make them run within any window. Every
+ *  wait is bounded, so a holder that never arrives fails the test instead of hanging it or the
+ *  gate. Plain node, no vitest — the lock must work anywhere. */
+const RENDEZVOUS_MS = 12_000;
+function lockHolderScript({ lockDir, log, ready, start, id, holdMs = 0, bypassLock = false }) {
   const q = JSON.stringify;
   return `
     import { withSiteBuildLock } from ${q(helperUrl)};
-    import { appendFileSync, existsSync, writeFileSync } from "node:fs";
+    import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
     const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    const waitFor = (what, done) => {
+      const deadline = performance.now() + ${RENDEZVOUS_MS};
+      while (!done()) {
+        if (performance.now() > deadline) throw new Error(${q(`holder ${id} gave up waiting for `)} + what);
+        pause(2);
+      }
+    };
     writeFileSync(${q(ready)}, "");
-    while (!existsSync(${q(start)})) pause(2);
+    waitFor("the start line", () => existsSync(${q(start)}));
     const hold = () => {
       appendFileSync(${q(log)}, ${q(`enter ${id}\n`)});
-      pause(${holdMs});
+      ${bypassLock
+        ? `waitFor("all four holders inside", () => readFileSync(${q(log)}, "utf8").split("enter ").length === 5);`
+        : `pause(${holdMs});`}
       appendFileSync(${q(log)}, ${q(`exit ${id}\n`)});
     };
     ${bypassLock ? "hold();" : `withSiteBuildLock(hold, { lockDir: ${q(lockDir)}, pollMs: 10 });`}
@@ -58,16 +72,16 @@ function lockHolderScript({ lockDir, log, ready, start, id, holdMs, bypassLock =
 }
 
 function runNode(script) {
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e", script], { stdio: ["ignore", "pipe", "pipe"] });
-    let err = "";
-    child.stderr.on("data", (d) => (err += d));
-    child.on("exit", (code) => resolve({ code, err }));
-  });
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script], { stdio: ["ignore", "pipe", "pipe"] });
+  let err = "";
+  child.stderr.on("data", (d) => (err += d));
+  const done = new Promise((resolve) => child.on("exit", (code) => resolve({ code, err })));
+  return { child, done };
 }
 
 /** Four holders, released together once all are waiting at the start line so every one contends,
- *  instead of a slow spawn arriving after the others have left. Returns exits and the shared log. */
+ *  instead of a slow spawn arriving after the others have left. Returns exits and the shared log.
+ *  Any holder still running when this returns or throws is killed: the test owns its children. */
 async function raceFourHolders(name, { holdMs, bypassLock = false }) {
   const dir = join(scratch, name);
   mkdirSync(dir, { recursive: true });
@@ -77,14 +91,21 @@ async function raceFourHolders(name, { holdMs, bypassLock = false }) {
   const ids = [0, 1, 2, 3];
   const ready = ids.map((id) => join(dir, `ready-${id}`));
   const lockDir = join(dir, "node_modules", ".lock");
-  let exited = 0;
-  const runs = ids.map((id) =>
-    runNode(lockHolderScript({ lockDir, log, ready: ready[id], start, id, holdMs, bypassLock })).then((r) => (exited++, r)),
-  );
-  while (!exited && !ready.every((r) => existsSync(r))) await new Promise((r) => setTimeout(r, 5));
-  writeFileSync(start, "");
-  const results = await Promise.all(runs);
-  return { results, lines: readFileSync(log, "utf8").split("\n").filter(Boolean) };
+  const holders = ids.map((id) => runNode(lockHolderScript({ lockDir, log, ready: ready[id], start, id, holdMs, bypassLock })));
+  try {
+    let exited = false;
+    for (const { done } of holders) done.then(() => (exited = true));
+    const deadline = performance.now() + RENDEZVOUS_MS;
+    while (!exited && !ready.every((r) => existsSync(r))) {
+      if (performance.now() > deadline) throw new Error(`the four holders never all reached the start line within ${RENDEZVOUS_MS} ms`);
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    writeFileSync(start, "");
+    const results = await Promise.all(holders.map(({ done }) => done));
+    return { results, lines: readFileSync(log, "utf8").split("\n").filter(Boolean) };
+  } finally {
+    for (const { child } of holders) if (child.exitCode === null && child.signalCode === null) child.kill();
+  }
 }
 
 /** Every entry made while another holder had not yet written its exit. */
@@ -111,12 +132,16 @@ describe("the site build lock serialises across processes", () => {
   }, 30_000);
 
   // The race above passes whenever it sees no overlap, so it has to be shown able to see one: the
-  // same four holders with the lock bypassed must be caught, on every run.
+  // same four holders with the lock bypassed must be caught, on every run. #434 review: a fixed
+  // 400 ms hold failed this control whenever the children ran more than 400 ms apart, however
+  // healthy the lock. Each bypassed holder now stays inside until all four entries are logged,
+  // so every exit follows all four entries and the detector must report exactly three overlaps.
   it("the same race with the lock bypassed is caught overlapping (the detector can fire)", async () => {
-    const { results, lines } = await raceFourHolders("bypassed", { holdMs: 400, bypassLock: true });
+    const { results, lines } = await raceFourHolders("bypassed", { bypassLock: true });
     for (const { code, err } of results) expect(code, err).toBe(0);
     expect(lines).toHaveLength(8);
-    expect(overlaps(lines).length).toBeGreaterThan(0);
+    expect(lines.slice(0, 4).every((l) => l.startsWith("enter ")), lines.join(" | ")).toBe(true);
+    expect(overlaps(lines)).toHaveLength(3);
   }, 30_000);
 
   it("releases the lock even when the protected build throws", () => {
