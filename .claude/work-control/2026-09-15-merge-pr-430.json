@@ -1,0 +1,83 @@
+{
+  "actor": "codex",
+  "actorNote": "The receipt actor is the implementation actor: `git log --format='%an <%ae>' origin/main..HEAD` returns one commit, e1bf1fb2 (2026-09-14T00:11:36Z) by codex <codex@desk.local>, so codex is the sole mutation author, and the gate requires the actor to be among the mutation authors. The landing transitions themselves (this receipt, `gh pr ready`, land-pr, the close and the receipt carrier) are run by claude-code under HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483), the way the #383 landing (.claude/work-control/2026-09-05-merge-pr-383.json) recorded it: final transition executor only, no implementation mutation in this transition. claude-code wrote the independent review of this head and authored none of the code.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/429#issuecomment-5687150879",
+  "leaseEvidenceNote": "The landing's Ownership claim on #429 (5687150879, posted 2026-09-15T19:48:37Z, 12-hour expiry that is an alarm only). Folder C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\hq-handoff-h-2026-09-15-4144e8 on the local branch claude/land-430, created at the reviewed head e1bf1fb2 by `git checkout -b claude/land-430 e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76` because the PR branch codex/429-global-junction is checked out in C:/Users/Kuya/code/sentinel-codex-429 (at the same commit e1bf1fb2); no ref on origin was moved. The write scope is the reviewed code paths plus exactly the three receipts this landing writes: .claude/hooks/project-write-assert.mjs, tools/entry/project-write-assert.test.mjs, .claude/work-control/2026-09-15-mark-pr-ready-430.json, .claude/work-control/2026-09-15-merge-pr-430.json, .claude/work-control/2026-09-15-close-issue-429.json. The landing edits no code path. Before the claim was posted the board row moved Review -> Ready with the Worktree field set to this folder @ claude/land-430, and preflight (tools/entry/preflight.mjs reconcile over gatherFacts) returned PASS on every check, processes and board.nextAction included. readIssueThread (tools/entry/gather.mjs) read the claim back as #429's newest lease with no newer Handoff; the previous Handoff on #429 (5657323548) had released the lane's lease.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured live at 2026-09-15T19:48:37Z from `gh pr list --state open --limit 50 --json files`; no list reached the 100-file cap. None of the 10 other open PRs (432, 404, 400, 397, 395, 394, 391, 317, 306, 297) touches .claude/hooks/project-write-assert.mjs, tools/entry/project-write-assert.test.mjs or the three landing receipts. No open PR is based on codex/429-global-junction. At claim time preflight found this scope disjoint from every live lease.",
+  "inheritedWork": false,
+  "currentHead": "e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76",
+  "pr": 430,
+  "issue": 429,
+  "kind": "lane",
+  "branch": "codex/429-global-junction",
+  "mutationAuthors": [
+    "codex"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel. Worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/hq-handoff-h-2026-09-15-4144e8 (git rev-parse --show-toplevel); canonical remote `origin`.",
+    "remoteState": "Fetched at 2026-09-15T19:52:35Z. origin/main and `git ls-remote origin refs/heads/main` both read 19b15889095f04bf203b0c6347221abd2b69bf7b. The PR base recorded by GitHub (baseRefOid b1c26d6db92f60f8729c51a1bd35ece4863da44d) is stale; the live merge-base with origin/main is b1c26d6db92f60f8729c51a1bd35ece4863da44d, and the branch is 16 commit(s) behind main, all of which are the #433 landing (merge 2e891f59 with b112d6af and 15fa49a4) and its receipt carrier 1d855364, the #421 landing (merge f050aae8 with ee4ed47d, 8f5140c0, 35cb01f6 and 8226f4aa: tools/entry/preflight.mjs and its test) and its carrier 23d0f6b8, and the #428 landing (merge 35f3e0f6: .claude/hooks/shell-ownership-assert.mjs, .claude/hooks/target-ownership.mjs and their tests) and its carrier 19b15889; `git log b1c26d6d..origin/main -- .claude/hooks/project-write-assert.mjs tools/entry/project-write-assert.test.mjs` is empty, so main has not touched either of this PR's paths since the review's base. origin/codex/429-global-junction and its ls-remote both read e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76, the same as local HEAD and the PR head. `git merge-tree --write-tree origin/main HEAD` exits 0 (no conflict) with tree 843302a36d731f4bb05d5de3df155371a3982e77; the review's base b1c26d6d is the merge-base, so the review head is unchanged; only main moved, by 16 commits that touch neither of this PR's paths.",
+    "worktree": "Linked worktree with one writer and its own index (config.worktree, extensions.worktreeConfig=true). core.hooksPath is `.githooks` (set in this worktree's own config.worktree at 2026-09-15T18:39Z) and resolves inside this worktree (.githooks/pre-push is present), so the pre-push gate is armed here. core.bare read false at 2026-09-15T19:52:35Z.",
+    "branch": "codex/429-global-junction is the head of PR #430 -> main; this folder holds it as the local alias claude/land-430 at the same commit. At 2026-09-15T19:52:35Z the PR read OPEN, not draft, MERGEABLE / CLEAN (GitHub read true / clean at 2026-09-15T19:52:36Z), head e1bf1fb2, with 0 closingIssuesReferences. The delta is one Codex commit (e1bf1fb2) touching two paths: .claude/hooks/project-write-assert.mjs and tools/entry/project-write-assert.test.mjs.",
+    "dirtyState": "No tracked changes. At 2026-09-15T19:52:35Z, before this receipt was (re)written, `git status --porcelain --untracked-files=all` listed clean: no modified, untracked or staged paths; the shared stash stack holds 4 entries from other branches, none touched. node_modules/ and site-app/node_modules/ are gitignored dependency trees. The receipts stay uncommitted until the receipt carrier that follows the close.",
+    "liveProcesses": "Get-Process at 2026-09-15T19:52:50Z: compy x0, cargo x0, rustc x0, msbuild x0, link x0, git x0, gh x0, npm x0, node x54, pwsh x8, powershell x4, claude x26, msedgewebview2 x6. No Rust build, app run, npm or git/gh operation was live beyond this receipt writer's own measurement calls. node, pwsh, powershell, claude and msedgewebview2 are not attributed one by one; other Claude Code sessions run on this machine and vitest runs as node.exe, so the node count alone does not rule it out. This session's own gate run had finished before the measurement. Get-Process is used instead of WMI because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76",
+      "evidence": "logs/verify-local-2026-09-15T19-50-00Z.log:9-39-40",
+      "summary": "442 frontend test files passed (442); 7129 tests passed | 4 skipped (7133); 0 failed. Results at :39-40."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76",
+      "evidence": "logs/verify-local-2026-09-15T19-50-00Z.log:45-70",
+      "summary": "`tsc && vite build`: tsc clean; vite production build succeeded (`built in 5.76s` at :70)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76",
+      "evidence": "logs/verify-local-2026-09-15T19-50-00Z.log:72-1432",
+      "summary": "1317 passed; 0 failed; 24 ignored at :1420, plus two 0-test targets at :1426 and :1432. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76",
+      "evidence": "logs/verify-local-2026-09-15T19-50-00Z.log:1435-1437",
+      "summary": "Clippy stage clean under -D warnings (scripts/verify-local.ps1 passes --all-targets --all-features -- -D warnings): `Finished` at :1437, with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is this landing's own run of the full local gate, `pwsh -NoProfile -File scripts/verify-local.ps1`, in this worktree at HEAD e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76 (`git rev-parse HEAD` read the same sha before and after the run). Log logs/verify-local-2026-09-15T19-50-00Z.log, 1437 lines, opened 2026-09-15T19:50:00Z. The console printed LOCAL CHECK RESULT: PASS. The exit code was not taken as the verdict; this receipt's writer re-checked every stage at its own line: git diff check (:3), write-scope drift #356 (:5-7, 'not measured -- no session record for this folder', re-measured separately under scopeDrift), frontend tests (:9-39-40), frontend type-check and build (:45-70), Rust tests (:72-1432) and Rust clippy (:1435-1437). No line matches `test result: FAILED`, `panicked` or `error[E`; no line in the frontend stages matches `error TS` or `npm ERR!`. Corroboration: the author's own pre-push gate that carried e1bf1fb2 to origin from C:/Users/Kuya/code/sentinel-codex-429 also passed (logs/verify-local-2026-09-14T00-11-38Z.log there, 2156 lines: 442 files / 7125 passed / 5 skipped at :132-133, built :163, 1317 Rust passed :1857, clippy Finished :2156), which #429's Handoff 5657323548 cites as LOCAL CHECK RESULT: PASS. Main moved after the review: the branch is 16 commits behind origin/main, none touching this PR's two paths (`git log b1c26d6d..origin/main -- <the two paths>` is empty), and `git merge-tree --write-tree origin/main HEAD` is conflict-free (tree 843302a3). No separate gate was run on that predicted merge tree; the merge commit is gated before anything else lands, because the receipt carrier that follows the close pushes HEAD:main from on top of the merge commit through the full pre-push gate, and a red there stops with a Handoff. `--no-verify` was never used in this lane. The log is gitignored (`logs`).",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "log:5-7: 'not measured -- no session record for this folder (launch through tools/entry, or pass --issue)'; this worktree was opened by the desktop app, not through tools/entry, so the gate had no cached claim. Measured explicitly with `node scripts/scope-drift-gate.mjs --issue 429 --refresh` at 2026-09-15T19:52:35Z: '2 changed paths since origin/main measured against the claim on #429 (cache): OK, every changed path is inside the claimed scope (the two code paths of this PR; the three receipt paths are claimed but not yet written)', OK against the landing scope.",
+    "reconciliationNote": "The code delta is exactly the paths the review covered. The landing claim keeps them and adds only the ${NRECEIPTS} receipts, so the explicit measurement is the gate's measurement with the claim supplied."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "claude-code",
+    "status": "passed",
+    "head": "e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/430#issuecomment-5670129168 (2026-09-14T20:09:59Z), headed \"Independent review: PASS at exact head `e1bf1fb2ac6abfa2867cdb839b99b55ea4d8eb76`\", names reviewer claude-code, non-author, at the exact PR head. HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483) cites the same comment as the landing authorization for #430.",
+    "reviewerNote": "Independent exact-head review by claude-code, which authored no commit in the proof delta: the sole mutation author is codex. GitHub holds no review object; the verdict is a PR comment posted from the shared Pootytxng account, which every executor uses, so the comment's author field does not identify the reviewer, and the body and the HQ handoff do. The reviewer built a disposable mkdtemp fixture (a git repository, a HOME/.claude folder and an in-root junction `owner-config` pointing into it) and called `decide()` from `git archive` extractions of base and head, with a verified verdict and with FOLDER_UNCLAIMED, for Write and Edit: at base a write through the junction and a write to the junction path itself were allowed 4/4 (the #429 red reproduced); at head both ask TARGET_OWNER_CONFIG 4/4; an ordinary in-root write is unchanged. It read `zoneOf` to confirm the new clause fires only when the real path leaves the root into ~/.claude or ~/.codex. Non-blocking findings: none. Limits stated: the reviewer reused the author's full native pre-push PASS and 170 focused tests rather than re-running the gate. The PASS covers no landing step and goes stale if the PR head changes; the PR head read e1bf1fb2 when this receipt was written. The base the review cites (b1c26d6d) is still the merge-base; main has since moved by 16 commits that touch neither path."
+  },
+  "transition": "merge-pr",
+  "mergeMethodNote": "Lands with `node scripts/land-pr.mjs --pr 430 --receipt .claude/work-control/2026-09-15-merge-pr-430.json`, after a `--dry-run` of the same command. land-pr refuses a receipt whose transition is not merge-pr, whose pr is not 430, or that the work-control gate does not PASS; it also refuses a PR that is not OPEN, a dependent PR, or a PRESERVE / LANDED record. Otherwise it runs `gh pr merge 430 --repo Pootytxng/sentinel --merge` (a true merge commit, never a squash), `git push origin --delete codex/429-global-junction`, `git fetch origin --prune`, then `node scripts/branch-disposition-audit.mjs`. `--delete-branch` is not used and no worktree is removed. core.bare is read back afterwards.",
+  "dependentsNote": "No open PR is based on codex/429-global-junction (measured 2026-09-15T19:48:37Z), so nothing needs retargeting before the prune. No file under docs/dispositions/ names this ref, so land-pr's PRESERVE / LANDED refusal does not fire, and none is owed: land-pr prunes the merged ref before its audit runs. The local branch codex/429-global-junction in C:/Users/Kuya/code/sentinel-codex-429 (at the same commit e1bf1fb2) keeps its own checkout; only the remote ref is pruned.",
+  "fileOverlapNote": "Zero file overlap with the 10 other open PRs, measured at 2026-09-15T19:48:37Z by comparing file lists: none touches .claude/hooks/project-write-assert.mjs, tools/entry/project-write-assert.test.mjs or the three landing receipts.",
+  "closingNote": "PR #430's closingIssuesReferences read 0 at 2026-09-15T19:52:35Z, so the merge closes no issue and the gate's merge lease check reads no lease. #429 is closed separately under its own close-issue receipt, after this landing's lease is released."
+}
