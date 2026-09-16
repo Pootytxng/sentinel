@@ -49,7 +49,7 @@
 // Dependency-free on purpose, like local-gate-guard and ci-budget-guard: a guard that protects the
 // build must not be one `npm install` away from being unable to run.
 
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import {
   cpSync,
@@ -91,13 +91,15 @@ const GOOD_HOOK = [
 
 // #313. This file's cost, DECLARED rather than discovered at someone's push. It walks every
 // registered worktree and builds real repositories, so it is one of the few here whose runtime
-// tracks the size of the machine's fleet rather than the size of the repo. Measured after the
-// template change: ~3.4s isolated, of which ~915ms is the live fleet walk. The ceiling is set well
-// above that on purpose — it is a statement of the budget, not an assertion about the clock, which
-// would flake the moment two gates ran at once. What it buys is that growth past this point fails
-// as a named breach of a stated budget instead of as a mystery timeout that reads like a flake and
-// gets re-run. A guard taught to look unreliable is most of the way to being muted.
-vi.setConfig({ testTimeout: 30_000 });
+// tracks the size of the machine's fleet rather than the size of the repo. The budget is asserted
+// below on the quantity that is deterministic under any load -- git spawns per fixture -- and NOT
+// on the clock. The first cut of this change declared it as `vi.setConfig({ testTimeout: 30_000 })`
+// and claimed growth would then fail "as a named breach of a stated budget"; the exact-head review
+// of PR #317 measured that it did the opposite: it DOUBLED vitest.config.ts's 15000ms ceiling, per
+// test, against a stated budget that was a file total, and the identical blob measured 7.36s on one
+// desk and 4.5s on another, so no clock number could be the assertion. Every fixture-side spawn
+// goes through `fixtureGit`, so the count below is exhaustive for what this file itself pays.
+let gitSpawns = 0;
 
 const temps = [];
 afterAll(() => {
@@ -110,12 +112,14 @@ afterAll(() => {
   }
 });
 
-const fixtureGit = (args, cwd) =>
-  execFileSync("git", ["-c", "core.hooksPath=", "-c", "protocol.file.allow=always", ...args], {
+const fixtureGit = (args, cwd) => {
+  gitSpawns += 1;
+  return execFileSync("git", ["-c", "core.hooksPath=", "-c", "protocol.file.allow=always", ...args], {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+};
 
 /**
  * #313. The template every fixture below is copied from, seeded once on first use rather than
@@ -189,6 +193,18 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
   // would still LOOK like a working fixture — git commands succeed, tests go green — while every
   // assertion silently judged the same shared checkout. So the copy is falsified here rather than
   // trusted: the pointer must lead home, and two fixtures must not be able to see each other.
+  // #313. The budget itself. Before the template a fixture cost six spawns (`init`, `config` x2,
+  // `add`, `commit`, `worktree add`); a copy costs one, the `worktree repair` that makes it sound.
+  // This is the regression worth catching -- someone re-adding per-fixture construction -- and it
+  // fails as a named number the moment that happens, under any load, on any desk. The one-time
+  // seed is paid explicitly first so the measurement is of a copy alone.
+  it("a fixture costs exactly one git spawn once the template exists: the worktree repair", () => {
+    fixtureTemplate();
+    const before = gitSpawns;
+    fixture("spawn-budget");
+    expect(gitSpawns - before).toBe(1);
+  });
+
   it("a copied fixture is its own repository, not a window onto the template", () => {
     const a = fixture("independence-a");
     const b = fixture("independence-b");
