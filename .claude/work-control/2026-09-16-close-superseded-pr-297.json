@@ -1,0 +1,65 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Transition executor only, under HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483) step 7, lane #297, and HQ's disposition on the PR itself (https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5683581145: port the NEGATION clause and its tests onto a fresh branch off main, falsify with a denial sentence first, land, close this PR as superseded, drop the CLAIMED row). Closing a superseded PR merges nothing and moves no ref; the branch stays on origin.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/295#issuecomment-5693893828",
+  "leaseEvidenceNote": "Ownership claim on #295 (the PR's own issue; its stale 2026-09-01 claim was released first under a Handoff) whose Write scope is scripts/handoff-worktree-truth.test.mjs, this receipt file and the disposition record for the PR's ref; the guard is the delta already on main at currentHead, the receipt and the record are the only writes left.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Inspected from C:/Users/Kuya/code/sentinel/.claude/worktrees/hq-handoff-h-2026-09-15-4144e8 at receipt time: origin fetched, origin/main = currentHead, PR #297 open at head 438dc387 on lane/rule-e-negation (21 commits ahead of main including the inherited #277 stack, 298 behind, CONFLICTING in five files including scripts/handoff-worktree-truth.test.mjs itself, per HQ), this folder clean except this receipt and the record, no build/test/install process running.",
+  "transition": "close-superseded-pr",
+  "currentHead": "7fa10fdccf0c22427652c6614445dc0d373c4b4f",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "7fa10fdccf0c22427652c6614445dc0d373c4b4f",
+      "evidence": "logs/verify-local-2026-09-16T07-47-52Z.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "7fa10fdccf0c22427652c6614445dc0d373c4b4f",
+      "evidence": "logs/verify-local-2026-09-16T07-47-52Z.log"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "7fa10fdccf0c22427652c6614445dc0d373c4b4f",
+      "evidence": "logs/verify-local-2026-09-16T07-47-52Z.log"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "7fa10fdccf0c22427652c6614445dc0d373c4b4f",
+      "evidence": "logs/verify-local-2026-09-16T07-47-52Z.log"
+    }
+  ],
+  "gateEvidenceNote": "The full local pre-push gate (scripts/verify-local.ps1) ran at 7fa10fdc in this worktree when that head was pushed to main and passed: logs/verify-local-2026-09-16T07-47-52Z.log. The gate at PR #297's own head 438dc387 was not run: that head is 298 commits behind main and CONFLICTING in five files including the guard itself (HQ's measurement on the PR), so the exact PR head could not land as-is.",
+  "independentReview": {
+    "practical": false,
+    "reason": "No reviewer is needed for a merge that does not happen: this transition closes PR #297 without merging. The clause it carried reached main as 7fa10fdc, a port into main's containmentClaims rather than a cherry-pick (the branch's copy of scripts/handoff-worktree-truth.test.mjs conflicts with main's), and passed the full local gate on the push. The port was falsified first: the denial fixtures were added alone and 3 of rule E's unit tests went red on main's code, then the clause was applied and the file went green. The exact-head independent review of the PR (https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5573930809, at 438dc387, from a different worktree and session) passed the guard logic with three findings, every one taken in the port: no 'without' in NEGATION, one verb at a time with the nearest name on each side, no colon or dash in CLAUSE_BOUNDARY. Three earlier review rounds on the same logic passed at a59c8c96, e12521c7 and 3ef9184d (PR comments 5498147858, 5499665829, 5499818979). The merge-pr route was refused because the PR is a conflicting branch whose docs/receipt payload must not land, and every identity on it is claude-code, which this gate rejects as a reviewer of claude-code for a merge-pr receipt. The port itself is new code on main authored by claude-code and still owes a non-claude-code review before #295 closes; the issue stays open in Review."
+  },
+  "pr": 297,
+  "prHead": "438dc387",
+  "issue": 295,
+  "kind": "lane",
+  "branch": "lane/rule-e-negation",
+  "supersededBy": "no PR: the rule E negation clause (NEGATION, CLAUSE_BOUNDARY, isNegated, the negation guard in containmentClaims, and its tests) is on main as 7fa10fdc, ported with the review's three repairs. The rest of the branch is not landed on HQ's order: the inherited lane/fleet-guard-failclosed-276 stack is already on main by its own merge (PR #277, MERGED 2026-09-01), and the docs/receipt payload (docs/SESSION_HANDOFF.md, docs/OWNER_ACTION_CHECKLIST.md, docs/BRANCH_DISPOSITIONS.md, three close-issue receipts, one merge-pr receipt) is stale and must not merge.",
+  "hqDisposition": "https://github.com/Pootytxng/sentinel/pull/297#issuecomment-5683581145",
+  "dispositionNote": "HQ step 7 said port the NEGATION clause and its tests onto a fresh branch (main's rule E has none; falsify with a denial sentence first), land, close the PR as superseded and drop the CLAIMED row in docs/dispositions/. Verified before the port: main's scripts/handoff-worktree-truth.test.mjs had no NEGATION, no isNegated and no clause scoping, and its containmentClaims read \"Neither `A` contains `B` nor the reverse.\" as a claim that A contains B (#295's defect, reproduced by the fixtures). Issue #295 is the lease holder and stays open in Review; closing it needs a non-claude-code review of 7fa10fdc.",
+  "refDisposition": "The branch ref lane/rule-e-negation stays on origin: the HQ handoff forbids ref deletion beyond land-pr's own prune and this landing did not go through land-pr. docs/dispositions/lane__rule-e-negation.json, CLAIMED until now, is retired to UNLANDED by merge-tree, kept only until the owner prunes it: the clause is on main by port, but the ref carries 21 commits including a stale docs/receipt payload that will never land, so merging the ref now would resurrect a state main no longer has. LANDED (a merge-tree no-op) is false and SUPERSEDED (prunable) fails scripts/branch-disposition-audit.mjs while the ref is still on origin. Owner action: git push origin --delete lane/rule-e-negation, then delete that record."
+}
