@@ -1,0 +1,65 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Transition executor only, under HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483) step 5. Closing a superseded PR merges nothing and moves no ref; the branch stays on origin.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5690833883",
+  "leaseEvidenceNote": "Ownership claim on #389 (the handoff issue) whose Write scope is exactly the three close-superseded-pr receipt files this step writes; no code path is in scope.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Inspected from C:/Users/Kuya/code/sentinel/.claude/worktrees/hq-handoff-h-2026-09-15-4144e8 at receipt time: origin fetched, origin/main = currentHead, PR #404 open at head 7f41a2a2 on claude/baseline-recovery-323-20260908, this folder clean except this step's own receipts, no build/test/install process running.",
+  "transition": "close-superseded-pr",
+  "currentHead": "a813568658f0efad285489b7ae7772817003541c",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "a813568658f0efad285489b7ae7772817003541c",
+      "evidence": "logs/verify-local-2026-09-16T01-49-12Z.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "a813568658f0efad285489b7ae7772817003541c",
+      "evidence": "logs/verify-local-2026-09-16T01-49-12Z.log"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "a813568658f0efad285489b7ae7772817003541c",
+      "evidence": "logs/verify-local-2026-09-16T01-49-12Z.log"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "a813568658f0efad285489b7ae7772817003541c",
+      "evidence": "logs/verify-local-2026-09-16T01-49-12Z.log"
+    }
+  ],
+  "gateEvidenceNote": "The full local pre-push gate (scripts/verify-local.ps1) ran at a8135686 in this worktree and passed: logs/verify-local-2026-09-16T01-49-12Z.log. No gate was run on PR #404's own head, because nothing from it is merged; the receipt binds to the head of the checkout that writes it.",
+  "independentReview": {
+    "practical": false,
+    "reason": "No reviewer is needed for a merge that does not happen: this transition closes PR #404 without merging, on Cowork HQ's measured disposition (https://github.com/Pootytxng/sentinel/pull/404#issuecomment-5683579328) re-measured here (see supersededBy). The replacement restamp is step 6 of the same handoff, cut from current main under its own claim and gate. Opening a review lane for a non-merge is the owner's call."
+  },
+  "pr": 404,
+  "prHead": "7f41a2a2",
+  "issue": 323,
+  "kind": "lane",
+  "branch": "claude/baseline-recovery-323-20260908",
+  "supersededBy": "no PR: obsolete. Measured at receipt time against origin/main = a8135686: main still reads source_main_commit=3fe7a029 (the value this PR moves from), so the restamp this PR carries (3fe7a029 -> f8c5f9d1; lib.rs:558 -> :565) never landed and was never re-done. It is nonetheless obsolete: f8c5f9d1 is on main but now 76 commits behind it (the checker's lag rule fails a badly stale anchor), and `fn gaming_mode_gate` sits at lib.rs:566 on today's main, so merging would land two stale anchors. The fresh restamp is step 6 of HQ handoff H-2026-09-15, cut from current main after the landings; nothing from this branch is needed for it.",
+  "hqDisposition": "https://github.com/Pootytxng/sentinel/pull/404#issuecomment-5683579328",
+  "dispositionNote": "OBSOLETE per HQ (do NOT merge), confirmed by measurement. One correction to the HQ wording: HQ said a later restamp cycle had already passed through; git measures no source_main_commit restamp on main after 02cd8a8c set 3fe7a029, so the anchor is stale on main today and is refreshed by step 6, not by this PR. Issue #323 stays open on its own merits.",
+  "refDisposition": "The branch ref stays on origin; the HQ handoff forbids ref deletion beyond land-pr's own prune, and docs/dispositions/ carries no row for this ref (a record is owed only once a judgment exists; this close records the judgment)."
+}
