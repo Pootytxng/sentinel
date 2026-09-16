@@ -280,12 +280,19 @@ export function zoneOf({ target, sessionRoot, cwd = null, descendants = false, w
 
   // The session root gets the same real-path treatment, or a junctioned root and a literal target
   // compare unequal and every write reads as somebody else's.
+  //
+  // It arrives through the hooks' `canonicalizePath`, which writes `\` on every OS. On POSIX that
+  // spelling is a RELATIVE path, so `resolve` put it under the cwd, the session read as "in no
+  // checkout", and every write into its own checkout was denied (Linux session, 2026-09-16). This
+  // module already reads `\` as a separator everywhere (`toComparable`), so it is one here too.
+  // Windows keeps the spelling byte for byte.
   let root = null;
   if (sessionRoot) {
+    const spelled = windows ? sessionRoot : String(sessionRoot).replace(/\\/g, "/");
     try {
-      root = canonicalTarget(resolve(sessionRoot), { exists, real });
+      root = canonicalTarget(resolve(spelled), { exists, real });
     } catch {
-      root = resolve(sessionRoot);
+      root = resolve(spelled);
     }
   }
 
