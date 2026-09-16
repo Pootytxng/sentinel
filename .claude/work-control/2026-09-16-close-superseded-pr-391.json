@@ -1,0 +1,65 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Transition executor only, under HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483) step 7, lane #391 (#390), re-routed on the record by the exact-head review https://github.com/Pootytxng/sentinel/pull/391#issuecomment-5573752058 (changes requested, one finding) and the claim it led to. Closing a superseded PR merges nothing and moves no ref; the branch stays on origin.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/390#issuecomment-5693150514",
+  "leaseEvidenceNote": "Ownership claim on #390 (the lane's issue) whose Write scope is the PR's three files (scripts/launch-focus-guard.test.mjs, scripts/lib/foreground-probe.ps1, scripts/lib/foreground-events.cs), this receipt file and the LANDED record for the PR's ref; the three files are the delta already on main at currentHead, the receipt and the record are the only writes left.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Inspected from C:/Users/Kuya/code/sentinel/.claude/worktrees/hq-handoff-h-2026-09-15-4144e8 at receipt time: origin fetched, origin/main = currentHead, PR #391 open at head 7a39cc73 on claude/adoring-neumann-e24531, this folder clean except this receipt and the record, no build/test/install process running.",
+  "transition": "close-superseded-pr",
+  "currentHead": "00eb3a4a25d4ebf0c35d826e8f789427be68a209",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "00eb3a4a25d4ebf0c35d826e8f789427be68a209",
+      "evidence": "logs/verify-local-2026-09-16T06-39-19Z.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "00eb3a4a25d4ebf0c35d826e8f789427be68a209",
+      "evidence": "logs/verify-local-2026-09-16T06-39-19Z.log"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "00eb3a4a25d4ebf0c35d826e8f789427be68a209",
+      "evidence": "logs/verify-local-2026-09-16T06-39-19Z.log"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "00eb3a4a25d4ebf0c35d826e8f789427be68a209",
+      "evidence": "logs/verify-local-2026-09-16T06-39-19Z.log"
+    }
+  ],
+  "gateEvidenceNote": "The full local pre-push gate (scripts/verify-local.ps1) ran at 00eb3a4a in this worktree when that head was pushed to main and passed: logs/verify-local-2026-09-16T06-39-19Z.log. The gate at PR #391's own head 7a39cc73 was not run: its tree carries docs/dispositions/claude__compy-health-parity.json (blob c676e84a), the record that failed the same gate at PR #394's head (logs/verify-local-2026-09-16T03-50-29Z.log), and its exact head lacks the repair the review requires, so the exact PR head could not land as-is.",
+  "independentReview": {
+    "practical": false,
+    "reason": "No reviewer is needed for a merge that does not happen: this transition closes PR #391 without merging. Its one commit (7a39cc73, claude-code, 2026-09-07) reached main by cherry-pick as 316cda64 with author and date preserved, followed by 00eb3a4a, the one-line repair its exact-head review (https://github.com/Pootytxng/sentinel/pull/391#issuecomment-5573752058) asked for (Get-RunnerAncestry returns @() when no runner was seen, with a source-pin test) and the cache-comment correction from the same review; both passed the full local gate on the push. The merge-pr route was refused because that review requested changes at the PR head and because it is claude-code reviewing claude-code, which this gate rejects; a non-claude-code review at main's head is still owed before #390 closes, and that ask is on the Handoff."
+  },
+  "pr": 391,
+  "prHead": "7a39cc73",
+  "issue": 390,
+  "kind": "lane",
+  "branch": "claude/adoring-neumann-e24531",
+  "supersededBy": "no PR: the PR's commit 7a39cc73 is on main as the cherry-pick 316cda64 (identical delta, author and date preserved) plus the repair 00eb3a4a: scripts/lib/foreground-probe.ps1 (isRunnerTooling's ancestry walk, now returning nothing when no runner was seen), scripts/lib/foreground-events.cs (event-time ppid read, ParentOf via NtQueryInformationProcess, corrected cache comment), scripts/launch-focus-guard.test.mjs (attribution by pid ancestry, the title ban and the new return-path source-pin).",
+  "hqDisposition": "https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483",
+  "dispositionNote": "HQ step 7 said review and land #391. The exact-head review (https://github.com/Pootytxng/sentinel/pull/391#issuecomment-5573752058) measured a fail-open path in Get-RunnerAncestry at 7a39cc73 (shell pids returned with no runner seen) and requested exactly that repair plus a source-pin; it is claude-code reviewing claude-code, which scripts/work-control-gate.mjs refuses for a merge-pr receipt, and the PR head carries the baseline disposition record that reds the local gate. The bytes landed by cherry-pick on main with the requested repair on top, the same mechanism HQ prescribes for #317 and #306 and the route taken for #394 and #397. Issue #390 stays open in Review until a non-claude-code reviewer covers main's head.",
+  "refDisposition": "The branch ref claude/adoring-neumann-e24531 stays on origin: the HQ handoff forbids ref deletion beyond land-pr's own prune and this landing did not go through land-pr. docs/dispositions/claude__adoring-neumann-e24531.json records it UNLANDED by merge-tree, kept only until the owner prunes it: the work is on main by cherry-pick plus the review's repair, and because the repair touched the same three files, merging the ref now would regress it, so LANDED (a merge-tree no-op) is false and SUPERSEDED (prunable) fails scripts/branch-disposition-audit.mjs while the ref is still on origin. The record exists because that audit reds every push while a ref in the origin cache has no proven row. Owner action: git push origin --delete claude/adoring-neumann-e24531, then delete that record."
+}
