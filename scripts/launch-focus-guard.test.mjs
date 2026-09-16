@@ -976,6 +976,22 @@ describe("the trace names WHAT raised the window (#121)", () => {
       expect(src, "the class compared is the OS-assigned one").toContain("CONSOLE_WINDOW_CLASS");
       expect(src, "an empty runner tree must return early and exclude nothing").toMatch(/runner\.size/);
     });
+
+    it("Get-RunnerAncestry excludes nothing when no runner was seen -- pinned in the probe source", () => {
+      // Measured at 7a39cc73 (review on PR #391): under a bash-based harness, and from any hand-run
+      // terminal, the walk ended without meeting node/npm and returned the SHELL pids it had passed
+      // through, so isRunnerTooling armed on the probe's own shell -- fail-OPEN inside the change
+      // whose thesis is fail-closed. No vitest reaches that PowerShell, so the guarantee is pinned
+      // the same way the title ban is: the function's own text must consult the flag on its way out.
+      const ps1 = readFileSync(join(ROOT, "scripts", "lib", "foreground-probe.ps1"), "utf8");
+      const start = ps1.indexOf("function Get-RunnerAncestry");
+      expect(start, "foreground-probe.ps1 no longer defines Get-RunnerAncestry").toBeGreaterThan(-1);
+      const fn = ps1.slice(start, ps1.indexOf("\n}\n", start));
+      expect(fn, "no runner seen => exclude nothing").toMatch(/if \(-not \$sawRunner\) \{ return @\(\) \}/);
+      const guard = fn.indexOf("if (-not $sawRunner) { return @() }");
+      expect(guard, "the guard must exist").toBeGreaterThan(-1);
+      expect(guard, "the guard must sit BEFORE the shells-only return, not after it").toBeLessThan(fn.lastIndexOf("return @($out)"));
+    });
   });
 
   it("RECORDED 2026-08-20: a launch the POLL would call clean, because the window that came forward was not the launched one", () => {

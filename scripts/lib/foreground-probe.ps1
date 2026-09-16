@@ -213,6 +213,11 @@ function Get-RunnerAncestry {
     [void]$out.Add($cur)
     $cur = [CompyProbe.EventHook]::ParentOf($cur)
   }
+  # Shells are hops TOWARD a runner, never proof of one. Returning them with no runner found arms
+  # the exclusion on the probe's own shell -- measured 2026-09-07 under a bash-based harness and
+  # from a hand-run terminal, four shell pids and zero runners -- which is fail-OPEN, the opposite
+  # of what isRunnerTooling documents. No runner seen => exclude nothing.
+  if (-not $sawRunner) { return @() }
   return @($out)
 }
 

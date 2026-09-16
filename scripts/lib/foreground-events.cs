@@ -85,9 +85,12 @@ namespace CompyProbe
     // Set by the probe once the poll loop starts, so event stamps share the poll's zero.
     public long ZeroMs = 0;
 
-    // pid -> parent pid, memoised so a burst of events from one process costs one syscall. PID reuse
-    // inside a single 6-second measurement is not a real hazard, and a stale entry could only ever
-    // make the guard STRICTER (an unrecognised ancestry is never excluded).
+    // pid -> parent pid, memoised so a burst of events from one process costs one syscall. The cache
+    // is static, so it lives for the whole PowerShell process (settle, measurement and relaunch),
+    // not for one 6-second window. A cached failure (0) is fail-closed: it never matches, so the
+    // window is never excluded. A stale non-zero entry after pid reuse could in principle discount
+    // an unrelated console (reuse + a console window + a minimise, all inside one run), which the
+    // short process lifetime makes unlikely rather than impossible.
     static readonly Dictionary<int, int> _parents = new Dictionary<int, int>();
 
     WinEventProc _proc;      // held in a field: the GC must not collect the delegate under the hook
