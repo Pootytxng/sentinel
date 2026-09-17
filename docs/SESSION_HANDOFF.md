@@ -76,10 +76,9 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 local/staged ONLY, never deployed (§11), via PR #289. **Stage 4 is NEXT**: the Tauri send command;
 deployment is Stage 7, owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
 
-**The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
-(`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
-Console (`LabConsole`), and its proving bench already ships armed as `ExperimentBench`.
-`src/superseded-plan-citation-guard.test.ts` fails the build on any live doc citing a dead plan.
+**The Instrument Bench plan is NOT an option and must never be offered as one** — built (`403be45`),
+REJECTED as the Lab 2026-07-09; the live Test room is the Ops Console (`LabConsole`), its bench ships
+as `ExperimentBench`. `src/superseded-plan-citation-guard.test.ts` reds any live doc citing it.
 
 **Do NOT touch** Tier 1 plan tasks 10–11 (independent security review + arming). Owner territory,
 filed in `docs/OWNER_ACTION_CHECKLIST.md` §C so arming can never happen quietly. Still dark, three
@@ -99,9 +98,12 @@ they do not independently establish priority, approval, or authorization.
   reachable. A checkout on a branch is safe: local branches live in the common `.git` and outlive
   their worktree, so deleting the folder loses nothing.
 - **Two lanes that overlap are a git question, not a remembered one.** Ask
-  `git merge-base --is-ancestor <inner> <outer>` before dropping either, both ways — "shares N
-  commits, diverging at `<sha>`" is what two lanes that merely overlap actually do, and neither
-  containing the other is the common answer. `refs/backup/*` is not a substitute for asking.
+  `git merge-base --is-ancestor <inner> <outer>` both ways before dropping either — neither
+  containing the other is the common answer, and `refs/backup/*` is not a substitute for asking.
+- **A claim the gate cannot READ is no claim** — `scripts/scope-drift-gate.mjs` prints "not measured"
+  when the Ownership claim does not open with `### Ownership claim`, or when its paths hang off
+  nested bullets: the Write scope is ONE bullet plus continuation lines, backticked
+  (`scripts/lib/claim-scope.mjs`). A posted claim is never edited — post a superseding one.
 
 ## Waiting on the owner — two arming gates, nothing else
 
