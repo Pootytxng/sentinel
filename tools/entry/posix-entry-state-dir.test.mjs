@@ -42,6 +42,11 @@ import { isAbsolute, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entryStateDir } from "../../.claude/hooks/session-root-assert.mjs";
+import {
+  CACHE_DIR_NAME,
+  claimCacheDir,
+  entryStateDir as scopeDriftStateDir,
+} from "../../scripts/lib/scope-drift.mjs";
 
 /**
  * A fresh evaluation of the hook module under a chosen environment.
@@ -148,5 +153,64 @@ describe("entryStateDir — the resolver, asked directly", () => {
   it("never returns a relative path, for any environment a caller can hand it", () => {
     const envs = [{}, { LOCALAPPDATA: "" }, { XDG_STATE_HOME: "." }, { COMPY_ENTRY_DIR: ".." }, { LOCALAPPDATA: "./x" }];
     for (const env of envs) expect(isAbsolute(entryStateDir({ env, home }))).toBe(true);
+  });
+});
+
+describe("the OTHER half of the store resolves the same folder — scripts/lib/scope-drift.mjs (#440)", () => {
+  // The hook WRITES the store; the drift gate READS a folder inside it. They are two files, and
+  // until this guard they were two resolvers: the hook's, fixed above, and `claimCacheDir`, which
+  // fell back to `join(homedir(), "AppData", "Local")` — a Windows-shaped path spelled out by hand,
+  // so on Linux it answered ~/AppData/Local/CompyEntry while the hook answered ~/.local/state/…
+  //
+  // Nothing is corrupted by that. Both are absolute, so #440's defect — the store landing INSIDE a
+  // checkout — stays closed either way. What breaks is quieter and worse for a guard: the writer
+  // and the reader look at different folders, so every claim reads back as `null`, which
+  // scope-drift.mjs spells "not measured", and the drift gate stops measuring while reporting
+  // nothing at all. A gate that fails is a gate; a gate that silently abstains is decoration.
+  //
+  // The repo's answer to shared logic is to duplicate it and pin the copies equal (precedent:
+  // tools/entry/session-root-assert.test.mjs, the worktree-field path helpers). This is that pin.
+  const home = "/home/user";
+
+  /** Every shape either resolver decides differently on: absent, blank, relative, Windows, XDG. */
+  const MATRIX = [
+    {},
+    { LOCALAPPDATA: "C:\\Users\\Kuya\\AppData\\Local" },
+    { LOCALAPPDATA: "" },
+    { LOCALAPPDATA: "   " },
+    { LOCALAPPDATA: "Local" },
+    { XDG_STATE_HOME: "/home/user/.local/state" },
+    { XDG_STATE_HOME: "state" },
+    { XDG_STATE_HOME: "/srv/state", LOCALAPPDATA: "C:\\Users\\Kuya\\AppData\\Local" },
+    { COMPY_ENTRY_DIR: "/srv/entry" },
+    { COMPY_ENTRY_DIR: "entry" },
+    { COMPY_ENTRY_DIR: "", XDG_STATE_HOME: "/home/user/.local/state" },
+    { COMPY_ENTRY_DIR: "/srv/entry", LOCALAPPDATA: "C:\\L", XDG_STATE_HOME: "/x" },
+  ];
+
+  it("resolves the state root identically to the hook, for every environment", () => {
+    for (const env of MATRIX) {
+      expect(scopeDriftStateDir({ env, home }), JSON.stringify(env)).toBe(entryStateDir({ env, home }));
+    }
+  });
+
+  it("puts the claim cache INSIDE the folder the hook writes, not beside it", () => {
+    for (const env of MATRIX) {
+      // Asked with the real homedir(), because that is what claimCacheDir uses when a caller does
+      // not name one — which is how every caller in the tree actually calls it.
+      expect(claimCacheDir({ env }), JSON.stringify(env)).toBe(
+        join(entryStateDir({ env, home: homedir() }), CACHE_DIR_NAME),
+      );
+    }
+  });
+
+  it("never hands back a cache path the cwd could move, whatever the environment says", () => {
+    // NOT `isAbsolute`: asked on Linux about `C:\\...` it says false, so a host-dependent assertion
+    // would fail the Windows rows here and the POSIX rows on the owner's desk. The question that
+    // actually matters is the one the resolver asks — is this path ROOTED, or would some cwd get to
+    // decide where it lands? Spelled out here rather than imported so a resolver that quietly
+    // widened what counts as rooted could not widen its own guard at the same time.
+    const rooted = (s) => isAbsolute(s) || /^[A-Za-z]:[\\/]/.test(s);
+    for (const env of MATRIX) expect(rooted(claimCacheDir({ env })), JSON.stringify(env)).toBe(true);
   });
 });
