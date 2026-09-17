@@ -85,6 +85,9 @@
       "title": "没有其他可显示的内容",
       "sub": "还没有游戏对局、指南核查或外部变化——这些 Compy 是与变更记录分开保存的。"
     },
+    "emptyUnknown": {
+      "title": "变更记录尚不完整"
+    },
     "sectionHead": {
       "sinceIncomplete": "Compy 目前还能读到的内容 · 自 "
     },

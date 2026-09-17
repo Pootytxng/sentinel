@@ -43,10 +43,6 @@ const ALLOWED: Record<string, string> = {
   // fork B_gpu was closed by wiring the surface into LabGround as an advisory panel.)
   "data/entitlements.ts": "Compy Pro dark scaffold — proGate() hard-false, nothing may gate on it yet",
 
-  // The Machine Model reader lands before its first screen (#449, slice 1 of #385). Slices 2–4
-  // (#450–#452) import it; the honesty check below then forces this entry out.
-  "data/machine-model.ts": "Machine Model reader, first importer arrives in #450–#452",
-
   // Loaded outside the app graph entirely: the static-site generator pulls this through Vite's
   // ssrLoadModule at build time (scripts/lib/library-render.mjs), so no src/ file imports it.
   "data/site.ts": "loaded by scripts/lib/library-render.mjs via ssrLoadModule — build-time, not app",

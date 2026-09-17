@@ -39,10 +39,19 @@ export async function readMachineModel(): Promise<MachineModel | null> {
  * The Machine Model for a screen.
  * `undefined` = not read yet · `null` = the read failed · otherwise the model.
  * Pass App's refresh counter as `refreshToken` so an App.refresh() re-reads it.
+ *
+ * `enabled: false` makes the hook read NOTHING — no invoke, not even a cached one — and report
+ * `undefined`. It exists because a flag-gated surface must be able to make zero IPC while the flag
+ * is off (a hook cannot be called conditionally), and "the flag is off" must not be reported as
+ * "the model is unreadable".
  */
-export function useMachineModel(refreshToken?: unknown): MachineModel | null | undefined {
+export function useMachineModel(
+  refreshToken?: unknown,
+  options?: { enabled?: boolean },
+): MachineModel | null | undefined {
+  const enabled = options?.enabled ?? true;
   const [model, setModel] = useState<MachineModel | null | undefined>(() =>
-    peekProbe<MachineModel>(MACHINE_MODEL_PROBE_KEY),
+    enabled ? peekProbe<MachineModel>(MACHINE_MODEL_PROBE_KEY) : undefined,
   );
   const [ledgerTick, setLedgerTick] = useState(0);
 
@@ -56,6 +65,10 @@ export function useMachineModel(refreshToken?: unknown): MachineModel | null | u
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setModel(undefined);
+      return;
+    }
     let live = true;
     void readMachineModel().then((next) => {
       if (live) setModel(next);
@@ -63,7 +76,7 @@ export function useMachineModel(refreshToken?: unknown): MachineModel | null | u
     return () => {
       live = false;
     };
-  }, [refreshToken, ledgerTick]);
+  }, [enabled, refreshToken, ledgerTick]);
 
   return model;
 }

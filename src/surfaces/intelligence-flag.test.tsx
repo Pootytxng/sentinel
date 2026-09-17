@@ -4,20 +4,22 @@
 // intelligence IPC (flag off = zero fetches, not just zero pixels). Pins:
 //   • WhatChangedPanel default-ON renders the engine's outcome verbatim (unavailable reason /
 //     report headline + §7 language), "0" renders NOTHING and never calls what_changed_for_session.
-//   • BlackbookV2 default-ON fetches the timeline ONCE, tapes only scope-"observed" rows (decision
-//     15 non-duplication), "0" never calls get_intelligence_timeline and the tape is byte-identical
-//     to an ON mount with nothing observed (the flag can only ever ADD observed rows).
+//   • BlackbookV2 default-ON reads the shared Machine Model ONCE (#450 replaced this room's own
+//     timeline fetch with it), tapes only scope-"observed" rows (decision 15 non-duplication), and
+//     "0" never calls get_machine_model — the tape is then byte-identical to an ON mount whose model
+//     could not be read (the flag can only ever ADD observed rows and the model's own note).
 // use-hud.ts's useIntelligenceFlag comment names this file as its pin — keep the name in sync.
 import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from "vitest";
 import { render, cleanup, waitFor } from "@testing-library/react";
 import { WhatChangedPanel } from "./WhatChangedPanel";
 import { BlackbookV2 } from "./BlackbookV2";
+import { invalidateProbe } from "../data/probe-cache";
 import type {
   WhatChangedOutcome,
   IntelSessionRef,
   IntelHypothesis,
-  IntelligenceTimeline,
-  IntelEvent,
+  ChangeChronology,
+  ChronologyEntry,
 } from "../types";
 
 // Mutable harness: each test sets the engine's answer; every invoke is recorded so the
@@ -25,13 +27,13 @@ import type {
 const harness = vi.hoisted(() => ({
   calls: [] as { cmd: string; args: unknown }[],
   outcome: null as unknown,
-  timeline: null as unknown,
+  model: null as unknown,
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string, args?: unknown) => {
     harness.calls.push({ cmd, args });
     if (cmd === "what_changed_for_session") return Promise.resolve(harness.outcome);
-    if (cmd === "get_intelligence_timeline") return Promise.resolve(harness.timeline);
+    if (cmd === "get_machine_model") return Promise.resolve(harness.model);
     return Promise.resolve(null);
   },
 }));
@@ -57,16 +59,27 @@ beforeAll(() => {
   (globalThis as Record<string, unknown>).IntersectionObserver ??= IO;
 });
 
-const emptyTimeline: IntelligenceTimeline = {
-  events: [],
+const CAUSATION =
+  "Chronology never implies causation by itself. These entries say what was recorded and when, not what caused what.";
+
+const chronology = (entries: ChronologyEntry[] = []): ChangeChronology => ({
+  identity_snapshots: 0,
+  total_events: entries.length,
+  coverage_note: "This view includes Compy-applied changes, monitored sessions…",
+  entries,
   dropped_unparseable: 0,
-  generated_at: "2026-07-10T00:00:00Z",
-};
+  causation_note: CAUSATION,
+});
+
+const modelWith = (entries: ChronologyEntry[] = []) => ({ chronology: chronology(entries) });
 
 beforeEach(() => {
   harness.calls = [];
   harness.outcome = null;
-  harness.timeline = emptyTimeline;
+  harness.model = modelWith();
+  // The model rides the probe cache; without this a later mount would answer from an earlier read
+  // and the "was it invoked?" pins would be measuring the cache, not the room.
+  invalidateProbe();
 });
 
 afterEach(() => {
@@ -240,19 +253,16 @@ describe('WhatChangedPanel — compy_intelligence "0" failsafe', () => {
 
 // ───────────────────────────── BlackbookV2 observed fetch ─────────────────────────────
 
-const observedEvent = (over: Partial<IntelEvent> = {}): IntelEvent => ({
+const observedEvent = (over: Partial<ChronologyEntry> = {}): ChronologyEntry => ({
   id: "gpu-driver-change:2026-07-07T10:00:00Z",
-  timestamp: "2026-07-07T10:00:00Z",
+  observed_at: "2026-07-07T10:00:00Z",
   event_type: "gpu-driver-change",
   source: "rig-fingerprint",
   scope: "observed",
-  game: null,
   summary: "GPU driver changed: 24.10.1 → 25.1.1",
   detail: "Noticed between two Compy readings — the exact time isn't recorded, only the window.",
   observed_between: ["2026-07-06T09:00:00Z", "2026-07-07T10:00:00Z"],
-  since_rolled_back: false,
-  // Observed source — no Compy rec behind it, so no id to carry.
-  rec_id: null,
+  class: "recorded-historically",
   ...over,
 });
 
@@ -263,45 +273,67 @@ const mountBlackbook = () =>
   render(<BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} />);
 
 describe("BlackbookV2 — compy_intelligence default ON tapes observed machine changes", () => {
-  it("fetches the timeline and tapes the observed row, summary verbatim", async () => {
+  it("reads the Machine Model and tapes the observed row, summary verbatim", async () => {
     useReduced();
-    harness.timeline = { ...emptyTimeline, events: [observedEvent()] };
+    harness.model = modelWith([observedEvent()]);
     const { container } = mountBlackbook();
     await waitFor(() =>
       expect(container.textContent).toContain("GPU driver changed: 24.10.1 → 25.1.1"),
     );
-    expect(calledCmds()).toContain("get_intelligence_timeline");
+    expect(calledCmds()).toContain("get_machine_model");
+    // The room reads the chronology ONCE — the model is one read, never a poll.
+    expect(calledCmds().filter((c) => c === "get_machine_model")).toHaveLength(1);
+    // ...and it no longer walks the second route to the same chronology (#450).
+    expect(calledCmds()).not.toContain("get_intelligence_timeline");
   });
 
   it("tapes ONLY scope-observed events — a compy-applied event never doubles the tape (decision 15)", async () => {
     useReduced();
-    harness.timeline = {
-      ...emptyTimeline,
-      events: [observedEvent({ scope: "compy-applied", summary: "Enabled HAGS" })],
-    };
+    harness.model = modelWith([
+      observedEvent({ scope: "compy-applied", summary: "Enabled HAGS" }),
+    ]);
     const { container } = mountBlackbook();
     await settle();
-    expect(calledCmds()).toContain("get_intelligence_timeline");
+    expect(calledCmds()).toContain("get_machine_model");
     expect(container.textContent).not.toContain("Enabled HAGS");
   });
 });
 
 describe('BlackbookV2 — compy_intelligence "0" failsafe', () => {
-  it("never invokes the timeline IPC, and the tape is byte-identical to ON-with-nothing-observed", async () => {
+  it("never invokes the model, and the tape is byte-identical to ON-with-an-unreadable-model", async () => {
     useReduced();
-    harness.timeline = emptyTimeline;
+    // The honest ON comparison is a model that gave NOTHING: with a readable model the flag also
+    // adds the chronology's own note, which is exactly the kind of thing the failsafe drops.
+    harness.model = null;
     const on = mountBlackbook();
     await settle();
     const onHtml = on.container.innerHTML;
-    expect(calledCmds()).toContain("get_intelligence_timeline");
+    expect(calledCmds()).toContain("get_machine_model");
     cleanup();
 
     harness.calls = [];
+    invalidateProbe();
     localStorage.setItem("compy_motion", "reduced");
     localStorage.setItem("compy_intelligence", "0");
     const off = mountBlackbook();
     await settle();
-    expect(calledCmds()).not.toContain("get_intelligence_timeline");
+    expect(calledCmds()).not.toContain("get_machine_model");
     expect(off.container.innerHTML).toBe(onHtml);
+  });
+
+  it("ON with a readable model ADDS the chronology note the failsafe has no source for", async () => {
+    useReduced();
+    harness.model = modelWith([observedEvent()]);
+    const on = mountBlackbook();
+    await waitFor(() => expect(on.container.querySelector(".bc-tape-note")).toBeTruthy());
+    expect(on.container.querySelector(".bc-tape-note")?.textContent).toBe(CAUSATION);
+    cleanup();
+
+    invalidateProbe();
+    localStorage.setItem("compy_motion", "reduced");
+    localStorage.setItem("compy_intelligence", "0");
+    const off = mountBlackbook();
+    await settle();
+    expect(off.container.querySelector(".bc-tape-note")).toBeNull();
   });
 });

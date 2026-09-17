@@ -30,8 +30,16 @@ use crate::intelligence::{EventScope, IdentitySnapshot};
 /// Bumped only when a consumer would read an existing field differently.
 pub(crate) const SCHEMA_VERSION: u32 = 1;
 
-/// Chronology entries returned. Bounded on purpose — MACHINE_MODEL.md §9 forbids turning the model
-/// into a telemetry lake, and a consumer that needs the full history reads the timeline directly.
+/// Chronology entries returned PER SCOPE THAT HAS ITS OWN SURFACE. Bounded on purpose —
+/// MACHINE_MODEL.md §9 forbids turning the model into a telemetry lake, and a consumer that needs
+/// the full history reads the timeline directly.
+///
+/// [`EventScope::Observed`] is exempt (#450). Compy-applied and measurement events are each shown
+/// by a surface that reads its own store in full (the Trust Ledger, the session record), so a cap
+/// on the model's copy of them hides nothing. Observed changes have no other store: the History
+/// tape is the only place they are ever shown, and it read them uncapped off the intelligence
+/// timeline before it read them here — so capping them would silently shorten the record of what
+/// happened to this machine.
 const MAX_CHRONOLOGY: usize = 25;
 /// Compy-change rows returned. Same bound, same reason. The COUNTS above them are never truncated,
 /// and neither is the evidence pass: this caps what is SHOWN, never what is accounted for.
@@ -414,6 +422,10 @@ pub(crate) struct MachineIdentity {
 /// One entry of the recorded chronology, copied off the existing timeline assembler.
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct ChronologyEntry {
+    /// The SOURCE record's own id, copied from `intelligence::EventRecord::id` and never
+    /// re-derived. It is the row key a view keys its list on, so two entries that share a
+    /// timestamp stay distinguishable (#450).
+    pub id: String,
     /// The SOURCE record's own timestamp. Never this model's build time.
     pub observed_at: String,
     pub summary: String,
@@ -462,7 +474,9 @@ pub(crate) struct ChangeChronology {
     /// Explicit production producer scope, tied to the wiring by test rather than by prose; also
     /// rendered beside counts and newest/oldest dates.
     pub coverage_note: &'static str,
-    /// Newest first, capped at [`MAX_CHRONOLOGY`] for DISPLAY only. `total_events` and
+    /// Newest first. Capped at [`MAX_CHRONOLOGY`] for DISPLAY only, and only for the scopes another
+    /// surface shows in full — every [`EventScope::Observed`] entry travels, because the History
+    /// tape is their only surface (#450). `total_events` and
     /// `recorded_from` above cover the whole supplied record, and so does the evidence pass:
     /// [`compose_evidence`] walks the uncapped projection, never this list, so Answer B's span can
     /// never be narrower than the boundary reported beside it (#385 review).
@@ -952,6 +966,7 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
         .iter()
         .rev()
         .map(|e| ChronologyEntry {
+            id: e.id.clone(),
             observed_at: e.timestamp.clone(),
             summary: e.summary.clone(),
             detail: e.detail.clone(),
@@ -962,7 +977,21 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
             class: EvidenceClass::RecordedHistorically,
         })
         .collect();
-    let entries: Vec<ChronologyEntry> = all_entries.iter().take(MAX_CHRONOLOGY).cloned().collect();
+    // The cap counts only the scopes another surface already shows in full; observed changes are
+    // shown nowhere else, so they all travel (see [`MAX_CHRONOLOGY`]). Order is untouched — the
+    // list stays newest-first with the capped scopes simply thinning out at the tail.
+    let mut capped_taken = 0usize;
+    let entries: Vec<ChronologyEntry> = all_entries
+        .iter()
+        .filter(|e| {
+            if e.scope == EventScope::Observed {
+                return true;
+            }
+            capped_taken += 1;
+            capped_taken <= MAX_CHRONOLOGY
+        })
+        .cloned()
+        .collect();
 
     (
         ChangeChronology {
@@ -1686,6 +1715,8 @@ mod machine_model_tests {
         let m = f.model();
         let e = &m.chronology.entries[0];
         assert_eq!(e.observed_at, "2026-08-20T00:00:00Z");
+        // The source record's own id, copied through unchanged — the row key a view lists on (#450).
+        assert_eq!(e.id, "obs:gpu-driver-change:2026-08-20T00:00:00Z");
         assert_eq!(e.class, EvidenceClass::RecordedHistorically);
         // The uncertainty WINDOW survives — the exact moment was never witnessed.
         assert!(e.observed_between.is_some());
@@ -3114,6 +3145,63 @@ mod machine_model_tests {
             b.newest_observed_at.as_deref(),
             Some(format!("2026-01-{:02}T00:00:00Z", MAX_CHRONOLOGY + 5).as_str())
         );
+    }
+
+    // ── 7g. The display cap never shortens the History tape (#450) ─────────
+
+    /// The History tape read the observed events off the intelligence timeline, uncapped, and now
+    /// reads them out of this model. So the model's list must carry EVERY observed event the
+    /// timeline holds — a cap there would delete rows from the only surface that shows them —
+    /// while the scopes that have their own surface stay capped.
+    #[test]
+    fn the_observed_scope_is_never_cut_off_at_the_display_cap() {
+        let mut f = Fixture::new();
+        f.snapshots.clear();
+        let event = |i: usize, scope: EventScope| crate::intelligence::EventRecord {
+            id: format!("{}:evt-{i}", if scope == EventScope::Observed { "obs" } else { "applied" }),
+            timestamp: format!("2026-01-{:02}T00:00:00Z", i + 1),
+            event_type: "gpu-driver-change".into(),
+            source: "identity-snapshot".into(),
+            scope,
+            game: None,
+            summary: format!("Event {i}"),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: false,
+            rec_id: None,
+        };
+        let over_cap = MAX_CHRONOLOGY + 5;
+        f.timeline = (0..over_cap)
+            .map(|i| event(i, EventScope::Observed))
+            .chain((0..over_cap).map(|i| event(i, EventScope::CompyApplied)))
+            .collect();
+
+        let m = f.model();
+        let observed: Vec<&ChronologyEntry> = m
+            .chronology
+            .entries
+            .iter()
+            .filter(|e| e.scope == EventScope::Observed)
+            .collect();
+        assert_eq!(
+            observed.len(),
+            over_cap,
+            "every observed event must travel — the tape shows no fewer rows than it did when it \
+             read the timeline itself"
+        );
+        // And by id, so a truncation cannot hide behind a matching count.
+        let ids: Vec<&str> = observed.iter().map(|e| e.id.as_str()).collect();
+        assert!(ids.contains(&"obs:evt-0"), "including the oldest: {ids:?}");
+        assert_eq!(
+            m.chronology
+                .entries
+                .iter()
+                .filter(|e| e.scope != EventScope::Observed)
+                .count(),
+            MAX_CHRONOLOGY,
+            "the scopes with their own surface stay capped"
+        );
+        assert_eq!(m.chronology.total_events, over_cap * 2, "the record is not capped either");
     }
 
     // ── 8. Existing producers keep their own vocabularies ─────────────────

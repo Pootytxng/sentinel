@@ -95,6 +95,14 @@
   outline-offset: 3px; }
 :root[data-v2="on"] .bc-tape-more-chev { font-size: var(--type-label); }
 
+/* The chronology's own note (#450) — the Machine Model's causation caveat, or its reason the record
+   is short. A footnote, not a banner: the rows above it are the content, and this is the sentence
+   that bounds how they may be read, so it sits at the tape's foot in the quietest text on the
+   column. The narrowing NOTICE above the room is a different job and still outranks it. */
+:root[data-v2="on"] .bc-tape-note { margin: 16px 0 0; max-width: 62ch;
+  font-family: var(--v2-font-sans); font-size: var(--type-label); line-height: 1.55;
+  color: var(--ix-text-3, var(--ix-text-2)); }
+
 /* The kind tag — an outlined micro-pill that carries the record's MEANING in the room's own
    colour ladder (03-history-approved.png): a Compy change is the accent, because it is the one
    kind the user did; drift Compy merely OBSERVED is amber, because "something changed and it

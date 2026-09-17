@@ -934,6 +934,8 @@ export type MachineIdentity = {
 };
 
 export type ChronologyEntry = {
+  /** The source record's own id (`IntelEvent.id`) — the row key (#450). */
+  id: string;
   observed_at: string;
   summary: string;
   detail?: string;

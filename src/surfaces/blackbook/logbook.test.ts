@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildLogbook, groupByMonth, startHereEntries, type LogbookRecord } from "./logbook";
-import type { AppliedChange, SessionSummary, IntelEvent } from "../../types";
+import {
+  buildLogbook,
+  chronologyNote,
+  groupByMonth,
+  startHereEntries,
+  type LogbookRecord,
+} from "./logbook";
+import type { AppliedChange, ChangeChronology, ChronologyEntry, SessionSummary } from "../../types";
 import type { AutopsyLedgerEntry } from "../../data/autopsy-ledger";
 import { KNOWLEDGE } from "../../data/knowledge";
 
@@ -47,19 +53,18 @@ const autopsy = (over: Partial<AutopsyLedgerEntry> = {}): AutopsyLedgerEntry => 
   ...over,
 });
 
-const intel = (over: Partial<IntelEvent> = {}): IntelEvent => ({
+// One chronology entry of the shared Machine Model — the tape's observed source since #450. Same
+// records as the old timeline fetch, one route (the model assembles them from that very timeline).
+const intel = (over: Partial<ChronologyEntry> = {}): ChronologyEntry => ({
   id: "gpu-driver-change:2026-07-07T10:00:00Z",
-  timestamp: "2026-07-07T10:00:00Z",
+  observed_at: "2026-07-07T10:00:00Z",
   event_type: "gpu-driver-change",
   source: "rig-fingerprint",
   scope: "observed",
-  game: null,
   summary: "GPU driver changed: 24.10.1 → 25.1.1",
   detail: "Noticed between two Compy readings — the exact time isn't recorded, only the window.",
   observed_between: ["2026-07-06T09:00:00Z", "2026-07-07T10:00:00Z"],
-  since_rolled_back: false,
-  // Observed source — no Compy rec behind it, so no id to carry.
-  rec_id: null,
+  class: "recorded-historically",
   ...over,
 });
 
@@ -322,7 +327,7 @@ describe("buildLogbook — vs-previous delta is same-game only", () => {
   });
 });
 
-describe("buildLogbook — observed machine changes (Intelligence Phase 1)", () => {
+describe("buildLogbook — observed machine changes (Intelligence Phase 1; Machine Model since #450)", () => {
   it("maps an observed event verbatim — the engine's own sentence, never rephrased", () => {
     const r = buildLogbook({ observed: [intel()] });
     expect(r).toHaveLength(1);
@@ -350,9 +355,9 @@ describe("buildLogbook — observed machine changes (Intelligence Phase 1)", () 
   });
 
   it("drops an observed event with an unparseable timestamp — never coerced to now/0", () => {
-    expect(buildLogbook({ observed: [intel({ timestamp: "not-a-date" })] })).toEqual([]);
+    expect(buildLogbook({ observed: [intel({ observed_at: "not-a-date" })] })).toEqual([]);
     const r = buildLogbook({
-      observed: [intel({ id: "bad", timestamp: "" }), intel({ id: "good" })],
+      observed: [intel({ id: "bad", observed_at: "" }), intel({ id: "good" })],
     });
     expect(r).toHaveLength(1);
     expect((r[0] as { id: string }).id).toBe("good");
@@ -366,8 +371,8 @@ describe("buildLogbook — observed machine changes (Intelligence Phase 1)", () 
     expect((r[0] as { observedBetween: unknown }).observedBetween).toBe(null);
   });
 
-  it("null observed_between ⇒ null (no invented window)", () => {
-    const r = buildLogbook({ observed: [intel({ observed_between: null })] });
+  it("absent observed_between ⇒ null (no invented window)", () => {
+    const r = buildLogbook({ observed: [intel({ observed_between: undefined })] });
     expect((r[0] as { observedBetween: unknown }).observedBetween).toBe(null);
   });
 
@@ -382,7 +387,7 @@ describe("buildLogbook — observed machine changes (Intelligence Phase 1)", () 
       changes: [change({ applied_at: t })],
       sessions: [session({ started_at: t })],
       autopsy: [autopsy({ at: Date.parse(t) })],
-      observed: [intel({ timestamp: t })],
+      observed: [intel({ observed_at: t })],
     });
     expect(r.map((x) => x.kind)).toEqual(["change", "session", "autopsy", "observed"]);
   });
@@ -478,5 +483,43 @@ describe("groupByMonth — consecutive calendar months, order kept, nothing inve
       rec("2026-06-15T17:51:00", "c"),
     ];
     expect(groupByMonth(input, "en").flatMap((g) => g.records)).toEqual(input);
+  });
+});
+
+
+// The tape's footnote comes from the model VERBATIM (#450). The honesty question here is which of
+// the chronology's two sentences wins, because one of them says a record is INCOMPLETE.
+describe("chronologyNote — the footnote is the model's sentence, never Compy's", () => {
+  const chron = (over: Partial<ChangeChronology> = {}): ChangeChronology => ({
+    identity_snapshots: 2,
+    total_events: 3,
+    coverage_note: "This view includes Compy-applied changes…",
+    entries: [],
+    dropped_unparseable: 0,
+    causation_note: "Chronology never implies causation by itself.",
+    ...over,
+  });
+
+  it("an unread model prints nothing — Compy does not invent a caveat", () => {
+    expect(chronologyNote(null)).toBeNull();
+    expect(chronologyNote(undefined)).toBeNull();
+  });
+
+  it("with rows on screen, the reason the record is incomplete outranks the causation caveat", () => {
+    expect(chronologyNote(chron({ unknown_reason: "The Trust Ledger could not be read." }))).toBe(
+      "The Trust Ledger could not be read.",
+    );
+  });
+
+  it("with nothing recorded at all the reason is NOT the footnote — it belongs to the empty state", () => {
+    const note = chronologyNote(
+      chron({ total_events: 0, unknown_reason: "The Trust Ledger could not be read." }),
+    );
+    expect(note).toBe("Chronology never implies causation by itself.");
+  });
+
+  it("no reason given ⇒ the causation caveat, and an empty caveat is no footnote at all", () => {
+    expect(chronologyNote(chron())).toBe("Chronology never implies causation by itself.");
+    expect(chronologyNote(chron({ causation_note: "" }))).toBeNull();
   });
 });
