@@ -61,9 +61,53 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
-export const TOKEN_DIR = join(process.env.LOCALAPPDATA ?? ".", "CompyEntry");
+/**
+ * Where compy-entry keeps its records: the launch handshake, the per-folder leases, the board
+ * cache, the briefs.
+ *
+ * ABSOLUTE, ALWAYS, ON EVERY PLATFORM (#440). This read `join(process.env.LOCALAPPDATA ?? ".",
+ * "CompyEntry")`, and LOCALAPPDATA is a Windows variable. On Linux — the cloud sessions, rooted at
+ * paths like /home/user/sentinel — it is unset, so the expression became the RELATIVE string
+ * "CompyEntry" and the store landed wherever the hook happened to be STANDING: the session's own
+ * checkout, untracked, with no .gitignore line to catch it. Session records are conversation ids,
+ * folder hashes and pids; they are not repository contents, and the cwd of a hook is not a location.
+ *
+ * The order extends the one scripts/lib/scope-drift.mjs already honours rather than inventing a
+ * second one, so both halves of the store keep answering the same folder:
+ *
+ *   COMPY_ENTRY_DIR — an explicit relocation, by a caller who means it.
+ *   LOCALAPPDATA    — Windows, and byte-identical to the expression this replaces. The owner's
+ *                     machine has live leases and briefs under %LOCALAPPDATA%\CompyEntry; a fix
+ *                     that moved them would orphan every one, which is worse than the bug it cures.
+ *   XDG_STATE_HOME  — POSIX, and the right variable of the three: these are records a program keeps
+ *                     BETWEEN runs, which is state — not cache, which may be deleted at any time,
+ *                     and not config, which a human edits.
+ *   ~/.local/state  — what XDG says to use when that variable is unset.
+ *
+ * A blank or RELATIVE value is absence at every step. Blank because `"" ?? x` is `""`, which is how
+ * a defined-but-empty LOCALAPPDATA reached the same relative path as an unset one. Relative because
+ * a relative override is this same defect wearing a new name — and the XDG spec says to ignore one.
+ */
+export function entryStateDir({ env = process.env, home = homedir() } = {}) {
+  // Asked on Linux about a Windows path, `isAbsolute` says false — so the verdict would depend on
+  // the host and a guard could not check the Windows answer from CI. Both spellings are named here
+  // so the resolver decides the same way everywhere. A lone leading backslash is deliberately NOT
+  // absolute: on POSIX a backslash is an ordinary filename character, so "\\CompyEntry" would
+  // resolve against the cwd and put the store straight back in the checkout.
+  const rooted = (s) => isAbsolute(s) || /^[A-Za-z]:[\\/]/.test(s) || /^\\\\[^\\]/.test(s);
+  const named = (value) => {
+    const s = typeof value === "string" ? value.trim() : "";
+    return s !== "" && rooted(s) ? s : null;
+  };
+
+  const explicit = named(env.COMPY_ENTRY_DIR);
+  if (explicit) return explicit;
+  return join(named(env.LOCALAPPDATA) ?? named(env.XDG_STATE_HOME) ?? join(home, ".local", "state"), "CompyEntry");
+}
+
+export const TOKEN_DIR = entryStateDir();
 export const TOKEN_NAME = "launch.json";
 export const DEFAULT_TTL_MINUTES = 30;
 
@@ -1253,7 +1297,6 @@ export function verifySession({
     if (pending) claimToken({ dir }, now);
   }
   sweepLineage({ dir, now });
-
   return result;
 }
 
