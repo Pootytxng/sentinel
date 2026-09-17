@@ -101,7 +101,7 @@ they do not independently establish priority, approval, or authorization.
   `git merge-base --is-ancestor <inner> <outer>` both ways before dropping either — neither
   containing the other is the common answer, and `refs/backup/*` is not a substitute for asking.
 - **A claim the gate cannot READ is no claim** — `scripts/scope-drift-gate.mjs` prints "not measured"
-  when the Ownership claim does not open with `### Ownership claim`, or when its paths hang off
+  when no line of the Ownership claim starts with `### Ownership claim`, or when its paths hang off
   nested bullets: the Write scope is ONE bullet plus continuation lines, backticked
   (`scripts/lib/claim-scope.mjs`). A posted claim is never edited — post a superseding one.
 

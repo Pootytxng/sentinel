@@ -93,6 +93,11 @@ export function BlackbookV2({
   // note; the tape never fabricates either.
   const intelOn = useIntelligenceFlag();
   const model = useMachineModel(undefined, { enabled: intelOn && consoleOn });
+  // This `null` is LOSSY on purpose: it folds "not read at all" (`undefined`, flag off) together with
+  // "read and failed" (`null`). Every consumer below asks the chronology what it SAYS
+  // (`unknown_reason`, `causation_note`), never whether it exists, so both cases correctly render
+  // nothing rather than a claim. A consumer that needs to tell those two apart must read `model`
+  // itself — it cannot recover the difference from here (non-author review, #455 at 75cf3f6b).
   const chronology = model?.chronology ?? null;
   // Scope-filtered here AND in buildLogbook (defense in depth: the builder is the tested honesty
   // spine).
