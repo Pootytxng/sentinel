@@ -1,4 +1,4 @@
-import type { AppliedChange, SessionSummary, IntelEvent } from "../../types";
+import type { AppliedChange, ChangeChronology, ChronologyEntry, SessionSummary } from "../../types";
 import type { AutopsyLedgerEntry } from "../../data/autopsy-ledger";
 import { knowledgeForLanguage, type KnowledgeEntry } from "../../data/knowledge";
 
@@ -6,9 +6,9 @@ import { knowledgeForLanguage, type KnowledgeEntry } from "../../data/knowledge"
 // direction A "The Logbook"). A PURE builder — it does no IO itself; the surface hands it data.
 // It MIRRORS four real record sources into one reverse-chronological tape; it never MOVES them
 // (applied changes still live in the Lab's Optimize station, sessions in Monitor, autopsy in its
-// ledger, observed events in the Rust intelligence timeline — the one read-only IPC the surface
-// fetches for it, Intelligence Phase 1). This is the honesty spine of the room, so it is written
-// and tested first:
+// ledger, observed events in the shared Machine Model's chronology — which the surface reads
+// through `data/machine-model.ts`, #450, replacing this room's own timeline fetch). This is the
+// honesty spine of the room, so it is written and tested first:
 //   • Only REAL records — an unparseable/absent timestamp is DROPPED, never coerced to now/0, so
 //     the tape can never fabricate a row. Empty in ⇒ empty out ⇒ the room's honest empty state.
 //   • The rollback flag rides ONLY change records, and only while the change is genuinely active
@@ -74,9 +74,9 @@ export type LogbookAutopsy = {
 
 export type LogbookObserved = {
   kind: "observed";
-  /** ms epoch, from IntelEvent.timestamp (the reading that revealed the change). */
+  /** ms epoch, from ChronologyEntry.observed_at (the reading that revealed the change). */
   at: number;
-  /** Stable timeline event id (from the Rust intelligence timeline). */
+  /** Stable event id, copied through the Machine Model from the timeline record. */
   id: string;
   /** "hardware-change" | "gpu-driver-change" | "windows-build-change" | "power-plan-change". */
   eventType: string;
@@ -94,10 +94,11 @@ export type LogbookInput = {
   changes?: AppliedChange[] | null;
   sessions?: SessionSummary[] | null;
   autopsy?: AutopsyLedgerEntry[] | null;
-  /** Intelligence-timeline events (Intelligence Phase 1). Only scope-"observed" rows are taped —
-   *  compy-applied and measurement events already have their own records above (decision 15:
-   *  the tape gains ONLY the event kinds no surface shows; it never re-lists). */
-  observed?: IntelEvent[] | null;
+  /** The Machine Model's chronology entries (#450; Intelligence Phase 1 before it). Only
+   *  scope-"observed" rows are taped — compy-applied and measurement events already have their own
+   *  records above (decision 15: the tape gains ONLY the event kinds no surface shows; it never
+   *  re-lists). */
+  observed?: ChronologyEntry[] | null;
 };
 
 // A finite ms-epoch or null (never coerced). ISO strings → Date.parse; anything unparseable → null.
@@ -221,7 +222,7 @@ export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookIn
   // already ride the change/session rows above, and re-listing them would double the tape.
   for (const ev of observed ?? []) {
     if (ev.scope !== "observed") continue;
-    const at = ms(ev.timestamp);
+    const at = ms(ev.observed_at);
     if (at === null) continue; // no honest timestamp ⇒ no row
     let between: [number, number] | null = null;
     if (ev.observed_between) {
@@ -244,6 +245,35 @@ export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookIn
   // that share a timestamp keep insertion order (change → session → autopsy → observed): deterministic.
   records.sort((x, y) => y.at - x.at);
   return records;
+}
+
+/**
+ * The tape's footnote, VERBATIM from the Machine Model's chronology (#450) — Compy never writes
+ * this sentence itself, so `null` (an unread model) prints nothing rather than a caveat Compy
+ * invented.
+ *
+ * `unknown_reason` outranks the causation caveat, but only while the chronology actually holds
+ * events: it is the sentence that says what is MISSING from the rows on screen (an unreadable Trust
+ * Ledger leaves a hole in them), and that qualifier beats a general caveat. With nothing recorded
+ * at all the reason belongs to the empty state instead, where it replaces "No record yet" — the
+ * room may never render "nothing changed" over a record it could not read.
+ *
+ * `unknownStatedElsewhere` is the room saying it has already disclosed that failure above the rows
+ * (`LedgerHealthNotice`). One failure gets ONE voice: 61e092c2 built that notice precisely so two
+ * surfaces could not warn about the same file in two different wordings, and the chronology's reason
+ * is the same file read a second way — so when the notice is up, the tape keeps the general caveat
+ * and says nothing more. It still never falls back to a no-change claim; that branch is the empty
+ * state's, and it narrows on the same signal.
+ */
+export function chronologyNote(
+  chronology: ChangeChronology | null | undefined,
+  { unknownStatedElsewhere = false }: { unknownStatedElsewhere?: boolean } = {},
+): string | null {
+  if (!chronology) return null;
+  if (chronology.unknown_reason && chronology.total_events > 0 && !unknownStatedElsewhere) {
+    return chronology.unknown_reason;
+  }
+  return chronology.causation_note || null;
 }
 
 /** One month of the tape: consecutive records sharing a calendar month (local time), newest

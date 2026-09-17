@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { invoke } from "@tauri-apps/api/core";
 import Learn from "./Learn";
 import { RoomShell } from "../design/room-shell";
 import { RoomEyebrow } from "../design/room-eyebrow";
@@ -16,7 +15,8 @@ import { useLogbookView } from "./blackbook/logbook-view";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { PatternsTile } from "./blackbook/PatternsTile";
 import { buildLogbook } from "./blackbook/logbook";
-import type { AppliedChange, SessionSummary, IntelEvent, IntelligenceTimeline } from "../types";
+import { useMachineModel } from "../data/machine-model";
+import type { AppliedChange, SessionSummary } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "../i18n";
@@ -40,9 +40,10 @@ import "./blackbook-v2.css";
 // compy_blackbook_console (DEFAULT ON), the room's working face is a flight-recorder LOGBOOK —
 // one reverse-chronological tape unifying the user's real changes, sessions and guide checks
 // (buildLogbook, a PURE view over data App already holds). Phase 4 itself added zero IPC;
-// Intelligence Phase 1 adds exactly ONE read-only fetch here (get_intelligence_timeline) so the
-// tape can also carry the machine changes Compy merely OBSERVED — still zero mutation, zero
-// network. The field guide (this file's Learn tree) stays reachable from the narrative column, and
+// Intelligence Phase 1 added exactly ONE read-only fetch here so the tape can also carry the
+// machine changes Compy merely OBSERVED, and #450 moved that read to the shared Machine Model
+// (`data/machine-model.ts`) — one chronology, one route, still zero mutation and zero network.
+// The field guide (this file's Learn tree) stays reachable from the narrative column, and
 // the face toggle returns from it. Flag off renders EXACTLY today's Learn tree, byte-identical for
 // both compy_editorial states (test-pinned).
 
@@ -82,27 +83,28 @@ export function BlackbookV2({
   const [face, setFace] = useState<Face>("logbook");
   const [guideFocus, setGuideFocus] = useState<string | null>(null);
 
-  // Observed machine changes for the tape (Intelligence Phase 1): the ONE read-only IPC this room
-  // makes, and only while BOTH the console face and the intelligence flag are on — classic mode
-  // never fetches. Scope-filtered here AND in buildLogbook (defense in depth: the builder is the
-  // tested honesty spine). A failed fetch ⇒ no observed rows — the tape never fabricates.
+  // Observed machine changes for the tape — now read from the SHARED MACHINE MODEL (#450, slice 2
+  // of #385) instead of this room's own `get_intelligence_timeline` fetch. Same chronology, one
+  // route: the model already assembles it (and carries its coverage, causation and unknown-reason
+  // sentences with it), so a second path to the same truth is a second thing to keep honest.
+  // Still the ONE read-only IPC this room makes, still only while BOTH the console face and the
+  // intelligence flag are on — `enabled: false` means the reader does not invoke at all, so
+  // classic mode is zero-IPC exactly as before. An unreadable model ⇒ no observed rows and no
+  // note; the tape never fabricates either.
   const intelOn = useIntelligenceFlag();
-  const [observed, setObserved] = useState<IntelEvent[]>([]);
-  useEffect(() => {
-    if (!intelOn || !consoleOn) {
-      setObserved([]);
-      return;
-    }
-    let alive = true;
-    invoke<IntelligenceTimeline>("get_intelligence_timeline")
-      .then((t) => {
-        if (alive) setObserved(t.events.filter((e) => e.scope === "observed"));
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [intelOn, consoleOn]);
+  const model = useMachineModel(undefined, { enabled: intelOn && consoleOn });
+  // This `null` is LOSSY on purpose: it folds "not read at all" (`undefined`, flag off) together with
+  // "read and failed" (`null`). Every consumer below asks the chronology what it SAYS
+  // (`unknown_reason`, `causation_note`), never whether it exists, so both cases correctly render
+  // nothing rather than a claim. A consumer that needs to tell those two apart must read `model`
+  // itself — it cannot recover the difference from here (non-author review, #455 at 75cf3f6b).
+  const chronology = model?.chronology ?? null;
+  // Scope-filtered here AND in buildLogbook (defense in depth: the builder is the tested honesty
+  // spine).
+  const observed = useMemo(
+    () => (chronology?.entries ?? []).filter((e) => e.scope === "observed"),
+    [chronology],
+  );
 
   const records = useMemo(
     () => buildLogbook({ changes, sessions, autopsy: ledger, observed }),
@@ -193,7 +195,12 @@ export function BlackbookV2({
       }
       aside={
         split ? (
-          <LogbookTape view={view} reduced={reduced} onReviewSession={reviewLatest ?? undefined} />
+          <LogbookTape
+            view={view}
+            reduced={reduced}
+            onReviewSession={reviewLatest ?? undefined}
+            chronology={chronology}
+          />
         ) : undefined
       }
       below={
@@ -238,6 +245,7 @@ export function BlackbookV2({
                 view={view}
                 reduced={reduced}
                 onReviewSession={reviewLatest ?? undefined}
+                chronology={chronology}
               />
               <BlackbookConsole
                 view={view}

@@ -117,6 +117,7 @@
     "coverage_note": "This view includes Compy-applied changes, monitored sessions, the live Gaming Mode slot, verified wins, the current Lab baseline, the latest A/B comparison, identity snapshots and drift notices. Single-slot sources show their current record only.",
     "entries": [
       {
+        "id": "obs:gpu-driver-change:2026-08-20T00:00:00Z",
         "observed_at": "2026-08-20T00:00:00Z",
         "summary": "GPU driver changed",
         "detail": "25.5.1 to 25.6.0",

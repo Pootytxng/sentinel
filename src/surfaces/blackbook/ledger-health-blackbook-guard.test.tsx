@@ -22,14 +22,19 @@ import { render, screen, cleanup, act } from "@testing-library/react";
 
 // One controllable command; everything else answers with the real shape its caller destructures, so
 // a sibling fetch can't throw inside its own .then and mask what this file is actually testing.
-const ipc: { health: unknown; rejectHealth: boolean } = { health: null, rejectHealth: false };
+const ipc: { health: unknown; rejectHealth: boolean; model: unknown } = {
+  health: null,
+  rejectHealth: false,
+  model: null,
+};
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
     if (cmd === "get_ledger_health") {
       return ipc.rejectHealth ? Promise.reject(new Error("ipc down")) : Promise.resolve(ipc.health);
     }
-    if (cmd === "get_intelligence_timeline") return Promise.resolve({ events: [] });
+    // The tape's observed rows and its chronology note come from the shared Machine Model (#450).
+    if (cmd === "get_machine_model") return Promise.resolve(ipc.model);
     return Promise.resolve(null);
   }),
 }));
@@ -40,7 +45,8 @@ import { useLogbookView } from "./logbook-view";
 import { LedgerHealthNotice } from "../../design/LedgerHealthNotice";
 import { BlackbookV2 } from "../BlackbookV2";
 import type { LogbookRecord, LogbookChange, LogbookSession, LogbookAutopsy } from "./logbook";
-import type { LedgerHealth, SessionSummary } from "../../types";
+import { invalidateProbe } from "../../data/probe-cache";
+import type { ChangeChronology, LedgerHealth, SessionSummary } from "../../types";
 
 beforeAll(() => {
   class RO {
@@ -66,6 +72,10 @@ afterEach(() => {
   sessionStorage.clear();
   ipc.health = null;
   ipc.rejectHealth = false;
+  ipc.model = null;
+  // The Machine Model rides the probe cache, so one mount's read would otherwise answer the next
+  // test's mount from memory.
+  invalidateProbe();
 });
 
 // Reduced motion makes the render deterministic (no per-row animationDelay), which is what lets the
@@ -126,22 +136,28 @@ const autopsy = (over: Partial<LogbookAutopsy> = {}): LogbookAutopsy => ({
 function Logbook({
   records,
   health,
+  chronology = null,
 }: {
   records: LogbookRecord[];
   health: LedgerHealth | null;
+  chronology?: ChangeChronology | null;
 }) {
   const view = useLogbookView(records, health);
   return (
     <>
       <LedgerHealthNotice health={health} />
-      <LogbookTape view={view} reduced />
+      <LogbookTape view={view} reduced chronology={chronology} />
       <BlackbookConsole view={view} vendor="amd" onOpenLab={vi.fn()} onOpenGuide={vi.fn()} />
     </>
   );
 }
 
-function mountConsole(records: LogbookRecord[], health: LedgerHealth | null) {
-  return render(<Logbook records={records} health={health} />);
+function mountConsole(
+  records: LogbookRecord[],
+  health: LedgerHealth | null,
+  chronology: ChangeChronology | null = null,
+) {
+  return render(<Logbook records={records} health={health} chronology={chronology} />);
 }
 
 // Every claim is asserted through the ELEMENT that carries it, not a substring of the room: a text
@@ -321,5 +337,189 @@ describe("BlackbookV2 wires the probe to the tape it qualifies", () => {
     // Byte-for-byte the healthy room: no head, and nothing claiming completeness.
     expect(head(container)).toBeNull();
     expect(container.textContent).not.toContain(WIDEST_CLAIM);
+  });
+});
+
+// ─────────────────── the same rule, applied to the CHRONOLOGY (#450) ───────────────────
+//
+// bug → guard for slice 2 of #385. The tape's observed rows now come from the shared Machine Model,
+// and the model states its own limits: `unknown_reason` is set when the Trust Ledger could not be
+// read (Compy-applied changes are missing from the chronology) or when nothing is recorded at all.
+// Rendering an empty tape as "No record yet" while that reason is set is the identical defect this
+// file was opened for — a claim about the MACHINE made out of a read that failed — one data source
+// over. The reason is the model's own sentence, so it is rendered verbatim, never rephrased.
+const CAUSATION = "Chronology never implies causation by itself. These entries say what was recorded and when, not what caused what.";
+const UNREADABLE_REASON =
+  "The Trust Ledger could not be read, so Compy-applied changes are missing from this view. (failed to read history.json)";
+
+const chron = (over: Partial<ChangeChronology> = {}): ChangeChronology => ({
+  identity_snapshots: 0,
+  total_events: 0,
+  coverage_note: "This view includes Compy-applied changes, monitored sessions…",
+  entries: [],
+  dropped_unparseable: 0,
+  causation_note: CAUSATION,
+  ...over,
+});
+
+const tapeNote = (c: HTMLElement) => c.querySelector(".bc-tape-note")?.textContent ?? null;
+const emptyTitle = (c: HTMLElement) => c.querySelector(".bc-empty-title")?.textContent ?? null;
+const emptySub = (c: HTMLElement) => c.querySelector(".bc-empty-sub")?.textContent ?? null;
+/** Everything the TAPE itself says — its empty state, its rows, its footnote. Scoped on purpose:
+ *  the room's change tile legitimately reads "nothing changed yet" when the ledger IS readable and
+ *  holds nothing, and that honest counter must not be able to satisfy a claim about the chronology.
+ */
+const tapeText = (c: HTMLElement) =>
+  [".bc-empty", ".bc-tape", ".bc-tape-note"]
+    .flatMap((sel) => Array.from(c.querySelectorAll(sel)))
+    .map((el) => el.textContent ?? "")
+    .join(" ")
+    .toLowerCase();
+/** The tape's own no-change claims (en `empty` / `emptyIncomplete`). While the model states a
+ *  reason, NONE of them may appear: each one asserts an absence of change, which is exactly the
+ *  claim a failed read cannot support. Falsifiable by construction — drop the unknown_reason branch
+ *  from LogbookTape and the first of these comes straight back. */
+const NO_CHANGE_CLAIMS = [
+  "no record yet",
+  "nothing else to show",
+  "compy logs changes, gaming sessions and guide checks here as they happen",
+];
+
+describe("the tape may not speak for a chronology the model could not fill", () => {
+  it("an empty tape states the model's own unknown reason, never 'No record yet'", () => {
+    useReduced();
+    const { container } = mountConsole([], HEALTHY, chron({ unknown_reason: UNREADABLE_REASON }));
+
+    expect(emptySub(container)).toBe(UNREADABLE_REASON);
+    expect(emptyTitle(container)).toBe("What changed is not fully known");
+    expect(emptyTitle(container)).not.toBe("No record yet");
+    for (const claim of NO_CHANGE_CLAIMS) expect(tapeText(container)).not.toContain(claim);
+  });
+
+  it("a POPULATED tape carries the reason as the note under the rows it qualifies", () => {
+    useReduced();
+    const { container } = mountConsole(
+      [change(), session()],
+      HEALTHY,
+      chron({ total_events: 4, unknown_reason: UNREADABLE_REASON }),
+    );
+
+    // Verbatim — the note is the model's sentence, and a reworded one would be Compy's claim.
+    expect(tapeNote(container)).toBe(UNREADABLE_REASON);
+    for (const claim of NO_CHANGE_CLAIMS) expect(tapeText(container)).not.toContain(claim);
+  });
+
+  it("with nothing missing, the note is the causation caveat — a chronology is not a cause", () => {
+    useReduced();
+    const { container } = mountConsole([change(), session()], HEALTHY, chron({ total_events: 4 }));
+
+    expect(tapeNote(container)).toBe(CAUSATION);
+  });
+
+  it("an unread model prints NO note — Compy never writes that sentence itself", () => {
+    useReduced();
+    const { container } = mountConsole([change(), session()], HEALTHY, null);
+
+    expect(tapeNote(container)).toBeNull();
+    // And the tape is otherwise exactly the tape: no invented caveat, no empty state.
+    expect(emptyTitle(container)).toBeNull();
+  });
+});
+
+// ─────────── ONE FAILURE, ONE VOICE — the defect the visual self-review caught (#450) ───────────
+//
+// bug → guard. The first cut of this slice rendered the chronology's `unknown_reason` whenever it was
+// set, including while `LedgerHealthNotice` was already up for the same unreadable history.json. The
+// self-review's paired fixture showed both boxes back to back, no scroll between them — the amber
+// "Compy can't read its own record right now" followed immediately by the tape's "The Trust Ledger
+// could not be read…". 61e092c2 built that notice so this would be structurally impossible; the
+// chronology is the same file read a second way, so it inherits the rule rather than escaping it.
+//
+// What must hold: while the notice speaks, the tape does not repeat it — AND it still never falls
+// through to a no-change claim, which is the reason the reason was rendered in the first place.
+describe("the room states an unreadable ledger ONCE, whichever read noticed it", () => {
+  const reasoned = chron({ total_events: 4, unknown_reason: UNREADABLE_REASON });
+
+  it("with the notice up, the tape does not print the reason a second time", () => {
+    useReduced();
+    const { container } = mountConsole([change(), session()], UNREADABLE, reasoned);
+
+    // The disclosure is there — exactly once, in the element built for it.
+    expect(notice(container)).toBeTruthy();
+    expect(container.querySelectorAll(".ledger-health")).toHaveLength(1);
+    // ...and the tape's footnote fell back to the general caveat instead of echoing it.
+    expect(tapeNote(container)).toBe(CAUSATION);
+    expect(tapeText(container)).not.toContain(UNREADABLE_REASON.toLowerCase());
+  });
+
+  it("an EMPTY tape under the notice narrows, and still never says 'No record yet'", () => {
+    useReduced();
+    const { container } = mountConsole([], UNREADABLE, chron({ unknown_reason: UNREADABLE_REASON }));
+
+    expect(notice(container)).toBeTruthy();
+    // The narrowed copy the notice's own commit introduced — not the model's sentence again...
+    expect(emptyTitle(container)).toBe("Nothing else to show");
+    expect(tapeText(container)).not.toContain(UNREADABLE_REASON.toLowerCase());
+    // ...and not the claim a failed read cannot support either.
+    expect(emptyTitle(container)).not.toBe("No record yet");
+    expect(tapeText(container)).not.toContain("no record yet");
+  });
+
+  it("with the ledger READABLE, the tape is still the only voice the reason has", () => {
+    useReduced();
+    // The honest counter-case: health says the record is complete, yet the model states a reason
+    // (its own producers came up short). Nothing else in the room is saying it, so the tape must.
+    const { container } = mountConsole([change(), session()], HEALTHY, reasoned);
+
+    expect(notice(container)).toBeNull();
+    expect(tapeNote(container)).toBe(UNREADABLE_REASON);
+  });
+});
+
+// Same chain proof as the ledger-health pair above, for the model: probe → prop → rendered claim.
+describe("BlackbookV2 wires the Machine Model to the tape it qualifies", () => {
+  async function mountRoomWithModel(chronology: ChangeChronology) {
+    useReduced();
+    localStorage.setItem("compy_blackbook_console", "1");
+    ipc.model = { chronology };
+    const r = render(<BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    return r;
+  }
+
+  it("a chronology the model could not fill reaches the room's empty state", async () => {
+    // Health reads COMPLETE here on purpose. Pairing this with an unreadable-ledger probe would test
+    // the opposite rule — with the notice up the tape defers to it ("one failure, one voice" above),
+    // so the chain from probe to rendered claim is only visible where the tape is the only voice.
+    ipc.health = HEALTHY;
+    const { container } = await mountRoomWithModel(chron({ unknown_reason: UNREADABLE_REASON }));
+
+    expect(container.querySelector(".bc-empty-sub")?.textContent).toBe(UNREADABLE_REASON);
+    for (const claim of NO_CHANGE_CLAIMS) expect(tapeText(container)).not.toContain(claim);
+  });
+
+  it("the observed rows come from the model's chronology, summary verbatim", async () => {
+    const { container } = await mountRoomWithModel(
+      chron({
+        total_events: 1,
+        entries: [
+          {
+            id: "obs:gpu-driver-change:2026-07-07T10:00:00Z",
+            observed_at: "2026-07-07T10:00:00Z",
+            summary: "GPU driver changed: 24.10.1 → 25.1.1",
+            event_type: "gpu-driver-change",
+            source: "identity-snapshot",
+            scope: "observed",
+            class: "recorded-historically",
+          },
+        ],
+      }),
+    );
+
+    expect(container.textContent).toContain("GPU driver changed: 24.10.1 → 25.1.1");
+    expect(container.querySelector(".bc-tape-note")?.textContent).toBe(CAUSATION);
   });
 });

@@ -133,6 +133,7 @@ const CHRONOLOGY = shape<ChangeChronology>(
   },
   {
     entries: shape<ChronologyEntry>("ChronologyEntry", {
+      id: "required",
       observed_at: "required",
       summary: "required",
       detail: "optional",

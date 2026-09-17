@@ -90,6 +90,9 @@
       "title": "Nothing else to show",
       "sub": "No gaming sessions, guide checks or outside changes yet — Compy keeps those separately from the change record."
     },
+    "emptyUnknown": {
+      "title": "What changed is not fully known"
+    },
     "sectionHead": {
       "sinceIncomplete": "what Compy can still read · since "
     },

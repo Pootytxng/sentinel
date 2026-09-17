@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Term } from "../../design/Term";
 import { prettyGameName } from "../game-name";
 import {
+  chronologyNote,
   groupByMonth,
   type LogbookChange,
   type LogbookSession,
@@ -9,6 +10,7 @@ import {
   type LogbookObserved,
 } from "./logbook";
 import type { LogbookView } from "./logbook-view";
+import type { ChangeChronology } from "../../types";
 import "../../i18n";
 import "./blackbook-console.css";
 
@@ -198,6 +200,7 @@ export function LogbookTape({
   view,
   reduced,
   onReviewSession,
+  chronology = null,
 }: {
   view: LogbookView;
   /** Reduced motion ⇒ the tape is still (no staggered reveal). */
@@ -205,29 +208,50 @@ export function LogbookTape({
   /** Opens the latest session where its full readout already lives — Live. Omitted ⇒ the row
    *  carries no chevron, because an affordance that leads nowhere is a drawn lie. */
   onReviewSession?: () => void;
+  /** The Machine Model's chronology (#450), for its own caveat and unknown-reason sentences. Null
+   *  while the model has not been read — the tape then prints no note rather than inventing one. */
+  chronology?: ChangeChronology | null;
 }) {
   const { t, i18n } = useTranslation();
   const { records, filter, tape, older, sinceDate, incomplete, latestSession } = view;
+  // `incomplete` is set on exactly the health the notice above renders, so it is also the answer to
+  // "has this room already disclosed that the ledger could not be read?". While it is, the
+  // chronology's own reason is a SECOND voice for one failure — the thing LedgerHealthNotice was
+  // built to make impossible — so the tape defers to it (self-review 2026-09-17, #450).
+  const note = chronologyNote(chronology, { unknownStatedElsewhere: Boolean(incomplete) });
+  // The model's OWN reason the chronology is short — an unreadable Trust Ledger, or nothing
+  // recorded. It replaces the empty state's claim about the machine, verbatim, and only where the
+  // room is not already saying it.
+  const unknownReason = incomplete ? null : (chronology?.unknown_reason ?? null);
 
   if (records.length === 0) {
     return (
       <div className="bc-empty">
         {/* "No record yet" is a claim about the MACHINE, and an unreadable ledger is the one
             state where Compy cannot make it. The notice above already says what's missing, so
-            this narrows to the kinds Compy can still vouch for rather than repeating it. */}
+            this narrows to the kinds Compy can still vouch for rather than repeating it. The
+            model's own unknown_reason (#450) is the same rule applied to the chronology: while it
+            is set, the empty tape states that reason instead of "nothing changed" — but only when
+            the notice is NOT up, because then the narrowed `emptyIncomplete` copy is already the
+            room's one answer for that failure. The two branches are mutually exclusive by
+            construction (`unknownReason` is nulled while `incomplete`), and neither can fall
+            through to "No record yet". */}
         <span className="bc-empty-title">
           {t(
-            incomplete
-              ? "blackbook.blackbookConsole.emptyIncomplete.title"
-              : "blackbook.blackbookConsole.empty.title",
+            unknownReason
+              ? "blackbook.blackbookConsole.emptyUnknown.title"
+              : incomplete
+                ? "blackbook.blackbookConsole.emptyIncomplete.title"
+                : "blackbook.blackbookConsole.empty.title",
           )}
         </span>
         <span className="bc-empty-sub">
-          {t(
-            incomplete
-              ? "blackbook.blackbookConsole.emptyIncomplete.sub"
-              : "blackbook.blackbookConsole.empty.sub",
-          )}
+          {unknownReason ??
+            t(
+              incomplete
+                ? "blackbook.blackbookConsole.emptyIncomplete.sub"
+                : "blackbook.blackbookConsole.empty.sub",
+            )}
         </span>
       </div>
     );
@@ -332,6 +356,11 @@ export function LogbookTape({
           </span>
         </button>
       )}
+      {/* THE MODEL'S OWN NOTE, last and quiet (#450). A chronology is not a causal chain, and the
+          shared Machine Model is the one place that sentence is written — so it is rendered
+          verbatim under the rows it qualifies, never rephrased into a claim. An unreadable Trust
+          Ledger replaces it with the reason (see chronologyNote). */}
+      {note && <p className="bc-tape-note">{note}</p>}
     </>
   );
 }
