@@ -80,6 +80,16 @@
 //      cannot make its measurement says exactly that instead. So rule C REQUIRES a reachable origin
 //      on a multi-checkout fleet; a single-checkout clone (CI) returns at the `live <= 1` branch
 //      long before this, and the pre-push gate that actually matters always has a network.
+//      CORRECTED 2026-09-16 (#439). "On a branch" meant the checkout's OWN porcelain `branch` line,
+//      so a detached checkout was stranded by definition -- there is no line to read. On 2026-09-16
+//      `.claude/worktrees/wonderful-khorana-e350f7` sat detached at `8d1baf0d` while the local
+//      branches `claude/doc-archive` and `claude/doc-budget-archive-move-dcbec2` both pointed at
+//      that commit. `git worktree remove` could not have lost anything, and the rule redded every
+//      lane's pre-push gate saying those commits were on "no branch" -- a claim nothing had
+//      measured. What the rule asks is whether a ref that SURVIVES the removal can still reach the
+//      head, and every local branch does, so it is now asked of all of them:
+//      `git for-each-ref --contains <sha> refs/heads/`. Fail-closed either way -- a probe that
+//      cannot be taken is not a refuge, and an unpushed head no local branch contains still fires.
 //   D. Local only. Every branch the bullet names must CARRY — resolved from `refs/heads/`, never
 //      `origin/`. Added 2026-08-29 (#243) after the hole between A and C let the same lie land
 //      twice: this repo's landing procedure prunes the remote ref in the same window it lands the
@@ -166,7 +176,8 @@
 //      three repairs its exact-head review asked for; see `isNegated` and `containmentClaims`.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, inject, it } from "vitest";
@@ -176,10 +187,12 @@ import { describe, expect, inject, it } from "vitest";
 // see the fleet was to run the guard.
 import {
   atRiskCarriers,
+  containingBranchesVia,
   countAheadVia,
   liveCarriers,
   originHeads,
   snapshot,
+  strandedCarriers,
   trustedExclusions,
   unmeasuredCarriers,
 } from "./fleet-snapshot.mjs";
@@ -981,7 +994,196 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(statedWorktreeCount("**11 worktrees** besides the canonical checkout")).toBe(11);
   });
 
-    // NARROWED by #291, and the narrowing is what closed the first-push trap. The rule used to demand
+  // #439, caught 2026-09-16 at the pre-push gate of every lane at once. Rule C read "on a branch"
+  // as the checkout's OWN porcelain `branch` line and nothing else, so a DETACHED checkout was
+  // stranded BY DEFINITION -- there is no branch line to read. `.claude/worktrees/wonderful-khorana-
+  // e350f7` sat detached at `8d1baf0d` while the local branches `claude/doc-archive` and
+  // `claude/doc-budget-archive-move-dcbec2` both pointed at that exact commit. `git worktree remove`
+  // could not have lost a thing, and the rule redded every lane's push saying those commits existed
+  // "on NO remote AND on no branch". The second half of that sentence was never measured.
+  //
+  // What the rule is actually asking is whether a ref that SURVIVES `git worktree remove` can still
+  // find the work. Every local branch does -- they live in the common .git, not in the worktree
+  // directory -- so the question is `git for-each-ref --contains <head> refs/heads/`, over ALL local
+  // branches, not which branch this one checkout happens to have checked out.
+  //
+  // The direction of the repair matters: this narrows what rule C reports, so both halves are
+  // proven here. A contained head must go quiet, and an uncontained one must still fire -- a fix
+  // that silenced the second would delete the rule while looking like it fixed it.
+  it("C: a detached checkout some local branch already contains is not stranded", () => {
+    // The 2026-09-16 checkout, to the commit. `refuge` is what the containment probe answered:
+    // the local branches that can still reach this head after the worktree is gone.
+    const khorana = (over) => ({
+      name: "wonderful-khorana-e350f7",
+      path: "/w/.claude/worktrees/wonderful-khorana-e350f7",
+      branch: null,
+      head: "8d1baf0d",
+      commits: 4,
+      unpushed: 4,
+      ...over,
+    });
+    // 1. The regression itself: two local branches point AT the head. Nothing is stranded.
+    expect(
+      strandedCarriers([khorana({ refuge: ["claude/doc-archive", "claude/doc-budget-archive-move-dcbec2"] })]),
+    ).toEqual([]);
+    // 2. The case rule C exists for, unchanged: unpushed commits on no local branch either, so the
+    //    worktree directory is the last thing that knows they exist.
+    expect(strandedCarriers([khorana({ refuge: [] })]).map((c) => c.name)).toEqual(["wonderful-khorana-e350f7"]);
+    // 3. Fail-closed, both shapes. A probe that could not be TAKEN is not a refuge (`null`), and
+    //    neither is a caller that never took one (`undefined`) -- absent and unmeasurable are the
+    //    same fact here as everywhere else in this file, and the safe direction for THIS question is
+    //    to keep naming the checkout. Over-reporting asks for a ref; under-reporting loses commits.
+    expect(strandedCarriers([khorana({ refuge: null })]).map((c) => c.name)).toEqual(["wonderful-khorana-e350f7"]);
+    expect(strandedCarriers([khorana({ refuge: undefined })]).map((c) => c.name)).toEqual(["wonderful-khorana-e350f7"]);
+    // 4. A checkout on its OWN branch is never stranded, whatever the probe did or did not say --
+    //    that branch survives `git worktree remove` on its own. This is the pre-#439 behaviour, kept.
+    expect(strandedCarriers([{ name: "lane/a", branch: "lane/a", head: "aaaa", commits: 3, unpushed: 3 }])).toEqual([]);
+
+    // The probe's three answers, through the same seam the live rule uses. An empty read is a
+    // MEASUREMENT here, unlike `originHeads` one function up: git exits non-zero for a commit it
+    // cannot resolve, so a clean empty answer means exactly "no local branch contains this" -- the
+    // stranded case itself, which must not be laundered into "could not ask".
+    const probe = containingBranchesVia;
+    expect(probe(() => "claude/doc-archive\nclaude/doc-budget-archive-move-dcbec2\n")("8d1baf0d")).toEqual([
+      "claude/doc-archive",
+      "claude/doc-budget-archive-move-dcbec2",
+    ]);
+    expect(probe(() => "")("8d1baf0d")).toEqual([]);
+    expect(probe(() => { throw new Error("error: no such commit 8d1baf0d"); })("8d1baf0d")).toBe(null);
+    // Nothing to ask about is not an empty answer either: a carrier with no head sha (porcelain
+    // without a HEAD line) must not read as "measured, no branch contains it".
+    expect(probe(() => "claude/doc-archive")(null)).toBe(null);
+
+    // WIRED, not merely available. The defect was in what the snapshot ASKED, so this drives the
+    // real `snapshot()` through a stub git and proves it asks the containment question per detached
+    // checkout and routes the answer into `stranded`. A snapshot that stopped asking would pass
+    // every assertion above and still red the fleet.
+    const asked = [];
+    const CONTAINS = { "8d1baf0d": "claude/doc-archive\nclaude/doc-budget-archive-move-dcbec2", cafe1234: "" };
+    const PORCELAIN = [
+      "worktree /w/sentinel\nHEAD 1111111\nbranch refs/heads/main\n",
+      "worktree /w/.claude/worktrees/wonderful-khorana-e350f7\nHEAD 8d1baf0d\ndetached\n",
+      "worktree /w/.claude/worktrees/really-stranded\nHEAD cafe1234\ndetached\n",
+    ].join("\n");
+    const stubGit = (...args) => {
+      if (args[0] === "worktree") return PORCELAIN;
+      if (args[0] === "rev-list") return "4";
+      if (args[0] === "for-each-ref") {
+        if (args.includes("refs/remotes/origin")) return "origin\norigin/HEAD\norigin/main";
+        const contains = args.find((a) => String(a).startsWith("--contains="));
+        const sha = String(contains).slice("--contains=".length);
+        asked.push(sha);
+        if (!(sha in CONTAINS)) throw new Error(`error: no such commit ${sha}`);
+        return CONTAINS[sha];
+      }
+      throw new Error(`stub git got an unexpected command: ${args.join(" ")}`);
+    };
+    const s = snapshot({ git: stubGit, lsRemote: () => "aaaa\trefs/heads/main" });
+    // Asked once per DETACHED checkout, and not at all for the one whose branch line already
+    // answers it -- the containment question costs a subprocess per checkout on a fleet this size.
+    expect(asked).toEqual(["8d1baf0d", "cafe1234"]);
+    // Both are at risk: neither's commits are on a trusted origin ref. That half is untouched.
+    expect(s.atRisk.map((c) => c.name)).toEqual(["wonderful-khorana-e350f7", "really-stranded"]);
+    // Only the one no branch can reach is STRANDED. This is the assertion #439 was failing.
+    expect(s.stranded.map((c) => c.name)).toEqual(["really-stranded"]);
+    expect(s.checkouts.find((c) => c.name === "wonderful-khorana-e350f7").refuge).toEqual([
+      "claude/doc-archive",
+      "claude/doc-budget-archive-move-dcbec2",
+    ]);
+  });
+
+  // The whole rule against a REAL fleet, because every assertion above is about what this file does
+  // with an ANSWER. None of them can prove the question is spelled in a way git accepts, and a
+  // `--contains` that silently listed every branch (or none) would keep them all green while the
+  // fleet rule went blind or cried wolf. So: a real origin, real worktrees, a real detached HEAD,
+  // and the refuge branches deleted out from under it to prove containment is DRIVING the verdict
+  // rather than decorating it -- the same falsification the trusted exclusion set gets below.
+  //
+  // It is also the only proof of the live path available to a single-checkout clone: rule C itself
+  // returns at `s.total <= 1` there, so on CI, and in any container that cloned this repo once, the
+  // branch that #439 broke would otherwise never execute.
+  it("C: measured against a real fleet — a contained detached head is safe, an orphaned one is not", () => {
+    const root = mkdtempSync(join(tmpdir(), "compy-rule-c-fleet-"));
+    // git exports GIT_DIR and friends to hooks, and this suite runs from one. Inherited, they would
+    // point every command below at the REAL repository -- the exact way this repo's own pre-push
+    // hook corrupted it three times on 2026-08-11. Scrubbed here for the same reason the hook
+    // scrubs them.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+    const run = (cwd, ...args) =>
+      execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], {
+        cwd,
+        encoding: "utf8",
+        env,
+        // Captured, not inherited: one probe below asks about a commit this repository does not
+        // have, and git says so on stderr. Inherited, that lands in the gate's output as a bare
+        // `error: no such commit` with nothing to attach it to -- a line that reads like a failure
+        // in a run that passed.
+        stdio: ["ignore", "pipe", "pipe"],
+      }).trim();
+    try {
+      const work = join(root, "work");
+      run(root, "init", "-q", "--bare", "origin.git");
+      run(root, "init", "-q", "-b", "main", "work");
+      const git = (...args) => run(work, ...args);
+      git("remote", "add", "origin", join(root, "origin.git"));
+      git("commit", "-q", "--allow-empty", "-m", "base");
+      // The only thing origin has. Everything built after this exists on this disk alone, which is
+      // what makes both worktrees below at-risk and keeps the two verdicts about REFS, not remotes.
+      git("push", "-q", "-u", "origin", "main");
+
+      // The 2026-09-16 shape: a detached checkout whose head two local branches point at.
+      git("commit", "-q", "--allow-empty", "-m", "work a branch still points at");
+      const covered = git("rev-parse", "HEAD");
+      git("branch", "claude/doc-archive", covered);
+      git("branch", "claude/doc-budget-archive-move-dcbec2", covered);
+      git("worktree", "add", "-q", "--detach", join(root, "wonderful-khorana-e350f7"), covered);
+      // ...and the shape rule C exists for: a commit no local branch reaches, in a checkout whose
+      // directory is the only thing that knows it.
+      git("commit", "-q", "--allow-empty", "-m", "work nothing else knows about");
+      const orphan = git("rev-parse", "HEAD");
+      git("worktree", "add", "-q", "--detach", join(root, "really-stranded"), orphan);
+      git("reset", "-q", "--hard", covered);
+
+      const probe = containingBranchesVia((c) =>
+        git("for-each-ref", "--format=%(refname:short)", `--contains=${c}`, "refs/heads/"),
+      );
+      // Both refuges reach the covered head; nothing reaches the orphan. A probe answering "every
+      // branch" or "no branch" fails one of these two lines.
+      expect(probe(covered)).toEqual(["claude/doc-archive", "claude/doc-budget-archive-move-dcbec2", "main"]);
+      expect(probe(orphan)).toEqual([]);
+      // A sha this repository does not have is git exiting non-zero, which is `null` -- never an
+      // empty list. If that read as "measured, nothing contains it", a broken probe would look
+      // exactly like a stranded fleet and the rule would red every gate with the wrong cause.
+      expect(probe("0".repeat(40))).toBe(null);
+
+      // The fleet, through the same `snapshot()` rule C runs. `lsRemote` is the fixture's own
+      // origin, so this stays a local measurement -- no network, and `trusted` is a real answer.
+      const fleet = () => snapshot({ git, lsRemote: () => git("ls-remote", "--heads", "origin") });
+      const s = fleet();
+      expect(s.trusted).toEqual(["origin/main"]);
+      // Both hold commits origin has never seen. That half of the rule is untouched by #439.
+      expect(s.atRisk.map((c) => c.name).sort()).toEqual(["really-stranded", "wonderful-khorana-e350f7"]);
+      // Only the orphan is stranded. This is the assertion the pre-#439 filter failed, on this exact
+      // shape, on 2026-09-16 -- and `git worktree remove` on the other one loses nothing.
+      expect(s.stranded.map((c) => c.name)).toEqual(["really-stranded"]);
+      expect(s.checkouts.find((c) => c.name === "wonderful-khorana-e350f7").refuge).toEqual([
+        "claude/doc-archive",
+        "claude/doc-budget-archive-move-dcbec2",
+        "main",
+      ]);
+
+      // Falsified, not merely observed: delete every ref that reaches the covered head -- which is
+      // what makes the removal lossy -- and the same checkout must become stranded. Without this,
+      // a `strandedCarriers` that had stopped reporting anything at all would pass everything above.
+      git("branch", "-D", "claude/doc-archive", "claude/doc-budget-archive-move-dcbec2");
+      git("reset", "-q", "--hard", "origin/main");
+      expect(fleet().stranded.map((c) => c.name).sort()).toEqual(["really-stranded", "wonderful-khorana-e350f7"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // NARROWED by #291, and the narrowing is what closed the first-push trap. The rule used to demand
   // that every checkout holding commits on no remote be NAMED in the handoff bullet. A lane about to
   // make its very first push is exactly that checkout -- its branch is not on origin yet -- so the
   // gate red-flagged the push that would have answered its own complaint, and the only way through
@@ -989,10 +1191,12 @@ describe("the handoff tells the truth about the worktrees", () => {
   //
   // What actually decides whether the work can be LOST is not prose, it is whether a shared ref can
   // find it. A local branch lives in the common .git: `git worktree remove` deletes the checkout and
-  // the branch survives, so the commits are still reachable and still pushable. A DETACHED head
-  // lives only in that worktree's own directory -- remove the checkout and the last thing that knew
-  // those commits existed is gone. That second shape is the one this rule was written for, and it is
-  // still invisible to every other audit in this repo, because it has no ref for one to read.
+  // the branch survives, so the commits are still reachable and still pushable. A DETACHED head that
+  // NO branch contains lives only in that worktree's own directory -- remove the checkout and the
+  // last thing that knew those commits existed is gone. That second shape is the one this rule was
+  // written for, and it is still invisible to every other audit in this repo, because it has no ref
+  // for one to read. The containment clause is #439's correction and is measured, not assumed: a
+  // detached head some local branch reaches is as safe as any lane, and the rule used to fail it.
   //
   // So the failure narrows to the branchless carrier, and the remedy narrows with it: give the work
   // a ref (`git branch <name> <sha>`) or push it. Neither is a shared write. Everything else the old
@@ -1071,22 +1275,64 @@ describe("the handoff tells the truth about the worktrees", () => {
       }
     }
 
+    // The containment probe, falsified LIVE. #439 turned on a question nothing asked, so a run that
+    // cannot ask it must not be able to pass quietly: take any local branch, hand the probe that
+    // branch's own tip, and the branch must come back. A probe git rejects (a misspelled option, a
+    // format this parser cannot read) answers `null` for every carrier, which is fail-closed and
+    // would red the gate -- but it would red it with the wrong cause, which is how #439 cost a day.
+    {
+      const branches = git("for-each-ref", "--format=%(refname:short)", "refs/heads/").split(/\r?\n/).filter(Boolean);
+      if (branches.length) {
+        const anyBranch = branches[0];
+        const contains = containingBranchesVia((c) =>
+          git("for-each-ref", "--format=%(refname:short)", `--contains=${c}`, "refs/heads/"),
+        )(git("rev-parse", anyBranch));
+        expect(
+          contains,
+          `rule C's containment probe could not be taken against this repository at all, so every ` +
+            `detached checkout below is reported stranded for want of a measurement rather than for ` +
+            `want of a ref. Fix the probe before reading its verdict.`,
+        ).not.toBeNull();
+        expect(
+          contains,
+          `rule C asked which local branches contain \`${anyBranch}\`'s own tip and was told ` +
+            `${JSON.stringify(contains)}. A branch always contains its own tip, so the probe is not ` +
+            `measuring containment -- and a probe that finds nothing calls every detached checkout stranded.`,
+        ).toContain(anyBranch);
+      } else {
+        console.log("rule C: this checkout has no local branches, so the containment probe is unfalsified this run");
+      }
+    }
+
     // Say what the rule DID, every run. After #291 the common case is an empty failing set, and an
     // empty set reported as silence is indistinguishable from a rule that had stopped looking.
-    const stranded = s.atRisk.filter((c) => !c.branch);
+    //
+    // #439: "on a branch" is ANY local branch containing the head, not this checkout's own branch
+    // line -- so the two counts below are no longer the same question, and the detached checkouts a
+    // branch already covers are named as covered rather than counted as losses.
+    const stranded = s.stranded;
+    const covered = s.atRisk.filter((c) => !c.branch && Array.isArray(c.refuge) && c.refuge.length);
     console.log(
       `rule C: ${s.checkouts.length} checkout(s), ${s.ahead.length} ahead of origin/main, ` +
         `${s.atRisk.length} holding commits on no remote ` +
-        `(${s.atRisk.length - stranded.length} of those on a branch, which survives worktree removal), ` +
+        `(${s.atRisk.length - stranded.length - covered.length} of those on their own branch, ` +
+        `${covered.length} detached but contained by a local branch — both survive worktree removal), ` +
         `${stranded.length} stranded on a detached head`,
     );
     // Non-vacuity: an EMPTY carrier list would mean the porcelain parser broke, which is a different
     // fact entirely and must never read as safety.
     expect(s.checkouts.length).toBeGreaterThan(0);
     expect(
-      stranded.map((c) => `${c.name} (+${c.unpushed}) at ${c.path}`),
-      `these checkouts hold commits that exist on NO remote AND on no branch, so the only thing that ` +
-        `knows they exist is the worktree directory itself. Deleting it loses them, and no ` +
+      stranded.map(
+        (c) =>
+          `${c.name} (+${c.unpushed}) at ${c.path}` +
+          // Named apart, because they are different findings with different remedies: one needs a
+          // ref, the other needs the probe repaired before anyone can know whether it needs one.
+          (c.refuge === null || c.refuge === undefined ? " [containment unmeasurable]" : ""),
+      ),
+      `these checkouts hold commits that exist on NO remote, and no local branch contains their head ` +
+        `either (\`git for-each-ref --contains <sha> refs/heads/\` answered with nothing), so the only ` +
+        `thing that knows they exist is the worktree directory itself. Deleting it loses them, and no ` +
         `origin-facing audit can see them first. Give the work a ref -- \`git branch <name> <sha>\` ` +
         `-- or push it. Recording it in prose is not a fix: prose does not make a commit reachable.`,
     ).toEqual([]);
