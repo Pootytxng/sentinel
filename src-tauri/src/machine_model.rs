@@ -3320,4 +3320,91 @@ mod machine_model_tests {
         let same = crate::hwchange::fingerprint(&hardware());
         assert_eq!(gpu_verdicts(f.baseline.as_ref().unwrap(), &same), 0);
     }
+
+    // ── Wire contract (#449) ──────────────────────────────────────────────
+    //
+    // The frontend's TypeScript copy of this model (`src/types.ts`) is checked against
+    // `src/test/fixtures/machine-model.wire.json` by `src/machine-model-contract.test.ts`. This test
+    // is the other half: the fixture must be exactly what serde emits, so a field added, renamed or
+    // removed here goes red until the fixture (and therefore the TS contract) is updated with it.
+    // To regenerate deliberately, run `COMPY_PRINT_WIRE_FIXTURE=1 cargo test --lib wire_fixture --
+    // --nocapture` and save the JSON printed between the markers. This module never writes a file
+    // (see `composition_module_contains_no_write_or_mutation_call`), not even from a test.
+
+    const WIRE_FIXTURE: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../src/test/fixtures/machine-model.wire.json");
+
+    fn wire_fixture_model() -> MachineModel {
+        let mut f = Fixture::new();
+        // An unknown fact: Windows edition/build could not be read.
+        f.hardware.windows_version = None;
+        // An identity disagreement: the stored baseline holds a different RAM total.
+        f.baseline = Some(crate::hwchange::test_fingerprint(
+            "AMD Ryzen 7 7800X3D",
+            &["Radeon RX 9070 XT"],
+            16,
+        ));
+        let mut applied = crate::history::test_view(
+            "chg-1",
+            "game-mode",
+            "Enable Game Mode",
+            "2026-07-04T09:30:00Z",
+            "applied",
+            true,
+            Some(true),
+            None,
+            true,
+        );
+        applied.restores_label = Some("Game Mode off".into());
+        f.changes.push(applied);
+        f.changes.push(crate::history::test_view(
+            "chg-2",
+            "hags",
+            "Turn on hardware-accelerated GPU scheduling",
+            "2026-07-05T09:30:00Z",
+            "rolled_back",
+            false,
+            None,
+            Some("2026-07-06T09:30:00Z".into()),
+            true,
+        ));
+        f.timeline.push(crate::intelligence::EventRecord {
+            id: "obs:gpu-driver-change:2026-08-20T00:00:00Z".into(),
+            timestamp: "2026-08-20T00:00:00Z".into(),
+            event_type: "gpu-driver-change".into(),
+            source: "identity-snapshot".into(),
+            scope: EventScope::Observed,
+            game: None,
+            summary: "GPU driver changed".into(),
+            detail: Some("25.5.1 to 25.6.0".into()),
+            observed_between: Some((
+                "2026-08-01T10:00:00Z".into(),
+                "2026-08-20T00:00:00Z".into(),
+            )),
+            since_rolled_back: false,
+            rec_id: None,
+        });
+        f.model()
+    }
+
+    #[test]
+    fn wire_fixture_matches_what_serde_emits() {
+        let m = wire_fixture_model();
+        // The fixture must carry the states the frontend has to render honestly.
+        assert!(m.identity.windows.is_unknown(), "fixture needs an unknown fact");
+        assert!(!m.identity.disagreements.is_empty(), "fixture needs an identity disagreement");
+
+        let emitted = serde_json::to_string_pretty(&m).expect("model serializes") + "\n";
+        if std::env::var_os("COMPY_PRINT_WIRE_FIXTURE").is_some() {
+            println!("----- BEGIN machine-model.wire.json -----\n{emitted}----- END -----");
+        }
+        let on_disk = std::fs::read_to_string(WIRE_FIXTURE)
+            .expect("src/test/fixtures/machine-model.wire.json is missing")
+            .replace("\r\n", "\n");
+        assert!(
+            on_disk == emitted,
+            "the Machine Model wire shape changed. Update src/types.ts, then regenerate the fixture \
+             with COMPY_PRINT_WIRE_FIXTURE=1 and re-run src/machine-model-contract.test.ts"
+        );
+    }
 }
