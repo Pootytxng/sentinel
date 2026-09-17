@@ -431,8 +431,12 @@ pub(crate) struct ChronologyEntry {
 }
 
 /// Answer B: the supplied chronology, not every history source Compy retains.
-/// Production build includes applied changes and identity snapshots only (#393); coverage travels
-/// with the serialized answer so totals and time boundaries cannot imply the omitted sources.
+/// The production build assembles it from every producer the intelligence timeline consults
+/// (#393): the Trust Ledger, monitored sessions, the live Gaming Mode slot, the scoreboard, the
+/// Lab baseline, the latest A/B comparison, identity snapshots and drift notices. Coverage travels
+/// with the serialized answer so totals and time boundaries say what the view holds. Single-slot
+/// producers (Gaming Mode slot, Lab baseline, A/B comparison) contribute their CURRENT record only:
+/// overwritten history is gone and is never reconstructed.
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct ChangeChronology {
     /// The earliest evidence in the supplied sources: the
@@ -454,7 +458,8 @@ pub(crate) struct ChangeChronology {
     pub identity_history_from: Option<String>,
     pub identity_snapshots: usize,
     pub total_events: usize,
-    /// Explicit production producer scope; also rendered beside counts and newest/oldest dates.
+    /// Explicit production producer scope, tied to the wiring by test rather than by prose; also
+    /// rendered beside counts and newest/oldest dates.
     pub coverage_note: &'static str,
     /// Newest first, capped at [`MAX_CHRONOLOGY`] for DISPLAY only. `total_events` and
     /// `recorded_from` above cover the whole supplied record, and so does the evidence pass:
@@ -469,7 +474,7 @@ pub(crate) struct ChangeChronology {
 }
 
 const CAUSATION_NOTE: &str = "Chronology never implies causation by itself. These entries say what was recorded and when, not what caused what.";
-const CHRONOLOGY_COVERAGE: &str = "This view includes Compy-applied changes and identity snapshots only. It excludes sessions, gaming slots, awards, benchmark baselines, comparisons and drift notices.";
+const CHRONOLOGY_COVERAGE: &str = "This view includes Compy-applied changes, monitored sessions, the live Gaming Mode slot, verified wins, the current Lab baseline, the latest A/B comparison, identity snapshots and drift notices. Single-slot sources show their current record only.";
 const CHRONOLOGY_EMPTY: &str = "No events are recorded in this view. An empty view is not evidence that nothing changed or that other history is empty.";
 const LEDGER_EMPTY: &str = "The Trust Ledger has no rows, so Compy has recorded no change on this machine.";
 
@@ -1232,6 +1237,43 @@ fn compose_evidence(
 
 // ─── Gathering (the only impure half) ────────────────────────────────────
 
+/// Every producer the chronology is assembled from, read ONCE by [`build`] and mapped onto the
+/// assembler's input shape by [`ChronologyProducers::timeline_inputs`]. Before this seam existed,
+/// six of the eight were hard-coded empty in `build` (#393), so a session, verified win, Lab
+/// baseline, A/B verdict or drift notice newer than the newest applied change never reached the
+/// chronology and "Most recent" named the wrong event: false, not merely partial. The map below is
+/// the only place a producer can be dropped, and `chronology_coverage_names_every_wired_producer`
+/// fails when one is.
+struct ChronologyProducers {
+    applied: Vec<crate::history::AppliedChange>,
+    sessions: Vec<crate::sessions::SessionSummary>,
+    /// Live Gaming Mode slot, if any: (started_at, human status label).
+    gaming_slot: Option<(String, &'static str)>,
+    awards: Vec<crate::benchmark_scoreboard::AwardEntry>,
+    benchmark_baseline_at: Option<String>,
+    comparison: Option<crate::comparison::ComparisonResult>,
+    snapshots: Vec<IdentitySnapshot>,
+    drift_notices: Vec<crate::drift::DriftNotice>,
+}
+
+impl ChronologyProducers {
+    /// Borrow every producer into the assembler's input shape. No field is dropped or replaced by
+    /// an empty literal here; the coverage guard proves that by pushing one record per producer
+    /// through this exact function.
+    fn timeline_inputs(&self) -> crate::intelligence::TimelineInputs<'_> {
+        crate::intelligence::TimelineInputs {
+            applied: &self.applied,
+            sessions: &self.sessions,
+            gaming_slot: self.gaming_slot.clone(),
+            awards: &self.awards,
+            benchmark_baseline_at: self.benchmark_baseline_at.clone(),
+            comparison: self.comparison.as_ref(),
+            snapshots: &self.snapshots,
+            drift_notices: &self.drift_notices,
+        }
+    }
+}
+
 /// Read every canonical producer once and compose. READ-ONLY by construction: each call below is a
 /// documented reader. In particular it uses `intelligence::load_store` rather than
 /// `get_intelligence_timeline` (which refreshes and writes snapshots) and
@@ -1240,7 +1282,6 @@ fn compose_evidence(
 pub(crate) fn build() -> MachineModel {
     let hardware = crate::hardware::get_hardware_info();
     let live_fingerprint = crate::hardware::current_fingerprint();
-    let snapshots = crate::intelligence::load_store().identity_snapshots;
     let baseline = crate::hwchange::persisted_baseline();
     // ONE ledger read, both projections derived from it. Reading twice — raw rows here, the view
     // through the ledger's own command — let an apply or rollback land BETWEEN the reads and compose
@@ -1251,21 +1292,33 @@ pub(crate) fn build() -> MachineModel {
     let raw_changes = crate::history::load_history().unwrap_or_default();
     let applied_changes = crate::history::applied_change_views(&raw_changes);
 
-    let assembly = crate::intelligence::assemble_timeline(&crate::intelligence::TimelineInputs {
-        applied: &raw_changes,
-        sessions: &[],
-        gaming_slot: None,
-        awards: &[],
-        benchmark_baseline_at: None,
-        comparison: None,
-        snapshots: &snapshots,
-        drift_notices: &[],
-    });
+    // Every other producer the intelligence timeline consults (#393), read the way
+    // `intelligence::gather` reads it, each exactly once. Each is a documented reader:
+    // `load_session`, `benchmark_state`, `latest_result` and `active_drift_notices` only read
+    // their store; `get_session_summaries` and `scoreboard` also set an UNPARSEABLE store aside as
+    // `*.json.corrupt` on load, the same quarantine-on-corrupt shape as `intelligence::load_store`
+    // and the ledger read above. None persists, refreshes, probes or mutates Windows state.
+    let producers = ChronologyProducers {
+        applied: raw_changes,
+        sessions: crate::sessions::get_session_summaries(),
+        gaming_slot: crate::gaming_session::load_session().map(|f| {
+            (
+                f.started_at.clone(),
+                crate::intelligence::gaming_status_label(f.status),
+            )
+        }),
+        awards: crate::benchmark_scoreboard::scoreboard().awards,
+        benchmark_baseline_at: crate::benchmark::benchmark_state().baseline_at,
+        comparison: crate::comparison::latest_result(),
+        snapshots: crate::intelligence::load_store().identity_snapshots,
+        drift_notices: crate::drift::active_drift_notices(),
+    };
+    let assembly = crate::intelligence::assemble_timeline(&producers.timeline_inputs());
 
     compose(&MachineModelInputs {
         hardware: &hardware,
         live_fingerprint: &live_fingerprint,
-        identity_snapshots: &snapshots,
+        identity_snapshots: &producers.snapshots,
         hw_baseline: baseline.as_ref(),
         applied_changes: &applied_changes,
         timeline: &assembly.events,
@@ -1341,6 +1394,102 @@ mod machine_model_tests {
         baseline: Option<HardwareFingerprint>,
         changes: Vec<AppliedChangeView>,
         timeline: Vec<crate::intelligence::EventRecord>,
+    }
+
+    // ── Producer-seam fixtures (#393) ─────────────────────────────────────
+    //
+    // Raw producer rows go through the SAME seam `build()` uses (`ChronologyProducers` →
+    // `timeline_inputs()` → the assembler → `compose`), so these tests exercise the production
+    // mapping rather than a hand-built timeline. Rows are built through serde where the type
+    // derives it, so a fixture names only the fields the assembler reads and every additive field
+    // takes its declared default.
+
+    fn ledger_row(id: &str, title: &str, applied_at: &str) -> crate::history::AppliedChange {
+        serde_json::from_value(serde_json::json!({
+            "id": id,
+            "rec_id": id,
+            "rec_title": title,
+            "applied_at": applied_at,
+            "snapshot": null,
+            "status": "applied",
+        }))
+        .expect("ledger row fixture")
+    }
+
+    fn session_row(started_at: &str) -> crate::sessions::SessionSummary {
+        serde_json::from_value(serde_json::json!({
+            "started_at": started_at,
+            "duration_secs": 600,
+            "process_name": "game.exe",
+            "samples": 600,
+            "avg_fps": 120.0,
+            "avg_frametime_ms": 8.3,
+            "low1_fps_est": 90.0,
+            "compy_changes_active": 0,
+        }))
+        .expect("session fixture")
+    }
+
+    fn award_row(at: &str) -> crate::benchmark_scoreboard::AwardEntry {
+        serde_json::from_value(serde_json::json!({
+            "points": 10,
+            "rec_id": "game-mode",
+            "rec_title": "Enable Game Mode",
+            "metric": "1% low",
+            "effect_pct": 4.2,
+            "ci_lo_pct": 1.1,
+            "ci_hi_pct": 7.3,
+            "at": at,
+        }))
+        .expect("award fixture")
+    }
+
+    fn comparison_row(at: &str) -> crate::comparison::ComparisonResult {
+        serde_json::from_value(serde_json::json!({
+            "rec_id": "game-mode",
+            "rec_title": "Enable Game Mode",
+            "game": "game.exe",
+            "baseline_avg_fps": 110.0,
+            "baseline_low1_fps": 80.0,
+            "after_avg_fps": 118.0,
+            "after_low1_fps": 88.0,
+            "delta_avg_pct": 7.3,
+            "delta_low1_pct": 10.0,
+            "noise_floor_pct": 3.0,
+            "verdict": "improved",
+            "at": at,
+        }))
+        .expect("comparison fixture")
+    }
+
+    fn producers() -> ChronologyProducers {
+        ChronologyProducers {
+            applied: Vec::new(),
+            sessions: Vec::new(),
+            gaming_slot: None,
+            awards: Vec::new(),
+            benchmark_baseline_at: None,
+            comparison: None,
+            snapshots: Fixture::new().snapshots,
+            drift_notices: Vec::new(),
+        }
+    }
+
+    /// Compose from raw producers exactly as `build()` does, minus the disk and hardware reads.
+    fn model_from(p: &ChronologyProducers) -> MachineModel {
+        let assembly = crate::intelligence::assemble_timeline(&p.timeline_inputs());
+        let views = crate::history::applied_change_views(&p.applied);
+        let f = Fixture::new();
+        compose(&MachineModelInputs {
+            hardware: &f.hardware,
+            live_fingerprint: &f.fingerprint,
+            identity_snapshots: &p.snapshots,
+            hw_baseline: None,
+            applied_changes: &views,
+            timeline: &assembly.events,
+            timeline_dropped: assembly.dropped_unparseable,
+            built_at: "2026-09-06T12:00:00Z".into(),
+        })
     }
 
     impl Fixture {
@@ -2065,7 +2214,7 @@ mod machine_model_tests {
     // ── 7. The command and the diagnostics section share ONE model ────────
 
     #[test]
-    fn partial_chronology_is_scoped_in_api_and_rendered_diagnostics() {
+    fn chronology_scope_travels_in_api_and_rendered_diagnostics() {
         let mut f = Fixture::new();
         for populated in [false, true] {
             if populated {
@@ -2079,8 +2228,10 @@ mod machine_model_tests {
             let m = f.model();
             let wire = serde_json::to_value(&m).unwrap();
             let coverage = wire["chronology"]["coverage_note"].as_str().unwrap_or("");
-            assert!(coverage.contains("Compy-applied changes and identity snapshots only"), "{coverage}");
-            assert!(coverage.contains("excludes sessions"), "{coverage}");
+            assert!(coverage.contains("monitored sessions"), "{coverage}");
+            assert!(coverage.contains("identity snapshots"), "{coverage}");
+            assert!(coverage.contains("current record only"), "{coverage}");
+            assert!(!coverage.contains("excludes"), "{coverage}");
             let entries = rendered_entries(&m);
             let (_, value, note) = entry_by_label(&entries, "Recorded changes");
             assert!(value.contains("events in this view"), "{value}");
@@ -2093,6 +2244,106 @@ mod machine_model_tests {
             }
             let (_, _, boundary) = entry_by_label(&entries, "Earliest dated record");
             assert!(boundary.contains("in this view"), "{boundary}");
+        }
+    }
+
+    // ── 8. Every producer reaches the chronology (#393) ───────────────────
+
+    /// RED first for #393: with six of eight producers hard-coded empty, a session newer than the
+    /// newest applied change never reached the chronology, so `entries.first()` named the applied
+    /// change as "Most recent" (false, not partial) and `total_events` counted one producer. Through
+    /// the production seam, the newer producer event leads and the total counts every wired row.
+    #[test]
+    fn newer_producer_event_leads_the_chronology_and_total_counts_wired_producers() {
+        let mut p = producers();
+        p.applied.push(ledger_row("chg-1", "Enable Game Mode", "2026-08-10T10:00:00Z"));
+        p.sessions.push(session_row("2026-08-12T20:00:00Z"));
+        let m = model_from(&p);
+
+        assert_eq!(m.chronology.total_events, 2, "one applied change + one session");
+        let first = m.chronology.entries.first().expect("newest entry");
+        assert_eq!(first.source, "sessions", "{}", first.summary);
+        assert_eq!(first.observed_at, "2026-08-12T20:00:00Z");
+        assert_eq!(m.chronology.entries[1].source, "trust-ledger");
+        assert_eq!(m.chronology.entries[1].observed_at, "2026-08-10T10:00:00Z");
+    }
+
+    /// CHRONOLOGY_COVERAGE is tied to the wiring, not to prose. One record per producer goes
+    /// through the same seam `build()` uses: every producer must surface, the total must count each
+    /// one, and the coverage note must name each source that surfaced. A producer silently dropped
+    /// from `timeline_inputs` fails the first assertion; a note that stops naming one fails the
+    /// second; and the structural half fails when `build()` stops reading one through its accessor
+    /// or feeds the seam an empty literal again.
+    #[test]
+    fn chronology_coverage_names_every_wired_producer() {
+        let mut p = producers();
+        p.applied.push(ledger_row("chg-1", "Enable Game Mode", "2026-08-02T10:00:00Z"));
+        p.drift_notices.push(crate::drift::DriftNotice {
+            id: "game-mode".into(),
+            label: "Game Mode".into(),
+            last_ready_at: Some("2026-08-02T10:00:00Z".into()),
+            noticed_at: "2026-08-03T10:00:00Z".into(),
+        });
+        p.sessions.push(session_row("2026-08-04T10:00:00Z"));
+        p.gaming_slot = Some(("2026-08-05T10:00:00Z".into(), "active"));
+        p.awards.push(award_row("2026-08-06T10:00:00Z"));
+        p.benchmark_baseline_at = Some("2026-08-07T10:00:00Z".into());
+        p.comparison = Some(comparison_row("2026-08-08T10:00:00Z"));
+        // A second snapshot whose driver differs is the one identity delta the scan reports.
+        p.snapshots.push(snap("2026-08-09T10:00:00Z", "Radeon RX 9070 XT", "25.6.1", 32, "abc123"));
+        let m = model_from(&p);
+
+        // (source as the assembler stamps it, phrase the coverage note must carry for it)
+        const WIRED: [(&str, &str); 8] = [
+            ("trust-ledger", "Compy-applied changes"),
+            ("sessions", "monitored sessions"),
+            ("gaming-session", "live Gaming Mode slot"),
+            ("scoreboard", "verified wins"),
+            ("benchmark", "current Lab baseline"),
+            ("comparison", "latest A/B comparison"),
+            ("identity-snapshot", "identity snapshots"),
+            ("drift-watch", "drift notices"),
+        ];
+        let sources: std::collections::BTreeSet<&str> =
+            m.chronology.entries.iter().map(|e| e.source.as_str()).collect();
+        for (source, phrase) in WIRED {
+            assert!(sources.contains(source), "producer {source} never reached the chronology: {sources:?}");
+            assert!(
+                CHRONOLOGY_COVERAGE.contains(phrase),
+                "coverage note no longer names {source} as {phrase:?}: {CHRONOLOGY_COVERAGE}"
+            );
+        }
+        assert_eq!(sources.len(), WIRED.len(), "{sources:?}");
+        assert_eq!(m.chronology.total_events, WIRED.len(), "one record per producer");
+        assert_eq!(m.chronology.entries.first().map(|e| e.source.as_str()), Some("identity-snapshot"));
+        assert!(!CHRONOLOGY_COVERAGE.contains("excludes"), "{CHRONOLOGY_COVERAGE}");
+
+        // Structural half: `build()` reads every producer through its accessor, exactly once, and
+        // hands the seam no empty literal. Needles are assembled at runtime for the reason the
+        // read-only scan above states: a scanner that matches its own source can never fail.
+        let build_src = {
+            let start = OWN_SOURCE.find("pub(crate) fn build() -> MachineModel {").expect("build() present");
+            let body = &OWN_SOURCE[start..];
+            &body[..body.find("\n}\n").expect("build() closes")]
+        };
+        let accessors = [
+            format!("get_session_{}", "summaries()"),
+            format!("load_{}", "session()"),
+            format!("{}()", "scoreboard"),
+            format!("benchmark_{}", "state()"),
+            format!("latest_{}", "result()"),
+            format!("active_drift_{}", "notices()"),
+            format!("timeline_{}", "inputs()"),
+        ];
+        for accessor in accessors {
+            assert_eq!(
+                build_src.matches(accessor.as_str()).count(),
+                1,
+                "build() must read the {accessor} producer exactly once"
+            );
+        }
+        for empty in [format!("&{}", "[]"), format!(": {}", "None"), format!("Vec::{}", "new()")] {
+            assert!(!build_src.contains(empty.as_str()), "build() feeds the seam {empty} instead of a producer");
         }
     }
 

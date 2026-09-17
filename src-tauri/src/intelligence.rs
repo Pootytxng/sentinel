@@ -2190,7 +2190,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
 
 // ─── Commands (read-only) ────────────────────────────────────────────────
 
-fn gaming_status_label(s: crate::gaming_session::SessionStatus) -> &'static str {
+pub(crate) fn gaming_status_label(s: crate::gaming_session::SessionStatus) -> &'static str {
     use crate::gaming_session::SessionStatus as S;
     match s {
         S::Active => "active",
