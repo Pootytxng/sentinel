@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` has two commits, a216e5c7 and fed5716f. Both were written by a remote Claude Code session under the #393 claim 5698283012 (released by Handoff 5704196258); they carry the shared Pootytxng account identity because that session committed from a cloud container. claude-code is therefore the sole mutation author. The landing is run by a separate claude-code session on the owner's chat order of 2026-09-17 (\"review and merge #436\"). It writes no code, only these receipts.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/393#issuecomment-5715398289",
+  "leaseEvidenceNote": "Landing claim 5715398289 on #393 (2026-09-17T13:45Z). It takes over from Cowork's gate-lane claim 5711798330, whose stated work (run the gate on fed5716f, post the log, stop) finished per PR comment 5711820357. Folder C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a, local branch claude/land-436 created at the reviewed head. The PR branch itself is checked out in C:/Users/Kuya/code/sentinel-gate-436, and no ref on origin was moved.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-17T13:40Z with `gh pr list --state open --json files`: open PRs 444 and 438 touch neither src-tauri/src/machine_model.rs, src-tauri/src/intelligence.rs nor these receipts. No open PR is based on claude/machine-model-chronology-4dt6sk.",
+  "inheritedWork": false,
+  "currentHead": "fed5716f0bafa5eb5c70178be36b1b333eaa5f7a",
+  "pr": 436,
+  "issue": 393,
+  "kind": "lane",
+  "branch": "claude/machine-model-chronology-4dt6sk",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched 2026-09-17T13:40Z. origin/main and `git ls-remote origin refs/heads/main` both read 8e373da02d287de33d7f260fee751c2717b97ebd, which is the PR's base and merge-base, so the merge tree equals the reviewed head's tree. PR head reads fed5716f on GitHub, MERGEABLE/CLEAN, 0 closingIssuesReferences.",
+    "worktree": "Linked worktree, one writer. core.bare reads false.",
+    "branch": "claude/land-436 is a local alias of the PR head fed5716f.",
+    "dirtyState": "`git status --porcelain` was clean before these receipts were written.",
+    "liveProcesses": "No Rust build, app run or npm process was started by this lane."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "fed5716f0bafa5eb5c70178be36b1b333eaa5f7a",
+      "evidence": "C:/Users/Kuya/code/sentinel-gate-436/logs/verify-local-2026-09-17T08-58-36Z.log:14879-14880 (SHA-256 624ee33928f6a611f5d739e32449708a7d4aacd87d4827a617d660f62e7b77df)",
+      "summary": "443 test files passed, 7237 passed / 5 skipped (7242)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "fed5716f0bafa5eb5c70178be36b1b333eaa5f7a",
+      "evidence": "C:/Users/Kuya/code/sentinel-gate-436/logs/verify-local-2026-09-17T08-58-36Z.log:14885-14910 (SHA-256 624ee33928f6a611f5d739e32449708a7d4aacd87d4827a617d660f62e7b77df)",
+      "summary": "frontend type-check and build stage; vite built clean."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "fed5716f0bafa5eb5c70178be36b1b333eaa5f7a",
+      "evidence": "C:/Users/Kuya/code/sentinel-gate-436/logs/verify-local-2026-09-17T08-58-36Z.log:14912-16263 (SHA-256 624ee33928f6a611f5d739e32449708a7d4aacd87d4827a617d660f62e7b77df)",
+      "summary": "1320 passed; 0 failed; 24 ignored; 0 filtered out."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "fed5716f0bafa5eb5c70178be36b1b333eaa5f7a",
+      "evidence": "C:/Users/Kuya/code/sentinel-gate-436/logs/verify-local-2026-09-17T08-58-36Z.log:16278-16280 (SHA-256 624ee33928f6a611f5d739e32449708a7d4aacd87d4827a617d660f62e7b77df)",
+      "summary": "Clippy stage Finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is Cowork's run of `scripts/verify-local.ps1` at this exact head in C:/Users/Kuya/code/sentinel-gate-436 (`git rev-parse HEAD` there = fed5716f, re-read 2026-09-17T13:40Z), reported in PR comment 5711820357. The landing lane re-read the log itself: SHA-256 matches the comment, and it has all six LOCAL CHECK stage markers (lines 3, 5, 8, 14885, 14912, 16278). No `test result: FAILED`, `panicked` or `error[E` line; the single FAILED match (line 12726) is a GamingMode test name printed to stderr, not a failure. The console PASS line is not in the file; the stage results above are. The log has 16280 lines against the comment's 16240, a line-count method difference; the hash matches. Main has not moved since the base, so no separate merge-tree gate is needed. The receipt carrier is pushed to main through the full pre-push gate.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "log line 6: not measured (no session record). Cowork measured it explicitly: `node scripts/scope-drift-gate.mjs --issue 393 --refresh` returned OK, with both changed paths inside machine_model.rs and intelligence.rs (comment 5711820357)."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "fed5716f0bafa5eb5c70178be36b1b333eaa5f7a",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/436#issuecomment-5715396402",
+    "reviewerNote": "A reviewer-only seat that authored nothing in this delta. It checked producer parity with intelligence::gather(), the single ledger read, read-only accessors, lock behaviour, panics on the command path, that the tests use the production seam, and the coverage text. The earlier review 5710230338 comes from a Claude Code lane, the same canonical identity as the author, so it is not relied on."
+  },
+  "transition": "merge-pr",
+  "mergeMethodNote": "`node scripts/land-pr.mjs --pr 436 --receipt .claude/work-control/2026-09-17-merge-pr-436.json`, after a --dry-run. That is a true merge commit and a prune of the remote ref, with no --delete-branch and no worktree removal.",
+  "dependentsNote": "No open PR is based on claude/machine-model-chronology-4dt6sk. The local checkout in sentinel-gate-436 keeps its branch.",
+  "closingNote": "0 closingIssuesReferences, so the merge closes nothing. #393 stays open for its owner to close under its own receipt."
+}
