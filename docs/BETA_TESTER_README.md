@@ -1,174 +1,210 @@
 # Compy — Private Beta Tester Guide
 
-Thanks for helping test Compy. This guide gets you installed, walks you through the one scary
-dialog, and tells you exactly what we want from you (about 20 minutes of honesty).
+About 20 minutes. One install, one first screen, one change (or Gaming Mode),
+one game, one undo. Honesty over a tour of every room.
+
+This guide matches **published Compy 0.9.26**. If a room name here does not
+appear in the app, you have an older build — see §2.
 
 ---
 
 ## 1. What Compy is
 
-**Compy finds what's actually slowing your gaming PC down — and fixes the fixable, with an undo
-button on everything.** It reads your real hardware (not a generic checklist), tells you in plain
-English what's worth changing for *your* rig, what's already fine, and — this is the part we're
-proudest of — **it tells you honestly when a change did nothing.** No fake "+20% FPS," no invented
-score, no drama.
+Compy reads *your* hardware and tells you what is worth changing on this PC.
+Every change it applies can be undone. It will also tell you when a change did
+nothing. That is not a bug.
 
-It is **not** an FPS booster and it doesn't promise frames. If your PC is already in good shape,
-Compy's job is to say so and leave it alone.
+It is not an FPS booster and it does not promise frames. If the PC is already
+fine, its job is to say so and leave it alone.
 
 ---
 
-## 2. The scary dialog (read this BEFORE installing)
+## 2. Install (do this first if you still have 0.9.0 / 0.1.0)
 
-When you run the installer, **Windows SmartScreen will probably show a blue warning**:
+Those old builds **cannot update themselves**. One install puts you on the
+updater path for good.
 
-> **"Windows protected your PC"** — Microsoft Defender SmartScreen prevented an unrecognized app
-> from starting. *Unknown publisher.*
+**Download:** [github.com/Pootytxng/compy-releases/releases/latest](https://github.com/Pootytxng/compy-releases/releases/latest)
 
-**This is expected, and you deserve to know exactly why:** Windows shows it for any app that isn't
-code-signed, and code-signing certificates cost money — this beta is free, unsigned, and hasn't
-earned its keep yet. Signing happens before any public release.
+Grab `Compy_0.9.26_x64-setup.exe`. Installing over an older copy keeps your
+history and settings.
 
-What the warning does NOT mean: it's not a virus flag, and it doesn't change what the app can do.
-For the record, here's what Compy deliberately never does — no game injection, no account, and
-nothing about your system is uploaded anywhere. The current build installs no kernel driver either.
-The one thing it does reach out for is its own update check, signed and described in section 6.
+Optional hash check:
 
-**To proceed:** click **More info** → **Run anyway.**
+```powershell
+Get-FileHash .\Compy_0.9.26_x64-setup.exe -Algorithm SHA256
+```
 
----
+`v0.9.26` should return
+`4B72D68120F2A2601D87B814ACCDB25C0E18B20AA79ADB63C9040BF9A9294E98`.
 
-## 3. Install
+### The scary dialog (read before you click)
 
-Installer: **`Compy_0.1.0_x64-setup.exe`** (private beta — please don't share it publicly)
+Windows SmartScreen will probably show a blue **"Windows protected your PC"**
+box — *Unknown publisher.*
 
-1. Run the installer (installs per-user; no admin needed).
-2. SmartScreen → **More info** → **Run anyway** (see section 2).
-3. Launch **Compy** from the Start Menu.
+That is expected. This beta is unsigned. A code-signing certificate is a paid
+step that has not happened yet. The warning is not Defender saying it found
+malware.
 
-You may see a **UAC prompt later** — only if you turn on FPS monitoring or apply certain
-recommendations. That's the elevated helper doing its job; "unknown publisher" there is the same
-unsigned-beta reason.
+**More info → Run anyway.**
 
----
-
-## 4. Anti-cheat: the answer to the question you're already asking
-
-Compy **never injects into games**. FPS is captured from *outside* the game via Windows' own event
-tracing (the same mechanism Microsoft's tools use), and the overlay is a separate window — it
-draws over borderless/windowed games only, never exclusive fullscreen. There is nothing for
-Vanguard, EAC, or BattlEye to object to, because Compy never touches the game process. Play
-ranked with it running; that's the design.
+Install is per-user. No admin prompt at install time. You may see UAC later,
+only if you turn on FPS monitoring or apply a change that needs elevation.
+Same unsigned-publisher reason there.
 
 ---
 
-## 5. The guided tour (the main thing to test)
+## 3. Anti-cheat
 
-Compy now opens with a guided first-experience. **Please go in blind and note where it loses you
-— first impressions are the data we can't get twice:**
-
-1. **Onboarding** (3 quick steps — it should read your actual rig on the first screen).
-2. **First check** — a fast scan with a verdict: what's worth fixing, what's already fine.
-3. **Apply the #1 fix** if you're comfortable (one click — and note the Trust Ledger entry it
-   leaves in **Fix**; everything is undoable from there).
-4. **Play something** — your normal game, with FPS monitoring on from **Play** (accept the UAC
-   prompt).
-5. **Open Play afterward** — your session is in the list, and clicking it unfolds a plain-English
-   debrief right there.
-6. If you applied the fix in step 3 and chose "compare next session": **play the same game again**
-   and the next debrief will show an honest verdict — improved, no measurable change, or
-   regressed. **"No measurable change" is not a bug.** It's the product refusing to lie to you.
-7. **Roll something back** from the Trust Ledger (in **Fix**) and confirm your setting came back
-   exactly.
-
-The map, if you ever feel lost — six rooms on the left rail: **Home** (the overview) · **Check**
-(scan your rig, see what's worth fixing) · **Play** (live monitoring, overlay, your session
-debriefs) · **Fix** (changes + the Trust Ledger) · **Learn** (the Library — every tweak and scam,
-graded) · **Lab** (Benchmark + Latency instruments). Export lives in the header; Settings is the
-gear — **Appearance has three themes; tell us which one you ended up keeping.**
+Compy never injects into games. FPS is captured from outside the game via
+Windows event tracing. The overlay is a separate window — it draws over
+borderless/windowed games, not exclusive fullscreen. Play ranked with it
+running; that is the design. We still do not promise a given anti-cheat will
+never complain about an overlay or ETW.
 
 ---
 
-## 6. Privacy
+## 4. The 20-minute path
 
-No telemetry, no account, no data about your machine sent anywhere. **Nothing about your system
-leaves your PC unless you choose to send it to us.** Export reports are local files; review one
-before sharing — it contains hardware names and app state, nothing else.
+Go in blind. Note where it loses you. Do **not** hunt old room names
+(Check / Play / Fix / Learn / Lab). The rail is:
 
-Compy does make exactly one outbound call, and you should know about it: it asks GitHub whether a
-newer signed version exists, and downloads it only with your say-so. That check sends no
-information about your machine, and you can switch it off in Settings.
+**Health · Live · History · Test**
+
+Stay on Health until the first verdict makes sense.
+
+### Minutes 0–7 — Health (the front door)
+
+1. Launch Compy from the Start menu.
+2. Stay on **Health**. It should name your actual CPU and GPU.
+3. Read the verdict in one sentence: fine / one thing to do / unsure.
+4. If the first screen is a catalog of rooms instead of a verdict, stop and
+   screenshot. That is the bug.
+
+### Minutes 7–12 — one change, not a stack
+
+Pick **one**:
+
+- **Gaming Mode** (preferred if offered): session-scoped — applies while you
+  play, restores when you stop. Note the UAC text. Play anything for about
+  five minutes. Quit. Confirm Discord / overlays / startup stuff feel normal
+  again.
+- **The #1 recommended fix**, only if the copy says it can be undone. Apply
+  that one. Do not apply a stack. Skip Test's experiment bench unless you are
+  an enthusiast who already knows what it is.
+
+If you cancel UAC, **nothing should have changed**. If something changed
+anyway, stop and tell us — that is a P0.
+
+### Minutes 12–18 — play, then Live
+
+Normal game, **borderless or windowed** (overlay will not sit on exclusive
+fullscreen).
+
+- Overlay should be a tiny HUD, not a second control panel.
+- After you quit, open **Live**. There should be a debrief in plain English.
+- "No measurable change" is a pass, not a fail.
+
+### Minutes 18–20 — undo + export
+
+- Roll the one change back from **History** (or confirm Gaming Mode already
+  restored).
+- Export (header). It writes Markdown + JSON locally. Read it before sending —
+  it contains hardware names.
+
+Settings → Appearance has multiple themes. Tell us which one you kept.
 
 ---
 
-## 7. What we want back from you (the actual ask)
+## 5. Privacy
 
-1. **An Export report** after you've played a session or two (Export button → it writes Markdown +
-   JSON locally → send us both if you're comfortable).
-2. **One sentence:** *how would you describe Compy to a friend?* Don't overthink it — your first
-   phrasing is the valuable one.
-3. **Anything that confused you, scared you, or broke.** Screenshot + what you clicked + what you
-   expected. The template below covers it.
-4. **On NVIDIA?** You're extra valuable — our NVIDIA monitoring is implemented but not yet
-   verified on real hardware (AMD is). Tell us everything that looks wrong.
+No account. Nothing about your system leaves the PC unless you choose to send
+it. Export reports are local files.
 
-Send everything back **in the same chat where you got this kit** — screenshots, exports, and
-complaints all welcome.
+Compy makes **one** automatic network call: it asks GitHub whether a newer
+signed-update package exists
+(`https://github.com/Pootytxng/compy-releases/releases/latest/download/latest.json`).
+That check sends no hardware inventory. GitHub still sees ordinary connection
+metadata (your IP) under GitHub's terms. You can switch the check off in
+**Settings → About**. Nothing downloads until you click Update now.
+
+"Signed" here means Compy's own update signature, not a Windows Authenticode
+publisher name. SmartScreen will still warn until the installer is
+code-signed.
 
 ---
 
-## 8. Known limitations (honesty section)
+## 6. What we want back
 
-- **No CPU temperature** — reading it needs a kernel driver, and this build ships none. (GPU
-  temperature works.)
+Five lines is enough. Send it in the same chat that gave you this kit.
+
+```
+Hardware shown: correct / wrong / missing
+Front door: clear / confusing
+What I did: Gaming Mode / one apply / neither
+Undo: worked / failed / didn't try
+One sentence to a friend:
+Scared me / lost me at:
+```
+
+On NVIDIA? Extra useful — NVIDIA monitoring is implemented but not yet
+verified on real hardware (AMD is). Tell us everything that looks wrong.
+
+Optional longer template is at the bottom if you want it.
+
+---
+
+## 7. Known limits (honesty)
+
+- **No CPU temperature** — that needs a kernel driver. This build ships none.
+  GPU temperature works.
 - **1% low is a live estimate**, not benchmark-grade.
-- **Comparison verdicts need two sessions of the same game** — different games don't compare.
-- **Overlay**: borderless/windowed only, not exclusive fullscreen.
-- **NVIDIA**: implemented, not yet hardware-verified (see section 7).
-- **Gaming Mode is not in this build** — it exists but stays off until it passes its own safety QA.
+- **Comparison verdicts need two sessions of the same game.**
+- **Overlay:** borderless/windowed only.
+- **NVIDIA:** implemented, not hardware-verified.
+- **Gaming Mode is in this build** and is the preferred 20-minute path.
+- **Test** (benchmark / experiments) is optional. Skip it unless you want it.
 
 ---
 
-## 9. Uninstall
+## 8. Uninstall
 
-Windows Settings → Apps → **Compy** → Uninstall. Your Trust Ledger and history are kept in
-`%APPDATA%\Compy` **by design** (so rollback records survive a reinstall — nothing silently lost).
-Delete that folder manually if you want everything gone.
+Windows Settings → Apps → **Compy** → Uninstall.
+
+Your Trust Ledger and history stay in `%APPDATA%\Compy` **by design** so
+rollback records survive a reinstall. Delete that folder yourself if you want
+everything gone. Roll back applied changes *inside* Compy before uninstalling
+if you want the machine returned to how it was.
 
 ---
 
-## 10. Feedback template
+## 9. Optional longer feedback
 
 ```
 Compy beta feedback
 
-Tester: 
+Tester:
 Windows version:
 CPU / GPU / Monitor:
 Install worked: yes/no
-SmartScreen appeared: yes/no — was section 2 enough warning: yes/no
+SmartScreen appeared: yes/no — was §2 enough warning: yes/no
 Onboarding: clear / confusing at step ___
-First check verdict made sense: yes/no
+Health verdict made sense: yes/no
 Hardware detected correctly: yes/no
-Played a session — debrief appeared: yes/no
-Debrief verdict felt accurate to how it played: yes/no
-Tried apply + compare: yes/no — verdict received: improved / no change / regressed / n.a.
+Played a session — Live debrief appeared: yes/no
+Debrief felt accurate: yes/no
+Tried apply + compare: yes/no — verdict: improved / no change / regressed / n.a.
 Rollback restored things exactly: yes/no/not tested
+Gaming Mode restored after quit: yes/no/not tested
 FPS helper + UAC behaved: yes/no
 Export worked: yes/no
-Bug/issue + steps:
+Bug + steps:
 Screenshot/export attached: yes/no
 
---- The part we care about most ---
 Describe Compy to a friend in ONE sentence:
 Did it feel trustworthy: yes/no — why:
-Premium or plain: premium/plain
-Did it reduce the urge to look up random tweak guides: yes/no
-"No measurable change" verdict — honest or annoying: honest/annoying/didn't see it
-Did you find the Library (the Learn tab)? yes/no — what did you search for:
-Which theme did you keep (Settings → Appearance): Midnight / Violet / Crimson / Emerald / Hearth:
+Which theme you kept (Settings → Appearance):
+Did "no measurable change" feel honest or annoying:
 What would make this the only PC-readiness tool you need:
-Other notes:
 ```
-
-Thanks again — your feedback directly shapes what ships.
