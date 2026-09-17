@@ -1297,6 +1297,7 @@ export function verifySession({
     if (pending) claimToken({ dir }, now);
   }
   sweepLineage({ dir, now });
+
   return result;
 }
 
