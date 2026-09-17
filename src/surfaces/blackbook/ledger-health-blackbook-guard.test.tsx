@@ -426,6 +426,56 @@ describe("the tape may not speak for a chronology the model could not fill", () 
   });
 });
 
+// ─────────── ONE FAILURE, ONE VOICE — the defect the visual self-review caught (#450) ───────────
+//
+// bug → guard. The first cut of this slice rendered the chronology's `unknown_reason` whenever it was
+// set, including while `LedgerHealthNotice` was already up for the same unreadable history.json. The
+// self-review's paired fixture showed both boxes back to back, no scroll between them — the amber
+// "Compy can't read its own record right now" followed immediately by the tape's "The Trust Ledger
+// could not be read…". 61e092c2 built that notice so this would be structurally impossible; the
+// chronology is the same file read a second way, so it inherits the rule rather than escaping it.
+//
+// What must hold: while the notice speaks, the tape does not repeat it — AND it still never falls
+// through to a no-change claim, which is the reason the reason was rendered in the first place.
+describe("the room states an unreadable ledger ONCE, whichever read noticed it", () => {
+  const reasoned = chron({ total_events: 4, unknown_reason: UNREADABLE_REASON });
+
+  it("with the notice up, the tape does not print the reason a second time", () => {
+    useReduced();
+    const { container } = mountConsole([change(), session()], UNREADABLE, reasoned);
+
+    // The disclosure is there — exactly once, in the element built for it.
+    expect(notice(container)).toBeTruthy();
+    expect(container.querySelectorAll(".ledger-health")).toHaveLength(1);
+    // ...and the tape's footnote fell back to the general caveat instead of echoing it.
+    expect(tapeNote(container)).toBe(CAUSATION);
+    expect(tapeText(container)).not.toContain(UNREADABLE_REASON.toLowerCase());
+  });
+
+  it("an EMPTY tape under the notice narrows, and still never says 'No record yet'", () => {
+    useReduced();
+    const { container } = mountConsole([], UNREADABLE, chron({ unknown_reason: UNREADABLE_REASON }));
+
+    expect(notice(container)).toBeTruthy();
+    // The narrowed copy the notice's own commit introduced — not the model's sentence again...
+    expect(emptyTitle(container)).toBe("Nothing else to show");
+    expect(tapeText(container)).not.toContain(UNREADABLE_REASON.toLowerCase());
+    // ...and not the claim a failed read cannot support either.
+    expect(emptyTitle(container)).not.toBe("No record yet");
+    expect(tapeText(container)).not.toContain("no record yet");
+  });
+
+  it("with the ledger READABLE, the tape is still the only voice the reason has", () => {
+    useReduced();
+    // The honest counter-case: health says the record is complete, yet the model states a reason
+    // (its own producers came up short). Nothing else in the room is saying it, so the tape must.
+    const { container } = mountConsole([change(), session()], HEALTHY, reasoned);
+
+    expect(notice(container)).toBeNull();
+    expect(tapeNote(container)).toBe(UNREADABLE_REASON);
+  });
+});
+
 // Same chain proof as the ledger-health pair above, for the model: probe → prop → rendered claim.
 describe("BlackbookV2 wires the Machine Model to the tape it qualifies", () => {
   async function mountRoomWithModel(chronology: ChangeChronology) {
@@ -441,8 +491,10 @@ describe("BlackbookV2 wires the Machine Model to the tape it qualifies", () => {
   }
 
   it("a chronology the model could not fill reaches the room's empty state", async () => {
-    // The realistic pairing: the same unreadable history.json the health probe reports.
-    ipc.health = UNREADABLE;
+    // Health reads COMPLETE here on purpose. Pairing this with an unreadable-ledger probe would test
+    // the opposite rule — with the notice up the tape defers to it ("one failure, one voice" above),
+    // so the chain from probe to rendered claim is only visible where the tape is the only voice.
+    ipc.health = HEALTHY;
     const { container } = await mountRoomWithModel(chron({ unknown_reason: UNREADABLE_REASON }));
 
     expect(container.querySelector(".bc-empty-sub")?.textContent).toBe(UNREADABLE_REASON);

@@ -518,6 +518,17 @@ describe("chronologyNote — the footnote is the model's sentence, never Compy's
     expect(note).toBe("Chronology never implies causation by itself.");
   });
 
+  // bug → guard (self-review 2026-09-17): the first cut of #450 printed this reason under the rows
+  // while `LedgerHealthNotice` was already printing the same failure above them — two voices for one
+  // unreadable file, which is exactly what 61e092c2 built that notice to prevent.
+  it("while the room already states the failure, the footnote is the caveat — not a second copy", () => {
+    const note = chronologyNote(chron({ unknown_reason: "The Trust Ledger could not be read." }), {
+      unknownStatedElsewhere: true,
+    });
+    expect(note).toBe("Chronology never implies causation by itself.");
+    expect(note).not.toContain("could not be read");
+  });
+
   it("no reason given ⇒ the causation caveat, and an empty caveat is no footnote at all", () => {
     expect(chronologyNote(chron())).toBe("Chronology never implies causation by itself.");
     expect(chronologyNote(chron({ causation_note: "" }))).toBeNull();

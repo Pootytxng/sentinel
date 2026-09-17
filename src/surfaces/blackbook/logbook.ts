@@ -257,10 +257,22 @@ export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookIn
  * Ledger leaves a hole in them), and that qualifier beats a general caveat. With nothing recorded
  * at all the reason belongs to the empty state instead, where it replaces "No record yet" — the
  * room may never render "nothing changed" over a record it could not read.
+ *
+ * `unknownStatedElsewhere` is the room saying it has already disclosed that failure above the rows
+ * (`LedgerHealthNotice`). One failure gets ONE voice: 61e092c2 built that notice precisely so two
+ * surfaces could not warn about the same file in two different wordings, and the chronology's reason
+ * is the same file read a second way — so when the notice is up, the tape keeps the general caveat
+ * and says nothing more. It still never falls back to a no-change claim; that branch is the empty
+ * state's, and it narrows on the same signal.
  */
-export function chronologyNote(chronology: ChangeChronology | null | undefined): string | null {
+export function chronologyNote(
+  chronology: ChangeChronology | null | undefined,
+  { unknownStatedElsewhere = false }: { unknownStatedElsewhere?: boolean } = {},
+): string | null {
   if (!chronology) return null;
-  if (chronology.unknown_reason && chronology.total_events > 0) return chronology.unknown_reason;
+  if (chronology.unknown_reason && chronology.total_events > 0 && !unknownStatedElsewhere) {
+    return chronology.unknown_reason;
+  }
   return chronology.causation_note || null;
 }
 
