@@ -205,7 +205,7 @@ describe("the OTHER half of the store resolves the same folder — scripts/lib/s
   });
 
   it("never hands back a cache path the cwd could move, whatever the environment says", () => {
-    // NOT `isAbsolute`: asked on Linux about `C:\\...` it says false, so a host-dependent assertion
+    // NOT `isAbsolute`: asked on Linux about `C:\...` it says false, so a host-dependent assertion
     // would fail the Windows rows here and the POSIX rows on the owner's desk. The question that
     // actually matters is the one the resolver asks — is this path ROOTED, or would some cwd get to
     // decide where it lands? Spelled out here rather than imported so a resolver that quietly
