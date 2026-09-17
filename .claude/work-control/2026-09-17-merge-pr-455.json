@@ -1,0 +1,94 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #450 work is 9c3c7f0b, ba3e008a, 75cf3f6b and 5ff25fec, written by a claude-code session in the worktree .claude/worktrees/land-pr-387-machine-model-6fe51a under git identity claude-code <claude-code@desk.local>. That session ended after posting its final review and did not merge, stating explicitly that merging was the owner's word and not its own. This is a different claude-code session, in a different folder, landing that work on the owner's chat order of 2026-09-17 (the ChatGPT HQ execution audit the owner handed over, whose named next mutation is \"the already-proven PR #455 landing\"). It writes no product code: its whole write scope is this receipt and the close-issue receipt beside it.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/450#issuecomment-5722102798",
+  "leaseEvidenceNote": "Claim 5722102798 supersedes 5719118594. Same executor and same issue, different folder, because .claude/hooks/project-write-assert refuses a write from this session into the build lane's checkout -- correctly, since a claim covers one checkout. The new claim names this folder, branch claude/450-landing, and a write scope of exactly the two receipt paths. The build lane's folder and its branch claude/450-blackbook-machine-model are untouched by this lease.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-17 with `gh api repos/Pootytxng/sentinel/pulls?state=open` and each PR's files. The only other open PRs are 444 (.claude/hooks, scripts, tools/entry) and 438 (tester docs). Neither touches any path in PR 455 and neither touches this receipt path. No open PR is based on claude/450-blackbook-machine-model -- both other open PRs target main.",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": {
+    "repository": "Pootytxng/sentinel; canonical remote origin. Verified by `git remote -v` in this folder.",
+    "remoteState": "Fetched 2026-09-17 twice, the second time immediately before this receipt. origin/main reads b2bfdbeddc5a2168bafab58431615a172f579216 both times, and `git ls-remote origin refs/heads/claude/450-blackbook-machine-model` reads 5ff25fec. b2bfdbed is the PR's base and its merge-base, so the merge tree equals the reviewed tree. GitHub reads PR 455 as OPEN, MERGEABLE, mergeable_state clean, not draft, with 0 closingIssuesReferences.",
+    "worktree": "Linked worktree .claude/worktrees/hq-handoff-h-2026-09-15-4144e8, one writer. core.bare is false. AT MERGE TIME core.hooksPath was set worktree-locally to the absolute path C:UsersKuyacodesentinel.githooks -- the main checkout's copy, not this one's. This receipt originally concluded that was NOT a guard loss, on two grounds that are both still true: the two .githooks directories were byte-identical (`diff -rq` reported no differences), and .githooks/pre-push resolves the tree it gates from `git rev-parse --show-toplevel` against PWD at push time rather than from the hook's own location. CORRECTED 2026-09-17 before this receipt was ever pushed: that conclusion was wrong by the project's own standard. scripts/hookspath-fleet-guard.test.mjs failed this folder on the first carrier push -- \"this checkout HAS its own .githooks/pre-push, but core.hooksPath points past it\" -- and that guard, not my reasoning, is the authority. Byte-identical today does not make a checkout self-sufficient: git skips a missing or unrunnable hook silently, so if the main checkout's copy were ever moved or changed, a push from here would look identical to a pass. The config was repointed with the exact command the guard prescribes, `git config --worktree core.hooksPath .githooks`, on this checkout only; no other worktree's config was touched, which stays owner-hands. The guard then passed 39/39.",
+    "branch": "claude/450-landing at 5ff25fec, created in this folder from the fetched PR head so that no two checkouts hold one branch. The build lane keeps claude/450-blackbook-machine-model.",
+    "dirtyState": "`git status --porcelain` was empty immediately after the branch was created and again after the reviewer finished, which the reviewer confirmed independently before and after its own run. This receipt is the first and only file this lease writes.",
+    "liveProcesses": "No app run, dev server or build of this lane. No node or claude process holds the build lane's folder (checked with Win32_Process against its path). The pre-push gate that carried 5ff25fec to origin, and the reviewer's scoped test runs, had both finished."
+  },
+  "currentHead": "5ff25fecb4c731e688d0e75ea91833eb3b5bc18b",
+  "pr": 455,
+  "issue": 450,
+  "kind": "lane",
+  "branch": "claude/450-landing",
+  "branchNote": "This folder stands at the PR head on its own branch name purely to bind the receipt to the commit the gate and the review name. Nothing is pushed from this branch; land-pr.mjs merges through the GitHub API and prunes the remote ref.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "5ff25fecb4c731e688d0e75ea91833eb3b5bc18b",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T18-31-52Z.log:8-43 (SHA-256 38ba28ae4afa36e4cabcd596454fdf9743f2fe8cacb85382e7b661b9054a4264)",
+      "summary": "445 test files passed (445); 7273 passed / 4 skipped (7277); 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "5ff25fecb4c731e688d0e75ea91833eb3b5bc18b",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T18-31-52Z.log:44-69 (SHA-256 38ba28ae4afa36e4cabcd596454fdf9743f2fe8cacb85382e7b661b9054a4264)",
+      "summary": "frontend type-check and build stage; vite built clean in 5.79s at :69."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "5ff25fecb4c731e688d0e75ea91833eb3b5bc18b",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T18-31-52Z.log:71-1442 (SHA-256 38ba28ae4afa36e4cabcd596454fdf9743f2fe8cacb85382e7b661b9054a4264)",
+      "summary": "1327 passed across the three `test result: ok` lines; 0 failed."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "5ff25fecb4c731e688d0e75ea91833eb3b5bc18b",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T18-31-52Z.log:1444-1446 (SHA-256 38ba28ae4afa36e4cabcd596454fdf9743f2fe8cacb85382e7b661b9054a4264)",
+      "summary": "The clippy stage compiled and finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of scripts/verify-local.ps1 that carried 5ff25fec to origin. The log's own header names the build lane's folder as the repo it gated. It was started at 18:31:52Z, twelve seconds after 5ff25fec was committed (11:31:40-07:00), so it ran at the exact landing head and not at an ancestor. All six LOCAL CHECK stage markers are present (lines 3, 5, 8, 44, 71, 1444) and the file contains no `test result: FAILED`, `panicked`, `error[E`, line-initial `warning` or line-initial `error` line. The log was read and hashed by this session in this folder; it is read-only evidence, so reading it is not a write into that checkout.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "Line 6 of the gate log reads \"not measured -- no session record for this folder\". Measured explicitly for this lease with `node scripts/scope-drift-gate.mjs --issue 450 --refresh` in this folder, which reported the 16 files of PR 455 as outside this claim. That reading is correct and expected rather than a violation: this folder is deliberately standing AT the PR head, so the tool measures the build lane's already-pushed work against a landing claim that does not cover it. This lease pushes nothing from this head. The only push it will make is the receipt carrier, whose head is main plus these receipt files, and whose changed set is exactly the two paths the claim names. The build lane's own push of those 16 files was measured against its own claim 5719118594, which covered all of them.",
+    "carrierRecheck": "scope-drift must be re-measured from the carrier head before the carrier push, not inherited from this reading."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "5ff25fecb4c731e688d0e75ea91833eb3b5bc18b",
+    "verdict": "APPROVE WITH WARNINGS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/455#issuecomment-5722190155",
+    "reviewerNote": "A read-only reviewer-only seat that authored none of the four commits. It was commissioned precisely because the PR's own earlier review comments could not satisfy this gate: only the rust-tauri-reviewer APPROVE names a declared reviewer identity and it sits at 9c3c7f0b, three commits stale, while the two reviews at 75cf3f6b and 5ff25fec name no reviewer identity at all and so resolve to the receipt actor, who is a mutation author. This review sits at the exact head, re-derived every claim from source instead of deferring to those verdicts, and ran tsc (clean), six vitest files (92 passed) and cargo test machine_model (43 passed). It confirmed the contract test is falsifiable, that get_intelligence_timeline is dead on the Blackbook path with no fallback, that the unreadable-ledger warning has exactly one voice, that the one new i18n key exists in both locales, and that src-tauri/src/actions.rs is absent from the diff. Two warnings, neither a defect in this head: the useMachineModel `enabled` branch has no direct unit test in src/data/machine-model.test.ts (carried to slice 3, #451, the next reader of that hook), and the PR's four prior review comments were all posted by the account that authored the commits. Two filed nits are pre-existing and not this slice's: the unsynchronized get_ledger_health / get_machine_model probes, and the untranslated unknown_reason body.",
+    "priorReviewNote": "The stale rust-tauri-reviewer APPROVE at 9c3c7f0b (pull/455#issuecomment-5719086855) and the self-reviewer visual PASS at ba3e008a (issuecomment-5719263131) remain real evidence for the commits they cover. They are recorded here as supporting, not as the gate-satisfying review, because neither sits at 5ff25fec."
+  },
+  "transition": "merge-pr",
+  "mergeMethodNote": "Run `node scripts/land-pr.mjs --pr 455 --receipt .claude/work-control/2026-09-17-merge-pr-455.json` after a --dry-run. True merge commit, remote ref pruned in the same breath, no --delete-branch and no worktree removal.",
+  "dependentsNote": "No open PR is based on claude/450-blackbook-machine-model. The build lane's folder keeps its local branch after the remote ref is pruned.",
+  "closingNote": "PR 455 has 0 closingIssuesReferences, so the merge closes nothing and no lease is ended by it. #450 stays open and needs its own close-issue receipt, which must be preceded by a Handoff on #450 ending with a released claim line.",
+  "headBindingNote": "The receipt is bound to 5ff25fec: git rev-parse HEAD in this folder reads it, origin carries it on refs/heads/claude/450-blackbook-machine-model so it is durably reachable, the gate ran at it, and the independent review names it.",
+  "mergeProofUnaffectedNote": "The hooksPath correction does not touch the proof chain behind the merge. PR 455 was merged through the GitHub API by scripts/land-pr.mjs, not by a push from this folder, and the gate evidence cited below is the pre-push run in .claude/worktrees/land-pr-387-machine-model-6fe51a, a different checkout that the fleet guard did not flag. The flagged configuration belonged to this bookkeeping folder and blocked only the receipt carrier push, which is why it surfaced after the merge rather than before it."
+}
