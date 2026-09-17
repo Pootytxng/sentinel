@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` has two commits, b153e986 and db67d0ed. This claude-code session wrote both, under git identity claude-code <claude-code@desk.local>, on the owner's chat orders of 2026-09-17 (\"fix all four findings\", \"ship the review fixes PR\"). The same session lands the PR on the owner's order \"review and merge #448\".",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/446#issuecomment-5715803778",
+  "leaseEvidenceNote": "The operative Ownership claim on #446 is 5715803778, mirrored as 5715804124 on #392 and 5715804402 on #447 (2026-09-17). It names this folder, branch claude/machine-model-review-fixes, and a write scope of history.rs, lib.rs, machine_model.rs, diagnostics.rs, src/types.ts and docs/RELEASE_STATE.md.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-17 with `gh pr list --state open --json files`. Open PR 444 touches only hooks, scripts and tools/entry files, and PR 438 touches only tester docs. Neither touches any path in #448. No open PR is based on claude/machine-model-review-fixes.",
+  "inheritedWork": false,
+  "currentHead": "db67d0ed4e1a8db7234566f7058adab042144f19",
+  "pr": 448,
+  "issue": 446,
+  "kind": "lane",
+  "branch": "claude/machine-model-review-fixes",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched 2026-09-17. origin/main reads dc314f42, the PR's base and merge-base, so the merge tree equals the reviewed head's tree. GitHub reads the PR head as db67d0ed, MERGEABLE, with 0 closingIssuesReferences.",
+    "worktree": "Linked worktree with one writer, core.hooksPath set per worktree to .githooks.",
+    "branch": "claude/machine-model-review-fixes at db67d0ed. `git ls-remote` on origin reads the same commit.",
+    "dirtyState": "`git status --porcelain` was clean before these receipts were written.",
+    "liveProcesses": "No app run or dev server. The only builds were the pre-push gate and the reviewer's cargo test and clippy, and both had finished."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "db67d0ed4e1a8db7234566f7058adab042144f19",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T14-12-01Z.log:38-39 (SHA-256 fc2364644a044bc2c8e76e8ec8f962b7943c310232b81cbc348672a418cf2bf5)",
+      "summary": "443 test files passed; 7242 passed / 4 skipped (7246)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "db67d0ed4e1a8db7234566f7058adab042144f19",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T14-12-01Z.log:44-70 (SHA-256 fc2364644a044bc2c8e76e8ec8f962b7943c310232b81cbc348672a418cf2bf5)",
+      "summary": "frontend type-check and build stage; vite built clean."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "db67d0ed4e1a8db7234566f7058adab042144f19",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T14-12-01Z.log:71-1427 (SHA-256 fc2364644a044bc2c8e76e8ec8f962b7943c310232b81cbc348672a418cf2bf5)",
+      "summary": "1325 passed; 0 failed; 24 ignored; 0 filtered out."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "db67d0ed4e1a8db7234566f7058adab042144f19",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T14-12-01Z.log:1442-1444 (SHA-256 fc2364644a044bc2c8e76e8ec8f962b7943c310232b81cbc348672a418cf2bf5)",
+      "summary": "Clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of `scripts/verify-local.ps1` at this exact head, from the push that created the remote branch. The console printed `LOCAL CHECK RESULT: PASS`, and git exited 0. The log has all six LOCAL CHECK stage markers (lines 3, 5, 8, 44, 71, 1442) and no `error[E` or `panicked` line. The first push, at b153e986, was refused on stale docs/RELEASE_STATE.md citations (log verify-local-2026-09-17T14-07-18Z.log). db67d0ed fixes them. Main has not moved since the base, so no separate merge-tree gate is needed. The receipt carrier goes to main through the full pre-push gate.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "Log line 6 reads \"not measured\" because this folder has no session record. It was measured explicitly with `node scripts/scope-drift-gate.mjs --issue 446 --refresh`, which returned OK: all six changed paths fall inside the claimed write scope."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "db67d0ed4e1a8db7234566f7058adab042144f19",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/448#issuecomment-5715927366",
+    "reviewerNote": "A read-only reviewer seat that wrote nothing in this change. It checked that no mutation or elevation is reachable, that the Rust and TypeScript enum shapes match, how existing callers of is_still_active behave, the three fixes and their guard tests, and #[cfg(test)] gating. It ran cargo test (machine_model 41, history 59) and clippy -D warnings, both clean. The landing lane corrected one line of the review: the legacy bool changes for three recommendations (power-ultimate, HAGS, fast-startup) when their read fails. That change is intended and documented in the PR body. An earlier rust-tauri-reviewer pass at the pre-rebase commit is not relied on. A Cowork adversarial audit is flagged, because history.rs is a starred module and this change touches only its read path."
+  },
+  "transition": "merge-pr",
+  "mergeMethodNote": "Run `node scripts/land-pr.mjs --pr 448 --receipt .claude/work-control/2026-09-17-merge-pr-448.json` after a --dry-run. That makes a true merge commit and prunes the remote ref, with no --delete-branch and no worktree removal.",
+  "dependentsNote": "No open PR is based on claude/machine-model-review-fixes. This worktree keeps its local branch.",
+  "closingNote": "The PR has 0 closingIssuesReferences, so the merge closes nothing. #392, #446 and #447 stay open, and each needs its own close-issue receipt."
+}
