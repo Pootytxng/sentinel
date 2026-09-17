@@ -34,6 +34,10 @@
 //     Windows store orphans every live lease and brief, which is a worse bug than the one it cures.
 //   * Every derived path — briefs, lineage files, the board cache — inherits the absoluteness.
 //     Pinning only TOKEN_DIR would let a later `join(".", ...)` reintroduce the same class.
+//   * EVERY file that resolves the store, not only the hook. `scripts/lib/scope-drift.mjs` READS a
+//     folder inside it; `tools/entry/tier.mjs` and `tools/entry/single-flight.mjs` WRITE into it.
+//     Each carried its own copy of the expression above, so repairing one left the rest, and a
+//     writer and a reader answering different folders is a guard that abstains without saying so.
 //
 // Companion: tools/entry/session-root-assert.test.mjs (severity + the duplicated path helpers).
 
@@ -49,6 +53,19 @@ import {
 } from "../../scripts/lib/scope-drift.mjs";
 
 /**
+ * The same fresh evaluation, for any module whose store path is a module-level const.
+ *
+ * Three files now compute one from the environment at import time, and a guard that re-evaluated
+ * only the hook would leave the other two free to drift.
+ */
+async function loadModuleUnder(env, load) {
+  vi.resetModules();
+  for (const key of ["LOCALAPPDATA", "XDG_STATE_HOME", "COMPY_ENTRY_DIR"]) vi.stubEnv(key, "");
+  for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+  return load();
+}
+
+/**
  * A fresh evaluation of the hook module under a chosen environment.
  *
  * TOKEN_DIR is a module-level const computed at import time, which is exactly how the defect
@@ -56,12 +73,23 @@ import {
  * every `dir = TOKEN_DIR` default in the file had taken it. So the guard has to re-evaluate the
  * module, not just call a helper — a helper that is right while the const is wrong is not a fix.
  */
-async function loadUnder(env) {
-  vi.resetModules();
-  for (const key of ["LOCALAPPDATA", "XDG_STATE_HOME", "COMPY_ENTRY_DIR"]) vi.stubEnv(key, "");
-  for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
-  return import("../../.claude/hooks/session-root-assert.mjs");
-}
+const loadUnder = (env) => loadModuleUnder(env, () => import("../../.claude/hooks/session-root-assert.mjs"));
+
+/** Every shape either resolver decides differently on: absent, blank, relative, Windows, XDG. */
+const MATRIX = [
+  {},
+  { LOCALAPPDATA: "C:\\Users\\Kuya\\AppData\\Local" },
+  { LOCALAPPDATA: "" },
+  { LOCALAPPDATA: "   " },
+  { LOCALAPPDATA: "Local" },
+  { XDG_STATE_HOME: "/home/user/.local/state" },
+  { XDG_STATE_HOME: "state" },
+  { XDG_STATE_HOME: "/srv/state", LOCALAPPDATA: "C:\\Users\\Kuya\\AppData\\Local" },
+  { COMPY_ENTRY_DIR: "/srv/entry" },
+  { COMPY_ENTRY_DIR: "entry" },
+  { COMPY_ENTRY_DIR: "", XDG_STATE_HOME: "/home/user/.local/state" },
+  { COMPY_ENTRY_DIR: "/srv/entry", LOCALAPPDATA: "C:\\L", XDG_STATE_HOME: "/x" },
+];
 
 beforeEach(() => {
   vi.unstubAllEnvs();
@@ -172,22 +200,6 @@ describe("the OTHER half of the store resolves the same folder — scripts/lib/s
   // tools/entry/session-root-assert.test.mjs, the worktree-field path helpers). This is that pin.
   const home = "/home/user";
 
-  /** Every shape either resolver decides differently on: absent, blank, relative, Windows, XDG. */
-  const MATRIX = [
-    {},
-    { LOCALAPPDATA: "C:\\Users\\Kuya\\AppData\\Local" },
-    { LOCALAPPDATA: "" },
-    { LOCALAPPDATA: "   " },
-    { LOCALAPPDATA: "Local" },
-    { XDG_STATE_HOME: "/home/user/.local/state" },
-    { XDG_STATE_HOME: "state" },
-    { XDG_STATE_HOME: "/srv/state", LOCALAPPDATA: "C:\\Users\\Kuya\\AppData\\Local" },
-    { COMPY_ENTRY_DIR: "/srv/entry" },
-    { COMPY_ENTRY_DIR: "entry" },
-    { COMPY_ENTRY_DIR: "", XDG_STATE_HOME: "/home/user/.local/state" },
-    { COMPY_ENTRY_DIR: "/srv/entry", LOCALAPPDATA: "C:\\L", XDG_STATE_HOME: "/x" },
-  ];
-
   it("resolves the state root identically to the hook, for every environment", () => {
     for (const env of MATRIX) {
       expect(scopeDriftStateDir({ env, home }), JSON.stringify(env)).toBe(entryStateDir({ env, home }));
@@ -212,5 +224,63 @@ describe("the OTHER half of the store resolves the same folder — scripts/lib/s
     // widened what counts as rooted could not widen its own guard at the same time.
     const rooted = (s) => isAbsolute(s) || /^[A-Za-z]:[\\/]/.test(s);
     for (const env of MATRIX) expect(rooted(claimCacheDir({ env })), JSON.stringify(env)).toBe(true);
+  });
+});
+
+// The store has more than two halves (#440, follow-up).
+//
+// The pin above holds the hook and the drift gate together. Two more files resolved the store on
+// their own, and nothing imported them from either side, so nothing noticed:
+//
+//     tools/entry/tier.mjs           TIER_STATE_DIR — the per-folder tier records
+//     tools/entry/single-flight.mjs  LOCK_DIR       — the launcher's one-at-a-time lock
+//
+// Both are WRITERS, not readers. `establishTier` writes a record under the first; `acquire` creates
+// the directory and writes the lock file under the second. Under the relative expression on a POSIX
+// session both landed in whatever folder the process happened to be standing in — the checkout
+// again for the records, and for the lock something worse than a misplaced file: a lock whose path
+// depends on the caller's cwd is not a lock. Two launcher runs started from two folders would each
+// create their own, each believe it was first, and the singleton launch token that single-flight
+// exists to protect gets overwritten exactly as it did before single-flight was written.
+//
+// They are pinned to the hook's answer rather than to a spelling of their own, so this reads as a
+// tautology at the current head — deliberately. The constants are evaluated at import time, which
+// is how the defect shipped: by the time a caller could pass an override the wrong value was
+// already baked into every `dir = LOCK_DIR` default in the file. A later hand-spelled `join(...)`
+// in either file is the thing this has to catch, and it would pass a test that only called a
+// helper.
+describe("the writers resolve the same store — tier records and the launcher lock (#440)", () => {
+  it("puts the tier records inside the folder the hook writes, for every environment", async () => {
+    for (const env of MATRIX) {
+      const m = await loadModuleUnder(env, () => import("./tier.mjs"));
+      // Asked with the live (stubbed) environment and the real homedir(), because that is what the
+      // module itself had to work with when it was evaluated a line ago.
+      expect(m.TIER_STATE_DIR, JSON.stringify(env)).toBe(join(entryStateDir(), "tiers"));
+      expect(m.tierRecordFile({ dir: "/w/sentinel" }).startsWith(join(entryStateDir(), "tiers")), JSON.stringify(env)).toBe(true);
+    }
+  });
+
+  it("puts the launcher lock in the folder the hook writes, for every environment", async () => {
+    for (const env of MATRIX) {
+      const m = await loadModuleUnder(env, () => import("./single-flight.mjs"));
+      expect(m.LOCK_DIR, JSON.stringify(env)).toBe(entryStateDir());
+      // The default-argument path, not just the constant: `lockFile()` is what `acquire`,
+      // `readLock` and `release` all reach for when nobody names a directory.
+      expect(m.lockFile(), JSON.stringify(env)).toBe(join(entryStateDir(), m.LOCK_NAME));
+    }
+  });
+
+  // Rootedness itself is pinned once, on the resolver, by "entryStateDir — the resolver, asked
+  // directly" above; equality carries it here. This row is the defect's own shape, stated plainly
+  // in the one environment that produced it, so the guard names the bug and not only the contract.
+  it("is absolute on a POSIX session with nothing set — the shape of the defect", async () => {
+    const tier = await loadModuleUnder({}, () => import("./tier.mjs"));
+    const flight = await loadModuleUnder({}, () => import("./single-flight.mjs"));
+
+    expect(isAbsolute(tier.TIER_STATE_DIR)).toBe(true);
+    expect(isAbsolute(flight.LOCK_DIR)).toBe(true);
+    expect(tier.TIER_STATE_DIR.startsWith(join(homedir(), ".local", "state"))).toBe(true);
+    expect(flight.LOCK_DIR.startsWith(join(homedir(), ".local", "state"))).toBe(true);
+    expect(resolve(flight.LOCK_DIR)).toBe(flight.LOCK_DIR);
   });
 });
