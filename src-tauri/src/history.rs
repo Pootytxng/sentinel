@@ -19,10 +19,11 @@ use crate::actions::*;
 use crate::compy_data_dir;
 use crate::data_root::MutationRoot;
 use crate::{
-    current_power_plan_name, eee_disabled_on_any_eligible_adapter, fast_startup_state,
-    game_bar_disabled, game_mode_enabled, hags_state, mouse_accel_disabled,
-    nagle_disabled_on_any_nic, pcie_aspm_off_on_ac, reserved_storage_enabled, service_running,
-    usb_selective_suspend_off_on_ac, visual_effects_for_best_performance,
+    current_power_plan_name, eee_disabled_on_any_eligible_adapter, fast_startup_state_checked,
+    game_bar_disabled, game_mode_enabled, hags_state_checked, mouse_accel_disabled,
+    nagle_disabled_on_any_nic, pcie_aspm_off_on_ac_checked, reserved_storage_enabled_checked,
+    service_running_checked, usb_selective_suspend_off_on_ac_checked,
+    visual_effects_for_best_performance,
 };
 
 // Serialized so concurrent apply/rollback calls can't interleave reads and
@@ -142,6 +143,10 @@ pub(crate) struct AppliedChangeView {
     snapshot: serde_json::Value,
     pub(crate) status: String,
     pub(crate) is_still_active: bool,
+    // What the live re-check established, so a consumer can tell a read that came back OFF from a
+    // probe that read nothing or a rec with no probe (#392). None when the row is not in the
+    // applied state, so nothing was checked. `is_still_active` is `legacy_active()` of this.
+    pub(crate) active_check: Option<ActiveCheck>,
     applied_action: Option<AppliedAction>,
     pub(crate) rollback_action: Option<RollbackAction>,
     app_version_at_apply: Option<String>,
@@ -182,28 +187,68 @@ impl AppliedChangeView {
     }
 }
 
-fn check_change_active(c: &AppliedChange) -> bool {
-    match c.rec_id.as_str() {
-        "game-mode" => game_mode_enabled(),
-        "visual-effects" => visual_effects_for_best_performance(),
-        "sysmain-disable" => !service_running("SysMain"),
-        "nvidia-telemetry" => !service_running("NvTelemetryContainer"),
-        "power-ultimate" => current_power_plan_name()
-            .map(|p| p.to_lowercase().contains("ultimate"))
-            .unwrap_or(false),
-        "nagle-disable" => nagle_disabled_on_any_nic(),
-        "hags-enable" => hags_state() == Some(2),
-        "mouse-accel-off" => mouse_accel_disabled(),
-        "game-bar-disable" => game_bar_disabled(),
-        "diagtrack-disable" => !service_running("DiagTrack"),
-        "windows-search-disable" => !service_running("WSearch"),
-        "fast-startup-off" => fast_startup_state() == Some(0),
-        "reserved-storage-off" => !reserved_storage_enabled(),
-        "usb-selective-suspend-off" => usb_selective_suspend_off_on_ac(),
-        "pcie-aspm-off" => pcie_aspm_off_on_ac(),
-        "eee-disable" => eee_disabled_on_any_eligible_adapter(),
-        _ => true, // unknown rec → assume still active rather than hide rollback
+/// What the live re-check of an applied change actually established (#392). A bare bool folded
+/// three different answers together: the setting reads off, the probe read nothing, and Compy has
+/// no probe for this rec at all. Only `Off` is evidence that the change is no longer in effect.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ActiveCheck {
+    On,
+    Off,
+    /// The probe ran and could not read the machine.
+    Unreadable,
+    /// No live probe exists for this rec id.
+    Unrecognised,
+}
+
+impl ActiveCheck {
+    fn from_read(read: Option<bool>) -> Self {
+        match read {
+            Some(true) => ActiveCheck::On,
+            Some(false) => ActiveCheck::Off,
+            None => ActiveCheck::Unreadable,
+        }
     }
+
+    /// The legacy `is_still_active` bool. Only a successful read that came back OFF is "not
+    /// active": an unreadable or unprobed change stays active so its rollback is never hidden and
+    /// it is never counted as reverted outside Compy on no evidence.
+    pub(crate) fn legacy_active(self) -> bool {
+        self != ActiveCheck::Off
+    }
+}
+
+fn check_change_state(c: &AppliedChange) -> ActiveCheck {
+    let read = ActiveCheck::from_read;
+    let not_running = |svc: &str| read(service_running_checked(svc).map(|r| !r));
+    // The registry readers without a checked variant (game mode, visual effects, mouse, game bar,
+    // Nagle, EEE) treat an absent key as the Windows default, which IS their "off" answer, so they
+    // stay plain reads here.
+    match c.rec_id.as_str() {
+        "game-mode" => read(Some(game_mode_enabled())),
+        "visual-effects" => read(Some(visual_effects_for_best_performance())),
+        "sysmain-disable" => not_running("SysMain"),
+        "nvidia-telemetry" => not_running("NvTelemetryContainer"),
+        "power-ultimate" => {
+            read(current_power_plan_name().map(|p| p.to_lowercase().contains("ultimate")))
+        }
+        "nagle-disable" => read(Some(nagle_disabled_on_any_nic())),
+        "hags-enable" => read(hags_state_checked().ok().map(|v| v == Some(2))),
+        "mouse-accel-off" => read(Some(mouse_accel_disabled())),
+        "game-bar-disable" => read(Some(game_bar_disabled())),
+        "diagtrack-disable" => not_running("DiagTrack"),
+        "windows-search-disable" => not_running("WSearch"),
+        "fast-startup-off" => read(fast_startup_state_checked().ok().map(|v| v == Some(0))),
+        "reserved-storage-off" => read(reserved_storage_enabled_checked().ok().map(|on| !on)),
+        "usb-selective-suspend-off" => read(usb_selective_suspend_off_on_ac_checked()),
+        "pcie-aspm-off" => read(pcie_aspm_off_on_ac_checked()),
+        "eee-disable" => read(Some(eee_disabled_on_any_eligible_adapter())),
+        _ => ActiveCheck::Unrecognised,
+    }
+}
+
+fn check_change_active(c: &AppliedChange) -> bool {
+    check_change_state(c).legacy_active()
 }
 
 /// Read-only enrichment (computed-at-read, never persisted): the "after" state Compy's change set
@@ -301,11 +346,8 @@ fn same_rig(stamp: &crate::hardware::HwFingerprint, now: &crate::hardware::HwFin
 }
 
 fn into_view(c: AppliedChange) -> AppliedChangeView {
-    let is_still_active = if c.status == "applied" {
-        check_change_active(&c)
-    } else {
-        false
-    };
+    let active_check = (c.status == "applied").then(|| check_change_state(&c));
+    let is_still_active = active_check.is_some_and(ActiveCheck::legacy_active);
     let restores_label = restores_label_from_snapshot(&c.snapshot);
     let applied_label = applied_label_from_action(&c.applied_action);
     let payoff_label = payoff_label_from_action(&c.applied_action).map(str::to_string);
@@ -322,6 +364,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         snapshot: c.snapshot,
         status: c.status,
         is_still_active,
+        active_check,
         applied_action: c.applied_action,
         rollback_action: c.rollback_action,
         app_version_at_apply: c.app_version_at_apply,
@@ -375,6 +418,11 @@ pub(crate) fn test_view(
         snapshot: serde_json::Value::Null,
         status: status.into(),
         is_still_active,
+        active_check: (status == "applied").then_some(if is_still_active {
+            ActiveCheck::On
+        } else {
+            ActiveCheck::Off
+        }),
         applied_action: None,
         rollback_action: reversible.then_some(RollbackAction::RestoreGameModeFromSnapshot),
         app_version_at_apply: None,
@@ -2433,6 +2481,28 @@ mod history_tests {
         assert_eq!(views.len(), 2);
         let still_there: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
         assert_eq!(still_there, ids, "the rows the caller still needs must survive the projection");
+    }
+
+    /// #392: only a read that came back OFF may say "no longer in effect". An unrecognised rec or
+    /// an unreadable probe is carried as its own answer, and the legacy bool keeps it active so it
+    /// is never counted as reverted outside Compy on no evidence.
+    #[test]
+    fn active_check_separates_off_from_unread_and_unprobed() {
+        let v = into_view(record("a-rec-we-do-not-track", "applied"));
+        assert_eq!(v.active_check, Some(ActiveCheck::Unrecognised), "no probe exists, so nothing was read");
+        assert!(v.is_still_active, "an unprobed change keeps its rollback reachable");
+
+        assert!(ActiveCheck::On.legacy_active());
+        assert!(!ActiveCheck::Off.legacy_active(), "a successful OFF read is the only 'not active'");
+        assert!(ActiveCheck::Unreadable.legacy_active());
+        assert!(ActiveCheck::Unrecognised.legacy_active());
+
+        let rolled = into_view(record("game-mode", "rolled_back"));
+        assert_eq!(rolled.active_check, None, "a rolled-back row is not live-checked");
+        assert!(!rolled.is_still_active);
+
+        let s = summarize_history(&[record("a-rec-we-do-not-track", "applied")]);
+        assert_eq!(s.externally_reverted, 0, "an unprobed change is not a revert");
     }
 
     #[test]

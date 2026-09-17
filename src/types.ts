@@ -97,6 +97,10 @@ export type AppliedChange = {
   snapshot: unknown;
   status: "applied" | "rolled_back";
   is_still_active: boolean;
+  // What the live re-check established (#392). `is_still_active` stays true for "unreadable" and
+  // "unrecognised" so a rollback is never hidden; only "off" is a read that came back not in effect.
+  // null when the row is not applied, so nothing was checked.
+  active_check?: "on" | "off" | "unreadable" | "unrecognised" | null;
   // Stamped when a change is rolled back (Intelligence Phase 2 — dates the rollback event in the
   // timeline). Additive, #[serde(default)] on the Rust side; absent/null for entries never undone.
   rolled_back_at?: string | null;
