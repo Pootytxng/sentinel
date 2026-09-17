@@ -72,9 +72,11 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 3 (#287) BUILT** — `scripts/lib/case-endpoint/` validator, handler and migration, proved
-local/staged ONLY, never deployed (§11), via PR #289. **Stage 4 is NEXT**: the Tauri send command;
-deployment is Stage 7, owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+**Phase 2 Shared Machine Model v1 is the active train.** #449 and #450 are CLOSED on `main`; **#451 is
+NEXT** — Health identity rows read `model.identity` facts, showing `unknown_reason` rather than "—" and
+naming both producers on a disagreement. Then #452, then #453 (guards + live exit proof). #456 is
+non-blocking debt; `src/data/machine-model.test.ts` lacks an `enabled`-branch test, carried into #451.
+**Q9b Stage 4** (Tauri send command, #287 spec §11) is parked behind Phase 2, not abandoned.
 
 **The Instrument Bench plan is NOT an option and must never be offered as one** — built (`403be45`),
 REJECTED as the Lab 2026-07-09; the live Test room is the Ops Console (`LabConsole`), its bench ships
@@ -107,10 +109,8 @@ they do not independently establish priority, approval, or authorization.
 
 ## Waiting on the owner — two arming gates, nothing else
 
-**Money items are ON HOLD by his standing rule (2026-08-25) and are deliberately NOT listed here as
-blockers** — `compy.gg`, the Ko-fi URL and Compy Pro pricing live in
-`docs/OWNER_ACTION_CHECKLIST.md` §B/§C and must stop being reported as things he owes. The two
-DIR-1 walk questions are ANSWERED and shipped; nothing design-side is parked on him.
+**Money items are ON HOLD (standing rule 2026-08-25) and are NOT blockers** — `compy.gg`, the Ko-fi URL
+and Pro pricing live in `docs/OWNER_ACTION_CHECKLIST.md` §B/§C. DIR-1 is ANSWERED and shipped.
 
 - **Receipts telemetry arming** (§C) and **Tier 1 arming** (§C) — signing-key custody, the catalog
   domain, and the arming itself, after an independent security review. Only the arming is his.
