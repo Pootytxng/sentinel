@@ -82,7 +82,7 @@ gates cannot be substituted; environment inability is a blocker, not a pass. Run
 exact head, by a reviewer who did not author the mutation being approved. One worktree per writer
 (mutexes enforce exclusion, never ownership), committing under `docs/WORK_CONTROL.md` "Executor identity".
 
-**Owner-bound in this repo** (in addition to `~/.claude/CLAUDE.md`):
+**Owner-bound in this repo** (in addition to `~/.claude/CLAUDE.md`; reversibility never licenses crossing one):
 1. Secrets/signing: the Ed25519 private key or any secret never enters repo / `.env*` / CI.
 2. Shared/irreversible Git: never move frozen beta refs (`16069fa`).
 3. Shipping mutation code to other people's machines, arming remote-fetch/updater/capabilities/CSP.

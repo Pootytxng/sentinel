@@ -155,7 +155,7 @@ const REQUIRED: { law: string; markers: string[]; file?: string }[] = [
   },
   {
     law: "Owner-bound gates",
-    markers: ["ZERO-BUDGET LAW", "never before 1.0", "16069fa", "WELFARE CHECK"],
+    markers: ["ZERO-BUDGET LAW", "never before 1.0", "16069fa", "WELFARE CHECK", "reversibility never licenses crossing one"],
   },
   {
     law: "Silent reinstall is mine, not the owner's",
