@@ -1386,3 +1386,161 @@ describe("a git repository-location operand goes through the shared resolver (#4
     }
   });
 });
+
+// A redirect target that is a variable, in the session's own claim: allowed with a line, not asked.
+//
+// Measured over three weeks and closed 2026-09-18: 228 `ask` decisions came out of this hook, and
+// 131 of them were plain shell REDIRECTION and nothing else - `cd "<worktree>" && … > $LOG`,
+// `set -e; B=…; … >> $B`. 134 of the 204 Bash asks literally began `cd "…" &&`, so the effective
+// directory was spelled in the command and was the session's own lane. The owner accepted every one.
+// That is a toll, not a control, and it hangs unattended runs on a keystroke nobody is there to
+// press. The residual accepted in exchange is one recoverable file (a redirect writes one path and
+// cannot recurse; git restores it), and it is pinned in BOTH directions here - the spared shape and
+// the shapes that must keep their prompt - because an exemption that quietly widens is the failure.
+describe("the redirect-in-own-claim exemption, pinned in both directions (2026-09-18)", () => {
+  const LANE = fwd(ROOT);
+
+  it("allows the measured shape instead of asking, and says so in context", () => {
+    // The transcript's commonest row, re-spelled onto the fixture lane. Before this rule: `ask`.
+    const d = ask(`cd "${LANE}" && npm run build > $LOG 2>&1`);
+    expect(d.permission).toBe("allow");
+    expect(d.additionalContext).toContain("Shell ownership");
+    expect(d.additionalContext).toContain("redirect");
+    // The trade is named in the output, so the reader is not left to infer it.
+    expect(d.additionalContext).toContain("131 of 228");
+  });
+
+  it("covers the other two spellings the audit counted, and the append form", () => {
+    for (const cmd of [
+      `cd "${LANE}" && ./run.sh > $LOG`,
+      `cd "${LANE}" && set -e; printf x >> $B`,
+      // Standing in the claim already, with no `cd` at all: the cwd the hook was handed is the lane.
+      `printf x > $OUT`,
+      // Two unresolved redirects at once are still only redirects.
+      `cd "${LANE}" && printf x > $A 2> $B`,
+    ]) {
+      expect(ask(cmd).permission, cmd).toBe("allow");
+    }
+  });
+
+  // ── the five shapes this rule must NOT have touched ────────────────────────────────────────────
+
+  it("still asks on an unresolved operand of a mutating VERB, in every verb family", () => {
+    // Only a REDIRECT target is spared. A verb that can recurse, relocate or rewrite keeps its
+    // prompt no matter where it stands, because its blast radius is not one file.
+    for (const cmd of [
+      `cd "${LANE}" && rm -rf $TARGET`,
+      `cd "${LANE}" && rmdir $D`,
+      `cd "${LANE}" && mv $A $B`,
+      `cd "${LANE}" && cp $A $B`,
+      `cd "${LANE}" && sed -i 's/a/b/' $F`,
+      `cd "${LANE}" && mkdir -p $D`,
+      `cd "${LANE}" && git reset --hard $REF`,
+      `cd "${LANE}" && git checkout -- $P`,
+      `cd "${LANE}" && git clean -fd $P`,
+      `cd "${LANE}" && git config user.name $N`,
+      `cd "${LANE}" && find . -name '*.tmp' | xargs rm -f`,
+    ]) {
+      expect(ask(cmd).permission, cmd).toBe("ask");
+    }
+    // The same in PowerShell, including `Out-File`: it is a MUTATING VERB in this checker's table,
+    // not a redirect operand, and the exemption is drawn on the redirect OPERATOR - a syntactic
+    // category with a hard guarantee of one path and one stream - not on a verb table that has no
+    // natural place to stop. Widening it to `Out-File` would have to widen it to `Set-Content` and
+    // `New-Item` on the same reasoning, so it was left where the guarantee is.
+    for (const cmd of [`Remove-Item $P`, `Move-Item $A $B`, `Out-File -FilePath $log`, `Set-Content $P 'x'`]) {
+      expect(ask(cmd, { toolName: "PowerShell" }).permission, cmd).toBe("ask");
+    }
+  });
+
+  it("leaves the opaque interpreters exactly where the class-3 tail already had them", () => {
+    // `node`/`python`/`bash -lc` are class 3, not class 2: they were ALREADY decided on the directory
+    // they stand in (spec §6), and this rule changes nothing about them. Pinned as UNCHANGED rather
+    // than as "asks", because asserting a prompt this hook never gave would be a fiction that the
+    // next reader would then try to preserve.
+    const own = ask(`cd "${LANE}" && node $SCRIPT`);
+    expect(own.permission).toBe("allow");
+    // Proof it took the old path and not the exemption: no redirect note is attached.
+    expect(own.additionalContext ?? "").not.toContain("Shell ownership");
+    expect(own.why).toContain("bounded by a directory this session is standing in");
+    // And standing anywhere protected that is not its own, the prompt is still there.
+    expect(ask(`cd ${fwd(SIB)} && node $SCRIPT`).permission).toBe("ask");
+    expect(ask(`node -e 'require("fs").writeFileSync("x","")'`, { cwd: SIB }).permission).toBe("ask");
+    expect(ask(`cd "${LANE}" && bash -lc "rm ${inSib("x.txt")}"`).permission).toBe("deny");
+  });
+
+  it("still DENIES a resolved sibling-checkout target, redirect or not", () => {
+    // The whole point of the guard. A redirect whose target IS knowable and lands in another lane is
+    // positive knowledge, decided long before this branch is reached.
+    expect(ask(`cd "${LANE}" && printf x > ${inSib("package.json")}`).permission).toBe("deny");
+    expect(ask(`cd "${LANE}" && printf x > ${inSib("notes.md")} 2> $LOG`).zone).toBe(ZONES.SIBLING);
+    // And a spared redirect beside a sibling write does not launder it.
+    expect(ask(`cd "${LANE}" && printf x > $LOG; rm -f ${inSib("x.txt")}`).permission).toBe("deny");
+  });
+
+  it("still ASKS on a resolved protected-global target beside a spared redirect", () => {
+    // `~/.claude` is `deny` through the shell; the ASK this rule must not have loosened is the
+    // UNKNOWN zone, which an unplaceable global-looking path reaches. Both are pinned.
+    expect(ask(`cd "${LANE}" && printf x > ${fwd(join(HOME_CLAUDE, "settings.json"))}`).permission).toBe("deny");
+    const d = ask(`cd "${LANE}" && printf x > $LOG && cp a.json ${fwd(join(HOME_CLAUDE, "settings.json"))}`);
+    expect(d.permission).toBe("deny");
+    expect(d.zone).toBe(ZONES.GLOBAL);
+  });
+
+  it("still asks on the wildcard, brace and tilde shapes (#428), from inside the claim", () => {
+    // #428's three rows verbatim, now run from the directory this rule exempts redirects in — proof
+    // that "standing in your own claim" did not become a general licence. They are RESOLVED ops with
+    // a wildcard prefix, never redirects, so they never reach the exemption at all.
+    const zone = vi.fn((q) => q.wildcard && (q.target === ".claude/worktrees/" || q.target === ".claude/")
+      ? { zone: ZONES.UNKNOWN, abs: inRoot(".claude"), owner: null, why: "contains a registered lane" }
+      : fakeZone(q));
+    expect(ask(`cd "${LANE}" && rm -rf .claude/worktrees/*`, { zone }).permission).toBe("ask");
+    expect(ask(`cd "${LANE}" && rm -rf .claude/work{trees,}`, { zone }).permission).toBe("ask");
+    expect(ask(`cd "${LANE}" && rm -rf ~+/x`).permission).toBe("ask");
+    // And a brace through a variable is still an operand of `rm`, not a redirect.
+    expect(ask(`cd "${LANE}" && rm -rf $D/{a,b}`).permission).toBe("ask");
+  });
+
+  it("still refuses a POSIX-drive `cd` into a sibling before the redirect is reached (#420)", () => {
+    // `/c/…` is the spelling the Bash tool uses by default, and #420 is the measurement that it must
+    // be understood exactly as well as `C:\…` is. If it were not, this rule would read a sibling as
+    // "the claim I am standing in" and hand out the exemption.
+    const drive = (p) => {
+      const m = /^([A-Za-z]):[\\/](.*)$/.exec(p);
+      return m ? `/${m[1].toLowerCase()}/${m[2].replace(/\\/g, "/")}` : fwd(p);
+    };
+    expect(ask(`cd ${drive(SIB)} && printf x > $LOG`).permission).toBe("ask");
+    expect(ask(`cd ${drive(SIB)} && printf x > out.log`).permission).toBe("deny");
+    // The same spelling of its OWN lane is the exemption, so the two are being told apart.
+    expect(ask(`cd ${drive(ROOT)} && printf x > $LOG`).permission).toBe("allow");
+  });
+
+  it("still asks when the effective cwd is not inside this session's own claim", () => {
+    // `unprotected` is NOT enough: the class-3 tail accepts it, this rule does not.
+    expect(ask(`cd ${fwd(SCRATCH)} && printf x > $LOG`).permission).toBe("ask");
+    // A `cd` this checker cannot follow leaves the directory unknown, which keeps the prompt.
+    expect(ask(`cd $D && printf x > $LOG`).permission).toBe("ask");
+    // Standing in a sibling is the case the guard exists for.
+    expect(ask(`cd ${fwd(SIB)} && printf x > $LOG`).permission).not.toBe("allow");
+    // And the hook's own cwd, with no `cd` at all, is judged the same way.
+    expect(ask(`printf x > $LOG`, { cwd: SIB }).permission).not.toBe("allow");
+    expect(ask(`printf x > $LOG`, { cwd: SCRATCH }).permission).toBe("ask");
+  });
+
+  it("carries the unclaimed-folder advisory beside the exemption rather than replacing it", () => {
+    // The #368 advisory attaches to a RESOLVED own-claim write, so the pairing shows up on a command
+    // that has both: one resolved write into the lane, one unresolvable redirect. Both lines are
+    // context, neither swallows the other, and neither becomes a `permissionDecision`.
+    const both = ask(`cd "${LANE}" && printf y > ${inRoot("a.txt")}; printf x > $LOG`, { verify: UNCLAIMED });
+    expect(both.permission).toBe("allow");
+    expect(both.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(both.additionalContext).toContain("Shell ownership");
+    // The exemption alone reaches no resolved own-claim target, so it carries only its own line —
+    // and verification does not gate it, exactly as class 2 and class 3 are not gated by it.
+    const alone = ask(`cd "${LANE}" && printf x > $LOG`, { verify: UNCLAIMED });
+    expect(alone.permission).toBe("allow");
+    expect(alone.additionalContext).toContain("Shell ownership");
+    // A live disagreement about the folder is still a deny, exemption or not.
+    expect(ask(`cd "${LANE}" && printf y > ${inRoot("a.txt")}; printf x > $LOG`, { verify: MISMATCH }).permission).toBe("deny");
+  });
+});

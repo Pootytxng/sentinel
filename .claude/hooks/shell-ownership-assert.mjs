@@ -1251,20 +1251,82 @@ export function decideShell({
         `takes the normal approval path instead of being waved through.`,
     });
 
+    /** Where an unresolved operand was STANDING. Used twice below: once to spare a redirect whose
+     *  effective directory is this session's own claim, and once for the class-3 tail. */
+    const cwdZone = (u) => (!u.cwdUnknown && u.cwd ? zone({ target: u.cwd, sessionRoot, cwd: u.cwd, deps: { home } }).zone : ZONES.UNKNOWN);
+
+    /**
+     * A REDIRECT WHOSE TARGET IS A VARIABLE, RUN INSIDE THIS SESSION'S OWN CLAIM, IS NOT WORTH A
+     * PROMPT (2026-09-18).
+     *
+     * Measured, not assumed. A three-week transcript audit closed 2026-09-18 counted 228 `ask`
+     * decisions from this hook. 131 of them — a clear majority — were plain shell REDIRECTION and
+     * nothing else: `cd "<worktree>" && … > $LOG`, `set -e; B=…; … >> $B`, and the PowerShell
+     * spelling `$log = '…'; … | Out-File $log`. 134 of the 204 Bash asks literally began `cd "…" &&`,
+     * so the effective directory was stated in the command and was the session's own lane. The owner
+     * pressed accept on every one of them. A prompt whose answer is never in doubt is not a control,
+     * it is a toll; worse, it stops unattended runs dead at a keystroke nobody is there to press, and
+     * the honest reading of #373 is that a guard which is noise gets removed rather than fixed.
+     *
+     * THE EXEMPTION IS AS NARROW AS THE MEASUREMENT. Two conditions, both required:
+     *
+     *   1. the ONLY thing that would have produced `ask` is a REDIRECT target — the `>`/`>>`/`2>`
+     *      operand `segments` collected, filed by `analyze` under the verb `redirection`. An
+     *      unresolved OPERAND of a mutating verb is untouched: `rm -rf $T`, `mv $A $B`, `sed -i … $F`,
+     *      `Remove-Item $P`, `mkdir $D`, `git reset --hard $REF`, `node $SCRIPT`, `… | xargs rm` all
+     *      still ask, because `named` below skips only the redirects this predicate spares and finds
+     *      them first otherwise;
+     *   2. the command's effective working directory — after every `cd` this checker could follow —
+     *      resolves to zone `own-claim`. `unprotected` is NOT enough here (the class-3 tail accepts
+     *      it; this does not), and an unfollowable `cd` leaves `cwdUnknown`, which zones `unknown`
+     *      and keeps asking.
+     *
+     * Everything resolved is already decided above and is unaffected: a resolved `sibling-checkout`
+     * target still denies, a resolved `protected-global` target still denies, and an `unknown` zone
+     * still asks — this branch is only reached once none of those fired.
+     *
+     * THE RESIDUAL, STATED EXACTLY. A variable could hold a path in another lane, so a spared
+     * redirect can clobber ONE file in a checkout this session does not own. That is the whole of it.
+     * A redirect writes exactly one path with exactly one stream: it cannot recurse, cannot delete a
+     * tree, cannot rename, cannot walk a directory. The blast radius is a single file, and in a
+     * repository of worktrees that file is under git — `git checkout --` or `git restore` brings it
+     * back, and the reflog holds anything committed. Against that: 131 certain interruptions of the
+     * owner's attention, each answered the same way, plus every unattended run those interruptions
+     * hang. One recoverable file at low probability is the cheaper side of that trade, and it is
+     * taken deliberately rather than drifted into. The `additionalContext` line below is the price of
+     * admission: the decision is still SAID OUT LOUD to the model, it is just not asked about.
+     */
+    const boundedRedirect = (u) => u.verb === "redirection" && cwdZone(u) === ZONES.OWN;
+    const spared = unresolved.filter(boundedRedirect);
+
     // A recognized mutation with an unknowable target is spec class 2, and verification does not
     // enter into it: `rm -rf $TARGET` is unknowable from a verified session too. These are rare in
     // written commands, so the approval prompt costs a keystroke and buys the one case that matters.
-    const named = unresolved.find((u) => u.kind !== "opaque");
+    const named = unresolved.find((u) => u.kind !== "opaque" && !boundedRedirect(u));
     if (named) return asking(named);
 
     // What is left is class 3: verbs that run code this checker does not evaluate. The only thing
     // that can be said about them is where they are STANDING, so that is what decides. It is not a
     // proof — an unresolved operand could still be an absolute path into a sibling — and that
     // residual is named in spec §6; the embedded-path scan is what catches the literal version of it.
-    const cwdZone = (u) => (!u.cwdUnknown && u.cwd ? zone({ target: u.cwd, sessionRoot, cwd: u.cwd, deps: { home } }).zone : ZONES.UNKNOWN);
     const stray = unresolved.find((u) => ![ZONES.OWN, ZONES.UNPROTECTED].includes(cwdZone(u)));
     if (stray) return asking(stray);
-    return carry({ permission: "allow", why: "every unresolved operand is bounded by a directory this session is standing in" });
+    const allowed = carry({
+      permission: "allow",
+      why: spared.length
+        ? "the only unresolved targets are redirects inside the claim this session owns"
+        : "every unresolved operand is bounded by a directory this session is standing in",
+    });
+    if (!spared.length) return allowed;
+    // Said out loud rather than asked about. Written as `additionalContext` WITHOUT a
+    // `permissionDecision` (see `emit`), so the settings rules and the auto-mode classifier still
+    // apply — the same shape the #368 advisory uses, and for the same reason.
+    const note =
+      `Shell ownership: allowed without a prompt — ${spared.map((u) => u.why).join("; ")}, ` +
+      `but the command runs inside this session's own claim, so a redirect can only land there ` +
+      `unless the variable names another lane. Redirects write one file and cannot recurse; if that ` +
+      `path was meant to be elsewhere, spell it out. (2026-09-18: 131 of 228 prompts were this.)`;
+    return { ...allowed, additionalContext: [allowed.additionalContext, note].filter(Boolean).join(" ") };
   }
 
   return carry({ permission: "allow", why: "nothing protected is reached" });

@@ -28,7 +28,9 @@
 //   - any parse/read/import failure -> silent exit. A guard must never be the reason a turn cannot
 //     end; that is the big-read-guard v1 failure mode (dead on a swallowed error) inverted.
 
-import { readFileSync, openSync, readSync, closeSync, statSync } from "node:fs";
+import { readFileSync, openSync, readSync, closeSync, statSync, existsSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const TAIL_BYTES = 512 * 1024;
 
@@ -82,6 +84,33 @@ if (successor?.kind === "launched" || successor?.kind === "chip") {
 
 if (missing.length === 0) process.exit(0);
 
+// ONCE PER SESSION, NOT ONCE PER TURN (2026-09-18). `stop_hook_active` already stops this hook
+// looping inside a single stop cycle, but nothing stopped it firing again on the next turn, and
+// the next. Measured over three weeks of transcripts: 286 turn-refusals from the Stop hooks, the
+// largest single source of "it stopped instead of carrying on" — against an owner whose recurring
+// order is the opposite ("proceed with a persistent marathon automated workflow while I step away
+// from my desk"). A guard that ends an unattended run to correct the SHAPE of a report has
+// inverted its own cost: the report is a convenience, the run is the work.
+//
+// So it keeps its teeth exactly once. The first incomplete handoff in a session still blocks and
+// still teaches. Every later one writes the same bullets to stderr, which the harness surfaces as
+// context without ending the turn. A session that was told once and did not comply is not fixed
+// by being told forty more times; it is only prevented from working.
+//
+// FAILS TOWARD BLOCKING, ONCE. An unwritable temp dir reads as "first time", so the worst case is
+// the old behaviour, never a guard that silently disarms itself.
+const sessionKey = String(input.session_id ?? "").replace(/[^A-Za-z0-9_-]/g, "");
+const marker = join(tmpdir(), `handoff-block-guard.${sessionKey || "nosession"}.once`);
+let alreadyBlocked = false;
+if (sessionKey) {
+  try {
+    alreadyBlocked = existsSync(marker);
+    if (!alreadyBlocked) writeFileSync(marker, new Date().toISOString(), "utf8");
+  } catch {
+    alreadyBlocked = false;
+  }
+}
+
 // ONE BULLET PER ACTUALLY-MISSING HALF (#270). This used to print all four every time, regardless
 // of what `missing` held, under the instruction "Append a short block". So a reply that already
 // carried a real tab verdict and a real next action, and only lacked a lane, was answered with a
@@ -110,6 +139,15 @@ const BULLET = {
 };
 
 const bullets = missing.map((m) => BULLET[m]).filter(Boolean).join("\n");
+
+// Second and later time in this session: say it, do not stop the turn.
+if (alreadyBlocked) {
+  process.stderr.write(
+    `HANDOFF REMINDER (not a block — this session was already stopped once for this) — missing: ` +
+      `${missing.join("; ")}. Add these to your final message when you next end a turn:\n${bullets}\n`,
+  );
+  process.exit(0);
+}
 
 process.stdout.write(
   JSON.stringify({
