@@ -177,9 +177,13 @@ if (thrashResult?.thrashing) {
         `session starting from zero could carry on from it alone; short enough to stay under its ` +
         `doc-budget cap. Replace stale content, never append to it.\n` +
         `2. Commit anything worth keeping.\n` +
-        `3. Tell the owner in ONE line that /clear is now the cheapest correct move and that ` +
-        `docs/SESSION_HANDOFF.md holds the resume point. You cannot run /clear — it is his command, ` +
-        `not a tool — so that one line IS the handoff.\n` +
+        `3. Launch your successor now — do not ask the owner to relay anything (#466). Run ` +
+        `\`node scripts/successor-route.mjs\`, act on the route it prints (dispatch the ` +
+        `compy-successor routine, or spawn_task the chip) using the resume point you just wrote to ` +
+        `docs/SESSION_HANDOFF.md, then say a tab verdict and \`Successor: launched|chip — <what you ` +
+        `just launched>\` and end your turn. A fresh successor starting clean gives this session's ` +
+        `context the same relief /clear would have — the owner does not have to notice this tab and ` +
+        `type it himself.\n` +
         `4. Do NOT paste a long recap into chat. The file is the recap; repeating it in the ` +
         `conversation is the cost you are trying to avoid.`,
     );

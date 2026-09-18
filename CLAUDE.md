@@ -125,8 +125,9 @@ owner.
 
 ### Reports, subagents, self-review
 
-- Owner replies: plain, short, outcome first; implementation detail belongs in commit/PR/spec.
-- End implementation sessions with a HANDOFF BLOCK: paste-ready next action, lane, tab-close verdict.
+- **Handoffs launch, never paste** (owner order 2026-09-17, #466): end by starting the successor
+  yourself — `node scripts/successor-route.mjs` picks a launcher routine or a `spawn_task` chip —
+  then write a tab verdict and `Successor: launched|chip|none — …`; the Stop hook checks the claim.
 - **Subagent routing:** `.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` — **the
   setting is the guard, do not add per-session routing instructions.** Pin a stronger `model:` in
   agent frontmatter only where adversarial judgment is provably the point (`web-design-director` is

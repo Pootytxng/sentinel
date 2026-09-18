@@ -1,4 +1,4 @@
-# SESSION HANDOFF — paste-ready prompt for the next session
+# SESSION HANDOFF — the resume point a launched successor reads first
 
 > Live pointer only. Product truth: [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md). Gate truth:
 > [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue: [`BACKLOG.md`](BACKLOG.md) (ledger, P0 first, derived
