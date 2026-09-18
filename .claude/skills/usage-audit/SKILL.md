@@ -41,8 +41,9 @@ skills, subagent model routing, boot-tax read paths, error classes — plus **he
 - 🔴/🟢 average carried context per turn as a share of that ceiling; the red line prints its own
   lever order.
 - 🟡 doc boot tax in bytes — each doc in the script's `DOC_BYTE_BUDGETS` (`docs/BACKLOG.md`,
-  `docs/RELEASE_STATE.md`, `CLAUDE.md`, `docs/OWNER_ACTION_CHECKLIST.md`) over its byte TARGET. The
-  gate is `$byteBudgets` in `scripts/doc-budget.ps1`, not this flag. For BACKLOG, archive steering-log
+  `docs/RELEASE_STATE.md`, `CLAUDE.md`, `docs/OWNER_ACTION_CHECKLIST.md`) over its byte TARGET. This
+  flag is not the gate: `CLAUDE.md` is gated by `MAX_BYTES` in `src/claude-md-laws-guard.test.ts`,
+  the other three by `$byteBudgets` in `scripts/doc-budget.ps1`. For BACKLOG, archive steering-log
   cycles to `docs/BACKLOG_ARCHIVE.md` per the retention rule at the top of its steering-log section.
 - 🟡 build-output bloat, in three classes — a worktree's `src-tauri/target` over ~20 GB; a target
   under that line but **untouched for 14 days** (build output no lane is using); and the **fleet
@@ -77,9 +78,10 @@ skills, subagent model routing, boot-tax read paths, error classes — plus **he
 - The context-size-advisor Stop hook is tracked (`.claude/hooks/context-size-advisor.mjs`,
   registered in `.claude/settings.json`). It reads LIVE context from the LAST assistant `usage` in
   the transcript tail (file size is a broken proxy post-compaction — the file keeps growing while
-  live context resets) and the compact window from the env var at runtime. Its size checkpoint
-  blocks once so mid-train state is persisted to `docs/SESSION_HANDOFF.md`; it never stops the work
-  and never asks for an owner paste block. Only its separate thrashing advisory (refill velocity)
+  live context resets) and the compact window from the env var at runtime. Each time its size
+  checkpoint fires, it blocks the stop once so mid-train state is persisted to
+  `docs/SESSION_HANDOFF.md`, then lets the turn end; it never stops the work and never asks for an
+  owner paste block. Only its separate thrashing advisory (refill velocity)
   escalates, to a one-line /clear note for the owner. Its thresholds live in the hook; don't
   restate them here.
 - ~215k tokens per transcript-MB (measured 2026-07-13) is still the right ratio for reading the
