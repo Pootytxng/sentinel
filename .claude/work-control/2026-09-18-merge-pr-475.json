@@ -1,0 +1,79 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` has one commit, 640cb66a. This claude-code session wrote it under git identity claude-code <claude-code@desk.local>. The owner's task brief asked for the three usage-audit.mjs defects reported by the #467 Handoff to be re-verified at source, fixed in that file only, and landed under Work Control. The same session lands the PR under that brief.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/473#issuecomment-5728166309",
+  "leaseEvidenceNote": "The operative Ownership claim on #473 is 5728166309 (2026-09-18T09:38Z, expires 20:55Z). It supersedes 5727650224 and only widens the write scope by the three receipt files. It names this folder, branch claude/473-usage-audit-flags, and a write scope of scripts/usage-audit.mjs and .claude/work-control/2026-09-18-{mark-pr-ready-475,merge-pr-475,close-issue-473}.json. `node scripts/scope-drift-gate.mjs --issue 473 --refresh` read it OK from the thread right after it was posted. The board item for #473 reads Active, Lane Claude Code, with Worktree / branch set to this folder @ this branch.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18T09:37Z with the REST files list of every open PR. Open PRs 471, 470, 464, 444 and 438 touch none of the four claimed paths. PR 475 touches exactly scripts/usage-audit.mjs. Every open PR is based on main; none is based on claude/473-usage-audit-flags.",
+  "inheritedWork": false,
+  "currentHead": "640cb66a88af003918dc79dc060b62e503d0fdf9",
+  "pr": 475,
+  "issue": 473,
+  "kind": "lane",
+  "branch": "claude/473-usage-audit-flags",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Checked 2026-09-18T09:40Z with `git ls-remote` right before this receipt: refs/heads/main reads b749b720, which is the PR's base and merge-base, so main has not moved since the branch was cut and the merge tree is the reviewed head tree. refs/heads/claude/473-usage-audit-flags reads 640cb66a. `git merge-tree --write-tree origin/main HEAD` exits 0. GitHub reads PR #475 as open and ready (isDraft false, marked ready under the gated receipt 2026-09-18-mark-pr-ready-475.json), mergeable MERGEABLE, head 640cb66a, base main, touching only scripts/usage-audit.mjs, with 0 closingIssuesReferences.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\nifty-bhaskara-c0b740, with one writer. Its core.hooksPath is set per worktree (config.worktree) to the relative .githooks. No other worktree's config was touched.",
+    "branch": "claude/473-usage-audit-flags at 640cb66a. origin/claude/473-usage-audit-flags reads the same commit.",
+    "dirtyState": "`git status --short` was clean at 640cb66a before the receipts were written. The only untracked files are this lane's two receipts, 2026-09-18-mark-pr-ready-475.json and this one; both are inside the claimed write scope. The logs/ captures are gitignored.",
+    "liveProcesses": "No app run, dev server, install or build of this lane is running. The pre-push gate finished with PASS at 09:36:53Z. The reviewer's scoped vitest runs had finished before this receipt was gated."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "640cb66a88af003918dc79dc060b62e503d0fdf9",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/nifty-bhaskara-c0b740/logs/verify-local-2026-09-18T09-27-03Z.log:9-44 (SHA-256 41f65a9808d7233c9bf131499cb1d509fec4c7ec4d471a0c6f222c345ec4b11f)",
+      "summary": "447 test files passed; 7337 passed / 4 skipped (7341). This includes the four guards that read usage-audit and both fleet guards, which read every registered worktree."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "640cb66a88af003918dc79dc060b62e503d0fdf9",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/nifty-bhaskara-c0b740/logs/verify-local-2026-09-18T09-27-03Z.log:45-71 (SHA-256 41f65a9808d7233c9bf131499cb1d509fec4c7ec4d471a0c6f222c345ec4b11f)",
+      "summary": "The frontend type-check and build stage passed; vite built clean."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "640cb66a88af003918dc79dc060b62e503d0fdf9",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/nifty-bhaskara-c0b740/logs/verify-local-2026-09-18T09-27-03Z.log:72-1788 (SHA-256 41f65a9808d7233c9bf131499cb1d509fec4c7ec4d471a0c6f222c345ec4b11f)",
+      "summary": "3 suites: 1327 passed; 0 failed; 24 ignored. No Rust file changed in this PR; the stage ran because it is part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "640cb66a88af003918dc79dc060b62e503d0fdf9",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/nifty-bhaskara-c0b740/logs/verify-local-2026-09-18T09-27-03Z.log:1789-2073 (SHA-256 41f65a9808d7233c9bf131499cb1d509fec4c7ec4d471a0c6f222c345ec4b11f)",
+      "summary": "The clippy stage finished at line 2073 (`Finished dev profile`) with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of scripts/verify-local.ps1 at this exact head, from the push that created the remote branch. The log header names this worktree as the tree it gated. It has all six LOCAL CHECK stage markers (lines 3, 5, 9, 45, 72, 1789) and zero matches for `test result: FAILED`, `panicked`, `error[E`, ` FAIL ` or `×` across its 2074 lines. The PASS banner is written to the console, not the log. The console capture is kept beside the log at logs/push-console-473.log (SHA-256 c9c3169b758ed4c4da3cd8c68be9881df667f85e71c33ecbe474428494bc5d0e). It reads `LOCAL CHECK RESULT: PASS` at line 2078 and the new-branch line at 2085, and git exited 0. This was the second gate run at this head. The first, verify-local-2026-09-18T09-04-44Z.log (SHA-256 f1954c84beaf0b7884e47613237fcb523d515b1f9f5151e4b3faff239777da09; console logs/push-473-2026-09-18.log, SHA-256 358dd7756a497b1b4b32065bc1953715bd039dd81de87ca91cf47ccbe7293a7f), failed 1 of 7341 tests: scripts/hookspath-fleet-guard.test.mjs named the peer folder reverent-bartik-501488 (the #474 lane, created 08:54Z), whose config.worktree carried the absolute core.hooksPath pin tracked in #405. That folder's own session repointed it to the relative .githooks at 09:26:35Z. This session touched no other worktree's config. Both logs are kept. The passing run was at the same head, so nothing changed between them but the peer's config.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "measured",
+    "reconciled": true,
+    "measurement": "Log lines 5-7 read: 1 changed path since origin/main measured against the claim on #473 (cache); OK: every changed path is inside `scripts/usage-audit.mjs`. Re-measured after the landing claim 5728166309 with `node scripts/scope-drift-gate.mjs --issue 473 --refresh`: OK against the widened scope, read from the thread."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "640cb66a88af003918dc79dc060b62e503d0fdf9",
+    "verdict": "PASS: one non-blocking finding, kept as written",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/475#issuecomment-5728160375",
+    "reviewerNote": "A read-only reviewer seat that wrote nothing in this change. At 640cb66a it confirmed HEAD, a clean tree, and one commit touching only scripts/usage-audit.mjs. It checked each defect against its source: the gate named per row against doc-budget.ps1 $byteBudgets and MAX_BYTES in src/claude-md-laws-guard.test.ts; the single 🔴 against usableHeadroom()'s reason, after a repo-wide grep of its callers (the lib, this script, and two tests that only match text); and the header's eight flag kinds against every flags.push site, in push order. It ran node --check (pass, LF, no BOM), a forced CLAUDE_CODE_AUTO_COMPACT_WINDOW=120000 run (exactly one 🔴 on the headroom line), an unforced run (the flag does not fire), the 9 guard files (321 passed), and doc-budget.ps1 (ALL PASS). The commit message has no closing keyword next to an issue number. Its one finding: the new conditional sentence 'Where a gate is already tighter than its target, that row cannot fire while the gate passes' is true, but its premise holds for 3 of the 4 rows. The author kept it as written, with the reason on the PR: listing the rows would restore the point-in-time claim that made the replaced comment stale."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #475 has 0 closingIssuesReferences, so this merge closes no issue. #473 closes separately, under its own close-issue receipt, after this landing lease is released. scripts/land-pr.mjs merges with a merge commit (never a squash) and prunes the head without --delete-branch."
+}
