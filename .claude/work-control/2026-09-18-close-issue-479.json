@@ -1,0 +1,79 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The implementation actor. `git log origin/main..HEAD` holds two commits, 20e2acb6 and f604203c. This claude-code session wrote both under git identity claude-code <claude-code@desk.local>. The owner's task brief asked for the root CLAUDE.md to go under 200 lines by moving subsystem detail into path-scoped .claude/rules, with the pinning guards redirected in the same change, and for the PR to be independently reviewed and merged when green. The same session lands the PR under that brief.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/479#issuecomment-5730123650",
+  "leaseEvidenceNote": "The release Handoff on #479 ends \"- Claim: Released.\" It releases claim 5729773047, so no lease is live on #479 when this receipt is gated. The board item reads Done, and its Claim expires field is cleared.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18 with the REST files list of every open PR. Open PRs 482, 480, 476, 471, 470, 464, 444 and 438 touch none of the 11 paths this PR changes. #482 touches only .claude/USAGE_ECONOMICS.md, the follow-up this PR hands off. Every open PR is based on main. None is based on claude/479-claude-md-rules.",
+  "inheritedWork": false,
+  "currentHead": "f604203c70b4ab6e58c5b52f33891a67f63f2dc9",
+  "pr": 483,
+  "issue": 479,
+  "kind": "lane",
+  "branch": "claude/479-claude-md-rules",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched after the landing. origin/main reads ec2521bc, the merge commit of PR #483 (scripts/land-pr.mjs, merge commit, no squash), whose parents are 06b91610 and f604203c. origin/claude/479-claude-md-rules is pruned. branch-disposition-audit reads OK. `git show origin/main:CLAUDE.md | wc -lc` reads 197 lines / 14,658 bytes.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\nervous-hertz-a13718, with one writer. Its config.worktree sets core.hooksPath to the relative .githooks. No other worktree's config was touched.",
+    "branch": "claude/479-claude-md-rules at f604203c. origin/claude/479-claude-md-rules reads the same commit.",
+    "dirtyState": "`git status --short` was clean at f604203c except for gitignored logs/ and this untracked receipt. The receipt file sits outside the claimed write scope: .claude/work-control/** overlapped #405's claim, so it was left out. It stays untracked here, and its carrier follows the landing.",
+    "liveProcesses": "No app run, dev server, install or build of this lane is running. The pre-push gate finished with PASS. The reviewer's scoped vitest runs had finished before this receipt was gated."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "f604203c70b4ab6e58c5b52f33891a67f63f2dc9",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/nervous-hertz-a13718/logs/verify-local-2026-09-18T12-28-54Z.log:9-44 (SHA-256 e71f6ec6a5b5de42c0ba83db9055e4b9034ef3dc081705aa8303cfea88c50a17)",
+      "summary": "449 test files passed; 7380 passed / 5 skipped (7385). This includes claude-md-laws-guard, verify-module-map-guard, subagent-throttle-hook, doc-budget and both fleet guards."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "f604203c70b4ab6e58c5b52f33891a67f63f2dc9",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/nervous-hertz-a13718/logs/verify-local-2026-09-18T12-28-54Z.log:45-71 (SHA-256 e71f6ec6a5b5de42c0ba83db9055e4b9034ef3dc081705aa8303cfea88c50a17)",
+      "summary": "The frontend type-check and build stage passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "f604203c70b4ab6e58c5b52f33891a67f63f2dc9",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/nervous-hertz-a13718/logs/verify-local-2026-09-18T12-28-54Z.log:72-1788 (SHA-256 e71f6ec6a5b5de42c0ba83db9055e4b9034ef3dc081705aa8303cfea88c50a17)",
+      "summary": "1327 passed; 0 failed; 24 ignored. No Rust file changed in this PR; the stage ran because it is part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "f604203c70b4ab6e58c5b52f33891a67f63f2dc9",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/nervous-hertz-a13718/logs/verify-local-2026-09-18T12-28-54Z.log:1789-2073 (SHA-256 e71f6ec6a5b5de42c0ba83db9055e4b9034ef3dc081705aa8303cfea88c50a17)",
+      "summary": "The clippy stage finished at line 2073 (`Finished dev profile`) with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of scripts/verify-local.ps1 at this exact head, from the push that created the remote branch. The log header names this worktree as the tree it gated. It has all six LOCAL CHECK stage markers (lines 3, 5, 9, 45, 72, 1789) and zero matches for `test result: FAILED`, `panicked`, `error[E`, ` FAIL ` or `×` across its 2073 lines. The PASS banner goes to the console, not the log. The console capture is kept beside the log at logs/push-console-479.log (SHA-256 3b9cee750e6ef31024ed7421101dfb89ae67ba717051033dd626196f10822fcb). It reads `LOCAL CHECK RESULT: PASS` at line 2078 and the new-branch line at 2085, and git exited 0.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "measured",
+    "reconciled": true,
+    "measurement": "Log lines 5-7 read: 11 changed paths since origin/main measured against the claim on #479 (thread); OK: every changed path is inside the claimed write scope."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "f604203c70b4ab6e58c5b52f33891a67f63f2dc9",
+    "verdict": "PASS: three non-blocking findings, answered in the evidence comment",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/483#issuecomment-5730113153",
+    "reviewerNote": "A declared read-only reviewer seat that wrote nothing in this change. At f604203c it confirmed HEAD. It diffed the old root line by line against the three rule files, and they carry the moved text verbatim. It found the guards stronger: rule markers pinned, globs matched to tracked files, every rule named and pinned, budgets ratcheted. It checked that the ★ rule loads for src-tauri/**. It checked decide(), the never-block posture and the entry guard. It ran the three guard suites (73/73), verify-module-map (exit 0) and doc-budget (ALL PASS). An earlier general-purpose pass also approved and found one lost clause, restored in f604203c. That pass is not the gate reviewer, because a general-purpose subagent is a claude-code seat."
+  },
+  "transition": "close-issue",
+  "closingNote": "#479 closes as done. Root CLAUDE.md is under 200 lines (197 / 14,658 bytes, from 260 / 19,981), and no law was deleted. Subsystem detail moved to path-scoped .claude/rules. Every pinning guard was redirected and ratcheted, and the subagent-throttle contradiction was fixed. All of it is on main in ec2521bc, reviewed at the exact head and gate-proven. Named and not done here: (1) the merge-pr-483 and close-issue-479 receipts reach main in a follow-up carrier; (2) the stale USAGE_ECONOMICS.md line is #481 / PR #482."
+}
