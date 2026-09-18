@@ -1,0 +1,73 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/495#issuecomment-5733935470",
+  "leaseEvidenceNote": "Newest Ownership claim on #495 (fresh unclaimed slice, refreshed for PR #497 and widened to three doc lists). It names this folder, branch `claude/angry-hamilton-bb33bd` and every path in the delta plus `.claude/work-control/2026-09-*-495.json` and `-497.json`; the pre-push scope-drift stage read it OK.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "No other open PR touches any path in this delta (checked across open PRs 2026-09-18 before the claim).",
+  "inheritedWork": false,
+  "currentHead": "eeed164160455e48b10f26bf0d3b8346a67776ab",
+  "pr": 497,
+  "issue": 495,
+  "kind": "lane",
+  "branch": "claude/angry-hamilton-bb33bd",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta 1d5fb547..eeed1641 has two commits, 1b866baf and eeed1641, both authored and committed as claude-code <claude-code@desk.local>.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "eeed164160455e48b10f26bf0d3b8346a67776ab",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/angry-hamilton-bb33bd/logs/verify-local-2026-09-18T17-49-11Z.log:9-44 (SHA-256 e99f5357c9ea8f66c76fa8adb291b0435ffb6a38a36221c181a4c8a87c175d4a)",
+      "summary": "Test Files  451 passed (451); Tests  7462 passed | 4 skipped (7466)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "eeed164160455e48b10f26bf0d3b8346a67776ab",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/angry-hamilton-bb33bd/logs/verify-local-2026-09-18T17-49-11Z.log:45-71 (SHA-256 e99f5357c9ea8f66c76fa8adb291b0435ffb6a38a36221c181a4c8a87c175d4a)",
+      "summary": "tsc and vite build passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "eeed164160455e48b10f26bf0d3b8346a67776ab",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/angry-hamilton-bb33bd/logs/verify-local-2026-09-18T17-49-11Z.log:72-1444 (SHA-256 e99f5357c9ea8f66c76fa8adb291b0435ffb6a38a36221c181a4c8a87c175d4a)",
+      "summary": "Largest suite: test result: ok. 1327 passed; 0 failed; 24 ignored; 0 measured; 0 filtered out; finished in 5.39s."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "eeed164160455e48b10f26bf0d3b8346a67776ab",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/angry-hamilton-bb33bd/logs/verify-local-2026-09-18T17-49-11Z.log:1445-1448 (SHA-256 e99f5357c9ea8f66c76fa8adb291b0435ffb6a38a36221c181a4c8a87c175d4a)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "This is the pre-push run of `scripts/verify-local.ps1` for the push of eeed1641. The console read `LOCAL CHECK RESULT: PASS` and the push exited 0. The log has zero lines matching `test result: FAILED`, `panicked`, `error[E`, ` FAIL `, `^warning` or `^error`. The branch forks from 1d5fb547, so the suite is the one at that base; main's later commits (PR #496 and its receipts) are not in this run. An earlier push of this same head (log verify-local-2026-09-18T17-45-50Z) was blocked only by #496's then-uncommitted receipts in another worktree; once they were carried, this run passed unchanged.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "eeed164160455e48b10f26bf0d3b8346a67776ab",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/497#issuecomment-5733956965",
+    "reviewerNote": "Reviewer-only seat, a read-only subagent in a fresh context at the exact head. Pass 1 at 1b866baf checked the gate change, independence (no alias can map the shared account name to grok), load-bearing tests and the identity note against git log; its one non-blocking finding was fixed in eeed1641 and pass 2 re-reviewed that head (8 test files / 342 tests passed). It is a Claude model, independent by role only, because Codex is at its usage limit until 2026-09-19 04:51 local."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "Marks the draft ready after the review; the merge follows under its own receipt."
+}
