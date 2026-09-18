@@ -46,14 +46,15 @@ more to me than a "works fine."
   `4B72D681…4E98`, published 2026-08-19). Do not send 0.9.0, 0.9.11, or any
   Drive link.
 - **What this buys you:** six unknowns become six known installs on 0.9.26,
-  and the consent-first update path gets tested at n=7 instead of the at
-  least two testers who have used it so far (they auto-updated to 0.9.12 on
+  and the consent-first update path gets tested by every tester instead of
+  the at least two who have used it so far (they auto-updated to 0.9.12 on
   2026-08-03/04).
 - **What to watch for:** if more than one of them reports the update check
   failing, that is a real signal and it goes straight to the top of the queue.
 - 20-minute ask after they install: first screen verdict → Gaming Mode *or*
   one undoable apply → play borderless → Live debrief → undo. Not a tour of
   Test / experiments.
-- Record whatever comes back in `docs/BETA_DISTRIBUTION_RECORD.md` — that file
-  is the only place tester state is tracked, and it currently still says 0.9.0
-  for all six.
+- Record the send in `docs/BETA_DISTRIBUTION_RECORD.md` (it currently still
+  says 0.9.0 for all six). Each tester's install and replies go in your local
+  `BETA_TESTER_TRACKER.local.md`, copied from `docs/BETA_TESTER_TRACKER.md`;
+  the `.local` copy stays out of git.
