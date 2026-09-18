@@ -555,3 +555,12 @@ again 2026-09-02 ("THREE" while A_prune sat above it) — a checklist that misco
 defect as one that lists non-asks. Re-derived 2026-09-03: FIVE (A0 residual · A0 distribution call ·
 A_settings · A_prune · A_wmi). Re-listing every archived item in the live file was a second copy that
 only cost boot tax; the archive is the index.
+
+## A_settings ① — the merge rule keyed to CI (moved from the live checklist 2026-09-18)
+
+The row asked for the `autoMode` merge rule in `~/.claude/settings.json` to stop keying on "required
+CI checks are passing" / "failing, pending, or absent", because hosted CI is off (2026-07-16) and
+checks are always absent. The corrected settings file, keyed to `scripts/verify-local.ps1` passing at
+the exact head plus a `scripts/work-control-gate.mjs` PASS, was applied 2026-08-30 and verified 23/23.
+Re-checked 2026-09-18: the CI wording is gone and the local-gate wording is live. ② (arming
+`.claude/hooks/work-control-receipt-guard.mjs`) stays open in the live checklist.

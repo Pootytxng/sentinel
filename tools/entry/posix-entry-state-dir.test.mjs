@@ -14,7 +14,7 @@
 //     <cwd>/CompyEntry/launch.json                    (writeToken)
 //     <cwd>/CompyEntry/sessions/<folderhash>.json     (writeLineage)
 //
-// `.gitignore` names no CompyEntry, so those session records sat untracked in the work tree where a
+// `.gitignore` named no CompyEntry, so those session records sat untracked in the work tree where a
 // blind `git add -A` would commit them — conversation ids, folder hashes, pids and the whole Work
 // Control board cache, into a public repository.
 //
@@ -41,8 +41,10 @@
 //
 // Companion: tools/entry/session-root-assert.test.mjs (severity + the duplicated path helpers).
 
+import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entryStateDir } from "../../.claude/hooks/session-root-assert.mjs";
@@ -136,6 +138,17 @@ describe("the store is absolute on a POSIX session — it is never the checkout 
   it("falls back to the home directory when nothing names a state root", async () => {
     const m = await loadUnder({});
     expect(m.TOKEN_DIR).toBe(join(homedir(), ".local", "state", "CompyEntry"));
+  });
+
+  it("keeps a copy an older session left in a checkout out of git, at any depth", () => {
+    // The fix stops new writes landing in the checkout; it cannot remove a folder a session wrote
+    // before the fix. `.gitignore` is the second wall. It must match at any depth, because the
+    // relative store followed the hook's cwd, not the repository root.
+    const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+    for (const path of ["CompyEntry/board.json", "CompyEntry/sessions/0a1b.json", "src/CompyEntry/launch.json"]) {
+      const probe = spawnSync("git", ["check-ignore", "--no-index", "-q", path], { cwd: repo });
+      expect({ path, ignored: probe.status === 0 }).toEqual({ path, ignored: true });
+    }
   });
 });
 

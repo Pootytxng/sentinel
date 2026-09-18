@@ -1,0 +1,87 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The implementation actor. `git log 8e373da0..b056ab3e` holds six commits: 20b85694, 0242a0fa, 96db3df5, 9ebe9fde, c384e824 and b056ab3e. All six were written by claude-code lanes (cloud Linux sessions; PRs #441, #442 and #443 were squashed into this lane). They carry the git identity `Pootytang <162564178+Pootytxng@users.noreply.github.com>` because the cloud containers committed through the GitHub API as the connected account. The PR's own review-request comment declares every mutation in the delta as claude-code's, so claude-code is the only mutation author listed. This desk session is also claude-code. It authored none of the six and did not push to the PR branch, but it shares the author identity, so it is not the reviewer.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/439#issuecomment-5732847213",
+  "leaseEvidenceNote": "The operative Ownership claim on #439 is 5732847213 (expires 2026-09-19). It re-posts 5732740271 with backticked paths. It names this folder, branch claude/jovial-dijkstra-3ac6c2, and a write scope covering all 11 paths of the PR delta plus this receipt, the #439 close receipt, .gitignore and docs/OWNER_ACTION_CHECKLIST.md. `node scripts/scope-drift-gate.mjs --issue 439 --refresh` read it from the thread: 11 changed paths since origin/main, every one inside the claimed scope. Board item #439 is Active, Lane Claude Code, and Worktree / branch names this folder @ this branch. The earlier leases on #439 and #440 were released by the Handoffs of 2026-09-17T07:24Z.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18 with the REST files list of every open PR. Two open PRs share paths with this delta. #490 (draft) touches tools/entry/target-ownership.test.mjs, and #470 (draft) touches scripts/lib/scope-drift.mjs. Neither holds a live lease on this delta, and both are drafts based on main. The merge order #444 before #490 is recorded on #490 (issuecomment-5732808826). A duplicate successor session (folder epic-cray-fe2842) started on this same task. It stood down after reading this lease and wrote nothing but its own core.hooksPath.",
+  "inheritedWork": true,
+  "currentHead": "b056ab3e563cffc42404eea6148defacd6543b98",
+  "pr": 444,
+  "issue": 439,
+  "kind": "lane",
+  "branch": "claude/work-lanes-consolidation-gfa4gt",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Checked with `git ls-remote` right before this receipt: refs/heads/main reads f92bf0ed and refs/heads/claude/work-lanes-consolidation-gfa4gt reads b056ab3e. The PR's merge-base is 8e373da0. `git merge-tree --write-tree origin/main HEAD` exits 0. GitHub reads PR #444 as open, not a draft, mergeable, CLEAN, head b056ab3e, closingIssuesReferences [440].",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\jovial-dijkstra-3ac6c2, one writer. core.hooksPath was repointed to the relative .githooks at worktree scope (#405).",
+    "branch": "Local branch claude/jovial-dijkstra-3ac6c2 was moved with `git reset --keep` to b056ab3e. Its upstream was set to origin/claude/work-lanes-consolidation-gfa4gt, so this checkout gates as a checkout of the PR branch. push.default is unset (simple), so a bare push cannot reach the PR branch.",
+    "dirtyState": "`git status --short` was clean at b056ab3e except for gitignored logs/ and this untracked receipt.",
+    "liveProcesses": "No build, dev server or install of this lane is running. Both verify-local runs had finished before this receipt."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "b056ab3e563cffc42404eea6148defacd6543b98",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-12-53Z.log:8-43 (SHA-256 636a11ea8d79c27026bf5a0874288c0ab5b59bc8348dd294c9abbdcfe597fbb5)",
+      "summary": "445 test files passed; 7276 passed / 4 skipped (7280). This includes tools/entry/posix-entry-state-dir.test.mjs, posix-session-root.test.mjs, target-ownership.test.mjs, handoff-worktree-truth.test.mjs, closing-keyword-guard and hookspath-fleet-guard."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "b056ab3e563cffc42404eea6148defacd6543b98",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-12-53Z.log:44-70 (SHA-256 636a11ea8d79c27026bf5a0874288c0ab5b59bc8348dd294c9abbdcfe597fbb5)",
+      "summary": "The frontend type-check and build stage passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "b056ab3e563cffc42404eea6148defacd6543b98",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-12-53Z.log:71-1778 (SHA-256 636a11ea8d79c27026bf5a0874288c0ab5b59bc8348dd294c9abbdcfe597fbb5)",
+      "summary": "1318 passed; 0 failed; 24 ignored. No Rust file changed in this PR; the stage ran because it is part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "b056ab3e563cffc42404eea6148defacd6543b98",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-12-53Z.log:1779-2063 (SHA-256 636a11ea8d79c27026bf5a0874288c0ab5b59bc8348dd294c9abbdcfe597fbb5)",
+      "summary": "The clippy stage finished at line 2063 (`Finished dev profile`) with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is a full `pwsh -File scripts/verify-local.ps1 -NoInstall` run at this exact head. Its console capture reads `LOCAL CHECK RESULT: PASS` and the process exited 0 (console log SHA-256 80df8524761b8e4e162d8e4581a0da04ec0156561aa0ed53789674b69c86d98c). The log has zero lines matching `test result: FAILED`, `panicked`, `error[E` or ` FAIL `. One line matches `×`: line 1278, the description of an ignored manual-QA test. A first run at the same head (logs/verify-local-2026-09-18T16-08-27Z.log) failed two tests, and neither failure was in the delta's code. (1) hookspath-fleet-guard named the duplicate session's folder epic-cray-fe2842, which still had the absolute core.hooksPath its fresh worktree arrives with. That session repointed its own folder, and the fleet guard passes in the second run. (2) closing-keyword-guard flagged the 9ebe9fde message line `PR #441 closed #440`. That run had no upstream, so the scan covered every commit ahead of the merge-base. The upstream was then set to the PR branch, where those commits are already pushed, and the finding is recorded here rather than hidden. The finding is real: landing 9ebe9fde closes #440, which is why closingIssuesReferences is [440]. That closure is the intended outcome, because this PR fixes #440. Every store composer is now absolute: TOKEN_DIR, LOCK_DIR, TIER_STATE_DIR and claimCacheDir. The one remaining LOCALAPPDATA fallback is the compy.exe default in scripts/q7-probe.mjs:57, which is not the store. The lease the gate reads for #440 is released. The commit could only be reworded by force-pushing the PR branch, which is owner-bound, so it was not reworded. The keyword reached the branch because the cloud lane pushed through the GitHub API, which skips .githooks/pre-push.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured in the gate run (no session record for this folder); measured separately",
+    "reconciled": true,
+    "measurement": "`node scripts/scope-drift-gate.mjs --issue 439 --refresh`: 11 changed paths since origin/main measured against the claim on #439 (thread); OK: every changed path is inside the claimed write scope."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "b056ab3e563cffc42404eea6148defacd6543b98",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/444#issuecomment-5732958570",
+    "reviewerNote": "Reviewer-only seat (it can never be a mutation author). It ran read-only at a checkout whose HEAD was exactly b056ab3e and left git status clean. It answered all four required probes. (a) Windows store paths are byte-identical: TOKEN_DIR, LOCK_DIR, TIER_STATE_DIR and claimCacheDir were evaluated live. (b) The backslash false-ALLOW predates this PR (toComparable); a new exotic false-DENY needs the same literal-backslash precondition. Both are tracked in #491. (c) The only remaining relative LOCALAPPDATA fallback is scripts/q7-probe.mjs:57, which is not the store. (d) No blocking defect. It re-ran the posix-entry-state-dir, posix-session-root, target-ownership and handoff-worktree-truth suites green. Its verdict agrees with the independent runtime review by a cloud claude-code session (issuecomment-5732688591). That review is not counted toward this gate, because it shares the authors identity. The owner prefers a non-Claude reviewer, but Codex was at its usage limit until 2026-09-19 04:51 and Cowork did not answer. This seat is a Claude model, independent by role and context only, and that is stated on the PR."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #444's closingIssuesReferences is [440], from the autolinked phrase `#441 closed #440` in the PR body and in commit 9ebe9fde. Merging closes #440, and the project's Item closed workflow sets it Done. The gate checked #440's lease: released 2026-09-17T07:24Z. #439 is not a closing reference. It closes separately under its own close-issue receipt, after this session's lease on it is released. scripts/land-pr.mjs merges with a merge commit (never a squash) and prunes the head without --delete-branch."
+}
