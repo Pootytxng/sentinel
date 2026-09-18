@@ -43,8 +43,10 @@ skills, subagent model routing, boot-tax read paths, error classes — plus **he
 - 🟡 doc boot tax in bytes — each doc in the script's `DOC_BYTE_BUDGETS` (`docs/BACKLOG.md`,
   `docs/RELEASE_STATE.md`, `CLAUDE.md`, `docs/OWNER_ACTION_CHECKLIST.md`) over its byte TARGET. This
   flag is not the gate: `CLAUDE.md` is gated by `MAX_BYTES` in `src/claude-md-laws-guard.test.ts`,
-  the other three by `$byteBudgets` in `scripts/doc-budget.ps1`. For BACKLOG, archive steering-log
-  cycles to `docs/BACKLOG_ARCHIVE.md` per the retention rule at the top of its steering-log section.
+  the other three by `$byteBudgets` in `scripts/doc-budget.ps1`. For BACKLOG, move anything that is
+  not current execution status out to `docs/BACKLOG_ARCHIVE.md`, which holds the retired steering-log
+  cycles. `docs/BACKLOG.md` states no retention rule of its own — its purpose line is "current
+  execution status only", and that is the whole test.
 - 🟡 build-output bloat, in three classes — a worktree's `src-tauri/target` over ~20 GB; a target
   under that line but **untouched for 14 days** (build output no lane is using); and the **fleet
   total** across every worktree once it passes 40 GB. The middle two exist because the per-tree rule
