@@ -1,0 +1,79 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` has one commit, 47c193d1. This claude-code session wrote it under git identity claude-code <claude-code@desk.local>. The owner's chat order of 2026-09-17 asked for each hunk of the unpushed local commit 723579d7 to be checked against current main, and for only the fixes still needed to land through a claimed lane, re-applied rather than cherry-picked. 723579d7 was also written by claude-code (2026-09-15), in another session; its text was re-derived here, not carried, so the proof delta has one author. The same session lands the PR under that order.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/460#issuecomment-5725095391",
+  "leaseEvidenceNote": "Handoff 5725095391 ends \"- Claim: released\". It releases landing claim 5725008733, which superseded the build claim 5724880846. No lease is live on #460 when this receipt is gated. The board item reads Status Review and Gate None, with Claim expires cleared. The carrier that brings this receipt to main runs afterwards, under a fresh receipts-only claim.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18T04:07Z with `gh pr list --state open --json files`. Open PR 444 touches only .claude/hooks, scripts/fleet-snapshot.mjs, scripts/handoff-worktree-truth.test.mjs, scripts/lib/scope-drift.mjs and tools/entry files. Open PR 438 touches only _tester-message.md and docs/BETA_TESTER_README.md. Neither touches any of #461's four paths or its receipt paths. Every open PR is based on main; none is based on claude/460-skill-stale-rows.",
+  "inheritedWork": false,
+  "currentHead": "47c193d1b02724f1472467b96a02b780cf6a8cb5",
+  "pr": 461,
+  "issue": 460,
+  "kind": "lane",
+  "branch": "claude/460-skill-stale-rows",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched after the landing. origin/main reads f3b224e3, the merge commit of PR #461 (merged 2026-09-18T04:19:39Z by scripts/land-pr.mjs). 47c193d1 is its second parent, and `git merge-base --is-ancestor 47c193d1 origin/main` holds. f3b224e3's tree is identical to 47c193d1's. land-pr pruned the head branch, and branch-disposition-audit read OK. PR #461 has 0 closingIssuesReferences, so the merge did not close #460.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\sleepy-wing-06fd0e, with one writer. Its core.hooksPath is set per worktree to the relative .githooks. It was repointed from an absolute pin to the main checkout's .githooks before the first push, the pattern tracked in #405. That is this folder's own config, and no other worktree's config was touched. This folder's previous branch, claude/sleepy-wing-06fd0e at 47ee0045 (which carries 723579d7), is left as it was.",
+    "branch": "claude/460-skill-stale-rows at 47c193d1 in this folder. Its remote ref was pruned after the merge, and 47c193d1 stays reachable from origin/main through f3b224e3.",
+    "dirtyState": "`git status --porcelain` shows only this landing's three untracked receipts: mark-pr-ready-461, merge-pr-461 and this one. No tracked file is modified.",
+    "liveProcesses": "None. The landing's merge, prune, fetch and audit have finished."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "47c193d1b02724f1472467b96a02b780cf6a8cb5",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/sleepy-wing-06fd0e/logs/verify-local-2026-09-18T03-54-33Z.log:33-138 (SHA-256 afdba34c1d19d5e63cc5ec1885213760ee8c3e0f46a6c35d598a8e8f64b29425)",
+      "summary": "446 test files passed; 7286 passed / 4 skipped (7290). This includes the guards that read the four skill files."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "47c193d1b02724f1472467b96a02b780cf6a8cb5",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/sleepy-wing-06fd0e/logs/verify-local-2026-09-18T03-54-33Z.log:139-165 (SHA-256 afdba34c1d19d5e63cc5ec1885213760ee8c3e0f46a6c35d598a8e8f64b29425)",
+      "summary": "The frontend type-check and build stage passed; vite built clean."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "47c193d1b02724f1472467b96a02b780cf6a8cb5",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/sleepy-wing-06fd0e/logs/verify-local-2026-09-18T03-54-33Z.log:166-1882 (SHA-256 afdba34c1d19d5e63cc5ec1885213760ee8c3e0f46a6c35d598a8e8f64b29425)",
+      "summary": "1327 passed; 0 failed; 24 ignored. No Rust file changed in this PR; the stage ran because it is part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "47c193d1b02724f1472467b96a02b780cf6a8cb5",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/sleepy-wing-06fd0e/logs/verify-local-2026-09-18T03-54-33Z.log:1883-2167 (SHA-256 afdba34c1d19d5e63cc5ec1885213760ee8c3e0f46a6c35d598a8e8f64b29425)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of scripts/verify-local.ps1 at this exact head, from the push that created the remote branch; it is the only gate run in this folder. The log header names this worktree as the tree it gated. It has all seven LOCAL CHECK stage markers (lines 3, 27, 29, 33, 139, 166, 1883) and zero matches for `test result: FAILED`, `panicked`, `error[E`, ` FAIL ` or `×` across its 2167 lines. The PASS banner is written to the console, not the log. The console capture is kept beside the log at logs/push-console-460.log (SHA-256 cb8504e645649d78085796a4b4b631b789edc9f5078cff531e63b97c7a157fc6). It reads `LOCAL CHECK RESULT: PASS` at line 2172 and the new-branch line at 2179, and git exited 0. Main has not moved since the base c5f6bfe5, so no separate merge-tree gate is needed. This receipt binds to the same reviewed head, 47c193d1, which is the tree main received through the merge f3b224e3. main was c5f6bfe5 when the PR was merged, and a merge of 47c193d1 onto its own base leaves 47c193d1's tree unchanged.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "measured",
+    "reconciled": true,
+    "measurement": "Log lines 29-31 read: 4 changed paths since origin/main measured against the claim on #460 (cache); OK: every changed path is inside the four claimed skill files. Re-measured after the landing claim 5725008733 with `node scripts/scope-drift-gate.mjs --issue 460 --refresh`: OK against the widened scope, read from the thread."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "47c193d1b02724f1472467b96a02b780cf6a8cb5",
+    "verdict": "PASS-WITH-NITS: two NON-BLOCKING findings, none requiring a code change",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/461#issuecomment-5725084847",
+    "reviewerNote": "A read-only reviewer seat that wrote nothing in this change. It confirmed HEAD = 47c193d1, a clean tree, and remote heads 47c193d1 / main c5f6bfe5. It confirmed one commit touching exactly the four skill files. Its premise check: 723579d7 is not an ancestor of main, and main's four files were still identical to 723579d7's parent. It checked each hunk against its source. INDEX's doc-sync row matches the skill's own precedence paragraph. The plugin note's \"four\" is exactly the overlap between the plugin's five skill directories and the repo's eleven. doc-sync's step 4 routing matches each law doc's own header. The gate-drift updater line fits RELEASE_STATE's Auto-updater row, which cites dependency, config and capability lines, and it pins no version. The usage-audit wording matches flagPeakContext(), WINDOW_CONFIGURED_SINCE = 2026-08-07, nativeCompactCeiling() and the on-disk USAGE_ECONOMICS.md stub. It ran the 20 guard files: 20 files, 566 tests passed, exit 0. Its own git grep found no test reading these files outside that set. It re-proved the HQ-citation guard: with the off-disk clause stripped, the guard went red (1 failed of 83) naming usage-audit/SKILL.md; after the restore the tree was clean and git diff exited 0. It judged all five deviations from 723579d7 justified. Its non-blocking findings: (a) the gate log ends at clippy's Finished line with no PASS banner. Answered on the PR: the banner is console-only by design, and the same push's console capture logs/push-console-460.log reads LOCAL CHECK RESULT: PASS at line 2172. (b) The PR body's first deviation cell named one of three wording changes; the body was corrected, and the head did not change."
+  },
+  "transition": "close-issue",
+  "closingNote": "#460 closes as done. The still-needed corrections from 723579d7 are on main in f3b224e3, re-derived against current main, reviewed at the exact head, and guard-proven. Named and not done here: (1) the three receipts reach main in a follow-up receipts-only carrier; (2) adjacent stale lines reported on PR #461 stay open: gate-drift-audit's outbound line, usage-audit's \"machine-local, gitignored\" hook note and flag list, and the 200k in the header comment of scripts/usage-audit.mjs; (3) the Cowork plugin's copies of the four skills need a re-port on the Cowork side; (4) what happens to 723579d7 itself, on the canonical checkout's local main and the local branches that hold it, is the owner's call, and nothing was deleted; (5) this folder was a further recurrence of the absolute core.hooksPath pin tracked in #405."
+}
