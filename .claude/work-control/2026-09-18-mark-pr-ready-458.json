@@ -1,0 +1,79 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` has one commit, fc4e01ba. This claude-code session wrote it under git identity claude-code <claude-code@desk.local>. The owner's chat order of 2026-09-17 asked for one bounded guard against `vitest run` silently dropping unmatched file arguments, plus its own test, carried through Work Control. The same session lands the PR under that order.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/457#issuecomment-5724516196",
+  "leaseEvidenceNote": "The operative Ownership claim on #457 is 5724516196 (2026-09-18T03:02Z, expires 15:02Z). It supersedes 5724365807 and only widens the write scope by the three receipt files. It names this folder, branch claude/457-vitest-filter-guard, and a write scope of scripts/lib/vitest-filter-guard.mjs, scripts/vitest-filter-guard.test.mjs, vitest.config.ts, scripts/vitest-global-setup.test.mjs, and .claude/work-control/2026-09-18-{mark-pr-ready-458,merge-pr-458,close-issue-457}.json. `node scripts/scope-drift-gate.mjs --issue 457 --refresh` read it OK right after it was posted. The board item for #457 reads Active, with Worktree set to this folder @ this branch.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18 with `gh pr list --state open --json files`. Open PR 444 touches only .claude/hooks, scripts/fleet-snapshot.mjs, scripts/handoff-worktree-truth.test.mjs, scripts/lib/scope-drift.mjs and tools/entry files, and PR 438 touches only tester docs. Neither touches any of #458's four paths. No open PR is based on claude/457-vitest-filter-guard.",
+  "inheritedWork": false,
+  "currentHead": "fc4e01ba0239fa7e56f39db06da44798f2828b78",
+  "pr": 458,
+  "issue": 457,
+  "kind": "lane",
+  "branch": "claude/457-vitest-filter-guard",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched 2026-09-18. origin/main reads cf10ed52, the PR's base and merge-base, so the merge tree equals the reviewed head's tree plus nothing else. GitHub reads PR #458 as draft, head fc4e01ba, MERGEABLE, with 0 closingIssuesReferences.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\github-app-install-5400f6, with one writer. Its core.hooksPath is set per worktree to the relative .githooks. It was repointed from an absolute pin to the main checkout's .githooks after hookspath-fleet-guard refused the first push; that is this folder's own config, and no other worktree's config was touched.",
+    "branch": "claude/457-vitest-filter-guard at fc4e01ba. `git ls-remote --heads origin` reads the same commit.",
+    "dirtyState": "`git status --porcelain` was clean before this receipt was written. The only untracked files since are this receipt and the gitignored logs/ captures.",
+    "liveProcesses": "No app run, dev server, install or build of this lane is running. The pre-push gate finished with PASS. The reviewer's scoped vitest runs had finished before this receipt was gated."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "fc4e01ba0239fa7e56f39db06da44798f2828b78",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/github-app-install-5400f6/logs/verify-local-2026-09-18T02-55-33Z.log:9-40 (SHA-256 e3cf037485ac54d62d6be753246eeea9dbaab20acdfb28a0f85f6cdce24696c8)",
+      "summary": "446 test files passed; 7286 passed / 4 skipped (7290). The new guard is registered in this run. A whole-suite run passes no filters, so by its code path it returns before any glob; that path is pinned by the test 'no filters costs nothing', and the log does not show it directly."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "fc4e01ba0239fa7e56f39db06da44798f2828b78",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/github-app-install-5400f6/logs/verify-local-2026-09-18T02-55-33Z.log:45-70 (SHA-256 e3cf037485ac54d62d6be753246eeea9dbaab20acdfb28a0f85f6cdce24696c8)",
+      "summary": "The frontend type-check and build stage passed; vite built clean."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "fc4e01ba0239fa7e56f39db06da44798f2828b78",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/github-app-install-5400f6/logs/verify-local-2026-09-18T02-55-33Z.log:72-1786 (SHA-256 e3cf037485ac54d62d6be753246eeea9dbaab20acdfb28a0f85f6cdce24696c8)",
+      "summary": "1327 passed; 0 failed; 24 ignored. No Rust file changed in this PR; the stage ran because it is part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "fc4e01ba0239fa7e56f39db06da44798f2828b78",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/github-app-install-5400f6/logs/verify-local-2026-09-18T02-55-33Z.log:1789-2073 (SHA-256 e3cf037485ac54d62d6be753246eeea9dbaab20acdfb28a0f85f6cdce24696c8)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of scripts/verify-local.ps1 at this exact head, from the push that created the remote branch. The log header names this worktree as the tree it gated. It has all six LOCAL CHECK stage markers (lines 3, 5, 9, 45, 72, 1789) and zero matches for `test result: FAILED`, `panicked`, `error[E`, ` FAIL ` or `×` across its 2073 lines. The PASS banner is written to the console, not the log. The console capture is kept beside the log at logs/push-console-2026-09-18T02-55-33Z.log (SHA-256 86c07a4300315b9a97d2e537aad3049d2f69c71dec18712972e15141ba6f3a3b). It reads `LOCAL CHECK RESULT: PASS` at line 2078 and the new-branch line at 2085, and git exited 0. An earlier push at the same head (log verify-local-2026-09-18T02-52-00Z.log) was refused by one test only: scripts/hookspath-fleet-guard.test.mjs named this folder's absolute core.hooksPath pin. The code did not change between the two runs. Main has not moved since the base, so no separate merge-tree gate is needed.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "measured",
+    "reconciled": true,
+    "measurement": "Log lines 5-7 read: 4 changed paths since origin/main measured against the claim on #457; OK: every changed path is inside the claimed scope. Re-measured after the landing claim with `node scripts/scope-drift-gate.mjs --issue 457 --refresh`: OK against the widened scope."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "fc4e01ba0239fa7e56f39db06da44798f2828b78",
+    "verdict": "PASS-WITH-NITS: three NON-BLOCKING findings, none requiring a change",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/458#issuecomment-5724627127",
+    "reviewerNote": "A read-only reviewer seat that wrote nothing in this change. It confirmed HEAD = fc4e01ba and a clean tree, then ran the pinned tests (2 files, 16 passed). The literal incident command refused, naming only the stale path, with no test run. The corrected command passed 3 files / 40 tests. Probes of case-flip, directory, absolute-path and option-value filters all passed. It re-proved falsifiability itself: unwired gives 2 failed and the incident reproduced as 2 passed / exit 0; logic mutated gives 6 failed. Both temp edits were restored in the same command. It read vitest 4.1.8's dist for parseCLI, globTestFiles/filterFiles, the globalSetup order and resolveProjects. Its non-blocking findings stay as known limits, not changed here: (1) watch mode is not exercised live, because a watch process does not exit; it shares the run command's filter schema. (2) `list`/`bench` refusal is not exercised live; they share the globTestFiles path. (3) vitest's own reporter prints 'No test files found' ahead of the refusal. That is vitest's behaviour, outside this change."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "PR #458 has 0 closingIssuesReferences. The body says \"Refs #457\" and places no closing keyword next to any issue number."
+}
