@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  STARMAP_REL,
   SUBMAP_REL,
   compare,
+  compareIndex,
   declaredCount,
   declaredModules,
   delegatesToSubmap,
   extractMapSection,
   mergeDeclared,
   productionSource,
+  rootStarIndex,
   verifyRepo,
 } from "./verify-module-map.mjs";
 
@@ -252,6 +255,81 @@ describe("verifyRepo against a repo on disk (the wiring, not the comparison)", (
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+// #479: the ★ entries moved into a path-scoped rule so the root could fall under 200 lines. The root
+// keeps the count and a ★ index; these pin the third home the same way the submap is pinned.
+const THREE_HOME_FIXTURE = {
+  "CLAUDE.md": [
+    "### Rust module map (`lib.rs` carved up)",
+    "",
+    `Complete (2 \`.rs\` files). ★ index: \`actions.rs\`. Entries: ${STARMAP_REL} and \`src-tauri/CLAUDE.md\`.`,
+    "",
+  ].join("\n"),
+  [STARMAP_REL]: '---\npaths:\n  - "src-tauri/**"\n---\n### Rust module map — ★ (continued)\n\n- ★ `actions.rs` (~10) — the mutation boundary.\n',
+  "src-tauri/CLAUDE.md": "### Rust module map — read-only (continued)\n\n- `fps.rs` (~20) — IPC.\n",
+  "src-tauri/src/actions.rs": 'fn apply() { key.set_value("x"); }\n',
+  "src-tauri/src/fps.rs": "fn read() {}\n",
+};
+
+const withRepo = (files, fn) => {
+  const root = fixtureRepo(files);
+  try {
+    return fn(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
+describe("three homes (root ★ index + path-scoped ★ rule + src-tauri read-only half)", () => {
+  it("reads the ★ entries from the rule file and passes when all three cover the tree", () => {
+    withRepo(THREE_HOME_FIXTURE, (root) => {
+      const result = verifyRepo(root);
+      expect(result.failures).toEqual([]);
+      expect(result.declared).toBe(2);
+      expect(result.starred).toBe(1);
+    });
+  });
+
+  it("indexes only prose, never the heading tail or a bullet", () => {
+    const section = extractMapSection(THREE_HOME_FIXTURE["CLAUDE.md"]);
+    expect([...rootStarIndex(section)]).toEqual(["actions.rs"]);
+    expect([...rootStarIndex("### x (`lib.rs`)\n- ★ `history.rs` (~1)\n")]).toEqual([]);
+  });
+
+  it("goes red when the root index drops a ★ module the rule file declares", () => {
+    const files = {
+      ...THREE_HOME_FIXTURE,
+      "CLAUDE.md": THREE_HOME_FIXTURE["CLAUDE.md"].replace("★ index: `actions.rs`.", "★ index: none."),
+    };
+    withRepo(files, (root) => {
+      expect(verifyRepo(root).failures).toEqual([
+        `INDEX-DRIFT: actions.rs is starred in ${STARMAP_REL} but missing from the root CLAUDE.md ★ index`,
+      ]);
+    });
+  });
+
+  it("goes red when the root index names a module that carries no star", () => {
+    expect(compareIndex(new Set(["actions.rs", "fps.rs"]), declaredModules("- ★ `actions.rs`\n- `fps.rs`\n"))).toEqual([
+      `INDEX-DRIFT: fps.rs is in the root CLAUDE.md ★ index but carries no star in ${STARMAP_REL}`,
+    ]);
+  });
+
+  it("names STARMAP-MISSING alone when the delegated ★ rule is gone", () => {
+    const { [STARMAP_REL]: _gone, ...withoutStarmap } = THREE_HOME_FIXTURE;
+    withRepo(withoutStarmap, (root) => {
+      const { failures } = verifyRepo(root);
+      expect(failures).toHaveLength(1);
+      expect(failures[0]).toContain("STARMAP-MISSING");
+    });
+  });
+
+  it("the live root delegates to the rule file, so the index check is armed on this tree", () => {
+    const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const root = extractMapSection(readFileSync(join(repo, "CLAUDE.md"), "utf8"));
+    expect(root).toContain(STARMAP_REL);
+    expect(rootStarIndex(root).size).toBeGreaterThan(5);
   });
 });
 
