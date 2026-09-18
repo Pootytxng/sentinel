@@ -129,11 +129,15 @@ export function pickRoute(tasks) {
 // things a pasted block used to say, without anyone pasting it. #466 review: a routine can land a
 // successor in the shared main checkout (useWorktree off) where every write is refused, so STEP 0 is
 // a self-check the session runs BEFORE trusting anything else here, not after.
+// #405, 2026-09-18: the hooksPath repoint is STEP 1, ahead of the claim. It used to follow the claim,
+// so a duplicate successor that stood down without claiming kept its absolute pin, and that pin
+// redded a peer lane's gate. successor-route.test.mjs pins the order.
 export const SUCCESSOR_PREAMBLE = `You are a Compy successor session, launched by a session that finished its part. This prompt IS the handoff; nobody pasted it. If a routine started you, nobody is watching the run: do not stop to ask questions, stop only at owner-bound steps.
 
 STEP 0 — check your folder: run \`git rev-parse --show-toplevel\`. If it prints the shared checkout C:/Users/Kuya/code/sentinel, every write is refused there (the launcher routine's worktree toggle is off). Write nothing: call spawn_task with this whole prompt so the owner gets a one-click worktree session, say that in one line, and stop.
-STEP 1 — you inherit no lease. Re-derive state (git, the issue, docs/WORK_CONTROL.md) before trusting anything below, and post your own Ownership claim before any write. Right after it, if \`git config --get core.hooksPath\` prints an absolute path, repoint your own folder: \`git config --worktree core.hooksPath .githooks\`. New app worktrees arrive pinned, and the pin reds every lane's push (#405). Anything owner-bound stops at the owner.
-STEP 2 — do the task below.
+STEP 1 — repair your folder before deciding anything else: if \`git config --get core.hooksPath\` prints an absolute path, run \`git config --worktree core.hooksPath .githooks\`. New app worktrees arrive pinned, and the pin reds every lane's push (#405). This is folder hygiene, not lease work (owner ruling 2026-09-18). It touches no tracked file, branch or index, and it applies even if STEP 2 finds a peer holding the lease and you stand down.
+STEP 2 — you inherit no lease. Re-derive state (git, the issue, docs/WORK_CONTROL.md) before trusting anything below, and post your own Ownership claim before any write. Anything owner-bound stops at the owner.
+STEP 3 — do the task below.
 LAST — end by launching your own successor the same way (\`node scripts/successor-route.mjs\`; if your own launcher routine is still running, use the other one), or write \`Successor: none — <why>\`.
 
 TASK:`;

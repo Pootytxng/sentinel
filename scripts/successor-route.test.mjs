@@ -189,11 +189,24 @@ describe("SUCCESSOR_PREAMBLE", () => {
   // #466: every fresh app worktree arrives with an absolute core.hooksPath pin (#405), and
   // hookspath-fleet-guard then reds every lane's push. Only the folder's own session may repoint it,
   // so the prompt a launched session starts from has to say so.
-  it("tells a launched session to repoint its own folder's absolute hooksPath, after its claim", () => {
-    expect(SUCCESSOR_PREAMBLE).toContain("git config --worktree core.hooksPath .githooks");
-    expect(SUCCESSOR_PREAMBLE.indexOf("core.hooksPath .githooks")).toBeGreaterThan(
-      SUCCESSOR_PREAMBLE.indexOf("Ownership claim"),
-    );
+  // #405, 2026-09-18: the repoint used to sit "right after" the Ownership claim. A duplicate
+  // successor (epic-cray-fe2842) found a peer holding the lease and stood down without claiming, so
+  // it never repointed, and its pin redded the #444 lane's gate. The repoint is folder hygiene. It
+  // has its own step, after STEP 0's shared-checkout stop and before the claim decision. It never
+  // mentions the claim, and it says that it still applies when the session stands down.
+  it("repoints the folder's absolute hooksPath in its own step, before and independent of any claim", () => {
+    const steps = SUCCESSOR_PREAMBLE.split(/\n(?=STEP |LAST |TASK:)/);
+    const at = (needle) => steps.findIndex((s) => s.includes(needle));
+    const repoint = at("git config --worktree core.hooksPath .githooks");
+    const claim = at("Ownership claim");
+    const sharedStop = at("git rev-parse --show-toplevel");
+
+    expect(repoint).toBeGreaterThan(-1);
+    expect(claim).toBeGreaterThan(-1);
+    expect(repoint).toBeGreaterThan(sharedStop); // never the shared checkout
+    expect(repoint).toBeLessThan(claim); // before the claim decision, not after it
+    expect(steps[repoint]).not.toMatch(/claim/i); // nothing about claiming gates it
+    expect(steps[repoint]).toMatch(/stand(s|ing)? down/i); // still runs when the session stands down
   });
 
   it("is a non-empty string independent of any live machine state", () => {
