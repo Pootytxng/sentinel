@@ -1,0 +1,79 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` has three commits: 9dac3569, 4875db37 and 3b558f58. Claude Code cloud sessions wrote all three for #477 and pushed them through the GitHub API. That harness recorded them under the account identity Pootytang <162564178+Pootytxng@users.noreply.github.com>, not claude-code <claude-code@desk.local>. No other executor (codex, chatgpt-hq, cowork) wrote any of them, so mutationAuthors is claude-code alone. This local claude-code session, in folder hungry-lehmann-62599b, holds the landing lease and lands the PR under the #477 successor brief. Its own case-B fix, ecec0510, duplicated 3b558f58 and was never pushed. The reviewer, frontend-ipc-contract-auditor, wrote nothing.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/477#issuecomment-5729174976",
+  "leaseEvidenceNote": "The operative Ownership claim on #477 is 5729174976, posted 2026-09-18T11:12:50Z and expiring 2026-09-18. The Verified takeover 5729164351 posted before it records the release of lease 5729069339. That comment carried a claim and a releasing Handoff in one body, and the thread fold reads it release-first, so its claim stood. 5729174976 names this folder, branch claude/wizardly-galileo-c02td8, and a write scope of the three PR files plus these three receipts. A cloud session re-took the scope from 11:10Z to 11:14Z without posting a claim, and pushed 3b558f58 at 11:12:09Z. Its after-the-fact amendment 5729187652 has no Handoff heading, so the fold still reads 5729174976 as the live lease. The collision and the adoption of 3b558f58 as the head are recorded on PR #478 in comment 5729414151. The gate's scope-drift stage read the claim OK (log lines 5-7). The board item for #477 reads Active, Lane Claude Code, and Worktree / branch set to this folder @ this branch.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18T11:40Z from the REST files list of every open PR. Open PRs 476, 471, 470, 464, 444 and 438 touch none of the six claimed paths. PR 478 touches exactly scripts/usage-audit-guard.test.mjs, scripts/usage-audit.mjs and .claude/skills/usage-audit/SKILL.md. Every open PR is based on main, and none is based on claude/wizardly-galileo-c02td8.",
+  "inheritedWork": false,
+  "currentHead": "3b558f5838147909834524653397a2f0f4d6c1d8",
+  "pr": 478,
+  "issue": 477,
+  "kind": "lane",
+  "branch": "claude/wizardly-galileo-c02td8",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Checked right before this receipt with `git ls-remote`: refs/heads/main reads 99458441, the PR's base and merge-base, so main has not moved since the branch was cut. refs/heads/claude/wizardly-galileo-c02td8 reads 3b558f58. `git merge-tree --write-tree origin/main HEAD` exits 0. GitHub reads PR #478 as open and ready (isDraft false, marked ready under the gated receipt 2026-09-18-mark-pr-ready-478.json), mergeable MERGEABLE, head 3b558f58, base main, touching only the three scoped files, with 0 closingIssuesReferences.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\hungry-lehmann-62599b, with one writer. Its core.hooksPath is set per worktree (config.worktree) to the relative .githooks. No other worktree's config was touched by this session.",
+    "branch": "claude/wizardly-galileo-c02td8 at 3b558f58, tracking origin/claude/wizardly-galileo-c02td8 at the same commit. This session's duplicate fix ecec0510 sits on the local-only branch claude/477-case-b-ecec0510 and was never pushed.",
+    "dirtyState": "`git status --porcelain` was clean at 3b558f58 before the receipts were written. The only untracked files are this lane's receipts under .claude/work-control/, all inside the claimed write scope. The logs/ captures are gitignored.",
+    "liveProcesses": "No app run, dev server, install or build of this lane is running. The gate run finished with PASS. The reviewer's read-only vitest run had finished before this receipt was gated."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "3b558f5838147909834524653397a2f0f4d6c1d8",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/hungry-lehmann-62599b/logs/verify-local-2026-09-18T12-02-23Z.log:9-44 (SHA-256 ee7d888b9c8d7ec82471d1b878e4fe245e1d7e143512f1527e882b97d125117a)",
+      "summary": "448 test files passed; 7351 passed / 4 skipped (7355). This includes the new usage-audit guard, the fleet guards that read every registered worktree (hookspath-fleet-guard, handoff-worktree-truth), and the guards that read usage-audit."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "3b558f5838147909834524653397a2f0f4d6c1d8",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/hungry-lehmann-62599b/logs/verify-local-2026-09-18T12-02-23Z.log:45-71 (SHA-256 ee7d888b9c8d7ec82471d1b878e4fe245e1d7e143512f1527e882b97d125117a)",
+      "summary": "The frontend type-check and build stage passed; vite built clean (line 71). The only notice is the standing chunk-size advisory."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "3b558f5838147909834524653397a2f0f4d6c1d8",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/hungry-lehmann-62599b/logs/verify-local-2026-09-18T12-02-23Z.log:72-1788 (SHA-256 ee7d888b9c8d7ec82471d1b878e4fe245e1d7e143512f1527e882b97d125117a)",
+      "summary": "3 suites: 1327 passed; 0 failed; 24 ignored. No Rust file changed in this PR; the stage ran because it is part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "3b558f5838147909834524653397a2f0f4d6c1d8",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/hungry-lehmann-62599b/logs/verify-local-2026-09-18T12-02-23Z.log:1789-2073 (SHA-256 ee7d888b9c8d7ec82471d1b878e4fe245e1d7e143512f1527e882b97d125117a)",
+      "summary": "The clippy stage finished at line 2073 (`Finished dev profile`) with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is a run of scripts/verify-local.ps1 at this exact head, started by hand with the same invocation as .githooks/pre-push line 84 (powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-local.ps1). A plain `git push` could not fire the hook: the head 3b558f58 was already on origin, pushed by a cloud session through the GitHub API with no local hook, so there was nothing new to push. The log header names this worktree as the tree it gated. It has all six LOCAL CHECK stage markers (lines 3, 5, 9, 45, 72, 1789) and zero matches for `test result: FAILED`, `panicked`, `error[E`, ` FAIL ` or `×` across its 2073 lines. The console capture is logs/gate-console-478-2026-09-18T12-02-22Z.log (SHA-256 73f43446a4618e456bbb2c0c27719046de02ae05e1c321aa434dfb33bdf011f3); it reads `LOCAL CHECK RESULT: PASS` at line 2078 and the script exited 0. Two earlier full runs at this lane are kept and both failed only on fleet guards that read other lanes' folders. The first was the push of ecec0510 at 11:14Z (logs/push-console-477.log, verify-local-2026-09-18T11-14-46Z.log): hookspath-fleet-guard named nervous-hertz-a13718's absolute per-worktree core.hooksPath. The second was at this head at 11:39Z (logs/gate-console-478-2026-09-18T11-39-41Z.log, verify-local-2026-09-18T11-39-42Z.log), with 2 of 7351 failing: hookspath-fleet-guard named quirky-montalcini-459301's pin, and handoff-worktree-truth rule C named nervous-hertz-a13718, which archiving its session had detached at 11:39:28Z. That folder's hooksPath was repointed by the owner, quirky-montalcini's by its own session, and the owner removed the nervous-hertz folder. This session touched no other worktree. Between the failing runs and the passing one, nothing in this tree changed.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "measured",
+    "reconciled": true,
+    "measurement": "Log lines 5-7 read: 3 changed paths since origin/main measured against the claim on #477 (cache); OK: every changed path is inside the six claimed paths. Re-measured by hand with `node scripts/scope-drift-gate.mjs --issue 477 --refresh`: OK, read from the thread."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "3b558f5838147909834524653397a2f0f4d6c1d8",
+    "verdict": "PASS: no blocking findings",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/478#issuecomment-5729462064",
+    "reviewerNote": "A read-only reviewer seat that wrote nothing in this change. At 3b558f58 it confirmed HEAD and the 3-file diff (+389 / -3). It checked case B's header against doc-budget.ps1:107 and :127-130, claude-md-laws-guard.test.ts:208 and b749b720's hardcoded pointer; the author spot-checked the same line citations. It traced each case's failure against the pre-fix source: A through compaction-window.mjs:144 and b749b720:196, B through the missing per-row gate, C by counting 5 header bullets against 8 flags.push sites, D by finding no retention or steering-log text in docs/BACKLOG.md. Its trace reproduces the recorded red-proof splits: 8 failed / 4 passed against b749b720, 3 failed / 9 passed against 99458441. It found no vacuous pass. The usage-audit.mjs and SKILL.md edits change advice text only. It ran node --check on both files (OK) and the guard (12/12 passed)."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #478 has 0 closingIssuesReferences, so this merge closes no issue. #477 closes separately, under its own close-issue receipt, after this landing lease is released. scripts/land-pr.mjs merges with a merge commit (never a squash) and prunes the head without --delete-branch."
+}
