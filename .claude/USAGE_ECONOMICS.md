@@ -47,8 +47,8 @@ report for eleven days. **A measured constant is unmeasured the moment you chang
   something was actually written rather than only instructing it.
 - `.claude/hooks/stop-continue.mjs` — the autopilot clamp above.
 - `.claude/hooks/subagent-throttle.mjs` and `.claude/hooks/workflow-usage-guard.mjs` — advisory
-  reminders. **Read the new law before acting on the subagent one**: its worth-spawning list is the
-  retired §1, and delegating verbose work is now the recommended default.
+  reminders. The subagent one was narrowed 2026-09-18 (#479) to fan-out bursts only; it no longer
+  nudges against a single delegation, which is the recommended default.
 - `scripts/doc-budget.ps1` — line AND byte budgets. Resident in `npm test`.
 - `scripts/usage-audit.mjs` — the weekly instrument. Reports cost-weighted spend shares, carried
   context against the real ceiling, per-turn floor week-over-week, and byte budgets. Written Mondays
