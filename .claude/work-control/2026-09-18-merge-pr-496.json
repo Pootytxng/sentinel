@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/494#issuecomment-5733874998",
+  "leaseEvidenceNote": "Ownership claim on #494, re-posted after the PR opened as #496 to correct the receipt glob. It names this folder, branch `claude/494-closing-keyword-merged-main` and Write scope `scripts/closing-keyword-guard.test.mjs`, `.claude/work-control/2026-09-18-*-494.json`, `.claude/work-control/2026-09-18-*-496.json`. The pre-push scope-drift stage printed `not measured -- no session record for this folder` (the session was not launched through tools/entry), so it was measured by hand: `node scripts/scope-drift-gate.mjs --issue 494 --refresh` read OK, 1 changed path, inside the claimed scope.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "The delta is one test file plus this lane's receipts. No open PR touches `scripts/closing-keyword-guard.test.mjs`, and no other branch names this fix.",
+  "inheritedWork": false,
+  "currentHead": "37330cc3ecc9d528fed63279cc8eff71edb9c853",
+  "pr": 496,
+  "issue": 494,
+  "kind": "lane",
+  "branch": "claude/494-closing-keyword-merged-main",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "origin/claude/494-closing-keyword-merged-main reads 37330cc3, one commit on top of origin/main 1d5fb547.",
+    "worktree": "Linked worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-zhukovsky-f1554d, one writer; core.hooksPath repointed to the relative .githooks at worktree scope before the push.",
+    "branch": "claude/494-closing-keyword-merged-main tracks its own origin branch; HEAD equals the pushed head.",
+    "dirtyState": "Clean except gitignored logs/ and the untracked receipts.",
+    "liveProcesses": "No build, dev server or install from this lane is running; the pre-push gate had finished before this receipt."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "37330cc3ecc9d528fed63279cc8eff71edb9c853",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-zhukovsky-f1554d/logs/verify-local-2026-09-18T17-34-10Z.log:50-155 (SHA-256 4fcb84d4e3bddbc176dea93f2cc20283c7f81b9ec315eb8c8b077008730837bf)",
+      "summary": "451 test files passed; 7456 passed / 4 skipped (7460), including the new #494 fixture cases."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "37330cc3ecc9d528fed63279cc8eff71edb9c853",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-zhukovsky-f1554d/logs/verify-local-2026-09-18T17-34-10Z.log:156-182 (SHA-256 4fcb84d4e3bddbc176dea93f2cc20283c7f81b9ec315eb8c8b077008730837bf)",
+      "summary": "tsc and vite build passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "37330cc3ecc9d528fed63279cc8eff71edb9c853",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-zhukovsky-f1554d/logs/verify-local-2026-09-18T17-34-10Z.log:183-1899 (SHA-256 4fcb84d4e3bddbc176dea93f2cc20283c7f81b9ec315eb8c8b077008730837bf)",
+      "summary": "1327 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "37330cc3ecc9d528fed63279cc8eff71edb9c853",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-zhukovsky-f1554d/logs/verify-local-2026-09-18T17-34-10Z.log:1900-2185 (SHA-256 4fcb84d4e3bddbc176dea93f2cc20283c7f81b9ec315eb8c8b077008730837bf)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "This is the pre-push run of `scripts/verify-local.ps1` for the push of 37330cc3. The console read `LOCAL CHECK RESULT: PASS` and the push exited 0. The log has zero lines matching `test result: FAILED`, `panicked`, `error[E`, ` FAIL `, `^warning` or `^error`. Falsification, run before the commit: dropping only the `^origin/main` exclusion turned both new fixture cases red.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "37330cc3ecc9d528fed63279cc8eff71edb9c853",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/496#issuecomment-5733937932",
+    "reviewerNote": "Reviewer-only seat, a read-only subagent at the exact head. It checked the new range across six ref shapes, reproduced the defect and the fix in its own throwaway repo, confirmed the existing cases and the live message are byte-identical, ran the suite (12/12), and checked the commit, title and body with the guard's own pattern. Two findings, neither blocking: one redundant rev-parse, and it did not rerun verify-local itself. It is a Claude model, independent by role only, because Codex is at its usage limit (resets 2026-09-19 04:51 local) and the ChatGPT route was denied today."
+  },
+  "transition": "merge-pr",
+  "closingNote": "The PR body says `Refs #494`; it has no closing reference. #494 closes separately under its own close-issue receipt, after this session's lease is released."
+}
