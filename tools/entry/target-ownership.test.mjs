@@ -19,6 +19,7 @@ import {
   ZONES,
   checkoutRootOf,
   fromPosixDrive,
+  globalScratchSubtrees,
   isWithin,
   nearestExistingAncestor,
   resolveAbsolute,
@@ -110,15 +111,25 @@ describe("the zone of a real path in a real repository", () => {
     expect(zone(join(HOME, ".codex", "config.toml")).zone).toBe(ZONES.GLOBAL);
   });
 
-  // The agent's own scratch is not the owner's authority. Measured 2026-09-18: 92 of ~400 prompts
-  // in three weeks were a session asking permission to write its OWN memory file. Named subtrees
-  // only — the default for anything under `~/.claude` stays GLOBAL, so a directory added later is
-  // protected until someone lists it on purpose.
-  it("does NOT treat the agent's own scratch under ~/.claude as the owner's configuration", () => {
-    expect(zone(join(HOME, ".claude", "projects", "C--Users-Kuya-code-sentinel", "memory", "MEMORY.md")).zone).toBe(ZONES.UNPROTECTED);
-    expect(zone(join(HOME, ".claude", "todos", "list.json")).zone).toBe(ZONES.UNPROTECTED);
-    expect(zone(join(HOME, ".claude", "plans", "plan.md")).zone).toBe(ZONES.UNPROTECTED);
-    expect(zone(join(HOME, ".claude", "file-history", "x.json")).zone).toBe(ZONES.UNPROTECTED);
+  // THE SCRATCH CARVE-OUT IS NOT VISIBLE FROM HERE, AND THAT IS THE POINT (2026-09-18 review).
+  // `globalScratchSubtrees` names DIRECTORIES, and this module is shared with the shell guard,
+  // which decides `rm -rf <dir>`. A draft that consulted the list here answered `unprotected` for
+  // the roots themselves — `rm -rf ~/.claude/projects`, every lane's memory and transcripts, none
+  // of it in git. `zoneOf` therefore answers GLOBAL for every path under a protected global,
+  // scratch included, and `project-write-assert.mjs` alone reopens it for a single named file.
+  it("answers GLOBAL for the agent's scratch too — the carve-out does not live in the shared zone", () => {
+    expect(zone(join(HOME, ".claude", "projects", "C--Users-Kuya-code-sentinel", "memory", "MEMORY.md")).zone).toBe(ZONES.GLOBAL);
+    expect(zone(join(HOME, ".claude", "todos", "list.json")).zone).toBe(ZONES.GLOBAL);
+    expect(zone(join(HOME, ".claude", "plans", "plan.md")).zone).toBe(ZONES.GLOBAL);
+    expect(zone(join(HOME, ".claude", "file-history", "x.json")).zone).toBe(ZONES.GLOBAL);
+  });
+
+  // The regression this pins by name: a directory operand naming a scratch ROOT is the whole
+  // store for every lane on the machine, and it must never read as free space.
+  it("answers GLOBAL for the scratch ROOTS themselves, which a destructive operand would name", () => {
+    for (const root of ["projects", "todos", "plans", "file-history"]) {
+      expect(zone(join(HOME, ".claude", root)).zone).toBe(ZONES.GLOBAL);
+    }
   });
 
   it("keeps every OTHER corner of ~/.claude protected, and carves nothing out of ~/.codex", () => {
@@ -129,6 +140,17 @@ describe("the zone of a real path in a real repository", () => {
     // carve-out there would reopen the sibling hole this module exists to close.
     expect(zone(join(HOME, ".codex", "worktrees", "2e5d", "sentinel", "src", "x.rs")).zone).toBe(ZONES.GLOBAL);
     expect(zone(join(HOME, ".codex", "sessions", "s.json")).zone).toBe(ZONES.GLOBAL);
+  });
+
+  it("names the scratch subtrees, and nothing under ~/.codex, so a future consumer cannot drift", () => {
+    const listed = globalScratchSubtrees({ home: HOME }).map(toComparable);
+    expect(listed).toEqual([
+      toComparable(join(HOME, ".claude", "projects")),
+      toComparable(join(HOME, ".claude", "todos")),
+      toComparable(join(HOME, ".claude", "plans")),
+      toComparable(join(HOME, ".claude", "file-history")),
+    ]);
+    expect(listed.some((p) => p.includes("/.codex"))).toBe(false);
   });
 
   it("answers for a file that does not exist yet — a new file in a sibling is still a sibling write", () => {

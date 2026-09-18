@@ -159,6 +159,61 @@ describe("what is and is not a project write", () => {
     expect(d.code).toBe("TARGET_OWNER_CONFIG");
   });
 
+  // The agent's own scratch under ~/.claude — 92 of ~400 measured prompts (2026-09-18). It is
+  // reopened HERE and nowhere else: this hook answers only for Write/Edit/NotebookEdit, which name
+  // one file and cannot recurse. `target-ownership.test.mjs` pins that `zoneOf` still says GLOBAL.
+  const SCRATCH = ["projects", "todos", "plans", "file-history"].map((d) => `${OWNER_CONFIG}\\${d}`);
+
+  it("lets a single-file write through to the agent's own scratch, with an affirmative allow", () => {
+    for (const target of [
+      `${OWNER_CONFIG}\\projects\\C--Users-Kuya-code-sentinel\\memory\\MEMORY.md`,
+      `${OWNER_CONFIG}\\todos\\list.json`,
+      `${OWNER_CONFIG}\\plans\\plan.md`,
+      `${OWNER_CONFIG}\\file-history\\x.json`,
+    ]) {
+      for (const toolName of ["Write", "Edit", "NotebookEdit"]) {
+        const field = toolName === "NotebookEdit" ? "notebook_path" : "file_path";
+        const d = decide(write({ toolName, toolInput: { [field]: target }, scratch: SCRATCH }));
+        expect(d.allow, target).toBe(true);
+        expect(d.permission, target).toBe("allow");
+        expect(d.code, target).toBe("TARGET_AGENT_SCRATCH");
+      }
+    }
+  });
+
+  // THE REGRESSION AN INDEPENDENT REVIEW FOUND, pinned by name. `isWithin` is true for equality, so
+  // a non-strict test exempts the scratch ROOTS — and a root is every lane's store, not one file.
+  it("does NOT exempt the scratch ROOTS themselves, only paths strictly beneath them", () => {
+    for (const root of SCRATCH) {
+      const d = decide(write({ toolInput: { file_path: root }, scratch: SCRATCH }));
+      expect(d.allow, root).toBe(false);
+      expect(d.permission, root).toBe("ask");
+      expect(d.code, root).toBe("TARGET_OWNER_CONFIG");
+    }
+  });
+
+  it("exempts nothing else under the owner's configuration, however close the spelling", () => {
+    for (const rest of ["settings.json", "CLAUDE.md", "hooks\\global-laws-assert.mjs", "skills\\s\\SKILL.md", "plugins\\p.json", ".credentials.json", "projectsX\\a.md", "projects.bak\\a.md"]) {
+      const d = decide(write({ toolInput: { file_path: `${OWNER_CONFIG}\\${rest}` }, scratch: SCRATCH }));
+      expect(d.allow, rest).toBe(false);
+      expect(d.code, rest).toBe("TARGET_OWNER_CONFIG");
+    }
+  });
+
+  it("writes the affirmative allow on the wire, since 'no decision' would hand the prompt back", () => {
+    const lines = [];
+    const d = decide(write({ toolInput: { file_path: `${OWNER_CONFIG}\\projects\\s\\memory\\M.md` }, scratch: SCRATCH }));
+    expect(emit(d, { write: (s) => lines.push(s) })).toBe(0);
+    expect(lines).toHaveLength(1);
+    const payload = JSON.parse(lines[0]).hookSpecificOutput;
+    expect(payload.hookEventName).toBe("PreToolUse");
+    expect(payload.permissionDecision).toBe("allow");
+    // An ordinary advisory allow still says nothing at all — the contrast is the point.
+    const quiet = [];
+    emit({ allow: true, why: "advisory" }, { write: (s) => quiet.push(s) });
+    expect(quiet).toEqual([]);
+  });
+
   it("routes Write and Edit through an in-root global-config junction to approval (#429)", () => {
     const fixture = mkdtempSync(join(tmpdir(), "compy-write-global-"));
     try {

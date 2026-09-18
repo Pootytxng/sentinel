@@ -807,15 +807,20 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
    * every `bash -lc` would make this guard noise, and a guard that is noise gets removed — the same
    * outcome as not having one.
    */
-  const cannot = (verb, why, kind = "mutation") => unresolved.push({ verb, why, kind, cwd: here, cwdUnknown });
+  const cannot = (verb, why, kind = "mutation", details = {}) => unresolved.push({ verb, why, kind, cwd: here, cwdUnknown, ...details });
 
   // Heredoc bodies go first, so a line inside one cannot teach this pass a name (#373).
   const text = expandKnownVars(stripHeredocs(command), { env, dialect });
   for (const seg of segments(lex(text, dialect), dialect)) {
     const words = seg.words;
     for (const r of seg.redirects) {
-      if (r.dynamic && !globBounded(r)) cannot("redirection", `the redirect target \`${r.value}\` is not knowable from the text`);
-      else at(expandHome(r.value, home), "redirection");
+      // The operand's RAW text is carried, not just its value. `decideShell` spares an unresolvable
+      // redirect standing in the session's own claim, and that exemption is only defensible when the
+      // operand is a plain variable; the raw text is the one thing that can tell a variable from a
+      // command substitution after lexing has thrown the quoting away.
+      if (r.dynamic && !globBounded(r)) {
+        cannot("redirection", `the redirect target \`${r.value}\` is not knowable from the text`, "mutation", { raw: r.raw ?? r.value });
+      } else at(expandHome(r.value, home), "redirection");
     }
     if (!words.length) continue;
 
@@ -1108,6 +1113,40 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
 const HEADER = "Blocked: this command writes into a checkout this session does not own.";
 
 /**
+ * A redirect operand's RAW text is nothing but literal characters and plain variable references —
+ * `$NAME`, `${NAME}` — with no command substitution anywhere in it.
+ *
+ * FOUND BY INDEPENDENT REVIEW of the 2026-09-18 redirect exemption, and it falsified that
+ * exemption's own rationale. `echo hi > \`rm -rf ../<other lane>/src\`` was ALLOWED on the branch and
+ * `ask` on main. The mechanism is entirely in this file's lexer: the backtick is not in `OPERATORS`,
+ * so `lex` folds the substitution into ordinary words, `segments` takes the single word after `>` as
+ * the redirect target (`` `rm ``) and scatters the rest into the `echo` segment, whose verb mutates
+ * nothing. `ops` came back empty and the only unresolved entry was a `redirection` standing in the
+ * session's own claim — exactly the shape the exemption was written to spare. The `$( … )` spelling
+ * of the identical command was DENIED, because `(` and `)` are operators and `CHAIN_OPS` boundaries,
+ * so the inner `rm` re-segments and zones as a sibling. Same semantics, opposite answers, and the
+ * ALLOWED one ran `rm -rf` on another lane.
+ *
+ * WHY THIS IS A WHITELIST AND NOT THE OBVIOUS BLACKLIST. The review's prescription was to reject a
+ * raw containing a backtick or `$(`, borrowing `globBounded`'s `[^$\`]`. Measured against this
+ * lexer, that is not sufficient: for `> $(rm -rf x)` and `> $((1+1))` the `(` is an OPERATOR, so it
+ * never reaches the operand token at all and the raw handed to this test is the single character
+ * `$`. A substring search for `$(` finds nothing there and spares it. Listing the ways an operand
+ * can hide a command means keeping that list ahead of the lexer forever — the same losing shape as
+ * an allowlist of cmdlets, argued against at `segments`. So the test is turned around: an operand is
+ * spared only if every `$` in it introduces an ordinary variable name and no backtick appears. `$1`,
+ * `$?`, `${X:-…}` and a bare trailing `$` are all refused, which is conservative and costs an `ask`
+ * that main gave anyway.
+ *
+ * The lesson is the general one: the exemption rested on a syntactic category ("it is only a
+ * redirect") that the parser did not actually enforce, and "a redirect cannot recurse or delete a
+ * tree" is true of the operator but not of a command hiding in its operand. So the operand must be
+ * positively shown to be a plain name, and everything else goes back to `ask` — where it was before,
+ * and where the `$( … )` spelling never left.
+ */
+const PLAIN_REDIRECT_NAME = /^(?:[^$`]|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\})*$/;
+
+/**
  * `permission: "allow"` means NO OBJECTION from this hook - the normal permission flow applies -
  * and is never written as a decision (see `emit`). `additionalContext`, when present, is the #368
  * advisory line for an unclaimed folder.
@@ -1261,22 +1300,32 @@ export function decideShell({
      *
      * Measured, not assumed. A three-week transcript audit closed 2026-09-18 counted 228 `ask`
      * decisions from this hook. 131 of them — a clear majority — were plain shell REDIRECTION and
-     * nothing else: `cd "<worktree>" && … > $LOG`, `set -e; B=…; … >> $B`, and the PowerShell
-     * spelling `$log = '…'; … | Out-File $log`. 134 of the 204 Bash asks literally began `cd "…" &&`,
-     * so the effective directory was stated in the command and was the session's own lane. The owner
-     * pressed accept on every one of them. A prompt whose answer is never in doubt is not a control,
-     * it is a toll; worse, it stops unattended runs dead at a keystroke nobody is there to press, and
-     * the honest reading of #373 is that a guard which is noise gets removed rather than fixed.
+     * nothing else: `cd "<worktree>" && … > $LOG` and `set -e; B=…; … >> $B`. 134 of the 204 Bash
+     * asks literally began `cd "…" &&`, so the effective directory was stated in the command and was
+     * the session's own lane. The owner pressed accept on every one of them. A prompt whose answer is
+     * never in doubt is not a control, it is a toll; worse, it stops unattended runs dead at a
+     * keystroke nobody is there to press, and the honest reading of #373 is that a guard which is
+     * noise gets removed rather than fixed.
      *
-     * THE EXEMPTION IS AS NARROW AS THE MEASUREMENT. Two conditions, both required:
+     * The audit also counted a PowerShell `$log = '…'; … | Out-File $log` shape, and it is NOT spared
+     * here. `out-file` is an entry in `FILE_MUTATORS` — a mutating VERB, not a redirect operand — so
+     * it takes the `named` path below exactly as `Set-Content` and `New-Item` do. Sparing it would
+     * mean widening this rule from the redirect OPERATOR to a verb table that has no principled place
+     * to stop, and the operator is where the argument below actually holds.
+     *
+     * THE EXEMPTION IS AS NARROW AS THE MEASUREMENT. Three conditions, all required:
      *
      *   1. the ONLY thing that would have produced `ask` is a REDIRECT target — the `>`/`>>`/`2>`
      *      operand `segments` collected, filed by `analyze` under the verb `redirection`. An
      *      unresolved OPERAND of a mutating verb is untouched: `rm -rf $T`, `mv $A $B`, `sed -i … $F`,
-     *      `Remove-Item $P`, `mkdir $D`, `git reset --hard $REF`, `node $SCRIPT`, `… | xargs rm` all
-     *      still ask, because `named` below skips only the redirects this predicate spares and finds
-     *      them first otherwise;
-     *   2. the command's effective working directory — after every `cd` this checker could follow —
+     *      `Remove-Item $P`, `Out-File $log`, `mkdir $D`, `git reset --hard $REF`, `node $SCRIPT`,
+     *      `… | xargs rm` all still ask, because `named` below skips only the redirects this
+     *      predicate spares and finds them first otherwise;
+     *   2. that operand is a plain NAME and not a command substitution — see `SUBSTITUTION` above,
+     *      and the review that made this condition necessary. Without it the rule was strictly worse
+     *      than no rule, because the lexer folds a backtick substitution into the operand and the
+     *      command inside it disappears;
+     *   3. the command's effective working directory — after every `cd` this checker could follow —
      *      resolves to zone `own-claim`. `unprotected` is NOT enough here (the class-3 tail accepts
      *      it; this does not), and an unfollowable `cd` leaves `cwdUnknown`, which zones `unknown`
      *      and keeps asking.
@@ -1285,18 +1334,25 @@ export function decideShell({
      * target still denies, a resolved `protected-global` target still denies, and an `unknown` zone
      * still asks — this branch is only reached once none of those fired.
      *
-     * THE RESIDUAL, STATED EXACTLY. A variable could hold a path in another lane, so a spared
-     * redirect can clobber ONE file in a checkout this session does not own. That is the whole of it.
-     * A redirect writes exactly one path with exactly one stream: it cannot recurse, cannot delete a
-     * tree, cannot rename, cannot walk a directory. The blast radius is a single file, and in a
-     * repository of worktrees that file is under git — `git checkout --` or `git restore` brings it
-     * back, and the reflog holds anything committed. Against that: 131 certain interruptions of the
-     * owner's attention, each answered the same way, plus every unattended run those interruptions
-     * hang. One recoverable file at low probability is the cheaper side of that trade, and it is
-     * taken deliberately rather than drifted into. The `additionalContext` line below is the price of
-     * admission: the decision is still SAID OUT LOUD to the model, it is just not asked about.
+     * THE RESIDUAL, STATED EXACTLY. A variable could hold a path in another lane, so the spared
+     * redirects of one command can clobber N files in a checkout this session does not own, where N
+     * is the number of redirect operands written in that command — `… > $A > $B` is two, and bash
+     * truncates both. That is the whole of it. Each redirect writes one named path with one stream:
+     * it cannot recurse, cannot delete a tree, cannot rename, cannot walk a directory, and condition
+     * 2 above is what keeps that sentence true of the operand as well as of the operator. The blast
+     * radius is a handful of files spelled out in the command, and in a repository of worktrees those
+     * files are under git — `git checkout --` or `git restore` brings them back, and the reflog holds
+     * anything committed. Against that: 131 certain interruptions of the owner's attention, each
+     * answered the same way, plus every unattended run those interruptions hang. A few recoverable
+     * files at low probability is the cheaper side of that trade, and it is taken deliberately rather
+     * than drifted into. The `additionalContext` line below is the price of admission: the decision
+     * is still SAID OUT LOUD to the model, it is just not asked about.
      */
-    const boundedRedirect = (u) => u.verb === "redirection" && cwdZone(u) === ZONES.OWN;
+    const boundedRedirect = (u) =>
+      u.verb === "redirection" &&
+      typeof u.raw === "string" &&
+      PLAIN_REDIRECT_NAME.test(u.raw) &&
+      cwdZone(u) === ZONES.OWN;
     const spared = unresolved.filter(boundedRedirect);
 
     // A recognized mutation with an unknowable target is spec class 2, and verification does not
@@ -1324,8 +1380,10 @@ export function decideShell({
     const note =
       `Shell ownership: allowed without a prompt — ${spared.map((u) => u.why).join("; ")}, ` +
       `but the command runs inside this session's own claim, so a redirect can only land there ` +
-      `unless the variable names another lane. Redirects write one file and cannot recurse; if that ` +
-      `path was meant to be elsewhere, spell it out. (2026-09-18: 131 of 228 prompts were this.)`;
+      `unless the variable names another lane. Each of these ${spared.length} redirect ` +
+      `${spared.length === 1 ? "target names one file" : "targets names one file"} and runs no ` +
+      `command; if a path was meant to be elsewhere, spell it out. ` +
+      `(2026-09-18: 131 of 228 prompts were this.)`;
     return { ...allowed, additionalContext: [allowed.additionalContext, note].filter(Boolean).join(" ") };
   }
 

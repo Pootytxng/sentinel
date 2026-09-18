@@ -244,6 +244,13 @@ export function protectedGlobals({ home = homedir() } = {}) {
  * `~/.codex` gets NOTHING here. It holds `worktrees/`, which are real checkouts of this very
  * repository (`~/.codex/worktrees/2e5d/sentinel` on this machine), and a carve-out there would
  * reopen the sibling-checkout hole this module exists to close.
+ *
+ * THIS LIST IS NOT CONSULTED BY `zoneOf`, AND MUST NOT BE. It names DIRECTORIES, and `isWithin` is
+ * true for equality, so consulting it in the shared zone answer made the roots themselves exempt —
+ * `rm -rf ~/.claude/projects` through the shell guard, which is every lane's memory and every
+ * lane's transcripts, none of it in git. `project-write-assert.mjs` is the single consumer, it
+ * requires a STRICT descendant, and it only ever answers for Write/Edit/NotebookEdit: one named
+ * file at a time. Any future consumer must satisfy both of those conditions or it is a hole.
  */
 export function globalScratchSubtrees({ home = homedir() } = {}) {
   const claude = join(home, ".claude");
@@ -358,15 +365,18 @@ export function zoneOf({ target, sessionRoot, cwd = null, descendants = false, w
     };
   }
 
-  // The agent's own scratch inside `~/.claude` is not the owner's authority (see
-  // `globalScratchSubtrees`). It falls THROUGH to the checkout walk below rather than being
-  // answered `unprotected` here, so that a checkout someone ever puts under one of those
-  // directories is still zoned as a checkout and not waved past by this carve-out.
-  const scratch = globalScratchSubtrees({ home });
+  // NOTHING IS CARVED OUT HERE, ON PURPOSE (2026-09-18 review). `globalScratchSubtrees` exists,
+  // but this module is the SHARED answer consumed by the shell guard as well as the write guard,
+  // and the shell guard decides `rm -rf <dir>`. A first draft of that carve-out lived here and an
+  // independent review broke it in one line: `isWithin` is true for equality, so the scratch roots
+  // were exempt themselves and `rm -rf ~/.claude/projects` came back `unprotected` — one unprompted
+  // command destroying the transcripts, memory and plans of EVERY lane on the machine, none of it
+  // under git and so none of it recoverable. The carve-out now lives in `project-write-assert.mjs`
+  // alone, where the tool is Write/Edit/NotebookEdit: one named file, no recursion, no directory.
+  // Keep it that way. A path-ownership answer must not depend on how gently the caller intends to
+  // use it, and this is the module that cannot know.
   for (const g of protectedGlobals({ home })) {
-    if (!isWithin(abs, g)) continue;
-    if (scratch.some((s) => isWithin(abs, s))) break;
-    return { zone: ZONES.GLOBAL, abs, owner: g, why: "inside the owner's global configuration" };
+    if (isWithin(abs, g)) return { zone: ZONES.GLOBAL, abs, owner: g, why: "inside the owner's global configuration" };
   }
 
   let owner = null;
