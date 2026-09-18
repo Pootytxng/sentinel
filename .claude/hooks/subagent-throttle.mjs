@@ -1,78 +1,85 @@
 #!/usr/bin/env node
-// PreToolUse(Agent) hook — subagent-spawn throttle advisor (2026-07-18).
+// PreToolUse(Agent) hook — subagent FAN-OUT advisor. Narrowed 2026-09-18 (#479).
 //
-// Context: the 2026-07-02 usage audit found 53% of burn was subagent-heavy. Model routing for
-// that is ALREADY code-enforced (CLAUDE_CODE_SUBAGENT_MODEL=sonnet in settings.json + every
-// named agent in .claude/agents/*.md pinned sonnet except the one documented opus exception,
-// web-design-director — verified 2026-07-18, no further guard needed there). What's NOT
-// enforced is spawn FREQUENCY/NECESSITY: "never spawn for small edits/obvious refactors" is a
-// sentence in USAGE_ECONOMICS.md §1, nothing checks it in the moment.
+// History: written 2026-07-18 to nudge against spawning at all — every 3rd Agent call it asked
+// "should the main agent just do this inline?", citing USAGE_ECONOMICS.md §1. On 2026-08-18 the
+// token-economy law reversed that §1: context is ~85% of spend, and a subagent absorbs verbose
+// reads in its own fresh window and returns only a summary, so **delegating verbose work is the
+// recommended default**. The hook kept nudging the other way for a month — a guard contradicting
+// the law it sat next to, and every 3rd delegation paid for a reminder to not delegate.
 //
-// This hook can't judge whether a given spawn is warranted (that's semantic, not mechanizable
-// from a JSON blob), so it does the honest mechanizable thing instead: counts Task spawns in
-// THIS session and, once the count crosses a threshold, injects a one-time-per-threshold
-// reminder to weigh the spawn against the worth-spawning list before proceeding. It NEVER
-// blocks — subagents are frequently the right call (audits, review, search per USAGE_ECONOMICS
-// §1), and a hard block here would fight legitimate work with no way to tell the difference.
-// Advisory only, same failure posture as the other hooks in this repo: any read/parse error is
-// a silent allow.
+// What is still worth catching is FAN-OUT: many spawns in a short burst. Each subagent pays its
+// own prefix build, so a burst multiplies cost without adding a single fresh window's worth of
+// benefit that one well-briefed worker would not also give. A single delegation — or a steady
+// sequence of them — is never flagged. Advisory only (never blocks); any read/parse error is a
+// silent allow, same failure posture as the other hooks in this repo.
 //
-// Guards: PreToolUse hooks don't have a stop_hook_active equivalent, so re-firing is throttled
-// by only warning once per THRESHOLD-multiple crossed, not on every single spawn past it.
+// Tests: scripts/subagent-throttle-hook.test.mjs (vitest excludes .claude/**).
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const THRESHOLD = 3; // matches the "1-2 tasks" autopilot convention's spirit, one step looser
-                      // since manual (non-autopilot) subagent use is more often deliberate
+export const BURST = 4; // spawns ...
+export const WINDOW_MS = 120_000; // ... inside this sliding window = fan-out
 
-let input = {};
-try {
-  input = JSON.parse(readFileSync(0, "utf8") || "{}");
-} catch {
+// Pure: given the prior state and this spawn's time, return the new state and the warning (or null).
+// Warns once per burst: after a warning, it stays quiet until the window has fully drained.
+export function decide(state, now) {
+  const recent = (Array.isArray(state?.spawns) ? state.spawns : [])
+    .filter((t) => typeof t === "number" && now - t < WINDOW_MS)
+    .concat(now);
+  const lastWarn = typeof state?.lastWarn === "number" ? state.lastWarn : -Infinity;
+  const inBurstAlreadyWarned = now - lastWarn < WINDOW_MS;
+  if (recent.length < BURST || inBurstAlreadyWarned) {
+    return { state: { spawns: recent, lastWarn: state?.lastWarn ?? null }, warning: null };
+  }
+  const warning =
+    `SUBAGENT FAN-OUT CHECK — ${recent.length} Agent spawns inside ${WINDOW_MS / 1000}s. ` +
+    `Delegating verbose work to a subagent is the law (token-economy skill) and is not what this ` +
+    `flags. A BURST is: each spawn pays its own prefix build. If these briefs overlap, fold them ` +
+    `into one well-briefed worker; if they are genuinely independent, proceed — this is a check, ` +
+    `not a block.`;
+  return { state: { spawns: recent, lastWarn: now }, warning };
+}
+
+function main() {
+  let input = {};
+  try {
+    input = JSON.parse(readFileSync(0, "utf8") || "{}");
+  } catch {
+    process.exit(0);
+  }
+  const sid = String(input?.session_id || "x").replace(/[^a-z0-9-]/gi, "");
+  const marker = join(tmpdir(), `compy-subagent-burst-${sid}.json`);
+
+  let prior = {};
+  try {
+    prior = JSON.parse(readFileSync(marker, "utf8"));
+  } catch {
+    /* first spawn this session */
+  }
+  const { state, warning } = decide(prior, Date.now());
+  try {
+    writeFileSync(marker, JSON.stringify(state));
+  } catch {
+    /* non-fatal; worst case a burst goes unflagged */
+  }
+  if (!warning) process.exit(0);
+
+  // additionalContext is the field that reaches the model on an "allow" (permissionDecisionReason
+  // is only surfaced on deny/ask), and "allow" means this can never block a legitimate spawn.
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "allow",
+        additionalContext: warning,
+      },
+    }) + "\n",
+  );
   process.exit(0);
 }
 
-const sid = String(input?.session_id || "x").replace(/[^a-z0-9-]/gi, "");
-const marker = join(tmpdir(), `compy-subagent-count-${sid}`);
-
-let count = 0;
-try {
-  count = Number(readFileSync(marker, "utf8")) || 0;
-} catch {
-  /* first spawn this session */
-}
-count += 1;
-try {
-  writeFileSync(marker, String(count));
-} catch {
-  /* non-fatal; worst case the counter resets and we warn again later than intended */
-}
-
-// Only warn on threshold crossings (3, 6, 9, ...), not every spawn past the first threshold.
-if (count % THRESHOLD !== 0) process.exit(0);
-
-const reason =
-  `SUBAGENT COUNT CHECK — this is Agent spawn #${count} in this session. Before dispatching: ` +
-  `does this one fit the worth-spawning list (audits, repo-wide search, diff review, test/log ` +
-  `checks, requirements comparison, regression hunts, release validation, security review — ` +
-  `USAGE_ECONOMICS.md §1), or is it a small edit/obvious refactor/explanation that the main ` +
-  `agent should just do inline? Subagent-heavy sessions were 53% of the 2026-07-02 measured ` +
-  `burn. Proceed if it's warranted — this is a check, not a block.`;
-
-// Advisory-only. Note: permissionDecisionReason on an "allow" is NOT delivered to the model as
-// context (per Claude Code's hooks reference — it's only surfaced on deny/ask). additionalContext
-// is the field that actually reaches Claude here (delivered "next to the tool result" for
-// PreToolUse), so that's what carries the reminder. permissionDecision stays "allow" so this can
-// never block a legitimate spawn.
-process.stdout.write(
-  JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "allow",
-      additionalContext: reason,
-    },
-  }) + "\n"
-);
-process.exit(0);
+const entry = process.argv[1] ? process.argv[1].replace(/\\/g, "/") : "";
+if (entry && import.meta.url.endsWith(entry.slice(entry.lastIndexOf("/")))) main();
