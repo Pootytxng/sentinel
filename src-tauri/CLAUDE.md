@@ -1,11 +1,10 @@
 # src-tauri — Rust module map (read-only half)
 
-> **Auto-loads only when work touches `src-tauri/`.** The ★ mutation, rollback & gate modules —
-> `actions.rs`, `history.rs`, `gaming_orchestrator.rs`, `gaming_session.rs`, `game_mode_persist.rs`,
-> `services.rs`, `gpu_profile.rs`, `remote_rules.rs`, `receipts.rs`, `license.rs`, `drift.rs`, plus
-> the `main.rs`/`lib.rs` core wiring — stay in the root `CLAUDE.md`, which every session loads,
-> because scoping a change against the safety boundary is a safety step and not a lookup. This file
-> carries the read-only remainder, which only Rust work needs.
+> **Auto-loads only when work touches `src-tauri/`.** The root `CLAUDE.md`, which every session
+> loads, keeps the ★ index and `.rs` count, because knowing which modules are the safety boundary is a
+> safety step and not a lookup. The ★ entries and `main.rs`/`lib.rs` core wiring live in
+> `.claude/rules/rust-safety-boundary.md` (#479), which loads alongside this file. This file carries
+> the read-only remainder.
 >
 > **Both halves are one map.** `node scripts/verify-module-map.mjs` reads them together and fails on
 > a missing module, a ghost, a wrong file count, a module declared in both halves, or an unstarred

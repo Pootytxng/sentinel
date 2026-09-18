@@ -48,9 +48,17 @@ $budgets = @{
   # Tightened 400 -> 380 on 2026-08-04, when the module map's read-only half moved to
   # src-tauri/CLAUDE.md. Without the tightening the root just refills to 400 and the split bought
   # nothing; the banked headroom is what keeps the always-loaded doc smaller.
-  "CLAUDE.md" = 380
+  # 380 -> 199 on 2026-09-18 (#479): the ★ module-map entries, LOCKED 6's full text and the dev-machine
+  # note moved to path-scoped .claude/rules/*.md (260 -> 197 lines). 199 = Anthropic's published
+  # "under ~200 lines" line, with 2 lines of headroom; the next addition pays with a deletion.
+  "CLAUDE.md" = 199
   # The half that only loads for Rust work. Budgeted so it cannot become the new dumping ground.
   "src-tauri/CLAUDE.md" = 120
+  # Path-scoped rules (#479). They load only when matching files are touched, but then load WHOLE, so
+  # each gets a ceiling at its moved size + a few lines - a rule file must not become the new root.
+  ".claude/rules/rust-safety-boundary.md" = 40
+  ".claude/rules/tweak-catalog.md" = 36
+  ".claude/rules/dev-machine.md" = 16
 }
 # BYTE budgets, added 2026-08-18. The line budgets above are structurally blind to the thing the
 # token law exists to control: docs/BACKLOG.md passed 1286/1400 LINES while weighing 142 KB, because
@@ -123,9 +131,13 @@ $byteBudgets = @{
   # The remaining ~496 is one ordinary entry's worth. Lower this again once #387 lands and the
   # real post-merge size is known.
   "src-tauri/CLAUDE.md" = 7680
+  # #479: the ★ entries' moved size (4,159 bytes at the move) + one ordinary entry.
+  ".claude/rules/rust-safety-boundary.md" = 4608
+  ".claude/rules/tweak-catalog.md" = 2048
+  ".claude/rules/dev-machine.md" = 768
 }
 # CLAUDE.md is deliberately NOT in the table above. Its byte ceiling already exists and predates
-# this one: src/claude-md-laws-guard.test.ts, "is under 25000 bytes (re-bloat guard)". Restating it
+# this one: src/claude-md-laws-guard.test.ts, "is under <MAX_BYTES> bytes (re-bloat guard)". Restating it
 # here would be a second source of truth for the same number - the exact drift bomb this repo
 # already disarmed for MAX_CONTINUES. One ceiling, one owner; that guard keeps it.
 

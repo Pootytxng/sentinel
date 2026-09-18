@@ -14,10 +14,18 @@
 // prose declares where the rest lives; delegatesToSubmap() turns that sentence into an enforced
 // contract, so the split cannot degrade into a half-map that verifies vacuously.
 //
+// Since #479 (2026-09-18) the map has THREE homes. The root CLAUDE.md fell under the published
+// "keep CLAUDE.md under 200 lines" guidance only by moving the ★ entries into the path-scoped rule
+// .claude/rules/rust-safety-boundary.md, which loads for src-tauri/ work. The root keeps what every
+// session needs before it opens a Rust file: the .rs count and a one-paragraph ★ INDEX naming each
+// safety-boundary module. compareIndex() pins that index to the stars in the rule file in both
+// directions, so the always-loaded list can neither hide a ★ module nor name one that lost its star.
+//
 // Sibling of scripts/verify-release-state.mjs (same gate-drift-audit family, same exit contract).
 // Run from anywhere: node scripts/verify-module-map.mjs [--strict] [--json]
 //   exit 0 = map matches the tree (line-count drift WARNs unless --strict)
-//   exit 1 = MISSING / GHOST / COUNT / UNSTARRED-MUTATOR / DUPLICATE / NO-MAP / SUBMAP-MISSING.
+//   exit 1 = MISSING / GHOST / COUNT / UNSTARRED-MUTATOR / DUPLICATE / NO-MAP / SUBMAP-MISSING /
+//            STARMAP-MISSING / INDEX-DRIFT.
 // The whole check is verifyRepo(), a pure function of a repo path, because the CLI is NOT the only
 // caller: scripts/verify-module-map-guard.test.mjs runs it against this tree on every `npm test`.
 // That residency is the point. This script existed from 2026-08-02 and `main` was already red by
@@ -34,6 +42,40 @@ export const MAP_HEADING = "### Rust module map";
 
 // Where the read-only half lives. Named in the root's map prose; naming it is what arms the check.
 export const SUBMAP_REL = "src-tauri/CLAUDE.md";
+
+// Where the ★ entries live since #479. Named in the root's map prose; naming it is what arms the check.
+export const STARMAP_REL = ".claude/rules/rust-safety-boundary.md";
+
+export function delegatesToStarmap(section) {
+  return section.includes(STARMAP_REL);
+}
+
+// The root's ★ index: every backticked module named OUTSIDE a bullet. Line 0 is the rest of the
+// heading line (`lib.rs` carved into ...), which names a module without indexing it, so it is skipped.
+export function rootStarIndex(section) {
+  const names = new Set();
+  for (const line of section.split("\n").slice(1)) {
+    if (line.trimStart().startsWith("-")) continue;
+    for (const m of line.matchAll(/`([A-Za-z0-9_]+\.rs)`/g)) names.add(m[1]);
+  }
+  return names;
+}
+
+// Both directions, because each is its own defect: a ★ module missing from the index is a safety
+// boundary no session sees until it is already editing Rust, and an indexed module without a star
+// is the index vouching for a boundary the map no longer declares.
+export function compareIndex(index, starDeclared) {
+  const starred = new Set([...starDeclared].filter(([, d]) => d.starred).map(([name]) => name));
+  const failures = [];
+  for (const name of starred) {
+    if (!index.has(name)) failures.push(`INDEX-DRIFT: ${name} is starred in ${STARMAP_REL} but missing from the root CLAUDE.md ★ index`);
+  }
+  for (const name of index) {
+    if (!starred.has(name)) failures.push(`INDEX-DRIFT: ${name} is in the root CLAUDE.md ★ index but carries no star in ${STARMAP_REL}`);
+  }
+  if (starred.size === 0) failures.push(`INDEX-DRIFT: ${STARMAP_REL} declares no starred module - the ★ half is empty`);
+  return failures;
+}
 
 // The root section either points at the submap or it does not. Re-merging both halves back into one
 // file stays a valid configuration - it just disarms the submap requirement, because then there is
@@ -184,18 +226,35 @@ export function compare(declared, actual, count) {
 // to report it, and a test can assert the reason instead of a stack trace.
 export function verifyRepo(repo) {
   const empty = { warnings: [], declared: 0, actual: 0, starred: 0 };
-  const section = readMapSection(join(repo, "CLAUDE.md"));
-  if (section === null) {
+  const rootSection = readMapSection(join(repo, "CLAUDE.md"));
+  if (rootSection === null) {
     return {
       ...empty,
       failures: [`NO-MAP: "${MAP_HEADING}" section not found in CLAUDE.md - an absent contract is a failure, not a pass.`],
     };
   }
 
+  // The ★ half: the rule file when the root delegates to it, otherwise the root's own bullets.
+  let section = rootSection;
+  let primaryRel = "CLAUDE.md";
+  let indexFailures = [];
+  if (delegatesToStarmap(rootSection)) {
+    const starSection = readMapSection(join(repo, ...STARMAP_REL.split("/")));
+    if (starSection === null) {
+      return {
+        ...empty,
+        failures: [`STARMAP-MISSING: CLAUDE.md delegates the ★ half of the map to ${STARMAP_REL}, but that file has no "${MAP_HEADING}" section. Restore it or fold the entries back into CLAUDE.md; a map whose safety half is gone must not verify.`],
+      };
+    }
+    section = starSection;
+    primaryRel = STARMAP_REL;
+    indexFailures = compareIndex(rootStarIndex(rootSection), declaredModules(starSection));
+  }
+
   // Resolved before compare() rather than folded into it: a vanished submap would otherwise surface
   // as nineteen MISSING lines with the actual cause buried, and the root cause has to read first.
   let subDeclared = new Map();
-  if (delegatesToSubmap(section)) {
+  if (delegatesToSubmap(rootSection)) {
     const subSection = readMapSection(join(repo, ...SUBMAP_REL.split("/")));
     if (subSection === null) {
       return {
@@ -208,10 +267,12 @@ export function verifyRepo(repo) {
 
   const { merged: declared, duplicates } = mergeDeclared(declaredModules(section), subDeclared);
   const actual = actualModules(join(repo, "src-tauri", "src"));
-  const { failures, warnings } = compare(declared, actual, declaredCount(section));
+  // The count lives in the root alone, whichever file carries the entries.
+  const { failures, warnings } = compare(declared, actual, declaredCount(rootSection));
   return {
     failures: [
-      ...duplicates.map((name) => `DUPLICATE: ${name} is declared in both CLAUDE.md and ${SUBMAP_REL} - the halves must stay disjoint or the map can contradict itself about a star`),
+      ...duplicates.map((name) => `DUPLICATE: ${name} is declared in both ${primaryRel} and ${SUBMAP_REL} - the halves must stay disjoint or the map can contradict itself about a star`),
+      ...indexFailures,
       ...failures,
     ],
     warnings,

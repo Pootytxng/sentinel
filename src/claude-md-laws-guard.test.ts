@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, readdirSync } from "fs";
+import { execFileSync } from "child_process";
 
 // CLAUDE.md LAWS GUARD (2026-08-05).
 //
@@ -29,10 +30,17 @@ const text = readFileSync(CLAUDE_MD, "utf8");
 // changes nothing about the law — cannot fail the build. The WORDING is pinned; the layout is not.
 const flat = text.replace(/\s+/g, " ");
 
+// #479 (2026-09-18): subsystem detail moved out of the root into path-scoped `.claude/rules/*.md`,
+// which load only when matching files are touched. A law that moved is still a law, so an entry may
+// name the `file` that now carries it; the markers are pinned there with the same strictness.
+const RULES_DIR = ".claude/rules";
+const flatOf = (file: string): string =>
+  file === CLAUDE_MD ? flat : readFileSync(file, "utf8").replace(/\s+/g, " ");
+
 // ── 1. Operative law markers ────────────────────────────────────────────────────────────────────
 // Grouped by the law they defend so a failure names the rule, not just a missing string.
 
-const REQUIRED: { law: string; markers: string[] }[] = [
+const REQUIRED: { law: string; markers: string[]; file?: string }[] = [
   {
     law: "LOCKED 1 — Capability Exception Gate / no fabricated CPU temp",
     markers: [
@@ -89,6 +97,28 @@ const REQUIRED: { law: string; markers: string[] }[] = [
       "ungated kernel-level capability",
       "EAC/BattlEye",
       "GPU-profile apply",
+      "`.claude/rules/tweak-catalog.md`",
+    ],
+  },
+  {
+    law: "LOCKED 6 in full — admission rails (path-scoped rule)",
+    file: `${RULES_DIR}/tweak-catalog.md`,
+    markers: [
+      "measurable-benefit-under-rails",
+      "ADD criterion",
+      "per-rig Trial",
+      "measurement does NOT make these safe",
+      "timer/HPET",
+      "bcdedit",
+      "MMCSS",
+      "core-parking writes",
+      "Defender disable",
+      "MPO disable",
+      "fixed pagefile",
+      "ungated kernel-level capability",
+      "EAC/BattlEye",
+      "GPU-profile apply",
+      "rollback-first",
     ],
   },
   {
@@ -117,7 +147,7 @@ const REQUIRED: { law: string; markers: string[] }[] = [
     law: "Honest measurement + outbound boundary",
     markers: [
       "never fabricate, never claim unmeasured",
-      "default-OFF",
+      "default OFF and it stays OFF after arming",
       "Tier 1 signed advisory download / no machine-data upload",
       "Tier 2 scrubbed incident fingerprint",
       "Tier 3 explicit per-case evidence upload",
@@ -125,7 +155,7 @@ const REQUIRED: { law: string; markers: string[] }[] = [
   },
   {
     law: "Owner-bound gates",
-    markers: ["ZERO-BUDGET LAW", "never before 1.0", "16069fa", "WELFARE CHECK"],
+    markers: ["ZERO-BUDGET LAW", "never before 1.0", "16069fa", "WELFARE CHECK", "reversibility never licenses crossing one"],
   },
   {
     law: "Silent reinstall is mine, not the owner's",
@@ -161,7 +191,24 @@ const REQUIRED: { law: string; markers: string[] }[] = [
   },
   {
     law: "Module map is mechanically verified",
-    markers: ["scripts/verify-module-map.mjs", "src-tauri/CLAUDE.md"],
+    markers: ["scripts/verify-module-map.mjs", "src-tauri/CLAUDE.md", ".claude/rules/rust-safety-boundary.md"],
+  },
+  {
+    law: "Rust ★ safety boundary entries (path-scoped rule)",
+    file: `${RULES_DIR}/rust-safety-boundary.md`,
+    markers: [
+      "THE Windows-mutation + rollback boundary, no exceptions",
+      "Rollback resolves from local history ALONE",
+      "Mutation-boundary",
+      "default-OFF even armed",
+      "MutationRoot",
+      "owner territory",
+    ],
+  },
+  {
+    law: "Dev machine — never generalize the owner's rig (path-scoped rule)",
+    file: `${RULES_DIR}/dev-machine.md`,
+    markers: ["RX 9070 XT", "Never generalize", "Re-read actual detected hardware"],
   },
   {
     law: "Token law",
@@ -174,17 +221,73 @@ const REQUIRED: { law: string; markers: string[] }[] = [
 ];
 
 describe("CLAUDE.md carries every operative law", () => {
-  for (const { law, markers } of REQUIRED) {
+  for (const { law, markers, file = CLAUDE_MD } of REQUIRED) {
     it(law, () => {
-      const missing = markers.filter((m) => !flat.includes(m.replace(/\s+/g, " ")));
+      const body = flatOf(file);
+      const missing = markers.filter((m) => !body.includes(m.replace(/\s+/g, " ")));
       expect(
         missing,
-        `CLAUDE.md no longer contains ${missing.length} marker(s) for "${law}". ` +
+        `${file} no longer contains ${missing.length} marker(s) for "${law}". ` +
           `If you deliberately reworded a law, update this guard in the SAME commit. ` +
           `If you did not, you just dropped a standing rule from the always-loaded brief.`,
       ).toEqual([]);
     });
   }
+});
+
+// ── 1b. Path-scoped rules stay reachable ────────────────────────────────────────────────────────
+// A rule file loads only when a file matching its `paths:` is touched. A glob that matches nothing
+// (a renamed module, a typo) makes the law silently unreachable — worse than a dead pointer, because
+// the file still exists and every existence check passes. So each glob must match a tracked file,
+// the root must name each rule (the only way a session learns it exists), and each rule must be
+// pinned above.
+
+const TRACKED = execFileSync("git", ["ls-files"], { encoding: "utf8" }).split("\n").filter(Boolean);
+const globToRegExp = (glob: string): RegExp =>
+  new RegExp(
+    "^" +
+      glob
+        .split("**")
+        .map((part) => part.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*"))
+        .join(".*") +
+      "$",
+  );
+export const rulePaths = (body: string): string[] => {
+  const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(body)?.[1] ?? "";
+  return [...front.matchAll(/^\s*-\s*"([^"]+)"\s*$/gm)].map((m) => m[1]);
+};
+const RULE_FILES = readdirSync(RULES_DIR).filter((f) => f.endsWith(".md"));
+
+describe("path-scoped rules are reachable and pinned", () => {
+  it("the rules directory is not empty (the guard would pass vacuously)", () => {
+    expect(RULE_FILES.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("the glob matcher is real: ** crosses directories, * does not", () => {
+    expect(globToRegExp("src-tauri/**").test("src-tauri/src/actions.rs")).toBe(true);
+    expect(globToRegExp("src-tauri/src/*.rs").test("src-tauri/src/a/b.rs")).toBe(false);
+    expect(globToRegExp("src-tauri/src/actions.rs").test("src-tauri/src/actionsXrs")).toBe(false);
+  });
+
+  describe.each(RULE_FILES)("%s", (name) => {
+    const rel = `${RULES_DIR}/${name}`;
+    const body = readFileSync(rel, "utf8");
+
+    it("declares paths: frontmatter and every glob matches a tracked file", () => {
+      const globs = rulePaths(body);
+      expect(globs.length, `${rel} has no paths: frontmatter — it would load on EVERY session`).toBeGreaterThan(0);
+      const dead = globs.filter((g) => !TRACKED.some((f) => globToRegExp(g).test(f)));
+      expect(dead, `${rel} scopes to globs that match no tracked file, so it never loads`).toEqual([]);
+    });
+
+    it("is named by the root CLAUDE.md", () => {
+      expect(flat.includes(name), `the root never names ${name}, so no session learns it exists`).toBe(true);
+    });
+
+    it("has a law entry pinning its markers", () => {
+      expect(REQUIRED.some((r) => r.file === rel), `${rel} carries law but no guard entry pins it`).toBe(true);
+    });
+  });
 });
 
 // ── 2. Byte budget ──────────────────────────────────────────────────────────────────────────────
@@ -205,7 +308,11 @@ describe("CLAUDE.md carries every operative law", () => {
 // ceiling STAYS at 25,000 — the ratchet only moves down, and measurement + 250 would raise it. So
 // headroom is 72 bytes and the next addition must pay for itself with a deletion. That is the rule
 // working, not the rule being inconvenient.
-const MAX_BYTES = 25_000;
+//
+// 2026-09-18 (#479): 19,981 → 14,615 by moving the ★ module-map entries, LOCKED 6's full text and the
+// dev-machine note into path-scoped `.claude/rules/*.md` (pinned above) and cutting duplicated prose.
+// Ceiling ratchets to measurement + ~250. Rule files carry their own budgets in scripts/doc-budget.ps1.
+const MAX_BYTES = 14_865;
 const MIN_BYTES = 12_000;
 
 // Measured as git STORES the file, not as this checkout RENDERS it. 2026-09-02: a worktree checked
