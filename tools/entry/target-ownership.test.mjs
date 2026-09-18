@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { decide } from "../../.claude/hooks/project-write-assert.mjs";
 import { decideShell } from "../../.claude/hooks/shell-ownership-assert.mjs";
+import { canonicalizePath } from "../../.claude/hooks/session-root-assert.mjs";
 import {
   ZONES,
   checkoutRootOf,
@@ -88,6 +89,15 @@ describe("the zone of a real path in a real repository", () => {
   it("puts the session's own files in its own claim", () => {
     expect(zone(join(MAIN, "src", "App.css")).zone).toBe(ZONES.OWN);
     expect(zone("src/App.css").zone).toBe(ZONES.OWN);
+  });
+
+  it("owns its checkout in the spelling resolveSessionRoot hands over, on every OS", () => {
+    // canonicalizePath writes backslashes on Linux too, and there that root once resolved to a
+    // relative path, so every write into the session's own checkout was denied (2026-09-16). This
+    // bites on a Linux host; posix-session-root.test.mjs simulates the same thing on Windows.
+    const root = canonicalizePath(MAIN);
+    expect(zone(join(MAIN, "src", "App.css"), { root }).zone).toBe(ZONES.OWN);
+    expect(zone(join(LANE, "src", "App.css"), { root }).zone).toBe(ZONES.SIBLING);
   });
 
   it("calls a SIBLING WORKTREE of the same repository what it is — the hole this closes", () => {

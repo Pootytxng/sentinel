@@ -27,6 +27,7 @@ export {
   CLAUDE_PROJECTS_DIR,
   CORRUPT,
   DEFAULT_TTL_MINUTES,
+  entryStateDir,
   EXPECTED_REPO,
   fetchBoardRows,
   invalidateBoardCache,

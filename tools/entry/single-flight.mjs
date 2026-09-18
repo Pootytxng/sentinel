@@ -20,7 +20,15 @@ import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, c
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const LOCK_DIR = join(process.env.LOCALAPPDATA ?? ".", "CompyEntry");
+import { entryStateDir } from "./session-assert.mjs";
+
+// The lock lives with the token it protects, resolved by the one resolver that answers for the
+// store (#440). This read `join(process.env.LOCALAPPDATA ?? ".", "CompyEntry")`, and on a POSIX
+// session with that Windows variable unset the expression is RELATIVE — so the lock's path depended
+// on the caller's cwd, which is not a lock at all: two runs started from two folders would each
+// create their own, each believe it was first, and overwrite the singleton this file exists to
+// protect. Windows is byte-identical to the old expression, so a live lock keeps resolving.
+export const LOCK_DIR = entryStateDir();
 export const LOCK_NAME = "launcher.lock";
 export const lockFile = ({ dir = LOCK_DIR } = {}) => join(dir, LOCK_NAME);
 

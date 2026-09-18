@@ -19,7 +19,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 import { normalizePattern, outsideScope, parseScopePatterns } from "./claim-scope.mjs";
 
@@ -27,11 +27,47 @@ import { normalizePattern, outsideScope, parseScopePatterns } from "./claim-scop
 export const CACHE_TTL_MS = 10 * 60_000;
 export const CACHE_DIR_NAME = "claims";
 
-/** `%LOCALAPPDATA%\CompyEntry\claims`, or under COMPY_ENTRY_DIR when a caller relocates the store. */
+/**
+ * Where the entry toolchain keeps state between runs.
+ *
+ * This is the SAME resolver as `entryStateDir` in `.claude/hooks/session-root-assert.mjs`, in the
+ * same order and for the same reasons (#440): `COMPY_ENTRY_DIR`, then `LOCALAPPDATA` (Windows),
+ * then `XDG_STATE_HOME`, then the XDG default under the home directory. A blank or RELATIVE value
+ * is absence at every step, because a relative store is a store that means "whichever checkout the
+ * process happened to be standing in".
+ *
+ * Duplicated rather than imported so this library owes nothing to the hook tree, which is how the
+ * rest of the entry path is held together. `tools/entry/posix-entry-state-dir.test.mjs` compares the
+ * two implementations across an environment matrix, so they cannot drift apart quietly. Change one,
+ * change both, or the guard fails.
+ *
+ * Why the agreement matters HERE rather than being merely tidy: the claim cache is one half of a
+ * store whose other half the hook writes. A resolver that answers an AppData-shaped path on Linux
+ * while the hook answers the XDG one corrupts nothing — writer and reader simply look at two
+ * different folders, so every claim reads back as `null`, which this file spells "not measured".
+ * The drift gate then stops measuring without ever reporting a failure, which is the one outcome a
+ * guard must never have.
+ */
+export function entryStateDir({ env = process.env, home = homedir() } = {}) {
+  // Asked on Linux about a Windows path, `isAbsolute` says false — so the verdict would depend on
+  // the host and a guard could not check the Windows answer from CI. Both spellings are named here
+  // so the resolver decides the same way everywhere. A lone leading backslash is deliberately NOT
+  // absolute: on POSIX a backslash is an ordinary filename character, so a backslash-led value
+  // would resolve against the cwd and put the store straight back in the checkout.
+  const rooted = (s) => isAbsolute(s) || /^[A-Za-z]:[\\/]/.test(s) || /^\\\\[^\\]/.test(s);
+  const named = (value) => {
+    const s = typeof value === "string" ? value.trim() : "";
+    return s !== "" && rooted(s) ? s : null;
+  };
+
+  const explicit = named(env.COMPY_ENTRY_DIR);
+  if (explicit) return explicit;
+  return join(named(env.LOCALAPPDATA) ?? named(env.XDG_STATE_HOME) ?? join(home, ".local", "state"), "CompyEntry");
+}
+
+/** The `claims` folder inside that state directory. */
 export function claimCacheDir({ env = process.env } = {}) {
-  const base =
-    env.COMPY_ENTRY_DIR || join(env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "CompyEntry");
-  return join(base, CACHE_DIR_NAME);
+  return join(entryStateDir({ env }), CACHE_DIR_NAME);
 }
 
 function cacheFile({ issue, dir }) {

@@ -20,7 +20,14 @@ import { homedir } from "node:os";
 import { WINDOW_KEY } from "./settings-resolve.mjs";
 import { ASSERT_HOOK_MARKER } from "./overlay.mjs";
 
-export const TIER_STATE_DIR = join(process.env.LOCALAPPDATA ?? ".", "CompyEntry", "tiers");
+import { entryStateDir } from "./session-assert.mjs";
+
+// Where the records go, asked of the one resolver that answers it (#440). This read
+// `join(process.env.LOCALAPPDATA ?? ".", "CompyEntry", "tiers")`, and on a POSIX session with that
+// Windows variable unset the expression is RELATIVE: the records landed in whatever folder the
+// process was standing in, which is the checkout. Windows is byte-identical to the old expression,
+// so the tier records already on the owner's machine keep resolving.
+export const TIER_STATE_DIR = join(entryStateDir(), "tiers");
 export const LOCAL_SETTINGS_PATH = ".claude/settings.local.json";
 
 const canonical = (p) => resolve(String(p ?? "")).replace(/[\\/]+$/, "").toLowerCase();

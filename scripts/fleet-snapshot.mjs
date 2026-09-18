@@ -82,10 +82,14 @@ export function liveCarriers(list, countAhead, countUnpushed) {
       return {
         path,
         name: branch ?? path.split(/[\\/]/).filter(Boolean).pop(),
-        // Whether a SHARED ref can find this work. Local branches live in the common .git and
-        // survive `git worktree remove`; a detached HEAD lives only in that worktree's own
-        // directory, so removing the checkout is the last thing that knew the commits existed.
-        // That difference is the whole of what rule C now fails on.
+        // The commit this checkout is sitting on, whether or not a branch line names it. Rule C's
+        // containment question is asked about THIS, not about the branch: a detached checkout has
+        // no branch to ask about, and that was the whole of the #439 misreading.
+        head: headLine ? headLine.slice("HEAD ".length) : null,
+        // The branch this checkout has checked out, or null when it is detached. It is a SUFFICIENT
+        // refuge (a local branch lives in the common .git and survives `git worktree remove`) but
+        // never a necessary one: `strandedCarriers` asks which branches contain the head, because
+        // reading the absence of this line as "on no branch" is exactly the #439 misreading.
         branch,
         commits: committish ? countAhead(committish) : null,
         unpushed: committish ? countUnpushed(committish) : null,
@@ -95,7 +99,8 @@ export function liveCarriers(list, countAhead, countUnpushed) {
 }
 
 /**
- * The carriers rule C FAILS on: the ones holding commits that exist nowhere but this disk.
+ * The carriers holding commits that exist nowhere but this disk. Rule C fails on the subset of
+ * these that no local branch can reach either -- see `strandedCarriers` below.
  *
  * `unpushed > 0` implies `commits > 0` — a commit no remote carries is not on `origin/main` either,
  * `origin/main` being a remote ref — so this is a strict subset of the reported carriers, and the
@@ -120,6 +125,60 @@ export function atRiskCarriers(carriers, trusted) {
     );
   }
   return carriers.filter((c) => c.unpushed > 0);
+}
+
+/**
+ * The local branches that can still reach a commit -- `git for-each-ref --contains <c> refs/heads/`
+ * -- built from an injected runner, like `countAheadVia`, so both failure shapes stay falsifiable.
+ *
+ * WHY A LOCAL BRANCH IS THE ANSWER. Rule C asks one question: if this checkout is removed, does
+ * anything still know these commits exist? A local branch does. It lives in the COMMON .git and
+ * survives `git worktree remove`, so the work stays reachable and stays pushable. A detached HEAD
+ * lives only in the worktree's own directory, and that is the shape the rule was written for.
+ *
+ * `null` is "could not ask", `[]` is "nothing contains it" -- and unlike `originHeads` one function
+ * down, an EMPTY read here is a real measurement, not a broken one. git exits non-zero for a commit
+ * it cannot resolve (`error: no such commit`, status 129), so the throw carries the failure and a
+ * clean empty answer means exactly what it says: no local branch reaches this commit. That is the
+ * stranded case itself, and laundering it into "unmeasured" would mute the rule.
+ *
+ * A carrier with no head sha at all (porcelain that printed no HEAD line) is `null` for the same
+ * reason absent and unmeasurable are one fact everywhere else in this file: nobody asked.
+ */
+export function containingBranchesVia(runner) {
+  return (committish) => {
+    if (!committish) return null;
+    try {
+      return String(runner(committish))
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    } catch {
+      return null;
+    }
+  };
+}
+
+/**
+ * The carriers rule C actually FAILS on: at-risk commits that no surviving ref can find.
+ *
+ * #439 (2026-09-16). This used to be `atRisk.filter((c) => !c.branch)`, and `branch` is only the
+ * checkout's OWN porcelain branch line -- so every detached checkout was stranded by definition,
+ * however many local branches pointed at its head. `.claude/worktrees/wonderful-khorana-e350f7` sat
+ * detached at `8d1baf0d` with `claude/doc-archive` and `claude/doc-budget-archive-move-dcbec2` both
+ * on that commit; removing the worktree could not have lost anything, and the rule redded every
+ * lane's pre-push gate claiming the commits were "on no branch". Nothing had asked.
+ *
+ * So "on a branch" means ANY local branch contains the head, measured by `containingBranchesVia`
+ * and carried on the carrier as `refuge`. The checkout's own branch is still honoured first and
+ * without a probe -- it is its own refuge, and that answer cannot fail to be taken.
+ *
+ * Fail-closed on everything else: a `refuge` that is `null` (probe failed) or missing (nobody
+ * probed) keeps the checkout named. The asymmetry is deliberate -- over-reporting costs one `git
+ * branch` command, under-reporting costs the commits.
+ */
+export function strandedCarriers(carriers) {
+  return carriers.filter((c) => !c.branch && !(Array.isArray(c.refuge) && c.refuge.length > 0));
 }
 
 /**
@@ -222,7 +281,17 @@ export function snapshot({ git = g, lsRemote } = {}) {
     ? (c) => (countAhead(c) === 0 ? 0 : countAheadVia((x) => git("rev-list", "--count", x, "--not", ...trusted))(c))
     : () => null;
 
-  const checkouts = liveCarriers(list, countAhead, countUnpushed);
+  // Asked only where the porcelain cannot already answer it: a checkout ON a branch carries its own
+  // surviving ref, so probing it would buy nothing and cost a subprocess per checkout (#291's
+  // measured concern -- this fleet runs to 30-odd worktrees and rule C once timed out at the gate).
+  // Detached checkouts are the few, and they are the only ones the question is about.
+  const containingBranches = containingBranchesVia((c) =>
+    git("for-each-ref", "--format=%(refname:short)", `--contains=${c}`, "refs/heads/"),
+  );
+  const checkouts = liveCarriers(list, countAhead, countUnpushed).map((c) =>
+    c.branch ? c : { ...c, refuge: containingBranches(c.head) },
+  );
+  const atRisk = trusted ? atRiskCarriers(checkouts, trusted) : [];
   return {
     // The raw porcelain, handed back so a caller can re-measure the SAME fleet through a broken
     // counter and prove the failure path is live. Without it a guard could only describe that path.
@@ -233,7 +302,12 @@ export function snapshot({ git = g, lsRemote } = {}) {
     checkouts,
     unmeasured: unmeasuredCarriers(checkouts),
     ahead: checkouts.filter((c) => c.commits > 0),
-    atRisk: trusted ? atRiskCarriers(checkouts, trusted) : [],
+    atRisk,
+    // The failing set, not merely the at-risk set: commits on no remote AND reachable from no local
+    // branch, so the worktree directory is the last thing that knows them. Computed here so the
+    // report a human reads and the rule that reds the gate cannot disagree -- this file's whole
+    // reason for existing.
+    stranded: strandedCarriers(atRisk),
   };
 }
 
@@ -249,15 +323,25 @@ function main() {
     lines.push(`  UNMEASURED against origin/main (fetch origin): ${s.unmeasured.join(", ")}`);
   }
   for (const c of s.checkouts) {
-    const where = c.branch ? c.name : `${c.name} (detached)`;
+    // A detached checkout is named with what can still find it, because that -- not the missing
+    // branch line -- is what decides whether removing it loses anything (#439).
+    const refuge = Array.isArray(c.refuge) && c.refuge.length ? `, on ${c.refuge.join(", ")}` : "";
+    const where = c.branch ? c.name : `${c.name} (detached${refuge})`;
     const ahead = typeof c.commits === "number" ? `+${c.commits}` : "?";
     const only = typeof c.unpushed === "number" ? c.unpushed : "?";
     lines.push(`  ${where} — ${ahead} past origin/main, ${only} on no remote — ${c.path ?? ""}`);
   }
   if (s.atRisk.length) {
     lines.push(
-      `  AT RISK — these hold commits that exist on NO remote and go with the worktree if it is`,
-      `  deleted: ${s.atRisk.map((c) => `${c.name} (+${c.unpushed})`).join(", ")}`,
+      `  ON NO REMOTE — push these or they exist on this disk alone:`,
+      `  ${s.atRisk.map((c) => `${c.name} (+${c.unpushed})`).join(", ")}`,
+    );
+  }
+  if (s.stranded.length) {
+    lines.push(
+      `  STRANDED — on no remote AND reachable from no local branch, so they go with the worktree`,
+      `  if it is deleted. Give the work a ref (\`git branch <name> <sha>\`) or push it:`,
+      `  ${s.stranded.map((c) => `${c.name} (+${c.unpushed}) at ${c.path}`).join(", ")}`,
     );
   }
   console.log(lines.join("\n"));
