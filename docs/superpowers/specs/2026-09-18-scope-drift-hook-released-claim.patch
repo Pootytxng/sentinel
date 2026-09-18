@@ -1,0 +1,81 @@
+diff --git a/.claude/hooks/scope-drift-check.mjs b/.claude/hooks/scope-drift-check.mjs
+index 6879607..36eba02 100644
+--- a/.claude/hooks/scope-drift-check.mjs
++++ b/.claude/hooks/scope-drift-check.mjs
+@@ -15,9 +15,10 @@
+ // final.
+ //
+ // It is quiet by design. No session record for this folder, no claim readable for the issue, a claim
+-// that names another folder, a scope with no backticked paths: silence, because "cannot measure" is
+-// not a finding. And a finding is repeated only when the set of drifting paths changes or ten
+-// minutes pass -- a reminder after every tool call teaches the reader to skip it.
++// its thread says is over, a claim that names another folder, a scope with no backticked paths:
++// silence, because "cannot measure" is not a finding. And a finding is repeated only when the set of
++// drifting paths changes or ten minutes pass -- a reminder after every tool call teaches the reader
++// to skip it.
+ //
+ // The claim comes from a local cache written by tools/entry/claim.mjs when it posts, refreshed here
+ // from the issue thread when it is older than ten minutes and GitHub answers. The thread is the
+@@ -31,6 +32,7 @@ import {
+   changedPaths,
+   claimCacheDir,
+   driftReport,
++  dropClaimCache,
+   isFresh,
+   readClaimCache,
+   renderDrift,
+@@ -42,6 +44,13 @@ export const OFF_SWITCH = "COMPY_SCOPE_DRIFT_OFF";
+ /** A finding already reported is repeated after this long, or as soon as the drifting set changes. */
+ export const REMIND_EVERY_MS = 10 * 60_000;
+ 
++/**
++ * claimFor's answer when the thread was read and holds no live claim (#465): a Handoff released the
++ * lease, or none was ever taken. There is nothing to measure. It has no `scope`, so even a caller
++ * that forgets to check for it measures nothing.
++ */
++export const VACANT = Object.freeze({ vacant: true });
++
+ /**
+  * The decision, over facts only. `memo` is what this folder was last told (the drifting paths and
+  * when); the returned `memo` is what to remember now.
+@@ -83,19 +92,29 @@ export function writeMemo({ issue, cacheDir }, memo) {
+   writeFileSync(memoFile({ issue, cacheDir }), `${JSON.stringify(memo)}\n`);
+ }
+ 
+-/** Cache when fresh; the thread when not and the caller can reach it; the stale cache otherwise. */
++/**
++ * Cache when fresh; the thread when not and the caller can reach it; the stale cache when the thread
++ * could not be read. A thread that WAS read and holds no live claim outvotes its copy, as it does in
++ * the gate's resolveClaim (#459): the copy is dropped and the answer is VACANT.
++ */
+ export function claimFor({ issue, cacheDir, now = new Date(), thread = null }) {
+   const cached = readClaimCache({ issue, dir: cacheDir });
+   if (cached && isFresh(cached, { now })) return cached;
+   if (thread) {
+     try {
+-      const live = thread(issue)?.claim ?? null;
++      const read = thread(issue);
++      const live = read?.claim ?? null;
+       if (live && typeof live.scope === "string") {
+         return writeClaimCache(
+           { issue, scopeText: live.scope, folder: live.folder ?? null, branch: live.branch ?? null, postedAt: live.postedAt ?? null, source: "thread" },
+           { dir: cacheDir, now },
+         );
+       }
++      // readIssueThread never throws; a thread it could not read comes back `unreadable: true`.
++      if (!live && read && read.unreadable !== true) {
++        dropClaimCache({ issue, dir: cacheDir });
++        return VACANT;
++      }
+     } catch {
+       // the thread is unreachable; the stale cache is still the best fact available
+     }
+@@ -122,7 +141,7 @@ export function run({
+   if (!record || record === CORRUPT || !Number.isInteger(record.issue) || record.issue <= 0) return null;
+   const issue = record.issue;
+   const claim = claimFor({ issue, cacheDir, now, thread });
+-  if (!claim) return null;
++  if (!claim || claim === VACANT) return null;
+   if (claim.folder && !samePath(claim.folder, root)) return null;
+   const changed = changedPaths({ cwd: root, ...(git ? { git } : {}) }).paths;
+   const verdict = decide({ issue, claim, changed, memo: readMemo({ issue, cacheDir }), now });
