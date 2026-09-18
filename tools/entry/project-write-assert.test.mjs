@@ -2,7 +2,7 @@
 // docs/superpowers/specs/2026-08-21-unverified-session-write-refusal.md §3b, §6.
 //
 // This hook can, if it is wrong, stop the machine from repairing it. So the properties below are not
-// "does it deny" — they are the four ways a wrong version of this file would hurt:
+// "does it deny" — they are the ways a wrong version of this file would hurt:
 //
 //   * it refuses something that is not a project write (the scratchpad, %TEMP%, a sibling repo),
 //   * it refuses without saying how to get back in, or prints a cure that would itself refuse,
@@ -10,12 +10,14 @@
 //   * it quietly persists a session record from a PreToolUse hook that fires on every write,
 //   * (#368, spec §8/§9) it refuses - or prompts on - a write in a merely UNCLAIMED folder, where the
 //     ruling is allow plus one line of context naming the cure; only a contradiction or a foreign
-//     checkout may still deny.
+//     checkout may still deny,
+//   * (#463) its cure names an issue that is not this folder's, so the session claims the wrong one.
 //
 // Everything is driven through the injected seams (`verify`, `issueLookup`, fabricated hook input),
 // so no test here touches the real launch store or this machine's live verification state.
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +36,8 @@ import {
   run,
   targetOf,
 } from "../../.claude/hooks/project-write-assert.mjs";
+// The whole module too, for an export that exists only once the owner applies the #463 patch.
+import * as hook from "../../.claude/hooks/project-write-assert.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HOOK_FILE = join(HERE, "..", "..", ".claude", "hooks", "project-write-assert.mjs");
@@ -362,9 +366,12 @@ describe("the answer ships its cure — the failure mode this whole spec exists 
 describe("the issue suggestion is read, never invented", () => {
   it("prefers the verdict's own issue, then the folder's record, then the token", () => {
     const none = () => null;
+    // A token this folder may use: its own, and not yet expired (#463).
+    const now = new Date("2026-09-18T04:17:00Z");
+    const live = () => ({ issue: 9, folder: ROOT, expiresAt: "2026-09-18T04:47:00Z" });
     expect(knownIssueFor({ root: ROOT, verdict: { issue: 125 }, read: none, token: none })).toBe(125);
-    expect(knownIssueFor({ root: ROOT, verdict: {}, read: () => ({ issue: 143 }), token: () => ({ issue: 9 }) })).toBe(143);
-    expect(knownIssueFor({ root: ROOT, verdict: {}, read: none, token: () => ({ issue: 9 }) })).toBe(9);
+    expect(knownIssueFor({ root: ROOT, verdict: {}, read: () => ({ issue: 143 }), token: live, now })).toBe(143);
+    expect(knownIssueFor({ root: ROOT, verdict: {}, read: none, token: live, now })).toBe(9);
   });
 
   it("suggests nothing from a record it cannot read", () => {
@@ -379,6 +386,95 @@ describe("the issue suggestion is read, never invented", () => {
         token: () => null,
       }),
     ).toBeNull();
+  });
+});
+
+// #463. The launch token is ONE file per machine. Read with no folder check and no expiry check, a
+// launch for `sentinel-pilot-b-363` that expired on 2026-09-03 made every unclaimed folder's advisory
+// say "post an Ownership claim on #363". The fix is in a hook entrypoint, which is owner-hands (#368),
+// so it ships as a patch. The apply-check keeps the patch applicable until it lands; the tests behind
+// `skipIf` run from the moment it has.
+describe("#463: the launch token names an issue only for its own folder, and only until it expires", () => {
+  const REPO = join(HERE, "..", "..");
+  const PATCH = join(REPO, "docs", "superpowers", "specs", "2026-09-18-known-issue-token-scope.patch");
+  const applied = typeof hook.tokenIssueFor === "function";
+
+  it("the owner-hand patch still applies to the hook as it is — and is gone once applied", () => {
+    if (applied) {
+      expect(existsSync(PATCH), "the patch is spent: delete it in the same commit that applies it").toBe(false);
+      return;
+    }
+    expect(existsSync(PATCH), "the patch this block names must exist until it is applied").toBe(true);
+    expect(() => execFileSync("git", ["apply", "--check", PATCH], { cwd: REPO, stdio: "pipe" })).not.toThrow();
+  });
+
+  describe.skipIf(!applied)("once applied", () => {
+    const NOW = new Date("2026-09-18T04:17:00Z");
+    const none = () => null;
+    const token =
+      (fields = {}) =>
+      () => ({ issue: 463, folder: ROOT, expiresAt: "2026-09-18T04:47:00Z", ...fields });
+    const suggest = (t, extra = {}) => knownIssueFor({ root: ROOT, verdict: {}, read: none, token: t, now: NOW, ...extra });
+    // Exactly what %LOCALAPPDATA%\CompyEntry\launch.json held when the wrong advisory was seen.
+    const observed = () => ({ issue: 363, folder: "C:\\Users\\Kuya\\code\\sentinel-pilot-b-363", expiresAt: "2026-09-03T12:05:04Z" });
+    const hookInput = { tool_name: "Edit", tool_input: { file_path: `${ROOT}\\docs\\BACKLOG.md` }, cwd: ROOT, session_id: SESSION };
+    const unclaimed = () => ({ ok: false, code: "FOLDER_UNCLAIMED", reason: "nothing to check" });
+
+    it("names a live token's issue in the folder the token names", () => {
+      expect(suggest(token())).toBe(463);
+      // Live until its expiry has passed, as the assert reads a token.
+      expect(suggest(token({ expiresAt: NOW.toISOString() }))).toBe(463);
+    });
+
+    it("names nothing from an expired token, even in its own folder", () => {
+      expect(suggest(token({ expiresAt: "2026-09-18T04:16:59Z" }))).toBeNull();
+    });
+
+    it("names nothing from a live token for another folder", () => {
+      expect(suggest(token({ folder: SIBLING }))).toBeNull();
+      expect(suggest(token({ folder: `${ROOT}-b` }))).toBeNull(); // a longer name is another folder
+      expect(suggest(token(), { root: null })).toBeNull(); // no folder to match
+    });
+
+    it("names nothing from the token that was actually on disk: #363, another folder, expired", () => {
+      expect(suggest(observed)).toBeNull();
+    });
+
+    it("counts an expiry it cannot read as expired, and a folder it cannot read as another folder", () => {
+      for (const expiresAt of [undefined, null, "", "soon"]) {
+        expect(suggest(token({ expiresAt })), String(expiresAt)).toBeNull();
+      }
+      for (const folder of [undefined, null, 42]) {
+        expect(suggest(token({ folder })), String(folder)).toBeNull();
+      }
+    });
+
+    it("matches the folder the way the assert does: separators, case, a trailing backslash", () => {
+      for (const folder of [ROOT.replace(/\\/g, "/"), ROOT.toUpperCase(), `${ROOT}\\`]) {
+        expect(suggest(token({ folder })), folder).toBe(463);
+      }
+    });
+
+    it("run() hands its own clock to the lookup, so expiry is judged at the hook's now", () => {
+      const seen = [];
+      run({ hookInput, env: { CLAUDE_PROJECT_DIR: ROOT }, now: NOW, verify: unclaimed, issueLookup: (args) => (seen.push(args), null) });
+      expect(seen).toHaveLength(1);
+      expect(seen[0].now).toBe(NOW);
+    });
+
+    it("end to end: the stale #363 token no longer reaches the advisory, which says 'the issue'", () => {
+      const d = run({
+        hookInput,
+        env: { CLAUDE_PROJECT_DIR: ROOT },
+        now: NOW,
+        verify: unclaimed,
+        issueLookup: (args) => knownIssueFor({ ...args, read: none, token: observed }),
+      });
+      expect(d.allow).toBe(true);
+      expect(d.additionalContext).toContain("FOLDER_UNCLAIMED");
+      expect(d.additionalContext).toContain("Ownership claim on the issue");
+      expect(d.additionalContext).not.toContain("#363");
+    });
   });
 });
 

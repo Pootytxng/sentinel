@@ -1,0 +1,45 @@
+diff --git a/.claude/hooks/project-write-assert.mjs b/.claude/hooks/project-write-assert.mjs
+index e06afa0..6e69c21 100644
+--- a/.claude/hooks/project-write-assert.mjs
++++ b/.claude/hooks/project-write-assert.mjs
+@@ -223,14 +223,28 @@ export function decide({ toolName, toolInput, verdict, root, sessionId = null, c
+   };
+ }
+ 
++/**
++ * The launch token's issue, but only for the folder the token names and only until it expires. The
++ * token is one file per machine, not per folder: read without both checks, a launch for
++ * `sentinel-pilot-b-363` that expired on 2026-09-03 told every unclaimed folder to claim #363 (#463).
++ * These are the two checks `verifySession` makes before a token may reach a session record, with one
++ * difference: an expiry that cannot be read counts as expired here, so a suggestion is this folder's
++ * or it is absent.
++ */
++export function tokenIssueFor({ token, root, now = new Date() } = {}) {
++  if (!root || !token || token === CORRUPT || !Number.isInteger(token.issue)) return null;
++  if (typeof token.folder !== "string" || !samePath(token.folder, root)) return null;
++  const expires = Date.parse(token.expiresAt ?? "");
++  return Number.isFinite(expires) && expires >= now.getTime() ? token.issue : null;
++}
++
+ /** An issue number still readable on disk, for a LAPSED cure. Never invented, never from CORRUPT. */
+-export function knownIssueFor({ root, dir = TOKEN_DIR, verdict = null, read = readLineage, token = readToken } = {}) {
++export function knownIssueFor({ root, dir = TOKEN_DIR, verdict = null, now = new Date(), read = readLineage, token = readToken } = {}) {
+   if (Number.isInteger(verdict?.issue)) return verdict.issue;
+   try {
+     const lineage = root ? read({ root, dir }) : null;
+     if (lineage && lineage !== CORRUPT && Number.isInteger(lineage.issue)) return lineage.issue;
+-    const t = token({ dir });
+-    if (t && t !== CORRUPT && Number.isInteger(t.issue)) return t.issue;
++    return tokenIssueFor({ token: token({ dir }), root, now });
+   } catch {
+     /* an unreadable record means no suggestion, never a wrong one */
+   }
+@@ -257,7 +271,7 @@ export function run({
+     root: resolved.root,
+     sessionId: hookInput?.session_id ?? null,
+     cwd,
+-    knownIssue: verdict?.ok ? null : issueLookup({ root: resolved.root, dir, verdict }),
++    knownIssue: verdict?.ok ? null : issueLookup({ root: resolved.root, dir, verdict, now }),
+     zone,
+   });
+ }
