@@ -73,8 +73,8 @@ or pricing doctrine without an explicit constitutional amendment.
 build → verify → commit → push → next; failed gates trigger repair, not wishful pass. Preserve failed
 candidates before reset/abandonment. Questions are for genuine owner forks, not routine engineering.
 
-**Dynamic executor routing + proof order** (full law: `docs/WORK_CONTROL.md`): Claude Code, Codex and
-ChatGPT HQ are all eligible executors; per bounded slice, pick the one best placed to reach the next
+**Dynamic executor routing + proof order** (full law: `docs/WORK_CONTROL.md`): Claude Code, Codex,
+ChatGPT HQ and Grok are all eligible executors; per bounded slice, pick the one best placed to reach the next
 proof boundary. The hard invariant is **one active mutation lease per overlapping scope**; non-holders
 keep reading, coordinating and reviewing. Handoffs transfer mutation authority only. Exact required
 gates cannot be substituted; environment inability is a blocker, not a pass. Run

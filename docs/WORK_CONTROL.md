@@ -49,7 +49,7 @@ becomes a competing priority ledger.
 
 - **ChatGPT HQ** is the default coordinator: re-derive native state, keep authority/priority/claims
   coherent, route bounded slices, and review when it did not author the proof head.
-- **Claude Code, Codex, and ChatGPT HQ are all eligible executors.** Choose the executor for the next
+- **Claude Code, Codex, ChatGPT HQ, and Grok are all eligible executors.** Choose the executor for the next
   bounded slice from current context, remaining capacity, local-machine access, tool fit, and ability
   to reach the next proof boundary. No model receives permanent implementation jurisdiction.
 - **Claude Code** is often best for long local Windows implementation/build/test sessions.
@@ -125,8 +125,9 @@ This is the intended collaboration model:
 Every executor commits with its own git identity so the gate's `mutationAuthors` list and the
 reviewer-not-author rule can be checked against `git log` instead of trusted on assertion.
 
-- `user.name` values: `claude-code`, `codex`, `cowork-hq`; HQ commits made through the GitHub API keep
-  the account name.
+- `user.name` values: `claude-code`, `codex`, `cowork-hq`; HQ and Grok commits made through the GitHub
+  API keep the account name, which `git log` cannot tell apart, so for those commits the lease record
+  naming the executor is the attribution and receipts list `chatgpt-hq` or `grok` in `mutationAuthors`.
 - Identity is set per worktree (`extensions.worktreeConfig` is already true in this repository:
   `git config --worktree user.name <executor>` and matching `user.email`), or via
   `GIT_AUTHOR_NAME` / `GIT_COMMITTER_NAME` in the executor's shell.
@@ -260,7 +261,7 @@ Independent review is a **transition gate**, not a permanent implementation depa
 
 - must review the exact current head;
 - must not be one of the mutation authors represented in the proof delta being approved;
-- may be Claude Code, Codex, ChatGPT HQ, or another competent independent context;
+- may be Claude Code, Codex, ChatGPT HQ, Grok, or another competent independent context;
 - becomes stale when the reviewed head changes.
 
 A handoff between executors does not by itself require independent review. Review happens when evidence

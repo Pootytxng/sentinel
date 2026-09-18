@@ -288,6 +288,7 @@ export const IMPLEMENTATION_ACTORS = new Set([
   "codex",
   "chatgpt-hq",
   "cowork",
+  "grok",
 ]);
 
 // Review-only seats are valid reviewer identities but can never be mutation authors. Human-readable
@@ -356,8 +357,9 @@ export function evaluateWorkControl(
 
   const actor = String(record?.actor ?? "").trim();
   if (!IMPLEMENTATION_ACTORS.has(actor)) {
+    // Built from the set, so the message cannot fall behind a newly declared executor (#495).
     blockers.push(
-      "The implementation actor must be a declared executor (claude-code, codex, chatgpt-hq, or cowork).",
+      `The implementation actor must be a declared executor (${[...IMPLEMENTATION_ACTORS].join(", ")}).`,
     );
   }
 
