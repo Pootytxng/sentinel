@@ -157,8 +157,10 @@ Optional longer template is at the bottom if you want it.
 
 ## 7. Known limits (honesty)
 
-- **No CPU temperature** — that needs a kernel driver. This build ships none.
-  GPU temperature works.
+- **No CPU temperature without a helper** — Compy ships no kernel driver, so it
+  reads CPU temperature from a sensor app you run (HWiNFO or
+  LibreHardwareMonitor). Compy walks you through setting one up. GPU
+  temperature works on its own.
 - **1% low is a live estimate**, not benchmark-grade.
 - **Comparison verdicts need two sessions of the same game.**
 - **Overlay:** borderless/windowed only.

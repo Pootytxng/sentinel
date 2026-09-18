@@ -30,8 +30,8 @@ Two honest heads-ups:
    paid for a code signing certificate yet, not because anything's wrong.
    Click **More info → Run anyway**.
 2. Compy talks to GitHub to check for updates and nothing else. No account, no
-   telemetry, no data leaving your machine. It's in the privacy doc if you
-   want to read it.
+   telemetry, and nothing about your PC leaves your machine unless you send
+   it. It's in the privacy doc if you want to read it.
 
 If it breaks, tell me exactly what you were doing when it did. That's worth
 more to me than a "works fine."
@@ -46,8 +46,9 @@ more to me than a "works fine."
   `4B72D681…4E98`, published 2026-08-19). Do not send 0.9.0, 0.9.11, or any
   Drive link.
 - **What this buys you:** six unknowns become six known installs on 0.9.26,
-  and the consent-first update path gets tested at n=7 instead of n=1. Right
-  now exactly one tester has ever used it (they landed on 0.9.11).
+  and the consent-first update path gets tested at n=7 instead of the at
+  least two testers who have used it so far (they auto-updated to 0.9.12 on
+  2026-08-03/04).
 - **What to watch for:** if more than one of them reports the update check
   failing, that is a real signal and it goes straight to the top of the queue.
 - 20-minute ask after they install: first screen verdict → Gaming Mode *or*
