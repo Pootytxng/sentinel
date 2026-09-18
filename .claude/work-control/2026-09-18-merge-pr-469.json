@@ -1,0 +1,79 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` has two commits, 64d02311 and 11add5f9. This claude-code session wrote both under git identity claude-code <claude-code@desk.local>. The owner's chat order of 2026-09-17 asked that sessions launch their own successor instead of pasting a handoff block for the owner to carry, and that the handoff rule be restructured everywhere to work that way. The same session lands the PR under that order.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/466#issuecomment-5726260813",
+  "leaseEvidenceNote": "The operative Ownership claim on #466 is 5726260813 (started 2026-09-18T06:08Z, expires 18:08Z). It supersedes 5725932208, which superseded 5725511245, and only widens the write scope by the three receipt files. It names this folder, branch claude/466-self-launching-handoff, and a write scope of the 11 changed paths (scripts/lib/handoff-block.mjs, scripts/handoff-block.test.mjs, .claude/hooks/handoff-block-guard.mjs, scripts/successor-route.mjs, scripts/successor-route.test.mjs, .claude/hooks/context-size-advisor.mjs, scripts/context-thrash-guard.test.mjs, CLAUDE.md, docs/SESSION_HANDOFF.md, docs/COWORK_HANDOFF.md, scripts/gate-residency-guard.test.mjs) plus .claude/work-control/2026-09-18-{mark-pr-ready-469,merge-pr-469,close-issue-466}.json. `node scripts/scope-drift-gate.mjs --issue 466 --refresh` read it OK right after it was posted. The board item for #466 reads Active, with Worktree set to this folder @ this branch.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18 over REST (`gh api repos/Pootytxng/sentinel/pulls?state=open` and each PR's /files). Open PR 464 touches only docs/superpowers/specs/2026-09-18-known-issue-token-scope.patch and tools/entry/project-write-assert.test.mjs. PR 444 touches .claude/hooks/session-root-assert.mjs, .claude/hooks/target-ownership.mjs, scripts/fleet-snapshot.mjs, scripts/handoff-worktree-truth.test.mjs, scripts/lib/scope-drift.mjs and tools/entry files. PR 438 touches only tester docs. None touches any of #469's 11 paths. No open PR is based on claude/466-self-launching-handoff.",
+  "inheritedWork": false,
+  "currentHead": "11add5f958cd45e0b1ad57369527e171286bdf7a",
+  "pr": 469,
+  "issue": 466,
+  "kind": "lane",
+  "branch": "claude/466-self-launching-handoff",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched 2026-09-18 right before this receipt. origin/main reads 431e3d1b, still the PR's base and merge-base, so the merge tree is the reviewed head's tree. GitHub reads PR #469 as ready for review (not draft), head 11add5f9, MERGEABLE, with 0 closingIssuesReferences. The PR was marked ready under receipt 2026-09-18-mark-pr-ready-469.json, whose gate returned PASS at this same head.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\github-app-install-5400f6, with one writer. Its core.hooksPath is set per worktree to the relative .githooks. The first push of this branch was refused by hookspath-fleet-guard for two other lanes' folders (quirky-goodall-781898, wonderful-nightingale-70a70b), which carried the absolute pin. This lane touched neither; it waited on a read-only poll until their own sessions repointed them.",
+    "branch": "claude/466-self-launching-handoff at 11add5f9. `git ls-remote --heads origin` reads the same commit.",
+    "dirtyState": "`git status --porcelain` shows only this landing's untracked receipts (2026-09-18-mark-pr-ready-469.json and this one). The gitignored logs/ captures do not appear. No tracked file is modified.",
+    "liveProcesses": "No app run, dev server, install or build of this lane is running. The pre-push gate finished with PASS, and the reviewer seat has finished."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "11add5f958cd45e0b1ad57369527e171286bdf7a",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/github-app-install-5400f6/logs/verify-local-2026-09-18T06-33-01Z.log:9-44 (SHA-256 6753ec2102760bf0b07623fb45464f3027eec659246b720a27d11ec5b3a92e2e)",
+      "summary": "447 test files passed; 7338 passed / 5 skipped (7343); 0 failed. This includes the PR's own handoff-block, successor-route, context-thrash-guard, claude-md-laws-guard and gate-residency-guard tests. scripts/hookspath-fleet-guard.test.mjs, which refused the earlier push and has no skip branch, ran and passed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "11add5f958cd45e0b1ad57369527e171286bdf7a",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/github-app-install-5400f6/logs/verify-local-2026-09-18T06-33-01Z.log:45-71 (SHA-256 6753ec2102760bf0b07623fb45464f3027eec659246b720a27d11ec5b3a92e2e)",
+      "summary": "The frontend type-check and build stage passed; vite built clean."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "11add5f958cd45e0b1ad57369527e171286bdf7a",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/github-app-install-5400f6/logs/verify-local-2026-09-18T06-33-01Z.log:72-1444 (SHA-256 6753ec2102760bf0b07623fb45464f3027eec659246b720a27d11ec5b3a92e2e)",
+      "summary": "1327 passed; 0 failed; 24 ignored. No Rust file changed in this PR; the stage ran because it is part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "11add5f958cd45e0b1ad57369527e171286bdf7a",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/github-app-install-5400f6/logs/verify-local-2026-09-18T06-33-01Z.log:1445-1447 (SHA-256 6753ec2102760bf0b07623fb45464f3027eec659246b720a27d11ec5b3a92e2e)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of scripts/verify-local.ps1 at this exact head, from the push that created the remote branch. The log header names this worktree as the tree it gated. It has all six LOCAL CHECK stage markers (lines 3, 5, 9, 45, 72, 1445) and zero matches for `test result: FAILED`, `panicked`, `error[E`, ` FAIL ` or `×` across its 1447 lines. The PASS banner is written to the console, not the log. The console capture is kept beside the log at logs/push-console-2026-09-18T06-32-54Z.log (SHA-256 c41def24e2d0928e8b38b2f9ecfc86303e9f9ce7e1fcdbcb2af598afeccbc5cf). It reads `LOCAL CHECK RESULT: PASS` at line 1452 and the new-branch line at 1459, and git exited 0. An earlier push at 6f5b8d2a (log verify-local-2026-09-18T06-02-24Z.log) was refused by two tests, 2 failed / 7336 passed: scripts/gate-residency-guard.test.mjs named the new scripts/successor-route.mjs as having no declared residency, which 11add5f9 declares; scripts/hookspath-fleet-guard.test.mjs named two other lanes' folders carrying the absolute core.hooksPath pin, which their own sessions cleared before this run. 64d02311 is a message-only amend of 6f5b8d2a (both trees ba2a885e). Main has not moved since the base, so no separate merge-tree gate is needed.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "measured",
+    "reconciled": true,
+    "measurement": "Log lines 5-7 read: 11 changed paths since origin/main measured against the claim on #466; OK: every changed path is inside the claimed scope. Re-measured after the landing claim with `node scripts/scope-drift-gate.mjs --issue 466 --refresh`: OK against the widened scope."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "11add5f958cd45e0b1ad57369527e171286bdf7a",
+    "verdict": "PASS at 11add5f9 (delta review), after PASS-WITH-NITS at 6f5b8d2a whose three NON-BLOCKING findings require no change",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/469#issuecomment-5726256809",
+    "reviewerNote": "A read-only reviewer seat that wrote nothing in this change. At 6f5b8d2a it ran the pinned tests (4 files / 100 passed) and doc-truth (11 passed), ran the route CLI against the real store (route chip, no writes), probed the false-pass paths (error results, success-text mismatch, calls before the owner's last message, launched-vs-chip mismatch, `Successor: none — n/a`, a pasted old block, last-line-wins), and re-proved falsifiability with two temp mutations (4 red, then exactly 1 red), each restored in the same command. At 11add5f9 it proved 64d02311 tree-identical to 6f5b8d2a, ran 5 files / 115 passed, confirmed exactly 11 changed paths, confirmed `git config --worktree` writes only the invoking worktree's own config, and re-proved the new preamble test red (1 failed / 20 passed) with its sentence spliced out. Its non-blocking findings stay as known limits, not changed here: (1) a launch call anywhere after the owner's last message can back a later `launched` line; (2) the 512KB transcript tail read is pre-existing and degrades safely; (3) launch tools are matched by name suffix. It could not verify start_session/hand_off_to_session live, because they are gated off for this account."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #469 has 0 closingIssuesReferences, so this merge closes no issue. #466 closes separately, under its own close-issue receipt, after this landing's lease is released. scripts/land-pr.mjs merges with a merge commit (never a squash) and prunes the head without --delete-branch."
+}
