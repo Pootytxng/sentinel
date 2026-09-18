@@ -17,7 +17,7 @@
 // thread, never a substitute for it: a stale copy is labelled stale, a missing one is "not measured".
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -76,6 +76,19 @@ export function writeClaimCache(
   mkdirSync(dir, { recursive: true });
   writeFileSync(cacheFile({ issue, dir }), `${JSON.stringify(record, null, 2)}\n`);
   return record;
+}
+
+/**
+ * Forget a claim the thread no longer holds (#459). True when no copy is left. It never throws: the
+ * caller's verdict comes from the thread, and a copy that would not go must not change it.
+ */
+export function dropClaimCache({ issue, dir = claimCacheDir() }) {
+  try {
+    rmSync(cacheFile({ issue, dir }), { force: true });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function isFresh(record, { now = new Date(), ttlMs = CACHE_TTL_MS } = {}) {

@@ -181,6 +181,27 @@ describe("resolveClaim — cache first, thread when stale, stale cache when the 
     expect(r.source).toBe("thread");
     expect(r.claim.scope).toEqual(["tools"]);
   });
+
+  // #459: a thread that was READ and holds no live claim is the record saying the lease is over. The
+  // cache is a copy of that record, so it cannot outvote it, however fresh it is.
+  it("a thread read with no live claim outvotes even a fresh cache, and the cached copy is dropped", () => {
+    writeClaimCache({ issue: 15, scopeText: "`docs/`" }, { dir, now });
+    const handoff = { released: true, postedAt: "2026-09-02T11:59:00Z" };
+    const r = resolveClaim({ issue: 15, cacheDir: dir, now, refresh: true, thread: () => ({ claim: null, handoff }) });
+    expect(r.claim).toBeNull();
+    expect(r.vacant).toBe(true);
+    expect(r.handoff).toEqual(handoff);
+    expect(readClaimCache({ issue: 15, dir })).toBeNull();
+  });
+
+  it("a thread that could not be read is not a released one: the stale cache still stands, labelled stale", () => {
+    writeClaimCache({ issue: 16, scopeText: "`docs/`" }, { dir, now: new Date(now.getTime() - CACHE_TTL_MS - 1) });
+    const r = resolveClaim({ issue: 16, cacheDir: dir, now, thread: () => ({ claim: null, handoff: null, unreadable: true }) });
+    expect(r.source).toBe("cache");
+    expect(r.stale).toBe(true);
+    expect(r.claim.scope).toEqual(["docs"]);
+    expect(readClaimCache({ issue: 16, dir })).not.toBeNull();
+  });
 });
 
 describe("changedPaths, against a fake git", () => {
@@ -304,6 +325,31 @@ describe("gate, over a real temporary repository", () => {
     const r = gate({ issue: 997, cwd: repo, cacheDir, offline: true });
     expect(r.measured).toBe(false);
     expect(r.reason).toMatch(/no backticked paths/);
+  });
+
+  // #459, observed on #457: after a Handoff released the claim, `--refresh` still printed "measured
+  // against the claim on #457 (cache)" and OK. The cached scope here covers every changed path, so a
+  // gate that vouches from it prints exactly that OK.
+  it("a thread with no live claim plus a fresh cache does not report OK against the cached scope", () => {
+    writeClaimCache({ issue: 996, scopeText: "`docs/`, `scripts/`, `src/`", folder: repo }, { dir: cacheDir });
+    const r = gate({ issue: 996, cwd: repo, cacheDir, refresh: true, thread: () => ({ claim: null }) });
+    expect(r.measured).toBe(false);
+    expect(r.ok).toBe(true);
+    expect(r.reason).toMatch(/^no live claim/);
+    expect(render(r)).toMatch(/^scope drift \(#356\): not measured -- /);
+    expect(render(r)).not.toMatch(/OK: every changed path/);
+    expect(readClaimCache({ issue: 996, dir: cacheDir })).toBeNull();
+  });
+
+  it("the pre-push path (a stale cache, no --refresh) says the claim was released, and when", () => {
+    const stale = new Date(Date.now() - CACHE_TTL_MS - 60_000);
+    writeClaimCache({ issue: 995, scopeText: "`docs/`, `scripts/`, `src/`", folder: repo }, { dir: cacheDir, now: stale });
+    const thread = () => ({ claim: null, handoff: { released: true, postedAt: "2026-09-18T03:29:00Z" } });
+    const r = gate({ issue: 995, cwd: repo, cacheDir, thread });
+    expect(r.measured).toBe(false);
+    expect(r.reason).toMatch(/^claim released/);
+    expect(r.reason).toContain("2026-09-18T03:29:00Z");
+    expect(readClaimCache({ issue: 995, dir: cacheDir })).toBeNull();
   });
 });
 

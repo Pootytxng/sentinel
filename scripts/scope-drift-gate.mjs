@@ -11,7 +11,8 @@
 // the file is in the diff.
 //
 // What it refuses to do is pretend. A folder with no session record has no claim to check against
-// and passes with "not measured" on the log; so does a claim it cannot read. A gate that failed
+// and passes with "not measured" on the log; so does a claim it cannot read, and so does a claim
+// its thread says is over, whatever copy of it the cache still holds (#459). A gate that failed
 // every unlaunched checkout would be switched off within the day, and a gate that passed them
 // silently would be lying about what it checked.
 //
@@ -32,6 +33,7 @@ import {
   changedPaths,
   claimCacheDir,
   driftReport,
+  dropClaimCache,
   isFresh,
   readClaimCache,
   renderDrift,
@@ -60,6 +62,11 @@ export function parseArgs(argv) {
  * missing, stale, or a refresh was asked for and the caller allowed the network; the stale cache
  * again when the thread could not be read -- labelled stale, because a verdict from a claim that
  * may have been widened since is a verdict with a caveat.
+ *
+ * A thread that WAS read and holds no live claim is a different fact (#459): a Handoff released the
+ * lease, or none was taken. The cache is only a copy of that thread, so it cannot outvote it. The
+ * copy is dropped and the answer is `vacant`, with the thread's newest Handoff, for the gate to
+ * report as not measured.
  */
 export function resolveClaim({ issue, cacheDir, refresh = false, offline = false, now = new Date(), thread = readIssueThread }) {
   const cached = readClaimCache({ issue, dir: cacheDir });
@@ -67,13 +74,19 @@ export function resolveClaim({ issue, cacheDir, refresh = false, offline = false
   if (fresh && !refresh) return { claim: cached, source: "cache", stale: false };
   if (!offline) {
     try {
-      const live = thread(issue)?.claim ?? null;
+      const read = thread(issue);
+      const live = read?.claim ?? null;
       if (live && typeof live.scope === "string") {
         const record = writeClaimCache(
           { issue, scopeText: live.scope, folder: live.folder ?? null, branch: live.branch ?? null, postedAt: live.postedAt ?? null, source: "thread" },
           { dir: cacheDir, now },
         );
         return { claim: record, source: "thread", stale: false };
+      }
+      // readIssueThread never throws; a thread it could not read comes back `unreadable: true`.
+      if (!live && read && read.unreadable !== true) {
+        dropClaimCache({ issue, dir: cacheDir });
+        return { claim: null, source: "thread", stale: false, vacant: true, handoff: read.handoff ?? null };
       }
       if (!cached) return { claim: null, source: "thread", stale: false };
     } catch {
@@ -106,7 +119,13 @@ export function gate({
   if (issueNo === null) {
     return { ok: true, measured: false, reason: "no session record for this folder (launch through tools/entry, or pass --issue)", root };
   }
-  const { claim, source, stale } = resolveClaim({ issue: issueNo, cacheDir, refresh, offline, now, thread });
+  const { claim, source, stale, vacant, handoff } = resolveClaim({ issue: issueNo, cacheDir, refresh, offline, now, thread });
+  if (vacant) {
+    const reason = handoff?.released
+      ? `claim released: a Handoff on #${issueNo}${handoff.postedAt ? ` (${handoff.postedAt})` : ""} ended its lease, and a released claim's scope vouches for nothing`
+      : `no live claim: the thread on #${issueNo} was read and holds none`;
+    return { ok: true, measured: false, issue: issueNo, reason, root };
+  }
   if (!claim) {
     return { ok: true, measured: false, issue: issueNo, reason: `no claim readable for #${issueNo} (thread ${offline ? "not consulted" : "unreadable or claim-less"}, no cache)`, root };
   }
