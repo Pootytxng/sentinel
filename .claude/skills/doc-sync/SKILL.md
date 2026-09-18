@@ -26,8 +26,11 @@ silently patch — see gate-drift-audit).
    unblocks/gates. Item markers: `[x]` done · `[~]` partial · `[ ]` open · `[⛔]`/🪪/📡 gated.
 3. **`docs/CHANGELOG.md`** — dated stratum for what would once have been a CLAUDE.md state banner.
    Point-in-time records; they are never "fixed" retroactively, they accumulate.
-4. **`CLAUDE.md`** — ONLY when a standing law/working rule changes (new gate class, new lane rule,
-   renamed doctrine). Current state does NOT go here — that's what drifted before RELEASE_STATE existed.
+4. **The doc that owns the law** — ONLY when a standing law/working rule changes: product law →
+   `docs/PRODUCT_CONSTITUTION.md`; a safety rule or new gate class → `docs/ARCHITECTURE_LOCKS.md`; a
+   lane, claim or handoff rule → `docs/WORK_CONTROL.md`. `CLAUDE.md` is bootstrap, not law: where it
+   summarizes the changed law, correct the summary in the same commit. Current state goes in none of
+   these — that's what drifted before RELEASE_STATE existed.
 
 ## Invariants
 
@@ -44,5 +47,6 @@ silently patch — see gate-drift-audit).
 
 ```
 DOC-SYNC: RELEASE_STATE row <updated @ commit / not needed> · BACKLOG log <written / n-a> ·
-CHANGELOG stratum <written / n-a> · CLAUDE.md <untouched / law change: which> · drift script <exit 0 / findings>
+CHANGELOG stratum <written / n-a> · law doc <untouched / changed: which + CLAUDE.md summary> ·
+drift script <exit 0 / findings>
 ```
