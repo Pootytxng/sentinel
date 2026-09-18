@@ -1760,3 +1760,82 @@ describe("the exemption survives the real wiring, not just a hand-built argument
     expect(toComparable(unresolved[0].cwd)).toBe(toComparable(ROOT));
   });
 });
+
+// The operand test must be LINEAR, and that is a correctness property, not a performance nicety.
+//
+// The first cut of the whitelist was one alternation:
+//
+//   /^(?:[^$`]|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\})*$/
+//
+// `[^$\`]` and the tail of `\$[A-Za-z_][A-Za-z0-9_]*` both match `[A-Za-z0-9_]`, so each `$`-run has
+// as many parses as its length and the parses multiply; on a NON-matching input the engine explores
+// every one. Measured on the predicate alone: n=5 0.45ms, n=6 2.6ms, n=7 26ms, n=8 170ms, n=9
+// 1160ms - about 7x per added run. Through `decideShell`, where it runs at least twice per operand,
+// n=9 took 2391ms; driven against the real hook process, whose `.claude/settings.json` timeout is 10
+// seconds, an 82-character operand was KILLED having emitted nothing.
+//
+// THAT IS A SECURITY BUG, NOT A SLOW TEST. A hook that emits nothing has no opinion, so the call
+// falls through to the normal permission flow - and `origin/main` answers `ask` for that same
+// command. A crafted operand therefore deleted this guard's opinion and burned a core for ten
+// seconds, from ANY directory, because the operand test runs before `cwdZone`. The regex did not
+// exist on main; it arrived with the exemption.
+//
+// These tests exist so that a future reader who "simplifies" the two passes back into one readable
+// alternation gets a red test instead of a silently disarmed guard.
+describe("the redirect-operand test is linear, and stays linear (ReDoS regression)", () => {
+  const LANE = fwd(ROOT);
+  /** n runs of `$aaaaaaaa`, then a backtick so the match FAILS - the expensive direction. */
+  const pathological = (n) => "$" + Array.from({ length: n }, () => "aaaaaaaa").join("$") + "`";
+
+  it("agrees with the original alternation on the whole refuse/spare table", () => {
+    // Equivalence, asserted operand by operand. The left column is what the rule must spare; the
+    // right is everything the review and the reviewer between them could think of that must not be.
+    for (const spare of ["$LOG", "${LOG}", "$env:TEMP\\a.log", "logs/$RUN/out.txt", '"$LOG/a.txt"', "out.log", "a$b"]) {
+      expect(hook.isPlainRedirectName(spare), spare).toBe(true);
+    }
+    for (const refuse of [
+      "$'\\x78'", "${!X}", "${X:-y}", "$1", "$?.log", "a$", "$[1+1]", "$((1+1)).log", "$(date)/x",
+      '"`rm -rf x`"', '"$(rm -rf x)"', "`rm", "$", "${X:-$", "$?", "$$LOG", "${LOG", "$-", "${}",
+    ]) {
+      expect(hook.isPlainRedirectName(refuse), refuse).toBe(false);
+    }
+  });
+
+  it("agrees with the original alternation on random strings, not just the ones we thought of", () => {
+    // A differential check against the very regex that was replaced. It is cheap here only because
+    // the inputs are short - the old one cannot be run on the long ones at all, which is the point.
+    const OLD = /^(?:[^$`]|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\})*$/;
+    const alphabet = ["$", "{", "}", "a", "_", "1", "`", "/", ".", ":", "-", '"', "(", ")", "?"];
+    for (let i = 0; i < 20000; i += 1) {
+      const n = 1 + (i % 7);
+      let s = "";
+      for (let j = 0; j < n; j += 1) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+      expect(hook.isPlainRedirectName(s), s).toBe(OLD.test(s));
+    }
+  });
+
+  it("decides a pathological operand well inside the hook's budget", () => {
+    // Generous on purpose - 250ms is far above what a linear scan needs (measured: 0.1ms) and far
+    // below the hook's 10s timeout, so it is not flaky on a loaded machine but still fails loudly if
+    // the alternation comes back. The old predicate took 2391ms at n=9 and did not finish at n=12.
+    const cmd = `cd "${LANE}" && echo hi > ${pathological(12)}`;
+    const started = Date.now();
+    const d = ask(cmd);
+    const elapsed = Date.now() - started;
+    expect(elapsed, `took ${elapsed}ms - the operand test is backtracking again`).toBeLessThan(250);
+    // Silence is the failure mode that matters: no answer means the guard has no opinion.
+    expect(d.permission).toBe("ask");
+  });
+
+  it("still ANSWERS on the pathological operand, and answers `ask`", () => {
+    // Every length, including ones the old predicate could never have returned from. `ask` is what
+    // `origin/main` says too, so the guard's opinion is preserved rather than merely fast.
+    for (const n of [8, 9, 12, 20, 64]) {
+      const d = ask(`cd "${LANE}" && echo hi > ${pathological(n)}`);
+      expect(d.permission, `n=${n}`).toBe("ask");
+      expect(d.additionalContext ?? "", `n=${n}`).not.toContain("Shell ownership");
+    }
+    // A long but ORDINARY operand is still spared - the fix did not buy its speed by refusing more.
+    expect(ask(`cd "${LANE}" && echo hi > ${"logs/deep/".repeat(40)}$RUN.log`).permission).toBe("allow");
+  });
+});

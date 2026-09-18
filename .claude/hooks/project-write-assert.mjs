@@ -317,15 +317,20 @@ export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) 
     // prompt back that this decision exists to remove. It is narrow by construction — a strict
     // descendant of a named scratch directory, reached through a single-file write tool.
     if (decision.permission === "allow") {
-      write(
-        `${JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: "PreToolUse",
-            permissionDecision: "allow",
-            permissionDecisionReason: decision.why ?? "the agent's own scratch under ~/.claude",
-          },
-        })}\n`,
-      );
+      // `additionalContext` rides along rather than being dropped. No live decision carries both
+      // today, but this branch returns before the context handling below, so a future one would
+      // have lost its cure silently — the 2026-09-18 review caught the shape before it had a
+      // victim, and a guard that loses a message is the same class of defect as one that loses a
+      // decision. Omitted entirely when absent, so the payload stays exactly as it was.
+      const out = {
+        hookEventName: "PreToolUse",
+        permissionDecision: "allow",
+        permissionDecisionReason: decision.why ?? "the agent's own scratch under ~/.claude",
+      };
+      if (typeof decision.additionalContext === "string" && decision.additionalContext !== "") {
+        out.additionalContext = decision.additionalContext;
+      }
+      write(`${JSON.stringify({ hookSpecificOutput: out })}\n`);
       return 0;
     }
     if (typeof decision.additionalContext !== "string" || decision.additionalContext === "") return 0;

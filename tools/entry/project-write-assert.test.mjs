@@ -214,6 +214,21 @@ describe("what is and is not a project write", () => {
     expect(quiet).toEqual([]);
   });
 
+  // The affirmative branch returns early, so it has to carry the context itself or drop it. No
+  // live decision holds both today; this pins the shape before one does.
+  it("carries additionalContext alongside the affirmative allow instead of dropping it", () => {
+    const both = [];
+    emit({ allow: true, permission: "allow", why: "scratch", additionalContext: "the cure" }, { write: (s) => both.push(s) });
+    const out = JSON.parse(both[0]).hookSpecificOutput;
+    expect(out.permissionDecision).toBe("allow");
+    expect(out.additionalContext).toBe("the cure");
+
+    // ...and stays absent when there is none, so the ordinary payload is unchanged.
+    const lean = [];
+    emit({ allow: true, permission: "allow", why: "scratch" }, { write: (s) => lean.push(s) });
+    expect(JSON.parse(lean[0]).hookSpecificOutput).not.toHaveProperty("additionalContext");
+  });
+
   it("routes Write and Edit through an in-root global-config junction to approval (#429)", () => {
     const fixture = mkdtempSync(join(tmpdir(), "compy-write-global-"));
     try {

@@ -1143,8 +1143,39 @@ const HEADER = "Blocked: this command writes into a checkout this session does n
  * tree" is true of the operator but not of a command hiding in its operand. So the operand must be
  * positively shown to be a plain name, and everything else goes back to `ask` — where it was before,
  * and where the `$( … )` spelling never left.
+ *
+ * IT IS TWO LINEAR PASSES AND NOT ONE REGEX, AND THAT IS THE WHOLE POINT.
+ *
+ * The first cut of this test was a single alternation:
+ *
+ *   /^(?:[^$`]|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\})*$/
+ *
+ * which reads correctly and BACKTRACKS EXPONENTIALLY. `[^$\`]` and the tail of
+ * `\$[A-Za-z_][A-Za-z0-9_]*` both match `[A-Za-z0-9_]`, so every `$`-run has as many parses as its
+ * length and the parses multiply across runs; on an input that does NOT match, the engine explores
+ * all of them before giving up. Measured on the regex alone: 5 runs 0.3ms, 6 runs 2.2ms, 7 runs
+ * 19ms, 8 runs 137ms — about 7x per added run.
+ *
+ * Driven against the real hook process, which `.claude/settings.json` gives `"timeout": 10`, an
+ * 82-character operand — nine `$aaaaaaaa` runs followed by a backtick — ran the full 10 seconds and
+ * was KILLED, emitting nothing. A hook that emits nothing has no opinion, so the call falls through
+ * to the normal permission flow; `origin/main` answers `ask` for that same command. A crafted
+ * operand therefore deleted this guard's opinion and burned a core for ten seconds, and it needed no
+ * `cd` at all, because this test runs before `cwdZone` and at least twice per operand. The
+ * vulnerability did not exist on main — it arrived with the exemption, which makes it ours.
+ *
+ * So the ambiguity is removed rather than tuned. JS has no atomic groups and no possessive
+ * quantifiers, so the single ambiguous alternation becomes two unambiguous passes: reject a backtick
+ * outright, then delete every well-formed `$NAME`/`${NAME}` and see whether any `$` survives. The
+ * replace pattern has no ambiguity to backtrack into — both alternatives are anchored at `$` and are
+ * disjoint on the character after it — so the whole check is linear in the length of the operand.
+ * The semantics are unchanged; `shell-ownership-assert.test.mjs` pins the full refuse/spare table
+ * against this predicate and puts a wall-clock bound on it, so re-introducing the alternation turns
+ * a test red instead of quietly turning the guard off.
  */
-const PLAIN_REDIRECT_NAME = /^(?:[^$`]|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\})*$/;
+export const isPlainRedirectName = (raw) =>
+  !raw.includes("`") &&
+  !raw.replace(/\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})/g, "").includes("$");
 
 /**
  * `permission: "allow"` means NO OBJECTION from this hook - the normal permission flow applies -
@@ -1351,7 +1382,7 @@ export function decideShell({
     const boundedRedirect = (u) =>
       u.verb === "redirection" &&
       typeof u.raw === "string" &&
-      PLAIN_REDIRECT_NAME.test(u.raw) &&
+      isPlainRedirectName(u.raw) &&
       cwdZone(u) === ZONES.OWN;
     const spared = unresolved.filter(boundedRedirect);
 
