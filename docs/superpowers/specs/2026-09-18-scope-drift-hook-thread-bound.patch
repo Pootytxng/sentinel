@@ -1,0 +1,45 @@
+diff --git a/.claude/hooks/scope-drift-check.mjs b/.claude/hooks/scope-drift-check.mjs
+index 6879607..2d49775 100644
+--- a/.claude/hooks/scope-drift-check.mjs
++++ b/.claude/hooks/scope-drift-check.mjs
+@@ -28,6 +28,7 @@ import { join, resolve } from "node:path";
+ 
+ import { CORRUPT, TOKEN_DIR, readLineage, resolveSessionRoot } from "./session-root-assert.mjs";
+ import {
++  boundedThread,
+   changedPaths,
+   claimCacheDir,
+   driftReport,
+@@ -138,6 +139,17 @@ export function emit(message, { write = (s) => process.stdout.write(s) } = {}) {
+   return 0;
+ }
+ 
++/**
++ * The thread as the CLI asks it: once per issue per ten minutes, whatever it answers (#468).
++ * claimFor caches only a live claim with a scope, so a released claim, an issue never claimed or
++ * a GitHub that does not answer sent every tool call back to the thread -- about 0.4 s and one
++ * GraphQL request each, or this hook's whole timeout while GitHub hangs. What claimFor decides
++ * from an answer does not change; only how often it asks.
++ */
++export function cliThread({ read, cacheDir = claimCacheDir(), now = new Date() }) {
++  return boundedThread(read, { dir: cacheDir, now });
++}
++
+ const invokedDirectly = (() => {
+   try {
+     return Boolean(process.argv[1]) && resolve(process.argv[1]).toLowerCase().endsWith("scope-drift-check.mjs");
+@@ -154,10 +166,11 @@ if (invokedDirectly) {
+     process.exit(0); // unreadable stdin is this hook's problem, not the session's
+   }
+   try {
+-    // The thread is consulted lazily, only past the cache's TTL, so a hook that runs after every
+-    // tool call costs one `gh` round trip per ten minutes at most -- and none when GitHub is down.
++    // The thread is asked once per issue per ten minutes, whatever it holds and whether or not
++    // GitHub answers (cliThread): a hook that runs after every tool call must not make each one
++    // wait on GitHub.
+     const { readIssueThread } = await import("../../tools/entry/gather.mjs");
+-    process.exit(emit(run({ hookInput: input, thread: readIssueThread })));
++    process.exit(emit(run({ hookInput: input, thread: cliThread({ read: readIssueThread }) })));
+   } catch {
+     process.exit(0); // a warning hook that crashes must not become the outage it warns about
+   }

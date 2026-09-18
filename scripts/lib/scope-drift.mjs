@@ -96,6 +96,75 @@ export function isFresh(record, { now = new Date(), ttlMs = CACHE_TTL_MS } = {})
   return Number.isFinite(at) && now.getTime() - at >= 0 && now.getTime() - at <= ttlMs;
 }
 
+/** readIssueThread's answer for a thread it could not read. */
+const UNREADABLE_READ = Object.freeze({ claim: null, handoff: null, unreadable: true });
+
+const holdsScopedClaim = (read) => typeof read?.claim?.scope === "string";
+
+function threadMemoFile({ issue, dir }) {
+  return join(dir, `thread-${Number(issue)}.json`);
+}
+
+/** A memo this module wrote, or null. It never holds a scoped claim, so one that does is not ours. */
+function readThreadMemo({ issue, dir }) {
+  try {
+    const memo = JSON.parse(readFileSync(threadMemoFile({ issue, dir }), "utf8"));
+    const read = memo?.read;
+    if (!read || typeof read !== "object" || Array.isArray(read) || holdsScopedClaim(read)) return null;
+    return memo;
+  } catch {
+    return null;
+  }
+}
+
+function writeThreadMemo({ issue, dir, now, read }) {
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(threadMemoFile({ issue, dir }), `${JSON.stringify({ issue: Number(issue), askedAt: now.toISOString(), read })}\n`);
+  } catch {
+    // a memo that will not write costs one more round trip, never a different answer
+  }
+}
+
+function dropThreadMemo({ issue, dir }) {
+  try {
+    rmSync(threadMemoFile({ issue, dir }), { force: true });
+  } catch {
+    // an undeletable memo expires with its TTL like any other
+  }
+}
+
+/**
+ * `read`, asked at most once per issue per `ttlMs`, whatever the thread answers (#468).
+ *
+ * The claim cache keeps one kind of answer: a live claim with a scope. A released claim, an issue
+ * never claimed, a claim with no scope and a GitHub that does not answer all left nothing behind,
+ * so a reader that asks whenever the cache is missing asked again on the next call. For the
+ * PostToolUse hook that meant every tool call: about 0.4 s and one GraphQL request each, or the
+ * hook's full 10 s timeout while GitHub hangs (measured on #468).
+ *
+ * Those answers are kept here for the claim cache's own TTL, so the copy is never older than a cached
+ * claim can be. A scoped claim is never kept: the caller caches it, and two copies can disagree
+ * (#459). The memo is marked unreadable BEFORE the thread is asked, so a reader killed mid-ask
+ * leaves "unreadable" behind, and the next call does not wait again. A throw propagates and leaves
+ * that mark.
+ *
+ * Only the hook's hot path wants this. The gate reads the thread raw, once per push, because it is
+ * the verdict.
+ */
+export function boundedThread(read, { dir = claimCacheDir(), now = new Date(), ttlMs = CACHE_TTL_MS } = {}) {
+  return (issue) => {
+    const memo = readThreadMemo({ issue, dir });
+    if (memo && isFresh({ cachedAt: memo.askedAt }, { now, ttlMs })) return memo.read;
+    writeThreadMemo({ issue, dir, now, read: UNREADABLE_READ });
+    const answer = read(issue);
+    const shaped = answer && typeof answer === "object" && !Array.isArray(answer);
+    if (holdsScopedClaim(answer)) dropThreadMemo({ issue, dir });
+    else writeThreadMemo({ issue, dir, now, read: shaped ? answer : UNREADABLE_READ });
+    return answer;
+  };
+}
+
 /** Case- and separator-insensitive: the same folder spelled by two tools is the same folder. */
 export function samePath(a, b) {
   const norm = (p) =>
