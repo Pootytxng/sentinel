@@ -38,7 +38,9 @@ gate function body at source and compare against the row's State column:
   · `restore_gate()` · `receipts_gate()` · `licensing_armed()` · `remote_fetch_enabled()`
   · `benchmark_trial::stack_trial_gate()` (§2a aggregate-stack A/B — DARK) — does the returned value
   match LIVE/ARMED/DARK/OFF as printed?
-- Outbound-network row: still no HTTP client in `Cargo.toml`, CSP still `connect-src 'self' ipc:`?
+- Outbound-network row: do the HTTP clients in `src-tauri/Cargo.toml` (a direct `reqwest` beside
+  `tauri-plugin-updater`) and the production CSP `connect-src` in `src-tauri/tauri.conf.json`
+  (`'self' ipc: http://ipc.localhost`) still say what the row claims?
 - Updater row: do the dependency, config and capability lines it cites still say what the row
   claims? Take the claim from the row itself, never from a remembered value.
 
