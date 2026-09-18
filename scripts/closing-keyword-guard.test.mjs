@@ -1,6 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, beforeAll, describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // CLOSING-KEYWORD GUARD (#343).
@@ -69,38 +71,54 @@ export function findClosingKeywordMatches(text) {
 // prove the pattern-matching itself can fail, and this file's own commit history carries the record
 // of a real falsification run against the live half (see the commit that adds this file).
 
-function git(args) {
-  return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+function git(args, cwd = ROOT) {
+  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 }
 
 // Probing calls (does @{upstream} exist? does origin/main?) are expected to fail on plenty of
 // legitimate checkouts — that is not an error, so its stderr must not read like one. stdio here
 // silences it without touching `git()` above, which real callers still want to fail loudly.
-function tryGit(args) {
+function tryGit(args, cwd = ROOT) {
   try {
-    return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
     return null;
   }
 }
 
-export function resolvePushBase() {
-  const upstream = tryGit(["rev-parse", "--verify", "@{upstream}"]);
+export function resolvePushBase(cwd = ROOT) {
+  const upstream = tryGit(["rev-parse", "--verify", "@{upstream}"], cwd);
   if (upstream) return upstream;
-  const originMain = tryGit(["rev-parse", "--verify", "origin/main"]);
+  const originMain = tryGit(["rev-parse", "--verify", "origin/main"], cwd);
   if (!originMain) return null;
-  return tryGit(["merge-base", "origin/main", "HEAD"]);
+  return tryGit(["merge-base", "origin/main", "HEAD"], cwd);
 }
 
-export function commitsAheadOfBase(base) {
+// A commit already reachable from origin/main has landed on the default branch, and GitHub acted on
+// its message when it landed; pushing it again to a lane ref can close nothing. Such commits still
+// fall inside `<upstream>..HEAD` whenever a lane merges origin/main to catch up, so they are excluded
+// here (#494: a main commit already carrying a keyword failed #438's catch-up push). Without
+// origin/main there is nothing to exclude against, and the range is `<base>..HEAD` as before.
+export function commitsAheadOfBase(base, cwd = ROOT) {
   if (!base) return [];
-  const shas = tryGit(["rev-list", `${base}..HEAD`]);
+  const originMain = tryGit(["rev-parse", "--verify", "origin/main"], cwd);
+  const shas = tryGit(["rev-list", "HEAD", `^${base}`, ...(originMain ? [`^${originMain}`] : [])], cwd);
   if (!shas) return [];
   return shas.split("\n").filter(Boolean);
 }
 
-export function commitBody(sha) {
-  return git(["show", "-s", "--format=%B", sha]);
+export function commitBody(sha, cwd = ROOT) {
+  return git(["show", "-s", "--format=%B", sha], cwd);
+}
+
+/** The live scan itself, runnable against any checkout so the fixture below exercises the same path. */
+export function scanPushRange(cwd = ROOT) {
+  const offenders = [];
+  for (const sha of commitsAheadOfBase(resolvePushBase(cwd), cwd)) {
+    const matches = findClosingKeywordMatches(commitBody(sha, cwd));
+    if (matches.length) offenders.push(`${sha.slice(0, 8)}: ${matches.map((m) => m.text).join(", ")}`);
+  }
+  return offenders;
 }
 
 // ── Fixture half: provably falsifiable, runs every time regardless of branch state ─────────────
@@ -178,15 +196,66 @@ describe("closing-keyword guard: pattern matching", () => {
   });
 });
 
+// #494: a lane whose upstream predates a keyword commit on main, then merges main to catch up. The
+// old `<upstream>..HEAD` range swept that main commit in and failed the push; it closes nothing on a
+// lane ref, because GitHub already acted on it when it landed on main.
+describe("closing-keyword guard: a lane that merges origin/main (#494)", () => {
+  let root;
+  let mainKeyword;
+  const fx = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const commit = (message) => {
+    fx(["commit", "-q", "--allow-empty", "-m", message]);
+    return fx(["rev-parse", "HEAD"]);
+  };
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), "compy-closing-keyword-"));
+    fx(["init", "-q", "-b", "main"]);
+    fx(["config", "user.email", "t@t"]);
+    fx(["config", "user.name", "t"]);
+    // Nothing ever fetches from this path; the remote only lets `@{upstream}` resolve through refspec.
+    fx(["remote", "add", "origin", join(root, "origin.git")]);
+    fx(["update-ref", "refs/remotes/origin/main", commit("seed")]);
+
+    fx(["checkout", "-q", "-b", "lane"]);
+    fx(["update-ref", "refs/remotes/origin/lane", commit("lane work, already pushed")]);
+    fx(["branch", "-q", "--set-upstream-to=origin/lane"]);
+
+    fx(["checkout", "-q", "main"]);
+    mainKeyword = commit("fix(entry): the store follows the session root (PR #441 closed #440)");
+    fx(["update-ref", "refs/remotes/origin/main", mainKeyword]);
+
+    fx(["checkout", "-q", "lane"]);
+    fx(["merge", "-q", "--no-ff", "origin/main", "-m", "Merge origin/main into lane"]);
+  });
+
+  afterAll(() => {
+    try {
+      rmSync(root, { recursive: true, force: true });
+    } catch {
+      /* a locked file on Windows must not fail the suite */
+    }
+  });
+
+  it("passes the catch-up merge: the keyword commit main already carries is not in the scan", () => {
+    // The fixture reproduces the defect: the upstream is the push base, and the old range holds the commit.
+    expect(resolvePushBase(root)).toBe(fx(["rev-parse", "origin/lane"]));
+    expect(fx(["rev-list", "@{upstream}..HEAD"]).split("\n")).toContain(mainKeyword);
+    expect(findClosingKeywordMatches(commitBody(mainKeyword, root)).length).toBe(1);
+
+    expect(commitsAheadOfBase(resolvePushBase(root), root)).not.toContain(mainKeyword);
+    expect(scanPushRange(root)).toEqual([]);
+  });
+
+  it("still fails a new lane commit carrying a closing keyword on top of that merge", () => {
+    const lane = commit("docs(entry): this fixes #441 by accident");
+    expect(scanPushRange(root)).toEqual([`${lane.slice(0, 8)}: fixes #441`]);
+  });
+});
+
 describe("closing-keyword guard: live scan of commits this checkout would push", () => {
   it("finds no closing keyword next to an issue/PR number in any commit ahead of the push base", () => {
-    const base = resolvePushBase();
-    const shas = commitsAheadOfBase(base);
-    const offenders = [];
-    for (const sha of shas) {
-      const matches = findClosingKeywordMatches(commitBody(sha));
-      if (matches.length) offenders.push(`${sha.slice(0, 8)}: ${matches.map((m) => m.text).join(", ")}`);
-    }
+    const offenders = scanPushRange();
     expect(
       offenders,
       "A commit message pairs a closing keyword with an issue/PR number. GitHub acts on this the " +
