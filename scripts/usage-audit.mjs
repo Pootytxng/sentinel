@@ -12,7 +12,8 @@
 //   node scripts/usage-audit.mjs --report        -> also write docs/usage-audit/REPORT-<date>.md
 //
 // Health flags it raises (the audit's standing findings, 2026-07-13):
-//   - peak main-lane context > 200k in any session (owner rule: hand off at 80-120k)
+//   - any session's peak main-lane context past CLAUDE_CODE_AUTO_COMPACT_WINDOW (flagPeakContext();
+//     compaction itself fires below it, at nativeCompactCeiling()) — owner rule: hand off at 80-120k
 //   - subagent runs on opus/fable (routing law: cheapest capable model, sonnet default)
 //   - docs/BACKLOG.md > 120 KB (boot tax — archive steering-log cycles per its retention rule)
 //   - "File has not been read yet" Edit errors (read-before-edit discipline)
