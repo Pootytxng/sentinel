@@ -66,9 +66,9 @@ $budgets = @{
 # 222 bytes per line. Tokens are charged by bytes. Both budgets now apply; a doc must clear both.
 #
 # The numbers are derived, not chosen:
-#   48 KB = MAX_UNBOUNDED_BYTES in .claude/hooks/big-read-guard.mjs. Past it, this repo's own guard
-#           already refuses to read the file whole - so a doc over it has become unreadable by its
-#           own rules.
+#   48 KB = MAX_UNBOUNDED_BYTES, the unbounded-Read budget the now-removed .claude/hooks/big-read-guard.mjs
+#           once enforced (purged as an owner-ordered hook cleanup; the number is kept here as the
+#           still-valid "unreadable in one big gulp" line, it just isn't hook-enforced anymore).
 #   120 KB = the boot-tax line scripts/usage-audit.mjs has flagged since 2026-07-13. BACKLOG is read
 #           by section by law, so it keeps the wider line.
 #   20 KB = Anthropic's published "keep CLAUDE.md under ~200 lines" (code.claude.com/docs/en/costs)

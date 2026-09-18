@@ -249,16 +249,16 @@ if (ceiling && carriedPerTurn > 0.55 * ceiling) {
 // The line budgets in scripts/doc-budget.ps1 are structurally blind to bytes:
 // docs/BACKLOG.md passed 1286/1400 lines while weighing 142 KB, because a line budget cannot see a
 // 113-byte average line. Tokens are charged by bytes, so the boot-tax budget is in bytes.
-// 48 KB is not invented: it is MAX_UNBOUNDED_BYTES in .claude/hooks/big-read-guard.mjs — the point
-// past which this repo already refuses to read a file whole. BACKLOG is read by section by law, so
-// it keeps the wider 120 KB line this audit has always used.
+// 48 KB is not invented: it was MAX_UNBOUNDED_BYTES in .claude/hooks/big-read-guard.mjs, the point
+// past which that (now-removed, owner-ordered hook purge) guard refused to read a file whole. BACKLOG
+// is read by section by law, so it keeps the wider 120 KB line this audit has always used.
 const DOC_BUDGET_PS1 = "$byteBudgets in scripts/doc-budget.ps1";
 const DOC_BYTE_BUDGETS = [
   // The advice here used to send the reader to "its retention rule" in docs/BACKLOG.md. That file
   // was rebuilt as an execution ledger on 2026-09-05: it has no steering-log section and states no
   // retention rule. Its own purpose line is the test, so the advice now carries it.
   ["docs/BACKLOG.md", 120 * 1024, "BACKLOG.md is 'current execution status only' — move what is no longer current out to docs/BACKLOG_ARCHIVE.md, which holds the retired steering-log cycles", DOC_BUDGET_PS1],
-  ["docs/RELEASE_STATE.md", 48 * 1024, "past big-read-guard's own unbounded-read budget — it can no longer be read whole", DOC_BUDGET_PS1],
+  ["docs/RELEASE_STATE.md", 48 * 1024, "past the former big-read-guard's unbounded-read budget — it can no longer be read whole in one Read", DOC_BUDGET_PS1],
   // 20 KB ≈ Anthropic's published "keep CLAUDE.md under ~200 lines" at this repo's ~110 bytes/line
   // (code.claude.com/docs/en/costs). It is auto-loaded on every boot of every session, so it is the
   // most expensive byte in the repo.

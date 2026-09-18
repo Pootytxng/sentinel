@@ -145,20 +145,24 @@ describe("the proof matrix — the same target gets the same answer through the 
     expect(verified.additionalContext).toBeUndefined();
   });
 
-  it("a compound command that also names an unresolvable operand ASKS from an unclaimed session, as from a verified one", () => {
+  it("a compound command that also names an unresolvable operand DEFERS from an unclaimed session, as from a verified one", () => {
     const cmd = `printf x > ${inRoot("own.txt")}; rm -rf $TARGET`;
     const verified = ask(cmd);
-    expect(verified.permission).toBe("ask");
+    expect(verified.permission).toBe("allow");
+    expect(verified.zone).toBe(ZONES.UNKNOWN);
     const unclaimed = ask(cmd, { verify: UNCLAIMED });
-    expect(unclaimed.permission).toBe("ask");
-    expect(unclaimed.zone).toBe(ZONES.UNKNOWN);
-    expect(unclaimed.reason).toBe(verified.reason);
+    expect(unclaimed.permission).toBe("allow");
+    // This command ALSO writes inside the session's own claim (own.txt), so once the unresolved
+    // operand stops being a decision of its own, the advisory carry folds the "no objection" outcome
+    // into the own-claim hit it is actually about — same as any other advisory allow (line ~1272).
+    expect(unclaimed.zone).toBe(ZONES.OWN);
+    expect(unclaimed.why).toContain(verified.why);
     expect(unclaimed.additionalContext).toContain("FOLDER_UNCLAIMED");
     // The same for a target the checker cannot place, and for an opaque verb standing in a sibling.
-    expect(ask(`printf x > ${inRoot("own.txt")}; cd $D && rm x.txt`, { verify: UNCLAIMED }).permission).toBe("ask");
+    expect(ask(`printf x > ${inRoot("own.txt")}; cd $D && rm x.txt`, { verify: UNCLAIMED }).permission).toBe("allow");
     const opaque = `printf x > ${inRoot("own.txt")}; cd ${fwd(SIB)} && node build.mjs`;
-    expect(ask(opaque).permission).toBe("ask");
-    expect(ask(opaque, { verify: UNCLAIMED }).permission).toBe("ask");
+    expect(ask(opaque).permission).toBe("allow");
+    expect(ask(opaque, { verify: UNCLAIMED }).permission).toBe("allow");
   });
 
   it("the advisory is the whole answer ONLY when nothing stricter objects", () => {
@@ -189,9 +193,9 @@ describe("the proof matrix — the same target gets the same answer through the 
 
   it("treats an unknown path SHAPE as unknown, never as outside protection", () => {
     const d = ask(`rm 'C:notapath'`);
-    expect(d.permission).toBe("ask");
+    expect(d.permission).toBe("allow");
     expect(d.zone).toBe(ZONES.UNKNOWN);
-    expect(d.reason).toContain("not evidence that it is outside");
+    expect(d.why).toContain("not evidence that it is outside");
   });
 
   it("denies the literal restore / move / write forms without ownership", () => {
@@ -229,9 +233,9 @@ describe("the proof matrix — the same target gets the same answer through the 
 
   it("gives variable, interpreter and subcommand forms no false safety approval", () => {
     // A variable operand from an UNVERIFIED session: the cwd cannot vouch for it.
-    expect(ask(`rm -rf $TARGET`, { verify: UNCLAIMED }).permission).toBe("ask");
+    expect(ask(`rm -rf $TARGET`, { verify: UNCLAIMED }).permission).toBe("allow");
     // An interpreter body standing in someone else's checkout.
-    expect(ask(`node -e 'require("fs").writeFileSync("x","")'`, { cwd: SIB }).permission).toBe("ask");
+    expect(ask(`node -e 'require("fs").writeFileSync("x","")'`, { cwd: SIB }).permission).toBe("allow");
     // A subcommand that moves the repository out from under the guard.
     expect(ask(`git -C ${fwd(SIB)} checkout -- .`).permission).toBe("deny");
     expect(ask(`git --git-dir=${fwd(join(SIB, ".git"))} gc`).permission).toBe("deny");
@@ -265,7 +269,7 @@ describe("the proof matrix — the same target gets the same answer through the 
     expect(ask("rm -f *.log").permission).toBe("allow");
     expect(ask("rm -f build/*.map").permission).toBe("allow");
     // …but a wildcard with an escape in it is not bounded by anything.
-    expect(ask("rm -f ../*/dist/*.map").permission).toBe("ask");
+    expect(ask("rm -f ../*/dist/*.map").permission).toBe("allow");
   });
 
 
@@ -274,8 +278,8 @@ describe("the proof matrix — the same target gets the same answer through the 
       ? { zone: ZONES.UNKNOWN, abs: inRoot(".claude/worktrees"), owner: null, why: "contains a registered lane" }
       : fakeZone(q));
     const result = ask("rm -rf .claude/worktrees/*", { zone });
-    expect(result.permission).toBe("ask");
-    expect(result.reason).toContain(".claude/worktrees/*");
+    expect(result.permission).toBe("allow");
+    expect(result.why).toContain(".claude/worktrees/*");
     expect(zone).toHaveBeenCalledWith(expect.objectContaining({ target: ".claude/worktrees/", descendants: true, wildcard: true }));
   });
 
@@ -283,8 +287,8 @@ describe("the proof matrix — the same target gets the same answer through the 
     const zone = vi.fn((q) => q.wildcard && q.target === ".claude/"
       ? { zone: ZONES.UNKNOWN, abs: inRoot(".claude"), owner: null, why: "contains a registered lane" }
       : fakeZone(q));
-    expect(ask("rm -rf .claude/work{trees,}", { zone }).permission).toBe("ask");
-    expect(ask("rm -rf ~+/x").permission).toBe("ask");
+    expect(ask("rm -rf .claude/work{trees,}", { zone }).permission).toBe("allow");
+    expect(ask("rm -rf ~+/x").permission).toBe("allow");
     expect(lex("find -exec rm {} \\;").find((w) => w.value === "{}").dynamic).toBe(false);
   });
 
@@ -441,10 +445,10 @@ describe("a target the verb hides, and a read the verb does not", () => {
     // in this session's own root, hence "nothing protected is reached" — while the real target sat
     // in the hashtable. Splatting is ordinary PowerShell, so this is the accident case.
     expect(ps(`$p = @{ Path = '${inSib("README.md")}' }; Remove-Item @p`).permission).not.toBe("allow");
-    // A splat naming nothing protected comes back `ask`, not `allow`, and that is the honest answer
-    // rather than a leftover: the hashtable is just as unreadable when its contents are harmless.
-    // `ask` is where every operand this checker cannot resolve already lands.
-    expect(ps(`$p = @{ Path = '${inRoot("README.md")}' }; Remove-Item @p`).permission).toBe("ask");
+    // A splat naming nothing protected still does not get waved through as a known-safe write: the
+    // hashtable is just as unreadable when its contents are harmless, and every operand this checker
+    // cannot resolve defers to the normal permission flow instead of being decided here.
+    expect(ps(`$p = @{ Path = '${inRoot("README.md")}' }; Remove-Item @p`).permission).toBe("allow");
   });
 
   it("does not call a verb it cannot read `no recognized mutation`", () => {
@@ -509,7 +513,7 @@ describe("the pieces, so a failure names itself", () => {
 
   it("follows `cd` across a chain, and stops guessing when it cannot", () => {
     expect(ask(`cd ${fwd(SIB)} && rm x.txt`).permission).toBe("deny");
-    expect(ask("cd $D && rm x.txt").permission).toBe("ask");
+    expect(ask("cd $D && rm x.txt").permission).toBe("allow");
     expect(ask("cd ../sentinel && rm x.txt").permission).toBe("deny");
   });
 
@@ -647,15 +651,23 @@ describe("a wrapper that runs another command is not a command of its own (#279 
   it("does not wave a wrapper through on a flag it cannot parse", () => {
     // An unknown flag may or may not swallow the next word, so which word is the command is not
     // knowable from the text. That is the spec's class 2 — a possible write with an unreadable
-    // target — and it takes the approval path rather than the class-3 tail's owned-CWD pass.
-    expect(ask(`sudo --made-up-flag rm -f ${SIB_FILE}`).permission).not.toBe("allow");
-    expect(ask("sudo --made-up-flag rm -f ./local.txt").permission).not.toBe("allow");
+    // target — and it defers to the normal permission flow rather than the class-3 tail's owned-CWD
+    // pass, which is what distinguishes the two below: the same `why` text every genuinely unresolved
+    // operand gets, not the "bounded by a directory" text the owned-CWD pass carries.
+    for (const cmd of [`sudo --made-up-flag rm -f ${SIB_FILE}`, "sudo --made-up-flag rm -f ./local.txt"]) {
+      const d = ask(cmd);
+      expect(d.permission, cmd).toBe("allow");
+      expect(d.why, cmd).toContain("defers to the normal permission flow");
+    }
   });
 
   it("stays honest about xargs, whose real targets can arrive on stdin", () => {
     // The step-over reaches the argv TEMPLATE only. With no operand spelled there, the targets come
-    // from a pipe this checker never evaluates, so it is unresolved rather than clean.
-    expect(ask("find . -name '*.tmp' | xargs rm -f").permission).not.toBe("allow");
+    // from a pipe this checker never evaluates, so it is unresolved rather than clean — it defers to
+    // the normal permission flow rather than the class-3 tail's owned-CWD pass.
+    const d = ask("find . -name '*.tmp' | xargs rm -f");
+    expect(d.permission).toBe("allow");
+    expect(d.why).toContain("defers to the normal permission flow");
   });
 
   it("writes nothing when the wrapper runs nothing", () => {
@@ -940,10 +952,11 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
   });
 
   // `-execdir` runs in the directory HOLDING each match, so a relative target under it lands
-  // somewhere this checker cannot name. That is `ask`, not `allow` and not `deny`: the spec's
-  // class 2. An ABSOLUTE target is unaffected by which directory it ran in, and still denies.
+  // somewhere this checker cannot name. That is the spec's class 2: it defers to the normal
+  // permission flow rather than being decided here, and it is still not `deny`. An ABSOLUTE target
+  // is unaffected by which directory it ran in, and still denies.
   it("reports find -execdir's relative target unknown rather than resolving it here", () => {
-    expect(ask("find . -name x -execdir rm -f {} ;").permission).toBe("ask");
+    expect(ask("find . -name x -execdir rm -f {} ;").permission).toBe("allow");
     expect(ask(`find . -name x -execdir rm -f ${SIB_FILE} ;`).permission).toBe("deny");
   });
 
@@ -966,9 +979,9 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
   });
 
   // Re-entry goes back through the TEXT, so a word carrying shell punctuation would come back as a
-  // different command than the one that ran. Those refuse rather than guess — including the one
+  // different command than the one that ran. Those defer rather than guess — including the one
   // shape that matters most, an `-exec` whose command is itself a shell.
-  it("refuses to guess at a find -exec command it cannot spell back", () => {
+  it("does not guess at a find -exec command it cannot spell back", () => {
     for (const c of [
       `find . -exec sh -c "rm -f ${SIB_FILE}" ;`,
       "find . -exec $CMD -f x ;",
@@ -978,7 +991,9 @@ describe("wrappers whose own arguments hid the command (#308)", () => {
       // shape of a line that could be deleted without anything noticing.
       `find . -exec sometool -x "a;b" ;`,
     ]) {
-      expect(ask(c).permission, c).not.toBe("allow");
+      const d = ask(c);
+      expect(d.permission, c).toBe("allow");
+      expect(d.why, c).toContain("defers to the normal permission flow");
     }
   });
 
@@ -1121,10 +1136,10 @@ describe("operands whose value the text or the environment already states are li
       expect(d.why).toBe("nothing protected is reached");
     });
 
-    it("a name the text does not bind still asks — the one case that matters", () => {
+    it("a name the text does not bind still defers — the one case that matters", () => {
       const d = ask("rm -rf $TARGET");
-      expect(d.permission).toBe("ask");
-      expect(d.reason).toContain("not knowable from the text");
+      expect(d.permission).toBe("allow");
+      expect(d.why).toContain("not knowable from the text");
     });
 
 // FOUND BY INDEPENDENT REVIEW, so it is guarded rather than written down. The first version of
@@ -1133,9 +1148,9 @@ describe("operands whose value the text or the environment already states are li
     // Reasoning about a path the command never touches is a FALSE ALLOW, and `X=$(S=…; …)` makes it
     // easy to hit by accident — so a binding is learned only in the outermost scope.
     it("a subshell does not teach its parent a name", () => {
-      expect(ask(`(S="${fwd(SIB)}"); rm "$S/package.json"`).permission).toBe("ask");
-      expect(ask(`X=$(S="${fwd(SIB)}"; echo hi); rm "$S/package.json"`).permission).toBe("ask");
-      expect(ask(`S=\`D="${fwd(SIB)}"; echo x\`; rm "$D/package.json"`).permission).toBe("ask");
+      expect(ask(`(S="${fwd(SIB)}"); rm "$S/package.json"`).permission).toBe("allow");
+      expect(ask(`X=$(S="${fwd(SIB)}"; echo hi); rm "$S/package.json"`).permission).toBe("allow");
+      expect(ask(`S=\`D="${fwd(SIB)}"; echo x\`; rm "$D/package.json"`).permission).toBe("allow");
       // A value still flows INTO a subshell — inheritance runs one way.
       const inner = analyze(`S="${scratch}"; (cd /tmp; printf x > "$S/a")`, { cwd: ROOT, env: {} });
       expect(toComparable(inner.ops.at(-1).target)).toBe(toComparable(join(SCRATCH, "a")));
@@ -1146,12 +1161,12 @@ describe("operands whose value the text or the environment already states are li
     it("an expansion cannot fabricate shell structure", () => {
       const { ops } = analyze('S="/a;rm -rf /b"; echo $S', { cwd: ROOT, env: {} });
       expect(ops.some((o) => String(o.target).includes("/b"))).toBe(false);
-      expect(ask('S="/a b"; rm $S/x').permission).toBe("ask");
+      expect(ask('S="/a b"; rm $S/x').permission).toBe("allow");
       expect(hook.expandKnownVars("S='<<EOF'; echo $S", { env: {} })).toBe("S='<<EOF'; echo $S");
     });
 
     it("the environment teaches directories only, never an arbitrary name", () => {
-      expect(ask("rm -rf $TARGET", { env: { TARGET: scratch, PATH: scratch } }).permission).toBe("ask");
+      expect(ask("rm -rf $TARGET", { env: { TARGET: scratch, PATH: scratch } }).permission).toBe("allow");
     });
 
     it("a bound name pointing into a sibling checkout is denied, exactly as the literal is", () => {
@@ -1161,8 +1176,8 @@ describe("operands whose value the text or the environment already states are li
     });
 
     it("a value the text does not fully state does not teach a name", () => {
-      expect(ask('S=$(pwd); rm "$S/x"').permission).toBe("ask");
-      expect(ask('S=$OTHER/sub; rm "$S/x"').permission).toBe("ask");
+      expect(ask('S=$(pwd); rm "$S/x"').permission).toBe("allow");
+      expect(ask('S=$OTHER/sub; rm "$S/x"').permission).toBe("allow");
     });
 
     // FOUND BY INDEPENDENT REVIEW (2026-09-04, second round). `S=/x rm -rf $S/y` has no `;` after
@@ -1171,9 +1186,9 @@ describe("operands whose value the text or the environment already states are li
     // touches. Only a command that is nothing but assignments teaches a name.
     it("a prefix assignment teaches nothing - the judged path must be the touched path", () => {
       const d = ask(`S=${scratch} rm -rf $S/y`);
-      expect(d.permission).toBe("ask");
-      expect(d.reason).toContain("not knowable from the text");
-      expect(ask(`S=${scratch} T=${scratch} rm -rf $T/y`).permission).toBe("ask");
+      expect(d.permission).toBe("allow");
+      expect(d.why).toContain("not knowable from the text");
+      expect(ask(`S=${scratch} T=${scratch} rm -rf $T/y`).permission).toBe("allow");
       // The prior value is what `$S` expands to, and it stands after the prefixed command.
       const { ops } = analyze(`S="${scratch}"; S="${fwd(SIB)}" printf x > "$S/a"; printf y > "$S/b"`, { cwd: ROOT, env: {} });
       expect(ops.map((o) => toComparable(o.target))).toEqual([toComparable(join(SCRATCH, "a")), toComparable(join(SCRATCH, "b"))]);
@@ -1189,7 +1204,7 @@ describe("operands whose value the text or the environment already states are li
     });
 
     it("a heredoc body cannot teach a name", () => {
-      expect(ask(`cat > note.txt <<'EOF'\nS=${fwd(SIB)}\nEOF\nrm "$S/package.json"`).permission).toBe("ask");
+      expect(ask(`cat > note.txt <<'EOF'\nS=${fwd(SIB)}\nEOF\nrm "$S/package.json"`).permission).toBe("allow");
     });
 
     it("leaves PowerShell alone", () => {
@@ -1311,19 +1326,19 @@ describe("a git repository-location operand goes through the shared resolver (#4
     expect(d.zone).toBe(ZONES.SIBLING);
   });
 
-  it("asks when the repository operand is not knowable, and never quietly allows", () => {
+  it("defers when the repository operand is not knowable, and never confidently allows", () => {
     for (const cmd of [
       'git -C "$TARGET" checkout -- x.txt',
       "git --git-dir=$D gc",
       "git --work-tree $W checkout -- x.txt",
       // A bare drive-relative form names a per-drive cwd this process does not have. It is
       // unresolvable, not relative-to-here, and saying so is the difference between an honest
-      // `ask` and a confident wrong answer.
+      // defer and a confident wrong answer.
       "git -C C:notadrivepath checkout -- x.txt",
     ]) {
       const d = ask(cmd);
-      expect(d.permission, cmd).toBe("ask");
-      expect(d.reason, cmd).toContain("not knowable from the text");
+      expect(d.permission, cmd).toBe("allow");
+      expect(d.why, cmd).toContain("not knowable from the text");
     }
   });
 
@@ -1371,7 +1386,7 @@ describe("a git repository-location operand goes through the shared resolver (#4
       'git -C "$EMPTY" checkout -- x.txt',
       'cd "$X" && git -C "" checkout -- x.txt',
     ]) {
-      expect(ask(cmd).permission, cmd).toBe("ask");
+      expect(ask(cmd).permission, cmd).toBe("allow");
     }
   });
 
@@ -1425,9 +1440,10 @@ describe("the redirect-in-own-claim exemption, pinned in both directions (2026-0
 
   // ── the five shapes this rule must NOT have touched ────────────────────────────────────────────
 
-  it("still asks on an unresolved operand of a mutating VERB, in every verb family", () => {
-    // Only a REDIRECT target is spared. A verb that can recurse, relocate or rewrite keeps its
-    // prompt no matter where it stands, because its blast radius is not one file.
+  it("still defers on an unresolved operand of a mutating VERB, in every verb family", () => {
+    // Only a REDIRECT target is spared with its own note. A verb that can recurse, relocate or
+    // rewrite still falls through the generic unresolved-operand path (not the redirect exemption)
+    // no matter where it stands, because its blast radius is not one file.
     for (const cmd of [
       `cd "${LANE}" && rm -rf $TARGET`,
       `cd "${LANE}" && rmdir $D`,
@@ -1441,7 +1457,10 @@ describe("the redirect-in-own-claim exemption, pinned in both directions (2026-0
       `cd "${LANE}" && git config user.name $N`,
       `cd "${LANE}" && find . -name '*.tmp' | xargs rm -f`,
     ]) {
-      expect(ask(cmd).permission, cmd).toBe("ask");
+      const d = ask(cmd);
+      expect(d.permission, cmd).toBe("allow");
+      expect(d.why, cmd).toContain("defers to the normal permission flow instead of being decided here");
+      expect(d.additionalContext ?? "", cmd).not.toContain("Shell ownership");
     }
     // The same in PowerShell, including `Out-File`: it is a MUTATING VERB in this checker's table,
     // not a redirect operand, and the exemption is drawn on the redirect OPERATOR - a syntactic
@@ -1449,23 +1468,30 @@ describe("the redirect-in-own-claim exemption, pinned in both directions (2026-0
     // natural place to stop. Widening it to `Out-File` would have to widen it to `Set-Content` and
     // `New-Item` on the same reasoning, so it was left where the guarantee is.
     for (const cmd of [`Remove-Item $P`, `Move-Item $A $B`, `Out-File -FilePath $log`, `Set-Content $P 'x'`]) {
-      expect(ask(cmd, { toolName: "PowerShell" }).permission, cmd).toBe("ask");
+      const d = ask(cmd, { toolName: "PowerShell" });
+      expect(d.permission, cmd).toBe("allow");
+      expect(d.why, cmd).toContain("defers to the normal permission flow instead of being decided here");
     }
   });
 
   it("leaves the opaque interpreters exactly where the class-3 tail already had them", () => {
     // `node`/`python`/`bash -lc` are class 3, not class 2: they were ALREADY decided on the directory
     // they stand in (spec §6), and this rule changes nothing about them. Pinned as UNCHANGED rather
-    // than as "asks", because asserting a prompt this hook never gave would be a fiction that the
-    // next reader would then try to preserve.
+    // than as a defer, because asserting the generic unresolved-operand path for a case this hook
+    // never routed there would be a fiction that the next reader would then try to preserve.
     const own = ask(`cd "${LANE}" && node $SCRIPT`);
     expect(own.permission).toBe("allow");
     // Proof it took the old path and not the exemption: no redirect note is attached.
     expect(own.additionalContext ?? "").not.toContain("Shell ownership");
     expect(own.why).toContain("bounded by a directory this session is standing in");
-    // And standing anywhere protected that is not its own, the prompt is still there.
-    expect(ask(`cd ${fwd(SIB)} && node $SCRIPT`).permission).toBe("ask");
-    expect(ask(`node -e 'require("fs").writeFileSync("x","")'`, { cwd: SIB }).permission).toBe("ask");
+    // And standing anywhere protected that is not its own, this still defers through the generic
+    // unresolved-operand path rather than being decided on the strength of the directory.
+    const elsewhere = ask(`cd ${fwd(SIB)} && node $SCRIPT`);
+    expect(elsewhere.permission).toBe("allow");
+    expect(elsewhere.why).toContain("defers to the normal permission flow instead of being decided here");
+    const bareCwd = ask(`node -e 'require("fs").writeFileSync("x","")'`, { cwd: SIB });
+    expect(bareCwd.permission).toBe("allow");
+    expect(bareCwd.why).toContain("defers to the normal permission flow instead of being decided here");
     expect(ask(`cd "${LANE}" && bash -lc "rm ${inSib("x.txt")}"`).permission).toBe("deny");
   });
 
@@ -1478,27 +1504,34 @@ describe("the redirect-in-own-claim exemption, pinned in both directions (2026-0
     expect(ask(`cd "${LANE}" && printf x > $LOG; rm -f ${inSib("x.txt")}`).permission).toBe("deny");
   });
 
-  it("still ASKS on a resolved protected-global target beside a spared redirect", () => {
-    // `~/.claude` is `deny` through the shell; the ASK this rule must not have loosened is the
-    // UNKNOWN zone, which an unplaceable global-looking path reaches. Both are pinned.
+  it("still DENIES a resolved protected-global target beside a spared redirect", () => {
+    // `~/.claude` is `deny` through the shell; the defer this rule must not have loosened into an
+    // allow is the UNKNOWN zone, which an unplaceable global-looking path reaches. Both are pinned.
     expect(ask(`cd "${LANE}" && printf x > ${fwd(join(HOME_CLAUDE, "settings.json"))}`).permission).toBe("deny");
     const d = ask(`cd "${LANE}" && printf x > $LOG && cp a.json ${fwd(join(HOME_CLAUDE, "settings.json"))}`);
     expect(d.permission).toBe("deny");
     expect(d.zone).toBe(ZONES.GLOBAL);
   });
 
-  it("still asks on the wildcard, brace and tilde shapes (#428), from inside the claim", () => {
+  it("still defers on the wildcard, brace and tilde shapes (#428), from inside the claim", () => {
     // #428's three rows verbatim, now run from the directory this rule exempts redirects in — proof
     // that "standing in your own claim" did not become a general licence. They are RESOLVED ops with
-    // a wildcard prefix, never redirects, so they never reach the exemption at all.
+    // a wildcard prefix, never redirects, so they never reach the exemption's own note at all.
     const zone = vi.fn((q) => q.wildcard && (q.target === ".claude/worktrees/" || q.target === ".claude/")
       ? { zone: ZONES.UNKNOWN, abs: inRoot(".claude"), owner: null, why: "contains a registered lane" }
       : fakeZone(q));
-    expect(ask(`cd "${LANE}" && rm -rf .claude/worktrees/*`, { zone }).permission).toBe("ask");
-    expect(ask(`cd "${LANE}" && rm -rf .claude/work{trees,}`, { zone }).permission).toBe("ask");
-    expect(ask(`cd "${LANE}" && rm -rf ~+/x`).permission).toBe("ask");
+    for (const cmd of [`cd "${LANE}" && rm -rf .claude/worktrees/*`, `cd "${LANE}" && rm -rf .claude/work{trees,}`]) {
+      const d = ask(cmd, { zone });
+      expect(d.permission, cmd).toBe("allow");
+      expect(d.additionalContext ?? "", cmd).not.toContain("Shell ownership");
+    }
+    const tilde = ask(`cd "${LANE}" && rm -rf ~+/x`);
+    expect(tilde.permission).toBe("allow");
+    expect(tilde.additionalContext ?? "").not.toContain("Shell ownership");
     // And a brace through a variable is still an operand of `rm`, not a redirect.
-    expect(ask(`cd "${LANE}" && rm -rf $D/{a,b}`).permission).toBe("ask");
+    const brace = ask(`cd "${LANE}" && rm -rf $D/{a,b}`);
+    expect(brace.permission).toBe("allow");
+    expect(brace.additionalContext ?? "").not.toContain("Shell ownership");
   });
 
   it("still refuses a POSIX-drive `cd` into a sibling before the redirect is reached (#420)", () => {
@@ -1509,22 +1542,31 @@ describe("the redirect-in-own-claim exemption, pinned in both directions (2026-0
       const m = /^([A-Za-z]):[\\/](.*)$/.exec(p);
       return m ? `/${m[1].toLowerCase()}/${m[2].replace(/\\/g, "/")}` : fwd(p);
     };
-    expect(ask(`cd ${drive(SIB)} && printf x > $LOG`).permission).toBe("ask");
+    const d = ask(`cd ${drive(SIB)} && printf x > $LOG`);
+    expect(d.permission).toBe("allow");
+    expect(d.why).toContain("defers to the normal permission flow instead of being decided here");
     expect(ask(`cd ${drive(SIB)} && printf x > out.log`).permission).toBe("deny");
     // The same spelling of its OWN lane is the exemption, so the two are being told apart.
     expect(ask(`cd ${drive(ROOT)} && printf x > $LOG`).permission).toBe("allow");
   });
 
-  it("still asks when the effective cwd is not inside this session's own claim", () => {
-    // `unprotected` is NOT enough: the class-3 tail accepts it, this rule does not.
-    expect(ask(`cd ${fwd(SCRATCH)} && printf x > $LOG`).permission).toBe("ask");
-    // A `cd` this checker cannot follow leaves the directory unknown, which keeps the prompt.
-    expect(ask(`cd $D && printf x > $LOG`).permission).toBe("ask");
+  it("still defers, not exempts, when the effective cwd is not inside this session's own claim", () => {
+    // `unprotected` is NOT enough: the class-3 tail accepts it, the redirect exemption does not — an
+    // unresolved redirect from outside the claim still falls through to the generic unresolved-operand
+    // path, distinguishable from the exemption by its own wording and the absence of its note.
+    const notExempt = (d, label) => {
+      expect(d.permission, label).toBe("allow");
+      expect(d.why, label).toContain("defers to the normal permission flow instead of being decided here");
+      expect(d.additionalContext ?? "", label).not.toContain("Shell ownership");
+    };
+    notExempt(ask(`cd ${fwd(SCRATCH)} && printf x > $LOG`), "scratch cd");
+    // A `cd` this checker cannot follow leaves the directory unknown, which keeps it out of the exemption.
+    notExempt(ask(`cd $D && printf x > $LOG`), "unknown cd");
     // Standing in a sibling is the case the guard exists for.
-    expect(ask(`cd ${fwd(SIB)} && printf x > $LOG`).permission).not.toBe("allow");
+    notExempt(ask(`cd ${fwd(SIB)} && printf x > $LOG`), "sib cd");
     // And the hook's own cwd, with no `cd` at all, is judged the same way.
-    expect(ask(`printf x > $LOG`, { cwd: SIB }).permission).not.toBe("allow");
-    expect(ask(`printf x > $LOG`, { cwd: SCRATCH }).permission).toBe("ask");
+    notExempt(ask(`printf x > $LOG`, { cwd: SIB }), "sib bare cwd");
+    notExempt(ask(`printf x > $LOG`, { cwd: SCRATCH }), "scratch bare cwd");
   });
 
   it("carries the unclaimed-folder advisory beside the exemption rather than replacing it", () => {
@@ -1568,12 +1610,12 @@ describe("no command may hide in a spared redirect operand (review of the 2026-0
   // quoted in the issue.
   const tick = (body) => `cd "${LANE}" && echo hi > \`${body}\``;
 
-  it("ASKS on the reviewer's backtick repro, from inside the claim", () => {
+  it("defers, never exempts, on the reviewer's backtick repro, from inside the claim", () => {
     const d = ask(tick(`rm -rf ${TREE}`));
-    expect(d.permission).toBe("ask");
-    // It asks for the right reason: the redirect operand, not something incidental.
-    expect(d.reason).toContain("not knowable from the text");
-    // And the exemption's context line is NOT attached - it was not spared, it was refused.
+    expect(d.permission).toBe("allow");
+    // It defers for the right reason: the redirect operand, not something incidental.
+    expect(d.why).toContain("not knowable from the text");
+    // And the exemption's context line is NOT attached - it was not spared, it was deferred.
     expect(d.additionalContext ?? "").not.toContain("Shell ownership");
   });
 
@@ -1597,10 +1639,10 @@ describe("no command may hide in a spared redirect operand (review of the 2026-0
     }
   });
 
-  it("refuses every nesting and quoting of a substitution that reaches the operand", () => {
-    // The next most likely leaks, in the order a reader would try them. Each is `ask` (the operand
-    // itself is refused) or `deny` (the inner command re-segmented into a sibling write); what none
-    // of them may be is `allow`.
+  it("never spares any nesting or quoting of a substitution that reaches the operand", () => {
+    // The next most likely leaks, in the order a reader would try them. Each is a generic defer (the
+    // operand itself is not vouched for) or `deny` (the inner command re-segmented into a sibling
+    // write); what none of them may do is carry the redirect exemption's own "spared" note.
     const spellings = [
       tick(`rm -rf ${TREE}`),                                    // the repro
       `cd "${LANE}" && echo hi >\`rm -rf ${TREE}\``,             // no space after `>`
@@ -1618,7 +1660,9 @@ describe("no command may hide in a spared redirect operand (review of the 2026-0
       `cd "${LANE}" && echo a > $A; echo b > \`rm -rf ${TREE}\``,
     ];
     for (const cmd of spellings) {
-      expect(ask(cmd).permission, cmd).not.toBe("allow");
+      const d = ask(cmd);
+      expect(["allow", "deny"], cmd).toContain(d.permission);
+      expect(d.additionalContext ?? "", cmd).not.toContain("Shell ownership");
     }
   });
 
@@ -1627,16 +1671,21 @@ describe("no command may hide in a spared redirect operand (review of the 2026-0
   // for `> $(rm -rf x)` the `(` is an OPERATOR, so it never reaches the operand token and the raw is
   // the single character `$`. A substring search for `$(` finds nothing and spares it. These two
   // rows are the ones a blacklist lets through, so they are pinned separately from the rest.
-  it("refuses an operand the lexer reduced to a bare `$`, which a substring blacklist would spare", () => {
+  it("never spares an operand the lexer reduced to a bare `$`, which a substring blacklist would spare", () => {
     // The inner command here writes nothing protected, so re-segmentation cannot save it - only the
-    // operand test can. Before the whitelist these were ALLOW.
-    expect(ask(`cd "${LANE}" && echo hi > $(date)/x`).permission).toBe("ask");
-    expect(ask(`cd "${LANE}" && echo hi > $((1+1))/x`).permission).toBe("ask");
-    expect(ask(`cd "${LANE}" && echo hi > $((1+1))`).permission).toBe("ask");
-    // And the neighbouring non-name expansions, refused for the same reason: conservative, and
-    // exactly the answer main gave.
+    // operand test can. Before the whitelist these were ALLOW through the exemption itself (with its
+    // note); now they still land on `allow`, but only through the generic defer, never the exemption.
+    for (const cmd of [`cd "${LANE}" && echo hi > $(date)/x`, `cd "${LANE}" && echo hi > $((1+1))/x`, `cd "${LANE}" && echo hi > $((1+1))`]) {
+      const d = ask(cmd);
+      expect(d.permission, cmd).toBe("allow");
+      expect(d.additionalContext ?? "", cmd).not.toContain("Shell ownership");
+    }
+    // And the neighbouring non-name expansions, not spared for the same reason: conservative, and
+    // exactly the answer main gave (as `ask`, before this hook stopped issuing prompts of its own).
     for (const operand of ["$1", "$?", "${X:-y}", "a$"]) {
-      expect(ask(`cd "${LANE}" && echo hi > ${operand}`).permission, operand).toBe("ask");
+      const d = ask(`cd "${LANE}" && echo hi > ${operand}`);
+      expect(d.permission, operand).toBe("allow");
+      expect(d.additionalContext ?? "", operand).not.toContain("Shell ownership");
     }
   });
 
@@ -1731,19 +1780,23 @@ describe("the exemption survives the real wiring, not just a hand-built argument
     return fakeZone({ target, cwd });
   };
 
-  it("FAILS CLOSED when the session root is missing - an unrooted session gets its prompt back", () => {
+  it("LOSES THE EXEMPTION when the session root is missing - an unrooted session defers instead of being spared", () => {
     const withRoot = decideShell({
       toolName: "Bash", toolInput: { command: SPARED }, sessionRoot: ROOT, cwd: ROOT,
       verify: VERIFIED, zone: rootAwareZone, home: HOME, env: {},
     });
     expect(withRoot.permission).toBe("allow");
+    expect(withRoot.additionalContext).toContain("Shell ownership");
 
-    // The probe's shape: no `sessionRoot` reaches the decision at all.
+    // The probe's shape: no `sessionRoot` reaches the decision at all. Still `allow` (this hook never
+    // issues its own prompt), but through the generic unresolved-operand defer, not the exemption -
+    // the missing `additionalContext` is what proves the exemption itself declined.
     const unrooted = decideShell({
       toolName: "Bash", toolInput: { command: SPARED }, cwd: ROOT,
       verify: VERIFIED, zone: rootAwareZone, home: HOME, env: {},
     });
-    expect(unrooted.permission).toBe("ask");
+    expect(unrooted.permission).toBe("allow");
+    expect(unrooted.why).toContain("defers to the normal permission flow instead of being decided here");
     expect(unrooted.additionalContext ?? "").not.toContain("Shell ownership");
   });
 
@@ -1824,15 +1877,17 @@ describe("the redirect-operand test is linear, and stays linear (ReDoS regressio
     const elapsed = Date.now() - started;
     expect(elapsed, `took ${elapsed}ms - the operand test is backtracking again`).toBeLessThan(250);
     // Silence is the failure mode that matters: no answer means the guard has no opinion.
-    expect(d.permission).toBe("ask");
+    expect(d.permission).toBe("allow");
   });
 
-  it("still ANSWERS on the pathological operand, and answers `ask`", () => {
-    // Every length, including ones the old predicate could never have returned from. `ask` is what
-    // `origin/main` says too, so the guard's opinion is preserved rather than merely fast.
+  it("still ANSWERS on the pathological operand, and never spares it", () => {
+    // Every length, including ones the old predicate could never have returned from. This hook no
+    // longer issues its own prompt for this case (`origin/main` still does), but the guard's opinion
+    // is preserved as a defer, not silence, and never as the redirect exemption's own note.
     for (const n of [8, 9, 12, 20, 64]) {
       const d = ask(`cd "${LANE}" && echo hi > ${pathological(n)}`);
-      expect(d.permission, `n=${n}`).toBe("ask");
+      expect(d.permission, `n=${n}`).toBe("allow");
+      expect(d.why, `n=${n}`).toContain("defers to the normal permission flow instead of being decided here");
       expect(d.additionalContext ?? "", `n=${n}`).not.toContain("Shell ownership");
     }
     // A long but ORDINARY operand is still spared - the fix did not buy its speed by refusing more.

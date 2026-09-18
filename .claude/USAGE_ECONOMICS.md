@@ -24,11 +24,10 @@
 ## The only numbers still stated here
 
 Every other context/token number in this repo now lives in code and is computed, not restated.
-Two remain here because a guard pins them to their code and would go red if they moved.
+One remains here because a guard pins it to its code and would go red if it moved.
 
 | Name | Value | Meaning | Source of truth |
 |---|---|---|---|
-| Autopilot continuation cap | 8 | How many tasks autopilot may chain in one session, so it cannot manufacture an oversized context on its own. | `.claude/hooks/stop-continue.mjs` — the code is the source; this row is a pinned mirror (`src/agent-machinery-guard.test.ts`). Change it in the hook, never here. |
 | Compaction window | see `.claude/settings.json` | `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, the ONE literal. `tools/entry/context-policy.json`'s `default` must agree or the launcher refuses. | `.claude/settings.json` |
 
 **Where compaction actually fires is no longer a number in any doc.** It is
@@ -39,13 +38,10 @@ report for eleven days. **A measured constant is unmeasured the moment you chang
 
 ## Code-enforced guards (unchanged, still live)
 
-- `.claude/hooks/big-read-guard.mjs` — DENIES an unbounded Read over its byte budget. Reads are
-  50.6% of all tool-result inflow, the largest single writer into any prefix.
 - `.claude/hooks/subagent-model-guard.mjs` — DENIES an opus/fable subagent outside the one
   documented exception (`web-design-director`). Measured compliance: 324/326 runs on sonnet.
 - `.claude/hooks/context-size-advisor.mjs` — Stop-hook persist-to-disk instruction, and it verifies
   something was actually written rather than only instructing it.
-- `.claude/hooks/stop-continue.mjs` — the autopilot clamp above.
 - `.claude/hooks/subagent-throttle.mjs` and `.claude/hooks/workflow-usage-guard.mjs` — advisory
   reminders. The subagent one was narrowed 2026-09-18 (#479) to fan-out bursts only; it no longer
   nudges against a single delegation, which is the recommended default.

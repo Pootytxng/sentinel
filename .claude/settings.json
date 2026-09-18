@@ -47,21 +47,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-continue.mjs\"",
-            "timeout": 20,
-            "statusMessage": "autopilot: checking task queue"
-          },
-          {
-            "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/context-size-advisor.mjs\"",
             "timeout": 10,
             "statusMessage": "context-size advisor"
-          },
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/handoff-block-guard.mjs\"",
-            "timeout": 10,
-            "statusMessage": "handoff-block guard"
           }
         ]
       }
@@ -120,17 +108,6 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/hookspath-guard.mjs\"",
             "timeout": 10,
             "statusMessage": "isolation-worktree refusal (shared hooksPath, #362)"
-          }
-        ]
-      },
-      {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/big-read-guard.mjs\"",
-            "timeout": 10,
-            "statusMessage": "big-read budget guard"
           }
         ]
       }
