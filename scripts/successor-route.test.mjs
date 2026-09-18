@@ -186,6 +186,16 @@ describe("SUCCESSOR_PREAMBLE", () => {
     expect(SUCCESSOR_PREAMBLE.endsWith("TASK:")).toBe(true);
   });
 
+  // #466: every fresh app worktree arrives with an absolute core.hooksPath pin (#405), and
+  // hookspath-fleet-guard then reds every lane's push. Only the folder's own session may repoint it,
+  // so the prompt a launched session starts from has to say so.
+  it("tells a launched session to repoint its own folder's absolute hooksPath, after its claim", () => {
+    expect(SUCCESSOR_PREAMBLE).toContain("git config --worktree core.hooksPath .githooks");
+    expect(SUCCESSOR_PREAMBLE.indexOf("core.hooksPath .githooks")).toBeGreaterThan(
+      SUCCESSOR_PREAMBLE.indexOf("Ownership claim"),
+    );
+  });
+
   it("is a non-empty string independent of any live machine state", () => {
     expect(typeof SUCCESSOR_PREAMBLE).toBe("string");
     expect(SUCCESSOR_PREAMBLE.length).toBeGreaterThan(40);
