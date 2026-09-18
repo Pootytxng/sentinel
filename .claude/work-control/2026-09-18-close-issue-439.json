@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The desk session that landed PR #444 (merged as 6eec9691) and its follow-up PR #493 (merged as 7a7eb0f0). The claude-code lane authored #444; this session authored #493.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/439#issuecomment-5733121338",
+  "leaseEvidenceNote": "The release Handoff on #439 ends \"- Claim: released\". It releases claim 5733009888, the last live claim on the thread. The board row Worktree / branch and Claim expires fields are cleared.",
+  "overlapExclusive": true,
+  "inheritedWork": false,
+  "currentHead": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+  "pr": 493,
+  "issue": 439,
+  "kind": "lane",
+  "branch": "claude/jovial-dijkstra-3ac6c2",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "origin/main reads 7a7eb0f0, the merge commit of PR #493, on top of 6eec9691, the merge commit of #444. Both PR heads are pruned, and the disposition audit reads OK.",
+    "worktree": "jovial-dijkstra-3ac6c2, one writer.",
+    "branch": "claude/jovial-dijkstra-3ac6c2 was set to 52585e68, the head of #493 that was gated and reviewed. It is the second parent of main 7a7eb0f0, and the two trees are identical.",
+    "dirtyState": "Clean except gitignored logs/ and the two untracked receipts this carrier will commit.",
+    "liveProcesses": "none"
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-30-03Z.log:9-44 (SHA-256 04f2435b2992ffa39de2808fca92122e79cc3eab60f18c9fbbe3e92c50059928)",
+      "summary": "451 test files passed; 7455 passed / 4 skipped (7459), including the new CompyEntry check-ignore guard."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-30-03Z.log:45-71 (SHA-256 04f2435b2992ffa39de2808fca92122e79cc3eab60f18c9fbbe3e92c50059928)",
+      "summary": "tsc and vite build passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-30-03Z.log:72-1444 (SHA-256 04f2435b2992ffa39de2808fca92122e79cc3eab60f18c9fbbe3e92c50059928)",
+      "summary": "1327 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-30-03Z.log:1445-1447 (SHA-256 04f2435b2992ffa39de2808fca92122e79cc3eab60f18c9fbbe3e92c50059928)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The #439 fix code is the #444 delta, gated PASS at b056ab3e (verify-local-2026-09-18T16-12-53Z.log). The last change under this issue is #493, whose head 52585e68 was gated PASS and reviewed. main 7a7eb0f0 merges that head, and its tree is identical.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/493#issuecomment-5733109494",
+    "reviewerNote": "Reviewer-only seat, read-only subagent at the exact head. It verified the gitignore depth and tracked-file safety, the guard test, the A_settings claims against the live settings file, the A_patches row against the bodies of #464, #470 and #471, the budget, and the guard suites (36 + 26 + 158 passed). Non-blocking: the §A count is prose-only. It is a Claude model, independent by role only, because Codex was at its usage limit."
+  },
+  "transition": "close-issue",
+  "closingNote": "#439 is closed as completed. A POSIX session root now owns its own checkout (zoneOf re-spells the root; guarded by tools/entry/posix-session-root.test.mjs), and rule C asks which local branches contain a detached head. The pre-existing literal-backslash false-ALLOW found in review is tracked separately in #491."
+}

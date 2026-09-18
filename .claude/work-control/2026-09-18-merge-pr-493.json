@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/439#issuecomment-5733009888",
+  "leaseEvidenceNote": "Ownership claim on #439 re-posted 2026-09-18 to widen the scope for this follow-up. It names this folder and branch, and its Write scope is `.gitignore`, `tools/entry/posix-entry-state-dir.test.mjs`, `docs/OWNER_ACTION_CHECKLIST.md`, `docs/archive/OWNER_ACTION_HISTORY.md` and `.claude/work-control/2026-09-18-*.json`. The pre-push gate's scope-drift stage read it: 5 changed paths, every one inside the claimed scope.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "The five paths are docs, `.gitignore`, one test and one receipt. No other lease claims them. The open patch PRs #464, #470 and #471 do not touch these files.",
+  "inheritedWork": false,
+  "currentHead": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+  "pr": 493,
+  "issue": 439,
+  "kind": "lane",
+  "branch": "claude/jovial-dijkstra-3ac6c2",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "origin/claude/jovial-dijkstra-3ac6c2 reads 52585e68, one commit on top of origin/main 6eec9691 (the #444 merge).",
+    "worktree": "Linked worktree C:UsersKuyacodesentinel.claudeworktreesjovial-dijkstra-3ac6c2, one writer; core.hooksPath is the relative .githooks at worktree scope.",
+    "branch": "claude/jovial-dijkstra-3ac6c2 tracks its own origin branch; HEAD equals the pushed head.",
+    "dirtyState": "Clean except gitignored logs/ and this untracked receipt.",
+    "liveProcesses": "No build, dev server or install from this lane is running; the pre-push gate had finished before this receipt."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-30-03Z.log:9-44 (SHA-256 04f2435b2992ffa39de2808fca92122e79cc3eab60f18c9fbbe3e92c50059928)",
+      "summary": "451 test files passed; 7455 passed / 4 skipped (7459), including the new CompyEntry check-ignore guard."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-30-03Z.log:45-71 (SHA-256 04f2435b2992ffa39de2808fca92122e79cc3eab60f18c9fbbe3e92c50059928)",
+      "summary": "tsc and vite build passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-30-03Z.log:72-1444 (SHA-256 04f2435b2992ffa39de2808fca92122e79cc3eab60f18c9fbbe3e92c50059928)",
+      "summary": "1327 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/jovial-dijkstra-3ac6c2/logs/verify-local-2026-09-18T16-30-03Z.log:1445-1447 (SHA-256 04f2435b2992ffa39de2808fca92122e79cc3eab60f18c9fbbe3e92c50059928)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "This is the pre-push run of `scripts/verify-local.ps1` for the push of 52585e68. The console read `LOCAL CHECK RESULT: PASS` and the push exited 0. The log has zero lines matching `test result: FAILED`, `panicked`, `error[E` or ` FAIL `.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "52585e68a5fa630557484f1ad9d82dc5e9ad9227",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/493#issuecomment-5733109494",
+    "reviewerNote": "Reviewer-only seat, read-only subagent at the exact head. It verified the gitignore depth and tracked-file safety, the guard test, the A_settings claims against the live settings file, the A_patches row against the bodies of #464, #470 and #471, the budget, and the guard suites (36 + 26 + 158 passed). Non-blocking: the §A count is prose-only. It is a Claude model, independent by role only, because Codex was at its usage limit."
+  },
+  "transition": "merge-pr",
+  "closingNote": "The PR body says `Refs #439`; it has no closing reference. #439 closes separately under its own close-issue receipt, after this session's lease is released."
+}
