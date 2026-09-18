@@ -254,7 +254,10 @@ if (ceiling && carriedPerTurn > 0.55 * ceiling) {
 // it keeps the wider 120 KB line this audit has always used.
 const DOC_BUDGET_PS1 = "$byteBudgets in scripts/doc-budget.ps1";
 const DOC_BYTE_BUDGETS = [
-  ["docs/BACKLOG.md", 120 * 1024, "archive old steering-log cycles to docs/BACKLOG_ARCHIVE.md per its retention rule", DOC_BUDGET_PS1],
+  // The advice here used to send the reader to "its retention rule" in docs/BACKLOG.md. That file
+  // was rebuilt as an execution ledger on 2026-09-05: it has no steering-log section and states no
+  // retention rule. Its own purpose line is the test, so the advice now carries it.
+  ["docs/BACKLOG.md", 120 * 1024, "BACKLOG.md is 'current execution status only' — move what is no longer current out to docs/BACKLOG_ARCHIVE.md, which holds the retired steering-log cycles", DOC_BUDGET_PS1],
   ["docs/RELEASE_STATE.md", 48 * 1024, "past big-read-guard's own unbounded-read budget — it can no longer be read whole", DOC_BUDGET_PS1],
   // 20 KB ≈ Anthropic's published "keep CLAUDE.md under ~200 lines" at this repo's ~110 bytes/line
   // (code.claude.com/docs/en/costs). It is auto-loaded on every boot of every session, so it is the
