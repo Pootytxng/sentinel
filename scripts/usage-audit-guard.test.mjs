@@ -13,11 +13,16 @@
 //     meant to act on printed "🔴 🔴 only 7k of working headroom". Pinned by RUNNING the script
 //     against a fixture that makes the flag fire and counting the markers in the emitted line.
 //
-//  B. UNNAMED GATE. DOC_BYTE_BUDGETS rows are TARGETS, deliberately tighter than the real byte
-//     gates, and the rows carried no pointer to the gate — so a reader who hit a 🟡 had no way to
-//     tell nag from block. Each row now names its gate, and this guard derives the correct answer
-//     from the gate files rather than restating it: a doc that is a key in $byteBudgets must name
-//     scripts/doc-budget.ps1, and a doc that is NOT a key must name the gate that does cover it.
+//  B. MISNAMED GATE. DOC_BYTE_BUDGETS rows are TARGETS sitting ALONGSIDE the real byte gates, and
+//     the gate is usually the tighter of the two — docs/BACKLOG.md targets 120 KB against a 12 KB
+//     $byteBudgets gate — which is why the script itself says a row whose gate is already tighter
+//     cannot fire while the gate passes. Every pre-fix row DID carry a pointer, but the same
+//     hardcoded one for all four: "the gate's current ratchet is in scripts/doc-budget.ps1". That is
+//     the wrong gate for CLAUDE.md, which doc-budget.ps1 leaves out of $byteBudgets on purpose, so
+//     its 🟡 sent the reader to a file that does not gate it. Each row now names its own gate, and
+//     this guard derives the correct answer from the gate files rather than restating it: a doc
+//     that is a key in $byteBudgets must name scripts/doc-budget.ps1, and a doc that is NOT a key
+//     must name the gate that does cover it.
 //
 //  C. STALE HEADER. The header's flag list was five bullets under a 2026-07-13 date while the
 //     script pushed eight distinct flags. Pinned by binding each bullet to exactly one primary
