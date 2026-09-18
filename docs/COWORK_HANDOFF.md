@@ -17,7 +17,7 @@
   HQ project ledger (`claude/HQ_DECISION_LEDGER.md`, Cowork project `019ff3cc…`).
 - **CC ("Claude Code" in VS Code)** - an eligible executor, often the best fit for git, compiling,
   tests, Windows verification, installers. No permanent implementation owner: any executor (CC,
-  Codex, Cowork, ChatGPT HQ) writes only under a current mutation lease (`docs/WORK_CONTROL.md`),
+  Codex, Cowork, ChatGPT HQ, Grok) writes only under a current mutation lease (`docs/WORK_CONTROL.md`),
   one writer per overlapping scope.
 - **Kuya (owner)** — owns money, brand (product name, logo, price presentation), people (tester
   invites/sends), and anything irreversible. He drives; he decides final execution order.

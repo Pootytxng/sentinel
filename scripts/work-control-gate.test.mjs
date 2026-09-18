@@ -95,10 +95,17 @@ describe("Claude/Codex role specialization", () => {
     );
   });
 
-  it("rejects an implementation actor outside the two declared model lanes", () => {
+  it("rejects an implementation actor outside the declared executors", () => {
     const result = evaluateWorkControl(record({ actor: "unknown-agent" }));
     expect(result.decision).toBe("BLOCKED");
     expect(result.blockers.join("\n")).toMatch(/implementation actor/i);
+  });
+
+  // #495: the rejection used to hardcode four names, so declaring a fifth executor left it lying.
+  it("names every declared executor, grok included, when it rejects an actor", () => {
+    const message = evaluateWorkControl(record({ actor: "unknown-agent" })).blockers.join("\n");
+    expect([...gate.IMPLEMENTATION_ACTORS]).toContain("grok");
+    for (const actor of gate.IMPLEMENTATION_ACTORS) expect(message).toContain(actor);
   });
 
   it("blocks inherited work until current repository, GitHub, worktree, dirty-state, and process inspection is complete", () => {
@@ -164,7 +171,7 @@ describe("proof-gated GitHub transitions", () => {
 
   // bug->guard #382: reviewer spelling, aliases, or prose cannot manufacture independence.
   it.each(
-    ["claude-code", "codex", "chatgpt-hq", "cowork"].flatMap((author) => [
+    ["claude-code", "codex", "chatgpt-hq", "cowork", "grok"].flatMap((author) => [
       [author, author],
       [author.toUpperCase(), author],
       [` ${author} `, author],
@@ -177,6 +184,32 @@ describe("proof-gated GitHub transitions", () => {
     }));
     expect(result.decision).toBe("BLOCKED");
     expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
+  });
+
+  // #495: Grok authors lanes through the GitHub API (PR #438). Undeclared, it could only sit in a
+  // receipt note, where the reviewer-not-author rule never reads it.
+  it("accepts grok as an author and keeps it off the review of its own delta (#438 shape)", () => {
+    const receipt = (reviewer) => record({
+      actor: "claude-code",
+      mutationAuthors: ["claude-code", "grok"],
+      independentReview: { practical: true, reviewer, status: "passed", head: HEAD },
+    });
+    expect(evaluateWorkControl(receipt("codex")).decision).toBe("PASS");
+    for (const reviewer of ["grok", " GROK ", "claude-code"]) {
+      const result = evaluateWorkControl(receipt(reviewer));
+      expect(result.decision, reviewer).toBe("BLOCKED");
+      expect(result.blockers.join("\n")).toMatch(/non-writing model/i);
+      expect(result.blockers.join("\n")).not.toMatch(/Unknown mutation author/);
+    }
+    expect(evaluateWorkControl(record({
+      actor: "grok",
+      mutationAuthors: ["grok"],
+      independentReview: { practical: true, reviewer: "grok", status: "passed", head: HEAD },
+    })).decision).toBe("BLOCKED");
+    expect(evaluateWorkControl(record({
+      actor: "grok",
+      independentReview: { practical: true, reviewer: "claude-code", writer: "grok", status: "passed", head: HEAD },
+    })).decision).toBe("PASS");
   });
 
   it("treats cowork-hq as the cowork executor identity, not an independent alias", () => {

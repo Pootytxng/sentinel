@@ -64,7 +64,7 @@ describe("dynamic mutation lease control law", () => {
 
   it("allows every declared executor instead of mechanically assigning implementation jurisdiction", () => {
     const gate = read("scripts/work-control-gate.mjs");
-    for (const actor of ["claude-code", "codex", "chatgpt-hq", "cowork"]) {
+    for (const actor of ["claude-code", "codex", "chatgpt-hq", "cowork", "grok"]) {
       expect(gate, actor).toContain(`"${actor}"`);
     }
     expect(gate).toMatch(/@deprecated Compatibility only for historical receipts\/tests/i);

@@ -57,7 +57,7 @@ For each bounded slice, route mutation to the executor with the best combination
 - specialization relevant to the slice;
 - ability to preserve an independent reviewer for the final proof delta.
 
-Claude Code, Codex, and ChatGPT HQ may each implement. Cowork may implement within an explicitly
+Claude Code, Codex, ChatGPT HQ, and Grok may each implement. Cowork may implement within an explicitly
 claimed suitable scope. ChatGPT HQ normally coordinates the whole control picture, but coordination
 does not prohibit it from taking a bounded mutation lease when it is the best executor.
 
