@@ -45,7 +45,7 @@ and pre-rebirth strategy specs are historical evidence only. They never outrank 
 
 ## Dynamic executor routing — no permanent implementation department
 
-Claude Code, Codex, and ChatGPT HQ may all implement. Role specialization is a routing hint, not
+Claude Code, Codex, ChatGPT HQ, and Grok may all implement. Role specialization is a routing hint, not
 jurisdiction.
 
 - **ChatGPT HQ** usually coordinates native state, priority, dependencies, handoffs, and proof status.
