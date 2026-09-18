@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/437#issuecomment-5733321777",
+  "leaseEvidenceNote": "Fresh Ownership claim on #437 after Grok's Handoff released its lease (2026-09-17T00:01:28Z). It names this folder, branch `grok/tester-kit-0.9.26` and Write scope `docs/BETA_TESTER_README.md`, `_tester-message.md`, `.claude/work-control/2026-09-*-438.json`. The pre-push scope-drift stage read it: 2 changed paths, both inside the claimed scope.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "No other open PR touches `docs/BETA_TESTER_README.md` or `_tester-message.md` (checked across open PRs 2026-09-18). Grok's lease on these paths was released before this claim, and its Handoff says Grok will not mark the PR ready, merge it or close #437.",
+  "inheritedWork": true,
+  "currentHead": "9567d6c7d9c7b59c740eb48fdea8e8447fe612e8",
+  "pr": 438,
+  "issue": 437,
+  "kind": "lane",
+  "branch": "grok/tester-kit-0.9.26",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta 8e373da0..9567d6c7 has three commits: Grok's a97923e6 (committed through the GitHub API as the `Pootytxng` account) and claude-code's e81952fc and 9567d6c7. The gate's declared actors do not include Grok, so it cannot be listed here; it is recorded in this note instead. The reviewer is neither Grok nor claude-code by identity. The gap is split out as its own task.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "origin/grok/tester-kit-0.9.26 reads 9567d6c7: Grok's a97923e6 plus two claude-code commits, forked from 8e373da0. origin/main is a96de1cb. Main never touched either file between 8e373da0 and a96de1cb, so the merge result carries these exact blobs.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\strange-darwin-6e88f1, one writer, adopted to #437. core.hooksPath was an absolute path into the main checkout; it now names this worktree's own .githooks at worktree scope (hookspath-fleet-guard).",
+    "branch": "grok/tester-kit-0.9.26 tracks its own origin branch; HEAD equals the pushed head.",
+    "dirtyState": "Clean except gitignored logs/ and these untracked receipts.",
+    "liveProcesses": "No build, dev server or install from this lane is running; the pre-push gate had finished before this receipt."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "9567d6c7d9c7b59c740eb48fdea8e8447fe612e8",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/strange-darwin-6e88f1/logs/verify-local-2026-09-18T17-07-09Z.log:9-44 (SHA-256 f5688031ac82ab36166ac764a91a2515fbebbaed14c62ce357ec1eaafdec21ef)",
+      "summary": "443 test files passed; 7242 passed / 4 skipped (7246)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "9567d6c7d9c7b59c740eb48fdea8e8447fe612e8",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/strange-darwin-6e88f1/logs/verify-local-2026-09-18T17-07-09Z.log:45-71 (SHA-256 f5688031ac82ab36166ac764a91a2515fbebbaed14c62ce357ec1eaafdec21ef)",
+      "summary": "tsc and vite build passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "9567d6c7d9c7b59c740eb48fdea8e8447fe612e8",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/strange-darwin-6e88f1/logs/verify-local-2026-09-18T17-07-09Z.log:72-1435 (SHA-256 f5688031ac82ab36166ac764a91a2515fbebbaed14c62ce357ec1eaafdec21ef)",
+      "summary": "1318 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "9567d6c7d9c7b59c740eb48fdea8e8447fe612e8",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/strange-darwin-6e88f1/logs/verify-local-2026-09-18T17-07-09Z.log:1436-1438 (SHA-256 f5688031ac82ab36166ac764a91a2515fbebbaed14c62ce357ec1eaafdec21ef)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "This is the pre-push run of `scripts/verify-local.ps1` for the push of 9567d6c7. The console read `LOCAL CHECK RESULT: PASS` and the push exited 0. The log has zero lines matching `test result: FAILED`, `panicked`, `error[E`, ` FAIL `, `^warning` or `^error`. The branch forks from 8e373da0, so the suite is the one at that base; main's later commits are not in this run.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "9567d6c7d9c7b59c740eb48fdea8e8447fe612e8",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/438#issuecomment-5733482724",
+    "reviewerNote": "Reviewer-only seat, a read-only subagent at the exact head. It checked every factual claim in both files against the repo (rail, installer and hash, Gaming Mode, the one updater endpoint, CPU-temp offer, tester count, tracker, Settings path) and confirmed A, B and C resolved. Its first pass at 27babdb4 raised two non-blocking findings, fixed in 9567d6c7 and re-reviewed. It is a Claude model, independent by role only, because Codex hit its usage limit (resets 2026-09-19 04:51 local)."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "Marks the draft ready after the review; the merge follows under its own receipt."
+}
