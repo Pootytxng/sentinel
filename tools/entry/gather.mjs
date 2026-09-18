@@ -34,7 +34,23 @@ export const HOST_DIR = join(CODE_ROOT, "sentinel");
 /** The NAME a missing worktree's base is looked up under. Nothing is ever created from the name. */
 export const CREATE_BASE_REF = "origin/main";
 
-const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+/**
+ * How long one `gh` READ may run before execFileSync kills it and throws (#474). Every reader here
+ * turns a throw into its unreadable answer, so a GitHub that stops answering reads as unreadable
+ * instead of holding the caller -- and the scope-drift gate reads a thread inside every `git push`.
+ * Measured 2026-09-18: the slowest read (the board) took 3.7-4.1 s and a thread 0.43-0.85 s, while a
+ * proxy that accepts and never answers held `gh` for 61 s before gh gave up on its own. 20 s is also
+ * the bound work-control-gate.mjs, adopt.mjs and session-root-assert.mjs put on their own `gh` reads.
+ * The writers in claim.mjs stay unbounded: a comment killed mid-flight may already be posted, so a
+ * retry posts it twice, and a field edit killed mid-plan leaves the board half-written.
+ */
+export const GH_READ_TIMEOUT_MS = 20_000;
+
+/** A `gh` for reads, killed at `timeout`. `exec` is a seam, so a guard can see what execFileSync is handed. */
+export function ghReader({ exec = execFileSync, timeout = GH_READ_TIMEOUT_MS } = {}) {
+  return (args) => exec("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout });
+}
+const gh = ghReader();
 const gitIn = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const firstLine = (e) => String(e?.stderr || e?.message || e).split("\n").filter(Boolean)[0] ?? "unknown error";
 
