@@ -55,6 +55,11 @@ site/assets/og-card*
 # autopilot state stay out. Guarded by tools/entry/tracked-hooks.test.mjs.
 .claude/settings.local.json
 .claude/autopilot.json
+# The compy-entry session store (session records, the Work Control board cache). Before #440 a POSIX
+# session resolved it as the RELATIVE folder CompyEntry under its cwd, i.e. inside the checkout. The
+# resolver is absolute now; this keeps a copy an older session left behind from ever being committed.
+# Guarded by tools/entry/posix-entry-state-dir.test.mjs.
+CompyEntry/
 
 # /.agents/ — machine-local, auto-generated `.claude`->Codex mirror of the canonical tracked
 # `.claude/skills/`. It is NOT the source of truth (that is `.claude/skills/`, committed) and it is

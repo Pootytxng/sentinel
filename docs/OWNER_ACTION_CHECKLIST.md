@@ -66,29 +66,33 @@
   Authenticode enrollment, publication, distribution, and external timing are owner territory;
   protected use of the existing updater key inside an authorized local release train is engineering.
 
-### A_settings. Two lines in your Claude settings that I am not allowed to touch  ·  ⏳ NEW 2026-08-20
+### A_settings. One line in your Claude settings that I am not allowed to touch  ·  ⏳ NEW 2026-08-20
 
-**The ask:** two small edits in `~/.claude/settings.json`. Your own rule reserves that file — and any
-hook that gates what a session may do — to your hand, which is correct and I am not asking to change
-it. Both are copy-paste.
+**The ask:** one paste into `~/.claude/settings.json`. Your own rule reserves that file — and any
+hook that gates what a session may do — to your hand, which is correct. (Its other edit, the merge
+rule keyed to CI checks that never run, is live since 2026-08-30; record in the archive.)
 
-**① A permission rule that can never be satisfied.** The `autoMode` block allows merging a PR "when
-required CI checks are passing" and tells me to confirm with you first when checks are "failing,
-pending, or **absent**". Hosted CI is OFF by your own 2026-07-16 zero-budget decision, so checks are
-**always absent** — the rule reads as a permanent stop on a condition that can never clear. The gate
-that actually runs on every push is `scripts/verify-local.ps1`. Replace, in `allow`:
-`"…allowed when the owner has asked for the merge and required CI checks are passing."` and in
-`soft_deny`: `"Merging a pull request whose required CI checks are failing, pending, or absent —
-confirm with the owner first."` with wording keyed to the local gate instead. **Why it matters:**
-right now the written rule and the working reality disagree, and a rule nobody can satisfy gets
-worked around rather than followed — which is exactly how PR #157 got merged with no receipt.
-
-**② The receipt hook, if you want it armed.** `.claude/hooks/work-control-receipt-guard.mjs` blocks
+**The receipt hook, if you want it armed.** `.claude/hooks/work-control-receipt-guard.mjs` blocks
 `gh pr merge` / `gh issue close` / `gh pr ready` unless a proof receipt exists for the current
 commit. It is written, tested both directions, and deliberately **not wired**, because wiring it
 means editing the file above. The exact settings block to paste is in a comment at the bottom of the
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
+
+### A_patches. Three hook fixes waiting for your hands  ·  ⏳ NEW 2026-09-18
+
+**The ask:** hook files are yours to change (#368), so each draft PR below carries its fix as a
+`.patch` in `docs/superpowers/specs/` plus tests. After a PR merges, in the repo folder:
+`git apply <patch> && git rm -q <patch>`, run its test, commit. Or tell HQ or Codex to do it.
+
+| PR | Fixes | Patch | Test (expect) |
+|---|---|---|---|
+| #464 | #463 advisory names another folder's issue | `2026-09-18-known-issue-token-scope.patch` | `tools/entry/project-write-assert.test.mjs` (42 passed) |
+| #470 | #468 drift hook asks GitHub on every write | `2026-09-18-scope-drift-hook-thread-bound.patch` | `tools/entry/scope-drift-check-thread.test.mjs` (6 passed) |
+| #471 | #465 drift hook measures a released claim | `2026-09-18-scope-drift-hook-released-claim.patch` | `tools/entry/scope-drift-check.test.mjs` (19 passed) |
+
+#470 and #471 touch the same hook and apply in either order. **Why it matters:** until applied, the
+hooks keep issuing wrong or slow warnings that sessions learn to ignore.
 
 ### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · re-derived 2026-09-03
 
@@ -123,10 +127,10 @@ removed the dependency, only you can remove the symptom.
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you (A0's key backup closed 2026-08-18; record and the two count
-corrections in the archive). **§A holds FIVE things, three chores:** ① A0's residual — delete the
+corrections in the archive). **§A holds SIX things:** ① A0's residual — delete the
 redundant `Desktop\COMPY KEY\` copy; ② A0's *"expand to the remaining invitees"* — a **distribution call**,
-yours by definition; ③ **A_settings**, two copy-paste edits in a file only you may edit; ④ **A_prune**,
-one delete; ⑤ **A_wmi**, one reboot.
+yours by definition; ③ **A_settings**, one paste in a file only you may edit; ④ **A_prune**,
+one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches.
 Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_ci · A_rig · A_ref2 · B1 · B7 · B_arc · A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**.
 
 ---
