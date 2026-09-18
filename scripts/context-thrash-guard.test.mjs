@@ -88,6 +88,16 @@ describe("context-size-advisor fires on the measured thrash signature", () => {
     expect(reason).toContain("docs/SESSION_HANDOFF.md");
   });
 
+  // #466: the owner ordered sessions to stop pasting a line for HIM to act on and instead launch the
+  // next session themselves. "that one line IS the handoff" was the literal old instruction; its
+  // replacement must name the script that makes the launch checkable instead of asserted.
+  it("launches a successor from the resume point instead of asking the owner to relay one line", () => {
+    const outs = runTurns([100_000, 100_000, 0, 100_000, 100_000, 0, 100_000]);
+    const reason = outs[6].reason;
+    expect(reason).toContain("successor-route");
+    expect(reason).not.toContain("that one line IS the handoff");
+  });
+
   it("stays silent through a HEALTHY compaction that actually reclaimed something", () => {
     // The contrast case from the same measured session: 119k -> 88k took 48 turns to climb back.
     expect(runTurns([100_000, 100_000, 60_000, 65_000, 70_000, 75_000])).toEqual([
