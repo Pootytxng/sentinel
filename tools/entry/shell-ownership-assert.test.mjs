@@ -1386,3 +1386,456 @@ describe("a git repository-location operand goes through the shared resolver (#4
     }
   });
 });
+
+// A redirect target that is a variable, in the session's own claim: allowed with a line, not asked.
+//
+// Measured over three weeks and closed 2026-09-18: 228 `ask` decisions came out of this hook, and
+// 131 of them were plain shell REDIRECTION and nothing else - `cd "<worktree>" && … > $LOG`,
+// `set -e; B=…; … >> $B`. 134 of the 204 Bash asks literally began `cd "…" &&`, so the effective
+// directory was spelled in the command and was the session's own lane. The owner accepted every one.
+// That is a toll, not a control, and it hangs unattended runs on a keystroke nobody is there to
+// press. The residual accepted in exchange is one recoverable file (a redirect writes one path and
+// cannot recurse; git restores it), and it is pinned in BOTH directions here - the spared shape and
+// the shapes that must keep their prompt - because an exemption that quietly widens is the failure.
+describe("the redirect-in-own-claim exemption, pinned in both directions (2026-09-18)", () => {
+  const LANE = fwd(ROOT);
+
+  it("allows the measured shape instead of asking, and says so in context", () => {
+    // The transcript's commonest row, re-spelled onto the fixture lane. Before this rule: `ask`.
+    const d = ask(`cd "${LANE}" && npm run build > $LOG 2>&1`);
+    expect(d.permission).toBe("allow");
+    expect(d.additionalContext).toContain("Shell ownership");
+    expect(d.additionalContext).toContain("redirect");
+    // The trade is named in the output, so the reader is not left to infer it.
+    expect(d.additionalContext).toContain("131 of 228");
+  });
+
+  it("covers the other two spellings the audit counted, and the append form", () => {
+    for (const cmd of [
+      `cd "${LANE}" && ./run.sh > $LOG`,
+      `cd "${LANE}" && set -e; printf x >> $B`,
+      // Standing in the claim already, with no `cd` at all: the cwd the hook was handed is the lane.
+      `printf x > $OUT`,
+      // Two unresolved redirects at once are still only redirects.
+      `cd "${LANE}" && printf x > $A 2> $B`,
+    ]) {
+      expect(ask(cmd).permission, cmd).toBe("allow");
+    }
+  });
+
+  // ── the five shapes this rule must NOT have touched ────────────────────────────────────────────
+
+  it("still asks on an unresolved operand of a mutating VERB, in every verb family", () => {
+    // Only a REDIRECT target is spared. A verb that can recurse, relocate or rewrite keeps its
+    // prompt no matter where it stands, because its blast radius is not one file.
+    for (const cmd of [
+      `cd "${LANE}" && rm -rf $TARGET`,
+      `cd "${LANE}" && rmdir $D`,
+      `cd "${LANE}" && mv $A $B`,
+      `cd "${LANE}" && cp $A $B`,
+      `cd "${LANE}" && sed -i 's/a/b/' $F`,
+      `cd "${LANE}" && mkdir -p $D`,
+      `cd "${LANE}" && git reset --hard $REF`,
+      `cd "${LANE}" && git checkout -- $P`,
+      `cd "${LANE}" && git clean -fd $P`,
+      `cd "${LANE}" && git config user.name $N`,
+      `cd "${LANE}" && find . -name '*.tmp' | xargs rm -f`,
+    ]) {
+      expect(ask(cmd).permission, cmd).toBe("ask");
+    }
+    // The same in PowerShell, including `Out-File`: it is a MUTATING VERB in this checker's table,
+    // not a redirect operand, and the exemption is drawn on the redirect OPERATOR - a syntactic
+    // category with a hard guarantee of one path and one stream - not on a verb table that has no
+    // natural place to stop. Widening it to `Out-File` would have to widen it to `Set-Content` and
+    // `New-Item` on the same reasoning, so it was left where the guarantee is.
+    for (const cmd of [`Remove-Item $P`, `Move-Item $A $B`, `Out-File -FilePath $log`, `Set-Content $P 'x'`]) {
+      expect(ask(cmd, { toolName: "PowerShell" }).permission, cmd).toBe("ask");
+    }
+  });
+
+  it("leaves the opaque interpreters exactly where the class-3 tail already had them", () => {
+    // `node`/`python`/`bash -lc` are class 3, not class 2: they were ALREADY decided on the directory
+    // they stand in (spec §6), and this rule changes nothing about them. Pinned as UNCHANGED rather
+    // than as "asks", because asserting a prompt this hook never gave would be a fiction that the
+    // next reader would then try to preserve.
+    const own = ask(`cd "${LANE}" && node $SCRIPT`);
+    expect(own.permission).toBe("allow");
+    // Proof it took the old path and not the exemption: no redirect note is attached.
+    expect(own.additionalContext ?? "").not.toContain("Shell ownership");
+    expect(own.why).toContain("bounded by a directory this session is standing in");
+    // And standing anywhere protected that is not its own, the prompt is still there.
+    expect(ask(`cd ${fwd(SIB)} && node $SCRIPT`).permission).toBe("ask");
+    expect(ask(`node -e 'require("fs").writeFileSync("x","")'`, { cwd: SIB }).permission).toBe("ask");
+    expect(ask(`cd "${LANE}" && bash -lc "rm ${inSib("x.txt")}"`).permission).toBe("deny");
+  });
+
+  it("still DENIES a resolved sibling-checkout target, redirect or not", () => {
+    // The whole point of the guard. A redirect whose target IS knowable and lands in another lane is
+    // positive knowledge, decided long before this branch is reached.
+    expect(ask(`cd "${LANE}" && printf x > ${inSib("package.json")}`).permission).toBe("deny");
+    expect(ask(`cd "${LANE}" && printf x > ${inSib("notes.md")} 2> $LOG`).zone).toBe(ZONES.SIBLING);
+    // And a spared redirect beside a sibling write does not launder it.
+    expect(ask(`cd "${LANE}" && printf x > $LOG; rm -f ${inSib("x.txt")}`).permission).toBe("deny");
+  });
+
+  it("still ASKS on a resolved protected-global target beside a spared redirect", () => {
+    // `~/.claude` is `deny` through the shell; the ASK this rule must not have loosened is the
+    // UNKNOWN zone, which an unplaceable global-looking path reaches. Both are pinned.
+    expect(ask(`cd "${LANE}" && printf x > ${fwd(join(HOME_CLAUDE, "settings.json"))}`).permission).toBe("deny");
+    const d = ask(`cd "${LANE}" && printf x > $LOG && cp a.json ${fwd(join(HOME_CLAUDE, "settings.json"))}`);
+    expect(d.permission).toBe("deny");
+    expect(d.zone).toBe(ZONES.GLOBAL);
+  });
+
+  it("still asks on the wildcard, brace and tilde shapes (#428), from inside the claim", () => {
+    // #428's three rows verbatim, now run from the directory this rule exempts redirects in — proof
+    // that "standing in your own claim" did not become a general licence. They are RESOLVED ops with
+    // a wildcard prefix, never redirects, so they never reach the exemption at all.
+    const zone = vi.fn((q) => q.wildcard && (q.target === ".claude/worktrees/" || q.target === ".claude/")
+      ? { zone: ZONES.UNKNOWN, abs: inRoot(".claude"), owner: null, why: "contains a registered lane" }
+      : fakeZone(q));
+    expect(ask(`cd "${LANE}" && rm -rf .claude/worktrees/*`, { zone }).permission).toBe("ask");
+    expect(ask(`cd "${LANE}" && rm -rf .claude/work{trees,}`, { zone }).permission).toBe("ask");
+    expect(ask(`cd "${LANE}" && rm -rf ~+/x`).permission).toBe("ask");
+    // And a brace through a variable is still an operand of `rm`, not a redirect.
+    expect(ask(`cd "${LANE}" && rm -rf $D/{a,b}`).permission).toBe("ask");
+  });
+
+  it("still refuses a POSIX-drive `cd` into a sibling before the redirect is reached (#420)", () => {
+    // `/c/…` is the spelling the Bash tool uses by default, and #420 is the measurement that it must
+    // be understood exactly as well as `C:\…` is. If it were not, this rule would read a sibling as
+    // "the claim I am standing in" and hand out the exemption.
+    const drive = (p) => {
+      const m = /^([A-Za-z]):[\\/](.*)$/.exec(p);
+      return m ? `/${m[1].toLowerCase()}/${m[2].replace(/\\/g, "/")}` : fwd(p);
+    };
+    expect(ask(`cd ${drive(SIB)} && printf x > $LOG`).permission).toBe("ask");
+    expect(ask(`cd ${drive(SIB)} && printf x > out.log`).permission).toBe("deny");
+    // The same spelling of its OWN lane is the exemption, so the two are being told apart.
+    expect(ask(`cd ${drive(ROOT)} && printf x > $LOG`).permission).toBe("allow");
+  });
+
+  it("still asks when the effective cwd is not inside this session's own claim", () => {
+    // `unprotected` is NOT enough: the class-3 tail accepts it, this rule does not.
+    expect(ask(`cd ${fwd(SCRATCH)} && printf x > $LOG`).permission).toBe("ask");
+    // A `cd` this checker cannot follow leaves the directory unknown, which keeps the prompt.
+    expect(ask(`cd $D && printf x > $LOG`).permission).toBe("ask");
+    // Standing in a sibling is the case the guard exists for.
+    expect(ask(`cd ${fwd(SIB)} && printf x > $LOG`).permission).not.toBe("allow");
+    // And the hook's own cwd, with no `cd` at all, is judged the same way.
+    expect(ask(`printf x > $LOG`, { cwd: SIB }).permission).not.toBe("allow");
+    expect(ask(`printf x > $LOG`, { cwd: SCRATCH }).permission).toBe("ask");
+  });
+
+  it("carries the unclaimed-folder advisory beside the exemption rather than replacing it", () => {
+    // The #368 advisory attaches to a RESOLVED own-claim write, so the pairing shows up on a command
+    // that has both: one resolved write into the lane, one unresolvable redirect. Both lines are
+    // context, neither swallows the other, and neither becomes a `permissionDecision`.
+    const both = ask(`cd "${LANE}" && printf y > ${inRoot("a.txt")}; printf x > $LOG`, { verify: UNCLAIMED });
+    expect(both.permission).toBe("allow");
+    expect(both.additionalContext).toContain("FOLDER_UNCLAIMED");
+    expect(both.additionalContext).toContain("Shell ownership");
+    // The exemption alone reaches no resolved own-claim target, so it carries only its own line —
+    // and verification does not gate it, exactly as class 2 and class 3 are not gated by it.
+    const alone = ask(`cd "${LANE}" && printf x > $LOG`, { verify: UNCLAIMED });
+    expect(alone.permission).toBe("allow");
+    expect(alone.additionalContext).toContain("Shell ownership");
+    // A live disagreement about the folder is still a deny, exemption or not.
+    expect(ask(`cd "${LANE}" && printf y > ${inRoot("a.txt")}; printf x > $LOG`, { verify: MISMATCH }).permission).toBe("deny");
+  });
+});
+
+// FOUND BY INDEPENDENT REVIEW of the exemption above, and it was a real escape, not a quibble:
+//
+//   cd "<own lane>" && echo hi > `rm -rf ../<other lane>/src`     branch: ALLOW    main: ask
+//
+// The whole mechanism is in this file's own lexer. The backtick is not in `OPERATORS`, so `lex`
+// folds the substitution into ordinary words; `segments` takes the single word after `>` as the
+// redirect target (`` `rm ``) and scatters the rest into the `echo` segment, whose verb mutates
+// nothing. `ops` came back EMPTY and the lone unresolved entry was a `redirection` standing in the
+// session's own claim - precisely the shape the exemption spares. The `$( … )` spelling of the same
+// command was DENIED all along, because `(`/`)` are operators and `CHAIN_OPS` boundaries, so the
+// inner `rm` re-segments and zones as a sibling. Same semantics, opposite answers.
+//
+// The exemption's stated rationale - "a redirect writes one path and cannot recurse" - is true of
+// the OPERATOR and false of a command hiding in its operand, so the fix is to require the operand to
+// be a plain name. Every spelling below is pinned because the next leak will be a spelling nobody
+// wrote down, and a blacklist of them is a list this lexer will outrun.
+describe("no command may hide in a spared redirect operand (review of the 2026-09-18 exemption)", () => {
+  const LANE = fwd(ROOT);
+  const TREE = inSib("src");
+  // Backticks inside template literals are noise; build these by concatenation, as the repro is
+  // quoted in the issue.
+  const tick = (body) => `cd "${LANE}" && echo hi > \`${body}\``;
+
+  it("ASKS on the reviewer's backtick repro, from inside the claim", () => {
+    const d = ask(tick(`rm -rf ${TREE}`));
+    expect(d.permission).toBe("ask");
+    // It asks for the right reason: the redirect operand, not something incidental.
+    expect(d.reason).toContain("not knowable from the text");
+    // And the exemption's context line is NOT attached - it was not spared, it was refused.
+    expect(d.additionalContext ?? "").not.toContain("Shell ownership");
+  });
+
+  it("still DENIES the $( … ) spelling, which never leaked", () => {
+    // Unchanged by the fix, and pinned so the two spellings can never drift apart again.
+    expect(ask(`cd "${LANE}" && echo hi > $(rm -rf ${TREE})`).permission).toBe("deny");
+    expect(ask(`cd "${LANE}" && echo hi >$(rm -rf ${TREE})`).permission).toBe("deny");
+  });
+
+  it("still ALLOWS a plain variable operand - the exemption itself still works", () => {
+    for (const cmd of [
+      `cd "${LANE}" && echo hi > $LOG`,
+      `cd "${LANE}" && echo hi > \${LOG}`,
+      `cd "${LANE}" && echo hi > "$LOG/a.txt"`,
+      `cd "${LANE}" && echo hi > logs/$RUN/out.txt`,
+      `cd "${LANE}" && echo a > $A 2> $B`,
+    ]) {
+      const d = ask(cmd);
+      expect(d.permission, cmd).toBe("allow");
+      expect(d.additionalContext, cmd).toContain("Shell ownership");
+    }
+  });
+
+  it("refuses every nesting and quoting of a substitution that reaches the operand", () => {
+    // The next most likely leaks, in the order a reader would try them. Each is `ask` (the operand
+    // itself is refused) or `deny` (the inner command re-segmented into a sibling write); what none
+    // of them may be is `allow`.
+    const spellings = [
+      tick(`rm -rf ${TREE}`),                                    // the repro
+      `cd "${LANE}" && echo hi >\`rm -rf ${TREE}\``,             // no space after `>`
+      tick(`rm -rf \\\`pwd\\\`/${TREE}`),                        // nested backticks
+      tick(`$(rm -rf ${TREE})`),                                 // `$(` inside backticks
+      `cd "${LANE}" && echo hi > $(\`rm -rf ${TREE}\`)`,         // backtick inside `$( )`
+      `cd "${LANE}" && echo hi > "\`rm -rf ${TREE}\`"`,          // double-quoted backtick
+      `cd "${LANE}" && echo hi > "$(rm -rf ${TREE})"`,           // double-quoted `$( )`
+      `cd "${LANE}" && echo hi > \${X:-$(rm -rf ${TREE})}`,      // substitution inside an expansion
+      `cd "${LANE}" && echo hi > >(rm -rf ${TREE})`,             // process substitution
+      `cd "${LANE}" && echo hi >> \`rm -rf ${TREE}\``,           // the append operator
+      `cd "${LANE}" && echo hi 2> \`rm -rf ${TREE}\``,           // a numbered fd
+      `cd "${LANE}" && echo hi &> \`rm -rf ${TREE}\``,           // the combined form
+      // A spared operand beside a refused one does not launder the command.
+      `cd "${LANE}" && echo a > $A; echo b > \`rm -rf ${TREE}\``,
+    ];
+    for (const cmd of spellings) {
+      expect(ask(cmd).permission, cmd).not.toBe("allow");
+    }
+  });
+
+  // WHY THE PREDICATE IS A WHITELIST. The review prescribed rejecting a raw containing a backtick or
+  // `$(`, borrowing `globBounded`'s `[^$\`]`. Measured against this lexer that is NOT sufficient:
+  // for `> $(rm -rf x)` the `(` is an OPERATOR, so it never reaches the operand token and the raw is
+  // the single character `$`. A substring search for `$(` finds nothing and spares it. These two
+  // rows are the ones a blacklist lets through, so they are pinned separately from the rest.
+  it("refuses an operand the lexer reduced to a bare `$`, which a substring blacklist would spare", () => {
+    // The inner command here writes nothing protected, so re-segmentation cannot save it - only the
+    // operand test can. Before the whitelist these were ALLOW.
+    expect(ask(`cd "${LANE}" && echo hi > $(date)/x`).permission).toBe("ask");
+    expect(ask(`cd "${LANE}" && echo hi > $((1+1))/x`).permission).toBe("ask");
+    expect(ask(`cd "${LANE}" && echo hi > $((1+1))`).permission).toBe("ask");
+    // And the neighbouring non-name expansions, refused for the same reason: conservative, and
+    // exactly the answer main gave.
+    for (const operand of ["$1", "$?", "${X:-y}", "a$"]) {
+      expect(ask(`cd "${LANE}" && echo hi > ${operand}`).permission, operand).toBe("ask");
+    }
+  });
+
+  it("carries the operand's raw text on the unresolved record, which is what the test reads", () => {
+    // The predicate cannot be written at all unless `analyze` keeps the raw operand; pinning it here
+    // means a refactor that drops it fails loudly instead of silently re-opening the hole.
+    const { unresolved } = analyze(`cd "${LANE}" && echo hi > $LOG`, { cwd: ROOT, home: HOME, env: {} });
+    expect(unresolved).toHaveLength(1);
+    expect(unresolved[0].verb).toBe("redirection");
+    expect(unresolved[0].raw).toBe("$LOG");
+    // A record with no raw at all must never be spared - the predicate requires a string.
+    const bare = analyze("cd " + LANE + " && echo hi > `rm -rf x`", { cwd: ROOT, home: HOME, env: {} });
+    expect(bare.unresolved[0].raw).toContain("`");
+  });
+
+  it("answers the PowerShell spellings on PowerShell's own grammar, not bash's", () => {
+    const psAsk = (command) => ask(command, { toolName: "PowerShell" });
+    // PowerShell has no backtick substitution - the backtick is its ESCAPE character - so
+    // `> \`rm …\`` names a literal file in the lane. It is allowed as a RESOLVED own-claim write,
+    // never through the exemption, and the absence of the context line is what proves which path it
+    // took. Answering this one on bash's grammar would be a false prompt on ordinary PowerShell.
+    const escaped = psAsk(`Set-Location "${LANE}"; echo hi > \`rm -rf ${TREE}\``);
+    expect(escaped.permission).toBe("allow");
+    expect(escaped.additionalContext ?? "").not.toContain("Shell ownership");
+    // PowerShell's substitution is `$( … )`, and it is denied exactly as the bash form is.
+    expect(psAsk(`Set-Location "${LANE}"; echo hi > $(Remove-Item -Recurse ${TREE})`).permission).toBe("deny");
+    // A plain variable is still the spared case in this dialect too.
+    expect(psAsk(`Set-Location "${LANE}"; echo hi > $log`).permission).toBe("allow");
+  });
+});
+
+// The exemption pinned through `run` - the wiring, not just the decision.
+//
+// A production probe reported the plain-variable exemption as `ask`, which would have meant the
+// whole rule was dead and the 131 prompts it exists to remove were still there. It was not: the
+// probe called `decideShell({ root, verdict })` where the parameter names are `sessionRoot` and
+// `verify`, so `sessionRoot` arrived undefined. Measured against the live `zoneOf`, a session that
+// does not say which root it is in gets `sibling-checkout` for its OWN lane - "a checkout, from a
+// session that is in none" - so `cwdZone` was not `own-claim`, the exemption correctly declined, and
+// the answer was `ask`.
+//
+// FAILING CLOSED THERE IS RIGHT, so nothing about the rule changes. What was missing is a test that
+// exercises the PARAMETER NAMES: every case above hands `decideShell` a hand-built argument object,
+// so a caller wiring it wrongly - or a rename of `sessionRoot`/`verify` - silently turns the
+// exemption off in production while every test stays green. `run` is the real caller and does the
+// real wiring, so the exemption is pinned through it here, end to end and onto the wire.
+describe("the exemption survives the real wiring, not just a hand-built argument object", () => {
+  const LANE = fwd(ROOT);
+  const SPARED = `cd "${LANE}" && npm run build > $LOG 2>&1`;
+
+  const hookInput = {
+    tool_name: "Bash",
+    tool_input: { command: SPARED },
+    cwd: ROOT,
+    session_id: "sess-secret-02",
+    transcript_path: "/private/transcript.jsonl",
+  };
+
+  it("ALLOWS the plain-variable redirect through `run`, the production entry point", () => {
+    // If this had existed, a wiring break would have failed here instead of in a probe.
+    const d = run({ hookInput, env: { CLAUDE_PROJECT_DIR: ROOT }, verify: VERIFIED, zone: fakeZone, home: HOME });
+    expect(d.permission).toBe("allow");
+    expect(d.additionalContext).toContain("Shell ownership");
+  });
+
+  it("puts that allow on the wire as additionalContext ALONE, leaking nothing", () => {
+    let wrote = "";
+    const d = run({ hookInput, env: { CLAUDE_PROJECT_DIR: ROOT }, verify: VERIFIED, zone: fakeZone, home: HOME });
+    expect(emit(d, { write: (s) => (wrote += s) })).toBe(0);
+    const payload = JSON.parse(wrote);
+    expect(Object.keys(payload.hookSpecificOutput).sort()).toEqual(["additionalContext", "hookEventName"]);
+    // Never a `permissionDecision: "allow"` - that would skip the prompt AND the auto-mode
+    // classifier for the call, which is broader than this rule means (#368's shape).
+    expect("permissionDecision" in payload.hookSpecificOutput).toBe(false);
+    expect(payload.hookSpecificOutput.additionalContext).toContain("Shell ownership");
+    expect(wrote).not.toContain("sess-secret-02");
+    expect(wrote).not.toContain("transcript");
+  });
+
+  // Mirrors the live resolver on the one axis this is about. Measured against the real `zoneOf`:
+  // `zoneOf({ target: <the lane>, sessionRoot: <the lane> })` is `own-claim`, and the same call with
+  // `sessionRoot` omitted is `sibling-checkout`, "a checkout, from a session that is in none".
+  const rootAwareZone = ({ target, sessionRoot, cwd }) => {
+    const abs = resolveAbsolute(target, cwd);
+    if (!abs) return { zone: ZONES.UNKNOWN, abs: null, owner: null, why: "the fixture cannot place it" };
+    if (sessionRoot && isWithin(abs, sessionRoot)) {
+      return { zone: ZONES.OWN, abs, owner: sessionRoot, why: "inside the session root" };
+    }
+    if (isWithin(abs, ROOT) || isWithin(abs, SIB)) {
+      return { zone: ZONES.SIBLING, abs, owner: ROOT, why: "a checkout, from a session that is in none" };
+    }
+    return fakeZone({ target, cwd });
+  };
+
+  it("FAILS CLOSED when the session root is missing - an unrooted session gets its prompt back", () => {
+    const withRoot = decideShell({
+      toolName: "Bash", toolInput: { command: SPARED }, sessionRoot: ROOT, cwd: ROOT,
+      verify: VERIFIED, zone: rootAwareZone, home: HOME, env: {},
+    });
+    expect(withRoot.permission).toBe("allow");
+
+    // The probe's shape: no `sessionRoot` reaches the decision at all.
+    const unrooted = decideShell({
+      toolName: "Bash", toolInput: { command: SPARED }, cwd: ROOT,
+      verify: VERIFIED, zone: rootAwareZone, home: HOME, env: {},
+    });
+    expect(unrooted.permission).toBe("ask");
+    expect(unrooted.additionalContext ?? "").not.toContain("Shell ownership");
+  });
+
+  it("pins the record the predicate reads, so neither field can go missing unnoticed", () => {
+    // The two hypotheses that would each have made the exemption silently dead: a `raw` that never
+    // arrives (the predicate requires a string and fails closed), and a `raw` carrying quoting or
+    // the operator rather than the bare token.
+    const { ops, unresolved } = analyze(SPARED, { cwd: ROOT, home: HOME, env: {} });
+    expect(ops).toEqual([]);
+    expect(unresolved).toHaveLength(1);
+    expect(unresolved[0]).toMatchObject({ verb: "redirection", kind: "mutation", raw: "$LOG", cwdUnknown: false });
+    // Exactly the bare token: no `>`, no surrounding quotes, no whitespace.
+    expect(unresolved[0].raw).toBe("$LOG");
+    expect(toComparable(unresolved[0].cwd)).toBe(toComparable(ROOT));
+  });
+});
+
+// The operand test must be LINEAR, and that is a correctness property, not a performance nicety.
+//
+// The first cut of the whitelist was one alternation:
+//
+//   /^(?:[^$`]|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\})*$/
+//
+// `[^$\`]` and the tail of `\$[A-Za-z_][A-Za-z0-9_]*` both match `[A-Za-z0-9_]`, so each `$`-run has
+// as many parses as its length and the parses multiply; on a NON-matching input the engine explores
+// every one. Measured on the predicate alone: n=5 0.45ms, n=6 2.6ms, n=7 26ms, n=8 170ms, n=9
+// 1160ms - about 7x per added run. Through `decideShell`, where it runs at least twice per operand,
+// n=9 took 2391ms; driven against the real hook process, whose `.claude/settings.json` timeout is 10
+// seconds, an 82-character operand was KILLED having emitted nothing.
+//
+// THAT IS A SECURITY BUG, NOT A SLOW TEST. A hook that emits nothing has no opinion, so the call
+// falls through to the normal permission flow - and `origin/main` answers `ask` for that same
+// command. A crafted operand therefore deleted this guard's opinion and burned a core for ten
+// seconds, from ANY directory, because the operand test runs before `cwdZone`. The regex did not
+// exist on main; it arrived with the exemption.
+//
+// These tests exist so that a future reader who "simplifies" the two passes back into one readable
+// alternation gets a red test instead of a silently disarmed guard.
+describe("the redirect-operand test is linear, and stays linear (ReDoS regression)", () => {
+  const LANE = fwd(ROOT);
+  /** n runs of `$aaaaaaaa`, then a backtick so the match FAILS - the expensive direction. */
+  const pathological = (n) => "$" + Array.from({ length: n }, () => "aaaaaaaa").join("$") + "`";
+
+  it("agrees with the original alternation on the whole refuse/spare table", () => {
+    // Equivalence, asserted operand by operand. The left column is what the rule must spare; the
+    // right is everything the review and the reviewer between them could think of that must not be.
+    for (const spare of ["$LOG", "${LOG}", "$env:TEMP\\a.log", "logs/$RUN/out.txt", '"$LOG/a.txt"', "out.log", "a$b"]) {
+      expect(hook.isPlainRedirectName(spare), spare).toBe(true);
+    }
+    for (const refuse of [
+      "$'\\x78'", "${!X}", "${X:-y}", "$1", "$?.log", "a$", "$[1+1]", "$((1+1)).log", "$(date)/x",
+      '"`rm -rf x`"', '"$(rm -rf x)"', "`rm", "$", "${X:-$", "$?", "$$LOG", "${LOG", "$-", "${}",
+    ]) {
+      expect(hook.isPlainRedirectName(refuse), refuse).toBe(false);
+    }
+  });
+
+  it("agrees with the original alternation on random strings, not just the ones we thought of", () => {
+    // A differential check against the very regex that was replaced. It is cheap here only because
+    // the inputs are short - the old one cannot be run on the long ones at all, which is the point.
+    const OLD = /^(?:[^$`]|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\})*$/;
+    const alphabet = ["$", "{", "}", "a", "_", "1", "`", "/", ".", ":", "-", '"', "(", ")", "?"];
+    for (let i = 0; i < 20000; i += 1) {
+      const n = 1 + (i % 7);
+      let s = "";
+      for (let j = 0; j < n; j += 1) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+      expect(hook.isPlainRedirectName(s), s).toBe(OLD.test(s));
+    }
+  });
+
+  it("decides a pathological operand well inside the hook's budget", () => {
+    // Generous on purpose - 250ms is far above what a linear scan needs (measured: 0.1ms) and far
+    // below the hook's 10s timeout, so it is not flaky on a loaded machine but still fails loudly if
+    // the alternation comes back. The old predicate took 2391ms at n=9 and did not finish at n=12.
+    const cmd = `cd "${LANE}" && echo hi > ${pathological(12)}`;
+    const started = Date.now();
+    const d = ask(cmd);
+    const elapsed = Date.now() - started;
+    expect(elapsed, `took ${elapsed}ms - the operand test is backtracking again`).toBeLessThan(250);
+    // Silence is the failure mode that matters: no answer means the guard has no opinion.
+    expect(d.permission).toBe("ask");
+  });
+
+  it("still ANSWERS on the pathological operand, and answers `ask`", () => {
+    // Every length, including ones the old predicate could never have returned from. `ask` is what
+    // `origin/main` says too, so the guard's opinion is preserved rather than merely fast.
+    for (const n of [8, 9, 12, 20, 64]) {
+      const d = ask(`cd "${LANE}" && echo hi > ${pathological(n)}`);
+      expect(d.permission, `n=${n}`).toBe("ask");
+      expect(d.additionalContext ?? "", `n=${n}`).not.toContain("Shell ownership");
+    }
+    // A long but ORDINARY operand is still spared - the fix did not buy its speed by refusing more.
+    expect(ask(`cd "${LANE}" && echo hi > ${"logs/deep/".repeat(40)}$RUN.log`).permission).toBe("allow");
+  });
+});

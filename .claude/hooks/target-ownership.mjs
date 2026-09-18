@@ -222,6 +222,41 @@ export function protectedGlobals({ home = homedir() } = {}) {
   return [join(home, ".claude"), join(home, ".codex")];
 }
 
+/**
+ * Subtrees INSIDE a protected global that are the AGENT'S OWN SCRATCH, not the owner's authority.
+ *
+ * `protectedGlobals` names two whole directories, and that was right when the question was "does
+ * this path decide what agents may do on this machine". But `~/.claude` is not only that. It is
+ * also where Claude Code keeps its own per-project working notes, todo lists, plans and file
+ * history — state the agent writes as a matter of course, several times a turn, about the very
+ * project it is working on. Measured 2026-09-18 across three weeks of transcripts: 92 of ~400
+ * permission prompts were a session being asked whether it might write its own memory file at
+ * `~/.claude/projects/<slug>/memory/*.md`. A prompt that frequent and that uninformative is not a
+ * guard; it is a tax on every turn, and the owner presses accept every time, which is the shape
+ * that trains him to stop reading prompts that DO matter.
+ *
+ * So the carve-out is by NAME, never by pattern: the four scratch directories are listed here and
+ * everything else under `~/.claude` — `settings.json`, `hooks/`, `CLAUDE.md`, `skills/`,
+ * `plugins/`, `.credentials.json`, and anything added later — keeps its GLOBAL answer by default.
+ * A new directory under `~/.claude` is protected until someone adds it to this list on purpose,
+ * which is the correct direction for a list that can be wrong.
+ *
+ * `~/.codex` gets NOTHING here. It holds `worktrees/`, which are real checkouts of this very
+ * repository (`~/.codex/worktrees/2e5d/sentinel` on this machine), and a carve-out there would
+ * reopen the sibling-checkout hole this module exists to close.
+ *
+ * THIS LIST IS NOT CONSULTED BY `zoneOf`, AND MUST NOT BE. It names DIRECTORIES, and `isWithin` is
+ * true for equality, so consulting it in the shared zone answer made the roots themselves exempt —
+ * `rm -rf ~/.claude/projects` through the shell guard, which is every lane's memory and every
+ * lane's transcripts, none of it in git. `project-write-assert.mjs` is the single consumer, it
+ * requires a STRICT descendant, and it only ever answers for Write/Edit/NotebookEdit: one named
+ * file at a time. Any future consumer must satisfy both of those conditions or it is a hole.
+ */
+export function globalScratchSubtrees({ home = homedir() } = {}) {
+  const claude = join(home, ".claude");
+  return [join(claude, "projects"), join(claude, "todos"), join(claude, "plans"), join(claude, "file-history")];
+}
+
 // A destructive directory operand can own its spelling while containing somebody else's lane.
 // Read Git's registration files rather than spawning git or walking the target's whole subtree.
 // Missing registration means none; unreadable registration means unknown, never permission.
@@ -330,6 +365,16 @@ export function zoneOf({ target, sessionRoot, cwd = null, descendants = false, w
     };
   }
 
+  // NOTHING IS CARVED OUT HERE, ON PURPOSE (2026-09-18 review). `globalScratchSubtrees` exists,
+  // but this module is the SHARED answer consumed by the shell guard as well as the write guard,
+  // and the shell guard decides `rm -rf <dir>`. A first draft of that carve-out lived here and an
+  // independent review broke it in one line: `isWithin` is true for equality, so the scratch roots
+  // were exempt themselves and `rm -rf ~/.claude/projects` came back `unprotected` — one unprompted
+  // command destroying the transcripts, memory and plans of EVERY lane on the machine, none of it
+  // under git and so none of it recoverable. The carve-out now lives in `project-write-assert.mjs`
+  // alone, where the tool is Write/Edit/NotebookEdit: one named file, no recursion, no directory.
+  // Keep it that way. A path-ownership answer must not depend on how gently the caller intends to
+  // use it, and this is the module that cannot know.
   for (const g of protectedGlobals({ home })) {
     if (isWithin(abs, g)) return { zone: ZONES.GLOBAL, abs, owner: g, why: "inside the owner's global configuration" };
   }

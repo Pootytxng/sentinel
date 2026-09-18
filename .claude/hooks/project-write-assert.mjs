@@ -66,7 +66,7 @@ import {
   samePath,
   verifySession,
 } from "./session-root-assert.mjs";
-import { ZONES, zoneOf } from "./target-ownership.mjs";
+import { ZONES, globalScratchSubtrees, isWithin, toComparable, zoneOf } from "./target-ownership.mjs";
 
 /** The tools that change a file directly. `Bash` is the named hole — spec §3c, not an oversight. */
 export const GUARDED_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
@@ -133,7 +133,7 @@ export function advisoryContext({ code, knownIssue = null }) {
  * @param {number|null} f.knownIssue an issue number still on disk, named in the advisory line
  * @returns {{allow: boolean, permission?: "allow"|"deny"|"ask", reason?: string, additionalContext?: string, code?: string, target?: string}}
  */
-export function decide({ toolName, toolInput, verdict, root, sessionId = null, cwd = null, knownIssue = null, zone = zoneOf }) {
+export function decide({ toolName, toolInput, verdict, root, sessionId = null, cwd = null, knownIssue = null, zone = zoneOf, scratch = globalScratchSubtrees() }) {
   if (!GUARDED_TOOLS.has(String(toolName ?? ""))) return { allow: true, why: "not a write tool" };
 
   const target = targetOf(toolInput);
@@ -162,6 +162,38 @@ export function decide({ toolName, toolInput, verdict, root, sessionId = null, c
       };
     }
     if (z.zone === ZONES.GLOBAL) {
+      // THE AGENT'S OWN SCRATCH IS NOT THE OWNER'S AUTHORITY (2026-09-18). 92 of ~400 prompts
+      // measured across three weeks were a session asking permission to write its OWN memory file
+      // at `~/.claude/projects/<slug>/memory/*.md`. That prompt is a tax on every turn, the owner
+      // accepts it every time, and a prompt always accepted is what teaches him to stop reading the
+      // ones that matter.
+      //
+      // THE CONDITIONS ARE BOTH LOAD-BEARING, and the first draft had neither right.
+      //
+      //  1. STRICT DESCENDANT. `isWithin` is true for equality, so a plain `isWithin(abs, s)`
+      //     exempts the scratch ROOTS themselves. An independent review turned that into
+      //     `rm -rf ~/.claude/projects` — every lane's transcripts, memory and plans, none of it in
+      //     git. The target must be strictly beneath the named directory, never the directory.
+      //  2. THIS HOOK ONLY. It runs for Write/Edit/NotebookEdit — one named file, no recursion, no
+      //     directory operand. `zoneOf` deliberately does NOT know about this list, because the
+      //     shell guard shares `zoneOf` and the shell guard decides `rm -rf`.
+      //
+      // Everything else under `~/.claude` and all of `~/.codex` still take the ask below. The
+      // answer here is `allow`, not "no decision": a GLOBAL target has already been refused by this
+      // branch, so it must be affirmatively let through, and the settings rules cannot see it.
+      const abs = z.abs;
+      const isScratchFile =
+        typeof abs === "string" &&
+        scratch.some((s) => isWithin(abs, s) && toComparable(abs) !== toComparable(s));
+      if (isScratchFile) {
+        return {
+          allow: true,
+          permission: "allow",
+          code: "TARGET_AGENT_SCRATCH",
+          target,
+          why: "the agent's own scratch under ~/.claude, written one file at a time",
+        };
+      }
       return {
         allow: false,
         permission: "ask",
@@ -278,6 +310,29 @@ export function run({
  */
 export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) {
   if (decision.allow) {
+    // The ONE affirmative allow (TARGET_AGENT_SCRATCH). Everywhere else an `allow` here means "no
+    // objection" and is written as nothing, so the settings rules and the auto-mode classifier
+    // still decide. This case is different because the target IS inside a protected global: the
+    // branch above has already resolved it, and leaving it to the normal flow would hand the very
+    // prompt back that this decision exists to remove. It is narrow by construction — a strict
+    // descendant of a named scratch directory, reached through a single-file write tool.
+    if (decision.permission === "allow") {
+      // `additionalContext` rides along rather than being dropped. No live decision carries both
+      // today, but this branch returns before the context handling below, so a future one would
+      // have lost its cure silently — the 2026-09-18 review caught the shape before it had a
+      // victim, and a guard that loses a message is the same class of defect as one that loses a
+      // decision. Omitted entirely when absent, so the payload stays exactly as it was.
+      const out = {
+        hookEventName: "PreToolUse",
+        permissionDecision: "allow",
+        permissionDecisionReason: decision.why ?? "the agent's own scratch under ~/.claude",
+      };
+      if (typeof decision.additionalContext === "string" && decision.additionalContext !== "") {
+        out.additionalContext = decision.additionalContext;
+      }
+      write(`${JSON.stringify({ hookSpecificOutput: out })}\n`);
+      return 0;
+    }
     if (typeof decision.additionalContext !== "string" || decision.additionalContext === "") return 0;
     // Context ALONE: no `permissionDecision` key, so this is "no decision" to the harness.
     write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: decision.additionalContext } })}\n`);
