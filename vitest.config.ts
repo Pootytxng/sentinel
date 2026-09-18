@@ -32,7 +32,10 @@ export default defineConfig({
     // lost its slice, and redded the gate as "origin unreachable" on an online machine. globalSetup
     // runs once in the main process before the pool exists; the answer reaches the worker through
     // provide/inject, and null (unreachable at setup) still fails closed there.
-    globalSetup: ["./scripts/lib/vitest-global-setup.mjs"],
+    // #457: a file argument that matches no test file is dropped silently, and the rest of the run
+    // reports green. The filter guard refuses that run, and it goes FIRST so a refused run never
+    // reaches origin.
+    globalSetup: ["./scripts/lib/vitest-filter-guard.mjs", "./scripts/lib/vitest-global-setup.mjs"],
     // No `retry` here, deliberately. A different small set of files failed on nearly every run for
     // days — encoding-guard, export-library, release-transaction-e2e, ExperimentBench — each one
     // passing when re-run alone, which reads exactly like contention and is not: two test files

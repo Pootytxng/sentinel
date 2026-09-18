@@ -1,0 +1,79 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` on the lane has one commit, b4df4e4c. This claude-code session wrote it under git identity claude-code <claude-code@desk.local>. The owner's chat order in this session asked for one bounded fix: the scope-drift gate must stop vouching from a released claim's cached copy (#459), carried through Work Control with a red-first test. The same session lands the PR under that order.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/459#issuecomment-5725139478",
+  "leaseEvidenceNote": "Handoff 5725139478 ends \"- Claim: released\". It releases landing claim 5725060608, which superseded the build claim 5724822135. No lease is live on #459 when this receipt is gated: the fixed gate itself, run with --refresh into a scratch cache, reads the thread as `not measured -- claim released: a Handoff on #459 (2026-09-18T04:25:42Z)`. The board item reads Status Review and Gate None, with Claim expires cleared. The carrier that brings this receipt to main runs afterwards, under a fresh receipts-only claim.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18 with `gh pr list --state open --json files`. Of the open PRs, only #444 touches any of this lane's paths: it edits scripts/lib/scope-drift.mjs (the claimCacheDir resolver and the node:path import). No live claim covers #444, and `git merge-tree --write-tree` of b4df4e4c with #444's head b056ab3e exits 0 (clean). PRs #461 and #438 touch none of these paths. No open PR is based on claude/459-scope-drift-released-claim. A REST fold of every open issue's thread found no live claim overlapping these paths before claim 5724822135 was posted.",
+  "inheritedWork": false,
+  "currentHead": "b4df4e4cf90c83d956f75fbf164fe5b0369efe08",
+  "pr": 462,
+  "issue": 459,
+  "kind": "lane",
+  "branch": "claude/459-scope-drift-released-claim",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched after the landing. origin/main reads c461078a, the merge commit of PR #462 (merged 2026-09-18T04:24:32Z by scripts/land-pr.mjs), with parents f3b224e3 and b4df4e4c; `git merge-base --is-ancestor b4df4e4c origin/main` holds. land-pr pruned the head branch (`git ls-remote --heads` finds none) and branch-disposition-audit read OK. PR #462 has 0 closingIssuesReferences and #459 still reads OPEN, so the merge did not close it.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\sharp-meninsky-9bade4, with one writer. Its core.hooksPath is the relative .githooks, and the pre-push hook ran scripts/verify-local.ps1 on the push that created the remote branch. The folder's earlier local-main commit 723579d7 (named in claim 5724822135) is untouched; the lane branch was cut from origin/main c5f6bfe5.",
+    "branch": "claude/459-scope-drift-released-claim at b4df4e4c, locally; the remote branch is pruned. b4df4e4c is reachable on origin through main (c461078a).",
+    "dirtyState": "`git status --porcelain` lists only the untracked receipts 2026-09-18-mark-pr-ready-462.json and 2026-09-18-merge-pr-462.json; this receipt is the third. No tracked file differs from b4df4e4c. The gitignored logs/ captures (gate log, push console, land-pr log) are kept.",
+    "liveProcesses": "None of this lane: no app run, dev server, install or build. land-pr finished (exit 0) and the reviewer seat has finished."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "b4df4e4cf90c83d956f75fbf164fe5b0369efe08",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/sharp-meninsky-9bade4/logs/verify-local-2026-09-18T04-07-03Z.log:9-40 (SHA-256 716268b37d5f3362011b8492d141530cf8cb010e25735abeb41706a1bc8f3674)",
+      "summary": "446 test files passed; 7290 passed / 4 skipped (7294). `npm test` is `node scripts/run-vitest.mjs run`, the unfiltered suite; `npx vitest list --filesOnly` at this head lists exactly 446 files, scripts/scope-drift-gate.test.mjs (with the four #459 tests) among them."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "b4df4e4cf90c83d956f75fbf164fe5b0369efe08",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/sharp-meninsky-9bade4/logs/verify-local-2026-09-18T04-07-03Z.log:45-70 (SHA-256 716268b37d5f3362011b8492d141530cf8cb010e25735abeb41706a1bc8f3674)",
+      "summary": "The frontend type-check and build stage passed; vite built clean (line 70)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "b4df4e4cf90c83d956f75fbf164fe5b0369efe08",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/sharp-meninsky-9bade4/logs/verify-local-2026-09-18T04-07-03Z.log:72-1442 (SHA-256 716268b37d5f3362011b8492d141530cf8cb010e25735abeb41706a1bc8f3674)",
+      "summary": "1327 passed; 0 failed; 24 ignored (line 1430). No Rust file changed in this PR; the stage ran because it is part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "b4df4e4cf90c83d956f75fbf164fe5b0369efe08",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/sharp-meninsky-9bade4/logs/verify-local-2026-09-18T04-07-03Z.log:1445-1447 (SHA-256 716268b37d5f3362011b8492d141530cf8cb010e25735abeb41706a1bc8f3674)",
+      "summary": "The clippy stage finished (line 1447) with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of scripts/verify-local.ps1 at this exact head, from the push that created the remote branch. The log header names this worktree as the tree it gated. It has all six LOCAL CHECK stage markers (lines 3, 5, 9, 45, 72, 1445) and zero matches for `test result: FAILED`, `panicked`, `error[E`, ` FAIL ` or `×` across its 1447 lines. The PASS banner is written to the console, not the log. The console capture is kept beside the log at logs/push-console-2026-09-18T04-07-01Z.log (SHA-256 9e4f4f9d7709f9c41f432b746f6a9f1242541991cbc742fda39e399031638459). It reads `LOCAL CHECK RESULT: PASS` at line 1452 and the new-branch line at 1459, and git exited 0.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "measured",
+    "reconciled": true,
+    "measurement": "Log lines 6-7 read: 3 changed paths since origin/main measured against the claim on #459 (cache); OK: every changed path is inside the claimed scope. The cache was the live claim 5724822135's own copy (the session record names #459 for this folder). Re-measured after the landing claim with `node scripts/scope-drift-gate.mjs --issue 459 --refresh`: read from the thread, OK against the widened scope. This is the gate this PR fixes; the claim it measured against is live, so this OK is not the released-claim case."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "b4df4e4cf90c83d956f75fbf164fe5b0369efe08",
+    "verdict": "PASS-WITH-NITS: three NON-BLOCKING findings, none requiring a change in this PR",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/462#issuecomment-5725107161",
+    "reviewerNote": "A read-only reviewer seat that wrote nothing in this change. It confirmed HEAD = b4df4e4c and a clean tree, and read the diff: 3 files, test changes all additions, no assertion weakened. It grepped every caller of resolveClaim, gate() and dropClaimCache; none outside this module changes behaviour. It ran the pinned file (35 passed). It re-proved falsifiability itself: with the old gate file checked out, 3 failed / 32 passed; the unreadable-thread boundary test passed on both, by design. The revert was restored in the same command. Live probes used a temp --cache-dir only. Against #457's real released thread, --refresh printed `not measured -- claim released: a Handoff on #457 (2026-09-18T03:29:00Z) ...` and dropped the seeded copy. With gh stripped from PATH, an 11-minute-stale cache measured as `(cache, stale)`, so the unreadable fallback is preserved. Its non-blocking findings stay as known limits, not changed here: (1) .claude/hooks/scope-drift-check.mjs claimFor has the same fallback (advisory hook; hook edits are owner-hands). (2) A cache younger than 10 minutes is still trusted without --refresh, as documented and unchanged. (3) A policy question: whether a released claim should fail harder than not measured."
+  },
+  "transition": "close-issue",
+  "closingNote": "#459 closes as done. The fix is on main in c461078a. It was proven red then green (3 failed / 32 passed, then 35 passed), re-proved by the reviewer, confirmed live on #457 real released thread, and confirmed on #459 own thread after its Handoff. Named and not done here: (1) the three receipts reach main in a follow-up receipts-only carrier; (2) known limits stay: a cache under 10 minutes old is trusted without --refresh; .claude/hooks/scope-drift-check.mjs claimFor keeps the same fallback (hook entrypoint, owner-hands); tools/entry/claim.mjs release does not drop the cache; a readable thread whose live claim has a non-string scope still falls back; (3) the reviewer policy question, whether a released claim should fail harder than not measured, is left for a future owner call."
+}

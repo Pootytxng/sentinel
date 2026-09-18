@@ -15,14 +15,15 @@
 // Everything is driven through the injected seams (`verify`, `issueLookup`, fabricated hook input),
 // so no test here touches the real launch store or this machine's live verification state.
 
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import * as tracked from "../../.claude/hooks/session-root-assert.mjs";
-import { ZONES } from "../../.claude/hooks/target-ownership.mjs";
+import { ZONES, zoneOf } from "../../.claude/hooks/target-ownership.mjs";
+import { decideShell } from "../../.claude/hooks/shell-ownership-assert.mjs";
 import {
   GUARDED_TOOLS,
   adoptCommand,
@@ -156,6 +157,38 @@ describe("what is and is not a project write", () => {
     expect(d.allow).toBe(false);
     expect(d.permission).toBe("ask");
     expect(d.code).toBe("TARGET_OWNER_CONFIG");
+  });
+
+  it("routes Write and Edit through an in-root global-config junction to approval (#429)", () => {
+    const fixture = mkdtempSync(join(tmpdir(), "compy-write-global-"));
+    try {
+      const root = join(fixture, "repo");
+      const home = join(fixture, "home");
+      const config = join(home, ".claude");
+      mkdirSync(root);
+      mkdirSync(config, { recursive: true });
+      const link = join(root, "owner-config");
+      symlinkSync(config, link, process.platform === "win32" ? "junction" : "dir");
+      // An unborn target proves that nearest-existing-parent resolution also stays protected.
+      const target = join(link, "new-settings.json");
+      const zone = (q) => zoneOf({ ...q, deps: { home } });
+      expect(zone({ target, sessionRoot: root, cwd: root }).zone).toBe(ZONES.GLOBAL);
+      for (const toolName of ["Write", "Edit"]) {
+        for (const verdict of [{ ok: true, mode: "launch" }, { ok: false, code: "FOLDER_UNCLAIMED" }]) {
+          const result = decide({ toolName, toolInput: { file_path: target }, root, cwd: root, verdict, zone });
+          expect(result, `${toolName}: ${verdict.ok ? "verified" : "unclaimed"}`).toMatchObject({
+            allow: false, permission: "ask", code: "TARGET_OWNER_CONFIG",
+          });
+        }
+      }
+      // Deliberate interface difference: direct writes ask; shell operations deny. Neither allows.
+      const shell = decideShell({ toolName: "Bash", toolInput: { command: `rm "${target.replace(/\\/g, "/")}"` },
+        sessionRoot: root, cwd: root, verify: () => ({ ok: true, root }), home, env: {} });
+      expect(shell.permission).toBe("deny");
+    } finally {
+      if (dirname(fixture) !== tmpdir()) throw new Error("Fixture escaped temporary directory");
+      rmSync(fixture, { recursive: true, force: true });
+    }
   });
 
   it("treats a path shape it cannot place as unknown, not as outside", () => {

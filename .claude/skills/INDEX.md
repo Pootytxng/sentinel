@@ -6,8 +6,9 @@
 > sessions: skim this table before starting any train whose class appears here. Keep the table current
 > in the same commit that adds/changes a skill (doc-sync law).
 >
-> 2026-09-15: the `compy` plugin v0.2.0 re-ported `status` + `doc-sync` from the 2026-09-05 repo
-> versions of those skills; the repo copies here remain the source of truth.
+> Four of these skills (`status`, `doc-sync`, `gate-drift-audit`, `usage-audit`) also ship as copies in
+> the Cowork `compy` plugin. The copies here are the source: changing one of the four also needs a
+> plugin re-port and version bump on the Cowork side.
 
 ## Live skills
 
@@ -21,7 +22,7 @@
 | `gate-drift-audit` | state assertions, after refactors moving cited code, periodic | layer 1: `node scripts/verify-release-state.mjs` (no LLM) · layer 2: **sonnet** worker | RELEASE_STATE.md citation + truth verification. |
 | `ship` | after every `npm run tauri build` | any | Silent reinstall is Claude's job; stamp-proof, ONE installer, RELEASE_STATE row, owner report format. |
 | `guard-forge` | a defect was caught, BEFORE its fix is claimed done | any | bug→guard law; red→green proof required; tiers: test > rubric > memory. |
-| `doc-sync` | any state change; any two docs disagreeing | any | Precedence (RELEASE_STATE=state · PRODUCT_CONSTITUTION=product truth · ARCHITECTURE_LOCKS=safety · WORK_CONTROL=ownership · CLAUDE.md=bootstrap · code>all) + same-commit ordering. |
+| `doc-sync` | any state change; any two docs disagreeing | any | Precedence (RELEASE_STATE=current state · PRODUCT_CONSTITUTION=product truth · ARCHITECTURE_LOCKS=safety · WORK_CONTROL=ownership · CLAUDE.md=bootstrap, not law · code>any doc on what is built) + same-commit ordering. |
 | `usage-audit` | owner asks about usage/tokens/budget; a 🔴 in `docs/usage-audit/LATEST.md` | layer 1: `node scripts/usage-audit.mjs` (no LLM) · layer 2: any (terse) | Session/token discipline meter. Weekly report auto-written by the `CompyUsageAudit` scheduled task (Mondays, zero tokens). |
 | `status` | "where are we" / "what's left" / "show me" / end of any train | dispatcher: any · doc reads: **sonnet** | Added 2026-08-05: >50% of the owner's short messages are status questions and there was no surface for them. Reconstructs from git + the state docs; never answers from session memory. |
 

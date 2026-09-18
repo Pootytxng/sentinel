@@ -1,6 +1,0 @@
-{
-  "ref": "origin/lane/guard-budget-313",
-  "disposition": "CLAIMED",
-  "issue": 313,
-  "evidence": "Not this lane's branch — dispositioned, untouched. Worktree `C:\\Users\\Kuya\\code\\sentinel-remote-design-286` (the checkout that carried `lane/remote-cache-design-286` then `lane/receipt-288`, **reused** again), issue [#313](https://github.com/Pootytxng/sentinel/issues/313), PR [#317](https://github.com/Pootytxng/sentinel/pull/317), based on `main`. `git merge-tree --write-tree origin/main origin/lane/guard-budget-313` is not a no-op, so it is not `MERGED`. Targets `scripts/hookspath-fleet-guard.test.mjs` paying 49% of the default test budget under contention (measured: 137 git spawns building twenty from-scratch repos). **The ref stays**; disposition is the owning lane's call."
-}

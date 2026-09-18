@@ -212,6 +212,10 @@ const RESIDENCY = {
     kind: "npm-test",
     runner: "scripts/dist-site-staleness-guard.test.mjs",
   },
+  "successor-route.mjs": {
+    kind: "npm-test",
+    runner: "scripts/successor-route.test.mjs",
+  },
   "supply-chain-gate.mjs": {
     kind: "release",
     runner: "scripts/verify-release.ps1",

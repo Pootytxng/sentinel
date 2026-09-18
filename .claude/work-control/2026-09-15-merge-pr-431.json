@@ -1,0 +1,84 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #428 lane is Codex's: `git log --format='%an <%ae>' origin/main..HEAD` returns codex <codex@desk.local> for the three fix commits 95968c91 (2026-09-14T00:24:37Z), e89e7519 (2026-09-14T13:08:24Z) and 834e4896 (2026-09-15T00:01:43Z), and claude-code <claude-code@desk.local> for the merge 97ffaafc (2026-09-15T12:10:54Z), which merged Codex's repair onto the then-current main (1d855364) under the #428 lane's claim and pushed it as the PR head. Both identities are therefore mutation authors and both are listed. claude-code is the actor because it runs this landing and is one of the authors; the reviewer, cowork, authored none of it.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/428#issuecomment-5686334081",
+  "leaseEvidenceNote": "The landing's Ownership claim on #428 (5686334081, posted 2026-09-15T18:56:17Z, 12-hour expiry that is an alarm only). Folder C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\hq-handoff-h-2026-09-15-4144e8 on the local branch claude/land-431, created at the reviewed head 97ffaafc by `git checkout -b claude/land-431 97ffaafcb241089515caa948e01eb74f095861d8` because the PR branch codex/428-parent-lanes is checked out in C:/Users/Kuya/code/sentinel-codex-428 (at the older 834e4896); no ref on origin was moved. The write scope is the reviewed code paths plus exactly the three receipts this landing writes: .claude/hooks/shell-ownership-assert.mjs, .claude/hooks/target-ownership.mjs, tools/entry/shell-ownership-assert.test.mjs, tools/entry/target-ownership.test.mjs, .claude/work-control/2026-09-15-mark-pr-ready-431.json, .claude/work-control/2026-09-15-merge-pr-431.json, .claude/work-control/2026-09-15-close-issue-428.json. The landing edits no code path. Before the claim was posted the board row moved Review -> Ready with the Worktree field set to this folder @ claude/land-431, and preflight (tools/entry/preflight.mjs reconcile over gatherFacts) returned PASS on every check, processes and board.nextAction included. readIssueThread (tools/entry/gather.mjs) read the claim back as #428's newest lease with no newer Handoff; the previous Handoff on #428 (5680293349) had released the lane's lease.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured live at 2026-09-15T18:57:40Z from `gh pr list --state open --limit 50 --json files`; no list reached the 100-file cap. None of the 11 other open PRs (432, 430, 404, 400, 397, 395, 394, 391, 317, 306, 297) touches .claude/hooks/shell-ownership-assert.mjs, .claude/hooks/target-ownership.mjs, tools/entry/shell-ownership-assert.test.mjs, tools/entry/target-ownership.test.mjs or the three landing receipts. No open PR is based on codex/428-parent-lanes. At claim time preflight found this scope disjoint from every live lease.",
+  "inheritedWork": false,
+  "currentHead": "97ffaafcb241089515caa948e01eb74f095861d8",
+  "pr": 431,
+  "issue": 428,
+  "kind": "lane",
+  "branch": "codex/428-parent-lanes",
+  "mutationAuthors": [
+    "claude-code",
+    "codex"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel. Worktree C:/Users/Kuya/code/sentinel/.claude/worktrees/hq-handoff-h-2026-09-15-4144e8 (git rev-parse --show-toplevel); canonical remote `origin`.",
+    "remoteState": "Fetched at 2026-09-15T19:19:17Z. origin/main and `git ls-remote origin refs/heads/main` both read 23d0f6b8c2866f6f3c6fe138a0b08d8c9c29ed4e. The PR base recorded by GitHub (baseRefOid b1c26d6db92f60f8729c51a1bd35ece4863da44d) is stale; the live merge-base with origin/main is 1d8553646944320e871e059ff447366edb40eac1, and the branch is 6 commit(s) behind main, all of which are the #427 landing (merge f050aae8, which brought ee4ed47d, 8f5140c0, 35cb01f6 and 8226f4aa: tools/entry/preflight.mjs and tools/entry/preflight.test.mjs) and its receipt carrier 23d0f6b8 (three files under .claude/work-control/); `git diff --name-only 1d855364 origin/main` lists exactly those five paths, disjoint from this PR's four. origin/codex/428-parent-lanes and its ls-remote both read 97ffaafcb241089515caa948e01eb74f095861d8, the same as local HEAD and the PR head. `git merge-tree --write-tree origin/main HEAD` exits 0 (no conflict) with tree e80c8c50c0292e14e657c06614248ae7e106c936; the review's base 1d855364 is the merge-base, so the review head is unchanged; only main moved, by six commits (two on its first-parent line) that touch none of this PR's paths.",
+    "worktree": "Linked worktree with one writer and its own index (config.worktree, extensions.worktreeConfig=true). core.hooksPath is `.githooks` (set in this worktree's own config.worktree at 2026-09-15T18:39Z) and resolves inside this worktree (.githooks/pre-push is present), so the pre-push gate is armed here. core.bare read false at 2026-09-15T19:19:17Z.",
+    "branch": "codex/428-parent-lanes is the head of PR #431 -> main; this folder holds it as the local alias claude/land-431 at the same commit. At 2026-09-15T19:19:17Z the PR read OPEN, not draft, MERGEABLE / CLEAN, head 97ffaafc, with 0 closingIssuesReferences. The delta is three Codex commits plus one merge (95968c91, e89e7519, 834e4896, 97ffaafc) touching four paths: .claude/hooks/shell-ownership-assert.mjs, .claude/hooks/target-ownership.mjs, tools/entry/shell-ownership-assert.test.mjs and tools/entry/target-ownership.test.mjs.",
+    "dirtyState": "No tracked changes. At 2026-09-15T19:19:17Z, before this receipt was (re)written, `git status --porcelain --untracked-files=all` listed nothing: the tree was clean (no tracked change, no untracked file); the shared stash stack holds 4 entries from other branches, none touched. node_modules/ and site-app/node_modules/ are gitignored dependency trees. The receipts stay uncommitted until the receipt carrier that follows the close.",
+    "liveProcesses": "Get-Process at 2026-09-15T19:18:49Z: compy x0, cargo x0, rustc x0, msbuild x0, link x0, git x0, gh x0, npm x0, node x54, pwsh x8, powershell x4, claude x29, msedgewebview2 x6. No Rust build, app run, npm or git/gh operation was live beyond this receipt writer's own measurement calls. node, pwsh, powershell, claude and msedgewebview2 are not attributed one by one; other Claude Code sessions run on this machine and vitest runs as node.exe, so the node count alone does not rule it out. This session's own gate run had finished before the measurement. Get-Process is used instead of WMI because Win32_Process is hung on this machine."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "97ffaafcb241089515caa948e01eb74f095861d8",
+      "evidence": "logs/verify-local-2026-09-15T18-56-06Z.log:8-38-39",
+      "summary": "442 frontend test files passed (442); 7170 tests passed | 4 skipped (7174); 0 failed. Results at :38-39."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "97ffaafcb241089515caa948e01eb74f095861d8",
+      "evidence": "logs/verify-local-2026-09-15T18-56-06Z.log:44-69",
+      "summary": "`tsc && vite build`: tsc clean; vite production build succeeded (`built in 6.54s` at :69)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "97ffaafcb241089515caa948e01eb74f095861d8",
+      "evidence": "logs/verify-local-2026-09-15T18-56-06Z.log:71-1431",
+      "summary": "1317 passed; 0 failed; 24 ignored at :1419, plus two 0-test targets at :1425 and :1431. This PR changes no Rust."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "97ffaafcb241089515caa948e01eb74f095861d8",
+      "evidence": "logs/verify-local-2026-09-15T18-56-06Z.log:1434-1436",
+      "summary": "Clippy stage clean under -D warnings (scripts/verify-local.ps1 passes --all-targets --all-features -- -D warnings): `Finished` at :1436, with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is this landing's own run of the full local gate, `pwsh -NoProfile -File scripts/verify-local.ps1`, in this worktree at HEAD 97ffaafcb241089515caa948e01eb74f095861d8 (`git rev-parse HEAD` read the same sha before and after the run). Log logs/verify-local-2026-09-15T18-56-06Z.log, 1436 lines, opened 2026-09-15T18:56:06Z. The console printed LOCAL CHECK RESULT: PASS. The exit code was not taken as the verdict; this receipt's writer re-checked every stage at its own line: git diff check (:3), write-scope drift #356 (:5-6, 'not measured -- no session record for this folder', re-measured separately under scopeDrift), frontend tests (:8-38-39), frontend type-check and build (:44-69), Rust tests (:71-1431) and Rust clippy (:1434-1436). No line matches `test result: FAILED`, `panicked` or `error[E`; no line in the frontend stages matches `error TS` or `npm ERR!`. Corroboration: the pre-push gate that carried 97ffaafc to origin from C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a also passed (logs/verify-local-2026-09-15T12-31-14Z.log there, 1437 lines: 442 files / 7170 passed / 4 skipped at :39-40, built :70, 1317 Rust passed :1420, clippy Finished :1437; push at 12:38:05Z), which the reviewer read and whose counts it verified. Main moved after the review: the branch is six commits behind origin/main (the #427 landing f050aae8 with the four commits it merged, and its receipt carrier 23d0f6b8), all disjoint from this PR's four paths, and `git merge-tree --write-tree origin/main HEAD` is conflict-free (tree e80c8c50). No separate gate was run on that predicted merge tree: the ownership guard refuses a throwaway branch in this folder (BRANCH_NOT_THE_BOARDS), and the merge commit is gated before anything else lands, because the receipt carrier that follows the close pushes HEAD:main from on top of the merge commit through the full pre-push gate; a red there stops with a Handoff. `--no-verify` was never used in this lane. The log is gitignored (`logs`).",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "log:5-6: 'not measured -- no session record for this folder (launch through tools/entry, or pass --issue)'; this worktree was opened by the desktop app, not through tools/entry, so the gate had no cached claim. Measured explicitly with `node scripts/scope-drift-gate.mjs --issue 428 --refresh` at 2026-09-15T19:18:33Z: '4 changed paths since origin/main measured against the claim on #428 (thread); OK: every changed path is inside the claimed scope', OK against the landing scope.",
+    "reconciliationNote": "The code delta is exactly the paths the review covered. The landing claim keeps them and adds only the ${NRECEIPTS} receipts, so the explicit measurement is the gate's measurement with the claim supplied."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "cowork",
+    "status": "passed",
+    "head": "97ffaafcb241089515caa948e01eb74f095861d8",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/431#issuecomment-5683535156 (2026-09-15T15:59:26Z), headed \"Independent review: PASS at exact head `97ffaafcb241089515caa948e01eb74f095861d8`\", names reviewer cowork (cowork-hq), non-author, at the exact PR head. HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483) cites the same comment as the landing authorization for #431.",
+    "reviewerNote": "Independent exact-head review by cowork, which authored no commit in the proof delta: mutationAuthors are codex and claude-code. GitHub holds no review object; the verdict is a PR comment posted from the shared Pootytxng account, which every executor uses, so the comment's author field does not identify the reviewer, and the body and the HQ handoff do. The reviewer verified the four-path scope and the merge parents (1d855364, 834e4896) mechanically, ran the two new test files in an isolated `git archive` extraction of 97ffaafc (178/178), and falsified both repairs by single-line reverts (brace globStart: 8 failed; contained-lane return: 3 failed, the original #428 defect reappearing), restoring byte-identical files afterwards. Non-blocking findings it recorded: the `\".\"` prefix fallback makes `rm *.log` from a lane-holding root ask (friction, disclosed); DIRECTORY_DESTRUCTIVE is a six-verb allowlist, so `find -delete`, `git clean`, `rd /s` and `robocopy /MIR` predate and stay outside this PR; the author's log lacks the literal verdict line but every count matches; the body's base citation is stale. Limits stated: the reviewer did not run the full native gate and read the author's log instead. The PASS covers no landing step and goes stale if the PR head changes; the PR head read 97ffaafc when this receipt was written."
+  },
+  "transition": "merge-pr",
+  "mergeMethodNote": "Lands with `node scripts/land-pr.mjs --pr 431 --receipt .claude/work-control/2026-09-15-merge-pr-431.json`, after a `--dry-run` of the same command. land-pr refuses a receipt whose transition is not merge-pr, whose pr is not 431, or that the work-control gate does not PASS; it also refuses a PR that is not OPEN, a dependent PR, or a PRESERVE / LANDED record. Otherwise it runs `gh pr merge 431 --repo Pootytxng/sentinel --merge` (a true merge commit, never a squash), `git push origin --delete codex/428-parent-lanes`, `git fetch origin --prune`, then `node scripts/branch-disposition-audit.mjs`. `--delete-branch` is not used and no worktree is removed. core.bare is read back afterwards.",
+  "dependentsNote": "No open PR is based on codex/428-parent-lanes (measured 2026-09-15T18:57:40Z), so nothing needs retargeting before the prune. No file under docs/dispositions/ names this ref, so land-pr's PRESERVE / LANDED refusal does not fire, and none is owed: land-pr prunes the merged ref before its audit runs. The local branch codex/428-parent-lanes in C:/Users/Kuya/code/sentinel-codex-428 (at the older 834e4896) keeps its own checkout; only the remote ref is pruned.",
+  "fileOverlapNote": "Zero file overlap with the 11 other open PRs, measured at 2026-09-15T18:57:40Z by comparing file lists: none touches .claude/hooks/shell-ownership-assert.mjs, .claude/hooks/target-ownership.mjs, tools/entry/shell-ownership-assert.test.mjs, tools/entry/target-ownership.test.mjs or the three landing receipts.",
+  "closingNote": "PR #431's closingIssuesReferences read 0 at 2026-09-15T19:19:17Z, so the merge closes no issue and the gate's merge lease check reads no lease. #428 is closed separately under its own close-issue receipt, after this landing's lease is released."
+}

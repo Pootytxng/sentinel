@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "built_at": "2026-09-06T12:00:00Z",
+  "identity": {
+    "cpu": {
+      "value": "AMD Ryzen 7 7800X3D",
+      "class": "directly-observed",
+      "source": "hardware::get_hardware_info",
+      "freshness": "unstamped-cache"
+    },
+    "gpu": {
+      "value": "Radeon RX 9070 XT",
+      "class": "directly-observed",
+      "source": "hardware::current_fingerprint",
+      "freshness": "unstamped-cache"
+    },
+    "gpu_driver": {
+      "value": "25.5.1",
+      "class": "directly-observed",
+      "source": "hardware::current_fingerprint",
+      "freshness": "unstamped-cache"
+    },
+    "ram_gb": {
+      "value": 32,
+      "class": "directly-observed",
+      "source": "hardware::current_fingerprint",
+      "freshness": "unstamped-cache"
+    },
+    "display": {
+      "value": "2560x1440@250",
+      "class": "directly-observed",
+      "source": "hardware::current_fingerprint",
+      "freshness": "unstamped-cache"
+    },
+    "windows": {
+      "value": null,
+      "class": "unavailable",
+      "source": "hardware::get_hardware_info",
+      "freshness": "not-applicable",
+      "unknown_reason": "The Windows edition/build read returned nothing, so the OS version is unknown rather than assumed."
+    },
+    "rig_hash": {
+      "value": "abc123",
+      "class": "derived-from-measurement",
+      "source": "hardware::current_fingerprint",
+      "freshness": "unstamped-cache"
+    },
+    "canonical_rule": "hardware::get_hardware_info is the canonical producer of current rig identity. Other fingerprints are recorded or scoped copies; disagreement is reported, not resolved.",
+    "contributing_producers": [
+      "hardware::current_fingerprint",
+      "intelligence::IdentitySnapshot",
+      "hwchange::fingerprint (persisted baseline)"
+    ],
+    "excluded_producers": [
+      {
+        "producer": "game_state::GameStateFingerprint",
+        "reason": "Session-scoped measurement conditions (game, display mode, capture backend), not a claim about which rig this is."
+      },
+      {
+        "producer": "history::same_rig",
+        "reason": "A comparison RULE the model applies to ledger rows, not a producer of an identity value of its own."
+      }
+    ],
+    "compared_fields": [
+      {
+        "field": "gpu",
+        "against": "intelligence::IdentitySnapshot"
+      },
+      {
+        "field": "gpu_driver",
+        "against": "intelligence::IdentitySnapshot"
+      },
+      {
+        "field": "display",
+        "against": "intelligence::IdentitySnapshot"
+      },
+      {
+        "field": "rig_hash",
+        "against": "intelligence::IdentitySnapshot"
+      },
+      {
+        "field": "ram_gb",
+        "against": "intelligence::IdentitySnapshot"
+      },
+      {
+        "field": "gpu",
+        "against": "hwchange::fingerprint (persisted baseline)"
+      },
+      {
+        "field": "ram_gb",
+        "against": "hwchange::fingerprint (persisted baseline)"
+      }
+    ],
+    "disagreements": [
+      {
+        "field": "ram_gb",
+        "left": {
+          "producer": "hardware::current_fingerprint",
+          "value": "32",
+          "freshness": "unstamped-cache"
+        },
+        "right": {
+          "producer": "hwchange::fingerprint (persisted baseline)",
+          "value": "16",
+          "freshness": "undated-historical"
+        },
+        "interpretation": "These producers use different rounding conventions for RAM, so a gap of 1 GB is a unit-convention difference rather than a hardware disagreement. Only a gap larger than the tolerance hwchange::diff_fingerprint itself applies is reported here."
+      }
+    ]
+  },
+  "chronology": {
+    "recorded_from": "2026-07-04T09:30:00Z",
+    "recorded_from_source": "history::AppliedChangeView",
+    "identity_history_from": "2026-08-01T10:00:00Z",
+    "identity_snapshots": 1,
+    "total_events": 1,
+    "coverage_note": "This view includes Compy-applied changes, monitored sessions, the live Gaming Mode slot, verified wins, the current Lab baseline, the latest A/B comparison, identity snapshots and drift notices. Single-slot sources show their current record only.",
+    "entries": [
+      {
+        "id": "obs:gpu-driver-change:2026-08-20T00:00:00Z",
+        "observed_at": "2026-08-20T00:00:00Z",
+        "summary": "GPU driver changed",
+        "detail": "25.5.1 to 25.6.0",
+        "event_type": "gpu-driver-change",
+        "source": "identity-snapshot",
+        "scope": "observed",
+        "observed_between": [
+          "2026-08-01T10:00:00Z",
+          "2026-08-20T00:00:00Z"
+        ],
+        "class": "recorded-historically"
+      }
+    ],
+    "dropped_unparseable": 0,
+    "causation_note": "Chronology never implies causation by itself. These entries say what was recorded and when, not what caused what."
+  },
+  "compy_changes": {
+    "total_recorded": 2,
+    "active_now": 1,
+    "in_effect_other_rig": 0,
+    "in_effect_rig_unknown": 0,
+    "in_effect_total": 1,
+    "applied_but_not_in_effect": 0,
+    "in_effect_unknown": 0,
+    "rolled_back": 1,
+    "on_this_rig": 1,
+    "not_on_this_rig": 0,
+    "rig_unknown": 1,
+    "changes": [
+      {
+        "id": "chg-2",
+        "title": "Turn on hardware-accelerated GPU scheduling",
+        "applied_at": {
+          "value": "2026-07-05T09:30:00Z",
+          "class": "recorded-historically",
+          "source": "history::AppliedChangeView",
+          "observed_at": "2026-07-05T09:30:00Z",
+          "freshness": "stamped"
+        },
+        "status": {
+          "value": "rolled_back",
+          "class": "recorded-historically",
+          "source": "history::AppliedChangeView",
+          "observed_at": "2026-07-06T09:30:00Z",
+          "freshness": "stamped",
+          "domain": {
+            "vocabulary": "history::AppliedChange.status",
+            "value": "rolled_back"
+          }
+        },
+        "still_active": {
+          "value": null,
+          "class": "unavailable",
+          "source": "history::check_change_state",
+          "freshness": "not-applicable",
+          "not_applicable_reason": "This change is not in the applied state, so there is no live setting to check."
+        },
+        "rolled_back_at": {
+          "value": "2026-07-06T09:30:00Z",
+          "class": "recorded-historically",
+          "source": "history::AppliedChangeView",
+          "observed_at": "2026-07-06T09:30:00Z",
+          "freshness": "stamped"
+        },
+        "on_this_rig": {
+          "value": null,
+          "class": "unavailable",
+          "source": "history::AppliedChangeView",
+          "freshness": "not-applicable",
+          "unknown_reason": "This row predates rig stamping, so which machine it was applied on is unknown."
+        },
+        "reversible": {
+          "value": true,
+          "class": "recorded-historically",
+          "source": "history::AppliedChangeView",
+          "observed_at": "2026-07-05T09:30:00Z",
+          "freshness": "stamped"
+        }
+      },
+      {
+        "id": "chg-1",
+        "title": "Enable Game Mode",
+        "applied_at": {
+          "value": "2026-07-04T09:30:00Z",
+          "class": "recorded-historically",
+          "source": "history::AppliedChangeView",
+          "observed_at": "2026-07-04T09:30:00Z",
+          "freshness": "stamped"
+        },
+        "status": {
+          "value": "applied",
+          "class": "recorded-historically",
+          "source": "history::AppliedChangeView",
+          "observed_at": "2026-07-04T09:30:00Z",
+          "freshness": "stamped",
+          "domain": {
+            "vocabulary": "history::AppliedChange.status",
+            "value": "applied"
+          }
+        },
+        "still_active": {
+          "value": true,
+          "class": "directly-observed",
+          "source": "history::check_change_state",
+          "freshness": "live-at-build"
+        },
+        "rolled_back_at": {
+          "value": null,
+          "class": "unavailable",
+          "source": "history::AppliedChangeView",
+          "freshness": "not-applicable",
+          "not_applicable_reason": "This change has not been rolled back, so there is no rollback time for it to have."
+        },
+        "on_this_rig": {
+          "value": true,
+          "class": "inferred-bounded",
+          "source": "history::same_rig",
+          "freshness": "unstamped-cache"
+        },
+        "reversible": {
+          "value": true,
+          "class": "recorded-historically",
+          "source": "history::AppliedChangeView",
+          "observed_at": "2026-07-04T09:30:00Z",
+          "freshness": "stamped"
+        },
+        "restores": "Game Mode off"
+      }
+    ],
+    "ledger_note": "The Trust Ledger is the canonical record of what Compy changed and how to undo it. This model reads it; rollback continues to resolve from history.json alone."
+  },
+  "evidence": {
+    "built_at": "2026-09-06T12:00:00Z",
+    "answers": [
+      {
+        "answer": "What machine is this?",
+        "classes": [
+          "directly-observed",
+          "unavailable",
+          "derived-from-measurement"
+        ],
+        "unstamped_facts": 6,
+        "unknown_facts": 1,
+        "not_applicable_facts": 0
+      },
+      {
+        "answer": "What recently changed?",
+        "classes": [
+          "recorded-historically"
+        ],
+        "oldest_observed_at": "2026-08-20T00:00:00Z",
+        "newest_observed_at": "2026-08-20T00:00:00Z",
+        "unstamped_facts": 0,
+        "unknown_facts": 0,
+        "not_applicable_facts": 0
+      },
+      {
+        "answer": "What did Compy change?",
+        "classes": [
+          "recorded-historically",
+          "unavailable",
+          "directly-observed",
+          "inferred-bounded"
+        ],
+        "oldest_observed_at": "2026-07-04T09:30:00Z",
+        "newest_observed_at": "2026-07-06T09:30:00Z",
+        "unstamped_facts": 2,
+        "unknown_facts": 1,
+        "not_applicable_facts": 2
+      }
+    ],
+    "unknowns": [
+      {
+        "field": "identity.windows",
+        "source": "hardware::get_hardware_info",
+        "reason": "The Windows edition/build read returned nothing, so the OS version is unknown rather than assumed."
+      },
+      {
+        "field": "compy_changes[chg-2].on_this_rig",
+        "source": "history::AppliedChangeView",
+        "reason": "This row predates rig stamping, so which machine it was applied on is unknown."
+      }
+    ],
+    "classes_present": [
+      "directly-observed",
+      "recorded-historically",
+      "derived-from-measurement",
+      "inferred-bounded",
+      "unavailable"
+    ],
+    "vocabulary": [
+      "directly-observed",
+      "recorded-historically",
+      "derived-from-measurement",
+      "inferred-bounded",
+      "user-declared",
+      "unavailable"
+    ]
+  }
+}

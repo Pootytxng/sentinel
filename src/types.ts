@@ -97,6 +97,10 @@ export type AppliedChange = {
   snapshot: unknown;
   status: "applied" | "rolled_back";
   is_still_active: boolean;
+  // What the live re-check established (#392). `is_still_active` stays true for "unreadable" and
+  // "unrecognised" so a rollback is never hidden; only "off" is a read that came back not in effect.
+  // null when the row is not applied, so nothing was checked.
+  active_check?: "on" | "off" | "unreadable" | "unrecognised" | null;
   // Stamped when a change is rolled back (Intelligence Phase 2 — dates the rollback event in the
   // timeline). Additive, #[serde(default)] on the Rust side; absent/null for entries never undone.
   rolled_back_at?: string | null;
@@ -842,4 +846,180 @@ export type ComponentEvidenceReport = {
   components: ComponentEvidence[];
   /** Passthrough so a surface can tell "no sessions yet" from "sessions exist, nothing implicated". */
   sessions_considered: number;
+};
+
+// ── Machine Model (mirrors src-tauri/src/machine_model.rs — read-only command get_machine_model) ──
+// Wire shape only: snake_case fields, kebab-case enum values, and every field Rust skips when empty
+// is optional here. `src/machine-model-contract.test.ts` checks these against
+// `src/test/fixtures/machine-model.wire.json`, which a Rust test proves is exactly what serde emits.
+// Read it only through `src/data/machine-model.ts`.
+
+/** How a fact was come by. Not a confidence score. */
+export const EVIDENCE_CLASSES = [
+  "directly-observed",
+  "recorded-historically",
+  "derived-from-measurement",
+  "inferred-bounded",
+  "user-declared",
+  "unavailable",
+] as const;
+export type EvidenceClass = (typeof EVIDENCE_CLASSES)[number];
+
+/** Whether a fact carries its own time. `unstamped-cache` must never be shown as live. */
+export const FRESHNESS_VALUES = [
+  "stamped",
+  "live-at-build",
+  "unstamped-cache",
+  "undated-historical",
+  "not-applicable",
+] as const;
+export type Freshness = (typeof FRESHNESS_VALUES)[number];
+
+/** A producing domain's own word for a fact's state, carried through unchanged. */
+export type DomainVocabulary = {
+  vocabulary: string;
+  value: string;
+};
+
+/** `value` is null when unknown (then `unknown_reason` says why) or not applicable. */
+export type Fact<T> = {
+  value: T | null;
+  class: EvidenceClass;
+  source: string;
+  observed_at?: string;
+  freshness: Freshness;
+  unknown_reason?: string;
+  not_applicable_reason?: string;
+  domain?: DomainVocabulary;
+};
+
+export type ExcludedProducer = {
+  producer: string;
+  reason: string;
+};
+
+export type IdentityClaim = {
+  producer: string;
+  value: string;
+  observed_at?: string;
+  freshness: Freshness;
+};
+
+/** Two producers disagree; neither value overwrites the other. */
+export type IdentityDisagreement = {
+  field: string;
+  left: IdentityClaim;
+  right: IdentityClaim;
+  interpretation: string;
+};
+
+export type ComparedField = {
+  field: string;
+  against: string;
+};
+
+export type MachineIdentity = {
+  cpu: Fact<string>;
+  gpu: Fact<string>;
+  gpu_driver: Fact<string>;
+  ram_gb: Fact<number>;
+  display: Fact<string>;
+  windows: Fact<string>;
+  rig_hash: Fact<string>;
+  canonical_rule: string;
+  contributing_producers: string[];
+  excluded_producers: ExcludedProducer[];
+  compared_fields: ComparedField[];
+  disagreements: IdentityDisagreement[];
+};
+
+export type ChronologyEntry = {
+  /** The source record's own id (`IntelEvent.id`) — the row key (#450). */
+  id: string;
+  observed_at: string;
+  summary: string;
+  detail?: string;
+  event_type: string;
+  source: string;
+  scope: IntelEventScope;
+  /** [earlier, later] bounds when the exact moment was never witnessed. */
+  observed_between?: [string, string];
+  class: EvidenceClass;
+};
+
+export type ChangeChronology = {
+  recorded_from?: string;
+  recorded_from_source?: string;
+  identity_history_from?: string;
+  identity_snapshots: number;
+  total_events: number;
+  coverage_note: string;
+  entries: ChronologyEntry[];
+  dropped_unparseable: number;
+  causation_note: string;
+  /** Set when the chronology could not be read; never render that as "nothing changed". */
+  unknown_reason?: string;
+};
+
+export type CompyChangeFact = {
+  id: string;
+  title: string;
+  applied_at: Fact<string>;
+  status: Fact<string>;
+  still_active: Fact<boolean>;
+  rolled_back_at: Fact<string>;
+  on_this_rig: Fact<boolean>;
+  reversible: Fact<boolean>;
+  restores?: string;
+};
+
+export type CompyChangeTruth = {
+  total_recorded: number;
+  active_now: number;
+  in_effect_other_rig: number;
+  in_effect_rig_unknown: number;
+  in_effect_total: number;
+  applied_but_not_in_effect: number;
+  in_effect_unknown: number;
+  rolled_back: number;
+  on_this_rig: number;
+  not_on_this_rig: number;
+  rig_unknown: number;
+  changes: CompyChangeFact[];
+  ledger_note: string;
+  /** Set when the Trust Ledger could not be read; counts are then not "zero changes". */
+  ledger_unreadable?: string;
+};
+
+export type UnknownFact = {
+  field: string;
+  source: string;
+  reason: string;
+};
+
+export type AnswerEvidence = {
+  answer: string;
+  classes: EvidenceClass[];
+  oldest_observed_at?: string;
+  newest_observed_at?: string;
+  unstamped_facts: number;
+  unknown_facts: number;
+  not_applicable_facts: number;
+};
+
+export type EvidenceSummary = {
+  built_at: string;
+  answers: AnswerEvidence[];
+  unknowns: UnknownFact[];
+  classes_present: EvidenceClass[];
+  vocabulary: EvidenceClass[];
+};
+
+export type MachineModel = {
+  schema_version: number;
+  built_at: string;
+  identity: MachineIdentity;
+  chronology: ChangeChronology;
+  compy_changes: CompyChangeTruth;
+  evidence: EvidenceSummary;
 };

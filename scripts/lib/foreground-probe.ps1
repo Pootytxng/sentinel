@@ -181,6 +181,84 @@ function Get-ProcessFamily {
   return @($family)
 }
 
+# THE TEST RUNNER'S OWN TREE (2026-09-07) -- walked UP from this probe, and deliberately BOUNDED.
+#
+# A `npm test` run spawns hundreds of short-lived node children, each of which can allocate a console
+# window that blinks open and shut inside the 2-second measurement. Two of six runs recorded on
+# 2026-09-07 caught one mid-blink as a MINIMIZESTART, which the guard scored as "the owner's window
+# went down" and used to reject a push whose diff was two Rust files. That noise has to be named by
+# PROVENANCE, because the only other thing distinguishing it -- the window title -- is attacker- and
+# accident-controlled, and a guard that can be talked out of firing by a window title is not a guard.
+#
+# The walk stops at the first ancestor that is not tooling, and once a node-family process has been
+# seen it will not walk back OUT through a shell again. So the chain is
+# `probe powershell -> vitest worker -> vitest -> npm` and STOPS at the interactive shell that ran
+# `npm test`. Widening it to that shell (or worse, to explorer.exe) would put the owner's own windows
+# inside the "tooling" set, which is precisely the harm this guard exists to catch.
+function Get-RunnerAncestry {
+  param([int]$FromPid, [int]$MaxHops = 24)
+  $jsRunner = @{ node = $true; npm = $true; npx = $true; pnpm = $true; yarn = $true; bun = $true; deno = $true; vitest = $true }
+  $shellHop = @{ powershell = $true; pwsh = $true; cmd = $true; conhost = $true; sh = $true; bash = $true }
+  $out = New-Object System.Collections.ArrayList
+  $seen = @{}
+  $cur = $FromPid
+  $sawRunner = $false
+  for ($i = 0; $i -lt $MaxHops; $i++) {
+    if ($cur -le 0 -or $seen.ContainsKey($cur)) { break }
+    $seen[$cur] = $true
+    $name = $null
+    try { $name = (Get-Process -Id $cur -ErrorAction Stop).ProcessName.ToLowerInvariant() } catch { break }
+    if ($jsRunner.ContainsKey($name)) { $sawRunner = $true }
+    elseif (-not ($shellHop.ContainsKey($name) -and -not $sawRunner)) { break }
+    [void]$out.Add($cur)
+    $cur = [CompyProbe.EventHook]::ParentOf($cur)
+  }
+  # Shells are hops TOWARD a runner, never proof of one. Returning them with no runner found arms
+  # the exclusion on the probe's own shell -- measured 2026-09-07 under a bash-based harness and
+  # from a hand-run terminal, four shell pids and zero runners -- which is fail-OPEN, the opposite
+  # of what isRunnerTooling documents. No runner seen => exclude nothing.
+  if (-not $sawRunner) { return @() }
+  return @($out)
+}
+
+# pid -> parent pid for everything the trace mentions, so a window's ancestry can still be walked
+# after the process that owned it is gone. The first link of a transient console's chain can ONLY
+# come from the hook's event-time read (see foreground-events.cs `ppid`); the rest is walked here,
+# inside the try block, while the tree is still alive.
+function Get-ParentMap {
+  param([object[]]$Measurements, [int]$MaxHops = 24)
+  $map = @{}
+  $roots = New-Object System.Collections.Generic.List[int]
+  foreach ($m in $Measurements) {
+    if (-not $m) { continue }
+    foreach ($e in $m.events) {
+      $evPid = [int]$e.pid
+      $evPpid = [int]$e.ppid
+      if ($evPid -gt 0 -and $evPpid -gt 0) { $map[$evPid] = $evPpid; $roots.Add($evPpid) }
+      elseif ($evPid -gt 0) { $roots.Add($evPid) }
+      if ([int]$e.rootPid -gt 0) { $roots.Add([int]$e.rootPid) }
+    }
+  }
+  foreach ($start in $roots) {
+    $cur = $start
+    for ($i = 0; $i -lt $MaxHops; $i++) {
+      if ($cur -le 0) { break }
+      if ($map.ContainsKey($cur)) { $cur = $map[$cur]; continue }
+      $parent = [CompyProbe.EventHook]::ParentOf($cur)
+      if ($parent -le 0) { break }
+      $map[$cur] = $parent
+      $cur = $parent
+    }
+  }
+  # STRING keys, and this is not cosmetic: ConvertTo-Json refuses a dictionary with non-string keys
+  # outright (NonStringKeyInDictionary), which would take the WHOLE probe result down -- every
+  # measurement would come back "foreground probe produced no result". Caught 2026-09-07 by running
+  # the real probe end-to-end; no pure test could have seen it.
+  $out = [ordered]@{}
+  foreach ($k in ($map.Keys | Sort-Object)) { $out["$k"] = $map[$k] }
+  return $out
+}
+
 # Turn one measurement's slice of the raw event list into the trace the caller sees: process names
 # resolved, every foreground/focus/minimise event kept (whoever owns it -- the window that LOST the
 # foreground matters as much as the one that took it), and window lifecycle kept only for the
@@ -205,6 +283,9 @@ function Resolve-Trace {
       hwnd    = ("0x{0:X}" -f $e.hwnd)
       pid     = $e.pid
       proc    = $(if ($Names.ContainsKey($e.pid)) { $Names[$e.pid] } else { $null })
+      # Read when the event ARRIVED, not now: `proc` above is already $null for every transient
+      # console this exists to identify, because those processes are gone by the time we get here.
+      ppid    = $e.ppid
       family  = $inFamily
       cls     = $e.cls
       title   = $e.title
@@ -269,12 +350,18 @@ try {
   foreach ($p in Get-Process) { $names[[int]$p.Id] = $p.ProcessName }
   Resolve-Trace -Hook $hook -Measurement $initial -Family $family -Names $names
   if ($relaunch) { Resolve-Trace -Hook $hook -Measurement $relaunch -Family $family -Names $names }
+  $runnerPids = @(Get-RunnerAncestry -FromPid $PID)
+  $parents = Get-ParentMap -Measurements @($initial, $relaunch)
 
   [ordered]@{
     filePath        = $FilePath
     arguments       = ($ArgumentList -join " ")
     launchedPid     = $proc.Id
     familyPids      = $family
+    # The two fields that let a reader tell this run's own tooling noise from the owner's window.
+    # An EMPTY runnerPids excludes nothing at all -- see summarizeTrace: unknown provenance is harm.
+    runnerPids      = $runnerPids
+    parents         = $parents
     rightsGranted   = $started.RightsGranted
     initial         = $initial
     relaunch        = $relaunch

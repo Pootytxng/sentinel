@@ -10,13 +10,21 @@
 //   node scripts/usage-audit.mjs                 -> stdout report, 80 newest sessions
 //   node scripts/usage-audit.mjs --sessions 120  -> widen the window
 //   node scripts/usage-audit.mjs --report        -> also write docs/usage-audit/REPORT-<date>.md
+//                                                   and docs/usage-audit/LATEST.md
 //
-// Health flags it raises (the audit's standing findings, 2026-07-13):
-//   - peak main-lane context > 200k in any session (owner rule: hand off at 80-120k)
-//   - subagent runs on opus/fable (routing law: cheapest capable model, sonnet default)
-//   - docs/BACKLOG.md > 120 KB (boot tax — archive steering-log cycles per its retention rule)
-//   - "File has not been read yet" Edit errors (read-before-edit discipline)
-//   - any worktree's src-tauri/target over ~20 GB (build-output bloat, report-only, 2026-08-20)
+// Health flags it raises, in the order it pushes them (.claude/skills/usage-audit/SKILL.md says how
+// to act on each):
+//   - 🔴/🟢 any session's peak main-lane context past CLAUDE_CODE_AUTO_COMPACT_WINDOW (flagPeakContext();
+//     compaction itself fires below it, at nativeCompactCeiling()) — owner rule: hand off at 80-120k
+//   - 🔴 too little working headroom: the p75 first-turn floor against that ceiling (usableHeadroom())
+//   - 🟡 subagent runs on opus/fable (routing law: cheapest capable model, sonnet default)
+//   - 🔴/🟢 average carried context per turn as a share of the ceiling
+//   - 🟡 a doc in DOC_BYTE_BUDGETS over its byte TARGET (boot tax; the flag names that doc's gate)
+//   - 🟡 Rust build-output bloat, report-only: one worktree's src-tauri/target, an idle one, and the
+//     fleet total (diskBloatFlags() in scripts/lib/disk-bloat.mjs)
+//   - 🔴/🟢 a per-turn floor step since the previous docs/usage-audit/REPORT-*.md
+//   - 🟡 "File has not been read yet" Edit errors above an average of one per session (read-before-edit
+//     discipline)
 
 import { createReadStream, readdirSync, statSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
@@ -191,8 +199,9 @@ const floors = rows.map((r) => r.firstCtx).filter((n) => n > 0).sort((a, b) => a
 const floorP75 = floors.length >= 3 ? floors[Math.floor(floors.length * 0.75)] : 0;
 const room = floorP75 ? usableHeadroom(windowInfo, floorP75) : null;
 if (room && !room.ok) {
+  // No marker here: a failing usableHeadroom() reason already opens with its own 🔴.
   flags.push(
-    `🔴 ${room.reason} Sessions are configured to thrash: ${floors.length} measured floors, p75 ${K(floorP75)}, ` +
+    `${room.reason} Sessions are configured to thrash: ${floors.length} measured floors, p75 ${K(floorP75)}, ` +
       `worst ${K(floors[floors.length - 1])}. Raise CLAUDE_CODE_AUTO_COMPACT_WINDOW or cut the per-turn payload.`,
   );
 }
@@ -229,11 +238,13 @@ if (ceiling && carriedPerTurn > 0.55 * ceiling) {
   flags.push(`🟢 avg carried context ${K(carriedPerTurn)}/turn = ${(100 * carriedPerTurn / ceiling).toFixed(0)}% of the ${K(ceiling)} ceiling.`);
 }
 
-// Doc boot tax, in BYTES. These are TARGETS, not the gate. The gate is $byteBudgets in
-// scripts/doc-budget.ps1, and for three docs it currently holds a RATCHET (their 2026-08-18 size)
-// rather than the target, because bringing them down is a content call. Deliberately two different
-// numbers with two different jobs: the gate blocks growth, this line keeps nagging toward the goal.
-// Naming them both "budget" is how docs drift, so this one says target and points at the gate.
+// Doc boot tax, in BYTES. These are TARGETS, not gates, and each row names its doc's real byte gate:
+// $byteBudgets in scripts/doc-budget.ps1 for BACKLOG, RELEASE_STATE and OWNER_ACTION_CHECKLIST, and
+// MAX_BYTES in src/claude-md-laws-guard.test.ts for CLAUDE.md, which doc-budget.ps1 leaves out of
+// $byteBudgets on purpose (one ceiling, one owner). Deliberately two different numbers with two
+// different jobs: the gate blocks growth, this line keeps nagging toward the goal. Where a gate is
+// already tighter than its target, that row cannot fire while the gate passes. Naming them both
+// "budget" is how docs drift, so this one says target and points at the gate.
 //
 // The line budgets in scripts/doc-budget.ps1 are structurally blind to bytes:
 // docs/BACKLOG.md passed 1286/1400 lines while weighing 142 KB, because a line budget cannot see a
@@ -241,19 +252,20 @@ if (ceiling && carriedPerTurn > 0.55 * ceiling) {
 // 48 KB is not invented: it is MAX_UNBOUNDED_BYTES in .claude/hooks/big-read-guard.mjs — the point
 // past which this repo already refuses to read a file whole. BACKLOG is read by section by law, so
 // it keeps the wider 120 KB line this audit has always used.
+const DOC_BUDGET_PS1 = "$byteBudgets in scripts/doc-budget.ps1";
 const DOC_BYTE_BUDGETS = [
-  ["docs/BACKLOG.md", 120 * 1024, "archive old steering-log cycles to docs/BACKLOG_ARCHIVE.md per its retention rule"],
-  ["docs/RELEASE_STATE.md", 48 * 1024, "past big-read-guard's own unbounded-read budget — it can no longer be read whole"],
+  ["docs/BACKLOG.md", 120 * 1024, "archive old steering-log cycles to docs/BACKLOG_ARCHIVE.md per its retention rule", DOC_BUDGET_PS1],
+  ["docs/RELEASE_STATE.md", 48 * 1024, "past big-read-guard's own unbounded-read budget — it can no longer be read whole", DOC_BUDGET_PS1],
   // 20 KB ≈ Anthropic's published "keep CLAUDE.md under ~200 lines" at this repo's ~110 bytes/line
   // (code.claude.com/docs/en/costs). It is auto-loaded on every boot of every session, so it is the
   // most expensive byte in the repo.
-  ["CLAUDE.md", 20 * 1024, "auto-loaded on every session boot; move detail into a skill"],
-  ["docs/OWNER_ACTION_CHECKLIST.md", 48 * 1024, "archive completed items"],
+  ["CLAUDE.md", 20 * 1024, "auto-loaded on every session boot; move detail into a skill", "MAX_BYTES in src/claude-md-laws-guard.test.ts"],
+  ["docs/OWNER_ACTION_CHECKLIST.md", 48 * 1024, "archive completed items", DOC_BUDGET_PS1],
 ];
-for (const [rel, budget, advice] of DOC_BYTE_BUDGETS) {
+for (const [rel, budget, advice, gate] of DOC_BYTE_BUDGETS) {
   try {
     const sz = statSync(join(REPO, rel)).size;
-    if (sz > budget) flags.push(`🟡 ${rel} is ${(sz / 1024).toFixed(1)} KB (> ${(budget / 1024).toFixed(0)} KB byte TARGET; the gate's current ratchet is in scripts/doc-budget.ps1) — ${advice}.`);
+    if (sz > budget) flags.push(`🟡 ${rel} is ${(sz / 1024).toFixed(1)} KB (> ${(budget / 1024).toFixed(0)} KB byte TARGET; its byte gate is ${gate}) — ${advice}.`);
   } catch { /* absent is not a failure */ }
 }
 

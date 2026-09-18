@@ -1,0 +1,65 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Transition executor only, under HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483) step 7, lane #317 (#313), and HQ's disposition on the PR itself (https://github.com/Pootytxng/sentinel/pull/317#issuecomment-5683579940: cherry-pick the code/test commits onto a fresh branch off main, drop the coordination-doc commits, re-measure, land, close as superseded). Closing a superseded PR merges nothing and moves no ref; the branch stays on origin.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/313#issuecomment-5693333996",
+  "leaseEvidenceNote": "Ownership claim on #313 (the lane's issue) whose Write scope is the PR's three test files (scripts/hookspath-fleet-guard.test.mjs, scripts/doc-path-escape-guard.test.mjs, scripts/verify-release-state-guard.test.mjs), this receipt file and the disposition record for the PR's ref; the three files are the delta already on main at currentHead, the receipt and the record are the only writes left.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Inspected from C:/Users/Kuya/code/sentinel/.claude/worktrees/hq-handoff-h-2026-09-15-4144e8 at receipt time: origin fetched, origin/main = currentHead, PR #317 open (draft) at head 19f458d4 on lane/guard-budget-313, this folder clean except this receipt and the record, no build/test/install process running.",
+  "transition": "close-superseded-pr",
+  "currentHead": "bf7bc328fcb52bbaedf5a485c95eaff72281e2a7",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "bf7bc328fcb52bbaedf5a485c95eaff72281e2a7",
+      "evidence": "logs/verify-local-2026-09-16T07-00-55Z.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "bf7bc328fcb52bbaedf5a485c95eaff72281e2a7",
+      "evidence": "logs/verify-local-2026-09-16T07-00-55Z.log"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "bf7bc328fcb52bbaedf5a485c95eaff72281e2a7",
+      "evidence": "logs/verify-local-2026-09-16T07-00-55Z.log"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "bf7bc328fcb52bbaedf5a485c95eaff72281e2a7",
+      "evidence": "logs/verify-local-2026-09-16T07-00-55Z.log"
+    }
+  ],
+  "gateEvidenceNote": "The full local pre-push gate (scripts/verify-local.ps1) ran at bf7bc328 in this worktree when that head was pushed to main and passed: logs/verify-local-2026-09-16T07-00-55Z.log. The gate at PR #317's own head 19f458d4 was not run: that head is 298+ commits behind main and CONFLICTING on four coordination docs (HQ's measurement on the PR), and its exact head lacks the two repairs the review requires, so the exact PR head could not land as-is.",
+  "independentReview": {
+    "practical": false,
+    "reason": "No reviewer is needed for a merge that does not happen: this transition closes PR #317 without merging. Its five code/test commits (45e1d025, e9af4faa test-file-only, e28870da, 6eea762a, 3b31a96a; author and dates preserved) reached main as 039f397c, ce1669b8, b1ab293a, b9871061 and 3fd72e9f, followed by bf7bc328, the two repairs its exact-head review (https://github.com/Pootytxng/sentinel/pull/317#issuecomment-5574065089, changes requested) asked for: the escape guard widened to env-rooted paths as a regex literal, and the 30s testTimeout replaced by a per-fixture git-spawn assertion; both falsified before the commit and all passed the full local gate on the push. The merge-pr route was refused because that review requested changes at the PR head, the PR is a conflicting draft, and it is claude-code reviewing claude-code, which this gate rejects; a non-claude-code review at main's head is still owed before #313 closes, and that ask is on the Handoff."
+  },
+  "pr": 317,
+  "prHead": "19f458d4",
+  "issue": 313,
+  "kind": "lane",
+  "branch": "lane/guard-budget-313",
+  "supersededBy": "no PR: the PR's code/test delta (scripts/hookspath-fleet-guard.test.mjs: one seeded template copied per fixture with git worktree repair, the independence test and its assertions as the PR's own review corrected them; scripts/doc-path-escape-guard.test.mjs: the new guard; scripts/verify-release-state-guard.test.mjs: the 60s per-test ceiling on the citation check) is on main as 039f397c, ce1669b8, b1ab293a, b9871061 and 3fd72e9f plus the repair bf7bc328. The PR's thirteen docs/work-control commits (docs/BRANCH_DISPOSITIONS.md, docs/SESSION_HANDOFF.md, archives, the draft-PR receipt) are not landed: HQ ordered them dropped, main has rewritten every one of those files since, and the receipt belongs to the PR route not taken.",
+  "hqDisposition": "https://github.com/Pootytxng/sentinel/pull/317#issuecomment-5683579940",
+  "dispositionNote": "HQ step 7 said cherry-pick only the code/test commits onto a fresh branch, re-measure the fleet guard's cost, get an exact-head independent review, land, close the PR as superseded, and retire the CLAIMED row in docs/dispositions/. Re-measured on this desk at --maxWorkers=1: main 6.39s/6.37s of tests (37 tests), this head 3.38s/3.34s (39 tests), 47% off. The exact-head review at 19f458d4 requested changes on two findings; both are the repair commit. It is claude-code reviewing claude-code, which scripts/work-control-gate.mjs refuses for a merge-pr receipt. Issue #313 stays open in Review until a non-claude-code reviewer covers main's head.",
+  "refDisposition": "The branch ref lane/guard-budget-313 stays on origin: the HQ handoff forbids ref deletion beyond land-pr's own prune and this landing did not go through land-pr. docs/dispositions/lane__guard-budget-313.json, CLAIMED until now, is retired to UNLANDED by merge-tree, kept only until the owner prunes it: the code is on main by cherry-pick plus the review's repairs, but the ref carries thirteen coordination-doc commits that will never land and the repairs changed the same test files after the picks, so merging the ref now would both regress the repairs and resurrect rewritten docs. LANDED (a merge-tree no-op) is false and SUPERSEDED (prunable) fails scripts/branch-disposition-audit.mjs while the ref is still on origin. Owner action: git push origin --delete lane/guard-budget-313, then delete that record."
+}

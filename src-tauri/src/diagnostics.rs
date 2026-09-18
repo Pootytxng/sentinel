@@ -605,24 +605,32 @@ pub(crate) fn machine_model_section(
     entries.push(DiagnosticEntry {
         label: "Recorded changes".into(),
         value: format!(
-            "{} recorded · {} identity snapshots",
+            "{} events in this view · {} identity snapshots",
             m.chronology.total_events, m.chronology.identity_snapshots
         ),
-        note: Some(match m.chronology.entries.first() {
-            Some(e) => format!("Most recent: {} ({}). {}", e.summary, e.observed_at, m.chronology.causation_note),
+        note: Some(format!("{} {}", m.chronology.coverage_note, match m.chronology.entries.first() {
+            // A non-empty view can still be missing a whole producer (an unreadable ledger), so the
+            // reason rides along whenever the model names one (#446).
+            Some(e) => format!(
+                "Most recent in this view: {} ({}). {}{}",
+                e.summary,
+                e.observed_at,
+                m.chronology.causation_note,
+                m.chronology.unknown_reason.as_deref().map(|r| format!(" {r}")).unwrap_or_default()
+            ),
             None => m
                 .chronology
                 .unknown_reason
                 .clone()
                 .unwrap_or_else(|| m.chronology.causation_note.to_string()),
-        }),
+        })),
     });
     if let Some(from) = m.chronology.recorded_from.as_ref() {
         entries.push(DiagnosticEntry {
             label: "Earliest dated record".into(),
             value: from.clone(),
             note: Some(format!(
-                "The earliest DATED evidence still retained, from {}. Undated records cannot be placed in time, so this is not a claim that nothing earlier is retained — still less that nothing changed before it.{}",
+                "The earliest DATED evidence in this view, from {}. Undated records cannot be placed in time, so this is not a claim that nothing earlier is retained — still less that nothing changed before it.{}",
                 m.chronology.recorded_from_source.unwrap_or("an unnamed source"),
                 match m.chronology.identity_history_from.as_deref() {
                     Some(id_from) if Some(id_from) != m.chronology.recorded_from.as_deref() =>
@@ -635,13 +643,23 @@ pub(crate) fn machine_model_section(
 
     // 3. What did Compy change?
     let c = &m.compy_changes;
+    // An unreadable ledger has no counts to show: every zero would be a claim nothing supports
+    // (#446). A readable one separates "read as off" from "could not be checked", because only
+    // the first is evidence the setting is no longer in effect — and neither says WHO changed it
+    // (#392).
     entries.push(DiagnosticEntry {
         label: "Changes Compy applied".into(),
-        value: format!(
-            "{} recorded · {} active on this PC · {} rolled back · {} reverted outside Compy",
-            c.total_recorded, c.active_now, c.rolled_back, c.applied_but_not_in_effect
-        ),
-        note: Some(c.ledger_note.into()),
+        value: match c.ledger_unreadable {
+            Some(_) => "Unreadable".into(),
+            None => format!(
+                "{} recorded · {} active on this PC · {} rolled back · {} no longer in effect · {} could not be checked",
+                c.total_recorded, c.active_now, c.rolled_back, c.applied_but_not_in_effect, c.in_effect_unknown
+            ),
+        },
+        note: Some(match c.ledger_unreadable.as_deref() {
+            Some(reason) => format!("{reason} {}", c.ledger_note),
+            None => c.ledger_note.into(),
+        }),
     });
     entries.push(DiagnosticEntry {
         label: "In effect, other or unknown PC".into(),
@@ -856,4 +874,3 @@ mod diagnostics_tests {
         assert!(saw_noteless, "at least one entry exercises the skip_serializing_if path");
     }
 }
-

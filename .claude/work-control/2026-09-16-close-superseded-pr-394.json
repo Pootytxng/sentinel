@@ -1,0 +1,65 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Transition executor only, under HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483) step 7, lane #394 (#318), re-routed by the Handoff https://github.com/Pootytxng/sentinel/issues/318#issuecomment-5692185284. Closing a superseded PR merges nothing and moves no ref; the branch stays on origin.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/318#issuecomment-5692199371",
+  "leaseEvidenceNote": "Ownership claim on #318 (the lane's issue) whose Write scope is docs/RELEASE_STATE.md, docs/archive/RELEASE_STATE_HISTORY.md and this receipt file; the two doc paths are the delta already on main at currentHead, the receipt is the only write left.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Inspected from C:/Users/Kuya/code/sentinel/.claude/worktrees/hq-handoff-h-2026-09-15-4144e8 at receipt time: origin fetched, origin/main = currentHead, PR #394 open at head 59e63fe3 on lane/mangled-path-repair, this folder clean except this receipt, no build/test/install process running.",
+  "transition": "close-superseded-pr",
+  "currentHead": "ddc5296bef19173a3e6358dfd0ccbc743a602fda",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "ddc5296bef19173a3e6358dfd0ccbc743a602fda",
+      "evidence": "logs/verify-local-2026-09-16T04-49-26Z.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "ddc5296bef19173a3e6358dfd0ccbc743a602fda",
+      "evidence": "logs/verify-local-2026-09-16T04-49-26Z.log"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "ddc5296bef19173a3e6358dfd0ccbc743a602fda",
+      "evidence": "logs/verify-local-2026-09-16T04-49-26Z.log"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "ddc5296bef19173a3e6358dfd0ccbc743a602fda",
+      "evidence": "logs/verify-local-2026-09-16T04-49-26Z.log"
+    }
+  ],
+  "gateEvidenceNote": "The full local pre-push gate (scripts/verify-local.ps1) ran at ddc5296b in this worktree when that head was pushed to main and passed: logs/verify-local-2026-09-16T04-49-26Z.log. The gate at PR #394's own head 59e63fe3 is RED for a baseline reason outside its delta (logs/verify-local-2026-09-16T03-50-29Z.log, branch-disposition record for a ref pruned since 2026-09-07); that is one of the two reasons the PR is not merged.",
+  "independentReview": {
+    "practical": false,
+    "reason": "No reviewer is needed for a merge that does not happen: this transition closes PR #394 without merging. Its one commit (59e63fe3, claude-code, 2026-09-07) reached main by cherry-pick as 3de55b2c with author and date preserved, followed by the repair commit ddc5296b that completes #318; both passed the full local gate on the push. The merge-pr route was refused because the only exact-head review (https://github.com/Pootytxng/sentinel/pull/394#issuecomment-5691686998) is claude-code, the same executor identity as the commit, which this gate rejects; a non-claude-code review at main's head is still owed before #318 closes, and that ask is on the Handoff."
+  },
+  "pr": 394,
+  "prHead": "59e63fe3",
+  "issue": 318,
+  "kind": "lane",
+  "branch": "lane/mangled-path-repair",
+  "supersededBy": "no PR: the PR's commit 59e63fe3 is on main as the cherry-pick 3de55b2c (identical delta, author and date preserved), and ddc5296b on main completes the #318 repair (three further mangled paths, the d7fed835 desk row archived, the RELEASE_STATE.md promise resolved).",
+  "hqDisposition": "https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483",
+  "dispositionNote": "HQ step 7 said review and land #394. Two measured blockers changed the route (https://github.com/Pootytxng/sentinel/issues/318#issuecomment-5692185284): the local gate at the PR's exact head is RED on a baseline disposition record for a since-pruned ref, and scripts/work-control-gate.mjs refuses a merge-pr receipt whose reviewer is the commit's own executor identity. The bytes landed by cherry-pick on main instead, the same mechanism HQ prescribes for #317 and #306. Issue #318 stays open in Review until a non-claude-code reviewer covers main's head.",
+  "refDisposition": "The branch ref lane/mangled-path-repair stays on origin; the HQ handoff forbids ref deletion beyond land-pr's own prune, and docs/dispositions/ carries no row for this ref (a record is owed only once a judgment exists; this close records the judgment: superseded by cherry-pick, ref is a prune candidate for the owner)."
+}

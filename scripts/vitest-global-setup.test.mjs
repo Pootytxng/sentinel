@@ -99,7 +99,8 @@ describe("vitest global setup (#339): origin is asked once, before the pool", ()
 
   it("wiring: the config registers the setup, and rule C injects instead of measuring inside the pool", () => {
     const config = read("vitest.config.ts");
-    expect(config).toContain('globalSetup: ["./scripts/lib/vitest-global-setup.mjs"]');
+    // Registered inside the globalSetup array, wherever #457's filter guard (which runs first) sits.
+    expect(config).toMatch(/globalSetup: \[[^\]]*"\.\/scripts\/lib\/vitest-global-setup\.mjs"[^\]]*\]/);
     const consumer = read(`scripts/${CONSUMER}.test.mjs`);
     expect(consumer).toMatch(/import \{[^}]*\binject\b[^}]*\} from "vitest"/);
     expect(consumer).toContain("providedLsRemote(inject(ORIGIN_HEADS_KEY))");

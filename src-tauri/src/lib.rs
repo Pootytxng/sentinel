@@ -174,12 +174,31 @@ pub(crate) fn game_mode_enabled() -> bool {
 }
 
 pub(crate) fn service_running(name: &str) -> bool {
-    crate::actions::quiet_command("sc")
+    service_running_checked(name).unwrap_or(false)
+}
+
+/// Like `service_running`, but `None` when `sc` produced nothing it can be read from — the spawn
+/// failed, or the output carries neither a STATE line nor the "service does not exist" code. The
+/// infallible reader folds that into "not running", which for a disable-a-service change reads as
+/// "still in effect" when nothing was read at all (#392).
+pub(crate) fn service_running_checked(name: &str) -> Option<bool> {
+    let output = crate::actions::quiet_command("sc")
         .args(["query", name])
         .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains("RUNNING"))
-        .unwrap_or(false)
+        .ok()?;
+    parse_sc_query(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Pure half of `service_running_checked`. `FAILED 1060` is "the service does not exist", which is
+/// a real answer (it is not running), not a failed read.
+fn parse_sc_query(stdout: &str) -> Option<bool> {
+    if stdout.contains("STATE") {
+        Some(stdout.contains("RUNNING"))
+    } else if stdout.contains("FAILED 1060") {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 pub(crate) fn visual_effects_for_best_performance() -> bool {
@@ -289,6 +308,16 @@ mod checked_prior_reader_tests {
         if let Ok(v) = reserved_storage_enabled_checked() {
             assert_eq!(v, reserved_storage_enabled());
         }
+    }
+
+    #[test]
+    fn sc_query_parse_separates_a_failed_read_from_a_stopped_or_missing_service() {
+        assert_eq!(parse_sc_query("SERVICE_NAME: SysMain\r\n        STATE              : 4  RUNNING\r\n"), Some(true));
+        assert_eq!(parse_sc_query("SERVICE_NAME: SysMain\r\n        STATE              : 1  STOPPED\r\n"), Some(false));
+        assert_eq!(parse_sc_query("[SC] EnumQueryServicesStatus:OpenService FAILED 1060:\r\n"), Some(false));
+        // Access denied, an empty pipe, anything unrecognised: nothing was read, so no answer.
+        assert_eq!(parse_sc_query("[SC] OpenSCManager FAILED 5:\r\n\r\nAccess is denied.\r\n"), None);
+        assert_eq!(parse_sc_query(""), None);
     }
 
     #[test]
@@ -685,15 +714,21 @@ fn gaming_session_is_live() -> bool {
 // State-detection helpers consumed by check_state_kind / check_change_active.
 
 pub(crate) fn usb_selective_suspend_off_on_ac() -> bool {
-    query_power_setting_ac_dc(PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND)
-        .map(|(ac, _)| ac == 0)
-        .unwrap_or(false)
+    usb_selective_suspend_off_on_ac_checked().unwrap_or(false)
+}
+
+/// `None` when `powercfg` returned no readable AC value (#392).
+pub(crate) fn usb_selective_suspend_off_on_ac_checked() -> Option<bool> {
+    query_power_setting_ac_dc(PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND).map(|(ac, _)| ac == 0)
 }
 
 pub(crate) fn pcie_aspm_off_on_ac() -> bool {
-    query_power_setting_ac_dc(PWR_SUBGROUP_PCIE, PWR_SETTING_PCIE_ASPM)
-        .map(|(ac, _)| ac == 0)
-        .unwrap_or(false)
+    pcie_aspm_off_on_ac_checked().unwrap_or(false)
+}
+
+/// `None` when `powercfg` returned no readable AC value (#392).
+pub(crate) fn pcie_aspm_off_on_ac_checked() -> Option<bool> {
+    query_power_setting_ac_dc(PWR_SUBGROUP_PCIE, PWR_SETTING_PCIE_ASPM).map(|(ac, _)| ac == 0)
 }
 
 pub(crate) fn eee_disabled_on_any_eligible_adapter() -> bool {

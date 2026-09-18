@@ -1,0 +1,79 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` has three commits, ada8412e, d378e74d and 78df1897. This claude-code session wrote all three under git identity claude-code <claude-code@desk.local>. The owner's task brief asked for the three statements PR #461's review left open to be re-verified against their sources, and for only the ones still stale to be fixed through a claimed lane. The same session lands the PR under that brief.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/467#issuecomment-5726731766",
+  "leaseEvidenceNote": "The operative Ownership claim on #467 is 5726731766 (2026-09-18T07:28:40Z, expires 18:07Z). It supersedes 5725932933 and only widens the write scope by the three receipt files. It names this folder, branch claude/467-stale-skill-statements, and a write scope of .claude/skills/gate-drift-audit/SKILL.md, .claude/skills/usage-audit/SKILL.md, scripts/usage-audit.mjs, and .claude/work-control/2026-09-18-{mark-pr-ready-472,merge-pr-472,close-issue-467}.json. `node scripts/scope-drift-gate.mjs --issue 467 --refresh` read it OK from the thread right after it was posted. The board item for #467 reads Active, Lane Claude Code, with Worktree / branch set to this folder @ this branch. The session-root hook's verdict for this session is ok for #467; its writer lease names this session (977c3f30).",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18T07:31Z with the REST files list of every open PR. Open PRs 471, 470, 464, 444 and 438 touch none of the three skill/script paths and none of the three receipt paths. PR 472 touches exactly the three skill/script paths. Every open PR is based on main; none is based on claude/467-stale-skill-statements.",
+  "inheritedWork": false,
+  "currentHead": "78df1897df2cb585f2ee017598a3d34dae1b559d",
+  "pr": 472,
+  "issue": 467,
+  "kind": "lane",
+  "branch": "claude/467-stale-skill-statements",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched 2026-09-18T07:31Z. origin/main reads 945e2cf7. The PR's base and merge-base is 449ddab0 (the merge of PR #469). The only commit on main since then is 945e2cf7, the #469 landing-receipts carrier. It touches three files, all under .claude/work-control/ (close-issue-466, mark-pr-ready-469, merge-pr-469), none of them in this PR. `git merge-tree --write-tree origin/main HEAD` exits 0, so the merge tree is the reviewed head's tree plus those three receipts. GitHub reads PR #472 as draft, head 78df1897, base main, touching exactly the three skill/script files, with 0 closingIssuesReferences.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\quirky-goodall-781898, with one writer. Its core.hooksPath is set per worktree (config.worktree) to the relative .githooks. No other worktree's config was touched.",
+    "branch": "claude/467-stale-skill-statements at 78df1897. origin/claude/467-stale-skill-statements reads the same commit after the fetch.",
+    "dirtyState": "`git status --short` was clean before this receipt was written. The only untracked file since is this receipt; the logs/ captures are gitignored.",
+    "liveProcesses": "No app run, dev server, install or build of this lane is running. The pre-push gate finished with PASS at 07:26Z. The reviewer's scoped vitest runs had finished before this receipt was gated."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "78df1897df2cb585f2ee017598a3d34dae1b559d",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/quirky-goodall-781898/logs/verify-local-2026-09-18T07-17-03Z.log:9-44 (SHA-256 8ae6269eca63c3f4086377650a9d4e7b28f7c90ca3ab00bb3eb3e60094f47487)",
+      "summary": "447 test files passed; 7337 passed / 4 skipped (7341). This includes the guards that read the three changed files and the fleet guards that failed in the earlier runs."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "78df1897df2cb585f2ee017598a3d34dae1b559d",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/quirky-goodall-781898/logs/verify-local-2026-09-18T07-17-03Z.log:45-71 (SHA-256 8ae6269eca63c3f4086377650a9d4e7b28f7c90ca3ab00bb3eb3e60094f47487)",
+      "summary": "The frontend type-check and build stage passed; vite built clean."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "78df1897df2cb585f2ee017598a3d34dae1b559d",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/quirky-goodall-781898/logs/verify-local-2026-09-18T07-17-03Z.log:72-1788 (SHA-256 8ae6269eca63c3f4086377650a9d4e7b28f7c90ca3ab00bb3eb3e60094f47487)",
+      "summary": "3 suites: 1327 passed; 0 failed; 24 ignored. No Rust file changed in this PR; the stage ran because it is part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "78df1897df2cb585f2ee017598a3d34dae1b559d",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/quirky-goodall-781898/logs/verify-local-2026-09-18T07-17-03Z.log:1789-2073 (SHA-256 8ae6269eca63c3f4086377650a9d4e7b28f7c90ca3ab00bb3eb3e60094f47487)",
+      "summary": "The clippy stage finished at line 2073 with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of scripts/verify-local.ps1 at this exact head, from the push that created the remote branch. The log header names this worktree as the tree it gated. It has all six LOCAL CHECK stage markers (lines 3, 5, 9, 45, 72, 1789) and zero matches for `test result: FAILED`, `panicked`, `error[E`, ` FAIL ` or `×` across its 2073 lines. The PASS banner is written to the console, not the log. The console capture is kept beside the log at logs/push-console-467.log (SHA-256 5b907689a8da67b4e6de83cfc78d21131621a7e933b7b78e88941ded90c89de9). It reads `LOCAL CHECK RESULT: PASS` at line 2078 and the new-branch line at 2085, and git exited 0. This was the fourth gate run in this folder. The three earlier runs were at older heads and failed; their logs and console captures are kept. verify-local-2026-09-18T06-14-27Z.log (a9718c0c…, head 33f56942, push-console-467-attempt1.log): 1 failed, scripts/hookspath-fleet-guard.test.mjs, because a peer worktree's core.hooksPath was pinned (the #405 pattern); the peer repointed its own folder and this session touched no other worktree's config. verify-local-2026-09-18T06-34-22Z.log (e3c898c0…, head c4c95cae, attempt2): 7 failed, all 15-second test timeouts while a peer lane's gate ran concurrently. verify-local-2026-09-18T06-43-36Z.log (33264592…, head c4c95cae, attempt3): 5 failed, 4 timeouts plus scripts/work-control-receipt-preservation.test.mjs, which flagged the peer's then-uncommitted mark-pr-ready-469.json; the peer's own carrier commit cleared it and this session left that file alone. The run at this head passes every one of those files. Since the PR base 449ddab0, main has moved to 945e2cf7, a carrier that touches three receipt JSONs only; the merge tree exits clean (see inspection.remoteState), so no separate merge-tree gate is needed.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "measured",
+    "reconciled": true,
+    "measurement": "Log lines 5-7 read: 3 changed paths since origin/main measured against the claim on #467 (cache); OK: every changed path is inside the three claimed skill/script files. Re-measured after the landing claim 5726731766 with `node scripts/scope-drift-gate.mjs --issue 467 --refresh`: OK against the widened scope, read from the thread."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "78df1897df2cb585f2ee017598a3d34dae1b559d",
+    "verdict": "PASS: no findings",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/472#issuecomment-5726723515",
+    "reviewerNote": "A read-only reviewer seat that wrote nothing in this change. At 78df1897 it confirmed HEAD, a clean tree, and exactly three commits touching the same three paths. It checked the new sentence (usage-audit/SKILL.md:84-87) against the hook's thrash block and found it matches: the session refreshes docs/SESSION_HANDOFF.md, commits, and launches its successor by the route scripts/successor-route.mjs prints, asking the owner for no /clear or relay. It confirmed scripts/successor-route.mjs exists and is tracked, and that the checkpoint description still matches the hook's non-thrash block. It ran the 7 guard files that read these paths: 181 tests passed. doc-budget.ps1: ALL PASS. No commit body places a closing keyword next to an issue number. SKILL.md has no BOM and no CRLF or lone CR. The review history is on the PR. At 33f56942 it returned FAIL: the doc-byte bullet named the wrong gate for CLAUDE.md. c4c95cae fixed that and passed. The rebase onto 449ddab0 turned 33f56942/c4c95cae into ada8412e/d378e74d (range-diff `=`), and at d378e74d it returned FAIL: the hook note carried thrash wording that #469 had made stale. 78df1897 fixed it. The PASS at 78df1897 is the operative verdict."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "PR #472 has 0 closingIssuesReferences. The body says \"Refs #467\" and places no closing keyword next to any issue number."
+}

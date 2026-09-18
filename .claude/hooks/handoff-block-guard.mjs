@@ -9,6 +9,13 @@
 // index. Under the standing toolchain-over-prose law, a rule missed that often gets a guard, and
 // under bug->guard the guard lands before the fix counts.
 //
+// UPDATE (2026-09-17/18, #466). The owner's next order: stop pasting a prompt for HIM to carry into
+// a new tab — launch the next session yourself. The contract is now a tab verdict plus a `Successor:
+// launched|chip|none — <reason>` line, and a "launched"/"chip" claim is checked against the turn's
+// OWN tool calls (lib.turnLaunches / lib.checkSuccessorProof) — saying "launched" with no
+// run_scheduled_task (or equivalent) call behind it is the same half-truth #270 already covers for a
+// hollow label, aimed at a claim instead of an empty field.
+//
 // COST SHAPE. This blocks at most ONCE per turn, and only when the final message is actually
 // missing a half. A compliant turn never sees it and pays nothing — the correct shape for a guard
 // whose job is to become invisible.
@@ -60,8 +67,20 @@ try {
 const text = lib.lastAssistantText(tail);
 if (text === null) process.exit(0); // nothing owner-facing was said; nothing to check
 
-const { ok, missing } = lib.checkHandoffBlock(text);
-if (ok) process.exit(0);
+const { missing: textMissing, successor } = lib.checkHandoffBlock(text);
+const missing = [...textMissing];
+
+// A well-formed Successor: line is only half the claim — the other half is that the turn actually
+// made the call it describes. Only checked once the line itself parses, so a malformed line reports
+// as "successor line" (fix the sentence) rather than "launched proof" (a confusing ask when there is
+// no parseable claim yet to hold proof against).
+if (successor?.kind === "launched" || successor?.kind === "chip") {
+  const launches = lib.turnLaunches(tail);
+  const proof = lib.checkSuccessorProof(successor, launches);
+  missing.push(...proof.missing);
+}
+
+if (missing.length === 0) process.exit(0);
 
 // ONE BULLET PER ACTUALLY-MISSING HALF (#270). This used to print all four every time, regardless
 // of what `missing` held, under the instruction "Append a short block". So a reply that already
@@ -70,15 +89,24 @@ if (ok) process.exit(0);
 // handoffs. His words: "quite literally redundant". A Stop hook can only ever append to a message
 // already sent, so the block it asks for must be exactly the part that is absent and nothing else.
 const BULLET = {
-  'tab verdict ("safe to close" / "keep this tab open because ...")':
+  "tab verdict":
     `- This tab: "safe to close" OR "keep this tab open because <reason>". Say it about the VS Code ` +
     `tab in front of him, not about the session — "leave session open" is not a verdict he can act on.`,
-  "next action for the following session":
-    `- Next session: the specific next task, paste-ready, naming files/branches/PRs by path or ` +
-    `number. If nothing is outstanding, say so plainly AND recommend what is worth doing instead — ` +
-    `"nothing left" with no direction is what he asked to stop seeing.`,
-  "which lane that next action is on (same lane / a new lane / name it)":
-    `- Lane: does the next action continue THIS lane or start a different one? Name the branch or PR.`,
+  "successor line":
+    `- Successor: launch the next session yourself before this reply ends; never paste a prompt for ` +
+    `him to carry. If the next step is this lane's own, keep working instead of stopping. Otherwise ` +
+    `run \`node scripts/successor-route.mjs\` and follow it: a launcher routine (update_scheduled_task ` +
+    `with the preamble plus the task, then run_scheduled_task), or a spawn_task chip. Then write ` +
+    `"Successor: launched — <what runs>", "Successor: chip — <what it starts>" or "Successor: none — ` +
+    `<why>". "none" fits only when the next step is owner-bound, plan usage (get_usage) is at or above ` +
+    `80%, or nothing is ordered or queued.`,
+  "launched proof":
+    `- Your reply claims "Successor: launched" but this turn shows no successful ` +
+    `run_scheduled_task/start_session/hand_off_to_session call. Either make that call now and keep ` +
+    `the "launched" line, or change the line to what actually happened.`,
+  "chip proof":
+    `- Your reply claims "Successor: chip" but this turn shows no successful spawn_task call. Either ` +
+    `make that call now and keep the "chip" line, or change the line to what actually happened.`,
 };
 
 const bullets = missing.map((m) => BULLET[m]).filter(Boolean).join("\n");

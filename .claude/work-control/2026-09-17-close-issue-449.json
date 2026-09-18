@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #449 work is c68e95d8 and f6a6047e, landed on main through PR #454 (merge a1f5d63f, receipt carrier fe5c2056). This claude-code session wrote both commits under git identity claude-code <claude-code@desk.local> on the owner's chat order \"build 449\". It closes the issue on the owner's chat order of 2026-09-17 (\"close 449\") and writes only this receipt.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/449#issuecomment-5717595554",
+  "leaseEvidenceNote": "Handoff 5717595554 ends \"- Claim: released\". It releases the carrier claim 5717529349 and the build-lane claim 5717439002 (which superseded 5717278897). This receipt is written uncommitted in this folder. After the close, it goes to main in a receipt-only carrier under an Ownership claim that names only this path.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-17 with `gh pr list --state open`. Open PR 444 touches only hooks, scripts and tools/entry files, and PR 438 touches only tester docs. Neither touches this receipt path.",
+  "inheritedWork": false,
+  "currentHead": "fe5c20567f369d711e3adf07e4b6e9b3b01ddd22",
+  "issue": 449,
+  "pr": 454,
+  "kind": "lane",
+  "branch": "main",
+  "branchNote": "The work is on main through PR #454 (merge a1f5d63f, receipt carrier fe5c2056). This worktree's local branch claude/449-machine-model-ts-contract is at the same commit as origin/main.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched 2026-09-17. origin/main and the worktree HEAD both read fe5c20567f369d711e3adf07e4b6e9b3b01ddd22.",
+    "worktree": "Linked worktree with one writer, core.hooksPath set per worktree to .githooks, and core.bare false.",
+    "branch": "claude/449-machine-model-ts-contract at fe5c2056, the same commit as origin/main.",
+    "dirtyState": "`git status --porcelain` was clean before this receipt was written.",
+    "liveProcesses": "No app run, dev server or build of this lane. The pre-push gate for fe5c2056 and the reviewer's test runs had finished."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "fe5c20567f369d711e3adf07e4b6e9b3b01ddd22",
+      "evidence": "logs/verify-local-2026-09-17T16-08-43Z.log:38-39 (SHA-256 cabb82d88851d8559c9337953eb317d0ee6e6f677543cd5dbe5dfb1e2513139b)",
+      "summary": "445 test files passed; 7257 passed / 4 skipped (7261); 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "fe5c20567f369d711e3adf07e4b6e9b3b01ddd22",
+      "evidence": "logs/verify-local-2026-09-17T16-08-43Z.log:44-69 (SHA-256 cabb82d88851d8559c9337953eb317d0ee6e6f677543cd5dbe5dfb1e2513139b)",
+      "summary": "tsc && vite build; built in 11.98s at :69."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "fe5c20567f369d711e3adf07e4b6e9b3b01ddd22",
+      "evidence": "logs/verify-local-2026-09-17T16-08-43Z.log:71-1428 (SHA-256 cabb82d88851d8559c9337953eb317d0ee6e6f677543cd5dbe5dfb1e2513139b)",
+      "summary": "1326 passed; 0 failed; 24 ignored; 0 filtered out."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "fe5c20567f369d711e3adf07e4b6e9b3b01ddd22",
+      "evidence": "logs/verify-local-2026-09-17T16-08-43Z.log:1443-1446 (SHA-256 cabb82d88851d8559c9337953eb317d0ee6e6f677543cd5dbe5dfb1e2513139b)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the full pre-push run of `scripts/verify-local.ps1` that carried fe5c2056 to main. The console printed `LOCAL CHECK RESULT: PASS`, and git exited 0. All six stage markers are present (lines 3, 5, 8, 44, 71, 1443), with no `FAILED`, `panicked` or `error[E` line.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "Log line 6 reads \"not measured\" because this folder has no session record. It was measured explicitly before that push with `node scripts/scope-drift-gate.mjs --issue 449 --refresh`, which returned OK: the changed paths are the two #454 receipts named in claim 5717529349."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "fe5c20567f369d711e3adf07e4b6e9b3b01ddd22",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/issues/449#issuecomment-5718453896",
+    "reviewerNote": "This is an exact-head review of main at fe5c2056 by a read-only reviewer that wrote none of the #449 commits. It confirmed that origin/main is fe5c2056 and that the only change since the approved PR head f6a6047e is the two receipt files. At that head it ran cargo test machine_model (42 passed) and the two new vitest files (16 passed), and confirmed #449's acceptance criteria are met on main. The same reviewer approved PR #454 at c68e95d8 and f6a6047e (comment 5717511414)."
+  },
+  "transition": "close-issue",
+  "headBindingNote": "The receipt is bound to fe5c2056, the current head of main. The gate ran at this head, and the review names it. The work commits c68e95d8 and f6a6047e are ancestors of it."
+}

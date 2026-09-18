@@ -1,9 +1,9 @@
-# SESSION HANDOFF — paste-ready prompt for the next session
+# SESSION HANDOFF — the resume point a launched successor reads first
 
 > Live pointer only. Product truth: [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md). Gate truth:
 > [`RELEASE_STATE.md`](RELEASE_STATE.md). Queue: [`BACKLOG.md`](BACKLOG.md) (ledger, P0 first, derived
 > from `product/ROADMAP.md`). Owner asks: [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
-> Budget 120 lines; this file is AT cap — trim before adding a line. Replace this file, never append.
+> Budget 116 lines, 2 spare — trim before adding a line. Replace this file, never append.
 > **Durable instructions only**: no fleet counts, no lane names, nothing another lane must repair (#291).
 
 ## Where the train is standing
@@ -13,29 +13,24 @@
 | | |
 |---|---|
 | Installed | `d7fed835`, stamp byte-found in the installed exe (`d7fed835 · release · shell 0.9.26`, ship-reinstall OK), one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Shipped | Q9b Stage 2 (#258): `src/surfaces/CaseEvidenceConsent.tsx` — the local preview/edit/one-submission-consent screen over Stage 1's canonical bytes, fixture-only, no command/HTTP/queue/persistence, gate still hard-false. Its guard now strips NOTHING and reads every byte: three independent reviews each defeated a comment-stripper and hid a real `invoke()`. Before it: Stage 1 (#252), rule D (#243), the Q9b contract (#247/#248/#249) |
-| Self-review | PASS 12/12 at `39f23847` over all six fixture states at 1484px, 200% zoom and 420px; nothing rendered has changed since |
 | Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push |
-| Harvest | Wave 1 Lane B (#224/#225) LANDED: PR #401 merged to `main` at `3fe7a029` (receipt `.claude/work-control/2026-09-07-merge-pr-401.json`, independent review APPROVE at `aed5bcac`); PR #294 closed as superseded and its ref pruned, so its content is on `main` and no ref carries it. Acceptance stays the owner's: look at Health/Test in the installed `d7fed835` build, accept or veto (#224 proof boundary, #225 step 7). |
+| Records | Q9b Stage 2 (#258), its 12/12 self-review and the Wave 1 Lane B landing (#224/#225, PR #401 at `3fe7a029`) are CLOSED and archived verbatim in [`archive/SESSION_HANDOFF_HISTORY.md`](archive/SESSION_HANDOFF_HISTORY.md) §2026-09-15; owner acceptance of Health/Test in the installed build is tracked in [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B8/§D_health, nowhere else |
 
 ## The rule that came out of the walk — read this before touching Health
 
 **DIR-1a: offering help is conditional on evidence** — a front door built only out of symptoms tells
 a healthy PC's owner they are in the wrong place, and *"i want more fps"* is a legitimate reason to be
-here. The shipped implementation must still answer *"is this framing earned?"* because the evidence-first and no-scareware laws in `docs/PRODUCT_CONSTITUTION.md` now supply the product authority.
-Historical rationale is preserved at `docs/UI_VISION_BACKLOG.md` §"⭐ DIR-1a"; it is evidence, not
-priority or work authorization. Shipped `b21bc18b`; guard
-`src/surfaces/home-console-front-door-gate.test.tsx`, falsified three ways. **DIR-1b:** the attention
-state carries a one-line ROUTE to the room that acts on it (#180 §C untouched — the detail paragraph
-still does not render on Health).
+here. Product authority is now the evidence-first and no-scareware laws in `docs/PRODUCT_CONSTITUTION.md`;
+shipped `b21bc18b`, guard `src/surfaces/home-console-front-door-gate.test.tsx`; the walk's rationale and
+falsification record are archived (§2026-09-15). **DIR-1b:** the attention state carries a one-line ROUTE
+to the room that acts on it (#180 §C untouched — the detail paragraph still does not render on Health).
 
 **Rooms are `Health · Live · History · Test`**, never the ids (`home`/`play`/`learn`/`lab` are
 persistence keys). **Read the rail from `src/design/homeRail.ts`, never from a doc.**
 
 **SOURCE-reachability is not USER-reachability.** A component can be dark one level up while **three
-guards stay green** (vendor-honesty proved only "not wrapped in a condition"; the affordance census
-counted 80 unreachable strings as live; the mono census described CSS nothing rendered). When a guard
-certifies a surface, check a route reaches it — and **an audit is not a work order.**
+guards stay green** (three 2026-08 cases, archived §2026-09-15). When a guard certifies a surface, check
+a route reaches it — and **an audit is not a work order.**
 
 ## Before you touch the UI — the fixture route, and the guards already covering copy
 
@@ -77,14 +72,15 @@ and it is how the self-reviewer reaches a state the shipped app cannot be put in
 
 ## THE NEXT STEP, exactly
 
-**Q9b Stage 3 (#287) BUILT** — `scripts/lib/case-endpoint/` validator, handler and migration, proved
-local/staged ONLY, never deployed (§11), via PR #289. **Stage 4 is NEXT**: the Tauri send command;
-deployment is Stage 7, owner territory. Spec: `docs/superpowers/specs/2026-08-29-q9b-tier3-case-evidence-contract.md` §11.
+**Phase 2 Shared Machine Model v1 is the active train.** #449 and #450 are CLOSED on `main`; **#451 is
+NEXT** — Health identity rows read `model.identity` facts, showing `unknown_reason` rather than "—" and
+naming both producers on a disagreement. Then #452, then #453 (guards + live exit proof). #456 is
+non-blocking debt; `src/data/machine-model.test.ts` lacks an `enabled`-branch test, carried into #451.
+**Q9b Stage 4** (Tauri send command, #287 spec §11) is parked behind Phase 2, not abandoned.
 
-**The Instrument Bench plan is NOT an option and must never be offered as one.** It was BUILT
-(`403be45`) and the owner REJECTED it as the Lab on 2026-07-09; the live Test room is the Ops
-Console (`LabConsole`), and its proving bench already ships armed as `ExperimentBench`.
-`src/superseded-plan-citation-guard.test.ts` fails the build on any live doc citing a dead plan.
+**The Instrument Bench plan is NOT an option and must never be offered as one** — built (`403be45`),
+REJECTED as the Lab 2026-07-09; the live Test room is the Ops Console (`LabConsole`), its bench ships
+as `ExperimentBench`. `src/superseded-plan-citation-guard.test.ts` reds any live doc citing it.
 
 **Do NOT touch** Tier 1 plan tasks 10–11 (independent security review + arming). Owner territory,
 filed in `docs/OWNER_ACTION_CHECKLIST.md` §C so arming can never happen quietly. Still dark, three
@@ -104,16 +100,17 @@ they do not independently establish priority, approval, or authorization.
   reachable. A checkout on a branch is safe: local branches live in the common `.git` and outlive
   their worktree, so deleting the folder loses nothing.
 - **Two lanes that overlap are a git question, not a remembered one.** Ask
-  `git merge-base --is-ancestor <inner> <outer>` before dropping either, both ways — "shares N
-  commits, diverging at `<sha>`" is what two lanes that merely overlap actually do, and neither
-  containing the other is the common answer. `refs/backup/*` is not a substitute for asking.
+  `git merge-base --is-ancestor <inner> <outer>` both ways before dropping either — neither
+  containing the other is the common answer, and `refs/backup/*` is not a substitute for asking.
+- **A claim the gate cannot READ is no claim** — `scripts/scope-drift-gate.mjs` prints "not measured"
+  when no line of the Ownership claim starts with `### Ownership claim`, or when its paths hang off
+  nested bullets: the Write scope is ONE bullet plus continuation lines, backticked
+  (`scripts/lib/claim-scope.mjs`). A posted claim is never edited — post a superseding one.
 
 ## Waiting on the owner — two arming gates, nothing else
 
-**Money items are ON HOLD by his standing rule (2026-08-25) and are deliberately NOT listed here as
-blockers** — `compy.gg`, the Ko-fi URL and Compy Pro pricing live in
-`docs/OWNER_ACTION_CHECKLIST.md` §B/§C and must stop being reported as things he owes. The two
-DIR-1 walk questions are ANSWERED and shipped; nothing design-side is parked on him.
+**Money items are ON HOLD (standing rule 2026-08-25) and are NOT blockers** — `compy.gg`, the Ko-fi URL
+and Pro pricing live in `docs/OWNER_ACTION_CHECKLIST.md` §B/§C. DIR-1 is ANSWERED and shipped.
 
 - **Receipts telemetry arming** (§C) and **Tier 1 arming** (§C) — signing-key custody, the catalog
   domain, and the arming itself, after an independent security review. Only the arming is his.

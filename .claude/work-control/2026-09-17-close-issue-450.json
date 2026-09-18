@@ -1,0 +1,92 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The #450 work is 9c3c7f0b, ba3e008a, 75cf3f6b and 5ff25fec, written by a claude-code session in the worktree .claude/worktrees/land-pr-387-machine-model-6fe51a under git identity claude-code <claude-code@desk.local>. That session ended after posting its final review and did not merge. This is a different claude-code session, in a different folder, which merged PR #455 as 7886a6c2 under .claude/work-control/2026-09-17-merge-pr-455.json and carried that receipt to main as 9263b172. It closes the issue on the owner's chat order of 2026-09-17, the ChatGPT HQ execution audit whose named next mutation is \"the already-proven PR #455 landing\". It writes no product code: its whole write scope is the two receipt paths.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/450#issuecomment-5722429786",
+  "leaseEvidenceNote": "Handoff 5722429786 ends \"- Claim: released\". It releases the receipt-carrier claim 5722285833. The landing claim 5722102798 was released earlier by Handoff 5722277956, and the build lane's own claim 5719118594 was superseded by 5722102798 and released with it. No lease is live on #450 when this receipt is gated. This receipt is written uncommitted in this folder; after the close it goes to main in a second receipt-only carrier under a fresh Ownership claim naming only this path.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-17 with `gh pr list --repo Pootytxng/sentinel --state open`. The only open PRs are 444 (.claude/hooks, scripts, tools/entry) and 438 (tester docs). Neither touches this receipt path and neither references #450. No open PR is based on any #450 branch; the remote ref claude/450-blackbook-machine-model was pruned by scripts/land-pr.mjs in the same run that merged PR #455.",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": {
+    "repository": "Pootytxng/sentinel; canonical remote origin. Verified by `git remote -v` in this folder.",
+    "remoteState": "Fetched 2026-09-17 immediately after the carrier push. origin/main and the worktree HEAD both read 9263b1727f8b5ea9f1aaaf8f22f6dd7873ca2ee8, re-confirmed independently by the reviewer at the start and again at the end of its pass. The push output reads `7886a6c2..9263b172  HEAD -> main`, a fast-forward. GitHub reads #450 as OPEN with no open PR referencing it.",
+    "worktree": "Linked worktree .claude/worktrees/hq-handoff-h-2026-09-15-4144e8, one writer. core.bare is false. core.hooksPath now reads `.githooks`, this checkout's own, verified by `git config --get core.hooksPath` by this session and independently by the reviewer, which also confirmed .githooks/pre-push exists here, is -rwxr-xr-x and passes `test -x`. It previously pointed at the main checkout's absolute .githooks; scripts/hookspath-fleet-guard.test.mjs refused the first carrier push over exactly that, and the config was repointed with the guard's own prescribed `git config --worktree core.hooksPath .githooks` on this checkout alone. No other worktree's config was touched, which stays owner-hands. The guard then passed 39/39, and all 18 registered worktrees now prove a usable pre-push gate.",
+    "branch": "claude/450-landing at 9263b172, the same commit as origin/main. The build lane keeps claude/450-blackbook-machine-model at 5ff25fec in its own folder; that commit is an ancestor of main through merge 7886a6c2.",
+    "dirtyState": "`git status --porcelain` was empty after the carrier push and was captured as empty by the reviewer both before and after its own pass, across a full cargo compile and three vitest runs. This receipt is the only file this lease now writes.",
+    "liveProcesses": "No app run, dev server or build of this lane. No node or claude process holds the build lane's folder. The carrier push's gate run and the reviewer's scoped test runs had both finished before this receipt was written."
+  },
+  "currentHead": "9263b1727f8b5ea9f1aaaf8f22f6dd7873ca2ee8",
+  "issue": 450,
+  "pr": 455,
+  "kind": "lane",
+  "branch": "claude/450-landing",
+  "branchNote": "The #450 work is on main through PR #455 (merge 7886a6c2, receipt carrier 9263b172). This worktree's local branch stands at the same commit as origin/main.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "9263b1727f8b5ea9f1aaaf8f22f6dd7873ca2ee8",
+      "evidence": "logs/verify-local-2026-09-17T22-59-21Z.log:8-43 (SHA-256 a7a90db5014b6abf983e0ab8e91330d001ab5f03694ccc92826f4b33149d472d)",
+      "summary": "445 test files passed (445); 7272 passed / 4 skipped (7276); 0 failed. Counts read at lines 38-39."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "9263b1727f8b5ea9f1aaaf8f22f6dd7873ca2ee8",
+      "evidence": "logs/verify-local-2026-09-17T22-59-21Z.log:44-70 (SHA-256 a7a90db5014b6abf983e0ab8e91330d001ab5f03694ccc92826f4b33149d472d)",
+      "summary": "frontend type-check and build stage; completed with no error line."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "9263b1727f8b5ea9f1aaaf8f22f6dd7873ca2ee8",
+      "evidence": "logs/verify-local-2026-09-17T22-59-21Z.log:71-1441 (SHA-256 a7a90db5014b6abf983e0ab8e91330d001ab5f03694ccc92826f4b33149d472d)",
+      "summary": "line 1429: test result: ok. 1327 passed; 0 failed; 24 ignored; 0 measured; 0 filtered out."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "9263b1727f8b5ea9f1aaaf8f22f6dd7873ca2ee8",
+      "evidence": "logs/verify-local-2026-09-17T22-59-21Z.log:1444-1446 (SHA-256 a7a90db5014b6abf983e0ab8e91330d001ab5f03694ccc92826f4b33149d472d)",
+      "summary": "The clippy stage compiled and finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of scripts/verify-local.ps1 that carried 9263b172 to main, run in THIS folder, so the log's own header names this worktree as the tree it gated. All six LOCAL CHECK stage markers are present at lines 3, 5, 8, 44, 71 and 1444, and the file contains zero matches for `test result: FAILED`, `panicked`, `error[E` or `FAILED` across all 1446 lines. The log file itself carries no result banner: scripts/verify-local.ps1:255 emits `LOCAL CHECK RESULT: PASS` with Write-Host, which goes to the console host and not to the redirected log. That banner was captured in this push's console output, so the PASS is stated explicitly and not merely inferred from the absence of failure markers. The reviewer flagged the missing banner honestly as something it could not resolve from the log alone; this note resolves it. The log and its hash were read by this session and independently re-hashed by the reviewer to the same value.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "Line 6 of the gate log reads \"not measured -- no session record for this folder (launch through tools/entry, or pass --issue)\". This folder has no session record, which is also why the compy-entry hook reports FOLDER_UNCLAIMED throughout; that notice is advisory and .githooks/pre-push contains no ownership check. Measured explicitly instead with `node scripts/scope-drift-gate.mjs --issue 450 --refresh` immediately before the carrier push, which returned OK: 1 changed path, inside the claim's two receipt paths.",
+    "carrierRecheck": "scope-drift must be re-measured from the second carrier's head before that push, not inherited from this reading."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "9263b1727f8b5ea9f1aaaf8f22f6dd7873ca2ee8",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/issues/450#issuecomment-5722427302",
+    "reviewerNote": "An exact-head review of main at 9263b172 by a read-only reviewer-only seat that wrote none of the #450 commits and none of the receipts. It confirmed HEAD and origin/main both read 9263b172, that `git diff 7886a6c2..HEAD --name-status` returns exactly one line -- A .claude/work-control/2026-09-17-merge-pr-455.json, 94 insertions, 0 deletions -- and that no source, test, locale or actions.rs file changed in that range. It re-established #450's acceptance from source rather than deferring to the earlier verdicts: BlackbookV2.tsx sources rows via useMachineModel with no direct invoke( left in the file, machine_model.rs copies the source record's id through and exempts EventScope::Observed from the display cap with both behaviours pinned by named tests, and actions.rs is absent from the whole six-commit range 9c3c7f0b^..9263b172. It executed the three blackbook suites (3 files / 40 passed), the hookspath fleet guard (39 passed) and cargo test machine_model (43 passed, exit 0). Its git status --porcelain was empty before and after. Two warnings, neither a defect in this head: the log carries no PASS banner, resolved above; and `vitest run` drops an unmatched file argument silently, which the reviewer hit because the review prompt named a stale path for ledger-health-blackbook-guard.test.tsx. Current gate exposure to that is nil -- no gate script passes explicit file paths to vitest, verify-local.ps1 runs the whole suite, and scripts/verify-release-gate.test.mjs:220 already pins that the single run covers the hooks and pipeline guards -- but it is a real instance of the class and is filed rather than fixed, because this lease is receipt-only.",
+    "priorReviewNote": "Three earlier reviews remain real evidence for the commits they cover and are recorded here as supporting, not as the gate-satisfying review, because none sits at 9263b172: the acceptance pass on merged main at 7886a6c2 (issuecomment-5722277073, rust-tauri-reviewer, VERDICT PASS, all eight criteria CONFIRMED); the frontend-ipc-contract-auditor APPROVE WITH WARNINGS at the pre-merge head 5ff25fec (pull/455#issuecomment-5722190155), which satisfied the merge gate; and the self-reviewer visual PASS at ba3e008a (issuecomment-5719263131), which covered five rendered states against the three required and included a controlled regression proving the one-voice guard is real."
+  },
+  "transition": "close-issue",
+  "acceptanceNote": "All eight of #450's acceptance criteria were confirmed on merged main at 7886a6c2 by a non-author seat (issuecomment-5722277073) and re-confirmed in substance at 9263b172 by the review this receipt cites. The self-review criterion is satisfied by the self-reviewer PASS at ba3e008a. Nothing in #450 is left open by this close.",
+  "carriedWorkNote": "One item from the pre-merge review is deliberately carried rather than closed: src/data/machine-model.test.ts has no direct unit test of the useMachineModel(_, {enabled}) branch -- no enabled:false no-invoke case, none for the enabled-to-disabled reset at machine-model.ts:67-70, and none for re-enabling. It is not one of #450's acceptance criteria. It is carried to slice 3, #451, the next reader of that hook. Fixing it on the reviewed head would have invalidated the review at 5ff25fec and cost a second full gate run.",
+  "headBindingNote": "The receipt is bound to 9263b172: git rev-parse HEAD in this folder reads it, origin carries it on refs/heads/main so it is durably reachable, the gate ran at it, and the independent review names it. The work commits 9c3c7f0b, ba3e008a, 75cf3f6b and 5ff25fec and the merge 7886a6c2 are all ancestors of it."
+}

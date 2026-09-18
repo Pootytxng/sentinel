@@ -21,6 +21,12 @@ namespace CompyProbe
     public long root;       // GetAncestor(GA_ROOT): the top-level window this one lives in
     public int rootPid;     // ...and who owns THAT (cross-process parenting shows up here)
     public int fgPid;       // for FOREGROUND: who owns the new foreground window
+    // The event process's PARENT, read AT EVENT TIME. This field cannot be reconstructed later: a
+    // vitest run's transient console windows belong to processes that are already gone by the time
+    // Resolve-Trace runs (recorded 2026-09-07, `proc: null` on every one of them), so the instant the
+    // event arrives is the only moment their ancestry exists to be read. It is what lets the guard
+    // tell a tooling console apart from the owner's window WITHOUT trusting a window title.
+    public int ppid;
   }
 
   public class EventHook : IDisposable
@@ -40,6 +46,20 @@ namespace CompyProbe
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr h);
+    [DllImport("ntdll.dll")] static extern int NtQueryInformationProcess(IntPtr h, int cls, ref PROCESS_BASIC_INFORMATION info, int len, out int written);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_BASIC_INFORMATION
+    {
+      public IntPtr ExitStatus;
+      public IntPtr PebBaseAddress;
+      public IntPtr AffinityMask;
+      public IntPtr BasePriority;
+      public IntPtr UniqueProcessId;
+      public IntPtr InheritedFromUniqueProcessId;
+    }
 
     const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
@@ -53,6 +73,10 @@ namespace CompyProbe
     const uint QS_ALLINPUT = 0x04FF;
     const uint MWMO_INPUTAVAILABLE = 0x0004;
     const uint PM_REMOVE = 0x0001;
+    // The weakest right that can answer "who is your parent" -- no elevation needed for a process
+    // running as the same user, which is every process this probe cares about.
+    const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    const int ProcessBasicInformation = 0;
 
     public readonly List<WinEvent> Events = new List<WinEvent>();
     public int Cap = 6000;
@@ -60,6 +84,14 @@ namespace CompyProbe
     public readonly Stopwatch Clock = new Stopwatch();
     // Set by the probe once the poll loop starts, so event stamps share the poll's zero.
     public long ZeroMs = 0;
+
+    // pid -> parent pid, memoised so a burst of events from one process costs one syscall. The cache
+    // is static, so it lives for the whole PowerShell process (settle, measurement and relaunch),
+    // not for one 6-second window. A cached failure (0) is fail-closed: it never matches, so the
+    // window is never excluded. A stale non-zero entry after pid reuse could in principle discount
+    // an unrelated console (reuse + a console window + a minimise, all inside one run), which the
+    // short process lifetime makes unlikely rather than impossible.
+    static readonly Dictionary<int, int> _parents = new Dictionary<int, int>();
 
     WinEventProc _proc;      // held in a field: the GC must not collect the delegate under the hook
     readonly List<IntPtr> _hooks = new List<IntPtr>();
@@ -125,7 +157,42 @@ namespace CompyProbe
       e.root = root.ToInt64();
       uint rootPid = 0; if (root != IntPtr.Zero) GetWindowThreadProcessId(root, out rootPid); e.rootPid = (int)rootPid;
       if (ev == EVENT_SYSTEM_FOREGROUND) { uint fg = 0; GetWindowThreadProcessId(GetForegroundWindow(), out fg); e.fgPid = (int)fg; }
+      e.ppid = ParentOf(e.pid);
       Events.Add(e);
+    }
+
+    // 0 when the parent cannot be read (the process died, or the query failed). 0 is the FAIL-CLOSED
+    // answer: an unresolvable ancestry never matches the runner's tree, so the event is scored as
+    // harm rather than discounted. Never throws -- a WinEvent callback that throws takes the probe
+    // down and loses the whole measurement.
+    public static int ParentOf(int pid)
+    {
+      if (pid <= 0) return 0;
+      lock (_parents)
+      {
+        int cached;
+        if (_parents.TryGetValue(pid, out cached)) return cached;
+      }
+      int parent = 0;
+      IntPtr h = IntPtr.Zero;
+      try
+      {
+        h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)pid);
+        if (h != IntPtr.Zero)
+        {
+          PROCESS_BASIC_INFORMATION info = new PROCESS_BASIC_INFORMATION();
+          int written;
+          if (NtQueryInformationProcess(h, ProcessBasicInformation, ref info, Marshal.SizeOf(info), out written) == 0)
+          {
+            long p = info.InheritedFromUniqueProcessId.ToInt64();
+            if (p > 0 && p <= int.MaxValue) parent = (int)p;
+          }
+        }
+      }
+      catch { parent = 0; }
+      finally { if (h != IntPtr.Zero) CloseHandle(h); }
+      lock (_parents) { _parents[pid] = parent; }
+      return parent;
     }
 
     static string Name(uint ev)

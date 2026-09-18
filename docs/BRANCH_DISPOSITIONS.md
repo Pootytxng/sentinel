@@ -9,9 +9,6 @@
 > single-branch clone (which is what `actions/checkout@v4` makes by default) may not say a ref is
 > gone, because it never looked. See `refSetCoverage` in that script.
 
-It exists because `docs/BACKLOG.md` claimed *"every branch has a verified disposition"* while nothing
-had ever checked one ([#65](https://github.com/Pootytxng/sentinel/issues/65)); this makes it true.
-
 ## How a disposition is proven
 
 The authoritative test is **merge-tree**, not ahead/behind: lanes land through PRs, so the commits
@@ -30,8 +27,7 @@ to merge blind".
 
 **A branch that landed without a fast-forward stops being a no-op the moment `main` moves**, and
 rebase is not the safe half: neither `--squash` nor `--rebase` leaves an ancestry link, so a later
-three-way merge reintroduces the branch's own stale copies (it hit this file twice on 2026-08-05 and
-destroyed an unreproducible proof on 2026-08-06 — [`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md)).
+three-way merge reintroduces the branch's own stale copies (measured twice, 2026-08-05/06; archived).
 
 **A MERGED row is therefore perishable: prune the ref in the same push as recording the merge**,
 rather than leave a row that fails its own audit on the next unrelated edit — including the edit that
@@ -44,8 +40,7 @@ any open PR whose base is deleted (#337); `scripts/prune-order-guard.test.mjs` f
 **The base is `origin/main`, not the local `main`**, and the audit reads local remote-tracking refs,
 so it reflects the last `git fetch` rather than the server. A local `main` is a checkout owned by
 whichever worktree holds it, and a merge that lands on the trunk does not update it — that worktree
-stays on the commit it had until someone pulls. On 2026-08-05 a `main` 4 commits behind made the
-audit call a genuinely-merged branch unmerged. Pinned in `scripts/branch-disposition-audit.test.mjs`.
+stays on the commit it had until someone pulls (2026-08-05 incident archived). Pinned in `scripts/branch-disposition-audit.test.mjs`.
 
 | disposition | meaning | action |
 | --- | --- | --- |
@@ -66,10 +61,10 @@ in the sweeps archive). A lane adds `docs/dispositions/<slug>.json` and touches 
 A record carries `ref`, `disposition`, `issue` and `evidence` — the same four columns, one file each.
 JSON rather than Markdown on purpose: the live-doc prose rules read documents, and a mechanical
 record is not a document making a claim about the fleet. **Counts are computed, never written.** Run
-`node scripts/branch-disposition-audit.mjs` for the live split; a number written beside an
-append-only record is wrong by the next commit, which it was twice on 2026-09-01 alone (#309/#312).
+`node scripts/branch-disposition-audit.mjs` for the live split; a number written beside an append-only record is wrong by the next commit (#309/#312, archived).
 
-Sweep history (2026-08-04 through 2026-08-21, #126) is archived in [`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md).
+Sweep history (2026-08-04 through 2026-08-21, #126), this file's origin (#65) and the incident behind
+each rule above are archived in [`archive/BRANCH_DISPOSITION_SWEEPS.md`](archive/BRANCH_DISPOSITION_SWEEPS.md).
 **Two facts still live here**: the retired detached checkout's work is preserved under tag
 `preserve/checklist-disk-item-c5660e`, and **rule C of `scripts/handoff-worktree-truth.test.mjs`
 fails on a branchless checkout holding commits no remote has** — the one shape a ref-facing audit

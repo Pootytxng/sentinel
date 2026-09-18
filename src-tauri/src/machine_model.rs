@@ -23,15 +23,23 @@
 use serde::Serialize;
 
 use crate::hardware::{HardwareInfo, HwFingerprint};
-use crate::history::AppliedChangeView;
+use crate::history::{ActiveCheck, AppliedChangeView};
 use crate::hwchange::HardwareFingerprint;
 use crate::intelligence::{EventScope, IdentitySnapshot};
 
 /// Bumped only when a consumer would read an existing field differently.
 pub(crate) const SCHEMA_VERSION: u32 = 1;
 
-/// Chronology entries returned. Bounded on purpose — MACHINE_MODEL.md §9 forbids turning the model
-/// into a telemetry lake, and a consumer that needs the full history reads the timeline directly.
+/// Chronology entries returned PER SCOPE THAT HAS ITS OWN SURFACE. Bounded on purpose —
+/// MACHINE_MODEL.md §9 forbids turning the model into a telemetry lake, and a consumer that needs
+/// the full history reads the timeline directly.
+///
+/// [`EventScope::Observed`] is exempt (#450). Compy-applied and measurement events are each shown
+/// by a surface that reads its own store in full (the Trust Ledger, the session record), so a cap
+/// on the model's copy of them hides nothing. Observed changes have no other store: the History
+/// tape is the only place they are ever shown, and it read them uncapped off the intelligence
+/// timeline before it read them here — so capping them would silently shorten the record of what
+/// happened to this machine.
 const MAX_CHRONOLOGY: usize = 25;
 /// Compy-change rows returned. Same bound, same reason. The COUNTS above them are never truncated,
 /// and neither is the evidence pass: this caps what is SHOWN, never what is accounted for.
@@ -308,6 +316,7 @@ pub(crate) const PRODUCER_HARDWARE_INFO: &str = "hardware::get_hardware_info";
 pub(crate) const PRODUCER_SNAPSHOT: &str = "intelligence::IdentitySnapshot";
 pub(crate) const PRODUCER_HWCHANGE: &str = "hwchange::fingerprint (persisted baseline)";
 pub(crate) const PRODUCER_LEDGER: &str = "history::AppliedChangeView";
+pub(crate) const PRODUCER_ACTIVE_CHECK: &str = "history::check_change_state";
 pub(crate) const PRODUCER_TIMELINE: &str = "intelligence::assemble_timeline";
 
 /// THE CANONICAL RIG-IDENTITY RULE, stated once so consumers stop re-deciding it:
@@ -413,6 +422,10 @@ pub(crate) struct MachineIdentity {
 /// One entry of the recorded chronology, copied off the existing timeline assembler.
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct ChronologyEntry {
+    /// The SOURCE record's own id, copied from `intelligence::EventRecord::id` and never
+    /// re-derived. It is the row key a view keys its list on, so two entries that share a
+    /// timestamp stay distinguishable (#450).
+    pub id: String,
     /// The SOURCE record's own timestamp. Never this model's build time.
     pub observed_at: String,
     pub summary: String,
@@ -430,10 +443,16 @@ pub(crate) struct ChronologyEntry {
     pub class: EvidenceClass,
 }
 
-/// Answer B: the chronology Compy already recorded — nothing back-filled, nothing inferred.
+/// Answer B: the supplied chronology, not every history source Compy retains.
+/// The production build assembles it from every producer the intelligence timeline consults
+/// (#393): the Trust Ledger, monitored sessions, the live Gaming Mode slot, the scoreboard, the
+/// Lab baseline, the latest A/B comparison, identity snapshots and drift notices. Coverage travels
+/// with the serialized answer so totals and time boundaries say what the view holds. Single-slot
+/// producers (Gaming Mode slot, Lab baseline, A/B comparison) contribute their CURRENT record only:
+/// overwritten history is gone and is never reconstructed.
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct ChangeChronology {
-    /// The earliest evidence Compy STILL RETAINS, across every retained chronology source: the
+    /// The earliest evidence in the supplied sources: the
     /// identity snapshots, the assembled timeline, and dated Trust-Ledger rows. Deriving it from
     /// identity snapshots alone dated "history starts" later than evidence already in hand, which
     /// would report a machine as unrecorded during a period Compy can still show (#385 review).
@@ -452,8 +471,13 @@ pub(crate) struct ChangeChronology {
     pub identity_history_from: Option<String>,
     pub identity_snapshots: usize,
     pub total_events: usize,
-    /// Newest first, capped at [`MAX_CHRONOLOGY`] for DISPLAY only. `total_events` and
-    /// `recorded_from` above cover the whole retained record, and so does the evidence pass:
+    /// Explicit production producer scope, tied to the wiring by test rather than by prose; also
+    /// rendered beside counts and newest/oldest dates.
+    pub coverage_note: &'static str,
+    /// Newest first. Capped at [`MAX_CHRONOLOGY`] for DISPLAY only, and only for the scopes another
+    /// surface shows in full — every [`EventScope::Observed`] entry travels, because the History
+    /// tape is their only surface (#450). `total_events` and
+    /// `recorded_from` above cover the whole supplied record, and so does the evidence pass:
     /// [`compose_evidence`] walks the uncapped projection, never this list, so Answer B's span can
     /// never be narrower than the boundary reported beside it (#385 review).
     pub entries: Vec<ChronologyEntry>,
@@ -465,8 +489,13 @@ pub(crate) struct ChangeChronology {
 }
 
 const CAUSATION_NOTE: &str = "Chronology never implies causation by itself. These entries say what was recorded and when, not what caused what.";
-const CHRONOLOGY_EMPTY: &str = "Nothing is recorded yet. Chronology starts when recording starts; an empty record is not evidence that nothing changed.";
+const CHRONOLOGY_COVERAGE: &str = "This view includes Compy-applied changes, monitored sessions, the live Gaming Mode slot, verified wins, the current Lab baseline, the latest A/B comparison, identity snapshots and drift notices. Single-slot sources show their current record only.";
+const CHRONOLOGY_EMPTY: &str = "No events are recorded in this view. An empty view is not evidence that nothing changed or that other history is empty.";
 const LEDGER_EMPTY: &str = "The Trust Ledger has no rows, so Compy has recorded no change on this machine.";
+/// Prefix for an UNREADABLE ledger. An unreadable ledger is not an empty one: every count below is
+/// unknown, not zero, and the load error rides along so the reason is checkable (#446).
+const LEDGER_UNREADABLE: &str = "The Trust Ledger could not be read, so what Compy changed on this machine is unknown, not zero.";
+const CHRONOLOGY_LEDGER_UNREADABLE: &str = "The Trust Ledger could not be read, so Compy-applied changes are missing from this view.";
 
 // ─── C. What did Compy change? ───────────────────────────────────────────
 
@@ -521,6 +550,10 @@ pub(crate) struct CompyChangeTruth {
     /// outside Compy reverted it. Distinct from a rollback Compy performed. Spans every rig
     /// attribution; `not_on_this_rig` and `rig_unknown` below cover the whole ledger the same way.
     pub applied_but_not_in_effect: usize,
+    /// Status `"applied"` but the live check established nothing: the probe could not read the
+    /// machine, or Compy has no probe for this kind of change. Neither in effect nor reverted —
+    /// unknown, and never folded into either count (#392).
+    pub in_effect_unknown: usize,
     pub rolled_back: usize,
     /// Stamped with a fingerprint `history::same_rig` matches to today's machine. Carried so a
     /// consumer rendering rig attribution can name the on-this-PC count instead of showing only
@@ -536,6 +569,11 @@ pub(crate) struct CompyChangeTruth {
     /// list, so a gap in a row too old to show still gets both counted and named (#385 review).
     pub changes: Vec<CompyChangeFact>,
     pub ledger_note: &'static str,
+    /// Present exactly when the ledger could not be read. Every count above is then 0 because
+    /// nothing was read, NOT because nothing was recorded, and a consumer must render it that way
+    /// (#446).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ledger_unreadable: Option<String>,
 }
 
 const LEDGER_NOTE: &str = "The Trust Ledger is the canonical record of what Compy changed and how to undo it. This model reads it; rollback continues to resolve from history.json alone.";
@@ -609,6 +647,9 @@ pub(crate) struct MachineModelInputs<'a> {
     pub hw_baseline: Option<&'a HardwareFingerprint>,
     /// The Trust-Ledger view, exactly as Care and Performance already read it.
     pub applied_changes: &'a [AppliedChangeView],
+    /// The ledger load error, when the ledger could not be read. `applied_changes` is then empty
+    /// because nothing was read, and composition must say so rather than report an empty ledger.
+    pub ledger_error: Option<&'a str>,
     /// The chronology, already assembled by its canonical producer.
     pub timeline: &'a [crate::intelligence::EventRecord],
     pub timeline_dropped: usize,
@@ -627,6 +668,7 @@ pub(crate) fn compose(inp: &MachineModelInputs) -> MachineModel {
     // review). One pass makes them agree by construction rather than by remembering to.
     let evidence = compose_evidence(
         &inp.built_at,
+        inp.ledger_error,
         &identity,
         &chronology,
         &all_chronology,
@@ -801,12 +843,22 @@ pub(crate) fn compare_identity_producers(inp: &MachineModelInputs) -> IdentityCo
             observed_at: None,
             freshness: Freshness::UndatedHistorical,
         };
-        if !fp.gpu.is_empty() && !base.gpus.is_empty() {
+        // The baseline records EVERY adapter, sorted, and `hwchange::diff_fingerprint` compares
+        // the whole list. Checking only that the primary adapter appears in it let an added or
+        // removed second GPU read as agreement here while hwchange reported "GPU changed" (#447).
+        // The live list comes from hwchange's own reduction so both surfaces apply one rule.
+        let live_gpus = crate::hwchange::fingerprint(inp.hardware).gpus;
+        if !live_gpus.is_empty() && !base.gpus.is_empty() {
             compared.push(ComparedField { field: "gpu", against: PRODUCER_HWCHANGE });
-            if !base.gpus.iter().any(|g| g == &fp.gpu) {
+            if live_gpus != base.gpus {
                 out.push(IdentityDisagreement {
                     field: "gpu",
-                    left: live(&fp.gpu),
+                    left: IdentityClaim {
+                        producer: PRODUCER_HARDWARE_INFO,
+                        value: live_gpus.join(", "),
+                        observed_at: None,
+                        freshness: Freshness::UnstampedCache,
+                    },
                     right: baseline(base.gpus.join(", ")),
                     interpretation: DISAGREE_BASELINE,
                 });
@@ -897,10 +949,13 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
         .min()
         .map(str::to_string);
 
-    let unknown_reason = if inp.timeline.is_empty() {
-        Some(CHRONOLOGY_EMPTY.to_string())
-    } else {
-        None
+    // An unreadable ledger leaves a hole in this view even when other producers filled it, so it
+    // is named whether or not the timeline is empty (#446).
+    let unknown_reason = match (inp.ledger_error, inp.timeline.is_empty()) {
+        (Some(e), true) => Some(format!("{CHRONOLOGY_LEDGER_UNREADABLE} {CHRONOLOGY_EMPTY} ({e})")),
+        (Some(e), false) => Some(format!("{CHRONOLOGY_LEDGER_UNREADABLE} ({e})")),
+        (None, true) => Some(CHRONOLOGY_EMPTY.to_string()),
+        (None, false) => None,
     };
 
     // The assembler emits ascending; consumers want newest first. Projected in full FIRST, so the
@@ -911,6 +966,7 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
         .iter()
         .rev()
         .map(|e| ChronologyEntry {
+            id: e.id.clone(),
             observed_at: e.timestamp.clone(),
             summary: e.summary.clone(),
             detail: e.detail.clone(),
@@ -921,7 +977,21 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
             class: EvidenceClass::RecordedHistorically,
         })
         .collect();
-    let entries: Vec<ChronologyEntry> = all_entries.iter().take(MAX_CHRONOLOGY).cloned().collect();
+    // The cap counts only the scopes another surface already shows in full; observed changes are
+    // shown nowhere else, so they all travel (see [`MAX_CHRONOLOGY`]). Order is untouched — the
+    // list stays newest-first with the capped scopes simply thinning out at the tail.
+    let mut capped_taken = 0usize;
+    let entries: Vec<ChronologyEntry> = all_entries
+        .iter()
+        .filter(|e| {
+            if e.scope == EventScope::Observed {
+                return true;
+            }
+            capped_taken += 1;
+            capped_taken <= MAX_CHRONOLOGY
+        })
+        .cloned()
+        .collect();
 
     (
         ChangeChronology {
@@ -930,6 +1000,7 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
             identity_history_from,
             identity_snapshots: inp.identity_snapshots.len(),
             total_events: inp.timeline.len(),
+            coverage_note: CHRONOLOGY_COVERAGE,
             entries,
             dropped_unparseable: inp.timeline_dropped,
             causation_note: CAUSATION_NOTE,
@@ -947,6 +1018,7 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
     let mut in_effect_other_rig = 0usize;
     let mut in_effect_rig_unknown = 0usize;
     let mut applied_but_not_in_effect = 0usize;
+    let mut in_effect_unknown = 0usize;
     let mut rolled_back = 0usize;
     let mut on_this_rig = 0usize;
     let mut not_on_this_rig = 0usize;
@@ -955,23 +1027,28 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
     for c in inp.applied_changes {
         if c.status == "rolled_back" {
             rolled_back += 1;
-        } else if c.is_still_active {
-            // `is_still_active` re-checks the live machine, so it proves the STATE is in effect
-            // here. It says nothing about who applied it or where, and `same_rig` is the only
-            // thing that does. Attribution is therefore carried, never collapsed (#385 review).
-            match c.on_this_rig {
-                Some(true) => active_now += 1,
-                Some(false) => in_effect_other_rig += 1,
-                None => in_effect_rig_unknown += 1,
+            tally_rig_attribution(c.on_this_rig, &mut on_this_rig, &mut not_on_this_rig, &mut rig_unknown);
+            continue;
+        }
+        // `active_check` is what the live re-check established, not the legacy bool: that bool
+        // stays true for a probe that read nothing, and counting it here would claim a live read
+        // proved a state nobody read (#392).
+        match c.active_check {
+            Some(ActiveCheck::On) => {
+                // The live check proves the STATE is in effect here. It says nothing about who
+                // applied it or where, and `same_rig` is the only thing that does. Attribution is
+                // therefore carried, never collapsed (#385 review).
+                match c.on_this_rig {
+                    Some(true) => active_now += 1,
+                    Some(false) => in_effect_other_rig += 1,
+                    None => in_effect_rig_unknown += 1,
+                }
             }
-        } else {
-            applied_but_not_in_effect += 1;
+            Some(ActiveCheck::Unreadable | ActiveCheck::Unrecognised) => in_effect_unknown += 1,
+            // A successful OFF read, or a row in a status nothing re-checks.
+            Some(ActiveCheck::Off) | None => applied_but_not_in_effect += 1,
         }
-        match c.on_this_rig {
-            Some(true) => on_this_rig += 1,
-            Some(false) => not_on_this_rig += 1,
-            None => rig_unknown += 1,
-        }
+        tally_rig_attribution(c.on_this_rig, &mut on_this_rig, &mut not_on_this_rig, &mut rig_unknown);
     }
 
     // EVERY row, newest first — deliberately NOT the capped display list. Capping here made the
@@ -1034,7 +1111,22 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
                 title: c.rec_title.clone(),
                 applied_at,
                 status,
-                still_active: Fact::live(c.is_still_active, "history::check_change_active"),
+                still_active: match c.active_check {
+                    Some(ActiveCheck::On) => Fact::live(true, PRODUCER_ACTIVE_CHECK),
+                    Some(ActiveCheck::Off) => Fact::live(false, PRODUCER_ACTIVE_CHECK),
+                    Some(ActiveCheck::Unreadable) => Fact::unknown(
+                        PRODUCER_ACTIVE_CHECK,
+                        "The live check for this setting could not read the machine, so whether it is still in effect is unknown.",
+                    ),
+                    Some(ActiveCheck::Unrecognised) => Fact::unknown(
+                        PRODUCER_ACTIVE_CHECK,
+                        "Compy has no live check for this kind of change, so whether it is still in effect is unknown.",
+                    ),
+                    None => Fact::not_applicable(
+                        PRODUCER_ACTIVE_CHECK,
+                        "This change is not in the applied state, so there is no live setting to check.",
+                    ),
+                },
                 rolled_back_at,
                 on_this_rig,
                 reversible: match stamp {
@@ -1055,14 +1147,29 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
         in_effect_rig_unknown,
         in_effect_total: active_now + in_effect_other_rig + in_effect_rig_unknown,
         applied_but_not_in_effect,
+        in_effect_unknown,
         rolled_back,
         on_this_rig,
         not_on_this_rig,
         rig_unknown,
         changes,
         ledger_note: LEDGER_NOTE,
+        ledger_unreadable: inp.ledger_error.map(|e| format!("{LEDGER_UNREADABLE} ({e})")),
     };
     (truth, all_facts)
+}
+
+fn tally_rig_attribution(
+    attribution: Option<bool>,
+    on_this_rig: &mut usize,
+    not_on_this_rig: &mut usize,
+    rig_unknown: &mut usize,
+) {
+    match attribution {
+        Some(true) => *on_this_rig += 1,
+        Some(false) => *not_on_this_rig += 1,
+        None => *rig_unknown += 1,
+    }
 }
 
 /// Fold one fact into an answer's roll-up AND, when it is missing, into the model's single unknown
@@ -1147,6 +1254,7 @@ fn empty_answer(answer: &'static str) -> AnswerEvidence {
 /// evidence span narrower than the retained-history boundary printed beside it (#385 review).
 fn compose_evidence(
     built_at: &str,
+    ledger_error: Option<&str>,
     identity: &MachineIdentity,
     chronology: &ChangeChronology,
     all_chronology: &[ChronologyEntry],
@@ -1198,7 +1306,22 @@ fn compose_evidence(
         tally(&mut c, &at("on_this_rig"), &ch.on_this_rig, &mut unknowns);
         tally(&mut c, &at("reversible"), &ch.reversible, &mut unknowns);
     }
-    if all_changes.is_empty() {
+    if let Some(e) = ledger_error {
+        tally_absent(
+            &mut c,
+            "compy_changes.changes",
+            PRODUCER_LEDGER,
+            &format!("{LEDGER_UNREADABLE} ({e})"),
+            &mut unknowns,
+        );
+        tally_absent(
+            &mut b,
+            "chronology.applied_changes",
+            PRODUCER_LEDGER,
+            CHRONOLOGY_LEDGER_UNREADABLE,
+            &mut unknowns,
+        );
+    } else if all_changes.is_empty() {
         tally_absent(
             &mut c,
             "compy_changes.changes",
@@ -1226,6 +1349,43 @@ fn compose_evidence(
 
 // ─── Gathering (the only impure half) ────────────────────────────────────
 
+/// Every producer the chronology is assembled from, read ONCE by [`build`] and mapped onto the
+/// assembler's input shape by [`ChronologyProducers::timeline_inputs`]. Before this seam existed,
+/// six of the eight were hard-coded empty in `build` (#393), so a session, verified win, Lab
+/// baseline, A/B verdict or drift notice newer than the newest applied change never reached the
+/// chronology and "Most recent" named the wrong event: false, not merely partial. The map below is
+/// the only place a producer can be dropped, and `chronology_coverage_names_every_wired_producer`
+/// fails when one is.
+struct ChronologyProducers {
+    applied: Vec<crate::history::AppliedChange>,
+    sessions: Vec<crate::sessions::SessionSummary>,
+    /// Live Gaming Mode slot, if any: (started_at, human status label).
+    gaming_slot: Option<(String, &'static str)>,
+    awards: Vec<crate::benchmark_scoreboard::AwardEntry>,
+    benchmark_baseline_at: Option<String>,
+    comparison: Option<crate::comparison::ComparisonResult>,
+    snapshots: Vec<IdentitySnapshot>,
+    drift_notices: Vec<crate::drift::DriftNotice>,
+}
+
+impl ChronologyProducers {
+    /// Borrow every producer into the assembler's input shape. No field is dropped or replaced by
+    /// an empty literal here; the coverage guard proves that by pushing one record per producer
+    /// through this exact function.
+    fn timeline_inputs(&self) -> crate::intelligence::TimelineInputs<'_> {
+        crate::intelligence::TimelineInputs {
+            applied: &self.applied,
+            sessions: &self.sessions,
+            gaming_slot: self.gaming_slot.clone(),
+            awards: &self.awards,
+            benchmark_baseline_at: self.benchmark_baseline_at.clone(),
+            comparison: self.comparison.as_ref(),
+            snapshots: &self.snapshots,
+            drift_notices: &self.drift_notices,
+        }
+    }
+}
+
 /// Read every canonical producer once and compose. READ-ONLY by construction: each call below is a
 /// documented reader. In particular it uses `intelligence::load_store` rather than
 /// `get_intelligence_timeline` (which refreshes and writes snapshots) and
@@ -1234,7 +1394,6 @@ fn compose_evidence(
 pub(crate) fn build() -> MachineModel {
     let hardware = crate::hardware::get_hardware_info();
     let live_fingerprint = crate::hardware::current_fingerprint();
-    let snapshots = crate::intelligence::load_store().identity_snapshots;
     let baseline = crate::hwchange::persisted_baseline();
     // ONE ledger read, both projections derived from it. Reading twice — raw rows here, the view
     // through the ledger's own command — let an apply or rollback land BETWEEN the reads and compose
@@ -1242,26 +1401,45 @@ pub(crate) fn build() -> MachineModel {
     // never saw. One shared answer that contradicts itself is the exact failure this slice exists to
     // remove (#385 review 5135765472, blocker 2). The view projection still lives in `history`, so
     // this module gains no second definition of what a ledger row means.
-    let raw_changes = crate::history::load_history().unwrap_or_default();
+    // An unreadable ledger is carried, not defaulted: `unwrap_or_default` made it compose exactly
+    // like an empty one and report "Compy has recorded no change" on the one machine where every
+    // rollback is blocked (#446).
+    let (raw_changes, ledger_error) = match crate::history::load_history() {
+        Ok(rows) => (rows, Option::<String>::None),
+        Err(e) => (Vec::default(), Some(e)),
+    };
     let applied_changes = crate::history::applied_change_views(&raw_changes);
 
-    let assembly = crate::intelligence::assemble_timeline(&crate::intelligence::TimelineInputs {
-        applied: &raw_changes,
-        sessions: &[],
-        gaming_slot: None,
-        awards: &[],
-        benchmark_baseline_at: None,
-        comparison: None,
-        snapshots: &snapshots,
-        drift_notices: &[],
-    });
+    // Every other producer the intelligence timeline consults (#393), read the way
+    // `intelligence::gather` reads it, each exactly once. Each is a documented reader:
+    // `load_session`, `benchmark_state`, `latest_result` and `active_drift_notices` only read
+    // their store; `get_session_summaries` and `scoreboard` also set an UNPARSEABLE store aside as
+    // `*.json.corrupt` on load, the same quarantine-on-corrupt shape as `intelligence::load_store`
+    // and the ledger read above. None persists, refreshes, probes or mutates Windows state.
+    let producers = ChronologyProducers {
+        applied: raw_changes,
+        sessions: crate::sessions::get_session_summaries(),
+        gaming_slot: crate::gaming_session::load_session().map(|f| {
+            (
+                f.started_at.clone(),
+                crate::intelligence::gaming_status_label(f.status),
+            )
+        }),
+        awards: crate::benchmark_scoreboard::scoreboard().awards,
+        benchmark_baseline_at: crate::benchmark::benchmark_state().baseline_at,
+        comparison: crate::comparison::latest_result(),
+        snapshots: crate::intelligence::load_store().identity_snapshots,
+        drift_notices: crate::drift::active_drift_notices(),
+    };
+    let assembly = crate::intelligence::assemble_timeline(&producers.timeline_inputs());
 
     compose(&MachineModelInputs {
         hardware: &hardware,
         live_fingerprint: &live_fingerprint,
-        identity_snapshots: &snapshots,
+        identity_snapshots: &producers.snapshots,
         hw_baseline: baseline.as_ref(),
         applied_changes: &applied_changes,
+        ledger_error: ledger_error.as_deref(),
         timeline: &assembly.events,
         timeline_dropped: assembly.dropped_unparseable,
         built_at: chrono::Utc::now().to_rfc3339(),
@@ -1314,6 +1492,10 @@ mod machine_model_tests {
     fn hardware() -> HardwareInfo {
         HardwareInfo {
             cpu_brand: "AMD Ryzen 7 7800X3D".into(),
+            gpus: vec![crate::hardware::GpuInfo {
+                name: "Radeon RX 9070 XT".into(),
+                ..Default::default()
+            }],
             windows_version: Some(crate::hardware::WindowsVersionInfo {
                 edition: "Professional".into(),
                 display_version: "24H2".into(),
@@ -1334,7 +1516,105 @@ mod machine_model_tests {
         snapshots: Vec<IdentitySnapshot>,
         baseline: Option<HardwareFingerprint>,
         changes: Vec<AppliedChangeView>,
+        ledger_error: Option<String>,
         timeline: Vec<crate::intelligence::EventRecord>,
+    }
+
+    // ── Producer-seam fixtures (#393) ─────────────────────────────────────
+    //
+    // Raw producer rows go through the SAME seam `build()` uses (`ChronologyProducers` →
+    // `timeline_inputs()` → the assembler → `compose`), so these tests exercise the production
+    // mapping rather than a hand-built timeline. Rows are built through serde where the type
+    // derives it, so a fixture names only the fields the assembler reads and every additive field
+    // takes its declared default.
+
+    fn ledger_row(id: &str, title: &str, applied_at: &str) -> crate::history::AppliedChange {
+        serde_json::from_value(serde_json::json!({
+            "id": id,
+            "rec_id": id,
+            "rec_title": title,
+            "applied_at": applied_at,
+            "snapshot": null,
+            "status": "applied",
+        }))
+        .expect("ledger row fixture")
+    }
+
+    fn session_row(started_at: &str) -> crate::sessions::SessionSummary {
+        serde_json::from_value(serde_json::json!({
+            "started_at": started_at,
+            "duration_secs": 600,
+            "process_name": "game.exe",
+            "samples": 600,
+            "avg_fps": 120.0,
+            "avg_frametime_ms": 8.3,
+            "low1_fps_est": 90.0,
+            "compy_changes_active": 0,
+        }))
+        .expect("session fixture")
+    }
+
+    fn award_row(at: &str) -> crate::benchmark_scoreboard::AwardEntry {
+        serde_json::from_value(serde_json::json!({
+            "points": 10,
+            "rec_id": "game-mode",
+            "rec_title": "Enable Game Mode",
+            "metric": "1% low",
+            "effect_pct": 4.2,
+            "ci_lo_pct": 1.1,
+            "ci_hi_pct": 7.3,
+            "at": at,
+        }))
+        .expect("award fixture")
+    }
+
+    fn comparison_row(at: &str) -> crate::comparison::ComparisonResult {
+        serde_json::from_value(serde_json::json!({
+            "rec_id": "game-mode",
+            "rec_title": "Enable Game Mode",
+            "game": "game.exe",
+            "baseline_avg_fps": 110.0,
+            "baseline_low1_fps": 80.0,
+            "after_avg_fps": 118.0,
+            "after_low1_fps": 88.0,
+            "delta_avg_pct": 7.3,
+            "delta_low1_pct": 10.0,
+            "noise_floor_pct": 3.0,
+            "verdict": "improved",
+            "at": at,
+        }))
+        .expect("comparison fixture")
+    }
+
+    fn producers() -> ChronologyProducers {
+        ChronologyProducers {
+            applied: Vec::new(),
+            sessions: Vec::new(),
+            gaming_slot: None,
+            awards: Vec::new(),
+            benchmark_baseline_at: None,
+            comparison: None,
+            snapshots: Fixture::new().snapshots,
+            drift_notices: Vec::new(),
+        }
+    }
+
+    /// Compose from raw producers exactly as `build()` does, minus the disk and hardware reads.
+    fn model_from(p: &ChronologyProducers) -> MachineModel {
+        let assembly = crate::intelligence::assemble_timeline(&p.timeline_inputs());
+        let views = crate::history::applied_change_views(&p.applied);
+        let f = Fixture::new();
+        compose(&MachineModelInputs {
+            hardware: &f.hardware,
+            live_fingerprint: &f.fingerprint,
+            identity_snapshots: &p.snapshots,
+            hw_baseline: None,
+            applied_changes: &views,
+            ledger_error: None,
+            timeline: &assembly.events,
+            timeline_dropped: assembly.dropped_unparseable,
+            built_at: "2026-09-06T12:00:00Z".into(),
+        })
     }
 
     impl Fixture {
@@ -1351,6 +1631,7 @@ mod machine_model_tests {
                 )],
                 baseline: None,
                 changes: Vec::new(),
+                ledger_error: None,
                 timeline: Vec::new(),
             }
         }
@@ -1362,6 +1643,7 @@ mod machine_model_tests {
                 identity_snapshots: &self.snapshots,
                 hw_baseline: self.baseline.as_ref(),
                 applied_changes: &self.changes,
+                ledger_error: self.ledger_error.as_deref(),
                 timeline: &self.timeline,
                 timeline_dropped: 0,
                 built_at: "2026-09-06T12:00:00Z".into(),
@@ -1433,6 +1715,8 @@ mod machine_model_tests {
         let m = f.model();
         let e = &m.chronology.entries[0];
         assert_eq!(e.observed_at, "2026-08-20T00:00:00Z");
+        // The source record's own id, copied through unchanged — the row key a view lists on (#450).
+        assert_eq!(e.id, "obs:gpu-driver-change:2026-08-20T00:00:00Z");
         assert_eq!(e.class, EvidenceClass::RecordedHistorically);
         // The uncertainty WINDOW survives — the exact moment was never witnessed.
         assert!(e.observed_between.is_some());
@@ -2059,6 +2343,140 @@ mod machine_model_tests {
     // ── 7. The command and the diagnostics section share ONE model ────────
 
     #[test]
+    fn chronology_scope_travels_in_api_and_rendered_diagnostics() {
+        let mut f = Fixture::new();
+        for populated in [false, true] {
+            if populated {
+                f.timeline.push(crate::intelligence::EventRecord {
+                    id: "scoped-identity".into(), timestamp: "2026-08-20T00:00:00Z".into(),
+                    event_type: "gpu-driver-change".into(), source: "identity-snapshot".into(),
+                    scope: EventScope::Observed, game: None, summary: "GPU driver changed".into(),
+                    detail: None, observed_between: None, since_rolled_back: false, rec_id: None,
+                });
+            }
+            let m = f.model();
+            let wire = serde_json::to_value(&m).unwrap();
+            let coverage = wire["chronology"]["coverage_note"].as_str().unwrap_or("");
+            assert!(coverage.contains("monitored sessions"), "{coverage}");
+            assert!(coverage.contains("identity snapshots"), "{coverage}");
+            assert!(coverage.contains("current record only"), "{coverage}");
+            assert!(!coverage.contains("excludes"), "{coverage}");
+            let entries = rendered_entries(&m);
+            let (_, value, note) = entry_by_label(&entries, "Recorded changes");
+            assert!(value.contains("events in this view"), "{value}");
+            assert!(note.contains(coverage), "{note}");
+            if populated {
+                assert!(note.contains("Most recent in this view:"), "{note}");
+                assert!(!note.contains("Most recent:"), "{note}");
+            } else {
+                assert!(!note.contains("Nothing is recorded yet"), "{note}");
+            }
+            let (_, _, boundary) = entry_by_label(&entries, "Earliest dated record");
+            assert!(boundary.contains("in this view"), "{boundary}");
+        }
+    }
+
+    // ── 8. Every producer reaches the chronology (#393) ───────────────────
+
+    /// RED first for #393: with six of eight producers hard-coded empty, a session newer than the
+    /// newest applied change never reached the chronology, so `entries.first()` named the applied
+    /// change as "Most recent" (false, not partial) and `total_events` counted one producer. Through
+    /// the production seam, the newer producer event leads and the total counts every wired row.
+    #[test]
+    fn newer_producer_event_leads_the_chronology_and_total_counts_wired_producers() {
+        let mut p = producers();
+        p.applied.push(ledger_row("chg-1", "Enable Game Mode", "2026-08-10T10:00:00Z"));
+        p.sessions.push(session_row("2026-08-12T20:00:00Z"));
+        let m = model_from(&p);
+
+        assert_eq!(m.chronology.total_events, 2, "one applied change + one session");
+        let first = m.chronology.entries.first().expect("newest entry");
+        assert_eq!(first.source, "sessions", "{}", first.summary);
+        assert_eq!(first.observed_at, "2026-08-12T20:00:00Z");
+        assert_eq!(m.chronology.entries[1].source, "trust-ledger");
+        assert_eq!(m.chronology.entries[1].observed_at, "2026-08-10T10:00:00Z");
+    }
+
+    /// CHRONOLOGY_COVERAGE is tied to the wiring, not to prose. One record per producer goes
+    /// through the same seam `build()` uses: every producer must surface, the total must count each
+    /// one, and the coverage note must name each source that surfaced. A producer silently dropped
+    /// from `timeline_inputs` fails the first assertion; a note that stops naming one fails the
+    /// second; and the structural half fails when `build()` stops reading one through its accessor
+    /// or feeds the seam an empty literal again.
+    #[test]
+    fn chronology_coverage_names_every_wired_producer() {
+        let mut p = producers();
+        p.applied.push(ledger_row("chg-1", "Enable Game Mode", "2026-08-02T10:00:00Z"));
+        p.drift_notices.push(crate::drift::DriftNotice {
+            id: "game-mode".into(),
+            label: "Game Mode".into(),
+            last_ready_at: Some("2026-08-02T10:00:00Z".into()),
+            noticed_at: "2026-08-03T10:00:00Z".into(),
+        });
+        p.sessions.push(session_row("2026-08-04T10:00:00Z"));
+        p.gaming_slot = Some(("2026-08-05T10:00:00Z".into(), "active"));
+        p.awards.push(award_row("2026-08-06T10:00:00Z"));
+        p.benchmark_baseline_at = Some("2026-08-07T10:00:00Z".into());
+        p.comparison = Some(comparison_row("2026-08-08T10:00:00Z"));
+        // A second snapshot whose driver differs is the one identity delta the scan reports.
+        p.snapshots.push(snap("2026-08-09T10:00:00Z", "Radeon RX 9070 XT", "25.6.1", 32, "abc123"));
+        let m = model_from(&p);
+
+        // (source as the assembler stamps it, phrase the coverage note must carry for it)
+        const WIRED: [(&str, &str); 8] = [
+            ("trust-ledger", "Compy-applied changes"),
+            ("sessions", "monitored sessions"),
+            ("gaming-session", "live Gaming Mode slot"),
+            ("scoreboard", "verified wins"),
+            ("benchmark", "current Lab baseline"),
+            ("comparison", "latest A/B comparison"),
+            ("identity-snapshot", "identity snapshots"),
+            ("drift-watch", "drift notices"),
+        ];
+        let sources: std::collections::BTreeSet<&str> =
+            m.chronology.entries.iter().map(|e| e.source.as_str()).collect();
+        for (source, phrase) in WIRED {
+            assert!(sources.contains(source), "producer {source} never reached the chronology: {sources:?}");
+            assert!(
+                CHRONOLOGY_COVERAGE.contains(phrase),
+                "coverage note no longer names {source} as {phrase:?}: {CHRONOLOGY_COVERAGE}"
+            );
+        }
+        assert_eq!(sources.len(), WIRED.len(), "{sources:?}");
+        assert_eq!(m.chronology.total_events, WIRED.len(), "one record per producer");
+        assert_eq!(m.chronology.entries.first().map(|e| e.source.as_str()), Some("identity-snapshot"));
+        assert!(!CHRONOLOGY_COVERAGE.contains("excludes"), "{CHRONOLOGY_COVERAGE}");
+
+        // Structural half: `build()` reads every producer through its accessor, exactly once, and
+        // hands the seam no empty literal. Needles are assembled at runtime for the reason the
+        // read-only scan above states: a scanner that matches its own source can never fail.
+        let build_src = {
+            let start = OWN_SOURCE.find("pub(crate) fn build() -> MachineModel {").expect("build() present");
+            let body = &OWN_SOURCE[start..];
+            &body[..body.find("\n}\n").expect("build() closes")]
+        };
+        let accessors = [
+            format!("get_session_{}", "summaries()"),
+            format!("load_{}", "session()"),
+            format!("{}()", "scoreboard"),
+            format!("benchmark_{}", "state()"),
+            format!("latest_{}", "result()"),
+            format!("active_drift_{}", "notices()"),
+            format!("timeline_{}", "inputs()"),
+        ];
+        for accessor in accessors {
+            assert_eq!(
+                build_src.matches(accessor.as_str()).count(),
+                1,
+                "build() must read the {accessor} producer exactly once"
+            );
+        }
+        for empty in [format!("&{}", "[]"), format!(": {}", "None"), format!("Vec::{}", "new()")] {
+            assert!(!build_src.contains(empty.as_str()), "build() feeds the seam {empty} instead of a producer");
+        }
+    }
+
+    #[test]
     fn the_diagnostics_section_renders_the_same_model_the_command_returns() {
         let mut f = Fixture::new();
         f.changes.push(crate::history::test_view(
@@ -2087,11 +2505,11 @@ mod machine_model_tests {
             ("Rig identity", "abc123"),
             ("Memory", "32 GB"),
             ("Identity producers disagree", "No"),
-            ("Recorded changes", "0 recorded · 1 identity snapshots"),
+            ("Recorded changes", "0 events in this view · 1 identity snapshots"),
             ("Earliest dated record", "2026-07-01T00:00:00Z"),
             (
                 "Changes Compy applied",
-                "1 recorded · 1 active on this PC · 0 rolled back · 0 reverted outside Compy",
+                "1 recorded · 1 active on this PC · 0 rolled back · 0 no longer in effect · 0 could not be checked",
             ),
             ("In effect, other or unknown PC", "0 recorded on another PC · 0 unattributed"),
             ("Applied on this machine", "1 on this PC · 0 elsewhere · 0 unknown"),
@@ -2729,6 +3147,63 @@ mod machine_model_tests {
         );
     }
 
+    // ── 7g. The display cap never shortens the History tape (#450) ─────────
+
+    /// The History tape read the observed events off the intelligence timeline, uncapped, and now
+    /// reads them out of this model. So the model's list must carry EVERY observed event the
+    /// timeline holds — a cap there would delete rows from the only surface that shows them —
+    /// while the scopes that have their own surface stay capped.
+    #[test]
+    fn the_observed_scope_is_never_cut_off_at_the_display_cap() {
+        let mut f = Fixture::new();
+        f.snapshots.clear();
+        let event = |i: usize, scope: EventScope| crate::intelligence::EventRecord {
+            id: format!("{}:evt-{i}", if scope == EventScope::Observed { "obs" } else { "applied" }),
+            timestamp: format!("2026-01-{:02}T00:00:00Z", i + 1),
+            event_type: "gpu-driver-change".into(),
+            source: "identity-snapshot".into(),
+            scope,
+            game: None,
+            summary: format!("Event {i}"),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: false,
+            rec_id: None,
+        };
+        let over_cap = MAX_CHRONOLOGY + 5;
+        f.timeline = (0..over_cap)
+            .map(|i| event(i, EventScope::Observed))
+            .chain((0..over_cap).map(|i| event(i, EventScope::CompyApplied)))
+            .collect();
+
+        let m = f.model();
+        let observed: Vec<&ChronologyEntry> = m
+            .chronology
+            .entries
+            .iter()
+            .filter(|e| e.scope == EventScope::Observed)
+            .collect();
+        assert_eq!(
+            observed.len(),
+            over_cap,
+            "every observed event must travel — the tape shows no fewer rows than it did when it \
+             read the timeline itself"
+        );
+        // And by id, so a truncation cannot hide behind a matching count.
+        let ids: Vec<&str> = observed.iter().map(|e| e.id.as_str()).collect();
+        assert!(ids.contains(&"obs:evt-0"), "including the oldest: {ids:?}");
+        assert_eq!(
+            m.chronology
+                .entries
+                .iter()
+                .filter(|e| e.scope != EventScope::Observed)
+                .count(),
+            MAX_CHRONOLOGY,
+            "the scopes with their own surface stay capped"
+        );
+        assert_eq!(m.chronology.total_events, over_cap * 2, "the record is not capped either");
+    }
+
     // ── 8. Existing producers keep their own vocabularies ─────────────────
 
     #[test]
@@ -2763,5 +3238,261 @@ mod machine_model_tests {
             .unknowns
             .iter()
             .any(|u| u.field == "chronology.entries"));
+    }
+
+    // ── Review fixes for #387: #446 · #392 · #447 ─────────────────────────
+
+    /// #446: `build()` defaulted a load error to an empty row list, so a corrupt ledger — the one
+    /// state in which every rollback is blocked — rendered "Compy has recorded no change on this
+    /// machine". An unreadable ledger must compose as UNKNOWN, carry its error, and never borrow
+    /// the empty-ledger sentence.
+    #[test]
+    fn an_unreadable_ledger_is_unknown_never_an_empty_one() {
+        let mut f = Fixture::new();
+        f.ledger_error = Some("history.json did not parse".into());
+        let m = f.model();
+
+        let note = m.compy_changes.ledger_unreadable.as_deref().expect("the load error is carried");
+        assert!(note.contains("history.json did not parse"));
+        let ledger_unknown = m
+            .evidence
+            .unknowns
+            .iter()
+            .find(|u| u.field == "compy_changes.changes")
+            .expect("an unreadable ledger is an unknown fact");
+        assert!(ledger_unknown.reason.contains("could not be read"));
+        assert!(
+            !m.evidence.unknowns.iter().any(|u| u.reason == LEDGER_EMPTY),
+            "an unreadable ledger must never be reported as an empty one"
+        );
+        assert!(m
+            .evidence
+            .unknowns
+            .iter()
+            .any(|u| u.field == "chronology.applied_changes"));
+        let reason = m.chronology.unknown_reason.as_deref().expect("chronology names the hole");
+        assert!(reason.starts_with(CHRONOLOGY_LEDGER_UNREADABLE));
+        // Diagnostics renders no counts for it: a zero there would be a claim nothing read.
+        let rendered = rendered_entries(&m);
+        let (_, value, note) = rendered
+            .iter()
+            .find(|(l, _, _)| l == "Changes Compy applied")
+            .expect("the section renders the ledger row");
+        assert_eq!(value, "Unreadable");
+        assert!(note.contains("history.json did not parse"));
+
+        // Other producers filling the view do not make the missing ledger rows disappear.
+        f.timeline.push(crate::intelligence::EventRecord {
+            id: "session:1".into(),
+            timestamp: "2026-08-02T00:00:00Z".into(),
+            event_type: "session-ended".into(),
+            source: "sessions".into(),
+            scope: EventScope::Observed,
+            game: None,
+            summary: "Session".into(),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: false,
+            rec_id: None,
+        });
+        let m = f.model();
+        assert!(m
+            .chronology
+            .unknown_reason
+            .as_deref()
+            .is_some_and(|r| r.starts_with(CHRONOLOGY_LEDGER_UNREADABLE)));
+
+        // A READABLE empty ledger still says empty, and carries no load error.
+        f.ledger_error = None;
+        let m = Fixture::new().model();
+        assert!(m.compy_changes.ledger_unreadable.is_none());
+        assert!(m.evidence.unknowns.iter().any(|u| u.reason == LEDGER_EMPTY));
+
+        // Structural half: build() must not default the load error away again.
+        let defaulted = format!("load_{}().unwrap_or_default", "history");
+        assert_eq!(OWN_SOURCE.match_indices(defaulted.as_str()).count(), 0);
+        let carried = format!("ledger_error: ledger_error.as_{}", "deref()");
+        assert_eq!(OWN_SOURCE.match_indices(carried.as_str()).count(), 1);
+    }
+
+    /// #392: a probe that read nothing (or a rec Compy has no probe for) kept the legacy
+    /// `is_still_active == true`, and the model reported it as live-proven "in effect". Unread is
+    /// unknown: its own count, an unknown fact, never folded into "active" or "not in effect".
+    #[test]
+    fn an_unread_live_check_is_unknown_not_proven_in_effect() {
+        let mut f = Fixture::new();
+        for (id, check) in [
+            ("on", ActiveCheck::On),
+            ("off", ActiveCheck::Off),
+            ("unread", ActiveCheck::Unreadable),
+            ("unprobed", ActiveCheck::Unrecognised),
+        ] {
+            let mut v = crate::history::test_view(
+                id, "game-mode", "Enable Game Mode", "2026-07-04T09:30:00Z", "applied",
+                check.legacy_active(), Some(true), None, true,
+            );
+            v.active_check = Some(check);
+            f.changes.push(v);
+        }
+        let m = f.model();
+        let t = &m.compy_changes;
+        assert_eq!(t.active_now, 1, "only the successful ON read is proven in effect");
+        assert_eq!(t.applied_but_not_in_effect, 1, "only the successful OFF read is not in effect");
+        assert_eq!(t.in_effect_unknown, 2);
+        assert_eq!(t.on_this_rig, 4, "attribution is tallied for every row regardless");
+
+        let by_id = |id: &str| t.changes.iter().find(|c| c.id == id).expect("row present");
+        assert_eq!(by_id("on").still_active.value, Some(true));
+        assert_eq!(by_id("on").still_active.class, EvidenceClass::DirectlyObserved);
+        assert_eq!(by_id("off").still_active.value, Some(false));
+        for id in ["unread", "unprobed"] {
+            let fact = &by_id(id).still_active;
+            assert!(fact.is_unknown(), "{id} must be unknown, not a live reading");
+            assert!(fact.value.is_none());
+        }
+
+        // A rolled-back row is not re-checked, so "still active" does not apply to it.
+        let mut f = Fixture::new();
+        f.changes.push(crate::history::test_view(
+            "rb", "game-mode", "Enable Game Mode", "2026-07-04T09:30:00Z", "rolled_back", false,
+            Some(true), Some("2026-07-05T00:00:00Z".into()), true,
+        ));
+        let m = f.model();
+        assert!(m.compy_changes.changes[0].still_active.is_not_applicable());
+        assert_eq!(m.compy_changes.rolled_back, 1);
+        assert_eq!(m.compy_changes.in_effect_unknown, 0);
+    }
+
+    /// #447: the baseline check only asked whether the PRIMARY adapter appeared in the baseline
+    /// list, so adding or removing a second GPU read as agreement here while
+    /// `hwchange::diff_fingerprint` reported "GPU changed". Both surfaces must apply one rule.
+    #[test]
+    fn the_gpu_baseline_compare_matches_hwchange_on_the_whole_adapter_list() {
+        // Only hwchange's GPU lines are the comparison under test; CPU/RAM fixtures differ.
+        let gpu_verdicts = |base: &HardwareFingerprint, live: &HardwareFingerprint| {
+            crate::hwchange::diff_fingerprint(base, live)
+                .iter()
+                .filter(|l| l.starts_with("GPU"))
+                .count()
+        };
+        let mut f = Fixture::new();
+        // Live machine: one adapter. Baseline: that adapter plus an iGPU since removed.
+        f.baseline = Some(crate::hwchange::test_fingerprint(
+            "AMD Ryzen 7 7800X3D",
+            &["AMD Radeon(TM) Graphics", "Radeon RX 9070 XT"],
+            31,
+        ));
+        let m = f.model();
+        let d = m
+            .identity
+            .disagreements
+            .iter()
+            .find(|d| d.field == "gpu")
+            .expect("a removed adapter is a GPU disagreement");
+        assert_eq!(d.left.value, "Radeon RX 9070 XT");
+        assert_eq!(d.right.producer, PRODUCER_HWCHANGE);
+
+        // The model agrees with hwchange's own verdict on the same pair, both ways.
+        let base = f.baseline.clone().unwrap();
+        let live = crate::hwchange::fingerprint(&hardware());
+        assert!(gpu_verdicts(&base, &live) > 0);
+
+        f.baseline = Some(crate::hwchange::test_fingerprint(
+            "AMD Ryzen 7 7800X3D",
+            &["Radeon RX 9070 XT"],
+            31,
+        ));
+        let m = f.model();
+        assert!(!m.identity.disagreements.iter().any(|d| d.field == "gpu"));
+        assert!(m.identity.compared_fields.iter().any(|c| c.field == "gpu"));
+        let same = crate::hwchange::fingerprint(&hardware());
+        assert_eq!(gpu_verdicts(f.baseline.as_ref().unwrap(), &same), 0);
+    }
+
+    // ── Wire contract (#449) ──────────────────────────────────────────────
+    //
+    // The frontend's TypeScript copy of this model (`src/types.ts`) is checked against
+    // `src/test/fixtures/machine-model.wire.json` by `src/machine-model-contract.test.ts`. This test
+    // is the other half: the fixture must be exactly what serde emits, so a field added, renamed or
+    // removed here goes red until the fixture (and therefore the TS contract) is updated with it.
+    // To regenerate deliberately, run `COMPY_PRINT_WIRE_FIXTURE=1 cargo test --lib wire_fixture --
+    // --nocapture` and save the JSON printed between the markers. This module never writes a file
+    // (see `composition_module_contains_no_write_or_mutation_call`), not even from a test.
+
+    const WIRE_FIXTURE: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../src/test/fixtures/machine-model.wire.json");
+
+    fn wire_fixture_model() -> MachineModel {
+        let mut f = Fixture::new();
+        // An unknown fact: Windows edition/build could not be read.
+        f.hardware.windows_version = None;
+        // An identity disagreement: the stored baseline holds a different RAM total.
+        f.baseline = Some(crate::hwchange::test_fingerprint(
+            "AMD Ryzen 7 7800X3D",
+            &["Radeon RX 9070 XT"],
+            16,
+        ));
+        let mut applied = crate::history::test_view(
+            "chg-1",
+            "game-mode",
+            "Enable Game Mode",
+            "2026-07-04T09:30:00Z",
+            "applied",
+            true,
+            Some(true),
+            None,
+            true,
+        );
+        applied.restores_label = Some("Game Mode off".into());
+        f.changes.push(applied);
+        f.changes.push(crate::history::test_view(
+            "chg-2",
+            "hags",
+            "Turn on hardware-accelerated GPU scheduling",
+            "2026-07-05T09:30:00Z",
+            "rolled_back",
+            false,
+            None,
+            Some("2026-07-06T09:30:00Z".into()),
+            true,
+        ));
+        f.timeline.push(crate::intelligence::EventRecord {
+            id: "obs:gpu-driver-change:2026-08-20T00:00:00Z".into(),
+            timestamp: "2026-08-20T00:00:00Z".into(),
+            event_type: "gpu-driver-change".into(),
+            source: "identity-snapshot".into(),
+            scope: EventScope::Observed,
+            game: None,
+            summary: "GPU driver changed".into(),
+            detail: Some("25.5.1 to 25.6.0".into()),
+            observed_between: Some((
+                "2026-08-01T10:00:00Z".into(),
+                "2026-08-20T00:00:00Z".into(),
+            )),
+            since_rolled_back: false,
+            rec_id: None,
+        });
+        f.model()
+    }
+
+    #[test]
+    fn wire_fixture_matches_what_serde_emits() {
+        let m = wire_fixture_model();
+        // The fixture must carry the states the frontend has to render honestly.
+        assert!(m.identity.windows.is_unknown(), "fixture needs an unknown fact");
+        assert!(!m.identity.disagreements.is_empty(), "fixture needs an identity disagreement");
+
+        let emitted = serde_json::to_string_pretty(&m).expect("model serializes") + "\n";
+        if std::env::var_os("COMPY_PRINT_WIRE_FIXTURE").is_some() {
+            println!("----- BEGIN machine-model.wire.json -----\n{emitted}----- END -----");
+        }
+        let on_disk = std::fs::read_to_string(WIRE_FIXTURE)
+            .expect("src/test/fixtures/machine-model.wire.json is missing")
+            .replace("\r\n", "\n");
+        assert!(
+            on_disk == emitted,
+            "the Machine Model wire shape changed. Update src/types.ts, then regenerate the fixture \
+             with COMPY_PRINT_WIRE_FIXTURE=1 and re-run src/machine-model-contract.test.ts"
+        );
     }
 }

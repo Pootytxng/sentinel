@@ -1,0 +1,65 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Transition executor only, under HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483) step 7, lane #306, and HQ's disposition on the PR itself (https://github.com/Pootytxng/sentinel/pull/306#issuecomment-5683580617: cherry-pick 4756086c onto a fresh branch off main, land under the normal gate, close this PR as superseded, drop the CLAIMED row). Closing a superseded PR merges nothing and moves no ref; the branch stays on origin.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5693613832",
+  "leaseEvidenceNote": "Ownership claim on #389 (the HQ handoff issue; PR #306 has no live issue of its own: #288 and #289 are a merged and a closed PR, and #286 is closed and Done) whose Write scope is docs/superpowers/specs/2026-08-31-remote-rules-cache-generation-recovery.md, this receipt file and the disposition record for the PR's ref; the spec is the delta already on main at currentHead, the receipt and the record are the only writes left.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Inspected from C:/Users/Kuya/code/sentinel/.claude/worktrees/hq-handoff-h-2026-09-15-4144e8 at receipt time: origin fetched, origin/main = currentHead, PR #306 open at head 28fb6585 on lane/receipt-288 (5 commits, CONFLICTING on docs/BRANCH_DISPOSITIONS.md and docs/SESSION_HANDOFF.md per HQ), this folder clean except this receipt and the record, no build/test/install process running.",
+  "transition": "close-superseded-pr",
+  "currentHead": "cdb890369fc9953bede5a2b9415fadde8daf6521",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "cdb890369fc9953bede5a2b9415fadde8daf6521",
+      "evidence": "logs/verify-local-2026-09-16T07-22-58Z.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "cdb890369fc9953bede5a2b9415fadde8daf6521",
+      "evidence": "logs/verify-local-2026-09-16T07-22-58Z.log"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "cdb890369fc9953bede5a2b9415fadde8daf6521",
+      "evidence": "logs/verify-local-2026-09-16T07-22-58Z.log"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "cdb890369fc9953bede5a2b9415fadde8daf6521",
+      "evidence": "logs/verify-local-2026-09-16T07-22-58Z.log"
+    }
+  ],
+  "gateEvidenceNote": "The full local pre-push gate (scripts/verify-local.ps1) ran at cdb89036 in this worktree when that head was pushed to main and passed: logs/verify-local-2026-09-16T07-22-58Z.log. The gate at PR #306's own head 28fb6585 was not run: that head is 298+ commits behind main and CONFLICTING on two coordination docs (HQ's measurement on the PR), so the exact PR head could not land as-is.",
+  "independentReview": {
+    "practical": false,
+    "reason": "No reviewer is needed for a merge that does not happen: this transition closes PR #306 without merging. Its one commit still needed on main, 4756086c (docs/superpowers/specs/2026-08-31-remote-rules-cache-generation-recovery.md section 7: four review rounds ran where the section said two, and the closing line that any fix to this design is new unreviewed content), reached main as cdb89036 with author and date preserved and passed the full local gate on the push. The exact-head independent review of the PR (https://github.com/Pootytxng/sentinel/pull/306#issuecomment-5573947736, at 28fb6585, from a different worktree and session) already said to land 4756086c and drop the overtaken receipts; HQ's later measurement moved d30a0bcf to moot as well (#288 is MERGED on GitHub). The merge-pr route was refused because the PR is a conflicting branch whose other four commits must not land, and every identity on it is claude-code, which this gate rejects as a reviewer of claude-code for a merge-pr receipt."
+  },
+  "pr": 306,
+  "prHead": "28fb6585",
+  "issue": 389,
+  "kind": "lane",
+  "branch": "lane/receipt-288",
+  "supersededBy": "no PR: the PR's one live change (docs/superpowers/specs/2026-08-31-remote-rules-cache-generation-recovery.md, section 7) is on main as cdb89036. The other four commits are not landed on HQ's order: d30a0bcf and 81b679ab (merge receipts for #288 MERGED and #289 CLOSED, outcomes GitHub already carries; whether refused/complete receipts deserve preservation is the receipts-doctrine call on #341/#346, not this PR's), c39dd14d (a docs/SESSION_HANDOFF.md bullet naming a lane state main no longer has) and 28fb6585 (a docs/BRANCH_DISPOSITIONS.md row main has since rewritten).",
+  "hqDisposition": "https://github.com/Pootytxng/sentinel/pull/306#issuecomment-5683580617",
+  "dispositionNote": "HQ step 7 said cherry-pick 4756086c only, land under the normal gate, close the PR as superseded and drop the CLAIMED row in docs/dispositions/. Verified before the pick: main at the pre-pick head still read \"The pattern across both rounds\" at line 210 of the spec, and git merge-tree of the single commit onto main was conflict-free. Issue #389 is the lease holder; there is no issue to close for this lane.",
+  "refDisposition": "The branch ref lane/receipt-288 stays on origin: the HQ handoff forbids ref deletion beyond land-pr's own prune and this landing did not go through land-pr. docs/dispositions/lane__receipt-288.json, CLAIMED until now, is retired to UNLANDED by merge-tree, kept only until the owner prunes it: the one live commit is on main by cherry-pick, but the ref carries four coordination commits that will never land (two moot receipts, a stale handoff bullet, a rewritten disposition row), so merging the ref now would resurrect a state main no longer has. LANDED (a merge-tree no-op) is false and SUPERSEDED (prunable) fails scripts/branch-disposition-audit.mjs while the ref is still on origin. Owner action: git push origin --delete lane/receipt-288, then delete that record."
+}

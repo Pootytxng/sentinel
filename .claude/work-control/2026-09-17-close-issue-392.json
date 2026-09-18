@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "actorNote": "This session is the mutation author of the #392 fix. PR #448 contains b153e986 and db67d0ed, both by claude-code <claude-code@desk.local>, and was merged as 887d46dc. Carrier 675c7457 is also by claude-code. The same session closes the issue on the owner's chat order of 2026-09-17 (\"close 392, 446 and 447\"). #392: an unread live check was reported as proven in effect. The fix adds the ActiveCheck tri-state, `in_effect_unknown`, and an unknown `still_active` fact. Guards: `an_unread_live_check_is_unknown_not_proven_in_effect`, `active_check_separates_off_from_unread_and_unprobed` and `sc_query_parse_separates_a_failed_read_from_a_stopped_or_missing_service`.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/392#issuecomment-5716049436",
+  "leaseEvidenceNote": "The lane's Handoff on #392 ends \"- Claim: released\", so the gate's close-issue lease read finds no live claim. These receipts are written uncommitted in the lane's own folder. After the closes, they go to main in a receipt-only carrier under a new Ownership claim that names exactly the three receipt paths.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-17 with `gh pr list --state open --json files`. Open PR 444 touches only hooks, scripts and tools/entry files, and PR 438 touches only tester docs. Neither touches these receipt paths.",
+  "inheritedWork": false,
+  "currentHead": "675c7457bd971866361b8239567a3522dcacc8e6",
+  "issue": 392,
+  "pr": 448,
+  "kind": "lane",
+  "branch": "main",
+  "branchNote": "The fix landed on main through PR #448, merge 887d46dc, and the receipt carrier is 675c7457. This worktree's local branch claude/land-448 is at the same commit as origin/main.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched 2026-09-17. origin/main and the worktree HEAD both read 675c7457bd971866361b8239567a3522dcacc8e6.",
+    "worktree": "Linked worktree with one writer, core.hooksPath set per worktree to .githooks, and core.bare false.",
+    "branch": "claude/land-448 at 675c7457, the same commit as origin/main.",
+    "dirtyState": "`git status --porcelain` was clean before this batch of three close-issue receipts was written.",
+    "liveProcesses": "No app run, dev server or build. The pre-push gate for 675c7457 had finished."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "675c7457bd971866361b8239567a3522dcacc8e6",
+      "evidence": "logs/verify-local-2026-09-17T14-21-05Z.log:38-39 (SHA-256 6b9c51ea0f9337d1c1b307a5b41992184bed412e3bd511a7cb2e60fcc2004d47)",
+      "summary": "443 test files passed; 7241 passed / 4 skipped (7245); 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "675c7457bd971866361b8239567a3522dcacc8e6",
+      "evidence": "logs/verify-local-2026-09-17T14-21-05Z.log:44-69 (SHA-256 6b9c51ea0f9337d1c1b307a5b41992184bed412e3bd511a7cb2e60fcc2004d47)",
+      "summary": "tsc && vite build; built in 9.95s at :69."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "675c7457bd971866361b8239567a3522dcacc8e6",
+      "evidence": "logs/verify-local-2026-09-17T14-21-05Z.log:71-1427 (SHA-256 6b9c51ea0f9337d1c1b307a5b41992184bed412e3bd511a7cb2e60fcc2004d47)",
+      "summary": "1325 passed; 0 failed; 24 ignored; 0 filtered out."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "675c7457bd971866361b8239567a3522dcacc8e6",
+      "evidence": "logs/verify-local-2026-09-17T14-21-05Z.log:1442-1444 (SHA-256 6b9c51ea0f9337d1c1b307a5b41992184bed412e3bd511a7cb2e60fcc2004d47)",
+      "summary": "The clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the full pre-push run of `scripts/verify-local.ps1` that carried 675c7457 to main. The console printed `LOCAL CHECK RESULT: PASS`, and git exited 0 after the push to main. All six stage markers are present (lines 3, 5, 8, 44, 71, 1442), with no `FAILED`, `panicked` or `error[E` line. One measured difference has no identified cause: this run reports 7241 frontend tests passed, while the run at db67d0ed reports 7242, with 443 files, 0 failed and 4 skipped in both. The frontend tree is identical between the two heads.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "Log line 6 reads \"not measured\" because this folder has no session record. It was measured explicitly before that push with `node scripts/scope-drift-gate.mjs --issue 446 --refresh`, which returned OK: both changed paths fall inside the carrier claim 5715947382."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "675c7457bd971866361b8239567a3522dcacc8e6",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/448#issuecomment-5716053408",
+    "reviewerNote": "An exact-head review of main at 675c7457 by a read-only reviewer seat that authored nothing here. It confirmed the following:\n- The diff from db67d0ed changes only the two receipts, so the tree is the one reviewed at db67d0ed (PASS, comment 5715927366).\n- All three fixes are present.\n- origin/main is 675c7457.\n- `cargo test --lib machine_model` passes (41).\nA Cowork adversarial audit of the history.rs read path is still flagged, and it does not block closing."
+  },
+  "transition": "close-issue",
+  "headBindingNote": "The receipt is bound to 675c7457, the current head of main. That is the head the gate ran at and the head the review names. The fix commits b153e986 and db67d0ed, and the merge 887d46dc, are ancestors of it."
+}

@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "actorNote": "The actor is the implementation actor. `git log origin/main..HEAD` has two commits, c68e95d8 and f6a6047e. This claude-code session wrote both, under git identity claude-code <claude-code@desk.local>, on the owner's chat order of 2026-09-17 (\"build 449\"). The same session lands the PR on the owner's order \"review and merge the 449 PR\".",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/449#issuecomment-5717439002",
+  "leaseEvidenceNote": "The operative Ownership claim on #449 is 5717439002 (2026-09-17). It supersedes 5717278897 and only widens the write scope by src/reachability-guard.test.ts. It names this folder, branch claude/449-machine-model-ts-contract, and a write scope of src/types.ts, src/data/machine-model.ts, src/data/machine-model.test.ts, src/machine-model-contract.test.ts, src/test/fixtures/machine-model.wire.json, src-tauri/src/machine_model.rs and src/reachability-guard.test.ts.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-17 with `gh pr list --state open --json files`. Open PR 444 touches only hooks, scripts and tools/entry files, and PR 438 touches only tester docs. Neither touches any path in #454. No open PR is based on claude/449-machine-model-ts-contract.",
+  "inheritedWork": false,
+  "currentHead": "f6a6047e5ab2f7acaaddb43a2c98266835639803",
+  "pr": 454,
+  "issue": 449,
+  "kind": "lane",
+  "branch": "claude/449-machine-model-ts-contract",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "Fetched 2026-09-17. origin/main reads 268ee574, the PR's base and merge-base, so the merge tree equals the reviewed head's tree. GitHub reads the PR head as f6a6047e, MERGEABLE, not draft, with 0 closingIssuesReferences.",
+    "worktree": "Linked worktree with one writer, core.hooksPath set per worktree to .githooks.",
+    "branch": "claude/449-machine-model-ts-contract at f6a6047e. `git ls-remote` on origin reads the same commit.",
+    "dirtyState": "`git status --porcelain` was clean before these receipts were written.",
+    "liveProcesses": "No app run or dev server. The only builds were the pre-push gate and the reviewer's cargo test, tsc and vitest runs, and all had finished."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "f6a6047e5ab2f7acaaddb43a2c98266835639803",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T16-02-31Z.log:38-39 (SHA-256 fcb4a82d0aadfe192e007cb735d55a11e3eaca7b2429fb0fcd3e706d24e54bc3)",
+      "summary": "445 test files passed; 7257 passed / 4 skipped (7261)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "f6a6047e5ab2f7acaaddb43a2c98266835639803",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T16-02-31Z.log:44-70 (SHA-256 fcb4a82d0aadfe192e007cb735d55a11e3eaca7b2429fb0fcd3e706d24e54bc3)",
+      "summary": "frontend type-check and build stage; vite built clean."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "f6a6047e5ab2f7acaaddb43a2c98266835639803",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T16-02-31Z.log:71-1442 (SHA-256 fcb4a82d0aadfe192e007cb735d55a11e3eaca7b2429fb0fcd3e706d24e54bc3)",
+      "summary": "1326 passed; 0 failed; 24 ignored; 0 filtered out."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "f6a6047e5ab2f7acaaddb43a2c98266835639803",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/land-pr-387-machine-model-6fe51a/logs/verify-local-2026-09-17T16-02-31Z.log:1443-1446 (SHA-256 fcb4a82d0aadfe192e007cb735d55a11e3eaca7b2429fb0fcd3e706d24e54bc3)",
+      "summary": "Clippy stage finished with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The evidence is the pre-push run of `scripts/verify-local.ps1` at this exact head, from the push that created the remote branch. The console printed `LOCAL CHECK RESULT: PASS`, and git exited 0. The log has all six LOCAL CHECK stage markers (lines 3, 5, 8, 44, 71, 1443) and no `error[E` or `panicked` line. The first push, at c68e95d8, was refused only by reachability-guard (the new reader had no importer yet); f6a6047e adds the ALLOWED entry. Main has not moved since the base, so no separate merge-tree gate is needed. The receipt carrier goes to main through the full pre-push gate.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "Log line 6 reads \"not measured\" because this folder has no session record. It was measured explicitly with `node scripts/scope-drift-gate.mjs --issue 449 --refresh`, which returned OK: all seven changed paths fall inside the claimed write scope."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "f6a6047e5ab2f7acaaddb43a2c98266835639803",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/454#issuecomment-5717511414",
+    "reviewerNote": "A read-only reviewer seat that wrote nothing in this change. It approved c68e95d8 after checking the TS types against every Rust Serialize struct, the #[cfg(test)] boundary and the module's no-write guard, that the contract test can go red, the hook's stale-response and cache behaviour, and the single invoke site. It ran cargo test machine_model (42), tsc and the new vitest files. It then approved the exact head f6a6047e, whose only addition is the reachability-guard ALLOWED entry, after running that guard (7 passed). One non-blocking nit (vocabulary typed as an array, not a 6-tuple) is left as is because the contract test pins it at runtime."
+  },
+  "transition": "merge-pr",
+  "mergeMethodNote": "Run `node scripts/land-pr.mjs --pr 454 --receipt .claude/work-control/2026-09-17-merge-pr-454.json` after a --dry-run. That makes a true merge commit and prunes the remote ref, with no --delete-branch and no worktree removal.",
+  "dependentsNote": "No open PR is based on claude/449-machine-model-ts-contract. This worktree keeps its local branch.",
+  "closingNote": "The PR has 0 closingIssuesReferences, so the merge closes nothing. #449 stays open and needs its own close-issue receipt."
+}

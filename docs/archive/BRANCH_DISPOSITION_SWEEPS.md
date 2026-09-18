@@ -5,6 +5,36 @@
 > narratives of sweeps whose refs are all long gone; the live file keeps only the CURRENT sweep and
 > the CURRENT rows. Back to the live file: [`../BRANCH_DISPOSITIONS.md`](../BRANCH_DISPOSITIONS.md).
 
+## Incident record behind the live rules, moved verbatim 2026-09-15 (line budget)
+
+Moved from [`../BRANCH_DISPOSITIONS.md`](../BRANCH_DISPOSITIONS.md) when it stood at 82/82 lines; the cap ratcheted 82 -> 79 in the same commit. The rules stay live; the incidents that produced them live here, as they stood.
+
+**Why the file exists (#65):**
+
+It exists because `docs/BACKLOG.md` claimed *"every branch has a verified disposition"* while nothing
+had ever checked one ([#65](https://github.com/Pootytxng/sentinel/issues/65)); this makes it true.
+
+**Rebase reintroduction (2026-08-05/06):**
+
+**A branch that landed without a fast-forward stops being a no-op the moment `main` moves**, and
+rebase is not the safe half: neither `--squash` nor `--rebase` leaves an ancestry link, so a later
+three-way merge reintroduces the branch's own stale copies (it hit this file twice on 2026-08-05 and
+destroyed an unreproducible proof on 2026-08-06 — [`archive/BRANCH_DISPOSITION_SWEEPS.md`](BRANCH_DISPOSITION_SWEEPS.md)).
+
+**Stale local `main` (2026-08-05):**
+
+**The base is `origin/main`, not the local `main`**, and the audit reads local remote-tracking refs,
+so it reflects the last `git fetch` rather than the server. A local `main` is a checkout owned by
+whichever worktree holds it, and a merge that lands on the trunk does not update it — that worktree
+stays on the commit it had until someone pulls. On 2026-08-05 a `main` 4 commits behind made the
+audit call a genuinely-merged branch unmerged. Pinned in `scripts/branch-disposition-audit.test.mjs`.
+
+**Hand-written counts (2026-09-01, #309/#312):**
+
+record is not a document making a claim about the fleet. **Counts are computed, never written.** Run
+`node scripts/branch-disposition-audit.mjs` for the live split; a number written beside an
+append-only record is wrong by the next commit, which it was twice on 2026-09-01 alone (#309/#312).
+
 ## Why the table left the live file (2026-09-02, #291)
 
 Moved here 2026-09-03 to pay for the #337 prune-order paragraph. On 2026-09-02 all eight open PRs

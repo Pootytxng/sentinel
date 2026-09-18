@@ -1,0 +1,83 @@
+{
+    "actor":  "claude-code",
+    "actorNote":  "Mutation author of the #396 landing on main: 3d2bf1d2 (a cherry-pick of PR #397 head 3c32d21e, author and date preserved). `git log --format='%h %an <%ae>' 3d2bf1d2~1..3d2bf1d2` reads: 3d2bf1d2 claude-code <claude-code@desk.local>. cowork (this receipt's writer and transition executor, git identity cowork-hq) and chatgpt-hq (the reviewer) authored none of it. The receipt is written by cowork under the owner's order of 2026-09-16 because the desk's every identity is claude-code and the gate refuses a close-issue receipt whose reviewer authored the mutation (desk summary, 'Findings for the toolchain' 2).",
+    "leaseEvidence":  "https://github.com/Pootytxng/sentinel/issues/435#issuecomment-5697227445",
+    "leaseEvidenceNote":  "The cowork Ownership claim on #435 (5697227445), naming folder C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\hq-handoff-h-2026-09-15-4144e8 on branch claude/435-doc-archive at 3718b1f744a2fab342155fa3b7ca184c3b0e7b13 with a write scope of exactly the seven close-issue receipts and the five docs/dispositions/ records the owner ordered pruned. The #396 lane's own lease was released by claude-code's `### Handoff` ending '- Claim: released' at https://github.com/Pootytxng/sentinel/issues/396#issuecomment-5693141937, so the gate's close-issue lease read finds no live claim on #396.",
+    "overlapExclusive":  true,
+    "overlapExclusiveNote":  "Measured live at 2026-09-16T12:19:44Z from `gh pr list --repo Pootytxng/sentinel --state open --json number,files`: zero open PRs (the 13 open on 2026-09-15 were merged or closed by H-2026-09-15). No open PR can touch this receipt's path. The only writer in this folder is the cowork claim above; no other live claim on the board names this folder or these paths.",
+    "inheritedWork":  false,
+    "currentHead":  "3718b1f744a2fab342155fa3b7ca184c3b0e7b13",
+    "issue":  396,
+    "pr":  397,
+    "kind":  "lane",
+    "branch":  "main",
+    "branchNote":  "The landing is on main itself (3d2bf1d2 (a cherry-pick of PR #397 head 3c32d21e, author and date preserved)); the lane branch that carried the original PR #397 was closed as superseded by the desk under its own close-superseded-pr receipt. This worktree's checked-out branch claude/435-doc-archive sits at the same commit as origin/main.",
+    "mutationAuthors":  [
+                            "claude-code"
+                        ],
+    "inspection":  {
+                       "repository":  "Pootytxng/sentinel. Worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\hq-handoff-h-2026-09-15-4144e8 (git rev-parse --show-toplevel); canonical remote origin (git remote -v: https://github.com/Pootytxng/sentinel.git).",
+                       "remoteState":  "Fetched with --prune at 2026-09-16T12:19:44Z. origin/main reads 3718b1f744a2fab342155fa3b7ca184c3b0e7b13 and `git ls-remote origin refs/heads/main` reads 3718b1f744a2fab342155fa3b7ca184c3b0e7b13; both equal this receipt's currentHead. The five refs the owner ordered pruned (claude/amazing-kapitsa-a2d02c, claude/adoring-neumann-e24531, lane/guard-budget-313, lane/receipt-288, lane/rule-e-negation) are still on origin at receipt time; they are pruned only after every close in this batch, in the same push that drops their docs/dispositions/ records.",
+                       "worktree":  "Linked worktree with one writer and its own index (extensions.worktreeConfig=true). core.hooksPath reads .githooks (resolves inside this worktree; .githooks/pre-push present, gate armed). user.name/user.email set at worktree scope to cowork-hq <cowork-hq@desk.local> at 2026-09-16T12:12Z for this lane; the desk's previous identity here was claude-code and is restored when the lane ends. core.bare reads false.",
+                       "branch":  "claude/435-doc-archive at 3718b1f744a2fab342155fa3b7ca184c3b0e7b13, the reviewed head; HEAD has not moved since the desk pushed it (2026-09-16T08:2xZ) and equals origin/main. Read at 2026-09-16T12:19:44Z.",
+                       "dirtyState":  "`git status --porcelain --untracked-files=all` at 2026-09-16T12:19:44Z, before this batch of receipts was written: ?? .claude/work-control/2026-09-16-close-issue-295.json, ?? .claude/work-control/2026-09-16-close-issue-313.json, ?? .claude/work-control/2026-09-16-close-issue-318.json, ?? .claude/work-control/2026-09-16-close-issue-389.json, ?? .claude/work-control/2026-09-16-close-issue-390.json, ?? .claude/work-control/2026-09-16-close-issue-396.json, ?? .claude/work-control/2026-09-16-close-issue-435.json. node_modules/, site-app/node_modules/ and logs/ are gitignored. The receipts stay uncommitted until the carrier commit that follows the closes.",
+                       "liveProcesses":  "Get-Process at 2026-09-16T12:19:44Z: compy x0, cargo x0, rustc x0, msbuild x0, link x0, git x0, gh x0, npm x0, node x14, pwsh x1, powershell x2, claude x18, msedgewebview2 x6. No Rust build, app run, npm, git or gh operation was live beyond this receipt writer's own measurement calls; the gate run that produced logs/verify-local-2026-09-16T12-13-31Z.log had finished (LOCAL CHECK RESULT: PASS at console copy :16171) before the measurement. node, pwsh, powershell, claude and msedgewebview2 are not attributed one by one (other Claude Code sessions and Desktop Commander run on this machine). Get-Process is used instead of WMI because Win32_Process is hung on this machine."
+                   },
+    "requiredGates":  [
+                          "npm test",
+                          "npm run build",
+                          "cargo test --manifest-path src-tauri/Cargo.toml",
+                          "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+                      ],
+    "gateResults":  [
+                        {
+                            "command":  "npm test",
+                            "status":  "passed",
+                            "head":  "3718b1f744a2fab342155fa3b7ca184c3b0e7b13",
+                            "evidence":  "logs/verify-local-2026-09-16T12-13-31Z.log:14767-14768",
+                            "summary":  "Test Files  443 passed (443); Tests  7241 passed | 4 skipped (7245); 0 failed."
+                        },
+                        {
+                            "command":  "npm run build",
+                            "status":  "passed",
+                            "head":  "3718b1f744a2fab342155fa3b7ca184c3b0e7b13",
+                            "evidence":  "logs/verify-local-2026-09-16T12-13-31Z.log:14798",
+                            "summary":  "tsc && vite build: no 'error TS' line; ' built in 8.33s' at :14798."
+                        },
+                        {
+                            "command":  "cargo test --manifest-path src-tauri/Cargo.toml",
+                            "status":  "passed",
+                            "head":  "3718b1f744a2fab342155fa3b7ca184c3b0e7b13",
+                            "evidence":  "logs/verify-local-2026-09-16T12-13-31Z.log:16149-16161",
+                            "summary":  "test result: ok. 1318 passed; 0 failed; 24 ignored; 0 measured; 0 filtered out; finished in 9.11s (first target at :16149; last 'test result: ok.' at :16161); no 'test result: FAILED' or 'panicked' line."
+                        },
+                        {
+                            "command":  "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+                            "status":  "passed",
+                            "head":  "3718b1f744a2fab342155fa3b7ca184c3b0e7b13",
+                            "evidence":  "logs/verify-local-2026-09-16T12-13-31Z.log:16164-16166",
+                            "summary":  "Clippy stage clean under -D warnings: 'Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.94s' at :16166 with no warning or error line."
+                        }
+                    ],
+    "gateEvidenceNote":  "The evidence is this reviewer-side executor's own run of the full local gate, `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-local.ps1` (no -NoInstall; the dependency bootstrap found root and site-app node_modules already satisfied), in this worktree at HEAD 3718b1f744a2fab342155fa3b7ca184c3b0e7b13, started 2026-09-16T12:13:31Z after the claim https://github.com/Pootytxng/sentinel/issues/435#issuecomment-5697227445 was posted. HEAD read 3718b1f744a2fab342155fa3b7ca184c3b0e7b13 before the run and again when this receipt was written. Log logs/verify-local-2026-09-16T12-13-31Z.log, 16166 lines; console copy C:\\Users\\Kuya\\code\\hq-2026-09-16\\gate-3718b1f7.console.log. The console printed LOCAL CHECK RESULT: PASS (console copy :16171; the file log ends at the clippy Finished line by design). The exit code was not taken as the verdict; each stage was re-read at its own line: git diff check, write-scope drift #356 ('scope drift (#356): 0 changed paths since origin/main measured against the claim on #435 (cache)' -- 0 changed paths against the cowork claim on #435), frontend tests (:14767-14768), frontend type-check and build (:14798), Rust tests (:16149-16161), Rust clippy (:16164-16166). No line matches 'test result: FAILED', 'panicked', 'error[E', 'error TS' or 'npm ERR!'. Corroboration: the desk's own pre-push gate that carried 3718b1f744a2fab342155fa3b7ca184c3b0e7b13 to origin, logs/verify-local-2026-09-16T08-22-07Z.log in this same folder (443 files / 7243 passed / 4 skipped at :39-40, built :70, 1318 Rust passed :1421, clippy Finished :1438). --no-verify was never used. The log is gitignored (logs). Measured difference, cause not identified: this run reports 7241 frontend tests passed where the desk's 08-22-07Z run at the same head reports 7243 (443 files and 4 skipped in both, 0 failed in both); no test file is reported failed, and the two runs differ in host (Desktop Commander under the packaged Claude host vs the desk's own shell).",
+    "scopeDrift":  {
+                       "stage":  "write-scope drift (#356)",
+                       "statusInGateRun":  "measured, OK",
+                       "reconciled":  true,
+                       "measurement":  "scope drift (#356): 0 changed paths since origin/main measured against the claim on #435 (cache)",
+                       "reconciliationNote":  "Measured against the cowork claim on #435 (cache written from the thread at 2026-09-16T12:12Z, 12 backticked paths). 0 changed paths since origin/main at gate time; the receipts written after the gate are all inside that scope."
+                   },
+    "independentReview":  {
+                              "practical":  true,
+                              "reviewer":  "chatgpt-hq",
+                              "status":  "passed",
+                              "head":  "3718b1f744a2fab342155fa3b7ca184c3b0e7b13",
+                              "verdict":  "PASS",
+                              "evidence":  "https://github.com/Pootytxng/sentinel/issues/396#issuecomment-5697044655 (2026-09-16T11:58:18Z), headed '### HQ independent exact-head review', 'Reviewer token: chatgpt-hq', 'Current reviewed head: 3718b1f744a2fab342155fa3b7ca184c3b0e7b13', 'Verdict: PASS', reviewing docs/CARE_TIER_MODULE_CONTRACTS.md (added), scripts/doc-budget.ps1 and src-tauri/CLAUDE.md as they exist in current main.",
+                              "reviewerNote":  "Independent exact-head review by chatgpt-hq, which authored no commit in the proof delta (mutationAuthors is claude-code alone; chatgpt-hq is a declared executor identity in scripts/work-control-gate.mjs and is not an alias of cowork). GitHub holds no review object; the verdict is an issue comment posted from the shared Pootytxng account, which every executor uses, so the comment's author field does not identify the reviewer and the body's reviewer token does. The review is a reading of the delta in the current-main tree and names no executed gate; the executed evidence at the same head is this receipt's own full local gate run (gateResults), which runs every guard the delta touches or adds. cowork, the receipt writer, additionally read the desk's Handoff on the issue and the landed diff at this head and found no blocking defect; cowork is not the reviewer of record. The PASS goes stale if main moves; main read 3718b1f744a2fab342155fa3b7ca184c3b0e7b13 when this receipt was written and gated."
+                          },
+    "transition":  "close-issue",
+    "headBindingNote":  "Bound to 3718b1f744a2fab342155fa3b7ca184c3b0e7b13, the current head of main and the head every named gate ran at, which is also the head the chatgpt-hq review names. The #396 delta (3d2bf1d2 (a cherry-pick of PR #397 head 3c32d21e, author and date preserved)) is an ancestor of this head on main; this receipt does not bind to the landing commit because the review and the gate are at the current head, not at the landing commit.",
+    "releaseNote":  "The #396 lane lease was released by https://github.com/Pootytxng/sentinel/issues/396#issuecomment-5693141937. The close runs as `gh issue close 396` after this receipt gates PASS; the board's 'Item closed' workflow moves the item to Done. This receipt and its six siblings are then carried onto main in one commit by cowork-hq.",
+    "closureConditionNote":  "#396 asked that src-tauri/CLAUDE.md be paid from the archive and its byte budget ratcheted down: the three Care tier contracts moved out of the module map into docs/CARE_TIER_MODULE_CONTRACTS.md, the three Care entries of src-tauri/CLAUDE.md were compacted, and scripts/doc-budget.ps1 ratchets that cap 10240 -> 7680; doc-budget ran inside the gate at this head. Nothing in the issue remains open."
+}

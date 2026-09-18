@@ -1,0 +1,65 @@
+{
+  "actor": "claude-code",
+  "actorNote": "Transition executor only, under HQ handoff H-2026-09-15 (https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483) step 7, lane #397 (#396), re-routed on the record by the exact-head review https://github.com/Pootytxng/sentinel/pull/397#issuecomment-5692273698 and the claim it led to. Closing a superseded PR merges nothing and moves no ref; the branch stays on origin.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/396#issuecomment-5692636853",
+  "leaseEvidenceNote": "Ownership claim on #396 (the lane's issue) whose Write scope is the PR's three files (src-tauri/CLAUDE.md, docs/CARE_TIER_MODULE_CONTRACTS.md, scripts/doc-budget.ps1) and this receipt file; the three files are the delta already on main at currentHead, the receipt is the only write left.",
+  "exclusiveWriter": true,
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Inspected from C:/Users/Kuya/code/sentinel/.claude/worktrees/hq-handoff-h-2026-09-15-4144e8 at receipt time: origin fetched, origin/main = currentHead, PR #397 open at head 3c32d21e on claude/amazing-kapitsa-a2d02c, this folder clean except this receipt, no build/test/install process running.",
+  "transition": "close-superseded-pr",
+  "currentHead": "3d2bf1d2a1ca8eb4bfe8d201aa3424a30ea7e76e",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "3d2bf1d2a1ca8eb4bfe8d201aa3424a30ea7e76e",
+      "evidence": "logs/verify-local-2026-09-16T05-06-31Z.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "3d2bf1d2a1ca8eb4bfe8d201aa3424a30ea7e76e",
+      "evidence": "logs/verify-local-2026-09-16T05-06-31Z.log"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "3d2bf1d2a1ca8eb4bfe8d201aa3424a30ea7e76e",
+      "evidence": "logs/verify-local-2026-09-16T05-06-31Z.log"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "3d2bf1d2a1ca8eb4bfe8d201aa3424a30ea7e76e",
+      "evidence": "logs/verify-local-2026-09-16T05-06-31Z.log"
+    }
+  ],
+  "gateEvidenceNote": "The full local pre-push gate (scripts/verify-local.ps1) ran at 3d2bf1d2 in this worktree when that head was pushed to main and passed: logs/verify-local-2026-09-16T05-06-31Z.log. The gate at PR #397's own head 3c32d21e was not run; its tree carries docs/dispositions/claude__compy-health-parity.json (blob c676e84a), the record that failed the same gate at PR #394's head (logs/verify-local-2026-09-16T03-50-29Z.log), so the exact PR head cannot pass without a new commit.",
+  "independentReview": {
+    "practical": false,
+    "reason": "No reviewer is needed for a merge that does not happen: this transition closes PR #397 without merging. Its one commit (3c32d21e, claude-code, 2026-09-07) reached main by cherry-pick as 3d2bf1d2 with author and date preserved and passed the full local gate on the push. The merge-pr route was refused because the only exact-head review (https://github.com/Pootytxng/sentinel/pull/397#issuecomment-5692273698) is claude-code, the same executor identity as the commit, which this gate rejects; a non-claude-code review at main's head is still owed before #396 closes, and that ask is on the Handoff."
+  },
+  "pr": 397,
+  "prHead": "3c32d21e",
+  "issue": 396,
+  "kind": "lane",
+  "branch": "claude/amazing-kapitsa-a2d02c",
+  "supersededBy": "no PR: the PR's commit 3c32d21e is on main as the cherry-pick 3d2bf1d2 (identical delta, author and date preserved): docs/CARE_TIER_MODULE_CONTRACTS.md added, the three Care entries of src-tauri/CLAUDE.md compacted, the src-tauri/CLAUDE.md byte budget ratcheted 10240 -> 7680 in scripts/doc-budget.ps1.",
+  "hqDisposition": "https://github.com/Pootytxng/sentinel/issues/389#issuecomment-5683639483",
+  "dispositionNote": "HQ step 7 said review and land #397. The exact-head review (https://github.com/Pootytxng/sentinel/pull/397#issuecomment-5692273698) passed the content and measured the budget arithmetic at today's main (7184 of 7680 bytes), but it is claude-code reviewing claude-code, which scripts/work-control-gate.mjs refuses for a merge-pr receipt, and the PR head carries the baseline disposition record that reds the local gate. The bytes landed by cherry-pick on main instead, the same mechanism HQ prescribes for #317 and #306 and the route taken for #394. Issue #396 stays open in Review until a non-claude-code reviewer covers main's head.",
+  "refDisposition": "The branch ref claude/amazing-kapitsa-a2d02c stays on origin: the HQ handoff forbids ref deletion beyond land-pr's own prune and this landing did not go through land-pr. docs/dispositions/claude__amazing-kapitsa-a2d02c.json records it LANDED (the work is on main by cherry-pick; the ref is kept only until the owner prunes it), because scripts/branch-disposition-audit.mjs reds every push while a landed ref in the origin cache has no record (measured: logs/verify-local-2026-09-16T05-09-59Z.log). Owner action: git push origin --delete claude/amazing-kapitsa-a2d02c, then delete that record."
+}
