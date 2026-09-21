@@ -1139,14 +1139,16 @@ const HEADER = "Blocked: this command writes into a checkout this session does n
  * can hide a command means keeping that list ahead of the lexer forever — the same losing shape as
  * an allowlist of cmdlets, argued against at `segments`. So the test is turned around: an operand is
  * spared only if every `$` in it introduces an ordinary variable name and no backtick appears. `$1`,
- * `$?`, `${X:-…}` and a bare trailing `$` are all refused, which is conservative and costs an `ask`
- * that main gave anyway.
+ * `$?`, `${X:-…}` and a bare trailing `$` are all refused, which is conservative and costs only the
+ * sparing: the operand defers to the native permission flow (an `ask` from this hook, when that
+ * was written).
  *
  * The lesson is the general one: the exemption rested on a syntactic category ("it is only a
  * redirect") that the parser did not actually enforce, and "a redirect cannot recurse or delete a
  * tree" is true of the operator but not of a command hiding in its operand. So the operand must be
- * positively shown to be a plain name, and everything else goes back to `ask` — where it was before,
- * and where the `$( … )` spelling never left.
+ * positively shown to be a plain name, and everything else goes back to being unspared — then an
+ * `ask`, now a deferral to the native permission flow — where it was before, and where the `$( … )`
+ * spelling never left.
  *
  * IT IS TWO LINEAR PASSES AND NOT ONE REGEX, AND THAT IS THE WHOLE POINT.
  *
@@ -1356,12 +1358,13 @@ export function decideShell({
      *
      * THE EXEMPTION IS AS NARROW AS THE MEASUREMENT. Three conditions, all required:
      *
-     *   1. the ONLY thing that would have produced `ask` is a REDIRECT target — the `>`/`>>`/`2>`
-     *      operand `segments` collected, filed by `analyze` under the verb `redirection`. An
-     *      unresolved OPERAND of a mutating verb is untouched: `rm -rf $T`, `mv $A $B`, `sed -i … $F`,
-     *      `Remove-Item $P`, `Out-File $log`, `mkdir $D`, `git reset --hard $REF`, `node $SCRIPT`,
-     *      `… | xargs rm` all still ask, because `named` below skips only the redirects this
-     *      predicate spares and finds them first otherwise;
+     *   1. the ONLY unresolved thing is a REDIRECT target — the `>`/`>>`/`2>` operand `segments`
+     *      collected, filed by `analyze` under the verb `redirection`. An unresolved OPERAND of a
+     *      mutating verb is untouched: `rm -rf $T`, `mv $A $B`, `sed -i … $F`, `Remove-Item $P`,
+     *      `Out-File $log`, `mkdir $D`, `git reset --hard $REF`, `node $SCRIPT`, `… | xargs rm` are
+     *      all still not spared — each defers to the native permission flow (this hook asked about
+     *      them until 2026-09-18) — because `named` below skips only the redirects this predicate
+     *      spares and finds them first otherwise;
      *   2. that operand is a plain NAME and not a command substitution — see `SUBSTITUTION` above,
      *      and the review that made this condition necessary. Without it the rule was strictly worse
      *      than no rule, because the lexer folds a backtick substitution into the operand and the
@@ -1369,11 +1372,12 @@ export function decideShell({
      *   3. the command's effective working directory — after every `cd` this checker could follow —
      *      resolves to zone `own-claim`. `unprotected` is NOT enough here (the class-3 tail accepts
      *      it; this does not), and an unfollowable `cd` leaves `cwdUnknown`, which zones `unknown`
-     *      and keeps asking.
+     *      and is not spared: it defers to the native permission flow below.
      *
      * Everything resolved is already decided above and is unaffected: a resolved `sibling-checkout`
      * target still denies, a resolved `protected-global` target still denies, and an `unknown` zone
-     * still asks — this branch is only reached once none of those fired.
+     * still denies when it is known to reach another checkout and otherwise defers to the native
+     * permission flow — this branch is only reached once none of those fired.
      *
      * THE RESIDUAL, STATED EXACTLY. A variable could hold a path in another lane, so the spared
      * redirects of one command can clobber N files in a checkout this session does not own, where N
