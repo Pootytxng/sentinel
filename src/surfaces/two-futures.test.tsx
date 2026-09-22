@@ -6,8 +6,18 @@ import { TwoFutures } from "./TwoFutures";
 import { BenchmarkTab } from "./Benchmark";
 import { hasMeasuredPair, partGlow } from "./two-futures-view";
 import { readTwoFutures } from "../design/theme";
-import type { AppliedChange, BenchmarkState, Efficacy, RunReport } from "../types";
+import type {
+  BenchmarkState,
+  CompyChangeFact,
+  Efficacy,
+  Fact,
+  MachineModel,
+  RunReport,
+} from "../types";
 import type { HardwareInfo } from "../App";
+import type { BenchmarkAttribution } from "./benchmark-view";
+import { invalidateProbe } from "../data/probe-cache";
+import wire from "../test/fixtures/machine-model.wire.json";
 
 // THE ANTI-FABRICATION GUARD (spec 2026-07-07-two-futures-measured-split, required in the same
 // train as the feature): the split view renders NOTHING but the honest empty state unless a real
@@ -31,12 +41,14 @@ const NO_PAIR = {
 
 // Settable benchmark state so the BenchmarkTab wiring can be pinned both without and WITH a
 // measured pair (the subsume guard below).
-const mocks = vi.hoisted(() => ({ bench: null as unknown, changes: [] as unknown[] }));
+const mocks = vi.hoisted(() => ({ bench: null as unknown, model: null as unknown }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
     if (cmd === "get_benchmark_state") return Promise.resolve(mocks.bench ?? NO_PAIR);
-    if (cmd === "get_applied_changes") return Promise.resolve(mocks.changes);
+    if (cmd === "get_applied_changes") return Promise.resolve([]);
+    // The attribution reads the Machine Model (#452): a readable, empty ledger unless a test says otherwise.
+    if (cmd === "get_machine_model") return Promise.resolve(mocks.model ?? modelWith([]));
     if (cmd === "get_recommendations") return Promise.resolve([]);
     if (cmd === "get_appliable_rec_ids") return Promise.resolve([]);
     if (cmd === "get_fps_status") return Promise.resolve({ active: false });
@@ -49,7 +61,8 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   mocks.bench = null;
-  mocks.changes = [];
+  mocks.model = null;
+  invalidateProbe();
 });
 
 const hw = {
@@ -231,8 +244,9 @@ describe("flag compy_two_futures — DEFAULT OFF", () => {
     const c = render(<BenchmarkTab />);
     expect(await c.findByTestId("two-futures-split")).toBeTruthy();
     expect(c.queryByText("Since your baseline")).toBeNull();
-    // The attribution line the efficacy card carried moved into the split.
-    expect(c.getByText(/No Compy changes recorded since the baseline/)).toBeTruthy();
+    // The attribution line the efficacy card carried moved into the split (it lands once the
+    // Machine Model read resolves, so it is awaited).
+    expect(await c.findByText(/No Compy changes recorded since the baseline/)).toBeTruthy();
   });
 
   it("flag off + measured pair: today's efficacy card renders unchanged, no split", async () => {
@@ -247,20 +261,44 @@ describe("flag compy_two_futures — DEFAULT OFF", () => {
 // Combined-effect attribution (panel-review brief 2026-07-15 §2, bug→guard): a delta measured
 // with >1 change active belongs to the stack — both attribution surfaces (the split and the
 // efficacy card) must say "combined" and refuse to credit any single change.
-const ledgerChange = (id: string, title: string): AppliedChange =>
-  ({
+function fact<T>(value: T | null): Fact<T> {
+  return { value, class: "recorded-historically", source: "test", freshness: "stamped" };
+}
+// A Machine Model row applied on this PC, inside the baseline→latest window of `pair`.
+function row(id: string, title: string): CompyChangeFact {
+  return {
     id,
-    rec_id: id,
-    rec_title: title,
-    applied_at: "2026-07-03T12:00:00Z", // inside the baseline→latest window of `pair`
-    snapshot: {},
-    status: "applied",
-    is_still_active: true,
-  }) as AppliedChange;
+    title,
+    applied_at: fact("2026-07-03T12:00:00Z"),
+    status: fact("applied"),
+    still_active: fact(true),
+    rolled_back_at: fact<string>(null),
+    on_this_rig: fact(true),
+    reversible: fact(true),
+  };
+}
+const WIRE = wire as unknown as MachineModel;
+function modelWith(rows: CompyChangeFact[]): MachineModel {
+  const compy_changes = { ...WIRE.compy_changes, total_recorded: rows.length, changes: rows };
+  delete compy_changes.ledger_unreadable;
+  return { ...WIRE, compy_changes };
+}
+// What `benchmarkAttribution` hands the card for rows applied here: nothing left out, nothing cut.
+function counted(titles: string[]): BenchmarkAttribution {
+  return {
+    kind: "counted",
+    credited: titles.map((title, i) => ({ id: `c${i}`, title })),
+    otherRig: 0,
+    rigUnknown: 0,
+    truncated: false,
+    listed: titles.length,
+    totalRecorded: titles.length,
+  };
+}
 
 describe("combined-effect attribution — the stack gets the credit, never one change", () => {
   it("one change: plain attribution, no combined caveat", () => {
-    const c = render(<TwoFutures bench={pair} hw={null} changes={[ledgerChange("a", "Game Mode")]} />);
+    const c = render(<TwoFutures bench={pair} hw={null} attribution={counted(["Game Mode"])} />);
     const line = c.container.querySelector(".bench-change")!;
     expect(line.textContent).toContain("Measuring the effect of: Game Mode.");
     expect(line.textContent).not.toMatch(/combined/i);
@@ -271,7 +309,7 @@ describe("combined-effect attribution — the stack gets the credit, never one c
       <TwoFutures
         bench={pair}
         hw={null}
-        changes={[ledgerChange("a", "Game Mode"), ledgerChange("b", "Power plan")]}
+        attribution={counted(["Game Mode", "Power plan"])}
       />,
     );
     const line = c.container.querySelector(".bench-change")!;
@@ -282,9 +320,10 @@ describe("combined-effect attribution — the stack gets the credit, never one c
 
   it("two changes in the efficacy card (flag off): same combined wording", async () => {
     mocks.bench = pair;
-    mocks.changes = [ledgerChange("a", "Game Mode"), ledgerChange("b", "Power plan")];
+    mocks.model = modelWith([row("a", "Game Mode"), row("b", "Power plan")]);
     const c = render(<BenchmarkTab />);
     expect(await c.findByText("Since your baseline")).toBeTruthy();
+    await c.findByText(/Measuring the combined effect of/);
     const line = c.container.querySelector(".bench-change")!;
     expect(line.textContent).toContain("Measuring the combined effect of: Game Mode, Power plan.");
     expect(line.textContent).toContain("These 2 changes were measured together");
@@ -313,5 +352,51 @@ describe("partGlow — measured emphasis only, neutral without data", () => {
     };
     expect(partGlow(huge, "cpu")).toBe(2.2);
     expect(partGlow(huge, "ram")).toBe(0.6);
+  });
+});
+
+// #452: the line reads what the Machine Model could and could not say. Each "could not" is its own
+// sentence, never folded into the count or the named list.
+describe("attribution off the Machine Model — the line says what it does not know", () => {
+  const base = counted(["Game Mode"]) as Extract<BenchmarkAttribution, { kind: "counted" }>;
+
+  it("pending: no claim yet, so no sentence — the split still renders", () => {
+    const c = render(<TwoFutures bench={pair} hw={null} attribution={{ kind: "pending" }} />);
+    expect(c.getByTestId("two-futures-split")).toBeTruthy();
+    expect(c.container.querySelector(".bench-change")).toBeNull();
+  });
+
+  it("unknown: withdraws instead of crediting the user", () => {
+    const c = render(<TwoFutures bench={pair} hw={null} attribution={{ kind: "unknown" }} />);
+    expect(c.container.querySelector(".bench-change")!.textContent).toBe(
+      "Compy can't read its own record, so it can't say whether any of its changes are part of this result.",
+    );
+  });
+
+  it("a row left out for being another PC's is said so, in the plural the count needs", () => {
+    const c = render(<TwoFutures bench={pair} hw={null} attribution={{ ...base, otherRig: 2 }} />);
+    const line = c.container.querySelector(".bench-change")!.textContent!;
+    expect(line).toContain("Measuring the effect of: Game Mode.");
+    expect(line).toContain("2 Compy changes in this window were made on another PC and are not counted here.");
+  });
+
+  it("a credited row whose PC is unknown is said so", () => {
+    const c = render(<TwoFutures bench={pair} hw={null} attribution={{ ...base, rigUnknown: 1 }} />);
+    expect(c.container.querySelector(".bench-change")!.textContent).toContain(
+      "1 of these was recorded before Compy stamped which PC it was on, so it may not have been this one.",
+    );
+  });
+
+  it("a display-capped list is called a floor, with the exact shown-of-total", () => {
+    const c = render(
+      <TwoFutures
+        bench={pair}
+        hw={null}
+        attribution={{ ...base, truncated: true, listed: 25, totalRecorded: 40 }}
+      />,
+    );
+    expect(c.container.querySelector(".bench-change")!.textContent).toContain(
+      "Compy's model lists only its newest 25 of 40 recorded changes",
+    );
   });
 });

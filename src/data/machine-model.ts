@@ -89,3 +89,35 @@ export function factText<T>(fact: Fact<T>, format: (value: T) => string = String
   if (fact.value !== null && fact.value !== undefined) return format(fact.value);
   return fact.unknown_reason ?? fact.not_applicable_reason ?? "unknown";
 }
+
+/**
+ * What the Machine Model can say about Compy's changes being in effect on THIS PC (#452).
+ *
+ * The one number a screen may print as "Compy changed this and it is still that way" is
+ * `active_now`. Everything else the model counts (other rig, rig unknown, live check unreadable) is
+ * carried alongside so a screen can say what it does NOT know; none of it is folded into that number.
+ *
+ *   - `pending`    — the model has not been read yet. Print nothing: a stand-in number is a claim.
+ *   - `unreadable` — the model or the Trust Ledger could not be read. Say so; never "0 changes".
+ *   - `counted`    — `activeNow` changes are in effect here; `unknown` applied rows could not be
+ *                    live-checked; `totalRecorded` rows exist in the ledger.
+ */
+export type InEffectCounts =
+  | { kind: "pending" }
+  | { kind: "unreadable"; reason: string }
+  | { kind: "counted"; activeNow: number; unknown: number; totalRecorded: number };
+
+export const MODEL_UNREADABLE_REASON = "The Machine Model could not be read.";
+
+export function inEffectCounts(model: MachineModel | null | undefined): InEffectCounts {
+  if (model === undefined) return { kind: "pending" };
+  if (model === null) return { kind: "unreadable", reason: MODEL_UNREADABLE_REASON };
+  const compy = model.compy_changes;
+  if (compy.ledger_unreadable) return { kind: "unreadable", reason: compy.ledger_unreadable };
+  return {
+    kind: "counted",
+    activeNow: compy.active_now,
+    unknown: compy.in_effect_unknown,
+    totalRecorded: compy.total_recorded,
+  };
+}

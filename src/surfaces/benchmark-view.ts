@@ -1,7 +1,7 @@
 // Pure presentation helpers for the Benchmark tab — labels, verdict tone, delta
 // formatting. Kept separate from the component so they're unit-tested without a DOM.
 import type { Status } from "../design";
-import type { BenchComponent, Verdict, TrialVerdict } from "../types";
+import type { BenchComponent, MachineModel, Verdict, TrialVerdict } from "../types";
 import { rigTierLine, type RigTier } from "../data/rig-tier";
 import type { TFunction } from "i18next";
 
@@ -126,6 +126,80 @@ export function changesBetweenRuns<T extends { applied_at: string }>(
     const t = Date.parse(c.applied_at);
     return !Number.isNaN(t) && t > start && t <= end;
   });
+}
+
+// ── Attribution off the Machine Model (#452) ──
+/**
+ * What the Test verdict may say about which Compy changes it measured. Read from the Machine
+ * Model's `compy_changes`, never from the bare applied-changes IPC list: the model is the one reader
+ * that knows whether the ledger was readable and which PC each row was applied on.
+ *
+ *   - `pending` — the model has not been read yet. Print nothing.
+ *   - `unknown` — the model or the ledger could not be read, or the ledger is known incomplete and
+ *                 names nothing in the window. "No Compy changes recorded" would credit the delta to
+ *                 the user off a record Compy cannot read, so the line withdraws instead. A known
+ *                 row on an incomplete ledger is still named: the health notice above qualifies it.
+ *   - `counted` — `credited` are the rows applied inside the baseline→latest window on this PC, or
+ *                 on a PC the ledger could not name (those are also counted in `rigUnknown` so the
+ *                 line can say so). Rows the ledger says were applied on ANOTHER PC are never
+ *                 credited; they are counted in `otherRig`. `truncated` is true when the model's
+ *                 display-capped list may have cut rows out of the window, so the named list is a
+ *                 floor, and `listed`/`totalRecorded` let the line say by how much.
+ */
+export type BenchmarkAttribution =
+  | { kind: "pending" }
+  | { kind: "unknown" }
+  | {
+      kind: "counted";
+      credited: { id: string; title: string }[];
+      otherRig: number;
+      rigUnknown: number;
+      truncated: boolean;
+      listed: number;
+      totalRecorded: number;
+    };
+
+export function benchmarkAttribution(
+  bench: { baseline_at?: string | null; latest_at?: string | null } | null,
+  model: MachineModel | null | undefined,
+  ledgerIncomplete: boolean,
+): BenchmarkAttribution {
+  if (model === undefined) return { kind: "pending" };
+  if (model === null) return { kind: "unknown" };
+  const compy = model.compy_changes;
+  if (compy.ledger_unreadable) return { kind: "unknown" };
+  const rows = compy.changes;
+  // The same window every attributing surface filters by (changesBetweenRuns). A row without a
+  // recorded apply time cannot be placed in it, so it is not credited.
+  const placed = rows
+    .filter((c) => typeof c.applied_at.value === "string")
+    .map((c) => ({ ...c, applied_at: c.applied_at.value as string }));
+  const inWindow = changesBetweenRuns(bench, placed);
+  const credited = inWindow
+    .filter((c) => c.on_this_rig.value !== false)
+    .map((c) => ({ id: c.id, title: c.title }));
+  if (ledgerIncomplete && credited.length === 0) return { kind: "unknown" };
+  const otherRig = inWindow.length - credited.length;
+  const rigUnknown = inWindow.filter((c) => c.on_this_rig.value === null).length;
+  // The model caps its list for display: if rows were cut AND every row still shown was applied
+  // after the baseline, the cut rows could also sit inside the window — the named list is a floor.
+  const start = bench?.baseline_at ? Date.parse(bench.baseline_at) : NaN;
+  const end = bench?.latest_at ? Date.parse(bench.latest_at) : NaN;
+  const shownTimes = placed.map((c) => Date.parse(c.applied_at)).filter((n) => !Number.isNaN(n));
+  const truncated =
+    !Number.isNaN(start) &&
+    !Number.isNaN(end) &&
+    compy.total_recorded > rows.length &&
+    (shownTimes.length === 0 || Math.min(...shownTimes) > start);
+  return {
+    kind: "counted",
+    credited,
+    otherRig,
+    rigUnknown,
+    truncated,
+    listed: rows.length,
+    totalRecorded: compy.total_recorded,
+  };
 }
 
 // ── A2 hardware-tier segmentation (LOCAL, no cohort/network) ──
