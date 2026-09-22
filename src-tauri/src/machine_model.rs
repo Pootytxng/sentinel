@@ -56,17 +56,23 @@ const IDENTITY_STREAM_OBSERVED_ROWS: usize = 2_000;
 /// stamped on sessions (at most [`crate::sessions::MAX_SESSIONS`] prints × two kinds — the
 /// fingerprint carries no Windows or power-plan field) and on ledger applies, plus active Drift
 /// Watch notices. Applies and notices have no numeric cap, but each adds a row only when the rig
-/// or a readiness state actually changed between two records, so this margin is generous for any
-/// store that grew honestly.
+/// or a readiness state actually changed between two records — for the ledger that is proven,
+/// not assumed: `ledger_applies_at_a_constant_rig_put_no_observed_rows_on_the_tape` and
+/// `observed_rows_under_the_ledger_track_rig_flips_not_apply_count` (#506) — so this margin is
+/// generous for any store that grew honestly.
 const OBSERVED_CHRONOLOGY_HEADROOM: usize = 500;
 /// The sanity ceiling on the observed-scope exemption (#456). Observed rows travel past
 /// [`MAX_CHRONOLOGY`] because the History tape is their only surface — but "uncapped" still has
 /// to be finite at THIS layer, because every `get_machine_model` payload carries them whether or
 /// not the caller wants the tape. It sits above what the retained stores can produce
 /// (`a_full_identity_store_never_reaches_the_observed_ceiling`), so it never shortens the tape
-/// for a store the producers can hold. When it does bind — a corrupt or hand-edited store — the
-/// OLDEST observed rows drop off the shown list, `total_events` still counts them, and the tape
-/// starts later rather than lying.
+/// for a store the producers can hold. The realistic way to reach it is slow, legitimate growth:
+/// a long-lived install whose rig genuinely changed more times than the headroom holds, across
+/// ledger applies (no retention cap ever ages those out, though each real change is one or two
+/// rows and an apply on an unchanged rig is none — see the two tests above) and sessions. A
+/// corrupt or hand-edited store is the other way there. When it does bind, the OLDEST observed
+/// rows drop off the shown list, `total_events` still counts them, and the tape starts later
+/// rather than lying.
 pub(crate) const MAX_OBSERVED_CHRONOLOGY: usize =
     IDENTITY_STREAM_OBSERVED_ROWS + OBSERVED_CHRONOLOGY_HEADROOM;
 
@@ -1004,8 +1010,9 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
         .collect();
     // The cap counts only the scopes another surface already shows in full; observed changes are
     // shown nowhere else, so they all travel (see [`MAX_CHRONOLOGY`]) — short of the sanity
-    // ceiling [`MAX_OBSERVED_CHRONOLOGY`], which no store the producers can retain reaches
-    // (#456). Order is untouched — the list stays newest-first with the capped scopes simply
+    // ceiling [`MAX_OBSERVED_CHRONOLOGY`], which sits above what the retained stores can produce
+    // and is reached only by slow legitimate growth on a long-lived install, or a corrupt store
+    // (#456, #506). Order is untouched — the list stays newest-first with the capped scopes simply
     // thinning out at the tail, and should the ceiling ever bind it is the OLDEST observed rows
     // that fall off it.
     let mut capped_taken = 0usize;
@@ -3348,8 +3355,148 @@ mod machine_model_tests {
         assert_eq!(m.chronology.total_events, assembled.events.len());
     }
 
-    /// When the ceiling does bind — only a store beyond what the producers retain can get there —
-    /// it behaves like the display cap and not like a lie: the newest rows stay, the oldest fall
+    /// The headroom's third producer, stated so it can be falsified (#506). The Trust Ledger never
+    /// caps `AppliedChange` rows and stamps a rig fingerprint on every apply, so on apply count
+    /// alone it could outgrow any ceiling. It does not, because `assemble_timeline` feeds every
+    /// fingerprinted record — sessions and applies together, time-ordered — through ONE
+    /// `IdentityDeltaScan`, which emits a row only when a print DIFFERS from the last one it saw.
+    /// A rig that never changes puts nothing on the tape however often Compy applies.
+    #[test]
+    fn ledger_applies_at_a_constant_rig_put_no_observed_rows_on_the_tape() {
+        let stamp = |i: usize| {
+            (chrono::DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z").expect("base stamp")
+                + chrono::Duration::minutes(i as i64))
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        };
+        let mut p = producers();
+        p.snapshots.clear();
+        // More applies than the ceiling holds, every one on the same rig: if apply count drove
+        // observed rows, this store alone would bind the ceiling.
+        let applies = MAX_OBSERVED_CHRONOLOGY * 2;
+        p.applied = (0..applies)
+            .map(|i| {
+                let mut c = ledger_row(&format!("apply-{i}"), "Enable Game Mode", &stamp(i));
+                c.hw_fingerprint = Some(fp("Radeon RX 9070 XT", "25.5.1", 32, "2560x1440@165", "h"));
+                c
+            })
+            .collect();
+
+        let assembled = crate::intelligence::assemble_timeline(&p.timeline_inputs());
+        let observed = assembled
+            .events
+            .iter()
+            .filter(|e| e.scope == EventScope::Observed)
+            .count();
+        assert_eq!(
+            observed, 0,
+            "a constant rig stamped on {applies} applies put {observed} observed rows on the tape"
+        );
+        assert_eq!(
+            assembled.events.len(),
+            applies,
+            "every apply still reached the timeline as its own Compy-applied event"
+        );
+
+        let m = model_from(&p);
+        assert!(
+            m.chronology.entries.iter().all(|e| e.scope != EventScope::Observed),
+            "nothing observed is shown"
+        );
+        assert_eq!(
+            m.chronology.entries.len(),
+            MAX_CHRONOLOGY,
+            "the applied scope stays on its own display cap"
+        );
+        assert_eq!(m.chronology.total_events, applies, "the record counts every apply");
+    }
+
+    /// And when the rig DOES change under the ledger, the tape grows with the changes and not with
+    /// the applies between them: the same flips spread over eight times as many applies are the
+    /// same observed rows, in the same order. Each flip is at most two rows — hardware-change and
+    /// gpu-driver-change — because a rig fingerprint carries no Windows or power-plan field; that
+    /// "× two kinds" is the arithmetic `OBSERVED_CHRONOLOGY_HEADROOM` is sized from.
+    #[test]
+    fn observed_rows_under_the_ledger_track_rig_flips_not_apply_count() {
+        let stamp = |i: usize| {
+            (chrono::DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z").expect("base stamp")
+                + chrono::Duration::minutes(i as i64))
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        };
+        // `flips` rig changes, one every `period` applies; every flip moves the driver AND the
+        // RAM — the widest change one print can carry.
+        let store = |flips: usize, period: usize| {
+            let mut p = producers();
+            p.snapshots.clear();
+            p.applied = (0..(flips + 1) * period)
+                .map(|i| {
+                    let seg = i / period;
+                    let mut c = ledger_row(&format!("apply-{i}"), "Enable Game Mode", &stamp(i));
+                    c.hw_fingerprint = Some(fp(
+                        "Radeon RX 9070 XT",
+                        &format!("25.{seg}.1"),
+                        16 + 16 * (seg as u32 % 2),
+                        "2560x1440@165",
+                        &format!("h{seg}"),
+                    ));
+                    c
+                })
+                .collect();
+            p
+        };
+        let observed_kinds = |p: &ChronologyProducers| -> Vec<String> {
+            crate::intelligence::assemble_timeline(&p.timeline_inputs())
+                .events
+                .into_iter()
+                .filter(|e| e.scope == EventScope::Observed)
+                .map(|e| e.event_type)
+                .collect()
+        };
+
+        let flips = 40;
+        let sparse = store(flips, 3);
+        let dense = store(flips, 25);
+        assert!(
+            dense.applied.len() >= 8 * sparse.applied.len(),
+            "the fixture must separate flips from applies: {} vs {} applies",
+            dense.applied.len(),
+            sparse.applied.len()
+        );
+        let sparse_kinds = observed_kinds(&sparse);
+        let dense_kinds = observed_kinds(&dense);
+        assert_eq!(sparse_kinds.len(), flips * 2, "{flips} flips × two kinds per print");
+        assert_eq!(
+            dense_kinds, sparse_kinds,
+            "the same flips over 8× the applies: the same rows, the same kinds, the same order"
+        );
+        assert_eq!(
+            sparse_kinds.iter().filter(|k| *k == "hardware-change").count(),
+            flips,
+            "one hardware-change per flip"
+        );
+        assert_eq!(
+            sparse_kinds.iter().filter(|k| *k == "gpu-driver-change").count(),
+            flips,
+            "one gpu-driver-change per flip"
+        );
+
+        // And the model shows every one of them: they are what the headroom is for.
+        let m = model_from(&dense);
+        let shown = m
+            .chronology
+            .entries
+            .iter()
+            .filter(|e| e.scope == EventScope::Observed)
+            .count();
+        assert_eq!(shown, flips * 2, "every observed row travels");
+        assert_eq!(
+            m.chronology.total_events,
+            dense.applied.len() + flips * 2,
+            "the record counts every apply and every flip"
+        );
+    }
+    /// When the ceiling does bind — a long-lived install whose rig changed more times than the
+    /// headroom holds, or a store beyond what the producers retain — it behaves like the display
+    /// cap and not like a lie: the newest rows stay, the oldest fall
     /// off the SHOWN list, and `total_events` still counts every one of them.
     #[test]
     fn past_the_observed_ceiling_the_oldest_rows_drop_and_the_count_stays_honest() {
