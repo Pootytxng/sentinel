@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/489#issuecomment-5769750656",
+  "leaseEvidenceNote": "Newest Ownership claim on #489, posted by Claude Code 2026-09-22T01:00Z for the #490 landing. It names this exact worktree and branch and limits writes to the branch delta origin/main...75c80f65 plus the mark-ready, merge and close receipt files. Codex's review lane released its lease by Handoff 5769511990 before this claim; the board row was Ready / Claude Code with no active claim. The lease is released by a Handoff before this close transition is gated.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-22T00:59Z (six open PRs): only PR #490 touches any of the sixteen delta paths and no PR touches the three new receipt paths. The board's only Active row is this claim. scripts/scope-drift-gate.mjs --issue 489 --refresh reads OK: 16 changed paths, all inside the claim.",
+  "inheritedWork": false,
+  "currentHead": "75c80f651513a156408001586e9dca3c54603669",
+  "pr": 490,
+  "issue": 489,
+  "kind": "lane",
+  "branch": "claude/purge-order-constraints-f885ec",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta origin/main..75c80f65 is two commits, 8668cc7c (the purge) and 75c80f65 (the review repair), both authored and committed by claude-code <claude-code@desk.local>. Codex reviewed twice and authored no mutation in the delta; its only writes were to gitignored autopilot.json copies outside every branch.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "75c80f651513a156408001586e9dca3c54603669",
+      "evidence": "logs/verify-local-2026-09-21T22-11-25Z.log:9-44 (SHA-256 50F89151DC79C39BCAD24A0A324812A6F07771CF7775DBFE417C894857F44B28)",
+      "summary": "447 frontend test files passed; 7,364 passed / 4 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "75c80f651513a156408001586e9dca3c54603669",
+      "evidence": "logs/verify-local-2026-09-21T22-11-25Z.log:45-71 (same SHA-256)",
+      "summary": "TypeScript check and Vite production build passed (built in 11.04s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "75c80f651513a156408001586e9dca3c54603669",
+      "evidence": "logs/verify-local-2026-09-21T22-11-25Z.log:72-1788 (same SHA-256)",
+      "summary": "1,327 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "75c80f651513a156408001586e9dca3c54603669",
+      "evidence": "logs/verify-local-2026-09-21T22-11-25Z.log:1789-2073 (same SHA-256)",
+      "summary": "Clippy finished clean under -D warnings."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran at exact head 75c80f65 on 2026-09-21T22:11:25Z and the push exited 0 with LOCAL CHECK RESULT: PASS. The author read every stage in the log; the independent reviewer re-hashed the same log to the SHA above and confirmed the named stages. The landing carrier will push the post-merge receipt commit through the native full gate again; no --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 16 changed paths since origin/main measured against the claim on #489, every one inside the claim. Re-measured 2026-09-22T01:01Z under the landing claim with --refresh: OK, 16 changed paths, all inside the delta-plus-receipts scope.",
+    "reconciliationNote": "The gate-run line was measured against the repair claim (16 delta paths); the landing claim widens that scope by the three receipt paths only."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "75c80f651513a156408001586e9dca3c54603669",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/490#pullrequestreview-5272965461",
+    "reviewerNote": "Independent Codex context reviewed the exact head 75c80f65 and returned PASS, superseding its CHANGES REQUIRED review 5271579348 of 8668cc7c; both delta commits are by claude-code, and Codex made no checkout or PR mutation. GitHub records COMMENTED because executors share one account, while the review body explicitly says PASS and names the reviewer identity. The review's own landing boundary (rewrite the ignored autopilot.json copies) was completed by Codex and re-verified read-only by the actor: all seven copies parse and have zero hooks/stop-continue.mjs hits."
+  },
+  "transition": "close-issue",
+  "closingNote": "PR #490 is merged and the hook purge with its review repair is on main. #489 closes as done after the landing claim is released; only the receipt-carrier commit remains, and it carries bookkeeping rather than product work. The owner-applied items outside the repo (~/.claude settings, output style) were never in this issue's repo scope."
+}
