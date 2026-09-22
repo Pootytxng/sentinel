@@ -22,7 +22,9 @@ use crate::compy_data_dir;
 // stripped to the most-recent 5 below, so the file stays small). The free Sessions view shows the most
 // recent 20; the extended history + trends over the full retained set is a Compy Pro view
 // (`SessionTrends`, ProGate-gated — dark until licensing is armed).
-const MAX_SESSIONS: usize = 100;
+/// Read by `machine_model` (#456): the observed-chronology headroom must hold the fingerprint
+/// stream these retained sessions can emit.
+pub(crate) const MAX_SESSIONS: usize = 100;
 /// Sessions shorter than this (seconds) are too brief to debrief or compare fairly — an alt-tab blip
 /// or accidental capture shouldn't produce a verdict or resolve an armed comparison. Owner-tunable.
 const MIN_SESSION_SECS: u64 = 60;
