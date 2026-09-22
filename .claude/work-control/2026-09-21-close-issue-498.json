@@ -1,0 +1,80 @@
+{
+  "actor": "codex",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/498#issuecomment-5769265668",
+  "leaseEvidenceNote": "Newest Ownership claim on #498, posted by Codex for the #499 landing. It names this exact worktree and branch and limits writes to docs/RELEASE_STATE.md plus the mark-ready, merge and close receipt files. The lease is released by a Handoff before this close transition is gated.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory found only PR #499 touching docs/RELEASE_STATE.md and no PR touching these three new receipt paths. The active-board census found no live lane naming this worktree or scope before the Codex claim.",
+  "inheritedWork": false,
+  "currentHead": "5d87f7a7713d4da99cc0242b215c969f57cb0702",
+  "pr": 499,
+  "issue": 498,
+  "kind": "lane",
+  "branch": "codex/498-release-state-restamp",
+  "mutationAuthors": [
+    "codex"
+  ],
+  "mutationAuthorsNote": "The proof delta 7862b967..5d87f7a7 is one commit, authored and committed by codex <codex@desk.local>. Claude Code reviewed but authored no mutation in the delta.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "5d87f7a7713d4da99cc0242b215c969f57cb0702",
+      "evidence": "logs/verify-local-2026-09-21T12-50-59Z.log:9-44 (SHA-256 3E59538F7AC126F6DB0BDA54C988EC955632B95B7E4A830AF5578111914CD4AD)",
+      "summary": "451 frontend test files passed; 7,458 passed / 5 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "5d87f7a7713d4da99cc0242b215c969f57cb0702",
+      "evidence": "logs/verify-local-2026-09-21T12-50-59Z.log:45-71 (same SHA-256)",
+      "summary": "TypeScript check and Vite production build passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "5d87f7a7713d4da99cc0242b215c969f57cb0702",
+      "evidence": "logs/verify-local-2026-09-21T12-50-59Z.log Rust-test stage (same SHA-256)",
+      "summary": "1,327 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "5d87f7a7713d4da99cc0242b215c969f57cb0702",
+      "evidence": "logs/verify-local-2026-09-21T12-50-59Z.log clippy stage (same SHA-256)",
+      "summary": "Clippy finished clean under -D warnings."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran at exact head 5d87f7a7 and the push exited 0. The author recorded LOCAL CHECK RESULT: PASS; the independent reviewer re-hashed the 12:50:59Z log to the SHA above, confirmed all stages and reran the live release-state verifier at this exact head: 31/31 citations OK and zero state drift. The landing carrier will also push the post-merge receipt commit through the native full gate; no --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "Codex ran scope-drift-gate.mjs --issue 498 --cwd this worktree --refresh at exact head 5d87f7a7 after drafting the receipts: four changed paths, consisting only of docs/RELEASE_STATE.md and the three named Work Control receipts, all inside the live claim.",
+    "reconciliationNote": "The automatic pre-push line was not used as evidence because this worktree was manually created."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "claude-code",
+    "status": "passed",
+    "head": "5d87f7a7713d4da99cc0242b215c969f57cb0702",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/499#pullrequestreview-5272233041",
+    "reviewerNote": "Independent Claude Code context reviewed the one-line release-state repair at the exact head. The only proof-delta commit is by codex; Claude Code made no checkout or PR mutation. GitHub records COMMENTED because executors share one account, while the review body explicitly says PASS and names the reviewer identity."
+  },
+  "transition": "close-issue",
+  "closingNote": "PR #499 is merged and the source anchor repair is on main. #498 closes as done after the landing claim is released; only the receipt-carrier commit remains, and it carries bookkeeping rather than product work."
+}
