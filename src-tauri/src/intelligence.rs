@@ -151,7 +151,18 @@ pub(crate) struct IntelligenceStore {
 const STORE_SCHEMA_VERSION: u32 = 1;
 /// Generous bound (identity changes are rare — this is years of history). Oldest entries
 /// drop first; the timeline simply starts later, it never invents what fell off.
-const MAX_IDENTITY_SNAPSHOTS: usize = 500;
+///
+/// Coupled (#456): `machine_model::MAX_OBSERVED_CHRONOLOGY` is written out from this count ×
+/// [`OBSERVED_KINDS_PER_READING`]. Move this and that ceiling's test fails until the ceiling is
+/// moved on purpose — every `get_machine_model` payload grows with it.
+pub(crate) const MAX_IDENTITY_SNAPSHOTS: usize = 500;
+/// The most observed-change events ONE identity reading can add to the timeline.
+/// `IdentityDeltaScan::feed` folds GPU, RAM and display into a single `hardware-change`, then emits
+/// at most one `gpu-driver-change`, one `windows-build-change` and one `power-plan-change`: four
+/// kinds, each at most once per reading (`feed` debug-asserts it;
+/// `one_identity_reading_adds_at_most_the_declared_observed_kinds` pins it).
+/// `machine_model::MAX_OBSERVED_CHRONOLOGY` is written out from this (#456).
+pub(crate) const OBSERVED_KINDS_PER_READING: usize = 4;
 /// At most one identity probe per this interval (probes run on app start + on intelligence
 /// command calls — no mid-run polling; the cadence limit is stated in probe copy).
 const IDENTITY_REFRESH_MIN_SECS: u64 = 600;
@@ -454,6 +465,7 @@ impl IdentityDeltaScan {
         windows: Option<(&str, Option<u32>, &str)>,
         power: &str,
     ) {
+        let emitted_before = out.len();
         let mut hw_changes: Vec<String> = Vec::new();
         let mut hw_from_at: Option<String> = None;
         let mut gpu_swapped = false;
@@ -601,6 +613,12 @@ impl IdentityDeltaScan {
             }
             self.last_power = Some((power.to_string(), at.to_string()));
         }
+        debug_assert!(
+            out.len() - emitted_before <= OBSERVED_KINDS_PER_READING,
+            "one reading emitted {} observed kinds; OBSERVED_KINDS_PER_READING (and the ceiling written from it) allows {}",
+            out.len() - emitted_before,
+            OBSERVED_KINDS_PER_READING
+        );
     }
 }
 
@@ -2668,6 +2686,60 @@ mod tests {
             last_ready_at: last_ready_at.map(Into::into),
             noticed_at: noticed_at.into(),
         }
+    }
+
+    /// #456: `machine_model::MAX_OBSERVED_CHRONOLOGY` is written out as snapshot retention × the
+    /// kinds one reading can emit. This pins the second factor against the scanner itself, so a
+    /// fifth observed kind cannot be added to `feed` without the ceiling's arithmetic failing.
+    #[test]
+    fn one_identity_reading_adds_at_most_the_declared_observed_kinds() {
+        let reading = |at: &str, driver: &str, ram_gb: u32, display: &str, build: &str, plan: &str| {
+            IdentitySnapshot {
+                observed_at: at.into(),
+                gpu: "Radeon RX 9070 XT".into(),
+                gpu_driver: driver.into(),
+                gpu_driver_date: String::new(),
+                windows_build: build.into(),
+                windows_ubr: Some(1),
+                windows_display_version: "24H2".into(),
+                power_plan: plan.into(),
+                ram_gb,
+                display: display.into(),
+                hw_hash: "h".into(),
+            }
+        };
+        // Every field the scanner watches changes between the two readings, GPU held so the
+        // driver delta is not reset as a swap artefact — the widest single reading there is.
+        let snaps = vec![
+            reading("2026-07-01T08:00:00Z", "25.5.1", 32, "2560x1440@165", "26100", "Balanced"),
+            reading("2026-07-02T08:00:00Z", "25.6.1", 64, "3840x2160@144", "26200", "High performance"),
+        ];
+        let asm = assemble_timeline(&empty_inputs(&[], &[], &snaps));
+        let mut kinds: Vec<&str> = asm
+            .events
+            .iter()
+            .filter(|e| e.scope == EventScope::Observed)
+            .map(|e| e.event_type.as_str())
+            .collect();
+        kinds.sort_unstable();
+        assert_eq!(
+            kinds,
+            vec!["gpu-driver-change", "hardware-change", "power-plan-change", "windows-build-change"],
+            "one reading emits each observed kind at most once, GPU/RAM/display folded into one row"
+        );
+        assert_eq!(kinds.len(), OBSERVED_KINDS_PER_READING, "the declared per-reading maximum IS the scanner's");
+
+        // A GPU swap on top of all that emits no MORE rows: the driver delta is the swap's story.
+        let swapped = vec![
+            snaps[0].clone(),
+            IdentitySnapshot { gpu: "Radeon RX 9090 XT".into(), ..snaps[1].clone() },
+        ];
+        let asm = assemble_timeline(&empty_inputs(&[], &[], &swapped));
+        let observed = asm.events.iter().filter(|e| e.scope == EventScope::Observed).count();
+        assert!(
+            observed < OBSERVED_KINDS_PER_READING,
+            "a swap resets driver tracking instead of adding a row: {observed} observed"
+        );
     }
 
     fn drift_inputs(notices: &[crate::drift::DriftNotice]) -> TimelineInputs<'_> {

@@ -34,7 +34,8 @@ pub(crate) const SCHEMA_VERSION: u32 = 1;
 /// MACHINE_MODEL.md §9 forbids turning the model into a telemetry lake, and a consumer that needs
 /// the full history reads the timeline directly.
 ///
-/// [`EventScope::Observed`] is exempt (#450). Compy-applied and measurement events are each shown
+/// [`EventScope::Observed`] is exempt (#450) — bounded only by the sanity ceiling
+/// [`MAX_OBSERVED_CHRONOLOGY`] (#456). Compy-applied and measurement events are each shown
 /// by a surface that reads its own store in full (the Trust Ledger, the session record), so a cap
 /// on the model's copy of them hides nothing. Observed changes have no other store: the History
 /// tape is the only place they are ever shown, and it read them uncapped off the intelligence
@@ -44,6 +45,30 @@ const MAX_CHRONOLOGY: usize = 25;
 /// Compy-change rows returned. Same bound, same reason. The COUNTS above them are never truncated,
 /// and neither is the evidence pass: this caps what is SHOWN, never what is accounted for.
 const MAX_CHANGES: usize = 25;
+/// Observed rows the identity-snapshot store can put on the timeline at its retention limit:
+/// [`crate::intelligence::MAX_IDENTITY_SNAPSHOTS`] readings ×
+/// [`crate::intelligence::OBSERVED_KINDS_PER_READING`] kinds per reading. Written out as a literal
+/// rather than derived so that a retention change cannot grow every `get_machine_model` payload
+/// unnoticed: `the_observed_ceiling_is_tied_to_identity_snapshot_retention` fails until whoever
+/// moved one constant moves the other on purpose (#456).
+const IDENTITY_STREAM_OBSERVED_ROWS: usize = 2_000;
+/// Room above that stream for the observed rows no snapshot count bounds: rig-fingerprint shifts
+/// stamped on sessions (at most [`crate::sessions::MAX_SESSIONS`] prints × two kinds — the
+/// fingerprint carries no Windows or power-plan field) and on ledger applies, plus active Drift
+/// Watch notices. Applies and notices have no numeric cap, but each adds a row only when the rig
+/// or a readiness state actually changed between two records, so this margin is generous for any
+/// store that grew honestly.
+const OBSERVED_CHRONOLOGY_HEADROOM: usize = 500;
+/// The sanity ceiling on the observed-scope exemption (#456). Observed rows travel past
+/// [`MAX_CHRONOLOGY`] because the History tape is their only surface — but "uncapped" still has
+/// to be finite at THIS layer, because every `get_machine_model` payload carries them whether or
+/// not the caller wants the tape. It sits above what the retained stores can produce
+/// (`a_full_identity_store_never_reaches_the_observed_ceiling`), so it never shortens the tape
+/// for a store the producers can hold. When it does bind — a corrupt or hand-edited store — the
+/// OLDEST observed rows drop off the shown list, `total_events` still counts them, and the tape
+/// starts later rather than lying.
+pub(crate) const MAX_OBSERVED_CHRONOLOGY: usize =
+    IDENTITY_STREAM_OBSERVED_ROWS + OBSERVED_CHRONOLOGY_HEADROOM;
 
 // ─── Evidence vocabulary (MACHINE_MODEL.md §3) ───────────────────────────
 
@@ -978,14 +1003,19 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
         })
         .collect();
     // The cap counts only the scopes another surface already shows in full; observed changes are
-    // shown nowhere else, so they all travel (see [`MAX_CHRONOLOGY`]). Order is untouched — the
-    // list stays newest-first with the capped scopes simply thinning out at the tail.
+    // shown nowhere else, so they all travel (see [`MAX_CHRONOLOGY`]) — short of the sanity
+    // ceiling [`MAX_OBSERVED_CHRONOLOGY`], which no store the producers can retain reaches
+    // (#456). Order is untouched — the list stays newest-first with the capped scopes simply
+    // thinning out at the tail, and should the ceiling ever bind it is the OLDEST observed rows
+    // that fall off it.
     let mut capped_taken = 0usize;
+    let mut observed_taken = 0usize;
     let entries: Vec<ChronologyEntry> = all_entries
         .iter()
         .filter(|e| {
             if e.scope == EventScope::Observed {
-                return true;
+                observed_taken += 1;
+                return observed_taken <= MAX_OBSERVED_CHRONOLOGY;
             }
             capped_taken += 1;
             capped_taken <= MAX_CHRONOLOGY
@@ -3202,6 +3232,175 @@ mod machine_model_tests {
             "the scopes with their own surface stay capped"
         );
         assert_eq!(m.chronology.total_events, over_cap * 2, "the record is not capped either");
+    }
+
+    // ── 7b. The exemption has a bound, and the bound is tied to the producers (#456) ─────────
+
+    /// `IDENTITY_STREAM_OBSERVED_ROWS` is a literal on purpose: a derived constant would move in
+    /// step with snapshot retention and every `get_machine_model` payload would grow with nobody
+    /// noticing. This test IS the notice — it fails until whoever moved either side moves the other.
+    #[test]
+    fn the_observed_ceiling_is_tied_to_identity_snapshot_retention() {
+        use crate::intelligence::{MAX_IDENTITY_SNAPSHOTS, OBSERVED_KINDS_PER_READING};
+        assert_eq!(
+            IDENTITY_STREAM_OBSERVED_ROWS,
+            MAX_IDENTITY_SNAPSHOTS * OBSERVED_KINDS_PER_READING,
+            "identity-snapshot retention or the per-reading kind count moved: re-derive \
+             IDENTITY_STREAM_OBSERVED_ROWS (and so MAX_OBSERVED_CHRONOLOGY) in the same change — \
+             this is the size of every get_machine_model payload changing"
+        );
+        // Compile-time, per clippy (assertions_on_constants): the inequalities hold or the test
+        // target does not build — which fails `cargo test` just as loudly, at the same named test.
+        const {
+            assert!(
+                OBSERVED_CHRONOLOGY_HEADROOM >= crate::sessions::MAX_SESSIONS * 2,
+                "the headroom must at least hold the session fingerprint stream: MAX_SESSIONS prints × \
+                 two kinds (hardware-change, gpu-driver-change)"
+            );
+        }
+        assert_eq!(
+            MAX_OBSERVED_CHRONOLOGY,
+            IDENTITY_STREAM_OBSERVED_ROWS + OBSERVED_CHRONOLOGY_HEADROOM
+        );
+        const {
+            assert!(
+                MAX_OBSERVED_CHRONOLOGY > MAX_CHRONOLOGY,
+                "the exemption widens the display cap, never narrows it"
+            );
+        }
+    }
+
+    /// The property slice 2 bought, re-proven under the ceiling: a store filled to the producers'
+    /// own retention limits — every reading changing everything the scanner watches, every
+    /// session print shifting the rig — still puts EVERY observed row through the model. The
+    /// ceiling is a sanity bound above that, not a second display cap.
+    #[test]
+    fn a_full_identity_store_never_reaches_the_observed_ceiling() {
+        use crate::intelligence::MAX_IDENTITY_SNAPSHOTS;
+        use crate::sessions::MAX_SESSIONS;
+        let stamp = |base: &str, hours: usize| {
+            (chrono::DateTime::parse_from_rfc3339(base).expect("base stamp")
+                + chrono::Duration::hours(hours as i64))
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        };
+        let mut p = producers();
+        // MAX_IDENTITY_SNAPSHOTS readings, each changing driver, RAM, display, Windows build and
+        // power plan (GPU held, so the driver delta is not reset as a swap artefact): four
+        // observed kinds per reading after the first — the widest stream the snapshot store holds.
+        p.snapshots = (0..MAX_IDENTITY_SNAPSHOTS)
+            .map(|i| {
+                let mut s = snap(
+                    &stamp("2020-01-01T00:00:00Z", i),
+                    "Radeon RX 9070 XT",
+                    &format!("25.{i}.1"),
+                    16 + 16 * (i as u32 % 2),
+                    "h",
+                );
+                s.display = format!("2560x1440@{}", 60 + i);
+                s.windows_build = format!("{}", 26100 + i);
+                s.power_plan = format!("plan-{i}");
+                s
+            })
+            .collect();
+        // MAX_SESSIONS fingerprinted sessions in a disjoint period, each shifting driver and RAM:
+        // two observed kinds per print, none deduplicated against the snapshot stream.
+        p.sessions = (0..MAX_SESSIONS)
+            .map(|i| {
+                let mut s = session_row(&stamp("2023-01-01T00:00:00Z", i));
+                s.hw_fingerprint = Some(fp(
+                    "Radeon RX 9070 XT",
+                    &format!("s{i}"),
+                    16 + 16 * (i as u32 % 2),
+                    "2560x1440@165",
+                    "h",
+                ));
+                s
+            })
+            .collect();
+
+        let assembled = crate::intelligence::assemble_timeline(&p.timeline_inputs());
+        let observed_in_record = assembled
+            .events
+            .iter()
+            .filter(|e| e.scope == EventScope::Observed)
+            .count();
+        assert!(
+            observed_in_record > MAX_CHRONOLOGY,
+            "the fixture must exercise the exemption: {observed_in_record} observed rows"
+        );
+        assert!(
+            observed_in_record <= MAX_OBSERVED_CHRONOLOGY,
+            "a store at the producers' own limits produced {observed_in_record} observed rows, over \
+             the {MAX_OBSERVED_CHRONOLOGY} ceiling — the ceiling would now shorten the History tape"
+        );
+
+        let m = model_from(&p);
+        let observed_shown = m
+            .chronology
+            .entries
+            .iter()
+            .filter(|e| e.scope == EventScope::Observed)
+            .count();
+        assert_eq!(
+            observed_shown, observed_in_record,
+            "every observed row travels — the tape is not shortened"
+        );
+        assert_eq!(m.chronology.total_events, assembled.events.len());
+    }
+
+    /// When the ceiling does bind — only a store beyond what the producers retain can get there —
+    /// it behaves like the display cap and not like a lie: the newest rows stay, the oldest fall
+    /// off the SHOWN list, and `total_events` still counts every one of them.
+    #[test]
+    fn past_the_observed_ceiling_the_oldest_rows_drop_and_the_count_stays_honest() {
+        let mut f = Fixture::new();
+        f.snapshots.clear();
+        let stamp = |i: usize| {
+            (chrono::DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z").expect("base stamp")
+                + chrono::Duration::minutes(i as i64))
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        };
+        let event = |i: usize, scope: EventScope| crate::intelligence::EventRecord {
+            id: format!("{}:evt-{i}", if scope == EventScope::Observed { "obs" } else { "applied" }),
+            timestamp: stamp(i),
+            event_type: "gpu-driver-change".into(),
+            source: "identity-snapshot".into(),
+            scope,
+            game: None,
+            summary: format!("Event {i}"),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: false,
+            rec_id: None,
+        };
+        let over = MAX_OBSERVED_CHRONOLOGY + 3;
+        let applied = MAX_CHRONOLOGY + 2;
+        f.timeline = (0..over)
+            .map(|i| event(i, EventScope::Observed))
+            .chain((0..applied).map(|i| event(i, EventScope::CompyApplied)))
+            .collect();
+
+        let m = f.model();
+        let observed: Vec<&str> = m
+            .chronology
+            .entries
+            .iter()
+            .filter(|e| e.scope == EventScope::Observed)
+            .map(|e| e.id.as_str())
+            .collect();
+        assert_eq!(observed.len(), MAX_OBSERVED_CHRONOLOGY, "the ceiling is exact");
+        let newest = format!("obs:evt-{}", over - 1);
+        assert_eq!(observed.first().copied(), Some(newest.as_str()), "newest first, and kept");
+        for i in 0..3 {
+            let oldest = format!("obs:evt-{i}");
+            assert!(!observed.contains(&oldest.as_str()), "the oldest rows are the ones that fall off");
+        }
+        assert_eq!(
+            m.chronology.entries.iter().filter(|e| e.scope != EventScope::Observed).count(),
+            MAX_CHRONOLOGY,
+            "the scopes with their own surface stay on the display cap"
+        );
+        assert_eq!(m.chronology.total_events, over + applied, "the record is never capped");
     }
 
     // ── 8. Existing producers keep their own vocabularies ─────────────────
