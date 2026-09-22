@@ -309,6 +309,25 @@
   outline-offset: 2px;
 }
 
+/* THE BODY IS A DESIGNED SCROLL VIEWPORT, and a 720p window sits below the height at which the
+   All parts list shows whole (issue #501, measured 2026-09-21 at exact inner sizes, sheet 880 wide):
+     · the six-card HardwareGrid needs 642px of body — pad 16 + tier 38 + its 12px margin + gap 16
+       + two card rows of 291 + 14 + 239 + pad 16 — so the sheet stands 708px tall with its 64px
+       head and 2px of border, and shows whole only from a 788px inner window (40px gutter each side);
+     · 1500×980 and 1920×1080 clear that with 190px or more to spare, and the body does not scroll;
+     · 1280×720 leaves the body 574px. The two ways to fit were a 6px gutter or a second, denser
+       card look inside the sheet alone, and both were rejected: the gutter reads as a broken
+       layout, and a second card density is a taste fork bought for 68px. So below 788px the body
+       SCROLLS by design, and its LEAD stays whole: the tier row and the entire first card row end
+       at 357px, inside the 574px box; row two (System / Storage / Network) starts at 371px and is
+       what scrolls the rest of the way in. For anyone tempted to shave pixels: once it scrolls,
+       the classic scrollbar takes 17px of width, the three cards narrow by 4px each, one line
+       wraps and row two grows from 239 to 259 — content is 662px at 720p and 642px above it, so a
+       fit "by 8px" is not a fit.
+   sheet-contract-guard.test.tsx pins this rule BY NAME as a scroll viewport, and self-review rubric
+   item 5 measures a pinned viewport by its lead and reach, not by zero surplus. Four sheets share
+   the class (Health's All parts, Fix, ActionDetails, HomeInterview); the pin covers the class, and
+   the lead is whatever a sheet prints first. */
 :root[data-v2="on"] .v2-sheet-body {
   flex: 1 1 auto;
   min-height: 0;

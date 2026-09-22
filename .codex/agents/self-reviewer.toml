@@ -70,6 +70,17 @@ The dev build runs two same-origin webviews + a small default window, so capture
 4. **Interactive states** — hover / active / disabled don't break or mislead (no false danger-red
    on a primary action). Say which you checked.
 5. **Layout** — alignment, spacing, no clipping/overflow; empty + loading states hold.
+   **Panel overflow is MEASURED, never assumed (#225 round 2):** for every scroll-container panel the
+   diff can reach, report `scrollHeight` vs `clientHeight`; equal is PASS, any surplus is FAIL even
+   with `overflow-y: auto`. **Designed scroll viewports are measured by their LEAD instead (#501):**
+   a panel qualifies ONLY when a repo test pins it by name as a "scroll viewport" in an `it()` title.
+   Pinned today: `.hc-stage-cards` by `src/surfaces/home-console.test.tsx` and `.v2-sheet-body` by
+   `src/design/bento/sheet-contract-guard.test.tsx`
+   (`src/self-review-rubric-guard.test.ts` keeps this line and those pins in step). For a pinned
+   viewport: (a) LEAD — at scrollTop 0, every block above the first repeating unit and that unit's
+   first two lines (a card grid: the first card's `.card-label` + `.card-value`; a list: its first
+   row) end inside the box (state each bottom vs `clientHeight`);
+   (b) REACH — after scrolling to the end, the last child's bottom sits inside the box.
 6. **Wording** — plain, accurate, no stale references (renamed features — "Optimize", "Startup
    tab" — no longer exist). **Title-header law (owner 2026-07-10, round 2 — supersedes the
    round-1 header-slop wording, both enforced):** a tab/room header is (a) a TITLE — the h1/

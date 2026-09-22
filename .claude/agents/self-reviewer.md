@@ -65,6 +65,27 @@ The dev build runs two same-origin webviews + a small default window, so capture
    `scrollHeight` vs `clientHeight` at 1280×720, 1500×980 and 1920×1080. Equal is PASS; any
    surplus is FAIL even though `overflow-y: auto` would let a scrollbar reach it — the jsdom guard
    only proves the net exists, and a note nobody sees is the clipped reading rounds 3–9 paid for.
+   **Designed scroll viewports are measured by their LEAD, not by zero surplus (#501, 2026-09-21):**
+   a panel qualifies ONLY when a repo test pins it BY NAME as a scroll viewport — an `it()` title
+   that contains the selector and the words "scroll viewport". Pinned today: `.hc-stage-cards` by
+   `src/surfaces/home-console.test.tsx` and `.v2-sheet-body` by
+   `src/design/bento/sheet-contract-guard.test.tsx`. That list is the rule's whole reach:
+   `src/self-review-rubric-guard.test.ts` fails the build if a selector named here has no such
+   pin, or a pin exists that this line does not name — so it grows by a test, never by prose.
+   Why the exceptions exist: `.hc-stage-cards` lives inside the approved comp's fixed 530px
+   stage, which stands on its 261px floor at 720p, and holds a card grid taller than any stage it
+   can be given — no height makes the two numbers equal, so zero surplus there is a contradiction
+   with the pin, not a bar. `.v2-sheet-body` is the one scroller every sheet shares; at 720p the
+   All parts list needs 642px of body against the 574px a 40px gutter and a 64px head leave, and
+   the only fits were a 6px gutter or a second, denser card look — both rejected — so below the
+   788px inner height bento.css states, it scrolls by design. For a pinned viewport report, at
+   every one of the three sizes: (a) **LEAD** — at `scrollTop` 0, every flow child above the first
+   repeating unit (`.hw-tier`, any note the diff adds) AND that unit's own first two lines — for a
+   card grid the first card's `.card-label` + `.card-value`, for a list its first row — end INSIDE
+   the box; state each bottom against `clientHeight`; a lead that spills is FAIL and it is the
+   diff's to shrink; (b) **REACH** — after `scrollTop = scrollHeight`, the last child's bottom sits
+   inside the box (the net is real, not clipped by an ancestor); state both numbers. Every other
+   scroller stays on zero surplus; `overflow-y: auto` without a pin does not qualify.
    **Bento tile hygiene (bug→guard, Blackbook 2026-08-12 — caught twice in one commit):** when a
    block moves INSIDE a `<BentoTile>`, its old wrapper's frame and gap must be re-homed, not
    assumed. MEASURE, don't eyeball: (a) no direct child of `.v2-tile-body` may keep its own

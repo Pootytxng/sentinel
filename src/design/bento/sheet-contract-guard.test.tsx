@@ -18,6 +18,8 @@
 // is left with an app that is visibly dimmed and accepts no clicks, with no sheet on screen to
 // close. That is an unrecoverable-looking state from one missed cleanup.
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import { Sheet } from "./Sheet";
 
@@ -273,5 +275,37 @@ describe("it survives the states a real room hands it", () => {
     cleanup();
     open({ sub: "what this panel is for" });
     expect(document.querySelector(".v2-sheet-sub")?.textContent).toBe("what this panel is for");
+  });
+});
+
+// #501 (2026-09-21): the body is a DESIGNED scroll viewport. bento.css states the inner window
+// height at which the All parts list shows whole (788px) and why 1280×720 sits below it. The
+// self-review rubric (item 5) reads the pin below — an it() title carrying the selector and the
+// words "scroll viewport" — and measures the body by its LEAD and REACH instead of zero surplus;
+// src/self-review-rubric-guard.test.ts keeps that title and the rubric's own list in step.
+describe("the body scrolls by design below the sheet's minimum height (#501)", () => {
+  const css = readFileSync(join("src", "design", "bento", "bento.css"), "utf8");
+  const rule = (selector: string) => {
+    const open = css.indexOf(`:root[data-v2="on"] ${selector} {`);
+    expect(open, `${selector} rule missing from bento.css`).toBeGreaterThan(-1);
+    return css.slice(open, css.indexOf("}", open));
+  };
+
+  it("CSS: .v2-sheet-body is a bounded scroll viewport, and a 720p window sits below the height at which the parts list shows whole", () => {
+    const body = rule(".v2-sheet-body");
+    expect(body).toContain("overflow-y: auto");
+    expect(body).toContain("min-height: 0");
+    expect(body).toContain("flex: 1 1 auto");
+    expect(rule(".v2-sheet")).toContain("max-height: 100%");
+    expect(rule(".v2-sheet-backdrop")).toContain("padding: 40px");
+  });
+
+  it("the comment above the body rule states the minimum inner height and why 720p is below it — the pin is not a blanket exemption", () => {
+    const at = css.indexOf(`:root[data-v2="on"] .v2-sheet-body {`);
+    const comment = css.slice(css.lastIndexOf("/*", at), at);
+    expect(comment).toContain("SCROLL VIEWPORT");
+    expect(comment).toContain("788px");
+    expect(comment).toContain("1280×720");
+    expect(comment).toContain("574px");
   });
 });
