@@ -27,6 +27,7 @@ import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeCpuTempC, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
+import { useMachineModel } from "../data/machine-model";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
@@ -353,6 +354,10 @@ export function HomeConsole({
 }: Props) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
+  // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
+  // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
+  // new object re-reads the model alongside it.
+  const model = useMachineModel(hw);
   // Optional confirm — the fast path (default-OFF) is the only consumer, so HomeConsole must not
   // hard-require the provider on every mount (see useConfirmOptional). null → runFastPath no-ops.
   const confirm = useConfirmOptional();
@@ -975,7 +980,7 @@ export function HomeConsole({
                   </Suspense>
                 ) : (
                   <div className="hc-stage-cards">
-                    <HardwareGrid hw={hw} />
+                    <HardwareGrid hw={hw} model={model} />
                   </div>
                 )}
               </div>
@@ -1528,7 +1533,7 @@ export function HomeConsole({
           origin={partsSheet.origin}
           onClose={partsSheet.close}
         >
-          <HardwareGrid hw={hw} />
+          <HardwareGrid hw={hw} model={model} />
         </Sheet>
       )}
 

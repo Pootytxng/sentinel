@@ -19,6 +19,7 @@ import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
+import { useMachineModel } from "../data/machine-model";
 import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import ElectricBorder from "../design/vendor/ElectricBorder/ElectricBorder";
 import CountUp from "../design/vendor/CountUp/CountUp";
@@ -130,6 +131,10 @@ export function HomeV2({
 }: Props) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
+  // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
+  // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
+  // new object re-reads the model alongside it.
+  const model = useMachineModel(hw);
   const accent = useV2Accent();
 
   // ── live tag probes (existing read-only commands; a failure just omits the value) ──
@@ -285,7 +290,7 @@ export function HomeV2({
         </Suspense>
       ) : (
         <div className="hv2-stage-cards">
-          <HardwareGrid hw={hw} />
+          <HardwareGrid hw={hw} model={model} />
         </div>
       )}
       {rig3d && (

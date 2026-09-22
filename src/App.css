@@ -372,6 +372,44 @@ textarea {
   font-size: var(--type-label);
 }
 
+/* Shared Machine Model identity rows (#451). A value the model could not supply prints the reason it
+   has none under the value slot — never a dash or a zero. Muted, not alarm-colored: an unknown is an
+   honest state, not a fault. No side stripe (side-stripe-guard): indentation alone sets it apart. */
+.hw-fact-reason {
+  font-size: var(--type-label);
+  line-height: 1.35;
+  color: var(--muted);
+  margin: 2px 0 4px;
+  padding-left: 10px;
+}
+
+/* Two producers disagree about one identity field: both readings print, neither overwrites the
+   other, and the model's own interpretation follows. Same quiet frame as the tier note above it. */
+.hw-disagree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: var(--type-label);
+}
+.hw-disagree-label {
+  color: var(--attention, #f5c451);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.hw-disagree-claim {
+  color: var(--fg);
+}
+.hw-disagree-why {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .card-value {
   font-size: var(--type-card);
   font-weight: 600;
