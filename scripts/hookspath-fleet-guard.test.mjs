@@ -73,6 +73,9 @@ import {
   scrubbedEnv,
 } from "./lib/hookspath-inspect.mjs";
 import { prePushContractViolations, refusesWhenVerifierMissing, shellCode } from "./lib/prepush-hook-contract.mjs";
+// #488: which folder a finding may block a push from. This checkout's own unusable hook blocks; a
+// peer's is warned with its fix; under fleet mode every one blocks.
+import { peerWarning, splitByFolder } from "./lib/fleet-scope.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -800,22 +803,58 @@ describe("the live fleet, as registered in THIS clone right now", () => {
     expect(worktrees.length).toBeGreaterThan(0);
   });
 
-  it("proves a usable pre-push gate in every registered worktree", () => {
+  it("proves a usable pre-push gate in every registered worktree — this one blocks, a peer's warns (#488)", () => {
     const main = worktrees[0]; // git lists the main working tree first
-    const broken = worktrees
-      .map((wt) => inspectWorktree(wt, main))
-      .filter((r) => !r.ok)
-      .map((r) => `${r.path}\n      ${r.reason}`);
+    const broken = worktrees.map((wt) => inspectWorktree(wt, main)).filter((r) => !r.ok);
+    // #488: a peer's unusable hook is that folder's session's to repoint, or the owner's, and until
+    // 2026-09-22 it failed every OTHER lane's push instead (the #456 push, 05:49Z, on a worktree
+    // created with an absolute pin). Every worktree is still measured and every finding still
+    // printed on every push; it blocks the push FROM the folder that has it, and every push under
+    // fleet mode (`npm run fleet:hygiene`). The successor prompt's STEP 1 self-repoint (#405, #466)
+    // is what closes the gap the block used to cover.
+    const { blocking, warnings } = splitByFolder(broken, { own: ROOT, folderOf: (r) => r.path });
+    const describeBroken = (r) => `${r.path}\n      ${r.reason}`;
+    const warn = peerWarning({
+      check: "hookspath-fleet-guard",
+      warnings,
+      describe: describeBroken,
+      fix: (r) =>
+        `git -C "${r.path}" config --worktree core.hooksPath .githooks   (only that folder's session ` +
+        `or the owner runs it; if its branch lacks .githooks/, rebase it onto main first)`,
+    });
+    if (warn) console.warn(warn);
+    const lines = blocking.map(describeBroken);
 
     expect(
-      broken,
+      lines,
       `These registered worktrees cannot be proven to run a usable pre-push gate. Git skips a\n` +
         `missing or unrunnable hook with no warning, so a push from one of them is unverified and\n` +
         `looks identical to a pass.\n\n` +
-        `  ${broken.join("\n\n  ")}\n\n` +
+        `  ${lines.join("\n\n  ")}\n\n` +
         `This is a statement about the worktrees registered in this clone at this moment. It is not\n` +
         `a claim about other clones, and a failure here is not evidence about past pushes.`,
     ).toEqual([]);
+  });
+
+  it("#488: a PEER worktree with no usable hook warns at the gate and blocks only under fleet mode — on a real fixture", () => {
+    // The fixture's linked worktree IS the unwired state (nothing sets core.hooksPath there), so it
+    // is a real finding from the real inspector, not a stub. With the fixture's main working tree
+    // standing in for the pushing checkout, the linked one is a peer by construction.
+    const f = fixture("peer-warns");
+    const broken = [f.main, f.linked].map((wt) => inspectWorktree(wt, f.main)).filter((r) => !r.ok);
+    expect(broken.map((r) => r.path), "the fixture must produce the finding this test is about").toContain(f.linked);
+
+    const gate = splitByFolder(broken, { own: f.main, folderOf: (r) => r.path, fleet: false });
+    expect(gate.blocking.map((r) => r.path), "a peer's finding blocked the push").not.toContain(f.linked);
+    expect(gate.warnings.map((r) => r.path)).toContain(f.linked);
+
+    const sweep = splitByFolder(broken, { own: f.main, folderOf: (r) => r.path, fleet: true });
+    expect(sweep.blocking.map((r) => r.path), "fleet mode must block on the peer").toContain(f.linked);
+    expect(sweep.warnings).toEqual([]);
+
+    // The same finding from the folder that HAS it still blocks that folder's own push.
+    const own = splitByFolder(broken, { own: f.linked, folderOf: (r) => r.path, fleet: false });
+    expect(own.blocking.map((r) => r.path)).toContain(f.linked);
   });
 
   it("keeps the shared core.hooksPath relative, so each worktree finds its own", () => {

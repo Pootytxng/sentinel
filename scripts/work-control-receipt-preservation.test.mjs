@@ -48,6 +48,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { fleetMode, peerWarning, sameFolder, splitByFolder } from "./lib/fleet-scope.mjs";
 
 const ROOT = process.cwd();
 const RECEIPT_DIR = ".claude/work-control";
@@ -88,12 +89,35 @@ export function preservationFailures(entries) {
       worktree: e.worktree,
       file: e.file,
       verdict: e.verdict,
+      // The newest commit that carries readable content for a stale shadow, when the sweep found
+      // one; the fix line names it so the reader can restore the record without re-deriving it.
+      carrier: e.carrier,
       why:
         e.verdict === "stranded"
           ? "no committed counterpart — this is the only copy of the proof"
           : `differs from the committed copy (${e.local.length}B here, ${e.committed.length}B committed)` +
             " — committing it forward would overwrite the record",
     }));
+}
+
+/**
+ * #488: which failures fail THIS push. A failure names the worktree it lives in. Only the pushing
+ * worktree's own failures block at the gate; under fleet mode every worktree's do; the rest are
+ * warned with the folder and the fix. Exported so the split is proven without a fleet on disk.
+ */
+export function judgedReceipts(failures, { own, fleet = fleetMode() } = {}) {
+  return splitByFolder(failures, { own, folderOf: (f) => f.worktree, fleet });
+}
+
+/** The one-line remedy for a failure, addressed to the folder that can run it. */
+export function receiptFix(f) {
+  const wt = `git -C "${f.worktree}"`;
+  if (f.verdict === "stranded") {
+    return `${wt} add -- "${f.file}" && ${wt} commit -m "chore(carrier): preserve ${f.file}"   (that folder's session or the owner)`;
+  }
+  const source = f.carrier ? `${f.carrier.slice(0, 12)}:./${f.file}` : `<carrier>:./${f.file}`;
+  // The redirect is absolute on purpose: `-C` moves git, not the shell's cwd.
+  return `${wt} show ${source} > "${f.worktree}/${f.file}"   (that folder's session or the owner; restore the committed copy, never commit the stale one over it)`;
 }
 
 /** `git worktree list --porcelain` -> absolute paths. Throws rather than returning [] on failure. */
@@ -332,16 +356,30 @@ describe("a work-control receipt survives the worktree it was written in", () =>
     }
     if (!anyRefResolves) throw new Error("HEAD resolved empty; refusing to judge receipts");
 
+    // #488: a PEER folder that cannot be entered (pruned from disk, unreadable) is reported, not
+    // fatal -- the pushing lane did not break it and is not the one to repair it. THIS folder, and
+    // every folder under fleet mode, still throws: an unmeasurable own folder is a broken
+    // measurement, never a pass. Failures of the SHARED repository below (rev-list, show) stay
+    // fatal everywhere; they are fixable from any folder.
+    const fleet = fleetMode();
     const entries = [];
+    const unswept = [];
     for (const worktree of worktrees) {
+      const mustJudge = fleet || sameFolder(worktree, ROOT);
       if (!existsSync(worktree)) {
-        throw new Error(`git names worktree ${worktree}, but it is not on disk — sweep incomplete`);
+        const why = `git names worktree ${worktree}, but it is not on disk — sweep incomplete`;
+        if (mustJudge) throw new Error(why);
+        unswept.push({ why, fix: "git worktree prune   (from any worktree, and only once that folder is known to be gone on purpose)" });
+        continue;
       }
       let status;
       try {
         status = git(STATUS_ARGV, worktree);
       } catch (error) {
-        throw new Error(`could not read ${worktree}: ${error.message}`);
+        const why = `could not read ${worktree}: ${error.message}`;
+        if (mustJudge) throw new Error(why);
+        unswept.push({ why, fix: `git -C "${worktree}" status   (that folder's session or the owner; find out why it does not answer)` });
+        continue;
       }
       // The rename discriminator, bound to THIS worktree. `hash-object` applies the same clean
       // filters git applied before committing, so a pure rename's two hashes are byte-identical
@@ -368,12 +406,14 @@ describe("a work-control receipt survives the worktree it was written in", () =>
         }
 
         let committed = null;
+        let readableCarrier = null;
         for (const carrier of carriers) {
           // The leading `./` is not cosmetic. Git Bash on this machine rewrites a bare
           // `<rev>:<path>` argument into `<rev>;<path>` with backslashes and git rejects it — the
           // measurement error that made six committed receipts read as missing when #298 was filed.
           try {
             committed = git(["show", `${carrier}:./${file}`]);
+            readableCarrier = carrier;
             break;
           } catch {
             // The newest commit touching a path can be the one that DELETED it. Walk back to the
@@ -385,17 +425,42 @@ describe("a work-control receipt survives the worktree it was written in", () =>
           // broken measurement is never reported as a clean bill of health.
           throw new Error(`${file} is touched by ${carriers.length} commit(s) but readable in none`);
         }
-        entries.push({ worktree, file, local: readFileSync(join(worktree, file), "utf8"), committed });
+        entries.push({
+          worktree,
+          file,
+          local: readFileSync(join(worktree, file), "utf8"),
+          committed,
+          carrier: readableCarrier,
+        });
       }
     }
 
     const failures = preservationFailures(entries);
+    // #488: this folder's failures block; a peer's are warned with the folder and the fix and block
+    // only under fleet mode. The fleet is still swept and still printed on every push.
+    const { blocking, warnings } = judgedReceipts(failures, { own: ROOT, fleet });
+    const describeFailure = (f) => `[${f.verdict}] ${f.file}  in ${f.worktree}  — ${f.why}`;
+    const warn = peerWarning({
+      check: "work-control-receipt-preservation",
+      warnings: [
+        ...warnings.map((f) => ({ line: describeFailure(f), fix: receiptFix(f) })),
+        ...unswept.map((u) => ({ line: u.why, fix: u.fix })),
+      ],
+      describe: (w) => w.line,
+      fix: (w) => w.fix,
+    });
+    if (warn) console.warn(warn);
+    console.log(
+      `receipt preservation: ${worktrees.length} worktree(s) swept, ${entries.length} uncommitted receipt(s) read, ` +
+        `${failures.length} not preserved (${blocking.length} in this checkout${fleet ? ", fleet mode" : ""}, ` +
+        `${warnings.length} in other worktrees: warned), ${unswept.length} folder(s) unswept`,
+    );
     expect(
-      failures,
-      failures.length
+      blocking,
+      blocking.length
         ? "These work-control receipts are not safely preserved:\n" +
-            failures
-              .map((f) => `  - [${f.verdict}] ${f.file}\n      in ${f.worktree}\n      ${f.why}`)
+            blocking
+              .map((f) => `  - [${f.verdict}] ${f.file}\n      in ${f.worktree}\n      ${f.why}\n      fix: ${receiptFix(f)}`)
               .join("\n") +
             "\nA stranded receipt must be committed. A stale shadow must be replaced with the" +
             " committed copy, never committed over it — including when the stale copy is a TRACKED" +
@@ -403,5 +468,48 @@ describe("a work-control receipt survives the worktree it was written in", () =>
             " like an ordinary uncommitted change."
         : "",
     ).toEqual([]);
+  });
+
+  // #488, bug → guard. On 2026-09-18 a stranded receipt in ONE lane's folder failed this test at the
+  // pre-push gate of EVERY lane, three times in an hour, each time from a folder the pushing lane was
+  // forbidden to touch. This pins the repair in both directions: a peer's finding is warned and does
+  // not block; this folder's finding still does; fleet mode blocks on every folder. A change that
+  // makes a peer-folder finding block a push again fails here before it reaches the gate.
+  it("#488: a peer worktree's stranded receipt warns at the gate and blocks only under fleet mode", () => {
+    const peer = join(ROOT, "..", "some-other-lane");
+    const entries = [
+      { worktree: peer, file: ".claude/work-control/theirs.json", local: "{}", committed: null },
+      { worktree: ROOT, file: ".claude/work-control/mine.json", local: "{}", committed: null },
+    ];
+    const failures = preservationFailures(entries);
+    expect(failures.map((f) => f.verdict)).toEqual(["stranded", "stranded"]);
+
+    const gate = judgedReceipts(failures, { own: ROOT, fleet: false });
+    expect(gate.blocking.map((f) => f.worktree)).toEqual([ROOT]);
+    expect(gate.warnings.map((f) => f.worktree)).toEqual([peer]);
+    // The pushing folder's spelling never matters: git prints forward slashes, cwd prints the launcher's.
+    expect(judgedReceipts(failures, { own: ROOT.replace(/\\/g, "/") + "/", fleet: false }).blocking.map((f) => f.worktree)).toEqual([ROOT]);
+
+    const fleet = judgedReceipts(failures, { own: ROOT, fleet: true });
+    expect(fleet.blocking.map((f) => f.worktree)).toEqual([peer, ROOT]);
+    expect(fleet.warnings).toEqual([]);
+
+    // The warning is addressed: folder, finding, and a fix the reader can paste.
+    const text = peerWarning({
+      check: "work-control-receipt-preservation",
+      warnings: gate.warnings,
+      describe: (f) => `[${f.verdict}] ${f.file}  in ${f.worktree}`,
+      fix: receiptFix,
+    });
+    expect(text).toContain("some-other-lane");
+    expect(text).toContain("theirs.json");
+    expect(text).toContain("chore(carrier): preserve .claude/work-control/theirs.json");
+    expect(text).toContain("npm run fleet:hygiene");
+    expect(text).not.toContain("mine.json");
+    // A stale shadow's fix names the carrier the sweep found, so the reader restores the record
+    // without re-deriving which commit holds it.
+    expect(
+      receiptFix({ worktree: peer, file: "r.json", verdict: "stale-shadow", carrier: "0123456789abcdef0123" }),
+    ).toContain("show 0123456789ab:./r.json");
   });
 });
