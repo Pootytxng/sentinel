@@ -203,6 +203,21 @@ function CardEvidence({ ev }: { ev: ComponentEvidence }) {
   );
 }
 
+// The opt-in "why" behind a terse line: a native <details> disclosure (keyboard-accessible, zero
+// JS, reduced-motion-safe by construction) — the same control the evidence index uses. The
+// always-visible surface stays terse values (owner ruling 47c0dd2b, #82: "terse values only… zero
+// prose"); the sentence that explains a missing value or a disagreement is one click away — never
+// hidden, never on screen uninvited.
+function WhyDisclosure({ className, children }: { className?: string; children: ReactNode }) {
+  const { t } = useTranslation();
+  return (
+    <details className={className ? `hw-why ${className}` : "hw-why"}>
+      <summary className="hw-why-summary">{t("gaming.hardwareGrid.whyLabel")}</summary>
+      <div className="hw-why-body">{children}</div>
+    </details>
+  );
+}
+
 function Card({
   label,
   value,
@@ -212,7 +227,8 @@ function Card({
 }: {
   label: string;
   value: string;
-  /** Why the value is missing, when it is — printed under the value, never in place of it. */
+  /** Why the value is missing, when it is — behind the why disclosure under the value, never in
+   *  place of it. */
   reason?: string | null;
   children: ReactNode;
   evidence?: ComponentEvidence;
@@ -224,7 +240,11 @@ function Card({
         {evidence && <span className="hw-evi-dot" aria-hidden="true" />}
       </div>
       <div className="card-value">{value}</div>
-      {reason && <div className="hw-fact-reason">{reason}</div>}
+      {reason && (
+        <WhyDisclosure className="hw-fact-more">
+          <div className="hw-fact-reason">{reason}</div>
+        </WhyDisclosure>
+      )}
       <div className="card-details">{children}</div>
       {evidence && <CardEvidence ev={evidence} />}
     </div>
@@ -246,7 +266,11 @@ function FactDetail({ k, state, t }: { k: ReactNode; state: IdentityState; t: TF
   return (
     <>
       <Detail k={k} v={stateValue(state, t)} />
-      {reason && <div className="hw-fact-reason">{reason}</div>}
+      {reason && (
+        <WhyDisclosure className="hw-fact-more">
+          <div className="hw-fact-reason">{reason}</div>
+        </WhyDisclosure>
+      )}
     </>
   );
 }
@@ -295,8 +319,9 @@ export function HardwareGrid({
         </div>
       )}
       {/* Two producers disagree about one identity field: both readings print, neither overwrites
-          the other, and the model's own interpretation follows. The card below still shows the
-          canonical producer's value — the disagreement is reported here, not resolved. */}
+          the other. The row stays terse — field, both producers, both values — and the model's own
+          interpretation sits behind the why disclosure. The card below still shows the canonical
+          producer's value — the disagreement is reported here, not resolved. */}
       {disagreements.map((d, i) => (
         <div key={`${d.field}-${i}`} className="hw-disagree" role="note">
           <span className="hw-disagree-label">
@@ -308,7 +333,9 @@ export function HardwareGrid({
           <span className="hw-disagree-claim">
             {producerLabel(d.right.producer, t)}: {d.right.value}
           </span>
-          <span className="hw-disagree-why">{d.interpretation}</span>
+          <WhyDisclosure>
+            <span className="hw-disagree-why">{d.interpretation}</span>
+          </WhyDisclosure>
         </div>
       ))}
       <div className="grid">

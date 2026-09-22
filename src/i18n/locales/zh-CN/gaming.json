@@ -266,7 +266,8 @@
     "producerCurrentRead": "当前硬件读取",
     "producerCurrentFingerprint": "当前指纹",
     "producerSessionSnapshot": "会话快照",
-    "producerSavedBaseline": "已保存的基线"
+    "producerSavedBaseline": "已保存的基线",
+    "whyLabel": "原因"
   },
   "blackBox": {
     "introPre": "「崩溃与卡死」会读取 Windows 已经记录的崩溃与卡死证据,并叠加显示 Compy 自己的",

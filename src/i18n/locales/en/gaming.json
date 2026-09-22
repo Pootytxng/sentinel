@@ -269,7 +269,8 @@
     "producerCurrentRead": "Current hardware read",
     "producerCurrentFingerprint": "Current fingerprint",
     "producerSessionSnapshot": "Session snapshot",
-    "producerSavedBaseline": "Saved baseline"
+    "producerSavedBaseline": "Saved baseline",
+    "whyLabel": "Why"
   },
   "blackBox": {
     "introPre": "Crash & Freeze reads the crash and freeze evidence Windows already recorded, and overlays Compy's own",
