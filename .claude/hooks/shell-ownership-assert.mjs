@@ -29,12 +29,16 @@
 //     resolver, all exit 0.
 //
 // DENY IS ONLY FOR POSITIVE KNOWLEDGE. A resolved path inside a checkout this session does not own
-// is a fact, and gets `deny`. Ambiguity — an unresolved operand, an unknown path shape — gets `ask`.
-// A hook `ask` is a REAL PROMPT in every permission mode, `permissions.defaultMode: "auto"` included,
-// and a hook decision overrides `permissions.allow` rules (code.claude.com/docs/en/permission-modes,
-// /hooks). It does not degrade to allow anywhere — an earlier version of this comment said it did,
-// and that false premise is why 33 of one day's 40 prompts were `ask`s on knowable operands (#373).
-// So `ask` is reserved for the genuinely unresolvable, where a human keystroke is the right answer.
+// is a fact, and gets `deny`. Ambiguity — an unresolved operand, an unknown path shape — is not
+// evidence either way, so it defers to Claude Code's own permission system (the auto-mode classifier
+// and `permissions.allow`/`ask`/`deny` rules) instead of this hook prompting on a guess.
+//
+// This hook itself never returns an `ask` permission decision (removed 2026-09-18): a hook `ask` is a REAL
+// PROMPT in every permission mode, `permissions.defaultMode: "auto"` included, and a hook decision
+// overrides `permissions.allow` rules outright (code.claude.com/docs/en/permission-modes, /hooks) —
+// it does not degrade to allow anywhere, and it was that same override that made 33 of one day's 40
+// prompts `ask`s on knowable operands (#373). Deferring, instead of asking, lets that already-tuned
+// permission flow decide the genuinely unresolvable cases.
 //
 // IT NEVER PERSISTS AND NEVER LOGS. No claim is written, no lineage record, no board row, no file.
 // `verifySession({persist: false})`, and it is only called when a protected zone is actually in play
@@ -606,7 +610,7 @@ const SPLICEABLE = /^[^\s$`;&|<>()'"\\]+$/;
  *      assignment, `S=/x rm -rf $S/y`, lives in `rm`'s environment alone and POSIX expands `$S` in
  *      that same command with S's prior value, so it teaches nothing (found by review 2026-09-04);
  *      `S=$(...)`, `S=$OTHER` with OTHER unknown, `read S` and every other binding form leave the
- *      name unknown, so `rm -rf $TARGET` still asks;
+ *      name unknown, so `rm -rf $TARGET` still defers to the normal permission flow;
  *   2. only an assignment in the OUTERMOST scope teaches anything. A subshell does not export its
  *      names to its parent, so `(S=/scratch); rm $S/x` really runs `rm /x`; believing the assignment
  *      would make this checker reason about a path the command never touches. `$(…)` and backticks
@@ -900,7 +904,7 @@ export function analyze(command, { cwd = null, dialect = "posix", home = homedir
        *
        * It also answers null rather than confidently wrong for an operand it cannot place — a bare
        * `C:foo` names a per-drive cwd this process does not have — and an unplaceable repository is
-       * the honest `ask` this branch already reaches for one line later.
+       * the honest defer-to-the-normal-permission-flow this branch already reaches for one line later.
        */
       const moveRepo = (value, dynamic) => {
         if (dynamic) {
@@ -1135,14 +1139,16 @@ const HEADER = "Blocked: this command writes into a checkout this session does n
  * can hide a command means keeping that list ahead of the lexer forever — the same losing shape as
  * an allowlist of cmdlets, argued against at `segments`. So the test is turned around: an operand is
  * spared only if every `$` in it introduces an ordinary variable name and no backtick appears. `$1`,
- * `$?`, `${X:-…}` and a bare trailing `$` are all refused, which is conservative and costs an `ask`
- * that main gave anyway.
+ * `$?`, `${X:-…}` and a bare trailing `$` are all refused, which is conservative and costs only the
+ * sparing: the operand defers to the native permission flow (an `ask` from this hook, when that
+ * was written).
  *
  * The lesson is the general one: the exemption rested on a syntactic category ("it is only a
  * redirect") that the parser did not actually enforce, and "a redirect cannot recurse or delete a
  * tree" is true of the operator but not of a command hiding in its operand. So the operand must be
- * positively shown to be a plain name, and everything else goes back to `ask` — where it was before,
- * and where the `$( … )` spelling never left.
+ * positively shown to be a plain name, and everything else goes back to being unspared — then an
+ * `ask`, now a deferral to the native permission flow — where it was before, and where the `$( … )`
+ * spelling never left.
  *
  * IT IS TWO LINEAR PASSES AND NOT ONE REGEX, AND THAT IS THE WHOLE POINT.
  *
@@ -1182,7 +1188,7 @@ export const isPlainRedirectName = (raw) =>
  * and is never written as a decision (see `emit`). `additionalContext`, when present, is the #368
  * advisory line for an unclaimed folder.
  *
- * @returns {{permission: "allow"|"deny"|"ask", reason?: string, additionalContext?: string, zone?: string, target?: string, code?: string}}
+ * @returns {{permission: "allow"|"deny", reason?: string, why?: string, additionalContext?: string, zone?: string, target?: string, code?: string}}
  */
 export function decideShell({
   toolName,
@@ -1242,7 +1248,8 @@ export function decideShell({
   // ride an unclaimed folder past them. Only an outcome of "no objection" turns into context
   // without a decision - `emit` writes `additionalContext` alone, no `permissionDecision`, so the
   // settings rules and the auto-mode classifier still apply. Never `allow` (that would skip both
-  // for the call), and never `ask` (a real prompt in every mode, on every write).
+  // for the call) — an advisory only ever rides beside a `deny`, or inside a plain "no objection"
+  // outcome; it never manufactures either one.
   let advisory = null;
   if (own && unverified) {
     const code = verdict?.code ?? "UNKNOWN";
@@ -1263,9 +1270,9 @@ export function decideShell({
       };
     }
   }
-  /** Every decision from here on carries the advisory line when there is one. On a deny or an ask
-   *  it rides beside the reason; on "no objection" it is the whole output, and the decision names
-   *  the folder and code it is about. */
+  /** Every decision from here on carries the advisory line when there is one. On a deny it rides
+   *  beside the reason; on "no objection" it is the whole output, and the decision names the folder
+   *  and code it is about. */
   const carry = (decision) => {
     if (!advisory) return decision;
     const named = decision.permission === "allow"
@@ -1300,27 +1307,32 @@ export function decideShell({
 
   const unknown = protectedHits.find((z) => z.zone === ZONES.UNKNOWN);
   if (unknown) {
+    // A named owner means another checkout is known to sit in the blast radius (a wildcard over
+    // registered lanes, a nested lane git will not identify): that is a cross-worktree write, so it
+    // is refused. With no owner the path is merely unresolved and native permissions decide.
+    if (unknown.owner) {
+      return carry({
+        permission: "deny",
+        zone: unknown.zone,
+        target: unknown.op.target,
+        reason:
+          `\`${unknown.op.verb}\` names \`${unknown.op.target}\`, which reaches ${unknown.owner} — another ` +
+          `checkout (${unknown.why}). Writes into another lane's worktree are refused; name a target ` +
+          `inside this session's own checkout instead.`,
+      });
+    }
     return carry({
-      permission: "ask",
+      permission: "allow",
       zone: unknown.zone,
       target: unknown.op.target,
-      reason:
+      why:
         `\`${unknown.op.verb}\` names \`${unknown.op.target}\`, and this checker could not work out ` +
         `where that lands (${unknown.why}). An unresolved path is not evidence that it is outside ` +
-        `protection, so it takes the normal approval path rather than a guess.`,
+        `protection, so this defers to the normal permission flow rather than guessing.`,
     });
   }
 
   if (unresolved.length) {
-    const asking = (u) => carry({
-      permission: "ask",
-      zone: ZONES.UNKNOWN,
-      reason:
-        `\`${u.verb}\` can write, and ${u.why}. A keyword scan that finds no protected path is not ` +
-        `proof that none is reached — a variable, an alias or a relative path still can — so this ` +
-        `takes the normal approval path instead of being waved through.`,
-    });
-
     /** Where an unresolved operand was STANDING. Used twice below: once to spare a redirect whose
      *  effective directory is this session's own claim, and once for the class-3 tail. */
     const cwdZone = (u) => (!u.cwdUnknown && u.cwd ? zone({ target: u.cwd, sessionRoot, cwd: u.cwd, deps: { home } }).zone : ZONES.UNKNOWN);
@@ -1346,12 +1358,13 @@ export function decideShell({
      *
      * THE EXEMPTION IS AS NARROW AS THE MEASUREMENT. Three conditions, all required:
      *
-     *   1. the ONLY thing that would have produced `ask` is a REDIRECT target — the `>`/`>>`/`2>`
-     *      operand `segments` collected, filed by `analyze` under the verb `redirection`. An
-     *      unresolved OPERAND of a mutating verb is untouched: `rm -rf $T`, `mv $A $B`, `sed -i … $F`,
-     *      `Remove-Item $P`, `Out-File $log`, `mkdir $D`, `git reset --hard $REF`, `node $SCRIPT`,
-     *      `… | xargs rm` all still ask, because `named` below skips only the redirects this
-     *      predicate spares and finds them first otherwise;
+     *   1. the ONLY unresolved thing is a REDIRECT target — the `>`/`>>`/`2>` operand `segments`
+     *      collected, filed by `analyze` under the verb `redirection`. An unresolved OPERAND of a
+     *      mutating verb is untouched: `rm -rf $T`, `mv $A $B`, `sed -i … $F`, `Remove-Item $P`,
+     *      `Out-File $log`, `mkdir $D`, `git reset --hard $REF`, `node $SCRIPT`, `… | xargs rm` are
+     *      all still not spared — each defers to the native permission flow (this hook asked about
+     *      them until 2026-09-18) — because `named` below skips only the redirects this predicate
+     *      spares and finds them first otherwise;
      *   2. that operand is a plain NAME and not a command substitution — see `SUBSTITUTION` above,
      *      and the review that made this condition necessary. Without it the rule was strictly worse
      *      than no rule, because the lexer folds a backtick substitution into the operand and the
@@ -1359,11 +1372,12 @@ export function decideShell({
      *   3. the command's effective working directory — after every `cd` this checker could follow —
      *      resolves to zone `own-claim`. `unprotected` is NOT enough here (the class-3 tail accepts
      *      it; this does not), and an unfollowable `cd` leaves `cwdUnknown`, which zones `unknown`
-     *      and keeps asking.
+     *      and is not spared: it defers to the native permission flow below.
      *
      * Everything resolved is already decided above and is unaffected: a resolved `sibling-checkout`
      * target still denies, a resolved `protected-global` target still denies, and an `unknown` zone
-     * still asks — this branch is only reached once none of those fired.
+     * still denies when it is known to reach another checkout and otherwise defers to the native
+     * permission flow — this branch is only reached once none of those fired.
      *
      * THE RESIDUAL, STATED EXACTLY. A variable could hold a path in another lane, so the spared
      * redirects of one command can clobber N files in a checkout this session does not own, where N
@@ -1388,16 +1402,35 @@ export function decideShell({
 
     // A recognized mutation with an unknowable target is spec class 2, and verification does not
     // enter into it: `rm -rf $TARGET` is unknowable from a verified session too. These are rare in
-    // written commands, so the approval prompt costs a keystroke and buys the one case that matters.
+    // written commands, so deferring to the normal permission flow costs nothing here and buys the
+    // one case that matters.
     const named = unresolved.find((u) => u.kind !== "opaque" && !boundedRedirect(u));
-    if (named) return asking(named);
+    if (named) {
+      return carry({
+        permission: "allow",
+        zone: ZONES.UNKNOWN,
+        why:
+          `\`${named.verb}\` can write, and ${named.why}. A keyword scan that finds no protected path is ` +
+          `not proof that none is reached — a variable, an alias or a relative path still can — so this ` +
+          `defers to the normal permission flow instead of being decided here.`,
+      });
+    }
 
     // What is left is class 3: verbs that run code this checker does not evaluate. The only thing
     // that can be said about them is where they are STANDING, so that is what decides. It is not a
     // proof — an unresolved operand could still be an absolute path into a sibling — and that
     // residual is named in spec §6; the embedded-path scan is what catches the literal version of it.
     const stray = unresolved.find((u) => ![ZONES.OWN, ZONES.UNPROTECTED].includes(cwdZone(u)));
-    if (stray) return asking(stray);
+    if (stray) {
+      return carry({
+        permission: "allow",
+        zone: ZONES.UNKNOWN,
+        why:
+          `\`${stray.verb}\` can write, and ${stray.why}. A keyword scan that finds no protected path is ` +
+          `not proof that none is reached — a variable, an alias or a relative path still can — so this ` +
+          `defers to the normal permission flow instead of being decided here.`,
+      });
+    }
     const allowed = carry({
       permission: "allow",
       why: spared.length
@@ -1443,8 +1476,8 @@ export function run({ hookInput, env = process.env, verify = verifySession, zone
  * (#368, the advisory codes) is written as that context ALONE - no `permissionDecision` - which the
  * hooks reference defines as "no decision; the normal permission flow still applies", with the
  * context delivered to the model. (`permissionDecision: "allow"` would skip the interactive prompt
- * and the auto-mode classifier for the call, which is broader than an advisory means.) Deny and
- * ask carry their reason, plus the advisory line beside it when there is one.
+ * and the auto-mode classifier for the call, which is broader than an advisory means.) Deny carries
+ * its reason, plus the advisory line beside it when there is one.
  */
 export function emit(decision, { write = (s) => process.stdout.write(s) } = {}) {
   if (!decision) return 0;

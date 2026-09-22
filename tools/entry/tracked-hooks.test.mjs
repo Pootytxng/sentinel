@@ -52,13 +52,12 @@ const trackedUnder = (path) => git(["ls-files", path]).split("\n").filter(Boolea
 
 const SETTINGS = JSON.parse(readFileSync(join(ROOT, ".claude", "settings.json"), "utf8"));
 
-/** The seven pre-existing hooks, plus the root assert this train adds. */
+/** The pre-existing hooks, plus the root assert this train adds. */
 const EXPECTED_HOOKS = [
   "context-size-advisor.mjs",
   "self-review-reminder.mjs",
   "session-root-assert.mjs",
   "ship-reminder.mjs",
-  "stop-continue.mjs",
   "subagent-model-guard.mjs",
   "subagent-throttle.mjs",
   "workflow-usage-guard.mjs",

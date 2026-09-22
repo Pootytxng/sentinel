@@ -490,16 +490,16 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
       expect(ps).toMatchObject({ permission: "deny", zone: ZONES.SIBLING });
     });
     it.each([
-      ["rm -rf .claude/worktrees/*", "ask"],
-      ["rm -rf .cla*/worktrees/*", "ask"],
-      ["rm -rf .claude/worktrees/lane?", "ask"],
-      ["mv .claude/worktrees/* staging", "ask"],
+      ["rm -rf .claude/worktrees/*", "deny"],
+      ["rm -rf .cla*/worktrees/*", "deny"],
+      ["rm -rf .claude/worktrees/lane?", "deny"],
+      ["mv .claude/worktrees/* staging", "deny"],
       ["rm -rf .claude/worktrees/laneA/*", "deny"],
       ["rm -rf src/*.tmp", "allow"],
       ['rm -rf ".claude/worktrees/*"', "allow"],
       ["rm -rf '.claude/worktrees/*'", "allow"],
       ["rm -rf .claude/worktrees/\\*", "allow"],
-      ['rm -rf ".claude"/worktrees/*', "ask"],
+      ['rm -rf ".claude"/worktrees/*', "deny"],
     ])("preserves wildcard ownership and literal controls: %s (#428)", (command, permission) => {
       expect(shell(command).permission).toBe(permission);
     });
@@ -509,21 +509,21 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
     });
 
     it.each([
-      ["rm -rf .claude/work{trees,}", "ask"],
-      ["rm -rf .claude/{worktrees,nothing}", "ask"],
-      ["rm -rf .claude/worktrees/{laneA,laneB}", "ask"],
+      ["rm -rf .claude/work{trees,}", "deny"],
+      ["rm -rf .claude/{worktrees,nothing}", "deny"],
+      ["rm -rf .claude/worktrees/{laneA,laneB}", "deny"],
       ["rm -rf .claude/worktrees/laneA/{1..3}", "deny"],
-      ['rm -rf .claude/work{tr"ee"s,}', "ask"],
-      ["rm -rf .claude/{unused,{worktrees,other}}", "ask"],
-      ["mv .claude/work{trees,} staging", "ask"],
+      ['rm -rf .claude/work{tr"ee"s,}', "deny"],
+      ["rm -rf .claude/{unused,{worktrees,other}}", "deny"],
+      ["mv .claude/work{trees,} staging", "deny"],
       ["rm -rf src/{one,two}.tmp", "allow"],
       ['rm -rf ".claude/work{trees,}"', "allow"],
       ["rm -rf .claude/work\\{trees,\\}", "allow"],
       ["rm -rf .claude/work{trees}", "allow"],
       ["rm -rf .claude/work{}", "allow"],
-      ["rm -rf ~+/.claude/worktrees", "ask"],
-      ["rm -rf ~-/.claude/worktrees", "ask"],
-      ["rm -rf ~somebody/.claude/worktrees", "ask"],
+      ["rm -rf ~+/.claude/worktrees", "allow"],
+      ["rm -rf ~-/.claude/worktrees", "allow"],
+      ["rm -rf ~somebody/.claude/worktrees", "allow"],
       ['rm -rf "~+/.claude/worktrees"', "allow"],
       ["rm -rf \\~+/.claude/worktrees", "allow"],
     ])("guards shell expansions without expanding literals: %s (#428 review)", (command, permission) => {
@@ -531,12 +531,12 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
     });
 
     it.each([
-      ["Remove-Item -Path '.claude/worktrees/*' -Recurse", "ask"],
-      ['Remove-Item -Path ".claude/worktrees/*" -Recurse', "ask"],
+      ["Remove-Item -Path '.claude/worktrees/*' -Recurse", "deny"],
+      ['Remove-Item -Path ".claude/worktrees/*" -Recurse', "deny"],
       ['Remove-Item -LiteralPath ".claude/worktrees/*" -Recurse', "allow"],
       ["Remove-Item -LiteralPath .claude/worktrees/* -Recurse", "allow"],
-      ["Move-Item -Path '.claude/worktrees/*' -Destination staging", "ask"],
-      ["Rename-Item -Path '.claude/worktrees/*' -NewName staging", "ask"],
+      ["Move-Item -Path '.claude/worktrees/*' -Destination staging", "deny"],
+      ["Rename-Item -Path '.claude/worktrees/*' -NewName staging", "deny"],
       ["Remove-Item -Path 'src/*.tmp'", "allow"],
       ["Remove-Item -LiteralPath '.claude/worktrees/laneA' -Recurse", "deny"],
     ])("distinguishes PowerShell provider wildcards from LiteralPath: %s (#428)", (command, permission) => {
@@ -558,7 +558,7 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
           expect(d.zone, command).toBe(ZONES.SIBLING);
         }
       }
-      expect(shell(`rm "${msys(join(STALE, "notes.md"))}"`).permission).toBe("ask");
+      expect(shell(`rm "${msys(join(STALE, "notes.md"))}"`).permission).toBe("deny");
       expect(shell(`rm "${msys(join(NMAIN, "src", "App.css"))}"`).permission).toBe("allow");
     });
 

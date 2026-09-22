@@ -252,6 +252,11 @@ const PATH_EXCEPTIONS = new Set<string>([
   // excluded here. A fixture that names a real file tests the same behaviour and stays checkable;
   // an exception list is where a guard goes to rot. Negative controls that must stay unreal use a
   // path OUTSIDE the repo prefixes above (e.g. `dist/...`), so they never reach this check.
+  //
+  // It rotted exactly that way once (#489, review 5271579348): the purged Stop hook's path was listed
+  // here so `.claude/autopilot.json`'s `_doc` could keep naming it, and because this set applies to
+  // EVERY source, a live citation of the deleted hook then passed anywhere. A historical record
+  // needs no exception: it names the hook by its bare file name, which `PATH_RE` does not match.
 ]);
 
 // A long path inside a wrapped comment block gets split across lines mid-token, e.g.
@@ -280,60 +285,53 @@ function isGitIgnored(paths: string[]): Set<string> {
   }
 }
 
+function deadPaths(text: string): string[] {
+  const missing = [...unwrap(text).matchAll(PATH_RE)]
+    .map((m) => m[1])
+    .filter((p) => !p.includes("*") && !PATH_EXCEPTIONS.has(p))
+    .filter((p) => !existsSync(p));
+  const ignored = isGitIgnored([...new Set(missing)]);
+  return [...new Set(missing.filter((p) => !ignored.has(p)))];
+}
+
+// The hooks the owner-ordered purge deleted (#489). Nothing may cite them by path as if they ran.
+const PURGED_HOOKS = [
+  ".claude/hooks/stop-continue.mjs",
+  ".claude/hooks/handoff-block-guard.mjs",
+  ".claude/hooks/big-read-guard.mjs",
+];
+
 describe("rot class 3 — every cited repo path exists", () => {
   it.each(SOURCES)("$path cites no repo file that is gone", ({ text }) => {
-    const missing = [...unwrap(text).matchAll(PATH_RE)]
-      .map((m) => m[1])
-      .filter((p) => !p.includes("*") && !PATH_EXCEPTIONS.has(p))
-      .filter((p) => !existsSync(p));
-    const ignored = isGitIgnored([...new Set(missing)]);
-    const dead = missing.filter((p) => !ignored.has(p));
     // Upstream codex-rs paths (codex-rs/.../src/engine/output_parser.rs) are excluded by the
     // lookbehind: they are always preceded by a `/`, so they never match as repo-relative.
-    expect([...new Set(dead)]).toEqual([]);
+    expect(deadPaths(text)).toEqual([]);
+  });
+
+  // bug->guard (#489, review 5271579348). With the Stop hook's path in PATH_EXCEPTIONS, a bogus live
+  // citation of it added to `.claude/USAGE_ECONOMICS.md` still passed 84/84. So plant that citation
+  // in EVERY scanned source, the local `.claude/autopilot.json` included when it is present, and
+  // require the check above to see it. An exception for a purged hook — global or for one source —
+  // fails here for the source it silences.
+  it.each(SOURCES)("$path would be caught citing a purged hook", ({ text }) => {
+    for (const hook of PURGED_HOOKS) expect(existsSync(hook), `${hook} is supposed to be deleted`).toBe(false);
+    const planted = `${text}\nsee ${PURGED_HOOKS.join(" and ")} for the current clamp\n`;
+    expect(deadPaths(planted)).toEqual(expect.arrayContaining(PURGED_HOOKS));
   });
 });
 
 // ── ROT CLASS 4: docs restating a code literal (defects 4, 5, 6) ────────────────────────────────
-
-describe("rot class 4 — the autopilot clamp cannot drift out of sync again", () => {
-  const hook = readFileSync(".claude/hooks/stop-continue.mjs", "utf8");
-  const codeValue = hook.match(/const\s+MAX_CONTINUES\s*=\s*(\d+)/)?.[1];
-
-  it("the code declares the clamp exactly once, and that is the source of truth", () => {
-    expect(codeValue).toBeDefined();
-    expect(hook.match(/const\s+MAX_CONTINUES\s*=\s*\d+/g)).toHaveLength(1);
-  });
-
-  // autopilot.json is gitignored LOCAL runtime state (.gitignore:52), so it is absent on a fresh
-  // clone and in CI. Skip cleanly there rather than crashing — but when it IS present (every real
-  // working copy, which is exactly where the drift happened) it is checked like anything else.
-  const autopilotExists = existsSync(".claude/autopilot.json");
-  it.skipIf(!autopilotExists)("`.claude/autopilot.json` states the same current clamp as the code", () => {
-    const doc = readFileSync(".claude/autopilot.json", "utf8");
-    const stated = doc.match(/the clamp is currently (\d+)/)?.[1];
-    // The _doc note is allowed to recount history ("was 2") — only the CURRENT-value sentence is
-    // pinned. If this sentence is reworded, reword it here too; do not delete the check.
-    expect(stated, "autopilot.json must say 'the clamp is currently <N>'").toBeDefined();
-    expect(stated).toBe(codeValue);
-  });
-
-  it("`.claude/USAGE_ECONOMICS.md` §5 states the same current clamp as the code", () => {
-    const doc = readFileSync(".claude/USAGE_ECONOMICS.md", "utf8");
-    const stated = doc.match(/\|\s*Autopilot continuation cap\s*\|\s*(\d+)/)?.[1];
-    expect(stated, "USAGE_ECONOMICS.md §5 must carry an 'Autopilot continuation cap' row").toBeDefined();
-    expect(stated).toBe(codeValue);
-  });
-
-  it("no OTHER file in the scanned surface hardcodes a MAX_CONTINUES value", () => {
-    // The two mirrors above are deliberate and pinned. Anything else restating the literal is a new
-    // drift bomb — §6's bullet was rewritten on 2026-08-05 specifically to stop doing this.
-    const offenders = SOURCES.filter((s) => s.path !== ".claude/hooks/stop-continue.mjs").filter((s) =>
-      /MAX_CONTINUES\s*(?:=|is|to|at)\s*\d/.test(s.text)
-    );
-    expect(offenders.map((s) => s.path)).toEqual([]);
-  });
-});
+//
+// RETIRED (owner-ordered purge, see chore(hooks) commit): this class pinned `.claude/hooks/
+// stop-continue.mjs`'s MAX_CONTINUES literal against its two doc mirrors (autopilot.json,
+// USAGE_ECONOMICS.md §5). The hook is deleted and the tracked mirror no longer restates it
+// (USAGE_ECONOMICS.md has no "Autopilot continuation cap" row). `autopilot.json` is gitignored, so
+// no commit can rewrite it: each checkout's copy keeps the old present-tense `_doc` until it is
+// rewritten by hand as a historical note naming the hook by bare file name, and rot class 3 above
+// stays red on a copy that still cites the deleted path. With the hook gone there is no longer a
+// code literal on one side and a doc restating it on the other for this class to pin.
+// Removed rather than left red, per this task's own scope: this test's job was catching a doc that
+// silently stopped matching code it no longer exists to match.
 
 // ── Wiring: every hook the settings file invokes must actually be on disk ────────────────────────
 
