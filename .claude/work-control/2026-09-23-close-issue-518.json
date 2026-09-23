@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/518#issuecomment-5803184624",
+  "leaseEvidenceNote": "This Claude Code session (4761bc48, worktree exciting-feistel-06bf7d) posted the non-author landing Ownership claim on #518 at 2026-09-23T21:24:53Z. It names this exact worktree and the local landing branch claude/518-landing, which sits at the PR head f2d14756 (origin/claude/518-parity-t-alias is checked out in the author's folder, so it cannot be checked out here). Its Write scope is one contiguous list: PR #531's single delta path plus the three receipt files. It follows the author's implementation claim (issuecomment-5792506363), whose Handoff (issuecomment-5796962437) held it only until the non-author review verdict. This landing's own Handoff released the landing claim (https://github.com/Pootytxng/sentinel/issues/518#issuecomment-5803225517 (2026-09-23T21:27:37Z), ending \"Claim: released\") before this close, so no live lease remains on #518.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T21:25:13Z, files read per PR: five open PRs, #531, #492, #471, #470 and #464. Only PR #531 touches src/i18n/locale-parity-guard.test.ts, and no PR touches the three receipt paths. The author's session (c9c0ee9a, folder heuristic-goldberg-7689ad) wrote nothing after its Handoff and is not writing this scope.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The commit was authored by another Claude Code session (c9c0ee9a) in worktree heuristic-goldberg-7689ad. This landing session authored no commit in the delta; it reviewed, reproduced the red-then-green, and lands.",
+  "currentHead": "f2d14756e84e333cbeff231786339e2d18872fe6",
+  "pr": 531,
+  "issue": 518,
+  "kind": "lane",
+  "branch": "claude/518-parity-t-alias",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is origin/main...f2d14756 (merge-base eaec2a11): one commit, f2d14756, authored and committed by claude-code <claude-code@desk.local> (git log --format='%an <%ae> | %cn <%ce>'). The reviewer seat authored none of it.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository Pootytxng/sentinel. origin/main is 0b631e49, the #531 merge (fetched after land-pr). origin/claude/518-parity-t-alias was pruned by land-pr; local HEAD is f2d14756, which the merge contains. Worktree exciting-feistel-06bf7d is on local branch claude/518-landing. git status --porcelain --untracked-files=all is empty apart from the three receipts. No gate, build or helper process from this landing is running.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "f2d14756e84e333cbeff231786339e2d18872fe6",
+      "evidence": "logs/verify-local-2026-09-23T14-22-45Z.log (in the author's worktree heuristic-goldberg-7689ad; SHA-256 E4EB33BCFC110FDCE9381F88EB8E458804BE33B3588AFFBF6932AB2F074DE6C4, 2097 lines) lines 22-61",
+      "summary": "458 frontend test files passed; 7,576 passed, 1 expected fail, 4 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "f2d14756e84e333cbeff231786339e2d18872fe6",
+      "evidence": "logs/verify-local-2026-09-23T14-22-45Z.log (in the author's worktree heuristic-goldberg-7689ad; SHA-256 E4EB33BCFC110FDCE9381F88EB8E458804BE33B3588AFFBF6932AB2F074DE6C4, 2097 lines) lines 62-88",
+      "summary": "tsc and the Vite production build passed (built in 9.85s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "f2d14756e84e333cbeff231786339e2d18872fe6",
+      "evidence": "logs/verify-local-2026-09-23T14-22-45Z.log (in the author's worktree heuristic-goldberg-7689ad; SHA-256 E4EB33BCFC110FDCE9381F88EB8E458804BE33B3588AFFBF6932AB2F074DE6C4, 2097 lines) lines 89-1811",
+      "summary": "1,333 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "f2d14756e84e333cbeff231786339e2d18872fe6",
+      "evidence": "logs/verify-local-2026-09-23T14-22-45Z.log (in the author's worktree heuristic-goldberg-7689ad; SHA-256 E4EB33BCFC110FDCE9381F88EB8E458804BE33B3588AFFBF6932AB2F074DE6C4, 2097 lines) lines 1812-2097",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 50.63s; no warning or error lines in the log); line 2097 is the mutex release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1) the author's push ran. It started at 14:22:45Z, queued 722s on Local\\Compy.TestGate.v1 behind peer gates, and ended with the mutex release. The author worktree's reflog binds HEAD to f2d14756 from the rebase finish at 14:12:33Z, before the log began, with no later HEAD move, and records the push that created origin/claude/518-parity-t-alias at f2d14756 at 14:43:26Z, after the log ended; pre-push only lets a push through on exit 0. The PASS line goes to the console, not the log, so the evidence is the four clean stages plus the accepted push. This landing session read every stage and hashed the log. main has moved 18 commits since the PR base eaec2a11, none touching src/, so the merged tree's src/ equals the reviewed head's. No --no-verify was used and none is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured (the author folder had no session record)",
+    "reconciled": true,
+    "measurement": "node scripts/scope-drift-gate.mjs --issue 518 --refresh at 2026-09-23T21:25Z: 1 changed path since origin/main, measured against this landing claim, OK (every changed path inside the claim).",
+    "reconciliationNote": "The landing claim lists the one delta path plus the three receipt paths, and nothing else."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "f2d14756e84e333cbeff231786339e2d18872fe6",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/531#issuecomment-5803176087, headed \"Independent exact-head review — frontend-ipc-contract-auditor seat\", Reviewed head f2d14756e84e333cbeff231786339e2d18872fe6, VERDICT: PASS.",
+    "reviewerNote": "A read-only reviewer seat that authored none of the delta. It ran npx vitest run src/i18n itself (22/22) and npx tsc --noEmit (exit 0). It confirmed every existing floor byte-identical to origin/main. It extracted the real harvest() with esbuild and measured it across src: sites went 1988 -> 1996, all +8 in SessionTrends.tsx, and the lookbehind change alone alters no count. It found no renamed-t alias or renamed TFunction parameter in src, and it reproduced the disarm proof going red under the old pattern. The landing session separately reproduced the red-then-green: 2 failed | 20 passed with harvest() reverted, and 22/22 restored. No findings; there are two non-blocking notes. The shared Pootytxng account records the verdict as a PR comment whose body names the reviewer identity. The reviewer is a Claude model, independent by role only, by the same route as the #537 landing."
+  },
+  "transition": "close-issue",
+  "closingNote": "PR #531 merged as 0b631e49a59c8335df4f892b2792d04f458c3026 (2026-09-23T21:27:02Z) by scripts/land-pr.mjs; the head ref was pruned. #518 is complete: the locale-parity walker harvests calls through a renamed t, and a disarm proof pins it. The receipt binds the reviewed head f2d14756, which the merge contains, so the ancestor-based provenance check holds after the prune."
+}
