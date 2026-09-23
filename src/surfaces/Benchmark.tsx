@@ -12,8 +12,8 @@ import { useLibrary } from "./library-context";
 import { useProfile } from "../hooks/use-profile";
 import { PROFILE_META, USE_PROFILES } from "../data/profile-store";
 import {
-  changeAttribution,
-  changesBetweenRuns,
+  benchmarkAttribution,
+  type BenchmarkAttribution,
   componentLabel,
   verdictLabel,
   verdictTone,
@@ -28,8 +28,9 @@ import {
 import { hasMeasuredPair } from "./two-futures-view";
 import { useExpertView } from "../design/use-expert-view";
 import { useDocumentVisible } from "../data/use-document-visible";
+import { useMachineModel } from "../data/machine-model";
 import { readTwoFutures } from "../design/theme";
-import { TwoFutures } from "./TwoFutures";
+import { AttributionLine, TwoFutures } from "./TwoFutures";
 import { LedgerHealthNotice, knownIncomplete, useLedgerHealth } from "../design/LedgerHealthNotice";
 import type { HardwareInfo } from "../App";
 import type {
@@ -283,13 +284,8 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   const showEfficacy =
     !!state?.efficacy && hasBaseline && !!state?.latest && state.latest_at !== state.baseline_at;
 
-  // Compy changes (Trust Ledger) applied between the baseline and the latest run — the "Change"
-  // the verdict is attributing the measured delta to. Shared window filter so every attributing
-  // surface (this card, Two Futures, the Lab verdict) agrees on what a result covers.
-  const changesSince = changesBetweenRuns(state, changes);
-
   // `refresh` collapses an unreadable ledger to `[]` (`.catch(() => [])` above), and BOTH attributing
-  // cards read that emptiness out loud as "No Compy changes recorded since the baseline — this
+  // cards used to read that emptiness out loud as "No Compy changes recorded since the baseline — this
   // reflects manual or ambient changes." That sentence does not merely under-report an absence: it
   // hands the measured delta to the user or their environment. On a ledger Compy cannot read, that
   // is a fabricated causal claim — the same defect `b60a314` closed on Optimize and `61e092c` on the
@@ -297,6 +293,15 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   // attribution line stops speaking when `knownIncomplete` is truthy.
   const health = useLedgerHealth(changes);
   const ledgerIncomplete = !!knownIncomplete(health);
+
+  // Which Compy changes the measured pair covers — read off the shared Machine Model (#452), not
+  // off the bare ledger list above. The model is the one reader that knows whether the ledger was
+  // readable (`ledger_unreadable`) and which PC each row was applied on, so a change made on
+  // another PC is never credited here and an unreadable record withdraws the line instead of
+  // crediting the user. One read-only IPC per benchmark refresh: `state` is `refresh()`'s product,
+  // so a new object re-reads the model (cached across surfaces, shared while in flight).
+  const model = useMachineModel(state);
+  const attribution: BenchmarkAttribution = benchmarkAttribution(state, model, ledgerIncomplete);
 
   // Exactly one of the two cards below prints an attribution line — they are mutually exclusive by
   // construction (the flag makes Two Futures SUBSUME the efficacy card). These are the render
@@ -372,11 +377,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
       {attributing && <LedgerHealthNotice health={health} />}
 
       {showEfficacyCard && state?.efficacy && (
-        <EfficacyCard
-          efficacy={state.efficacy}
-          changes={changesSince}
-          ledgerIncomplete={ledgerIncomplete}
-        />
+        <EfficacyCard efficacy={state.efficacy} attribution={attribution} />
       )}
 
       {/* Two Futures measured split — where the efficacy readout lives (spec placement).
@@ -386,12 +387,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
           per-component efficacy (partGlow) — so it renders regardless of the standalone flag. The
           one law still holds: no measured pair → the honest empty state, no fabricated trophy. */}
       {showSplit && (
-        <TwoFutures
-          bench={state}
-          hw={hw}
-          changes={changesSince}
-          ledgerIncomplete={ledgerIncomplete}
-        />
+        <TwoFutures bench={state} hw={hw} attribution={attribution} />
       )}
 
       {state?.latest && (
@@ -707,17 +703,13 @@ function RunCard({ report, at, title }: { report: RunReport; at: string | null; 
 
 function EfficacyCard({
   efficacy,
-  changes,
-  ledgerIncomplete = false,
+  attribution,
 }: {
   efficacy: Efficacy;
-  changes: AppliedChange[];
-  /** The ledger is KNOWN incomplete, so an empty `changes` is not evidence of a quiet machine.
-      Defaults false, so every other caller renders exactly as it did. */
-  ledgerIncomplete?: boolean;
+  /** Which Compy changes the pair covers, off the Machine Model (#452) — see AttributionLine. */
+  attribution: BenchmarkAttribution;
 }) {
   const { t } = useTranslation();
-  const attr = changeAttribution(changes.length, t);
   return (
     <Card>
       <SectionHeader
@@ -726,20 +718,7 @@ function EfficacyCard({
           <StatusPill status={verdictTone(efficacy.overall)} label={verdictLabel(efficacy.overall, t)} />
         }
       />
-      <p className="bench-change">
-        {changes.length > 0 ? (
-          <>
-            {attr.lead} <strong>{changes.map((c) => c.rec_title).join(", ")}</strong>.
-            {attr.caveat ? ` ${attr.caveat}` : ""}
-          </>
-        ) : ledgerIncomplete ? (
-          // "No Compy changes recorded … this reflects manual or ambient changes" credits the delta
-          // to the user. Compy cannot know that from a record it cannot read.
-          <>{t("common.ledgerHealth.attributionUnknown")}</>
-        ) : (
-          <>{t("gaming.benchmark.noChangesRecorded")}</>
-        )}
-      </p>
+      <AttributionLine attribution={attribution} empty={t("gaming.benchmark.noChangesRecorded")} />
       <div className="bench-eff">
         {efficacy.per_component.map((c) => (
           <div className="bench-eff-row" key={c.component}>

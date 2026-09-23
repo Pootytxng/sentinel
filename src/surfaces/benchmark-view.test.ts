@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  benchmarkAttribution,
   changeAttribution,
   changesBetweenRuns,
   componentLabel,
@@ -13,7 +14,8 @@ import {
   fmtLocalWinTopPct,
   fmtLocalWinPercentile,
 } from "./benchmark-view";
-import type { TrialVerdict } from "../types";
+import type { CompyChangeFact, Fact, MachineModel, TrialVerdict } from "../types";
+import wire from "../test/fixtures/machine-model.wire.json";
 
 const GIB = 1024 ** 3;
 
@@ -198,5 +200,99 @@ describe("fmtLocalWinPercentile (Expert view §2 — the true percentile, unroun
     // The boundaries stay honest raw values (fmtLocalWinTopPct clamps these to 1/100).
     expect(fmtLocalWinPercentile(100)).toBe("Percentile 100.0 of your verified wins (top 0.0%)");
     expect(fmtLocalWinPercentile(0)).toBe("Percentile 0.0 of your verified wins (top 100.0%)");
+  });
+});
+
+describe("benchmarkAttribution — the Test verdict's claim, read off the Machine Model (#452)", () => {
+  const window = { baseline_at: "2026-07-01T10:00:00Z", latest_at: "2026-07-02T10:00:00Z" };
+  const WIRE = wire as unknown as MachineModel;
+  function fact<T>(value: T | null): Fact<T> {
+    return { value, class: "recorded-historically", source: "test", freshness: "stamped" };
+  }
+  function row(id: string, appliedAt: string | null, onThisRig: boolean | null = true): CompyChangeFact {
+    return {
+      id,
+      title: id,
+      applied_at: fact(appliedAt),
+      status: fact("applied"),
+      still_active: fact(true),
+      rolled_back_at: fact<string>(null),
+      on_this_rig: fact(onThisRig),
+      reversible: fact(true),
+    };
+  }
+  function modelWith(rows: CompyChangeFact[], totalRecorded = rows.length): MachineModel {
+    const compy_changes = { ...WIRE.compy_changes, total_recorded: totalRecorded, changes: rows };
+    delete compy_changes.ledger_unreadable;
+    return { ...WIRE, compy_changes };
+  }
+  const titles = (a: ReturnType<typeof benchmarkAttribution>) =>
+    a.kind === "counted" ? a.credited.map((c) => c.title) : a.kind;
+
+  it("model not read yet → pending; read failed → unknown; ledger unreadable → unknown", () => {
+    expect(benchmarkAttribution(window, undefined, false)).toEqual({ kind: "pending" });
+    expect(benchmarkAttribution(window, null, false)).toEqual({ kind: "unknown" });
+    const unreadable = modelWith([]);
+    unreadable.compy_changes.ledger_unreadable = "locked";
+    expect(benchmarkAttribution(window, unreadable, false)).toEqual({ kind: "unknown" });
+  });
+
+  it("credits exactly the changesBetweenRuns window: after the baseline, no later than the latest run", () => {
+    const m = modelWith([
+      row("before", "2026-07-01T09:00:00Z"),
+      row("at-baseline", "2026-07-01T10:00:00Z"),
+      row("inside", "2026-07-01T12:00:00Z"),
+      row("at-latest", "2026-07-02T10:00:00Z"),
+      row("after", "2026-07-02T11:00:00Z"),
+      row("undated", null),
+    ]);
+    expect(titles(benchmarkAttribution(window, m, false))).toEqual(["inside", "at-latest"]);
+  });
+
+  it("a row the ledger places on another PC is never credited — counted in otherRig instead", () => {
+    const a = benchmarkAttribution(
+      window,
+      modelWith([row("here", "2026-07-01T12:00:00Z", true), row("elsewhere", "2026-07-01T13:00:00Z", false)]),
+      false,
+    );
+    expect(titles(a)).toEqual(["here"]);
+    expect(a).toMatchObject({ otherRig: 1, rigUnknown: 0 });
+  });
+
+  it("a row whose PC is unknown is credited AND counted in rigUnknown", () => {
+    const a = benchmarkAttribution(window, modelWith([row("maybe", "2026-07-01T12:00:00Z", null)]), false);
+    expect(titles(a)).toEqual(["maybe"]);
+    expect(a).toMatchObject({ otherRig: 0, rigUnknown: 1 });
+  });
+
+  it("a ledger known incomplete withdraws only the EMPTY claim — a named row is still named", () => {
+    expect(benchmarkAttribution(window, modelWith([]), true)).toEqual({ kind: "unknown" });
+    expect(benchmarkAttribution(window, modelWith([row("x", "2026-07-01T13:00:00Z", false)]), true)).toEqual({ kind: "unknown" });
+    expect(titles(benchmarkAttribution(window, modelWith([row("named", "2026-07-01T12:00:00Z")]), true))).toEqual(["named"]);
+  });
+
+  it("no window → nothing credited, and no floor claim either", () => {
+    const m = modelWith([row("x", "2026-07-01T12:00:00Z")], 40);
+    expect(benchmarkAttribution({ baseline_at: null, latest_at: window.latest_at }, m, false)).toMatchObject({
+      kind: "counted",
+      credited: [],
+      truncated: false,
+    });
+  });
+
+  it("truncated only when rows were cut AND every listed row is newer than the baseline", () => {
+    const inside = row("inside", "2026-07-01T12:00:00Z");
+    // Cut, and the oldest listed row is inside the window: older rows could be too.
+    expect(benchmarkAttribution(window, modelWith([inside], 40), false)).toMatchObject({
+      truncated: true,
+      listed: 1,
+      totalRecorded: 40,
+    });
+    // Cut, but a listed row predates the baseline: the cut rows are older still, so none is missing.
+    expect(
+      benchmarkAttribution(window, modelWith([inside, row("old", "2026-06-01T12:00:00Z")], 40), false),
+    ).toMatchObject({ truncated: false });
+    // Nothing cut.
+    expect(benchmarkAttribution(window, modelWith([inside]), false)).toMatchObject({ truncated: false });
   });
 });

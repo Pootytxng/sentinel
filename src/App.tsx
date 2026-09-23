@@ -28,7 +28,7 @@ import { LabGround } from "./surfaces/LabGround";
 // prune solely for the knowledge-library MODAL, which any surface can raise via LibraryContext.
 import Learn from "./surfaces/Learn";
 import { prewarmScan } from "./surfaces/use-scan";
-import { activeChangeCount } from "./surfaces/dashboard-data";
+import { inEffectCounts, useMachineModel } from "./data/machine-model";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { LEDGER_CHANGED_EVENT } from "./types";
@@ -528,6 +528,14 @@ function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
+  // Shared Machine Model (#452): the Lab verdict's "N safe changes are active" count is the model's
+  // `active_now`, never a filter over the bare ledger list. `changes` is refresh()'s product, so a
+  // new list re-reads the model alongside it (cached across surfaces, shared while in flight).
+  // Not yet read or unreadable → 0: the verdict then says "nothing needs applying", a statement
+  // about the rec list, never "N changes are active" off a count the model could not give.
+  const model = useMachineModel(changes);
+  const inEffect = inEffectCounts(model);
+  const labActiveCount = inEffect.kind === "counted" ? inEffect.activeNow : 0;
   const [startup, setStartup] = useState<StartupEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticSection[]>([]);
   const [rulesSource, setRulesSource] = useState<string>("embedded");
@@ -1571,7 +1579,7 @@ function App() {
                   onRollback={rollback}
                   onApplyBatch={applyBatch}
                   gamingEnabled={gamingEnabled}
-                  activeCount={activeChangeCount(changes)}
+                  activeCount={labActiveCount}
                   diagnostics={<DiagnosticsTab sections={diagnostics} />}
                   diagnosticsCaptured={diagnostics.length > 0}
                 />

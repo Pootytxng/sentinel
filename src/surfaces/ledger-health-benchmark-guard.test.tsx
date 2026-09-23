@@ -18,11 +18,16 @@
 // incompleteness from a failed read is the same sin, mirrored.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, act } from "@testing-library/react";
-import type { AppliedChange, BenchmarkState } from "../types";
+import type { AppliedChange, BenchmarkState, CompyChangeFact, Fact, MachineModel } from "../types";
+import { invalidateProbe } from "../data/probe-cache";
+import wire from "../test/fixtures/machine-model.wire.json";
 
 const health: { value: unknown; reject: boolean } = { value: null, reject: false };
 const applied: { changes: AppliedChange[]; reject: boolean } = { changes: [], reject: false };
 const bench: { state: BenchmarkState | null } = { state: null };
+// The attribution reads the Machine Model (#452): its `compy_changes` rows, and its own word on
+// whether the ledger behind them was readable.
+const model: { value: MachineModel | null } = { value: null };
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
@@ -34,6 +39,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         return applied.reject ? Promise.reject(new Error("locked")) : Promise.resolve(applied.changes);
       case "get_ledger_health":
         return health.reject ? Promise.reject(new Error("ipc down")) : Promise.resolve(health.value);
+      case "get_machine_model":
+        return Promise.resolve(model.value);
       case "get_fps_status":
         return Promise.resolve({ active: false });
       case "get_recommendations":
@@ -105,12 +112,41 @@ const efficacyClaim = (c: HTMLElement) => c.querySelector(".bench-change");
 const splitClaim = (c: HTMLElement) =>
   c.querySelector('[data-testid="two-futures-split"] .bench-change');
 
+function fact<T>(value: T | null): Fact<T> {
+  return { value, class: "recorded-historically", source: "test", freshness: "stamped" };
+}
+function row(id: string, title: string, appliedAt: string, onThisRig: boolean | null): CompyChangeFact {
+  return {
+    id,
+    title,
+    applied_at: fact(appliedAt),
+    status: fact("applied"),
+    still_active: fact(true),
+    rolled_back_at: fact<string>(null),
+    on_this_rig: fact(onThisRig),
+    reversible: fact(true),
+  };
+}
+const WIRE = wire as unknown as MachineModel;
+// A model that READ the ledger and found exactly `rows`.
+function modelWith(rows: CompyChangeFact[]): MachineModel {
+  const compy_changes = { ...WIRE.compy_changes, total_recorded: rows.length, changes: rows };
+  delete compy_changes.ledger_unreadable;
+  return { ...WIRE, compy_changes };
+}
+// A model whose own ledger read failed: counts are 0 because nothing was read, and it says so.
+function unreadableModel(reason: string): MachineModel {
+  return { ...WIRE, compy_changes: { ...modelWith([]).compy_changes, ledger_unreadable: reason } };
+}
+
 beforeEach(() => {
   health.value = HEALTHY;
   health.reject = false;
   applied.changes = [];
   applied.reject = false;
   bench.state = MEASURED;
+  model.value = modelWith([]);
+  invalidateProbe();
 });
 
 afterEach(() => {
@@ -121,10 +157,9 @@ afterEach(() => {
 async function mount(provingGround = false) {
   const r = render(<BenchmarkTab provingGround={provingGround} />);
   // Flush get_benchmark_state / get_applied_changes, then the health probe those results key.
+  // …and the Machine Model read the attribution keys off (one IPC, shared while in flight).
   await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    for (let i = 0; i < 12; i++) await Promise.resolve();
   });
   return r;
 }
@@ -170,6 +205,7 @@ describe("the efficacy card may not blame the user for a ledger it can't read", 
   it("a PARTIAL list still gets the disclosure — it is the dangerous case, because it looks whole", async () => {
     health.value = QUARANTINED;
     applied.changes = [CHANGE];
+    model.value = modelWith([row(CHANGE.id, CHANGE.rec_title, CHANGE.applied_at, true)]);
     const { container } = await mount();
 
     // Narrowing applies only to the EMPTY branch; a named change is still named.
@@ -266,5 +302,68 @@ describe("UNKNOWN health is not incompleteness — a failed probe may not manufa
 
     expect(efficacyClaim(container)?.textContent).toContain(CAUSAL_CLAIM);
     expect(container.querySelector(".ledger-health")).toBeNull();
+  });
+});
+
+// #452: the attribution now reads the Machine Model, which carries two things a bare
+// `get_applied_changes` list never did — its own word on whether the ledger was readable, and which
+// PC each row was applied on. Both are pinned here.
+describe("the Machine Model's own word on the ledger outranks a health probe that says complete", () => {
+  it("a model that could not read the ledger withdraws the claim even when health says COMPLETE", async () => {
+    model.value = unreadableModel("history.json is locked");
+    const { container } = await mount();
+
+    expect(efficacyClaim(container)?.textContent).toBe(WITHDRAWN);
+    expect(container.textContent).not.toContain(CAUSAL_CLAIM);
+  });
+
+  it("no model at all (the read failed) withdraws too — never the empty sentence off nothing", async () => {
+    model.value = null;
+    const { container } = await mount(true);
+
+    expect(splitClaim(container)?.textContent).toBe(WITHDRAWN);
+    expect(container.textContent).not.toContain(CAUSAL_CLAIM);
+  });
+});
+
+describe("which PC a change was applied on decides whether it is credited", () => {
+  const IN_WINDOW = "2026-08-01T12:00:00.000Z";
+
+  it("a change the ledger places on ANOTHER PC is never named, and the line says it was left out", async () => {
+    model.value = modelWith([row("chg-x", "Power plan", IN_WINDOW, false)]);
+    const { container } = await mount();
+
+    const line = efficacyClaim(container)?.textContent ?? "";
+    expect(line).not.toContain("Power plan");
+    expect(line).toContain(CAUSAL_CLAIM);
+    expect(line).toContain(
+      "1 Compy change in this window was made on another PC and is not counted here.",
+    );
+  });
+
+  it("a change on THIS PC is named as the thing being measured", async () => {
+    model.value = modelWith([row("chg-y", "Game Mode", IN_WINDOW, true)]);
+    const { container } = await mount(true);
+
+    const line = splitClaim(container)?.textContent ?? "";
+    expect(line).toContain("Measuring the effect of: Game Mode.");
+    expect(line).not.toContain(CAUSAL_CLAIM);
+    expect(line).not.toContain("another PC");
+  });
+
+  it("a change whose PC the ledger could not name is credited AND said to be uncertain", async () => {
+    model.value = modelWith([row("chg-z", "Game Mode", IN_WINDOW, null)]);
+    const { container } = await mount();
+
+    const line = efficacyClaim(container)?.textContent ?? "";
+    expect(line).toContain("Measuring the effect of: Game Mode.");
+    expect(line).toContain("1 of these was recorded before Compy stamped which PC it was on");
+  });
+
+  it("a change outside the baseline→latest window is not credited", async () => {
+    model.value = modelWith([row("chg-old", "Game Mode", "2026-07-01T12:00:00.000Z", true)]);
+    const { container } = await mount();
+
+    expect(efficacyClaim(container)?.textContent).toContain(CAUSAL_CLAIM);
   });
 });

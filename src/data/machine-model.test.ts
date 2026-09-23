@@ -9,7 +9,13 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import { factText, readMachineModel, useMachineModel } from "./machine-model";
+import {
+  MODEL_UNREADABLE_REASON,
+  factText,
+  inEffectCounts,
+  readMachineModel,
+  useMachineModel,
+} from "./machine-model";
 
 const MODEL = wire as unknown as MachineModel;
 
@@ -104,5 +110,86 @@ describe("factText", () => {
 
   it("uses the unknown fact from the wire fixture as-is", () => {
     expect(factText(MODEL.identity.windows)).toBe(MODEL.identity.windows.unknown_reason);
+  });
+});
+
+describe("inEffectCounts — the one number a screen may print as 'in effect on this PC'", () => {
+  it("not read yet → pending, never a stand-in zero", () => {
+    expect(inEffectCounts(undefined)).toEqual({ kind: "pending" });
+  });
+
+  it("a failed read → unreadable with a reason, never counted", () => {
+    expect(inEffectCounts(null)).toEqual({ kind: "unreadable", reason: MODEL_UNREADABLE_REASON });
+  });
+
+  it("a model whose own ledger read failed → unreadable with the model's reason, counts ignored", () => {
+    const m: MachineModel = {
+      ...MODEL,
+      compy_changes: { ...MODEL.compy_changes, ledger_unreadable: "history.json is locked" },
+    };
+    expect(inEffectCounts(m)).toEqual({ kind: "unreadable", reason: "history.json is locked" });
+  });
+
+  it("a readable model → active_now, the live-check unknowns and the total, straight off the wire", () => {
+    expect(inEffectCounts(MODEL)).toEqual({
+      kind: "counted",
+      activeNow: 1,
+      unknown: 0,
+      totalRecorded: 2,
+    });
+  });
+});
+
+describe("one read in flight is shared — surfaces mounting together cost one IPC (#452)", () => {
+  it("concurrent readMachineModel() calls resolve off one backend call", async () => {
+    let release!: (m: MachineModel) => void;
+    invokeMock.mockImplementation(() => new Promise((r) => (release = r)));
+    const a = readMachineModel();
+    const b = readMachineModel();
+    await Promise.resolve(); // the fetcher starts on the next tick
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    release(MODEL);
+    await expect(a).resolves.toBe(MODEL);
+    await expect(b).resolves.toBe(MODEL);
+  });
+
+  it("two hooks mounted in the same tick share the read", async () => {
+    invokeMock.mockResolvedValue(MODEL);
+    const h1 = renderHook(() => useMachineModel());
+    const h2 = renderHook(() => useMachineModel());
+    await waitFor(() => expect(h1.result.current).toBe(MODEL));
+    await waitFor(() => expect(h2.result.current).toBe(MODEL));
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a shared failure is not cached: the next call goes back to the backend", async () => {
+    invokeMock.mockRejectedValueOnce(new Error("ipc down")).mockResolvedValueOnce(MODEL);
+    const [a, b] = await Promise.all([readMachineModel(), readMachineModel()]);
+    expect(a).toBeNull();
+    expect(b).toBeNull();
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    await expect(readMachineModel()).resolves.toBe(MODEL);
+  });
+
+  it("invalidateProbe() while a read is in flight: that read's result is never cached as fresh", async () => {
+    const STALE = { ...MODEL, built_at: "stale" } as MachineModel;
+    let releaseStale!: (m: MachineModel) => void;
+    let releaseFresh!: (m: MachineModel) => void;
+    invokeMock
+      .mockImplementationOnce(() => new Promise((r) => (releaseStale = r)))
+      .mockImplementationOnce(() => new Promise((r) => (releaseFresh = r)));
+    const stale = readMachineModel();
+    await Promise.resolve();
+    invalidateProbe(); // App.refresh() after an apply: the caller wants a read that saw the write
+    const fresh = readMachineModel();
+    await Promise.resolve();
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+    releaseStale(STALE);
+    await expect(stale).resolves.toBe(STALE);
+    releaseFresh(MODEL);
+    await expect(fresh).resolves.toBe(MODEL);
+    // The cache holds the fresh read, and proving it costs no third IPC.
+    await expect(readMachineModel()).resolves.toBe(MODEL);
+    expect(invokeMock).toHaveBeenCalledTimes(2);
   });
 });
