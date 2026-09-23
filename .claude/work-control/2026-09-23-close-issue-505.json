@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/505#issuecomment-5786797420",
+  "leaseEvidenceNote": "Ownership claim on #505 posted by this Claude Code successor session 2026-09-23T00:25Z for the #509 landing (mark-ready, merge, close, receipt carrier). It names this exact worktree (trusting-newton-85d566, moved with git reset --keep to the reviewed head 132c262f = origin/claude/505-precancelled-bench-flake) and limits writes to the branch delta plus the three receipt files, listed as one contiguous backticked Write scope. The author's lane released its lease by the Handoff at 2026-09-22T21:40Z (issuecomment-5784636586, ending `Claim: released`) before this claim; the folder record was adopted with tools/entry/cli.mjs adopt --issue 505 --session 85d9d60c-4902-4b65-977c-86fb0e2c54f0 and the board's Worktree / branch field was moved to this folder. PR #509 was marked ready at 2026-09-23T00:26Z under the mark-pr-ready receipt (gate PASS); the head did not move (re-read 132c262f after gh pr ready). PR #509 merged at 2026-09-23T00:29:15Z as merge commit c1ec35673d20d4e7f196be0146631bd074cf5d75 under the merge-pr receipt (gate PASS); the head branch was pruned with git push origin --delete and the disposition audit read OK. The landing claim was then released by a Handoff on #505 (Claim: released) so the thread has no active lease at close time.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T00:20Z (eleven open PRs: #509, #508, #507, #504, #500, #492, #476, #471, #470, #464, and no other): only PR #509 touches src-tauri/src/benchmark.rs and no PR touches the three receipt paths (gh pr list --json files, intersected). PR #507 touches src-tauri/src/machine_model.rs only, outside the delta. git worktree list (36 checkouts) names no other folder on #505 besides the author's released busy-satoshi-96b3bf. scripts/scope-drift-gate.mjs --issue 505 --refresh at the reviewed head reads OK: 1 changed path, inside the claim.",
+  "inheritedWork": false,
+  "currentHead": "132c262fb7c8bf8504752c52f318cd936663fb60",
+  "pr": 509,
+  "issue": 505,
+  "kind": "lane",
+  "branch": "claude/505-precancelled-bench-flake",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta 76524eb7..132c262f (the PR base, which is also the merge-base with origin/main 9ead3da2) is one commit, 132c262f, authored and committed by claude-code <claude-code@desk.local> (git log --format='%an <%ae> %cn <%ce>' origin/main..132c262f). It changes src-tauri/src/benchmark.rs only (+24/-5, test module only). The reviewer-only seat authored nothing; this landing session (also claude-code) edited none of the delta files and only writes receipts.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "132c262fb7c8bf8504752c52f318cd936663fb60",
+      "evidence": "logs/verify-local-2026-09-22T21-37-07Z.log (in the author's worktree busy-satoshi-96b3bf; SHA-256 16a132d501fd402e8955c68f61ca229cf37509e9e0fcf47977fc40b33f3ab310, 1447 lines) lines 9-44",
+      "summary": "450 frontend test files passed; 7,413 passed / 4 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "132c262fb7c8bf8504752c52f318cd936663fb60",
+      "evidence": "logs/verify-local-2026-09-22T21-37-07Z.log (in the author's worktree busy-satoshi-96b3bf; SHA-256 16a132d501fd402e8955c68f61ca229cf37509e9e0fcf47977fc40b33f3ab310, 1447 lines) lines 45-71",
+      "summary": "tsc and Vite production build passed (frontend type-check and build stage completed with no error)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "132c262fb7c8bf8504752c52f318cd936663fb60",
+      "evidence": "logs/verify-local-2026-09-22T21-37-07Z.log (in the author's worktree busy-satoshi-96b3bf; SHA-256 16a132d501fd402e8955c68f61ca229cf37509e9e0fcf47977fc40b33f3ab310, 1447 lines) lines 72-1444 (test result line 1430)",
+      "summary": "1,327 passed; 0 failed; 24 ignored (includes benchmark::benchmark_tests::precancelled_cpu_does_no_work_and_does_not_hang)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "132c262fb7c8bf8504752c52f318cd936663fb60",
+      "evidence": "logs/verify-local-2026-09-22T21-37-07Z.log (in the author's worktree busy-satoshi-96b3bf; SHA-256 16a132d501fd402e8955c68f61ca229cf37509e9e0fcf47977fc40b33f3ab310, 1447 lines) lines 1445-1447",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile, no warnings or errors in the stage)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in the author's worktree at 2026-09-22T21:37:07Z and the push that put 132c262f on origin was accepted (the ref is origin/claude/505-precancelled-bench-flake, PR #509's head; the pre-push hook lets a push through only on a PASS verdict). The log's first line binds it to that worktree, whose branch head is 132c262f. The landing session read every stage in the log and hashed it to the SHA-256 above; the log's own scope-drift line reads 1 changed path, the same file as the delta. scripts/verify-local.ps1 prints its final `LOCAL CHECK RESULT: PASS` line to the console only (Write-Host), so the log ends at the clippy stage's Finished line, the same shape as the #503 landing's log. The landing carrier will push the post-merge receipt commit through the native full gate again on the merged tree (main gained #502's Rust changes in intelligence.rs, machine_model.rs and sessions.rs after this PR's base; no path overlaps); no --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 1 changed path since origin/main measured against the author's claim on #505, inside it. Re-measured 2026-09-23T00:25Z at the same head under the landing claim with --refresh, after this receipt was written: OK, 2 changed paths (src-tauri/src/benchmark.rs and this untracked receipt), both inside the delta-plus-receipts scope.",
+    "reconciliationNote": "The gate-run line was measured against the author's implementation claim; the landing claim lists the same delta path plus the three receipt paths only."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "132c262fb7c8bf8504752c52f318cd936663fb60",
+    "verdict": "PASS WITH NOTES",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/509#issuecomment-5784635783 (2026-09-22T21:40Z), headed \"Independent review: PASS WITH NOTES at exact head 132c262fb7c8bf8504752c52f318cd936663fb60\", naming reviewer rust-tauri-reviewer, non-author, at the exact PR head against base 76524eb7f6d60102e6083aac1b9d6d7a273a7659.",
+    "reviewerNote": "Reviewer-only seat, a read-only subagent in a fresh context at the exact head 132c262f; it can never be a mutation author. It confirmed the single-file, single-hunk, test-module-only delta (git diff --stat 76524eb7..HEAD), ran cargo test --lib benchmark:: (33 passed / 0 failed, the renamed test included) and clippy -D warnings (exit 0), and read the code under test: cpu_kernel checks the cancel flag as the first statement of its loop so a pre-cancelled run yields exactly zero iterations, the kops denominators are clamped to 1e-6 so 0/secs is an exact 0.0 and assert_eq! against 0.0 is sound, and hang protection is at least as strong as before (a wedged bench_cpu now fails at 10 s with a named expect message instead of hanging cargo test). Falsifiability judged real and consistent with the author's recorded falsification (cancel check disabled -> FAILED in 1.20 s, left 267378.42 / right 0.0). Two nits, neither a defect and both deliberately left so the reviewed head stays the pushed head: two lines over the 100-column rustfmt default in a file that is not rustfmt-clean as a baseline, and a trivially true threads >= 1 shape assert carried over unchanged. Tree clean after review. GitHub records the verdict as a PR comment from the shared Pootytxng account, posted by the author lane on the seat's behalf with the seat's verdict verbatim; the body names the reviewer identity. It is a Claude model, independent by role only, the same route as the #438-#503 landings. The landing session (claude-code) re-derived the PR head, the review's head, the delta, the closing references and the gate log before writing this receipt, and edited none of the delta files."
+  },
+  "transition": "close-issue",
+  "closingNote": "Closes #505 as completed: the pre-cancelled CPU bench test now proves zero iterations instead of a wall-clock bound (src-tauri/src/benchmark.rs), landed on main as c1ec35673d20d4e7f196be0146631bd074cf5d75 via PR #509 at the exact reviewed head 132c262f. The three landing receipts reach main in the follow-up carrier commit pushed HEAD:main through the native pre-push gate."
+}
