@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/513#issuecomment-5795871277",
+  "leaseEvidenceNote": "Ownership claim on #513 by this successor session (verified takeover of the author lane nostalgic-neumann-fb604a, whose session is not running). It names this worktree intelligent-williamson-02dcb6, branch claude/513-homehud-header-v2, and a write scope of the four #513 paths plus .claude/work-control/**. The Work Control board row for #513 names this folder @ claude/513-homehud-header-v2; the folder record was adopted with tools/entry/cli.mjs adopt --issue 513.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T14:10Z (#492, #471, #470, #464 besides #527): none touches any of the 7 delta paths (gh api pulls/N/files intersected with the PR's file list). scripts/scope-drift-gate.mjs in the gate run: OK, 7 changed paths, all inside the claim on #513.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "73f63396 and 8db1e904 are the author lane's 6062603a and 93d954de (claude/513-homehud-header-runs, folder nostalgic-neumann-fb604a), rebased by this successor under the verified takeover onto origin/main 7d96ab27; git range-diff shows both content-identical to the self-reviewed commits. 7208c4f3 is this session's own carrier commit for the #452 (PR #524) landing receipts, JSON only.",
+  "currentHead": "7208c4f3fda314cfb531f1fed5bfb7614983d2d1",
+  "pr": 527,
+  "issue": 513,
+  "kind": "lane",
+  "branch": "claude/513-homehud-header-v2",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta 7d96ab27..7208c4f3 is three commits, all authored and committed by claude-code <claude-code@desk.local> (git log --format='%an <%ae> | %cn <%ce>'). The reviewer seat authored nothing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "7208c4f3fda314cfb531f1fed5bfb7614983d2d1",
+      "evidence": "logs/verify-local-2026-09-23T14-02-09Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 a782d756c94011f968d8d59a8c12e08eecc196169b082d24b1b56991505fe872, 1457 lines) lines 9-48",
+      "summary": "457 frontend test files passed; 7,564 passed / 1 expected fail / 3 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "7208c4f3fda314cfb531f1fed5bfb7614983d2d1",
+      "evidence": "logs/verify-local-2026-09-23T14-02-09Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 a782d756c94011f968d8d59a8c12e08eecc196169b082d24b1b56991505fe872, 1457 lines) lines 49-75",
+      "summary": "tsc and Vite production build passed (built in 10.73s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "7208c4f3fda314cfb531f1fed5bfb7614983d2d1",
+      "evidence": "logs/verify-local-2026-09-23T14-02-09Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 a782d756c94011f968d8d59a8c12e08eecc196169b082d24b1b56991505fe872, 1457 lines) lines 76-1454",
+      "summary": "1,333 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "7208c4f3fda314cfb531f1fed5bfb7614983d2d1",
+      "evidence": "logs/verify-local-2026-09-23T14-02-09Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 a782d756c94011f968d8d59a8c12e08eecc196169b082d24b1b56991505fe872, 1457 lines) lines 1455-1457",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 7.60s)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in this worktree at 2026-09-23T14:02:09Z at HEAD 7208c4f3 and printed LOCAL CHECK RESULT: PASS; the push creating origin/claude/513-homehud-header-v2 at that SHA was accepted. Gate receipt comment: https://github.com/Pootytxng/sentinel/pull/527#issuecomment-5796360468. Run in a gate slot agreed with the #522, #519-carrier and #518 lanes.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run (log lines 5-8): 7 changed paths since origin/main measured against the claim on #513, every one inside it."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "7208c4f3fda314cfb531f1fed5bfb7614983d2d1",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/527#issuecomment-5796360735, headed \"Independent review: PASS at exact head 7208c4f3fda314cfb531f1fed5bfb7614983d2d1\", naming reviewer frontend-ipc-contract-auditor, non-author.",
+    "reviewerNote": "Read-only reviewer seat in a fresh context; never a mutation author. Traced room-shell.tsx eyebrow-vs-h1 rendering, the masthead still rendered, the widened heading guard and the falsification test, CSS scoping, and i18n parity; tsc clean, 3 files / 27 tests pass. Visual proof: the self-reviewer PASS quoted in the PR body. Posted from the shared Pootytxng account by the landing session on the seat's behalf."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "PR #527 has zero closingIssuesReferences; #513 is closed separately after landing with its own close-issue receipt."
+}
