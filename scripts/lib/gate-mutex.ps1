@@ -52,7 +52,13 @@ function Get-GateMutexHolderText {
   $text = "pid $($note.pid)"
   if ($note.label) { $text += " ($($note.label))" }
   try {
-    $since = [DateTime]::Parse([string]$note.since).ToUniversalTime()
+    # PowerShell 7's ConvertFrom-Json has already turned the ISO string into a UTC DateTime, and [string]
+    # on that drops the Z, so Parse would read it as local time (#529). Take a DateTime as it is; parse a
+    # string (Windows PowerShell 5.1 leaves it one) round-trip.
+    $since = if ($note.since -is [DateTime]) { $note.since } else {
+      [DateTime]::Parse([string]$note.since, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
+    }
+    $since = $since.ToUniversalTime()
     $age = [int]([DateTime]::UtcNow - $since).TotalSeconds
     $text += ", since $($since.ToString('HH:mm:ss'))Z (${age}s)"
   } catch { }
