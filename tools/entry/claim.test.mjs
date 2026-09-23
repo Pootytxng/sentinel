@@ -269,6 +269,24 @@ describe("threadLease: is a lease still live on this thread?", () => {
         expect(threadLease([CLAIM, hold, LATER, release]).claim).toBeNull();
       },
     );
+
+    // #517: the push-time overlap gate dates a held path from the run, not the newest comment, so a
+    // refresh cannot reset a lane's seniority and a release must end the run with the lease.
+    it("returns the run since the last release, oldest first, ending in the live claim", () => {
+      const REFRESH = at("2026-09-10T07:00:00Z", "### Ownership claim", "- Lane: Claude Code", "- Write scope: `src-tauri/src/race_seam.rs`, `docs/`");
+      const lease = threadLease([CLAIM, REFRESH]);
+      expect(lease.run.map((c) => c.postedAt)).toEqual([CLAIM.createdAt, REFRESH.createdAt]);
+      expect(lease.run.at(-1)).toBe(lease.claim);
+      expect(threadLease([CLAIM, RELEASE]).run).toEqual([]);
+      expect(threadLease([CLAIM, RELEASE, LATER, RECLAIM]).run.map((c) => c.postedAt)).toEqual([RECLAIM.createdAt]);
+      expect(threadLease([]).run).toEqual([]);
+    });
+
+    it("carries the claim comment's url when the reader supplied one, and invents none when it did not", () => {
+      const url = "https://github.com/Pootytxng/sentinel/issues/1#issuecomment-1";
+      expect(threadLease([{ ...CLAIM, url }]).claim).toMatchObject({ url });
+      expect(threadLease([CLAIM]).claim).not.toHaveProperty("url");
+    });
   });
 
   // HQ review 5165670535 on e56c6395, finding 1: a line-start regex read a release quoted inside fenced
