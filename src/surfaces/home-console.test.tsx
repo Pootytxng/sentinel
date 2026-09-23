@@ -3,7 +3,7 @@ import { render, screen, cleanup, waitFor, fireEvent, act } from "@testing-libra
 import { ShellV2 } from "../design/ShellV2";
 import { railFor } from "../design/homeRail";
 import { postureLine } from "./command-center-data";
-import { activeChangeCount } from "./dashboard-data";
+import { inEffectCounts } from "../data/machine-model";
 import { HomeConsole } from "./HomeConsole";
 import { READING_ROWS } from "../design/console/Reading";
 // i18n update (2026-07-23): postureLine now takes a TFunction as its last param — the real
@@ -211,7 +211,7 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
   // both directions: the verdict must be IN the h1, and the room title must be GONE (not merely
   // demoted), because a second copy of a label the rail already renders is the noise TYPE-1 cleared.
   it("UX-1 front-door law: the h1 IS the verdict, the room title is gone, and it renders ONCE", () => {
-    const posture = postureLine(readiness, priorities, activeChangeCount(props.changes), i18n.t);
+    const posture = postureLine(readiness, priorities, inEffectCounts(null), i18n.t);
     const c = mount().container;
     const h1 = c.querySelector(".v2-verdict h1")!;
     expect(h1.querySelector(".hc-headline")!.textContent).toBe(posture.headline);
@@ -316,7 +316,7 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
       ready_count: 2,
       attention_count: 1,
     };
-    const posture = postureLine(attn, priorities, activeChangeCount(props.changes), i18n.t);
+    const posture = postureLine(attn, priorities, inEffectCounts(null), i18n.t);
     const c = mount({ ...props, readiness: attn }).container;
     expect(posture.tone).toBe("attention");
     // UX-1: the tone class rides the verdict line itself now that the line IS the h1's content —

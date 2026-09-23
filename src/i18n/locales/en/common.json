@@ -199,6 +199,9 @@
   },
   "ledgerHealth": {
     "activeUnknown": "unknown — Compy can't read its own record",
+    "activePending": "still reading Compy's record",
+    "activeUnchecked_one": "{{count}} more couldn't be checked just now",
+    "activeUnchecked_other": "{{count}} more couldn't be checked just now",
     "activeChangesUnvouched": "Compy can't promise every change here can be undone",
     "trackedUnknown": "unknown — not the same as nothing applied",
     "unreadableTitle": "Compy can't read its own record right now",

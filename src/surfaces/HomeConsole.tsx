@@ -20,14 +20,13 @@ import { useIntelligenceFlag, useHomeInterviewFlag } from "../design/use-hud";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
-import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeCpuTempC, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
-import { useMachineModel } from "../data/machine-model";
+import { inEffectCounts, useMachineModel } from "../data/machine-model";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
@@ -559,7 +558,9 @@ export function HomeConsole({
   const { parts: manualParts } = useManualParts();
 
   // ── measured derivations (all real, all honestly empty when absent — HomeHud's exact logic) ──
-  const posture = postureLine(readiness, priorities, activeChangeCount(changes), t);
+  // The Machine Model's in-effect answer (#452) — see HomeHud for why never the bare ledger list.
+  const inEffect = inEffectCounts(model);
+  const posture = postureLine(readiness, priorities, inEffect, t);
   // This is the Home a default-flag user actually lands on (compy_home_console DEFAULT ON), so it
   // is where the ledger-completeness disclosure matters most. postureLine already declines to print
   // a count it doesn't have — at zero changes the change-note is omitted rather than rendered as
@@ -771,7 +772,8 @@ export function HomeConsole({
     recsLoaded: recs != null,
     safeStackReady: stackReady,
     fastPathWired: fastPathAvailable,
-    activeChanges: activeChangeCount(changes),
+    // Not counted (pending or unreadable) is null, so the interview cannot quote it as a 0.
+    activeChanges: inEffect.kind === "counted" ? inEffect.activeNow : null,
     sessionCount: sessions.length,
     lastSession:
       strip.kind === "data"

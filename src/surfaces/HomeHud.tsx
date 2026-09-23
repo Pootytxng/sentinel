@@ -13,14 +13,13 @@ import { Sparkline } from "../design/Sparkline";
 import { useReducedMotion } from "../design/use-motion";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
-import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
-import { useMachineModel } from "../data/machine-model";
+import { inEffectCounts, useMachineModel } from "../data/machine-model";
 import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import { useV2Accent } from "./HomeV2";
 import CountUp from "../design/vendor/CountUp/CountUp";
@@ -241,7 +240,11 @@ export function HomeHud({
   };
 
   // ── measured derivations (all real, all honestly empty when absent — HomeV2's exact logic) ──
-  const posture = postureLine(readiness, priorities, activeChangeCount(changes), t);
+  // The in-effect count is the Machine Model's answer (#452), never `is_still_active` counted off the
+  // bare ledger list: that list is EMPTY when the ledger can't be read, and it counts a row whose live
+  // check failed as in effect. Only `activeNow` is in effect; `unknown` is named, never added to it.
+  const inEffect = inEffectCounts(model);
+  const posture = postureLine(readiness, priorities, inEffect, t);
   const strip = liveStrip(sessions, t);
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   const fpsGrade: Grade = strip.kind === "data" ? gradeFps(strip.avgFps, rig) : "neutral";
@@ -298,7 +301,6 @@ export function HomeHud({
   const latestTime = latest
     ? new Date(latest.applied_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
-  const activeCount = activeChangeCount(changes);
 
   // An unreadable ledger loads as an EMPTY one, and this column paints an empty one as "0" +
   // "nothing applied yet — your PC is untouched": a claim ABOUT THE MACHINE, read off a record
@@ -316,6 +318,8 @@ export function HomeHud({
   // quarantined keeps the pre-quarantine changes off this list and out of reach. So the promise is
   // withdrawn on health alone, independent of the count.
   const ledgerUnvouched = !!knownIncomplete(health);
+  // The model's own "can't read" is the same absence as a blank ledger: a word, never a 0.
+  const activeWithdrawn = ledgerBlank || inEffect.kind === "unreadable";
 
   const drifts = readiness?.drifts ?? [];
   const driftNames =
@@ -594,17 +598,21 @@ export function HomeHud({
           <LedgerHealthNotice health={health} />
 
           <Module label={t("home.homeHud.ledger.activeChangesLabel")}>
-            {ledgerBlank ? (
+            {activeWithdrawn ? (
               <span className="hud-note">{t("common.ledgerHealth.activeUnknown")}</span>
+            ) : inEffect.kind !== "counted" ? (
+              <span className="hud-note">{t("common.ledgerHealth.activePending")}</span>
             ) : (
               <>
                 <span className="hud-reading hud-mono">
-                  {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
+                  {reduced ? inEffect.activeNow : <CountUp to={inEffect.activeNow} duration={0.9} />}
                 </span>
                 <span className="hud-note">
                   {ledgerUnvouched
                     ? t("common.ledgerHealth.activeChangesUnvouched")
                     : t("home.homeHud.ledger.activeChangesNote")}
+                  {inEffect.unknown > 0 &&
+                    ` · ${t("common.ledgerHealth.activeUnchecked", { count: inEffect.unknown })}`}
                 </span>
               </>
             )}

@@ -224,6 +224,8 @@ describe("LAW 3 — evidence is quoted, never synthesised", () => {
       ["last session", { lastSession: null }, "Last recorded session"],
       ["session count", { sessionCount: 0 }, "to compare against"],
       ["applied changes", { activeChanges: 0 }, "still undoable"],
+      // #452: a count the Machine Model could not give (pending or unreadable) is not a 0 to quote.
+      ["unread applied changes", { activeChanges: null }, "still undoable"],
       ["gpu temperature", { gpuTempC: null }, "reading"],
     ];
     for (const [name, patch, fragment] of probes) {
@@ -238,6 +240,12 @@ describe("LAW 3 — evidence is quoted, never synthesised", () => {
         fragment,
       );
     }
+  });
+
+  it("an unread change count cannot make 'did it help' a measured answer", () => {
+    // RICH has changes and sessions on record, so the answer is direct; without a count it is not.
+    expect(find("didItHelp", RICH).level).toBe("measured");
+    expect(find("didItHelp", { ...RICH, activeChanges: null }).level).not.toBe("measured");
   });
 
   it("quotes the reading it was handed, not a rounded-up version of it", () => {

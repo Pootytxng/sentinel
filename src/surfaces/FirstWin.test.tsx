@@ -111,6 +111,35 @@ describe("FirstWin — when it speaks at all", () => {
     expect(document.body.textContent || "").not.toMatch(/just read your PC/i);
     expect(invokeMock.calls).toEqual([]);
   });
+
+  // #452: "first" vs "latest" is a fact about the ledger's history, not an in-effect count. A
+  // change the user applied earlier still makes this one not their first even when its live check
+  // no longer agrees; only an undone one (the demo leaves those) does not count.
+  describe("the heading", () => {
+    const earlier = (over: Partial<AppliedChange>): AppliedChange => ({
+      ...CHANGE,
+      id: "c-0",
+      rec_id: "hags-enable",
+      applied_at: "2026-08-25T01:00:00Z",
+      ...over,
+    });
+
+    it("calls the only change the user made their first", () => {
+      mount([rec(true)]);
+      expect(screen.getByText("Your first change")).toBeInTheDocument();
+    });
+
+    it("is not 'first' when an earlier applied change no longer reads as live", () => {
+      mount([rec(true)], [earlier({ is_still_active: false }), CHANGE]);
+      expect(screen.getByText("Your latest change")).toBeInTheDocument();
+      expect(screen.queryByText("Your first change")).toBeNull();
+    });
+
+    it("stays 'first' when the only earlier row was undone", () => {
+      mount([rec(true)], [earlier({ status: "rolled_back", is_still_active: false }), CHANGE]);
+      expect(screen.getByText("Your first change")).toBeInTheDocument();
+    });
+  });
 });
 
 describe("FirstWin — the proof, and its limits", () => {

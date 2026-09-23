@@ -15,9 +15,10 @@ import { join } from "path";
 // the only readers a surface may count through.
 //
 // The corpus is INVERTED on purpose (walk everything, exempt explicitly), the same lesson the
-// mutation-boundary guard learned: a new surface is in scope the moment it exists. The exemptions
-// below are the Home faces still leased to #451 (slice 3) and the FirstWin heading; part 2 of #452
-// migrates them and DELETES their rows — the liveness test below refuses a rotted exemption.
+// mutation-boundary guard learned: a new surface is in scope the moment it exists. Part 2 of #452
+// migrated the three Home faces, deleted `activeChangeCount`, and moved the FirstWin heading onto a
+// history fact, so the exemption list is EMPTY. A new row needs a real reason, and the liveness test
+// below refuses one that has rotted.
 
 const SRC = "src";
 
@@ -68,23 +69,7 @@ export function detect(source: string): string[] {
 
 // file → why it may still count off the bare list. Each must stay LIVE (the file exists and still
 // matches) or be deleted; a reason shorter than a sentence is a placeholder, not a reason.
-const EXCEPTIONS: Record<string, string> = {
-  [join("src", "surfaces", "dashboard-data.ts")]:
-    "Defines activeChangeCount() itself. Part 2 of #452 deletes the helper and its test once the " +
-    "Home faces below no longer import it; until then the definition is the thing being retired.",
-  [join("src", "surfaces", "HomeHud.tsx")]:
-    "Health face: posture line + 'Active changes' reading count off the bare list. Leased to #451 " +
-    "(slice 3, PR #500) while this guard lands; part 2 of #452 migrates it to inEffectCounts().",
-  [join("src", "surfaces", "HomeV2.tsx")]:
-    "Health face variant with the same posture line and reading as HomeHud. Leased to #451 while " +
-    "this guard lands; part 2 of #452 migrates it to inEffectCounts() and removes this row.",
-  [join("src", "surfaces", "HomeConsole.tsx")]:
-    "Health console: posture line and the interview facts' activeChanges count off the bare list. " +
-    "Leased to #451 while this guard lands; part 2 of #452 migrates it to inEffectCounts().",
-  [join("src", "surfaces", "FirstWin.tsx")]:
-    "liveCount picks the heading ('your first win' vs 'your latest win'), never a printed number. " +
-    "#452 lists the FirstWin rows out of scope; part 2 decides whether the heading reads the model.",
-};
+const EXCEPTIONS: Record<string, string> = {};
 
 // ── Tests ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -119,13 +104,21 @@ describe("in-effect counts read the Machine Model, never a private filter over t
     }
   });
 
-  it("the slice-4 surfaces read the model and are not on the exemption list", () => {
+  it("the slice-4 surfaces and the Health faces read the model and are not exempted", () => {
     // These are the fix; an exemption row for any of them would be the defect coming back.
     const app = join("src", "App.tsx");
     const bench = join("src", "surfaces", "Benchmark.tsx");
     const twoFutures = join("src", "surfaces", "TwoFutures.tsx");
     for (const file of [app, bench, twoFutures]) expect(EXCEPTIONS).not.toHaveProperty(file);
     expect(stripComments(readFileSync(app, "utf8"))).toMatch(/\binEffectCounts\s*\(/);
+    // Part 2 of #452: the three Health faces print the count, so each must read it from the model.
+    for (const face of ["HomeHud.tsx", "HomeV2.tsx", "HomeConsole.tsx"]) {
+      const file = join("src", "surfaces", face);
+      expect(EXCEPTIONS).not.toHaveProperty(file);
+      expect(stripComments(readFileSync(file, "utf8")), `${face} reads inEffectCounts()`).toMatch(
+        /\binEffectCounts\s*\(/,
+      );
+    }
     expect(stripComments(readFileSync(bench, "utf8"))).toMatch(/\bbenchmarkAttribution\s*\(/);
     expect(stripComments(readFileSync(twoFutures, "utf8"))).not.toMatch(/get_applied_changes/);
   });

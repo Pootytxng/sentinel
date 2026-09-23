@@ -5,6 +5,7 @@
 
 import type { TFunction } from "i18next";
 import type { GameReadiness, Priorities, SessionSummary } from "../types";
+import type { InEffectCounts } from "../data/machine-model";
 import { deriveSystemPosture } from "./system-posture";
 import { latestSession } from "./dashboard-data";
 import { prettyGameName } from "./game-name";
@@ -28,12 +29,18 @@ export type PostureLine = {
 // i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
 // component — it can't call useTranslation() itself) — every call site passes its own `t` from
 // useTranslation(). Mirrors ago()/smoothness() elsewhere in this codebase.
+//
+// `inEffect` is the Machine Model's own answer (#452), never a count a face works out from the bare
+// ledger list: that list reads as EMPTY when the ledger can't be read, so a bare number here could
+// not tell "nothing is active" from "Compy can't read its record". Only `activeNow` is in effect;
+// rows whose live check failed (`unknown`) are never added to it.
 export function postureLine(
   readiness: GameReadiness | null,
   priorities: Priorities | null,
-  activeChanges: number,
+  inEffect: InEffectCounts,
   t: TFunction,
 ): PostureLine {
+  const activeChanges = inEffect.kind === "counted" ? inEffect.activeNow : 0;
   const p = deriveSystemPosture({ readiness, activeChanges, monitoringAvailable: true }, t);
 
   if (p.state === "attention") {
@@ -54,8 +61,14 @@ export function postureLine(
     limiterCount > 0
       ? t("home.posture.readyWorthFixing", { count: limiterCount })
       : t("home.posture.readyMeasuredClean");
+  // Unreadable is a word, not a silence: the reassurance beside it would otherwise read as "Compy
+  // changed nothing". Pending (the model not read yet) says nothing — a stand-in is a claim.
   const changeNote =
-    activeChanges > 0 ? t("home.posture.changeNoteReversible", { count: activeChanges }) : "";
+    inEffect.kind === "unreadable"
+      ? t("home.posture.changeNoteUnknown")
+      : activeChanges > 0
+        ? t("home.posture.changeNoteReversible", { count: activeChanges })
+        : "";
   return {
     headline: p.headline,
     sentence,

@@ -389,6 +389,7 @@
     "readyWorthFixing": "可以开玩了——有 {{count}} 项值得修复。",
     "readyMeasuredClean": "可以开玩了——这台主机今天测得很干净。",
     "changeNoteReversible_other": "{{count}} 项安全更改生效中,可随时回滚。",
+    "changeNoteUnknown": "Compy 暂时无法读取它的更改记录。",
     "noChangeWithoutSayso": "未经你同意,绝不更改任何东西。",
     "lastSessionFallback": "上次会话"
   },

@@ -285,8 +285,12 @@ export type InterviewFacts = {
   safeStackReady: number;
   /** Is the audited one-UAC batch primitive wired on this mount? */
   fastPathWired: boolean;
-  /** activeChangeCount(changes) — applied and still live in the Trust Ledger. */
-  activeChanges: number;
+  /**
+   * The Machine Model's in-effect count (`inEffectCounts(model).activeNow`, #452). null when the
+   * model is not read yet or cannot read the ledger — an absence, never quoted as 0. Rows whose live
+   * check failed are not in it.
+   */
+  activeChanges: number | null;
   /** How many monitored sessions are on record. */
   sessionCount: number;
   /** The most recent recorded session, or null when there is none. Never a placeholder. */
@@ -354,7 +358,8 @@ export function interviewFinding(
     );
   };
   const changesLine = () => {
-    if (facts.activeChanges > 0) ev.push(k("ev.changes", { count: facts.activeChanges }));
+    if (facts.activeChanges != null && facts.activeChanges > 0)
+      ev.push(k("ev.changes", { count: facts.activeChanges }));
   };
   const readinessLine = () => {
     if (facts.readiness)
@@ -521,7 +526,7 @@ export function interviewFinding(
     case "didItHelp": {
       changesLine();
       sessionCountLine();
-      direct = facts.activeChanges > 0 && facts.sessionCount > 0;
+      direct = facts.activeChanges != null && facts.activeChanges > 0 && facts.sessionCount > 0;
       sentence = k("didItHelp.sentence");
       action = station("benchmark", "lab", k("act.beforeAfter"));
       break;

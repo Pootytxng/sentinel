@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  activeChangeCount,
   topLimiters,
   latestSession,
   leaveAloneCount,
@@ -11,18 +10,6 @@ import type { AppliedChange, Priorities, SessionSummary } from "../types";
 const change = (over: Partial<AppliedChange>): AppliedChange => ({
   id: "c", rec_id: "r", rec_title: "t", applied_at: "2026-06-01T00:00:00Z",
   snapshot: null, status: "applied", is_still_active: true, ...over,
-});
-
-describe("activeChangeCount", () => {
-  it("counts only applied + still-active changes", () => {
-    const changes = [
-      change({ status: "applied", is_still_active: true }),
-      change({ status: "applied", is_still_active: false }),
-      change({ status: "rolled_back", is_still_active: false }),
-    ];
-    expect(activeChangeCount(changes)).toBe(1);
-  });
-  it("handles empty", () => expect(activeChangeCount([])).toBe(0));
 });
 
 describe("gameModeRevertedExternally", () => {

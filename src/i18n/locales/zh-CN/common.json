@@ -195,6 +195,8 @@
   },
   "ledgerHealth": {
     "activeUnknown": "未知 —— Compy 读不到自己的记录",
+    "activePending": "仍在读取 Compy 的记录",
+    "activeUnchecked_other": "另有 {{count}} 项暂时无法检查",
     "activeChangesUnvouched": "Compy 无法保证这里的每一项更改都能撤销",
     "trackedUnknown": "未知 —— 这和「什么都没应用」不是一回事",
     "unreadableTitle": "Compy 目前读不到自己的记录",

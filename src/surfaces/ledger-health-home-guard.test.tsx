@@ -38,16 +38,24 @@
 // unexplained reassurance reads as "nothing happened".
 import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from "vitest";
 import { render, screen, cleanup, act } from "@testing-library/react";
-import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
+import type { AppliedChange, GameReadiness, MachineModel, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
+import { invalidateProbe } from "../data/probe-cache";
+import wire from "../test/fixtures/machine-model.wire.json";
 
 const health: { value: unknown; reject: boolean } = { value: null, reject: false };
+// The Machine Model's answer (#452): the "Active changes" count is read from here, not the list.
+// `undefined` means "answer as the list implies" (see mount) — every older test below keeps its
+// meaning because a model that read the ledger agrees with the list it was handed.
+const model: { value: MachineModel | null | undefined; hang: boolean } = { value: undefined, hang: false };
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
     switch (cmd) {
       case "get_ledger_health":
         return health.reject ? Promise.reject(new Error("ipc down")) : Promise.resolve(health.value);
+      case "get_machine_model":
+        return model.hang ? new Promise(() => {}) : Promise.resolve(model.value);
       case "get_build_stamp":
         return Promise.resolve("ab12cd3 · dev");
       case "get_gpu_sensors":
@@ -191,6 +199,19 @@ const REVERSIBLE_NOTE = "every one reversible from the ledger";
 const ACTIVE_WITHDRAWN = "unknown — Compy can't read its own record";
 const TRACKED_WITHDRAWN = "unknown — not the same as nothing applied";
 const UNVOUCHED = "Compy can't promise every change here can be undone";
+const PENDING = "still reading Compy's record";
+
+const WIRE = wire as unknown as MachineModel;
+// A model that READ the ledger: `activeNow` in effect on this PC, `unknown` whose live check
+// failed. Only these two counters feed inEffectCounts(); the fixture's rows are not read here.
+function countedModel(activeNow: number, unknown = 0): MachineModel {
+  const compy_changes = { ...WIRE.compy_changes, active_now: activeNow, in_effect_unknown: unknown };
+  delete compy_changes.ledger_unreadable;
+  return { ...WIRE, compy_changes };
+}
+function unreadableModel(reason: string): MachineModel {
+  return { ...WIRE, compy_changes: { ...countedModel(0).compy_changes, ledger_unreadable: reason } };
+}
 
 type Face = {
   name: string;
@@ -246,6 +267,8 @@ const props = (changes: AppliedChange[]) => ({
 
 async function mount(face: Face, changes: AppliedChange[] = []) {
   useReduced();
+  // Every row these tests hand in is applied and live, so a model that read them counts them all.
+  if (model.value === undefined) model.value = countedModel(changes.length);
   const Comp = face.Comp;
   const p = props(changes);
   const r = render(
@@ -285,6 +308,9 @@ function cardFor(container: HTMLElement, face: Face, label: string): HTMLElement
 beforeEach(() => {
   health.value = HEALTHY;
   health.reject = false;
+  model.value = undefined;
+  model.hang = false;
+  invalidateProbe();
 });
 
 afterEach(() => {
@@ -386,6 +412,39 @@ describe.each(FACES)("$name may not report a ledger it can't read as an untouche
     expect(active.textContent).toContain(REVERSIBLE_NOTE);
     expect(active.textContent).not.toContain(UNVOUCHED);
     expect(container.querySelector(".ledger-health")).toBeNull();
+  });
+
+  // #452: the count is the Machine Model's answer, not a filter over the list handed in as a prop.
+  // The list collapses to [] when the ledger can't be read and reads a row whose live check failed
+  // as active; the model has a word for the first and a separate counter for the second.
+  it("an unreadable model is a word, never a number — even beside a list that looks whole", async () => {
+    model.value = unreadableModel("history.json is locked");
+    const { container } = await mount(face, [CHANGE]);
+
+    const active = cardFor(container, face, face.activeLabel);
+    expect(active.querySelector(face.num)).toBeNull();
+    expect(active.textContent).toContain(ACTIVE_WITHDRAWN);
+    expect(active.textContent).not.toContain(REVERSIBLE_NOTE);
+  });
+
+  it("a change whose live check failed is named as unchecked, never counted as in effect", async () => {
+    // The bare list calls both rows live; the model could confirm only one of them.
+    const unchecked = { ...CHANGE, id: "ch2", rec_id: "game-mode", rec_title: "Game Mode" };
+    model.value = countedModel(1, 1);
+    const { container } = await mount(face, [CHANGE, unchecked]);
+
+    const active = cardFor(container, face, face.activeLabel);
+    expect(active.querySelector(face.num)?.textContent?.trim()).toBe("1");
+    expect(active.textContent).toContain("1 more couldn't be checked just now");
+  });
+
+  it("a model not read yet prints no stand-in number", async () => {
+    model.hang = true;
+    const { container } = await mount(face, [CHANGE]);
+
+    const active = cardFor(container, face, face.activeLabel);
+    expect(active.querySelector(face.num)).toBeNull();
+    expect(active.textContent).toContain(PENDING);
   });
 
   // Drift watch sits a few modules below the two readings above, ungated by health — and it used to
@@ -490,6 +549,7 @@ describe("the refusal reaches the user, not just the component", () => {
 describe("HomeConsole — the face a default-flag user actually lands on", () => {
   async function mountConsole(changes: AppliedChange[] = []) {
     useReduced();
+    if (model.value === undefined) model.value = countedModel(changes.length);
     const r = render(
       <ShellV2
         items={railFor(true)}
