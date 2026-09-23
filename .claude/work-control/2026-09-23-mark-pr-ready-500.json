@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/451#issuecomment-5786783516",
+  "leaseEvidenceNote": "Ownership claim on #451 posted by this Claude Code successor session (deb27e67-a4e1-4115-89df-34f4e04297d2) at 2026-09-23T00:25Z for the PR #500 review and landing, live when this transition ran. It names this exact worktree (clever-lalande-490eed, branch review/451-land at the reviewed head) and lists, as one contiguous backticked Write scope, the eleven delta paths plus the three receipt files. The author's lane released its lease by the Handoff at 2026-09-22T21:38Z (issuecomment-5784601615, ending `Claim: released`) before this claim; the folder record was adopted with tools/entry adopt --issue 451.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T02:56Z (six open PRs: #504, #500, #492, #471, #470, #464): only PR #500 touches any of the eleven delta paths and no PR touches the three receipt paths (gh pr view --json files per PR, intersected with the delta-plus-receipts list). scripts/scope-drift-gate.mjs --issue 451 --refresh at the reviewed head reads OK: 11 changed paths, all inside the claim. git merge-tree --write-tree origin/main 9d6d79d5 is conflict-free against origin/main d53dc77b.",
+  "inheritedWork": false,
+  "currentHead": "9d6d79d51bb187a03aecd9d58de2cfea0ab9c06c",
+  "pr": 500,
+  "issue": 451,
+  "kind": "lane",
+  "branch": "claude/451-health-identity-facts",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta f326ee01..9d6d79d5 is two commits, 5663dfc4 (identity rows read the Shared Machine Model) and 9d6d79d5 (terse disagreement row + opt-in why disclosure, the repair after the FAIL review at 5663dfc4), both authored and committed by claude-code <claude-code@desk.local> (git log --format='%an <%ae> %cn' f326ee01..9d6d79d5). The two reviewer-only seats authored nothing; this landing session (also claude-code) edited none of the delta files and only writes receipts.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "9d6d79d51bb187a03aecd9d58de2cfea0ab9c06c",
+      "evidence": "logs/verify-local-2026-09-22T21-30-07Z.log (in the author's worktree reverent-allen-e0a304; SHA-256 9BA939AC6EBC2D018FD14A0659E5A2E4D6D3C3C2A5BB8CEA6FBA7A5BBA66D8D0, 1729 lines) lines 9-44",
+      "summary": "451 frontend test files passed; 7,432 passed / 3 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "9d6d79d51bb187a03aecd9d58de2cfea0ab9c06c",
+      "evidence": "logs/verify-local-2026-09-22T21-30-07Z.log (in the author's worktree reverent-allen-e0a304; SHA-256 9BA939AC6EBC2D018FD14A0659E5A2E4D6D3C3C2A5BB8CEA6FBA7A5BBA66D8D0, 1729 lines) lines 45-71",
+      "summary": "tsc and Vite production build passed (built in 8.18s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "9d6d79d51bb187a03aecd9d58de2cfea0ab9c06c",
+      "evidence": "logs/verify-local-2026-09-22T21-30-07Z.log (in the author's worktree reverent-allen-e0a304; SHA-256 9BA939AC6EBC2D018FD14A0659E5A2E4D6D3C3C2A5BB8CEA6FBA7A5BBA66D8D0, 1729 lines) lines 72-1444",
+      "summary": "1,327 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "9d6d79d51bb187a03aecd9d58de2cfea0ab9c06c",
+      "evidence": "logs/verify-local-2026-09-22T21-30-07Z.log (in the author's worktree reverent-allen-e0a304; SHA-256 9BA939AC6EBC2D018FD14A0659E5A2E4D6D3C3C2A5BB8CEA6FBA7A5BBA66D8D0, 1729 lines) lines 1445-1729",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 45.92s, no warning: lines in the stage)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in the author's worktree at 2026-09-22T21:30:07Z and the push that put 9d6d79d5 on origin was accepted (origin/claude/451-health-identity-facts, PR #500's head). The author's worktree reflog binds that HEAD to 9d6d79d5 from 2026-09-22T11:49:10Z, before the log time. The landing session read every stage in the log and hashed it to the SHA-256 above; the log's own scope-drift line reads 11 changed paths, the same eleven files as the delta. The landing carrier will push the post-merge receipt commit through the native full gate again; no --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 11 changed paths since origin/main measured against the author's claim on #451, every one inside it. Re-measured 2026-09-23T00:24Z at the same head under the landing claim with --refresh: OK, 11 changed paths, all inside the delta-plus-receipts scope.",
+    "reconciliationNote": "The gate-run line was measured against the author's implementation claim; the landing claim lists the same eleven delta paths plus the three receipt paths only."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "9d6d79d51bb187a03aecd9d58de2cfea0ab9c06c",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/500#issuecomment-5788193387 (2026-09-23T02:57Z), headed \"Independent review of PR #500 at exact head 9d6d79d51bb187a03aecd9d58de2cfea0ab9c06c\", quoting verbatim the PASS verdicts of the two reviewer-only seats frontend-ipc-contract-auditor (contract) and self-reviewer (visual), both non-author, at the exact PR head against base f326ee0120bed1d0a33f2b89b874ca9dc60857be.",
+    "reviewerNote": "Two reviewer-only seats, each a subagent in a fresh context at the exact head 9d6d79d5; neither can be a mutation author. Contract seat frontend-ipc-contract-auditor (read-only): confirmed the 11-file delta (997 insertions, 63 deletions) with no removed or weakened expect(); the six identity rows read the Machine Model through identityState and never hw.; get_machine_model and get_component_evidence match their TS generics, src-tauri and src/types.ts untouched; the 12 new hardwareGrid keys exist once each in en and zh-CN; pinned vitest 84/84 and 21/21; npx tsc --noEmit exit 0; falsified both new guards itself (value={hw.hostname} reds the source guard; an always-visible hw-disagree-why reds 2 lead-budget tests; both green after git checkout --). One non-blocking nit: two pre-existing census lines re-recorded in the baseline. Visual seat self-reviewer (dispatched through the self-review skill, dev build of this head from this worktree, never inline): 12/12 PASS over the three states (known, unknown with reason, disagreement) seeded through the probe cache, four renders and three real window sizes; re-measured items 5 and 10 itself: .hc-stage-cards LEAD holds in every state and size (first card value bottom at most 213.8px inside the 232px box at 720p), .v2-sheet-body surplus 156px at 720p with REACH confirmed, zero surplus on .hud-stage-cards, .hv2-stage-cards and .hc-panel, .hw-disagree collapsed 48.5px en and 30.25px zh-CN against the 94px budget; the always-visible grid text carries no interpretation or reason string; Why disclosure collapsed by default, reachable by Tab with a 2px focus ring, toggled by Enter, Space and click; teardown quoted no-debug-port CLEAN exit 0. Its out-of-scope HomeHud header finding predates #451 and was filed as a separate task. The earlier independent review at the parent head 5663dfc4 failed visual items 5 and 10; this review covers the repair head. GitHub records the verdicts as one PR comment from the shared Pootytxng account, posted by the landing session with both seat verdicts verbatim; each is a Claude model, independent by role only, the same route as the #503 landing. The landing session re-ran the scope-drift gate, the open-PR overlap and the merge-tree check itself and edited none of the delta files."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "Marks draft PR #500 ready after exact-head non-author review by two reviewer-only seats (contract and visual); the earlier independent review at the parent head 5663dfc4 failed visual items 5 and 10, and this review covers the repair head. Merge follows under its own receipt without changing the reviewed head."
+}
