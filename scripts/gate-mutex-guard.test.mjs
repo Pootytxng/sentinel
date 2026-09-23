@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { spawn } from "node:child_process";
 
 // #522 -- the pre-push gate's heavy stages queue on a machine-wide mutex instead of running beside a
@@ -35,6 +35,23 @@ const powershell = process.env.SystemRoot
   ? join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
   : "powershell.exe";
 const PRODUCTION_NAME = "Local\\Compy.TestGate.v1";
+// PowerShell 7, when this machine has it. The pre-push hook runs the gate under Windows PowerShell,
+// but a lane can run verify-local.ps1 from pwsh, and pwsh's ConvertFrom-Json reads the holder note
+// differently (#529). lstat, not existsSync: a Store-installed pwsh is an app-execution alias that
+// stat cannot follow (EACCES), so existsSync calls a runnable pwsh absent.
+const present = (path) => {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const pwsh =
+  [
+    process.env.ProgramFiles && join(process.env.ProgramFiles, "PowerShell", "7", "pwsh.exe"),
+    ...(process.env.PATH ?? "").split(delimiter).filter(Boolean).map((dir) => join(dir, "pwsh.exe")),
+  ].find((path) => path && present(path)) ?? null;
 
 const stripPsComments = (text) =>
   text
@@ -211,13 +228,13 @@ const makeCase = () => {
   };
 };
 
-const start = (script, params) => {
+const start = (script, params, shell = powershell) => {
   const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", join(driverDir, script)];
   for (const [key, value] of Object.entries(params)) {
     if (value === true) args.push(`-${key}`);
     else if (value !== undefined && value !== false) args.push(`-${key}`, String(value));
   }
-  const child = spawn(powershell, args, { cwd: root, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(shell, args, { cwd: root, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   child.out = "";
   child.err = "";
   child.stdout.on("data", (chunk) => (child.out += chunk));
@@ -231,8 +248,8 @@ const start = (script, params) => {
   return child;
 };
 
-const contender = (testCase, extra = {}) =>
-  start("contender.ps1", { Lib: lib, MutexName: testCase.mutexName, StateDir: testCase.stateDir, ...extra });
+const contender = (testCase, extra = {}, shell = powershell) =>
+  start("contender.ps1", { Lib: lib, MutexName: testCase.mutexName, StateDir: testCase.stateDir, ...extra }, shell);
 
 const probe = (testCase, extra = {}) =>
   start("probe.ps1", { VerifyLocal: verifyLocal, Lib: lib, MutexName: testCase.mutexName, StateDir: testCase.stateDir, ...extra });
@@ -401,6 +418,43 @@ describe.runIf(process.platform === "win32")("the gate mutex library", () => {
       new RegExp(`TEST GATE: gave up after \\d+s waiting for '.*' -- still held by pid ${pidOf(held.stdout)} \\(stuck lane\\)`),
     );
   });
+
+  // #529: the busy notice says when the holder started (UTC) and how long ago, which is what a person
+  // reads to decide whether a holder is stuck. Under PowerShell 7 the reader turned the note's UTC
+  // start into local time, so a queued gate named a start hours off and a negative age. The holder
+  // runs under Windows PowerShell as the hook's gate does; the waiter reads the note under each shell.
+  // The bug shows only off UTC: on the owner's machine (UTC-7) the shipped reader fails this case.
+  for (const [shellName, shell] of [["Windows PowerShell", powershell], ["PowerShell 7", pwsh]]) {
+    it.runIf(shell)(`names the holder's start in UTC and a true age to a waiter under ${shellName}`, async () => {
+      const testCase = makeCase();
+      const ready = testCase.file("holder-ready.txt");
+      const release = testCase.file("holder-release.txt");
+      const holder = contender(testCase, { Label: "clock lane", ReadyFile: ready, ReleaseFile: release });
+      await waitFor(() => existsSync(ready), "the holder to acquire");
+
+      const waiter = contender(testCase, { Label: "waiting lane" }, shell);
+      await waitFor(() => /TEST GATE: busy/.test(waiter.out), "the waiter to queue");
+      writeFileSync(release, "release", "utf8");
+      const [held, waited] = await Promise.all([holder.done, waiter.done]);
+
+      expect(held.code, held.stderr).toBe(0);
+      expect(waited.code, waited.stderr).toBe(0);
+      const notice = /TEST GATE: busy -- '.*' is held by pid (\d+) \(clock lane\), since (\d\d):(\d\d):(\d\d)Z \((-?\d+)s\)/.exec(waited.stdout);
+      expect(notice, waited.stdout).not.toBeNull();
+      expect(Number(notice[1])).toBe(pidOf(held.stdout));
+      // The notice comes as the wait starts, seconds after the holder took the gate.
+      const age = Number(notice[5]);
+      expect(age).toBeGreaterThanOrEqual(0);
+      expect(age).toBeLessThanOrEqual(120);
+      // The holder writes its note as it acquires, just before it stamps ACQUIRED. Compare times of day,
+      // wrapping at midnight; an offset from UTC is whole hours (or halves), far outside 5s.
+      const acquired = new Date(stamp(held.stdout, "ACQUIRED"));
+      const reported = Number(notice[2]) * 3600 + Number(notice[3]) * 60 + Number(notice[4]);
+      const actual = acquired.getUTCHours() * 3600 + acquired.getUTCMinutes() * 60 + acquired.getUTCSeconds();
+      const drift = Math.abs(reported - actual);
+      expect(Math.min(drift, 86_400 - drift)).toBeLessThanOrEqual(5);
+    });
+  }
 
   it("takes over from a holder that died without releasing, rather than deadlocking the queue", async () => {
     const testCase = makeCase();
