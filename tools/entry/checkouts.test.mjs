@@ -11,18 +11,11 @@
 // differed from the assumed behaviour — a mock would have reproduced the assumption, not the bug.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { discoverCheckouts, inspectCheckout, listWorktreesOf, relatedCheckouts } from "./checkouts.mjs";
-
-// A COUNTER, not a mock: every call still runs the real `git`. It counts the processes this file
-// and checkouts.mjs start, so the per-case spawn budget below is measured, not assumed.
-vi.mock("node:child_process", async (importOriginal) => {
-  const real = await importOriginal();
-  return { ...real, execFileSync: vi.fn(real.execFileSync) };
-});
 
 // TIMEOUT (#542): every case here is real `git` processes, and their wall time is set by machine
 // load, not by what the case asserts. One discoverCheckouts over this fixture is 17 spawns (4 per
@@ -34,11 +27,30 @@ vi.mock("node:child_process", async (importOriginal) => {
 // Speed is guarded by SPAWN COUNT instead (afterEach below), which does not vary with load.
 vi.setConfig({ testTimeout: 60_000 });
 
+// Git counts its own processes: with GIT_TRACE2_EVENT set to a directory, every git process writes
+// one file there. That count includes checkouts.mjs's calls, which JS-side wrappers did not see
+// under vitest: a `vi.mock` pass-through and a patched builtin export were tried first, and both
+// counted 0 for checkouts.mjs. The last case in this file proves this counter is not blind.
+// Tracing changes no git behaviour.
+const traceDir = mkdtempSync(join(tmpdir(), "compy-entry-checkouts-trace2-"));
+const priorTrace = process.env.GIT_TRACE2_EVENT;
+process.env.GIT_TRACE2_EVENT = traceDir;
+const gitSpawns = () => readdirSync(traceDir).length;
+afterAll(() => {
+  // The worker outlives this file, and so does its environment.
+  if (priorTrace === undefined) delete process.env.GIT_TRACE2_EVENT;
+  else process.env.GIT_TRACE2_EVENT = priorTrace;
+  try {
+    rmSync(traceDir, { recursive: true, force: true });
+  } catch {
+    /* a locked file on Windows must not fail the suite */
+  }
+});
+
 // One discovery (17) plus two reads of the case's own. A case over this is paying for a second
 // discovery or a new git call per checkout. Either one reopens #542, so fix the spend or re-derive
 // the budget above. Do not just raise this number.
 const CASE_SPAWN_BUDGET = 19;
-const gitSpawns = () => execFileSync.mock.calls.filter(([file]) => file === "git").length;
 let spawnsBefore;
 beforeEach(() => {
   spawnsBefore = gitSpawns();
@@ -119,8 +131,8 @@ describe("linked-worktree metadata", () => {
 });
 
 // The three read-only cases below all read one discovery of the untouched fixture. Discovery is
-// read-only (the last case proves it), so running it three times would buy 34 more spawns and no
-// more evidence.
+// read-only ("leaves every discovered checkout's state untouched" proves it), so running it three
+// times would buy 34 more spawns and no more evidence.
 let fixtureDiscovery;
 const discovered = () => (fixtureDiscovery ??= discoverCheckouts({ roots: [root] }));
 
@@ -196,5 +208,16 @@ describe("discovery is read-only and tolerant", () => {
     const before = git(linked, "status", "--porcelain");
     discoverCheckouts({ roots: [root] });
     expect(git(linked, "status", "--porcelain")).toBe(before);
+  });
+});
+
+describe("the per-case spawn budget (#542)", () => {
+  it("counts checkouts.mjs's own git processes, so the budget is not vacuous", () => {
+    const start = gitSpawns();
+    inspectCheckout(host);
+    // 4 per checkout is the arithmetic the 17-per-discovery budget above rests on. Zero means the
+    // counter went blind and every case passes its budget unmeasured.
+    expect(gitSpawns() - start).toBeGreaterThan(0);
+    expect(gitSpawns() - start).toBeLessThanOrEqual(4);
   });
 });
