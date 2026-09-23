@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/517#issuecomment-5796422997",
+  "leaseEvidenceNote": "Refreshed Ownership claim on #517 posted by this Claude Code successor session (e855a8b6-e2fa-4af7-8835-bccba929c1c3) at 2026-09-23T14:13Z, live when this transition ran (expires 2026-09-24T01:20Z). It names this worktree (recursing-hertz-8a06a2, branch claude/517-lease-overlap-land) and lists as one contiguous backticked Write scope the nine paths of e9fe9f2a, the three #523 receipts and the two #517 receipts. It adds scripts/verify-local.ps1 and docs/WORK_CONTROL.md after the gate-mutex lane released them by Handoff (#522 issuecomment-5796365766). This session's Verified takeover of the idle #517 lane is issuecomment at 2026-09-23T10:59Z.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T14:40Z (open PRs #530, #492, #471, #470, #464): no PR other than #530 touches any of the twelve changed paths (gh pr view --json files per PR, intersected with git diff --name-only origin/main HEAD). The gate's own lease-overlap stage (log lines 9-11) checked every open issue's live lease: no other lane holds a pushed path. git merge-tree --write-tree origin/main dc665fcd is conflict-free against origin/main 5cf737a8 (tree b16c646b).",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "currentHead": "dc665fcd75f2f895b88a283297cb84fbaefbefa9",
+  "pr": 530,
+  "issue": 517,
+  "kind": "lane",
+  "branch": "claude/517-lease-overlap-land",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The delta is the receipts-only carrier 169bcc24 (this session) plus e9fe9f2a, authored by the idle #517 lane (claude-code, folder intelligent-jones-184397, never pushed), cherry-picked by this session (claude-code) as dc665fcd with a hand-resolved conflict in scripts/verify-local.ps1 against #525. Every mutation author is claude-code; the reviewer seat authored nothing.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "dc665fcd75f2f895b88a283297cb84fbaefbefa9",
+      "evidence": "logs/verify-local-2026-09-23T14-14-38Z.log (in this landing worktree recursing-hertz-8a06a2; SHA-256 21c7eb62e980168d21a68f28c71a5ecdf26ddcb8169b9d674532896153c43902, 1475 lines) lines 26-65",
+      "summary": "459/459 frontend test files passed; 7,613 passed / 1 expected fail / 3 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "dc665fcd75f2f895b88a283297cb84fbaefbefa9",
+      "evidence": "logs/verify-local-2026-09-23T14-14-38Z.log (in this landing worktree recursing-hertz-8a06a2; SHA-256 21c7eb62e980168d21a68f28c71a5ecdf26ddcb8169b9d674532896153c43902, 1475 lines) lines 66-92",
+      "summary": "tsc and Vite production build passed (built in 12.48s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "dc665fcd75f2f895b88a283297cb84fbaefbefa9",
+      "evidence": "logs/verify-local-2026-09-23T14-14-38Z.log (in this landing worktree recursing-hertz-8a06a2; SHA-256 21c7eb62e980168d21a68f28c71a5ecdf26ddcb8169b9d674532896153c43902, 1475 lines) lines 93-1471",
+      "summary": "1,333 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "dc665fcd75f2f895b88a283297cb84fbaefbefa9",
+      "evidence": "logs/verify-local-2026-09-23T14-14-38Z.log (in this landing worktree recursing-hertz-8a06a2; SHA-256 21c7eb62e980168d21a68f28c71a5ecdf26ddcb8169b9d674532896153c43902, 1475 lines) lines 1472-1475",
+      "summary": "Clippy finished clean under -D warnings; the mutex was released after it and the push was accepted."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in this worktree at 2026-09-23T14:14:38Z with HEAD at dc665fcd, and the push that created origin/claude/517-lease-overlap-land (PR #530's head) was accepted after it (exit 0). The new lease-overlap stage passed live (log lines 9-11). The #525 gate mutex queued the heavy stages for 681s behind two other lanes' gates (lines 12-24) before they ran alone. No --no-verify was used.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 12 changed paths since origin/main measured against the claim on #517, every one inside it.",
+    "reconciliationNote": "Measured by the native gate at the exact head; no reconciliation needed."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "dc665fcd75f2f895b88a283297cb84fbaefbefa9",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/530#issuecomment-5796763586, headed \"Independent exact-head review — frontend-ipc-contract-auditor seat\", quoting the seat's PASS verdict at dc665fcd75f2f895b88a283297cb84fbaefbefa9.",
+    "reviewerNote": "Reviewer-only seat frontend-ipc-contract-auditor, a read-only subagent in a fresh context at the exact head dc665fcd; it cannot be a mutation author. It read git diff eaec2a11 dc665fcd and ran scripts/lease-overlap-gate.test.mjs and scripts/gate-mutex-guard.test.mjs at --maxWorkers=1 (38 passed). Findings, all non-blocking. First, claim-scope.mjs coversPath compares literal paths case-sensitively; this is pre-existing and not in this diff, it is a false pass rather than a false refusal, and it is flagged as its own task. Second, one unreadable thread refuses every push, which is rule 5 by design. Third, the verify-local.ps1 conflict resolution is correct, with the check placed before Enter-GateMutex and nothing lost. Fourth, the seniority logic fails closed and is verified against the real incident fixture and 14 table cases. GitHub records the verdict as a PR comment from the shared Pootytxng account posted by the landing session; the seat is a Claude model, independent by role only."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "Marks draft PR #530 ready after exact-head non-author review. Merge follows under its own receipt without changing the reviewed head."
+}
