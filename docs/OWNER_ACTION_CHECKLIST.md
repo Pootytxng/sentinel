@@ -126,15 +126,7 @@ removed the dependency, only you can remove the symptom.
 
 ### A_spent. Four spent checkouts to remove  ·  ⏳ NEW 2026-09-23  ·  [#520](https://github.com/Pootytxng/sentinel/issues/520)
 
-**The ask:** `git worktree remove` for `.claude\worktrees\compy-health-parity`, `..\sentinel-recon-261`
-and `..\sentinel-remote-design-286`, and — once the #520 PR is on `main` — `.claude\worktrees\license-tests`,
-which needs `--force` because its only content is the uncommitted copy of tests that PR carries.
-Each was classified by content, not ancestry: the first three are SUPERSEDED (their work reached
-`main` as `5ee0de97`/`02cd8a8c`, `7fa10fdc`, and the cherry-picks ending `3fd72e9f`, with receipts for
-PRs #297 and #317 under `.claude/work-control/`), and what each still holds past `main` is older copies
-of docs `main` has since rewritten. Removing a checkout keeps its branch, so no commit is lost.
-**Why it matters:** the fleet report lists all four as work on no remote on every run, which is
-exactly the wrong picture the next session starts from. B8 is untouched by this.
+**The ask:** `git worktree remove` for `.claudeworktreescompy-health-parity`, `..sentinel-recon-261`, `..sentinel-remote-design-286`, and (`--force`, once #520's PR is on `main`) `.claudeworktreeslicense-tests`. All four are superseded or salvaged; evidence on #520. Branches survive removal. **Why it matters:** the fleet report shows them as unpushed work on every run.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
@@ -184,20 +176,7 @@ for THIS beta stays `37a166c`; newer main commits (e.g. `970f801`, the §6 prese
 The send decision + recipient list are yours; Claude runs the mechanics (hash, upload,
 download-test, record-keeping) on your GO.
 
-**⚠️ INCIDENT 2026-07-22 AM — the wrong link went out; two things now on YOU:**
-The OLD June kit's link (stale `fc940fe` 0.1.0 build) was sent out instead of the staged 0.9.0
-link — protocol steps 3 (verify the actual link) and 5 (record recipients) were skipped. Cowork
-has since killed the old link (verified dead unauthenticated), renamed the file
-`RETIRED-DO-NOT-SEND_Compy-Beta-Kit_OLD-0.1.0-June.zip`, and re-verified the correct link
-end-to-end (anonymous download, SHA-256 `6BC2F7DF…F5A2C4` exact):
-https://drive.google.com/file/d/1BNuoY-ubKCLTkPUDFdnmFGAUkK4g0J9n/view?usp=sharing
-1. ~~Tell Claude who received the old link~~ → ✅ DONE 2026-07-22: **Matcher · Chinaman · J ·
-   Zoid · Sultan · Majin** — recorded in `BETA_DISTRIBUTION_RECORD.md`.
-2. ~~Re-send using ONLY the link above~~ → ✅ DONE 2026-07-22 (~9 AM PDT): owner sent the
-   correction + verified link to all six; the exact sent link was re-verified unauthenticated
-   **post-send** (HTTP 200 · SHA-256 exact) and the old link re-confirmed dead in the same pass.
-**Nothing left on you for this incident.** The open risk item is now §A2 (smoke pass, 0/24) —
-six people hold a working install link. Anyone clicking the old link sees "request access" — safe.
+**2026-07-22 wrong-link incident — ✅ closed, nothing on you;** record moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md) §B2 (2026-09-23).
 
 **Fold-in — cold-start user testing (panel-review brief 2026-07-15 §4.10):** the beta send doubles as
 the cold-start test event — same recipients, no separate program. Target mix when picking who gets it:

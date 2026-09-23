@@ -10,6 +10,27 @@
 
 ---
 
+## §B2 — the 2026-07-22 wrong-link incident (closed)
+
+> Moved out of [`docs/OWNER_ACTION_CHECKLIST.md`](../OWNER_ACTION_CHECKLIST.md) §B2 on **2026-09-23** for its line and byte budget (#520). Verbatim; nothing here is waiting on the owner.
+
+**⚠️ INCIDENT 2026-07-22 AM — the wrong link went out; two things now on YOU:**
+The OLD June kit's link (stale `fc940fe` 0.1.0 build) was sent out instead of the staged 0.9.0
+link — protocol steps 3 (verify the actual link) and 5 (record recipients) were skipped. Cowork
+has since killed the old link (verified dead unauthenticated), renamed the file
+`RETIRED-DO-NOT-SEND_Compy-Beta-Kit_OLD-0.1.0-June.zip`, and re-verified the correct link
+end-to-end (anonymous download, SHA-256 `6BC2F7DF…F5A2C4` exact):
+https://drive.google.com/file/d/1BNuoY-ubKCLTkPUDFdnmFGAUkK4g0J9n/view?usp=sharing
+1. ~~Tell Claude who received the old link~~ → ✅ DONE 2026-07-22: **Matcher · Chinaman · J ·
+   Zoid · Sultan · Majin** — recorded in `BETA_DISTRIBUTION_RECORD.md`.
+2. ~~Re-send using ONLY the link above~~ → ✅ DONE 2026-07-22 (~9 AM PDT): owner sent the
+   correction + verified link to all six; the exact sent link was re-verified unauthenticated
+   **post-send** (HTTP 200 · SHA-256 exact) and the old link re-confirmed dead in the same pass.
+**Nothing left on you for this incident.** The open risk item is now §A2 (smoke pass, 0/24) —
+six people hold a working install link. Anyone clicking the old link sees "request access" — safe.
+
+---
+
 ## §D — taste / visual sign-offs the owner already closed
 
 > Moved out of [`docs/OWNER_ACTION_CHECKLIST.md`](../OWNER_ACTION_CHECKLIST.md) §D on
