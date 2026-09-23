@@ -124,13 +124,25 @@ stalling — but anything else on this PC that asks WMI will stay slow or empty 
 back. **Why it matters:** two pre-push gates went red on a kill that had already happened; the fix
 removed the dependency, only you can remove the symptom.
 
+### A_spent. Four spent checkouts to remove  ·  ⏳ NEW 2026-09-23  ·  [#520](https://github.com/Pootytxng/sentinel/issues/520)
+
+**The ask:** `git worktree remove` for `.claude\worktrees\compy-health-parity`, `..\sentinel-recon-261`
+and `..\sentinel-remote-design-286`, and — once the #520 PR is on `main` — `.claude\worktrees\license-tests`,
+which needs `--force` because its only content is the uncommitted copy of tests that PR carries.
+Each was classified by content, not ancestry: the first three are SUPERSEDED (their work reached
+`main` as `5ee0de97`/`02cd8a8c`, `7fa10fdc`, and the cherry-picks ending `3fd72e9f`, with receipts for
+PRs #297 and #317 under `.claude/work-control/`), and what each still holds past `main` is older copies
+of docs `main` has since rewritten. Removing a checkout keeps its branch, so no commit is lost.
+**Why it matters:** the fleet report lists all four as work on no remote on every run, which is
+exactly the wrong picture the next session starts from. B8 is untouched by this.
+
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you (A0's key backup closed 2026-08-18; record and the two count
-corrections in the archive). **§A holds SIX things:** ① A0's residual — delete the
+corrections in the archive). **§A holds SEVEN things:** ① A0's residual — delete the
 redundant `Desktop\COMPY KEY\` copy; ② A0's *"expand to the remaining invitees"* — a **distribution call**,
 yours by definition; ③ **A_settings**, one paste in a file only you may edit; ④ **A_prune**,
-one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches.
+one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches; ⑦ **A_spent**, four folder removals.
 Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_ci · A_rig · A_ref2 · B1 · B7 · B_arc · A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**.
 
 ---

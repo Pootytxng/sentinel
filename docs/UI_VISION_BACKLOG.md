@@ -38,14 +38,11 @@ else. This is the list the owner meant.
 > label was true when written and rotted when the work landed, and `CLAUDE.md` sends every session
 > here before it touches UI, so a stale "unpushed" invites a re-do of four shipped rooms (refs #291).
 >
-> **What IS still unlanded is the follow-up parity work, not the slices:** `claude/compy-health-parity`
-> (24 commits) carries the Test-room recovery the owner ACCEPTED on 2026-08-27 (round 4 `bf88150a`,
-> independently reviewed by Codex, issue #224) plus the Health-room parity round (issue #225). It
-> CONTAINS `claude/compy-visual-recovery-kit-6fd074` — 14 shared commits, diverging at `c8366609` —
-> so the two are one stack and land as ONE PR closing both issues. Backed up to `refs/backup/*` and
-> on no other machine. **Caution before trusting the acceptance:** `main`'s `73b629ed` restructured the
-> Test room the day AFTER the sign-off, so the accepted comp was reviewed against a composition that
-> no longer exists. It must merge green and pass a fresh self-review before it is called done again.
+> **The parity follow-up is on `main` too (re-derived 2026-09-23, #520).** The Test-room recovery
+> (#224) and the Health-room parity round (#225) reached `main` through the harvest `5ee0de97` and the
+> closeout chain ending `02cd8a8c`; PR #294 closed as superseded. What its old local branch still
+> holds past `main` is older copies of docs, a CSS comment and two i18n strings `main` has since
+> rewritten, so nothing there is to land. #224 and #225 stay open for the owner's acceptance, not for code.
 
 Four approved PNGs (Health · Live · History · Test) + `HANDOFF.md` in
 `~/.codex/visualizations/2026/08/23/01a02bee.../compy-four-room-handoff/`. Every comp is the SAME
