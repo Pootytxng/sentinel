@@ -3,12 +3,15 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 // (fs/path typed by src/test-node-shims.d.ts — see sweep-guard for why sources are read from disk.)
 
-// LOCALE PARITY GUARD — two laws, both mechanical.
+// LOCALE PARITY GUARD — three laws, all mechanical.
 //
 //   LAW 1 (key parity): every en key exists in every other locale, EXCEPT plural variants that
 //   locale's grammar has no category for.
 //   LAW 2 (no raw braces): every {{var}} written in any locale must be supplied by the code at
 //   that key's call sites, or i18next renders the braces literally to the user.
+//   LAW 3 (every called key resolves): every static key the code calls — t("x"), either branch of
+//   t(cond ? "x" : "y"), an i18nKey prop — exists in the base locale, as a string leaf or as the
+//   base of a plural (`x_other`).
 //
 // Written 2026-08-04, closing a gap BACKLOG named against itself: parity had been "spot-checked
 // on the Trust-Ledger strings and the network-check line — not a full line-by-line diff."
@@ -49,6 +52,18 @@ import { join } from "path";
 // difference is entirely `_one` variants Chinese has no category for · 0 extra keys · 701 of 733
 // var-bearing strings graded · 1 real placeholder defect, since fixed in SessionDebrief.tsx.
 
+// LAW 3 was added 2026-09-22 for #510. Commit 36011078 shipped four `lab.labConsole` strings with
+// their call sites in LabConsole.tsx; the harvest 5ee0de97 took PR #294's older lab.json for BOTH
+// locales and dropped the four keys while the call sites stayed. Law 1 was green — en and zh-CN
+// lost them together, so they were in perfect parity — orphan-key-guard grades the other
+// direction (every locale key has a consumer), the affordance census counts call sites, and tsc
+// cannot see a string. The owner's Test room rendered "LAB.LABCONSOLE.UNITKEPT" over the MEASURED
+// pill until a self-review of an unrelated lane caught it. Two of the four keys sit in a ternary,
+// `t(n > 0 ? "…Some" : "…None")`, which is why the walker below reads every quoted literal in a
+// call's FIRST ARGUMENT and not only the literal that follows `t(`. Comments are stripped first:
+// i18n/index.ts explains itself with `t("area.key")`, and a quoted example is not a call.
+//
+// Measured at authoring of Law 3 (2026-09-22): 1963 call sites · 4 unresolved on main, all #510's.
 const LOCALES_DIR = join("src", "i18n", "locales");
 const BASE_LOCALE = "en";
 /** Quotes drifted strings for its own disarm proof — scanning it would self-trip. */
@@ -113,60 +128,144 @@ function placeholders(value: string): string[] {
 }
 
 /**
- * Every variable the code supplies, per translation key, unioned over call sites.
- *
- * A regex cannot read the options object — `{ game: prettyGameName(r.game) }` and any nested
- * literal defeat `\{[^}]*\}` — so the object is brace-matched from the source text and split at
- * depth 0, then each part's leading identifier is the supplied name.
+ * Production source with its comments removed, so Law 3 grades calls and not examples. Block
+ * comments go whole; a line comment goes from a `//` that no `:` or `\` precedes (a URL's `://`
+ * and a regex's `\/\/` are not comments). A string that holds `//` is not protected — the
+ * non-vacuity floors below bound what that can cost, and no call site sits behind one today.
  */
-function suppliedVars(): Map<string, Set<string>> {
-  const supplied = new Map<string, Set<string>>();
+function stripComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\\])\/\/[^\n]*/gm, "$1");
+}
 
-  // Recursive readdir over the whole frontend. Tests are excluded so a guard quoting a drifted
-  // string (this file does, for its own disarm proof) can never be mistaken for a call site.
-  const sources = readdirSync("src", { recursive: true })
-    .filter((p) => /\.tsx?$/.test(p) && !/\.test\./.test(p) && !p.endsWith(".d.ts"))
-    .map((p) => join("src", p));
+/** One `t(...)` call (or `i18nKey`): the keys its first argument can spell, and the option names it passes. */
+type CallSite = { file: string; keys: string[]; vars: Set<string> };
 
-  for (const file of sources) {
-    const text = readFileSync(file, "utf8");
-    for (const m of text.matchAll(/\bt\(\s*"([\w.\-]+)"/g)) {
-      const key = m[1];
-      if (!supplied.has(key)) supplied.set(key, new Set());
-      let i = m.index! + m[0].length;
-      while (i < text.length && /\s/.test(text[i])) i++;
-      if (text[i] !== ",") continue; // t("key") — no options object
-      i++;
-      while (i < text.length && /\s/.test(text[i])) i++;
-      if (text[i] !== "{") continue; // t("key", someVariable) — not statically readable
+/** A quoted literal with at least one dot — the only shape a namespaced key can take. */
+const KEY_LITERAL = /["']([\w\-]+(?:\.[\w\-]+)+)["']/g;
 
-      let depth = 0;
-      let end = i;
-      for (; end < text.length; end++) {
-        if (text[end] === "{") depth++;
-        else if (text[end] === "}" && --depth === 0) break;
-      }
+/**
+ * Index of the `)` that closes the `(` at `open`. Strings are skipped so a paren inside a quoted
+ * value cannot close the call early; an unbalanced call runs to the end of the file.
+ */
+function closeParen(text: string, open: number): number {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === "\\") i++;
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") quote = c;
+    else if (c === "(") depth++;
+    else if (c === ")" && --depth === 0) return i;
+  }
+  return text.length;
+}
 
-      let nest = 0;
-      let part = "";
-      const parts: string[] = [];
-      for (const c of text.slice(i + 1, end)) {
-        if ("{[(".includes(c)) nest++;
-        else if ("}])".includes(c)) nest--;
-        if (c === "," && nest === 0) {
-          parts.push(part);
-          part = "";
-        } else part += c;
-      }
+/**
+ * Split at depth-0 commas, strings respected. Used twice: the call's argument list, and the
+ * entries of its options object. A regex cannot do either — `{ game: prettyGameName(r.game) }`
+ * and any nested literal defeat `\{[^}]*\}`.
+ */
+function splitTopLevel(inner: string): string[] {
+  const parts: string[] = [];
+  let nest = 0;
+  let quote: string | null = null;
+  let part = "";
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i];
+    if (quote) {
+      part += c;
+      if (c === "\\") part += inner[++i] ?? "";
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") quote = c;
+    else if ("{[(".includes(c)) nest++;
+    else if ("}])".includes(c)) nest--;
+    if (c === "," && nest === 0) {
       parts.push(part);
+      part = "";
+    } else part += c;
+  }
+  parts.push(part);
+  return parts;
+}
 
-      for (const p of parts) {
+/**
+ * Every static call site in one file. The first argument yields its keys — a plain literal, or
+ * every branch of a conditional; a template literal yields none, so a runtime-built key is
+ * skipped (see SCOPE). The second argument, when it is an object literal, yields the supplied
+ * variable names for Law 2.
+ */
+function harvest(text: string, file: string): CallSite[] {
+  const sites: CallSite[] = [];
+  const src = stripComments(text);
+  for (const m of src.matchAll(/\bt\(/g)) {
+    const open = m.index! + m[0].length - 1;
+    const close = closeParen(src, open);
+    const args = splitTopLevel(src.slice(open + 1, close));
+    const keys = [...(args[0] ?? "").matchAll(KEY_LITERAL)].map((k) => k[1]);
+    if (!keys.length) continue; // t(variable) — nothing static to grade
+    const vars = new Set<string>();
+    const bag = (args[1] ?? "").trim();
+    if (bag.startsWith("{") && bag.endsWith("}")) {
+      for (const p of splitTopLevel(bag.slice(1, -1))) {
         const name = /^\s*(?:\.\.\.)?([A-Za-z_$][\w$]*)\s*(?::|$)/.exec(p);
-        if (name) supplied.get(key)!.add(name[1]);
+        if (name) vars.add(name[1]);
       }
+    }
+    sites.push({ file, keys, vars });
+  }
+  for (const m of src.matchAll(/\bi18nKey=\{?\s*["']([\w\-]+(?:\.[\w\-]+)+)["']/g)) {
+    sites.push({ file, keys: [m[1]], vars: new Set() });
+  }
+  return sites;
+}
+
+/**
+ * Every static call site in the frontend. Tests are excluded so a guard quoting a drifted string
+ * (this file does, for its own disarm proofs) can never be mistaken for a call site.
+ */
+function callSites(): CallSite[] {
+  return readdirSync("src", { recursive: true })
+    .filter((p) => /\.tsx?$/.test(p) && !/\.test\./.test(p) && !p.endsWith(".d.ts"))
+    .map((p) => join("src", p))
+    .flatMap((file) => harvest(readFileSync(file, "utf8"), file));
+}
+
+/** Every variable the code supplies, per translation key, unioned over call sites (Law 2's input). */
+function suppliedVars(sites: CallSite[]): Map<string, Set<string>> {
+  const supplied = new Map<string, Set<string>>();
+  for (const { keys, vars } of sites) {
+    for (const key of keys) {
+      const bag = supplied.get(key) ?? new Set<string>();
+      for (const v of vars) bag.add(v);
+      supplied.set(key, bag);
     }
   }
   return supplied;
+}
+
+/** The base locale as one map, every area under its namespace. */
+function baseKeys(): Flat {
+  const all: Flat = new Map();
+  for (const area of areaFiles()) for (const [k, v] of read(BASE_LOCALE, area)) all.set(k, v);
+  return all;
+}
+
+/** LAW 3: static keys the code calls that the base locale cannot answer, as "file: key". */
+function unresolvedKeys(sites: CallSite[], base: Flat): string[] {
+  const out = new Set<string>();
+  for (const { file, keys } of sites) {
+    for (const key of keys) {
+      if (base.has(key) || base.has(`${key}_other`)) continue;
+      out.add(`${file.replace(/\\/g, "/")}: ${key}`);
+    }
+  }
+  return [...out].sort();
 }
 
 type Missing = { locale: string; area: string; key: string };
@@ -239,7 +338,9 @@ function rawBraceRisks(
 
 describe("locale parity: no missing string, no raw {{braces}} in any language", () => {
   const locales = localeNames();
-  const supplied = suppliedVars();
+  const sites = callSites();
+  const supplied = suppliedVars(sites);
+  const base = baseKeys();
 
   it("reads every locale and area actually shipped (guard is not vacuous)", () => {
     expect(locales).toContain(BASE_LOCALE);
@@ -311,6 +412,58 @@ describe("locale parity: no missing string, no raw {{braces}} in any language", 
     expect(
       offenders.map((o) => `${o.locale}/${o.area}: ${o.key} uses {{${o.variable}}}, never passed`),
     ).toEqual([]);
+  });
+
+  it("harvests every static key the code calls, ternary branches included (guard is not vacuous)", () => {
+    expect(sites.length).toBeGreaterThanOrEqual(1900);
+    expect(base.size).toBeGreaterThanOrEqual(2000);
+    // The exact shape #510 shipped: the key sits in a ternary, so a `t("` scan never sees it.
+    const lc = sites.filter((s) => s.file.endsWith("LabConsole.tsx")).flatMap((s) => s.keys);
+    expect(lc).toContain("lab.labConsole.provenNoteSome");
+    expect(lc).toContain("lab.labConsole.provenNoteNone");
+  });
+
+  it("reads a key out of a ternary and an i18nKey, never out of a comment (disarm proof)", () => {
+    // Synthesised in memory — nothing read from or written to disk.
+    const synthetic = [
+      '// every call site just does t("area.key")',
+      '/* t("lab.commented.out") */',
+      'const u = "https://x.y/z"; t(open ? "lab.branch.open" : "lab.branch.closed", { count })',
+      't("lab.plain.key")',
+      '<Trans i18nKey="lab.trans.key" />',
+      "t(dynamicKey)",
+      "t(`lab.runtime.${id}`)",
+    ].join("\n");
+    const found = harvest(synthetic, "synthetic.tsx");
+    expect(found.flatMap((s) => s.keys)).toEqual([
+      "lab.branch.open",
+      "lab.branch.closed",
+      "lab.plain.key",
+      "lab.trans.key",
+    ]);
+    expect([...found[0].vars]).toEqual(["count"]);
+    const tiny: Flat = new Map([
+      ["lab.plain.key", "x"],
+      ["lab.branch.open_other", "{{count}} open"],
+    ]);
+    expect(unresolvedKeys(found, tiny)).toEqual([
+      "synthetic.tsx: lab.branch.closed",
+      "synthetic.tsx: lab.trans.key",
+    ]);
+  });
+
+  it("every static key the code calls exists in the base locale", () => {
+    expect(unresolvedKeys(sites, base)).toEqual([]);
+  });
+
+  it("#510's four rig-console strings stay in both locales", () => {
+    // The specific defect, pinned specifically: 5ee0de97 dropped these from en AND zh-CN at once.
+    for (const locale of [BASE_LOCALE, "zh-CN"]) {
+      const lab = read(locale, "lab.json");
+      for (const leaf of ["unitKept", "provenNoteSome", "provenNoteNone", "noiseFloorNote"]) {
+        expect(lab.get(`lab.labConsole.${leaf}`), `${locale}: lab.labConsole.${leaf}`).toBeTruthy();
+      }
+    }
   });
 
   it("keeps its own quoted strings out of the scan", () => {
