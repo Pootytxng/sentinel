@@ -142,11 +142,18 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
     // ...and the room now explains itself in one sentence under it, as every other room does.
     expect(c.querySelector(".v2-verdict-sub")!.textContent).toContain("measures before and after");
     cleanup();
-    // The classic "0" failsafe keeps the pre-rollout contract: the verdict sentence as the h1.
+    // The classic "0" failsafe used to keep "the pre-rollout contract: the verdict sentence as the
+    // h1" — and this line pinned it, which is how "1 change you applied was turned off outside
+    // Compy." stood as the room's heading on 2026-09-23 (#547). The failsafe now wears the same
+    // title; its verdict leads the sub line with the fix it names (hud-rooms-flag.test.tsx pins the
+    // drift case end to end).
     localStorage.setItem("compy_editorial", "0");
     const off = renderMerged([SAFE_REC]);
     expect(off.querySelector(".hud-headline")).toBeNull();
-    expect(off.querySelector(".v2-verdict h1")!.textContent!.trim()).not.toBe("Test");
+    expect(off.querySelector(".v2-verdict h1")!.textContent).toContain("Test one change at a time");
+    expect(off.querySelector(".v2-verdict h1")!.textContent, "no count may reach the failsafe's h1").not.toMatch(/\d/);
+    expect(off.querySelector(".v2-verdict-sub")!.textContent).toContain("1 safe fix is ready to apply.");
+    expect(off.querySelector(".v2-verdict-sub .lc-verdict-fix")!.textContent).toBe("Show the fix");
   });
 
   it("Optimize is NOT always-on — its detail panel opens only when its dock node is clicked", () => {

@@ -173,6 +173,10 @@
       "actionNote": "想让电脑更快、又稳妥、又不想自己折腾时，选这个。",
       "safety": "一次一项可还原的改动 · 一次实测结果 · 默认还原。"
     },
+    "verdictFix": {
+      "drifted_other": "查看改动",
+      "ready_other": "查看修复"
+    },
     "bench": {
       "aria": "工作台上的你的整机"
     },

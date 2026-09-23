@@ -107,6 +107,7 @@ export function LabConsole({
   hud,
   ledState,
   classicVerdict,
+  classicFixLabel,
   below,
 }: {
   // The fast-path prop bundle — the SAME audited apply handlers the OptimizeV2 room gets (zero new
@@ -134,8 +135,14 @@ export function LabConsole({
   // The room verdict's LED state, computed by LabGround from the SAME optimizeVerdict the classic
   // headline speaks — so the dot and the sentence can never disagree about the room.
   ledState: "ok" | "warn" | "scan";
-  // The classic (flag-off) h1: the verdict sentence, with its DecryptedText treatment intact.
+  // The classic (flag-off) verdict sentence, with its DecryptedText treatment intact. It is the
+  // line UNDER the h1, never the h1 (#547): a sentence that changes with the machine's state is a
+  // flag, and the title-header law keeps flags out of headings in both shells.
   classicVerdict: ReactNode;
+  // When the classic verdict flags something actionable (fixes ready, or a change switched off
+  // outside Compy), the label of the fix it carries inline. It opens the Optimize station — the
+  // same door the dock row and the HUD's primary action open, never a second code path.
+  classicFixLabel?: string;
   // Full-width content under both columns — the GPU profile surface and the experiments bench.
   below?: ReactNode;
 }) {
@@ -577,15 +584,38 @@ export function LabConsole({
               {ws.name}
             </span>
           </span>
-        ) : hud ? (
-          <span className="lc-headline">{t("lab.labConsole.narrative.headline")}</span>
         ) : (
-          classicVerdict
+          /* The room's title in BOTH shells (#547). The classic failsafe used to put the fixes
+             verdict here, which is how "1 change you applied was turned off outside Compy." ended
+             up standing as the page's one heading; that sentence now leads the sub line below. */
+          <span className="lc-headline">{t("lab.labConsole.narrative.headline")}</span>
         )
       }
       /* The station's EXISTING purpose sentence — its dockLine, the same string its list row
          prints. Nothing new is written for this header, so nothing new can claim anything. */
-      sub={ws ? ws.dockLine : hud ? t("lab.labConsole.narrative.sub") : undefined}
+      sub={
+        ws ? (
+          ws.dockLine
+        ) : hud ? (
+          t("lab.labConsole.narrative.sub")
+        ) : (
+          <>
+            {classicVerdict}
+            {classicFixLabel != null && (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  className="lc-verdict-fix"
+                  onClick={() => openFrom("optimize", "optimize")}
+                >
+                  {classicFixLabel}
+                </button>
+              </>
+            )}
+          </>
+        )
+      }
       /* THE ONE DOMINANT ACTION. It opens the SAME Optimize station the list row below opens, by
          the same setter -- one door, two handles, never two code paths. The line under it is the
          comp's, and it is a positioning sentence, not a claim: it says when to pick this, and

@@ -8,7 +8,7 @@ import { liveGpuProfileSnapshot } from "../data/gpu-profile-store";
 import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
 import { deriveReverted } from "./use-scan";
-import { optimizeVerdict } from "./optimize-v2-data";
+import { optimizeVerdict, safeFixesReady } from "./optimize-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import type { LabFastPathProps } from "./lab/OptimizeStation";
 import type { HardwareInfo } from "../App";
@@ -58,6 +58,17 @@ export function LabGround(props: LabFastPathProps & {
   // Fix's "Applied — turned off outside Compy" group inside the Optimize panel.
   const reverted = useMemo(() => deriveReverted(changes), [changes]);
   const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted, t);
+  // The classic failsafe's verdict is a FLAG, not a title (#547): it now sits under the room's h1,
+  // and when it flags something actionable it names the fix beside itself. Drift outranks nothing —
+  // the verdict already leads with ready fixes when both exist — so the label follows the verdict.
+  const ready =
+    recs == null ? 0 : safeFixesReady(recs, isAppliable, new Set(reverted.map((r) => r.rec_id)));
+  const classicFixLabel =
+    !verdict.settled || verdict.allClear
+      ? undefined
+      : ready > 0
+        ? t("lab.labConsole.verdictFix.ready", { count: ready })
+        : t("lab.labConsole.verdictFix.drifted", { count: reverted.length });
 
   // The whole fast-path bundle threaded to Lab's ground mode (station 1's body).
   const fast: LabFastPathProps = { recs, changes, isAppliable, vendor, ...rest };
@@ -86,7 +97,7 @@ export function LabGround(props: LabFastPathProps & {
       vendor={vendor}
       hw={hw}
       hud={hud}
-      /* The eyebrow dot speaks the SAME verdict the classic headline speaks — one source, so the
+      /* The eyebrow dot speaks the SAME verdict the classic sub line speaks — one source, so the
          dot and the sentence can never disagree about the room. */
       ledState={!verdict.settled ? "scan" : verdict.allClear ? "ok" : "warn"}
       classicVerdict={
@@ -103,6 +114,7 @@ export function LabGround(props: LabFastPathProps & {
           />
         )
       }
+      classicFixLabel={classicFixLabel}
       below={
         <>
           {/* C-14 — the GPU profile surface, ADVISORY ONLY. It can never be anything but advisory:

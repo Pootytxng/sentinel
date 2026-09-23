@@ -4,6 +4,8 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { MonitorV2 } from "./MonitorV2";
 import { BlackbookV2 } from "./BlackbookV2";
+import { LabGround } from "./LabGround";
+import { ConfirmProvider } from "../design/ConfirmDialog";
 import type { SessionSummary } from "../types";
 import type { ReactNode } from "react";
 
@@ -38,6 +40,8 @@ vi.mock("./MonitorConsole", () => ({
   ),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(null) }));
+// The Test room's rig lazily loads three.js; a stub keeps this a DOM test (same stub lab-ground.test uses).
+vi.mock("./rig/RigViewer", () => ({ RigViewer: () => <div data-testid="rig-hologram" /> }));
 
 beforeAll(() => {
   class RO {
@@ -239,6 +243,71 @@ describe("HUD room rollout: title-header law (h1 = the room title, never a statu
     // Classic v2 (flag '0'): the RoomShell verdict sub still coaches — the hint stays yielded.
     const off = mountWithFlag(ROOMS[1], "0");
     expect(off.querySelector(".lx-autopsy-hint")).toBeNull();
+  });
+});
+
+// ISSUE #547 — the Test room. The self-reviewer seat (2026-09-23) caught its h1 reading
+// "1 change you applied was turned off outside Compy." — the very sentence the title-header law was
+// written about. Under the HUD the h1 was already the room's title; on the classic "0" failsafe
+// LabConsole handed the fixes verdict straight to RoomShell's h1, and lab-ground.test.tsx PINNED
+// that as "the pre-rollout contract". A status sentence is not a title in either shell, so both flag
+// states are held to it here, with the one fixture that produced the defect: a change Compy applied
+// that was since switched off outside it, and nothing else to do.
+describe("Test room: title-header law (h1 = the room title, the drift flag carries its fix below it)", () => {
+  const DRIFTED = [
+    { rec_id: "game-mode", rec_title: "Game Mode", status: "applied", is_still_active: false },
+  ] as never[];
+  const mountTest = (flag: string) => {
+    localStorage.clear();
+    localStorage.setItem("compy_editorial", flag);
+    return render(
+      <ConfirmProvider>
+        <LabGround
+          hw={{ cpu_brand: "x", cpu_cores_logical: 8, cpu_cores_physical: 4, ram_total_bytes: 0, gpus: [] } as never}
+          isAppliable={() => true}
+          onOpenLibrary={() => {}}
+          onChanged={() => {}}
+          vendor="amd"
+          sessions={[]}
+          gpus={[]}
+          recs={[]}
+          startup={[]}
+          changes={DRIFTED}
+          busyId={null}
+          activeChangeFor={() => undefined}
+          onToggleRec={() => {}}
+          onToggleStartup={() => {}}
+          onRollback={() => {}}
+          onApplyBatch={async () => ({ applied: 0, skipped: [] })}
+          gamingEnabled={false}
+          activeCount={0}
+        />
+      </ConfirmProvider>,
+    ).container;
+  };
+
+  it("the h1 is the room title in BOTH flag states — never the drift sentence", () => {
+    for (const flag of ["0", "1"]) {
+      const c = mountTest(flag);
+      const h1 = c.querySelector('.v2-room[data-room="lab"] > .v2-verdict h1')!;
+      expect(h1.textContent, `flag ${flag}`).toContain("Test one change at a time");
+      expect(h1.textContent, `flag ${flag}`).not.toMatch(/turned off outside Compy/i);
+      // No count in a heading, either — a number in the h1 is a status readout by construction.
+      expect(c.querySelector(".lc-headline")!.textContent, `flag ${flag}`).not.toMatch(/d/);
+      cleanup();
+    }
+  });
+
+  it("classic failsafe: the drift flag sits in the sub line and its fix opens the Optimize station in place", () => {
+    const c = mountTest("0");
+    const sub = c.querySelector('.v2-room[data-room="lab"] > .v2-verdict .v2-verdict-sub')!;
+    expect(sub, "the verdict moved under the title, it did not vanish").not.toBeNull();
+    expect(sub.textContent).toMatch(/1 change you applied was turned off outside Compy/);
+    // The fix rides WITH the flag — no "go to another tab" dead end.
+    const fix = within(sub as HTMLElement).getByRole("button");
+    expect(c.querySelector(".lc-detail"), "Optimize is closed until asked for").toBeNull();
+    fireEvent.click(fix);
+    expect(c.querySelector(".lc-detail"), "the fix opens the station that holds the toggle").not.toBeNull();
   });
 });
 
