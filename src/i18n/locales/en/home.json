@@ -407,6 +407,7 @@
     "readyMeasuredClean": "Ready to play — this rig measured clean today.",
     "changeNoteReversible_one": "{{count}} safe change active & reversible. ",
     "changeNoteReversible_other": "{{count}} safe changes active & reversible. ",
+    "changeNoteUnknown": "Compy can't read its change record right now. ",
     "noChangeWithoutSayso": "Nothing changes without your say-so.",
     "lastSessionFallback": "Last session"
   },

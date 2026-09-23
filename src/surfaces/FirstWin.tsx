@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import type { AppliedChange, Recommendation } from "../types";
 import { friendlyLabel } from "../data/friendly-labels";
 import {
-  activeChanges,
   pickFirstWinChange,
   shouldOfferFirstWin,
   verifyChangeHeld,
@@ -122,7 +121,12 @@ export function FirstWin({
   if (!change) return null;
 
   const name = friendlyLabel(change.rec_id)?.headline ?? change.rec_title;
-  const liveCount = activeChanges(changes).length;
+  // "First" vs "latest" is a fact about the ledger's HISTORY — is there another change the user
+  // applied and has not undone — not a claim about what is in effect on the machine now, so it reads
+  // the ledger rows, not the Machine Model's in-effect count (#452). A drifted or another-rig row was
+  // still applied by the user, so it keeps "first" from being claimed; a rolled-back one (the demo)
+  // does not.
+  const otherApplied = changes.some((c) => c.id !== change.id && c.status === "applied");
   // Room names are interpolated from the SAME rail strings the nav renders, never typed into the
   // copy — a rename would otherwise leave this card sending people to a door that no longer exists
   // ([[room-labels-vs-nav-ids]]: the user sees labels, ids are persistence keys).
@@ -138,7 +142,7 @@ export function FirstWin({
   return (
     <section className="first-win" aria-label={t("home.firstWin.sectionAria")}>
       <div className="fw-head">
-        {liveCount > 1 ? t("home.firstWin.headingLatest") : t("home.firstWin.heading")}
+        {otherApplied ? t("home.firstWin.headingLatest") : t("home.firstWin.heading")}
       </div>
 
       {phase !== "undone" && (

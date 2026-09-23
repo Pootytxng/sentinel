@@ -1,9 +1,8 @@
 import type { AppliedChange, Priorities, PriorityItem, SessionSummary } from "../types";
 
-/** Changes Compy applied that are still live (the honest "what's improved" count). */
-export function activeChangeCount(changes: AppliedChange[]): number {
-  return changes.filter((c) => c.status === "applied" && c.is_still_active).length;
-}
+// (The former `activeChangeCount(changes)` was deleted by #452: it counted `is_still_active` off the
+// bare ledger list, which reads "0" when the ledger can't be read and counts a row whose live check
+// failed as in effect. The one in-effect count is `inEffectCounts()` in data/machine-model.ts.)
 
 /**
  * Did Windows Game Mode revert after Compy applied it? True when a "game-mode" change was applied

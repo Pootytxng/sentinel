@@ -12,14 +12,13 @@ import { LedgerHealthNotice, knownIncomplete, useLedgerHealth } from "../design/
 import { Sparkline } from "../design/Sparkline";
 import { useReducedMotion } from "../design/use-motion";
 import { postureLine, liveStrip } from "./command-center-data";
-import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
-import { useMachineModel } from "../data/machine-model";
+import { inEffectCounts, useMachineModel } from "../data/machine-model";
 import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import ElectricBorder from "../design/vendor/ElectricBorder/ElectricBorder";
 import CountUp from "../design/vendor/CountUp/CountUp";
@@ -188,7 +187,9 @@ export function HomeV2({
   const { parts: manualParts } = useManualParts();
 
   // ── measured derivations (all real, all honestly empty when absent) ──
-  const posture = postureLine(readiness, priorities, activeChangeCount(changes), t);
+  // The Machine Model's in-effect answer (#452) — see HomeHud for why never the bare ledger list.
+  const inEffect = inEffectCounts(model);
+  const posture = postureLine(readiness, priorities, inEffect, t);
   const strip = liveStrip(sessions, t);
   // Session numbers graded against THIS rig (deslop directive #4): fps vs the display's real
   // refresh, 1% low vs the session's own average. Neutral (nothing measured) = uncolored ink.
@@ -223,7 +224,6 @@ export function HomeV2({
   const latestTime = latest
     ? new Date(latest.applied_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
-  const activeCount = activeChangeCount(changes);
 
   // An unreadable ledger loads as an EMPTY one, and these two cards paint an empty one as "0" +
   // "nothing applied yet — your PC is untouched": a claim ABOUT THE MACHINE, read off a record
@@ -237,6 +237,8 @@ export function HomeV2({
   const ledgerBlank = changes.length === 0 && !!knownIncomplete(health);
   // See HomeHud: the absolute reversibility promise is withdrawn on health alone, not on the count.
   const ledgerUnvouched = !!knownIncomplete(health);
+  // The model's own "can't read" is the same absence as a blank ledger: a word, never a 0.
+  const activeWithdrawn = ledgerBlank || inEffect.kind === "unreadable";
 
   // ── Glanceable fill (spec 2026-07-05) — measured-only sources for the two glance cards ──
   // Drift watch: the A5 drift signal, surfaced on Home for the first time (no one-mention clash).
@@ -474,17 +476,21 @@ export function HomeV2({
 
           <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
             <span className="hv2-stat-k">{t("home.homeV2.stats.activeChangesLabel")}</span>
-            {ledgerBlank ? (
+            {activeWithdrawn ? (
               <span className="hv2-stat-d">{t("common.ledgerHealth.activeUnknown")}</span>
+            ) : inEffect.kind !== "counted" ? (
+              <span className="hv2-stat-d">{t("common.ledgerHealth.activePending")}</span>
             ) : (
               <>
                 <span className="hv2-stat-n hv2-mono">
-                  {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
+                  {reduced ? inEffect.activeNow : <CountUp to={inEffect.activeNow} duration={0.9} />}
                 </span>
                 <span className="hv2-stat-d">
                   {ledgerUnvouched
                     ? t("common.ledgerHealth.activeChangesUnvouched")
                     : t("home.homeV2.stats.activeChangesNote")}
+                  {inEffect.unknown > 0 &&
+                    ` · ${t("common.ledgerHealth.activeUnchecked", { count: inEffect.unknown })}`}
                 </span>
               </>
             )}

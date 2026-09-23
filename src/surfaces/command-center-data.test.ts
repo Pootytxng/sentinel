@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { postureLine as postureLineRaw, liveStrip as liveStripRaw } from "./command-center-data";
 import type { GameReadiness, Priorities, ReadinessCheck, SessionSummary } from "../types";
+import type { InEffectCounts } from "../data/machine-model";
 // i18n update (2026-07-23): postureLine/liveStrip's strings now come from t(...) (Simplified
 // Chinese translation pass) instead of literal English, so both take a TFunction as their last
 // param. These test-local wrappers resolve them through the real i18next instance (English is the
@@ -8,11 +9,24 @@ import type { GameReadiness, Priorities, ReadinessCheck, SessionSummary } from "
 // stays exactly as written — same text, just sourced from locale JSON instead of a .ts literal.
 import i18n from "../i18n";
 
+// A bare number here means the model READ the ledger and counted it (#452).
+const counted = (activeNow: number, unknown = 0): InEffectCounts => ({
+  kind: "counted",
+  activeNow,
+  unknown,
+  totalRecorded: activeNow + unknown,
+});
 const postureLine = (
   readiness: GameReadiness | null,
   priorities: Priorities | null,
-  activeChanges: number,
-) => postureLineRaw(readiness, priorities, activeChanges, i18n.t);
+  inEffect: number | InEffectCounts,
+) =>
+  postureLineRaw(
+    readiness,
+    priorities,
+    typeof inEffect === "number" ? counted(inEffect) : inEffect,
+    i18n.t,
+  );
 const liveStrip = (sessions: SessionSummary[]) => liveStripRaw(sessions, i18n.t);
 
 const check = (status: ReadinessCheck["status"], label: string): ReadinessCheck =>
@@ -98,6 +112,38 @@ describe("postureLine (real headline + priorities-driven sentence)", () => {
     expect(p.tone).toBe("attention");
     expect(p.headline).toBe("Monitor below max refresh");
     expect(p.headline).not.toMatch(/more|·/);
+  });
+
+  // #452: the count comes from the Machine Model, and the model has three answers, not one number.
+  describe("the change note reads the model's in-effect answer", () => {
+    const ready = () => readiness([check("ready", "SSD")]);
+
+    it("an unreadable record is a word, never a silence or a 0", () => {
+      const p = postureLine(ready(), priorities(0), {
+        kind: "unreadable",
+        reason: "history.json is locked",
+      });
+      expect(p.reassurance).toMatch(/can't read its change record/i);
+      expect(p.reassurance).not.toMatch(/\b0\b/);
+      // The say-so promise is about the future and stays true either way.
+      expect(p.reassurance).toMatch(/say-so/i);
+    });
+
+    it("a row whose live check failed is never counted as in effect", () => {
+      const p = postureLine(ready(), priorities(0), counted(1, 2));
+      expect(p.reassurance).toMatch(/^1 safe change active/);
+      expect(p.reassurance).not.toMatch(/\b3\b/);
+    });
+
+    it("nothing in effect and nothing unknown prints no change note", () => {
+      const p = postureLine(ready(), priorities(0), counted(0));
+      expect(p.reassurance).toBe("Nothing changes without your say-so.");
+    });
+
+    it("an unread model (pending) prints no stand-in number", () => {
+      const p = postureLine(ready(), priorities(0), { kind: "pending" });
+      expect(p.reassurance).toBe("Nothing changes without your say-so.");
+    });
   });
 });
 
