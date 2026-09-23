@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/452#issuecomment-5794031939",
+  "leaseEvidenceNote": "Ownership claim on #452 (refresh of issuecomment-5793680347, which followed the Verified takeover of the part-2 author lane peaceful-proskuriakova-51baf8 whose session is not running). It names this worktree intelligent-williamson-02dcb6, the branch pushed as claude/452-part2-health-in-effect, and a write scope of the 20 delta paths plus .claude/work-control/**. The Work Control board row for #452 names this folder @ claude/intelligent-williamson-02dcb6; the folder record was adopted with tools/entry/cli.mjs adopt --issue 452.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T13:50Z (#492, #471, #470, #464 besides #524): none touches any of the 20 delta paths (gh api pulls/N/files intersected with git diff --name-only 42340386..HEAD). scripts/scope-drift-gate.mjs --issue 452 --refresh at the reviewed head: OK, 20 changed paths, all inside the claim (thread).",
+  "inheritedWork": true,
+  "inheritedWorkNote": "eeacf1e0 is the author lane's 2afaa66f (claude/peaceful-proskuriakova-51baf8), cherry-picked by this successor under the verified takeover and rebased twice (onto 27e94217, then 42340386); git range-diff shows it content-identical each time. 8c18dddc is this session's own guard fix.",
+  "currentHead": "8c18dddc3c3d9919165a6e31c87bd9d81dcf671b",
+  "pr": 524,
+  "issue": 452,
+  "kind": "lane",
+  "branch": "claude/452-part2-health-in-effect",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta 42340386..8c18dddc is two commits, both authored and committed by claude-code <claude-code@desk.local> (git log --format='%an <%ae> | %cn <%ce>'). The reviewer seat authored nothing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "8c18dddc3c3d9919165a6e31c87bd9d81dcf671b",
+      "evidence": "logs/verify-local-2026-09-23T13-27-37Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 4b40a5581e320fcd6df8cd13d79d5933b13f1b1a1f8d37344b684ee363119c9c, 1735 lines) lines 9-44",
+      "summary": "456 frontend test files passed; 7,558 passed / 1 expected fail / 3 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "8c18dddc3c3d9919165a6e31c87bd9d81dcf671b",
+      "evidence": "logs/verify-local-2026-09-23T13-27-37Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 4b40a5581e320fcd6df8cd13d79d5933b13f1b1a1f8d37344b684ee363119c9c, 1735 lines) lines 45-71",
+      "summary": "tsc and Vite production build passed (built in 9.52s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "8c18dddc3c3d9919165a6e31c87bd9d81dcf671b",
+      "evidence": "logs/verify-local-2026-09-23T13-27-37Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 4b40a5581e320fcd6df8cd13d79d5933b13f1b1a1f8d37344b684ee363119c9c, 1735 lines) lines 72-1450",
+      "summary": "1,333 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "8c18dddc3c3d9919165a6e31c87bd9d81dcf671b",
+      "evidence": "logs/verify-local-2026-09-23T13-27-37Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 4b40a5581e320fcd6df8cd13d79d5933b13f1b1a1f8d37344b684ee363119c9c, 1735 lines) lines 1451-1735",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 50.06s)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in this worktree at 2026-09-23T13:27:37Z at HEAD 8c18dddc and printed LOCAL CHECK RESULT: PASS; the push creating origin/claude/452-part2-health-in-effect at that SHA was accepted. Gate receipt comment: https://github.com/Pootytxng/sentinel/pull/524#issuecomment-5795832070. Earlier runs at this head's pre-rebase ancestors went red on 15s timeouts only (concurrent lane gates plus the fleet-walk timeouts #512 fixed); this run was in a slot agreed with the #522 and consolidation lanes.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run (log lines 5-8): 20 changed paths since origin/main measured against the claim on #452, every one inside it. Re-measured with --refresh at the same head: OK, 20 paths."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "8c18dddc3c3d9919165a6e31c87bd9d81dcf671b",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/524#issuecomment-5795832402, headed \"Independent review: PASS at exact head 8c18dddc3c3d9919165a6e31c87bd9d81dcf671b\", naming reviewer frontend-ipc-contract-auditor, non-author.",
+    "reviewerNote": "Read-only reviewer seat in fresh contexts; never a mutation author. Semantic review at the pre-rebase head 1bb30158 (tsc clean, 13 files / 219 tests, Rust MachineModel fields vs src/types.ts, en/zh-CN parity, additive tests, one non-blocking latent-trap note). Re-confirmed by the seat after each rebase with git range-diff (both commits '=') and base-delta overlap checks, the last at exactly 8c18dddc on 42340386, including a trace of #523's global tree-walk tripwire against the three touched guards. Visual proof: the self-reviewer PASS block quoted in the PR body. Posted from the shared Pootytxng account by the landing session on the seat's behalf."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "PR #524 has zero closingIssuesReferences; #452 is closed separately after landing with its own close-issue receipt."
+}

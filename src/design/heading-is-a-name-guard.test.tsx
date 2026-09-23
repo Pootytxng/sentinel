@@ -34,9 +34,10 @@ afterEach(cleanup);
 // that actually renders when Live opens, since the segment defaults to "live". A caller-half guard
 // that reads only the files someone already remembered to fix proves nothing. Add every room that
 // mounts a RoomShell here; the list is the coverage.
-// HomeHud.tsx and HomeV2.tsx were added by the coverage test below on its first run — neither had
-// the bug (neither renders a RoomEyebrow at all), but neither was being read either. That is the
-// list doing its job on the day it was written.
+// HomeHud.tsx and HomeV2.tsx were added by the coverage test below on its first run — neither
+// renders a RoomEyebrow, so the scan passed them, but neither was being read either. That is the
+// list doing its job on the day it was written. HomeHud did carry the bug in its own hand-rolled
+// masthead, which a RoomEyebrow-only scan could not see (#513).
 const ROOMS = [
   "HomeConsole.tsx",
   "HomeHud.tsx",
@@ -96,14 +97,18 @@ describe("a room heading is a NAME, never a name welded to a readout (#211)", ()
     expect(container.querySelectorAll(".v2-eyebrow")).toHaveLength(0);
   });
 
+  // #513: this scan looked for `RoomEyebrow` only, and HomeHud's hand-rolled masthead
+  // (`.hud-masthead-eyebrow`, label + dateline) sat inside `verdict` for its whole life while the
+  // scan passed — its heading read "…Sep 22, 2026Monitor below max refresh". So any eyebrow counts,
+  // the shared component or a room's own copy of it.
   it("no room hands its eyebrow back to the verdict slot", () => {
     for (const file of ROOMS) {
       const source = readFileSync(join("src", "surfaces", file), "utf8");
       expect(
         propSource(source, "verdict"),
-        `${file} passes a RoomEyebrow inside verdict={…}, which renders it inside the <h1> — pass ` +
+        `${file} passes an eyebrow inside verdict={…}, which renders it inside the <h1> — pass ` +
           `it as eyebrow={…} instead`,
-      ).not.toContain("RoomEyebrow");
+      ).not.toMatch(/RoomEyebrow|eyebrow/i);
     }
   });
 

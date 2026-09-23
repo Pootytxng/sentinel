@@ -41,6 +41,10 @@
   .v2-verdict
   h1:not(:has(.hc-headline)) {
   display: block;
+  /* Pinned under the masthead (#513). The header row bottom-aligns its items, and once the
+     masthead left the h1 the headline alone was shorter than a two-line dek sharing its row, so
+     the dek pushed it down: 10px under the masthead at 1280 wide, 15px at 1500 and 1920. */
+  align-self: flex-start;
   margin: 0 0 6px;
   font: 650 var(--type-section) / 1.15 var(--v2-font-sans);
   letter-spacing: -0.01em;
@@ -64,6 +68,15 @@
   text-transform: uppercase;
   color: var(--v2-faint);
   margin-bottom: 10px;
+}
+/* The masthead left the <h1> for RoomShell's eyebrow slot (#513), so it is a flex item of the
+   header row now. `flex-basis: 100%` keeps it on its own line above the headline, and the home
+   header's 10px row gap takes over from its own margin: same 10px, not 20. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"]:not([data-layout="split"])
+  .v2-verdict
+  > .hud-masthead-eyebrow {
+  flex-basis: 100%;
+  margin-bottom: 0;
 }
 :root[data-v2="on"][data-hud="on"] .hud-masthead-eyebrow .hud-mono {
   font: var(--type-label) var(--v2-font-mono);

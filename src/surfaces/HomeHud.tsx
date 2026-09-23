@@ -433,17 +433,20 @@ export function HomeHud({
   return (
     <RoomShell
       room="home"
+      // The masthead is the eyebrow slot's, not the verdict's (#513): `verdict` renders inside the
+      // <h1>, and with the masthead there the heading read "Rig diagnostic · Sep 22, 2026Monitor
+      // below max refresh" — label, date and verdict as one string, the #211 defect hand-rolled.
+      eyebrow={
+        <span className="hud-masthead-eyebrow">
+          <span className={`hud-led hud-led-${ledState}`} aria-hidden="true" />
+          {t("home.homeHud.masthead.eyebrow")} <span className="hud-eyebrow-sep">·</span>{" "}
+          <span className="hud-mono">{dateline}</span>
+        </span>
+      }
       verdict={
-        <>
-          <span className="hud-masthead-eyebrow">
-            <span className={`hud-led hud-led-${ledState}`} aria-hidden="true" />
-            {t("home.homeHud.masthead.eyebrow")} <span className="hud-eyebrow-sep">·</span>{" "}
-            <span className="hud-mono">{dateline}</span>
-          </span>
-          <span className="hud-headline" key={posture.headline}>
-            {posture.headline}
-          </span>
-        </>
+        <span className="hud-headline" key={posture.headline}>
+          {posture.headline}
+        </span>
       }
       sub={dekRedundant ? undefined : dek}
       measured={
@@ -458,6 +461,9 @@ export function HomeHud({
               </span>{" "}
               {t("home.homeHud.readout.checksPost")}
             </span>
+            {/* A real space between the segments (#513). Only CSS parted them — the strip's gap and
+                hairline — so the text itself read "measuredattention 3". Whitespace between flex
+                items is not rendered, so this leaves the strip's look exactly as it was. */}{" "}
             <span
               className={`hud-readout-seg${(readiness!.attention_count ?? 0) > 0 ? " hud-readout-warn" : ""}`}
             >
