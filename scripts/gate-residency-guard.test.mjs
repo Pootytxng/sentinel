@@ -92,6 +92,10 @@ const RESIDENCY = {
     kind: "npm-test",
     runner: "scripts/handoff-worktree-truth.test.mjs",
   },
+  // #488: the fleet-wide BLOCKING sweep (`npm run fleet:hygiene`). The four checks it runs are
+  // resident tests already; what this adds is the flag that makes their peer-folder findings block,
+  // and its runner pins that every listed check actually reads that flag.
+  "fleet-hygiene.mjs": { kind: "npm-test", runner: "scripts/fleet-hygiene.test.mjs" },
   // Not resident on purpose. It asks the LIVE machine what is running, so a resident copy would
   // fail every time a q7 probe or a self-review legitimately holds a debug port open -- i.e. it
   // would go red exactly while the tool that opens the port is doing its job. Its residency is

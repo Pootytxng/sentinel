@@ -197,6 +197,9 @@ import {
   unmeasuredCarriers,
 } from "./fleet-snapshot.mjs";
 import { ORIGIN_HEADS_KEY, providedLsRemote } from "./lib/vitest-global-setup.mjs";
+// #488: which folder a rule-C finding may block a push from. This checkout's own stranding blocks;
+// a peer checkout's is warned with its fix; under fleet mode every one blocks.
+import { peerWarning, splitByFolder } from "./lib/fleet-scope.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -1092,6 +1095,52 @@ describe("the handoff tells the truth about the worktrees", () => {
     ]);
   });
 
+  // #488, bug → guard. Rule C walks every checkout on the machine, so on 2026-09-18 one stranded
+  // detached head in a PEER folder redded the push of every lane at once -- from folders none of
+  // them were allowed to touch. The repair: only THIS checkout's stranding blocks at the gate, a
+  // peer's is warned with its exact fix (runnable from anywhere, a branch lives in the shared
+  // .git), and fleet mode blocks on all of them. Both directions are pinned so a change that makes
+  // a peer-folder finding block a push again fails here first.
+  it("C: #488 — a stranded PEER checkout warns at the gate and blocks only under fleet mode", () => {
+    const peer = {
+      name: "sentinel-codex-393",
+      path: join(ROOT, "..", "some-other-lane"),
+      head: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      commits: 2,
+      unpushed: 2,
+      branch: null,
+      refuge: [],
+    };
+    const own = { ...peer, name: "this-lane", path: ROOT, head: "0123456789abcdef0123456789abcdef01234567" };
+    const stranded = strandedCarriers([peer, own]);
+    expect(stranded.map((c) => c.name)).toEqual(["sentinel-codex-393", "this-lane"]);
+
+    const gate = splitByFolder(stranded, { own: ROOT, folderOf: (c) => c.path, fleet: false });
+    expect(gate.blocking.map((c) => c.name)).toEqual(["this-lane"]);
+    expect(gate.warnings.map((c) => c.name)).toEqual(["sentinel-codex-393"]);
+    // Spelling of the pushing folder never decides it: git prints forward slashes, import.meta.url
+    // prints whatever the launcher used.
+    expect(
+      splitByFolder(stranded, { own: ROOT.replace(/\\/g, "/") + "/", folderOf: (c) => c.path, fleet: false }).blocking.map((c) => c.name),
+    ).toEqual(["this-lane"]);
+
+    const fleet = splitByFolder(stranded, { own: ROOT, folderOf: (c) => c.path, fleet: true });
+    expect(fleet.blocking.map((c) => c.name)).toEqual(["sentinel-codex-393", "this-lane"]);
+    expect(fleet.warnings).toEqual([]);
+
+    // The warning carries the folder, the head, and the one-line rescue.
+    const text = peerWarning({
+      check: "handoff-worktree-truth rule C",
+      warnings: gate.warnings,
+      describe: (c) => `${c.name} (+${c.unpushed}) at ${c.path}`,
+      fix: (c) => `git branch rescue/${c.name} ${c.head}`,
+    });
+    expect(text).toContain("some-other-lane");
+    expect(text).toContain("git branch rescue/sentinel-codex-393 deadbeef");
+    expect(text).toContain("npm run fleet:hygiene");
+    expect(text).not.toContain("this-lane");
+  });
+
   // The whole rule against a REAL fleet, because every assertion above is about what this file does
   // with an ANSWER. None of them can prove the question is spelled in a way git accepts, and a
   // `--contains` that silently listed every branch (or none) would keep them all green while the
@@ -1312,24 +1361,37 @@ describe("the handoff tells the truth about the worktrees", () => {
     // branch already covers are named as covered rather than counted as losses.
     const stranded = s.stranded;
     const covered = s.atRisk.filter((c) => !c.branch && Array.isArray(c.refuge) && c.refuge.length);
+    // #488: a stranded PEER checkout is named on every push and blocks none of them -- the pushing
+    // lane did not strand it and (docs/WORK_CONTROL.md: one folder, one writer) is not the one to
+    // reconcile it. THIS checkout's own stranding blocks, and under fleet mode every one does. The
+    // fix is runnable from any worktree, since a branch lives in the shared .git, so the WARN prints
+    // it in full rather than pointing at a folder.
+    const { blocking, warnings } = splitByFolder(stranded, { own: ROOT, folderOf: (c) => c.path });
+    const describeStranded = (c) =>
+      `${c.name} (+${c.unpushed}) at ${c.path}` +
+      // Named apart, because they are different findings with different remedies: one needs a
+      // ref, the other needs the probe repaired before anyone can know whether it needs one.
+      (c.refuge === null || c.refuge === undefined ? " [containment unmeasurable]" : "");
     console.log(
       `rule C: ${s.checkouts.length} checkout(s), ${s.ahead.length} ahead of origin/main, ` +
         `${s.atRisk.length} holding commits on no remote ` +
         `(${s.atRisk.length - stranded.length - covered.length} of those on their own branch, ` +
         `${covered.length} detached but contained by a local branch — both survive worktree removal), ` +
-        `${stranded.length} stranded on a detached head`,
+        `${stranded.length} stranded on a detached head` +
+        (warnings.length ? ` (${warnings.length} in other worktrees: warned, not blocking)` : ""),
     );
+    const warn = peerWarning({
+      check: "handoff-worktree-truth rule C",
+      warnings,
+      describe: describeStranded,
+      fix: (c) => `git branch rescue/${c.name} ${c.head}   (from any worktree: a branch lives in the shared .git)`,
+    });
+    if (warn) console.warn(warn);
     // Non-vacuity: an EMPTY carrier list would mean the porcelain parser broke, which is a different
     // fact entirely and must never read as safety.
     expect(s.checkouts.length).toBeGreaterThan(0);
     expect(
-      stranded.map(
-        (c) =>
-          `${c.name} (+${c.unpushed}) at ${c.path}` +
-          // Named apart, because they are different findings with different remedies: one needs a
-          // ref, the other needs the probe repaired before anyone can know whether it needs one.
-          (c.refuge === null || c.refuge === undefined ? " [containment unmeasurable]" : ""),
-      ),
+      blocking.map(describeStranded),
       `these checkouts hold commits that exist on NO remote, and no local branch contains their head ` +
         `either (\`git for-each-ref --contains <sha> refs/heads/\` answered with nothing), so the only ` +
         `thing that knows they exist is the worktree directory itself. Deleting it loses them, and no ` +

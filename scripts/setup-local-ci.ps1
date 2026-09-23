@@ -8,7 +8,9 @@
 #
 # The corollary is the part worth knowing: a worktree whose branch does not carry .githooks/ ends up
 # with no hook at all, and git reports nothing -- it runs nothing and allows the push.
-# scripts/hookspath-fleet-guard.test.mjs is the thing that notices that across every checkout.
+# scripts/hookspath-fleet-guard.test.mjs is the thing that notices that across every checkout: it
+# blocks the push from the affected checkout, warns about every other one, and blocks on all of
+# them under `npm run fleet:hygiene` (#488).
 #
 # It then proves the wiring rather than announcing it. An unreachable hook is not an error to git --
 # it simply runs nothing and lets the push through, which is indistinguishable from a passing gate.
