@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/522#issuecomment-5796308057",
+  "leaseEvidenceNote": "The landing Ownership claim on #522, posted by this Claude Code session at 2026-09-23T14:05Z and live when this transition ran. It names this exact worktree (peaceful-liskov-d2dc95) and branch claude/522-gate-mutex. Its Write scope is one contiguous list: PR #525's four delta paths plus the three receipt files. It replaces this lane's implementation claim (issuecomment-5793638013) for the landing; that claim is released by the Handoff. It was released by this lane's Handoff (https://github.com/Pootytxng/sentinel/issues/522#issuecomment-5796365766, ending \"Claim: released\") before this close, so no live lease remains on #522.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T14:07:29Z, files read per PR over REST (five open PRs: #525, #492, #471, #470, #464). Only PR #525 touches any of its four delta paths, and no PR touches the three receipt paths. scripts/scope-drift-gate.mjs --issue 522 --refresh at the reviewed head reads OK: 4 changed paths, all inside the landing claim.",
+  "inheritedWork": false,
+  "currentHead": "49d1260ccef0de135c9da6e572bbf21dafe12dc9",
+  "pr": 525,
+  "issue": 522,
+  "kind": "lane",
+  "branch": "claude/522-gate-mutex",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta origin/main..49d1260c (merge-base 7d96ab27f37b57447676c3bc8ec8638059ac19de) is two commits, 10cd87a2 and 49d1260c. Both were authored and committed by claude-code <claude-code@desk.local> in this worktree (git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD). The reviewer seat authored none of it.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository Pootytxng/sentinel. origin/main is 7d96ab27, unchanged since the rebase (fetched 2026-09-23T14:05Z). origin/claude/522-gate-mutex equals local HEAD 49d1260c. Worktree peaceful-liskov-d2dc95 is on branch claude/522-gate-mutex. git status --porcelain --untracked-files=all is empty apart from these receipts. No gate, build or helper process from this lane is running; the last gate (13:49:31Z) logged its mutex release.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "49d1260ccef0de135c9da6e572bbf21dafe12dc9",
+      "evidence": "logs/verify-local-2026-09-23T13-38-28Z.log (in this worktree peaceful-liskov-d2dc95; SHA-256 CC969BD09FCD4F1DDD104FC999B724156C08943A32C3965603EB6849C73BC429, 1460 lines) lines 15-50",
+      "summary": "457 frontend test files passed; 7,569 passed, 1 expected fail, 4 skipped; 0 failed. Queued 292s behind a concurrent gate (log lines 8-13) before the stage began."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "49d1260ccef0de135c9da6e572bbf21dafe12dc9",
+      "evidence": "logs/verify-local-2026-09-23T13-38-28Z.log (in this worktree peaceful-liskov-d2dc95; SHA-256 CC969BD09FCD4F1DDD104FC999B724156C08943A32C3965603EB6849C73BC429, 1460 lines) lines 51-77",
+      "summary": "tsc and the Vite production build passed (built in 7.60s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "49d1260ccef0de135c9da6e572bbf21dafe12dc9",
+      "evidence": "logs/verify-local-2026-09-23T13-38-28Z.log (in this worktree peaceful-liskov-d2dc95; SHA-256 CC969BD09FCD4F1DDD104FC999B724156C08943A32C3965603EB6849C73BC429, 1460 lines) lines 78-1456",
+      "summary": "1,333 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "49d1260ccef0de135c9da6e572bbf21dafe12dc9",
+      "evidence": "logs/verify-local-2026-09-23T13-38-28Z.log (in this worktree peaceful-liskov-d2dc95; SHA-256 CC969BD09FCD4F1DDD104FC999B724156C08943A32C3965603EB6849C73BC429, 1460 lines) lines 1457-1460",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 5.89s; no warning or error lines in the stage); line 1460 is the mutex release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate. `git push` ran it at 2026-09-23T13:38:28Z, and the push that put 49d1260c on origin (new branch claude/522-gate-mutex) was accepted after LOCAL CHECK RESULT: PASS. The worktree reflog binds HEAD to 49d1260c from the rebase finish at 13:37:18Z, before the log time, with no later HEAD move. Every stage was read, from the diff check to clippy, and the log was hashed to the SHA-256 above. Three more full gate runs at the same head passed too, each overlapping another gate: logs/verify-local-2026-09-23T13-38-20Z.log (SHA-256 DBCC350B3F5B08398DF2E965F26CA93988EDC4A3A0AF32250E32D7257C381F03), 13-49-26Z (E5F7B751A2204100ECAC2723A2CACE77B92EC800CCFBFE09CA272C882F953468) and 13-49-31Z (BE3A83025183564BF8A1BC6CC263D367A14F82C8A7390AB6D0679A1DD8353786; queued 280s). Each shows 457/457 files, 1,333 Rust tests passed, clippy clean and PASS. The post-merge receipt carrier pushes through the native full gate again; no --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 4 changed paths since origin/main, measured against the implementation claim on #522, all inside it. Re-measured 2026-09-23T14:05Z at the same head under the landing claim with --refresh: OK, 4 changed paths, all inside the scope of delta plus receipts.",
+    "reconciliationNote": "The implementation claim also listed scripts/verify-release.ps1 and scripts/local-gate-guard.test.mjs, and neither was touched. The landing claim lists the four delta paths plus the three receipt paths only."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "49d1260ccef0de135c9da6e572bbf21dafe12dc9",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/525#issuecomment-5796314980 (2026-09-23T14:06:33Z), headed \"Independent exact-head review — frontend-ipc-contract-auditor seat\", Reviewed head 49d1260ccef0de135c9da6e572bbf21dafe12dc9, VERDICT: PASS.",
+    "reviewerNote": "A read-only reviewer seat convened by the #512/#517 consolidation lane (session 968142), which authored none of the delta. It reviewed git objects (git diff origin/main...49d1260c) and confirmed five things. Release is unconditional in finally. An acquisition failure cannot become a PASS. Abandoned-mutex takeover warns. The WORK_CONTROL.md bullet matches the code. The guard falsifies against a real named mutex and real spawned PowerShell. It found no bypass. It ran no tests, because its checkout lacked the PR files and writing is outside its rules, so the author's native gate logs above are the run evidence. It raised two non-blocking findings, both left unchanged so the reviewed head stands. (1) At gate-mutex.ps1:104-113 the wait slice can round to 0 in the last moment before the deadline. That costs at most a sub-millisecond re-poll, and the deadline check throws on the next pass. (2) A mid-sentence wrap in the WORK_CONTROL.md bullet, which renders correctly. The shared Pootytxng account records the verdict as a PR comment; the body names the reviewer identity. It is a Claude model, independent by role only, the same route as the #438-#511 landings."
+  },
+  "transition": "close-issue",
+  "closingNote": "PR #525 merged as ab64b33ef51130cc89028a4f86b75b9d9bb13d16 (2026-09-23T14:08:16Z) by scripts/land-pr.mjs; the head ref was pruned. All four #522 success criteria hold: overlap and cost measured; verify-local.ps1 holds LocalCompy.TestGate.v1 across its four heavy stages; scripts/gate-mutex-guard.test.mjs pins it; four consecutive native gates passed while overlapping another gate. testTimeout was not raised, and no assertion was weakened. Follow-ups outside the success criteria are tracked: #526 covers verify-release.ps1; a task chip covers ad-hoc suite runs. The receipt binds the reviewed head 49d1260c, which the merge contains, so the ancestor-based provenance check holds after the prune."
+}
