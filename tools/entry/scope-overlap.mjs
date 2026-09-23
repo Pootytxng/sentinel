@@ -147,7 +147,7 @@ export function overlapRemediation(verdict) {
   if (staleHits.length) {
     lines.push(`${staleHits.map(who).join(", ")}: the claim is not live but its declared paths overlap — renew it with a current scope if that lane is still writing, or retire it (handoff comment, board status off Active) if it is done.`);
   }
-  if (verdict.findings.some((f) => f.pairs.some(([a, b]) => a === b && hasGlob(a)))) {
+  if (verdict.findings.some((f) => f.pairs.some(([a, b]) => a.toLowerCase() === b.toLowerCase() && hasGlob(a)))) {
     lines.push("A shared glob claims every file it matches — name the one file this lane owns (its own docs/dispositions/<ref>.json, not docs/dispositions/*.json).");
   }
   if (undecided.length) {
