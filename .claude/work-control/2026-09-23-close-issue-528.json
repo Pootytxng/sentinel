@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/528#issuecomment-5796452154",
+  "leaseEvidenceNote": "Ownership claim on #528 by this session. It names this worktree intelligent-williamson-02dcb6, branch claude/527-receipt-carrier, and a write scope of .claude/work-control/**, docs/RELEASE_STATE.md and docs/archive/RELEASE_STATE_HISTORY.md. The scope was narrowed to receipts only in issuecomment-5796861839, because the reinstall half is Blocked (owner-only). The board row for #528 names this folder @ claude/527-receipt-carrier.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T15:27Z (#531, #492, #471, #470, #464 besides #534): none touches any of the 3 delta paths (gh api pulls/N/files). The gate run's lease-overlap stage (#517) reported OK: no other lane holds a pushed path from earlier than #528.",
+  "inheritedWork": false,
+  "inheritedWorkNote": "The single commit b3022972 is this session's own. It carries the three receipts this session wrote and gated for the #513 landing (PR #527).",
+  "currentHead": "b3022972dd936f573342b86fdc682cad08e1851d",
+  "pr": 534,
+  "issue": 528,
+  "kind": "lane",
+  "branch": "claude/527-receipt-carrier",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta 0dbc2186..b3022972 is one commit, authored and committed by claude-code <claude-code@desk.local>. The reviewer seat authored nothing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "b3022972dd936f573342b86fdc682cad08e1851d",
+      "evidence": "logs/verify-local-2026-09-23T15-20-37Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 2bdbb220202a5c51b49eb0d0729d3f6d7538b894f64fff12af90dd7a9d89aa56, 1463 lines) lines 14-53",
+      "summary": "459 frontend test files passed; 7,612 passed / 1 expected fail / 3 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "b3022972dd936f573342b86fdc682cad08e1851d",
+      "evidence": "logs/verify-local-2026-09-23T15-20-37Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 2bdbb220202a5c51b49eb0d0729d3f6d7538b894f64fff12af90dd7a9d89aa56, 1463 lines) lines 54-80",
+      "summary": "tsc and Vite production build passed (built in 10.18s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "b3022972dd936f573342b86fdc682cad08e1851d",
+      "evidence": "logs/verify-local-2026-09-23T15-20-37Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 2bdbb220202a5c51b49eb0d0729d3f6d7538b894f64fff12af90dd7a9d89aa56, 1463 lines) lines 81-1459",
+      "summary": "1,333 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "b3022972dd936f573342b86fdc682cad08e1851d",
+      "evidence": "logs/verify-local-2026-09-23T15-20-37Z.log (in this worktree intelligent-williamson-02dcb6; SHA-256 2bdbb220202a5c51b49eb0d0729d3f6d7538b894f64fff12af90dd7a9d89aa56, 1463 lines) lines 1460-1463",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 7.58s)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in this worktree at 2026-09-23T15:20:37Z at HEAD b3022972 and printed LOCAL CHECK RESULT: PASS; the push creating origin/claude/527-receipt-carrier at that SHA was accepted. Gate receipt comment: https://github.com/Pootytxng/sentinel/pull/534#issuecomment-5797653013. It also lists the three earlier red runs at this head and how each was classified: #532, a load timeout, and an SSH reachability failure.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run (log lines 5-7): 3 changed paths since origin/main measured against the claim on #528, every one inside .claude/work-control/**."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "b3022972dd936f573342b86fdc682cad08e1851d",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/534#issuecomment-5797653316, headed \"Independent review: PASS at exact head b3022972dd936f573342b86fdc682cad08e1851d\", naming reviewer frontend-ipc-contract-auditor, non-author.",
+    "reviewerNote": "A read-only reviewer seat in a fresh context, never a mutation author. It confirmed the diff is exactly 3 additive receipt JSON files and that their fields match PR #527 (merged as eaec2a11, head 7208c4f3) and the cited comments. It ran scripts/work-control-receipt-preservation.test.mjs: 8/8. Posted from the shared Pootytxng account by the landing session on the seat's behalf."
+  },
+  "transition": "close-issue",
+  "closingNote": "PR #534 is merged to main as 01a8f823e69b1943dd0c1b6056dec8f50b33bdb3 (merge commit over the reviewed head b3022972). The handoff at https://github.com/Pootytxng/sentinel/issues/528#issuecomment-5797677068 released the claim. #528 closes as done for its receipts half; the desk-build/reinstall half is Blocked (owner-only, classifier refused ship-reinstall.ps1) and waits on #532, as recorded in that handoff."
+}
