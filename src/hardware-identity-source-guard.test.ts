@@ -106,7 +106,10 @@ describe("hardware identity source guard (#451)", () => {
   it("6. every Home passes useMachineModel() through to every grid and reads none of the identity itself", () => {
     for (const home of ["surfaces/HomeConsole.tsx", "surfaces/HomeHud.tsx", "surfaces/HomeV2.tsx"]) {
       const src = read(home);
-      expect(src, `${home} does not import useMachineModel`).toContain('import { useMachineModel } from "../data/machine-model"');
+      // Any named-import list that includes useMachineModel counts (#452 imports inEffectCounts beside it).
+      expect(src, `${home} does not import useMachineModel`).toMatch(
+        /import \{[^}]*\buseMachineModel\b[^}]*\} from "\.\.\/data\/machine-model"/,
+      );
       expect(src, `${home} does not call useMachineModel(hw)`).toContain("const model = useMachineModel(hw);");
       const grids = src.match(/<HardwareGrid\b[^>]*>/g) ?? [];
       expect(grids.length, `${home} renders no HardwareGrid`).toBeGreaterThan(0);
