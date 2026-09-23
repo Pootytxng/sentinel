@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/520#issuecomment-5798961201",
+  "leaseEvidenceNote": "This Claude Code session (551f06b5) posted the landing Ownership claim on #520 at 2026-09-23T16:51:18Z. It names this exact worktree (awesome-babbage-430d03) and branch claude/520-lane-review-license-tests. Its Write scope is one contiguous list: PR #537's five delta paths plus the two receipt files. It replaces this lane's implementation claim (issuecomment-5794326819), which the Handoff releases. This lane's Handoff released it (https://github.com/Pootytxng/sentinel/issues/520#issuecomment-5799001837, 2026-09-23T16:53:32Z, ending \"Claim: released\") before this close, so no live lease remains on #520.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T16:51:20Z, files read per PR over REST. There are six open PRs: #537, #531, #492, #471, #470 and #464. Only PR #537 touches any of its five delta paths, and no PR touches the two receipt paths. The gate run's own lease-overlap stage (#517) read OK: no other lane holds a pushed path from earlier than #520.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The license.rs tests were salvaged from uncommitted work in .claude/worktrees/license-tests, which this lane read without writing (#520 lane review). This session re-applied them, verified them (26 passed; three production mutations each failed a new test and were reverted) and committed them. No other executor authored a commit in the delta.",
+  "currentHead": "62d170121352bb84328cd62db916d7a1920acdeb",
+  "pr": 537,
+  "issue": 520,
+  "kind": "lane",
+  "branch": "claude/520-lane-review-license-tests",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is origin/main..62d17012 (merge-base dd8ff93b36e8fe37569fa9e30d76719467d68f36): three commits, 02706dc6, 1afc56e4 and 62d17012. claude-code <claude-code@desk.local> authored and committed all three in this worktree (git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD). The reviewer seat authored none of it.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository Pootytxng/sentinel. origin/main is d74277f0, the #537 merge (fetched after land-pr). origin/claude/520-lane-review-license-tests was pruned by land-pr; local HEAD is 62d17012, which the merge contains. Worktree awesome-babbage-430d03 is on branch claude/520-lane-review-license-tests. git status --porcelain --untracked-files=all is empty apart from the two receipts. No gate, build or helper process from this lane is running.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "62d170121352bb84328cd62db916d7a1920acdeb",
+      "evidence": "logs/verify-local-2026-09-23T16-42-51Z.log (in this worktree awesome-babbage-430d03; SHA-256 D8151321D00119EADDF12477B713830250291E835FBBE818C0804ADCCA9261B3, 1755 lines) lines 14-53",
+      "summary": "459 frontend test files passed; 7,616 passed, 1 expected fail, 4 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "62d170121352bb84328cd62db916d7a1920acdeb",
+      "evidence": "logs/verify-local-2026-09-23T16-42-51Z.log (in this worktree awesome-babbage-430d03; SHA-256 D8151321D00119EADDF12477B713830250291E835FBBE818C0804ADCCA9261B3, 1755 lines) lines 54-80",
+      "summary": "tsc and the Vite production build passed (built in 9.46s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "62d170121352bb84328cd62db916d7a1920acdeb",
+      "evidence": "logs/verify-local-2026-09-23T16-42-51Z.log (in this worktree awesome-babbage-430d03; SHA-256 D8151321D00119EADDF12477B713830250291E835FBBE818C0804ADCCA9261B3, 1755 lines) lines 81-1469",
+      "summary": "1,343 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "62d170121352bb84328cd62db916d7a1920acdeb",
+      "evidence": "logs/verify-local-2026-09-23T16-42-51Z.log (in this worktree awesome-babbage-430d03; SHA-256 D8151321D00119EADDF12477B713830250291E835FBBE818C0804ADCCA9261B3, 1755 lines) lines 1470-1755",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 50.00s; no warning or error lines in the log); line 1755 is the mutex release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate. `git push` ran it at 2026-09-23T16:42:51Z, and the push that created origin/claude/520-lane-review-license-tests at 62d17012 was accepted after LOCAL CHECK RESULT: PASS. The worktree reflog binds HEAD to 62d17012 from the rebase finish at 16:42:42Z, before the log time, with no later HEAD move. Every stage was read and the log was hashed to the SHA-256 above. Three earlier gate runs, at pre-rebase heads, failed on 15s test timeouts alone, with no assertion failure (28 of 28 on the last). The desk was also running a game and another lane's gate. Every failing file passed when re-run in isolation. No --no-verify was used and none is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 5 changed paths since origin/main, measured against the claim on #520, all inside it.",
+    "reconciliationNote": "The landing claim lists the same five delta paths plus the two receipt paths, and nothing else."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "62d170121352bb84328cd62db916d7a1920acdeb",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/537#issuecomment-5798973318, headed \"Independent exact-head review — rust-tauri-reviewer seat\", Reviewed head 62d170121352bb84328cd62db916d7a1920acdeb, VERDICT: PASS.",
+    "reviewerNote": "A read-only reviewer seat that authored none of the delta. It reviewed git objects (git diff origin/main...62d17012) and confirmed several things. Every license.rs line is inside #[cfg(test)] modules. Each test matches the production code: the cap at line 103, deny_unknown_fields at line 50, and now > t at line 131. Keys are ephemeral, with no key material in the diff. The moved archive block is byte-identical. There are no closing keywords. It ran cargo test --lib license itself: 26 passed. No findings. The shared Pootytxng account records the verdict as a PR comment, whose body names the reviewer identity. The reviewer is a Claude model, independent by role only, by the same route as the #525/#533 landings."
+  },
+  "transition": "close-issue",
+  "closingNote": "PR #537 merged as d74277f0f3514369a5156ee002328bb4650ac617 (2026-09-23T16:52:54Z) by scripts/land-pr.mjs; the head ref was pruned. #520 is complete. All four lanes are classified: compy-health-parity, lane/rule-e-negation and lane/guard-budget-313 are SUPERSEDED, and license-tests is SALVAGED by #537. The spent folders are listed for the owner in OWNER_ACTION_CHECKLIST §A_spent. The receipt binds the reviewed head 62d17012, which the merge contains, so the ancestor-based provenance check holds after the prune."
+}
