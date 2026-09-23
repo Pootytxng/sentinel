@@ -67,6 +67,21 @@ describe("what counts as covered", () => {
     expect(coversPath("docs/*.md", "docs/archive/old.md")).toBe(false);
     expect(coversPath("docs/**/*.md", "docs/archive/old.md")).toBe(true);
   });
+
+  it("names a file in any case and either slash, as the directory and glob branches already did (#539)", () => {
+    // Windows paths are case-insensitive, so both spellings are one file. Only the literal branch
+    // compared exactly, and for the lease-overlap gate (#517) that miss is a false PASS: another
+    // lane's claim on the same file goes unseen.
+    expect(coversPath("src/Surfaces/HomeHud.tsx", "src/surfaces/homehud.tsx")).toBe(true);
+    expect(coversPath("src\\Surfaces\\HomeHud.tsx", "src/surfaces/HomeHud.tsx")).toBe(true);
+    expect(coversPath("src/Surfaces", "src/surfaces/HomeHud.tsx")).toBe(true);
+    expect(coversPath("src/Surfaces/*.tsx", "src/surfaces/HomeHud.tsx")).toBe(true);
+    // Case folding must not turn into prefix matching.
+    expect(coversPath("src/Surfaces/HomeHud.tsx", "src/surfaces/HomeHud.tsx.bak")).toBe(false);
+    expect(outsideScope(["src/surfaces/homehud.tsx"], ["src/Surfaces/HomeHud.tsx"])).toEqual([]);
+    // Two globs that differ only in case are one scope, not two disjoint ones.
+    expect(overlappingPairs(["Docs/*.md"], ["docs/*.md"])).toEqual([["Docs/*.md", "docs/*.md"]]);
+  });
 });
 
 describe("two lanes, compared", () => {
