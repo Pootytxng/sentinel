@@ -18,13 +18,14 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { discoverCheckouts, inspectCheckout, listWorktreesOf, relatedCheckouts } from "./checkouts.mjs";
 
 // TIMEOUT (#542): every case here is real `git` processes, and their wall time is set by machine
-// load, not by what the case asserts. One discoverCheckouts over this fixture is 17 spawns (4 per
-// checkout x 4 checkouts + 1 `worktree list` for the host). Measured 2026-09-23: 150-600 ms per git
-// spawn standing alone on the dev PC, and in a full native gate the tolerant case below (then 35
-// spawns, two discoveries) took 16.6 s against the global 15 s — about 0.47 s a spawn. At the budget
-// of 19 spawns a case, that rate is about 9 s, too close to 15 s to survive a busier machine. The
-// assertions are about which checkouts are found, which do not become truer at 15 s than at 60 s.
-// Speed is guarded by SPAWN COUNT instead (afterEach below), which does not vary with load.
+// load, not by what the case asserts. One discoverCheckouts over this fixture is 9 spawns (2 per
+// checkout x 4 checkouts + 1 `worktree list` for the host; it was 4 per checkout until #549).
+// Measured 2026-09-23: 150-600 ms per git spawn standing alone on the dev PC, and in a full native
+// gate the tolerant case below (then 35 spawns, two discoveries) took 16.6 s against the global 15 s
+// — about 0.47 s a spawn. At the budget of 11 spawns a case, that rate is about 5 s. The 60 s below
+// is headroom for a busier machine, not room to spend: the assertions are about which checkouts are
+// found, which do not become truer at 15 s than at 60 s. Speed is guarded by SPAWN COUNT instead
+// (afterEach below), which does not vary with load.
 vi.setConfig({ testTimeout: 60_000 });
 
 // Git counts its own processes: with GIT_TRACE2_EVENT set to a directory, every git process writes
@@ -47,10 +48,10 @@ afterAll(() => {
   }
 });
 
-// One discovery (17) plus two reads of the case's own. A case over this is paying for a second
-// discovery or a new git call per checkout. Either one reopens #542, so fix the spend or re-derive
-// the budget above. Do not just raise this number.
-const CASE_SPAWN_BUDGET = 19;
+// One discovery (9) plus two reads of the case's own. A case over this is paying for a second
+// discovery or a new git call per checkout. Either one reopens #542 and #549, so fix the spend or
+// re-derive the budget above. Do not just raise this number.
+const CASE_SPAWN_BUDGET = 11;
 let spawnsBefore;
 beforeEach(() => {
   spawnsBefore = gitSpawns();
@@ -130,9 +131,39 @@ describe("linked-worktree metadata", () => {
   });
 });
 
+describe("the HEAD states one rev-parse reads", () => {
+  it("an unborn HEAD has no branch and is NOT detached; a detached HEAD is detached", () => {
+    // One rev-parse reads all three facts (#549). On an unborn HEAD it prints both dirs and a bare
+    // `HEAD`, then exits 128. Read naively, that `HEAD` would report a fresh `git init` as detached.
+    // Outside `root`, so the discovery cases below still see exactly the four fixture checkouts.
+    const fresh = mkdtempSync(join(tmpdir(), "compy-entry-checkouts-unborn-"));
+    try {
+      execFileSync("git", ["init", "--quiet", "-b", "main", fresh], { stdio: "ignore" });
+      const unborn = inspectCheckout(fresh);
+      expect(unborn.kind).toBe("clone");
+      expect(unborn.commonDir.toLowerCase()).toBe(join(fresh, ".git").toLowerCase());
+      expect(unborn.gitDir.toLowerCase()).toBe(join(fresh, ".git").toLowerCase());
+      expect(unborn.branch).toBeNull();
+      expect(unborn.detached).toBe(false);
+
+      git(fresh, "commit", "--quiet", "--allow-empty", "-m", "first");
+      git(fresh, "checkout", "--quiet", "--detach");
+      const detached = inspectCheckout(fresh);
+      expect(detached.branch).toBeNull();
+      expect(detached.detached).toBe(true);
+    } finally {
+      try {
+        rmSync(fresh, { recursive: true, force: true });
+      } catch {
+        /* a locked file on Windows must not fail the suite */
+      }
+    }
+  });
+});
+
 // The three read-only cases below all read one discovery of the untouched fixture. Discovery is
 // read-only ("leaves every discovered checkout's state untouched" proves it), so running it three
-// times would buy 34 more spawns and no more evidence.
+// times would buy 18 more spawns and no more evidence.
 let fixtureDiscovery;
 const discovered = () => (fixtureDiscovery ??= discoverCheckouts({ roots: [root] }));
 
@@ -215,9 +246,10 @@ describe("the per-case spawn budget (#542)", () => {
   it("counts checkouts.mjs's own git processes, so the budget is not vacuous", () => {
     const start = gitSpawns();
     inspectCheckout(host);
-    // 4 per checkout is the arithmetic the 17-per-discovery budget above rests on. Zero means the
-    // counter went blind and every case passes its budget unmeasured.
+    // 2 per checkout (one rev-parse, one remote get-url) is the arithmetic the 9-per-discovery budget
+    // above rests on (#549). Zero means the counter went blind and every case passes its budget
+    // unmeasured.
     expect(gitSpawns() - start).toBeGreaterThan(0);
-    expect(gitSpawns() - start).toBeLessThanOrEqual(4);
+    expect(gitSpawns() - start).toBeLessThanOrEqual(2);
   });
 });
