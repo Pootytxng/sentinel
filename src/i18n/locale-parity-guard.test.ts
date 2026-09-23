@@ -195,6 +195,21 @@ function splitTopLevel(inner: string): string[] {
 }
 
 /**
+ * A property named `t` bound to a plain name: `const { t: translate } = useTranslation()`, or a
+ * `{ t: tr }` prop. #518: SessionTrends.tsx's rename hid all eight of its calls from Laws 2 and 3.
+ * A type literal `{ t: TFunction }` matches too and adds nothing: no code calls `TFunction(`.
+ * Still unseen: `const tr = t` and a parameter typed `(tr: TFunction)`. Neither exists in src today.
+ */
+const T_RENAME = /[{,]\s*t\s*:\s*([A-Za-z_$][\w$]*)\s*(?=[,}])/g;
+
+/** `t(`, plus a call through every name this file renames `t` to. */
+function translatorCall(src: string): RegExp {
+  const names = new Set(["t", ...[...src.matchAll(T_RENAME)].map((m) => m[1])]);
+  const alt = [...names].map((n) => n.replace(/\$/g, "\\$")).join("|");
+  return new RegExp(`(?<![\\w$])(?:${alt})\\(`, "g");
+}
+
+/**
  * Every static call site in one file. The first argument yields its keys — a plain literal, or
  * every branch of a conditional; a template literal yields none, so a runtime-built key is
  * skipped (see SCOPE). The second argument, when it is an object literal, yields the supplied
@@ -203,7 +218,7 @@ function splitTopLevel(inner: string): string[] {
 function harvest(text: string, file: string): CallSite[] {
   const sites: CallSite[] = [];
   const src = stripComments(text);
-  for (const m of src.matchAll(/\bt\(/g)) {
+  for (const m of src.matchAll(translatorCall(src))) {
     const open = m.index! + m[0].length - 1;
     const close = closeParen(src, open);
     const args = splitTopLevel(src.slice(open + 1, close));
@@ -450,6 +465,39 @@ describe("locale parity: no missing string, no raw {{braces}} in any language", 
       "synthetic.tsx: lab.branch.closed",
       "synthetic.tsx: lab.trans.key",
     ]);
+  });
+
+  it("harvests the calls a renamed t makes (guard is not vacuous)", () => {
+    // SessionTrends.tsx calls `const { t: translate } = useTranslation()` — eight calls a `t(` scan never saw.
+    const st = sites.filter((s) => s.file.endsWith("SessionTrends.tsx"));
+    expect(st.length).toBeGreaterThanOrEqual(8);
+    expect(st.flatMap((s) => s.keys)).toContain("monitor.sessionTrends.trendUp");
+    expect(supplied.get("monitor.sessionTrends.gameStat")).toEqual(new Set(["count", "fps"]));
+  });
+
+  it("reads a key through a renamed t, and not through any other function (disarm proof)", () => {
+    // The #510 shape behind a rename: a dropped key the code still calls. Synthesised in memory.
+    const synthetic = [
+      "const { i18n, t: translate } = useTranslation();",
+      'translate(ok ? "lab.alias.kept" : "lab.alias.dropped", { count })',
+      'function Row({ t: tr }) { return tr("lab.prop.alias"); }',
+      'other("lab.not.a.call"); retranslate("lab.not.a.call")',
+      't("lab.plain.key")',
+    ].join("\n");
+    const found = harvest(synthetic, "synthetic.tsx");
+    expect(found.flatMap((s) => s.keys)).toEqual([
+      "lab.alias.kept",
+      "lab.alias.dropped",
+      "lab.prop.alias",
+      "lab.plain.key",
+    ]);
+    expect([...found[0].vars]).toEqual(["count"]);
+    const tiny: Flat = new Map([
+      ["lab.alias.kept", "x"],
+      ["lab.prop.alias", "x"],
+      ["lab.plain.key", "x"],
+    ]);
+    expect(unresolvedKeys(found, tiny)).toEqual(["synthetic.tsx: lab.alias.dropped"]);
   });
 
   it("every static key the code calls exists in the base locale", () => {
