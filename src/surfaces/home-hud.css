@@ -41,6 +41,10 @@
   .v2-verdict
   h1:not(:has(.hc-headline)) {
   display: block;
+  /* Pinned under the masthead (#513). The header row bottom-aligns its items, and once the
+     masthead left the h1 the headline alone was shorter than a two-line dek sharing its row, so
+     the dek pushed it down: 10px under the masthead at 1280 wide, 15px at 1500 and 1920. */
+  align-self: flex-start;
   margin: 0 0 6px;
   font: 650 var(--type-section) / 1.15 var(--v2-font-sans);
   letter-spacing: -0.01em;

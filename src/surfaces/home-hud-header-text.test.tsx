@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, act, screen } from "@testing-library/react";
+import { readFileSync } from "fs";
+import { join } from "path";
 import i18n from "../i18n";
 import { HomeRoom } from "./HomeRoom";
 import type { GameReadiness, Priorities } from "../types";
@@ -180,6 +182,19 @@ describe("HomeHud header text never runs together (#513)", () => {
       expect([...welds(header!), ...welds(measured!)]).toEqual([]);
     });
   }
+
+  // A TEXT guard on the stylesheet, because jsdom never loads it. The self-reviewer measured the
+  // first cut of this fix on a dev build: with the masthead out of the h1, the headline alone was
+  // shorter than a two-line dek sharing its row, and the row's bottom alignment sank it — 10px under
+  // the masthead at 1280 wide, 15px at 1500 and 1920. Pinning the h1 to the row's top is the fix.
+  it("the HUD headline is pinned under the masthead, not bottom-aligned with its row", () => {
+    const css = readFileSync(join("src", "surfaces", "home-hud.css"), "utf8");
+    const rule = css
+      .split("}")
+      .find((block) => /\[data-room="home"\][^{]*\.v2-verdict\s+h1:not\(:has\(\.hc-headline\)\)\s*\{/.test(block));
+    expect(rule, "home-hud.css lost its HUD home h1 rule").toBeTruthy();
+    expect(rule).toMatch(/align-self:\s*flex-start/);
+  });
 
   it("the weld check fires on the shape it guards (falsification)", () => {
     // The two defects as they shipped, rebuilt by hand, must both be reported.
