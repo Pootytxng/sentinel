@@ -10,7 +10,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { normalizeWorktreeField } from "./worktree-field.mjs";
-import { BOARD_READ_LIMIT, parseBoardItems } from "./gather.mjs";
+import { BOARD_READ_LIMIT, ghReader, parseBoardItems } from "./gather.mjs";
 
 export const PROJECT_NUMBER = 1;
 export const PROJECT_OWNER = "Pootytxng";
@@ -60,10 +60,14 @@ export function renderPlan(plan) {
   return lines;
 }
 
-const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+// Reads share gather's bound, GH_READ_TIMEOUT_MS (#474, #514): a GitHub that stops answering throws
+// here, before the first write, instead of holding the migration. The item-edit writer stays
+// unbounded, as claim.mjs's writers do (#474 fix item 2): an edit killed mid-flight may already have landed.
+const ghRead = ghReader();
+const ghWrite = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 
 // Whole board or a throw (a truncated read would migrate the first N rows and call the rest done).
-export function readBoard({ run = gh } = {}) {
+export function readBoard({ run = ghRead } = {}) {
   const raw = run(["project", "item-list", String(PROJECT_NUMBER), "--owner", PROJECT_OWNER, "--format", "json", "--limit", String(BOARD_READ_LIMIT)]);
   return parseBoardItems(raw).map((it) => ({
     number: it.content?.number,
@@ -72,9 +76,10 @@ export function readBoard({ run = gh } = {}) {
   }));
 }
 
-function main(argv) {
+/** `read` and `write` are seams, so a guard can reach the --apply reads and see what a hung one writes. */
+export function main(argv, { read = ghRead, write = ghWrite } = {}) {
   const apply = argv.includes("--apply");
-  const plan = planMigration(readBoard());
+  const plan = planMigration(readBoard({ run: read }));
   console.log(`\n${FIELD_NAME} migration — ${apply ? "APPLY" : "dry run, nothing will be written"}\n`);
   for (const line of renderPlan(plan)) console.log(line);
 
@@ -83,13 +88,13 @@ function main(argv) {
     return 0;
   }
 
-  const projectId = JSON.parse(gh(["project", "view", String(PROJECT_NUMBER), "--owner", PROJECT_OWNER, "--format", "json"])).id;
-  const fields = JSON.parse(gh(["project", "field-list", String(PROJECT_NUMBER), "--owner", PROJECT_OWNER, "--format", "json"])).fields;
+  const projectId = JSON.parse(read(["project", "view", String(PROJECT_NUMBER), "--owner", PROJECT_OWNER, "--format", "json"])).id;
+  const fields = JSON.parse(read(["project", "field-list", String(PROJECT_NUMBER), "--owner", PROJECT_OWNER, "--format", "json"])).fields;
   const fieldId = fields.find((f) => f.name === FIELD_NAME)?.id;
   if (!fieldId) throw new Error(`Field "${FIELD_NAME}" not found on project ${PROJECT_NUMBER}`);
 
   for (const row of plan.filter((r) => r.action === "change")) {
-    gh(["project", "item-edit", "--project-id", projectId, "--id", row.itemId, "--field-id", fieldId, "--text", row.after]);
+    write(["project", "item-edit", "--project-id", projectId, "--id", row.itemId, "--field-id", fieldId, "--text", row.after]);
     console.log(`  wrote #${row.number}`);
   }
   console.log("\n  Refused items were NOT written — they need a human decision.\n");
