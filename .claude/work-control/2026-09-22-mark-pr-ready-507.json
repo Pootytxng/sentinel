@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/506#issuecomment-5786774536",
+  "leaseEvidenceNote": "Ownership claim on #506 posted by this Claude Code successor session (6475e6ca-946f-4d34-b58e-fce143633437) 2026-09-23T00:22:00Z for the #507 review and landing, live when this transition ran. It names this exact worktree (awesome-leakey-eb5ee0, local branch review-507 checked out at the reviewed head via gh pr checkout 507 --branch review-507, because the PR branch itself is still checked out in the author's worktree recursing-khayyam-ec2cac) and a review-only Write scope of exactly the three receipt files. The author's lane released its lease by the Handoff at 2026-09-22T21:33:04Z (issuecomment-5784523354, ending `Claim: released`) before this claim; the folder record was adopted with node tools/entry/cli.mjs adopt --issue 506 --session 6475e6ca-946f-4d34-b58e-fce143633437.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T00:21Z (ten open PRs: #509, #508, #507, #504, #500, #492, #476, #471, #470, #464; gh pr list --json files): only PR #507 touches src-tauri/src/machine_model.rs and no PR touches the three receipt paths. PR #509 (claude/505-precancelled-bench-flake) touches only src-tauri/src/benchmark.rs; PR #500 / claude/451-health-identity-facts is frontend-only.",
+  "inheritedWork": false,
+  "currentHead": "602fde8b33858e9136cb7b3ec909abd860b25b58",
+  "pr": 507,
+  "issue": 506,
+  "kind": "lane",
+  "branch": "claude/506-ledger-observed-assumption",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta 9ead3da2..602fde8b is one commit, 602fde8b, authored and committed by claude-code <claude-code@desk.local> (git log --format='%h %an <%ae> %cn <%ce>' 9ead3da2..602fde8b). The reviewer-only seat authored nothing; this landing session (also claude-code) edited none of the delta beyond a transient falsification restored by git checkout -- before any commit, and only writes receipts.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "602fde8b33858e9136cb7b3ec909abd860b25b58",
+      "evidence": "logs/verify-local-2026-09-22T21-24-06Z.log (in the author's worktree recursing-khayyam-ec2cac; SHA-256 E98C1A1EE0A7E5D6090588E15FC7F563E2F44051CDC60E315166AFAE1B901BA5, 129,835 bytes, 1452 lines) lines 8-43",
+      "summary": "450 frontend test files passed; 7,413 passed / 4 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "602fde8b33858e9136cb7b3ec909abd860b25b58",
+      "evidence": "logs/verify-local-2026-09-22T21-24-06Z.log (in the author's worktree recursing-khayyam-ec2cac; SHA-256 E98C1A1EE0A7E5D6090588E15FC7F563E2F44051CDC60E315166AFAE1B901BA5, 129,835 bytes, 1452 lines) lines 44-70",
+      "summary": "tsc and Vite production build passed (built in 8.15s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "602fde8b33858e9136cb7b3ec909abd860b25b58",
+      "evidence": "logs/verify-local-2026-09-22T21-24-06Z.log (in the author's worktree recursing-khayyam-ec2cac; SHA-256 E98C1A1EE0A7E5D6090588E15FC7F563E2F44051CDC60E315166AFAE1B901BA5, 129,835 bytes, 1452 lines) lines 71-1449",
+      "summary": "1,333 passed; 0 failed; 24 ignored (the two new tests pass at log lines 1348 and 1427; the reworded binding test at line 1175)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "602fde8b33858e9136cb7b3ec909abd860b25b58",
+      "evidence": "logs/verify-local-2026-09-22T21-24-06Z.log (in the author's worktree recursing-khayyam-ec2cac; SHA-256 E98C1A1EE0A7E5D6090588E15FC7F563E2F44051CDC60E315166AFAE1B901BA5, 129,835 bytes, 1452 lines) lines 1450-1452",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile, no warnings or errors in the stage)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran twice in the author's worktree. The first run at 2026-09-22T21:19:23Z (logs/verify-local-2026-09-22T21-19-23Z.log, SHA-256 23854C16DE04073C06AA5E7358075CF4980459022849183B47567F1370D6A0ED, 195 lines) failed one frontend test, scripts/hookspath-fleet-guard.test.mjs (1 failed / 7412 passed), on that folder's own core.hooksPath pin, so that push was refused; the author repointed the folder's hooksPath (Handoff environmental note) and the second run at 21:24:06Z passed every stage (five LOCAL CHECK stages, no failure line), after which the push that put 602fde8b on origin was accepted (~21:29Z; the ref is origin/claude/506-ledger-observed-assumption, PR #507's head, its only commit). The author's worktree reflog (read as a plain file) binds that HEAD to 602fde8b from the commit at 21:16:43Z with no later move. The landing session copied both logs byte-for-byte into its scratchpad (cat redirect; sizes 11,500 and 129,835 bytes match the originals), read every stage, and hashed them to the SHA-256 values above; the log's own scope-drift line reads 'not measured' because that folder had no launch record. Independently of that log, the landing session checked out the same head in its own worktree (awesome-leakey-eb5ee0, local branch review-507) and ran cargo test --manifest-path src-tauri/Cargo.toml machine_model (48 passed / 0 failed, 00:23-00:24Z) plus cargo clippy --all-targets --all-features -- -D warnings (exit 0, clean, 00:25:05Z); it also falsified the production assumption once in that worktree by mutating src-tauri/src/intelligence.rs line 530 from `if prev != driver {` to `if prev != driver || true {`, which reds exactly the two new tests (test result: FAILED. 46 passed; 2 failed; the constant-rig fixture's message reads 'a constant rig stamped on 5000 applies put 4999 observed rows on the tape'), then restored the file with an unconditional git checkout -- src-tauri/src/intelligence.rs and re-ran to 48 passed / 0 failed with git status --porcelain empty and HEAD unchanged at 602fde8b. The landing carrier will push the post-merge receipt commit through the native full gate again; no --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-6) the stage reads 'not measured -- no session record for this folder'. Re-measured 2026-09-23T00:27Z at the same head under the landing claim with node scripts/scope-drift-gate.mjs --issue 506 --refresh: 1 changed path since origin/main outside this claim, src-tauri/src/machine_model.rs, which is the reviewed delta itself.",
+    "reconciliationNote": "The landing claim is review-only by the task's rail (no source files), so the reviewed delta is deliberately outside it; that path is the write scope of the author's claim (issuecomment-5784215862: src-tauri/src/machine_model.rs and src-tauri/src/intelligence.rs), released by Handoff before this claim, and the PR's only commit is the author's. This lane changed nothing in that path beyond a transient one-line falsification restored by git checkout -- before any commit (porcelain empty at the head). The carrier push from this folder's own branch carries only the three receipt files, all inside this claim."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "rust-tauri-reviewer",
+    "status": "passed",
+    "head": "602fde8b33858e9136cb7b3ec909abd860b25b58",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/507#issuecomment-5786900275 (2026-09-23T00:32:13Z), headed \"Independent review: PASS at exact head 602fde8b33858e9136cb7b3ec909abd860b25b58\", naming reviewer rust-tauri-reviewer, non-author, at the exact PR head against base 9ead3da2ded442c3d19dee12d65134115da6ee2f.",
+    "reviewerNote": "Reviewer-only seat rust-tauri-reviewer (a read-only Claude subagent in a fresh context, authored nothing) reviewed the exact head 602fde8b33858e9136cb7b3ec909abd860b25b58 against base 9ead3da2ded442c3d19dee12d65134115da6ee2f on the brief from the #506 Handoff: each new test exercises the real IdentityDeltaScan path in intelligence.rs (ChronologyProducers -> timeline_inputs() -> assemble_timeline -> compose), each can fail, no existing assertion weakened, the reworded doc comments match compose_chronology's behaviour (oldest observed rows drop, total_events still counts them), actions.rs untouched, and returned PASS. The PR's only commit is by claude-code, so a Claude Code session cannot be the recorded reviewer; the seat is a Claude model and the review is independent by role only, the same route as the #438-#503 landings. The verdict comment was posted on PR #507 by the landing session on the seat's behalf via --body-file, seat verdict verbatim, and read back once."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "Marks draft PR #507 ready after exact-head non-author review by a reviewer-only seat; merge follows under its own receipt without changing the reviewed head."
+}
