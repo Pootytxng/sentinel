@@ -407,20 +407,32 @@ export function parseHandoff(body) {
  * gate cannot disagree about when a lease ended. `comments` is the thread in posting order, as
  * `gh issue view --json comments` returns it; `handoff` is the newest one, released or not, because
  * guard 7 reads its next action.
+ *
+ * `run` is every claim since the last release, oldest first; its last entry is `claim` (#517). A
+ * refreshed claim restates the lease, it does not start a new one, so the push-time overlap gate
+ * measures how long a path has been held from the run, not from the newest comment. A comment's
+ * `url`, when the reader supplied one, rides along so a refusal can link the claim it names.
  */
 export function threadLease(comments) {
   let claim = null;
   let handoff = null;
+  let run = [];
   for (const c of comments ?? []) {
     const asHandoff = parseHandoff(c.body);
     if (asHandoff) {
       handoff = { ...asHandoff, postedAt: c.createdAt };
-      if (asHandoff.released) claim = null;
+      if (asHandoff.released) {
+        claim = null;
+        run = [];
+      }
     }
     const asClaim = parseClaim(c.body);
-    if (asClaim) claim = { ...asClaim, postedAt: c.createdAt };
+    if (asClaim) {
+      claim = { ...asClaim, postedAt: c.createdAt, ...(c.url ? { url: c.url } : {}) };
+      run.push(claim);
+    }
   }
-  return { claim, handoff };
+  return { claim, handoff, run };
 }
 
 const REPO = ["--repo", "Pootytxng/sentinel"];

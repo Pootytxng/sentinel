@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/512#issuecomment-5794343889",
+  "leaseEvidenceNote": "Ownership claim on #512 posted by this Claude Code successor session (e855a8b6-e2fa-4af7-8835-bccba929c1c3) at 2026-09-23T11:54Z for the consolidated #512/#515 fix, live when this transition ran (expires 23:59Z). It names this worktree (recursing-hertz-8a06a2, branch claude/512-tree-walk-budget) and lists, as one contiguous backticked Write scope, the seventeen delta paths, the two #504 receipts and the three receipts of this landing. Verified takeovers of the idle #512 lane (issuecomment-5794341874) and #515 lane (issuecomment-5794342895) precede it; this session authored neither lane's original work.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T13:12Z (open PRs #523, #492, #471, #470, #464): no PR other than #523 touches any of the nineteen changed paths (gh pr view --json files per PR, intersected with git diff --name-only origin/main HEAD). The gate-mutex lane (#522) holds scripts/verify-local.ps1 and docs/WORK_CONTROL.md, neither in this delta. git merge-tree --write-tree origin/main 1a7aaa0f is conflict-free against origin/main 27e94217 (tree 2e4da35e).",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "currentHead": "1a7aaa0fb8e7f482a20fe4c3a4493f348bb09511",
+  "pr": 523,
+  "issue": 515,
+  "kind": "lane",
+  "branch": "claude/512-tree-walk-budget",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The delta carries the #512 lane's commit f4f31e5d (claude-code, folder sweet-easley-682bac) and the #515 lane's uncommitted tripwire work (claude-code, folder ecstatic-morse-50b6f0), consolidated and committed as 1a7aaa0f by this session (claude-code) on top of the #504 receipts carrier 412d6e2b. Every mutation author is claude-code; the reviewer seat authored nothing.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "1a7aaa0fb8e7f482a20fe4c3a4493f348bb09511",
+      "evidence": "logs/verify-local-2026-09-23T13-03-05Z.log (in this landing worktree recursing-hertz-8a06a2; SHA-256 6f42eba449949aedd0bfb15c604f4c0e043251589bb49878921876ba636d7fd7, 1453 lines) lines 9-44",
+      "summary": "456/456 frontend test files passed; 7,546 passed / 1 expected fail / 3 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "1a7aaa0fb8e7f482a20fe4c3a4493f348bb09511",
+      "evidence": "logs/verify-local-2026-09-23T13-03-05Z.log (in this landing worktree recursing-hertz-8a06a2; SHA-256 6f42eba449949aedd0bfb15c604f4c0e043251589bb49878921876ba636d7fd7, 1453 lines) lines 45-71",
+      "summary": "tsc and Vite production build passed (built in 9.63s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "1a7aaa0fb8e7f482a20fe4c3a4493f348bb09511",
+      "evidence": "logs/verify-local-2026-09-23T13-03-05Z.log (in this landing worktree recursing-hertz-8a06a2; SHA-256 6f42eba449949aedd0bfb15c604f4c0e043251589bb49878921876ba636d7fd7, 1453 lines) lines 72-1450",
+      "summary": "1,333 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "1a7aaa0fb8e7f482a20fe4c3a4493f348bb09511",
+      "evidence": "logs/verify-local-2026-09-23T13-03-05Z.log (in this landing worktree recursing-hertz-8a06a2; SHA-256 6f42eba449949aedd0bfb15c604f4c0e043251589bb49878921876ba636d7fd7, 1453 lines) lines 1451-1453",
+      "summary": "Clippy finished clean under -D warnings; LOCAL CHECK RESULT: PASS."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in this worktree at 2026-09-23T13:03:05Z with HEAD at 1a7aaa0f, and the push that created origin/claude/512-tree-walk-budget (PR #523's head) was accepted after it. No other lane's gate ran concurrently (the #452 and #522 lanes held theirs by agreement). An earlier push of the same head on 2026-09-23 was refused on 24 vitest load timeouts while two peer gates ran; every timed-out file passed on re-run at 2-4 workers, and that run is superseded by this full pass. No --no-verify was used.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 19 changed paths since origin/main measured against the claim on #512, every one inside it.",
+    "reconciliationNote": "Measured by the native gate at the exact head; no reconciliation needed."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "1a7aaa0fb8e7f482a20fe4c3a4493f348bb09511",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/523#issuecomment-5795432148, headed \"Independent exact-head review — frontend-ipc-contract-auditor seat\", quoting the seat's PASS verdict at 1a7aaa0fb8e7f482a20fe4c3a4493f348bb09511.",
+    "reviewerNote": "Reviewer-only seat frontend-ipc-contract-auditor, a read-only subagent in a fresh context at the exact head 1a7aaa0f; it cannot be a mutation author. It read the delta against origin/main 27e94217 and ran scripts/tree-walk-tripwire.test.mjs at --maxWorkers=2 (20 passed, 1 expected fail). Findings, all non-blocking: tripwire wraps persist per worker by design, double-wrap guarded; the 2x-budget boundary replaces a stale literal; no weakened assertions, the #504 own-folder/peer split kept verbatim in all four fleet files; prefilters only narrow and fail loud; inspectFleet and the for-each-ref batch are verdict-identical to the sequential path. Not verified by the seat: the full suite and build, which the gate log covers. GitHub records the verdict as a PR comment from the shared Pootytxng account posted by the landing session; the seat is a Claude model, independent by role only."
+  },
+  "transition": "close-issue",
+  "closingNote": "Closes #515 as a duplicate of #512: its tripwire and budget work landed inside PR #523 (merged at the reviewed head 1a7aaa0f). The #515 lease was taken over by this session and released by Handoff before this close."
+}

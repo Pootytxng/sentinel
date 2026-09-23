@@ -169,6 +169,10 @@ A separate worktree or clone is mandatory for every active writer. Shared checko
    slice whose scope overlaps another live mutation lease. It reads the thread of every item that is
    not Done, whatever its column, since a lease held through review sits in Review; Done is skipped
    because closing and merging refuse while a lease is live (#411, #413), and an unreadable thread locks.
+   A scan is only a snapshot, so the push checks again (#517): `scripts/lease-overlap-gate.mjs` refuses
+   a push whose committed paths another open issue's live lease has held since before this lane's own
+   claim on them (serializing means the earlier lease goes first), naming the issue, the claim comment
+   and the paths. A thread it cannot read refuses the push.
 5. **Unknown means locked.** Unknown folder, scope, dirty state, or live-process ownership is not a
    permission to proceed.
 6. **Expiry is an alarm, not a takeover.** A stale board claim never authorizes reset, stash, discard,

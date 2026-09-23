@@ -234,6 +234,11 @@ const RESIDENCY = {
     kind: "scheduled",
     why: "The CompyUsageAudit Windows task runs it Mondays and writes docs/usage-audit/LATEST.md. It reads session transcripts outside the repo, so a commit cannot change its answer.",
   },
+  "lease-overlap-gate.mjs": {
+    kind: "push-gate",
+    staticGuard: "scripts/lease-overlap-gate.test.mjs",
+    why: "The push-time check that another lane's live, earlier lease does not hold a pushed path (#517): verify-local.ps1 runs it before the test suite, and its own test pins that call. It reads GitHub, so a commit cannot fix its answer inside npm test.",
+  },
   "scope-drift-gate.mjs": {
     kind: "push-gate",
     staticGuard: "scripts/scope-drift-gate.test.mjs",
