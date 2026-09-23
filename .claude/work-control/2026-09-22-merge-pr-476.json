@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/474#issuecomment-5787865457",
+  "leaseEvidenceNote": "Ownership claim on #474 posted by this Claude Code successor session (3198fa66-ed92-4261-ac5a-e410910c7fe6) at 2026-09-23T02:23Z for the #476 review and landing, live when this transition ran (expires 2026-09-23T14:23Z). It names this exact worktree (angry-hamilton-bb33bd; local branch review-476 checked out at the reviewed head with gh pr checkout 476 --branch review-476, and this folder's own branch claude/hungry-booth-8e1966 for the receipt carrier) and a review-only Write scope of exactly the three receipt files. The author's claim still read HELD (it was never released) and had expired at 2026-09-18T21:04Z, and the author's worktree reverent-bartik-501488 no longer exists. Expiry is an alarm, not a takeover, so this claim follows the Verified takeover https://github.com/Pootytxng/sentinel/issues/474#issuecomment-5787863036, which records the inspection. The folder record was adopted with node tools/entry/cli.mjs adopt --issue 474 --session 3198fa66-ed92-4261-ac5a-e410910c7fe6. The board row's Status, Lane, Worktree / branch, Next action, Claim expires and Last verified fields were written to match the claim with gh project item-edit at 2026-09-23T02:40Z.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Open-PR inventory re-derived at 2026-09-23T02:41Z with gh pr list --state open --json number,headRefName,files. Seven PRs are open: #504, #500, #492, #476, #471, #470, #464. Only PR #476 touches tools/entry/gather.mjs or tools/entry/gh-read-bound.test.mjs, and no PR touches the three receipt paths. PR #470 (claude/468-scope-drift-thread-bound) changes scripts/lib/scope-drift.mjs and a separate test, so it has no file overlap. origin/main (17cfb6c7) is 70 commits ahead of the merge-base b749b720, none of them touching either PR file; git merge-tree --write-tree 17cfb6c7 d098ac7e exits 0.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "This session inherited the author's lane on #474, whose claim read HELD and had expired. Before claiming, each inspection field was verified against current evidence in the Verified takeover (issuecomment-5787863036).\n- repository: origin is Pootytxng/sentinel.\n- remoteState: origin/claude/474-gh-read-timeout = d098ac7e = PR #476 headRefOid, and the PR was OPEN and draft.\n- worktree: the author's folder reverent-bartik-501488 is gone from git worktree list, so no process can be writing there, and this review ran in angry-hamilton-bb33bd.\n- branch: the local branch claude/474-gh-read-timeout is not checked out in any worktree, and review-476 = d098ac7e.\n- dirtyState: git status --porcelain was empty at the head, before and after the falsification and both gate runs.\n- liveProcesses: no build, install or helper process belongs to the removed folder, and this lane runs none beyond its own gate runs, all of which ended.\nThe lane edits no source file; it only writes these receipts.",
+  "currentHead": "d098ac7e33f2f34b5634b729e6b6e0ba703be02e",
+  "pr": 476,
+  "issue": 474,
+  "kind": "lane",
+  "branch": "claude/474-gh-read-timeout",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta b749b720..d098ac7e is one commit, d098ac7e, authored and committed by claude-code <claude-code@desk.local> (git log --format='%h %an <%ae> | %cn <%ce>' b749b720..d098ac7e). The reviewer-only seat authored nothing. This landing session, also claude-code, edited none of the delta: its one transient falsification of tools/entry/gather.mjs line 51 was restored with git checkout -- before any commit. It writes only receipts.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "d098ac7e33f2f34b5634b729e6b6e0ba703be02e",
+      "evidence": "npmtest476-2026-09-23T02-31-36Z.log (this landing session's scratchpad; SHA-256 363CF04C7AAB1A5302220E998358F08231246C96E0FA16CE2C3507E0C5A28499, 2,928 bytes, 37 lines) lines 1-37",
+      "summary": "448 of 448 frontend test files passed; 7,347 passed / 5 skipped / 0 failed. This run was made in the guard-documented worktree condition: the gitignored, local-only .claude/autopilot.json was set aside and then restored byte-identical by an unconditional trap (sha256 1ceb1493...40e68 before and after, log line 37). See gateEvidenceNote for why."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "d098ac7e33f2f34b5634b729e6b6e0ba703be02e",
+      "evidence": "gate476-2026-09-23T02-26-50Z.log (this landing session's scratchpad; SHA-256 BC098B2A2C49BB7B6F4AEBDA4A06736D80692CC1B39612759E8821D16C78AAC4, 129,620 bytes, 1461 lines) lines 57-83",
+      "summary": "tsc and the Vite production build passed (built in 10.40s, line 82); the stage exited 0 (line 83)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "d098ac7e33f2f34b5634b729e6b6e0ba703be02e",
+      "evidence": "gate476-2026-09-23T02-26-50Z.log (this landing session's scratchpad; SHA-256 BC098B2A2C49BB7B6F4AEBDA4A06736D80692CC1B39612759E8821D16C78AAC4, 129,620 bytes, 1461 lines) lines 84-1456",
+      "summary": "1,327 passed; 0 failed; 24 ignored (line 1442); the stage exited 0 (line 1456)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "d098ac7e33f2f34b5634b729e6b6e0ba703be02e",
+      "evidence": "gate476-2026-09-23T02-26-50Z.log (this landing session's scratchpad; SHA-256 BC098B2A2C49BB7B6F4AEBDA4A06736D80692CC1B39612759E8821D16C78AAC4, 129,620 bytes, 1461 lines) lines 1457-1460",
+      "summary": "Clippy finished clean under -D warnings (line 1459); the stage exited 0 (line 1460)."
+    }
+  ],
+  "gateEvidenceNote": "The author's native pre-push log (logs/verify-local-2026-09-18T*.log) was deleted along with its worktree reverent-bartik-501488, so this landing session ran the gates itself at d098ac7e in its own worktree, on local branch review-476.\n\nWhy the stages were run directly: scripts/verify-local.ps1 stops at its first failing stage. Under this review-only claim its write-scope drift stage would stop on the reviewed delta before any test ran. So the four required gates ran directly in verify-local's order, each stage logged with start, end, HEAD and exit code.\n\nFirst run (gate476-2026-09-23T02-26-50Z.log (this landing session's scratchpad; SHA-256 BC098B2A2C49BB7B6F4AEBDA4A06736D80692CC1B39612759E8821D16C78AAC4, 129,620 bytes, 1461 lines)):\n- git diff --check: exit 0 (line 3).\n- npm test: exit 1 (lines 4-56). One test failed: src/agent-machinery-guard.test.ts, the check that .claude/autopilot.json states the same current clamp as the code. 7,350 passed, 4 skipped.\n- npm run build, cargo test and clippy: all passed (lines 57-1460).\n- The run ended with porcelain empty and HEAD d098ac7e (line 1461).\n\nWhy that npm test failure is baseline, not this PR's: the failing check reads the gitignored, local-only .claude/autopilot.json. This worktree's copy had been rewritten by tooling from newer main to a HISTORICAL note with no clamp sentence, because main removed the stop-continue hook and this guard in 8668cc7c and 75c80f65. The PR touches neither the test nor the file. The guard's own comment says the file exists only in the primary checkout and in no worktree, clone or CI runner, and the check skips when the file is absent.\n\nThe rerun (npmtest476-2026-09-23T02-31-36Z.log (this landing session's scratchpad; SHA-256 363CF04C7AAB1A5302220E998358F08231246C96E0FA16CE2C3507E0C5A28499, 2,928 bytes, 37 lines)) put the file aside, as in that designed condition: 448/448 files, 7,347 passed / 5 skipped / 0 failed, with porcelain empty and HEAD d098ac7e (line 36). The count is 3 lower because the guard's SCANNED list filters .claude/autopilot.json with existsSync. With the file absent, those 3 scans of it drop out, and all 3 had passed in the first run.\n\nOther checks by this session:\n- The focused test npx vitest run tools/entry/gh-read-bound.test.mjs passed 12/12.\n- It was falsified once by removing ', timeout' from the exec options at gather.mjs:51, which failed 11 of 12 tests. The file was restored with git checkout -- tools/entry/gather.mjs, giving 12/12 again with porcelain empty.\n\nThe carrier commit that preserves these receipts runs the full native .githooks/pre-push gate again, on main with #476 merged. No --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not run in the gate run (stages were run directly; see gateEvidenceNote)",
+    "reconciled": true,
+    "measurement": "Measured at this head under the landing claim with node scripts/scope-drift-gate.mjs --issue 474 --refresh: 2 changed paths since origin/main fall outside this claim, tools/entry/gather.mjs and tools/entry/gh-read-bound.test.mjs. Those 2 paths are the reviewed delta itself.",
+    "reconciliationNote": "The landing claim is review-only (no source files), so the reviewed delta is deliberately outside it. Those two paths are the author's work, in the scope of the author's expired HELD claim, which the Verified takeover inherited. The PR's only commit is the author's. This lane changed nothing in them beyond one transient falsification, restored with git checkout -- before any commit. The carrier push from this folder's own branch carries only the three receipt files, all inside this claim."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "d098ac7e33f2f34b5634b729e6b6e0ba703be02e",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/476#issuecomment-5787990150 (2026-09-23T02:37:19Z), headed \"Independent review: PASS at exact head d098ac7e33f2f34b5634b729e6b6e0ba703be02e\". It names reviewer frontend-ipc-contract-auditor, a non-author, reviewing the exact PR head against merge-base b749b720679c6cc9b0ec9a3a99dacf46cfb00f22.",
+    "reviewerNote": "The reviewer-only seat frontend-ipc-contract-auditor reviewed the exact head d098ac7e against b749b720. It is a read-only Claude subagent in a fresh context that authored nothing, and it read only git objects; #496 used the same seat for a Node change. It was briefed on #474's fix:\n- every gh read in tools/entry/gather.mjs is bounded;\n- a timed-out thread read must not read as vacant;\n- the fake slow gh test is honest;\n- the default timeout is exercised, and so is any override;\n- no assertion is weakened;\n- nothing else in tools/entry changes behaviour.\nIt returned PASS with no blocking findings. Its one non-blocking note is that tools/entry/migrate-board.mjs:63 still runs gh unbounded, off the push-gate path; that is raised as a follow-up. The seat also recorded that no env-var override exists and that #474 never asked for one.\nThe successor brief named a general-purpose agent for the seat. This gate accepts only declared reviewer identities, so that agent was stopped before it finished and the review was re-run on this declared seat. The PR's only commit is by claude-code, so a Claude Code session cannot be the recorded reviewer. The seat is a Claude model, so the review is independent by role only.\nThe landing session posted the verdict on PR #476 on the seat's behalf via --body-file, with the seat verdict verbatim."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #476 has zero closingIssuesReferences (checked with gh pr view --json closingIssuesReferences at review time), so #474 stays open through the merge. It closes separately under its close-issue receipt, after a Handoff releases the landing claim. The merge is a merge commit through scripts/land-pr.mjs, never with --delete-branch."
+}

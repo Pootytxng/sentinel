@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/514#issuecomment-5789700322",
+  "leaseEvidenceNote": "Ownership claim on #514 posted by this Claude Code successor session (b1c4074f-c5a8-4b0a-b8b7-d886aea1f3e0) at 2026-09-23T05:35Z for the PR #516 review and landing, live when this transition ran (expires 2026-09-23T17:35Z). It names this exact worktree (fervent-wilbur-b7c604; local branch review-516 at the reviewed head, and this folder's own branch claude/fervent-wilbur-b7c604 for the receipt carrier) and a review-only Write scope of exactly the three receipt files. The author's claim (issuecomment-5789160401) read HELD, released only when a review verdict lands, and had not expired; this claim follows the Verified takeover https://github.com/Pootytxng/sentinel/issues/514#issuecomment-5789697889, which records that the author session 71458af8 has ended (its local folder record's pid 12532 is not running) and that it launched this session for the review. The folder record was adopted with node tools/entry/cli.mjs adopt --issue 514 --session b1c4074f-c5a8-4b0a-b8b7-d886aea1f3e0.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Open-PR inventory re-derived at 2026-09-23T05:34Z with gh pr list --state open --json number,headRefName,files. Seven PRs are open: #516, #511, #504, #492, #471, #470, #464. Only PR #516 touches tools/entry/migrate-board.mjs or tools/entry/migrate-board.test.mjs, and no PR touches the three receipt paths. origin/main (3024d6f3) is one receipts-only carrier commit ahead of the merge-base 54dbc196 and touches neither PR file; git merge-tree --write-tree origin/main 0b5a6391 exits 0.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "This session inherited the author's lane on #514, whose claim read HELD pending a review verdict. Before claiming, each inspection field was verified: repository Pootytxng/sentinel (origin); remote state (PR #516 head = origin/claude/514-migrate-board-gh-bound = 0b5a6391, draft, MERGEABLE, zero closingIssuesReferences); the author's worktree mystifying-thompson-a303ee is clean on claude/514-migrate-board-gh-bound at 0b5a6391, equal to its upstream, and was only read; this worktree fervent-wilbur-b7c604 was clean on its own branch at origin/main 3024d6f3 and its worktree core.hooksPath was repointed from the main checkout's absolute .githooks to its own relative .githooks; live processes: the author session's pid 12532 is not running, and this lane runs no build, install or dev server.",
+  "currentHead": "0b5a63916186d4860a6bc5ffb67614b79c219401",
+  "pr": 516,
+  "issue": 514,
+  "kind": "lane",
+  "branch": "claude/514-migrate-board-gh-bound",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta 54dbc196..0b5a6391 is one commit, 0b5a6391, authored and committed by claude-code <claude-code@desk.local> (git log --format='%h %an <%ae> | %cn <%ce>' 54dbc196..0b5a6391), from the author session 71458af8. The reviewer-only seat frontend-ipc-contract-auditor authored nothing; this landing session (also claude-code) edited none of the delta files and only writes receipts.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "0b5a63916186d4860a6bc5ffb67614b79c219401",
+      "evidence": "logs/verify-local-2026-09-23T05-10-03Z.log (in the author's worktree mystifying-thompson-a303ee; SHA-256 7A00DC498081965598BBE98FD44E79F7B67054568C54B731FFC96DB39251FA42, 150,593 bytes, 2078 lines) lines 9-44",
+      "summary": "454 of 454 frontend test files passed; 7,486 passed / 4 skipped / 0 failed (lines 39-40)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "0b5a63916186d4860a6bc5ffb67614b79c219401",
+      "evidence": "logs/verify-local-2026-09-23T05-10-03Z.log (in the author's worktree mystifying-thompson-a303ee; SHA-256 7A00DC498081965598BBE98FD44E79F7B67054568C54B731FFC96DB39251FA42, 150,593 bytes, 2078 lines) lines 45-71",
+      "summary": "tsc and the Vite production build passed (built in 7.79s, line 70)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "0b5a63916186d4860a6bc5ffb67614b79c219401",
+      "evidence": "logs/verify-local-2026-09-23T05-10-03Z.log (in the author's worktree mystifying-thompson-a303ee; SHA-256 7A00DC498081965598BBE98FD44E79F7B67054568C54B731FFC96DB39251FA42, 150,593 bytes, 2078 lines) lines 72-1794",
+      "summary": "1,333 passed; 0 failed; 24 ignored (line 1780)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "0b5a63916186d4860a6bc5ffb67614b79c219401",
+      "evidence": "logs/verify-local-2026-09-23T05-10-03Z.log (in the author's worktree mystifying-thompson-a303ee; SHA-256 7A00DC498081965598BBE98FD44E79F7B67054568C54B731FFC96DB39251FA42, 150,593 bytes, 2078 lines) lines 1795-2078",
+      "summary": "Clippy finished clean under -D warnings (line 2078)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate (scripts/verify-local.ps1) ran in the author's worktree at 2026-09-23T05:10:03Z, and the push that put 0b5a6391 on origin (origin/claude/514-migrate-board-gh-bound, PR #516's head) was accepted. The author's worktree reflog binds HEAD to 0b5a6391 from its commit at 2026-09-23T04:48:15Z, before the log time, with no later HEAD move. The landing session read every stage header in the log (lines 3, 5, 9, 45, 72, 1795) and hashed it to the SHA-256 above; the log's own scope-drift line (lines 5-7) reads 2 changed paths, both inside the author's claim. The author's first push was refused only by full-suite 15 s timeouts and a peer folder's hooksPath pin (Handoff issuecomment-5789487088), none from this change. At the reviewed head this landing session also ran npx vitest run tools/entry/migrate-board.test.mjs tools/entry/board-read-whole.test.mjs tools/entry/gh-read-bound.test.mjs (3 files, 27/27 pass) and falsified the guard twice: with origin/main's migrate-board.mjs 4 of 4 new cases fail (4 failed / 7 passed of 11); with ghRead swapped for an unbounded execFileSync the 2 default-path cases fail (2 failed / 9 passed). Both were restored with an unconditional git checkout --, leaving porcelain empty. The landing carrier pushes the post-merge receipt commit through the native full gate again; no --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 2 changed paths since origin/main measured against the author's claim on #514, both inside it. Under the landing claim at the same head, the scope-drift hook reads 2 changed paths outside the claim, tools/entry/migrate-board.mjs and tools/entry/migrate-board.test.mjs. Those 2 paths are the reviewed delta itself.",
+    "reconciliationNote": "The landing claim is review-only (receipt files only), so the reviewed delta is deliberately outside it. Those two paths are the author's work, inside the author's HELD claim that the Verified takeover inherited. The PR's only commit is the author's. This lane changed nothing in them beyond one transient falsification, restored with git checkout -- before any commit. The carrier push from this folder's own branch carries only the three receipt files, all inside this claim."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "0b5a63916186d4860a6bc5ffb67614b79c219401",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/516#issuecomment-5789959806 (2026-09-23T06:06:51Z), headed \"Independent review: PASS at exact head 0b5a63916186d4860a6bc5ffb67614b79c219401\". It names reviewer frontend-ipc-contract-auditor, a non-author, reviewing the exact PR head against merge-base 54dbc196c4ba9cdc1a4546b1dded47460657eeaf.",
+    "reviewerNote": "The reviewer-only seat frontend-ipc-contract-auditor reviewed the exact head 0b5a6391 against 54dbc196, as #476 did. It is a read-only Claude subagent in a fresh context that authored nothing, and it read only git objects. It was briefed on #514's fix: every gh read in migrate-board.mjs is bounded; the item-edit writer stays unbounded; the 4 new cases fail against origin/main's migrate-board.mjs; no test runs a real gh or makes a network call; no existing assertion is weakened. It returned PASS with no blocking findings. Its one non-blocking note is a low flake risk in the 300 ms kill / 4.5 s bound on a heavily loaded machine, the same pattern gh-read-bound.test.mjs already uses. The PR's only commit is by claude-code, so a Claude Code session cannot be the recorded reviewer. The seat is a Claude model, so the review is independent by role only. The landing session posted the verdict on PR #516 on the seat's behalf via --body-file, with the seat verdict verbatim, plus its own measured test and falsification results."
+  },
+  "transition": "close-issue",
+  "closingNote": "PR #516 is merged into main as merge commit 453f6d3e962c78b4bac8066e809233264a69d5b8 (2026-09-23T06:07:43Z, via scripts/land-pr.mjs, no --delete-branch; land-pr pruned origin/claude/514-migrate-board-gh-bound and its disposition audit read OK). The three gh reads in tools/entry/migrate-board.mjs now go through ghReader() from gather.mjs and share GH_READ_TIMEOUT_MS (20 s); the item-edit writer stays unbounded per #474 fix item 2. The 4 new guard cases in tools/entry/migrate-board.test.mjs fail against origin/main and pass with the fix. The landing claim was released by Handoff https://github.com/Pootytxng/sentinel/issues/514#issuecomment-5789973608 before this close, and the three landing receipts reach main in the carrier commit."
+}

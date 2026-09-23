@@ -1,0 +1,78 @@
+{
+  "actor": "claude-code",
+  "actorNote": "One commit on the branch, 690f0d8f, written by this claude-code session as claude-code <claude-code@desk.local>. The owner's brief dictated the replacement text for .claude/USAGE_ECONOMICS.md lines 49-51 and asked for commit, PR, independent review and merge after the #479 PR landed.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/481#issuecomment-5730416983",
+  "leaseEvidenceNote": "The landing claim on #481 names this folder, branch claude/481-usage-economics-throttle, and a write scope of .claude/USAGE_ECONOMICS.md plus this PR's two receipt files. It supersedes 5729916866, widening only by the receipts. `node scripts/scope-drift-gate.mjs --issue 481 --refresh` read it OK from the thread.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Measured 2026-09-18 after #483 merged: of the open PRs, only #482 touches .claude/USAGE_ECONOMICS.md; none touches the receipt paths. #482 is based on main and no open PR is based on its branch.",
+  "inheritedWork": false,
+  "currentHead": "690f0d8ffb4ef716716062af91fccbe206e3ce54",
+  "pr": 482,
+  "issue": 481,
+  "kind": "lane",
+  "branch": "claude/481-usage-economics-throttle",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "inspection": {
+    "repository": "Pootytxng/sentinel; canonical remote origin.",
+    "remoteState": "`git ls-remote`: refs/heads/claude/481-usage-economics-throttle = 690f0d8f; refs/heads/main = ec2521bc (the #483 merge that landed #479). The branch's merge-base is d5ed8a95, so main has moved by #479's gated commits and its receipt carrier; none touches .claude/USAGE_ECONOMICS.md (`git diff HEAD...origin/main -- .claude/USAGE_ECONOMICS.md` is empty) and `git merge-tree --write-tree origin/main HEAD` exits 0. main's subagent-throttle.mjs now carries BURST = 4 and WINDOW_MS = 120_000, which is what the new doc line states.",
+    "worktree": "Linked worktree C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\optimistic-jepsen-fb6b10, one writer. Its core.hooksPath is set per worktree (config.worktree) to the relative .githooks; no other worktree's config was touched.",
+    "branch": "claude/481-usage-economics-throttle at 690f0d8f; origin reads the same commit.",
+    "dirtyState": "Clean at 690f0d8f apart from this lane's untracked receipts, inside the claimed scope. logs/ is gitignored.",
+    "liveProcesses": "None of this lane's: no build, dev server or install running. The pre-push gate finished with PASS."
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "690f0d8ffb4ef716716062af91fccbe206e3ce54",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/optimistic-jepsen-fb6b10/logs/verify-local-2026-09-18T12-26-41Z.log:8-43 (SHA-256 3cd05fc784cd56e4fa2305a5a74fd240cf7029b06a6f3a05f2ba6d7cabf07e9b)",
+      "summary": "448 test files passed; 7351 passed / 4 skipped (7355), including src/agent-machinery-guard.test.ts and the fleet guards."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "690f0d8ffb4ef716716062af91fccbe206e3ce54",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/optimistic-jepsen-fb6b10/logs/verify-local-2026-09-18T12-26-41Z.log:44-70 (SHA-256 3cd05fc784cd56e4fa2305a5a74fd240cf7029b06a6f3a05f2ba6d7cabf07e9b)",
+      "summary": "Frontend type-check and build stage passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "690f0d8ffb4ef716716062af91fccbe206e3ce54",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/optimistic-jepsen-fb6b10/logs/verify-local-2026-09-18T12-26-41Z.log:71-1787 (SHA-256 3cd05fc784cd56e4fa2305a5a74fd240cf7029b06a6f3a05f2ba6d7cabf07e9b)",
+      "summary": "1327 passed; 0 failed; 24 ignored. No Rust file changed; the stage runs as part of the gate."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "690f0d8ffb4ef716716062af91fccbe206e3ce54",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/optimistic-jepsen-fb6b10/logs/verify-local-2026-09-18T12-26-41Z.log:1788-2072 (SHA-256 3cd05fc784cd56e4fa2305a5a74fd240cf7029b06a6f3a05f2ba6d7cabf07e9b)",
+      "summary": "Finished dev profile at line 2072 with no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "Pre-push run of scripts/verify-local.ps1 at this exact head, from the push that created the remote branch. The log has all six LOCAL CHECK markers (lines 3, 5, 8, 44, 71, 1788) and zero matches for `test result: FAILED`, `panicked`, `error[E`, ` FAIL ` or `×` across 2072 lines. Console capture logs/push-console-481.log (SHA-256 4fed2945184cae137768a6b8c5c502afddc14841a1bf3ecddb89e17283b1a0b5) reads `LOCAL CHECK RESULT: PASS` at line 2077 and the new-branch line at 2084. An earlier run at the same head failed 1 test: scripts/hookspath-fleet-guard.test.mjs named THIS folder, whose core.hooksPath pointed at the main checkout's .githooks; this session set its own config.worktree to .githooks as the guard instructed and re-ran. Nothing else changed between the runs.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "not measured",
+    "reconciled": true,
+    "measurement": "Log line 6: not measured -- no session record for this folder. Measured afterwards with `node scripts/scope-drift-gate.mjs --issue 481 --refresh`: 1 changed path since origin/main; OK, every changed path is inside the claim on #481."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "690f0d8ffb4ef716716062af91fccbe206e3ce54",
+    "verdict": "PASS: no findings",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/482#issuecomment-5730052644",
+    "reviewerNote": "Read-only reviewer seat that wrote nothing in this change. At 690f0d8f it confirmed a clean tree and a diff of only .claude/USAGE_ECONOMICS.md (+2/-2); the text matches the owner's wording; LF, no BOM; on the #479 branch subagent-throttle.mjs warns only at >=4 spawns in 120 s; agent-machinery-guard 100/100; no test pins the removed wording; no closing keyword beside the dependency issue number. The #479 branch has since landed on main with those constants unchanged."
+  },
+  "transition": "mark-pr-ready"
+}
