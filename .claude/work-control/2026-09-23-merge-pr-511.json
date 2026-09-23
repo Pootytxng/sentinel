@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/510#issuecomment-5789689793",
+  "leaseEvidenceNote": "Ownership claim on #510 posted by this Claude Code successor session 2026-09-23T05:36Z for the #511 review and landing, live when this transition ran. It names this exact worktree (reverent-dubinsky-43ceb0) and lists the three delta paths plus the three receipt files as one contiguous Write scope. The author's claim (issuecomment-5786810727) was released in its Handoff (issuecomment-5788440794, ending \"Claim: released\").",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T05:36Z (seven open PRs: #516, #511, #504, #492, #471, #470, #464; files read per PR over REST): only PR #511 touches any of the three delta paths and no PR touches the three receipt paths. scripts/scope-drift-gate.mjs --issue 510 --refresh at the reviewed head reads OK: 3 changed paths, all inside the claim.",
+  "inheritedWork": false,
+  "currentHead": "24484070cbda6dd1dee78eb4ac8cf8bf7b5a8e7a",
+  "pr": 511,
+  "issue": 510,
+  "kind": "lane",
+  "branch": "claude/510-lab-console-i18n-keys",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta origin/main..24484070 (merge-base 54dbc196) is one commit, 24484070, authored and committed by claude-code <claude-code@desk.local> in worktree gallant-shamir-0b891b (git log --format='%an <%ae> %cn' 54dbc196..24484070). The reviewer-only seat authored nothing; this landing session (also claude-code) edited none of the delta files and only writes receipts.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "24484070cbda6dd1dee78eb4ac8cf8bf7b5a8e7a",
+      "evidence": "logs/verify-local-2026-09-23T03-17-03Z.log (in the author's worktree gallant-shamir-0b891b; SHA-256 BAC5C4E29ED3143C07A1537AD7ED06F0144818FFA0E428CF9A0DC180E3D98732, 1734 lines) lines 9-44",
+      "summary": "454 frontend test files passed; 7,487 passed / 3 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "24484070cbda6dd1dee78eb4ac8cf8bf7b5a8e7a",
+      "evidence": "logs/verify-local-2026-09-23T03-17-03Z.log (in the author's worktree gallant-shamir-0b891b; SHA-256 BAC5C4E29ED3143C07A1537AD7ED06F0144818FFA0E428CF9A0DC180E3D98732, 1734 lines) lines 45-71",
+      "summary": "tsc and Vite production build passed (built in 9.85s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "24484070cbda6dd1dee78eb4ac8cf8bf7b5a8e7a",
+      "evidence": "logs/verify-local-2026-09-23T03-17-03Z.log (in the author's worktree gallant-shamir-0b891b; SHA-256 BAC5C4E29ED3143C07A1537AD7ED06F0144818FFA0E428CF9A0DC180E3D98732, 1734 lines) lines 72-1449",
+      "summary": "1,333 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "24484070cbda6dd1dee78eb4ac8cf8bf7b5a8e7a",
+      "evidence": "logs/verify-local-2026-09-23T03-17-03Z.log (in the author's worktree gallant-shamir-0b891b; SHA-256 BAC5C4E29ED3143C07A1537AD7ED06F0144818FFA0E428CF9A0DC180E3D98732, 1734 lines) lines 1450-1734",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile; 0 warning or error lines in the stage)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in the author's worktree at 2026-09-23T03:17:03Z and the push that put 24484070 on origin was accepted (the ref is origin/claude/510-lab-console-i18n-keys, PR #511's head; the author reports LOCAL CHECK RESULT: PASS in gate receipt issuecomment-5788437453). The author's worktree reflog binds HEAD to 24484070 from the rebase finish at 03:09:47Z, before the log time. The landing session read every stage in the log (git diff check, write-scope drift, frontend tests, type-check and build, Rust tests, Rust clippy) and hashed it to the SHA-256 above; the log's own scope-drift line reads 3 changed paths, the same three files as the delta. The landing carrier will push the post-merge receipt commit through the native full gate again; no --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 3 changed paths since origin/main measured against the author's claim on #510, every one inside it. Re-measured 2026-09-23T05:37Z at the same head under the landing claim with --refresh: OK, 3 changed paths, all inside the delta-plus-receipts scope.",
+    "reconciliationNote": "The gate-run line was measured against the author's implementation claim (which also listed docs/BACKLOG.md and docs/CHANGELOG.md, untouched); the landing claim lists the same three delta paths plus the three receipt paths only."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "24484070cbda6dd1dee78eb4ac8cf8bf7b5a8e7a",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/511#issuecomment-5790017807 (2026-09-23T06:12Z), headed \"Independent review: PASS at exact head 24484070cbda6dd1dee78eb4ac8cf8bf7b5a8e7a\", naming reviewer frontend-ipc-contract-auditor, non-author, at the exact PR head against merge-base 54dbc196c4ba9cdc1a4546b1dded47460657eeaf.",
+    "reviewerNote": "Reviewer-only seat, a read-only subagent in a fresh context at the exact head 24484070 in this landing worktree. It re-proved falsifiability itself: stripping the four keys from both lab.json files reds 2 tests (the Law 3 resolution test naming all four LabConsole keys, and the #510 pin), green 13/13 after an unconditional git checkout -- restore, git status empty and HEAD unchanged afterwards. It re-implemented the old (54dbc196) and new harvest and diffed them against live source: new 1836 keys is a strict superset of old 1822 except 3 phantom comment/JSDoc matches the new comment-stripping correctly drops; all prior floors (1500, 300, 650, 9, 100) unchanged, no expect removed or weakened, two floors added. zh-CN: the four values are plain leaves with no plural suffix or {{count}}, and read faithfully in context (unitKept \"项\" follows the existing measure-word convention). vitest src/i18n + src/surfaces/lab-console + affordance-census: 6 files, 60 tests passed; tsc --noEmit exit 0. One non-blocking, pre-existing finding: a destructured alias (src/surfaces/SessionTrends.tsx:22, const { t: translate }) hides its static calls from Law 2 and Law 3; the landing session grep-confirmed it is the only such site and filed it as a separate follow-up task, not repaired here. GitHub records the verdict as a PR comment from the shared Pootytxng account, posted by the landing session on the seat's behalf with the verdict verbatim; the body names the reviewer identity. It is a Claude model, independent by role only, the same route as the #438-#509 landings."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #511 has zero closingIssuesReferences (checked with gh pr view --json closingIssuesReferences at 2026-09-23T06:15Z), so #510 stays open through the merge and closes separately under its close-issue receipt after the landing claim is released by Handoff. Merged by scripts/land-pr.mjs without --delete-branch; the head ref is pruned with git push origin --delete."
+}
