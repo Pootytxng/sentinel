@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/452#issuecomment-5786765000",
+  "leaseEvidenceNote": "Ownership claim on #452 posted by this Claude Code successor session 2026-09-23T00:25Z for the #508 review and landing (reviewer-only seat). It names this exact worktree (funny-roentgen-1edf0e, fast-forwarded from 9ead3da2 to the reviewed head) and limits writes to the mark-ready and merge receipt files; the 13 delta paths are listed so the scope-drift gate reads the reviewed delta as in scope. The author's lane released its lease by the Handoff at 2026-09-22T21:36Z (https://github.com/Pootytxng/sentinel/issues/452#issuecomment-5784564381, ending `Claim: released`) before this claim; the folder record was adopted with tools/entry/cli.mjs adopt --issue 452. Part 2 of #452 (Home faces) is outside this claim and the issue stays open.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T00:35Z (ten open PRs: #509, #508, #507, #504, #500, #492, #476, #471, #470, #464): only PR #508 touches any of the 13 delta paths and no PR touches the two receipt paths (gh pr view --json files per PR, intersected); no open PR is based on claude/modest-germain-cfa2af. scripts/scope-drift-gate.mjs --issue 452 --refresh at the reviewed head reads OK: 13 changed paths, all inside the claim.",
+  "inheritedWork": false,
+  "currentHead": "8e3aa32ae035b990b51d3e5dfc3fdad78d60fa38",
+  "pr": 508,
+  "issue": 452,
+  "kind": "lane",
+  "branch": "claude/modest-germain-cfa2af",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta origin/main..8e3aa32a is one commit, 8e3aa32a, authored and committed by claude-code <claude-code@desk.local> (git log --format='%an <%ae> %cn <%ce>' 9ead3da2..8e3aa32a). The reviewer-only seat authored nothing; this landing session (also claude-code) edited none of the delta files and only writes receipts.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "8e3aa32ae035b990b51d3e5dfc3fdad78d60fa38",
+      "evidence": "logs/verify-local-2026-09-22T21-29-25Z.log (in the author's worktree modest-germain-cfa2af; SHA-256 FE923CB0119B81EB84175893B48F5D51890B702BD50383031289000C80027F59, 1732 lines) lines 9-44",
+      "summary": "451 frontend test files passed; 7,445 passed / 3 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "8e3aa32ae035b990b51d3e5dfc3fdad78d60fa38",
+      "evidence": "logs/verify-local-2026-09-22T21-29-25Z.log (in the author's worktree modest-germain-cfa2af; SHA-256 FE923CB0119B81EB84175893B48F5D51890B702BD50383031289000C80027F59, 1732 lines) lines 45-71",
+      "summary": "tsc and Vite production build passed (built in 8.41s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "8e3aa32ae035b990b51d3e5dfc3fdad78d60fa38",
+      "evidence": "logs/verify-local-2026-09-22T21-29-25Z.log (in the author's worktree modest-germain-cfa2af; SHA-256 FE923CB0119B81EB84175893B48F5D51890B702BD50383031289000C80027F59, 1732 lines) lines 72-1448",
+      "summary": "1,331 passed; 0 failed; 24 ignored (the #505 precancelled_cpu flake did not fire)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "8e3aa32ae035b990b51d3e5dfc3fdad78d60fa38",
+      "evidence": "logs/verify-local-2026-09-22T21-29-25Z.log (in the author's worktree modest-germain-cfa2af; SHA-256 FE923CB0119B81EB84175893B48F5D51890B702BD50383031289000C80027F59, 1732 lines) lines 1449-1732",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 57.11s, no warnings or errors in the stage)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in the author's worktree at 2026-09-22T21:29:25Z and the push that put 8e3aa32a on origin was accepted (the ref is origin/claude/modest-germain-cfa2af, PR #508's head; the author's gate receipt is https://github.com/Pootytxng/sentinel/pull/508#issuecomment-5784558478). The author's worktree reflog binds that HEAD to 8e3aa32a from 21:17:31Z (rebase finish onto 9ead3da2), before the log time. The landing session read every stage marker in the log (git diff check line 3, write-scope drift lines 5-7, frontend tests 9-44, type-check and build 45-71, Rust tests 72-1448, Rust clippy 1449-1732) and hashed it to the SHA-256 above; the log's own scope-drift line reads 13 changed paths, the same 13 files as the delta. The landing carrier will push the post-merge receipt commit through the native full gate again; no --no-verify is authorized. The script prints 'LOCAL CHECK RESULT: PASS' to the console (Write-Host, verify-local.ps1 line 255), not into the log file; the log ends at clippy's Finished line, and the accepted push is the binding proof.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 13 changed paths since origin/main measured against the author's claim on #452, every one inside it. Re-measured 2026-09-23T00:33Z at the same head under the landing claim with --refresh: OK, 13 changed paths, all inside the delta-plus-receipts scope.",
+    "reconciliationNote": "The gate-run line was measured against the author's part-1 claim (which also listed Benchmark.test.tsx and docs/BACKLOG.md, both unchanged); the landing claim lists the same 13 delta paths plus the two receipt paths only."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "8e3aa32ae035b990b51d3e5dfc3fdad78d60fa38",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/508#issuecomment-5786863036 (2026-09-23T00:47Z), headed \"Independent review: PASS at exact head 8e3aa32ae035b990b51d3e5dfc3fdad78d60fa38\", naming reviewer frontend-ipc-contract-auditor, non-author, at the exact PR head against base 9ead3da2ded442c3d19dee12d65134115da6ee2f.",
+    "reviewerNote": "Reviewer-only seat, a read-only subagent in a fresh context at the exact head 8e3aa32a; it can never be a mutation author. It confirmed HEAD and base, that nothing under src-tauri/ is touched, compared the Rust CompyChangeFact / CompyChangeTruth / MachineModel structs field-by-field with src/types.ts for every field inEffectCounts() and benchmarkAttribution() read (no serde renames; Fact<T> optional fields match), confirmed useMachineModel returns undefined while pending and null on failure to match the pending/unreadable branches, reasoned the probe-cache in-flight sharing through its rejection and invalidate-mid-flight paths, traced App.tsx's labActiveCount=0 into optimizeVerdict ('Nothing needs applying right now.', no '0 changes active' string rendered), checked both AttributionLine call sites and the ledgerIncomplete source, verified en/zh-CN parity of the three new keys and the pre-existence of every other t() key, and read all four changed test diffs (additive, no assertion weakened). tsc exit 0; vitest on the guard, machine-model and benchmark-view files 52/52. Four non-blocking findings recorded on the PR and not repaired in the review: no direct probe-cache unit test for the in-flight logic; guard regex gaps (optional chaining, filtered array stored then .length, a // inside a non-URL string, is_still_active in string literals) that none of this PR's surfaces exploit; useMachineModel's doc says 'refresh counter' while callers pass a data reference (works by identity); the guard test's microtask-loop flush. GitHub records the verdict as a PR comment from the shared Pootytxng account, posted by the landing session on the seat's behalf with the seat's verdict; the body names the reviewer identity. It is a Claude model, independent by role only, the same route as the #438-#503 landings. The landing session (claude-code) separately falsified the guard by mutation (App.tsx + LabGround.tsx both named, restored clean), ran the five pinned vitest files (99/99), tsc and the scope-drift gate before dispatching the seat, and edited none of the delta files. Visual proof for the Test attribution line is the self-reviewer PASS block quoted in the PR body; the Health posture line is part 2."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #508 has zero closingIssuesReferences (gh pr view --json closingIssuesReferences at review time), and #452 stays OPEN on purpose through and after the merge: part 2 of the issue (Home posture line, interview facts, activeChangeCount deletion, the five guard exemptions) is still owed and needs its own claim once #451's Home-face lease is released."
+}
