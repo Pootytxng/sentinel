@@ -250,6 +250,10 @@ try {
   # for why the suite alone was not enough.
   $testGate = Enter-GateMutex -Label "verify-local.ps1 in $repo" -Say { param($Text) Write-Gate $Text }
   try {
+    # #543: scripts/run-vitest.mjs queues a full suite on this same mutex. The gate's own `npm test`
+    # is one, so it would wait on this process for the whole bound; the marker names the holder and
+    # run-vitest.mjs skips the queue while that pid is alive. Set inside the try so it is cleared.
+    $env:COMPY_TEST_GATE_HELD = [string]$PID
     Invoke-Check -Name "frontend tests" -Command $npm -Arguments @("test") -NodeHosted
     Invoke-Check -Name "frontend type-check and build" -Command $npm -Arguments @("run", "build") -NodeHosted
     Invoke-Check -Name "Rust tests" -Command $cargo -Arguments @("test", "--manifest-path", "src-tauri/Cargo.toml")
@@ -259,6 +263,8 @@ try {
     Invoke-Check -Name "Rust clippy" -Command $cargo -Arguments @("clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--all-features", "--", "-D", "warnings")
   }
   finally {
+    # A gate typed into a long-lived shell would otherwise leave that shell's later runs exempt.
+    Remove-Item Env:COMPY_TEST_GATE_HELD -ErrorAction SilentlyContinue
     Exit-GateMutex -Lease $testGate
   }
 }

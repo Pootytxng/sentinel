@@ -7,6 +7,7 @@ import { realpathSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { runQueued } from "./lib/gate-mutex.mjs";
 
 // 2026-07-22: an Electron-hosted bridge shell leaks NODE_ENV=production into children; production React lacks React.act and 608 render tests false-fail. Tests always run in vitest's own env.
 delete process.env.NODE_ENV;
@@ -17,9 +18,16 @@ const trueCwd = realpathSync.native(process.cwd());
 const pkgPath = createRequire(import.meta.url).resolve("vitest/package.json");
 const bin = JSON.parse(readFileSync(pkgPath, "utf8")).bin;
 const vitestBin = join(dirname(pkgPath), typeof bin === "string" ? bin : bin.vitest);
-const result = spawnSync(
-  process.execPath,
-  [vitestBin, ...process.argv.slice(2)],
-  { cwd: trueCwd, stdio: "inherit" },
+const launchVitest = (args, { cwd, env }) =>
+  spawnSync(process.execPath, [vitestBin, ...args], { cwd, env, stdio: "inherit" }).status ?? 1;
+
+// #543: a FULL suite run queues on the pre-push gate's test mutex, so a lane's ad-hoc `npm test`
+// cannot starve a gate's suite into timeouts; filtered, watch and gate-nested runs never wait.
+// scripts/lib/gate-mutex.mjs says what queues and why.
+process.exit(
+  await runQueued(process.argv.slice(2), {
+    cwd: trueCwd,
+    interactive: Boolean(process.stdin.isTTY) && !process.env.CI,
+    launch: launchVitest,
+  }),
 );
-process.exit(result.status ?? 1);

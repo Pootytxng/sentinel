@@ -4,6 +4,7 @@ import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { spawn } from "node:child_process";
+import { GATE_HELD_ENV } from "./lib/gate-mutex.mjs";
 
 // #522 -- the pre-push gate's heavy stages queue on a machine-wide mutex instead of running beside a
 // peer's. Three gates' suites at once each ran ~15 minutes and all three failed on 28-37 timeouts
@@ -192,6 +193,7 @@ function Write-Gate { param([string]$Text = "") Write-Host $Text }
 function Invoke-Check {
   param([string]$Name, [string]$Command, [string[]]$Arguments = @(), [switch]$NodeHosted)
   Write-Host "CHECK-START $Name $(Stamp)"
+  Write-Host "CHECK-MARKER $Name [$env:${GATE_HELD_ENV}]"
   Set-Content -LiteralPath $ReadyFile -Value "ready"
   Wait-ForRelease -Path $ReleaseFile
   Write-Host "CHECK-END $Name $(Stamp)"
@@ -201,7 +203,9 @@ $repo = "probe-repo"
 $npm = "npm"
 $cargo = "cargo"
 "PID $PID"
-. ([scriptblock]::Create($stmt.Extent.Text + [Environment]::NewLine + $try.Extent.Text))
+# The finally reports the marker whether or not a stage threw: the gate must clear it either way.
+try { . ([scriptblock]::Create($stmt.Extent.Text + [Environment]::NewLine + $try.Extent.Text)) }
+finally { Write-Host "MARKER-AFTER [$env:${GATE_HELD_ENV}]" }
 "PROBE-DONE $(Stamp)"
 `;
 
@@ -397,6 +401,29 @@ describe.runIf(process.platform === "win32")("verify-local.ps1 queues its heavy 
     const released = result.stdout.indexOf(`TEST GATE: released '${testCase.mutexName}'.`);
     expect(end).toBeGreaterThanOrEqual(0);
     expect(released).toBeGreaterThan(end);
+  });
+});
+
+describe.runIf(process.platform === "win32")("verify-local.ps1 tells its own suite it holds the gate (#543)", () => {
+  // scripts/run-vitest.mjs queues a full suite on this same mutex. The gate's own `npm test` IS a full
+  // suite, so without the marker it would wait on its own parent for the whole 30-minute bound. And a
+  // marker left set after the gate would exempt every later run typed into that shell.
+  it.each([
+    ["passes", undefined],
+    ["fails", "frontend tests"],
+  ])("exports its own pid to every held stage and clears it after, when the suite %s", async (_, failAt) => {
+    const testCase = makeCase();
+    const release = testCase.file("probe-release.txt");
+    writeFileSync(release, "release", "utf8");
+    const result = await probe(testCase, { ReadyFile: testCase.file("probe-ready.txt"), ReleaseFile: release, FailAt: failAt }).done;
+    expect(result.code === 0, result.stderr).toBe(!failAt);
+
+    const gatePid = pidOf(result.stdout);
+    expect(Number.isInteger(gatePid)).toBe(true);
+    const markers = [...result.stdout.matchAll(/^CHECK-MARKER (.+?) \[(.*)\]\s*$/gm)].map((m) => [m[1], m[2]]);
+    const ran = failAt ? HEAVY_STAGES.slice(0, HEAVY_STAGES.indexOf(failAt) + 1) : HEAVY_STAGES;
+    expect(markers).toEqual(ran.map((stage) => [stage, String(gatePid)]));
+    expect(result.stdout).toMatch(/^MARKER-AFTER \[\]\s*$/m);
   });
 });
 
