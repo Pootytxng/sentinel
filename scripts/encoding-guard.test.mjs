@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import { findMojibake, mojibakeOnce, recoverMojibake, repairText, repairToFixpoint, trackedTextFiles } from "./encoding-guard.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -136,7 +137,9 @@ describe("tracked text files", () => {
   // corrupt whenever the machine is busy, and the pre-push gate refuses a legitimate push for a
   // defect that does not exist (2026-08-11: it did exactly that). Budget it explicitly rather than
   // letting machine load decide the verdict. The number is deliberately far above the real cost:
-  // this timeout must only ever catch a hang, never a slow day.
+  // this timeout must only ever catch a hang, never a slow day. #515: under synthetic load that slowed
+  // a read of the tree to the 2026-09-23 incident's pace, this test took 117 s against its old 120 s,
+  // so it now takes the shared, measured whole-tree budget.
   it("carries no double-encoded text", () => {
     const dirty = [];
     for (const file of files) {
@@ -150,5 +153,5 @@ describe("tracked text files", () => {
       if (hits.length) dirty.push(`${file}: ${hits.length} span(s), first at line ${hits[0].line} (${JSON.stringify(hits[0].consumed)} -> ${JSON.stringify(hits[0].recovered)})`);
     }
     expect(dirty, `repair with: node scripts/encoding-guard.mjs --fix\n${dirty.join("\n")}`).toEqual([]);
-  }, 120_000);
+  }, TREE_WALK_TIMEOUT_MS);
 });

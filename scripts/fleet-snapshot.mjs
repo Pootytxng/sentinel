@@ -37,6 +37,32 @@ export function countAheadVia(runner) {
   };
 }
 
+// #512. The one batch read behind branchAheadCountsVia, shared with the test that checks it live.
+export const BRANCH_AHEAD_FORMAT = "--format=%(refname) %(ahead-behind:origin/main)";
+
+/**
+ * #512. Every local branch's distance past `origin/main`, from ONE `git for-each-ref` line per
+ * branch (`refs/heads/<name> <ahead> <behind>`), as a Map keyed by the short name liveCarriers
+ * uses. `null` when the batch could not be taken at all, so the caller falls back to counting one
+ * checkout at a time rather than reading a failed batch as "no branch is ahead". A line this cannot
+ * parse is left out of the map for the same reason: an absent key is re-counted, never zeroed.
+ */
+export function branchAheadCountsVia(runner) {
+  let out;
+  try {
+    out = String(runner());
+  } catch {
+    return null;
+  }
+  const counts = new Map();
+  for (const line of out.split(/\r?\n/)) {
+    // Ref names cannot contain spaces, so the first space ends the name.
+    const m = /^refs\/heads\/(\S+) (\d+) (\d+)$/.exec(line.trim());
+    if (m) counts.set(m[1], Number(m[2]));
+  }
+  return counts;
+}
+
 /**
  * Checkouts EITHER of whose distances could not be measured. `null` is deliberately not `0`: an
  * unfetched or unresolvable ref makes every count throw at once, and a `catch { return 0 }` would
@@ -260,8 +286,17 @@ export function snapshot({ git = g, lsRemote } = {}) {
 
   const aheadCache = new Map();
   const countAheadOnce = countAheadVia((c) => git("rev-list", "--count", `origin/main..${c}`));
+  // #512. One subprocess for every branch checkout's count, where there used to be one EACH: on the
+  // 41-worktree fleet of 2026-09-23 that was 41 of live rule C's 60 git spawns, and the walk's cost
+  // grew with every lane opened. `%(ahead-behind:origin/main)` is the count `rev-list --count
+  // origin/main..<branch>` takes, asked of the branch ref itself (git >= 2.41; an older git fails
+  // the batch and lands in the fallback). A detached head, a branch the batch does not list, or a
+  // batch that failed outright is still counted one at a time, so null-not-zero holds as before.
+  const branchAhead = branchAheadCountsVia(() =>
+    git("for-each-ref", BRANCH_AHEAD_FORMAT, "refs/heads/"),
+  );
   const countAhead = (c) => {
-    if (!aheadCache.has(c)) aheadCache.set(c, countAheadOnce(c));
+    if (!aheadCache.has(c)) aheadCache.set(c, branchAhead?.has(c) ? branchAhead.get(c) : countAheadOnce(c));
     return aheadCache.get(c);
   };
 

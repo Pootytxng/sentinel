@@ -64,6 +64,7 @@ const ALLOWED: Record<string, string> = {
   "test/setup.ts": "vitest setupFiles entry — loaded by the runner, not by the app",
   "test/axe.ts": "the C-13 axe harness — imported by the a11y guards, never by the shipped app",
   "test/css-margin.ts": "CSS box-model reasoning shared by the #236 layout guards — tests only, never the app",
+  "test/tree-walk-budget.ts": "the #515 whole-tree test timeout — the tripwire setup file and walker tests, never the app",
 };
 
 function walk(dir: string, out: string[] = []): string[] {

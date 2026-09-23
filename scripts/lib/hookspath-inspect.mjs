@@ -11,7 +11,7 @@
 // evidence is not success. Every `return ""` and every `if (!x) continue` in the old version turned
 // "I could not tell" into "fine", which is the one answer a safety check may never give.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { prePushContractViolations, refusesWhenVerifierMissing } from "./prepush-hook-contract.mjs";
@@ -94,6 +94,36 @@ export function gitRaw(args, cwd) {
 }
 
 /**
+ * gitRaw's exact contract, without blocking: the same scrubbed env, the same four outcomes kept
+ * apart. A spawn failure is `ran: false`; a signal-killed git ran but has no exit status, exactly as
+ * spawnSync reports it.
+ */
+export function gitRawAsync(args, cwd) {
+  return new Promise((done) => {
+    let settled = false;
+    const settle = (r) => {
+      if (!settled) {
+        settled = true;
+        done(r);
+      }
+    };
+    let child;
+    try {
+      child = spawn("git", args, { cwd, env: scrubbedEnv(), stdio: ["ignore", "pipe", "pipe"] });
+    } catch (e) {
+      settle({ ran: false, status: null, stdout: "", stderr: String(e?.message ?? e) });
+      return;
+    }
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (d) => (stdout += d));
+    child.stderr.setEncoding("utf8").on("data", (d) => (stderr += d));
+    child.on("error", (e) => settle({ ran: false, status: null, stdout: "", stderr: String(e?.message ?? e) }));
+    child.on("close", (code) => settle({ ran: true, status: code, stdout: stdout.trim(), stderr: stderr.trim() }));
+  });
+}
+
+/**
  * Registered worktrees, main first (git lists the main working tree first, and it is the only one
  * `git worktree remove` cannot delete -- which is what makes it the one safe absolute anchor).
  *
@@ -141,6 +171,55 @@ const canonical = (p) => {
     return resolve(p);
   }
 };
+
+/** The only two git reads inspectWorktree makes. Named so inspectFleet can prefetch exactly these. */
+const HOOKS_PATH_READ = ["config", "--get", "core.hooksPath"];
+const HOOK_PATH_RESOLVE = ["rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push"];
+const readKey = (args, cwd) => JSON.stringify([args, cwd]);
+
+/**
+ * #512. Every registered checkout, judged by inspectWorktree unchanged -- only its two git reads
+ * are run ahead of time, `concurrency` at once, instead of one blocking spawn after another.
+ *
+ * The walk is two git spawns per worktree, so its wall time grows with the fleet. With 41 registered
+ * worktrees it measured 82 spawns, 765ms of CPU and 11.7s of wall clock under a full parallel `npm test`:
+ * the time was spent waiting on git, not working, and it pushed the live test past the 15s
+ * `testTimeout` four times on 2026-09-23. Running the waits side by side removes that without
+ * changing a single verdict.
+ *
+ * A read the prefetch did not make -- a checkout that was not a directory when looked at, or one
+ * whose canonical path moved in between -- falls back to the ordinary blocking read (`gitSync`, gitRaw
+ * by default), so a miss costs time, never a verdict. Both git seams are injectable so a fixture can
+ * count them.
+ */
+export async function inspectFleet(
+  worktrees,
+  mainRoot,
+  { concurrency = 8, gitAsync = gitRawAsync, gitSync = gitRaw } = {},
+) {
+  const jobs = [];
+  for (const wt of worktrees) {
+    const here = canonical(wt);
+    let isDir = false;
+    try {
+      isDir = statSync(here).isDirectory();
+    } catch {
+      /* inspectWorktree decides what a missing or unreadable checkout means; nothing to prefetch */
+    }
+    if (isDir) jobs.push([HOOKS_PATH_READ, here], [HOOK_PATH_RESOLVE, here]);
+  }
+  const reads = new Map();
+  let next = 0;
+  const worker = async () => {
+    while (next < jobs.length) {
+      const [args, cwd] = jobs[next++];
+      reads.set(readKey(args, cwd), await gitAsync(args, cwd));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length) }, worker));
+  const git = (args, cwd) => reads.get(readKey(args, cwd)) ?? gitSync(args, cwd);
+  return worktrees.map((wt) => inspectWorktree(wt, mainRoot, { git }));
+}
 
 const readable = (p) => {
   try {
@@ -195,7 +274,7 @@ export function inspectWorktree(wt, mainRoot, deps = {}) {
   if (!stat.isDirectory()) return fail(`registered as a worktree but is not a directory`);
 
   // ---- 1. The effective core.hooksPath, with "absent" told apart from "could not read". --------
-  const cfg = git(["config", "--get", "core.hooksPath"], here);
+  const cfg = git(HOOKS_PATH_READ, here);
   if (!cfg.ran) {
     return fail(`git could not be run here to read core.hooksPath — ${cfg.stderr}`);
   }
@@ -218,7 +297,7 @@ export function inspectWorktree(wt, mainRoot, deps = {}) {
   }
 
   // ---- 2. Where that actually lands, asked of git rather than recomputed. ----------------------
-  const res = git(["rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push"], here);
+  const res = git(HOOK_PATH_RESOLVE, here);
   if (!res.ran || res.status !== 0 || !res.stdout) {
     return fail(
       `core.hooksPath is "${cfg.stdout}" but the pre-push path could not be resolved` +

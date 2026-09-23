@@ -779,6 +779,14 @@ describe("work-control receipt CLI", () => {
   // these cases exercise the same code the gate runs against GitHub.
   const made = [];
 
+  // #512. Declared, not discovered. Every case below builds its own repository with two bare
+  // remotes (13 git spawns) and then runs the gate CLI, which asks the fixture origin for itself:
+  // 13-22 subprocesses per case. Alone a case takes ~1s; under the parallel pre-push gate they were
+  // measured at 4-10.8s, and the stale-ref case timed out at vitest's 15s default on 2026-09-23.
+  // The repositories cannot be shared -- each case mutates its own origin -- so the budget is named
+  // here instead of the global testTimeout being raised for every file in the suite.
+  const CLI_RECEIPT_TIMEOUT_MS = 60_000;
+
   function makeRepo() {
     const root = mkdtempSync(join(tmpdir(), "compy-wc-repo-"));
     made.push(root);
@@ -839,7 +847,7 @@ describe("work-control receipt CLI", () => {
     const result = runReceipt(at(repo.pushed), repo.work);
     expect(result.status, result.stdout + result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({ decision: "PASS", blockers: [], warnings: [] });
-  });
+  }, CLI_RECEIPT_TIMEOUT_MS);
 
   it("exits nonzero and prints BLOCKED when an exact required gate is unavailable", () => {
     const repo = makeRepo();
@@ -856,7 +864,7 @@ describe("work-control receipt CLI", () => {
     );
     expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout).decision).toBe("BLOCKED");
-  });
+  }, CLI_RECEIPT_TIMEOUT_MS);
 
   it("refuses a receipt whose head has never left this disk", () => {
     const repo = makeRepo();
@@ -867,7 +875,7 @@ describe("work-control receipt CLI", () => {
     const result = runReceipt(at(local), repo.work);
     expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(/not durably reachable/i);
-  });
+  }, CLI_RECEIPT_TIMEOUT_MS);
 
   it("refuses a receipt held up only by a stale remote-tracking ref", () => {
     // The trap this exists for: refs/remotes/origin/* is the last FETCH, not origin. Below, origin
@@ -891,7 +899,7 @@ describe("work-control receipt CLI", () => {
     const result = runReceipt(at(stranded), repo.work);
     expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(/not durably reachable/i);
-  });
+  }, CLI_RECEIPT_TIMEOUT_MS);
 
   it("refuses a receipt that only a fork can reach", () => {
     const repo = makeRepo();
@@ -905,7 +913,7 @@ describe("work-control receipt CLI", () => {
     const result = runReceipt(at(onlyOnFork), repo.work);
     expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(/not durably reachable/i);
-  });
+  }, CLI_RECEIPT_TIMEOUT_MS);
 
   it("refuses a fork standing in the place called origin, however reachable it is", () => {
     // The maximal version of the case above: the remote is named origin, it answers, it has the
@@ -920,7 +928,7 @@ describe("work-control receipt CLI", () => {
     expect(JSON.parse(result.stdout).blockers.join("\n")).toMatch(
       /no remote points at Pootytxng\/sentinel/i,
     );
-  });
+  }, CLI_RECEIPT_TIMEOUT_MS);
 });
 
 describe("the lease and proof law stays loaded in every model bootstrap", () => {

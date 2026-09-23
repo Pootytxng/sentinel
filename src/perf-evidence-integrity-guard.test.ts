@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { execFileSync } from "child_process";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
+import { TREE_WALK_TIMEOUT_MS } from "./test/tree-walk-budget";
 
 /**
  * PERF EVIDENCE INTEGRITY GUARD — a measurement may not be quoted as proof unless it settled.
@@ -83,11 +84,13 @@ interface Offender {
   line: string;
 }
 
+const CITING_PATHSPECS = ["*.ts", "*.tsx", "*.mjs", "*.js", "*.css", "*.md", "*.json"];
+
 /** Every tracked text file that could quote a measurement at a reader. */
 function citingFiles(): string[] {
   return execFileSync(
     "git",
-    ["ls-files", "--", "*.ts", "*.tsx", "*.mjs", "*.js", "*.css", "*.md", "*.json"],
+    ["ls-files", "--", ...CITING_PATHSPECS],
     // No maxBuffer: the repo's execFileSync typing accepts only { input, encoding }, and this
     // listing is ~47 KB today against Node's 1 MB default. Revisit if that ever gets close.
     { encoding: "utf8" },
@@ -96,6 +99,29 @@ function citingFiles(): string[] {
     .map((l) => l.trim())
     .filter(Boolean)
     .filter((f) => !EXEMPT_PREFIXES.some((p) => f.startsWith(p)));
+}
+
+/**
+ * #512. The subset of citingFiles() that contains `${RAW}/` at all -- the same test
+ * unsettledCitations applies first and skips on, asked of git in one process instead of by opening
+ * ~2,000 files here one at a time. That cost 8.8s under the parallel pre-push gate and timed out
+ * once on 2026-09-23. A fixed ASCII string is found in the raw bytes exactly when it is found in
+ * their UTF-8 decoding, so no file that could hold a citation is dropped. Exit 1 is git grep's
+ * "searched, found nothing"; any other failure throws rather than returning an empty, passing list.
+ */
+function filesMentioningRaw(): string[] {
+  let out: string;
+  try {
+    out = execFileSync("git", ["grep", "-l", "-z", "-a", "-F", "-e", `${RAW}/`, "--", ...CITING_PATHSPECS], {
+      encoding: "utf8",
+    });
+  } catch (e) {
+    const err = e as { status?: number | null; stderr?: unknown };
+    if (err.status === 1 && !String(err.stderr ?? "").trim()) return [];
+    throw e;
+  }
+  const hits = new Set(out.split("\u0000").filter(Boolean));
+  return citingFiles().filter((f) => hits.has(f));
 }
 
 /**
@@ -167,8 +193,9 @@ export function unsettledCitations(
 }
 
 describe("perf evidence integrity: a run that never settled may not be quoted as proof", () => {
-  it("no live file cites an attribute run whose baseline never converged", () => {
-    const offenders = unsettledCitations(citingFiles(), (f) =>
+  // #515: `git grep` over the whole tree rides the tree-walk budget, never the 15s default.
+  it("no live file cites an attribute run whose baseline never converged", { timeout: TREE_WALK_TIMEOUT_MS }, () => {
+    const offenders = unsettledCitations(filesMentioningRaw(), (f) =>
       readFileSync(f, "utf8"),
     );
     expect(
@@ -226,6 +253,22 @@ describe("perf evidence integrity: the guard itself is armed", () => {
     );
     expect(found).toHaveLength(1);
     expect(found[0].run).toBe("bad-run.json");
+  });
+
+  it("hands the live check every file that mentions the raw directory, and only those (#512)", { timeout: TREE_WALK_TIMEOUT_MS }, () => {
+    const all = citingFiles();
+    const kept = filesMentioningRaw();
+    // It must narrow, or it is not the prefilter it claims to be; and it must not come back empty,
+    // because this very file names the directory in the block above and has to survive it.
+    expect(kept.length).toBeLessThan(all.length);
+    expect(kept).toContain("src/perf-evidence-integrity-guard.test.ts");
+    // Agreement with the skip it replaces, on a fixed sample of the live tree plus some it kept:
+    // a file is kept exactly when its own text contains the directory.
+    const keptSet = new Set(kept);
+    const sample = all.filter((_, i) => i % 40 === 0).concat(kept.slice(0, 10));
+    for (const f of sample) {
+      expect(keptSet.has(f), f).toBe(readFileSync(f, "utf8").includes(`${RAW}/`));
+    }
   });
 
   it("stays silent on a citation of a settled run", () => {

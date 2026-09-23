@@ -187,6 +187,8 @@ import { describe, expect, inject, it } from "vitest";
 // see the fleet was to run the guard.
 import {
   atRiskCarriers,
+  BRANCH_AHEAD_FORMAT,
+  branchAheadCountsVia,
   containingBranchesVia,
   countAheadVia,
   liveCarriers,
@@ -1072,6 +1074,8 @@ describe("the handoff tells the truth about the worktrees", () => {
       if (args[0] === "worktree") return PORCELAIN;
       if (args[0] === "rev-list") return "4";
       if (args[0] === "for-each-ref") {
+        // #512's batch distance read. Not a containment probe, so it is not recorded in `asked`.
+        if (args.includes(BRANCH_AHEAD_FORMAT)) return "refs/heads/main 0 0";
         if (args.includes("refs/remotes/origin")) return "origin\norigin/HEAD\norigin/main";
         const contains = args.find((a) => String(a).startsWith("--contains="));
         const sha = String(contains).slice("--contains=".length);
@@ -1139,6 +1143,77 @@ describe("the handoff tells the truth about the worktrees", () => {
     expect(text).toContain("git branch rescue/sentinel-codex-393 deadbeef");
     expect(text).toContain("npm run fleet:hygiene");
     expect(text).not.toContain("this-lane");
+  });
+
+  // #512. The branch checkouts' distances now come from ONE `for-each-ref` instead of one `rev-list`
+  // per checkout -- 41 of live rule C's 60 git spawns on 2026-09-23, growing with every lane opened.
+  // A batch is only an optimisation if every way it can fail lands back on the per-checkout count,
+  // and never on a zero: that is the null-not-zero law this file already holds everywhere else.
+  it("C: branch distances come from one batch read, and any gap in it is counted one by one (#512)", () => {
+    // The parser, on its own. Malformed lines are left out -- re-counted, not zeroed -- and a batch
+    // git refused is null, which is "could not ask", not "no branch is ahead".
+    expect(branchAheadCountsVia(() => "refs/heads/lane/a 3 1\r\nrefs/heads/main 0 0\n")).toEqual(
+      new Map([["lane/a", 3], ["main", 0]]),
+    );
+    expect(branchAheadCountsVia(() => "refs/heads/lane/a\nrefs/heads/lane/b x 0\nrefs/tags/v1 2 0\n")).toEqual(new Map());
+    expect(branchAheadCountsVia(() => { throw new Error("fatal: unknown field name: ahead-behind"); })).toBe(null);
+
+    const PORCELAIN = [
+      "worktree /w/sentinel\nHEAD 1111111\nbranch refs/heads/main\n",
+      "worktree /w/.claude/worktrees/lane-a\nHEAD aaaa\nbranch refs/heads/lane/a\n",
+      "worktree /w/.claude/worktrees/lane-b\nHEAD bbbb\nbranch refs/heads/lane/b\n",
+      "worktree /w/.claude/worktrees/parked\nHEAD cafe1234\ndetached\n",
+    ].join("\n");
+    const measure = (batch, perCheckout = () => "7") => {
+      const counted = [];
+      let batches = 0;
+      const stubGit = (...args) => {
+        if (args[0] === "worktree") return PORCELAIN;
+        if (args[0] === "rev-list") {
+          const range = args.find((a) => String(a).startsWith("origin/main.."));
+          if (!range) return "1"; // the unpushed count, a different question
+          counted.push(range.slice("origin/main..".length));
+          return perCheckout();
+        }
+        if (args[0] === "for-each-ref") {
+          if (args.includes(BRANCH_AHEAD_FORMAT)) {
+            batches += 1;
+            return batch();
+          }
+          if (args.includes("refs/remotes/origin")) return "origin/main";
+          return ""; // a containment probe: nothing contains the parked head
+        }
+        throw new Error(`stub git got an unexpected command: ${args.join(" ")}`);
+      };
+      const s = snapshot({ git: stubGit, lsRemote: () => "aaaa\trefs/heads/main" });
+      return { batches, counted, commits: Object.fromEntries(s.checkouts.map((c) => [c.name, c.commits])), s };
+    };
+
+    // 1. The batch answers every branch checkout; only the detached one costs a rev-list.
+    const whole = measure(() => "refs/heads/main 0 0\nrefs/heads/lane/a 3 0\nrefs/heads/lane/b 0 2\n");
+    expect(whole.batches).toBe(1);
+    expect(whole.counted).toEqual(["cafe1234"]);
+    expect(whole.commits).toEqual({ "lane/a": 3, "lane/b": 0, parked: 7 });
+
+    // 2. A branch the batch did not list is counted on its own, never read as zero.
+    const gap = measure(() => "refs/heads/main 0 0\nrefs/heads/lane/a 3 0\n");
+    expect(gap.counted).toEqual(["lane/b", "cafe1234"]);
+    expect(gap.commits).toEqual({ "lane/a": 3, "lane/b": 7, parked: 7 });
+
+    // 3. A batch git refused (an older git, an unresolvable origin/main): every checkout counted one
+    //    at a time, exactly as before #512.
+    const refused = measure(() => { throw new Error("fatal: unknown field name: ahead-behind"); });
+    expect(refused.counted).toEqual(["main", "lane/a", "lane/b", "cafe1234"]);
+    expect(refused.commits).toEqual({ "lane/a": 7, "lane/b": 7, parked: 7 });
+
+    // 4. Batch AND fallback both unable to measure: unmeasured, and rule C fails on it -- the batch
+    //    must not be the thing that turns a total measurement failure into "nothing is ahead".
+    const blind = measure(
+      () => { throw new Error("fatal: bad revision 'origin/main'"); },
+      () => { throw new Error("fatal: bad revision 'origin/main'"); },
+    );
+    expect(blind.commits).toEqual({ "lane/a": null, "lane/b": null, parked: null });
+    expect(blind.s.unmeasured).toEqual(["lane/a", "lane/b", "parked"]);
   });
 
   // The whole rule against a REAL fleet, because every assertion above is about what this file does
@@ -1230,7 +1305,11 @@ describe("the handoff tells the truth about the worktrees", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  });
+    // #512. Declared, not discovered: this builds a real origin and three checkouts, then walks them
+    // twice -- about 40 git spawns, none avoidable without faking the fleet this test exists to be
+    // real about. Alone it takes ~2s; under the parallel pre-push gate it was measured at 7.9s and
+    // timed out at vitest's 15s default on 2026-09-23. Same budget as the live rule C test below.
+  }, 60_000);
 
   // NARROWED by #291, and the narrowing is what closed the first-push trap. The rule used to demand
   // that every checkout holding commits on no remote be NAMED in the handoff bullet. A lane about to
@@ -1350,6 +1429,30 @@ describe("the handoff tells the truth about the worktrees", () => {
         ).toContain(anyBranch);
       } else {
         console.log("rule C: this checkout has no local branches, so the containment probe is unfalsified this run");
+      }
+    }
+
+    // #512's batch distance read, falsified LIVE. The stub test above proves every gap in the batch
+    // falls back to a per-checkout count; this proves the batch is actually TAKEN against this git
+    // (a refused one would pass silently and hand the cost straight back), and that on a real
+    // checkout it answers the same number the per-checkout `rev-list` it replaced would have.
+    {
+      const batch = branchAheadCountsVia(() => git("for-each-ref", BRANCH_AHEAD_FORMAT, "refs/heads/"));
+      expect(
+        batch,
+        "git refused rule C's one-read branch distance batch (`%(ahead-behind:...)` needs git >= 2.41), " +
+          "so every branch checkout is being counted one subprocess at a time again -- the cost #512 removed.",
+      ).not.toBeNull();
+      const sample = s.checkouts.find((c) => c.branch && c.commits > 0) ?? s.checkouts.find((c) => c.branch);
+      if (sample) {
+        const perCheckout = Number(git("rev-list", "--count", `origin/main..${sample.branch}`));
+        expect(
+          batch.get(sample.branch),
+          `the batch says \`${sample.branch}\` is ${batch.get(sample.branch)} past origin/main; ` +
+            `\`rev-list --count\` says ${perCheckout}. Rule C would be judging on the wrong distance.`,
+        ).toBe(perCheckout);
+      } else {
+        console.log("rule C: no checkout besides main is on a branch, so the batch distance read is unfalsified this run");
       }
     }
 
