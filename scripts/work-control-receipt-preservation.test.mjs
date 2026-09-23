@@ -48,6 +48,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import { fleetMode, peerWarning, sameFolder, splitByFolder } from "./lib/fleet-scope.mjs";
 
 const ROOT = process.cwd();
@@ -328,7 +329,8 @@ describe("a work-control receipt survives the worktree it was written in", () =>
     expect(uncommittedReceipts(` M "${R}"`)).toEqual([R]);
   });
 
-  it("every receipt whose bytes are in no commit is a benign shadow of one", () => {
+  // It reads git history in every registered worktree, so its cost grows with the fleet (#515).
+  it("every receipt whose bytes are in no commit is a benign shadow of one", { timeout: TREE_WALK_TIMEOUT_MS }, () => {
     let porcelain;
     try {
       porcelain = git(["worktree", "list", "--porcelain"]);

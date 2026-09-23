@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
+import { TREE_WALK_TIMEOUT_MS } from "./test/tree-walk-budget";
 
 // GATE RELIABILITY (2026-08-19): this file reads 200+ shipped files off disk. Building the corpus
 // once (see collect() below) cut it from ~8s to ~5s, but under the pre-push gate's full
 // parallelism disk contention still puts it near the 15s default -- which is a statement about
 // machine load, not about the copy being scanned. Raising it changes nothing this guard asserts.
-vi.setConfig({ testTimeout: 60_000 });
+// #515: the number is the shared, measured whole-tree budget now, not one picked for this file.
+vi.setConfig({ testTimeout: TREE_WALK_TIMEOUT_MS });
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { execFileSync } from "child_process";
 import { join } from "path";
@@ -127,6 +129,17 @@ function collect(): string[] {
   return out;
 }
 
+// The corpus TEXT is read once as well (#515). Eleven tests each re-read all of it, ~925 files and
+// 11.9 MB a time, and under a synthetic load that slows a read of the tree to what the 2026-09-23
+// incident saw, one of them took 124 s against this file's 60 s. Every caller gets a fresh array of
+// fresh entries, so a test that plants a line into its copy cannot leak it into another test.
+let corpusTextCache: { path: string; text: string }[] | null = null;
+
+function corpusText(): { path: string; text: string }[] {
+  if (!corpusTextCache) corpusTextCache = collect().map((path) => ({ path, text: readFileSync(path, "utf8") }));
+  return corpusTextCache.map((entry) => ({ ...entry }));
+}
+
 // statSync throws on a vanished or unreadable entry; a walk that dies on one is a guard that stops
 // guarding, so an unreadable path is simply not a directory to descend into.
 function statIsDir(rel: string): boolean {
@@ -238,8 +251,8 @@ describe("outbound-claim guard", () => {
       .map((s) => s.name)
       .join(", ")}] is live`, () => {
       const offenders: string[] = [];
-      for (const file of collect()) {
-        for (const { phrase, line } of findAbsolutes(readFileSync(file, "utf8"))) {
+      for (const { path: file, text } of corpusText()) {
+        for (const { phrase, line } of findAbsolutes(text)) {
           offenders.push(`${file}:${line} → "${phrase}"`);
         }
       }
@@ -268,9 +281,7 @@ describe("outbound-claim guard", () => {
   // not telemetry — so this claim is gated on receipts alone, not on the surface set above.
   it("absolute 'no telemetry' copy is reworded in the same change that arms receipts", () => {
     if (!receiptsArmed()) return;
-    const offenders = telemetryPromiseOffenders(
-      collect().map((path) => ({ path, text: readFileSync(path, "utf8") })),
-    ).map((o) => `${o.path}:${o.line} → "${o.phrase}"`);
+    const offenders = telemetryPromiseOffenders(corpusText()).map((o) => `${o.path}:${o.line} → "${o.phrase}"`);
     expect(
       offenders,
       `receipts_gate() is TRUE but the no-telemetry promise still ships in:\n  ` +
@@ -525,7 +536,7 @@ export function readOutboundSnapshot(): OutboundSnapshot {
         source: caseUpload.source,
       },
     ],
-    copy: collect().map((file) => ({ file, text: readFileSync(file, "utf8") })),
+    copy: corpusText().map(({ path, text }) => ({ file: path, text })),
   };
 }
 

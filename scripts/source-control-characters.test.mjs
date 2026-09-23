@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 // Every source file under scripts/, tools/, src/, docs/ and src-tauri/src/ must be plain text: no
 // control character other than tab, newline and carriage return.
@@ -31,6 +33,12 @@ import { dirname, resolve } from "node:path";
 // `src-tauri/src` was not named in #304 and is added anyway: all four roots were measured at this
 // head before widening, the Rust tree came back clean, and leaving the last source root out to match
 // a sentence written before the measurement is how a half-closed gap gets recorded as handled.
+//
+// #512. Reading all ~1,350 files one open at a time cost 9.5s under the parallel pre-push gate and
+// timed out once on 2026-09-23. One `git grep` now reads the same tree in a single process and names
+// the files holding a byte this rule flags; only those are opened and reported here. The pattern is
+// generated from isControl itself, and a fixture below proves, for every one of the 256 byte values,
+// that git names a file exactly when offendersIn would flag it.
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
@@ -45,8 +53,8 @@ const BINARY = /\.(woff2?|ttf|otf|png|jpe?g|gif|webp|ico|pdf|zip|exe|dll|wasm|mp
 const ALLOWED = new Set([0x09, 0x0a, 0x0d]);
 const isControl = (byte) => (byte < 0x20 && !ALLOWED.has(byte)) || byte === 0x7f;
 
-const tracked = () =>
-  execFileSync("git", ["ls-files", "-z", ...ROOTS], { cwd: REPO, maxBuffer: 64 * 1024 * 1024 })
+const tracked = (cwd = REPO) =>
+  execFileSync("git", ["ls-files", "-z", ...ROOTS], { cwd, maxBuffer: 64 * 1024 * 1024 })
     .toString("utf8")
     .split("\u0000")
     .filter(Boolean)
@@ -64,22 +72,99 @@ const offendersIn = (bytes) => {
   return found;
 };
 
-describe("source files under every source root carry no raw control characters", () => {
-  it("finds no offender in any tracked file", () => {
-    const files = tracked();
-    expect(files.length).toBeGreaterThan(20);
+// Every byte isControl flags, as one PCRE character class. Built from the predicate rather than
+// written out, so the two cannot drift apart.
+const CONTROL_CLASS = `[${Array.from({ length: 0x80 }, (_, b) => b)
+  .filter(isControl)
+  .map((b) => `\\x${b.toString(16).padStart(2, "0")}`)
+  .join("")}]`;
 
-    const report = [];
-    for (const file of files) {
-      const found = offendersIn(readFileSync(resolve(REPO, file)));
-      for (const [byte, at] of found) {
-        report.push(
-          `${file}: 0x${byte.toString(16).padStart(2, "0")} at ${at.join(", ")}` +
-            ` -- write it as a \\u escape instead; the runtime string is identical and git can diff the file`,
-        );
-      }
+/**
+ * The tracked files under ROOTS in which git finds a byte isControl flags. `-a` so a file git would
+ * call binary is searched anyway -- a NUL is the very byte that makes it "binary". Exit 1 is git
+ * grep's "searched, found nothing"; anything else it cannot answer throws, because an empty set from
+ * a failed search would wave the whole tree through.
+ */
+const controlCandidates = (cwd = REPO) => {
+  try {
+    return new Set(
+      execFileSync("git", ["grep", "-l", "-z", "-a", "-P", CONTROL_CLASS, "--", ...ROOTS], {
+        cwd,
+        maxBuffer: 64 * 1024 * 1024,
+        stdio: ["ignore", "pipe", "pipe"],
+      })
+        .toString("utf8")
+        .split("\u0000")
+        .filter(Boolean),
+    );
+  } catch (e) {
+    if (e?.status === 1 && !String(e.stderr ?? "").trim()) return new Set();
+    throw e;
+  }
+};
+
+const report = (cwd = REPO) => {
+  const candidates = controlCandidates(cwd);
+  const lines = [];
+  for (const file of tracked(cwd)) {
+    if (!candidates.has(file)) continue; // git read every byte and found none this rule flags
+    const found = offendersIn(readFileSync(resolve(cwd, file)));
+    for (const [byte, at] of found) {
+      lines.push(
+        `${file}: 0x${byte.toString(16).padStart(2, "0")} at ${at.join(", ")}` +
+          ` -- write it as a \\u escape instead; the runtime string is identical and git can diff the file`,
+      );
     }
-    expect(report).toEqual([]);
+  }
+  return lines;
+};
+
+const temps = [];
+afterAll(() => {
+  for (const dir of temps) rmSync(dir, { recursive: true, force: true });
+});
+
+describe("source files under every source root carry no raw control characters", () => {
+  // #515: `git grep` over the whole tree rides the tree-walk budget, never the 15s default.
+  it("finds no offender in any tracked file", { timeout: TREE_WALK_TIMEOUT_MS }, () => {
+    expect(tracked().length).toBeGreaterThan(20);
+    expect(report()).toEqual([]);
+  });
+
+  it("git names exactly the files offendersIn flags, for every byte value — fixture repository", () => {
+    const repo = mkdtempSync(join(tmpdir(), "control-chars-"));
+    temps.push(repo);
+    mkdirSync(join(repo, "scripts"));
+    mkdirSync(join(repo, "elsewhere"));
+    const bodies = {};
+    for (let b = 0; b < 256; b += 1) bodies[`scripts/b${b.toString(16).padStart(2, "0")}.txt`] = [0x61, b, 0x62, 0x0a];
+    // A control byte beside invalid or multi-byte UTF-8 -- the shapes a UTF-aware matcher could
+    // swallow -- and at the very edges of a file.
+    bodies["scripts/after-invalid.txt"] = [0xff, 0x01];
+    bodies["scripts/after-truncated-lead.txt"] = [0xc3, 0x01];
+    bodies["scripts/inside-truncated-seq.txt"] = [0xe2, 0x82, 0x01];
+    bodies["scripts/after-valid-utf8.txt"] = [0xc3, 0xa9, 0x7f];
+    bodies["scripts/first-byte.txt"] = [0x00, 0x61];
+    bodies["scripts/last-byte.txt"] = [0x61, 0x0a, 0x1b];
+    bodies["scripts/clean.txt"] = [0x61, 0x09, 0x62, 0x0d, 0x0a, 0xc3, 0xa9, 0x0a];
+    bodies["elsewhere/out-of-scope.txt"] = [0x61, 0x01];
+    for (const [name, bytes] of Object.entries(bodies)) writeFileSync(join(repo, name), Buffer.from(bytes));
+    const fx = (...args) =>
+      execFileSync("git", ["-c", "core.autocrlf=false", "-c", "core.safecrlf=false", ...args], {
+        cwd: repo,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    fx("init", "-q");
+    fx("add", "-A");
+
+    const flagged = tracked(repo)
+      .filter((f) => offendersIn(readFileSync(join(repo, f))).size > 0)
+      .sort();
+    expect([...controlCandidates(repo)].sort()).toEqual(flagged);
+    // Non-vacuity: 30 single-byte offenders plus the six edge shapes, and never the clean file.
+    expect(flagged).toHaveLength(36);
+    expect(flagged).not.toContain("scripts/clean.txt");
+    expect(report(repo)).toHaveLength(36);
   });
 
   it("actually detects one -- the detector is not vacuous", () => {

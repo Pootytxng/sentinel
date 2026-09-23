@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/488#issuecomment-5793593993",
+  "leaseEvidenceNote": "Ownership claim on #488 posted by this Claude Code successor session (e855a8b6-e2fa-4af7-8835-bccba929c1c3) at 2026-09-23T10:58Z for the PR #504 review and landing, live when this transition ran (expires 22:58Z). It names this worktree (recursing-hertz-8a06a2, branch claude/sleepy-elgamal-5a59bd) and lists, as one contiguous backticked Write scope, the ten delta paths plus the two receipt files. The author's lane released its lease by the Handoff at 2026-09-22T09:43Z (ending `Claim: released`) before this claim; the folder record was adopted with tools/entry adopt --issue 488.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-23T11:03Z (five open PRs: #504, #492, #471, #470, #464): only PR #504 touches any of the ten delta paths and no PR touches the two receipt paths (gh pr view --json files per PR, intersected with the delta list). git merge-tree --write-tree origin/main beed13ed is conflict-free against origin/main a02b9b7f (tree 30317e64); main has not changed the ten paths since the base f326ee01.",
+  "inheritedWork": false,
+  "currentHead": "beed13ed8988db544f8ed697569c62c7610a5686",
+  "pr": 504,
+  "issue": 488,
+  "kind": "lane",
+  "branch": "claude/exciting-feistel-06bf7d",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta f326ee01..beed13ed was authored and committed by the #488 implementation lane (claude-code <claude-code@desk.local>, folder exciting-feistel-06bf7d). This landing session (also claude-code, a different session) edited none of the delta files and only writes receipts; the reviewer seat authored nothing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "beed13ed8988db544f8ed697569c62c7610a5686",
+      "evidence": "logs/verify-local-2026-09-22T09-35-46Z.log (in the author's worktree exciting-feistel-06bf7d; SHA-256 8FCADEBAD32B01D74F252E77A5C84B44DC300A246F0DE0EA82676B725298F963, 1729 lines) lines 9-44",
+      "summary": "450 frontend test files passed; 7,429 passed / 5 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "beed13ed8988db544f8ed697569c62c7610a5686",
+      "evidence": "logs/verify-local-2026-09-22T09-35-46Z.log (in the author's worktree exciting-feistel-06bf7d; SHA-256 8FCADEBAD32B01D74F252E77A5C84B44DC300A246F0DE0EA82676B725298F963, 1729 lines) lines 45-71",
+      "summary": "tsc and Vite production build passed (built in 9.41s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "beed13ed8988db544f8ed697569c62c7610a5686",
+      "evidence": "logs/verify-local-2026-09-22T09-35-46Z.log (in the author's worktree exciting-feistel-06bf7d; SHA-256 8FCADEBAD32B01D74F252E77A5C84B44DC300A246F0DE0EA82676B725298F963, 1729 lines) lines 72-1444",
+      "summary": "1,327 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "beed13ed8988db544f8ed697569c62c7610a5686",
+      "evidence": "logs/verify-local-2026-09-22T09-35-46Z.log (in the author's worktree exciting-feistel-06bf7d; SHA-256 8FCADEBAD32B01D74F252E77A5C84B44DC300A246F0DE0EA82676B725298F963, 1729 lines) lines 1445-1729",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 56.76s, no warning: lines in the stage)."
+    }
+  ],
+  "gateEvidenceNote": "The real .githooks/pre-push gate ran in the author's worktree at 2026-09-22T09:35:46Z and the push that put beed13ed on origin was accepted (origin/claude/exciting-feistel-06bf7d, PR #504's head). The author's worktree reflog binds that HEAD to beed13ed from 2026-09-22 02:24:30 -0700 (09:24:30Z), before the log time. The landing session read every stage in the log and hashed it to the SHA-256 above. The landing carrier will push the post-merge receipt commit through the native full gate again; no --no-verify is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 10 changed paths since origin/main measured against the author's claim on #488, every one inside it. Re-measured 2026-09-23T11:10Z by git diff --name-only f326ee01 beed13ed: the same ten paths, each named in the landing claim's Write scope.",
+    "reconciliationNote": "The gate-run line was measured against the author's implementation claim; the landing claim lists the same ten delta paths plus the two receipt paths only. The scope-drift CLI was not re-run at the head because this landing folder is not checked out at beed13ed and the author's folder is not this session's to act in; the name-only diff is the same measurement."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "beed13ed8988db544f8ed697569c62c7610a5686",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/504#issuecomment-5794318198, headed \"Reviewer-only seat review of PR #504 at exact head beed13ed8988db544f8ed697569c62c7610a5686\", quoting verbatim the PASS verdict of the reviewer-only seat frontend-ipc-contract-auditor against base f326ee0120bed1d0a33f2b89b874ca9dc60857be; an earlier general-purpose reviewer PASS at the same head is https://github.com/Pootytxng/sentinel/pull/504#issuecomment-5793789880.",
+    "reviewerNote": "Reviewer-only seat frontend-ipc-contract-auditor, a read-only subagent in a fresh context at the exact head beed13ed; it cannot be a mutation author. It read the delta from git objects and ran the six touched suites in the author folder (clean at the head before and after) at --maxWorkers=4 --testTimeout=180000: 91 tests, 90 passed, 1 timed out at its own computed 15000ms cap after logging 0 CRLF offenders, a timeout not an assertion failure, the #512/#515 load defect this session consolidates next. Findings, all non-blocking: folderKey normalisation (realpath, slashes, trailing separator, win32 case) verified by passing fixtures; own-folder findings still assert toEqual([]) in all four checks; shared-repo assertions stay unconditional; runHygiene returns 1 on a missing status; the call-site test greps comment-stripped source; package.json adds one script line and setup-local-ci.ps1 is comment-only. Not verified by the seat: an end-to-end fleet:hygiene run and the full suite, which the author gate log covers. GitHub records the verdict as a PR comment from the shared Pootytxng account posted by the landing session; the seat is a Claude model, independent by role only."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "Marks draft PR #504 ready after exact-head non-author review. Merge follows under its own receipt without changing the reviewed head."
+}

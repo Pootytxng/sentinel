@@ -64,8 +64,11 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import {
   gitRaw,
+  gitRawAsync,
+  inspectFleet,
   inspectWorktree,
   isInside,
   listWorktrees,
@@ -267,6 +270,66 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
     a.run(["config", "core.hooksPath", ".githooks"], a.main);
     expect(inspectWorktree(a.linked, a.main).ok).toBe(true);
     expect(inspectWorktree(b.linked, b.main).ok).toBe(false);
+  });
+
+  // #512. The live walk below runs through inspectFleet, which exists only to overlap the waits on
+  // git. It is allowed to be faster and nothing else, so it is held to inspectWorktree's own verdicts
+  // on a fleet that yields both answers, and its cost is asserted as spawn counts, not the clock.
+  it("inspectFleet reaches inspectWorktree's verdicts, prefetching exactly its two reads per checkout side by side", async () => {
+    const a = fixture("fleet-a");
+    a.armWith(a.linked, GOOD_HOOK);
+    a.run(["config", "core.hooksPath", ".githooks"], a.main);
+    const b = fixture("fleet-b"); // unwired: git init sets no core.hooksPath
+    const fleet = [a.main, a.linked, b.main, b.linked, join(b.base, "never-existed")];
+    const sequential = fleet.map((wt) => inspectWorktree(wt, a.main));
+    // Non-vacuity: a fleet where every verdict agreed could not tell a correct prefetch from one
+    // that answered everything the same way.
+    expect(sequential.map((r) => r.ok)).toEqual([false, true, false, false, true]);
+
+    let inFlight = 0;
+    let peak = 0;
+    const asked = [];
+    const gitAsync = async (args, cwd) => {
+      asked.push(args[0]);
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      try {
+        return await gitRawAsync(args, cwd);
+      } finally {
+        inFlight -= 1;
+      }
+    };
+    const blocking = [];
+    const gitSync = (args, cwd) => {
+      blocking.push(args[0]);
+      return gitRaw(args, cwd);
+    };
+
+    expect(await inspectFleet(fleet, a.main, { gitAsync, gitSync })).toEqual(sequential);
+    // Two reads per checkout that exists, none for the one that does not, and no blocking re-read.
+    expect(asked.sort()).toEqual(["config", "config", "config", "config", "rev-parse", "rev-parse", "rev-parse", "rev-parse"]);
+    expect(blocking).toEqual([]);
+    expect(peak, "the reads must actually overlap, or this is the old walk with extra steps").toBeGreaterThan(1);
+  });
+
+  it("a prefetch that yields nothing falls back to the blocking read, never to a verdict", async () => {
+    const f = fixture("fleet-miss");
+    f.armWith(f.linked, GOOD_HOOK);
+    f.run(["config", "core.hooksPath", ".githooks"], f.main);
+    const fleet = [f.main, f.linked];
+    const sequential = fleet.map((wt) => inspectWorktree(wt, f.main));
+    const blocking = [];
+    const gitSync = (args, cwd) => {
+      blocking.push(args[0]);
+      return gitRaw(args, cwd);
+    };
+    // Not a state gitRawAsync can reach -- it always resolves a result -- but the only way to force
+    // every lookup to miss, which is what a checkout whose path moved mid-walk looks like.
+    const empty = async () => undefined;
+    expect(await inspectFleet(fleet, f.main, { gitAsync: empty, gitSync })).toEqual(sequential);
+    expect(sequential.map((r) => r.ok)).toEqual([false, true]);
+    // main fails at the missing hook after both reads; linked passes after both.
+    expect(blocking.sort()).toEqual(["config", "config", "rev-parse", "rev-parse"]);
   });
 
   it("an unset core.hooksPath fails: a registered worktree that is not wired runs no hook", () => {
@@ -803,9 +866,12 @@ describe("the live fleet, as registered in THIS clone right now", () => {
     expect(worktrees.length).toBeGreaterThan(0);
   });
 
-  it("proves a usable pre-push gate in every registered worktree — this one blocks, a peer's warns (#488)", () => {
+  // #515: reaches into every registered checkout, so it rides the tree-walk budget.
+  it("proves a usable pre-push gate in every registered worktree — this one blocks, a peer's warns (#488)", { timeout: TREE_WALK_TIMEOUT_MS }, async () => {
     const main = worktrees[0]; // git lists the main working tree first
-    const broken = worktrees.map((wt) => inspectWorktree(wt, main)).filter((r) => !r.ok);
+    // #512: inspectFleet is inspectWorktree per checkout with the git reads run side by side; the
+    // fixture describe above proves the verdicts identical.
+    const broken = (await inspectFleet(worktrees, main)).filter((r) => !r.ok);
     // #488: a peer's unusable hook is that folder's session's to repoint, or the owner's, and until
     // 2026-09-22 it failed every OTHER lane's push instead (the #456 push, 05:49Z, on a worktree
     // created with an absolute pin). Every worktree is still measured and every finding still

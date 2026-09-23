@@ -14,7 +14,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: ["./src/test/setup.ts"],
+    // #515: the second file fails any test that walks the real tree or worktree fleet on less than
+    // the measured TREE_WALK_TIMEOUT_MS (src/test/tree-walk-budget.ts).
+    setupFiles: ["./src/test/setup.ts", "./scripts/lib/tree-walk-tripwire-setup.mjs"],
     css: false,
     // Don't scan gitignored local git worktrees (.claude/worktrees/wf_*) — they hold STALE frozen
     // snapshots of these very test files, so vitest would otherwise run duplicate/outdated copies and
