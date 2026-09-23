@@ -1320,12 +1320,31 @@ mod benchmark_tests {
         assert!(raw.bandwidth_mb_s > 0.0);
     }
 
+    // Regression guard (baseline flake at the local pre-push gate, 2026-09-22, #505): the old
+    // form, `precancelled_cpu_returns_fast_and_does_not_hang`, proved "a pre-cancelled run bails"
+    // with a wall-clock bound (`elapsed < 400ms`) around a call that spawns one thread per core.
+    // Inside the ~1,350-test parallel cargo run on the dev rig, thread start-up plus scheduling
+    // alone can exceed that, so the bound fired on a scripts-only diff and cost a full gate
+    // re-run. A wall-clock upper bound under load is a flake by construction. What the test
+    // MEANS is that a pre-cancelled run does NO work, and that is observable without a clock:
+    // both kernels return zero iterations, so both throughputs are exactly 0.0 (0 / secs). The
+    // only timing left is a generous hang guard on a helper thread, so a runner that ignores
+    // `cancel` and wedges fails with a message instead of hanging the whole suite.
     #[test]
-    fn precancelled_cpu_returns_fast_and_does_not_hang() {
-        let cancel = AtomicBool::new(true); // pre-cancelled
-        let t = Instant::now();
-        let _ = bench_cpu(&RunConfig::default(), &cancel); // 600ms budget, but cancelled
-        assert!(t.elapsed() < Duration::from_millis(400)); // bails well under budget
+    fn precancelled_cpu_does_no_work_and_does_not_hang() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let cancel = AtomicBool::new(true); // pre-cancelled
+            let _ = tx.send(bench_cpu(&RunConfig::default(), &cancel)); // 600ms budget x2, cancelled
+        });
+        // Hang guard only: the full un-cancelled budget is 1.2s, so 10s cannot fire under load,
+        // yet it still turns a wedged runner into a failure instead of a hung cargo test.
+        let raw = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("pre-cancelled bench_cpu must return, not hang");
+        assert_eq!(raw.single_kops, 0.0, "pre-cancelled single-thread kernel must run zero iterations");
+        assert_eq!(raw.multi_kops, 0.0, "pre-cancelled multi-thread kernel must run zero iterations");
+        assert!(raw.threads >= 1);
     }
 
     #[test]
