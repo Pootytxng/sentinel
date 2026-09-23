@@ -279,9 +279,9 @@ or transfers a mutation lease.
 - `Local\Compy.ReleasePipeline.v1` is held by `scripts/release.ps1` through prepare/prove/publish exit.
 - `Local\Compy.InstalledBinary.v1` is held by `scripts/ship-reinstall.ps1` through installed-binary
   replacement/proof/relaunch.
-- `Local\Compy.TestGate.v1` is held by `scripts/verify-local.ps1` around its `npm test` stage only
-  (#522), so concurrent pre-push gates queue for the full suite instead of starving each other into
-  timeouts. It guards a read-only proof, not a mutation, so a second gate waits (bounded at 30
+- `Local\Compy.TestGate.v1` is held by `scripts/verify-local.ps1` from its `npm test` stage through
+  build, cargo test and clippy (#522), so concurrent pre-push gates queue for the heavy stages
+  instead of starving each other into timeouts. It guards a read-only proof, not a mutation, so a second gate waits (bounded at 30
   minutes, naming the holder) and a holder that died is taken over with a WARN; it leaves no recovery
   state. `scripts/lib/gate-mutex.ps1`, pinned by `scripts/gate-mutex-guard.test.mjs`.
 

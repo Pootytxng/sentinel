@@ -5,13 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 
-// #522 -- the pre-push gate's `npm test` stage queues on a machine-wide mutex instead of running a
-// second full suite beside a peer's. Three gates' suites at once each ran ~15 minutes and all three
-// failed on 28-37 timeouts (2026-09-23); the failing tests rotated with the load, so no per-test fix
-// could converge. This file pins the fix against REAL processes: the gate takes the mutex around
-// `npm test` and nothing else, a second holder waits rather than runs, the wait is bounded and names
-// the holder, a failed suite still releases it, and a holder that died is taken over rather than
-// deadlocking every lane's push.
+// #522 -- the pre-push gate's heavy stages queue on a machine-wide mutex instead of running beside a
+// peer's. Three gates' suites at once each ran ~15 minutes and all three failed on 28-37 timeouts
+// (2026-09-23); the failing tests rotated with the load, so no per-test fix could converge. This
+// file pins the fix against REAL processes: the gate takes the mutex around the suite, build, cargo
+// test and clippy (a lock on the suite alone admitted the next gate's suite beside the holder's
+// compile, which cost it 6 timeouts), a second holder waits rather than runs, the wait is bounded and
+// names the holder, a failed stage still releases it, and a holder that died is taken over rather
+// than deadlocking every lane's push.
 //
 // NEVER THE PRODUCTION NAME. This file runs inside `npm test`, which runs inside a gate that HOLDS
 // Local\Compy.TestGate.v1. A case that waited on that name would wait on its own gate for 30 minutes.
@@ -28,6 +29,8 @@ const root = join(import.meta.dirname, "..");
 const lib = join(root, "scripts", "lib", "gate-mutex.ps1");
 const verifyLocal = join(root, "scripts", "verify-local.ps1");
 const workControl = join(root, "docs", "WORK_CONTROL.md");
+// verify-local.ps1's heavy stages, in gate order: everything the mutex must hold.
+const HEAVY_STAGES = ["frontend tests", "frontend type-check and build", "Rust tests", "Rust clippy"];
 const powershell = process.env.SystemRoot
   ? join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
   : "powershell.exe";
@@ -102,7 +105,7 @@ Exit-GateMutex -Lease $lease
 const PROBE = String.raw`
 param(
   [string]$VerifyLocal, [string]$Lib, [string]$MutexName, [string]$StateDir,
-  [string]$ReadyFile = "", [string]$ReleaseFile = "", [switch]$Fail, [switch]$InspectOnly
+  [string]$ReadyFile = "", [string]$ReleaseFile = "", [string]$FailAt = "", [switch]$InspectOnly
 )
 $ErrorActionPreference = "Stop"
 ${STAMP}
@@ -125,7 +128,7 @@ function Get-CheckName {
 function Test-Inside { param($Inner, $Outer) $Inner.Extent.StartOffset -ge $Outer.Extent.StartOffset -and $Inner.Extent.EndOffset -le $Outer.Extent.EndOffset }
 
 $enters = @(Get-Calls $ast "Enter-GateMutex")
-$report = [ordered]@{ enterCalls = $enters.Count; libDotSourced = $false; assignedTo = $null; nextIsTry = $false; catchClauses = $null; guardedChecks = @(); unguardedTestChecks = @(); finallyReleasesLease = $false; enterBeforeTestStage = $false }
+$report = [ordered]@{ enterCalls = $enters.Count; libDotSourced = $false; assignedTo = $null; nextIsTry = $false; catchClauses = $null; guardedChecks = @(); unguardedHeavyChecks = @(); finallyReleasesLease = $false; enterBeforeTestStage = $false }
 foreach ($c in (Get-Calls $ast "Join-Path")) {
   if ($c.Extent.Text -notmatch 'lib\\gate-mutex\.ps1') { continue }
   $p = $c.Parent
@@ -148,11 +151,13 @@ if ($enters.Count -eq 1) {
         if ($report.assignedTo -and $x.Extent.Text -match ('-Lease\s+\$' + [regex]::Escape($report.assignedTo) + '\b')) { $report.finallyReleasesLease = $true }
       }
     }
-    # Every Invoke-Check that runs the npm test script, or is named like the test stage, must sit
-    # inside the guarded try -- a second, unguarded copy would run the suite beside a peer again.
+    # Every Invoke-Check that runs the suite, the build or cargo -- by name or by what it runs -- must
+    # sit inside the guarded try: an unguarded copy would load the machine beside a peer's suite again.
+    $heavyNames = @("frontend tests", "frontend type-check and build", "Rust tests", "Rust clippy")
     foreach ($check in (Get-Calls $ast "Invoke-Check")) {
-      $isTestStage = ((Get-CheckName $check) -eq "frontend tests") -or ($check.Extent.Text -match '@\(\s*"test"\s*\)')
-      if ($isTestStage -and -not (Test-Inside $check $try.Body)) { $report.unguardedTestChecks += (Get-CheckName $check) }
+      $text = $check.Extent.Text
+      $isHeavy = ($heavyNames -contains (Get-CheckName $check)) -or ($text -match '@\(\s*"test"\s*\)') -or ($text -match '@\(\s*"run"\s*,\s*"build"') -or ($text -match '-Command\s+\$cargo\b')
+      if ($isHeavy -and -not (Test-Inside $check $try.Body)) { $report.unguardedHeavyChecks += (Get-CheckName $check) }
     }
     $firstTest = @(Get-Calls $ast "Invoke-Check" | Where-Object { (Get-CheckName $_) -eq "frontend tests" } | Select-Object -First 1)
     if ($firstTest.Count -eq 1) { $report.enterBeforeTestStage = $stmt.Extent.EndOffset -le $firstTest[0].Extent.StartOffset }
@@ -172,10 +177,11 @@ function Invoke-Check {
   Set-Content -LiteralPath $ReadyFile -Value "ready"
   Wait-ForRelease -Path $ReleaseFile
   Write-Host "CHECK-END $Name $(Stamp)"
-  if ($Fail) { throw "$Name failed with exit code 1." }
+  if ($FailAt -eq $Name) { throw "$Name failed with exit code 1." }
 }
 $repo = "probe-repo"
 $npm = "npm"
+$cargo = "cargo"
 "PID $PID"
 . ([scriptblock]::Create($stmt.Extent.Text + [Environment]::NewLine + $try.Extent.Text))
 "PROBE-DONE $(Stamp)"
@@ -237,6 +243,8 @@ const stamp = (stdout, label) => {
   const m = new RegExp("^" + label + " (\\S+)\\s*$", "m").exec(stdout);
   return m ? Date.parse(m[1]) : null;
 };
+// The CHECK-END stage names in the order the probe finished them.
+const ended = (stdout) => [...stdout.matchAll(/^CHECK-END (.+?) \S+\s*$/gm)].map((m) => m[1]);
 const pidOf = (stdout) => Number(/^PID (\d+)\s*$/m.exec(stdout)?.[1] ?? NaN);
 
 const waitFor = async (predicate, what, timeoutMs = 60_000) => {
@@ -292,8 +300,8 @@ describe("the test-gate mutex is a distinct, documented name", () => {
   });
 });
 
-describe.runIf(process.platform === "win32")("verify-local.ps1 queues its test stage on the gate mutex", () => {
-  it("takes the mutex around `npm test` and nothing else, and releases it in finally", async () => {
+describe.runIf(process.platform === "win32")("verify-local.ps1 queues its heavy stages on the gate mutex", () => {
+  it("takes the mutex around the suite, build, cargo test and clippy, and releases it in finally", async () => {
     const result = await probe(makeCase(), { InspectOnly: true }).done;
     expect(result.code, result.stderr).toBe(0);
     const report = JSON.parse(/^INSPECT (.*)$/m.exec(result.stdout)?.[1] ?? "null");
@@ -305,11 +313,12 @@ describe.runIf(process.platform === "win32")("verify-local.ps1 queues its test s
       catchClauses: 0,
       finallyReleasesLease: true,
       enterBeforeTestStage: true,
-      unguardedTestChecks: [],
+      unguardedHeavyChecks: [],
     });
     expect(report.assignedTo).toBeTruthy();
-    // Only the suite is serialized: the build and cargo stages stay parallel across lanes.
-    expect(report.guardedChecks).toEqual(["frontend tests"]);
+    // Exactly the heavy stages, in gate order. The cheap checks before them (diff check, scope drift)
+    // stay outside so lanes still run those in parallel -- a lock around them would queue for nothing.
+    expect(report.guardedChecks).toEqual(HEAVY_STAGES);
   });
 
   it("makes a second gate WAIT, naming the holder, and admits it only after the first releases", async () => {
@@ -338,29 +347,35 @@ describe.runIf(process.platform === "win32")("verify-local.ps1 queues its test s
 
     // The premise, proven by both processes' own clocks: the peer asked while the gate's test stage
     // was running, and got the mutex only once that stage had ended.
+    // Admission waits for the LAST heavy stage, not the suite: the first cut admitted the next gate
+    // when the suite ended, straight into the holder's compile.
+    expect(ended(held.stdout)).toEqual(HEAVY_STAGES);
     const stageStart = stamp(held.stdout, "CHECK-START frontend tests");
-    const stageEnd = stamp(held.stdout, "CHECK-END frontend tests");
+    const suiteEnd = stamp(held.stdout, "CHECK-END frontend tests");
+    const lastEnd = stamp(held.stdout, "CHECK-END " + HEAVY_STAGES.at(-1));
     const asked = stamp(waited.stdout, "ATTEMPT");
     const admitted = stamp(waited.stdout, "ACQUIRED");
-    for (const value of [stageStart, stageEnd, asked, admitted]) expect(value).not.toBeNull();
+    for (const value of [stageStart, suiteEnd, lastEnd, asked, admitted]) expect(value).not.toBeNull();
     expect(asked).toBeGreaterThanOrEqual(stageStart);
-    expect(asked).toBeLessThanOrEqual(stageEnd);
-    expect(admitted).toBeGreaterThanOrEqual(stageEnd);
+    expect(asked).toBeLessThanOrEqual(suiteEnd);
+    expect(admitted).toBeGreaterThanOrEqual(lastEnd);
   });
 
-  it("still releases the mutex when the test stage fails, and the gate still fails", async () => {
+  it.each(["frontend tests", "Rust clippy"])("still releases the mutex when %s fails, and the gate still fails", async (failing) => {
     const testCase = makeCase();
     const ready = testCase.file("probe-ready.txt");
     const release = testCase.file("probe-release.txt");
-    const gate = probe(testCase, { ReadyFile: ready, ReleaseFile: release, Fail: true });
+    const gate = probe(testCase, { ReadyFile: ready, ReleaseFile: release, FailAt: failing });
     await waitFor(() => existsSync(ready), "the gate to reach its test stage");
     writeFileSync(release, "release", "utf8");
     const result = await gate.done;
 
     expect(result.code).not.toBe(0);
-    expect(result.stdout + result.stderr).toContain("frontend tests failed with exit code 1.");
+    expect(result.stdout + result.stderr).toContain(`${failing} failed with exit code 1.`);
     expect(result.stdout).not.toMatch(/^PROBE-DONE /m);
-    const end = result.stdout.indexOf("CHECK-END frontend tests");
+    // A red stage stops the gate: nothing after it ran, and nothing ran unlocked.
+    expect(ended(result.stdout)).toEqual(HEAVY_STAGES.slice(0, HEAVY_STAGES.indexOf(failing) + 1));
+    const end = result.stdout.indexOf(`CHECK-END ${failing}`);
     const released = result.stdout.indexOf(`TEST GATE: released '${testCase.mutexName}'.`);
     expect(end).toBeGreaterThanOrEqual(0);
     expect(released).toBeGreaterThan(end);

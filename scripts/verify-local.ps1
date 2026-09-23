@@ -178,8 +178,8 @@ $node = Resolve-RequiredCommand "node"
 # driven against fixture trees by scripts/deps-bootstrap-guard.test.mjs.
 . (Join-Path $PSScriptRoot "deps-satisfied.ps1")
 
-# Defines Enter-GateMutex / Exit-GateMutex: one full test suite at a time in this Windows session
-# (#522). Pinned by scripts/gate-mutex-guard.test.mjs.
+# Defines Enter-GateMutex / Exit-GateMutex: one gate's heavy stages at a time in this Windows
+# session (#522). Pinned by scripts/gate-mutex-guard.test.mjs.
 . (Join-Path $PSScriptRoot "lib\gate-mutex.ps1")
 
 function Confirm-Dependencies {
@@ -239,22 +239,23 @@ try {
   # fails the push. A folder with no session record or no cached claim is "not measured" and passes
   # with that line on the log -- the gate says what it could not check rather than pretend.
   Invoke-Check -Name "write-scope drift (#356)" -Command $node -Arguments @("scripts/scope-drift-gate.mjs")
-  # #522: lanes QUEUE for the full suite instead of starving each other. Three gates' `npm test` at
+  # #522: lanes QUEUE for the heavy stages instead of starving each other. Three gates' `npm test` at
   # once each took ~15 minutes and all three failed on timeouts (2026-09-23); alone it is ~2. The
-  # lock covers this stage only -- see scripts/lib/gate-mutex.ps1 for why not the whole gate.
+  # lock spans the suite AND the build and cargo stages after it -- see scripts/lib/gate-mutex.ps1
+  # for why the suite alone was not enough.
   $testGate = Enter-GateMutex -Label "verify-local.ps1 in $repo" -Say { param($Text) Write-Gate $Text }
   try {
     Invoke-Check -Name "frontend tests" -Command $npm -Arguments @("test") -NodeHosted
+    Invoke-Check -Name "frontend type-check and build" -Command $npm -Arguments @("run", "build") -NodeHosted
+    Invoke-Check -Name "Rust tests" -Command $cargo -Arguments @("test", "--manifest-path", "src-tauri/Cargo.toml")
+    # `--all-features` is a superset of ci.yml's flags, never weaker. The crate declares no [features]
+    # and no optional dependencies today, so it resolves identically -- it is here so that adding one
+    # later does not quietly leave it unlinted.
+    Invoke-Check -Name "Rust clippy" -Command $cargo -Arguments @("clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--all-features", "--", "-D", "warnings")
   }
   finally {
     Exit-GateMutex -Lease $testGate
   }
-  Invoke-Check -Name "frontend type-check and build" -Command $npm -Arguments @("run", "build") -NodeHosted
-  Invoke-Check -Name "Rust tests" -Command $cargo -Arguments @("test", "--manifest-path", "src-tauri/Cargo.toml")
-  # `--all-features` is a superset of ci.yml's flags, never weaker. The crate declares no [features]
-  # and no optional dependencies today, so it resolves identically -- it is here so that adding one
-  # later does not quietly leave it unlinted.
-  Invoke-Check -Name "Rust clippy" -Command $cargo -Arguments @("clippy", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets", "--all-features", "--", "-D", "warnings")
 }
 finally {
   Pop-Location

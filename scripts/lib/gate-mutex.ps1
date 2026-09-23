@@ -1,4 +1,4 @@
-# gate-mutex.ps1 - one full test suite at a time in this Windows session (#522).
+# gate-mutex.ps1 - one gate's heavy stages at a time in this Windows session (#522).
 # ASCII only for Windows PowerShell 5.1 compatibility.
 #
 # WHY. Every lane's pre-push gate runs `npm test`, and each `npm test` starts a full vitest pool of
@@ -10,10 +10,13 @@
 # The failing tests rotate with the load, so fixing tests one at a time never converges. Queueing
 # does: a gate that waits two minutes for a peer beats three gates that each fail after fifteen.
 #
-# WHAT IT HOLDS. `scripts/verify-local.ps1` holds this around the `npm test` stage and nothing else:
-# the builds and cargo stages do not time out, and in the same 110 logs a peer's build/cargo stage
-# overlapped a gate's `npm test` once, with no timeout. Holding the whole gate would queue lanes
-# for ~4 minutes per peer to protect against a load that was never observed to hurt.
+# WHAT IT HOLDS. `scripts/verify-local.ps1` holds this from `npm test` through the build, cargo test
+# and clippy stages. The first cut held `npm test` alone, and that SCHEDULED the collision it was
+# meant to stop: a queued gate is admitted the moment the holder's suite ends, which is exactly when
+# the holder starts compiling. On 2026-09-23 at 13:14Z the holder passed 457/457 files alone, then
+# the queued gate's suite ran beside its build and cargo stages (a 2m20s test-profile compile) and
+# lost 6 tests to the 15s limit at 15.0-17.6s each. The cheap stages before the lock (diff check,
+# scope drift) still run in parallel; the queue costs each extra lane one whole gate of waiting.
 #
 # HOW IT DIFFERS FROM Local\Compy.ReleasePipeline.v1 AND Local\Compy.InstalledBinary.v1
 # (scripts/lib/process-mutex.ps1). Those guard mutations, so a second process fails at once and a
@@ -128,7 +131,7 @@ function Enter-GateMutex {
       throw $gaveUp
     }
     if (-not $queued) {
-      $null = & $Say "TEST GATE: busy -- '$Name' is held by $holder. Queued rather than running a second full suite beside it (#522); waiting up to ${TimeoutSeconds}s."
+      $null = & $Say "TEST GATE: busy -- '$Name' is held by $holder. Queued rather than running a second gate's suite and builds beside it (#522); waiting up to ${TimeoutSeconds}s."
       $queued = $true
     } elseif (($now - $lastNotice).TotalSeconds -ge $NoticeSeconds) {
       $null = & $Say "TEST GATE: still queued after ${waited}s -- held by $holder."
