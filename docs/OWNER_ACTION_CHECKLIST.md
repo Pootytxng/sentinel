@@ -124,13 +124,17 @@ stalling — but anything else on this PC that asks WMI will stay slow or empty 
 back. **Why it matters:** two pre-push gates went red on a kill that had already happened; the fix
 removed the dependency, only you can remove the symptom.
 
+### A_spent. Four spent checkouts to remove  ·  ⏳ NEW 2026-09-23  ·  [#520](https://github.com/Pootytxng/sentinel/issues/520)
+
+**The ask:** `git worktree remove` for `.claudeworktreescompy-health-parity`, `..sentinel-recon-261`, `..sentinel-remote-design-286`, and (`--force`, once #520's PR is on `main`) `.claudeworktreeslicense-tests`. All four are superseded or salvaged; evidence on #520. Branches survive removal. **Why it matters:** the fleet report shows them as unpushed work on every run.
+
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you (A0's key backup closed 2026-08-18; record and the two count
-corrections in the archive). **§A holds SIX things:** ① A0's residual — delete the
+corrections in the archive). **§A holds SEVEN things:** ① A0's residual — delete the
 redundant `Desktop\COMPY KEY\` copy; ② A0's *"expand to the remaining invitees"* — a **distribution call**,
 yours by definition; ③ **A_settings**, one paste in a file only you may edit; ④ **A_prune**,
-one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches.
+one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches; ⑦ **A_spent**, four folder removals.
 Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_ci · A_rig · A_ref2 · B1 · B7 · B_arc · A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**.
 
 ---
@@ -172,20 +176,7 @@ for THIS beta stays `37a166c`; newer main commits (e.g. `970f801`, the §6 prese
 The send decision + recipient list are yours; Claude runs the mechanics (hash, upload,
 download-test, record-keeping) on your GO.
 
-**⚠️ INCIDENT 2026-07-22 AM — the wrong link went out; two things now on YOU:**
-The OLD June kit's link (stale `fc940fe` 0.1.0 build) was sent out instead of the staged 0.9.0
-link — protocol steps 3 (verify the actual link) and 5 (record recipients) were skipped. Cowork
-has since killed the old link (verified dead unauthenticated), renamed the file
-`RETIRED-DO-NOT-SEND_Compy-Beta-Kit_OLD-0.1.0-June.zip`, and re-verified the correct link
-end-to-end (anonymous download, SHA-256 `6BC2F7DF…F5A2C4` exact):
-https://drive.google.com/file/d/1BNuoY-ubKCLTkPUDFdnmFGAUkK4g0J9n/view?usp=sharing
-1. ~~Tell Claude who received the old link~~ → ✅ DONE 2026-07-22: **Matcher · Chinaman · J ·
-   Zoid · Sultan · Majin** — recorded in `BETA_DISTRIBUTION_RECORD.md`.
-2. ~~Re-send using ONLY the link above~~ → ✅ DONE 2026-07-22 (~9 AM PDT): owner sent the
-   correction + verified link to all six; the exact sent link was re-verified unauthenticated
-   **post-send** (HTTP 200 · SHA-256 exact) and the old link re-confirmed dead in the same pass.
-**Nothing left on you for this incident.** The open risk item is now §A2 (smoke pass, 0/24) —
-six people hold a working install link. Anyone clicking the old link sees "request access" — safe.
+**2026-07-22 wrong-link incident — ✅ closed, nothing on you;** record moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md) §B2 (2026-09-23).
 
 **Fold-in — cold-start user testing (panel-review brief 2026-07-15 §4.10):** the beta send doubles as
 the cold-start test event — same recipients, no separate program. Target mix when picking who gets it:

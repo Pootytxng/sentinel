@@ -45,7 +45,7 @@ inherited. **Nothing open blocks Phase 2.**
 - **Repaired here:** the stranded PR #383 merge receipt, whose loss reddened the gate fleet-wide.
 - **Also repaired:** this worktree's `core.hooksPath`, which had silently disarmed its pre-push gate.
 - **Not this lane's:** `RELEASE_STATE.md`'s stale commit/stamp anchors. The desk runs unmerged
-  `c82440a1`; both are already fixed at `3ab9b010` on the live #224/#225 lane. Let that lane land.
+  `c82440a1`; both are fixed at `3ab9b010`, on `main` with the #224/#225 parity work (#520).
 - **Not blockers:** #156 — the post-install stamp gate catches it; never loosen it. #283, #292, #64.
 - **Owner-gated:** #321 CI billing, #205 signing, #201 `compy.gg` — `OWNER_ACTION_CHECKLIST.md`.
 - **Not inherited:** the #295-#351 governance cluster is Phase-1-irrelevant by the roadmap's own

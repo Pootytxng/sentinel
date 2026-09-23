@@ -368,6 +368,27 @@ mod license_storage_tests {
         assert_eq!(err, "Couldn't save the license locally.");
         assert!(!err.contains(&key), "the user's key never appears in what they are shown");
     }
+
+    #[test]
+    fn a_key_file_that_exists_but_cannot_be_read_as_text_means_no_license() {
+        let dir = scratch("unreadable");
+
+        // A DIRECTORY sitting where the key file goes: it exists, but read_to_string fails.
+        let as_dir = dir.join("license.key");
+        std::fs::create_dir_all(&as_dir).unwrap();
+        assert!(as_dir.exists());
+        assert_eq!(read_stored_key_from(&as_dir), None);
+
+        // Bytes that are not UTF-8: the file reads, the text decode fails.
+        let not_utf8 = dir.join("binary.key");
+        std::fs::write(&not_utf8, [0xff, 0xfe, 0x00, 0x80]).unwrap();
+        assert_eq!(read_stored_key_from(&not_utf8), None);
+
+        // Whitespace only: readable, but carries no key.
+        let blank = dir.join("blank.key");
+        std::fs::write(&blank, b" \r\n\t ").unwrap();
+        assert_eq!(read_stored_key_from(&blank), None);
+    }
 }
 
 // ─── Pure-core tests (the crypto is proven against a test keypair; production key stays placeholder) ──
@@ -515,5 +536,137 @@ mod license_tests {
         assert!(s.valid && s.tier == "pro", "node-minted token must verify cross-tool: {s:?}");
         // And it must NOT verify against a different (placeholder) key — the signature binds the key.
         assert!(!verify_license(token, &LICENSE_SIGNING_PUBKEY_BYTES, now()).valid);
+    }
+
+    /// Sign ARBITRARY payload bytes, for payload shapes the `LicensePayload` struct cannot serialize
+    /// (a missing `expires_at` key, an unparseable date).
+    fn sign_raw(payload_json: &str, kp: &KeyPair) -> String {
+        let sig = kp.sk.sign(payload_json.as_bytes(), None);
+        format!("{}.{}", hex_encode(payload_json.as_bytes()), hex_encode(&sig[..]))
+    }
+
+    fn test_key() -> (KeyPair, [u8; 32]) {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = kp.pk[..].try_into().unwrap();
+        (kp, pk)
+    }
+
+    #[test]
+    fn odd_length_hex_on_either_side_of_a_signed_token_is_malformed() {
+        let (kp, pk) = test_key();
+        let token = sign_token(&payload("pro", None), &kp);
+        let (p, s) = token.split_once('.').unwrap();
+        assert!(verify_license(&token, &pk, now()).valid, "sanity: the intact token verifies");
+
+        for bad in [
+            format!("{}.{}", &p[..p.len() - 1], s), // payload one nybble short
+            format!("{}.{}", p, &s[..s.len() - 1]), // signature one nybble short
+            format!("{p}0.{s}"),                    // payload one nybble long
+            format!("{p}.{s}0"),                    // signature one nybble long
+        ] {
+            let st = verify_license(&bad, &pk, now());
+            assert!(!st.valid && st.tier == "free", "{bad:?} → {st:?}");
+            assert_eq!(st.reason, "license malformed");
+        }
+    }
+
+    #[test]
+    fn a_signature_of_the_wrong_byte_length_is_malformed_not_a_bad_signature() {
+        let (kp, pk) = test_key();
+        let token = sign_token(&payload("pro", None), &kp);
+        let (p, s) = token.split_once('.').unwrap();
+        // Ed25519 signatures are exactly 64 bytes (128 hex chars).
+        assert_eq!(s.len(), 128);
+        for sig in [&s[..126], &format!("{s}00")[..], ""] {
+            let st = verify_license(&format!("{p}.{sig}"), &pk, now());
+            assert!(!st.valid, "sig of {} hex chars → {st:?}", sig.len());
+            assert_eq!(st.reason, "license malformed");
+        }
+    }
+
+    #[test]
+    fn a_multibyte_character_cannot_split_the_hex_decoder() {
+        // "é" is 2 bytes: "aé" is 3 bytes (odd) and "éé" is 4 bytes (even, not hex). Neither may panic.
+        assert_eq!(hex_decode("aé"), None);
+        assert_eq!(hex_decode("éé"), None);
+        let pk = [7u8; 32];
+        for bad in ["aé.00", "00.éé", "é.é"] {
+            assert!(!verify_license(bad, &pk, now()).valid, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_length_cap_is_inclusive_and_is_checked_before_the_key_is_looked_at() {
+        let pk = [7u8; 32];
+        let at_cap = "a".repeat(LICENSE_KEY_MAX_CHARS);
+        let over = "a".repeat(LICENSE_KEY_MAX_CHARS + 1);
+        // At the cap it is parsed (and fails for having no dot); over the cap it is refused outright —
+        // even against the placeholder key, which would otherwise answer "licensing not active".
+        assert_eq!(verify_license(&at_cap, &pk, now()).reason, "license malformed");
+        assert_eq!(verify_license(&over, &LICENSE_SIGNING_PUBKEY_BYTES, now()).reason, "license malformed");
+        // Surrounding whitespace does not count toward the cap.
+        let padded = format!("   {at_cap}   ");
+        assert_eq!(verify_license(&padded, &LICENSE_SIGNING_PUBKEY_BYTES, now()).reason, "licensing not active");
+    }
+
+    #[test]
+    fn a_payload_with_no_expires_at_key_at_all_is_a_perpetual_license() {
+        let (kp, pk) = test_key();
+        let token = sign_raw(
+            r#"{"email_hash":"abc123","tier":"pro","issued_at":"2026-06-14T00:00:00Z"}"#,
+            &kp,
+        );
+        let st = verify_license(&token, &pk, now());
+        assert!(st.valid && st.tier == "pro", "{st:?}");
+        assert_eq!(st.reason, "active");
+        assert_eq!(st.expires_at, None);
+
+        // Far in the future it is still valid — nothing expires it.
+        let later = DateTime::parse_from_rfc3339("2099-12-31T23:59:59Z").unwrap().with_timezone(&Utc);
+        assert!(verify_license(&token, &pk, later).valid);
+    }
+
+    #[test]
+    fn an_explicit_null_expires_at_is_the_same_perpetual_license() {
+        let (kp, pk) = test_key();
+        let token = sign_raw(
+            r#"{"email_hash":"abc123","tier":"pro","issued_at":"2026-06-14T00:00:00Z","expires_at":null}"#,
+            &kp,
+        );
+        let st = verify_license(&token, &pk, now());
+        assert!(st.valid && st.expires_at.is_none(), "{st:?}");
+    }
+
+    #[test]
+    fn an_unparseable_expiry_is_malformed_never_treated_as_perpetual() {
+        let (kp, pk) = test_key();
+        for exp in ["", "never", "2027-01-01", "2027-13-01T00:00:00Z"] {
+            let json = format!(
+                r#"{{"email_hash":"abc123","tier":"pro","issued_at":"2026-06-14T00:00:00Z","expires_at":"{exp}"}}"#
+            );
+            let st = verify_license(&sign_raw(&json, &kp), &pk, now());
+            assert!(!st.valid, "expiry {exp:?} must not grant Pro: {st:?}");
+            assert_eq!(st.reason, "license malformed", "expiry {exp:?}");
+        }
+    }
+
+    #[test]
+    fn a_license_is_still_valid_at_the_exact_expiry_instant_and_free_one_second_later() {
+        let (kp, pk) = test_key();
+        let token = sign_token(&payload("pro", Some("2026-06-14T12:00:00Z")), &kp);
+        assert!(verify_license(&token, &pk, now()).valid, "now == expiry is not yet expired");
+        let after = now() + chrono::Duration::seconds(1);
+        let st = verify_license(&token, &pk, after);
+        assert!(!st.valid && st.reason == "license expired 2026-06-14", "{st:?}");
+    }
+
+    #[test]
+    fn an_unknown_payload_field_is_refused_even_when_signed() {
+        let (kp, pk) = test_key();
+        let token = sign_raw(
+            r#"{"email_hash":"abc123","tier":"pro","issued_at":"2026-06-14T00:00:00Z","seats":99}"#,
+            &kp,
+        );
+        assert_eq!(verify_license(&token, &pk, now()).reason, "license malformed");
     }
 }
