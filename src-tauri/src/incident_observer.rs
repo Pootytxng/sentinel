@@ -481,10 +481,48 @@ pub(crate) fn load_or_quarantine(path: &Path) -> IncidentObserverState {
         Ok(s) => s,
     };
     match serde_json::from_str::<IncidentObserverState>(&raw) {
-        Ok(s) if s.schema_version == SCHEMA_VERSION => s,
+        Ok(mut s) if s.schema_version == SCHEMA_VERSION => {
+            repair_powershell_blobs(&mut s);
+            s
+        }
         _ => {
             quarantine(path);
             IncidentObserverState::fresh()
+        }
+    }
+}
+
+/// Split a leading PowerShell `{"value":[...],"Count":n}` blob off `text` (#540): the app name it
+/// wrapped, and the rest of the string. Windows writes the app FIRST in both app families'
+/// EventData (Application Error 1000, Application Hang 1002), so element 0 is the name the fixed
+/// decoder would have read. Only the whole wrapper signature matches (`powershell_array_wrapper`):
+/// text that merely starts with some other JSON object was not written by that decoder.
+fn split_powershell_blob(text: &str) -> Option<(Option<String>, &str)> {
+    if !text.starts_with('{') {
+        return None;
+    }
+    let mut stream = serde_json::Deserializer::from_str(text).into_iter::<serde_json::Value>();
+    let serde_json::Value::Object(o) = stream.next()?.ok()? else { return None };
+    let values = crate::blackbox::powershell_array_wrapper(&o)?;
+    let app = values.first().and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
+    Some((app.map(str::to_string), &text[stream.byte_offset()..]))
+}
+
+/// Rewrite text the pre-#540 decoder persisted, so a card observed before the fix renders the way
+/// the fixed pipeline would have written it. Unrecoverable → unknown ("An application"), never JSON.
+fn repair_powershell_blobs(state: &mut IncidentObserverState) {
+    for row in &mut state.seen {
+        if let Some((app, _)) = row.app.as_deref().and_then(split_powershell_blob) {
+            row.app = crate::blackbox::norm_app(&app).filter(|a| !a.is_empty());
+        }
+    }
+    if let Some(card) = state.pending_card.as_mut() {
+        if let Some((app, _)) = card.app_label.as_deref().and_then(split_powershell_blob) {
+            card.app_label = app.as_deref().and_then(crate::blackbox::pretty_proc_opt);
+        }
+        if let Some((app, rest)) = split_powershell_blob(&card.summary) {
+            let name = app.as_deref().and_then(crate::blackbox::pretty_proc_opt);
+            card.summary = format!("{}{rest}", name.as_deref().unwrap_or("An application"));
         }
     }
 }
@@ -1048,6 +1086,113 @@ mod tests {
         );
         assert_eq!(s.pending_card.as_ref().unwrap().incident_id, "a2");
         assert_eq!(s.seen.len(), 1);
+    }
+
+    /// #540 bug→guard at the exact text Health renders. The webview prints `summary` and
+    /// `app_label` verbatim, so the card built from the collector's real Windows PowerShell 5.1
+    /// wire shape must read as a sentence and a program name — never `{"Count":10,"value":[...]}`.
+    #[test]
+    fn the_home_card_from_a_powershell_wrapped_row_carries_no_raw_json() {
+        let incidents = crate::blackbox::incidents_from_event_json(crate::blackbox::PS51_WRAPPED_HANG_JSON);
+        let card = card_for(incidents.first().expect("the hang row assembles"));
+        crate::blackbox::assert_no_raw_json("summary", &card.summary);
+        crate::blackbox::assert_no_raw_json("kind", &card.kind);
+        assert_eq!(card.app_label.as_deref(), Some("dllhost"));
+        assert!(card.summary.starts_with("dllhost stopped responding"), "summary: {}", card.summary);
+    }
+
+    /// #540: the owner's `incident-observer.json` (2026-09-23) persisted the pre-fix blob as the
+    /// card's summary and app label and as the app of 14 remembered rows. The card lives up to seven
+    /// days and its hang may never be re-read, so the fix must repair what is on disk: the loaded card
+    /// reads as a sentence, and the corrected scan adopts the row instead of announcing it twice.
+    #[test]
+    fn a_persisted_powershell_blob_loads_as_plain_english_and_is_not_reannounced() {
+        let blob = r#"{"Count":10,"value":["dllhost.exe","10.0.26100.8328","8420","134343869975195777","4294967295","C:\\Windows\\System32\\dllhost.exe","5a159009-d190-4e7f-9925-bd18ddb1599d","","App","Quiesce"]}"#;
+        let when = "2026-09-23T10:15:00-07:00";
+        let mut s = IncidentObserverState::fresh();
+        s.last_scan_at = Some("2026-09-23T17:16:00Z".into());
+        let mut hang = row("old", "2026-09-23T17:16:00Z");
+        hang.kind_tag = IncidentKind::AppHang.tag().into();
+        hang.app = crate::blackbox::norm_app(&Some(blob.to_string()));
+        hang.occurred_at = when.into();
+        hang.notified_at = Some("2026-09-23T17:16:00Z".into());
+        let mut empty = row("empty", "2026-09-23T17:16:00Z");
+        empty.app = Some(r#"{"count":0,"value":[]}"#.into());
+        s.seen = vec![hang, empty];
+        s.pending_home_incident_id = Some("old".into());
+        s.pending_card = Some(PendingCareIncident {
+            incident_id: "old".into(),
+            occurred_at: when.into(),
+            occurred_display: "Sep 23, 10:15 AM".into(),
+            kind: "App hang".into(),
+            app_label: Some(blob.into()),
+            summary: format!("{blob} stopped responding (froze) — Sep 23, 10:15 AM"),
+        });
+        let dir = tmpdir("ps-blob");
+        let p = dir.join("incident-observer.json");
+        save_to(&p, &s).unwrap();
+
+        let mut s = load_or_quarantine(&p);
+        let _ = std::fs::remove_dir_all(&dir);
+        let card = s.pending_card.clone().expect("the card survives the repair");
+        assert_eq!(card.summary, "dllhost stopped responding (froze) — Sep 23, 10:15 AM");
+        assert_eq!(card.app_label.as_deref(), Some("dllhost"));
+        assert_eq!(s.seen[0].app.as_deref(), Some("dllhost"));
+        assert_eq!(s.seen[1].app, None, "an unrecoverable blob is unknown, not JSON");
+
+        let fixed = crate::blackbox::incidents_from_event_json(crate::blackbox::PS51_WRAPPED_HANG_JSON);
+        let out = observe(&report(fixed.clone()), at("2026-09-23T17:40:00Z"), &mut s);
+        assert!(out.toast.is_none(), "the same hang was announced again under its corrected identity");
+        assert!(out.newly_observed.is_empty());
+        assert_eq!(s.pending_home_incident_id.as_deref(), Some(fixed[0].incident_id.as_str()));
+        crate::blackbox::assert_no_raw_json("summary", &s.pending_card.as_ref().unwrap().summary);
+    }
+
+    #[test]
+    fn an_unrecoverable_blob_summary_names_no_app_rather_than_printing_json() {
+        let mut s = IncidentObserverState::fresh();
+        s.pending_card = Some(PendingCareIncident {
+            incident_id: "x".into(),
+            occurred_at: String::new(),
+            occurred_display: String::new(),
+            kind: "App crash".into(),
+            app_label: Some(r#"{"Count":0,"value":[]}"#.into()),
+            summary: r#"{"Count":0,"value":[]} stopped working and closed — Sep 1, 9:00 PM"#.into(),
+        });
+        repair_powershell_blobs(&mut s);
+        let card = s.pending_card.unwrap();
+        assert_eq!(card.summary, "An application stopped working and closed — Sep 1, 9:00 PM");
+        assert_eq!(card.app_label, None);
+    }
+
+    /// #540 review: the load-time repair rewrites only the exact 5.1 wrapper. Stored text that merely
+    /// starts with some other JSON object carrying a `value` array was not written by the pre-fix
+    /// decoder, so it is left exactly as stored rather than having an app name read out of it.
+    #[test]
+    fn the_repair_leaves_text_that_is_not_the_exact_wrapper_as_stored() {
+        for text in [
+            r#"{"value":["other.exe"]} stopped working and closed — Sep 1, 9:00 PM"#,
+            r#"{"Count":2,"value":["other.exe"]} stopped working and closed — Sep 1, 9:00 PM"#,
+            r#"{"Count":1,"value":["other.exe"],"Length":1} stopped working and closed — Sep 1, 9:00 PM"#,
+        ] {
+            let mut s = IncidentObserverState::fresh();
+            let mut r = row("r", "2026-09-01T21:00:00Z");
+            r.app = Some(text.into());
+            s.seen = vec![r];
+            s.pending_card = Some(PendingCareIncident {
+                incident_id: "r".into(),
+                occurred_at: String::new(),
+                occurred_display: String::new(),
+                kind: "App crash".into(),
+                app_label: Some(text.into()),
+                summary: text.into(),
+            });
+            repair_powershell_blobs(&mut s);
+            let card = s.pending_card.unwrap();
+            assert_eq!(card.summary, text);
+            assert_eq!(card.app_label.as_deref(), Some(text));
+            assert_eq!(s.seen[0].app.as_deref(), Some(text));
+        }
     }
 
     #[test]

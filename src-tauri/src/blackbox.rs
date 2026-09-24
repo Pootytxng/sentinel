@@ -1100,6 +1100,13 @@ impl RawEvent {
     fn props(&self) -> Vec<String> {
         match &self.props {
             serde_json::Value::Array(a) => a.iter().map(value_to_string).collect(),
+            // Windows PowerShell 5.1 hands the `@(...)` calculated property to ConvertTo-Json
+            // wrapped in a PSObject, so the array arrives as `{"value":[...],"Count":n}` (#540).
+            serde_json::Value::Object(o) => match powershell_array_wrapper(o) {
+                Some(a) => a.iter().map(value_to_string).collect(),
+                // Any other object is unreadable: unknown, never its JSON text.
+                None => Vec::new(),
+            },
             serde_json::Value::Null => Vec::new(),
             // PowerShell's ConvertTo-Json unwraps a single-element array to a scalar.
             other => vec![value_to_string(other)],
@@ -1107,11 +1114,32 @@ impl RawEvent {
     }
 }
 
+/// The array inside Windows PowerShell 5.1's `{"value":[...],"Count":n}` wrapper (#540), matched by
+/// its whole signature: exactly the keys `value` and `Count`, and `Count` equal to the array's
+/// length. Key case is ignored because the observer's persisted rows went through `norm_app`. Any
+/// other object is `None`, so an unrelated shape never becomes event fields.
+pub(crate) fn powershell_array_wrapper(
+    o: &serde_json::Map<String, serde_json::Value>,
+) -> Option<&Vec<serde_json::Value>> {
+    if o.len() != 2 {
+        return None;
+    }
+    let field = |name: &str| o.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v);
+    let values = field("value")?.as_array()?;
+    let count = usize::try_from(field("count")?.as_u64()?).ok()?;
+    (count == values.len()).then_some(values)
+}
+
+/// One field as text. A nested object/array is not a field value, so it reads blank (unknown)
+/// rather than as JSON text a headline would print verbatim (#540).
 fn value_to_string(v: &serde_json::Value) -> String {
     match v {
         serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Null => String::new(),
-        other => other.to_string(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        serde_json::Value::Null | serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
+            String::new()
+        }
     }
 }
 
@@ -1184,6 +1212,25 @@ fn parse_events_json(s: &str) -> Vec<RawEvent> {
         .into_iter()
         .filter_map(|i| serde_json::from_value::<RawEvent>(i).ok())
         .collect()
+}
+
+/// #540 fixture: one Application Hang 1002 row exactly as Windows PowerShell 5.1 emits it from
+/// `EVENTS_SCRIPT`, with `props` as the `{"value":[...],"Count":n}` wrapper rather than an array.
+#[cfg(test)]
+pub(crate) const PS51_WRAPPED_HANG_JSON: &str = r#"[{"time":"2026-09-23T10:15:00.0000000-07:00","id":1002,"provider":"Application Hang","message":"The program dllhost.exe version 10.0.26100.1 stopped interacting with Windows and was closed.","props":{"value":["dllhost.exe","10.0.26100.1","1a2c","01dc2c7f00000000","5000","C:\\Windows\\System32\\dllhost.exe","0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0","","","Unknown"],"Count":10}}]"#;
+
+/// Test seam: raw collector JSON → the assembled incident list, through the real pipeline.
+#[cfg(test)]
+pub(crate) fn incidents_from_event_json(json: &str) -> Vec<Incident> {
+    assemble_incidents(parse_events_json(json), Vec::new(), Vec::new(), &[])
+}
+
+/// Test helper: a user-facing string carries no JSON punctuation or PowerShell wrapper keys.
+#[cfg(test)]
+pub(crate) fn assert_no_raw_json(field: &str, text: &str) {
+    for leak in ["{", "}", "[", "]", "\"Count\"", "\"value\""] {
+        assert!(!text.contains(leak), "{field} carries raw JSON ({leak:?}): {text}");
+    }
 }
 
 /// Read the WER `Report.wer` files (`ReportArchive` + `ReportQueue`). Read-only file reads, no
@@ -1655,6 +1702,52 @@ mod blackbox_tests {
         assert_eq!(arr.props(), vec!["a", "b"]);
         let none = ev("Display", 4101, "t", "m", serde_json::Value::Null);
         assert!(none.props().is_empty());
+    }
+
+    /// #540: Windows PowerShell 5.1 serializes the collector's `@(...)` calculated property as the
+    /// object `{"value":[...],"Count":n}`. That is the array, and it must decode as one; any OTHER
+    /// object or nested value is unreadable, and unreadable stays unknown — never raw JSON text.
+    #[test]
+    fn props_unwraps_the_powershell_array_wrapper_and_never_stringifies_an_object() {
+        let wrapped = ev("Application Hang", 1002, "t", "m",
+            serde_json::json!({"value": ["dllhost.exe", "10.0"], "Count": 2}));
+        assert_eq!(wrapped.props(), vec!["dllhost.exe", "10.0"]);
+        let unknown = ev("Application Hang", 1002, "t", "m", serde_json::json!({"Length": 3}));
+        assert!(unknown.props().is_empty(), "an object that is not the wrapper is unknown, got {:?}", unknown.props());
+        let nested = ev("Application Error", 1000, "t", "m", serde_json::json!([{"a": 1}, ["b"], "c.exe"]));
+        assert_eq!(nested.props(), vec!["", "", "c.exe"], "a nested value is a blank field, not JSON text");
+    }
+
+    /// #540 review: only the WHOLE 5.1 wrapper signature is the array. An object that merely carries
+    /// a `value` array (no `Count`, a `Count` that is not its length, or another key) is some other
+    /// shape, and an unrecognized shape stays unknown rather than becoming invented event fields.
+    #[test]
+    fn props_reads_only_the_exact_powershell_wrapper_signature() {
+        for not_the_wrapper in [
+            serde_json::json!({"value": ["a.exe", "1.0"]}),
+            serde_json::json!({"value": ["a.exe", "1.0"], "Count": 3}),
+            serde_json::json!({"value": ["a.exe", "1.0"], "Count": "2"}),
+            serde_json::json!({"value": ["a.exe", "1.0"], "Count": 2, "Length": 2}),
+        ] {
+            let e = ev("Application Error", 1000, "t", "m", not_the_wrapper.clone());
+            assert!(e.props().is_empty(), "{not_the_wrapper} is not the wrapper, got {:?}", e.props());
+        }
+    }
+
+    /// #540 bug→guard. Health's care notice printed `{"Count":10,"value":["dllhost.exe",...]}` as
+    /// the incident sentence on the owner's rig: the 5.1 wrapper above was stringified into ONE prop,
+    /// that prop became the faulting app, and the headline and app label carried it verbatim. This
+    /// feeds the collector's exact wire shape through the real parse → assemble pipeline.
+    #[test]
+    fn a_powershell_wrapped_props_row_yields_a_plain_english_headline() {
+        let out = incidents_from_event_json(PS51_WRAPPED_HANG_JSON);
+        assert_eq!(out.len(), 1, "the hang row must survive parsing");
+        let i = &out[0];
+        assert_eq!(i.receipt.faulting_app.as_deref(), Some("dllhost.exe"));
+        assert!(i.headline.starts_with("dllhost stopped responding (froze)"), "headline: {}", i.headline);
+        for (field, text) in [("headline", i.headline.as_str()), ("receipt.detail", i.receipt.detail.as_str())] {
+            assert_no_raw_json(field, text);
+        }
     }
 
     #[test]
