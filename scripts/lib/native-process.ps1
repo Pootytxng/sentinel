@@ -213,10 +213,22 @@ function Get-NativeProcessSnapshot {
 # 2026-09-23: explorer.exe, a second claude.exe, Discord, Firefox and every MSYS program started by
 # a cygwin-to-cygwin exec (`bash` running `sh script`) had a dead parent. A timed-out child that drew
 # one of those pids would make this walk return that whole unrelated subtree, and Stop-NativeProcessTree
-# would kill it with Process.Kill()'s 0xFFFFFFFF, which Git Bash prints as exit 127 — the signature of
-# two unexplained `git push` deaths that day (#559). A real child cannot be older than its parent, so a link is followed only
-# when the child started at or after the parent, and a link whose start times cannot be read is not
-# followed at all: a process not proven ours is never killed. scripts/tree-kill-stale-parent-guard.test.mjs.
+# would kill it with Process.Kill()'s 0xFFFFFFFF, which Git Bash prints as exit 127: the signature of
+# two unexplained `git push` deaths that day (#559). A real child cannot be older than its parent, so
+# a link is followed only when the child started at or after the parent, and a link whose start times
+# cannot be read is not followed at all: a process not proven ours is never killed.
+# scripts/tree-kill-stale-parent-guard.test.mjs.
+function Get-NativeProcessStartTime {
+  param([Parameter(Mandatory = $true)][int]$Id, [Parameter(Mandatory = $true)][hashtable]$Cache)
+  # Read once per pid; $null = gone or not readable (another user, elevated, protected).
+  if (-not $Cache.ContainsKey($Id)) {
+    $t = $null
+    try { $t = [System.Diagnostics.Process]::GetProcessById($Id).StartTime } catch { }
+    $Cache[$Id] = $t
+  }
+  return $Cache[$Id]
+}
+
 function Get-NativeDescendantIds {
   param(
     [Parameter(Mandatory = $true)][int]$ProcessId,
@@ -228,17 +240,7 @@ function Get-NativeDescendantIds {
     if (-not $byParent.ContainsKey($row.ParentProcessId)) { $byParent[$row.ParentProcessId] = New-Object System.Collections.ArrayList }
     $null = $byParent[$row.ParentProcessId].Add($row.ProcessId)
   }
-  # Start time per pid, read once; $null = gone or not readable (another user, elevated, protected).
   $startOf = @{}
-  $readStart = {
-    param([int]$Id)
-    if (-not $startOf.ContainsKey($Id)) {
-      $t = $null
-      try { $t = [System.Diagnostics.Process]::GetProcessById($Id).StartTime } catch { }
-      $startOf[$Id] = $t
-    }
-    $startOf[$Id]
-  }
   $order = New-Object System.Collections.ArrayList
   $seen = @{ $ProcessId = $true }
   $queue = New-Object System.Collections.Queue
@@ -246,11 +248,11 @@ function Get-NativeDescendantIds {
   while ($queue.Count -gt 0) {
     $current = $queue.Dequeue()
     if ($byParent.ContainsKey($current)) {
-      $parentStart = & $readStart $current
+      $parentStart = Get-NativeProcessStartTime -Id $current -Cache $startOf
       if ($null -eq $parentStart) { continue }
       foreach ($child in $byParent[$current]) {
         if ($seen.ContainsKey($child)) { continue }
-        $childStart = & $readStart $child
+        $childStart = Get-NativeProcessStartTime -Id $child -Cache $startOf
         if ($null -eq $childStart -or $childStart -lt $parentStart) { continue }
         $seen[$child] = $true; $null = $order.Add($child); $queue.Enqueue($child)
       }
