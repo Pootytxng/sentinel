@@ -24,6 +24,11 @@
 # READ-ONLY proof, so a second gate WAITS (bounded, naming the holder), and a holder that died
 # without releasing is simply taken over: there is nothing it held that could need recovery.
 #
+# THE OTHER HOLDER (#543). A gate can be starved with no peer gate at all: a lane's hand-started full
+# suite is the same load. scripts/run-vitest.mjs therefore queues a FULL, non-watch run here too,
+# through gate-mutex-hold.ps1 (Node has no named-mutex API), and verify-local.ps1 exports
+# COMPY_TEST_GATE_HELD=<its pid> while it holds this so its own `npm test` does not wait on itself.
+#
 # Pinned by scripts/gate-mutex-guard.test.mjs against real processes; documented in
 # docs/WORK_CONTROL.md "Windows-session collision guards".
 
@@ -173,7 +178,7 @@ function Enter-GateMutex {
       throw $gaveUp
     }
     if (-not $queued) {
-      $null = & $Say "TEST GATE: busy -- '$Name' is held by $holder. Queued rather than running a second gate's suite and builds beside it (#522); waiting up to ${TimeoutSeconds}s for any one holder (#541)."
+      $null = & $Say "TEST GATE: busy -- '$Name' is held by $holder. Queued rather than running a second suite and builds beside it (#522, #543); waiting up to ${TimeoutSeconds}s for any one holder (#541)."
       $queued = $true
     } elseif (($now - $lastNotice).TotalSeconds -ge $NoticeSeconds) {
       $null = & $Say "TEST GATE: still queued after ${waited}s -- held by $holder."
