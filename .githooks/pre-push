@@ -81,4 +81,28 @@ if [ ! -f "$repo/scripts/verify-local.ps1" ]; then
   exit 1
 fi
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo/scripts/verify-local.ps1"
+# ---------------------------------------------------------------------------------------------
+# A gate that DIED must say so. Git Bash turns a Windows exit code it has no name for into 127:
+# 0xFFFFFFFF (what Process.Kill() and Stop-Process -Force leave) and any crash status such as
+# 0xC0000409 or 0xC0000005 all arrive as 127; 0xC000013A (Ctrl+C / console closed) arrives as 130.
+# Before #559 such a death looked like a red gate with no reason printed: the log simply stopped
+# mid-check. The rc is captured and re-raised unchanged, so `set -e` semantics
+# hold: every non-zero answer still refuses the push. scripts/pre-push-killed-gate-guard.test.mjs.
+# ---------------------------------------------------------------------------------------------
+if ! command -v powershell.exe >/dev/null 2>&1; then
+  # The shell's own "command not found" is also 127; this keeps that case from reading as a kill.
+  echo "pre-push: powershell.exe is not on PATH, so the gate cannot run. Refusing to push unverified code." >&2
+  exit 1
+fi
+rc=0
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo/scripts/verify-local.ps1" || rc=$?
+if [ "$rc" -ne 0 ]; then
+  case "$rc" in
+    127|130)
+      echo "pre-push: the gate process was TERMINATED, not failed (exit $rc). It did not finish, so nothing was proven." >&2
+      echo "pre-push: 127 = killed from outside (Windows exit 0xFFFFFFFF) or crashed with a Windows status code;" >&2
+      echo "pre-push: 130 = Ctrl+C or its console closed. Its log stops mid-check. See #559, then push again." >&2
+      ;;
+  esac
+  exit "$rc"
+fi
