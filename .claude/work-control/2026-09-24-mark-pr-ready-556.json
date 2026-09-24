@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/549#issuecomment-5806068096",
+  "leaseEvidenceNote": "The landing Ownership claim on #549 was posted by this Claude Code session (20597fd9) at 2026-09-24T01:54:50Z and was live when this transition ran. It names this exact worktree (vigilant-turing-922e60) and branch claude/549-checkout-scan-spawns. Its Write scope is one contiguous list: PR #556's two delta paths plus the four receipt files. It refreshes this lane's implementation claim, which already covered both delta paths. The test file came into that claim from #542, after a Verified takeover of #542's dead session and #542's Handoff with `Claim: released`.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T01:54:47Z, reading each PR's files over REST. Eight PRs were open: #556, #555, #550, #546, #492, #471, #470 and #464. Only #556 touches tools/entry/checkouts.mjs or tools/entry/checkouts.test.mjs, and no PR touches the four receipt paths. At the same head, node scripts/scope-drift-gate.mjs --issue 549 --refresh reads OK against the thread: 2 changed paths, both inside the claim. node scripts/lease-overlap-gate.mjs --issue 549 reads OK: no other lane holds a pushed path from earlier than #549.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "Two of the four commits, e7a63f42 and b7da2fe2, are #542's 950cc132 and 0d0af369. They were carried over with `git cherry-pick -x`. Another Claude Code session (5ad97c96, worktree determined-ishizaka-8268b1) wrote them and never pushed them. That session was dead: its pid was gone, its transcript had been cold for over 2 hours, and its gate log stopped while it was queued for the test lock. The takeover is recorded at https://github.com/Pootytxng/sentinel/issues/542 (Verified takeover, then Handoff with `Claim: released`). That folder was left untouched at 0d0af369. The reviewer seat confirmed that the cherry-picked patch bodies are identical to the originals.",
+  "currentHead": "468d69ad760a1f21d18a0de1a4fe7c8b012347bc",
+  "pr": 556,
+  "issue": 549,
+  "kind": "lane",
+  "branch": "claude/549-checkout-scan-spawns",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is origin/main...468d69ad, with merge-base 4a4ea2d25489ab953534e51ebe68d6fd108a5451. It has four commits: 46de6504, e7a63f42, b7da2fe2 and 468d69ad. `git log --format='%an <%ae> | %cn <%ce>'` shows claude-code <claude-code@desk.local> as author and committer of every one. The reviewer seat authored none of them.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository: Pootytxng/sentinel. origin/main is 4a4ea2d2, fetched 2026-09-24T01:53Z; it is the PR base, and main has not moved since the branch was cut. origin/claude/549-checkout-scan-spawns equals local HEAD 468d69ad. Worktree vigilant-turing-922e60 is on branch claude/549-checkout-scan-spawns. `git status --porcelain --untracked-files=all` shows nothing apart from this landing's receipts. No gate, build or helper process from this lane is running: the passing gate logged the test lock's release on its last line, 1755. The reviewer seat's vitest runs have ended.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "468d69ad760a1f21d18a0de1a4fe7c8b012347bc",
+      "evidence": "logs/verify-local-2026-09-24T01-47-46Z.log (in this worktree vigilant-turing-922e60; SHA-256 997E86CE9BE02365C3DEE23AD8F9EE3C001C1FB34464B8AC57D416A976DDDBB0, 1755 lines) lines 14-53",
+      "summary": "459 frontend test files passed: 7,617 passed, 1 expected fail, 4 skipped, 0 failed (lines 48-49). The test lock was acquired with no wait (line 12)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "468d69ad760a1f21d18a0de1a4fe7c8b012347bc",
+      "evidence": "logs/verify-local-2026-09-24T01-47-46Z.log (in this worktree vigilant-turing-922e60; SHA-256 997E86CE9BE02365C3DEE23AD8F9EE3C001C1FB34464B8AC57D416A976DDDBB0, 1755 lines) lines 54-80",
+      "summary": "tsc and the Vite production build passed (built in 8.16s, line 79)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "468d69ad760a1f21d18a0de1a4fe7c8b012347bc",
+      "evidence": "logs/verify-local-2026-09-24T01-47-46Z.log (in this worktree vigilant-turing-922e60; SHA-256 997E86CE9BE02365C3DEE23AD8F9EE3C001C1FB34464B8AC57D416A976DDDBB0, 1755 lines) lines 81-1469",
+      "summary": "1,343 passed; 0 failed; 24 ignored (line 1455)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "468d69ad760a1f21d18a0de1a4fe7c8b012347bc",
+      "evidence": "logs/verify-local-2026-09-24T01-47-46Z.log (in this worktree vigilant-turing-922e60; SHA-256 997E86CE9BE02365C3DEE23AD8F9EE3C001C1FB34464B8AC57D416A976DDDBB0, 1755 lines) lines 1470-1755",
+      "summary": "Clippy finished clean under -D warnings: the dev profile finished in 42.21s (line 1754), and the stage has no warning or error lines. Line 1755 is the test lock's release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1).\n- `git push -u origin claude/549-checkout-scan-spawns` ran the gate at 2026-09-24T01:47:44Z. It printed LOCAL CHECK RESULT: PASS, and the push that created the remote branch at 468d69ad was accepted.\n- The worktree reflog binds HEAD to 468d69ad from its commit at 2026-09-23T23:56:56Z, before the log began, and records no later HEAD move.\n- Every stage was read, from the diff check to clippy, and the log was hashed to the SHA-256 above.\n- Two earlier push attempts at the same head never reached a verdict. Each was killed as a whole process tree: git exited 127 with no error line, and no stage reported a failure. The cause is unknown; the #541 lane reports that its tests were not running at those times.\n  - The first attempt, logs/verify-local-2026-09-24T00-00-18Z.log, passed its frontend tests (459 files), its build, and its Rust tests (1,343) before it died at the start of clippy. That log is also truncated, because a `tail -f` from this session blocked the gate's writes to it.\n  - The second attempt, logs/verify-local-2026-09-24T00-08-26Z.log, died right after taking the test lock.\n  - Neither attempt is cited as evidence.\n- No --no-verify was used and none is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7), 2 changed paths since origin/main were measured against the claim on #549 (cache), and both were inside it. At 01:54Z, at the same head, the re-posted landing claim was measured with --refresh: OK, 2 changed paths.",
+    "reconciliationNote": "The gate run measured against the implementation claim, whose scope was the two delta paths. The landing claim keeps those two paths and adds only the four receipt files."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "468d69ad760a1f21d18a0de1a4fe7c8b012347bc",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/556#issuecomment-5806059020. The comment is headed \"Independent exact-head review — frontend-ipc-contract-auditor seat\" and records reviewed head 468d69ad760a1f21d18a0de1a4fe7c8b012347bc and VERDICT: PASS.",
+    "reviewerNote": "The reviewer is a read-only seat that authored none of the delta. Its checks:\n- It confirmed that the diff touches only the two files.\n- It diffed each cherry-picked #542 patch against its original. The bodies are identical apart from the -x trailer.\n- It isolated the final commit's edit. The budget went from 19 to 11 and the ceiling from 4 to 2; both were lowered and nothing was loosened.\n- It ran `npx vitest run tools/entry/checkouts.test.mjs` itself: 12/12 passed.\n- It ran the combined rev-parse by hand on an unborn, a normal and a detached HEAD. Unborn gave 3 lines and exit 128; the other two exited 0.\n- It falsified in a scratch copy outside the worktree. The new test file run against the four-call checkouts.mjs from 4a4ea2d2 failed 5 of 12 tests, all on the spawn budget.\n\nIt found nothing blocking and made two non-blocking notes. First, `remote get-url` still swallows stderr, as it did before this change. Second, gitDir survives a failed exit by design.\n\nThe author session separately falsified the same budget cases, and also showed that ignoring the exit code fails the unborn case.\n\nThe shared Pootytxng account records the verdict as a PR comment whose body names the reviewer identity. The reviewer is a Claude model, independent by role only. The same route was used for the #531 and #533 landings."
+  },
+  "transition": "mark-pr-ready",
+  "closingNote": "PR #556 has zero closingIssuesReferences; its body says \"Refs #549, refs #542\". So #549 and #542 stay open through the merge and close under their own close-issue receipts."
+}
