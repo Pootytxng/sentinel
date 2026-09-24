@@ -294,4 +294,17 @@ describe.runIf(process.platform === "win32")("a full ad-hoc suite queues on the 
     expect(result.stderr).toContain("run-vitest: WARN could not queue this full suite on the test gate");
     expect(launched(result.stdout)?.marker).toBe("");
   });
+
+  // Codex review of PR #571: the holder mapped EVERY failure to the give-up exit, so a helper that
+  // broke refused the run as if the gate were busy. A name Windows rejects ("Could not find a part
+  // of the path") makes Enter-GateMutex throw something other than its bounded-wait give-up.
+  it("still runs, with a warning, when the holder starts but fails for a reason other than a busy gate", async () => {
+    const testCase = makeCase();
+    const result = await drive({ ...testCase, name: `${testCase.name}\\not-a-name` }, ["run"]).done;
+    expect(result.code, result.stderr).toBe(7);
+    expect(result.stderr).toContain("TEST GATE WARN: the gate holder failed before it held");
+    expect(result.stderr).toContain("run-vitest: WARN could not queue this full suite on the test gate");
+    expect(result.stderr).not.toMatch(/TEST GATE: gave up/);
+    expect(launched(result.stdout)?.marker).toBe("");
+  });
 });

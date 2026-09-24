@@ -12,7 +12,8 @@
 # leave the gate held. If this process is itself killed, the mutex is abandoned and the next waiter
 # takes it over with a WARN -- the library's own recovery, nothing extra here.
 #
-# Exit codes: 0 held and released; 3 gave up after the bounded wait (the library said who holds it).
+# Exit codes: 0 held and released; 3 gave up after the bounded wait (the library said who holds it);
+# 4 failed for any other reason before holding it (a TEST GATE WARN line says why; the run goes on).
 # Driven by scripts/lib/gate-mutex.mjs; pinned by scripts/run-vitest-gate-guard.test.mjs.
 
 param(
@@ -34,8 +35,12 @@ $say = { param($Text) [Console]::Error.WriteLine($Text) }
 try {
   $lease = Enter-GateMutex -Name $Name -StateDir $StateDir -Label $Label -TimeoutSeconds $TimeoutSeconds -NoticeSeconds $NoticeSeconds -Say $say
 } catch {
-  # Enter-GateMutex has already said who holds the gate and for how long this waited.
-  exit 3
+  $message = $_.Exception.Message
+  # Only the library's bounded-wait give-up is exit 3; it has already said who holds the gate. Any
+  # other failure is this helper breaking, not a busy gate, and must not refuse the run as one.
+  if ($message -like "TEST GATE: gave up after*") { exit 3 }
+  & $say "TEST GATE WARN: the gate holder failed before it held '$Name': $message"
+  exit 4
 }
 
 try {
