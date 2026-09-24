@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/540#issuecomment-5817427882",
+  "leaseEvidenceNote": "Claude Code desktop session ebef4468 took over #540 by the Verified takeover at https://github.com/Pootytxng/sentinel/issues/540#issuecomment-5817427527 (the prior claim 5802908063 expired 2026-09-24T09:04:02Z with no Handoff; no live session was rooted in modest-moser-601fc4), then posted the cited Ownership claim naming worktree trusting-newton-85d566, branch claude/540-care-notice-takeover and the write scope src-tauri/src/blackbox.rs, src-tauri/src/incident_observer.rs (narrowed from the prior claim by dropping two docs this landing does not touch). The #540 board item is Active with this folder @ branch, and the session was adopted for #540 with tools/entry/cli.mjs. PR #572 has no closing issue references, so #540 stays open and its lease does not block this merge.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T16:07:55Z over REST (pulls?state=open, then pulls/N/files). Open PRs: #572, #566, #561, #557, #492, #471, #470, #464. Only #572 touches src-tauri/src/blackbox.rs or src-tauri/src/incident_observer.rs. The native gate's lease-overlap stage (#517) read OK at this head: no other lane holds a pushed path from earlier than #540. #544's expired claim names src-tauri/src/blackbox.rs; that lane is serialized behind this one and takes the file only after this lane releases it.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The first commit (09378b10) is a cherry-pick of local-only commit b4b2205041aef8f6091c89e559202e169f3f2487, authored by an earlier claude-code session (transcript 8230d889) in folder modest-moser-601fc4 on branch claude/540-care-notice-raw-json. Authorship and message are kept; git range-diff against b4b22050 shows only the added takeover paragraph and the cherry-pick trailer, with no code difference, and git diff --stat is identical (blackbox.rs +65, incident_observer.rs +116/-3). The second commit (7c33f9df) is this session's repair for the independent review's finding. The original folder, branch and commit are untouched and stay preserved.",
+  "currentHead": "7c33f9dfd9bec3ea679af5304a21b3d071fe2166",
+  "pr": 572,
+  "issue": 540,
+  "kind": "lane",
+  "branch": "claude/540-care-notice-takeover",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is 87b4eda937850d1e9492c1037a1af2958d8e2a2f..7c33f9df, two commits: 09378b10 (the cherry-pick; original author session 8230d889, cherry-picked by session ebef4468) and 7c33f9df (review repair by session ebef4468). Both are authored and committed by claude-code <claude-code@desk.local>. No codex-authored content is in the delta. The reviewer, codex, is not a mutation author.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository: Pootytxng/sentinel. origin/main is 87b4eda937850d1e9492c1037a1af2958d8e2a2f and equals the PR base. origin/claude/540-care-notice-takeover equals local HEAD 7c33f9df in worktree trusting-newton-85d566, whose tracked tree is clean (this receipt is the only untracked file). No build, install or helper process is running for this lane: the pre-push gate finished and released the TestGate mutex.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "7c33f9dfd9bec3ea679af5304a21b3d071fe2166",
+      "evidence": "logs/verify-local-2026-09-24T16-00-00Z.log (in worktree trusting-newton-85d566; SHA-256 b96099df672c758f7e50c40346a0478990da83226f88561536a7ad4c4041cbe5, 1480 lines)",
+      "summary": "Test Files  461 passed (461);Tests  7685 passed | 1 expected fail | 9 skipped (7695). No queue line: the gate's own suite ran under COMPY_TEST_GATE_HELD."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "7c33f9dfd9bec3ea679af5304a21b3d071fe2166",
+      "evidence": "logs/verify-local-2026-09-24T16-00-00Z.log (in worktree trusting-newton-85d566; SHA-256 b96099df672c758f7e50c40346a0478990da83226f88561536a7ad4c4041cbe5, 1480 lines)",
+      "summary": "tsc && vite build completed (chunk-size advisory only)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "7c33f9dfd9bec3ea679af5304a21b3d071fe2166",
+      "evidence": "logs/verify-local-2026-09-24T16-00-00Z.log (in worktree trusting-newton-85d566; SHA-256 b96099df672c758f7e50c40346a0478990da83226f88561536a7ad4c4041cbe5, 1480 lines)",
+      "summary": "1350 passed; 0 failed; 24 ignored (lib), doc/bin targets 0 failed."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "7c33f9dfd9bec3ea679af5304a21b3d071fe2166",
+      "evidence": "logs/verify-local-2026-09-24T16-00-00Z.log (in worktree trusting-newton-85d566; SHA-256 b96099df672c758f7e50c40346a0478990da83226f88561536a7ad4c4041cbe5, 1480 lines)",
+      "summary": "Finished with no warnings or errors."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1), run natively when this session pushed claude/540-care-notice-takeover at 7c33f9df (push exit 0, stdout 'LOCAL CHECK RESULT: PASS'). Every stage was read: diff check, write-scope drift OK, lease overlap OK, TestGate mutex acquired with no wait, frontend tests, type-check and build, Rust tests, clippy, TestGate released. The earlier head 09378b10 also passed the same gate. The five original guards were proven red on main's production code and the two review guards red at 09378b10 before the fix; each of the three wrapper-signature conditions, when dropped, turns both review guards red (evidence on PR #572).",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run, 2 changed paths since origin/main were measured against this session's claim on #540, and both were inside it.",
+    "reconciliationNote": "No widening was needed."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "7c33f9dfd9bec3ea679af5304a21b3d071fe2166",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/572#issuecomment-5817738647",
+    "reviewerNote": "Codex CLI (codex exec -m gpt-5.6-sol -s read-only). Its Windows sandbox cannot launch processes on this machine (elevated: helper codex-windows-sandbox-setup.exe not found; unelevated: CreateProcessAsUserW access denied), and an unsandboxed run was refused by the session's permission classifier on #569. Each review therefore judged a bundle captured read-only by the author session, and the reviewer ran no commands; this is disclosed on PR #572. Codex returned FAIL at 09378b10 (https://github.com/Pootytxng/sentinel/pull/572#issuecomment-5817676795); the finding was repaired and guarded, and the cited PASS is at this exact head."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #572's closingIssuesReferences is empty, so the merge closes nothing. #540 stays open after this lane releases, because its third success criterion (a self-reviewer PASS on the Home care notice) needs a subagent and a dev build, which the recovery handoff directing this lane forbids. scripts/land-pr.mjs merges with a merge commit, never --delete-branch, and prunes only the head ref claude/540-care-notice-takeover with git push origin --delete. The original folder modest-moser-601fc4 and its local branch claude/540-care-notice-raw-json are not pruned."
+}
