@@ -154,9 +154,10 @@ function Set-NativeEnvironment {
 # kill path leaned on a service that can be down, and let its own helper outlive the timeout.
 #
 # The tree is now read from a toolhelp snapshot (kernel32; no service between us and the answer;
-# ~5ms measured) and terminated through .NET Process.Kill, leaves first, root last. taskkill remains
-# only as the fallback for a host where the helper type cannot be compiled, and a fallback killer
-# that outlives its wait is itself killed: nothing this function starts may survive its return.
+# ~5ms measured) and terminated through .NET Process.Kill, leaves first, root last. taskkill is gone
+# entirely: it was the fallback for a host where the helper type cannot be compiled, but "/T" walks
+# the same recycled parent pids as an unchecked snapshot (#562). The fallback now kills the root
+# alone and reports its descendants as not killed, and it starts no helper that could outlive it.
 $script:NativeProcessSnapshotSource = @'
 using System;
 using System.Collections.Generic;
@@ -261,18 +262,17 @@ function Get-NativeDescendantIds {
   return @($order)
 }
 
+# Returns "tree" when every proven descendant and the root were sent a kill, or "root-only" when the
+# tree could not be read: then only the root is killed and its descendants are NOT, because nothing
+# proves they are ours. The caller reports that as TreeKill so a survivor is never a silent pass.
 function Stop-NativeProcessTree {
-  param(
-    [Parameter(Mandatory = $true)][int]$ProcessId,
-    [int]$TimeoutMs = 10000
-  )
+  param([Parameter(Mandatory = $true)][int]$ProcessId)
   $descendants = $null
-  $snapshotTakenAt = $null
-  # COMPY_NATIVE_TREE_KILL_FALLBACK=1 forces the taskkill path. The guard sets it to prove the
-  # fallback cannot strand its caller; a release run never does.
+  $snapshotTakenAt = Get-Date
+  # COMPY_NATIVE_TREE_KILL_FALLBACK=1 forces the root-only path. The guards set it to prove the
+  # fallback kills nothing it cannot prove and cannot strand its caller; a release run never does.
   if ($env:COMPY_NATIVE_TREE_KILL_FALLBACK -ne "1") {
     try {
-      $snapshotTakenAt = Get-Date
       $descendants = Get-NativeDescendantIds -ProcessId $ProcessId
     } catch {
       $descendants = $null
@@ -291,37 +291,17 @@ function Stop-NativeProcessTree {
         if ($victim.StartTime -le $snapshotTakenAt) { $victim.Kill() }
       } catch { }
     }
-    return
+    return "tree"
   }
-  $taskkill = Join-Path $env:SystemRoot "System32\taskkill.exe"
-  if (Test-Path -LiteralPath $taskkill -PathType Leaf) {
-    $info = New-Object System.Diagnostics.ProcessStartInfo
-    $info.FileName = $taskkill
-    $info.Arguments = ConvertTo-NativeArgumentString @("/PID", "$ProcessId", "/T", "/F")
-    $info.UseShellExecute = $false
-    $info.CreateNoWindow = $true
-    $info.RedirectStandardOutput = $true
-    $info.RedirectStandardError = $true
-    $killer = New-Object System.Diagnostics.Process
-    $killer.StartInfo = $info
-    try {
-      if ($killer.Start()) {
-        $null = $killer.StandardOutput.ReadToEndAsync()
-        $null = $killer.StandardError.ReadToEndAsync()
-        if (-not $killer.WaitForExit($TimeoutMs)) {
-          # A killer still running past its wait is the pipe-holder described above. It is killed
-          # here; the caller's own Process.Kill on the root is the next line of defence.
-          try { $killer.Kill() } catch { }
-          $killer.WaitForExit(2000) | Out-Null
-        }
-      }
-    } catch {
-      # The tracked-process fallback below still runs. Timeout handling must never pretend a failed
-      # tree-kill attempt succeeded.
-    } finally {
-      $killer.Dispose()
-    }
-  }
+  # No proven tree. Any OS-reported walk here -- taskkill /T, Win32_Process -- follows the same
+  # recorded parent pids with no start-time check, so it can reach a stranger that inherited a
+  # recycled pid (#562). The root is the one process the caller proved is its own; it alone is killed,
+  # with the same identity re-check, and nothing is started that could outlive this call.
+  try {
+    $victim = [System.Diagnostics.Process]::GetProcessById($ProcessId)
+    if ($victim.StartTime -le $snapshotTakenAt) { $victim.Kill() }
+  } catch { }
+  return "root-only"
 }
 
 # Runs a native executable and returns its stdout, stderr and exit code as DATA. Never raises a
@@ -367,6 +347,7 @@ function Invoke-CapturedProcess {
   $exitCode = -1
   $timedOut = $false
   $terminationAttempted = $false
+  $treeKill = "none"
   $processId = -1
   try {
     if (-not $process.Start()) { throw "Could not start '$FilePath'." }
@@ -379,7 +360,7 @@ function Invoke-CapturedProcess {
       $timedOut = $true
       if ($KillTreeOnTimeout) {
         $terminationAttempted = $true
-        Stop-NativeProcessTree -ProcessId $process.Id -TimeoutMs $DrainMs
+        $treeKill = Stop-NativeProcessTree -ProcessId $process.Id
         if (-not $process.HasExited) {
           try { $process.Kill() } catch { }
         }
@@ -405,6 +386,7 @@ function Invoke-CapturedProcess {
     ProcessId            = $processId
     DurationMs           = $clock.ElapsedMilliseconds
     TerminationAttempted = $terminationAttempted
+    TreeKill             = $treeKill
     EnvironmentKeys      = @($(if ($Environment) { $Environment.Keys | Sort-Object } else { @() }))
   }
 }
@@ -445,9 +427,13 @@ function Invoke-CheckedProcess {
   # The message text is unchanged; the classification, exit code and full redacted stderr ride along
   # as exception Data so a wrapper can print a real diagnosis instead of "exit 1".
   if ($result.TimedOut) {
+    $timeoutMessage = if ($result.TreeKill -eq "root-only") {
+      "$Label timed out after $TimeoutMs ms; its process tree could not be read, so only the root was terminated and any descendants may still be running."
+    } else {
+      "$Label timed out after $TimeoutMs ms and was terminated."
+    }
     throw (New-NativeProcessFailure -Label $Label -Classification "timeout" -Command $result.Arguments `
-      -StdOut $result.StdOut -StdErr $result.StdErr `
-      -Message "$Label timed out after $TimeoutMs ms and was terminated.")
+      -StdOut $result.StdOut -StdErr $result.StdErr -Message $timeoutMessage)
   }
   if ($result.ExitCode -ne 0 -and -not ($AllowExitCodes -contains $result.ExitCode)) {
     $detail = Get-FirstNonEmptyLine $result.StdErr
@@ -731,6 +717,7 @@ function Invoke-StreamedProcess {
   $exitUnknown = $false
   $timedOut = $false
   $terminationAttempted = $false
+  $treeKill = "none"
   try {
     if (-not $process.Start()) {
       throw "$Label could not start '$($resolved.Source)'."
@@ -760,7 +747,7 @@ function Invoke-StreamedProcess {
     if ($timedOut) {
       if ($KillTreeOnTimeout) {
         $terminationAttempted = $true
-        Stop-NativeProcessTree -ProcessId $process.Id -TimeoutMs $DrainMs
+        $treeKill = Stop-NativeProcessTree -ProcessId $process.Id
         if (-not $process.HasExited) {
           try { $process.Kill() } catch { }
         }
@@ -789,7 +776,9 @@ function Invoke-StreamedProcess {
   $stdErrText = ($stdErrLines -join "`r`n")
 
   if ($timedOut) {
-    $timeoutMessage = if ($KillTreeOnTimeout) {
+    $timeoutMessage = if ($treeKill -eq "root-only") {
+      "$Label timed out after $TimeoutMs ms; its process tree could not be read, so only the root was terminated and any descendants may still be running."
+    } elseif ($KillTreeOnTimeout) {
       "$Label timed out after $TimeoutMs ms and process-tree termination was attempted."
     } else {
       "$Label timed out after $TimeoutMs ms; the process was intentionally left running for inspection."
@@ -821,6 +810,7 @@ function Invoke-StreamedProcess {
     ProcessId            = $processId
     DurationMs           = $clock.ElapsedMilliseconds
     TerminationAttempted = $terminationAttempted
+    TreeKill             = $treeKill
     EnvironmentKeys      = @($(if ($Environment) { $Environment.Keys | Sort-Object } else { @() }))
   }
 }
