@@ -68,13 +68,36 @@ function Get-GateMutexHolderText {
   return $text
 }
 
+# Which holder the note names, so a waiter can tell one long hold from a queue moving through
+# several (#541): the note's text when it names a pid, "" when there is no note (the last holder
+# released, or the current one wrote none), and $null when a note is there but unreadable this
+# instant (mid-write, or locked). $null is unknown, never a change: a stuck holder's note that
+# flickered unreadable must not earn it a fresh deadline.
+function Get-GateMutexHolderKey {
+  param([string]$NotePath)
+  try {
+    if (-not (Test-Path -LiteralPath $NotePath -PathType Leaf)) { return "" }
+    $text = [System.IO.File]::ReadAllText($NotePath)
+    $note = $text | ConvertFrom-Json
+    if ($null -eq $note -or -not $note.pid) { return $null }
+    return $text.Trim()
+  } catch { return $null }
+}
+
 # Acquire the gate. Returns a lease for Exit-GateMutex. Waits while another process holds it, says
-# who that is when the wait starts and every NoticeSeconds after, and throws after TimeoutSeconds.
+# who that is when the wait starts and every NoticeSeconds after, and throws once one holder has
+# kept it TimeoutSeconds.
 #
-# TimeoutSeconds is 30 minutes because a holder can legitimately take that long: the slowest
-# `npm test` in the measured logs ran 1111s under load, and a queue of three normal ones is ~7 min.
-# Past that, the holder is stuck rather than slow, and the gate says which process to look at
-# instead of waiting forever or running beside it.
+# The bound is per holder, not per queue (#541). A single deadline for the whole wait gave up behind
+# a queue of healthy gates: on 2026-09-23 one waited 940s behind three holders in turn, each a
+# normal gate holding it 4.5-8.5 minutes, so a queue four or five deep would fail a push for no
+# defect. The deadline restarts whenever the holder note names a different holder or disappears --
+# the queue moved -- and a holder that keeps the gate past TimeoutSeconds still makes the waiter
+# throw, naming it.
+#
+# TimeoutSeconds is 30 minutes because one holder can legitimately take that long: the slowest
+# `npm test` in the measured logs ran 1111s under load. Past that, the holder is stuck rather than
+# slow, and the gate says which process to look at instead of waiting forever or running beside it.
 function Enter-GateMutex {
   param(
     [string]$Name = $GateMutexName,
@@ -95,6 +118,8 @@ function Enter-GateMutex {
   $tookOver = $false
   $queued = $false
   $lastNotice = $started
+  $holderKey = $null
+  $holderSeen = $started
 
   while ($true) {
     if ($null -eq $mutex) {
@@ -128,16 +153,27 @@ function Enter-GateMutex {
     if ($owned) { break }
 
     $now = [DateTime]::UtcNow
+    # A new holder since the last look restarts the bound, and is checked BEFORE the deadline, so a
+    # change inside the final slice still counts. The first look only records who holds it.
+    $key = Get-GateMutexHolderKey -NotePath $notePath
+    if ($null -ne $key) {
+      if ($null -ne $holderKey -and $key -ne $holderKey) {
+        $deadline = $now.AddSeconds($TimeoutSeconds)
+        $holderSeen = $now
+      }
+      $holderKey = $key
+    }
     $waited = [int]($now - $started).TotalSeconds
     $holder = if ($null -eq $mutex) { "a process this session cannot open" } else { Get-GateMutexHolderText -NotePath $notePath }
     if ($now -ge $deadline) {
       if ($null -ne $mutex) { $mutex.Dispose() }
-      $gaveUp = "TEST GATE: gave up after ${waited}s waiting for '$Name' -- still held by $holder. A test run does not take this long; if that process is not a gate still making progress (its folder's logs\verify-local-*.log stops growing), stop it and push again."
+      $sameFor = [int]($now - $holderSeen).TotalSeconds
+      $gaveUp = "TEST GATE: gave up after ${waited}s waiting for '$Name' -- still held by $holder, with no change of holder in the last ${sameFor}s. A test run does not take this long; if that process is not a gate still making progress (its folder's logs\verify-local-*.log stops growing), stop it and push again."
       $null = & $Say $gaveUp
       throw $gaveUp
     }
     if (-not $queued) {
-      $null = & $Say "TEST GATE: busy -- '$Name' is held by $holder. Queued rather than running a second gate's suite and builds beside it (#522); waiting up to ${TimeoutSeconds}s."
+      $null = & $Say "TEST GATE: busy -- '$Name' is held by $holder. Queued rather than running a second gate's suite and builds beside it (#522); waiting up to ${TimeoutSeconds}s for any one holder (#541)."
       $queued = $true
     } elseif (($now - $lastNotice).TotalSeconds -ge $NoticeSeconds) {
       $null = & $Say "TEST GATE: still queued after ${waited}s -- held by $holder."

@@ -79,10 +79,11 @@ function Wait-ForRelease {
 // -ReadyFile/-ReleaseFile turn it into a holder that lets go only when TOLD (never a fixed sleep,
 // which races powershell.exe start-up under the full pool -- #324). -Deny instead creates the mutex
 // with an ACL that denies this user, standing in for a lane running under a token we cannot open.
+// A long -NoticeSeconds keeps a queued contender in ONE kernel wait instead of re-waiting each second.
 const CONTENDER = String.raw`
 param(
   [string]$Lib, [string]$MutexName, [string]$StateDir, [string]$Label = "contender",
-  [int]$TimeoutSeconds = 90, [string]$ReadyFile = "", [string]$ReleaseFile = "", [switch]$Deny
+  [int]$TimeoutSeconds = 90, [int]$NoticeSeconds = 1, [string]$ReadyFile = "", [string]$ReleaseFile = "", [switch]$Deny
 )
 $ErrorActionPreference = "Stop"
 ${STAMP}
@@ -106,7 +107,7 @@ if ($Deny) {
   exit 0
 }
 "ATTEMPT $(Stamp)"
-$lease = Enter-GateMutex -Name $MutexName -StateDir $StateDir -Label $Label -TimeoutSeconds $TimeoutSeconds -NoticeSeconds 1
+$lease = Enter-GateMutex -Name $MutexName -StateDir $StateDir -Label $Label -TimeoutSeconds $TimeoutSeconds -NoticeSeconds $NoticeSeconds
 "ACQUIRED $(Stamp)"
 if ($ReadyFile) { Set-Content -LiteralPath $ReadyFile -Value "ready" }
 if ($ReleaseFile) { Wait-ForRelease -Path $ReleaseFile }
@@ -415,8 +416,66 @@ describe.runIf(process.platform === "win32")("the gate mutex library", () => {
     expect(late.code).not.toBe(0);
     expect(late.stdout).not.toMatch(/^ACQUIRED /m);
     expect(late.stdout + late.stderr).toMatch(
-      new RegExp(`TEST GATE: gave up after \\d+s waiting for '.*' -- still held by pid ${pidOf(held.stdout)} \\(stuck lane\\)`),
+      new RegExp(`TEST GATE: gave up after \\d+s waiting for '.*' -- still held by pid ${pidOf(held.stdout)} \\(stuck lane\\).*, with no change of holder in the last \\d+s\\.`),
     );
+  });
+
+  // #541: the bound is on ONE holder, not the whole queue. On 2026-09-23 a gate waited 940s behind
+  // three holders in turn, each a normal gate; with one deadline for the whole wait, a queue four or
+  // five deep would throw while every holder was still making progress, failing a push for no defect.
+  //
+  // NO FIFO, NO FIXED PAUSES. Windows does not promise which waiter a released mutex goes to, so
+  // two identical lanes queue behind the first holder and whichever the kernel admits is the second
+  // holder; the other is the waiter. Every handoff is paced by the queued lanes' OWN "still queued
+  // after Ns" notices, never by a sleep in this process: the first holder lets go once both have
+  // waited half the timeout, the second once the waiter has waited longer than the whole timeout --
+  // a notice the single-deadline library can never print, because it throws first. Each holder
+  // keeps the gate about half the timeout, so it takes a stall of several seconds, not a slow
+  // scheduler, to make one holder look stuck; the waitFor bounds are only the hang guard.
+  it("restarts the bound when the holder changes, so a queue longer than the timeout still admits the waiter", async () => {
+    const timeoutSeconds = 20;
+    const handoffAt = timeoutSeconds / 2;
+    const exited = (child) => child.exitCode !== null || child.signalCode !== null;
+    const queuedFor = (child) => Math.max(-1, ...[...child.out.matchAll(/TEST GATE: still queued after (\d+)s/g)].map((m) => Number(m[1])));
+    const testCase = makeCase();
+    const lane = (label, name) => {
+      const [ready, release] = [testCase.file(`${name}-ready.txt`), testCase.file(`${name}-release.txt`)];
+      return Object.assign(contender(testCase, { Label: label, TimeoutSeconds: timeoutSeconds, ReadyFile: ready, ReleaseFile: release }), { label, ready, release });
+    };
+
+    const first = lane("first lane", "first");
+    await waitFor(() => existsSync(first.ready), "the first holder to acquire");
+    const queue = [lane("lane b", "b"), lane("lane c", "c")];
+    await waitFor(() => queue.every((q) => /TEST GATE: busy/.test(q.out)), "both lanes to queue");
+    await waitFor(() => queue.some(exited) || queue.every((q) => queuedFor(q) >= handoffAt), `both lanes to report ${handoffAt}s queued`);
+    writeFileSync(first.release, "release", "utf8");
+
+    await waitFor(() => queue.some((q) => existsSync(q.ready)) || queue.every(exited), "the kernel to admit one queued lane");
+    const second = queue.find((q) => existsSync(q.ready));
+    expect(second, "neither queued lane acquired after the first holder released").toBeDefined();
+    const waiter = queue.find((q) => q !== second);
+    await waitFor(() => exited(waiter) || queuedFor(waiter) > timeoutSeconds, `the waiter to report more than ${timeoutSeconds}s queued`);
+    writeFileSync(second.release, "release", "utf8");
+    writeFileSync(waiter.release, "release", "utf8"); // the waiter lets go as soon as it holds
+    const [one, two, waited] = await Promise.all([first.done, second.done, waiter.done]);
+
+    expect(one.code, one.stderr).toBe(0);
+    expect(two.code, two.stderr).toBe(0);
+    expect(waited.code, waited.stdout + waited.stderr).toBe(0);
+    for (const result of [one, two, waited]) expect(result.stdout + result.stderr).not.toMatch(/TEST GATE: gave up/);
+
+    // The premise, in the waiter's own words: it was still queued after longer than one timeout, so
+    // a single deadline for the whole wait would have thrown.
+    expect(queuedFor(waiter)).toBeGreaterThan(timeoutSeconds);
+    // The gate went first holder -> second holder -> waiter, by causality in the processes' own
+    // stamps (each stamps RELEASED before it lets go and ACQUIRED after it holds).
+    const [firstFreed, secondHeld, secondFreed, admitted] = [stamp(one.stdout, "RELEASED"), stamp(two.stdout, "ACQUIRED"), stamp(two.stdout, "RELEASED"), stamp(waited.stdout, "ACQUIRED")];
+    for (const value of [firstFreed, secondHeld, secondFreed, admitted]) expect(value).not.toBeNull();
+    expect(secondHeld).toBeGreaterThanOrEqual(firstFreed);
+    expect(admitted).toBeGreaterThanOrEqual(secondFreed);
+    // And the waiter named each holder in turn while it queued.
+    expect(waited.stdout).toContain(`held by pid ${pidOf(one.stdout)} (first lane)`);
+    expect(waited.stdout).toContain(`held by pid ${pidOf(two.stdout)} (${second.label})`);
   });
 
   // #529: the busy notice says when the holder started (UTC) and how long ago, which is what a person
