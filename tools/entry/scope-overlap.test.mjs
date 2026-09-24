@@ -62,6 +62,18 @@ describe("acceptance 5 — a second overlapping writer is refused", () => {
     // Narrowed to the record each lane owns, the same two lanes pass.
     expect(scopeOverlapVerdict({ mine: ["docs/dispositions/lane__alpha.json"], others: [{ number: 13, scope: ["docs/dispositions/lane__beta.json"] }], files: TRACKED }).ok).toBe(true);
   });
+
+  it("a shared glob spelled in two cases still earns the name-the-one-file cure", () => {
+    // #539 makes overlappingPairs pair scopes that differ only in case and return each in its own
+    // spelling, so an exact `a === b` test would skip this hint while the refusal itself stood.
+    const v = {
+      ok: false,
+      undeclared: false,
+      unknown: [],
+      findings: [{ number: 13, pairs: [["Docs/*.md", "docs/*.md"]], files: [], stale: false }],
+    };
+    expect(overlapRemediation(v)).toContain("A shared glob claims every file it matches");
+  });
 });
 
 describe("acceptance 6 — disjoint scopes are not falsely blocked", () => {
