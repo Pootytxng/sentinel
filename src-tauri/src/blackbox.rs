@@ -1102,16 +1102,32 @@ impl RawEvent {
             serde_json::Value::Array(a) => a.iter().map(value_to_string).collect(),
             // Windows PowerShell 5.1 hands the `@(...)` calculated property to ConvertTo-Json
             // wrapped in a PSObject, so the array arrives as `{"value":[...],"Count":n}` (#540).
-            serde_json::Value::Object(o) => match o.get("value") {
-                Some(serde_json::Value::Array(a)) => a.iter().map(value_to_string).collect(),
+            serde_json::Value::Object(o) => match powershell_array_wrapper(o) {
+                Some(a) => a.iter().map(value_to_string).collect(),
                 // Any other object is unreadable: unknown, never its JSON text.
-                _ => Vec::new(),
+                None => Vec::new(),
             },
             serde_json::Value::Null => Vec::new(),
             // PowerShell's ConvertTo-Json unwraps a single-element array to a scalar.
             other => vec![value_to_string(other)],
         }
     }
+}
+
+/// The array inside Windows PowerShell 5.1's `{"value":[...],"Count":n}` wrapper (#540), matched by
+/// its whole signature: exactly the keys `value` and `Count`, and `Count` equal to the array's
+/// length. Key case is ignored because the observer's persisted rows went through `norm_app`. Any
+/// other object is `None`, so an unrelated shape never becomes event fields.
+pub(crate) fn powershell_array_wrapper(
+    o: &serde_json::Map<String, serde_json::Value>,
+) -> Option<&Vec<serde_json::Value>> {
+    if o.len() != 2 {
+        return None;
+    }
+    let field = |name: &str| o.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v);
+    let values = field("value")?.as_array()?;
+    let count = usize::try_from(field("count")?.as_u64()?).ok()?;
+    (count == values.len()).then_some(values)
 }
 
 /// One field as text. A nested object/array is not a field value, so it reads blank (unknown)
@@ -1700,6 +1716,22 @@ mod blackbox_tests {
         assert!(unknown.props().is_empty(), "an object that is not the wrapper is unknown, got {:?}", unknown.props());
         let nested = ev("Application Error", 1000, "t", "m", serde_json::json!([{"a": 1}, ["b"], "c.exe"]));
         assert_eq!(nested.props(), vec!["", "", "c.exe"], "a nested value is a blank field, not JSON text");
+    }
+
+    /// #540 review: only the WHOLE 5.1 wrapper signature is the array. An object that merely carries
+    /// a `value` array (no `Count`, a `Count` that is not its length, or another key) is some other
+    /// shape, and an unrecognized shape stays unknown rather than becoming invented event fields.
+    #[test]
+    fn props_reads_only_the_exact_powershell_wrapper_signature() {
+        for not_the_wrapper in [
+            serde_json::json!({"value": ["a.exe", "1.0"]}),
+            serde_json::json!({"value": ["a.exe", "1.0"], "Count": 3}),
+            serde_json::json!({"value": ["a.exe", "1.0"], "Count": "2"}),
+            serde_json::json!({"value": ["a.exe", "1.0"], "Count": 2, "Length": 2}),
+        ] {
+            let e = ev("Application Error", 1000, "t", "m", not_the_wrapper.clone());
+            assert!(e.props().is_empty(), "{not_the_wrapper} is not the wrapper, got {:?}", e.props());
+        }
     }
 
     /// #540 bug→guard. Health's care notice printed `{"Count":10,"value":["dllhost.exe",...]}` as

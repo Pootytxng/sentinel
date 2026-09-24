@@ -495,14 +495,15 @@ pub(crate) fn load_or_quarantine(path: &Path) -> IncidentObserverState {
 /// Split a leading PowerShell `{"value":[...],"Count":n}` blob off `text` (#540): the app name it
 /// wrapped, and the rest of the string. Windows writes the app FIRST in both app families'
 /// EventData (Application Error 1000, Application Hang 1002), so element 0 is the name the fixed
-/// decoder would have read. The key match ignores case because rows stored it through `norm_app`.
+/// decoder would have read. Only the whole wrapper signature matches (`powershell_array_wrapper`):
+/// text that merely starts with some other JSON object was not written by that decoder.
 fn split_powershell_blob(text: &str) -> Option<(Option<String>, &str)> {
     if !text.starts_with('{') {
         return None;
     }
     let mut stream = serde_json::Deserializer::from_str(text).into_iter::<serde_json::Value>();
     let serde_json::Value::Object(o) = stream.next()?.ok()? else { return None };
-    let values = o.iter().find(|(k, _)| k.eq_ignore_ascii_case("value"))?.1.as_array()?;
+    let values = crate::blackbox::powershell_array_wrapper(&o)?;
     let app = values.first().and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
     Some((app.map(str::to_string), &text[stream.byte_offset()..]))
 }
@@ -1162,6 +1163,36 @@ mod tests {
         let card = s.pending_card.unwrap();
         assert_eq!(card.summary, "An application stopped working and closed — Sep 1, 9:00 PM");
         assert_eq!(card.app_label, None);
+    }
+
+    /// #540 review: the load-time repair rewrites only the exact 5.1 wrapper. Stored text that merely
+    /// starts with some other JSON object carrying a `value` array was not written by the pre-fix
+    /// decoder, so it is left exactly as stored rather than having an app name read out of it.
+    #[test]
+    fn the_repair_leaves_text_that_is_not_the_exact_wrapper_as_stored() {
+        for text in [
+            r#"{"value":["other.exe"]} stopped working and closed — Sep 1, 9:00 PM"#,
+            r#"{"Count":2,"value":["other.exe"]} stopped working and closed — Sep 1, 9:00 PM"#,
+            r#"{"Count":1,"value":["other.exe"],"Length":1} stopped working and closed — Sep 1, 9:00 PM"#,
+        ] {
+            let mut s = IncidentObserverState::fresh();
+            let mut r = row("r", "2026-09-01T21:00:00Z");
+            r.app = Some(text.into());
+            s.seen = vec![r];
+            s.pending_card = Some(PendingCareIncident {
+                incident_id: "r".into(),
+                occurred_at: String::new(),
+                occurred_display: String::new(),
+                kind: "App crash".into(),
+                app_label: Some(text.into()),
+                summary: text.into(),
+            });
+            repair_powershell_blobs(&mut s);
+            let card = s.pending_card.unwrap();
+            assert_eq!(card.summary, text);
+            assert_eq!(card.app_label.as_deref(), Some(text));
+            assert_eq!(s.seen[0].app.as_deref(), Some(text));
+        }
     }
 
     #[test]
