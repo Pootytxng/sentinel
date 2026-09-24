@@ -10,9 +10,9 @@
 // gate's own REST reads "as of" a moment in that morning: only the comments posted by then exist.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { threadLease } from "../tools/entry/claim.mjs";
@@ -292,6 +292,103 @@ describe("pushedPaths, over a real temporary repository", () => {
 
   it("returns null for a base that is not a commit", () => {
     expect(pushedPaths({ cwd: dir, base: "origin/nope" })).toBeNull();
+  });
+});
+
+// #538: the gate's first carrier push after #517 landed was refused. #528's claim declared
+// `.claude/work-control/**`, so it held every receipt any lane would ever write, and the receipts-only
+// push of #517's mark-pr-ready and merge-pr receipts serialized behind a lane that could not collide.
+describe("a new receipt is nobody's path (#538)", () => {
+  const WC = ".claude/work-control";
+  const URL_528 = "https://github.com/Pootytxng/sentinel/issues/528#issuecomment-5796452154";
+  const CLAIM_528 = [
+    "### Ownership claim",
+    "- Lane: lane:claude-code — carry the #513 landing receipts (PR #527) and the desk-build row for the rebuilt Health faces to main",
+    "- Write scope: `.claude/work-control/**` `docs/RELEASE_STATE.md` `docs/archive/RELEASE_STATE_HISTORY.md`",
+    "- Started: 2026-09-23T14:20Z",
+    "- Claim expires: 2026-09-24T02:00Z (alarm only)",
+  ].join("\n");
+  const threads = { 528: [{ body: CLAIM_528, created_at: "2026-09-23T14:20:30Z", html_url: URL_528 }] };
+  const RECEIPTS_517 = [`${WC}/2026-09-23-mark-pr-ready-517.json`, `${WC}/2026-09-23-merge-pr-517.json`];
+  const OLD = `${WC}/2026-09-20-merge-pr-500.json`;
+  const LANDED = `${WC}/2026-09-23-close-issue-517.json`;
+
+  let dir;
+  const git = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const put = (rel, text) => {
+    mkdirSync(dirname(join(dir, rel)), { recursive: true });
+    writeFileSync(join(dir, rel), text);
+  };
+  const push = () => gate({ issue: 517, cwd: dir, lineage: noLineage, gh: fakeGh({ asOf: "2026-09-23T15:00:00Z", threads }), now: new Date("2026-09-23T15:00:00Z") });
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), "lease-receipts-"));
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "t@example.invalid");
+    git("config", "user.name", "t");
+    put(OLD, "{}\n");
+    put(`${WC}/README.md`, "r\n");
+    git("add", ".");
+    git("commit", "-q", "-m", "base");
+    git("branch", "fork");
+    // main moves on: another lane lands the #517 close-issue receipt.
+    put(LANDED, "{\"landed\":true}\n");
+    git("add", ".");
+    git("commit", "-q", "-m", "landed");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    // The #517 carrier: two new receipts and nothing else.
+    git("checkout", "-q", "-b", "carrier", "fork");
+    for (const r of RECEIPTS_517) put(r, "{}\n");
+    git("add", ".");
+    git("commit", "-q", "-m", "receipts");
+    // A push that also edits an existing receipt, re-adds a receipt main already has, and adds
+    // files in that folder that are not receipts.
+    git("checkout", "-q", "-b", "mixed", "carrier");
+    put(OLD, "{\"edited\":true}\n");
+    put(LANDED, "{\"mine\":true}\n");
+    put(`${WC}/notes.md`, "n\n");
+    put(`${WC}/sub/nested.json`, "{}\n");
+    git("add", ".");
+    git("commit", "-q", "-m", "mixed");
+  }, 60_000);
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("passes the receipts-only carrier push #528's glob claim refused, and names the receipts it let through", async () => {
+    git("checkout", "-q", "carrier");
+    const r = await push();
+    expect(r.ok).toBe(true);
+    expect(r.verdict.newReceipts).toEqual(RECEIPTS_517);
+    expect(render(r)).toContain("2 new receipts not held by any lease (added, absent on origin/main)");
+  });
+
+  it("still refuses an edited receipt, a receipt main already has, and a non-receipt in that folder", async () => {
+    git("checkout", "-q", "mixed");
+    const r = await push();
+    expect(r.ok).toBe(false);
+    expect(r.verdict.findings).toHaveLength(1);
+    expect(r.verdict.findings[0]).toMatchObject({ number: 528, url: URL_528 });
+    expect(r.verdict.findings[0].held.map((h) => h.path)).toEqual([OLD, LANDED, `${WC}/notes.md`, `${WC}/sub/nested.json`]);
+    expect(r.verdict.newReceipts).toEqual(RECEIPTS_517);
+  });
+
+  it("exempts nothing when git cannot say what is new: an unknown path stays a checked one", async () => {
+    const git = (cwd, args) => {
+      if (args[0] === "rev-parse") return "0".repeat(40);
+      if (args[0] === "ls-tree") throw new Error("fatal: not a tree object");
+      return RECEIPTS_517.join("\0");
+    };
+    const r = await gate({ issue: 517, git, lineage: noLineage, gh: fakeGh({ asOf: "2026-09-23T15:00:00Z", threads }) });
+    expect(r.ok).toBe(false);
+    expect(r.verdict.findings[0].held.map((h) => h.path)).toEqual(RECEIPTS_517);
+  });
+
+  it("over strings: only a path both added and shaped like a receipt is exempt", () => {
+    const run = threadLease(threads[528].map((c) => ({ body: c.body, createdAt: c.created_at, url: c.html_url }))).run;
+    const verdict = (changed, added) => leaseOverlapVerdict({ changed, added, own: 517, threads: [{ number: 528, run }] });
+    expect(verdict(RECEIPTS_517, RECEIPTS_517).ok).toBe(true);
+    expect(verdict(RECEIPTS_517, []).ok).toBe(false);
+    expect(verdict([`${WC}/notes.md`], [`${WC}/notes.md`]).ok).toBe(false);
+    expect(verdict(["docs/RELEASE_STATE.md"], ["docs/RELEASE_STATE.md"]).ok).toBe(false);
   });
 });
 

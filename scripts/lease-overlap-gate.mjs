@@ -15,6 +15,8 @@
 //     closed issue, and asking the board would put `gh project item-list`, the costliest read there
 //     is, inside every push. Reading an open issue that sits in Done costs one read and can only
 //     refuse more, never pass more.
+//   - which of those paths are NEW receipts (#538): added by the push and absent on the base's tip.
+//     Those are exempt in scripts/lib/lease-overlap.mjs; every other path is checked.
 //   - over REST, one bounded `gh api` per thread, several at once. One GraphQL request for every
 //     thread timed out at 20 s on 2026-09-23 while single-thread reads still answered.
 //
@@ -37,7 +39,7 @@ import { CORRUPT, readLineage } from "../.claude/hooks/session-root-assert.mjs";
 import { threadLease } from "../tools/entry/claim.mjs";
 import { GH_READ_TIMEOUT_MS, REPO, ghReader } from "../tools/entry/gather.mjs";
 import { normalizePattern } from "./lib/claim-scope.mjs";
-import { leaseOverlapVerdict, renderLeaseOverlap } from "./lib/lease-overlap.mjs";
+import { isReceiptPath, leaseOverlapVerdict, renderLeaseOverlap } from "./lib/lease-overlap.mjs";
 
 /** Threads read at once. Enough to finish ~45 threads in a few seconds; few enough not to trip abuse limits. */
 export const READ_CONCURRENCY = 6;
@@ -105,6 +107,24 @@ export function pushedPaths({ cwd, base = "origin/main", git = defaultGit }) {
   return [...new Set(raw.split("\0").map(normalizePattern).filter(Boolean))].sort();
 }
 
+/**
+ * The receipts the push adds that the base's TIP does not have (#538). Added since the merge base is
+ * not enough: a receipt of the same name that landed on main meanwhile would collide. Any read that
+ * fails returns [], which exempts nothing: an unknown path stays a checked one (collision rule 5).
+ */
+export function newReceipts({ cwd, base = "origin/main", git = defaultGit }) {
+  const dir = ".claude/work-control/";
+  const list = (args) => git(cwd, args).split("\0").map(normalizePattern).filter(Boolean);
+  try {
+    const onBase = new Set(list(["ls-tree", "-r", "--name-only", "-z", base, "--", dir]).map((p) => p.toLowerCase()));
+    return list(["diff", "--name-only", "-z", "--no-renames", "--diff-filter=A", `${base}...HEAD`, "--", dir])
+      .filter((p) => isReceiptPath(p) && !onBase.has(p.toLowerCase()))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 export function parseArgs(argv) {
   const out = { issue: null, cwd: process.cwd(), base: "origin/main", json: false };
   for (let i = 0; i < argv.length; i++) {
@@ -131,8 +151,9 @@ export async function gate({ issue = null, cwd = process.cwd(), base = "origin/m
     const record = lineage({ root });
     if (record && record !== CORRUPT && Number.isInteger(record.issue) && record.issue > 0) own = record.issue;
   }
+  const added = newReceipts({ cwd: root, base, git });
   const { threads, listError } = await readLeases({ gh });
-  const verdict = leaseOverlapVerdict({ changed, own, threads, listError, now });
+  const verdict = leaseOverlapVerdict({ changed, added, own, threads, listError, now });
   return { ok: verdict.ok, base, changed, verdict };
 }
 
