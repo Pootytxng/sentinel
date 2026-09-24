@@ -1,0 +1,81 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/553#issuecomment-5808041384",
+  "leaseEvidenceNote": "The landing Ownership claim on #553 was posted by this Claude Code session (42d11166) at about 2026-09-24T05:05Z and was live when this transition ran. It names this worktree (machine-model-defects-115554) and branch claude/infallible-raman-4f439b, whose local HEAD was set to the reviewed head with `git reset --keep`. Its Write scope is one contiguous list: PR #555's four delta paths plus the two receipt files. The implementation claim was released first, at https://github.com/Pootytxng/sentinel/issues/553#issuecomment-5805218671.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "At this head, `node scripts/scope-drift-gate.mjs --issue 553 --refresh` reads OK (4 changed paths, all inside the landing claim) and `node scripts/lease-overlap-gate.mjs --issue 553` reads OK: no other lane holds a pushed path from earlier than #553. origin/main moved from the PR base 4a4ea2d2 to efefe28c (#556, #550, #546); `git diff --stat 4a4ea2d2 origin/main` touches none of #555's four files, and GitHub reports the PR MERGEABLE / CLEAN.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "Both commits (e5cc2906, a4aae172) were written by another Claude Code session in worktree modest-nash-c6c838, which released its claim with a Handoff (comment 5805218671). This landing session changed no code.",
+  "currentHead": "a4aae172d7131cc80aef9da364491ae000d51d2e",
+  "pr": 555,
+  "issue": 553,
+  "kind": "lane",
+  "branch": "claude/553-lease-store-guard",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is 4a4ea2d2..a4aae172: e5cc2906 and a4aae172. `git log --format='%an <%ae> | %cn <%ce>'` shows claude-code <claude-code@desk.local> as author and committer of both. Codex authored none of them.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository Pootytxng/sentinel. origin/main efefe28c, fetched about 05:00Z. origin/claude/553-lease-store-guard equals a4aae172, which is this folder's local HEAD and the lane folder's HEAD. `git status --porcelain --untracked-files=all` in this folder shows only this landing's receipts. No build, gate or helper process from this lane is running; the passing gate's last line is the test lock's release.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "a4aae172d7131cc80aef9da364491ae000d51d2e",
+      "evidence": "logs/verify-local-2026-09-24T00-17-39Z.log (in worktree modest-nash-c6c838; SHA-256 027236024C627D06DA2C48C5EA4B7C8CE2E907B525F60B352D23CEB152149451, 2169 lines) lines 14-123",
+      "summary": "460 test files passed: 7,628 passed, 1 expected fail, 9 skipped, 0 failed (lines 118-119)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "a4aae172d7131cc80aef9da364491ae000d51d2e",
+      "evidence": "logs/verify-local-2026-09-24T00-17-39Z.log (in worktree modest-nash-c6c838; SHA-256 027236024C627D06DA2C48C5EA4B7C8CE2E907B525F60B352D23CEB152149451, 2169 lines) lines 124-150",
+      "summary": "tsc and the Vite production build passed (built in 10.08s, line 149)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "a4aae172d7131cc80aef9da364491ae000d51d2e",
+      "evidence": "logs/verify-local-2026-09-24T00-17-39Z.log (in worktree modest-nash-c6c838; SHA-256 027236024C627D06DA2C48C5EA4B7C8CE2E907B525F60B352D23CEB152149451, 2169 lines) lines 151-1883",
+      "summary": "1,343 passed; 0 failed; 24 ignored (line 1869)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "a4aae172d7131cc80aef9da364491ae000d51d2e",
+      "evidence": "logs/verify-local-2026-09-24T00-17-39Z.log (in worktree modest-nash-c6c838; SHA-256 027236024C627D06DA2C48C5EA4B7C8CE2E907B525F60B352D23CEB152149451, 2169 lines) lines 1884-2169",
+      "summary": "Clippy finished clean under -D warnings (dev profile finished in 1m 14s, line 2168); the stage has no warning or error lines. Line 2169 is the test lock's release."
+    }
+  ],
+  "gateEvidenceNote": "The gate is the native pre-push gate run on the push of a4aae172: the commit is timed 2026-09-24T00:17:19Z and the log starts at 00:17:39Z, and the lane folder's reflog shows no HEAD move after a4aae172. The same run's scope-drift (lines 5-7) and lease-overlap (lines 9-11) stages read OK. GitHub Actions runs no jobs for this repository, so this local gate is the proof.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run (log lines 5-7), 4 changed paths were inside the #553 implementation claim. At the landing claim, the same 4 paths read OK against the thread with --refresh."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "a4aae172d7131cc80aef9da364491ae000d51d2e",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/555#issuecomment-5807941328. The comment is headed \"Independent exact-head security and code review — PASS\" and records reviewed head a4aae172d7131cc80aef9da364491ae000d51d2e.",
+    "reviewerNote": "Codex reviewed as the non-author: no blocking code, security or specification findings. It ran `npx vitest run tools/entry/lease-store-guard.test.mjs tools/entry/shell-ownership-assert.test.mjs` (143 passed, 5 skipped) and `git apply --check --whitespace=error-all` on the stored patch (PASS). Owner-only residual it names, carried unchanged: the stored PowerShell patch is not active, so `Remove-Item \"$env:LOCALAPPDATACompyEntrysessions*.json\"` stays unprotected until the owner applies docs/superpowers/specs/2026-09-23-powershell-env-knowable-553.patch. Nothing may claim PowerShell coverage before then."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #555 has no closing keyword, so the merge closes no issue. #553 closes under its own close-issue receipt, after this landing's claim is released."
+}
