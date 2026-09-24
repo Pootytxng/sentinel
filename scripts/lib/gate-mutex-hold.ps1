@@ -29,8 +29,11 @@ $ErrorActionPreference = "Stop"
 if (-not $Name) { $Name = $GateMutexName }
 if (-not $StateDir) { $StateDir = $GateMutexStateDir }
 
-# Every line goes to stderr: stdout belongs to the one line the parent is waiting for.
-$say = { param($Text) [Console]::Error.WriteLine($Text) }
+# Every line goes to stderr: stdout belongs to the one line the parent is waiting for. A line that
+# cannot be written is dropped, never thrown: a throw inside the wait would pre-empt the give-up and
+# a busy gate would read as a broken holder. (Windows PowerShell 5.1 already drops a failed console
+# write; this does not lean on that.)
+$say = { param($Text) try { [Console]::Error.WriteLine($Text) } catch { } }
 
 try {
   $lease = Enter-GateMutex -Name $Name -StateDir $StateDir -Label $Label -TimeoutSeconds $TimeoutSeconds -NoticeSeconds $NoticeSeconds -Say $say

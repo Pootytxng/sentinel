@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -306,5 +306,39 @@ describe.runIf(process.platform === "win32")("a full ad-hoc suite queues on the 
     expect(result.stderr).toContain("run-vitest: WARN could not queue this full suite on the test gate");
     expect(result.stderr).not.toMatch(/TEST GATE: gave up/);
     expect(launched(result.stdout)?.marker).toBe("");
+  });
+
+  // Codex re-review of PR #571: every TEST GATE line goes to stderr, and a write that threw inside the
+  // wait would pre-empt the give-up, so a busy gate would read as a broken holder and the suite would
+  // run unqueued beside it. A stderr handle opened read-only makes every one of those writes fail.
+  const holdWithUnwritableStderr = async (name, stateDir) => {
+    const path = join(driverDir, `stderr-${crypto.randomUUID()}.txt`);
+    writeFileSync(path, "");
+    const fd = openSync(path, "r");
+    try {
+      return await holdGate({ name, stateDir, timeoutSeconds: 2, noticeSeconds: 1, stderr: fd }).then(
+        (lease) => {
+          leases.add(lease);
+          return { held: true };
+        },
+        (error) => error,
+      );
+    } finally {
+      closeSync(fd);
+    }
+  };
+
+  it("still gives up on a busy gate when the holder cannot write a line to stderr", async () => {
+    const testCase = makeCase();
+    await hold(testCase, "the gate");
+    const outcome = await holdWithUnwritableStderr(testCase.name, testCase.stateDir);
+    expect(outcome.gaveUp, outcome.message).toBe(true);
+  });
+
+  it("exits 4 when the holder breaks and cannot even say so", async () => {
+    const testCase = makeCase();
+    const outcome = await holdWithUnwritableStderr(`${testCase.name}\\not-a-name`, testCase.stateDir);
+    expect(outcome.gaveUp, outcome.message).toBe(false);
+    expect(outcome.message).toContain("(code 4)");
   });
 });
