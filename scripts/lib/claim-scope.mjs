@@ -166,13 +166,17 @@ function toRegExp(pattern) {
  * Does `pattern` cover `path`? True when the pattern names the path, matches it as a glob, or is a
  * directory the path sits under. The directory case is the one that matters: a lane claiming
  * `scripts/` has claimed every file in it, whether or not it listed them.
+ *
+ * Every branch ignores case, because Windows does: `src/Surfaces/HomeHud.tsx` and
+ * `src/surfaces/homehud.tsx` are one file, and a case-sensitive literal compare made the lease-overlap
+ * gate miss that overlap (#539).
  */
 export function coversPath(pattern, path) {
-  const p = normalizePattern(pattern);
-  const target = normalizePattern(path);
+  const p = normalizePattern(pattern).toLowerCase();
+  const target = normalizePattern(path).toLowerCase();
   if (!p || !target) return false;
   if (p === target) return true;
-  if (target.toLowerCase().startsWith(`${p.toLowerCase()}/`)) return true;
+  if (target.startsWith(`${p}/`)) return true;
   return /[*?]/.test(p) ? toRegExp(p).test(target) : false;
 }
 
@@ -196,7 +200,9 @@ export function overlappingPairs(scopeA, scopeB) {
   for (const a of norm(scopeA)) {
     for (const b of norm(scopeB)) {
       const overlaps =
-        a === b || (isLiteral(b) && coversPath(a, b)) || (isLiteral(a) && coversPath(b, a));
+        a.toLowerCase() === b.toLowerCase() ||
+        (isLiteral(b) && coversPath(a, b)) ||
+        (isLiteral(a) && coversPath(b, a));
       if (overlaps) pairs.push([a, b]);
     }
   }
