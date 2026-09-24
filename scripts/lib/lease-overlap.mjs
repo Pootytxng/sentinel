@@ -17,9 +17,10 @@
 //
 // Unknown means locked (collision rule 5). A thread that could not be read refuses the push, and so
 // does the open-issue list. A live claim that declares no paths holds every path: its scope is
-// unknown, and "we could not tell" must not print the same verdict as "disjoint". Expiry is an alarm,
-// not a takeover (rule 6): an expired claim still holds its paths, and the refusal says it expired.
-// Paths are matched with claim-scope.mjs, the one scope parser (#408).
+// unknown, and "we could not tell" must not print the same verdict as "disjoint". The one exception
+// is a claim that says it writes nothing, `Write scope: none` (#554): declared, so it holds no path.
+// Expiry is an alarm, not a takeover (rule 6): an expired claim still holds its paths, and the refusal
+// says it expired. Paths are matched with claim-scope.mjs, the one scope parser (#408).
 //
 // One carve-out (#538): a NEW transition receipt is nobody's path. Receipts are one file per
 // transition, named per PR or issue, and only ever added, so a receipt this push adds that the base
@@ -29,7 +30,7 @@
 // that folder are paths like any other.
 
 import { claimExpiry } from "../../tools/entry/claim.mjs";
-import { coversPath, normalizePattern, parseScopePatterns } from "./claim-scope.mjs";
+import { coversPath, declaresNone, normalizePattern, parseScopePatterns } from "./claim-scope.mjs";
 
 /** A transition receipt: a `.json` directly in `.claude/work-control/`. */
 export const isReceiptPath = (path) => /^\.claude\/work-control\/[^/]+\.json$/i.test(normalizePattern(path));
@@ -37,8 +38,12 @@ export const isReceiptPath = (path) => /^\.claude\/work-control\/[^/]+\.json$/i.
 /** The paths a claim declares, or [] when it declares none. */
 export const declaredPaths = (claim) => parseScopePatterns(claim?.scope ?? "");
 
-/** Does this claim hold `path`? A claim that declares no paths holds all of them (rule 5). */
+/**
+ * Does this claim hold `path`? `Write scope: none` holds nothing (#554); any other claim that
+ * declares no paths holds all of them (rule 5).
+ */
 export function holds(claim, path) {
+  if (declaresNone(claim?.scope)) return false;
   const patterns = declaredPaths(claim);
   return patterns.length === 0 || patterns.some((p) => coversPath(p, path));
 }

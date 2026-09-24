@@ -192,24 +192,26 @@ export function changedPaths({ cwd = process.cwd(), base = "origin/main", git = 
 /**
  * The decision. `changed` and `scope` are strings; the answer is the changed paths the scope does
  * not cover, plus the ones it does, so a report can show its work. No scope at all is not "all
- * outside": it is "cannot measure", and the caller must say so rather than fail the tree.
+ * outside": it is "cannot measure", and the caller must say so rather than fail the tree. The one
+ * exception is `none` (#554), a claim that declares `Write scope: none`: that IS a scope, one that
+ * holds no path, so it is measured and every changed path is outside it.
  */
-export function driftReport({ changed = [], scope = [] } = {}) {
+export function driftReport({ changed = [], scope = [], none = false } = {}) {
   const patterns = scope.map(normalizePattern).filter(Boolean);
   const paths = changed.map(normalizePattern).filter(Boolean);
-  if (patterns.length === 0) return { measured: false, outside: [], covered: [], scope: patterns };
+  if (patterns.length === 0 && !none) return { measured: false, outside: [], covered: [], scope: patterns, none: false };
   const outside = outsideScope(paths, patterns);
   const covered = paths.filter((p) => !outside.includes(p));
-  return { measured: true, outside, covered, scope: patterns };
+  return { measured: true, outside, covered, scope: patterns, none: Boolean(none) };
 }
 
 /** The sentence a lane is given. One line per path so a diff of the message is a diff of the drift. */
-export function renderDrift({ issue, outside, scope, stale = false }) {
+export function renderDrift({ issue, outside, scope, stale = false, none = false }) {
   const lines = [
     `write-scope drift (#356): ${outside.length} changed path${outside.length === 1 ? "" : "s"} outside the ` +
       `claim on #${issue}${stale ? " (claim read from a stale cache; re-read the thread to be sure)" : ""}:`,
     ...outside.map((p) => `  - ${p}`),
-    `claimed: ${scope.map((s) => `\`${s}\``).join(", ") || "(nothing parsed)"}`,
+    `claimed: ${none ? "none (`Write scope: none` holds no path)" : scope.map((s) => `\`${s}\``).join(", ") || "(nothing parsed)"}`,
     "cure: widen the claim on the issue (re-post it with the paths added to `Write scope`) and refresh with " +
       "`node scripts/scope-drift-gate.mjs --refresh`, or move the change to the lane that owns those paths.",
   ];

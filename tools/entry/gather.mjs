@@ -22,7 +22,7 @@ import {
 } from "./settings-resolve.mjs";
 import { envWindowOf, planTier, readLocalLayer, readProjectWindow, readTierRecord } from "./tier.mjs";
 import { parseWorktreeField } from "./worktree-field.mjs";
-import { parseScopePatterns, scopeTextFromMarkdown } from "../../scripts/lib/claim-scope.mjs";
+import { declaresNone, parseScopePatterns, scopeTextFromMarkdown } from "../../scripts/lib/claim-scope.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
 export const PROJECT = { number: 1, owner: "Pootytxng" };
@@ -215,7 +215,8 @@ export function readIssueBody(issue) {
 /**
  * The facts `scope.overlap` decides over (#358): this task's declared paths (from --scope, else its
  * own live claim, else the issue body's "Write scope" bullet), the declared paths of every OTHER live
- * lease, and the tracked paths of the base commit — the set a glob can claim.
+ * lease, and the tracked paths of the base commit — the set a glob can claim. `none` marks a scope that
+ * declares `Write scope: none` (#554): declared, holding no path, which is not the same as undeclared.
  *
  * A lease lives in the issue thread, not in the board column (#414): a claim held through review sits
  * in Review, and one parked on the owner sits in Needs Kuya. So every item that is not Done is read,
@@ -267,6 +268,7 @@ export function gatherScopeFacts({ task, items = [], claim = null, scopeText = n
       {
         ...at,
         scope: live ? parseScopePatterns(live.scope) : null,
+        none: live ? declaresNone(live.scope) : false,
         live: Boolean(live),
         expired: Boolean(expiry && expiry < now),
         expires: expiry ? expiry.toISOString().slice(0, 10) : (live?.expires ?? null),
@@ -280,7 +282,7 @@ export function gatherScopeFacts({ task, items = [], claim = null, scopeText = n
   } catch {
     files = null;
   }
-  return { mine, text, source, others, files };
+  return { mine, none: declaresNone(text), text, source, others, files };
 }
 
 /** The field ids claim.mjs needs to write. Read once, passed in, never guessed. */

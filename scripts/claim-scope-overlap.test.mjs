@@ -11,14 +11,22 @@
 // a string, because the decision is a string question; the gathering (GitHub, git) belongs to the
 // caller and is not what goes wrong.
 import { describe, expect, it } from "vitest";
+import { threadLease } from "../tools/entry/claim.mjs";
+import { gatherScopeFacts } from "../tools/entry/gather.mjs";
+import { scopeOverlapVerdict } from "../tools/entry/scope-overlap.mjs";
 import {
   coversPath,
+  declaresNone,
   normalizePattern,
   outsideScope,
   overlappingFiles,
   overlappingPairs,
+  parseScopePatterns,
   parseWriteScope,
+  scopeTextFromMarkdown,
 } from "./lib/claim-scope.mjs";
+import { holds } from "./lib/lease-overlap.mjs";
+import { driftReport } from "./lib/scope-drift.mjs";
 
 // The two lanes of the pilot, verbatim from the bullets posted on #350 and #343 (2026-09-02). Kept
 // as literals rather than fetched: this asserts that the comparison would have cleared THESE two
@@ -168,5 +176,98 @@ describe("the second net: a lane that drifts after dispatch", () => {
     // opposite reading -- no scope means no limit -- would make the check disappear exactly where
     // the claim was sloppiest.
     expect(outsideScope(["scripts/x.mjs"], [])).toEqual(["scripts/x.mjs"]);
+  });
+});
+
+// #554, observed 2026-09-23: #552 was a read-only measurement lane, and its claim said so in the only
+// words it had. Its scope named no backticked path, so it parsed as [], and a claim that declares no
+// paths holds every path (collision rule 5). The push gate then refused every later lane's push —
+// #549's `tools/entry/checkouts.mjs` first. The claim below is #552's, verbatim:
+// https://github.com/Pootytxng/sentinel/issues/552#issuecomment-5804878358
+const CLAIM_552 = [
+  "### Ownership claim",
+  "",
+  "- Lane: heavy compile/install vs gate npm test (#552)",
+  "- Executor/tool: Claude Code — commits as `claude-code <claude-code@desk.local>`",
+  "- Repository: Pootytxng/sentinel",
+  "- Worktree folder: C:/Users/Kuya/code/sentinel/.claude/worktrees/ecstatic-franklin-c19ff2",
+  "- Branch: claude/552-heavy-compile-gate-overlap",
+  "- Base: origin/main 4a4ea2d2",
+  "- Write scope: none yet. The measurement is read-only. This claim is re-posted with exact paths before any repo write.",
+  "- Scope note: `scripts/lib/gate-mutex*`, `scripts/run-vitest.mjs` and `scripts/verify-local.ps1` belong to #541 and #543 until they land. Stays out of `vitest.config.ts`, `scripts/lib/tree-walk-*` and `src/test/tree-walk-budget.ts`.",
+  "- Started: 2026-09-23T22:05Z",
+  "- Claim expires: 2026-09-24T10:05Z (alarm only)",
+  "- Next action: measure whether npm ci / tauri build / tauri dev compile / cargo overlap slows gate npm test (gate logs + transcripts, time-normalized, dose-response). Fix only if the effect is real.",
+  "- Active build/install/helper processes: none",
+  "",
+].join("\n");
+const CHECKOUTS = "tools/entry/checkouts.mjs";
+
+describe("`Write scope: none` is declared, and holds nothing (#554)", () => {
+  it("reads #552's own wording as a declaration that the lane writes nothing", () => {
+    const text = scopeTextFromMarkdown(CLAIM_552, { aliases: ["scope"] });
+    expect(text).toBe("none yet. The measurement is read-only. This claim is re-posted with exact paths before any repo write.");
+    expect(parseScopePatterns(text)).toEqual([]);
+    expect(declaresNone(text)).toBe(true);
+    expect(declaresNone("none")).toBe(true);
+    expect(declaresNone("None.")).toBe(true);
+    expect(declaresNone("  NONE — read-only lane")).toBe(true);
+  });
+
+  it("is narrow: every other scope that names no path stays unknown, and unknown stays locked", () => {
+    for (const unknown of [null, undefined, "", "TBD", "N/A", "read-only", "nothing", "the home surfaces", "nonexistent", "none-ish", "not none"]) {
+      expect(declaresNone(unknown), String(unknown)).toBe(false);
+    }
+  });
+
+  it("a `none` that goes on to name a path is read for the path, not as none", () => {
+    const text = "none yet; will add `src/foo.ts` before writing";
+    expect(declaresNone(text)).toBe(false);
+    expect(parseScopePatterns(text)).toEqual(["src/foo.ts"]);
+  });
+
+  describe("every reader agrees, because each reads it through claim-scope.mjs (#408)", () => {
+    const at = "2026-09-23T23:51:34Z";
+    const lease = (body) => threadLease([{ body, createdAt: at, url: "u:552" }]).claim;
+    const noScopeLine = CLAIM_552.replace(/^- Write scope:.*\n/m, "");
+    const pathless = CLAIM_552.replace(/^- Write scope:.*$/m, "- Write scope: read-only, see the note below.");
+
+    it("the push gate: a none claim holds no path; a pathless or missing scope holds every path", () => {
+      expect(holds(lease(CLAIM_552), CHECKOUTS)).toBe(false);
+      expect(lease(noScopeLine).scope).toBeNull();
+      expect(holds(lease(noScopeLine), CHECKOUTS)).toBe(true);
+      expect(holds(lease(pathless), CHECKOUTS)).toBe(true);
+    });
+
+    it("dispatch: a none lease is not an unknown lease, and a none task overlaps no one", () => {
+      const gather = (body, scopeText = `\`${CHECKOUTS}\``) =>
+        gatherScopeFacts({
+          task: { number: 549 },
+          items: [{ number: 552, status: "Active", lane: "Claude Code" }],
+          scopeText,
+          now: new Date("2026-09-24T00:10:00Z"),
+          threads: () => new Map([[552, { claim: lease(body) }]]),
+          git: () => `${CHECKOUTS}\n`,
+          body: () => null,
+        });
+      const facts = gather(CLAIM_552);
+      expect(facts.others).toMatchObject([{ number: 552, scope: [], none: true, live: true }]);
+      expect(scopeOverlapVerdict(facts)).toMatchObject({ ok: true, unknown: [] });
+      for (const body of [noScopeLine, pathless]) {
+        const v = scopeOverlapVerdict(gather(body));
+        expect(v.ok).toBe(false);
+        expect(v.unknown).toMatchObject([{ number: 552, why: "its claim declares no paths" }]);
+      }
+      // The same declaration on the dispatching side: a task that writes nothing overlaps no lease,
+      // even one whose scope is unknown. A task with no scope at all is still refused.
+      expect(scopeOverlapVerdict(gather(pathless, "none"))).toMatchObject({ ok: true, undeclared: false });
+      expect(scopeOverlapVerdict(gather(pathless, "TBD"))).toMatchObject({ ok: false, undeclared: true });
+    });
+
+    it("the drift gate: a none claim is measured, and every changed path is outside it", () => {
+      const read = (text) => driftReport({ changed: [CHECKOUTS], scope: parseScopePatterns(text), none: declaresNone(text) });
+      expect(read(lease(CLAIM_552).scope)).toMatchObject({ measured: true, outside: [CHECKOUTS], none: true });
+      expect(read(lease(pathless).scope)).toMatchObject({ measured: false, outside: [] });
+    });
   });
 });
