@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/545#issuecomment-5808462740",
+  "leaseEvidenceNote": "At 2026-09-24T05:48:39Z, Claude Code session d184dcf1 posted the landing Ownership claim on #545. It names this worktree (youthful-swartz-2f0580) and branch claude/545-hint-case-on-539 at PR #564's head. Its Write scope is one contiguous list: the two delta paths plus this receipt. It supersedes the same session's first #545 claim (https://github.com/Pootytxng/sentinel/issues/545#issuecomment-5808008159, 05:03Z), which came right after a Verified takeover of the idle author session. The PR body says 'Fixes #545', so this merge closes #545 and the gate reads #545's lease first. This session therefore posted its Handoff with '- Claim: released' on #545 just before this transition ran. No other lease on #545 is live.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T05:48:59Z, reading each PR's files over REST. Seven PRs were open: #564, #561, #557, #492, #471, #470 and #464. Only #564 touches tools/entry/scope-overlap.mjs or tools/entry/scope-overlap.test.mjs, and no PR touches this receipt path. In the gate run at this head (log lines 5-11), both stages read OK. Write-scope drift found 2 changed paths, both inside the #545 claim. Lease overlap found that no other lane holds a pushed path from earlier than #545.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The fix and its test were written by Claude Code session 1eb4d265 as commit 8d4679db, which was never pushed. That session's app entry is 'Fold case in scope-overlap shared-glob hint', worktree relaxed-torvalds-c57bbb, branch claude/545-overlap-hint-case, and its #545 claim was never released (https://github.com/Pootytxng/sentinel/issues/545#issuecomment-5803234378). That session is idle: the app's session list shows it not running, with last activity at 2026-09-23T23:47:42Z (re-checked 05:49Z). The takeover is recorded at https://github.com/Pootytxng/sentinel/issues/545#issuecomment-5808007956. This session read 8d4679db from the shared object store and cherry-picked it with -x onto origin/main efefe28c as 0a4b2f44. It never wrote in the author's folder. The patch is unchanged apart from the -x trailer.",
+  "currentHead": "0a4b2f44c97e184760f4126842e251d7e2d4fb31",
+  "pr": 564,
+  "issue": 545,
+  "kind": "lane",
+  "branch": "claude/545-hint-case-on-539",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is origin/main...0a4b2f44, with merge-base efefe28c3c6e07d14a33778d56127127b53ea7f4. It is one commit, 0a4b2f44. `git log --format='%an <%ae> | %cn <%ce>'` shows claude-code <claude-code@desk.local> as its author and committer. The reviewer seat authored nothing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository: Pootytxng/sentinel. origin/main is 28698587, fetched at 2026-09-24T05:48Z; #555 landed after the PR base. `git diff --stat efefe28c origin/main -- tools/entry/scope-overlap.mjs tools/entry/scope-overlap.test.mjs` is empty, so main has not touched either delta file since the base. origin/claude/545-hint-case-on-539 equals local HEAD 0a4b2f44 on that branch in worktree youthful-swartz-2f0580. `git status --porcelain` shows only this receipt. No gate, build or helper process from this lane is running: the gate log ends with the test lock's release, and the reviewer seat's vitest runs have finished.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "0a4b2f44c97e184760f4126842e251d7e2d4fb31",
+      "evidence": "logs/verify-local-2026-09-24T05-36-07Z.log (in worktree youthful-swartz-2f0580; SHA-256 A1B73ECB1EECA5B81424A9CE48F1223B02F2F62E2FDC29AF679466F00B8E0B31, 2099 lines) lines 14-53",
+      "summary": "459 frontend test files passed: 7,620 passed, 1 expected fail, 4 skipped, 0 failed (lines 48-49)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "0a4b2f44c97e184760f4126842e251d7e2d4fb31",
+      "evidence": "logs/verify-local-2026-09-24T05-36-07Z.log (in worktree youthful-swartz-2f0580; SHA-256 A1B73ECB1EECA5B81424A9CE48F1223B02F2F62E2FDC29AF679466F00B8E0B31, 2099 lines) lines 54-80",
+      "summary": "tsc and the Vite production build passed (built in 10.35s, line 79)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "0a4b2f44c97e184760f4126842e251d7e2d4fb31",
+      "evidence": "logs/verify-local-2026-09-24T05-36-07Z.log (in worktree youthful-swartz-2f0580; SHA-256 A1B73ECB1EECA5B81424A9CE48F1223B02F2F62E2FDC29AF679466F00B8E0B31, 2099 lines) lines 81-1813",
+      "summary": "1,343 passed; 0 failed; 24 ignored (line 1799)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "0a4b2f44c97e184760f4126842e251d7e2d4fb31",
+      "evidence": "logs/verify-local-2026-09-24T05-36-07Z.log (in worktree youthful-swartz-2f0580; SHA-256 A1B73ECB1EECA5B81424A9CE48F1223B02F2F62E2FDC29AF679466F00B8E0B31, 2099 lines) lines 1814-2098",
+      "summary": "Clippy finished clean under -D warnings in 57.29s (line 2098), with no warning or error line. Line 2099 is the test lock's release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1). It was run natively (PowerShell) when this session pushed claude/545-hint-case-on-539, and the push that created the remote branch at 0a4b2f44 was accepted. This worktree's HEAD reflog binds HEAD to 0a4b2f44 from the cherry-pick at 2026-09-24T05:02:41Z, before the log began at 05:36:07Z, and records no later HEAD move. This session read every stage: diff check (line 3), write-scope drift OK (lines 5-7), lease overlap OK (lines 9-11), frontend tests, build, Rust tests and clippy. It hashed the log to the SHA-256 above. Disclosure: VITEST_MAX_WORKERS=4 was set in the push shell. That is vitest's own worker-count setting, and the same suite and gate ran unchanged. Three earlier pushes of this same head did not pass. Logs 05-05-19Z and 05-18-40Z each failed 7 tests on the 15s test timeout, in four git-spawning files outside this delta (branch-disposition-audit, verify-release-state-guard, first-launch, target-ownership); those four files passed 208/208 when re-run alone. This was under machine load from a running game. Log 05-29-10Z ended with vitest exiting silently about two minutes after RUN, with no test result. None of the three is a verdict on this tree. The load flake is tracked as a separate task. No --no-verify was used and none is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7), 2 changed paths since origin/main were measured against this session's claim on #545, and both were inside it.",
+    "reconciliationNote": "The landing claim keeps the two delta paths and adds only this receipt."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "0a4b2f44c97e184760f4126842e251d7e2d4fb31",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/564#issuecomment-5808496248. The comment is headed \"Independent exact-head review — frontend-ipc-contract-auditor seat\" and records reviewed head 0a4b2f44c97e184760f4126842e251d7e2d4fb31 and VERDICT: PASS.",
+    "reviewerNote": "The reviewer is a read-only seat that authored none of the delta. It was run by the landing session, which carried the delta by cherry-pick -x but did not write it. Its checks:\n- The diff touches only the two files.\n- 0a4b2f44's patch is byte-identical to 8d4679db's; only the -x trailer differs.\n- The lowercase comparison cannot fire for two different globs: glob characters do not change under toLowerCase, and only #539's overlappingPairs case-fold on main emits a pair that differs only in case.\n- The two dependent test files passed 28/28.\n- A falsification in a scratch copy outside the repo: main's pre-fix module fails the new assertion, and the head's module passes it.\n\nIt made one non-blocking note: the falsification reproduced the new assertion directly, without running the whole copied test file. The shared Pootytxng account records the verdict as a PR comment whose body names the reviewer identity. The reviewer is a Claude model and is independent by role only. The #531, #533, #546 and #556 landings used the same route."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #564's closingIssuesReferences is [545] ('Fixes #545'), so the merge closes #545, and 'Item closed' sets its board item Done. This session's #545 lease was released with a Handoff before this transition. scripts/land-pr.mjs merges without --delete-branch and then prunes the head ref with git push origin --delete."
+}

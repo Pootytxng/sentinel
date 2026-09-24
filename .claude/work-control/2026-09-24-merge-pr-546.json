@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/539#issuecomment-5807894717",
+  "leaseEvidenceNote": "Claude Code session d184dcf1 posted the landing Ownership claim on #539 at 2026-09-24T04:50Z. It names this worktree (youthful-swartz-2f0580) and local branch claude/539-land at the PR head. Its Write scope is one contiguous list: PR #546's two delta paths plus this receipt. The claim came right after a Verified takeover of the idle author session d14c4d72 (https://github.com/Pootytxng/sentinel/issues/539#issuecomment-5807894510). The PR body says 'Fixes #539', so this merge closes #539 and the gate reads #539's lease first. This session therefore posted its Handoff with '- Claim: released' on #539 just before this transition ran. No other lease on #539 is live.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T04:58:26Z, reading each PR's files over REST. Eight PRs were open: #561, #557, #555, #546, #492, #471, #470 and #464. Only #546 touches scripts/lib/claim-scope.mjs or scripts/claim-scope-overlap.test.mjs, and no PR touches this receipt path. At the same head at 04:51Z, `node scripts/scope-drift-gate.mjs --issue 539 --refresh` read OK: 2 changed paths, both inside the claim. `node scripts/lease-overlap-gate.mjs --issue 539` read OK: no other lane holds a pushed path from earlier than #539.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The whole delta is one commit, 98fb5423. Claude Code session d14c4d72 wrote and pushed it from worktree pensive-dhawan-863b49. That session is idle: the app's session list showed it not running, with last activity at 2026-09-23T21:44:43Z. Its folder is clean at 98fb5423, and its HEAD reflog ends at that commit. The takeover is recorded at https://github.com/Pootytxng/sentinel/issues/539#issuecomment-5807894510. That folder was left untouched. This landing session added no commit to the delta.",
+  "currentHead": "98fb5423fc00adf588a3dc48aacd7f5e1c3d3b5d",
+  "pr": 546,
+  "issue": 539,
+  "kind": "lane",
+  "branch": "claude/539-coverspath-case",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is origin/main...98fb5423, with merge-base 93256c1949bc6a115007a30648f682e6419c2329. It is one commit, 98fb5423. `git log --format='%an <%ae> | %cn <%ce>'` shows claude-code <claude-code@desk.local> as its author and committer. The reviewer seat authored nothing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository: Pootytxng/sentinel. origin/main is c5cff38b, fetched at 2026-09-24T04:57Z. The PR base was 93256c19, and `git diff --stat 93256c19 origin/main -- scripts/lib/claim-scope.mjs scripts/claim-scope-overlap.test.mjs` is empty, so main has not touched either delta file since the base. origin/claude/539-coverspath-case equals local HEAD 98fb5423 on branch claude/539-land in worktree youthful-swartz-2f0580. `git status --porcelain` shows only this receipt. No gate, build or helper process from this lane is running. The author's gate log ends with the test lock's release, and the reviewer seat's vitest runs have finished.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "98fb5423fc00adf588a3dc48aacd7f5e1c3d3b5d",
+      "evidence": "logs/verify-local-2026-09-23T21-27-24Z.log (in worktree pensive-dhawan-863b49; SHA-256 61A3C5AF9B1CC6ACB3F37305F45F33A732AC654C73F6E293B28D0688FE0DACE9, 2108 lines) lines 23-62",
+      "summary": "459 frontend test files passed: 7,614 passed, 1 expected fail, 4 skipped, 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "98fb5423fc00adf588a3dc48aacd7f5e1c3d3b5d",
+      "evidence": "logs/verify-local-2026-09-23T21-27-24Z.log (in worktree pensive-dhawan-863b49; SHA-256 61A3C5AF9B1CC6ACB3F37305F45F33A732AC654C73F6E293B28D0688FE0DACE9, 2108 lines) lines 63-89",
+      "summary": "tsc and the Vite production build passed (built in 10.37s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "98fb5423fc00adf588a3dc48aacd7f5e1c3d3b5d",
+      "evidence": "logs/verify-local-2026-09-23T21-27-24Z.log (in worktree pensive-dhawan-863b49; SHA-256 61A3C5AF9B1CC6ACB3F37305F45F33A732AC654C73F6E293B28D0688FE0DACE9, 2108 lines) lines 90-1822",
+      "summary": "1,343 passed; 0 failed; 24 ignored (line 1808)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "98fb5423fc00adf588a3dc48aacd7f5e1c3d3b5d",
+      "evidence": "logs/verify-local-2026-09-23T21-27-24Z.log (in worktree pensive-dhawan-863b49; SHA-256 61A3C5AF9B1CC6ACB3F37305F45F33A732AC654C73F6E293B28D0688FE0DACE9, 2108 lines) lines 1823-2107",
+      "summary": "Clippy finished clean under -D warnings, with no warning or error line. Line 2108 is the test lock's release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1). It was run by the author session when it pushed claude/539-coverspath-case, and the push that created the remote branch at 98fb5423 was accepted.\n- The author worktree's HEAD reflog (.git/worktrees/pensive-dhawan-863b49/logs/HEAD) binds HEAD to 98fb5423 from its commit at 2026-09-23T21:04Z, before the log began at 21:27:24Z, and records no later HEAD move.\n- This landing session read every stage: diff check (line 3), write-scope drift OK (lines 5-7), lease overlap OK (lines 9-11), frontend tests, build, Rust tests and clippy. It hashed the log to the SHA-256 above.\n- No --no-verify was used and none is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7), 2 changed paths since origin/main were measured against the author's claim on #539, and both were inside it. At 04:51Z, at the same head, the landing claim was measured with --refresh: OK, 2 changed paths.",
+    "reconciliationNote": "The landing claim keeps the two delta paths and adds only this receipt."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "98fb5423fc00adf588a3dc48aacd7f5e1c3d3b5d",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/546#issuecomment-5807947048. The comment is headed \"Independent exact-head review — frontend-ipc-contract-auditor seat\" and records reviewed head 98fb5423fc00adf588a3dc48aacd7f5e1c3d3b5d and VERDICT: PASS.",
+    "reviewerNote": "The reviewer is a read-only seat that authored none of the delta, run by the landing session, which also authored none of it. Its checks:\n- The diff touches only the two files, and main has not touched them since the base.\n- Only the literal branch and overlappingPairs compared with exact case.\n- toRegExp has no character classes, so lowercasing before it changes nothing, and there is no prefix-match regression.\n- No caller relies on case, and no two tracked files differ only by case.\n- It ran the nine dependent test files: 339/339 passed.\n- It falsified in a scratch copy outside the worktree: the base module with the head's test file failed the new #539 test.\n\nIt made two non-blocking notes. Unicode case-folding edge cases do not apply to ASCII paths, and overlappingFiles is covered through coversPath.\n\nThe shared Pootytxng account records the verdict as a PR comment whose body names the reviewer identity. The reviewer is a Claude model, independent by role only. The same route was used for the #531, #533 and #556 landings."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #546's closingIssuesReferences is [539] ('Fixes #539'), so the merge closes #539, and 'Item closed' sets its board item Done. This session's #539 lease was released with a Handoff before this transition. scripts/land-pr.mjs merges without --delete-branch and then prunes the head ref with git push origin --delete. The author's idle worktree keeps its local branch."
+}

@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/538#issuecomment-5808697423",
+  "leaseEvidenceNote": "At 2026-09-24T06:07Z, Claude Code session d184dcf1 posted the landing Ownership claim on #538. It names this worktree (youthful-swartz-2f0580) and branch claude/538-receipt-carveout at PR #565's head. Its Write scope is one contiguous list: the four delta paths plus this receipt. It supersedes the same session's first #538 claim (https://github.com/Pootytxng/sentinel/issues/538#issuecomment-5808529867, 05:54Z), which came right after a Verified takeover of the idle author session (https://github.com/Pootytxng/sentinel/issues/538#issuecomment-5808529212). The PR body says 'Fixes #538', so this merge closes #538 and the gate reads #538's lease first. This session therefore posted its Handoff with '- Claim: released' on #538 just before this transition ran. No other lease on #538 is live.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T06:07:47Z, reading each PR's files over REST. Seven PRs were open: #565, #561, #557, #492, #471, #470 and #464. Only #565 touches docs/WORK_CONTROL.md, scripts/lease-overlap-gate.mjs, scripts/lease-overlap-gate.test.mjs or scripts/lib/lease-overlap.mjs, and no PR touches this receipt path. In the gate run at this head (log lines 5-11), both stages read OK. Write-scope drift found 4 changed paths, all inside the #538 claim. Lease overlap found that no other lane holds a pushed path from earlier than #538. #559 part 3 holds two of these files from 04:46Z and is queued behind #538 by its own claim, so #538 goes first (collision rule 2).",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The whole content is uncommitted edits by Claude Code session 55491d06 in worktree peaceful-curran-28b56e (app entry 'Stop broad receipt-folder claims blocking every carrier'). That session is idle: the app's session list shows it not running, with last activity at 2026-09-23T21:12:14Z (re-checked 05:54Z). Its folder has no commit of its own at 93256c19, and its #538 claim (https://github.com/Pootytxng/sentinel/issues/538#issuecomment-5802886674) was never released. The takeover is recorded at https://github.com/Pootytxng/sentinel/issues/538#issuecomment-5808529212. This session read `git -C peaceful-curran-28b56e --no-optional-locks diff` into a patch (267 lines, SHA-256 3f2487c39e50944072612539ef53496f6d4e0cd862cb7e11af09920923114dda, re-read unchanged at 05:54Z), applied it as-is onto origin/main 66c5e281 and committed it as 98f27f85. main had not touched the four files since 93256c19. That folder was left untouched: nothing reset, stashed or discarded.",
+  "currentHead": "98f27f8584cedcab3f7da8301002b665c4cb6031",
+  "pr": 565,
+  "issue": 538,
+  "kind": "lane",
+  "branch": "claude/538-receipt-carveout",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is origin/main...98f27f85, with merge-base 66c5e28151b93545bd62cf66e5da1f88b3762981. It is one commit, 98f27f85. `git log --format='%an <%ae> | %cn <%ce>'` shows claude-code <claude-code@desk.local> as its author and committer. The reviewer seat authored nothing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository: Pootytxng/sentinel. origin/main is 66c5e281 (fetched 2026-09-24T06:08Z) and equals the PR base. origin/claude/538-receipt-carveout equals local HEAD 98f27f85 on that branch in worktree youthful-swartz-2f0580. `git status --porcelain` shows only this receipt. No gate, build or helper process from this lane is running: the gate log ends with the test lock's release, and the reviewer seat's vitest runs have finished.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "98f27f8584cedcab3f7da8301002b665c4cb6031",
+      "evidence": "logs/verify-local-2026-09-24T05-57-30Z.log (in worktree youthful-swartz-2f0580; SHA-256 7F1AF8167CB5ADB93FE1F05A5275A228F6FAC2D4947A9B23972345E43DC39535, 1475 lines) lines 16-55",
+      "summary": "460 frontend test files passed: 7,638 passed, 1 expected fail, 9 skipped, 0 failed (lines 50-51)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "98f27f8584cedcab3f7da8301002b665c4cb6031",
+      "evidence": "logs/verify-local-2026-09-24T05-57-30Z.log (in worktree youthful-swartz-2f0580; SHA-256 7F1AF8167CB5ADB93FE1F05A5275A228F6FAC2D4947A9B23972345E43DC39535, 1475 lines) lines 56-82",
+      "summary": "tsc and the Vite production build passed (built in 10.62s, line 81)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "98f27f8584cedcab3f7da8301002b665c4cb6031",
+      "evidence": "logs/verify-local-2026-09-24T05-57-30Z.log (in worktree youthful-swartz-2f0580; SHA-256 7F1AF8167CB5ADB93FE1F05A5275A228F6FAC2D4947A9B23972345E43DC39535, 1475 lines) lines 83-1471",
+      "summary": "1,343 passed; 0 failed; 24 ignored (line 1457)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "98f27f8584cedcab3f7da8301002b665c4cb6031",
+      "evidence": "logs/verify-local-2026-09-24T05-57-30Z.log (in worktree youthful-swartz-2f0580; SHA-256 7F1AF8167CB5ADB93FE1F05A5275A228F6FAC2D4947A9B23972345E43DC39535, 1475 lines) lines 1472-1474",
+      "summary": "Clippy finished clean under -D warnings (line 1474), with no warning or error line. Line 1475 is the test lock's release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1). It was run natively (PowerShell) when this session pushed claude/538-receipt-carveout, and the push that created the remote branch at 98f27f85 was accepted. This worktree's HEAD reflog binds HEAD to 98f27f85 from its commit at 2026-09-24T05:56:26Z, before the log began at 05:57:30Z, and records no later HEAD move. This session read every stage: diff check (line 3), write-scope drift OK (lines 5-7), lease overlap OK (lines 9-11), the test-lock queue (79s behind another lane's gate), frontend tests, build, Rust tests and clippy. It hashed the log to the SHA-256 above. VITEST_MAX_WORKERS=4 was set in the push shell. That is vitest's own worker-count setting, and the same suite and gate ran unchanged. Falsification before the push: with the carve-out disabled in both the lib and the gate, 3 tests failed and 30 passed. The fourth new test checks the fail-safe (nothing exempt when git cannot say what is new), so it passes either way by design. No --no-verify was used and none is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7), 4 changed paths since origin/main were measured against this session's claim on #538, and all were inside it.",
+    "reconciliationNote": "The landing claim keeps the four delta paths and adds only this receipt."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "98f27f8584cedcab3f7da8301002b665c4cb6031",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/565#issuecomment-5808858415. The comment is headed \"Independent exact-head review — frontend-ipc-contract-auditor seat\" and records reviewed head 98f27f8584cedcab3f7da8301002b665c4cb6031 and VERDICT: PASS.",
+    "reviewerNote": "The reviewer is a read-only seat that authored none of the delta. It was run by the landing session, which applied the idle session's diff as-is but wrote none of it. Its checks:\n- The diff touches only the four files, and main has not touched them since 93256c19.\n- The committed edit is byte-identical to the uncommitted diff still in peaceful-curran-28b56e.\n- isReceiptPath takes only a direct-child .json.\n- newReceipts drops any name on the base's tip, case-insensitively, so a receipt main added meanwhile is refused.\n- Edits (--diff-filter=A), renames (--no-renames) and git failures (returns [] = exempt nothing) stay checked.\n- normalizePattern folds backslashes.\n- No caller gains an exemption by accident.\n- The test file passed 33/33.\n- In a scratch copy under %TEMP%, with the lib's newReceipts forced to [], it confirmed 3 failed | 30 passed. The fail-safe test passes either way.\n- The docs sentence matches the behaviour.\n\nIts non-blocking note: no test runs a differing-case pair through real git; the lowercase compare is correct by inspection. The shared Pootytxng account records the verdict as a PR comment whose body names the reviewer identity. The reviewer is a Claude model and is independent by role only. The #531, #533, #546, #556 and #564 landings used the same route."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #565's closingIssuesReferences is [538] ('Fixes #538'), so the merge closes #538, and 'Item closed' sets its board item Done. This session's #538 lease was released with a Handoff before this transition. scripts/land-pr.mjs merges without --delete-branch and then prunes the head ref with git push origin --delete. The author's idle folder keeps its uncommitted edits, now identical to what landed."
+}

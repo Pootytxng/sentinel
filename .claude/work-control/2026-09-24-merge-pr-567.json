@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/554#issuecomment-5809270381",
+  "leaseEvidenceNote": "At 2026-09-24T06:51Z, Claude Code session d184dcf1 posted the landing Ownership claim on #554. It names this worktree (youthful-swartz-2f0580) and branch claude/554-none-write-scope-rebased at PR #567's head. Its Write scope is one contiguous list: the ten delta paths, this receipt, and the three receipts from this session's earlier landings (546, 564, 565), which the carrier commits after this merge. It supersedes the same session's first #554 claim (https://github.com/Pootytxng/sentinel/issues/554#issuecomment-5808893198, 06:22:57Z). That claim came after #554's previous lease was released (https://github.com/Pootytxng/sentinel/issues/554#issuecomment-5805232095, 00:28Z), so no takeover was needed. The PR body says 'Fixes #554', so this merge closes #554, and the gate reads #554's lease first. This session therefore posted its Handoff with '- Claim: released' on #554 just before this transition ran. No other lease on #554 is live.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T06:52:48Z, reading each PR's files over REST. Eight PRs were open: #567, #566, #561, #557, #492, #471, #470 and #464. Two others touch these paths:\n- #566 (#559 part 3) touches scripts/lib/lease-overlap.mjs and scripts/lease-overlap-gate.test.mjs. Its lane released its #559 claim at 06:42:32Z (https://github.com/Pootytxng/sentinel/issues/559#issuecomment-5809139778) so that #554 goes first, and it rebases after this merge. git merge-tree of c8678347 with 893be540 is clean.\n- #470 is a draft owner-hands patch for #468 and touches scripts/lib/scope-drift.mjs. git merge-tree with 893be540 is clean.\nIn the gate run at this head (log lines 5-11), both claim stages read OK. Write-scope drift found 10 changed paths, all inside the #554 claim. Lease overlap found that no other lane holds a pushed path from earlier than #554.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The code is commit d04d5f8a, written by the Claude Code app session local_f38e8c8a (entry 'Let a read-only claim declare an empty write scope') in worktree stoic-heisenberg-55b3b9. That session released #554 at 00:28Z (https://github.com/Pootytxng/sentinel/issues/554#issuecomment-5805232095) while its push waited behind the #539, #545 and #538 leases, and it is not running (last activity 00:28:20Z). This session landed those three first, then branched claude/554-none-write-scope-rebased from d04d5f8a and rebased it onto origin/main bbd29a4d as 893be540.\n- There was one conflict, the scripts/lib/lease-overlap.mjs header comment. Both paragraphs were kept: #554's, then #538's.\n- The rebase's comment cleanup had dropped the message line that begins '#552', so the original message was restored byte for byte with --cleanup=verbatim. The tree is unchanged (b380dfc6).\n- The author's folder was left untouched: nothing reset, stashed or discarded.",
+  "currentHead": "893be54089939ae7d99e8e8617404ad36a862c7c",
+  "pr": 567,
+  "issue": 554,
+  "kind": "lane",
+  "branch": "claude/554-none-write-scope-rebased",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is origin/main...893be540, with merge-base bbd29a4d7b810c9e23fd0182f8acd6b0144925bf. It is one commit, 893be540. `git log --format='%an <%ae> | %cn <%ce>'` shows claude-code <claude-code@desk.local> as its author and committer. The reviewer seat authored nothing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository: Pootytxng/sentinel. origin/main is bbd29a4d (fetched 2026-09-24T07:00Z) and equals the PR base. origin/claude/554-none-write-scope-rebased equals local HEAD 893be540 on that branch in worktree youthful-swartz-2f0580. `git status --porcelain` shows only this receipt. No gate, build or helper process from this lane is running: the gate log ends with the test lock's release, and the reviewer seat has finished (its scratch copy is outside the repo).",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "893be54089939ae7d99e8e8617404ad36a862c7c",
+      "evidence": "logs/verify-local-2026-09-24T06-43-00Z.log (in worktree youthful-swartz-2f0580; SHA-256 7988A0D7B338C3E68830E711A52ED4BC421DD8C4C8FE432A8E0B2059AB155B93, 1473 lines) lines 14-53",
+      "summary": "460 frontend test files passed: 7,648 passed, 1 expected fail, 9 skipped, 0 failed (lines 48-49)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "893be54089939ae7d99e8e8617404ad36a862c7c",
+      "evidence": "logs/verify-local-2026-09-24T06-43-00Z.log (in worktree youthful-swartz-2f0580; SHA-256 7988A0D7B338C3E68830E711A52ED4BC421DD8C4C8FE432A8E0B2059AB155B93, 1473 lines) lines 54-80",
+      "summary": "tsc and the Vite production build passed (built in 10.65s, line 79). Line 78 is Vite's standing chunk-size advisory, not a failure."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "893be54089939ae7d99e8e8617404ad36a862c7c",
+      "evidence": "logs/verify-local-2026-09-24T06-43-00Z.log (in worktree youthful-swartz-2f0580; SHA-256 7988A0D7B338C3E68830E711A52ED4BC421DD8C4C8FE432A8E0B2059AB155B93, 1473 lines) lines 81-1469",
+      "summary": "1,343 passed; 0 failed; 24 ignored (line 1455)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "893be54089939ae7d99e8e8617404ad36a862c7c",
+      "evidence": "logs/verify-local-2026-09-24T06-43-00Z.log (in worktree youthful-swartz-2f0580; SHA-256 7988A0D7B338C3E68830E711A52ED4BC421DD8C4C8FE432A8E0B2059AB155B93, 1473 lines) lines 1470-1472",
+      "summary": "Clippy finished clean under -D warnings (line 1472), with no warning or error line. Line 1473 is the test lock's release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1). It was run natively (PowerShell) when this session pushed claude/554-none-write-scope-rebased, and the push that created the remote branch at 893be540 was accepted.\n- This worktree's HEAD reflog binds HEAD to 893be540 from its amend at 2026-09-24T06:27:51Z, before the log began at 06:43:00Z, and records no later HEAD move.\n- This session read every stage: diff check (line 3), write-scope drift OK (lines 5-7), lease overlap OK (lines 9-11), test lock acquired with no wait, frontend tests, build, Rust tests and clippy. It hashed the log to the SHA-256 above.\n- VITEST_MAX_WORKERS=4 was set in the push shell. That is vitest's own worker-count setting, and the same suite and gate ran unchanged.\n- Falsification after the rebase: with declaresNone stubbed to return false, 6 failed and 136 passed across six suites. Restored.\n- No --no-verify was used and none is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7), 10 changed paths since origin/main were measured against this session's claim on #554, and all were inside it.",
+    "reconciliationNote": "The landing claim keeps the ten delta paths and adds only receipt paths."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "frontend-ipc-contract-auditor",
+    "status": "passed",
+    "head": "893be54089939ae7d99e8e8617404ad36a862c7c",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/567#issuecomment-5809360499. The comment is headed \"Independent exact-head review — frontend-ipc-contract-auditor seat\" and records reviewed head 893be54089939ae7d99e8e8617404ad36a862c7c and VERDICT: PASS.",
+    "reviewerNote": "The reviewer is a read-only seat that authored none of the delta. It was run by the landing session, which rebased the idle session's commit but wrote none of the change. Its checks:\n- The diff touches exactly the 10 files, and per file it equals d04d5f8a's delta. The only addition is the lease-overlap.mjs header merge.\n- #538 (isReceiptPath, added, newReceipts), #545 (the case-insensitive shared-glob hint) and #539 (coversPath case) all survive, and WORK_CONTROL.md has both sentences.\n- declaresNone was traced against the true and false spellings, including nonexistent, none-such and a backticked none.\n- Every caller of holds, scopeOverlapVerdict, gatherScopeFacts and driftReport was checked.\n- The 6 suites passed 142/142.\n- In a scratch copy (git archive), with declaresNone stubbed to false, exactly the predicted 6 failed and 136 passed.\n\nNon-blocking findings:\n- The warn-only PostToolUse hook .claude/hooks/scope-drift-check.mjs:51 does not pass none to driftReport, so a none lane gets no in-session drift warning. The push gate still refuses the drift. Hook edits are owner-hands, so this was filed as a separate task.\n- A none-leading scope with un-backticked prose naming a file reads as none for the overlap check. The drift gate still flags that lane's own writes.\n- The doc names only the canonical spelling.\n\nThe shared Pootytxng account records the verdict as a PR comment whose body names the reviewer identity. The reviewer is a Claude model and is independent by role only. The #531, #533, #546, #556, #564 and #565 landings used the same route."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #567's closingIssuesReferences is [554] ('Fixes #554'), so the merge closes #554, and 'Item closed' sets its board item Done. This session's #554 lease was released with a Handoff before this transition. scripts/land-pr.mjs merges without --delete-branch and then prunes the head ref with git push origin --delete. The author's idle folder keeps its original branch at d04d5f8a."
+}
