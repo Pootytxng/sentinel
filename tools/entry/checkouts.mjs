@@ -7,6 +7,10 @@
 //
 // Strictly read-only: `rev-parse`, `remote get-url`, `worktree list`. Nothing here writes, checks
 // out, fetches, or touches another lane's working tree.
+//
+// Cost: 2 git processes per checkout plus 1 `worktree list` per host. The scan covers every checkout
+// under C:\Users\Kuya\code: 62 on 2026-09-23, so each git call added per checkout costs 62 more
+// processes per scan (#549). `checkouts.test.mjs` counts them per case.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
@@ -15,15 +19,25 @@ import { canonicalizePath } from "./worktree-field.mjs";
 
 export const DEFAULT_ROOTS = ["C:\\Users\\Kuya\\code"];
 
+const GIT_OPTS = { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] };
+
 function git(cwd, args) {
   try {
-    return execFileSync("git", args, {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
+    return execFileSync("git", args, { cwd, ...GIT_OPTS }).trim();
   } catch {
     return null;
+  }
+}
+
+/**
+ * Like `git`, but keeps the lines printed before a failure. `rev-parse` prints one line per option,
+ * in order, so an option that fails late does not undo the lines before it.
+ */
+function gitLines(cwd, args) {
+  try {
+    return { ok: true, lines: execFileSync("git", args, { cwd, ...GIT_OPTS }).trim().split(/\r?\n/) };
+  } catch (e) {
+    return { ok: false, lines: typeof e?.stdout === "string" ? e.stdout.trim().split(/\r?\n/) : [] };
   }
 }
 
@@ -41,12 +55,17 @@ export function inspectCheckout(dir) {
   const dotGit = dotGitKind(dir);
   if (!dotGit) return null;
 
-  const commonRaw = git(dir, ["rev-parse", "--git-common-dir"]);
-  if (commonRaw === null) return null;
-  const gitDirRaw = git(dir, ["rev-parse", "--absolute-git-dir"]);
+  // Two git processes per checkout, not four (#549): this scan runs over every checkout on the
+  // machine, and one git process costs 150-600 ms on the dev PC (#542). One rev-parse answers three
+  // questions, one line each. On an unborn HEAD it still prints both dirs and a bare `HEAD`, then
+  // exits 128, so a failed run keeps the dirs and drops the branch. That is what the separate
+  // `rev-parse --abbrev-ref HEAD` returned there: no branch, and not detached.
+  const revParse = gitLines(dir, ["rev-parse", "--git-common-dir", "--absolute-git-dir", "--abbrev-ref", "HEAD"]);
+  const [commonRaw, gitDirRaw, branchRaw] = revParse.lines;
+  if (!commonRaw) return null;
   const commonDir = canonicalizePath(isAbsolute(commonRaw) ? commonRaw : resolve(dir, commonRaw));
 
-  const branch = git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const branch = revParse.ok ? (branchRaw ?? null) : null;
   const detached = branch === "HEAD";
 
   // A linked worktree's `.git` is a file pointing at the host — the same fact that keeps
