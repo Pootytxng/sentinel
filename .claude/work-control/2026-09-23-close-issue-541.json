@@ -1,0 +1,80 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/541#issuecomment-5803683615",
+  "leaseEvidenceNote": "The landing Ownership claim on #541 was posted by this Claude Code lane at 2026-09-23T22:01:19Z, expires 2026-09-24T10:00Z, and was live when this transition ran. It names this exact worktree (serene-chaum-59a068) and branch claude/541-gate-mutex-per-holder. Its Write scope is one contiguous list: PR #550's two delta paths plus the two receipt files. It replaced this lane's implementation claim (issuecomment-5802940571), which covered the same two delta paths. The claim's 'head' line still reads b030c91a; the lease binds scope and folder, not a head, and the review-repair commit d119fe0c stayed inside that scope. #543 claimed the same two code paths later (2026-09-23T21:15:01Z) and was told on #543 that #541 lands first. This lane's Handoff released it after the merge (https://github.com/Pootytxng/sentinel/issues/541#issuecomment-5807949339, 2026-09-24T04:55:57Z, `Claim: released`), so no lease is live on #541 when it closes.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T04:49:10Z, reading each PR's files over REST. Nine PRs were open: #561, #557, #555, #550, #546, #492, #471, #470 and #464. Only #550 touches scripts/lib/gate-mutex.ps1 or scripts/gate-mutex-guard.test.mjs, and no PR touches the two receipt paths. At the same head, node scripts/scope-drift-gate.mjs --issue 541 --refresh reads OK against the thread: 2 changed paths, both inside the claim. node scripts/lease-overlap-gate.mjs --issue 541 reads OK: no other lane holds a pushed path from earlier than #541.",
+  "currentHead": "d119fe0c116f5a033b75faa6f366f8d763cffeaa",
+  "pr": 550,
+  "issue": 541,
+  "kind": "lane",
+  "branch": "claude/541-gate-mutex-per-holder",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is origin/main...d119fe0c, with merge-base 93256c1949bc6a115007a30648f682e6419c2329. It has two commits: b030c91a (the fix) and d119fe0c (the review repair of the guard). `git log --format='%an <%ae> | %cn <%ce>'` shows claude-code <claude-code@desk.local> as author and committer of both. The Codex reviewer authored neither.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository: Pootytxng/sentinel. origin/main is f5367ed3, fetched 2026-09-24T04:47Z. It has moved 9 commits past the merge-base 93256c19 (the #531 and #556 landings and their receipt carriers). Those commits change src/i18n/locale-parity-guard.test.ts, tools/entry/checkouts.mjs, tools/entry/checkouts.test.mjs and seven receipt files, none of which is a delta path; `git merge-tree --write-tree origin/main HEAD` is clean and GitHub reports PR #550 MERGEABLE / CLEAN. Before the merge, origin/claude/541-gate-mutex-per-holder equaled local HEAD d119fe0c, which equaled PR #550's headRefOid; after the merge scripts/land-pr.mjs pruned that ref, and local HEAD is still d119fe0c, an ancestor of origin/main c5cff38b. Worktree serene-chaum-59a068 is on branch claude/541-gate-mutex-per-holder with core.hooksPath .githooks. `git status --porcelain --untracked-files=all` shows nothing apart from this landing's receipts. No gate, build or helper process from this lane is running: the passing gate logged the test lock's release on its last line, 2401.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "d119fe0c116f5a033b75faa6f366f8d763cffeaa",
+      "evidence": "logs/verify-local-2026-09-24T01-49-20Z.log (in this worktree serene-chaum-59a068; SHA-256 683BAD65A4734ECDAB3791C3FCCDCDD1175A775FD5831CFB1A128D53E8876D55, 2401 lines) lines 20-979",
+      "summary": "459 frontend test files passed: 7,614 passed, 1 expected fail, 4 skipped, 0 failed (lines 974-975). The test lock was acquired after 207s queued behind a peer lane's gate, which it named while waiting (lines 14-18)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "d119fe0c116f5a033b75faa6f366f8d763cffeaa",
+      "evidence": "logs/verify-local-2026-09-24T01-49-20Z.log (in this worktree serene-chaum-59a068; SHA-256 683BAD65A4734ECDAB3791C3FCCDCDD1175A775FD5831CFB1A128D53E8876D55, 2401 lines) lines 980-1008",
+      "summary": "tsc and the Vite production build passed (built in 7.44s, line 1007)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "d119fe0c116f5a033b75faa6f366f8d763cffeaa",
+      "evidence": "logs/verify-local-2026-09-24T01-49-20Z.log (in this worktree serene-chaum-59a068; SHA-256 683BAD65A4734ECDAB3791C3FCCDCDD1175A775FD5831CFB1A128D53E8876D55, 2401 lines) lines 1009-2397",
+      "summary": "1,343 passed; 0 failed; 24 ignored (line 2383)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "d119fe0c116f5a033b75faa6f366f8d763cffeaa",
+      "evidence": "logs/verify-local-2026-09-24T01-49-20Z.log (in this worktree serene-chaum-59a068; SHA-256 683BAD65A4734ECDAB3791C3FCCDCDD1175A775FD5831CFB1A128D53E8876D55, 2401 lines) lines 2398-2401",
+      "summary": "Clippy finished clean under -D warnings: the dev profile finished in 6.09s (line 2400), and the stage has no warning or error lines. Line 2401 is the test lock's release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1).\n- `git push` of claude/541-gate-mutex-per-holder ran the gate at 2026-09-24T01:49:20Z. It printed LOCAL CHECK RESULT: PASS, and the push that moved the remote branch from b030c91a to d119fe0c was accepted.\n- The worktree reflog binds HEAD to d119fe0c from its amend at 2026-09-24T00:04:10Z, before the log began, and records no later HEAD move.\n- Every stage was read, from the diff check to clippy, and the log was hashed to the SHA-256 above.\n- The gate queued on the test-gate mutex this PR changes, and its own wait printed the per-holder wording the fix introduces (line 14).\n- No --no-verify was used and none is authorized.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7), 2 changed paths since origin/main were measured against the claim on #541 (cache), and both were inside it. At 2026-09-24T04:48Z, at the same head, the landing claim was measured with --refresh: OK, 2 changed paths.",
+    "reconciliationNote": "The gate run and the refresh both measured against the landing claim, whose scope is the two delta paths plus the two receipt files."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "d119fe0c116f5a033b75faa6f366f8d763cffeaa",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/550#issuecomment-5807854638. The comment is headed \"Independent exact-head review — PASS\", posted 2026-09-24T04:46:02Z, and records reviewed head d119fe0c116f5a033b75faa6f366f8d763cffeaa, role 'Codex read-only reviewer; authored none of the proof delta', and Verdict: PASS (Standards 0 findings; Spec 0 findings).",
+    "reviewerNote": "The reviewer is Codex in a read-only role and authored none of the delta. It supersedes the REQUIRE CHANGES review at b030c91a (https://github.com/Pootytxng/sentinel/pull/550#issuecomment-5804229826), whose two blocking findings (FIFO mutex admission, and the 10s-versus-6s fixed-pause margin) the review-repair commit d119fe0c addresses. Its checks:\n- The guard no longer assumes FIFO admission and no longer uses fixed parent-side pauses or wall-clock hold assertions as the behavioral proof; it takes whichever queued lane Windows admits and paces handoffs from the contenders' own queue notices, keeping waitFor only as a hang guard.\n- A readable holder-key change restarts the deadline, a missing note is a known transition, and an unreadable note stays unknown and does not reset it.\n- The stuck-holder case still times out and names the holder.\n- It ran `npx vitest run scripts/gate-mutex-guard.test.mjs` itself at this exact head: 1 file, 12/12 passed in 36.59s.\n- The production change stays bounded to scripts/lib/gate-mutex.ps1 and the guard to scripts/gate-mutex-guard.test.mjs.\n\nThe author session separately falsified the repaired case against the pre-fix library (blob b417efef): the waiter gave up after 20s behind the second holder and the test failed on its exit code, not on the hang guard. With the fix (blob 61de02d8) it passed 4 of 4 focused runs.\n\nThe shared Pootytxng account records the verdict as a PR comment whose body names the reviewer role."
+  },
+  "transition": "close-issue",
+  "closingNote": "PR #550 merged as c5cff38b8cb17b7ebcf22054cada0c60312b95fb at 2026-09-24T04:51:40Z, landed by scripts/land-pr.mjs under the merge-pr receipt 2026-09-23-merge-pr-550.json (work-control gate PASS), and the head ref was pruned. This receipt binds the reviewed head d119fe0c. The merge contains that head, so the ancestor-based provenance check holds after the prune. #541's defect is fixed: Enter-GateMutex restarts its deadline whenever the holder note names a different holder or disappears, so -TimeoutSeconds bounds one holder, not the whole queue, and a note that is present but unreadable counts as unknown, never as a change. A holder that keeps the gate past the timeout still makes the waiter give up, naming it. scripts/gate-mutex-guard.test.mjs pins this with real processes: three lanes with a 20s timeout, handoffs paced by the lanes' own queue notices, no FIFO assumption; the waiter queues longer than one timeout and still acquires. The case was falsified against the pre-fix library (the waiter gave up after 20s) and the stuck-holder case is unchanged. No assertion was weakened. Left outside this issue's claim: docs/WORK_CONTROL.md's 'bounded at 30 minutes' now means per holder; that wording belongs to a coordinated doc lane."
+}
