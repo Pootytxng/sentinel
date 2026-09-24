@@ -91,7 +91,8 @@ The dev build runs two same-origin webviews + a small default window, so capture
    provenance taglines, or standing promises in micro-text). Any of these is a FAIL — the text
    relocates to the element it actually describes. Check any header/lede area the diff touches.
    (The classic `compy_editorial="0"` failsafe keeps its pre-rollout verdict headers — only
-   HUD-on surfaces are held to this.)
+   HUD-on surfaces are held to this — except the Test room, whose h1 is its title in both states
+   since #547.)
 7. **The owner's exact ask** — decompose multi-part asks; quote each part, confirm it's met.
 8. **Canvas idle rest** (only when the diff touches the r3f canvas tree — `src/surfaces/rig/**`,
    the HomeHud stage, or a vendored 3D material; otherwise evidence = "n/a, no canvas files in
