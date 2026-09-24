@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/569#issuecomment-5816350821",
+  "leaseEvidenceNote": "Claude Code desktop session ebef4468 held the #569 lease (claim https://github.com/Pootytxng/sentinel/issues/569#issuecomment-5816215906, widened at the cited comment) for this folder (trusting-newton-85d566) and branch claude/569-receipt-carrier. Its scope includes this close-issue receipt. The landing lease was released with a Handoff at https://github.com/Pootytxng/sentinel/issues/569#issuecomment-5816470257 after PR #570 merged, before this transition.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T14:44:36Z over REST (pulls?state=open, then pulls/N/files). Eight PRs were open: #570, #566, #561, #557, #492, #471, #470 and #464. Only #570 touches any of the nine #569 scope paths. The native gate's lease-overlap stage (#517) read OK: no other lane holds a pushed path, and all seven files are new receipts absent from origin/main (#538 carve-out). The live leases on #558, #559 and #562 cover scripts/local-gate-guard.test.mjs, scripts/lib/lease-overlap.mjs, scripts/lease-overlap-gate.test.mjs, scripts/lib/native-process.ps1 and scripts/tree-kill-fallback-guard.test.mjs, none of which this PR touches.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The seven files were authored by earlier sessions and committed on three local branches that never reached main: claude/536-receipt-carrier @ 6e0491079f5250add752e04e6953790d2dbd1a56 (folder intelligent-williamson-02dcb6), claude/infallible-raman-4f439b @ 46d53fc1d89297179c4952ad7a9aba0c8c888c14 (folder machine-model-defects-115554) and claude/541-gate-mutex-per-holder @ e8ab265dc3161c4a253648a4b967092b52b40450 (folder serene-chaum-59a068). They were copied byte for byte with `git checkout <head> -- <path>`; blob ids, SHA-256 and byte counts equal the source commits and the #569 table. The source branches and folders were not touched and stay preserved.",
+  "currentHead": "44261133826cd026eb228af27a6079b9029029d0",
+  "pr": 570,
+  "issue": 569,
+  "kind": "lane",
+  "branch": "claude/569-receipt-carrier",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is caba19b26038f01c6bbea9d548e1cb555102383e..44261133, one commit, authored and committed by claude-code <claude-code@desk.local>. The carried receipt contents were written by earlier claude-code sessions; no codex-authored content is in the delta. The reviewer, codex, is not a mutation author.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository Pootytxng/sentinel. origin/main is c06bd7c766be0cc356ac7facd24a07534e860d5b, the merge of PR #570 (fetched 2026-09-24T14:50Z), and it contains 44261133. Local HEAD is still 44261133 on claude/569-receipt-carrier, whose origin ref was pruned by land-pr. The tracked tree is clean. The only untracked files are this receipt and the merge-pr-570 receipt, both inside the #569 scope. No build, install or helper process is running.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "44261133826cd026eb228af27a6079b9029029d0",
+      "evidence": "logs/verify-local-2026-09-24T14-36-52Z.log (in worktree trusting-newton-85d566; SHA-256 7bff8e9015b0346874002659a3a009ea0e6af0c5f826a408fb78286611d08990, 1474 lines)",
+      "summary": "Test Files 460 passed (460); Tests 7646 passed, 1 expected fail, 10 skipped (7657)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "44261133826cd026eb228af27a6079b9029029d0",
+      "evidence": "logs/verify-local-2026-09-24T14-36-52Z.log (in worktree trusting-newton-85d566; SHA-256 7bff8e9015b0346874002659a3a009ea0e6af0c5f826a408fb78286611d08990, 1474 lines)",
+      "summary": "tsc && vite build completed (chunk-size advisory only)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "44261133826cd026eb228af27a6079b9029029d0",
+      "evidence": "logs/verify-local-2026-09-24T14-36-52Z.log (in worktree trusting-newton-85d566; SHA-256 7bff8e9015b0346874002659a3a009ea0e6af0c5f826a408fb78286611d08990, 1474 lines)",
+      "summary": "1343 passed; 0 failed; 24 ignored (lib), doc/bin targets 0 failed."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "44261133826cd026eb228af27a6079b9029029d0",
+      "evidence": "logs/verify-local-2026-09-24T14-36-52Z.log (in worktree trusting-newton-85d566; SHA-256 7bff8e9015b0346874002659a3a009ea0e6af0c5f826a408fb78286611d08990, 1474 lines)",
+      "summary": "Finished with no warnings or errors."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1), run natively when this session pushed claude/569-receipt-carrier at 44261133 (push exit 0, stdout 'LOCAL CHECK RESULT: PASS'). Every stage was read: diff check, write-scope drift OK, lease overlap OK, TestGate mutex acquired with no wait, frontend tests, type-check and build, Rust tests, clippy.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run (log lines 5-7), 7 changed paths since origin/main were measured against this session's claim on #569, and all were inside it.",
+    "reconciliationNote": "The claim was widened afterwards only to add this merge receipt and close-issue-569; `node scripts/scope-drift-gate.mjs --issue 569 --refresh` read OK against the widened claim."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "44261133826cd026eb228af27a6079b9029029d0",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/570#issuecomment-5816449032",
+    "reviewerNote": "Codex CLI 0.146 (codex exec -m gpt-5.6-sol -s read-only). Its Windows sandbox cannot launch processes on this machine (elevated: helper codex-windows-sandbox-setup.exe not found; unelevated: CreateProcessAsUserW access denied), and an unsandboxed run was refused by the session's permission classifier. The review therefore judged a bundle of raw read-only git/gh outputs captured by the author session (commit object, name-status diff, ls-tree at head and at each source commit, blob SHA-256 and byte counts, currentHead ancestry, GitHub PR/issue state, and all seven files in full) against the independent #569 audit table. The reviewer did not execute git itself; this is disclosed on PR #570."
+  },
+  "transition": "close-issue",
+  "closingNote": "Closes #569. All seven receipts are verified on origin/main at c06bd7c7 by git ls-tree: every blob id equals its source-commit blob, and the SHA-256 prefixes match the #569 table. The three source branches (claude/536-receipt-carrier @ 6e049107, claude/infallible-raman-4f439b @ 46d53fc1, claude/541-gate-mutex-per-holder @ e8ab265d) and their folders are unchanged and preserved. This receipt and merge-pr-570 trail by one commit and are carried to main under a new receipts-only claim."
+}
