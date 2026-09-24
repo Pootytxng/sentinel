@@ -178,7 +178,7 @@ A separate worktree or clone is mandatory for every active writer. Shared checko
    therefore cannot serialize another lane's landing carrier. An edited or deleted receipt, one main
    already has, and any other file there are checked like every path.
 5. **Unknown means locked.** Unknown folder, scope, dirty state, or live-process ownership is not a
-   permission to proceed.
+   permission to proceed. A lane that writes nothing claims `- Write scope: none`, which holds no path (#554).
 6. **Expiry is an alarm, not a takeover.** A stale board claim never authorizes reset, stash, discard,
    delete, force, process kill, or overwrite. Inspect actual state first and record the takeover.
 7. **No silent process control.** Do not stop another tool's build, dev server, helper, editor, or

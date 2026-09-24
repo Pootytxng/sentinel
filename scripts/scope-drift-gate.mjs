@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 
 import { CORRUPT, readLineage } from "../.claude/hooks/session-root-assert.mjs";
 import { readIssueThread } from "../tools/entry/gather.mjs";
+import { declaresNone } from "./lib/claim-scope.mjs";
 import {
   changedPaths,
   claimCacheDir,
@@ -139,7 +140,8 @@ export function gate({
     };
   }
   const changed = changedPaths({ cwd: root, base, ...(git ? { git } : {}) });
-  const report = driftReport({ changed: changed.paths, scope: claim.scope });
+  // `Write scope: none` is a declared scope that holds no path (#554): measured, not skipped.
+  const report = driftReport({ changed: changed.paths, scope: claim.scope, none: declaresNone(claim.scopeText) });
   if (!report.measured) {
     return { ok: true, measured: false, issue: issueNo, reason: `the claim on #${issueNo} declares no backticked paths in its Write scope; nothing to compare with`, root, claimSource: source };
   }
@@ -153,6 +155,7 @@ export function gate({
     claimSource: source,
     stale,
     scope: report.scope,
+    none: report.none,
     changed: changed.paths,
     covered: report.covered,
     outside: report.outside,
@@ -165,8 +168,9 @@ export function render(result) {
     `scope drift (#356): ${result.changed.length} changed path${result.changed.length === 1 ? "" : "s"} since ` +
     `${result.base ?? "(no base)"} measured against the claim on #${result.issue} (${result.claimSource}${result.stale ? ", stale" : ""})`;
   const notes = result.notes.map((n) => `  note: ${n}`);
+  if (result.ok && result.none) return [head, ...notes, "OK: the claim declares `Write scope: none`, and nothing changed"].join("\n");
   if (result.ok) return [head, ...notes, `OK: every changed path is inside ${result.scope.map((s) => `\`${s}\``).join(", ")}`].join("\n");
-  return [head, ...notes, renderDrift({ issue: result.issue, outside: result.outside, scope: result.scope, stale: result.stale })].join("\n");
+  return [head, ...notes, renderDrift({ issue: result.issue, outside: result.outside, scope: result.scope, stale: result.stale, none: result.none })].join("\n");
 }
 
 const invokedDirectly = (() => {

@@ -138,6 +138,20 @@ export function parseScopePatterns(scopeText) {
   return declared.filter((p, i, a) => p && a.indexOf(p) === i);
 }
 
+/**
+ * C. NONE: exact scope text -> does the lane declare that it writes nothing? (#554). A scope that
+ * names no path is UNKNOWN, and unknown means locked (collision rule 5), so a read-only lane had no
+ * way to say so: #552's "none yet. The measurement is read-only." held every path and refused every
+ * later lane's push. This is the one spelling that says it -- declared, holds nothing -- and it is
+ * narrow on purpose, because everything it misses stays locked: the text must START with the word
+ * `none` and carry no backticked path. "N/A", "TBD", "read-only" and a missing line stay unknown, and
+ * a `none` that goes on to name a path is read for that path, by B.
+ */
+export function declaresNone(scopeText) {
+  const text = String(scopeText ?? "").trim();
+  return /^none(?![\w-])/i.test(text) && !text.includes("`");
+}
+
 /** A then B, and nothing of its own: the paths a `Write scope` bullet declares out of raw Markdown. */
 export function parseWriteScope(markdown) {
   return parseScopePatterns(scopeTextFromMarkdown(markdown) ?? "");

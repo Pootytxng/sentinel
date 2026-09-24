@@ -55,6 +55,11 @@ describe("driftReport — the decision, over strings", () => {
     expect(r.outside).toEqual([]);
   });
 
+  it("…unless the claim declared `Write scope: none` (#554): that scope holds no path, so everything is outside", () => {
+    expect(driftReport({ changed: ["src/x.ts"], scope: [], none: true })).toMatchObject({ measured: true, outside: ["src/x.ts"], covered: [], none: true });
+    expect(driftReport({ changed: [], scope: [], none: true })).toMatchObject({ measured: true, outside: [] });
+  });
+
   it("backslashes and ./ prefixes do not create false drift", () => {
     expect(driftReport({ changed: [".\\scripts\\a.mjs"], scope: ["scripts/"] }).outside).toEqual([]);
   });
@@ -327,6 +332,17 @@ describe("gate, over a real temporary repository", () => {
     expect(r.reason).toMatch(/no backticked paths/);
   });
 
+  // #554: `Write scope: none` is a declared scope that holds no path, not a missing one. A read-only
+  // lane that writes anything is drift, measured at the push like any other.
+  it("a `Write scope: none` claim is measured, and every changed path is outside it", () => {
+    writeClaimCache({ issue: 994, scopeText: "none yet. The measurement is read-only.", folder: repo }, { dir: cacheDir });
+    const r = gate({ issue: 994, cwd: repo, cacheDir, offline: true });
+    expect(r).toMatchObject({ measured: true, none: true, ok: false, scope: [] });
+    expect(r.changed.length).toBeGreaterThan(0);
+    expect(r.outside).toEqual(r.changed);
+    expect(render(r)).toContain("claimed: none (`Write scope: none` holds no path)");
+  });
+
   // #459, observed on #457: after a Handoff released the claim, `--refresh` still printed "measured
   // against the claim on #457 (cache)" and OK. The cached scope here covers every changed path, so a
   // gate that vouches from it prints exactly that OK.
@@ -364,6 +380,11 @@ describe("small pieces", () => {
     expect(samePath("C:/a", "C:/b")).toBe(false);
     expect(samePath(null, "C:/b")).toBe(false);
   });
+  it("a `Write scope: none` claim with nothing changed is OK, and says why", () => {
+    const r = { measured: true, ok: true, none: true, issue: 552, base: "origin/main", claimSource: "thread", stale: false, notes: [], scope: [], changed: [], covered: [], outside: [] };
+    expect(render(r)).toContain("OK: the claim declares `Write scope: none`, and nothing changed");
+  });
+
   it("renderDrift carries the cure and the stale caveat", () => {
     const text = renderDrift({ issue: 5, outside: ["src/x.ts"], scope: ["docs/"], stale: true });
     expect(text).toContain("stale cache");

@@ -186,6 +186,27 @@ describe("leaseOverlapVerdict, over strings", () => {
     expect(leaseOverlapVerdict({ changed: [A], own: 5, threads: earlier }).ok).toBe(true);
   });
 
+  // #554, replayed from 2026-09-23. #552 claimed at 23:51:34Z with no backticked path, because it was
+  // a read-only lane; #549 claimed both files at 23:55:35Z and was refused both. `Write scope: none`
+  // is the declaration that lets a lane say it writes nothing, and it holds no path. Silence does not:
+  // a claim with no scope line, or one that names no path, is still unknown, and still holds them all.
+  it("a `Write scope: none` claim holds no path, so #549's push passes #552 (#554)", () => {
+    const pushed = ["tools/entry/checkouts.mjs", "tools/entry/checkouts.test.mjs"];
+    const own549 = { number: 549, run: [claim("2026-09-23T23:55:35Z", "`tools/entry/checkouts.mjs` `tools/entry/checkouts.test.mjs`")] };
+    const as552 = (scope) => ({ number: 552, run: [claim("2026-09-23T23:51:34Z", scope)] });
+    const verdict = (scope) => leaseOverlapVerdict({ changed: pushed, own: 549, threads: [own549, as552(scope)] });
+
+    expect(verdict("none yet. The measurement is read-only. This claim is re-posted with exact paths before any repo write.")).toMatchObject({ ok: true, findings: [] });
+    expect(verdict("none")).toMatchObject({ ok: true, findings: [] });
+
+    for (const silent of [null, undefined, "", "read-only for now"]) {
+      const v = verdict(silent);
+      expect(v.ok, String(silent)).toBe(false);
+      expect(v.findings).toMatchObject([{ number: 552, undeclared: true, held: pushed.map((path) => ({ path })) }]);
+      expect(renderLeaseOverlap(v, { changed: pushed })).toContain("its claim declares no paths, so it holds every path (collision rule 5)");
+    }
+  });
+
   it("an unreadable own thread refuses too: this lane's seniority is unknown", () => {
     const v = leaseOverlapVerdict({ changed: [A], own: 7, threads: [{ number: 7, unreadable: true }] });
     expect(v.ok).toBe(false);

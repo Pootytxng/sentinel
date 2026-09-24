@@ -15,10 +15,11 @@
 //
 // Unknown means locked (collision rule 4): a task with no readable scope while another writer is
 // live is refused, and so is a live writer whose claim declares no paths, because "we could not
-// tell" and "they are disjoint" must not print the same verdict. A board row that says Active with
-// no live claim behind it (none posted, released, or expired) is not a verified writer: it is named
-// in the row, and refused only when the paths it did declare overlap — the board's staleness is a
-// hygiene finding, not a licence to double-write.
+// tell" and "they are disjoint" must not print the same verdict. `Write scope: none` is not unknown
+// (#554): it declares that the lane writes nothing, so it overlaps no one, from either side. A board
+// row that says Active with no live claim behind it (none posted, released, or expired) is not a
+// verified writer: it is named in the row, and refused only when the paths it did declare overlap —
+// the board's staleness is a hygiene finding, not a licence to double-write.
 //
 // A writer is a live lease, wherever its board column is (#414): gather.mjs reads every item that is
 // not Done, and a thread it could not read arrives `unreadable` — an unknown lease, refused with its
@@ -44,20 +45,34 @@ function compare(mine, theirs, files) {
 /**
  * @param {object} f
  * @param {string[]|null} f.mine     this task's declared paths; null/[] = undeclared
- * @param {Array<{number:number, lane?:string|null, column?:string|null, scope:string[]|null, live?:boolean, expired?:boolean, expires?:string|null, unreadable?:boolean}>} f.others
- *        every OTHER lease gather read: the paths its claim declares, and whether that claim is live
+ * @param {boolean} [f.none]         this task declares `Write scope: none` (#554): it writes nothing
+ * @param {Array<{number:number, lane?:string|null, column?:string|null, scope:string[]|null, none?:boolean, live?:boolean, expired?:boolean, expires?:string|null, unreadable?:boolean}>} f.others
+ *        every OTHER lease gather read: the paths its claim declares (`none` = it declares none, so it
+ *        holds no path), and whether that claim is live
  *        (absent `live`/`expired` = a live claim, which is the conservative reading); `unreadable` =
  *        its thread could not be read, so the lease is unknown
  * @param {string[]|null} f.files    the tracked paths a glob can claim; null = unavailable
  * @returns {{ok:boolean, reason:string, findings:Array<{number, lane, pairs:string[][], files:string[], stale:boolean}>, unknown:Array<{number, lane, why:string}>, stale:Array<{number, lane}>, undeclared:boolean}}
  */
-export function scopeOverlapVerdict({ mine = null, others = [], files = null } = {}) {
+export function scopeOverlapVerdict({ mine = null, none = false, others = [], files = null } = {}) {
   const known = (others ?? []).filter((o) => o && Number.isFinite(Number(o.number)));
   const writers = known.filter(isLive);
   const stale = known.filter((o) => !isLive(o));
   const declared = Array.isArray(mine) && mine.length > 0;
   const staleText = stale.length ? `; stale on the board, not a writer: ${stale.map(staleNote).join(", ")}` : "";
   const staleOut = stale.map(ref);
+
+  // A lease that holds no path overlaps nothing, whoever else is live and whatever could be read.
+  if (none) {
+    return {
+      ok: true,
+      reason: `this task declares \`Write scope: none\` — it writes nothing, so it overlaps no lease${staleText}`,
+      findings: [],
+      unknown: [],
+      stale: staleOut,
+      undeclared: false,
+    };
+  }
 
   if (!declared) {
     if (writers.length === 0) {
@@ -87,6 +102,7 @@ export function scopeOverlapVerdict({ mine = null, others = [], files = null } =
       unknown.push({ ...ref(o), why: UNREADABLE_WHY, unreadable: true });
       continue;
     }
+    if (o.none) continue;
     const theirs = Array.isArray(o.scope) ? o.scope.filter(Boolean) : [];
     if (theirs.length === 0) {
       unknown.push({ ...ref(o), why: "its claim declares no paths" });
@@ -135,7 +151,7 @@ export function scopeOverlapVerdict({ mine = null, others = [], files = null } =
 export function overlapRemediation(verdict) {
   if (!verdict || verdict.ok) return null;
   if (verdict.undeclared) {
-    return "Declare the Write scope — pass --scope \"`path`, `path`\" to the launcher, or add a `- Write scope:` bullet naming backticked paths to the issue body — then re-run.";
+    return "Declare the Write scope — pass --scope \"`path`, `path`\" to the launcher, or add a `- Write scope:` bullet naming backticked paths to the issue body (`none` if this task writes nothing) — then re-run.";
   }
   const lines = [];
   const unread = verdict.unknown.filter((u) => u.unreadable);
@@ -151,7 +167,7 @@ export function overlapRemediation(verdict) {
     lines.push("A shared glob claims every file it matches — name the one file this lane owns (its own docs/dispositions/<ref>.json, not docs/dispositions/*.json).");
   }
   if (undecided.length) {
-    lines.push(`Ask ${undecided.map(who).join(", ")} to renew its claim with a Write scope that names paths; an unreadable scope cannot be proven disjoint.`);
+    lines.push(`Ask ${undecided.map(who).join(", ")} to renew its claim with a Write scope that names paths, or \`none\` if it writes nothing; an unreadable scope cannot be proven disjoint.`);
   }
   if (unread.length) {
     const one = unread.length === 1;
