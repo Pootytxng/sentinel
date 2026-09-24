@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/543#issuecomment-5816621128",
+  "leaseEvidenceNote": "Claude Code desktop session ebef4468 held the #543 lease (Verified takeover https://github.com/Pootytxng/sentinel/issues/543#issuecomment-5816620483, then the cited Ownership claim) for folder trusting-newton-85d566 and branch claude/543-gate-mutex-takeover. The landing lease was released with a Handoff at https://github.com/Pootytxng/sentinel/issues/543#issuecomment-5817311180 after PR #571 merged, before this transition. This receipt and merge-pr-571 are untracked and are carried to main later under a new receipts-only claim.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T15:41:25Z over REST (pulls?state=open, then pulls/N/files). Seven PRs were open: #566, #561, #557, #492, #471, #470 and #464. None touches any of the seven #543 scope paths. PR #571 is merged. #558 takes scripts/verify-local.ps1 only now that this lane has released it.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The first commit (08e3a71c) was authored by an earlier claude-code session (2b497501) as local-only commit c064d7b20340e4b3aa4615bd41006acec65d43ab in folder confident-solomon-d1a1ab, which was left mid-merge. It is cherry-picked with message and authorship kept. The only conflict, scripts/lib/gate-mutex.ps1 against #541's busy wording, is resolved with that session's own unrecorded resolution (blob 351fab9f, read without moving it); git range-diff against c064d7b2 shows the busy line keeping #541's suffix as the only code difference. The two later commits (176a01d9, 0f71f8de) are this session's repairs for the independent review's findings. The original folder, branch, index and merge state are untouched and stay preserved.",
+  "currentHead": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+  "pr": 571,
+  "issue": 543,
+  "kind": "lane",
+  "branch": "claude/543-gate-mutex-takeover",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is 3d1cd762cbe454c418b0b087080f53e9a267eb41..0f71f8de, three commits: 08e3a71c (the cherry-pick; original author session 2b497501, cherry-picked by session ebef4468), 176a01d9 and 0f71f8de (review repairs by session ebef4468). All three are authored and committed by claude-code <claude-code@desk.local>. No codex-authored content is in the delta. The reviewer, codex, is not a mutation author.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository Pootytxng/sentinel. origin/main is faba2017a4c31e0db830844c52b04d4b402e0bcf, the merge of PR #571 (fetched 2026-09-24T15:40Z), and it contains 0f71f8de. git diff 0f71f8de origin/main over the seven scope paths is empty. Local HEAD is still 0f71f8de on claude/543-gate-mutex-takeover, whose origin ref was pruned. The tracked tree is clean. The only untracked files are this receipt and the merge-pr-571 receipt. No build, install or helper process is running.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+      "evidence": "logs/verify-local-2026-09-24T15-29-57Z.log (in worktree trusting-newton-85d566; SHA-256 0cd278c81c169ba118123fc899f485e4e6016d1939d6f2120d6f58b53bf9622a, 1473 lines)",
+      "summary": "Test Files  461 passed (461);Tests  7685 passed | 1 expected fail | 9 skipped (7695). No queue line: the gate's own suite ran under COMPY_TEST_GATE_HELD."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+      "evidence": "logs/verify-local-2026-09-24T15-29-57Z.log (in worktree trusting-newton-85d566; SHA-256 0cd278c81c169ba118123fc899f485e4e6016d1939d6f2120d6f58b53bf9622a, 1473 lines)",
+      "summary": "tsc && vite build completed (chunk-size advisory only)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+      "evidence": "logs/verify-local-2026-09-24T15-29-57Z.log (in worktree trusting-newton-85d566; SHA-256 0cd278c81c169ba118123fc899f485e4e6016d1939d6f2120d6f58b53bf9622a, 1473 lines)",
+      "summary": "1343 passed; 0 failed; 24 ignored (lib), doc/bin targets 0 failed."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+      "evidence": "logs/verify-local-2026-09-24T15-29-57Z.log (in worktree trusting-newton-85d566; SHA-256 0cd278c81c169ba118123fc899f485e4e6016d1939d6f2120d6f58b53bf9622a, 1473 lines)",
+      "summary": "Finished with no warnings or errors."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1), run natively when this session pushed claude/543-gate-mutex-takeover at 0f71f8de (push exit 0, stdout 'LOCAL CHECK RESULT: PASS'). Every stage was read: diff check, write-scope drift OK, lease overlap OK, TestGate mutex acquired with no wait, frontend tests, type-check and build, Rust tests, clippy, TestGate released. The earlier heads 08e3a71c and 176a01d9 also passed the same gate. Issue success criterion 4 ran beside the 08e3a71c gate (evidence https://github.com/Pootytxng/sentinel/issues/543#issuecomment-5816851097); the two later commits change only the holder's failure exits and its stderr writer, which that proof does not exercise.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run, 7 changed paths since origin/main were measured against this session's claim on #543, and all were inside it.",
+    "reconciliationNote": "No widening was needed."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/571#issuecomment-5817234596",
+    "reviewerNote": "Codex CLI (codex exec -m gpt-5.6-sol -s read-only). Its Windows sandbox cannot launch processes on this machine (elevated: helper codex-windows-sandbox-setup.exe not found; unelevated: CreateProcessAsUserW access denied), and an unsandboxed run was refused by the session's permission classifier on #569. Each review therefore judged a bundle captured read-only by the author session, and the reviewer ran no commands; this is disclosed on PR #571. Codex returned FAIL at 08e3a71c (https://github.com/Pootytxng/sentinel/pull/571#issuecomment-5816968931) and at 176a01d9 (https://github.com/Pootytxng/sentinel/pull/571#issuecomment-5817136592); both findings were repaired and guarded, and the cited PASS is at this exact head."
+  },
+  "transition": "close-issue",
+  "closingNote": "Closes #543. All four success criteria hold. (1) Measured: across 142 gate windows since 2026-09-01, 6 overlapped a hand-started full suite; those ran a median of 440-777s and every one timed out (10-52 timeouts), next to a 204s median and 18% with a timeout for gates that ran alone (08e3a71c commit message). (2) The root fix is on origin/main at faba2017: scripts/run-vitest.mjs queues full-suite runs on Local\\Compy.TestGate.v1. (3) The real-process guards in scripts/run-vitest-gate-guard.test.mjs and scripts/gate-mutex-guard.test.mjs landed with it. (4) Proof beside an in-flight gate: https://github.com/Pootytxng/sentinel/issues/543#issuecomment-5816851097. The prior writer's folder confident-solomon-d1a1ab and its branch claude/543-adhoc-suite-gate-mutex are unchanged and preserved. The docs/WORK_CONTROL.md bullet belongs to #551."
+}

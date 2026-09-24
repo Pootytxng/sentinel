@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/543#issuecomment-5816621128",
+  "leaseEvidenceNote": "Claude Code desktop session ebef4468 took over #543 by the Verified takeover at https://github.com/Pootytxng/sentinel/issues/543#issuecomment-5816620483 (the prior claim 5803047262 expired 2026-09-24T09:12Z with no Handoff; its pid was not running and no session was rooted in confident-solomon-d1a1ab), then posted the cited Ownership claim naming worktree trusting-newton-85d566, branch claude/543-gate-mutex-takeover and the prior claim's seven paths unchanged. The #543 board item is Active with this folder @ branch, and the session was adopted for #543 with tools/entry/cli.mjs. PR #571 has no closing issue references, so #543 stays open and its lease does not block this merge.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T15:36:36Z over REST (pulls?state=open, then pulls/N/files). Open PRs: #571, #566, #561, #557, #492, #471, #470, #464. Only #571 touches any of the seven #543 scope paths. The native gate's lease-overlap stage (#517) read OK at this head: no other lane holds a pushed path. The live leases on #558, #559 and #562 cover scripts/local-gate-guard.test.mjs, scripts/lib/lease-overlap.mjs, scripts/lease-overlap-gate.test.mjs, scripts/lib/native-process.ps1 and scripts/tree-kill-fallback-guard.test.mjs, none of which this PR touches; #558 takes scripts/verify-local.ps1 only after this lane releases it.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The first commit (08e3a71c) was authored by an earlier claude-code session (2b497501) as local-only commit c064d7b20340e4b3aa4615bd41006acec65d43ab in folder confident-solomon-d1a1ab, which was left mid-merge. It is cherry-picked with message and authorship kept. The only conflict, scripts/lib/gate-mutex.ps1 against #541's busy wording, is resolved with that session's own unrecorded resolution (blob 351fab9f, read without moving it); git range-diff against c064d7b2 shows the busy line keeping #541's suffix as the only code difference. The two later commits (176a01d9, 0f71f8de) are this session's repairs for the independent review's findings. The original folder, branch, index and merge state are untouched and stay preserved.",
+  "currentHead": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+  "pr": 571,
+  "issue": 543,
+  "kind": "lane",
+  "branch": "claude/543-gate-mutex-takeover",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is 3d1cd762cbe454c418b0b087080f53e9a267eb41..0f71f8de, three commits: 08e3a71c (the cherry-pick; original author session 2b497501, cherry-picked by session ebef4468), 176a01d9 and 0f71f8de (review repairs by session ebef4468). All three are authored and committed by claude-code <claude-code@desk.local>. No codex-authored content is in the delta. The reviewer, codex, is not a mutation author.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository: Pootytxng/sentinel. origin/main is 3d1cd762cbe454c418b0b087080f53e9a267eb41 and equals the PR base. origin/claude/543-gate-mutex-takeover equals local HEAD 0f71f8de in worktree trusting-newton-85d566, whose tracked tree is clean (this receipt is the only untracked file). No build, install or helper process is running for this lane: the pre-push gate finished and released the TestGate mutex.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+      "evidence": "logs/verify-local-2026-09-24T15-29-57Z.log (in worktree trusting-newton-85d566; SHA-256 0cd278c81c169ba118123fc899f485e4e6016d1939d6f2120d6f58b53bf9622a, 1473 lines)",
+      "summary": "Test Files  461 passed (461);Tests  7685 passed | 1 expected fail | 9 skipped (7695). No queue line: the gate's own suite ran under COMPY_TEST_GATE_HELD."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+      "evidence": "logs/verify-local-2026-09-24T15-29-57Z.log (in worktree trusting-newton-85d566; SHA-256 0cd278c81c169ba118123fc899f485e4e6016d1939d6f2120d6f58b53bf9622a, 1473 lines)",
+      "summary": "tsc && vite build completed (chunk-size advisory only)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+      "evidence": "logs/verify-local-2026-09-24T15-29-57Z.log (in worktree trusting-newton-85d566; SHA-256 0cd278c81c169ba118123fc899f485e4e6016d1939d6f2120d6f58b53bf9622a, 1473 lines)",
+      "summary": "1343 passed; 0 failed; 24 ignored (lib), doc/bin targets 0 failed."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+      "evidence": "logs/verify-local-2026-09-24T15-29-57Z.log (in worktree trusting-newton-85d566; SHA-256 0cd278c81c169ba118123fc899f485e4e6016d1939d6f2120d6f58b53bf9622a, 1473 lines)",
+      "summary": "Finished with no warnings or errors."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1), run natively when this session pushed claude/543-gate-mutex-takeover at 0f71f8de (push exit 0, stdout 'LOCAL CHECK RESULT: PASS'). Every stage was read: diff check, write-scope drift OK, lease overlap OK, TestGate mutex acquired with no wait, frontend tests, type-check and build, Rust tests, clippy, TestGate released. The earlier heads 08e3a71c and 176a01d9 also passed the same gate. Issue success criterion 4 ran beside the 08e3a71c gate (evidence https://github.com/Pootytxng/sentinel/issues/543#issuecomment-5816851097); the two later commits change only the holder's failure exits and its stderr writer, which that proof does not exercise.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run, 7 changed paths since origin/main were measured against this session's claim on #543, and all were inside it.",
+    "reconciliationNote": "No widening was needed."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "0f71f8de7cd81d11bdce691951f68e22e87f747b",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/571#issuecomment-5817234596",
+    "reviewerNote": "Codex CLI (codex exec -m gpt-5.6-sol -s read-only). Its Windows sandbox cannot launch processes on this machine (elevated: helper codex-windows-sandbox-setup.exe not found; unelevated: CreateProcessAsUserW access denied), and an unsandboxed run was refused by the session's permission classifier on #569. Each review therefore judged a bundle captured read-only by the author session, and the reviewer ran no commands; this is disclosed on PR #571. Codex returned FAIL at 08e3a71c (https://github.com/Pootytxng/sentinel/pull/571#issuecomment-5816968931) and at 176a01d9 (https://github.com/Pootytxng/sentinel/pull/571#issuecomment-5817136592); both findings were repaired and guarded, and the cited PASS is at this exact head."
+  },
+  "transition": "merge-pr",
+  "closingNote": "PR #571's closingIssuesReferences is empty, so the merge closes nothing; #543 stays open until the change is verified on origin/main, then closes under its own close-issue receipt after this lane releases. scripts/land-pr.mjs merges with a merge commit, never --delete-branch, and prunes only the head ref claude/543-gate-mutex-takeover with git push origin --delete. The original folder confident-solomon-d1a1ab and its branch claude/543-adhoc-suite-gate-mutex are not pruned."
+}
