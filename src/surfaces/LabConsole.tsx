@@ -46,6 +46,9 @@ import type { GpuVendor } from "./walkthroughs";
 import type { HardwareInfo } from "../App";
 import "./lab-console.css";
 
+/** Which control opened a station, kept as an identity because the control unmounts while it is open. */
+type Opener = "primary" | "verdict" | LabStationKey;
+
 /**
  * HOW CLOSE THE BENCH SITS TO ITS RIG.
  *
@@ -322,11 +325,11 @@ export function LabConsole({
   // WHICH CONTROL OPENED THIS STATION (Mission 1, 2026-08-28). A selected station now REPLACES the
   // overview instead of mounting beside it, so the row or button the user pressed is unmounted
   // while the workspace is up — "give focus back to the opener" cannot hold onto an element, only
-  // onto its identity. "primary" is the dominant Optimize action; a station key is that station's
-  // row in the list. `restoreRef` carries it across the close, because `openerRef` has to be clear
+  // onto its identity. "primary" is the dominant Optimize action; "verdict" is the classic sub line's
+  // inline fix link (#547); a station key is that station's row in the list. `restoreRef` carries it across the close, because `openerRef` has to be clear
   // by the time the overview is back.
-  const openerRef = useRef<"primary" | LabStationKey | null>(null);
-  const restoreRef = useRef<"primary" | LabStationKey | null>(null);
+  const openerRef = useRef<Opener | null>(null);
+  const restoreRef = useRef<Opener | null>(null);
   const closeStation = () => {
     restoreRef.current = openerRef.current;
     openerRef.current = null;
@@ -335,7 +338,7 @@ export function LabConsole({
   };
   // ONE door, two handles, still ONE code path: the dominant action and the list row both land
   // here and differ only in what they record as the opener.
-  const openFrom = (k: LabStationKey, opener: "primary" | LabStationKey) => {
+  const openFrom = (k: LabStationKey, opener: Opener) => {
     setOpenIncidentId(null);
     if (openStation === k) {
       closeStation();
@@ -438,9 +441,11 @@ export function LabConsole({
     const back =
       opener === "primary"
         ? room.querySelector<HTMLElement>(".lc-start")
-        : Array.from(room.querySelectorAll<HTMLElement>(".dock-node")).find(
-            (b) => b.querySelector(".dock-nm")?.textContent === stations[opener].name,
-          );
+        : opener === "verdict"
+          ? room.querySelector<HTMLElement>(".lc-verdict-fix")
+          : Array.from(room.querySelectorAll<HTMLElement>(".dock-node")).find(
+              (b) => b.querySelector(".dock-nm")?.textContent === stations[opener].name,
+            );
     back?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `stations` is a per-render lookup, not a trigger
   }, [openStation]);
@@ -607,7 +612,7 @@ export function LabConsole({
                 <button
                   type="button"
                   className="lc-verdict-fix"
-                  onClick={() => openFrom("optimize", "optimize")}
+                  onClick={() => openFrom("optimize", "verdict")}
                 >
                   {classicFixLabel}
                 </button>

@@ -293,7 +293,7 @@ describe("Test room: title-header law (h1 = the room title, the drift flag carri
       expect(h1.textContent, `flag ${flag}`).toContain("Test one change at a time");
       expect(h1.textContent, `flag ${flag}`).not.toMatch(/turned off outside Compy/i);
       // No count in a heading, either — a number in the h1 is a status readout by construction.
-      expect(c.querySelector(".lc-headline")!.textContent, `flag ${flag}`).not.toMatch(/d/);
+      expect(c.querySelector(".lc-headline")!.textContent, `flag ${flag}`).not.toMatch(/\d/);
       cleanup();
     }
   });
@@ -306,8 +306,17 @@ describe("Test room: title-header law (h1 = the room title, the drift flag carri
     // The fix rides WITH the flag — no "go to another tab" dead end.
     const fix = within(sub as HTMLElement).getByRole("button");
     expect(c.querySelector(".lc-detail"), "Optimize is closed until asked for").toBeNull();
+    fix.focus();
     fireEvent.click(fix);
     expect(c.querySelector(".lc-detail"), "the fix opens the station that holds the toggle").not.toBeNull();
+    // Backing out hands focus to the control the keyboard user actually pressed — this link, not the
+    // dock's Optimize row that opens the same station (#557 review).
+    fireEvent.click(c.querySelector<HTMLElement>(".lc-detail-close")!);
+    expect(c.querySelector(".lc-detail"), "the close control closes the station").toBeNull();
+    expect(document.activeElement, "focus returns to the inline fix that opened the station").toBe(
+      c.querySelector(".v2-verdict-sub .lc-verdict-fix"),
+    );
+    expect(document.activeElement!.classList.contains("dock-node")).toBe(false);
   });
 });
 
