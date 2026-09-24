@@ -79,7 +79,7 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_patches. Three hook fixes waiting for your hands  ·  ⏳ NEW 2026-09-18
+### A_patches. Four hook fixes waiting for your hands  ·  ⏳ NEW 2026-09-18, #553 added 2026-09-23
 
 **The ask:** hook files are yours to change (#368), so each draft PR below carries its fix as a
 `.patch` in `docs/superpowers/specs/` plus tests. After a PR merges, in the repo folder:
@@ -90,6 +90,7 @@ session that had just re-read it.
 | #464 | #463 advisory names another folder's issue | `2026-09-18-known-issue-token-scope.patch` | `tools/entry/project-write-assert.test.mjs` (42 passed) |
 | #470 | #468 drift hook asks GitHub on every write | `2026-09-18-scope-drift-hook-thread-bound.patch` | `tools/entry/scope-drift-check-thread.test.mjs` (6 passed) |
 | #471 | #465 drift hook measures a released claim | `2026-09-18-scope-drift-hook-released-claim.patch` | `tools/entry/scope-drift-check.test.mjs` (19 passed) |
+| PR for #553 | shell guard misses PowerShell `$env:` paths and `"a","b"` lists | `2026-09-23-powershell-env-knowable-553.patch` | `tools/entry/lease-store-guard.test.mjs` (16 passed) |
 
 #470 and #471 touch the same hook and apply in either order. **Why it matters:** until applied, the
 hooks keep issuing wrong or slow warnings that sessions learn to ignore.
@@ -134,7 +135,7 @@ None of them is waiting on you (A0's key backup closed 2026-08-18; record and th
 corrections in the archive). **§A holds SEVEN things:** ① A0's residual — delete the
 redundant `Desktop\COMPY KEY\` copy; ② A0's *"expand to the remaining invitees"* — a **distribution call**,
 yours by definition; ③ **A_settings**, one paste in a file only you may edit; ④ **A_prune**,
-one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches; ⑦ **A_spent**, four folder removals.
+one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, four hook patches; ⑦ **A_spent**, four folder removals.
 Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_ci · A_rig · A_ref2 · B1 · B7 · B_arc · A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**.
 
 ---

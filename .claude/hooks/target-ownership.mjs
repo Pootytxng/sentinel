@@ -35,6 +35,8 @@ import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "n
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
+import { LINEAGE_DIR_NAME, TOKEN_DIR, lineageFile } from "./session-root-assert.mjs";
+
 export const ZONES = Object.freeze({
   OWN: "own-claim",
   SIBLING: "sibling-checkout",
@@ -257,6 +259,57 @@ export function globalScratchSubtrees({ home = homedir() } = {}) {
   return [join(claude, "projects"), join(claude, "todos"), join(claude, "plans"), join(claude, "file-history")];
 }
 
+/**
+ * THE WRITER-LEASE STORE IS EVERY LANE'S, NOT ANYBODY'S (#553).
+ *
+ * `<entry state dir>/sessions/` holds one record per folder: the conversation writing there, and
+ * the lease the pre-push lease-overlap gate reads. It sits under no checkout, so it used to answer
+ * `unprotected`, and on 2026-09-23 at 21:17:53Z one session followed a memory note to "clear the
+ * folder's session record" with `Remove-Item ...\sessions\*.json`. The glob took every lane's
+ * record, and each lane's next push refused its own claimed paths until it re-ran `adopt`.
+ *
+ * So: this session's OWN folder record answers to this session's claim, exactly as its checkout
+ * does. The store itself, a wildcard over it, a destructive operation on a folder that contains it,
+ * and any other folder's record answer `sibling-checkout`, owned by the folder the record names when
+ * it names one. Re-pointing a folder's record is `node tools/entry/cli.mjs adopt`, never a delete.
+ */
+export function leaseStoreZone(abs, sessionRoot, { descendants = false, wildcard = false, exists, real, read = readFileSync, entryDir = TOKEN_DIR } = {}) {
+  const canon = (p) => {
+    try {
+      return canonicalTarget(p, { exists, real });
+    } catch {
+      return p;
+    }
+  };
+  const store = canon(join(entryDir, LINEAGE_DIR_NAME));
+  const own = sessionRoot ? canon(lineageFile({ root: sessionRoot, dir: entryDir })) : null;
+  const inside = isWithin(abs, store);
+  if (!inside && !(descendants && isWithin(store, abs))) return null;
+
+  const glob = wildcard || /[*?[]/.test(abs.slice(store.length));
+  if (own && !glob && toComparable(abs) === toComparable(own)) {
+    return { zone: ZONES.OWN, abs, owner: sessionRoot, why: "this session's own writer-lease record" };
+  }
+  let owner = store;
+  if (inside && !glob && toComparable(abs) !== toComparable(store)) {
+    try {
+      const folder = JSON.parse(read(abs, "utf8"))?.folder;
+      if (typeof folder === "string" && folder) owner = folder;
+    } catch {
+      // No record there, or not one this can read: the store is the owner it can name.
+    }
+  }
+  return {
+    zone: ZONES.SIBLING,
+    abs,
+    owner,
+    why:
+      "the shared writer-lease store, where every lane's session record lives (#553): deleting the store, " +
+      "a wildcard over it, or another folder's record takes a live lane's lease. A folder re-points its own " +
+      "record with `node tools/entry/cli.mjs adopt --issue <n> --session <id>`",
+  };
+}
+
 // A destructive directory operand can own its spelling while containing somebody else's lane.
 // Read Git's registration files rather than spawning git or walking the target's whole subtree.
 // Missing registration means none; unreadable registration means unknown, never permission.
@@ -330,6 +383,9 @@ export function zoneOf({ target, sessionRoot, cwd = null, descendants = false, w
       root = resolve(spelled);
     }
   }
+
+  const lease = leaseStoreZone(abs, sessionRoot, { descendants, wildcard, exists, real, read: deps.read, entryDir: deps.entryDir });
+  if (lease) return lease;
 
   if (descendants && wildcard) {
     // The caller supplies the static directory prefix, not a literal filename containing '*'.
