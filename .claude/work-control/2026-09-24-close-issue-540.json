@@ -1,0 +1,82 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/540#issuecomment-5818283107",
+  "leaseEvidenceNote": "Claude Code desktop session ebef4468 claimed #540's visual acceptance (success criterion 3) at https://github.com/Pootytxng/sentinel/issues/540#issuecomment-5818230904, then superseded it with the cited claim, which changed only the folder to trusting-newton-85d566 on claude/540-care-notice-takeover at 37167636, with write scope .claude/work-control/2026-09-24-close-issue-540.json. The board item was Active with that folder @ branch, and the session was adopted for #540. The lease was released by the Handoff at https://github.com/Pootytxng/sentinel/issues/540#issuecomment-5818715845 before this transition. This receipt is untracked and is carried to main later under a receipts-only claim.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "A fresh open-PR inventory was taken at 2026-09-24T17:10:35Z over REST (pulls?state=open, then pulls/N/files). Seven PRs were open: #566, #561, #557, #492, #471, #470 and #464. None touches this receipt's path. #540's own code landed in PR #572 (merged, 48e1cc75). No other lane's lease names the receipt path.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "The #540 fix is inherited and already landed. 09378b10 is a cherry-pick of local-only b4b22050 by an earlier claude-code session (transcript 8230d889, folder modest-moser-601fc4). 7c33f9df is the review repair. Both merged in PR #572 (48e1cc75), and 37167636 carries the merge-pr-572 receipt. This lane added no code. It ran a dev build of main 37167636 against a sandboxed synthetic fixture, and the self-reviewer judged it. modest-moser-601fc4 and claude/540-care-notice-raw-json remain untouched and preserved.",
+  "currentHead": "371676368c4f426cba595c035e0ee4e46261c656",
+  "pr": 572,
+  "issue": 540,
+  "kind": "lane",
+  "branch": "claude/540-care-notice-takeover",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The proof delta is 87b4eda937850d1e9492c1037a1af2958d8e2a2f..7c33f9df, two commits: 09378b10 (the cherry-pick; original author session 8230d889, cherry-picked by session ebef4468) and 7c33f9df (review repair by session ebef4468). Both are authored and committed by claude-code <claude-code@desk.local>. No codex-authored content is in the delta. The reviewer, codex, is not a mutation author. From 7c33f9df to 37167636 there are two more commits: the merge commit 48e1cc75, whose tree equals 7c33f9df, and 37167636, which adds only .claude/work-control/2026-09-24-merge-pr-572.json (git diff --stat 7c33f9df 37167636 lists that one file, +82). Both are claude-code. The self-reviewer seat authored nothing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository Pootytxng/sentinel. origin/main is 371676368c4f426cba595c035e0ee4e46261c656 (git ls-remote, 2026-09-24T17:10Z). git worktree list shows trusting-newton-85d566 on claude/540-care-notice-takeover at 37167636. All 2,095 tracked files there are byte-identical to 37167636's blobs: each blob id was computed and compared with git ls-files -s from the clean 540-visual-check checkout of the same commit (0 differ or missing). The only untracked file added is this receipt. 540-visual-check has git status --porcelain empty at 37167636. No compy.exe, vite, cargo or debug listener is running (no-debug-port.mjs CLEAN; 1420 and 9333 free).",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "371676368c4f426cba595c035e0ee4e46261c656",
+      "evidence": "logs/verify-local-2026-09-24T16-10-45Z.log (in worktree trusting-newton-85d566; SHA-256 d4d9680d8cd9981a0ce31a3dfd79e465924fc591cae2fe278b501b7fcf3d83a6, 1481 lines)",
+      "summary": "Test Files  461 passed (461); Tests  7685 passed | 1 expected fail | 9 skipped (7695)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "371676368c4f426cba595c035e0ee4e46261c656",
+      "evidence": "logs/verify-local-2026-09-24T16-10-45Z.log (in worktree trusting-newton-85d566; SHA-256 d4d9680d8cd9981a0ce31a3dfd79e465924fc591cae2fe278b501b7fcf3d83a6, 1481 lines)",
+      "summary": "tsc && vite build completed (built in 7.06s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "371676368c4f426cba595c035e0ee4e46261c656",
+      "evidence": "logs/verify-local-2026-09-24T16-10-45Z.log (in worktree trusting-newton-85d566; SHA-256 d4d9680d8cd9981a0ce31a3dfd79e465924fc591cae2fe278b501b7fcf3d83a6, 1481 lines)",
+      "summary": "1350 passed; 0 failed; 24 ignored (lib), doc/bin targets 0 failed."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "371676368c4f426cba595c035e0ee4e46261c656",
+      "evidence": "logs/verify-local-2026-09-24T16-10-45Z.log (in worktree trusting-newton-85d566; SHA-256 d4d9680d8cd9981a0ce31a3dfd79e465924fc591cae2fe278b501b7fcf3d83a6, 1481 lines)",
+      "summary": "Finished with no warnings or errors."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate (scripts/verify-local.ps1), run natively when the #540 carrier commit 37167636 was pushed to main (stdout 'LOCAL CHECK RESULT: PASS'; Handoff https://github.com/Pootytxng/sentinel/issues/540#issuecomment-5817848835). Every stage was read in the log: diff check; write-scope drift OK (1 path since origin/main, inside that claim); lease overlap OK; TestGate acquired with no wait; frontend tests; type-check and build; Rust tests; clippy; TestGate released.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the 37167636 gate run, 1 changed path since origin/main (.claude/work-control/2026-09-24-merge-pr-572.json) was inside the carrier claim on #540.",
+    "reconciliationNote": "This close lane changes no tracked file. Its only write is this receipt, which its claim names."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "self-reviewer",
+    "status": "passed",
+    "head": "371676368c4f426cba595c035e0ee4e46261c656",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/issues/540#issuecomment-5818692705",
+    "reviewerNote": "The owner authorized exactly one self-reviewer seat for #540's success criterion 3 ('self-reviewer verdict PASS on the Home care notice rendering a plain sentence'). It judged the running dev build of this exact head: window title 'Compy · 37167636 · dev', no +dirty, and a tracked tree byte-identical to 37167636. The build ran on a sandboxed synthetic pre-#540 fixture. The seat captured natively at 1500×980 over CDP and returned a 12-item SELF-REVIEW block with VERDICT PASS. The code review of the fix is codex's PASS at 7c33f9df (https://github.com/Pootytxng/sentinel/pull/572#issuecomment-5817738647). The delta from there to this head is the tree-identical merge and one receipt file."
+  },
+  "transition": "close-issue",
+  "closingNote": "Closes #540. All three success criteria hold. (1) The new tests were red on main's production code and green on the fix (evidence on PR #572). (2) cargo test (blackbox, incident_observer) is green, and the native pre-push gate passed at 7c33f9df (logs/verify-local-2026-09-24T16-00-00Z.log) and again at 37167636 (cited above). (3) The self-reviewer returned PASS on the Home care notice rendering a plain sentence, 'dllhost stopped responding (froze) — Sep 24, 4:07 AM', with no trace of the PowerShell wrapper (https://github.com/Pootytxng/sentinel/issues/540#issuecomment-5818692705). The owner's installed app and data were untouched: 5,625 files fingerprinted before and after, 0 differences."
+}
