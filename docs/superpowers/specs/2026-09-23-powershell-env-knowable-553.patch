@@ -1,0 +1,132 @@
+diff --git a/.claude/hooks/shell-ownership-assert.mjs b/.claude/hooks/shell-ownership-assert.mjs
+index a29d6f6..3ab9adc 100644
+--- a/.claude/hooks/shell-ownership-assert.mjs
++++ b/.claude/hooks/shell-ownership-assert.mjs
+@@ -178,6 +178,15 @@ export function lex(text, dialect = "posix") {
+       continue;
+     }
+ 
++    // PowerShell's unquoted `,` builds an array: `Remove-Item "a","b"` passes TWO paths. Read as one
++    // word they became a single path that resolved nowhere, and the 2026-09-23 wildcard delete of
++    // every writer-lease record went through unjudged (#553). A quoted comma was consumed above.
++    if (c === "," && dialect === "powershell") {
++      push();
++      i += 1;
++      continue;
++    }
++
+     // `#` opens a comment only unquoted and at a word boundary, so `$#`, `${#x}` and `sha#1` survive.
+     if (c === "#" && word === null && dialect === "posix") {
+       while (i < src.length && src[i] !== "\n") i += 1;
+@@ -596,6 +605,97 @@ const VALUE_END = new Set([" ", "\t", "\n", ";", "&", "|", ")", "(", "<", ">"]);
+  *  the operand stays unknowable and takes the approval path — the safe direction. */
+ const SPLICEABLE = /^[^\s$`;&|<>()'"\\]+$/;
+ 
++/** PowerShell's own one-plain-word test: no whitespace, quote, backtick, variable, operator,
++ *  grouping, array comma, splat or comment start. `\` is an ordinary character there. */
++const PS_SPLICEABLE = /^[^\s$`;&|<>(){}'",@#]+$/;
++/** A READ of a process environment variable: `$env:NAME` or `${env:NAME}`, any case. */
++const PS_ENV_READ = /\$(?:\{env:([A-Za-z_][A-Za-z0-9_]*)\}|env:([A-Za-z_][A-Za-z0-9_]*))/iy;
++
++/**
++ * PowerShell's `$env:NAME` for the well-known directories (`KNOWN_ENV`), replaced by the value this
++ * process holds, so `Remove-Item "$env:LOCALAPPDATA\…"` is judged as the literal path it is (#553).
++ * Measured 2026-09-23T21:17:53Z: `Remove-Item "$env:LOCALAPPDATA\CompyEntry\sessions\*.json"`
++ * deleted every lane's writer-lease record, and this checker waved it through as "not knowable"
++ * although the value sat in its own environment.
++ *
++ * Each rule exists because the opposite is a FALSE ALLOW, judged against a path the command does
++ * not touch:
++ *   1. a command that CHANGES the environment teaches nothing: `$env:X = …` (any assignment
++ *      operator), `env:` named without `$` (`Set-Item env:X`, `Remove-Item Env:\X`, a drive or
++ *      path argument) or `SetEnvironmentVariable` leaves every read unexpanded;
++ *   2. single-quoted strings and BOTH here-string forms stay verbatim — `'$env:X'` is literal text,
++ *      and an `@"…"@` body is data this checker does not need to know;
++ *   3. a read the parser would take further stays unexpanded: `$env:X:y` is the variable `X:y`,
++ *      `$env:X?` a different name, and bare `$env:X.y`, `$env:X[0]` and `$env:X(…)` are member
++ *      access — in a double-quoted string only `:` and `?` extend the name;
++ *   4. a value is spliced only if it re-lexes as one plain PowerShell word (`PS_SPLICEABLE`).
++ * Like the POSIX rule, it trusts the environment a command starts with; a script the command runs
++ * first could change it, exactly as `source ./x.sh` could.
++ */
++export function expandPowerShellEnv(command, { env = process.env } = {}) {
++  const src = String(command ?? "");
++  if (!/\$\{?env:/i.test(src)) return src;
++
++  const reads = new RegExp(PS_ENV_READ.source, "gi");
++  const assigns = new RegExp(`(?:${PS_ENV_READ.source})\\s*(?:[-+*/%]|\\?\\?)?=(?!=)`, "i");
++  if (assigns.test(src) || /env:|SetEnvironmentVariable/i.test(src.replace(reads, ""))) return src;
++
++  const known = new Map();
++  const keys = Object.keys(env ?? {});
++  for (const name of KNOWN_ENV) {
++    const key = keys.find((k) => k.toUpperCase() === name);
++    const v = key === undefined ? undefined : env[key];
++    if (typeof v !== "string" || !/^([A-Za-z]:[\\/]|\/)/.test(v)) continue;
++    const norm = v.replace(/\\/g, "/");
++    if (PS_SPLICEABLE.test(norm)) known.set(name, norm);
++  }
++  if (!known.size) return src;
++
++  let out = "";
++  let i = 0;
++  let inDouble = false;
++  while (i < src.length) {
++    const c = src[i];
++    if (c === "@" && !inDouble && (src[i + 1] === "'" || src[i + 1] === '"') && /^\r?\n/.test(src.slice(i + 2, i + 4))) {
++      const close = src.indexOf(`\n${src[i + 1]}@`, i + 2);
++      const end = close === -1 ? src.length : close + 3;
++      out += src.slice(i, end);
++      i = end;
++      continue;
++    }
++    if (c === "'" && !inDouble) {
++      const j = src.indexOf("'", i + 1);
++      const end = j === -1 ? src.length : j + 1;
++      out += src.slice(i, end);
++      i = end;
++      continue;
++    }
++    if (c === "`" && i + 1 < src.length) {
++      out += c + src[i + 1];
++      i += 2;
++      continue;
++    }
++    if (c === '"') inDouble = !inDouble;
++    if (c === "$") {
++      PS_ENV_READ.lastIndex = i;
++      const m = PS_ENV_READ.exec(src);
++      if (m) {
++        const next = src[i + m[0].length] ?? "";
++        const longer = m[1] === undefined && (inDouble ? /[:?]/ : /[:?.[(]/).test(next);
++        const value = known.get((m[1] ?? m[2]).toUpperCase());
++        if (value !== undefined && !longer) {
++          out += value;
++          i += m[0].length;
++          continue;
++        }
++      }
++    }
++    out += c;
++    i += 1;
++  }
++  return out;
++}
++
+ /**
+  * Replace the variables whose value the text (or the well-known environment) already states, so a
+  * literal-by-construction operand is judged as the literal it is. Measured 2026-09-04 (#373): 33 of
+@@ -619,10 +719,12 @@ const SPLICEABLE = /^[^\s$`;&|<>()'"\\]+$/;
+  *   3. a value is spliced only if it re-lexes as one plain word (`SPLICEABLE`), so an expansion can
+  *      never fabricate an operator, a redirect, a quote or a second word;
+  *   4. single quotes are honoured — `'$S'` is the literal text `$S`, and stays so.
+- * PowerShell is untouched: `$env:TEMP` and `$s = …` have their own rules and no measured cost.
++ * PowerShell reads only the well-known directories, through `expandPowerShellEnv` (#553); its
++ * `$s = …` bindings stay unknowable.
+  */
+ export function expandKnownVars(command, { env = process.env, dialect = "posix" } = {}) {
+   const src = String(command ?? "");
++  if (dialect === "powershell") return expandPowerShellEnv(src, { env });
+   if (dialect !== "posix" || !src.includes("$")) return src;
+   const known = new Map();
+   for (const name of KNOWN_ENV) {

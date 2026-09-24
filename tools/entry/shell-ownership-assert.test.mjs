@@ -1207,8 +1207,14 @@ describe("operands whose value the text or the environment already states are li
       expect(ask(`cat > note.txt <<'EOF'\nS=${fwd(SIB)}\nEOF\nrm "$S/package.json"`).permission).toBe("allow");
     });
 
-    it("leaves PowerShell alone", () => {
-      expect(hook.expandKnownVars("$env:TEMP", { env: { TEMP: scratch }, dialect: "powershell" })).toBe("$env:TEMP");
+    // PowerShell reads the well-known directories only through #553's owner-hand pass
+    // (`expandPowerShellEnv`, tested in `lease-store-guard.test.mjs`); its `$s = …` bindings stay
+    // unknowable in both states.
+    it("expands PowerShell's well-known `$env:` directories only through the #553 pass", () => {
+      const want = typeof hook.expandPowerShellEnv === "function" ? scratch : "$env:TEMP";
+      expect(hook.expandKnownVars("$env:TEMP", { env: { TEMP: scratch }, dialect: "powershell" })).toBe(want);
+      const bound = '$s = "C:/x"; Remove-Item $s';
+      expect(hook.expandKnownVars(bound, { env: {}, dialect: "powershell" })).toBe(bound);
     });
   });
 });
