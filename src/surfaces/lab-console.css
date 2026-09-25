@@ -264,6 +264,23 @@
 :root[data-v2="on"] .lc-headline {
   display: block;
 }
+/* The classic failsafe's inline fix (#547): the verdict sentence under the h1 names what it found,
+   and this names what to do about it, in the same line. A text-weight control, not a second
+   primary -- it opens the same Optimize station the dock row opens. */
+:root[data-v2="on"] .lc-verdict-fix {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--v2-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+:root[data-v2="on"] .lc-verdict-fix:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
 /* The button is the shared green primary (`.v2-primary` carries fill, border and focus ring --
    the owner overruled the violet it used to wear). Only its box is local: the comp measures it at
    262 x 44 app px, i.e. shrink-to-fit, never a column-wide bar. */
