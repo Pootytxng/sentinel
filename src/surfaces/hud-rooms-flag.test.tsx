@@ -257,33 +257,34 @@ describe("Test room: title-header law (h1 = the room title, the drift flag carri
   const DRIFTED = [
     { rec_id: "game-mode", rec_title: "Game Mode", status: "applied", is_still_active: false },
   ] as never[];
+  const testRoom = (changes = DRIFTED) => (
+    <ConfirmProvider>
+      <LabGround
+        hw={{ cpu_brand: "x", cpu_cores_logical: 8, cpu_cores_physical: 4, ram_total_bytes: 0, gpus: [] } as never}
+        isAppliable={() => true}
+        onOpenLibrary={() => {}}
+        onChanged={() => {}}
+        vendor="amd"
+        sessions={[]}
+        gpus={[]}
+        recs={[]}
+        startup={[]}
+        changes={changes}
+        busyId={null}
+        activeChangeFor={() => undefined}
+        onToggleRec={() => {}}
+        onToggleStartup={() => {}}
+        onRollback={() => {}}
+        onApplyBatch={async () => ({ applied: 0, skipped: [] })}
+        gamingEnabled={false}
+        activeCount={0}
+      />
+    </ConfirmProvider>
+  );
   const mountTest = (flag: string) => {
     localStorage.clear();
     localStorage.setItem("compy_editorial", flag);
-    return render(
-      <ConfirmProvider>
-        <LabGround
-          hw={{ cpu_brand: "x", cpu_cores_logical: 8, cpu_cores_physical: 4, ram_total_bytes: 0, gpus: [] } as never}
-          isAppliable={() => true}
-          onOpenLibrary={() => {}}
-          onChanged={() => {}}
-          vendor="amd"
-          sessions={[]}
-          gpus={[]}
-          recs={[]}
-          startup={[]}
-          changes={DRIFTED}
-          busyId={null}
-          activeChangeFor={() => undefined}
-          onToggleRec={() => {}}
-          onToggleStartup={() => {}}
-          onRollback={() => {}}
-          onApplyBatch={async () => ({ applied: 0, skipped: [] })}
-          gamingEnabled={false}
-          activeCount={0}
-        />
-      </ConfirmProvider>,
-    ).container;
+    return render(testRoom()).container;
   };
 
   it("the h1 is the room title in BOTH flag states — never the drift sentence", () => {
@@ -306,9 +307,12 @@ describe("Test room: title-header law (h1 = the room title, the drift flag carri
     // The fix rides WITH the flag — no "go to another tab" dead end.
     const fix = within(sub as HTMLElement).getByRole("button");
     expect(c.querySelector(".lc-detail"), "Optimize is closed until asked for").toBeNull();
+    expect(fix.getAttribute("aria-expanded"), "the inline control announces its closed state").toBe("false");
     fix.focus();
     fireEvent.click(fix);
     expect(c.querySelector(".lc-detail"), "the fix opens the station that holds the toggle").not.toBeNull();
+    expect(fix.getAttribute("aria-expanded"), "the inline control announces its open state").toBe("true");
+    expect(fix.getAttribute("aria-controls"), "the control names the open panel").toBe("lab-console-detail");
     // Backing out hands focus to the control the keyboard user actually pressed — this link, not the
     // dock's Optimize row that opens the same station (#557 review).
     fireEvent.click(c.querySelector<HTMLElement>(".lc-detail-close")!);
@@ -317,6 +321,27 @@ describe("Test room: title-header law (h1 = the room title, the drift flag carri
       c.querySelector(".v2-verdict-sub .lc-verdict-fix"),
     );
     expect(document.activeElement!.classList.contains("dock-node")).toBe(false);
+    expect(fix.getAttribute("aria-expanded"), "closing restores the closed state").toBe("false");
+  });
+
+  it("classic failsafe: when a drifted change clears while Optimize is open, close returns focus to its dock control", () => {
+    localStorage.clear();
+    localStorage.setItem("compy_editorial", "0");
+    const view = render(testRoom());
+    const fix = view.container.querySelector<HTMLElement>(".lc-verdict-fix")!;
+    fix.focus();
+    fireEvent.click(fix);
+    expect(view.container.querySelector(".lc-detail")).not.toBeNull();
+
+    // The same mounted room receives an all-clear update: the actionable inline control unmounts.
+    view.rerender(testRoom([]));
+    expect(view.container.querySelector(".lc-verdict-fix")).toBeNull();
+    const optimizeDock = Array.from(view.container.querySelectorAll<HTMLElement>(".dock-node")).find(
+      (node) => node.querySelector(".dock-nm")?.textContent?.includes("Optimize"),
+    );
+    expect(optimizeDock, "the stable Optimize dock target stays available").toBeDefined();
+    fireEvent.click(view.container.querySelector<HTMLElement>(".lc-detail-close")!);
+    expect(document.activeElement, "closing after all-clear returns focus to Optimize in the dock").toBe(optimizeDock);
   });
 });
 

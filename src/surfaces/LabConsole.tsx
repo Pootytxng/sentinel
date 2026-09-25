@@ -438,14 +438,16 @@ export function LabConsole({
     restoreRef.current = null;
     const room = document.querySelector<HTMLElement>('.v2-room[data-room="lab"]');
     if (!room) return;
+    const dockButtonFor = (key: LabStationKey) =>
+      Array.from(room.querySelectorAll<HTMLElement>(".dock-node")).find(
+        (button) => button.querySelector(".dock-nm")?.textContent === stations[key].name,
+      );
     const back =
       opener === "primary"
         ? room.querySelector<HTMLElement>(".lc-start")
         : opener === "verdict"
-          ? room.querySelector<HTMLElement>(".lc-verdict-fix")
-          : Array.from(room.querySelectorAll<HTMLElement>(".dock-node")).find(
-              (b) => b.querySelector(".dock-nm")?.textContent === stations[opener].name,
-            );
+          ? (room.querySelector<HTMLElement>(".lc-verdict-fix") ?? dockButtonFor("optimize"))
+          : dockButtonFor(opener);
     back?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `stations` is a per-render lookup, not a trigger
   }, [openStation]);
@@ -612,6 +614,8 @@ export function LabConsole({
                 <button
                   type="button"
                   className="lc-verdict-fix"
+                  aria-expanded={openStation === "optimize"}
+                  aria-controls={openStation === "optimize" ? "lab-console-detail" : undefined}
                   onClick={() => openFrom("optimize", "verdict")}
                 >
                   {classicFixLabel}
