@@ -13,8 +13,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { CORRUPT } from "../.claude/hooks/session-root-assert.mjs";
 import { parseScopePatterns, parseWriteScope } from "./lib/claim-scope.mjs";
 import {
   CACHE_TTL_MS,
@@ -27,7 +28,7 @@ import {
   samePath,
   writeClaimCache,
 } from "./lib/scope-drift.mjs";
-import { gate, parseArgs, render, resolveClaim } from "./scope-drift-gate.mjs";
+import { exitCode, gate, parseArgs, render, resolveClaim } from "./scope-drift-gate.mjs";
 
 const ROOT = resolve(process.cwd());
 const read = (rel) => readFileSync(join(ROOT, ...rel.split("/")), "utf8");
@@ -317,6 +318,264 @@ describe("gate, over a real temporary repository", () => {
     expect(r.measured).toBe(false);
     expect(r.ok).toBe(true);
     expect(render(r)).toMatch(/not measured -- no session record/);
+  });
+
+  // #573. A folder with no session record (a receipts carrier started by hand: the #540 shape)
+  // stopped at the case above even while its issue held a live claim naming it. The fallback asks the
+  // board which issue names this folder and the thread what that issue claims, both read fresh, and
+  // measures only when the folder as it stands agrees with both. Every miss is "not measured", never
+  // a guess. The board, the live folder, the thread and the session record are injected: no network.
+  describe("no session record: the board fallback (#573)", () => {
+    const BRANCH = "claude/mystifying-feynman-75ac2b";
+    const RECEIPT = ".claude/work-control/2026-09-24-close-issue-540.json";
+    const dirs = [];
+    let repo;
+    const fgit = (args, cwd = repo) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    const tempDir = (prefix) => {
+      const d = mkdtempSync(join(tmpdir(), prefix));
+      dirs.push(d);
+      return d;
+    };
+    /** A seam that answers with `fn` and counts how often it was asked. */
+    const counted = (fn) => {
+      const seam = (...args) => {
+        seam.calls += 1;
+        return fn(...args);
+      };
+      seam.calls = 0;
+      return seam;
+    };
+    const row = (over = {}) => ({ issue: 540, folder: repo, branch: BRANCH, status: "Done", ...over });
+    const here = (over = {}) => ({ toplevel: repo.replace(/\\/g, "/"), repo: "pootytxng/sentinel", branch: BRANCH, isWorktree: true, ...over });
+    // The #540 carrier's claim as it was posted: a forward-slash folder, prose after the branch name.
+    const liveClaim = (over = {}) => ({
+      claim: { scope: `\`${RECEIPT}\``, folder: repo.replace(/\\/g, "/"), branch: `${BRANCH} (at main \`371676368c4f\`)`, postedAt: "2026-09-24T21:21:31Z", ...over },
+      handoff: null,
+    });
+    /** Every seam injected and counted; `over` replaces any of them. */
+    const seams = (over = {}) => ({
+      lineage: counted(() => null),
+      board: counted(() => [row()]),
+      live: counted(() => here()),
+      thread: counted(() => liveClaim()),
+      ...over,
+    });
+    const run = (s, opts = {}) => gate({ cwd: repo, cacheDir: tempDir("compy-scope-fallback-cache-"), ...s, ...opts });
+
+    beforeAll(() => {
+      repo = tempDir("compy-scope-fallback-");
+      fgit(["init", "-q", "-b", BRANCH]);
+      fgit(["config", "user.email", "guard@example.invalid"]);
+      fgit(["config", "user.name", "guard"]);
+      fgit(["config", "commit.gpgsign", "false"]);
+      mkdirSync(join(repo, "docs"));
+      writeFileSync(join(repo, "docs", "a.md"), "a\n");
+      fgit(["add", "-A"]);
+      fgit(["commit", "-q", "-m", "base"]);
+      fgit(["update-ref", "refs/remotes/origin/main", "HEAD"]);
+      // A URL only. Nothing here fetches; the live reader parses it.
+      fgit(["remote", "add", "origin", "https://github.com/Pootytxng/sentinel.git"]);
+      mkdirSync(join(repo, ".claude", "work-control"), { recursive: true });
+      writeFileSync(join(repo, ...RECEIPT.split("/")), "{}\n");
+    });
+    afterAll(() => {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+      for (const d of dirs) rmSync(d, { recursive: true, force: true });
+    });
+
+    it("1. the #540 shape: a Done row, a live receipt-only claim naming this folder, prose on its Branch line: measured OK; one path outside it is red, exit 1", () => {
+      const s = seams();
+      const r = run(s);
+      expect(r).toMatchObject({ ok: true, measured: true, issue: 540, issueSource: "board", claimSource: "thread", stale: false });
+      expect(r.covered).toEqual([RECEIPT]);
+      expect(render(r)).toMatch(/measured against the claim on #540 \(thread; issue from the board/);
+      expect(exitCode(r)).toBe(0);
+      expect([s.board.calls, s.live.calls, s.thread.calls]).toEqual([1, 1, 1]);
+
+      writeFileSync(join(repo, "stray.txt"), "x\n");
+      try {
+        const red = run(seams());
+        expect(red).toMatchObject({ ok: false, measured: true, issue: 540, issueSource: "board", outside: ["stray.txt"] });
+        expect(exitCode(red)).toBe(1);
+      } finally {
+        rmSync(join(repo, "stray.txt"), { force: true });
+      }
+    });
+
+    it("2. the #506 shape: the one row naming this folder is on another branch: not measured, the reason names that branch, the thread is never read", () => {
+      const s = seams({ board: counted(() => [row({ issue: 506, branch: "claude/506-ledger-observed-assumption" })]) });
+      const r = run(s);
+      expect(r).toMatchObject({ ok: true, measured: false });
+      expect(r.reason).toContain("#506");
+      expect(r.reason).toContain("claude/506-ledger-observed-assumption");
+      expect(s.board.calls).toBe(1);
+      expect(s.thread.calls).toBe(0);
+    });
+
+    it("3. a failed board fetch is no answer, even while board.json holds this folder's row, fresh or stale; a fresh board.json does not skip the fetch", async () => {
+      // board.json lives in the entry store, a directory fixed when the hook module loads. Reload both
+      // modules against a temporary store, so the row planted below is exactly what they would read.
+      const entryDir = tempDir("compy-scope-fallback-entry-");
+      vi.resetModules();
+      vi.stubEnv("COMPY_ENTRY_DIR", entryDir);
+      try {
+        const hook = await import("../.claude/hooks/session-root-assert.mjs");
+        const reloaded = await import("./scope-drift-gate.mjs");
+        expect(hook.TOKEN_DIR).toBe(entryDir);
+        for (const ageMs of [60_000, 2 * 60 * 60_000]) {
+          hook.writeBoardCache({ fetchedAt: new Date(Date.now() - ageMs).toISOString(), rows: [row()] });
+          // Control: the planted row is what the cached board reader serves, fresh and stale alike.
+          expect(hook.boardFacts({ fetch: () => null }).rows).toEqual([row()]);
+          const s = seams({ board: counted(() => null) });
+          const r = reloaded.gate({ cwd: repo, cacheDir: tempDir("compy-scope-fallback-cache-"), ...s });
+          expect(r, `board.json ${ageMs} ms old`).toMatchObject({ ok: true, measured: false });
+          expect(r.reason).toMatch(/board could not be read/);
+          expect(s.board.calls).toBe(1);
+          expect(s.thread.calls).toBe(0);
+        }
+        // A truncated read is a failed read: the default reader returns null for it.
+        const item = { content: { number: 540 }, "worktree / branch": `${repo} @ ${BRANCH}`, status: "Done" };
+        const truncated = counted(() => hook.fetchBoardRows({ run: () => JSON.stringify({ items: [item], totalCount: 1001 }) }));
+        const r = reloaded.gate({ cwd: repo, cacheDir: tempDir("compy-scope-fallback-cache-"), ...seams({ board: truncated }) });
+        expect(r).toMatchObject({ ok: true, measured: false });
+        expect(r.reason).toMatch(/board could not be read/);
+        expect(truncated.calls).toBe(1);
+      } finally {
+        vi.unstubAllEnvs();
+        vi.resetModules();
+      }
+    });
+
+    it("4. a thread whose claim was released, or that holds none, is no answer while a fresh cached claim still covers every change", () => {
+      const threads = [
+        [() => ({ claim: null, handoff: { released: true, postedAt: "2026-09-24T21:40:00Z" } }), /released.*2026-09-24T21:40:00Z/],
+        [() => ({ claim: null, handoff: null }), /holds no live claim/],
+      ];
+      for (const [answer, why] of threads) {
+        const cacheDir = tempDir("compy-scope-fallback-cache-");
+        writeClaimCache({ issue: 540, scopeText: `\`${RECEIPT}\``, folder: repo, branch: BRANCH }, { dir: cacheDir });
+        const s = seams({ thread: counted(answer) });
+        const r = gate({ cwd: repo, cacheDir, ...s });
+        expect(r).toMatchObject({ ok: true, measured: false });
+        expect(r.reason).toMatch(why);
+        expect(s.thread.calls).toBe(1);
+      }
+    });
+
+    it("5. a thread that cannot be read is no answer while a cached claim exists, fresh or stale: no cached claim counts here", () => {
+      const unreadable = [
+        () => ({ claim: null, handoff: null, unreadable: true }),
+        () => {
+          throw new Error("gh: network down");
+        },
+      ];
+      for (const answer of unreadable) {
+        for (const ageMs of [0, CACHE_TTL_MS + 60_000]) {
+          const cacheDir = tempDir("compy-scope-fallback-cache-");
+          writeClaimCache({ issue: 540, scopeText: `\`${RECEIPT}\``, folder: repo, branch: BRANCH }, { dir: cacheDir, now: new Date(Date.now() - ageMs) });
+          const s = seams({ thread: counted(answer) });
+          const r = gate({ cwd: repo, cacheDir, ...s });
+          expect(r, `cache ${ageMs} ms old`).toMatchObject({ ok: true, measured: false });
+          expect(r.reason).toMatch(/thread on #540 could not be read/);
+          expect(s.thread.calls).toBe(1);
+        }
+      }
+    });
+
+    it("6. a live claim that names another folder, or no folder, is no answer", () => {
+      const other = run(seams({ thread: counted(() => liveClaim({ folder: "C:/Users/Kuya/code/sentinel/.claude/worktrees/some-other-lane" })) }));
+      expect(other).toMatchObject({ ok: true, measured: false });
+      expect(other.reason).toMatch(/names another folder/);
+      expect(other.reason).toContain("some-other-lane");
+      for (const folder of [null, undefined, ""]) {
+        const none = run(seams({ thread: counted(() => liveClaim({ folder })) }));
+        expect(none, `folder ${JSON.stringify(folder)}`).toMatchObject({ ok: true, measured: false });
+        expect(none.reason).toMatch(/names no Worktree folder/);
+      }
+    });
+
+    it("7. no row naming this folder is no answer; two rows (a stale Done row and a live one) are no answer either, and both are named", () => {
+      for (const rows of [[], [row({ issue: 777, folder: join(tmpdir(), "some-other-folder") })]]) {
+        const s = seams({ board: counted(() => rows) });
+        const r = run(s);
+        expect(r).toMatchObject({ ok: true, measured: false });
+        expect(r.reason).toMatch(/no board row names this folder/);
+        expect(s.thread.calls).toBe(0);
+      }
+      const s = seams({ board: counted(() => [row({ issue: 506, branch: "claude/506-ledger-observed-assumption" }), row({ issue: 540, status: "Active" })]) });
+      const r = run(s);
+      expect(r).toMatchObject({ ok: true, measured: false });
+      expect(r.reason).toMatch(/2 board rows name this folder/);
+      expect(r.reason).toContain("#506");
+      expect(r.reason).toContain("#540");
+      expect(s.thread.calls).toBe(0);
+    });
+
+    it("8. a wrong origin, a detached HEAD, or a folder that is not the git top-level is no answer", () => {
+      const shapes = [
+        [here({ repo: "someone/sentinel-fork" }), /origin/],
+        [here({ repo: null }), /origin/],
+        [here({ branch: null }), /detached/],
+        [here({ toplevel: resolve(repo, "..").replace(/\\/g, "/") }), /not the git top-level/],
+        [here({ toplevel: null }), /not the git top-level/],
+      ];
+      for (const [folder, why] of shapes) {
+        const s = seams({ live: counted(() => folder) });
+        const r = run(s);
+        expect(r, JSON.stringify(folder)).toMatchObject({ ok: true, measured: false });
+        expect(r.reason).toMatch(why);
+        expect(s.thread.calls).toBe(0);
+      }
+    });
+
+    it("8, over real git: the default live reader passes this folder as it is, and refuses it detached, re-pointed, or entered from a subfolder", () => {
+      // Control: the folder as it really is agrees, so the refusals below are the reader's, not a setup fault.
+      expect(run(seams({ live: undefined }))).toMatchObject({ ok: true, measured: true, issue: 540 });
+
+      fgit(["checkout", "-q", "--detach"]);
+      try {
+        const r = run(seams({ live: undefined }));
+        expect(r).toMatchObject({ ok: true, measured: false });
+        expect(r.reason).toMatch(/detached/);
+      } finally {
+        fgit(["checkout", "-q", BRANCH]);
+      }
+
+      fgit(["remote", "set-url", "origin", "https://github.com/someone/sentinel-fork.git"]);
+      try {
+        const r = run(seams({ live: undefined }));
+        expect(r).toMatchObject({ ok: true, measured: false });
+        expect(r.reason).toMatch(/origin/);
+      } finally {
+        fgit(["remote", "set-url", "origin", "https://github.com/Pootytxng/sentinel.git"]);
+      }
+
+      const sub = join(repo, "docs");
+      const r = gate({ cwd: sub, cacheDir: tempDir("compy-scope-fallback-cache-"), ...seams({ live: undefined, board: counted(() => [row({ folder: sub })]) }) });
+      expect(r).toMatchObject({ ok: true, measured: false });
+      expect(r.reason).toMatch(/not the git top-level/);
+    });
+
+    it("9. --offline, --issue, a CORRUPT record, or any session record: the board is never read", () => {
+      const variants = [
+        ["--offline", { offline: true }, null],
+        ["--issue", { issue: 540 }, null],
+        ["a CORRUPT record", {}, CORRUPT],
+        ["a record for another issue", {}, { issue: 506 }],
+        ["a record with no usable issue", {}, { folder: repo }],
+      ];
+      for (const [label, opts, record] of variants) {
+        const s = seams({ lineage: counted(() => record) });
+        run(s, opts);
+        expect(s.board.calls, label).toBe(0);
+        expect(s.live.calls, label).toBe(0);
+      }
+      // Control: the same seams with none of those do read the board, so the zeros above can fail.
+      const control = seams();
+      run(control);
+      expect(control.board.calls).toBe(1);
+    });
   });
 
   it("the session record supplies the issue when --issue is absent", () => {
