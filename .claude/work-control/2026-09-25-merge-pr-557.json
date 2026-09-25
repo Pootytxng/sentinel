@@ -1,0 +1,83 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "currentHead": "bb7ecefc8949d45f2d36af5f29ce274c688a37ab",
+  "pr": 557,
+  "issue": 547,
+  "kind": "lane",
+  "branch": "claude/547-test-room-h1",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/547#issuecomment-5832283973",
+  "leaseEvidenceNote": "This Claude Code session (51a57d6c) posted the landing Ownership claim on #547 at 2026-09-25, after the Codex lane's Handoff (issuecomment-5830793614) ended `Claim: released`. It names this exact worktree (affectionate-feistel-8f9c99) and branch claude/547-test-room-h1. Its Write scope is one contiguous list: PR #557's nine delta paths plus the #547/#557 receipt files. The session record for this folder is verified for #547 (compy-entry SessionStart).",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Fresh open-PR inventory at 2026-09-25T12:50Z, files read per PR over REST: #566, #561, #557, #492, #471, #470, #464. Only PR #557 touches any of its nine delta paths; none touches the receipt paths. The gate run's lease-overlap stage (#517, log lines 9-11) read OK.",
+  "inheritedWork": true,
+  "inheritedWorkNote": "ce0bedbc and 0c03790e were authored by this Claude Code lane; 3b178cb8 and bb7ecefc were authored by the Codex lane in this same worktree under its own #547 claims (issuecomment-5830650799) and Verified takeover (issuecomment-5830307848), then released by Handoff issuecomment-5830793614. This session re-derived the tree, head and delta and changed no code.",
+  "mutationAuthors": [
+    "claude-code",
+    "codex"
+  ],
+  "mutationAuthorsNote": "The proof delta is origin/main...bb7ecefc (merge-base 0b631e49a59c8335df4f892b2792d04f458c3026): ce0bedbc and 0c03790e by claude-code <claude-code@desk.local>; 3b178cb8 and bb7ecefc by codex <codex@desk.local> (git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD). The reviewer (ChatGPT HQ) authored none of it.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Repository Pootytxng/sentinel. origin/main is 4d2e93ea897ba812d13e3d20d588c9779efbbe91 (fetched 2026-09-25); it touches none of the nine delta paths since the merge-base, and git merge-tree reports a clean merge. origin/claude/547-test-room-h1 equals local HEAD bb7ecefc. Worktree affectionate-feistel-8f9c99 is on branch claude/547-test-room-h1; git status is empty apart from this lane's receipts. The self-review dev build was torn down (no listener on :1420/:9333; no-debug-port: CLEAN); no gate, build or helper process from this lane is running.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "bb7ecefc8949d45f2d36af5f29ce274c688a37ab",
+      "evidence": "logs/verify-local-2026-09-25T10-14-08Z.log (in this worktree affectionate-feistel-8f9c99; SHA-256 776F490BA6E5632413856D8ABA0FEAADC277AC0395244B9EB9299F6B2614DC28, 1473 lines) lines 14-53",
+      "summary": "459 frontend test files passed; 7,619 passed, 1 expected fail, 3 skipped; 0 failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "bb7ecefc8949d45f2d36af5f29ce274c688a37ab",
+      "evidence": "logs/verify-local-2026-09-25T10-14-08Z.log (in this worktree affectionate-feistel-8f9c99; SHA-256 776F490BA6E5632413856D8ABA0FEAADC277AC0395244B9EB9299F6B2614DC28, 1473 lines) lines 54-80",
+      "summary": "tsc and the Vite production build passed (built in 10.00s)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "bb7ecefc8949d45f2d36af5f29ce274c688a37ab",
+      "evidence": "logs/verify-local-2026-09-25T10-14-08Z.log (in this worktree affectionate-feistel-8f9c99; SHA-256 776F490BA6E5632413856D8ABA0FEAADC277AC0395244B9EB9299F6B2614DC28, 1473 lines) lines 81-1469",
+      "summary": "1,343 passed; 0 failed; 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "bb7ecefc8949d45f2d36af5f29ce274c688a37ab",
+      "evidence": "logs/verify-local-2026-09-25T10-14-08Z.log (in this worktree affectionate-feistel-8f9c99; SHA-256 776F490BA6E5632413856D8ABA0FEAADC277AC0395244B9EB9299F6B2614DC28, 1473 lines) lines 1470-1473",
+      "summary": "Clippy finished clean under -D warnings (Finished dev profile in 7.60s; no warning or error lines); line 1473 is the mutex release."
+    }
+  ],
+  "gateEvidenceNote": "The cited log is the real .githooks/pre-push gate, run by the Codex lane's push at 2026-09-25T10:14:08Z; the push that set origin/claude/547-test-room-h1 to bb7ecefc was accepted after it. The worktree reflog binds HEAD to bb7ecefc from 2026-09-25T10:12:34Z, before the log time, with no later HEAD move. Every stage was read and the log hashed to the SHA-256 above. No --no-verify was used.",
+  "scopeDrift": {
+    "stage": "write-scope drift (#356)",
+    "statusInGateRun": "OK",
+    "reconciled": true,
+    "measurement": "In the gate run itself (log lines 5-7): 9 changed paths since origin/main, measured against the claim on #547, all inside it. Re-run against this landing claim with --refresh: OK.",
+    "reconciliationNote": "The landing claim lists the same nine delta paths plus the receipt paths, and nothing else."
+  },
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "head": "bb7ecefc8949d45f2d36af5f29ce274c688a37ab",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/557#pullrequestreview-5316543046, headed \"Independent exact-head code review — PASS\", commit_id bb7ecefc8949d45f2d36af5f29ce274c688a37ab, submitted 2026-09-25T10:21:30Z.",
+    "reviewerNote": "A non-Claude, non-Codex reviewer that authored none of the delta. It reviewed the full 9-file delta and confirmed the two accessibility findings of its prior CHANGES REQUIRED review (5316360875, at 3b178cb8) are repaired. The shared Pootytxng account records it as a PR review whose body names the reviewer. Native visual/focus self-review at the same head: VERDICT PASS, https://github.com/Pootytxng/sentinel/issues/547#issuecomment-5832645689."
+  },
+  "closingNote": "PR #557 lists #547 in closingIssuesReferences (\"Closes #547\"), so the merge closes #547; this lane's claim is released by Handoff before the merge. scripts/land-pr.mjs merges without --delete-branch, then prunes the head ref with git push origin --delete."
+}
