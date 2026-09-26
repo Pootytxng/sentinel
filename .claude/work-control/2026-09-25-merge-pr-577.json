@@ -1,0 +1,27 @@
+{
+  "actor": "codex",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/574#issuecomment-5842736996",
+  "leaseEvidenceNote": "Landing-only claim after the Codex implementation Handoff released its claim.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Only this carrier writes the three new transition receipt paths; no reviewed hook/test file is edited.",
+  "inheritedWork": true,
+  "inspection": {"repository": true, "remoteState": true, "worktree": true, "branch": true, "dirtyState": true, "liveProcesses": true},
+  "currentHead": "d38681a828af07b70aa1dfa99797f4cc0886611b",
+  "pr": 577,
+  "issue": 574,
+  "kind": "lane",
+  "branch": "codex/574-effective-identity",
+  "mutationAuthors": ["codex"],
+  "mutationAuthorsNote": "Codex authored and committed both proof-delta commits; ChatGPT HQ reviewed without mutation.",
+  "requiredGates": ["npm test", "npm run build", "cargo test --manifest-path src-tauri/Cargo.toml", "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"],
+  "gateResults": [
+    {"command": "npm test", "status": "passed", "head": "d38681a828af07b70aa1dfa99797f4cc0886611b", "evidence": "Native pre-push log logs/verify-local-2026-09-26T01-40-48Z.log, raw bytes PR #577 comment 5842439129, SHA-256 D7B29F26CA651478617AF4C40E04BC59C61A6EA897E28A5867C802353E6B6150", "summary": "461 files, 7685 passed, one expected fail, nine skipped."},
+    {"command": "npm run build", "status": "passed", "head": "d38681a828af07b70aa1dfa99797f4cc0886611b", "evidence": "Same decoded native pre-push log and SHA-256", "summary": "Type check and production build passed."},
+    {"command": "cargo test --manifest-path src-tauri/Cargo.toml", "status": "passed", "head": "d38681a828af07b70aa1dfa99797f4cc0886611b", "evidence": "Same decoded native pre-push log and SHA-256", "summary": "1350 passed, zero failed, 24 ignored."},
+    {"command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings", "status": "passed", "head": "d38681a828af07b70aa1dfa99797f4cc0886611b", "evidence": "Same decoded native pre-push log and SHA-256", "summary": "Clean with -D warnings."}
+  ],
+  "gateEvidenceNote": "The native gate passed at the remote PR head and its push exited zero. ChatGPT HQ decoded the raw log from PR comment 5842439129, checked its 131896 bytes and SHA-256, and verified each required stage including scope drift, lease overlap, and TestGate release. The reviewed head has not changed.",
+  "independentReview": {"practical": true, "reviewer": "chatgpt-hq", "status": "passed", "head": "d38681a828af07b70aa1dfa99797f4cc0886611b", "verdict": "PASS", "evidence": "https://github.com/Pootytxng/sentinel/pull/577#pullrequestreview-5324360322", "reviewerNote": "Separate ChatGPT Work context reviewed the full diff, falsified effective-identity and launch-brief warning paths, verified the native gate bytes, and issued explicit exact-head PASS. GitHub records COMMENTED because the connected account owns the PR."},
+  "transition": "merge-pr",
+  "closingNote": "Land reviewed PR #577 through scripts/land-pr.mjs. PR closingIssuesReferences is empty; #574 closes only after main proof and a separate close receipt."
+}
