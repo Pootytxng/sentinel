@@ -1,0 +1,27 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/551#issuecomment-5842521919",
+  "leaseEvidenceNote": "Landing-only claim on #551 in the separate clean worktree 576-landing (branch codex/576-landing). This carrier released that claim in its Handoff https://github.com/Pootytxng/sentinel/issues/551#issuecomment-5842627855 before this close-issue gate and the closure; the author and Codex landing claims were released earlier.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Only this carrier wrote the three new #551 transition receipt paths, and no other live lane owns them or the reviewed path docs/WORK_CONTROL.md.",
+  "inheritedWork": true,
+  "inspection": {"repository": true, "remoteState": true, "worktree": true, "branch": true, "dirtyState": true, "liveProcesses": true},
+  "currentHead": "054848bf960c48afe6e992176d5bcf7be73cac2c",
+  "pr": 576,
+  "issue": 551,
+  "kind": "lane",
+  "branch": "codex/576-landing",
+  "mutationAuthors": ["claude-code"],
+  "mutationAuthorsNote": "Both PR #576 commits (baa177fe, 054848bf) and the receipt-only carrier aa3d87e4 are authored and committed by claude-code <claude-code@desk.local>. The reviewer, Codex, authored none of them.",
+  "requiredGates": ["npm test", "npm run build", "cargo test --manifest-path src-tauri/Cargo.toml", "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"],
+  "gateResults": [
+    {"command": "npm test", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "evidence": "logs/verify-local-2026-09-26T02-05-26Z.log in the author folder 551-testgate-bullet, 208791 bytes, SHA-256 4cffe8d2876605c9ec96f1ea03416114c6e3797214d3937b2504f5f420dee360", "summary": "461 frontend files; 7685 passed, one expected fail, nine skipped."},
+    {"command": "npm run build", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "evidence": "Same native pre-push log and SHA-256", "summary": "Type check and production build passed."},
+    {"command": "cargo test --manifest-path src-tauri/Cargo.toml", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "evidence": "Same native pre-push log and SHA-256", "summary": "1350 passed, zero failed, 24 ignored."},
+    {"command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "evidence": "Same native pre-push log and SHA-256", "summary": "Finished clean with -D warnings."}
+  ],
+  "gateEvidenceNote": "The real native pre-push gate ran from the author folder for the push of 054848bf: the commit is stamped 02:05:19Z, the gate log starts 02:05:26Z, origin/claude/551-testgate-bullet is 054848bf, and the author's Handoff records LOCAL CHECK RESULT: PASS and push success. The log does not print the head SHA itself; that tie comes from the push. It shows scope drift OK, lease overlap OK, and the TestGate acquired and released. This carrier read the log in place and did not re-run the gate. The receipt-only carrier aa3d87e4 (child of merge e831d5a6) then passed its own native pre-push gate: 576-landing/logs/verify-local-2026-09-26T02-54-31Z.log, 235185 bytes, SHA-256 08a556381efa9e4efe60728669bc7573f8d2859e4a3ff6bcbfdb6c2483afeb5d, LOCAL CHECK RESULT: PASS, push exited 0.",
+  "independentReview": {"practical": true, "reviewer": "codex", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "verdict": "PASS", "evidence": "https://github.com/Pootytxng/sentinel/pull/576#pullrequestreview-5324226946", "reviewerNote": "Codex reviewed the exact head, reproduced the earlier-missed case (run -t foo is a full non-watch suite and queues; a file argument, --changed and --shard do not), checked gate-mutex.ps1, gate-mutex.mjs and verify-local.ps1 against the bullet, and checked the native gate log. It supersedes the earlier review of baa177fe. GitHub records it as COMMENTED because the connected account cannot approve its own PR."},
+  "transition": "close-issue",
+  "closingNote": "PR #576 merged as e831d5a6. origin/main at aa3d87e4 contains docs/WORK_CONTROL.md byte-identical to the reviewed head 054848bf (blob ca695472) and the mark-ready and merge receipts, with no change to the reviewed path after the reviewed head. Close #551 after this carrier's Handoff released its lease; preserve this close receipt on main through a separate receipt-only push."
+}
