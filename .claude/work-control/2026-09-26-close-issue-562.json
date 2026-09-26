@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/559#issuecomment-5848954933",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/561#issuecomment-5848820804",
+    "status": "passed",
+    "reviewerNote": "Local Codex CLI (gpt-5.6-sol, read-only sandbox) reviewed the exact pushed head: the job object the child joins right after Start(), its flags (BREAKAWAY_OK only, not inheritable, no kill-on-close), the root-only path through the caller's own Process object, that no parent pid, snapshot, start time or clock is read on the kill path, the stated residuals, the two real-hook pushes for exit 130 and a missing powershell.exe, and the release PowerShell rails. Verdict PASS, none blocking. It authored no mutation.",
+    "head": "ded9f5053771c27abe706ab9b7486805fe0e2f4f"
+  },
+  "branch": "claude/559-tree-kill-stale-parent",
+  "overlapExclusiveNote": "The landing claim holds only this lane's three new receipt paths; no other live claim owns them and no source path is edited.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "ded9f5053771c27abe706ab9b7486805fe0e2f4f",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "462 frontend files, 7637 passed, one expected failure, four skipped.",
+      "evidence": "logs/verify-local-2026-09-26T18-25-48Z.log; SHA-256 8EA85E129D272213D604BF5F2846FBFCC301505646E8F17398F362EF3C87EE70; push log logs/push561.log (LOCAL CHECK RESULT: PASS, d2fe0f9b..ded9f505 pushed at the exact head)",
+      "head": "ded9f5053771c27abe706ab9b7486805fe0e2f4f"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-26T18-25-48Z.log; SHA-256 8EA85E129D272213D604BF5F2846FBFCC301505646E8F17398F362EF3C87EE70; push log logs/push561.log (LOCAL CHECK RESULT: PASS, d2fe0f9b..ded9f505 pushed at the exact head)",
+      "head": "ded9f5053771c27abe706ab9b7486805fe0e2f4f"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1343 passed, zero failed.",
+      "evidence": "logs/verify-local-2026-09-26T18-25-48Z.log; SHA-256 8EA85E129D272213D604BF5F2846FBFCC301505646E8F17398F362EF3C87EE70; push log logs/push561.log (LOCAL CHECK RESULT: PASS, d2fe0f9b..ded9f505 pushed at the exact head)",
+      "head": "ded9f5053771c27abe706ab9b7486805fe0e2f4f"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-26T18-25-48Z.log; SHA-256 8EA85E129D272213D604BF5F2846FBFCC301505646E8F17398F362EF3C87EE70; push log logs/push561.log (LOCAL CHECK RESULT: PASS, d2fe0f9b..ded9f505 pushed at the exact head)",
+      "head": "ded9f5053771c27abe706ab9b7486805fe0e2f4f"
+    }
+  ],
+  "issue": 562,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Landing-only claim on #559 after the implementation claim was released; it names this receipt path because #561 carries #562 whole.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push moved the branch to the exact PR head; nothing was pushed after it.",
+  "pr": 561,
+  "mutationAuthorsNote": "claude-code authored ded9f505 and cherry-picked #562's 9769deba (authored by claude-code) as 158b3c09. Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "close-issue",
+  "closingNote": "Close #562 after PR #561 is merged (main 36e17274): its commit 9769deba is carried in #561 as 158b3c09 with its author and message, so the taskkill /T fallback is gone and a no-job timeout kills only the root, reported as root-only. The #559 fix then replaced the tree walk with a job object at the reviewed head."
+}
