@@ -374,13 +374,79 @@ function reloads(at: ts.Node): boolean {
   return ts.isPropertyAccessExpression(up) && up.expression === at && up.name.text === "reload" && ts.isCallExpression(up.parent) && up.parent.expression === up;
 }
 
-// Whether a file calls a name directly anywhere (`go(u)`).
-function calledIn(tree: ts.SourceFile, name: string): boolean {
-  let hit = false;
+// The node a declaration binds its name in, or undefined when the identifier declares nothing:
+// `let`, `const` and `class` bind in their block, `var` and parameters in their function, a
+// function expression's own name inside it, an import in the file, and a caught error in its catch.
+function scopeOf(id: ts.Identifier): ts.Node | undefined {
+  let decl: ts.Node = id.parent;
+  if (ts.isBindingElement(decl) && decl.name === id) {
+    while (ts.isBindingElement(decl) || ts.isObjectBindingPattern(decl) || ts.isArrayBindingPattern(decl)) decl = decl.parent;
+  } else if ((decl as { name?: ts.Node }).name !== id) return undefined;
+  if (ts.isParameter(decl)) return decl.parent;
+  if (ts.isVariableDeclaration(decl)) {
+    const list = decl.parent;
+    if (ts.isCatchClause(list)) return list;
+    const block = (node: ts.Node) => ts.isBlock(node) || ts.isSourceFile(node) || ts.isModuleBlock(node) || ts.isCaseBlock(node) || ts.isForStatement(node) || ts.isForInStatement(node) || ts.isForOfStatement(node);
+    const fn = (node: ts.Node) => ts.isSourceFile(node) || ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isMethodDeclaration(node) || ts.isConstructorDeclaration(node) || ts.isAccessor(node);
+    const within = list.flags & ts.NodeFlags.BlockScoped ? block : fn;
+    let scope: ts.Node = list.parent;
+    while (!within(scope)) scope = scope.parent;
+    return scope;
+  }
+  if (ts.isFunctionDeclaration(decl) || ts.isClassDeclaration(decl) || ts.isEnumDeclaration(decl)) return decl.parent;
+  if (ts.isFunctionExpression(decl) || ts.isClassExpression(decl)) return decl;
+  if (ts.isImportClause(decl) || ts.isImportSpecifier(decl) || ts.isNamespaceImport(decl) || ts.isImportEqualsDeclaration(decl)) return id.getSourceFile();
+  return undefined;
+}
+
+// Whether a declaration in the file binds this reference: a local `open` is not the window's.
+function boundHere(tree: ts.SourceFile, ref: ts.Identifier): boolean {
+  const scopes = new Set<ts.Node>();
   walk(tree, (node) => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === name) hit = true;
+    const scope = ts.isIdentifier(node) && node.text === ref.text ? scopeOf(node) : undefined;
+    if (scope) scopes.add(scope);
   });
-  return hit;
+  for (let at: ts.Node | undefined = ref.parent; at; at = at.parent) if (scopes.has(at)) return true;
+  return false;
+}
+
+// Where a value destructured from an `open` key is used as a flag, not handed on or called: negated,
+// tested, on the left of `&&`, read from (`open.label`, but not `.call`, `.apply` or `.bind`), listed
+// as a React hook's dependency, or passed to a component's prop, which is read in its own file.
+const DEPENDENCY_HOOKS = new Set(["useEffect", "useLayoutEffect", "useInsertionEffect", "useMemo", "useCallback", "useImperativeHandle"]);
+function usedAsFlag(ref: ts.Identifier): boolean {
+  const up = ref.parent;
+  if (ts.isPrefixUnaryExpression(up)) return up.operator === ts.SyntaxKind.ExclamationToken;
+  if (ts.isBinaryExpression(up)) return up.left === ref && up.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken;
+  if (ts.isConditionalExpression(up)) return up.condition === ref;
+  if (ts.isIfStatement(up) || ts.isWhileStatement(up) || ts.isDoStatement(up)) return up.expression === ref;
+  if (ts.isPropertyAccessExpression(up)) return !["call", "apply", "bind"].includes(up.name.text);
+  if (ts.isArrayLiteralExpression(up) && ts.isCallExpression(up.parent) && ts.isIdentifier(up.parent.expression)) {
+    return DEPENDENCY_HOOKS.has(up.parent.expression.text) && up.parent.arguments[up.parent.arguments.length - 1] === up;
+  }
+  if (ts.isJsxExpression(up) && ts.isJsxAttribute(up.parent)) {
+    const element = up.parent.parent.parent;
+    return (ts.isJsxOpeningElement(element) || ts.isJsxSelfClosingElement(element)) && /^[A-Z]/.test(element.tagName.getText());
+  }
+  return false;
+}
+
+// Whether every use of the name an `open` key is destructured into is a flag.
+function onlyFlags(tree: ts.SourceFile, bound: ts.Identifier): boolean {
+  let ok = true;
+  walk(tree, (node) => {
+    if (ts.isIdentifier(node) && node !== bound && node.text === bound.text && isReference(node) && !usedAsFlag(node)) ok = false;
+  });
+  return ok;
+}
+
+// A form sent from code: `submit` or `requestSubmit` read off anything, its `action` set, or an
+// attribute that sends the page or loads a file set by name.
+const FORM_SENDS = new Set(["submit", "requestSubmit"]);
+const SENDS_ATTRIBUTES = new Set(["action", "formaction", "href", "xlink:href", "src", "srcdoc", "data"]);
+function assigned(node: ts.Node): boolean {
+  const up = node.parent;
+  return ts.isBinaryExpression(up) && up.left === node && up.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && up.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
 }
 
 // Rule 7, per file: each load that names code outside the corpus, names no file, names a package
@@ -415,22 +481,31 @@ export function loads(source: string, file: string): string[] {
       }
     }
     // Navigation: `location`, `navigation` and `open` read off anything (a reload and a pinned data
-    // field excepted), `location` and `navigation` reached bare, `open` called bare, and a link or
-    // form target.
+    // field excepted), `location` and `navigation` reached bare, the window's `open` reached bare in
+    // any way (`go = open`, `open.call(w, u)`) unless a declaration in the file binds it (#582, at
+    // 3a0a9995), and a link or form target.
     if (name !== undefined && MOVES_PAGE.has(name)) {
       const member = readOff(node);
-      const called = ts.isCallExpression(node.parent) && node.parent.expression === node;
-      const at = member ?? (ts.isIdentifier(node) && isReference(node) && (name !== "open" || called) ? node : undefined);
+      const at = member ?? (ts.isIdentifier(node) && isReference(node) && (name !== "open" || !boundHere(tree, node)) ? node : undefined);
       const field = member && `${file}|${member.getText(tree)}`;
       if (field && NAV_FIELDS.has(field)) navFieldsSeen.add(field);
       else if (at && !reloads(at)) bad.add(`${lineOf(tree, node)} (${name} can send the page elsewhere; a data field of that name is pinned in NAV_FIELDS)`);
     }
     if (name !== undefined && NAVIGATES.has(name)) bad.add(`${lineOf(tree, node)} (${name} can send the page elsewhere)`);
+    if (name !== undefined && FORM_SENDS.has(name) && readOff(node)) bad.add(`${lineOf(tree, node)} (${name} sends a form to its action)`);
+    const field = name === "action" ? readOff(node) : undefined;
+    if (field && assigned(field)) bad.add(`${lineOf(tree, node)} (a form's action set from code)`);
+    if (name === "setAttribute" || name === "setAttributeNS") {
+      const arg = calleeCall(node)?.arguments?.[name === "setAttributeNS" ? 1 : 0];
+      const attribute = arg && plainText(arg)?.toLowerCase();
+      if (attribute === undefined || SENDS_ATTRIBUTES.has(attribute)) bad.add(`${lineOf(tree, node)} (an attribute that sends the page or loads a file, set by name)`);
+    }
     if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
-      // `const { location } = anything`, and `const { open: go } = w` where `go` is then called. A
-      // prop named `open` that is only read is a flag, not a window's `open`.
-      const key = nameOf(node.propertyName ?? node.name) ?? (node.propertyName && plainText(node.propertyName));
-      const opens = key === "open" && ts.isIdentifier(node.name) && calledIn(tree, node.name.text);
+      // `const { location } = anything`, and `const { open: go } = w` where `go` is then called or
+      // handed on (#582, at 3a0a9995). A prop named `open` that is only used as a flag is not a
+      // window's `open`.
+      const key = node.propertyName ? (nameOf(node.propertyName) ?? plainText(node.propertyName) ?? (ts.isComputedPropertyName(node.propertyName) ? plainText(node.propertyName.expression) : undefined)) : nameOf(node.name);
+      const opens = key === "open" && !(ts.isIdentifier(node.name) && onlyFlags(tree, node.name));
       if (key === "location" || key === "navigation" || opens) bad.add(`${lineOf(tree, node)} (${key} can send the page elsewhere)`);
     }
     if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && ts.isIdentifier(node.tagName)) {
@@ -700,10 +775,14 @@ const CONFIG_FLAG = /--config(?![\w-])|TAURI_CONFIG/i;
 // A short `-c`, alone or with its value attached (`-calt.json`), but not a PowerShell
 // case-sensitive operator (`-contains`, `-ceq`, …).
 const SHORT_C = /(?:^|[\s"'`(,=[])-c(?!(?:ontains|notcontains|eq|ne|gt|ge|lt|le|like|notlike|match|notmatch|replace|split|in|notin)\b)/;
-// A file that starts the Tauri CLI: a line that names a runner and then `tauri`, whatever flags
-// sit between them (`npm --silent run tauri`, `npx tauri`, `cargo tauri`), the CLI's package, or
-// its binary. `src-tauri` and `@tauri-apps/…` on a runner's line are paths, not the CLI.
-const TAURI_ROUTE = /\b(?:npm|npx|pnpm|yarn|bunx?|cargo|node)(?:\.cmd|\.exe)?\b.*(?<![\w@./\\-])tauri(?![\w-])|@tauri-apps[\\/]cli|\.bin[\\/]tauri|tauri\.cmd|["'`]tauri["'`]/i;
+// A file that can start the Tauri CLI: `tauri` standing alone anywhere in it, whatever runs it and
+// however the command is broken over lines (`tauri build`, `npm --silent run tauri`, `cargo tauri`,
+// a name in an argument array), the CLI's package, or its binary (#582, at 3a0a9995).
+// `src-tauri` and `@tauri-apps/…` are paths, not the CLI.
+const TAURI_ROUTE = /(?<![\w@./\\-])tauri(?![\w-])|@tauri-apps[\\/]cli|\.bin[\\/]tauri|tauri\.cmd/i;
+// A short `-c` that is prose in a record, not a command: pinned by its file and exact words. The
+// rest of that line is still read, and each pin must still match.
+const PROSE_C = new Map([[join(".claude", "work-control", "2026-09-01-merge-pr-277.json"), "git grep -c agent-skills-config"]]);
 // The code that can start a build: every script, hook, skill, workflow and settings file in the
 // repo, past the app's own source, the docs, the lockfile and what installs and builds write
 // (#582, at 9c97047f).
@@ -918,15 +997,22 @@ describe("screens read machine truth through the Machine Model, never around it"
     });
     // No code that can start a build hands Tauri another config: no `--config` or TAURI_CONFIG
     // anywhere, however the command is spelled (`npm run tauri -- build --config x`), and no short
-    // `-c` anywhere in a file that starts the Tauri CLI, so an argument array split over lines is
-    // read too (#582, at 63c57f30). git's and codex's own `-c` live in files that start no Tauri.
+    // `-c` anywhere in a file that can start the Tauri CLI, so an argument array or a command split
+    // over lines is read too (#582, at 63c57f30 and 3a0a9995). git's and codex's own `-c` live in
+    // files that name no Tauri.
+    const proseSeen = new Set<string>();
     const handed = BUILD_CODE.flatMap((file) => {
       const text = readFileSync(file, "utf8");
       const lines = text.split(/\r?\n/);
-      const hits = lines.filter((line) => CONFIG_FLAG.test(line) || (TAURI_ROUTE.test(text) && SHORT_C.test(line)));
+      const pinned = PROSE_C.get(file);
+      const hits = lines.filter((line) => {
+        const read = pinned && line.includes(pinned) ? (proseSeen.add(file), line.split(pinned).join(" ")) : line;
+        return CONFIG_FLAG.test(line) || (TAURI_ROUTE.test(text) && SHORT_C.test(read));
+      });
       return hits.map((line) => `${file}: ${line.trim()}`);
     });
     expect(handed, "no script passes Tauri another config").toEqual([]);
+    expect([...PROSE_C.keys()].filter((file) => !proseSeen.has(file)), "each pinned prose `-c` still matches its file").toEqual([]);
     expect(BUILD_CODE.filter((file) => TAURI_ROUTE.test(readFileSync(file, "utf8"))).length, "the scan finds the release build's Tauri call").toBeGreaterThan(0);
     // Cargo reads `.cargo/config.toml` (or `config`) in the folder it builds in and every folder
     // above it, and its `[env]` table can set TAURI_CONFIG for tauri-codegen. The repo's two such
@@ -1206,6 +1292,25 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loads("function Sheet({ open }: { open: boolean }) { return open ? 1 : 0; }", screen)).toEqual([]);
     expect(loads("const [open, setOpen] = useState(false); if (open) setOpen(false);", screen)).toEqual([]);
     expect(loads("const x = { location: 1, open: true };", screen)).toEqual([]);
+    // The window's `open` handed on bare, or a destructured `open` used as more than a flag, and a
+    // form sent from code (#582, at 3a0a9995).
+    expect(loads("const go = open; go(url);", screen)).toHaveLength(1);
+    expect(loads("open.call(window, url);", screen)).toHaveLength(1);
+    expect(loads("const pick = [open][0];", screen)).toHaveLength(1);
+    expect(loads("const { open } = window; const go = open; go(url);", screen)).toHaveLength(1);
+    expect(loads("const { open } = window; open.call(window, url);", screen)).toHaveLength(1);
+    expect(loads('const { ["open"]: go } = window; go(url);', screen)).toHaveLength(1);
+    expect(loads("function Tile({ open }: P) { return <button onClick={open} />; }", screen)).toHaveLength(1);
+    expect(loads("formRef.current.action = url; formRef.current.submit();", screen)).toHaveLength(2);
+    expect(loads('form["action"] = url;', screen)).toHaveLength(1);
+    expect(loads("form.requestSubmit();", screen)).toHaveLength(1);
+    expect(loads('el.setAttribute("action", url);', screen)).toHaveLength(1);
+    expect(loads("el.setAttributeNS(null, name, url);", screen)).toHaveLength(1);
+    expect(loads('function Sheet({ open }: P) { useEffect(() => {}, [open]); return !open ? 1 : open.label; }', screen)).toEqual([]);
+    expect(loads("function Sheet({ open }: P) { return open && <Dialog open={open} />; }", screen)).toEqual([]);
+    expect(loads("function run(open: () => void) { open(); }", screen)).toEqual([]);
+    expect(loads("const [open] = useState(false); const shown = open;", screen)).toEqual([]);
+    expect(loads('const next = step.action; el.setAttribute("aria-expanded", "true");', screen)).toEqual([]);
     // What real code does passes: a corpus file by any of its specifiers, an asset, a package.
     expect(loads('import { x } from "./data/machine-model";', app)).toEqual([]);
     expect(loads('import { x } from "./data/machine-model.js";', app)).toEqual([]);
@@ -1285,6 +1390,9 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(TAURI_ROUTE.test("npm.cmd --prefix . exec tauri build")).toBe(true);
     expect(TAURI_ROUTE.test("cargo test --manifest-path src-tauri/Cargo.toml")).toBe(false);
     expect(TAURI_ROUTE.test('node -e "require(\'@tauri-apps/api\')"')).toBe(false);
+    // A bare CLI call and a command broken over lines are routes too (#582, at 3a0a9995).
+    expect(TAURI_ROUTE.test("tauri build -c alternate.json")).toBe(true);
+    expect(TAURI_ROUTE.test("npm --silent run `\n  tauri -- build")).toBe(true);
     expect(BUILD_CODE).toEqual(expect.arrayContaining([join(".github", "workflows", "ci.yml"), "compy-entry.ps1", join("scripts", "release.ps1")]));
   });
 
