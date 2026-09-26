@@ -131,6 +131,25 @@ describe("replay: what the gate would have said to #452 that morning", () => {
   });
 });
 
+describe("a checkout with no session record (#559)", () => {
+  it("names `adopt` for the refusing issue instead of only telling the lane to wait on itself", async () => {
+    // #513's own lane pushing from a folder nobody launched: the gate cannot see that the claim is its own.
+    const r = await pushAs({ own: null, asOf: "2026-09-23T04:50:00Z", paths: [HOMEHUD] });
+    expect(r.ok).toBe(false);
+    const text = render(r);
+    expect(text).toContain("no session record");
+    expect(text).toContain("node tools/entry/cli.mjs adopt --issue 513 --session <your session id>");
+    // The serialize advice survives, scoped to the case where the claim really is another lane's.
+    expect(text).toMatch(/If it is another lane's, overlapping scopes serialize/);
+  });
+
+  it("keeps the plain serialize advice, and no adopt hint, when the pusher's issue is known", async () => {
+    const text = render(await pushAs({ own: 452, asOf: "2026-09-23T04:50:00Z", paths: [HOMEHUD] }));
+    expect(text).toContain("take these paths out of this push, or wait");
+    expect(text).not.toContain("adopt --issue");
+  });
+});
+
 describe("leaseOverlapVerdict, over strings", () => {
   const claim = (postedAt, scope, extra = {}) => ({ postedAt, scope, url: `u:${postedAt}`, ...extra });
   const A = "src/a.ts";
