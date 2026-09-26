@@ -25,6 +25,9 @@ import { join } from "path";
 //      it, and there are too many ways to build a string to list them. `invoke` is imported under
 //      its own name and never passed around as a value; the one wrapper that forwards its parameter
 //      to `invoke` is named below and held to the same rule at its own call sites.
+//   6. `invoke` is reached only by its name: `@tauri-apps/api/core` is imported with a static
+//      `import { … } from`, and nothing touches the package root or the global Tauri objects.
+//   Every rule reads the source as it runs: comments blanked, escapes decoded (see decodeEscapes).
 //
 // The corpus is INVERTED on purpose (walk everything, exempt explicitly), the lesson the
 // mutation-boundary guard learned: a new surface is in scope the moment it exists. Test files and
@@ -62,17 +65,22 @@ function stripComments(source: string): string {
     .replace(/(?<!:)\/\/[^\n]*/g, " ");
 }
 
-// JavaScript runs an identifier or a string written with \u escapes as the characters they stand
-// for: `inv\u006fke` IS `invoke`. So the source is read as it runs. Every \uXXXX or \u{…} escape
-// that stands for an identifier character is decoded before any rule looks. Any other escape, a
-// quote included, stays as written, since decoding it could end a string early. So does one that
-// follows a literal backslash, which is text, not an escape (#582, at 9105a072).
+// JavaScript runs an escape as the character it stands for: `inv\u006fke` IS `invoke`, and in a
+// string `\x61` is `a` and `\m` is `m`. So the source is read as it runs. Every \uXXXX, \u{…},
+// \xHH or backslash-before-an-ordinary-character that stands for an identifier character is
+// decoded before any rule looks. Any other escape, a quote included, stays as written, since
+// decoding it could end a string early. So does one that follows a literal backslash, which is
+// text, not an escape. A backslash before a line break is left alone: the sink refuses a literal
+// that spans a line, so a name joined across one never reaches `invoke` (#582, at 9105a072).
 function decodeEscapes(code: string): string {
-  return code.replace(/(?<=(?:^|[^\\])(?:\\\\)*)\\u(?:\{([0-9a-fA-F]{1,6})\}|([0-9a-fA-F]{4}))/g, (m, braced, four) => {
-    const point = parseInt(braced ?? four, 16);
-    const ch = point <= 0x10ffff ? String.fromCodePoint(point) : "";
-    return /^[\w$]$/.test(ch) ? ch : m;
-  });
+  return code.replace(
+    /(?<=(?:^|[^\\])(?:\\\\)*)\\(?:u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([^bfnrtvux0-9\r\n\u2028\u2029]))/g,
+    (m, braced, four, hex, same) => {
+      const point = same === undefined ? parseInt(braced ?? four ?? hex, 16) : same.codePointAt(0);
+      const ch = point <= 0x10ffff ? String.fromCodePoint(point) : "";
+      return /^[\w$]$/.test(ch) ? ch : m;
+    },
+  );
 }
 
 // What every rule scans: executable source, comments blanked, escapes read as they run.
@@ -106,9 +114,9 @@ export function loose(source: string): string[] {
   );
 }
 
-// A call's first argument written out as one plain string: quotes, or a backtick string with no
-// `${`, followed by the next argument or the closing paren.
-const PLAIN_FIRST = /^\s*(?:(["'])[^"'\n]*\1|`[^`$]*`)\s*[,)]/;
+// A call's first argument written out as one plain string on one line: quotes, or a backtick string
+// with no `${`, followed by the next argument or the closing paren.
+const PLAIN_FIRST = /^\s*(?:(["'])[^"'\n\r\u2028\u2029]*\1|`[^`$\n\r\u2028\u2029]*`)\s*[,)]/;
 
 // The text after a callee name, if it is being called: past an optional type-argument list (nested
 // `<…>` included, the `>` of `=>` ignored) to the opening paren. null when the name is not called.
@@ -142,6 +150,16 @@ export function sink(source: string, wrapper?: { forward: string; name: string }
     const line = code.slice(from, to < 0 ? undefined : to).trim();
     bad.push(`line ${code.slice(0, at).split("\n").length}: ${line}`);
   };
+  // Rule 6: `invoke` is only ever reached by its name. The module that exports it is imported by a
+  // static `import { … } from`, never as a namespace, a dynamic `import()`, a re-export or through
+  // the package root, and the global Tauri objects are never touched, since each of those hands
+  // over the function under a key that can be built from pieces.
+  for (const m of code.matchAll(/(["'`])@tauri-apps\/api(?:\/core)?\1/g)) {
+    const before = code.slice(Math.max(0, m.index - 300), m.index);
+    const root = !m[0].includes("/core");
+    if (root || !/\bimport\s+(?:type\s+)?\{[^{}]*\}\s*from\s*$/.test(before)) flag(m.index);
+  }
+  for (const m of code.matchAll(/__TAURI(?:_INTERNALS)?__/g)) flag(m.index);
   let forwarded = false;
   for (const m of code.matchAll(/\binvoke\b/g)) {
     const rest = code.slice(m.index + "invoke".length);
@@ -162,7 +180,7 @@ export function sink(source: string, wrapper?: { forward: string; name: string }
     const args = argsAfter(rest);
     if (args === null || !PLAIN_FIRST.test(args)) flag(m.index);
   }
-  return bad;
+  return [...new Set(bad)]; // one entry per line, however many rules it breaks
 }
 
 // ── Exemptions ──────────────────────────────────────────────────────────────────────────────────
@@ -312,6 +330,23 @@ describe("screens read machine truth through the Machine Model, never around it"
     // end a string early. A literal backslash before the escape leaves it text, not an escape.
     expect(sink('invoke("get_x\\u0022")')).toEqual([]);
     expect(sink('const text = "\\\\u0069nvoke(name)";')).toEqual([]);
+    // A string also spells a character with a hex escape, or with a backslash before an ordinary one.
+    expect(detect('invoke("get_m\\x61chine_model")')).toEqual([MODEL]);
+    expect(detect('invoke("get_\\machine\\_model")')).toEqual([MODEL]);
+    // A backslash before a line break joins the two lines, so a literal that spans one is not plain.
+    expect(sink('invoke("get_machine\\\n_model")')).toHaveLength(1);
+    expect(sink('invoke(`get_machine\\\n_model`)')).toHaveLength(1);
+    expect(sink('invoke("get_machine\\\u2028_model")')).toHaveLength(1);
+    // Rule 6: the invoke function reached without its name.
+    expect(sink('import * as core from "@tauri-apps/api/core";\ncore[["inv", "oke"].join("")](name);')).toHaveLength(1);
+    expect(sink('const core = await import("@tauri-apps/api/core");')).toHaveLength(1);
+    expect(sink('export * from "@tauri-apps/api/core";')).toHaveLength(1);
+    expect(sink('import { core } from "@tauri-apps/api";')).toHaveLength(1);
+    expect(sink('import { invoke } from "@tauri-apps/api/c\\u006fre";\nimport * as c from "@tauri-apps/api/c\\x6fre";')).toHaveLength(1);
+    expect(sink('window.__TAURI_INTERNALS__[key](name);')).toHaveLength(1);
+    expect(sink('const t = window["__TAURI__"];')).toHaveLength(1);
+    // What real code does passes: a named import, type-only included.
+    expect(sink('import { invoke } from "@tauri-apps/api/core";\nimport type { InvokeArgs } from "@tauri-apps/api/core";')).toEqual([]);
     // The forms this codebase really uses.
     expect(sink('import { invoke } from "@tauri-apps/api/core";')).toEqual([]);
     // The specifier is spliced in so fixture-parity-guard, which reads imports as text, does not
