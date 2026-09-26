@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 // CLOSING-KEYWORD GUARD (#343).
 //
@@ -199,7 +200,7 @@ describe("closing-keyword guard: pattern matching", () => {
 // #494: a lane whose upstream predates a keyword commit on main, then merges main to catch up. The
 // old `<upstream>..HEAD` range swept that main commit in and failed the push; it closes nothing on a
 // lane ref, because GitHub already acted on it when it landed on main.
-describe("closing-keyword guard: a lane that merges origin/main (#494)", () => {
+describe("closing-keyword guard: a lane that merges origin/main (#494)", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
   let root;
   let mainKeyword;
   const fx = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -227,7 +228,7 @@ describe("closing-keyword guard: a lane that merges origin/main (#494)", () => {
 
     fx(["checkout", "-q", "lane"]);
     fx(["merge", "-q", "--no-ff", "origin/main", "-m", "Merge origin/main into lane"]);
-  });
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   afterAll(() => {
     try {

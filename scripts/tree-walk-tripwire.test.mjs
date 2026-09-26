@@ -7,18 +7,22 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { describe, expect, it, onTestFailed } from "vitest";
-import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
+import { beforeAll, beforeEach, describe, expect, it, onTestFailed } from "vitest";
+import { GIT_SPAWN_TIMEOUT_MS, TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import {
   BYTE_READ_FLOOR,
   DIR_LISTING_FLOOR,
   FILE_READ_FLOOR,
   FLEET_CHECKOUT_FLOOR,
+  GIT_SPAWN_FLOOR,
   LISTED_PATH_FLOOR,
   createLocator,
   currentObservation,
   emptyObservation,
   enumerates,
+  gitSpawnVerdict,
+  hookGitVerdict,
+  hookRecords,
   measures,
   parseGit,
   registeredCheckouts,
@@ -96,6 +100,49 @@ describe("the verdict", () => {
 
   it("is a budget well above the 15 s default it replaces", () => {
     expect(TREE_WALK_TIMEOUT_MS).toBeGreaterThan(15_000 * 2);
+  });
+});
+
+describe("the git-spawn verdict (#563)", () => {
+  const spawns = (n, hookGitSpawns = 0) => obs({ gitSpawns: n + hookGitSpawns, hookGitSpawns });
+  const hook = (patch) => ({ kind: "beforeAll", suite: "a fixture repo", timeout: 15_000, gitSpawns: GIT_SPAWN_FLOOR, ...patch });
+
+  it("fails a test at the floor on the 15 s default, not one spawn below it, and names the fix", () => {
+    expect(gitSpawnVerdict(15_000, spawns(GIT_SPAWN_FLOOR - 1), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+    const v = gitSpawnVerdict(15_000, spawns(GIT_SPAWN_FLOOR), GIT_SPAWN_TIMEOUT_MS);
+    expect(v).toMatch(/git-spawn tripwire \(#563\)/);
+    expect(v).toMatch(/\{ timeout: GIT_SPAWN_TIMEOUT_MS \}/);
+    expect(v).toMatch(/src\/test\/tree-walk-budget\.ts/);
+  });
+
+  it("fails on any timeout short of the budget and passes on the budget or more", () => {
+    expect(gitSpawnVerdict(GIT_SPAWN_TIMEOUT_MS - 1, spawns(40), GIT_SPAWN_TIMEOUT_MS)).not.toBeNull();
+    expect(gitSpawnVerdict(GIT_SPAWN_TIMEOUT_MS, spawns(40), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+    expect(gitSpawnVerdict(TREE_WALK_TIMEOUT_MS, spawns(40), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+  });
+
+  it("does not charge a test for the git its beforeEach/afterEach started: those run on their own hook timeout", () => {
+    expect(gitSpawnVerdict(15_000, spawns(1, 20), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+    expect(gitSpawnVerdict(15_000, spawns(GIT_SPAWN_FLOOR, 20), GIT_SPAWN_TIMEOUT_MS)).not.toBeNull();
+  });
+
+  it("fails a before-hook at the floor on its default hook timeout, naming the second argument it needs", () => {
+    expect(hookGitVerdict(hook({ gitSpawns: GIT_SPAWN_FLOOR - 1 }), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+    const v = hookGitVerdict(hook({ suite: "a fixture repo" }), GIT_SPAWN_TIMEOUT_MS);
+    expect(v).toMatch(/git-spawn tripwire \(#563\): the beforeAll hook of "a fixture repo"/);
+    expect(v).toMatch(/beforeAll\(fn, GIT_SPAWN_TIMEOUT_MS\)/);
+    expect(hookGitVerdict(hook({ kind: "beforeEach" }), GIT_SPAWN_TIMEOUT_MS)).toMatch(/beforeEach\(fn, GIT_SPAWN_TIMEOUT_MS\)/);
+    expect(hookGitVerdict(hook({ timeout: GIT_SPAWN_TIMEOUT_MS }), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+  });
+
+  it("fails an after-hook at the floor whatever it was given, since vitest does not expose its timeout", () => {
+    expect(hookGitVerdict(hook({ kind: "afterAll", timeout: undefined }), GIT_SPAWN_TIMEOUT_MS)).toMatch(/does not expose an afterAll hook's timeout/);
+    expect(hookGitVerdict(hook({ kind: "afterAll", timeout: undefined, gitSpawns: GIT_SPAWN_FLOOR - 1 }), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+  });
+
+  it("is a budget well above the 15 s default and below the whole-tree one", () => {
+    expect(GIT_SPAWN_TIMEOUT_MS).toBeGreaterThan(15_000 * 2);
+    expect(GIT_SPAWN_TIMEOUT_MS).toBeLessThan(TREE_WALK_TIMEOUT_MS);
   });
 });
 
@@ -242,5 +289,71 @@ describe.skipIf(CENSUS)("fails a walker on the default timeout, in the real runn
   it("…and the specimen failed on the tripwire's verdict, nothing else", () => {
     expect(caught).toMatch(/tree-walk tripwire \(#515\)/);
     expect(caught).toMatch(/git ls-files` listed \d+ paths/);
+  });
+});
+
+// #563: the same live proof for git processes. Each specimen starts GIT_SPAWN_FLOOR of them in
+// os.tmpdir(), the way a fixture-repository test does, so none of it is a walk of this tree.
+const startGit = (n) => {
+  for (let i = 0; i < n; i++) execFileSync("git", ["--version"], { cwd: os.tmpdir() });
+};
+
+describe.skipIf(CENSUS)("fails a test that starts many git processes on the default timeout, in the real runner (#563)", () => {
+  let caught = "";
+  it.fails("specimen: starts the floor's worth of git processes on the default timeout (its failure is the expected outcome)", () => {
+    onTestFailed(({ task }) => {
+      caught = (task.result?.errors ?? []).map((e) => e.message).join("\n");
+    });
+    startGit(GIT_SPAWN_FLOOR);
+  });
+
+  it("…and the specimen failed on the git-spawn verdict, nothing else", () => {
+    expect(caught).toContain(`git-spawn tripwire (#563): this test starts ${GIT_SPAWN_FLOOR} git processes`);
+  });
+
+  it("the same work on GIT_SPAWN_TIMEOUT_MS passes", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
+    startGit(GIT_SPAWN_FLOOR);
+    expect(currentObservation().gitSpawns).toBe(GIT_SPAWN_FLOOR);
+  });
+});
+
+// A hook that crosses the floor fails the FILE, in the setup's afterAll, so these specimens cannot
+// use it.fails. Instead the test after them finds each specimen's record, checks it, and claims it
+// from the live list, which is what keeps this file's afterAll from failing on them.
+describe.skipIf(CENSUS)("fails a hook that starts many git processes on the default hook timeout, in the real runner (#563)", () => {
+  describe("specimen beforeAll on the default hook timeout", () => {
+    beforeAll(() => startGit(GIT_SPAWN_FLOOR));
+    it("runs", () => {});
+  });
+
+  describe("specimen beforeEach on the default hook timeout", () => {
+    beforeEach(() => startGit(GIT_SPAWN_FLOOR));
+    it("is not charged for its beforeEach's git", () => {
+      const o = currentObservation();
+      expect(o.hookGitSpawns).toBe(GIT_SPAWN_FLOOR);
+      expect(gitSpawnVerdict(15_000, o, GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+    });
+  });
+
+  describe("specimen beforeAll on the budget", () => {
+    beforeAll(() => startGit(GIT_SPAWN_FLOOR), GIT_SPAWN_TIMEOUT_MS);
+    it("runs", () => {});
+  });
+
+  it("…and each hook was recorded against itself, failing on the default and passing on the budget", () => {
+    const claim = (suite) => {
+      const i = hookRecords().findIndex((h) => h.suite.endsWith(suite));
+      expect(i, `no record for "${suite}": did the setup file's beforeAll wrap this file's hooks?`).toBeGreaterThanOrEqual(0);
+      return hookRecords().splice(i, 1)[0];
+    };
+    const all = claim("specimen beforeAll on the default hook timeout");
+    expect(all).toMatchObject({ kind: "beforeAll", gitSpawns: GIT_SPAWN_FLOOR });
+    expect(hookGitVerdict(all, GIT_SPAWN_TIMEOUT_MS)).toMatch(/beforeAll\(fn, GIT_SPAWN_TIMEOUT_MS\)/);
+    const each = claim("specimen beforeEach on the default hook timeout");
+    expect(each).toMatchObject({ kind: "beforeEach", gitSpawns: GIT_SPAWN_FLOOR });
+    expect(hookGitVerdict(each, GIT_SPAWN_TIMEOUT_MS)).toMatch(/beforeEach\(fn, GIT_SPAWN_TIMEOUT_MS\)/);
+    const budgeted = claim("specimen beforeAll on the budget");
+    expect(budgeted).toMatchObject({ kind: "beforeAll", timeout: GIT_SPAWN_TIMEOUT_MS, gitSpawns: GIT_SPAWN_FLOOR });
+    expect(hookGitVerdict(budgeted, GIT_SPAWN_TIMEOUT_MS)).toBeNull();
   });
 });

@@ -14,6 +14,7 @@ import {
 } from "./work-control-gate.mjs";
 // Read through the namespace so a missing export fails its own case, not every case in this file.
 import * as gate from "./work-control-gate.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 // Provenance has its own describe block below, with its own falsifications. Every case in the
 // blocks before it is about what the receipt itself proves, so they run against a remote that
@@ -188,7 +189,7 @@ describe("proof-gated GitHub transitions", () => {
 
   // #495: Grok authors lanes through the GitHub API (PR #438). Undeclared, it could only sit in a
   // receipt note, where the reviewer-not-author rule never reads it.
-  it("accepts grok as an author and keeps it off the review of its own delta (#438 shape)", () => {
+  it("accepts grok as an author and keeps it off the review of its own delta (#438 shape)", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const receipt = (reviewer) => record({
       actor: "claude-code",
       mutationAuthors: ["claude-code", "grok"],
@@ -785,7 +786,7 @@ describe("work-control receipt CLI", () => {
   // measured at 4-10.8s, and the stale-ref case timed out at vitest's 15s default on 2026-09-23.
   // The repositories cannot be shared -- each case mutates its own origin -- so the budget is named
   // here instead of the global testTimeout being raised for every file in the suite.
-  const CLI_RECEIPT_TIMEOUT_MS = 60_000;
+  const CLI_RECEIPT_TIMEOUT_MS = GIT_SPAWN_TIMEOUT_MS;
 
   function makeRepo() {
     const root = mkdtempSync(join(tmpdir(), "compy-wc-repo-"));

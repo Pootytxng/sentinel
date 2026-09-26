@@ -16,6 +16,7 @@ import {
   validateStageCandidate,
   verifyRepo,
 } from "./verify-release-state.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 // TWO kinds of test live here, and neither substitutes for the other. Delete either and the guard
 // stops guarding:
@@ -370,9 +371,9 @@ describe("RELEASE_STATE.md as it stands, against the tree it cites", () => {
   // processes compete: it timed out at 15000ms on three consecutive gate runs on 2026-09-01 while
   // passing 51/51 standing alone each time, and a gate that fails on load rather than on truth
   // teaches everyone to re-run until green, which is how a real failure gets waved through.
-  // 60s is the contention headroom, not permission to get slower — if this ever needs more, the
-  // fix is to make the check cheaper, not to raise this number again.
-  it("has no broken citation, no missing section and no state drift", { timeout: 60_000 }, () => {
+  // 120s (GIT_SPAWN_TIMEOUT_MS, #563) is the contention headroom, not permission to get slower —
+  // if this ever needs more, the fix is to make the check cheaper, not to raise this number again.
+  it("has no broken citation, no missing section and no state drift", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
     const { bad, missingSections, stateFail, citations } = verifyRepo(repo);
     expect(bad.map((r) => `${r.verdict} ${r.file}:${r.line} ${r.detail}`)).toEqual([]);
@@ -481,7 +482,7 @@ const withGitFixture = ({ orphan = false, ...docOpts }, assert) => {
 const failures = (r) => r.stateFail.join("\n");
 
 describe("check (8) against real repositories: the relation is derived, not believed", () => {
-  it("accepts a truthfully declared desk-ahead", () => {
+  it("accepts a truthfully declared desk-ahead", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withGitFixture(
       { published: (f) => f.first, installed: (f) => f.second, relation: "desk-ahead" },
       (r) => {
@@ -493,7 +494,7 @@ describe("check (8) against real repositories: the relation is derived, not beli
   });
 
   // THE defect class: two unequal identities plus a claim that they are the same build.
-  it("rejects a same-commit anchor while the two identities are different commits", () => {
+  it("rejects a same-commit anchor while the two identities are different commits", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withGitFixture(
       { published: (f) => f.first, installed: (f) => f.second, relation: "same-commit" },
       (r) => {
@@ -504,21 +505,21 @@ describe("check (8) against real repositories: the relation is derived, not beli
     );
   });
 
-  it("names desk-behind when the desk is the older of the two", () => {
+  it("names desk-behind when the desk is the older of the two", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withGitFixture(
       { published: (f) => f.second, installed: (f) => f.first, relation: "desk-ahead" },
       (r) => expect(failures(r)).toContain("git ancestry says desk-behind"),
     );
   });
 
-  it("fails closed when neither identity is an ancestor of the other", () => {
+  it("fails closed when neither identity is an ancestor of the other", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withGitFixture(
       { orphan: true, published: (f) => f.first, installed: (f) => f.second, relation: "desk-ahead" },
       (r) => expect(failures(r)).toContain("DIVERGENT-HISTORY"),
     );
   });
 
-  it("rejects same-bytes prose whenever the declared relation is not same-commit", () => {
+  it("rejects same-bytes prose whenever the declared relation is not same-commit", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withGitFixture(
       {
         published: (f) => f.first,
@@ -530,14 +531,14 @@ describe("check (8) against real repositories: the relation is derived, not beli
     );
   });
 
-  it("treats a missing relation anchor as a failure rather than a pass", () => {
+  it("treats a missing relation anchor as a failure rather than a pass", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withGitFixture(
       { published: (f) => f.first, installed: (f) => f.second, relation: null },
       (r) => expect(failures(r)).toContain("STATE:desk_fleet_relation anchor missing"),
     );
   });
 
-  it("rejects a relation value that is not one of the four", () => {
+  it("rejects a relation value that is not one of the four", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withGitFixture(
       { published: (f) => f.first, installed: (f) => f.second, relation: "fine" },
       (r) => {
@@ -634,7 +635,7 @@ describe("check (9): the Bottom line is read, not merely counted", () => {
   });
 
   // (9a) — the half that needs no git at all.
-  it("FIRES: the paragraph describes the desk build and never names the anchor", () => {
+  it("FIRES: the paragraph describes the desk build and never names the anchor", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withLane(
       (fx) => ({ installed: fx.desk, bottom: "**Bottom line:** the owner's desk runs a newer, unreleased desk build." }),
       ({ unstamped }) => {
@@ -644,7 +645,7 @@ describe("check (9): the Bottom line is read, not merely counted", () => {
     );
   });
 
-  it("stays silent when the paragraph names the anchor verbatim", () => {
+  it("stays silent when the paragraph names the anchor verbatim", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withLane(
       (fx) => ({ installed: fx.desk, bottom: `**Bottom line:** the owner's desk runs an unreleased build stamped \`${fx.desk}\`.` }),
       ({ unstamped, stale }) => {
@@ -654,7 +655,7 @@ describe("check (9): the Bottom line is read, not merely counted", () => {
     );
   });
 
-  it("stays silent when the paragraph never mentions the desk — there is no claim to go stale", () => {
+  it("stays silent when the paragraph never mentions the desk — there is no claim to go stale", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withLane(
       (fx) => ({ installed: fx.desk, bottom: "**Bottom line:** the newest published release is the one the fleet has." }),
       ({ unstamped }) => expect(unstamped).toHaveLength(0),
@@ -663,7 +664,7 @@ describe("check (9): the Bottom line is read, not merely counted", () => {
 
   // (9b) — THE defect of 2026-08-23, in the shape it actually shipped: the anchor moved on, the
   // sentence a reader trusts stayed on the previous lane build, and every other check passed.
-  it("FIRES: a superseded lane build is named beside the current one", () => {
+  it("FIRES: a superseded lane build is named beside the current one", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withLane(
       (fx) => ({
         installed: fx.desk,
@@ -677,7 +678,7 @@ describe("check (9): the Bottom line is read, not merely counted", () => {
     );
   });
 
-  it("LOOKALIKE: a published hash that IS on the mainline is a release, not a stale stamp", () => {
+  it("LOOKALIKE: a published hash that IS on the mainline is a release, not a stale stamp", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withLane(
       (fx) => ({
         installed: fx.desk,
@@ -693,7 +694,7 @@ describe("check (9): the Bottom line is read, not merely counted", () => {
   // The real document cites `2bd649d`, a failed candidate preserved on its own branch. It is
   // off-mainline like every stale desk stamp, and reachability from HEAD is the only thing that
   // separates the two. Drop that condition and this goes red on correct provenance.
-  it("LOOKALIKE: an off-mainline commit unreachable from HEAD is preserved provenance", () => {
+  it("LOOKALIKE: an off-mainline commit unreachable from HEAD is preserved provenance", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withLane(
       (fx) => ({
         installed: fx.desk,
@@ -705,7 +706,7 @@ describe("check (9): the Bottom line is read, not merely counted", () => {
 
   // Scope. The owner-installed ROW is required to carry the build lineage, so every lane predecessor
   // in it would trip (9b) if the check read the whole document instead of the one paragraph.
-  it("LOOKALIKE: lane predecessors listed BELOW the paragraph are lineage, and out of scope", () => {
+  it("LOOKALIKE: lane predecessors listed BELOW the paragraph are lineage, and out of scope", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     withLane(
       (fx) => ({
         installed: fx.desk,

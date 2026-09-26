@@ -28,6 +28,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MIRROR = join(HERE, "user-hooks", "unloaded-project-config.mjs");
@@ -128,7 +129,7 @@ describe("silence where the warning would be false", () => {
     );
   });
 
-  it("says nothing about a sibling worktree of the same repository — its config IS loaded", () => {
+  it("says nothing about a sibling worktree of the same repository — its config IS loaded", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const home = mk("case-b", "home");
     const main = repo(mk("case-b", "main"));
     const wt = join(root, "case-b", "wt");
@@ -170,7 +171,7 @@ describe("the warning it exists for is still delivered", () => {
 
   // The same-repository early-out must not have become "any repo is fine". Sharing git is the
   // evidence; two unrelated repos share nothing.
-  it("warns across two different repositories, both of which carry config", () => {
+  it("warns across two different repositories, both of which carry config", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const home = mk("case-c", "home");
     const a = repo(mk("case-c", "repo-a"));
     const b = repo(mk("case-c", "repo-b"));

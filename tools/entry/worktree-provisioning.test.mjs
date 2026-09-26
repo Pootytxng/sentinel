@@ -49,6 +49,7 @@ import {
   provisioningRootFor,
 } from "../../.claude/hooks/session-root-assert.mjs";
 import { VERIFIER, prePushContractViolations } from "../../scripts/lib/prepush-hook-contract.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HOOK_FILE = join(ROOT, ".claude", "hooks", "session-root-assert.mjs");
@@ -234,7 +235,7 @@ describe("#405 the two defects reproduce, exactly as the fleet guards report the
     expect(cachedSize).toBe(readFileSync(join(linked, "doc.md")).length); // 17 — what git wrote
     expect(blobSize).toBe(14); // ...over a 14-byte blob it still considers checked out
     expect(cachedSize).not.toBe(blobSize);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 });
 
 describe("#405 the diagnosis — positive controls", () => {
@@ -254,7 +255,7 @@ describe("#405 the diagnosis — positive controls", () => {
     expect(git(linked, "config", "core.hooksPath")).toBe(before);
     expect(resolve(linked, git(linked, "config", "core.hooksPath")).startsWith(linked)).toBe(false);
     expect(git(bed.host, "config", "--local", "core.hooksPath")).toBe(".githooks");
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("(B) counts the CRLF files whose blob CR alone reproduces, and rewrites none of them", () => {
     const bed = makeHost("diag-eol");
@@ -273,7 +274,7 @@ describe("#405 the diagnosis — positive controls", () => {
     expect(blobSha(stripCrlf(bytesBefore))).toBe(sha);
     expect(readFileSync(file).equals(bytesBefore)).toBe(true);
     expect(crCount(readFileSync(file))).toBe(3);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("(C) a folder that was provisioned correctly is a silent no-op", () => {
     const bed = makeHost("already-ok");
@@ -284,7 +285,7 @@ describe("#405 the diagnosis — positive controls", () => {
     expect(r.action).toBe("clean");
     expect(r.line).toBeNull();
     expect(r.lineEndings.provable).toEqual([]);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 });
 
 describe("#405 the diagnosis fails CLOSED — every refusal is its own test", () => {
@@ -298,7 +299,7 @@ describe("#405 the diagnosis fails CLOSED — every refusal is its own test", ()
     expect(r.action).toBe("refused");
     expect(r.reason).toMatch(/mid-edit/);
     expect(r.hooksPath.action).toBe("skipped");
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("does NOT refuse over an untracked file — that would make it inert everywhere real work happens", () => {
     const bed = makeHost("untracked");
@@ -309,7 +310,7 @@ describe("#405 the diagnosis fails CLOSED — every refusal is its own test", ()
 
     expect(r.action).toBe("reported");
     expect(existsSync(join(linked, "scratch.tmp"))).toBe(true);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("refuses when the checked-out branch is not the branch the claim names", () => {
     const bed = makeHost("wrongbranch");
@@ -319,7 +320,7 @@ describe("#405 the diagnosis fails CLOSED — every refusal is its own test", ()
 
     expect(r.action).toBe("refused");
     expect(r.reason).toMatch(/not the claimed lane\/liar/);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("refuses when no branch was named at all — an unverified folder is not a diagnosable one", () => {
     const bed = makeHost("nobranch");
@@ -329,7 +330,7 @@ describe("#405 the diagnosis fails CLOSED — every refusal is its own test", ()
 
     expect(r.action).toBe("refused");
     expect(r.reason).toMatch(/no verified branch/);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("never touches the main checkout, however broken it looks", () => {
     const bed = makeHost("mainrepo");
@@ -339,7 +340,7 @@ describe("#405 the diagnosis fails CLOSED — every refusal is its own test", ()
 
     expect(r.action).toBe("main");
     expect(r.line).toBeNull();
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("reports a file as UNPROVABLE when dropping CR does not reproduce its blob", () => {
     const bed = makeHost("notblob");
@@ -364,7 +365,7 @@ describe("#405 the diagnosis fails CLOSED — every refusal is its own test", ()
     expect(r.lineEndings.unprovable).toContain("doc.md");
     expect(r.lineEndings.provable).not.toContain("doc.md");
     expect(readFileSync(join(linked, "doc.md")).equals(before)).toBe(true);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("will not call a folder with no .githooks/pre-push repairable — there is nothing safe to name", () => {
     const bed = makeHost("nohooks", { withHooks: false });
@@ -376,7 +377,7 @@ describe("#405 the diagnosis fails CLOSED — every refusal is its own test", ()
     expect(r.hooksPath.action).toBe("escapes");
     expect(r.hooksPath.reason).toMatch(/no \.githooks\/pre-push of its own/);
     expect(r.line).toContain("escapes this folder");
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("will not call it repairable when extensions.worktreeConfig is off", () => {
     const bed = makeHost("noext", { worktreeConfig: false });
@@ -393,7 +394,7 @@ describe("#405 the diagnosis fails CLOSED — every refusal is its own test", ()
 
     expect(r.hooksPath.action).toBe("escapes");
     expect(r.hooksPath.reason).toMatch(/extensions\.worktreeConfig is not true/);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("cannot measure line endings in a repository whose objects are not sha1", () => {
     const bed = makeHost("sha256");
@@ -410,7 +411,7 @@ describe("#405 the diagnosis fails CLOSED — every refusal is its own test", ()
     expect(r.lineEndings.action).toBe("unmeasurable");
     expect(r.lineEndings.reason).toMatch(/not sha1/);
     expect(r.lineEndings.provable).toEqual([]);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("a folder that is not a checkout, or no root at all, is skipped without a line — never a throw", () => {
     const bed = newBed("notrepo");
@@ -484,7 +485,7 @@ describe("round-2 finding 1 — the module cannot write, for any caller, under a
       expect(args[0]).not.toBe("checkout");
       expect(["rev-parse", "status", "config", "ls-files"]).toContain(args[0]);
     }
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("leaves every tracked byte in the folder exactly as it found it", () => {
     const bed = makeHost("nobytes");
@@ -496,7 +497,7 @@ describe("round-2 finding 1 — the module cannot write, for any caller, under a
 
     expect(r.lineEndings.provable.length).toBeGreaterThan(0); // it saw files it COULD have rewritten
     expect(snapshotBytes(linked)).toEqual(before);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("ignores every option round 1 used to write with — there is no escape hatch left to pass", () => {
     const bed = makeHost("nohatch");
@@ -528,7 +529,7 @@ describe("round-2 finding 1 — the module cannot write, for any caller, under a
     expect(r.action).toBe("reported");
     expect(snapshotBytes(linked)).toEqual(before);
     expect(git(linked, "config", "core.hooksPath")).toBe(hooksBefore);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("exports no repair entry point and no result action that claims one", () => {
     expect(hook.repairWorktreeProvisioning).toBeUndefined();
@@ -540,7 +541,7 @@ describe("round-2 finding 1 — the module cannot write, for any caller, under a
     expect(["reported", "clean", "main", "skipped", "refused"]).toContain(r.action);
     expect(r.action).not.toBe("repaired");
     expect(r.hooksPath.action).not.toBe("set");
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("the SessionStart call site asks for a diagnosis and passes nothing else", () => {
     const src = readFileSync(HOOK_FILE, "utf8");
@@ -583,7 +584,7 @@ describe("round-2 finding 2 — the unmeasurable-overlap claim is gone, not mere
     expect(r).not.toHaveProperty("overlap");
     expect(r).not.toHaveProperty("liveSessions");
     expect(r.line).not.toMatch(/other live session|no other session|non-overlap/i);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -694,7 +695,7 @@ describe("round-2 finding 4 — the code says what it does, so the PR can be che
     // that says so plainly rather than leaving a PR body to claim it: the folder is still broken.
     expect(resolve(linked, git(linked, "config", "core.hooksPath")).startsWith(linked)).toBe(false);
     expect(crCount(readFileSync(join(linked, "doc.md")))).toBe(3);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -743,7 +744,7 @@ describe("round-3 finding — the diagnosis does not write the linked worktree's
     });
     const afterLoose = readFileSync(indexFile);
     expect(afterLoose.equals(beforeLoose)).toBe(false);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("leaves it identical on the refusal paths too, which run git before deciding to stop", () => {
     const bed = makeHost("index-refuse");
@@ -768,7 +769,7 @@ describe("round-3 finding — the diagnosis does not write the linked worktree's
     const okBefore = readFileSync(okIndex);
     expect(diagnoseWorktreeProvisioning(okLinked, { expectedBranch: "lane/index-clean" }).action).toBe("clean");
     expect(readFileSync(okIndex).equals(okBefore)).toBe(true);
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("routes every observation through the lock-free runner, not the shared one", () => {
     const src = readFileSync(HOOK_FILE, "utf8");

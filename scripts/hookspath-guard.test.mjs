@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import {
   RELATIVE_HOOKS,
   decideAgent,
@@ -70,7 +71,7 @@ describe("PostToolUse(Agent): the shared config is restored on a real repository
     return { dir, git };
   };
 
-  it("restores an absolute value to .githooks and reports what it replaced", () => {
+  it("restores an absolute value to .githooks and reports what it replaced", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const f = fixture();
     const abs = join(f.dir, ".githooks");
     f.git(["config", "core.hooksPath", abs]);
@@ -82,7 +83,7 @@ describe("PostToolUse(Agent): the shared config is restored on a real repository
     expect(readSharedHooksPath(f.dir).values).toEqual([RELATIVE_HOOKS]);
   });
 
-  it("leaves a relative value alone, and an unset key alone", () => {
+  it("leaves a relative value alone, and an unset key alone", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const f = fixture();
     f.git(["config", "core.hooksPath", RELATIVE_HOOKS]);
     expect(restoreSharedHooksPath(f.dir)).toMatchObject({ restored: false, values: [RELATIVE_HOOKS] });

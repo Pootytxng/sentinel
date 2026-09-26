@@ -16,17 +16,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { discoverCheckouts, inspectCheckout, listWorktreesOf, relatedCheckouts } from "./checkouts.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 // TIMEOUT (#542): every case here is real `git` processes, and their wall time is set by machine
 // load, not by what the case asserts. One discoverCheckouts over this fixture is 9 spawns (2 per
 // checkout x 4 checkouts + 1 `worktree list` for the host; it was 4 per checkout until #549).
 // Measured 2026-09-23: 150-600 ms per git spawn standing alone on the dev PC, and in a full native
 // gate the tolerant case below (then 35 spawns, two discoveries) took 16.6 s against the global 15 s
-// — about 0.47 s a spawn. At the budget of 11 spawns a case, that rate is about 5 s. The 60 s below
-// is headroom for a busier machine, not room to spend: the assertions are about which checkouts are
-// found, which do not become truer at 15 s than at 60 s. Speed is guarded by SPAWN COUNT instead
-// (afterEach below), which does not vary with load.
-vi.setConfig({ testTimeout: 60_000 });
+// — about 0.47 s a spawn. At the budget of 11 spawns a case, that rate is about 5 s. The 120 s below
+// (GIT_SPAWN_TIMEOUT_MS, #563) is headroom for a busier machine, not room to spend: the assertions
+// are about which checkouts are found, which do not become truer at 15 s than at 120 s. Speed is
+// guarded by SPAWN COUNT instead (afterEach below), which does not vary with load.
+vi.setConfig({ testTimeout: GIT_SPAWN_TIMEOUT_MS });
 
 // Git counts its own processes: with GIT_TRACE2_EVENT set to a directory, every git process writes
 // one file there. That count includes checkouts.mjs's calls, which JS-side wrappers did not see
@@ -99,7 +100,7 @@ beforeAll(() => {
   writeFileSync(join(unrelated, "README.md"), "other project\n");
   git(unrelated, "add", "-A");
   git(unrelated, "commit", "-m", "other");
-}, 60_000);
+}, GIT_SPAWN_TIMEOUT_MS);
 
 afterAll(() => {
   try {
@@ -132,7 +133,7 @@ describe("linked-worktree metadata", () => {
 });
 
 describe("the HEAD states one rev-parse reads", () => {
-  it("an unborn HEAD has no branch and is NOT detached; a detached HEAD is detached", () => {
+  it("an unborn HEAD has no branch and is NOT detached; a detached HEAD is detached", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     // One rev-parse reads all three facts (#549). On an unborn HEAD it prints both dirs and a bare
     // `HEAD`, then exits 128. Read naively, that `HEAD` would report a fresh `git init` as detached.
     // Outside `root`, so the discovery cases below still see exactly the four fixture checkouts.
@@ -181,7 +182,7 @@ describe("the checkout class git worktree list omits", () => {
     expect(listed).not.toContain(clone.toLowerCase());
   });
 
-  it("discovery finds all of them, so the separate clone cannot be missed", () => {
+  it("discovery finds all of them, so the separate clone cannot be missed", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const found = discovered();
     const byPath = Object.fromEntries(found.map((c) => [c.path.toLowerCase(), c]));
     expect(Object.keys(byPath)).toHaveLength(4);
@@ -216,7 +217,7 @@ describe("the checkout class git worktree list omits", () => {
 });
 
 describe("discovery is read-only and tolerant", () => {
-  it("ignores directories that are not checkouts and never throws on them", () => {
+  it("ignores directories that are not checkouts and never throws on them", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const stray = join(root, "not-a-repo");
     // A plain directory and a loose file beside the checkouts, plus a root that does not exist.
     // (This used to `git init` the directory and then delete it, which paid a spawn and left
@@ -235,7 +236,7 @@ describe("discovery is read-only and tolerant", () => {
     );
   });
 
-  it("leaves every discovered checkout's state untouched", () => {
+  it("leaves every discovered checkout's state untouched", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const before = git(linked, "status", "--porcelain");
     discoverCheckouts({ roots: [root] });
     expect(git(linked, "status", "--porcelain")).toBe(before);

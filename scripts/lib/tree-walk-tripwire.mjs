@@ -19,7 +19,7 @@
 // records it as the FILE's walk), vite's `import.meta.glob` (resolved by the transform, outside the
 // worker), `fs.promises.glob`, streams, and the bytes of a read made through a file descriptor (the
 // open is counted, the bytes are not). A test that is slow for another reason, such as many git
-// spawns against an os.tmpdir() fixture, is not a walk and is not this tripwire's business.
+// spawns against an os.tmpdir() fixture, is not a walk; the git-spawn check below (#563) covers it.
 import { createRequire, syncBuiltinESMExports } from "node:module";
 import path from "node:path";
 import os from "node:os";
@@ -52,6 +52,8 @@ export function emptyObservation() {
     recursivePaths: new Set(), // paths of this tree returned by recursive readdir or a `**` glob
     readFiles: new Set(),
     bytesRead: 0,
+    gitSpawns: 0, // every git process this test started, os.tmpdir() fixtures included (#563)
+    hookGitSpawns: 0, // the part of gitSpawns its beforeEach/afterEach hooks started (#563)
   };
 }
 
@@ -63,6 +65,8 @@ export function measures(o) {
     recursivePaths: o.recursivePaths.size,
     fileReads: o.readFiles.size,
     bytesRead: o.bytesRead,
+    gitSpawns: o.gitSpawns,
+    hookGitSpawns: o.hookGitSpawns,
   };
 }
 
@@ -112,6 +116,53 @@ export function tripwireVerdict(timeout, o, budget) {
     `fails with a bare "Test timed out". Give it the measured budget: ` +
     `\`{ timeout: TREE_WALK_TIMEOUT_MS }\` from src/test/tree-walk-budget.ts (${budget} ms), on the ` +
     `test or its describe. Do not narrow what it checks to get under the default.`
+  );
+}
+
+// ── many git processes (#563) ──────────────────────────────────────────────────────────────────
+// A test that builds a fixture repository in os.tmpdir() walks nothing, but every git process it
+// starts pays for a process start, and the full suite's own parallelism starves those. The
+// 2026-09-24 gate that failed on seven such tests (logs/verify-local-2026-09-24T05-18-40Z.log in the
+// youthful-swartz-2f0580 checkout) ran their files 8.3 to 11.4 times slower than a census of the
+// whole suite on 2026-09-26: first-launch 81 s against 8.4 s, target-ownership 139 s against 12 s.
+// In that census 348 of 7,704 tests started git, at 60 ms a process at the median and 225 ms at
+// worst. The floor is the lowest count that keeps every test under it clear of the default at the
+// worst measured slowdown: the slowest default-timeout test starting fewer than 6 took 467 ms, 5.3 s
+// at 11.4 times, a third of the 15 s default. At 7 that would have been a 962 ms test (11 s), at 8 a
+// 1.6 s test (18 s, past the default). The count is deterministic where a time would flake.
+export const GIT_SPAWN_FLOOR = 6; // git processes one test, or one hook, starts
+
+// The failure a test that starts GIT_SPAWN_FLOOR or more git processes gets on too small a timeout,
+// or null. Its beforeEach/afterEach hooks run on their own hook timeout, so their git is theirs.
+export function gitSpawnVerdict(timeout, o, budget) {
+  const n = o.gitSpawns - o.hookGitSpawns;
+  if (n < GIT_SPAWN_FLOOR || timeout >= budget) return null;
+  return (
+    `git-spawn tripwire (#563): this test starts ${n} git processes (the floor is ${GIT_SPAWN_FLOOR}) ` +
+    `but runs on a ${timeout} ms timeout. On a loaded machine each can take over a second, and that ` +
+    `is how the pre-push gate fails with a bare "Test timed out". Give it the measured budget: ` +
+    `\`{ timeout: GIT_SPAWN_TIMEOUT_MS }\` from src/test/tree-walk-budget.ts (${budget} ms), on the ` +
+    `test or its describe, or start fewer git processes. Do not narrow what it checks.`
+  );
+}
+
+// The same rule for one hook: { kind, suite, timeout, gitSpawns }. vitest keeps a before-hook's
+// timeout on the hook and an after-hook's only inside a closure, so an after-hook's is unknown.
+export function hookGitVerdict(h, budget) {
+  if (h.gitSpawns < GIT_SPAWN_FLOOR || (typeof h.timeout === "number" && h.timeout >= budget)) return null;
+  const which = `the ${h.kind} hook of "${h.suite}" starts ${h.gitSpawns} git processes (the floor is ${GIT_SPAWN_FLOOR})`;
+  if (typeof h.timeout !== "number") {
+    return (
+      `git-spawn tripwire (#563): ${which}, and vitest does not expose an ${h.kind} hook's timeout, so ` +
+      `its budget cannot be checked. Move that git work into a beforeAll or beforeEach given ` +
+      `GIT_SPAWN_TIMEOUT_MS from src/test/tree-walk-budget.ts (${budget} ms) as its second argument.`
+    );
+  }
+  return (
+    `git-spawn tripwire (#563): ${which} but runs on a ${h.timeout} ms hook timeout. On a loaded ` +
+    `machine that is how a whole describe fails with "Hook timed out". Give it the measured budget ` +
+    `as its second argument, \`${h.kind}(fn, GIT_SPAWN_TIMEOUT_MS)\` from src/test/tree-walk-budget.ts ` +
+    `(${budget} ms), or start fewer git processes.`
   );
 }
 
@@ -227,6 +278,7 @@ function install(root) {
   const state = {
     current: null,
     fileLevel: emptyObservation(),
+    hooks: [], // { kind, suite, timeout, gitSpawns, ms } for each hook run that started git (#563)
     locate: createLocator(root, () => registeredCheckouts(root, orig)),
   };
   const obs = () => state.current ?? state.fileLevel;
@@ -245,6 +297,7 @@ function install(root) {
     const prog = programOf(argv[0]);
     const cwd = opts.cwd ? pathOf(opts.cwd) ?? process.cwd() : process.cwd();
     if (prog === "git") {
+      obs().gitSpawns++;
       const g = parseGit(argv.slice(1), cwd);
       const where = touch(g.dir);
       if (!where) return null;
@@ -419,4 +472,67 @@ export function takeFileLevel() {
   const o = s.fileLevel;
   s.fileLevel = emptyObservation();
   return o;
+}
+
+// ── hooks (#563) ───────────────────────────────────────────────────────────────────────────────
+const HOOK_KINDS = ["beforeAll", "beforeEach", "afterEach", "afterAll"];
+const HOOK_TIMEOUT = Symbol.for("VITEST_CLEANUP_TIMEOUT"); // where @vitest/runner keeps a before-hook's timeout
+const WATCHED = Symbol.for("compy.git-spawn-hook");
+
+function watchHook(s, hook, kind, suite) {
+  const w = async function (...args) {
+    const target = s.current ?? s.fileLevel;
+    const before = target.gitSpawns;
+    const t0 = performance.now();
+    try {
+      return await hook.apply(this, args);
+    } finally {
+      const n = target.gitSpawns - before;
+      if (kind.endsWith("Each")) target.hookGitSpawns += n;
+      if (n > 0) s.hooks.push({ kind, suite, timeout: hook[HOOK_TIMEOUT], gitSpawns: n, ms: Math.round(performance.now() - t0) });
+    }
+  };
+  w[WATCHED] = true;
+  return keep(w, hook); // carries the timeout and stack-trace keys the runner reads back
+}
+
+// Wrap every hook of one test file, in place, so each hook's git processes are counted against it.
+// Called from the setup file's own beforeAll, which runs first and after collection, so every suite
+// and hook is registered. vitest iterates a suite's beforeAll hooks from the very array it keeps, so
+// the file's own top-level beforeAll hooks, still ahead in that loop, run wrapped as well. `getHooks`
+// is vitest's TestRunner.getSuiteHooks, passed in so this module stays free of the runner.
+export function watchHooks(fileSuite, getHooks) {
+  const s = globalThis[STATE];
+  if (!s || !fileSuite) return 0;
+  let watched = 0;
+  const walk = function* (suite) {
+    yield suite;
+    for (const t of suite.tasks ?? []) if (t.type === "suite") yield* walk(t);
+  };
+  for (const suite of walk(fileSuite)) {
+    const hooks = getHooks(suite);
+    for (const kind of HOOK_KINDS) {
+      const list = hooks?.[kind] ?? [];
+      for (let i = 0; i < list.length; i++) {
+        if (list[i][WATCHED]) continue;
+        list[i] = watchHook(s, list[i], kind, suite === fileSuite ? "<file>" : suite.fullName ?? suite.name);
+        watched++;
+      }
+    }
+  }
+  return watched;
+}
+
+// The hook runs recorded so far in this file (live, so a test can claim its own specimen), and the
+// same list taken and cleared at the end of the file.
+export function hookRecords() {
+  return globalThis[STATE]?.hooks ?? [];
+}
+
+export function takeHookRecords() {
+  const s = globalThis[STATE];
+  if (!s) return [];
+  const h = s.hooks;
+  s.hooks = [];
+  return h;
 }

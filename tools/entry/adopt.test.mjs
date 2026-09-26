@@ -19,6 +19,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import * as assert from "../../.claude/hooks/session-root-assert.mjs";
 import { EXPECTED_REPO, adopt, planAdoption } from "./adopt.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
 const OTHER_SESSION = "99999999-8888-7777-6666-555555555555";
@@ -174,7 +175,7 @@ describe("adopt — a real adoption in a throwaway worktree is accepted by the a
     }
   });
 
-  it("writes a record the assert then verifies as a resume", () => {
+  it("writes a record the assert then verifies as a resume", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     repo = mkdtempSync(join(tmpdir(), "compy-adopt-repo-"));
     store = mkdtempSync(join(tmpdir(), "compy-adopt-store-"));
     const git = (...args) =>

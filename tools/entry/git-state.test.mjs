@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { branchMatches, describeGitState, inspectGitState } from "./git-state.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const git = (cwd, ...args) =>
   execFileSync("git", ["-c", "user.name=guard", "-c", "user.email=guard@test", ...args], {
@@ -162,7 +163,7 @@ describe("guard 5 — every dirty class is detected on its own", () => {
     expect(s.clean).toBe(false);
   });
 
-  it("divergence in each direction, counted separately", () => {
+  it("divergence in each direction, counted separately", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     expect(inspectGitState(repos.ahead)).toMatchObject({ ahead: 1, behind: 0, clean: false });
     expect(inspectGitState(repos.behind)).toMatchObject({ ahead: 0, behind: 1, clean: false });
     expect(inspectGitState(repos.diverged)).toMatchObject({ ahead: 1, behind: 1, clean: false });
@@ -190,7 +191,7 @@ describe("guard 3 — correct folder, wrong branch", () => {
 });
 
 describe("the description is the remediation line", () => {
-  it("names each state it found, so a refusal tells Kuya what to do", () => {
+  it("names each state it found, so a refusal tells Kuya what to do", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     expect(describeGitState(inspectGitState(repos.clean))).toMatch(/clean/i);
     expect(describeGitState(inspectGitState(repos.modified))).toMatch(/1 modified/);
     expect(describeGitState(inspectGitState(repos.untracked))).toMatch(/1 untracked/);
@@ -201,7 +202,7 @@ describe("the description is the remediation line", () => {
 });
 
 describe("inspection never mutates", () => {
-  it("leaves the stash and the working tree exactly as they were", () => {
+  it("leaves the stash and the working tree exactly as they were", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const before = git(repos.stashed, "stash", "list");
     const status = git(repos.stashed, "status", "--porcelain");
     inspectGitState(repos.stashed);

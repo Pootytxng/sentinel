@@ -12,3 +12,14 @@
 // scripts/lib/tree-walk-tripwire.mjs. scripts/lib/tree-walk-tripwire-setup.mjs fails any test that
 // walks the real tree or fleet on less than this, so a new walker cannot land on the default.
 export const TREE_WALK_TIMEOUT_MS = 600_000;
+
+// #563: the timeout every test or hook that starts GIT_SPAWN_FLOOR (scripts/lib/tree-walk-tripwire.mjs)
+// or more git processes must run on, fixture repositories in os.tmpdir() included.
+//
+// Those tests walk nothing, so the budget above does not reach them, yet each git process pays for a
+// process start that the full suite's own parallelism starves. On 2026-09-24 seven of them took
+// turns failing the pre-push gate on the 15 s default, their files running 8.3 to 11.4 times slower
+// than in a 2026-09-26 census of the whole suite. The slowest git test in that census took 4.3 s; at
+// 11.4 times that is 50 s, and this leaves 2.4 times on top. Like the budget above it is a HANG
+// GUARD: nothing it checks gets weaker, and a hung test still fails, at this number.
+export const GIT_SPAWN_TIMEOUT_MS = 120_000;

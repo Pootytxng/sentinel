@@ -64,7 +64,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
+import { GIT_SPAWN_TIMEOUT_MS, TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import {
   gitRaw,
   gitRawAsync,
@@ -204,14 +204,14 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
   // This is the regression worth catching -- someone re-adding per-fixture construction -- and it
   // fails as a named number the moment that happens, under any load, on any desk. The one-time
   // seed is paid explicitly first so the measurement is of a copy alone.
-  it("a fixture costs exactly one git spawn once the template exists: the worktree repair", () => {
+  it("a fixture costs exactly one git spawn once the template exists: the worktree repair", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     fixtureTemplate();
     const before = gitSpawns;
     fixture("spawn-budget");
     expect(gitSpawns - before).toBe(1);
   });
 
-  it("a copied fixture is its own repository, not a window onto the template", () => {
+  it("a copied fixture is its own repository, not a window onto the template", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const a = fixture("independence-a");
     const b = fixture("independence-b");
 
@@ -275,7 +275,7 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
   // #512. The live walk below runs through inspectFleet, which exists only to overlap the waits on
   // git. It is allowed to be faster and nothing else, so it is held to inspectWorktree's own verdicts
   // on a fleet that yields both answers, and its cost is asserted as spawn counts, not the clock.
-  it("inspectFleet reaches inspectWorktree's verdicts, prefetching exactly its two reads per checkout side by side", async () => {
+  it("inspectFleet reaches inspectWorktree's verdicts, prefetching exactly its two reads per checkout side by side", { timeout: GIT_SPAWN_TIMEOUT_MS }, async () => {
     const a = fixture("fleet-a");
     a.armWith(a.linked, GOOD_HOOK);
     a.run(["config", "core.hooksPath", ".githooks"], a.main);
@@ -312,7 +312,7 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
     expect(peak, "the reads must actually overlap, or this is the old walk with extra steps").toBeGreaterThan(1);
   });
 
-  it("a prefetch that yields nothing falls back to the blocking read, never to a verdict", async () => {
+  it("a prefetch that yields nothing falls back to the blocking read, never to a verdict", { timeout: GIT_SPAWN_TIMEOUT_MS }, async () => {
     const f = fixture("fleet-miss");
     f.armWith(f.linked, GOOD_HOOK);
     f.run(["config", "core.hooksPath", ".githooks"], f.main);
@@ -410,7 +410,7 @@ describe("the fleet guard fails when it cannot PROVE a gate — fixture reposito
     expect(gone).toMatchObject({ ok: true, absent: true });
   });
 
-  it("an own-hook that cannot be STATTED fails, instead of licensing the bridge (review round 5)", () => {
+  it("an own-hook that cannot be STATTED fails, instead of licensing the bridge (review round 5)", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const f = fixture("ownstat");
     // The legitimate bridge: the linked checkout has no hook of its own and points at the main one.
     f.armWith(f.main, GOOD_HOOK);
@@ -537,7 +537,7 @@ describe("where a RELATIVE core.hooksPath actually resolves — the claim two do
   // red if it is ever wrong again -- on a future git, or on another platform. A comment cannot do
   // that. This can: one shared relative value, two worktrees, and an assertion about which .githooks
   // each one lands in. Measured here on git 2.55.0.windows.3.
-  it("resolves against the worktree the hook runs in, NOT the main working tree", () => {
+  it("resolves against the worktree the hook runs in, NOT the main working tree", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const f = fixture("resolution");
     f.armWith(f.main, GOOD_HOOK);
     f.armWith(f.linked, GOOD_HOOK);
@@ -603,7 +603,7 @@ describe("a leaked GIT_DIR cannot redirect the inspection", () => {
     expect(clean.PATH, "stripping PATH would stop git being found at all").toBeDefined();
   });
 
-  it("gives the same verdict with GIT_DIR set as without it", () => {
+  it("gives the same verdict with GIT_DIR set as without it", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     // What this does NOT claim: that a leaked GIT_DIR would otherwise flip this verdict. MEASURED on
     // 2026-08-31, it would not -- pointed at the main working tree it left the resolution alone,
     // because a RELATIVE core.hooksPath follows the working tree, not GIT_DIR. That measurement is

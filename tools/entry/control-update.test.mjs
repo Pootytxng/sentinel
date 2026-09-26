@@ -25,6 +25,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { planControlUpdate, readControlState, sameRepo, updateControl } from "./control-update.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
@@ -263,7 +264,7 @@ describe("what it does to a repository, and what it never does", () => {
   });
 });
 
-describe("against two real repositories", () => {
+describe("against two real repositories", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
   let root;
   let origin;
   let clone;
@@ -292,7 +293,7 @@ describe("against two real repositories", () => {
     git(root, ["clone", "-q", origin, clone]);
     git(clone, ["config", "user.email", "guard@example.invalid"]);
     git(clone, ["config", "user.name", "guard"]);
-  });
+  }, GIT_SPAWN_TIMEOUT_MS);
   afterAll(() => {
     try {
       rmSync(root, { recursive: true, force: true });
