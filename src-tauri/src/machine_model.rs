@@ -1425,7 +1425,7 @@ impl ChronologyProducers {
 
 /// Read every canonical producer once and compose. READ-ONLY by construction: each call below is a
 /// documented reader. In particular it uses `intelligence::load_store` rather than
-/// `get_intelligence_timeline` (which refreshes and writes snapshots) and
+/// `intelligence::refresh_identity_snapshots_async` (which writes snapshots) and
 /// `hwchange::persisted_baseline` rather than `get_hardware_changes` (which writes a first-run
 /// baseline). Picking the writing variant of either would silently make this module a mutator.
 pub(crate) fn build() -> MachineModel {
