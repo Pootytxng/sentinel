@@ -1,0 +1,27 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/551#issuecomment-5842521919",
+  "leaseEvidenceNote": "Landing-only claim on #551 in the separate clean worktree 576-landing, keeping the branch name codex/576-landing that Codex prepared. The author's Handoff (issuecomment-5842251616) and Codex's landing Handoff (issuecomment-5842423833) both released their claims; this carrier touches no reviewed file and not the author folder.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Every earlier lease on #551 is released. This claim names only three new transition receipt paths, which no other lane writes.",
+  "inheritedWork": true,
+  "inspection": {"repository": true, "remoteState": true, "worktree": true, "branch": true, "dirtyState": true, "liveProcesses": true},
+  "currentHead": "054848bf960c48afe6e992176d5bcf7be73cac2c",
+  "pr": 576,
+  "issue": 551,
+  "kind": "lane",
+  "branch": "codex/576-landing",
+  "mutationAuthors": ["claude-code"],
+  "mutationAuthorsNote": "Both PR #576 commits, baa177fe and 054848bf, are authored and committed by claude-code <claude-code@desk.local> (git log origin/main..054848bf). This landing carrier makes no change to the reviewed delta.",
+  "requiredGates": ["npm test", "npm run build", "cargo test --manifest-path src-tauri/Cargo.toml", "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"],
+  "gateResults": [
+    {"command": "npm test", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "evidence": "logs/verify-local-2026-09-26T02-05-26Z.log in the author folder 551-testgate-bullet, 208791 bytes, SHA-256 4cffe8d2876605c9ec96f1ea03416114c6e3797214d3937b2504f5f420dee360", "summary": "461 frontend files; 7685 passed, one expected fail, nine skipped."},
+    {"command": "npm run build", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "evidence": "Same native pre-push log and SHA-256", "summary": "Type check and production build passed."},
+    {"command": "cargo test --manifest-path src-tauri/Cargo.toml", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "evidence": "Same native pre-push log and SHA-256", "summary": "1350 passed, zero failed, 24 ignored."},
+    {"command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "evidence": "Same native pre-push log and SHA-256", "summary": "Finished clean with -D warnings."}
+  ],
+  "gateEvidenceNote": "The real native pre-push gate ran from the author folder for the push of 054848bf: the commit is stamped 02:05:19Z, the gate log starts 02:05:26Z, origin/claude/551-testgate-bullet is 054848bf, and the author's Handoff records LOCAL CHECK RESULT: PASS and push success. The log does not print the head SHA itself; that tie comes from the push. It shows scope drift OK, lease overlap OK, and the TestGate acquired and released. This carrier read the log in place and did not re-run the gate.",
+  "independentReview": {"practical": true, "reviewer": "codex", "status": "passed", "head": "054848bf960c48afe6e992176d5bcf7be73cac2c", "verdict": "PASS", "evidence": "https://github.com/Pootytxng/sentinel/pull/576#pullrequestreview-5324226946", "reviewerNote": "Codex reviewed the exact head, reproduced the earlier-missed case (run -t foo is a full non-watch suite and queues; a file argument, --changed and --shard do not), checked gate-mutex.ps1, gate-mutex.mjs and verify-local.ps1 against the bullet, and checked the native gate log. It supersedes the earlier review of baa177fe. GitHub records it as COMMENTED because the connected account cannot approve its own PR."},
+  "transition": "merge-pr",
+  "closingNote": "Merge PR #576 at the independently reviewed exact head through scripts/land-pr.mjs (merge, prune the remote head branch, fetch, disposition audit). PR #576 names no closing issue; #551 closes separately with its own close-issue receipt after this lane releases its claim."
+}
