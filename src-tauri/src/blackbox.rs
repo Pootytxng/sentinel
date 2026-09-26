@@ -1170,20 +1170,93 @@ struct ReliabilityRecord {
     product: String,
 }
 
+/// Every (channel, provider, event ids) the Event Log reader asks Windows for. ONE table: the query is
+/// built from it, and `event_log_query_is_provider_scoped` proves each pair classifies, so the reader
+/// can never again fetch by id alone and let a noisy provider crowd real incidents out (#544).
+/// `BugCheck` is the older name for the blue-screen source; current builds log it as
+/// SystemErrorReporting. Asking for an absent provider simply matches nothing.
+const EVENT_LOG_SOURCES: &[(&str, &str, &[u32])] = &[
+    ("System", "Microsoft-Windows-Kernel-Power", &[41]),
+    ("System", "EventLog", &[6008]),
+    ("System", "Microsoft-Windows-WER-SystemErrorReporting", &[1001]),
+    ("System", "BugCheck", &[1001]),
+    ("System", "Microsoft-Windows-WHEA-Logger", &[17, 18, 19]),
+    ("System", "Display", &[4101]),
+    ("Application", "Application Error", &[1000]),
+    ("Application", "Application Hang", &[1002]),
+];
+
+/// Newest matching rows read from EACH channel, so a busy Application log cannot push System's
+/// shutdowns and blue screens out of the result.
+const EVENTS_PER_CHANNEL: u32 = 40;
+
+/// Pure: the provider-scoped XPath query for one channel, or `None` when the table names no source
+/// there. Attribute values use single quotes; `event_log_script` escapes them for PowerShell.
+fn event_log_query_xml(channel: &str) -> Option<String> {
+    let selects: Vec<String> = EVENT_LOG_SOURCES
+        .iter()
+        .filter(|(c, _, _)| *c == channel)
+        .map(|(_, provider, ids)| {
+            let ids: Vec<String> = ids.iter().map(|id| format!("EventID={id}")).collect();
+            format!(
+                "<Select Path='{channel}'>*[System[Provider[@Name='{provider}'] and ({})]]</Select>",
+                ids.join(" or ")
+            )
+        })
+        .collect();
+    if selects.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "<QueryList><Query Id='0' Path='{channel}'>{}</Query></QueryList>",
+        selects.concat()
+    ))
+}
+
+/// Pure: the whole read-only reader script — one capped, provider-scoped read per channel, in table
+/// order, then the same row projection the parser has always consumed.
+fn event_log_script() -> String {
+    let mut channels: Vec<&str> = Vec::new();
+    for (channel, _, _) in EVENT_LOG_SOURCES {
+        if !channels.contains(channel) {
+            channels.push(*channel);
+        }
+    }
+    let reads: Vec<String> = channels
+        .into_iter()
+        .filter_map(event_log_query_xml)
+        .map(|xml| {
+            format!(
+                "@(Get-WinEvent -FilterXml '{}' -MaxEvents {EVENTS_PER_CHANNEL})",
+                xml.replace('\'', "''")
+            )
+        })
+        .collect();
+    format!(
+        "$ErrorActionPreference='SilentlyContinue';$e = {};{}",
+        reads.join(" + "),
+        EVENT_LOG_PROJECTION
+    )
+}
+
+/// The row projection `parse_events_json` reads: time, id, provider, message, and `props` from
+/// EventData.
+const EVENT_LOG_PROJECTION: &str = "@($e |\
+ Select-Object @{n='time';e={$_.TimeCreated.ToString('o')}}, @{n='id';e={[int]$_.Id}}, @{n='provider';e={[string]$_.ProviderName}}, @{n='message';e={[string]$_.Message}}, @{n='props';e={@($_.Properties | ForEach-Object {[string]$_.Value})}}) |\
+ ConvertTo-Json -Depth 4 -Compress";
+
 /// Read the crash/instability events Windows recorded (System + Application channels). Read-only,
 /// non-elevated, no window. Returns the parsed rows and an optional "skipped" note if the reader
 /// could not run at all (a clean machine returns an empty list, NOT a skip).
 fn collect_event_log() -> (Vec<RawEvent>, Option<String>) {
-    // Over-fetch by ID across both logs (FilterHashtable ANDs keys, ORs within a key); the pure
-    // classifier then keeps only the (provider,id) pairs it recognizes. `EventData` → `props` gives
-    // language-independent faulting app/module/code. Errors are swallowed (SilentlyContinue) so a
-    // "no events found" on a clean machine yields empty output, not a failure.
-    let script = "$ErrorActionPreference='SilentlyContinue';\
-@(Get-WinEvent -FilterHashtable @{LogName='System','Application'; Id=41,1001,17,18,19,4101,1000,1002,6008} -MaxEvents 80 |\
- Select-Object @{n='time';e={$_.TimeCreated.ToString('o')}}, @{n='id';e={[int]$_.Id}}, @{n='provider';e={[string]$_.ProviderName}}, @{n='message';e={[string]$_.Message}}, @{n='props';e={@($_.Properties | ForEach-Object {[string]$_.Value})}}) |\
- ConvertTo-Json -Depth 4 -Compress";
+    // Ask only for the (provider, id) pairs the classifier recognizes, capped PER CHANNEL. The old
+    // id-only query let 8,500+ routine "Windows Error Reporting" 1001 notices fill its single 80-row
+    // cap, so no shutdown, crash or blue screen ever reached this collector (#544). `EventData` →
+    // `props` gives language-independent faulting app/module/code. Errors are swallowed
+    // (SilentlyContinue) so "no events found" on a clean machine yields empty output, not a failure.
+    let script = event_log_script();
     let Ok(out) = crate::actions::quiet_command("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .args(["-NoProfile", "-NonInteractive", "-Command", script.as_str()])
         .output()
     else {
         return (Vec::new(), Some("Windows Event Log (couldn't run the reader)".into()));
@@ -2257,6 +2330,53 @@ mod blackbox_tests {
         assert_eq!(one.len(), 1);
         assert_eq!(one[0].source_name, "Application Error");
         assert_eq!(one[0].id, 1000);
+    }
+
+    /// #544 bug→guard: the Event Log reader asks only for provider-scoped pairs the classifier
+    /// recognizes, reaches every Event-Log incident family, and caps each channel on its own.
+    #[test]
+    fn event_log_query_is_provider_scoped() {
+        let script = event_log_script();
+        assert!(!script.contains("FilterHashtable"), "the id-only query must not return");
+        assert!(
+            !script.contains("'Windows Error Reporting'"),
+            "the routine WER bucket provider is never requested"
+        );
+        let selects: Vec<&str> = script.split("<Select ").skip(1).collect();
+        assert_eq!(selects.len(), EVENT_LOG_SOURCES.len(), "one Select per table row");
+        for select in &selects {
+            assert!(select.contains("Provider[@Name=''"), "unscoped Select: {select}");
+        }
+        let mut families: Vec<IncidentKind> = Vec::new();
+        for (_, provider, ids) in EVENT_LOG_SOURCES {
+            for id in *ids {
+                let kind = classify_incident(provider, *id)
+                    .unwrap_or_else(|| panic!("{provider}/{id} is fetched but never classifies"));
+                if !families.contains(&kind) {
+                    families.push(kind);
+                }
+            }
+        }
+        for kind in [
+            IncidentKind::GpuTimeout,
+            IncidentKind::AppCrash,
+            IncidentKind::AppHang,
+            IncidentKind::UnexpectedShutdown,
+            IncidentKind::BlueScreen,
+            IncidentKind::HardwareError,
+        ] {
+            assert!(families.contains(&kind), "{kind:?} is unreachable from the Event Log");
+        }
+        for channel in ["System", "Application"] {
+            let xml = event_log_query_xml(channel).expect("both channels are read");
+            assert_eq!(
+                xml.matches("Path='").count(),
+                xml.matches(&format!("Path='{channel}'")).count(),
+                "{channel}'s query reads only its own channel"
+            );
+        }
+        let cap = format!("-MaxEvents {EVENTS_PER_CHANNEL})");
+        assert_eq!(script.matches(&cap).count(), 2, "each channel is capped on its own");
     }
 
     // Live read-only QA harness (real rig, non-elevated): runs the three collectors + the merge
