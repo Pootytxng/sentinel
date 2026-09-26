@@ -289,7 +289,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   const ledgerIncomplete = !!knownIncomplete(health);
 
   // Which Compy changes the measured pair covers — read off the shared Machine Model (#452), not
-  // off the bare ledger list above. The model is the one reader that knows whether the ledger was
+  // off a bare ledger list. The model is the one reader that knows whether the ledger was
   // readable (`ledger_unreadable`) and which PC each row was applied on, so a change made on
   // another PC is never credited here and an unreadable record withdraws the line instead of
   // crediting the user. One read-only IPC per benchmark refresh: `state` is `refresh()`'s product,
