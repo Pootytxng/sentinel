@@ -124,7 +124,7 @@ stalling — but anything else on this PC that asks WMI will stay slow or empty 
 back. **Why it matters:** two pre-push gates went red on a kill that had already happened; the fix
 removed the dependency, only you can remove the symptom.
 
-### A_spent. Spent checkouts to remove  ·  ⏳ NEW 2026-09-01, merged with A_stale 2026-09-26  ·  [#520](https://github.com/Pootytxng/sentinel/issues/520)
+### A_spent. Spent checkouts to remove  ·  ⏳ NEW 2026-09-01, A_stale folded in 2026-09-26  ·  [#520](https://github.com/Pootytxng/sentinel/issues/520)
 
 **The ask:** from `C:\Users\Kuya\code\sentinel`, `git worktree remove` for `.claude\worktrees\compy-health-parity`, `..\sentinel-recon-261`, `..\sentinel-remote-design-286` and (`--force`) `.claude\worktrees\license-tests`: superseded or salvaged, evidence on #520. Then the other dead checkouts. That list changes daily, so ask any session for it; it re-derives it with `node scripts/fleet-snapshot.mjs` (nothing on no remote, no open PR). Branches survive removal, and removal is denied to sessions. **Why it matters:** `git worktree list` is how every session learns what is live, and each dead folder in it is a false lead.
 
