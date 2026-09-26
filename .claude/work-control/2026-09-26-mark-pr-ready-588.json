@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/292#issuecomment-5847838406",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/588#issuecomment-5847767038",
+    "status": "passed",
+    "reviewerNote": "Local Codex CLI (gpt-5.6-sol, read-only sandbox) reviewed the exact pushed head: the temp-file cleanup order in atomic_write.rs, the cfg(test) failure seam, the clear-license error path on a share-locked file, the byte-named cap, and that verification, the placeholder key, the armed gate and transport are untouched. Six findings, all severity NONE. It authored no mutation.",
+    "head": "dc2b87e4382df9dcbcb7d196a0635a0d1873080e"
+  },
+  "branch": "claude/292-license-storage-gaps",
+  "overlapExclusiveNote": "The landing claim holds only this lane's three new receipt paths; no other live claim owns them and no source path is edited.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "dc2b87e4382df9dcbcb7d196a0635a0d1873080e",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "461 frontend files, 7699 passed, one expected failure, nine skipped.",
+      "evidence": "logs/verify-local-2026-09-26T15-11-22Z.log; SHA-256 FAF7FE543CB1AA7E500A8266EF6A30BB4F01B450DED83F24AF9F14057A1B5BC8; push log logs/push292.log (LOCAL CHECK RESULT: PASS, new branch pushed at the exact head)",
+      "head": "dc2b87e4382df9dcbcb7d196a0635a0d1873080e"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-26T15-11-22Z.log; SHA-256 FAF7FE543CB1AA7E500A8266EF6A30BB4F01B450DED83F24AF9F14057A1B5BC8; push log logs/push292.log (LOCAL CHECK RESULT: PASS, new branch pushed at the exact head)",
+      "head": "dc2b87e4382df9dcbcb7d196a0635a0d1873080e"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1355 passed, zero failed: 1351 on main plus the 4 new tests.",
+      "evidence": "logs/verify-local-2026-09-26T15-11-22Z.log; SHA-256 FAF7FE543CB1AA7E500A8266EF6A30BB4F01B450DED83F24AF9F14057A1B5BC8; push log logs/push292.log (LOCAL CHECK RESULT: PASS, new branch pushed at the exact head)",
+      "head": "dc2b87e4382df9dcbcb7d196a0635a0d1873080e"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-26T15-11-22Z.log; SHA-256 FAF7FE543CB1AA7E500A8266EF6A30BB4F01B450DED83F24AF9F14057A1B5BC8; push log logs/push292.log (LOCAL CHECK RESULT: PASS, new branch pushed at the exact head)",
+      "head": "dc2b87e4382df9dcbcb7d196a0635a0d1873080e"
+    }
+  ],
+  "issue": 292,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Landing-only claim after the implementation claim was released.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push created the branch at the exact PR head; nothing was pushed after it.",
+  "pr": 588,
+  "mutationAuthorsNote": "claude-code authored the single source commit. Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "mark-pr-ready",
+  "closingNote": "Mark draft PR #588 ready at the independently reviewed exact pushed head; merge requires its own receipt."
+}
