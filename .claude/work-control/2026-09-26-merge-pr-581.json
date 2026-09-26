@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/579#issuecomment-5845690303",
+  "mutationAuthors": [
+    "codex"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "chatgpt-hq",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/581#pullrequestreview-5325693859",
+    "status": "passed",
+    "reviewerNote": "Separate ChatGPT Work context reviewed all PR comments including the prior CHANGES REQUIRED finding, independently falsified missing-brief, bad-hash, trusted-brief and inherited-identity paths, verified the gate log and issued an exact-head PASS. GitHub records COMMENTED because the connected account owns the PR.",
+    "head": "3b21457d773496b3a7bdded80ef85d62abf49d10"
+  },
+  "transition": "merge-pr",
+  "closingNote": "Land PR #581 through scripts/land-pr.mjs. closingIssuesReferences is empty; #579 closes only after a separate receipt and proof on main.",
+  "branch": "codex/579-no-brief-context",
+  "overlapExclusiveNote": "These are three new per-transition receipt paths; no other live claim owns them and no source path is edited.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "3b21457d773496b3a7bdded80ef85d62abf49d10",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "461 frontend files, 7695 passed, one expected failure, nine skipped.",
+      "evidence": "logs/verify-local-2026-09-26T10-48-52Z.log; raw bytes PR #581 comment 5845644020; SHA-256 0F6E5E7997741A8334A9B283C383A7E541ACAD2B4B011EE3E14F7DE890050753",
+      "head": "3b21457d773496b3a7bdded80ef85d62abf49d10"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-26T10-48-52Z.log; raw bytes PR #581 comment 5845644020; SHA-256 0F6E5E7997741A8334A9B283C383A7E541ACAD2B4B011EE3E14F7DE890050753",
+      "head": "3b21457d773496b3a7bdded80ef85d62abf49d10"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1350 passed, zero failed, 24 ignored.",
+      "evidence": "logs/verify-local-2026-09-26T10-48-52Z.log; raw bytes PR #581 comment 5845644020; SHA-256 0F6E5E7997741A8334A9B283C383A7E541ACAD2B4B011EE3E14F7DE890050753",
+      "head": "3b21457d773496b3a7bdded80ef85d62abf49d10"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-26T10-48-52Z.log; raw bytes PR #581 comment 5845644020; SHA-256 0F6E5E7997741A8334A9B283C383A7E541ACAD2B4B011EE3E14F7DE890050753",
+      "head": "3b21457d773496b3a7bdded80ef85d62abf49d10"
+    }
+  ],
+  "issue": 579,
+  "inheritedWork": true,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Landing-only receipt claim after the two-file implementation claim was released.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and push exited zero at the exact PR head. ChatGPT HQ decoded the raw log and verified its SHA-256, scope, lease, frontend suite/build, Rust suite, clippy and TestGate release.",
+  "pr": 581,
+  "mutationAuthorsNote": "Codex authored the single hook-and-test source commit. ChatGPT HQ authored no mutation.",
+  "actor": "codex"
+}
