@@ -33,22 +33,34 @@ import ts from "typescript";
 //      sibling or code outside `src/` could otherwise hand a renamed `invoke` to a screen where no
 //      rule looks, and a module named by a value cannot be checked. So every module a production
 //      file loads is named by a literal and is a production file or a registry package that
-//      package.json declares. The resolver maps no other name: no alias, no tsconfig `paths`, and
-//      one known plugin. Nothing loads code by URL (workers, worklets, script or frame elements).
-//      The build serves nothing else that runs: `index.html` holds only the entry script, `public/`
-//      holds only images and fonts, and the CSP takes no script, worker or frame from anywhere but
-//      the app itself (#582, at 74b64745).
+//      package.json declares. The resolver maps no other name: no alias, no tsconfig `paths`, no
+//      JSX pragma, and one known plugin whose name nothing else in the config can take. Nothing
+//      loads code by URL (workers, worklets, script or frame elements). The build serves nothing
+//      else that runs: `index.html` holds only the entry script, `public/` holds only images and
+//      fonts, and the CSP takes no script, worker or frame from anywhere but the app itself (#582,
+//      at 74b64745). The build runs only the commands pinned here, with no npm lifecycle script,
+//      and Tauri reads one config file, whose frontend folder, window pages and security settings
+//      are pinned. The Rust side opens no other page and runs no other script in a webview (#582,
+//      at 4d8f2900).
 //   Every rule reads the TypeScript syntax tree, not the text. A comment, a regex or JSX text is
 //   what the compiler says it is, and a string or a name is read as the value it runs as, escapes
 //   included. Reading the text by hand let a `"//"` inside a string blank the code after it (#582,
-//   at f4ef8dd3).
+//   at f4ef8dd3). Two reads are text on purpose: a JSX pragma lives in a comment, and Rust is read
+//   only for the webview calls named below.
+//
+// Where a page navigates is no way around rule 7. A remote page gets no IPC: Tauri 2.11 refuses a
+// custom command from a non-local origin unless a capability names that origin, and none does
+// (pinned below). A local page can only be a file the build serves, which the pins above hold.
+// Screens are still kept from navigating by the ordinary names (`location`, `navigation`, `open`,
+// links, form actions, `<meta>` and `<base>`), so the app never leaves itself.
 //
 // What it cannot decide: a global looked up under a key built from pieces while the code runs. The
 // syntax tree cannot follow a value through execution, so review catches that. Code built from a
 // string (`eval`, `new Function`, a string timer, an inline handler) does not run in the shipped
 // app, because its CSP (`script-src 'self'`, pinned by csp-lockdown-guard) refuses it. The looser
-// dev CSP never ships. Everything written the ordinary way, and every construction or escape form a
-// review has named, is decided here.
+// dev CSP never ships. Registry packages and Tauri plugins, scripts included, are trusted at the
+// versions and hashes their lockfiles pin. Everything written the ordinary way, and every
+// construction or escape form a review has named, is decided here.
 //
 // The corpus is INVERTED on purpose (walk everything, exempt explicitly), the lesson the
 // mutation-boundary guard learned: a new surface is in scope the moment it exists. Test files and
@@ -306,6 +318,44 @@ const DECLARED = new Set(Object.keys(DEPENDENCIES));
 const URL_LOADERS = new Set(["Worker", "SharedWorker", "serviceWorker", "importScripts", "addModule", "createContextualFragment", "srcdoc", "srcDoc"]);
 const CODE_ELEMENTS = new Set(["script", "iframe", "frame", "frameset", "object", "embed", "portal", "fencedframe"]);
 
+// Where a page can be sent: the link and form targets, the window objects whose `location`,
+// `navigation` and `open` move the page, and the elements that send it elsewhere or change where its
+// links go.
+const NAVIGATES = new Set(["href", "xlinkHref", "formAction"]);
+const WINDOWS = new Set(["window", "globalThis", "self", "top", "parent", "frames", "opener", "document"]);
+const NAV_ELEMENTS = new Set(["a", "area", "meta", "base"]);
+
+// A window object: `window`, `document` and their kin, directly or as a member (`window.document`).
+function isWindow(node: ts.Node): boolean {
+  if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node)) return isWindow(node.expression);
+  const name = ts.isIdentifier(node) ? node.text : ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) ? nameOf(ts.isPropertyAccessExpression(node) ? node.name : node.argumentExpression) : undefined;
+  return name !== undefined && WINDOWS.has(name);
+}
+
+// The member expression when a name is read off a window object (`window.location`, `top["open"]`).
+function onWindow(node: ts.Node): ts.Expression | undefined {
+  const up = node.parent;
+  const member = (ts.isPropertyAccessExpression(up) && up.name === node) || (ts.isElementAccessExpression(up) && up.argumentExpression === node);
+  return member && isWindow(up.expression) ? up : undefined;
+}
+
+// An identifier that names a value where it stands: not a property, a key, a declared name, an
+// attribute or a type.
+function isReference(node: ts.Identifier): boolean {
+  const up = node.parent;
+  if (ts.isPropertyAccessExpression(up)) return up.expression === node;
+  if (ts.isShorthandPropertyAssignment(up)) return true;
+  if (ts.isQualifiedName(up) || ts.isTypeReferenceNode(up) || ts.isJsxAttribute(up) || ts.isImportSpecifier(up) || ts.isExportSpecifier(up)) return false;
+  if (ts.isBindingElement(up) && up.propertyName === node) return false;
+  return (up as { name?: ts.Node }).name !== node;
+}
+
+// `location.reload()`: the page loads itself again.
+function reloads(at: ts.Node): boolean {
+  const up = at.parent;
+  return ts.isPropertyAccessExpression(up) && up.expression === at && up.name.text === "reload" && ts.isCallExpression(up.parent) && up.parent.expression === up;
+}
+
 // Rule 7, per file: each load that names code outside the corpus, names no file, names a package
 // nobody declared, or is not written as a literal at all, and each way to load code by URL.
 // Rule 6 holds the Tauri API itself.
@@ -332,11 +382,37 @@ export function loads(source: string, file: string): string[] {
     if (name === "createElement" || name === "createElementNS") {
       const call = calleeCall(node);
       const tag = call?.arguments?.[name === "createElementNS" ? 1 : 0];
-      const text = tag && plainText(tag);
-      if (text === undefined || CODE_ELEMENTS.has(text.toLowerCase())) bad.add(`${lineOf(tree, node)} (an element that can load code)`);
+      const text = tag && plainText(tag)?.toLowerCase();
+      if (text === undefined || CODE_ELEMENTS.has(text) || NAV_ELEMENTS.has(text) || text === "form") {
+        bad.add(`${lineOf(tree, node)} (an element that can load code or send the page elsewhere)`);
+      }
     }
-    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && ts.isIdentifier(node.tagName) && CODE_ELEMENTS.has(node.tagName.text.toLowerCase())) {
-      bad.add(`${lineOf(tree, node)} (an element that loads code by URL)`);
+    // Navigation: the page's `location` or `navigation`, reached bare or on a window object (a
+    // reload excepted), `open` on a window object or called bare, and a link or form target.
+    if (name === "location" || name === "navigation") {
+      const at = onWindow(node) ?? (ts.isIdentifier(node) && isReference(node) ? node : undefined);
+      if (at && !reloads(at)) bad.add(`${lineOf(tree, node)} (${name} can send the page elsewhere)`);
+    }
+    if (name !== undefined && NAVIGATES.has(name)) bad.add(`${lineOf(tree, node)} (${name} can send the page elsewhere)`);
+    if (name === "open" && (onWindow(node) || (ts.isIdentifier(node) && ts.isCallExpression(node.parent) && node.parent.expression === node))) {
+      bad.add(`${lineOf(tree, node)} (open can open another page)`);
+    }
+    if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+      // `const { location } = window`
+      const key = nameOf(node.propertyName ?? node.name) ?? (node.propertyName && plainText(node.propertyName));
+      const from = ts.isVariableDeclaration(node.parent.parent) ? node.parent.parent.initializer : undefined;
+      if (key !== undefined && from && isWindow(from) && (key === "location" || key === "navigation" || key === "open")) {
+        bad.add(`${lineOf(tree, node)} (${key} can send the page elsewhere)`);
+      }
+    }
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && ts.isIdentifier(node.tagName)) {
+      const tag = node.tagName.text.toLowerCase();
+      // A capitalised tag is a component (`<Area>` is a chart), and only a lower-case one is the element.
+      const intrinsic = /^[a-z]/.test(node.tagName.text);
+      if (CODE_ELEMENTS.has(tag)) bad.add(`${lineOf(tree, node)} (an element that loads code by URL)`);
+      if (intrinsic && NAV_ELEMENTS.has(tag)) bad.add(`${lineOf(tree, node)} (an element that sends the page elsewhere)`);
+      const action = node.attributes.properties.some((attr) => ts.isJsxAttribute(attr) && ts.isIdentifier(attr.name) && attr.name.text === "action");
+      if (intrinsic && tag === "form" && action) bad.add(`${lineOf(tree, node)} (a form that submits to another page)`);
     }
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) check(node.moduleSpecifier, node);
     else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) check(node.moduleReference.expression, node);
@@ -349,6 +425,11 @@ export function loads(source: string, file: string): string[] {
       if (!env) bad.add(`${lineOf(tree, node)} (import.meta can load files no list names)`);
     }
   });
+  // A JSX pragma (`@jsxImportSource ../test`) names the module the file's JSX compiles to, and it
+  // lives in a comment, so it is read as text. A string that spells one fails too, which is safe.
+  for (const match of source.matchAll(/@jsx\w*/g)) {
+    bad.add(`line ${tree.getLineAndCharacterOfPosition(match.index ?? 0).line + 1} (${match[0]} picks the module JSX loads)`);
+  }
   return [...bad];
 }
 
@@ -364,12 +445,30 @@ function listFiles(dir: string): string[] {
 
 const TAURI = JSON.parse(readFileSync(join("src-tauri", "tauri.conf.json"), "utf8")) as {
   build?: Record<string, string>;
-  app?: { security?: { csp?: Record<string, string>; capabilities?: unknown[] } };
+  app?: {
+    windows?: { url?: string }[];
+    security?: { csp?: Record<string, string>; capabilities?: unknown[] };
+  };
 };
 
 // The Vite settings this pin has read. A new one can change what a name resolves to or what the
 // build serves.
 const VITE_KEYS = new Set(["plugins", "clearScreen", "server", "port", "strictPort", "host", "hmr", "protocol", "watch", "ignored"]);
+// Every other name vite.config.ts may use. A helper, a class or a second `react` would be a new name.
+const VITE_NAMES = new Set([...VITE_KEYS, "defineConfig", "react", "host", "process", "env", "TAURI_DEV_HOST", "undefined"]);
+
+// npm runs these on its own: around any script it is asked to run (`prebuild`, `postbuild`), and on
+// install, so one could rewrite the build before or after it.
+const LIFECYCLE = new Set(["preinstall", "install", "postinstall", "preprepare", "prepare", "postprepare", "prepack", "postpack", "prepublish", "dependencies"]);
+
+// The Rust calls that pick a webview's page or run script in it. Each place one appears is pinned
+// by its text, so a new one fails until a review adds it.
+const WEBVIEW_CALL = /\b(?:WebviewWindowBuilder|WebviewBuilder|WindowBuilder|WebviewUrl)\b|[.:]\s*(?:eval|eval_with_callback|navigate|with_webview|set_url|add_child|from_config|on_web_resource_request|register_(?:asynchronous_)?uri_scheme_protocol)\b|initialization_script/;
+const WEBVIEW_LINES = [
+  `${join("src-tauri", "src", "monitoring.rs")}: let _ = w.eval("window.location.reload()");`,
+  `${join("src-tauri", "src", "tray.rs")}: use tauri::{WebviewUrl, WebviewWindowBuilder};`,
+  `${join("src-tauri", "src", "tray.rs")}: let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))`,
+];
 
 // public/ is copied into the build as it is and served beside the bundle, so it holds only files
 // that cannot run: images and fonts, and SVG with no script in it.
@@ -485,20 +584,102 @@ describe("screens read machine truth through the Machine Model, never around it"
     const only = plugins && ts.isArrayLiteralExpression(plugins) && plugins.elements.length === 1 ? plugins.elements[0] : undefined;
     const reactOnly = !!only && ts.isCallExpression(only) && only.arguments.length === 0 && ts.isIdentifier(only.expression) && only.expression.text === react;
     expect(reactOnly, "the one Vite plugin is react(), with no options").toBe(true);
-    // tsconfig `paths`, `baseUrl` and `rootDirs` are aliases to any resolver told to read them, and
-    // `extends` can bring them in from elsewhere.
+    // `react()` must be the imported plugin, so nothing may declare the name again or build a
+    // plugin by hand: each name is declared once, the one function is the config, there is no class,
+    // and every name used is one this pin has read (#582, at 4d8f2900).
+    const declared: string[] = [];
+    const names = new Set<string>();
+    let functions = 0;
+    let classes = 0;
+    walk(config, (node) => {
+      const name = nameOf(node);
+      if (name !== undefined) names.add(name);
+      if (ts.isFunctionLike(node)) functions += 1;
+      if (ts.isClassLike(node)) classes += 1;
+      const up = node.parent;
+      const declares =
+        !!up &&
+        (ts.isVariableDeclaration(up) || ts.isBindingElement(up) || ts.isParameter(up) || ts.isFunctionDeclaration(up) ||
+          ts.isFunctionExpression(up) || ts.isClassDeclaration(up) || ts.isClassExpression(up) || ts.isImportClause(up) ||
+          ts.isImportSpecifier(up) || ts.isNamespaceImport(up) || ts.isImportEqualsDeclaration(up) || ts.isEnumDeclaration(up) ||
+          ts.isModuleDeclaration(up)) &&
+        (up as { name?: ts.Node }).name === node;
+      if (declares && ts.isIdentifier(node)) declared.push(node.text);
+    });
+    expect(declared.sort(), "vite.config.ts declares defineConfig, react and host, once each").toEqual(["defineConfig", "host", "react"]);
+    expect({ functions, classes }, "vite.config.ts holds one function, the config, and no class").toEqual({ functions: 1, classes: 0 });
+    expect([...names].filter((name) => !VITE_NAMES.has(name)), "vite.config.ts uses a name this pin has not read").toEqual([]);
+    // tsconfig `paths`, `baseUrl` and `rootDirs` are aliases to any resolver told to read them,
+    // `extends` can bring them in from elsewhere, and a JSX import source names the module JSX
+    // compiles to. tsc emits nothing, so the build reads no file it wrote.
     for (const name of readdirSync(".").filter((file) => /^tsconfig.*\.json$/.test(file))) {
       const tsconfig = ts.parseConfigFileTextToJson(name, readFileSync(name, "utf8")).config ?? {};
       const options = tsconfig.compilerOptions ?? {};
-      const maps = [...("extends" in tsconfig ? ["extends"] : []), ...["paths", "baseUrl", "rootDirs"].filter((key) => key in options)];
+      const maps = [
+        ...("extends" in tsconfig ? ["extends"] : []),
+        ...["paths", "baseUrl", "rootDirs", "jsxImportSource", "jsxFactory", "jsxFragmentFactory"].filter((key) => key in options),
+      ];
       expect(maps, `${name} maps module names`).toEqual([]);
     }
+    const root = ts.parseConfigFileTextToJson("tsconfig.json", readFileSync("tsconfig.json", "utf8")).config ?? {};
+    expect(root.compilerOptions?.noEmit, "tsc, run by the build, emits nothing").toBe(true);
+    // Vite also loads a PostCSS config, and a Babel config through the React plugin; either runs
+    // code during the build.
+    const buildConfigs = readdirSync(".").filter((file) => /^(?:\.?postcss|\.postcssrc|babel\.config|\.babelrc)/i.test(file));
+    expect(buildConfigs, "the build loads no PostCSS or Babel config").toEqual([]);
+    // package.json holds nothing that remaps a name (`imports`, `browser`, `overrides`, workspaces)
+    // or configures a build tool.
+    expect(Object.keys(PACKAGE).sort(), "package.json holds only the fields this pin has read").toEqual(
+      ["dependencies", "devDependencies", "name", "private", "scripts", "type", "version"],
+    );
     // A declared name must be the registry's: not a local folder, a git ref, a URL or an npm alias.
     const unregistered = Object.entries(DEPENDENCIES).filter(([, range]) => !/^[\^~]?\d/.test(range)).map(([name, range]) => `${name}: ${range}`);
     expect(unregistered, "every dependency is a registry version range").toEqual([]);
-    // And no build command points Vite at another config.
-    const commands = [PACKAGE.scripts?.build, PACKAGE.scripts?.dev, TAURI.build?.beforeBuildCommand, TAURI.build?.beforeDevCommand];
-    expect(commands.filter((cmd) => /(?:^|\s)(?:-c|--config)(?:\s|=|$)/.test(cmd ?? "")), "a build command names another Vite config").toEqual([]);
+    // And what npm installs is the registry's, at a pinned hash, with no npm setting to change that.
+    const lock = JSON.parse(readFileSync("package-lock.json", "utf8")) as { packages: Record<string, { resolved?: string; integrity?: string; link?: boolean }> };
+    const unpinned = Object.entries(lock.packages)
+      .filter(([path, entry]) => path !== "" && (entry.link || !entry.resolved?.startsWith("https://registry.npmjs.org/") || !entry.integrity))
+      .map(([path]) => path);
+    expect(unpinned, "every locked package comes from the npm registry with an integrity hash").toEqual([]);
+    const npmrc = existsSync(".npmrc") ? readFileSync(".npmrc", "utf8").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !/^[#;]/.test(line)) : [];
+    expect(npmrc, ".npmrc sets only include=dev").toEqual(["include=dev"]);
+  });
+
+  it("the build runs only the commands read here, and Tauri serves only the built frontend", () => {
+    // Each step of `npm run tauri build`, and no npm hook around any of them (#582, at 4d8f2900).
+    const scripts = PACKAGE.scripts ?? {};
+    expect({ build: scripts.build, dev: scripts.dev, tauri: scripts.tauri }).toEqual({ build: "tsc && vite build", dev: "vite", tauri: "tauri" });
+    const hooks = Object.keys(scripts).filter((name) => LIFECYCLE.has(name) || (/^(?:pre|post)/.test(name) && name.replace(/^(?:pre|post)/, "") in scripts));
+    expect(hooks, "no npm lifecycle script runs around the build").toEqual([]);
+    // Tauri merges a platform file (tauri.windows.conf.json) or reads a JSON5 or TOML config in
+    // place of this one, so tauri.conf.json is the only one.
+    const tauriConfigs = readdirSync("src-tauri").filter((file) => /^tauri\b.*\.(?:json5?|toml)$/i.test(file));
+    expect(tauriConfigs, "src-tauri holds one Tauri config, tauri.conf.json").toEqual(["tauri.conf.json"]);
+    expect(TAURI.build).toEqual({
+      beforeDevCommand: "npm run dev",
+      devUrl: "http://localhost:1420",
+      beforeBuildCommand: "npm run build",
+      frontendDist: "../dist",
+    });
+    // No build script hands Tauri another config.
+    const handed = listFiles("scripts")
+      .filter((file) => !/\.test\./.test(file) && /\.(?:ps1|[cm]?js|sh|cmd|bat)$/i.test(file))
+      .flatMap((file) => readFileSync(file, "utf8").split(/\r?\n/).filter((line) => /TAURI_CONFIG|tauri\s+build\b.*\s(?:-c|--config)\b/.test(line)).map((line) => `${file}: ${line.trim()}`));
+    expect(handed, "no script passes Tauri another config").toEqual([]);
+    const buildRs = readFileSync(join("src-tauri", "build.rs"), "utf8");
+    expect(buildRs.includes("TAURI_CONFIG"), "build.rs sets no Tauri config").toBe(false);
+    // Every window opens the app's own page.
+    const pages = (TAURI.app?.windows ?? []).map((w) => w.url).filter((url) => url !== undefined && url !== "index.html");
+    expect(pages, "every window opens index.html").toEqual([]);
+    // The security block holds the two CSPs and nothing else: no isolation app, no inline
+    // capability, no header or asset setting this pin has not read.
+    expect(Object.keys(TAURI.app?.security ?? {}).sort(), "tauri.conf.json security holds csp and devCsp only").toEqual(["csp", "devCsp"]);
+    // And the Rust side opens no other page and runs no other script in a webview.
+    const rust = listFiles(join("src-tauri", "src")).filter((file) => file.endsWith(".rs"));
+    const webview = rust.flatMap((file) =>
+      readFileSync(file, "utf8").split(/\r?\n/).filter((line) => WEBVIEW_CALL.test(line)).map((line) => `${file}: ${line.trim()}`),
+    );
+    expect(webview.sort(), "a Rust webview call is new: check the page it opens and the script it runs, then pin it").toEqual([...WEBVIEW_LINES].sort());
   });
 
   it("the shipped build serves no code beyond the bundle, and runs none it builds at run time", () => {
@@ -515,6 +696,9 @@ describe("screens read machine truth through the Machine Model, never around it"
     // it. csp-lockdown-guard pins default-src and script-src; the fallbacks are held here.
     const csp = TAURI.app?.security?.csp;
     expect(typeof csp, "the shipped CSP is a directive object").toBe("object");
+    // A browser reads a directive name in any case, so `Worker-Src` is worker-src; every name is
+    // written in lower case so the lookups below see it (#582, at 4d8f2900).
+    expect(Object.keys(csp ?? {}).filter((d) => !/^[a-z-]+$/.test(d)), "CSP directive names are lower case").toEqual([]);
     const open = CODE_DIRECTIVES.filter((d) => csp && d in csp && csp[d].split(/\s+/).some((t) => t && t !== "'self'" && t !== "'none'"));
     expect(open.map((d) => `${d}: ${csp?.[d]}`), "the CSP takes scripts, workers and frames from the app itself only").toEqual([]);
     // A remote origin with the IPC would run code no file here holds.
@@ -706,6 +890,25 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loads("const make = document.createElement;", screen)).toHaveLength(1);
     expect(loads('const f = <iframe src="/bridge.html" />;', screen)).toHaveLength(1);
     expect(loads('const s = <script src="/bridge.js"></script>;', screen)).toHaveLength(1);
+    // A JSX pragma picks the module JSX compiles to, from a comment (#582, at 4d8f2900).
+    expect(loads("/** @jsxImportSource ../test */\nconst x = <div />;", screen)).toHaveLength(1);
+    // Navigation, by the ordinary names (#582, at 4d8f2900).
+    expect(loads('location.assign("https://x");', screen)).toHaveLength(1);
+    expect(loads("window.location.href = u;", screen)).toHaveLength(2);
+    expect(loads("document.location = u;", screen)).toHaveLength(1);
+    expect(loads("navigation.navigate(u);", screen)).toHaveLength(1);
+    expect(loads("window.open(u);", screen)).toHaveLength(1);
+    expect(loads('window["open"](u);', screen)).toHaveLength(1);
+    expect(loads("open(u);", screen)).toHaveLength(1);
+    expect(loads('const a = <a href="https://x">x</a>;', screen)).toHaveLength(2);
+    expect(loads('const m = <meta httpEquiv="refresh" content="0;url=https://x" />;', screen)).toHaveLength(1);
+    expect(loads("const b = <base href={u} />;", screen)).toHaveLength(2);
+    expect(loads("const f = <form action={u} />;", screen)).toHaveLength(1);
+    expect(loads("const b = <button formAction={u} />;", screen)).toHaveLength(1);
+    expect(loads('const a = document.createElement("a");', screen)).toHaveLength(1);
+    expect(loads('const f = document.createElement("form");', screen)).toHaveLength(1);
+    expect(loads("window.document.location = u;", screen)).toHaveLength(1);
+    expect(loads("const { location: l } = window;", screen)).toHaveLength(1);
     // What real code does passes: a corpus file by any of its specifiers, an asset, a package.
     expect(loads('import { x } from "./data/machine-model";', app)).toEqual([]);
     expect(loads('import { x } from "./data/machine-model.js";', app)).toEqual([]);
@@ -718,6 +921,13 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loads('import * as THREE from "three";', app)).toEqual([]);
     expect(loads('const style = document.createElement("style");', app)).toEqual([]);
     expect(loads("const box = <section className={css} />;", app)).toEqual([]);
+    expect(loads("const f = <form className={css} onSubmit={add} />;", app)).toEqual([]);
+    expect(loads("dialog.open();", app)).toEqual([]);
+    expect(loads("const [open, setOpen] = useState(false);\nif (open) setOpen(!open);", app)).toEqual([]);
+    expect(loads("const tile = <BentoTile open={{ label }} />;", app)).toEqual([]);
+    expect(loads("const retry = () => window.location.reload();", app)).toEqual([]);
+    expect(loads("const row = { location: bundle.location };\nconst { location } = bundle;\ntype T = { location: string };", app)).toEqual([]);
+    expect(loads("const chart = <Area values={v} id=\"cpu\" />;", app)).toEqual([]);
   });
 
   it("a planted direct reader in any other screen is a violation", () => {
