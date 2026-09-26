@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { dirname, join } from "path";
 import ts from "typescript";
+import { TREE_WALK_TIMEOUT_MS } from "./test/tree-walk-budget";
 
 // MACHINE-MODEL READER GUARD (#453 — Phase 2 of #385, slice 5).
 //
@@ -40,27 +41,37 @@ import ts from "typescript";
 //      fonts, and the CSP takes no script, worker or frame from anywhere but the app itself (#582,
 //      at 74b64745). The build runs only the commands pinned here, with no npm lifecycle script,
 //      and Tauri reads one config file, whose frontend folder, window pages and security settings
-//      are pinned. The Rust side opens no other page and runs no other script in a webview (#582,
-//      at 4d8f2900).
+//      are pinned (#582, at 4d8f2900). No script body, and no script or hook in the repo, hands
+//      Tauri another config (`--config`, `-c` or `TAURI_CONFIG`). Cargo reads no config but its
+//      audit file, patches or replaces no crate, and every crate in Cargo.lock comes from crates.io
+//      with a checksum. The Rust side opens no other page and runs no other script in a webview:
+//      every Rust file is read as tokens, each webview call is pinned whole with its arguments, and
+//      no Rust file pulls in source by `include!` or `#[path]` (#582, at 63c57f30).
 //   Every rule reads the TypeScript syntax tree, not the text. A comment, a regex or JSX text is
 //   what the compiler says it is, and a string or a name is read as the value it runs as, escapes
 //   included. Reading the text by hand let a `"//"` inside a string blank the code after it (#582,
-//   at f4ef8dd3). Two reads are text on purpose: a JSX pragma lives in a comment, and Rust is read
-//   only for the webview calls named below.
+//   at f4ef8dd3). Three reads are not TypeScript on purpose: a JSX pragma lives in a comment, the
+//   build scripts are read as lines for the config flags, and Rust is read as tokens (comments
+//   dropped, strings kept whole) for the webview calls named below.
 //
 // Where a page navigates is no way around rule 7. A remote page gets no IPC: Tauri 2.11 refuses a
 // custom command from a non-local origin unless a capability names that origin, and none does
 // (pinned below). A local page can only be a file the build serves, which the pins above hold.
-// Screens are still kept from navigating by the ordinary names (`location`, `navigation`, `open`,
-// links, form actions, `<meta>` and `<base>`), so the app never leaves itself.
+// Those two are the boundary. The navigation names (`location`, `navigation`, `open`, links, form
+// actions, `<meta>`, `<base>` and the ways to reach a window) are defense in depth: they keep the
+// app from leaving itself in the ordinary ways, and a way this list misses still lands on a page
+// with no IPC or on a file the pins hold.
 //
 // What it cannot decide: a global looked up under a key built from pieces while the code runs. The
 // syntax tree cannot follow a value through execution, so review catches that. Code built from a
 // string (`eval`, `new Function`, a string timer, an inline handler) does not run in the shipped
 // app, because its CSP (`script-src 'self'`, pinned by csp-lockdown-guard) refuses it. The looser
 // dev CSP never ships. Registry packages and Tauri plugins, scripts included, are trusted at the
-// versions and hashes their lockfiles pin. Everything written the ordinary way, and every
-// construction or escape form a review has named, is decided here.
+// versions and hashes their lockfiles pin. A Rust name a macro builds from pieces is not a token
+// this guard can see, so review catches that too. The machine the build runs on is outside the
+// repo: a `TAURI_CONFIG` set in its shell, or a `~/.cargo` or `CARGO_HOME` config, is the
+// builder's to keep clean. Everything written the ordinary way, and every construction or escape
+// form a review has named, is decided here.
 //
 // The corpus is INVERTED on purpose (walk everything, exempt explicitly), the lesson the
 // mutation-boundary guard learned: a new surface is in scope the moment it exists. Test files and
@@ -320,9 +331,13 @@ const CODE_ELEMENTS = new Set(["script", "iframe", "frame", "frameset", "object"
 
 // Where a page can be sent: the link and form targets, the window objects whose `location`,
 // `navigation` and `open` move the page, and the elements that send it elsewhere or change where its
-// links go.
+// links go. A window is also reached from a document, an element or an event (`defaultView`,
+// `ownerDocument`, `contentWindow`, `view`), so those names count as one (#582, at 63c57f30).
 const NAVIGATES = new Set(["href", "xlinkHref", "formAction"]);
-const WINDOWS = new Set(["window", "globalThis", "self", "top", "parent", "frames", "opener", "document"]);
+const WINDOWS = new Set([
+  "window", "globalThis", "self", "top", "parent", "frames", "opener", "document",
+  "defaultView", "ownerDocument", "contentWindow", "view",
+]);
 const NAV_ELEMENTS = new Set(["a", "area", "meta", "base"]);
 
 // A window object: `window`, `document` and their kin, directly or as a member (`window.document`).
@@ -435,11 +450,12 @@ export function loads(source: string, file: string): string[] {
 
 // ── What the shipped build resolves and serves (rule 7) ─────────────────────────────────────────
 
-// Every file under a folder, at any depth.
-function listFiles(dir: string): string[] {
+// Every file under a folder, at any depth, past the folders named in `skip`.
+function listFiles(dir: string, skip: ReadonlySet<string> = new Set()): string[] {
   return readdirSync(dir).flatMap((name) => {
     const rel = join(dir, name);
-    return statSync(rel).isDirectory() ? listFiles(rel) : [rel];
+    if (skip.has(rel)) return [];
+    return statSync(rel).isDirectory() ? listFiles(rel, skip) : [rel];
   });
 }
 
@@ -461,14 +477,189 @@ const VITE_NAMES = new Set([...VITE_KEYS, "defineConfig", "react", "host", "proc
 // install, so one could rewrite the build before or after it.
 const LIFECYCLE = new Set(["preinstall", "install", "postinstall", "preprepare", "prepare", "postprepare", "prepack", "postpack", "prepublish", "dependencies"]);
 
-// The Rust calls that pick a webview's page or run script in it. Each place one appears is pinned
-// by its text, so a new one fails until a review adds it.
-const WEBVIEW_CALL = /\b(?:WebviewWindowBuilder|WebviewBuilder|WindowBuilder|WebviewUrl)\b|[.:]\s*(?:eval|eval_with_callback|navigate|with_webview|set_url|add_child|from_config|on_web_resource_request|register_(?:asynchronous_)?uri_scheme_protocol)\b|initialization_script/;
-const WEBVIEW_LINES = [
-  `${join("src-tauri", "src", "monitoring.rs")}: let _ = w.eval("window.location.reload()");`,
-  `${join("src-tauri", "src", "tray.rs")}: use tauri::{WebviewUrl, WebviewWindowBuilder};`,
-  `${join("src-tauri", "src", "tray.rs")}: let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))`,
+// ── Rust, read as tokens (rule 7) ───────────────────────────────────────────────────────────────
+
+type RustToken = { text: string; word: boolean };
+
+const RUST_RAW_STRING = /(?:b|c)?r(#*)"/y;
+const RUST_STRING = /(?:b|c)?"/y;
+const RUST_RAW_IDENT = /r#([\p{XID_Start}_][\p{XID_Continue}]*)/uy;
+const RUST_IDENT = /[\p{XID_Start}_][\p{XID_Continue}]*/uy;
+const RUST_NUMBER = /[0-9][0-9A-Za-z_]*/y;
+const RUST_LIFETIME = /'[\p{XID_Start}_][\p{XID_Continue}]*/uy;
+
+// Rust source as tokens. Comments are dropped (block comments nest), and so is whitespace. A string
+// or a char is kept whole as it is written, and a raw identifier (`r#eval`) is the name it spells.
+// So a line break, a comment or spacing between a receiver and its call changes nothing (#582, at
+// 63c57f30). A literal that never closes throws, and the guard fails.
+export function rustTokens(source: string): RustToken[] {
+  const out: RustToken[] = [];
+  const sticky = (re: RegExp, at: number) => {
+    re.lastIndex = at;
+    return re.exec(source);
+  };
+  // The end of a quoted literal that opens at `from`, past its escapes.
+  const closeQuote = (from: number, quote: string) => {
+    for (let j = from; j < source.length; j += 1) {
+      if (source[j] === "\\") j += 1;
+      else if (source[j] === quote) return j + 1;
+    }
+    throw new Error(`an unclosed ${quote} literal at offset ${from}`);
+  };
+  // A char literal opening at `at`, or undefined for a lifetime.
+  const charEnd = (at: number) => {
+    if (source[at + 1] === "\\") return closeQuote(at + 1, "'");
+    const width = (source.codePointAt(at + 1) ?? 0) > 0xffff ? 2 : 1;
+    return source[at + 1 + width] === "'" ? at + 2 + width : undefined;
+  };
+  let i = 0;
+  while (i < source.length) {
+    const c = source[i];
+    let m: RegExpExecArray | null;
+    if (/\s/.test(c)) i += 1;
+    else if (source.startsWith("//", i)) {
+      const end = source.indexOf("\n", i);
+      i = end === -1 ? source.length : end;
+    } else if (source.startsWith("/*", i)) {
+      let depth = 0;
+      do {
+        if (i >= source.length) throw new Error("an unclosed block comment");
+        if (source.startsWith("/*", i)) (depth += 1), (i += 2);
+        else if (source.startsWith("*/", i)) (depth -= 1), (i += 2);
+        else i += 1;
+      } while (depth > 0);
+    } else if ((m = sticky(RUST_RAW_STRING, i))) {
+      const close = `"${m[1]}`;
+      const end = source.indexOf(close, i + m[0].length);
+      if (end === -1) throw new Error(`an unclosed raw string at offset ${i}`);
+      out.push({ text: source.slice(i, end + close.length), word: false });
+      i = end + close.length;
+    } else if ((m = sticky(RUST_STRING, i))) {
+      const end = closeQuote(i + m[0].length, '"');
+      out.push({ text: source.slice(i, end), word: false });
+      i = end;
+    } else if (source.startsWith("b'", i)) {
+      const end = charEnd(i + 1);
+      if (end === undefined) throw new Error(`a malformed byte literal at offset ${i}`);
+      out.push({ text: source.slice(i, end), word: false });
+      i = end;
+    } else if ((m = sticky(RUST_RAW_IDENT, i))) {
+      out.push({ text: m[1], word: true });
+      i += m[0].length;
+    } else if ((m = sticky(RUST_IDENT, i)) || (m = sticky(RUST_NUMBER, i))) {
+      out.push({ text: m[0], word: true });
+      i += m[0].length;
+    } else if (c === "'") {
+      const end = charEnd(i);
+      if (end !== undefined) {
+        out.push({ text: source.slice(i, end), word: false });
+        i = end;
+      } else if ((m = sticky(RUST_LIFETIME, i))) {
+        out.push({ text: m[0], word: true });
+        i += m[0].length;
+      } else throw new Error(`a stray quote at offset ${i}`);
+    } else if (source.startsWith("::", i)) {
+      out.push({ text: "::", word: false });
+      i += 2;
+    } else {
+      out.push({ text: c, word: false });
+      i += 1;
+    }
+  }
+  return out;
+}
+
+// Tokens written back as text: a space only between two words, so `let _ = w.eval(x)` is `let _=w.eval(x)`.
+function rustText(tokens: RustToken[]): string {
+  return tokens.map((token, at) => (at > 0 && token.word && tokens[at - 1].word ? ` ${token.text}` : token.text)).join("");
+}
+
+// The Rust names that pick a webview's page, run script in it, change the config the app was
+// built with, or widen what the IPC answers. A type or a macro counts wherever it is named. A
+// method counts where it is reached as one, after `.` or `::`, so a test's local closure called
+// `eval` is not a webview. `Webview::builder` and its kin are matched with their type.
+const WEBVIEW_TYPES = new Set(["WebviewWindowBuilder", "WebviewBuilder", "WindowBuilder", "WebviewUrl", "generate_context"]);
+const WEBVIEW_METHODS = new Set([
+  "eval", "eval_with_callback", "navigate", "with_webview", "set_url", "add_child", "from_config",
+  "on_web_resource_request", "on_navigation", "on_new_window",
+  "register_uri_scheme_protocol", "register_asynchronous_uri_scheme_protocol",
+  "initialization_script", "initialization_script_for_all_frames", "append_invoke_initialization_script", "js_init_script",
+  "config_mut", "set_assets", "assets_mut", "runtime_authority_mut", "add_capability",
+]);
+const BUILDER_TYPES = new Set(["WebviewWindow", "Webview", "Window"]);
+const CLOSES: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
+
+// Each place Rust source names one of those: the name and everything after it to the end of its
+// expression (a `;` or `,` outside brackets, or the bracket that closes around it). A builder is
+// held with every option it is given, and a closure with its body.
+export function webviewCalls(source: string): string[] {
+  const tokens = rustTokens(source);
+  const found: string[] = [];
+  tokens.forEach((token, at) => {
+    if (!token.word) return;
+    const before = tokens[at - 1]?.text;
+    const builder = token.text === "builder" && before === "::" && BUILDER_TYPES.has(tokens[at - 2]?.text ?? "");
+    const method = WEBVIEW_METHODS.has(token.text) && (before === "." || before === "::");
+    if (!builder && !method && !WEBVIEW_TYPES.has(token.text)) return;
+    const open: string[] = [];
+    let end = at + 1;
+    for (; end < tokens.length; end += 1) {
+      const text = tokens[end].text;
+      if (text in CLOSES) open.push(CLOSES[text]);
+      else if (text === ")" || text === "]" || text === "}") {
+        if (open.length === 0) break;
+        if (open.pop() !== text) throw new Error(`unbalanced ${text} after ${token.text}`);
+      } else if ((text === ";" || text === ",") && open.length === 0) break;
+    }
+    found.push(rustText(tokens.slice(builder ? at - 2 : at, end)));
+  });
+  return found;
+}
+
+// Code a Rust file takes from another file: `include!`, and a module at a `#[path]`.
+export function rustIncludes(source: string): string[] {
+  const tokens = rustTokens(source);
+  const found: string[] = [];
+  tokens.forEach((token, at) => {
+    if (token.text === "include" && tokens[at + 1]?.text === "!") found.push("include!");
+    if (token.text !== "#") return;
+    const start = tokens[at + 1]?.text === "!" ? at + 2 : at + 1;
+    if (tokens[start]?.text !== "[") return;
+    let depth = 0;
+    for (let j = start; j < tokens.length; j += 1) {
+      if (tokens[j].text === "[") depth += 1;
+      else if (tokens[j].text === "]" && --depth === 0) break;
+      else if (tokens[j].text === "path" && tokens[j + 1]?.text === "=") found.push("#[path]");
+    }
+  });
+  return found;
+}
+
+// Each webview call in the Rust sources, pinned whole, so a new one or a changed one fails until a
+// review reads it and pins it here.
+const RS = (file: string) => join("src-tauri", "src", file);
+const WEBVIEW_PINS = [
+  `${RS("lib.rs")}: generate_context!()`,
+  `${RS("lib.rs")}: config_mut().app.windows{window.focus=false;}`,
+  `${RS("monitoring.rs")}: eval("window.location.reload()")`,
+  `${RS("tray.rs")}: WebviewUrl`,
+  `${RS("tray.rs")}: WebviewWindowBuilder`,
+  `${RS("tray.rs")}: WebviewWindowBuilder::new(app,"main",WebviewUrl::App("index.html".into())).title("Compy").inner_size(800.0,600.0).min_inner_size(380.0,560.0).focused(activate).build()`,
+  `${RS("tray.rs")}: WebviewUrl::App("index.html".into())`,
 ];
+
+// ── Build inputs outside the frontend (rule 7) ──────────────────────────────────────────────────
+
+// Tauri takes another config from `--config`/`-c` or from TAURI_CONFIG. `--config-env` is git's.
+const CONFIG_FLAG = /--config(?![\w-])|TAURI_CONFIG/;
+// A short `-c`, alone or with its value attached (`-calt.json`), but not a PowerShell
+// case-sensitive operator (`-contains`, `-ceq`, …).
+const SHORT_C = /(?:^|[\s"'`(,=[])-c(?!(?:ontains|notcontains|eq|ne|gt|ge|lt|le|like|notlike|match|notmatch|replace|split|in|notin)\b)/;
+// A file that starts the Tauri CLI: through npm, npx or cargo, its package, or its binary.
+const TAURI_ROUTE = /npm(?:\.cmd)?\s+(?:run(?:-script)?|exec|x)\s+tauri|npx(?:\.cmd)?\s+tauri|cargo\s+tauri|@tauri-apps[\\/]cli|\.bin[\\/]tauri|tauri\.cmd|["'`]tauri["'`]/i;
+// The folders whose code can start a build, and the code in them.
+const BUILD_CODE = [...listFiles("scripts"), ...listFiles("tools"), ...listFiles(".githooks"), ...listFiles(join(".claude", "hooks")), ...listFiles(join(".claude", "skills"))]
+  .filter((file) => !/\.test\./.test(file) && (/\.(?:ps1|psm1|[cm]?[jt]s|sh|cmd|bat|py)$/i.test(file) || file.startsWith(".githooks")));
 
 // public/ is copied into the build as it is and served beside the bundle, so it holds only files
 // that cannot run: images and fonts, and SVG with no script in it.
@@ -645,12 +836,17 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(npmrc, ".npmrc sets only include=dev").toEqual(["include=dev"]);
   });
 
-  it("the build runs only the commands read here, and Tauri serves only the built frontend", () => {
+  it("the build runs only the commands read here, and Tauri serves only the built frontend", { timeout: TREE_WALK_TIMEOUT_MS }, () => {
     // Each step of `npm run tauri build`, and no npm hook around any of them (#582, at 4d8f2900).
     const scripts = PACKAGE.scripts ?? {};
     expect({ build: scripts.build, dev: scripts.dev, tauri: scripts.tauri }).toEqual({ build: "tsc && vite build", dev: "vite", tauri: "tauri" });
     const hooks = Object.keys(scripts).filter((name) => LIFECYCLE.has(name) || (/^(?:pre|post)/.test(name) && name.replace(/^(?:pre|post)/, "") in scripts));
     expect(hooks, "no npm lifecycle script runs around the build").toEqual([]);
+    // Every script body, not only the three above: one that starts Tauri is `tauri` and nothing
+    // else, and none hands a tool another config (#582, at 63c57f30).
+    const bodies = Object.entries(scripts).map(([name, body]) => `${name}: ${body}`);
+    expect(bodies.filter((line) => /tauri/i.test(line) && line !== "tauri: tauri"), "only the `tauri` script starts Tauri, as bare `tauri`").toEqual([]);
+    expect(bodies.filter((line) => CONFIG_FLAG.test(line) || SHORT_C.test(line)), "no npm script passes a config flag").toEqual([]);
     // Tauri merges a platform file (tauri.windows.conf.json) or reads a JSON5 or TOML config in
     // place of this one, so tauri.conf.json is the only one.
     const tauriConfigs = readdirSync("src-tauri").filter((file) => /^tauri\b.*\.(?:json5?|toml)$/i.test(file));
@@ -661,25 +857,47 @@ describe("screens read machine truth through the Machine Model, never around it"
       beforeBuildCommand: "npm run build",
       frontendDist: "../dist",
     });
-    // No build script hands Tauri another config.
-    const handed = listFiles("scripts")
-      .filter((file) => !/\.test\./.test(file) && /\.(?:ps1|[cm]?js|sh|cmd|bat)$/i.test(file))
-      .flatMap((file) => readFileSync(file, "utf8").split(/\r?\n/).filter((line) => /TAURI_CONFIG|tauri\s+build\b.*\s(?:-c|--config)\b/.test(line)).map((line) => `${file}: ${line.trim()}`));
+    // No code that can start a build hands Tauri another config: no `--config` or TAURI_CONFIG
+    // anywhere, however the command is spelled (`npm run tauri -- build --config x`), and no short
+    // `-c` anywhere in a file that starts the Tauri CLI, so an argument array split over lines is
+    // read too (#582, at 63c57f30). git's and codex's own `-c` live in files that start no Tauri.
+    const handed = BUILD_CODE.flatMap((file) => {
+      const text = readFileSync(file, "utf8");
+      const lines = text.split(/\r?\n/);
+      const hits = lines.filter((line) => CONFIG_FLAG.test(line) || (TAURI_ROUTE.test(text) && SHORT_C.test(line)));
+      return hits.map((line) => `${file}: ${line.trim()}`);
+    });
     expect(handed, "no script passes Tauri another config").toEqual([]);
-    const buildRs = readFileSync(join("src-tauri", "build.rs"), "utf8");
-    expect(buildRs.includes("TAURI_CONFIG"), "build.rs sets no Tauri config").toBe(false);
+    expect(BUILD_CODE.filter((file) => TAURI_ROUTE.test(readFileSync(file, "utf8"))).length, "the scan finds the release build's Tauri call").toBeGreaterThan(0);
+    // Cargo reads `.cargo/config.toml` (or `config`) in the folder it builds in and every folder
+    // above it, and its `[env]` table can set TAURI_CONFIG for tauri-codegen. The repo's two such
+    // folders hold only cargo-audit's settings, and there is no workspace above src-tauri
+    // (#582, at 63c57f30). The owner's own ~/.cargo, CARGO_HOME and shell are outside the repo.
+    const cargoConfigs = [".cargo", join("src-tauri", ".cargo")].flatMap((dir) => (existsSync(dir) ? listFiles(dir) : []));
+    expect(cargoConfigs, "the repo gives Cargo no config").toEqual([join("src-tauri", ".cargo", "audit.toml")]);
+    expect(existsSync("Cargo.toml"), "no Cargo workspace above src-tauri").toBe(false);
+    expect(readFileSync(join("src-tauri", "Cargo.toml"), "utf8").match(/^\s*\[(?:patch|replace|workspace)\b.*$/gm), "Cargo.toml patches in no crate").toBeNull();
+    // Every crate but the app itself comes from crates.io, and Cargo checks each against its hash.
+    const crates = readFileSync(join("src-tauri", "Cargo.lock"), "utf8").split(/\r?\n\[\[package\]\]\r?\n/).slice(1);
+    const foreign = crates.filter((entry) => !/^name = "compy"$/m.test(entry) && !(/^source = "registry\+https:\/\/github\.com\/rust-lang\/crates\.io-index"$/m.test(entry) && /^checksum = "[0-9a-f]{64}"$/m.test(entry)));
+    expect(foreign.map((entry) => entry.split(/\r?\n/)[0]), "every locked crate comes from crates.io with a checksum").toEqual([]);
+    expect(crates.length, "Cargo.lock was read").toBeGreaterThan(100);
     // Every window opens the app's own page.
     const pages = (TAURI.app?.windows ?? []).map((w) => w.url).filter((url) => url !== undefined && url !== "index.html");
     expect(pages, "every window opens index.html").toEqual([]);
     // The security block holds the two CSPs and nothing else: no isolation app, no inline
     // capability, no header or asset setting this pin has not read.
     expect(Object.keys(TAURI.app?.security ?? {}).sort(), "tauri.conf.json security holds csp and devCsp only").toEqual(["csp", "devCsp"]);
-    // And the Rust side opens no other page and runs no other script in a webview.
-    const rust = listFiles(join("src-tauri", "src")).filter((file) => file.endsWith(".rs"));
-    const webview = rust.flatMap((file) =>
-      readFileSync(file, "utf8").split(/\r?\n/).filter((line) => WEBVIEW_CALL.test(line)).map((line) => `${file}: ${line.trim()}`),
-    );
-    expect(webview.sort(), "a Rust webview call is new: check the page it opens and the script it runs, then pin it").toEqual([...WEBVIEW_LINES].sort());
+    // And the Rust side opens no other page, runs no other script in a webview, and changes no
+    // config it was built with. Every Rust file under src-tauri is read as tokens, build.rs
+    // included, and none takes code from another file (#582, at 63c57f30).
+    const rust = listFiles("src-tauri", new Set([join("src-tauri", "target")])).filter((file) => file.endsWith(".rs"));
+    expect(rust, "the Rust corpus holds the app and its build script").toEqual(expect.arrayContaining([join("src-tauri", "build.rs"), RS("lib.rs"), RS("tray.rs")]));
+    const sources = rust.map((file) => [file, readFileSync(file, "utf8")] as const);
+    expect(sources.filter(([, text]) => text.includes("TAURI_CONFIG")).map(([file]) => file), "no Rust file names TAURI_CONFIG").toEqual([]);
+    expect(sources.flatMap(([file, text]) => rustIncludes(text).map((hit) => `${file}: ${hit}`)), "no Rust file takes code from another file").toEqual([]);
+    const webview = sources.flatMap(([file, text]) => webviewCalls(text).map((call) => `${file}: ${call}`));
+    expect(webview.sort(), "a Rust webview call is new or changed: check the page it opens and the script it runs, then pin it").toEqual([...WEBVIEW_PINS].sort());
   });
 
   it("the shipped build serves no code beyond the bundle, and runs none it builds at run time", () => {
@@ -909,6 +1127,11 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loads('const f = document.createElement("form");', screen)).toHaveLength(1);
     expect(loads("window.document.location = u;", screen)).toHaveLength(1);
     expect(loads("const { location: l } = window;", screen)).toHaveLength(1);
+    // A window reached from a document, an element or an event (#582, at 63c57f30).
+    expect(loads("document.defaultView!.location.assign(u);", screen)).toHaveLength(1);
+    expect(loads("el.ownerDocument.location = u;", screen)).toHaveLength(1);
+    expect(loads("frame.contentWindow.open(u);", screen)).toHaveLength(1);
+    expect(loads("event.view.location.href = u;", screen)).toHaveLength(2);
     // What real code does passes: a corpus file by any of its specifiers, an asset, a package.
     expect(loads('import { x } from "./data/machine-model";', app)).toEqual([]);
     expect(loads('import { x } from "./data/machine-model.js";', app)).toEqual([]);
@@ -928,6 +1151,48 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loads("const retry = () => window.location.reload();", app)).toEqual([]);
     expect(loads("const row = { location: bundle.location };\nconst { location } = bundle;\ntype T = { location: string };", app)).toEqual([]);
     expect(loads("const chart = <Area values={v} id=\"cpu\" />;", app)).toEqual([]);
+  });
+
+  it("Rust is read as tokens, and each webview call is held whole with its arguments", () => {
+    const text = (source: string) => rustText(rustTokens(source));
+    // Comments go; strings, raw strings and char literals stay whole; `r#eval` is `eval`.
+    expect(text('let a = 1; // eval("x")\n/* outer /* nested */ eval("y") */ let b = 2;')).toBe("let a=1;let b=2;");
+    expect(text('let s = r#"he said "eval""#;')).toBe('let s=r#"he said "eval""#;');
+    expect(text("let c = '\\''; fn f<'a>(x: &'a str) {}")).toBe("let c='\\'';fn f<'a>(x:&'a str){}");
+    expect(text("w.r#eval(x)")).toBe("w.eval(x)");
+    expect(() => rustTokens('let s = "never closed;')).toThrow();
+    // A call split across lines or behind a comment is still the call.
+    expect(webviewCalls('w.\n  eval("x");')).toEqual(['eval("x")']);
+    expect(webviewCalls('w /* here */ . /* there */ r#eval(r"x");')).toEqual(['eval(r"x")']);
+    expect(webviewCalls('let js = "w.eval(1)"; // w.navigate(u)')).toEqual([]);
+    // A builder is held with every option it is given, up to the end of its expression.
+    expect(webviewCalls('let w = WebviewWindowBuilder::new(app, "x", url).initialization_script(s).build()?;'))
+      .toEqual(expect.arrayContaining(['WebviewWindowBuilder::new(app,"x",url).initialization_script(s).build()?', "initialization_script(s).build()?"]));
+    expect(webviewCalls("let w = Webview::builder(app).build();")).toEqual(["Webview::builder(app).build()"]);
+    expect(webviewCalls("f(a, w.navigate(u), b);")).toEqual(["navigate(u)"]);
+    expect(() => webviewCalls("w.navigate(u];")).toThrow();
+    // A test's local closure named `eval` is not a webview; a path call to one is.
+    expect(webviewCalls("let eval = |x| x + 1; assert_eq!(eval(2), 3);")).toEqual([]);
+    expect(webviewCalls("tauri::WebviewWindow::eval(&w, s);")).toEqual(["eval(&w,s)"]);
+    // Source pulled in from elsewhere is code no pin reads.
+    expect(rustIncludes('include!("bridge.rs");')).toHaveLength(1);
+    expect(rustIncludes('#[path = "bridge.rs"] mod m;')).toHaveLength(1);
+    expect(rustIncludes('#![path = "x"]')).toHaveLength(1);
+    expect(rustIncludes('let s = include_str!("a.txt"); let path = p; // include!("x")')).toEqual([]);
+  });
+
+  it("the config-flag scan catches each way to hand Tauri a config, and not the operators around it", () => {
+    expect(CONFIG_FLAG.test("npm run tauri -- build --config alt.json")).toBe(true);
+    expect(CONFIG_FLAG.test("$env:TAURI_CONFIG = '{}'")).toBe(true);
+    expect(CONFIG_FLAG.test("--config-file x")).toBe(false);
+    expect(SHORT_C.test('$args = @("build", "-c", "alt.json")')).toBe(true);
+    expect(SHORT_C.test("tauri build -calt.json")).toBe(true);
+    expect(SHORT_C.test("if ($list -contains $x -or $a -ceq $b) {}")).toBe(false);
+    expect(SHORT_C.test("node -e x")).toBe(false);
+    expect(TAURI_ROUTE.test("npm run tauri -- build")).toBe(true);
+    expect(TAURI_ROUTE.test("npx tauri build")).toBe(true);
+    expect(TAURI_ROUTE.test("node node_modules\\@tauri-apps\\cli\\tauri.js build")).toBe(true);
+    expect(TAURI_ROUTE.test("npm run build")).toBe(false);
   });
 
   it("a planted direct reader in any other screen is a violation", () => {
