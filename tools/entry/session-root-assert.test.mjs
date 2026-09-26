@@ -418,6 +418,50 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
     expect(tracked.ensureWorktreeIdentity(linked).action).toBe("kept");
   }, 30_000);
 
+  it("warns when inherited Git variables make both effective identities codex despite claude-code worktree config", () => {
+    setup();
+    const linked = join(bed, "linked-inherited-codex");
+    git(host, "worktree", "add", "-q", "-b", "lane/inherited-codex", linked);
+    git(linked, "config", "--worktree", "user.name", "claude-code");
+    git(linked, "config", "--worktree", "user.email", "claude-code@desk.local");
+    const env = {
+      GIT_AUTHOR_NAME: "codex",
+      GIT_AUTHOR_EMAIL: "codex@desk.local",
+      GIT_COMMITTER_NAME: "codex",
+      GIT_COMMITTER_EMAIL: "codex@desk.local",
+    };
+
+    const actual = execFileSync("git", ["var", "GIT_AUTHOR_IDENT"], {
+      cwd: linked,
+      env: { ...process.env, ...env },
+      encoding: "utf8",
+    }).trim();
+    expect(actual).toMatch(/^codex <codex@desk\.local> /);
+    const result = tracked.ensureWorktreeIdentity(linked, { env });
+    expect(result.action).toBe("kept");
+    expect(result.warning).toMatch(/GIT_AUTHOR_IDENT.*codex/);
+    expect(result.warning).toMatch(/GIT_COMMITTER_IDENT.*codex/);
+    const shown = tracked.sessionStartMessage({
+      verdict: { message: "compy-entry: verified" },
+      identity: result,
+      provisioning: { action: "skipped", line: null },
+    });
+    expect(shown).toContain(result.warning); // SessionStart stdout, which Claude receives as context.
+    const correct = {
+      GIT_AUTHOR_NAME: "claude-code",
+      GIT_AUTHOR_EMAIL: "claude-code@desk.local",
+      GIT_COMMITTER_NAME: "claude-code",
+      GIT_COMMITTER_EMAIL: "claude-code@desk.local",
+    };
+    expect(tracked.ensureWorktreeIdentity(linked, { env: correct }).warning).toBeNull();
+    const committerOnly = tracked.ensureWorktreeIdentity(linked, {
+      env: { ...correct, GIT_COMMITTER_NAME: "codex", GIT_COMMITTER_EMAIL: "codex@desk.local" },
+    });
+    expect(committerOnly.warning).toMatch(/GIT_COMMITTER_IDENT.*codex/);
+    expect(committerOnly.warning).not.toMatch(/GIT_AUTHOR_IDENT/);
+    expect(worktreeName(linked)).toBe("claude-code");
+  }, 30_000);
+
   it("(b) a linked worktree that already carries a --worktree identity is left exactly as it was", () => {
     setup();
     const linked = join(bed, "linked-owned");
