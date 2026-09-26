@@ -1,0 +1,73 @@
+{
+  "inheritedWork": true,
+  "branch": "claude/close-323-326-398",
+  "gateResults": [
+    {
+      "status": "passed",
+      "summary": "7704 passed, one expected failure, nine skipped.",
+      "command": "npm test",
+      "head": "e6c9ef25bd428cd17e43c17f40f2eeb0552d8a44",
+      "evidence": "logs/verify-local-2026-09-26T16-44-01Z.log; SHA-256 4DEB93CFF7F6DD6782293E2C9060DE2998F74A9E42FFF3C4B726FAF6B1286B3D; push log logs/push585carrier2.log"
+    },
+    {
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "command": "npm run build",
+      "head": "e6c9ef25bd428cd17e43c17f40f2eeb0552d8a44",
+      "evidence": "logs/verify-local-2026-09-26T16-44-01Z.log; SHA-256 4DEB93CFF7F6DD6782293E2C9060DE2998F74A9E42FFF3C4B726FAF6B1286B3D; push log logs/push585carrier2.log"
+    },
+    {
+      "status": "passed",
+      "summary": "1355 passed, zero failed, 24 ignored.",
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "head": "e6c9ef25bd428cd17e43c17f40f2eeb0552d8a44",
+      "evidence": "logs/verify-local-2026-09-26T16-44-01Z.log; SHA-256 4DEB93CFF7F6DD6782293E2C9060DE2998F74A9E42FFF3C4B726FAF6B1286B3D; push log logs/push585carrier2.log"
+    },
+    {
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "head": "e6c9ef25bd428cd17e43c17f40f2eeb0552d8a44",
+      "evidence": "logs/verify-local-2026-09-26T16-44-01Z.log; SHA-256 4DEB93CFF7F6DD6782293E2C9060DE2998F74A9E42FFF3C4B726FAF6B1286B3D; push log logs/push585carrier2.log"
+    }
+  ],
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "transition": "close-issue",
+  "overlapExclusiveNote": "Only this lane prepares the #323 close receipt; its claim is the one lease on the issue and is released before this gate.",
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/323#issuecomment-5848154880",
+  "closingNote": "Repair PR #314 merged as 7dafc402 on 2026-09-02, an ancestor of main, with its merge receipt .claude/work-control/2026-09-02-merge-pr-314.json; superseding draft PR #404 was closed unmerged. Both causes are absent at e6c9ef25: branch-disposition-audit exits 0 (every landed origin ref has a proven record) and doc-budget ends ALL PASS.",
+  "currentHead": "e6c9ef25bd428cd17e43c17f40f2eeb0552d8a44",
+  "mutationAuthorsNote": "claude-code prepared this close receipt and carries it; the transition changes no code. The repair closed here landed in PR #314, whose commits carry the unmapped identity t <t@t>, under its own reviewed merge receipt.",
+  "pr": 314,
+  "gateEvidenceNote": "Native direct-main pre-push gate passed at exact main head e6c9ef25 (the #587 receipt carrier): diff check, write-scope, lease overlap, vitest, build, cargo test, clippy.",
+  "kind": "lane",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "leaseEvidenceNote": "Close-receipt preparation claim at main head e6c9ef25. It is released before the close-issue gate and closure.",
+  "issue": 323,
+  "independentReview": {
+    "reviewerNote": "Read-only Codex run (codex exec -m gpt-5.6-sol -s read-only) by claude-code, posted verbatim. Codex had no local shell and checked everything through the GitHub connector against main e6c9ef25; claude-code ran the two scripts it could not and they match.",
+    "head": "e6c9ef25bd428cd17e43c17f40f2eeb0552d8a44",
+    "reviewer": "codex",
+    "status": "passed",
+    "practical": true,
+    "evidence": "https://github.com/Pootytxng/sentinel/issues/323#issuecomment-5848155015",
+    "verdict": "PASS"
+  },
+  "overlapExclusive": true,
+  "inspection": {
+    "repository": true,
+    "worktree": true,
+    "dirtyState": true,
+    "liveProcesses": true,
+    "remoteState": true,
+    "branch": true
+  }
+}
