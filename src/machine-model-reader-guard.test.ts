@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync, statSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import { dirname, join } from "path";
+import ts from "typescript";
 
 // MACHINE-MODEL READER GUARD (#453 — Phase 2 of #385, slice 5).
 //
@@ -26,18 +27,25 @@ import { join } from "path";
 //      its own name and never passed around as a value; the one wrapper that forwards its parameter
 //      to `invoke` is named below and held to the same rule at its own call sites.
 //   6. `invoke` is reached only by its name: `@tauri-apps/api/core` is imported with a static
-//      `import { … } from`, and nothing touches the package root or the global Tauri objects.
-//   Every rule reads the source as it runs: comments blanked, escapes decoded (see decodeEscapes).
+//      `import { … } from`, and nothing touches the package root, another spelling of the core
+//      module, or the global Tauri objects.
+//   7. Every module a production file loads is a production file this guard reads. A support file,
+//      a test file, a stray `.js` sibling or code outside `src/` could otherwise hand a renamed
+//      `invoke` to a screen where no rule looks, and a module named by a value cannot be checked.
+//   Every rule reads the TypeScript syntax tree, not the text. A comment, a regex or JSX text is
+//   what the compiler says it is, and a string or a name is read as the value it runs as, escapes
+//   included. Reading the text by hand let a `"//"` inside a string blank the code after it (#582,
+//   at f4ef8dd3).
 //
 // What it cannot decide: code written to hide a call while it runs. Examples are `eval`,
-// `new Function`, or a global looked up under a key built from pieces. Text cannot follow a value
-// through execution, so review catches those. Everything written the ordinary way, and every
-// construction or escape form a review has named, is decided here.
+// `new Function`, or a global looked up under a key built from pieces. The syntax tree cannot
+// follow a value through execution, so review catches those. Everything written the ordinary way,
+// and every construction or escape form a review has named, is decided here.
 //
 // The corpus is INVERTED on purpose (walk everything, exempt explicitly), the lesson the
 // mutation-boundary guard learned: a new surface is in scope the moment it exists. Test files and
 // the `src/test/` support folder are out of the corpus because they MOCK these commands; a mock is
-// not a reader.
+// not a reader. Rule 7 keeps that exclusion from becoming a hiding place.
 
 const SRC = "src";
 const TEST_SUPPORT = join("src", "test");
@@ -58,134 +66,249 @@ function collect(dir: string): string[] {
 }
 
 const files = collect(SRC);
+// Windows paths match whatever their case, so membership does too.
+const corpusKeys = new Set(files.map((file) => file.toLowerCase()));
+
+// ── Reading ─────────────────────────────────────────────────────────────────────────────────────
+
+// A sample is read as TSX; a real file as its extension says.
+const SAMPLE = "sample.tsx";
+
+const parsed = new Map<string, ts.SourceFile>();
+function parse(source: string, file: string): ts.SourceFile {
+  const key = `${file}\n${source}`;
+  let tree = parsed.get(key);
+  if (!tree) {
+    const kind = file.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.TSX;
+    tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, kind);
+    parsed.set(key, tree);
+  }
+  return tree;
+}
+
+function walk(node: ts.Node, visit: (node: ts.Node) => void): void {
+  visit(node);
+  ts.forEachChild(node, (child) => walk(child, visit));
+}
+
+// A string written out whole, in quotes or in a backtick string with no `${`, as the value it runs
+// as. A tagged template hands its text to a function, so it is a call, not a plain string.
+function plainText(node: ts.Node): string | undefined {
+  if (!ts.isStringLiteral(node) && !ts.isNoSubstitutionTemplateLiteral(node)) return undefined;
+  return ts.isTaggedTemplateExpression(node.parent) ? undefined : node.text;
+}
+
+// "line N: <that line>", for a report a reader can find.
+function lineOf(tree: ts.SourceFile, node: ts.Node): string {
+  const { line } = tree.getLineAndCharacterOfPosition(node.getStart(tree));
+  const starts = tree.getLineStarts();
+  return `line ${line + 1}: ${tree.text.slice(starts[line], starts[line + 1] ?? tree.text.length).trim()}`;
+}
 
 // ── Detection ───────────────────────────────────────────────────────────────────────────────────
-
-// Comments legitimately NAME a command while explaining why a screen no longer calls it; only
-// executable source is in scope. `(?<!:)` keeps `https://…` in a string literal from reading as a
-// line comment.
-function stripComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-    .replace(/(?<!:)\/\/[^\n]*/g, " ");
-}
-
-// JavaScript runs an escape as the character it stands for: `inv\u006fke` IS `invoke`, and in a
-// string `\x61` is `a` and `\m` is `m`. So the source is read as it runs. Every \uXXXX, \u{…},
-// \xHH or backslash-before-an-ordinary-character that stands for an identifier character is
-// decoded before any rule looks. Any other escape, a quote included, stays as written, since
-// decoding it could end a string early. So does one that follows a literal backslash, which is
-// text, not an escape. A backslash before a line break is left alone: the sink refuses a literal
-// that spans a line, so a name joined across one never reaches `invoke` (#582, at 9105a072).
-function decodeEscapes(code: string): string {
-  return code.replace(
-    /(?<=(?:^|[^\\])(?:\\\\)*)\\(?:u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([^bfnrtvux0-9\r\n\u2028\u2029]))/g,
-    (m, braced, four, hex, same) => {
-      const point = same === undefined ? parseInt(braced ?? four ?? hex, 16) : same.codePointAt(0);
-      const ch = point <= 0x10ffff ? String.fromCodePoint(point) : "";
-      return /^[\w$]$/.test(ch) ? ch : m;
-    },
-  );
-}
-
-// What every rule scans: executable source, comments blanked, escapes read as they run.
-function executable(source: string): string {
-  return decodeEscapes(stripComments(source));
-}
 
 const MODEL = "get_machine_model";
 const RETIRED = "get_intelligence_timeline";
 const PRODUCERS = ["get_hardware_info", "get_applied_changes"] as const;
-const WATCHED = [MODEL, RETIRED, ...PRODUCERS];
+const WATCHED: readonly string[] = [MODEL, RETIRED, ...PRODUCERS];
 
-// A command is named to `invoke` as a string literal; the quote pair is what separates a call from
-// a type name, a comment, or a `source: "hardware::get_hardware_info"` provenance label.
-export function detect(source: string): string[] {
-  const code = executable(source);
-  return WATCHED.filter((cmd) => new RegExp(`(["'\`])${cmd}\\1`).test(code));
+// A command is named to `invoke` as a string literal whose whole value is the name; a type name, a
+// comment, or a `source: "hardware::get_hardware_info"` provenance label is not one.
+export function detect(source: string, file = SAMPLE): string[] {
+  const seen = new Set<string>();
+  walk(parse(source, file), (node) => {
+    const text = plainText(node);
+    if (text !== undefined && WATCHED.includes(text)) seen.add(text);
+  });
+  return WATCHED.filter((cmd) => seen.has(cmd));
 }
 
-// What sits right before a call's first argument: `invoke(`, `invoke<T>(`, `ipc.run<T[]>(`.
-const CALL_BEFORE = /[\w$.]+\s*(?:<[^()]*>)?\s*\(\s*$/;
+// Rule 4: the watched names a source writes anywhere but as a call's first argument (a constant, an
+// array, an object value). A violation in every file, whatever its exemption.
+export function loose(source: string, file = SAMPLE): string[] {
+  const seen = new Set<string>();
+  walk(parse(source, file), (node) => {
+    const text = plainText(node);
+    const call = node.parent;
+    const first = !!call && ts.isCallExpression(call) && call.arguments[0] === node;
+    if (text !== undefined && WATCHED.includes(text) && !first) seen.add(text);
+  });
+  return WATCHED.filter((cmd) => seen.has(cmd));
+}
 
-// Rule 4: the watched names a source mentions OUTSIDE call position (a constant, an array, an
-// object value). A violation in every file, whatever its exemption.
-export function loose(source: string): string[] {
-  const code = executable(source);
-  return WATCHED.filter((cmd) =>
-    [...code.matchAll(new RegExp(`(["'\`])${cmd}\\1`, "g"))].some(
-      (m) => !CALL_BEFORE.test(code.slice(Math.max(0, m.index - 200), m.index)),
-    ),
+// ── The sink (rules 5 and 6) ────────────────────────────────────────────────────────────────────
+
+// The one wrapper that forwards its own parameter to `invoke`, by file and by the name its callers
+// use. It is found by its shape: `const <name> = (<param>, …) => … invoke(<param>) …`, with that call
+// in the wrapper's own body. The forward is exempt once, and every other use of the name must be a
+// call with a plain literal first. So rule 5 holds one hop out, and a second forwarding helper is a
+// violation until it is named here.
+type Wrapper = { name: string };
+const WRAPPERS: Record<string, Wrapper> = {
+  [join("src", "App.tsx")]: { name: "run" },
+};
+
+type Forward = { decl: ts.Node; call: ts.CallExpression };
+
+// The function a node's code runs in.
+function ownerOf(node: ts.Node): ts.Node | undefined {
+  for (let up = node.parent; up; up = up.parent) if (ts.isFunctionLike(up)) return up;
+  return undefined;
+}
+
+function forwardOf(tree: ts.SourceFile, wrapper: Wrapper): Forward | undefined {
+  let found: Forward | undefined;
+  walk(tree, (node) => {
+    if (found || !ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || node.name.text !== wrapper.name) return;
+    const fn = node.initializer;
+    if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn))) return;
+    const param = fn.parameters[0]?.name;
+    if (!param || !ts.isIdentifier(param)) return;
+    walk(fn.body, (inner) => {
+      if (found || !ts.isCallExpression(inner) || !ts.isIdentifier(inner.expression)) return;
+      const arg = inner.arguments[0];
+      const forwards = inner.expression.text === "invoke" && !!arg && ts.isIdentifier(arg) && arg.text === param.text;
+      if (forwards && ownerOf(inner) === fn) found = { decl: node.name, call: inner };
+    });
+  });
+  return found;
+}
+
+// A use of a name: an identifier, read as the name it spells (`inv\u006fke` IS `invoke`), or a
+// string standing for one, as a key in `x["invoke"]` or a name in an import or export list.
+function nameOf(node: ts.Node): string | undefined {
+  if (ts.isIdentifier(node)) return node.text;
+  const up = node.parent;
+  const standsForName =
+    !!up &&
+    ((ts.isElementAccessExpression(up) && up.argumentExpression === node) ||
+      ts.isImportSpecifier(up) ||
+      ts.isExportSpecifier(up));
+  return ts.isStringLiteralLike(node) && standsForName ? node.text : undefined;
+}
+
+// `invoke("x", …)`, `ipc.invoke("x")` or `ipc["invoke"]("x")`: the name is what is called, and its
+// first argument is a plain literal.
+function calledWithPlain(node: ts.Node): boolean {
+  const up = node.parent;
+  const member =
+    (ts.isPropertyAccessExpression(up) && up.name === node) ||
+    (ts.isElementAccessExpression(up) && up.argumentExpression === node);
+  const callee = member ? up : node;
+  const call = callee.parent;
+  return (
+    ts.isCallExpression(call) &&
+    call.expression === callee &&
+    call.arguments.length > 0 &&
+    plainText(call.arguments[0]) !== undefined
   );
 }
 
-// A call's first argument written out as one plain string on one line: quotes, or a backtick string
-// with no `${`, followed by the next argument or the closing paren.
-const PLAIN_FIRST = /^\s*(?:(["'])[^"'\n\r\u2028\u2029]*\1|`[^`$\n\r\u2028\u2029]*`)\s*[,)]/;
+const CORE = "@tauri-apps/api/core";
 
-// The text after a callee name, if it is being called: past an optional type-argument list (nested
-// `<…>` included, the `>` of `=>` ignored) to the opening paren. null when the name is not called.
-function argsAfter(rest: string): string | null {
-  let i = rest.search(/\S/);
-  if (rest[i] === "<") {
-    for (let depth = 0; i < rest.length; i++) {
-      if (rest[i] === "<") depth++;
-      else if (rest[i] === ">" && rest[i - 1] !== "=" && --depth === 0) break;
-    }
-    i = i + 1 + rest.slice(i + 1).search(/\S/);
-  }
-  return rest[i] === "(" ? rest.slice(i + 1) : null;
+// `import { invoke } from "@tauri-apps/api/core"`: the name brought in under itself.
+function isNamedCoreImport(node: ts.Node): boolean {
+  const spec = node.parent;
+  if (!spec || !ts.isImportSpecifier(spec) || spec.name !== node || spec.propertyName) return false;
+  const decl = spec.parent.parent.parent;
+  return ts.isImportDeclaration(decl) && plainText(decl.moduleSpecifier) === CORE;
 }
 
-// The one wrapper that forwards its own parameter to `invoke`, by file: the forwarding call, which
-// is exempt once, and the name its callers use, whose every call must pass a plain literal. Rule 5
-// then holds one hop out, and a second forwarding helper is a violation until it is named here.
-const WRAPPERS: Record<string, { forward: string; name: string }> = {
-  [join("src", "App.tsx")]: { forward: "invoke<T>(cmd)", name: "run" },
-};
+// A specifier for the module that exports `invoke`, however it is spelled: the package root, `core`
+// or `index`, with an extension, a trailing slash, other letter case, or a `.` or `..` step.
+function namesCore(spec: string): boolean {
+  const m = /^@tauri-apps\/api(\/.*)?$/i.exec(spec);
+  if (!m) return false;
+  const rest = m[1] ?? "";
+  if (/(^|\/)\.\.?(\/|$)/.test(rest)) return true;
+  const bare = rest.replace(/^\/+|\/+$/g, "").replace(/\.(?:[cm]?js|d\.ts|[cm]?ts)$/i, "").toLowerCase();
+  return bare === "" || bare === "core" || bare === "index";
+}
 
-// Rule 5, per file: every place `invoke` (or the file's wrapper) appears other than as a call with
-// a plain literal first argument or a bare `import { invoke }`, as "line N: <that line>".
-export function sink(source: string, wrapper?: { forward: string; name: string }): string[] {
-  const code = executable(source);
-  const bad: string[] = [];
-  const flag = (at: number) => {
-    const from = code.lastIndexOf("\n", at - 1) + 1;
-    const to = code.indexOf("\n", at);
-    const line = code.slice(from, to < 0 ? undefined : to).trim();
-    bad.push(`line ${code.slice(0, at).split("\n").length}: ${line}`);
+// The one way in: a static named import from the core module, type-only included.
+function isCoreImport(node: ts.Node): boolean {
+  const decl = node.parent;
+  if (!decl || !ts.isImportDeclaration(decl) || decl.moduleSpecifier !== node || plainText(node) !== CORE) return false;
+  const clause = decl.importClause;
+  return !!clause && !clause.name && !!clause.namedBindings && ts.isNamedImports(clause.namedBindings);
+}
+
+// The global Tauri objects (`__TAURI__`, `__TAURI_INTERNALS__` and their plugin kin) hand `invoke`
+// over under a key, so any name or string that spells one is a way around rule 5.
+function touchesGlobals(node: ts.Node): boolean {
+  const text =
+    ts.isIdentifier(node) || ts.isPrivateIdentifier(node) || ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node)
+      ? node.text
+      : undefined;
+  return text?.includes("__TAURI") ?? false;
+}
+
+// Rules 5 and 6, per file: every place `invoke` (or the file's wrapper) is used other than as a call
+// with a plain literal first argument or a bare `import { invoke }`, and every other way to reach it,
+// as "line N: <that line>".
+export function sink(source: string, wrapper?: Wrapper, file = SAMPLE): string[] {
+  const tree = parse(source, file);
+  const bad = new Set<string>(); // one entry per line, however many rules it breaks
+  const flag = (node: ts.Node) => bad.add(lineOf(tree, node));
+  const forward = wrapper && forwardOf(tree, wrapper);
+  walk(tree, (node) => {
+    const text = plainText(node);
+    if (text !== undefined && namesCore(text) && !isCoreImport(node)) flag(node);
+    if (touchesGlobals(node)) flag(node);
+    const name = nameOf(node);
+    if (name === "invoke") {
+      if (!isNamedCoreImport(node) && node !== forward?.call.expression && !calledWithPlain(node)) flag(node);
+    } else if (wrapper && name === wrapper.name) {
+      if (node !== forward?.decl && !calledWithPlain(node)) flag(node);
+    }
+  });
+  return [...bad];
+}
+
+// ── Loaded modules (rule 7) ─────────────────────────────────────────────────────────────────────
+
+// Vite's default resolve order (vite.config.ts sets none), then the directory's index. As Vite and
+// TypeScript both allow, a `.js`-style specifier also names the `.ts` file beside it. Every
+// candidate that exists is checked, not only the first, so the two resolvers cannot disagree
+// about which file loads.
+const EXTENSIONS = [".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"];
+const CODE = /\.(?:[cm]?[jt]s|[jt]sx)$/i;
+
+function candidates(from: string, spec: string): string[] {
+  const path = spec.replace(/[?#].*$/, "");
+  const base = path.startsWith("/") ? join(".", path) : join(dirname(from), path);
+  const swapped = /\.[cm]?jsx?$/i.test(base) ? [base.replace(/js(x?)$/i, "ts$1"), base.replace(/\.js$/i, ".tsx")] : [];
+  return [base, ...EXTENSIONS.map((ext) => base + ext), ...swapped, ...EXTENSIONS.map((ext) => join(base, `index${ext}`))];
+}
+
+const isFile = (path: string) => existsSync(path) && statSync(path).isFile();
+
+// Rule 7, per file: each load that names code outside the corpus, names no file, or is not written
+// as a literal at all. A package specifier is left to npm; rule 6 holds the Tauri API.
+export function loads(source: string, file: string): string[] {
+  const tree = parse(source, file);
+  const bad = new Set<string>();
+  const check = (spec: ts.Node | undefined, at: ts.Node) => {
+    const text = spec && plainText(spec);
+    if (text === undefined) return void bad.add(`${lineOf(tree, at)} (a module named by a value, not a literal)`);
+    if (!/^(?:\.{1,2}(?:\/|$)|\/)/.test(text)) return;
+    const found = candidates(file, text).filter(isFile);
+    if (found.length === 0) bad.add(`${text}: resolves to no file`);
+    for (const hit of found) if (CODE.test(hit) && !corpusKeys.has(hit.toLowerCase())) bad.add(`${text} -> ${hit}: code this guard does not read`);
   };
-  // Rule 6: `invoke` is only ever reached by its name. The module that exports it is imported by a
-  // static `import { … } from`, never as a namespace, a dynamic `import()`, a re-export or through
-  // the package root, and the global Tauri objects are never touched, since each of those hands
-  // over the function under a key that can be built from pieces.
-  for (const m of code.matchAll(/(["'`])@tauri-apps\/api(?:\/core)?\1/g)) {
-    const before = code.slice(Math.max(0, m.index - 300), m.index);
-    const root = !m[0].includes("/core");
-    if (root || !/\bimport\s+(?:type\s+)?\{[^{}]*\}\s*from\s*$/.test(before)) flag(m.index);
-  }
-  for (const m of code.matchAll(/__TAURI(?:_INTERNALS)?__/g)) flag(m.index);
-  let forwarded = false;
-  for (const m of code.matchAll(/\binvoke\b/g)) {
-    const rest = code.slice(m.index + "invoke".length);
-    if (/\bimport\s*\{[^}]*$/.test(code.slice(Math.max(0, m.index - 300), m.index))) {
-      if (!/^\s*[,}]/.test(rest)) flag(m.index); // `import { invoke as call }`
-      continue;
+  walk(tree, (node) => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) check(node.moduleSpecifier, node);
+    else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) check(node.moduleReference.expression, node);
+    else if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === "require"))) check(node.arguments[0], node);
+    else if (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword) {
+      // `import.meta.glob` loads files no list names, and `import.meta.url` locates a worker or a
+      // module at run time. Only the build-time `import.meta.env` flags are read here.
+      const up = node.parent;
+      const env = ts.isPropertyAccessExpression(up) && up.name.text === "env";
+      if (!env) bad.add(`${lineOf(tree, node)} (import.meta can load files no list names)`);
     }
-    if (wrapper && !forwarded && rest.startsWith(wrapper.forward.slice("invoke".length))) {
-      forwarded = true;
-      continue;
-    }
-    const args = argsAfter(rest);
-    if (args === null || !PLAIN_FIRST.test(args)) flag(m.index);
-  }
-  for (const m of wrapper ? code.matchAll(new RegExp(`\\b${wrapper.name}\\b`, "g")) : []) {
-    const rest = code.slice(m.index + wrapper!.name.length);
-    if (/^\s*=[^=>]/.test(rest)) continue; // its declaration
-    const args = argsAfter(rest);
-    if (args === null || !PLAIN_FIRST.test(args)) flag(m.index);
-  }
-  return [...new Set(bad)]; // one entry per line, however many rules it breaks
+  });
+  return [...bad];
 }
 
 // ── Exemptions ──────────────────────────────────────────────────────────────────────────────────
@@ -229,8 +352,8 @@ describe("screens read machine truth through the Machine Model, never around it"
     const offenders: string[] = [];
     for (const file of files) {
       const source = readFileSync(file, "utf8");
-      const bad = violations(file, detect(source));
-      const kept = loose(source).map((cmd) => `${cmd} (not a call argument)`);
+      const bad = violations(file, detect(source, file));
+      const kept = loose(source, file).map((cmd) => `${cmd} (not a call argument)`);
       if (bad.length + kept.length > 0) offenders.push(`${file}: ${[...bad, ...kept].join(", ")}`);
     }
     expect(
@@ -243,7 +366,7 @@ describe("screens read machine truth through the Machine Model, never around it"
 
   it("every invoke names its command as one plain literal, so a built or forwarded name cannot slip past", () => {
     const offenders = files.flatMap((file) =>
-      sink(readFileSync(file, "utf8"), WRAPPERS[file]).map((hit) => `${file} ${hit}`),
+      sink(readFileSync(file, "utf8"), WRAPPERS[file], file).map((hit) => `${file} ${hit}`),
     );
     expect(
       offenders,
@@ -252,19 +375,26 @@ describe("screens read machine truth through the Machine Model, never around it"
     ).toEqual([]);
   });
 
-  it("keeps the wrapper entry live and tied to its name, so the exemption cannot outlive the wrapper", () => {
-    for (const [file, { forward, name }] of Object.entries(WRAPPERS)) {
-      const code = executable(readFileSync(file, "utf8"));
-      const escaped = forward.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  it("every module a production file loads is one this guard reads", () => {
+    const offenders = files.flatMap((file) => loads(readFileSync(file, "utf8"), file).map((hit) => `${file} ${hit}`));
+    expect(
+      offenders,
+      "a production file may load only production files: move shared code out of tests and src/test, " +
+        "turn a .js file into .ts, and name every module with a literal",
+    ).toEqual([]);
+  });
+
+  it("keeps the wrapper entry live, so the exemption cannot outlive the wrapper", () => {
+    for (const [file, wrapper] of Object.entries(WRAPPERS)) {
       expect(
-        new RegExp(`\\b${name}\\s*=[^;]*?${escaped}`).test(code),
-        `${file} no longer declares ${name} as the wrapper around ${forward}; rename or delete its entry`,
-      ).toBe(true);
+        forwardOf(parse(readFileSync(file, "utf8"), file), wrapper),
+        `${file} no longer declares ${wrapper.name} as a wrapper that forwards its parameter to invoke; rename or delete its entry`,
+      ).toBeDefined();
     }
   });
 
   it("the one reader still reads the model", () => {
-    expect(detect(readFileSync(READER, "utf8"))).toContain(MODEL);
+    expect(detect(readFileSync(READER, "utf8"), READER)).toContain(MODEL);
   });
 
   it("keeps every exemption live, so the list cannot rot into a rubber stamp", () => {
@@ -272,7 +402,7 @@ describe("screens read machine truth through the Machine Model, never around it"
       const [file, cmd] = key.split("|");
       expect(files, `${file} is exempted but no longer exists`).toContain(file);
       expect(
-        detect(readFileSync(file, "utf8")),
+        detect(readFileSync(file, "utf8"), file),
         `${file} no longer calls ${cmd} — delete its exemption rather than leaving a standing pass`,
       ).toContain(cmd);
       expect(reason.length, `${key} needs a real reason, not a placeholder`).toBeGreaterThan(80);
@@ -289,6 +419,10 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(detect("// get_intelligence_timeline used to feed this tape\nconst x = 0;")).toEqual([]);
     expect(detect("/* invoke(\"get_hardware_info\") */ const y = 1;")).toEqual([]);
     expect(detect('const source = "hardware::get_hardware_info";')).toEqual([]);
+    // A comment marker inside a string or a regex is text, and the code after it is still read (#582, at f4ef8dd3).
+    expect(detect('const marker = "//"; invoke("get_machine_model");')).toEqual([MODEL]);
+    expect(detect('const open = "/*"; invoke("get_hardware_info"); const close = "*/";')).toEqual(["get_hardware_info"]);
+    expect(detect('const re = /\\/\\//; invoke("get_machine_model");')).toEqual([MODEL]);
   });
 
   it("a watched name kept outside a call is caught, and every real call form passes", () => {
@@ -296,6 +430,7 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loose('export const MODEL_CMD = "get_machine_model";')).toEqual([MODEL]);
     expect(loose("const cmds = ['get_hardware_info', 'x'];")).toEqual(["get_hardware_info"]);
     expect(loose('const t = { cmd: "get_applied_changes" };')).toEqual(["get_applied_changes"]);
+    expect(loose('const url = "https://x"; const m = "//"; export const C = "get_machine_model";')).toEqual([MODEL]);
     // The forms this codebase really uses.
     expect(loose('invoke<MachineModel>("get_machine_model")')).toEqual([]);
     expect(loose('invoke<{ network_pills?: NetworkPill[] } | null>("get_hardware_info")')).toEqual([]);
@@ -316,9 +451,14 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(sink("invoke(CMD)")).toHaveLength(1);
     expect(sink("invoke<T>(cmd)")).toHaveLength(1);
     expect(sink('import { invoke as call } from "@tauri-apps/api/core";')).toHaveLength(1);
+    expect(sink('import { "invoke" as call } from ' + '"@tauri-apps/api/core";')).toHaveLength(1);
     expect(sink('export { invoke } from "@tauri-apps/api/core";')).toHaveLength(1);
     expect(sink("const call = invoke;")).toHaveLength(1);
     expect(sink('invoke.call(null, "get_machine_model")')).toHaveLength(1);
+    expect(sink("ipc[`invoke`](name)")).toHaveLength(1);
+    // A comment marker inside a string no longer hides the code after it (#582, at f4ef8dd3).
+    expect(sink('const marker = "//"; invoke(["get", "machine", "model"].join("_"));')).toHaveLength(1);
+    expect(sink('const open = "/*"; invoke(name); const close = "*/";')).toHaveLength(1);
     // The named wrapper forwards once; its own callers are held to the rule, and a second forward is not exempt.
     const app = WRAPPERS[join("src", "App.tsx")];
     const wrapped = "const run = <T,>(cmd: string) =>\n  invoke<T>(cmd);\n";
@@ -326,30 +466,45 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(sink(wrapped + 'run<X>("get_" + kind, set);', app)).toHaveLength(1);
     expect(sink(wrapped + "run<X>(name, set);", app)).toHaveLength(1);
     expect(sink(wrapped + "invoke<T>(cmd);", app)).toHaveLength(1);
-    // An escaped identifier runs as the name it spells, so it is read as that name (#582, at 9105a072).
+    // The exemption is the wrapper's shape, so a forward under another name, or from a nested function, is not it.
+    expect(sink("const go = <T,>(cmd: string) =>\n  invoke<T>(cmd);\n", app)).toHaveLength(1);
+    expect(sink("const run = (cmd: string) => [1].map(() => invoke(cmd));", app)).toHaveLength(1);
+    // An escaped identifier runs as the name it spells, and the compiler reads it as that name (#582, at 9105a072).
     expect(sink('core.inv\\u006fke(["get", "machine", "model"].join("_"))')).toHaveLength(1);
     expect(sink(wrapped + 'r\\u0075n(["get", "machine", "model"].join("_"), set);', app)).toHaveLength(1);
     expect(sink('inv\\u{6f}ke(name)')).toHaveLength(1);
     expect(detect('invoke("get_m\\u0061chine_model")')).toEqual([MODEL]);
-    // An escape that stands for anything else, a quote included, stays as written: decoding it could
-    // end a string early. A literal backslash before the escape leaves it text, not an escape.
+    // A quote escape stays inside its string, and an escaped backslash leaves what follows as text.
     expect(sink('invoke("get_x\\u0022")')).toEqual([]);
     expect(sink('const text = "\\\\u0069nvoke(name)";')).toEqual([]);
     // A string also spells a character with a hex escape, or with a backslash before an ordinary one.
     expect(detect('invoke("get_m\\x61chine_model")')).toEqual([MODEL]);
     expect(detect('invoke("get_\\machine\\_model")')).toEqual([MODEL]);
-    // A backslash before a line break joins the two lines, so a literal that spans one is not plain.
-    expect(sink('invoke("get_machine\\\n_model")')).toHaveLength(1);
-    expect(sink('invoke(`get_machine\\\n_model`)')).toHaveLength(1);
-    expect(sink('invoke("get_machine\\\u2028_model")')).toHaveLength(1);
+    // A backslash before a line break joins the two lines, and the compiler reads the joined value, so
+    // the command is caught by its real name. The text-reading guard could only refuse such a literal
+    // outright; now it is plain, and it names what it calls.
+    expect(detect('invoke("get_machine\\\n_model")')).toEqual([MODEL]);
+    expect(detect('invoke(`get_machine\\\n_model`)')).toEqual([MODEL]);
+    expect(detect('invoke("get_machine\\\u2028_model")')).toEqual([MODEL]);
+    // Escapes are read only where the language reads them: a regex, a raw string and JSX text stay text.
+    expect(sink("const re = /invo\\ke/;")).toEqual([]);
+    expect(sink("const s = String.raw`inv\\u006fke(name)`;")).toEqual([]);
+    expect(sink("const el = <p>invoke(name) and inv\\u006fke(name)</p>;")).toEqual([]);
+    expect(detect('const re = /\\d/; invoke("get_machine_model");')).toEqual([MODEL]);
     // Rule 6: the invoke function reached without its name.
     expect(sink('import * as core from "@tauri-apps/api/core";\ncore[["inv", "oke"].join("")](name);')).toHaveLength(1);
     expect(sink('const core = await import("@tauri-apps/api/core");')).toHaveLength(1);
     expect(sink('export * from "@tauri-apps/api/core";')).toHaveLength(1);
     expect(sink('import { core } from "@tauri-apps/api";')).toHaveLength(1);
     expect(sink('import { invoke } from "@tauri-apps/api/c\\u006fre";\nimport * as c from "@tauri-apps/api/c\\x6fre";')).toHaveLength(1);
+    expect(sink('import { invoke } from "@tauri-apps/api/core.js";')).toHaveLength(1);
+    expect(sink('import { invoke } from "@tauri-apps/api/./core";')).toHaveLength(1);
+    expect(sink('import { invoke } from "@tauri-apps/api/index";')).toHaveLength(1);
+    expect(sink('import { invoke } from "@tauri-apps/API/core";')).toHaveLength(1);
     expect(sink('window.__TAURI_INTERNALS__[key](name);')).toHaveLength(1);
     expect(sink('const t = window["__TAURI__"];')).toHaveLength(1);
+    expect(sink('const t = window["__TAUR\\u0049__"];')).toHaveLength(1);
+    expect(sink('const t = window[`__TAURI_${"INTERNALS"}__`];')).toHaveLength(1);
     // What real code does passes: a named import, type-only included.
     expect(sink('import { invoke } from "@tauri-apps/api/core";\nimport type { InvokeArgs } from "@tauri-apps/api/core";')).toEqual([]);
     // The forms this codebase really uses.
@@ -362,8 +517,36 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(sink('invoke<{ network_pills?: NetworkPill[] } | null>("get_hardware_info")')).toEqual([]);
     expect(sink('invoke<Record<string, number>>("get_x", { id })')).toEqual([]);
     expect(sink('ipc.invoke(\n  "get_hardware_info",\n)')).toEqual([]);
+    expect(sink('ipc["invoke"]("get_hardware_info")')).toEqual([]);
     expect(sink(wrapped + 'run<AppliedChange[]>("get_applied_changes", setChanges);', app)).toEqual([]);
     expect(sink("// invoke(name) used to live here\nconst y = 1;")).toEqual([]);
+  });
+
+  it("the load rule catches code outside the corpus, and every real import passes", () => {
+    const screen = join("src", "surfaces", "Sample.tsx");
+    const app = join("src", "App.tsx");
+    const outside = (hits: string[]) => hits.filter((hit) => hit.endsWith("code this guard does not read"));
+    // A bridge in the excluded support folder, a test file, and code outside src (#582, at f4ef8dd3).
+    expect(outside(loads('export { setup as call } from "../test/setup";', screen))).toHaveLength(1);
+    expect(outside(loads('import "./machine-model-reader-guard.test";', app))).toHaveLength(1);
+    expect(outside(loads('import { x } from "../scripts/verify-module-map";', app))).toHaveLength(1);
+    expect(outside(loads('const m = await import("../scripts/verify-module-map.mjs");', app))).toHaveLength(1);
+    // A module named by a value, a glob, or a name that resolves to nothing cannot be checked.
+    expect(loads("const m = await import(path);", app)).toHaveLength(1);
+    expect(loads("const m = await import(`./data/${name}`);", app)).toHaveLength(1);
+    expect(loads("const m = require(name);", app)).toHaveLength(1);
+    expect(loads('const all = import.meta.glob("./surfaces/*.tsx");', app)).toHaveLength(1);
+    expect(loads('const w = new Worker(new URL("./sample.test.ts", import.meta.url));', app)).toHaveLength(1);
+    expect(loads("const dev = import.meta.env.DEV;", app)).toEqual([]);
+    expect(loads('import "./no-such-module";', app)).toEqual(["./no-such-module: resolves to no file"]);
+    // What real code does passes: a corpus file by any of its specifiers, an asset, a package.
+    expect(loads('import { x } from "./data/machine-model";', app)).toEqual([]);
+    expect(loads('import { x } from "./data/machine-model.js";', app)).toEqual([]);
+    expect(loads('import { x } from "../data/machine-model";', screen)).toEqual([]);
+    expect(loads('import { x } from "/src/data/machine-model.ts";', app)).toEqual([]);
+    expect(loads('import url from "./App.css?url";', app)).toEqual([]);
+    expect(loads('import { invoke } from "@tauri-apps/api/core";', app)).toEqual([]);
+    expect(loads('const { t } = await import("./data/machine-model");', app)).toEqual([]);
   });
 
   it("a planted direct reader in any other screen is a violation", () => {
