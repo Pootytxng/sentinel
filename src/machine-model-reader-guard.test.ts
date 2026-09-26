@@ -41,12 +41,14 @@ import { TREE_WALK_TIMEOUT_MS } from "./test/tree-walk-budget";
 //      fonts, and the CSP takes no script, worker or frame from anywhere but the app itself (#582,
 //      at 74b64745). The build runs only the commands pinned here, with no npm lifecycle script,
 //      and Tauri reads one config file, whose frontend folder, window pages and security settings
-//      are pinned (#582, at 4d8f2900). No script body, and no script or hook in the repo, hands
-//      Tauri another config (`--config`, `-c` or `TAURI_CONFIG`). Cargo reads no config but its
-//      audit file, patches or replaces no crate, and every crate in Cargo.lock comes from crates.io
-//      with a checksum. The Rust side opens no other page and runs no other script in a webview:
-//      every Rust file is read as tokens, each webview call is pinned whole with its arguments, and
-//      no Rust file pulls in source by `include!` or `#[path]` (#582, at 63c57f30).
+//      are pinned (#582, at 4d8f2900). No script body, and no script, hook, workflow or settings
+//      file anywhere in the repo, hands Tauri another config (`--config`, `-c`, or `TAURI_CONFIG`
+//      in any case). Cargo reads no config but its audit file, patches or replaces no crate, and
+//      every crate in Cargo.lock comes from crates.io with a checksum. The Rust side opens no other
+//      page and runs no other script in a webview: every Rust file is read as tokens, each webview
+//      call is pinned whole with its arguments, any other method named like a webview API is
+//      listed with why it changes no page, and no Rust file pulls in source by `include!` or
+//      `#[path]` (#582, at 63c57f30 and 9c97047f).
 //   Every rule reads the TypeScript syntax tree, not the text. A comment, a regex or JSX text is
 //   what the compiler says it is, and a string or a name is read as the value it runs as, escapes
 //   included. Reading the text by hand let a `"//"` inside a string blank the code after it (#582,
@@ -57,10 +59,10 @@ import { TREE_WALK_TIMEOUT_MS } from "./test/tree-walk-budget";
 // Where a page navigates is no way around rule 7. A remote page gets no IPC: Tauri 2.11 refuses a
 // custom command from a non-local origin unless a capability names that origin, and none does
 // (pinned below). A local page can only be a file the build serves, which the pins above hold.
-// Those two are the boundary. The navigation names (`location`, `navigation`, `open`, links, form
-// actions, `<meta>`, `<base>` and the ways to reach a window) are defense in depth: they keep the
-// app from leaving itself in the ordinary ways, and a way this list misses still lands on a page
-// with no IPC or on a file the pins hold.
+// Those two are the boundary. The navigation names (`location`, `navigation` and `open` read off
+// anything, links, form actions, `<meta>` and `<base>`) are defense in depth: they keep the app
+// from leaving itself in the ordinary ways, and a way this list misses still lands on a page with
+// no IPC or on a file the pins hold.
 //
 // What it cannot decide: a global looked up under a key built from pieces while the code runs. The
 // syntax tree cannot follow a value through execution, so review catches that. Code built from a
@@ -70,8 +72,12 @@ import { TREE_WALK_TIMEOUT_MS } from "./test/tree-walk-budget";
 // versions and hashes their lockfiles pin. A Rust name a macro builds from pieces is not a token
 // this guard can see, so review catches that too. The machine the build runs on is outside the
 // repo: a `TAURI_CONFIG` set in its shell, or a `~/.cargo` or `CARGO_HOME` config, is the
-// builder's to keep clean. Everything written the ordinary way, and every construction or escape
-// form a review has named, is decided here.
+// builder's to keep clean.
+//
+// So this is a drift guard, not the security boundary. It decides code written the ordinary way
+// and every construction a review has named. Code written to get past it is not all within its
+// reach; the boundary against that is the CSP, the IPC origin check, the capability file and
+// review.
 //
 // The corpus is INVERTED on purpose (walk everything, exempt explicitly), the lesson the
 // mutation-boundary guard learned: a new surface is in scope the moment it exists. Test files and
@@ -329,29 +335,26 @@ const DECLARED = new Set(Object.keys(DEPENDENCIES));
 const URL_LOADERS = new Set(["Worker", "SharedWorker", "serviceWorker", "importScripts", "addModule", "createContextualFragment", "srcdoc", "srcDoc"]);
 const CODE_ELEMENTS = new Set(["script", "iframe", "frame", "frameset", "object", "embed", "portal", "fencedframe"]);
 
-// Where a page can be sent: the link and form targets, the window objects whose `location`,
-// `navigation` and `open` move the page, and the elements that send it elsewhere or change where its
-// links go. A window is also reached from a document, an element or an event (`defaultView`,
-// `ownerDocument`, `contentWindow`, `view`), so those names count as one (#582, at 63c57f30).
+// Where a page can be sent: the link and form targets, the names that move the page, and the
+// elements that send it elsewhere or change where its links go.
 const NAVIGATES = new Set(["href", "xlinkHref", "formAction"]);
-const WINDOWS = new Set([
-  "window", "globalThis", "self", "top", "parent", "frames", "opener", "document",
-  "defaultView", "ownerDocument", "contentWindow", "view",
-]);
 const NAV_ELEMENTS = new Set(["a", "area", "meta", "base"]);
+// `location`, `navigation` and `open` count read off anything, not only off a named window: a
+// window is reached through a variable, an event, a node or a frame in more ways than a list of
+// names can hold (#582, at 9c97047f). A data field that shares one of the names is pinned here by
+// its file and exact text, and each pin must still match.
+const MOVES_PAGE = new Set(["location", "navigation", "open"]);
+const NAV_FIELDS = new Set([
+  `${join("src", "surfaces", "SupportEvidence.tsx")}|bundle.location`,
+  `${join("src", "surfaces", "lab", "OptimizeStation.tsx")}|(e.currentTarget as HTMLDetailsElement).open`,
+]);
+const navFieldsSeen = new Set<string>();
 
-// A window object: `window`, `document` and their kin, directly or as a member (`window.document`).
-function isWindow(node: ts.Node): boolean {
-  if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node)) return isWindow(node.expression);
-  const name = ts.isIdentifier(node) ? node.text : ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) ? nameOf(ts.isPropertyAccessExpression(node) ? node.name : node.argumentExpression) : undefined;
-  return name !== undefined && WINDOWS.has(name);
-}
-
-// The member expression when a name is read off a window object (`window.location`, `top["open"]`).
-function onWindow(node: ts.Node): ts.Expression | undefined {
+// The member expression when a name is read off something (`x.location`, `x["open"]`).
+function readOff(node: ts.Node): ts.Expression | undefined {
   const up = node.parent;
   const member = (ts.isPropertyAccessExpression(up) && up.name === node) || (ts.isElementAccessExpression(up) && up.argumentExpression === node);
-  return member && isWindow(up.expression) ? up : undefined;
+  return member ? up : undefined;
 }
 
 // An identifier that names a value where it stands: not a property, a key, a declared name, an
@@ -369,6 +372,15 @@ function isReference(node: ts.Identifier): boolean {
 function reloads(at: ts.Node): boolean {
   const up = at.parent;
   return ts.isPropertyAccessExpression(up) && up.expression === at && up.name.text === "reload" && ts.isCallExpression(up.parent) && up.parent.expression === up;
+}
+
+// Whether a file calls a name directly anywhere (`go(u)`).
+function calledIn(tree: ts.SourceFile, name: string): boolean {
+  let hit = false;
+  walk(tree, (node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === name) hit = true;
+  });
+  return hit;
 }
 
 // Rule 7, per file: each load that names code outside the corpus, names no file, names a package
@@ -402,23 +414,24 @@ export function loads(source: string, file: string): string[] {
         bad.add(`${lineOf(tree, node)} (an element that can load code or send the page elsewhere)`);
       }
     }
-    // Navigation: the page's `location` or `navigation`, reached bare or on a window object (a
-    // reload excepted), `open` on a window object or called bare, and a link or form target.
-    if (name === "location" || name === "navigation") {
-      const at = onWindow(node) ?? (ts.isIdentifier(node) && isReference(node) ? node : undefined);
-      if (at && !reloads(at)) bad.add(`${lineOf(tree, node)} (${name} can send the page elsewhere)`);
+    // Navigation: `location`, `navigation` and `open` read off anything (a reload and a pinned data
+    // field excepted), `location` and `navigation` reached bare, `open` called bare, and a link or
+    // form target.
+    if (name !== undefined && MOVES_PAGE.has(name)) {
+      const member = readOff(node);
+      const called = ts.isCallExpression(node.parent) && node.parent.expression === node;
+      const at = member ?? (ts.isIdentifier(node) && isReference(node) && (name !== "open" || called) ? node : undefined);
+      const field = member && `${file}|${member.getText(tree)}`;
+      if (field && NAV_FIELDS.has(field)) navFieldsSeen.add(field);
+      else if (at && !reloads(at)) bad.add(`${lineOf(tree, node)} (${name} can send the page elsewhere; a data field of that name is pinned in NAV_FIELDS)`);
     }
     if (name !== undefined && NAVIGATES.has(name)) bad.add(`${lineOf(tree, node)} (${name} can send the page elsewhere)`);
-    if (name === "open" && (onWindow(node) || (ts.isIdentifier(node) && ts.isCallExpression(node.parent) && node.parent.expression === node))) {
-      bad.add(`${lineOf(tree, node)} (open can open another page)`);
-    }
     if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
-      // `const { location } = window`
+      // `const { location } = anything`, and `const { open: go } = w` where `go` is then called. A
+      // prop named `open` that is only read is a flag, not a window's `open`.
       const key = nameOf(node.propertyName ?? node.name) ?? (node.propertyName && plainText(node.propertyName));
-      const from = ts.isVariableDeclaration(node.parent.parent) ? node.parent.parent.initializer : undefined;
-      if (key !== undefined && from && isWindow(from) && (key === "location" || key === "navigation" || key === "open")) {
-        bad.add(`${lineOf(tree, node)} (${key} can send the page elsewhere)`);
-      }
+      const opens = key === "open" && ts.isIdentifier(node.name) && calledIn(tree, node.name.text);
+      if (key === "location" || key === "navigation" || opens) bad.add(`${lineOf(tree, node)} (${key} can send the page elsewhere)`);
     }
     if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && ts.isIdentifier(node.tagName)) {
       const tag = node.tagName.text.toLowerCase();
@@ -584,9 +597,40 @@ const WEBVIEW_METHODS = new Set([
   "on_web_resource_request", "on_navigation", "on_new_window",
   "register_uri_scheme_protocol", "register_asynchronous_uri_scheme_protocol",
   "initialization_script", "initialization_script_for_all_frames", "append_invoke_initialization_script", "js_init_script",
+  "js_init_script_on_all_frames", "invoke_system", "additional_browser_args",
   "config_mut", "set_assets", "assets_mut", "runtime_authority_mut", "add_capability",
 ]);
 const BUILDER_TYPES = new Set(["WebviewWindow", "Webview", "Window"]);
+// Tauri names these APIs for what they do, and so does WebView2 (`ExecuteScript`, `Navigate`), so
+// any other name reached as a method or a path whose words say it runs script, moves or serves a
+// page, or widens the IPC fails until a review either holds it above or lists it here with why it
+// changes no page (#582, at 9c97047f). A name's words are its snake_case or CamelCase parts, so
+// `description` is not `script`. Each entry must still be named somewhere.
+const WEBVIEW_WORDS = new Set([
+  "eval", "evaluate", "script", "scripts", "navigate", "navigation", "protocol", "webview", "invoke",
+  "capability", "capabilities", "authority", "asset", "assets", "browser",
+]);
+const CAPTURE = "The ETW capture backend's report of what it can measure (capture.rs); it is not Tauri's capability API.";
+const NOT_WEBVIEW: Record<string, string> = {
+  get_webview_window: "Looks up an open window by its label; it opens, loads and runs nothing.",
+  compose_batch_script: "Compy's own PowerShell batch, built in actions.rs; it never reaches a webview.",
+  invoke_handler: "Registers the app's own commands, each a Rust function in this crate; it loads no page and runs no script.",
+  capabilities: CAPTURE,
+  capture_capabilities: CAPTURE,
+  CaptureCapabilities: CAPTURE,
+};
+
+// Each name Rust source reaches after `.` or `::` whose words WEBVIEW_WORDS holds, past the
+// webview names above, which are held whole.
+export function webviewNames(source: string): string[] {
+  const tokens = rustTokens(source);
+  const words = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().split("_");
+  return tokens
+    .filter((token, at) => token.word && (tokens[at - 1]?.text === "." || tokens[at - 1]?.text === "::"))
+    .map((token) => token.text)
+    .filter((name) => words(name).some((word) => WEBVIEW_WORDS.has(word)))
+    .filter((name) => !WEBVIEW_METHODS.has(name) && !WEBVIEW_TYPES.has(name) && !BUILDER_TYPES.has(name));
+}
 const CLOSES: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
 
 // Each place Rust source names one of those: the name and everything after it to the end of its
@@ -650,16 +694,29 @@ const WEBVIEW_PINS = [
 
 // ── Build inputs outside the frontend (rule 7) ──────────────────────────────────────────────────
 
-// Tauri takes another config from `--config`/`-c` or from TAURI_CONFIG. `--config-env` is git's.
-const CONFIG_FLAG = /--config(?![\w-])|TAURI_CONFIG/;
+// Tauri takes another config from `--config`/`-c` or from TAURI_CONFIG, and Windows reads an
+// environment name in any case (`$env:tauri_config`). `--config-env` is git's.
+const CONFIG_FLAG = /--config(?![\w-])|TAURI_CONFIG/i;
 // A short `-c`, alone or with its value attached (`-calt.json`), but not a PowerShell
 // case-sensitive operator (`-contains`, `-ceq`, …).
 const SHORT_C = /(?:^|[\s"'`(,=[])-c(?!(?:ontains|notcontains|eq|ne|gt|ge|lt|le|like|notlike|match|notmatch|replace|split|in|notin)\b)/;
-// A file that starts the Tauri CLI: through npm, npx or cargo, its package, or its binary.
-const TAURI_ROUTE = /npm(?:\.cmd)?\s+(?:run(?:-script)?|exec|x)\s+tauri|npx(?:\.cmd)?\s+tauri|cargo\s+tauri|@tauri-apps[\\/]cli|\.bin[\\/]tauri|tauri\.cmd|["'`]tauri["'`]/i;
-// The folders whose code can start a build, and the code in them.
-const BUILD_CODE = [...listFiles("scripts"), ...listFiles("tools"), ...listFiles(".githooks"), ...listFiles(join(".claude", "hooks")), ...listFiles(join(".claude", "skills"))]
-  .filter((file) => !/\.test\./.test(file) && (/\.(?:ps1|psm1|[cm]?[jt]s|sh|cmd|bat|py)$/i.test(file) || file.startsWith(".githooks")));
+// A file that starts the Tauri CLI: a line that names a runner and then `tauri`, whatever flags
+// sit between them (`npm --silent run tauri`, `npx tauri`, `cargo tauri`), the CLI's package, or
+// its binary. `src-tauri` and `@tauri-apps/…` on a runner's line are paths, not the CLI.
+const TAURI_ROUTE = /\b(?:npm|npx|pnpm|yarn|bunx?|cargo|node)(?:\.cmd|\.exe)?\b.*(?<![\w@./\\-])tauri(?![\w-])|@tauri-apps[\\/]cli|\.bin[\\/]tauri|tauri\.cmd|["'`]tauri["'`]/i;
+// The code that can start a build: every script, hook, skill, workflow and settings file in the
+// repo, past the app's own source, the docs, the lockfile and what installs and builds write
+// (#582, at 9c97047f).
+const NOT_BUILD_CODE = new Set(["node_modules", ".git", "dist", "target", "logs", "worktrees", "package-lock.json"]);
+const APP_FOLDERS = new Set(["src", "src-tauri", "docs", "public"]);
+function buildCode(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const rel = join(dir, name);
+    if (NOT_BUILD_CODE.has(name) || (dir === "." && APP_FOLDERS.has(name))) return [];
+    return statSync(rel).isDirectory() ? buildCode(rel) : [rel];
+  });
+}
+const BUILD_CODE = buildCode(".").filter((file) => !/\.test\./.test(file) && (/\.(?:ps1|psm1|[cm]?[jt]s|sh|cmd|bat|py|ya?ml|json)$/i.test(file) || file.startsWith(".githooks")));
 
 // public/ is copied into the build as it is and served beside the bundle, so it holds only files
 // that cannot run: images and fonts, and SVG with no script in it.
@@ -741,6 +798,7 @@ describe("screens read machine truth through the Machine Model, never around it"
         "turn a .js file into .ts, name every module with a literal, import packages package.json " +
         "declares, and load no code by URL",
     ).toEqual([]);
+    expect([...NAV_FIELDS].filter((pin) => !navFieldsSeen.has(pin)), "each pinned data field still matches its file").toEqual([]);
   });
 
   it("the resolver maps a name no other way than rule 7 reads it", () => {
@@ -843,7 +901,8 @@ describe("screens read machine truth through the Machine Model, never around it"
     const hooks = Object.keys(scripts).filter((name) => LIFECYCLE.has(name) || (/^(?:pre|post)/.test(name) && name.replace(/^(?:pre|post)/, "") in scripts));
     expect(hooks, "no npm lifecycle script runs around the build").toEqual([]);
     // Every script body, not only the three above: one that starts Tauri is `tauri` and nothing
-    // else, and none hands a tool another config (#582, at 63c57f30).
+    // else, and none hands a tool another config (#582, at 63c57f30). The `-c` check reads every
+    // body, not only Tauri's: `npm run build -- -c x` hands Vite another config.
     const bodies = Object.entries(scripts).map(([name, body]) => `${name}: ${body}`);
     expect(bodies.filter((line) => /tauri/i.test(line) && line !== "tauri: tauri"), "only the `tauri` script starts Tauri, as bare `tauri`").toEqual([]);
     expect(bodies.filter((line) => CONFIG_FLAG.test(line) || SHORT_C.test(line)), "no npm script passes a config flag").toEqual([]);
@@ -894,10 +953,13 @@ describe("screens read machine truth through the Machine Model, never around it"
     const rust = listFiles("src-tauri", new Set([join("src-tauri", "target")])).filter((file) => file.endsWith(".rs"));
     expect(rust, "the Rust corpus holds the app and its build script").toEqual(expect.arrayContaining([join("src-tauri", "build.rs"), RS("lib.rs"), RS("tray.rs")]));
     const sources = rust.map((file) => [file, readFileSync(file, "utf8")] as const);
-    expect(sources.filter(([, text]) => text.includes("TAURI_CONFIG")).map(([file]) => file), "no Rust file names TAURI_CONFIG").toEqual([]);
+    expect(sources.filter(([, text]) => /TAURI_CONFIG/i.test(text)).map(([file]) => file), "no Rust file names TAURI_CONFIG").toEqual([]);
     expect(sources.flatMap(([file, text]) => rustIncludes(text).map((hit) => `${file}: ${hit}`)), "no Rust file takes code from another file").toEqual([]);
     const webview = sources.flatMap(([file, text]) => webviewCalls(text).map((call) => `${file}: ${call}`));
     expect(webview.sort(), "a Rust webview call is new or changed: check the page it opens and the script it runs, then pin it").toEqual([...WEBVIEW_PINS].sort());
+    const named = new Set(sources.flatMap(([, text]) => webviewNames(text)));
+    expect([...named].filter((name) => !(name in NOT_WEBVIEW)).sort(), "a Rust method is named like a webview API: hold it in WEBVIEW_METHODS, or list why it changes no page").toEqual([]);
+    expect(Object.keys(NOT_WEBVIEW).filter((name) => !named.has(name)), "each name listed as no webview is still named").toEqual([]);
   });
 
   it("the shipped build serves no code beyond the bundle, and runs none it builds at run time", () => {
@@ -1132,6 +1194,18 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loads("el.ownerDocument.location = u;", screen)).toHaveLength(1);
     expect(loads("frame.contentWindow.open(u);", screen)).toHaveLength(1);
     expect(loads("event.view.location.href = u;", screen)).toHaveLength(2);
+    // The names count read off anything, so a window kept in a variable or reached some other way
+    // is held the same (#582, at 9c97047f).
+    expect(loads("const target = document.defaultView!; target.location.assign(url);", screen)).toHaveLength(1);
+    expect(loads("const w = window; w.open(u);", screen)).toHaveLength(1);
+    expect(loads("node.getRootNode().location = u;", screen)).toHaveLength(1);
+    expect(loads("const { open: go } = w; go(u);", screen)).toHaveLength(1);
+    expect(loads("const { location } = props;", screen)).toHaveLength(1);
+    expect(loads("const shown = details.open;", screen)).toHaveLength(1);
+    expect(loads("window.location.reload(); anything.location.reload();", screen)).toEqual([]);
+    expect(loads("function Sheet({ open }: { open: boolean }) { return open ? 1 : 0; }", screen)).toEqual([]);
+    expect(loads("const [open, setOpen] = useState(false); if (open) setOpen(false);", screen)).toEqual([]);
+    expect(loads("const x = { location: 1, open: true };", screen)).toEqual([]);
     // What real code does passes: a corpus file by any of its specifiers, an asset, a package.
     expect(loads('import { x } from "./data/machine-model";', app)).toEqual([]);
     expect(loads('import { x } from "./data/machine-model.js";', app)).toEqual([]);
@@ -1145,11 +1219,16 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loads('const style = document.createElement("style");', app)).toEqual([]);
     expect(loads("const box = <section className={css} />;", app)).toEqual([]);
     expect(loads("const f = <form className={css} onSubmit={add} />;", app)).toEqual([]);
-    expect(loads("dialog.open();", app)).toEqual([]);
+    // A method named `open` counts on anything now, so a dialog's own `open()` is pinned in
+    // NAV_FIELDS before it passes (#582, at 9c97047f).
+    expect(loads("dialog.open();", app)).toHaveLength(1);
     expect(loads("const [open, setOpen] = useState(false);\nif (open) setOpen(!open);", app)).toEqual([]);
     expect(loads("const tile = <BentoTile open={{ label }} />;", app)).toEqual([]);
     expect(loads("const retry = () => window.location.reload();", app)).toEqual([]);
-    expect(loads("const row = { location: bundle.location };\nconst { location } = bundle;\ntype T = { location: string };", app)).toEqual([]);
+    // A data field named `location` is read off something too, so it passes only once pinned; an
+    // object key and a type member are not reads.
+    expect(loads("const row = { location: bundle.location };\nconst { location } = bundle;\ntype T = { location: string };", app)).toHaveLength(2);
+    expect(loads("const row = { location: 1 };\ntype T = { location: string; open: boolean };", app)).toEqual([]);
     expect(loads("const chart = <Area values={v} id=\"cpu\" />;", app)).toEqual([]);
   });
 
@@ -1179,6 +1258,13 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(rustIncludes('#[path = "bridge.rs"] mod m;')).toHaveLength(1);
     expect(rustIncludes('#![path = "x"]')).toHaveLength(1);
     expect(rustIncludes('let s = include_str!("a.txt"); let path = p; // include!("x")')).toEqual([]);
+    // The app builder's and a plugin builder's own script hooks are held whole, and any other
+    // method named like a webview API is listed by name (#582, at 9c97047f).
+    expect(webviewCalls("tauri::Builder::default().invoke_system(s).run(ctx)")).toEqual(["invoke_system(s).run(ctx)"]);
+    expect(webviewCalls('plugin::Builder::new("x").js_init_script_on_all_frames(s).build()')).toEqual(["js_init_script_on_all_frames(s).build()"]);
+    expect(webviewNames("b.set_webview_script(x); w.evaluate_js(y); tauri::webview::Url::parse(u);")).toEqual(["set_webview_script", "evaluate_js", "webview"]);
+    expect(webviewNames("w.invoke_system(s); w.eval(x); let eval = 1; script.len();")).toEqual([]);
+    expect(webviewNames("d.description(); v.doubleValue(); tauri::WebviewWindow::get(); c.ExecuteScript(s);")).toEqual(["ExecuteScript"]);
   });
 
   it("the config-flag scan catches each way to hand Tauri a config, and not the operators around it", () => {
@@ -1193,6 +1279,13 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(TAURI_ROUTE.test("npx tauri build")).toBe(true);
     expect(TAURI_ROUTE.test("node node_modules\\@tauri-apps\\cli\\tauri.js build")).toBe(true);
     expect(TAURI_ROUTE.test("npm run build")).toBe(false);
+    // An environment name in any case, and a runner's flags before `tauri` (#582, at 9c97047f).
+    expect(CONFIG_FLAG.test("$env:tauri_config = '{}'")).toBe(true);
+    expect(TAURI_ROUTE.test("npm --silent run tauri -- build -c alternate.json")).toBe(true);
+    expect(TAURI_ROUTE.test("npm.cmd --prefix . exec tauri build")).toBe(true);
+    expect(TAURI_ROUTE.test("cargo test --manifest-path src-tauri/Cargo.toml")).toBe(false);
+    expect(TAURI_ROUTE.test('node -e "require(\'@tauri-apps/api\')"')).toBe(false);
+    expect(BUILD_CODE).toEqual(expect.arrayContaining([join(".github", "workflows", "ci.yml"), "compy-entry.ps1", join("scripts", "release.ps1")]));
   });
 
   it("a planted direct reader in any other screen is a violation", () => {
