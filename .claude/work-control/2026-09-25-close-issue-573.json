@@ -1,0 +1,27 @@
+{
+  "actor": "codex",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/573#issuecomment-5842086394",
+  "leaseEvidenceNote": "Landing-only claim in codex/575-landing. The implementation lease was released before this carrier. This carrier will release its own lease before the close-issue gate and closure.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Only this carrier wrote the three new transition receipt paths. No other live lane owns any of these paths or the reviewed source paths.",
+  "inheritedWork": true,
+  "inspection": {"repository": true, "remoteState": true, "worktree": true, "branch": true, "dirtyState": true, "liveProcesses": true},
+  "currentHead": "91af459c22166d5725b98a0262578be7d500e0ea",
+  "pr": 575,
+  "issue": 573,
+  "kind": "lane",
+  "branch": "codex/575-landing",
+  "mutationAuthors": ["claude-code", "codex"],
+  "mutationAuthorsNote": "Claude wrote the PR implementation but inherited Git variables labeled that commit codex; Codex authored the two receipt-only files in 91af459c. Both identities are listed conservatively.",
+  "requiredGates": ["npm test", "npm run build", "cargo test --manifest-path src-tauri/Cargo.toml", "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"],
+  "gateResults": [
+    {"command": "npm test", "status": "passed", "head": "91af459c22166d5725b98a0262578be7d500e0ea", "evidence": "logs/verify-local-2026-09-26T02-30-45Z.log, raw bytes PR #575 comment 5842429150, SHA-256 6E8E4F45EC42C67BC204FE5528054C273079FB9E1AA86A22B1615BBAC248829D", "summary": "461 frontend test files; 7694 passed, one expected fail, nine skipped."},
+    {"command": "npm run build", "status": "passed", "head": "91af459c22166d5725b98a0262578be7d500e0ea", "evidence": "Same decoded native log and SHA-256", "summary": "Type check and production build passed."},
+    {"command": "cargo test --manifest-path src-tauri/Cargo.toml", "status": "passed", "head": "91af459c22166d5725b98a0262578be7d500e0ea", "evidence": "Same decoded native log and SHA-256", "summary": "1350 passed, zero failed, 24 ignored."},
+    {"command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings", "status": "passed", "head": "91af459c22166d5725b98a0262578be7d500e0ea", "evidence": "Same decoded native log and SHA-256", "summary": "Clean with -D warnings."}
+  ],
+  "gateEvidenceNote": "The receipt carrier's native pre-push gate returned LOCAL CHECK RESULT: PASS and its direct-main push exited zero. ChatGPT HQ independently decoded the 157747-byte log from PR comment 5842429150, matched SHA-256, and verified scope drift, lease overlap, frontend suite/build, Rust suite, clippy, and TestGate release. The merge commit 16aa44fc and carrier commit 91af459c are both on origin/main.",
+  "independentReview": {"practical": true, "reviewer": "chatgpt-hq", "status": "passed", "head": "91af459c22166d5725b98a0262578be7d500e0ea", "verdict": "PASS", "evidence": "https://github.com/Pootytxng/sentinel/pull/575#issuecomment-5842451905", "reviewerNote": "Separate ChatGPT Work context reviewed the exact receipt-only main commit, confirmed implementation byte equality with previously reviewed 6a70aabb, checked both receipts against live state, decoded and verified the raw native gate log, and issued explicit PASS at 91af459c. It authored no mutation."},
+  "transition": "close-issue",
+  "closingNote": "PR #575 merged as 16aa44fc. Origin/main at 91af459c contains its reviewed implementation and the ready/merge receipts, and no source change after the reviewed head. Close #573 after this carrier's Handoff releases its lease; preserve this close receipt on main through a separate receipt-only push."
+}
