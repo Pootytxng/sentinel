@@ -288,10 +288,20 @@ or transfers a mutation lease.
 - `Local\Compy.InstalledBinary.v1` is held by `scripts/ship-reinstall.ps1` through installed-binary
   replacement/proof/relaunch.
 - `Local\Compy.TestGate.v1` is held by `scripts/verify-local.ps1` from its `npm test` stage through
-  build, cargo test and clippy (#522), so concurrent pre-push gates queue for the heavy stages
-  instead of starving each other into timeouts. It guards a read-only proof, not a mutation, so a second gate waits (bounded at 30
-  minutes, naming the holder) and a holder that died is taken over with a WARN; it leaves no recovery
-  state. `scripts/lib/gate-mutex.ps1`, pinned by `scripts/gate-mutex-guard.test.mjs`.
+  build, cargo test and clippy (#522), and by `scripts/run-vitest.mjs` for a non-watch run of every
+  test file, through `scripts/lib/gate-mutex-hold.ps1` (#543), so gates and ad-hoc full suites
+  take turns instead of starving each other into timeouts. It guards a read-only proof, not a
+  mutation, so a later caller waits, naming the holder, and gives up only after one holder has kept
+  it 30 minutes: the deadline restarts whenever the holder changes (#541). A holder that died is
+  taken over with a WARN; it leaves no recovery state.
+  For `run-vitest.mjs`, the holder's exit 3 (gave up after that wait) refuses the run with exit 1;
+  its exit 4, or a holder that cannot start, only warns and the suite runs unqueued. A test-name
+  filter (`-t`) still loads every file, so it queues; a file filter, `--changed`, `--shard`, watch,
+  `related`, `list`, `bench` and `init` never queue.
+  Nor does a run whose `COMPY_TEST_GATE_HELD=<pid>` names a live pid: `verify-local.ps1` exports its
+  own pid while it holds the gate (cleared in `finally`), so its `npm test` does not wait on itself.
+  `scripts/lib/gate-mutex.ps1` and `scripts/lib/gate-mutex.mjs`, pinned by
+  `scripts/gate-mutex-guard.test.mjs` and `scripts/run-vitest-gate-guard.test.mjs`.
 
 For the two mutation mutexes above, a second process in the same Windows session fails immediately.
 It does not wait, steal, expire, or reclaim the mutex.
