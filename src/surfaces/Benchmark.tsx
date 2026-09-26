@@ -37,7 +37,6 @@ import type {
   BenchmarkState,
   RunReport,
   Efficacy,
-  AppliedChange,
   TrialState,
   ScoreboardView,
 } from "../types";
@@ -51,7 +50,6 @@ const POLL_MS = 700;
 export function BenchmarkTab({ provingGround = false }: { provingGround?: boolean } = {}) {
   const { t } = useTranslation();
   const [state, setState] = useState<BenchmarkState | null>(null);
-  const [changes, setChanges] = useState<AppliedChange[]>([]);
   const [trial, setTrial] = useState<TrialState | null>(null);
   const [tweaks, setTweaks] = useState<{ id: string; title: string }[]>([]);
   const [selectedTweak, setSelectedTweak] = useState<string>("");
@@ -106,17 +104,12 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
 
   const refresh = useCallback(async () => {
     try {
-      const [s, ch, t, sb] = await Promise.all([
+      const [s, t, sb] = await Promise.all([
         invoke<BenchmarkState>("get_benchmark_state"),
-        // Collapses to empty so one unreadable ledger can't blank the whole tab. That emptiness is
-        // NOT evidence of a quiet machine, and the attribution line below must not read it as such —
-        // `useLedgerHealth` is what keeps the two apart. Never delete one without the other.
-        invoke<AppliedChange[]>("get_applied_changes").catch(() => [] as AppliedChange[]),
         invoke<TrialState>("get_trial_state").catch(() => null),
         invoke<ScoreboardView>("get_scoreboard").catch(() => null),
       ]);
       setState(s);
-      setChanges(ch);
       if (t) setTrial(t);
       if (sb) setScore(sb);
     } catch {
@@ -284,14 +277,15 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   const showEfficacy =
     !!state?.efficacy && hasBaseline && !!state?.latest && state.latest_at !== state.baseline_at;
 
-  // `refresh` collapses an unreadable ledger to `[]` (`.catch(() => [])` above), and BOTH attributing
-  // cards used to read that emptiness out loud as "No Compy changes recorded since the baseline — this
-  // reflects manual or ambient changes." That sentence does not merely under-report an absence: it
-  // hands the measured delta to the user or their environment. On a ledger Compy cannot read, that
-  // is a fabricated causal claim — the same defect `b60a314` closed on Optimize and `61e092c` on the
-  // Blackbook Logbook, in its worst form yet. So the same disclosure is mounted here, and the
-  // attribution line stops speaking when `knownIncomplete` is truthy.
-  const health = useLedgerHealth(changes);
+  // BOTH attributing cards used to read an unreadable ledger's emptiness out loud as "No Compy changes
+  // recorded since the baseline — this reflects manual or ambient changes." That sentence does not
+  // merely under-report an absence: it hands the measured delta to the user or their environment. On
+  // a ledger Compy cannot read, that is a fabricated causal claim — the same defect `b60a314` closed
+  // on Optimize and `61e092c` on the Blackbook Logbook, in its worst form yet. So the same disclosure
+  // is mounted here, and the attribution line stops speaking when `knownIncomplete` is truthy. The
+  // probe re-runs on every refresh (`state` is `refresh()`'s product, as for the model below); the
+  // tab reads no ledger list of its own (#453).
+  const health = useLedgerHealth(state);
   const ledgerIncomplete = !!knownIncomplete(health);
 
   // Which Compy changes the measured pair covers — read off the shared Machine Model (#452), not
