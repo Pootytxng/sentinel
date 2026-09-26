@@ -29,18 +29,26 @@ import ts from "typescript";
 //   6. `invoke` is reached only by its name: `@tauri-apps/api/core` is imported with a static
 //      `import { … } from`, and nothing touches the package root, another spelling of the core
 //      module, or the global Tauri objects.
-//   7. Every module a production file loads is a production file this guard reads. A support file,
-//      a test file, a stray `.js` sibling or code outside `src/` could otherwise hand a renamed
-//      `invoke` to a screen where no rule looks, and a module named by a value cannot be checked.
+//   7. The shipped app runs only code this guard reads. A support file, a test file, a stray `.js`
+//      sibling or code outside `src/` could otherwise hand a renamed `invoke` to a screen where no
+//      rule looks, and a module named by a value cannot be checked. So every module a production
+//      file loads is named by a literal and is a production file or a registry package that
+//      package.json declares. The resolver maps no other name: no alias, no tsconfig `paths`, and
+//      one known plugin. Nothing loads code by URL (workers, worklets, script or frame elements).
+//      The build serves nothing else that runs: `index.html` holds only the entry script, `public/`
+//      holds only images and fonts, and the CSP takes no script, worker or frame from anywhere but
+//      the app itself (#582, at 74b64745).
 //   Every rule reads the TypeScript syntax tree, not the text. A comment, a regex or JSX text is
 //   what the compiler says it is, and a string or a name is read as the value it runs as, escapes
 //   included. Reading the text by hand let a `"//"` inside a string blank the code after it (#582,
 //   at f4ef8dd3).
 //
-// What it cannot decide: code written to hide a call while it runs. Examples are `eval`,
-// `new Function`, or a global looked up under a key built from pieces. The syntax tree cannot
-// follow a value through execution, so review catches those. Everything written the ordinary way,
-// and every construction or escape form a review has named, is decided here.
+// What it cannot decide: a global looked up under a key built from pieces while the code runs. The
+// syntax tree cannot follow a value through execution, so review catches that. Code built from a
+// string (`eval`, `new Function`, a string timer, an inline handler) does not run in the shipped
+// app, because its CSP (`script-src 'self'`, pinned by csp-lockdown-guard) refuses it. The looser
+// dev CSP never ships. Everything written the ordinary way, and every construction or escape form a
+// review has named, is decided here.
 //
 // The corpus is INVERTED on purpose (walk everything, exempt explicitly), the lesson the
 // mutation-boundary guard learned: a new surface is in scope the moment it exists. Test files and
@@ -187,21 +195,22 @@ function nameOf(node: ts.Node): string | undefined {
   return ts.isStringLiteralLike(node) && standsForName ? node.text : undefined;
 }
 
-// `invoke("x", …)`, `ipc.invoke("x")` or `ipc["invoke"]("x")`: the name is what is called, and its
-// first argument is a plain literal.
-function calledWithPlain(node: ts.Node): boolean {
+// The call a name is the callee of: `f(…)`, `x.f(…)` or `x["f"](…)`, with or without `new`.
+function calleeCall(node: ts.Node): ts.CallExpression | ts.NewExpression | undefined {
   const up = node.parent;
   const member =
     (ts.isPropertyAccessExpression(up) && up.name === node) ||
     (ts.isElementAccessExpression(up) && up.argumentExpression === node);
   const callee = member ? up : node;
   const call = callee.parent;
-  return (
-    ts.isCallExpression(call) &&
-    call.expression === callee &&
-    call.arguments.length > 0 &&
-    plainText(call.arguments[0]) !== undefined
-  );
+  return (ts.isCallExpression(call) || ts.isNewExpression(call)) && call.expression === callee ? call : undefined;
+}
+
+// `invoke("x", …)`, `ipc.invoke("x")` or `ipc["invoke"]("x")`: the name is what is called, and its
+// first argument is a plain literal.
+function calledWithPlain(node: ts.Node): boolean {
+  const call = calleeCall(node);
+  return !!call && ts.isCallExpression(call) && call.arguments.length > 0 && plainText(call.arguments[0]) !== undefined;
 }
 
 const CORE = "@tauri-apps/api/core";
@@ -265,12 +274,12 @@ export function sink(source: string, wrapper?: Wrapper, file = SAMPLE): string[]
   return [...bad];
 }
 
-// ── Loaded modules (rule 7) ─────────────────────────────────────────────────────────────────────
+// ── Loaded code (rule 7) ────────────────────────────────────────────────────────────────────────
 
-// Vite's default resolve order (vite.config.ts sets none), then the directory's index. As Vite and
-// TypeScript both allow, a `.js`-style specifier also names the `.ts` file beside it. Every
-// candidate that exists is checked, not only the first, so the two resolvers cannot disagree
-// about which file loads.
+// Vite's default resolve order (the resolver pin below keeps vite.config.ts from setting another),
+// then the directory's index. As Vite and TypeScript both allow, a `.js`-style specifier also names
+// the `.ts` file beside it. Every candidate that exists is checked, not only the first, so the two
+// resolvers cannot disagree about which file loads.
 const EXTENSIONS = [".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"];
 const CODE = /\.(?:[cm]?[jt]s|[jt]sx)$/i;
 
@@ -283,20 +292,52 @@ function candidates(from: string, spec: string): string[] {
 
 const isFile = (path: string) => existsSync(path) && statSync(path).isFile();
 
-// Rule 7, per file: each load that names code outside the corpus, names no file, or is not written
-// as a literal at all. A package specifier is left to npm; rule 6 holds the Tauri API.
+// A bare specifier must name, whole, a package that package.json declares. Anything else could be an
+// alias, a `#` subpath import or a virtual module, and any of those can map to any file.
+const PACKAGE = JSON.parse(readFileSync("package.json", "utf8")) as {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
+};
+const DEPENDENCIES = { ...PACKAGE.dependencies, ...PACKAGE.devDependencies };
+const DECLARED = new Set(Object.keys(DEPENDENCIES));
+
+// The names that load code from a URL rather than an import, and the elements that do the same.
+const URL_LOADERS = new Set(["Worker", "SharedWorker", "serviceWorker", "importScripts", "addModule", "createContextualFragment", "srcdoc", "srcDoc"]);
+const CODE_ELEMENTS = new Set(["script", "iframe", "frame", "frameset", "object", "embed", "portal", "fencedframe"]);
+
+// Rule 7, per file: each load that names code outside the corpus, names no file, names a package
+// nobody declared, or is not written as a literal at all, and each way to load code by URL.
+// Rule 6 holds the Tauri API itself.
 export function loads(source: string, file: string): string[] {
   const tree = parse(source, file);
   const bad = new Set<string>();
   const check = (spec: ts.Node | undefined, at: ts.Node) => {
     const text = spec && plainText(spec);
     if (text === undefined) return void bad.add(`${lineOf(tree, at)} (a module named by a value, not a literal)`);
-    if (!/^(?:\.{1,2}(?:\/|$)|\/)/.test(text)) return;
+    if (!/^(?:\.{1,2}(?:\/|$)|\/)/.test(text)) {
+      const [, name = "", rest = ""] = /^(@[^/]+\/[^/]+|[^/]+)(.*)$/.exec(text.replace(/[?#].*$/, "")) ?? [];
+      if (!DECLARED.has(name)) bad.add(`${text}: no package package.json declares`);
+      else if (/(^|\/)\.\.?(\/|$)/.test(rest)) bad.add(`${text}: steps out of its package`);
+      return;
+    }
     const found = candidates(file, text).filter(isFile);
     if (found.length === 0) bad.add(`${text}: resolves to no file`);
     for (const hit of found) if (CODE.test(hit) && !corpusKeys.has(hit.toLowerCase())) bad.add(`${text} -> ${hit}: code this guard does not read`);
   };
   walk(tree, (node) => {
+    // A URL can name any file the app serves, and on the dev server that is every file in the repo.
+    const name = nameOf(node);
+    if (name !== undefined && URL_LOADERS.has(name)) bad.add(`${lineOf(tree, node)} (${name} loads code by URL)`);
+    if (name === "createElement" || name === "createElementNS") {
+      const call = calleeCall(node);
+      const tag = call?.arguments?.[name === "createElementNS" ? 1 : 0];
+      const text = tag && plainText(tag);
+      if (text === undefined || CODE_ELEMENTS.has(text.toLowerCase())) bad.add(`${lineOf(tree, node)} (an element that can load code)`);
+    }
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && ts.isIdentifier(node.tagName) && CODE_ELEMENTS.has(node.tagName.text.toLowerCase())) {
+      bad.add(`${lineOf(tree, node)} (an element that loads code by URL)`);
+    }
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) check(node.moduleSpecifier, node);
     else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) check(node.moduleReference.expression, node);
     else if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === "require"))) check(node.arguments[0], node);
@@ -310,6 +351,33 @@ export function loads(source: string, file: string): string[] {
   });
   return [...bad];
 }
+
+// ── What the shipped build resolves and serves (rule 7) ─────────────────────────────────────────
+
+// Every file under a folder, at any depth.
+function listFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const rel = join(dir, name);
+    return statSync(rel).isDirectory() ? listFiles(rel) : [rel];
+  });
+}
+
+const TAURI = JSON.parse(readFileSync(join("src-tauri", "tauri.conf.json"), "utf8")) as {
+  build?: Record<string, string>;
+  app?: { security?: { csp?: Record<string, string>; capabilities?: unknown[] } };
+};
+
+// The Vite settings this pin has read. A new one can change what a name resolves to or what the
+// build serves.
+const VITE_KEYS = new Set(["plugins", "clearScreen", "server", "port", "strictPort", "host", "hmr", "protocol", "watch", "ignored"]);
+
+// public/ is copied into the build as it is and served beside the bundle, so it holds only files
+// that cannot run: images and fonts, and SVG with no script in it.
+const ASSET = /\.(?:svg|png|jpe?g|gif|webp|avif|ico|bmp|woff2?|ttf|otf)$/i;
+const RUNS_IN_SVG = /<script|<foreignobject|\son\w+\s*=|javascript:/i;
+
+// The CSP directives that decide where a script, a worker or a frame may come from.
+const CODE_DIRECTIVES = ["default-src", "script-src", "script-src-elem", "script-src-attr", "worker-src", "child-src", "frame-src"];
 
 // ── Exemptions ──────────────────────────────────────────────────────────────────────────────────
 
@@ -380,8 +448,82 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(
       offenders,
       "a production file may load only production files: move shared code out of tests and src/test, " +
-        "turn a .js file into .ts, and name every module with a literal",
+        "turn a .js file into .ts, name every module with a literal, import packages package.json " +
+        "declares, and load no code by URL",
     ).toEqual([]);
+  });
+
+  it("the resolver maps a name no other way than rule 7 reads it", () => {
+    // Vite also reads vite.config.js, .mjs, .cjs, .mts and .cts, and one of those would change the
+    // rules unseen.
+    const configs = readdirSync(".").filter((name) => name.startsWith("vite.config."));
+    expect(configs, "keep one Vite config, vite.config.ts").toEqual(["vite.config.ts"]);
+    const config = parse(readFileSync("vite.config.ts", "utf8"), "vite.config.ts");
+    const imports: string[] = [];
+    const unread: string[] = [];
+    let react: string | undefined;
+    let plugins: ts.Expression | undefined;
+    walk(config, (node) => {
+      if (ts.isImportDeclaration(node)) {
+        const spec = plainText(node.moduleSpecifier) ?? lineOf(config, node);
+        imports.push(spec);
+        if (spec === "@vitejs/plugin-react") react = node.importClause?.name?.text;
+      } else if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || nameOf(node.expression) === "require")) {
+        unread.push(lineOf(config, node));
+      } else if (ts.isObjectLiteralElementLike(node)) {
+        const named = ts.isSpreadAssignment(node) ? undefined : node.name;
+        const key = named && (ts.isIdentifier(named) ? named.text : plainText(named));
+        if (key === "plugins" && ts.isPropertyAssignment(node)) plugins = node.initializer;
+        if (key === undefined || !VITE_KEYS.has(key)) unread.push(lineOf(config, node));
+      }
+    });
+    expect(imports.sort(), "vite.config.ts imports Vite and its React plugin, nothing that could resolve a name").toEqual([
+      "@vitejs/plugin-react",
+      "vite",
+    ]);
+    expect(unread, "a new Vite setting can change what a name resolves to: check it against rule 7, then add it to VITE_KEYS").toEqual([]);
+    const only = plugins && ts.isArrayLiteralExpression(plugins) && plugins.elements.length === 1 ? plugins.elements[0] : undefined;
+    const reactOnly = !!only && ts.isCallExpression(only) && only.arguments.length === 0 && ts.isIdentifier(only.expression) && only.expression.text === react;
+    expect(reactOnly, "the one Vite plugin is react(), with no options").toBe(true);
+    // tsconfig `paths`, `baseUrl` and `rootDirs` are aliases to any resolver told to read them, and
+    // `extends` can bring them in from elsewhere.
+    for (const name of readdirSync(".").filter((file) => /^tsconfig.*\.json$/.test(file))) {
+      const tsconfig = ts.parseConfigFileTextToJson(name, readFileSync(name, "utf8")).config ?? {};
+      const options = tsconfig.compilerOptions ?? {};
+      const maps = [...("extends" in tsconfig ? ["extends"] : []), ...["paths", "baseUrl", "rootDirs"].filter((key) => key in options)];
+      expect(maps, `${name} maps module names`).toEqual([]);
+    }
+    // A declared name must be the registry's: not a local folder, a git ref, a URL or an npm alias.
+    const unregistered = Object.entries(DEPENDENCIES).filter(([, range]) => !/^[\^~]?\d/.test(range)).map(([name, range]) => `${name}: ${range}`);
+    expect(unregistered, "every dependency is a registry version range").toEqual([]);
+    // And no build command points Vite at another config.
+    const commands = [PACKAGE.scripts?.build, PACKAGE.scripts?.dev, TAURI.build?.beforeBuildCommand, TAURI.build?.beforeDevCommand];
+    expect(commands.filter((cmd) => /(?:^|\s)(?:-c|--config)(?:\s|=|$)/.test(cmd ?? "")), "a build command names another Vite config").toEqual([]);
+  });
+
+  it("the shipped build serves no code beyond the bundle, and runs none it builds at run time", () => {
+    const html = readFileSync("index.html", "utf8");
+    expect(html.match(/<script/gi), "index.html loads the entry script and no other").toHaveLength(1);
+    expect(html).toContain('<script type="module" src="/src/main.tsx"></script>');
+    expect(html.match(/\son\w+\s*=|javascript:|<(?:iframe|frame|object|embed|portal|base)\b/gi), "index.html runs nothing else").toBeNull();
+    expect(files).toContain(join("src", "main.tsx"));
+    const runnable = existsSync("public")
+      ? listFiles("public").filter((file) => !ASSET.test(file) || (/\.svg$/i.test(file) && RUNS_IN_SVG.test(readFileSync(file, "utf8"))))
+      : [];
+    expect(runnable, "public/ is served as it is: images and fonts only, and no script in an SVG").toEqual([]);
+    // Code built from a string, a blob: worker or a frame from elsewhere needs one of these to allow
+    // it. csp-lockdown-guard pins default-src and script-src; the fallbacks are held here.
+    const csp = TAURI.app?.security?.csp;
+    expect(typeof csp, "the shipped CSP is a directive object").toBe("object");
+    const open = CODE_DIRECTIVES.filter((d) => csp && d in csp && csp[d].split(/\s+/).some((t) => t && t !== "'self'" && t !== "'none'"));
+    expect(open.map((d) => `${d}: ${csp?.[d]}`), "the CSP takes scripts, workers and frames from the app itself only").toEqual([]);
+    // A remote origin with the IPC would run code no file here holds.
+    const capabilities = listFiles(join("src-tauri", "capabilities"));
+    const remote = [
+      ...capabilities.filter((file) => !file.endsWith(".json") || "remote" in JSON.parse(readFileSync(file, "utf8"))),
+      ...(TAURI.app?.security?.capabilities ?? []).filter((entry) => typeof entry !== "string").map(() => "an inline capability in tauri.conf.json"),
+    ];
+    expect(remote, "capabilities live in src-tauri/capabilities/*.json, and none opens the IPC to a remote origin").toEqual([]);
   });
 
   it("keeps the wrapper entry live, so the exemption cannot outlive the wrapper", () => {
@@ -536,9 +678,34 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loads("const m = await import(`./data/${name}`);", app)).toHaveLength(1);
     expect(loads("const m = require(name);", app)).toHaveLength(1);
     expect(loads('const all = import.meta.glob("./surfaces/*.tsx");', app)).toHaveLength(1);
-    expect(loads('const w = new Worker(new URL("./sample.test.ts", import.meta.url));', app)).toHaveLength(1);
+    // The worker and the import.meta.url that locates it, one entry each.
+    expect(loads('const w = new Worker(new URL("./sample.test.ts", import.meta.url));', app)).toHaveLength(2);
     expect(loads("const dev = import.meta.env.DEV;", app)).toEqual([]);
     expect(loads('import "./no-such-module";', app)).toEqual(["./no-such-module: resolves to no file"]);
+    // A bare name no declared package owns could be an alias, a # import or a virtual module, and a
+    // declared one can step out of its package (#582, at 74b64745).
+    expect(loads('import { call } from "@bridge";', screen)).toEqual(["@bridge: no package package.json declares"]);
+    expect(loads('import { call } from "#bridge";', screen)).toHaveLength(1);
+    expect(loads('import { call } from "virtual:bridge";', screen)).toHaveLength(1);
+    expect(loads('import { call } from "constructor";', screen)).toHaveLength(1);
+    expect(loads('export { call } from "reakt";', screen)).toHaveLength(1);
+    expect(loads('import { call } from "react/../../src/test/setup";', screen)).toHaveLength(1);
+    // Code loaded by URL: a worker from public/ runs outside every import (#582, at 74b64745).
+    expect(loads('const w = new Worker("/bridge.js", { type: "module" });', screen)).toHaveLength(1);
+    expect(loads('const w = new SharedWorker("/bridge.js");', screen)).toHaveLength(1);
+    expect(loads('navigator.serviceWorker.register("/bridge.js");', screen)).toHaveLength(1);
+    expect(loads('CSS.paintWorklet.addModule("/bridge.js");', screen)).toHaveLength(1);
+    expect(loads('importScripts("/bridge.js");', screen)).toHaveLength(1);
+    expect(loads('const W = globalThis["Worker"];', screen)).toHaveLength(1);
+    expect(loads("frame.srcdoc = html;", screen)).toHaveLength(1);
+    expect(loads("const f = range.createContextualFragment(html);", screen)).toHaveLength(1);
+    expect(loads('const s = document.createElement("script");', screen)).toHaveLength(1);
+    expect(loads('const s = document.createElement("IFRAME");', screen)).toHaveLength(1);
+    expect(loads('const s = document.createElementNS(ns, "script");', screen)).toHaveLength(1);
+    expect(loads("const s = document.createElement(tag);", screen)).toHaveLength(1);
+    expect(loads("const make = document.createElement;", screen)).toHaveLength(1);
+    expect(loads('const f = <iframe src="/bridge.html" />;', screen)).toHaveLength(1);
+    expect(loads('const s = <script src="/bridge.js"></script>;', screen)).toHaveLength(1);
     // What real code does passes: a corpus file by any of its specifiers, an asset, a package.
     expect(loads('import { x } from "./data/machine-model";', app)).toEqual([]);
     expect(loads('import { x } from "./data/machine-model.js";', app)).toEqual([]);
@@ -547,6 +714,10 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(loads('import url from "./App.css?url";', app)).toEqual([]);
     expect(loads('import { invoke } from "@tauri-apps/api/core";', app)).toEqual([]);
     expect(loads('const { t } = await import("./data/machine-model");', app)).toEqual([]);
+    expect(loads('import { createRoot } from "react-dom/client";', app)).toEqual([]);
+    expect(loads('import * as THREE from "three";', app)).toEqual([]);
+    expect(loads('const style = document.createElement("style");', app)).toEqual([]);
+    expect(loads("const box = <section className={css} />;", app)).toEqual([]);
   });
 
   it("a planted direct reader in any other screen is a violation", () => {
