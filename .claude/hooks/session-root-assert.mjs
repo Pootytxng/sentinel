@@ -552,10 +552,10 @@ const gitResult = (root, args, { env = null } = {}) => {
 };
 
 /**
- * @returns {{action: "set"|"kept"|"main"|"skipped"|"failed", line: string|null, detail?: string}}
+ * @returns {{action: "set"|"kept"|"main"|"skipped"|"failed", line: string|null, detail?: string, warning?: string|null}}
  *   `line` is the one advisory line to print: set on "set" and "failed", null otherwise.
  */
-export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKTREE_IDENTITY } = {}) {
+export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKTREE_IDENTITY, env = null } = {}) {
   if (!root) return { action: "skipped", line: null, detail: "no root" };
   const gitDir = run(root, ["rev-parse", "--git-dir"]);
   const commonDir = run(root, ["rev-parse", "--git-common-dir"]);
@@ -566,8 +566,24 @@ export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKT
   // an absolute path under the host's .git/worktrees/. Resolve both against the root before comparing.
   if (samePath(resolve(root, gitDir.out), resolve(root, commonDir.out))) return { action: "main", line: null };
 
+  // Git's author/committer environment wins over --worktree config. Read what a commit from this
+  // session would actually use; warn without changing another executor's existing identity.
+  const effectiveWarning = () => {
+    const mismatches = [];
+    for (const role of ["AUTHOR", "COMMITTER"]) {
+      const key = `GIT_${role}_IDENT`;
+      const found = run(root, ["var", key], { env });
+      if (!found.ok || !found.out.startsWith(`${identity.name} <${identity.email}> `)) {
+        mismatches.push(`${key}=${found.ok ? found.out : `unavailable (${found.out})`}`);
+      }
+    }
+    return mismatches.length
+      ? `compy-entry: WARNING - effective Git identity differs from ${identity.name} <${identity.email}>: ${mismatches.join("; ")}; correct it before committing.`
+      : null;
+  };
+
   const existing = run(root, ["config", "--worktree", "user.name"]);
-  if (existing.ok && existing.out) return { action: "kept", line: null, detail: existing.out };
+  if (existing.ok && existing.out) return { action: "kept", line: null, detail: existing.out, warning: effectiveWarning() };
   // Exit 1 is "unset", the case this step exists for. Anything else (no worktreeConfig extension,
   // not a repository, git missing) is a failure to log, not a reason to write.
   if (!existing.ok && existing.status !== 1) {
@@ -579,7 +595,7 @@ export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKT
     const failed = setName.ok ? setEmail : setName;
     return { action: "failed", line: `compy-entry: worktree identity not set - ${failed.out}`, detail: failed.out };
   }
-  return { action: "set", line: `compy-entry: worktree identity set to ${identity.name}` };
+  return { action: "set", line: `compy-entry: worktree identity set to ${identity.name}`, warning: effectiveWarning() };
 }
 
 // ── worktree provisioning (#405) ─────────────────────────────────────────────────────────────────
@@ -1389,10 +1405,9 @@ export function readBrief({ issue, dir = BRIEF_DIR }) {
  * Both fields are the CLI's own documented SessionStart output (validated by 2.1.220), not a
  * side-channel. A refused session gets nothing at all.
  */
-export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null } = {}) {
+export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null, extraContext = null } = {}) {
   if (!result?.ok) return null;
   const brief = readBrief({ issue: result.issue, dir: briefDir });
-  if (!brief?.text) return null;
 
   // The brief becomes authoritative context on every start, so it is exactly the kind of file that
   // must not be trusted for merely existing. When the launch bound a digest, the bytes have to match
@@ -1403,11 +1418,15 @@ export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null
   // it describes is a claim the file makes about itself: edit the text, leave the field, and a
   // stored-field comparison waves it through. The digest has to be computed from the bytes that are
   // about to become context.
-  if (result.briefHash && createHash("sha256").update(String(brief.text), "utf8").digest("hex") !== result.briefHash) return null;
+  const trustedBrief = brief?.text && (!result.briefHash || createHash("sha256").update(String(brief.text), "utf8").digest("hex") === result.briefHash)
+    ? brief
+    : null;
+  if (!trustedBrief && !extraContext) return null;
 
-  const out = { hookEventName: "SessionStart", additionalContext: brief.text };
-  if (brief.sessionTitle) out.sessionTitle = brief.sessionTitle;
-  const opening = brief.opening?.[result.mode === "resume" ? "resume" : "launch"];
+  const out = { hookEventName: "SessionStart", additionalContext: [trustedBrief?.text, extraContext].filter(Boolean).join("\n") };
+  if (!trustedBrief) return out;
+  if (trustedBrief.sessionTitle) out.sessionTitle = trustedBrief.sessionTitle;
+  const opening = trustedBrief.opening?.[result.mode === "resume" ? "resume" : "launch"];
   if (source === "startup" && opening) out.initialUserMessage = opening;
   return out;
 }
@@ -1426,6 +1445,11 @@ const readStdin = async () => {
     return null;
   }
 };
+
+export const sessionStartMessage = ({ verdict, identity, provisioning }) =>
+  [verdict.message, identity.action === "set" ? identity.line : null, identity.warning, provisioning.action === "failed" ? null : provisioning.line]
+    .filter(Boolean)
+    .join("\n");
 
 export async function main() {
   const hookInput = await readStdin();
@@ -1461,11 +1485,9 @@ export async function main() {
   }
   if (provisioning.action === "failed") console.error(provisioning.line);
 
-  const message = [verdict.message, identity.action === "set" ? identity.line : null, provisioning.action === "failed" ? null : provisioning.line]
-    .filter(Boolean)
-    .join("\n");
+  const message = sessionStartMessage({ verdict, identity, provisioning });
 
-  const payload = sessionStartOutput(result, { source: hookInput?.source ?? null });
+  const payload = sessionStartOutput(result, { source: hookInput?.source ?? null, extraContext: identity.warning });
   // Plain text when there is no brief: stdout alone is still added to the session, and a folder with
   // no launch of its own must not be handed someone else's instructions.
   if (payload) console.log(JSON.stringify({ systemMessage: message, hookSpecificOutput: payload }));
