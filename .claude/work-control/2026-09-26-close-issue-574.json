@@ -1,0 +1,73 @@
+{
+  "mutationAuthors": [
+    "codex"
+  ],
+  "inheritedWork": true,
+  "issue": 574,
+  "independentReview": {
+    "status": "passed",
+    "practical": true,
+    "reviewerNote": "Separate ChatGPT Work context reviewed live #574 original criteria, the earlier #577 CHANGES REQUIRED and corrected disposition, #579 source/carrier/final receipt evidence, and 17 independent probes against exact integrated hook bytes. Explicit closure PASS at current main head.",
+    "verdict": "PASS",
+    "head": "4009bfd9695009ed6062763e5eb107e197210fca",
+    "evidence": "https://github.com/Pootytxng/sentinel/issues/574#issuecomment-5845855854",
+    "reviewer": "chatgpt-hq"
+  },
+  "leaseEvidenceNote": "Close-receipt preparation claim on #574 at the independently reviewed corrected main head. This claim will be released before the close-issue gate.",
+  "branch": "codex/579-no-brief-context",
+  "actor": "codex",
+  "kind": "lane",
+  "transition": "close-issue",
+  "gateEvidenceNote": "The final #579 close-receipt carrier at this exact main head passed the native full pre-push gate. ChatGPT HQ decoded the raw log, verified its SHA-256 and every stage, and independently ran integrated identity/context probes. Earlier #577 PASS and landing receipts are historical, not acceptance of the regression.",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/574#issuecomment-5845860157",
+  "overlapExclusiveNote": "Only this lane prepares the new #574 close receipt. All prior #574 and #579 claims are released and no other live lane owns this path.",
+  "currentHead": "4009bfd9695009ed6062763e5eb107e197210fca",
+  "gateResults": [
+    {
+      "status": "passed",
+      "evidence": "logs/verify-local-2026-09-26T11-14-51Z.log; raw bytes PR #581 comment 5845835397; SHA-256 3D06A5AB9A57C61297E131F6CCDC21B9BD4164A2E7394CD0DB3725506C5E44EE",
+      "summary": "461 files, 7695 passed, one expected failure, nine skipped.",
+      "head": "4009bfd9695009ed6062763e5eb107e197210fca",
+      "command": "npm test"
+    },
+    {
+      "status": "passed",
+      "evidence": "logs/verify-local-2026-09-26T11-14-51Z.log; raw bytes PR #581 comment 5845835397; SHA-256 3D06A5AB9A57C61297E131F6CCDC21B9BD4164A2E7394CD0DB3725506C5E44EE",
+      "summary": "Type check and production build passed.",
+      "head": "4009bfd9695009ed6062763e5eb107e197210fca",
+      "command": "npm run build"
+    },
+    {
+      "status": "passed",
+      "evidence": "logs/verify-local-2026-09-26T11-14-51Z.log; raw bytes PR #581 comment 5845835397; SHA-256 3D06A5AB9A57C61297E131F6CCDC21B9BD4164A2E7394CD0DB3725506C5E44EE",
+      "summary": "1350 passed, zero failed, 24 ignored.",
+      "head": "4009bfd9695009ed6062763e5eb107e197210fca",
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml"
+    },
+    {
+      "status": "passed",
+      "evidence": "logs/verify-local-2026-09-26T11-14-51Z.log; raw bytes PR #581 comment 5845835397; SHA-256 3D06A5AB9A57C61297E131F6CCDC21B9BD4164A2E7394CD0DB3725506C5E44EE",
+      "summary": "Finished clean with -D warnings.",
+      "head": "4009bfd9695009ed6062763e5eb107e197210fca",
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+    }
+  ],
+  "overlapExclusive": true,
+  "closingNote": "PR #577 merged as 2cb583c6, then #579 corrective PR #581 merged as 5216d615 and issue #579 closed. Origin/main at 4009bfd9 contains the repaired source and all #579 receipts. Close #574 only after this preparation Handoff releases its claim; preserve this close receipt on main under a separate receipt-only claim and native gate.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "pr": 577,
+  "inspection": {
+    "repository": true,
+    "liveProcesses": true,
+    "dirtyState": true,
+    "branch": true,
+    "worktree": true,
+    "remoteState": true
+  },
+  "mutationAuthorsNote": "Codex authored #574 hook/test commits, the #579 corrective hook/test commit, and the receipt-only carrier commits. ChatGPT HQ authored none."
+}
