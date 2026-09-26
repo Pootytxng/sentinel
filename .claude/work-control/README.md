@@ -45,7 +45,10 @@ gate that only gets run when someone remembers is not a gate.
 settings reserve authority-gating hooks to his own hand, and the settings block to paste sits at the
 bottom of that file.
 
-Receipts are evidence, not scratch: keep them, don't prune them.
+Receipts are evidence, not scratch: keep them, don't prune them, and never edit one after it lands.
+A wrong receipt is corrected by adding `<date>-correct-<receipt>.json` with `"transition":
+"correct-receipt"` (#307). `scripts/work-control-receipt-append-only.test.mjs` and
+`scripts/work-control-receipt-reviewer-claims.test.mjs` hold both rules.
 
 **The receipt chain trails by one commit, by construction.** A receipt binds to the head it
 authorizes, so it cannot ride inside that same commit — writing it in would change the head and
