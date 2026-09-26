@@ -446,7 +446,19 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
       identity: result,
       provisioning: { action: "skipped", line: null },
     });
-    expect(shown).toContain(result.warning); // SessionStart stdout, which Claude receives as context.
+    expect(shown).toContain(result.warning); // Plain-text SessionStart stdout when there is no JSON payload.
+    writeFileSync(join(bed, "574.json"), JSON.stringify({ text: "launch brief" }));
+    const withBrief = tracked.sessionStartOutput(
+      { ok: true, issue: 574, briefHash: null },
+      { briefDir: bed, source: "startup", extraContext: result.warning },
+    );
+    expect(withBrief.additionalContext).toContain("launch brief");
+    expect(withBrief.additionalContext).toContain(result.warning);
+    const withoutBrief = tracked.sessionStartOutput(
+      { ok: true, issue: 575, briefHash: null },
+      { briefDir: bed, source: "startup", extraContext: result.warning },
+    );
+    expect(withoutBrief.additionalContext).toBe(result.warning);
     const correct = {
       GIT_AUTHOR_NAME: "claude-code",
       GIT_AUTHOR_EMAIL: "claude-code@desk.local",

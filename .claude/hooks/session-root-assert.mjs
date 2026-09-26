@@ -1405,10 +1405,9 @@ export function readBrief({ issue, dir = BRIEF_DIR }) {
  * Both fields are the CLI's own documented SessionStart output (validated by 2.1.220), not a
  * side-channel. A refused session gets nothing at all.
  */
-export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null } = {}) {
+export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null, extraContext = null } = {}) {
   if (!result?.ok) return null;
   const brief = readBrief({ issue: result.issue, dir: briefDir });
-  if (!brief?.text) return null;
 
   // The brief becomes authoritative context on every start, so it is exactly the kind of file that
   // must not be trusted for merely existing. When the launch bound a digest, the bytes have to match
@@ -1419,11 +1418,15 @@ export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null
   // it describes is a claim the file makes about itself: edit the text, leave the field, and a
   // stored-field comparison waves it through. The digest has to be computed from the bytes that are
   // about to become context.
-  if (result.briefHash && createHash("sha256").update(String(brief.text), "utf8").digest("hex") !== result.briefHash) return null;
+  const trustedBrief = brief?.text && (!result.briefHash || createHash("sha256").update(String(brief.text), "utf8").digest("hex") === result.briefHash)
+    ? brief
+    : null;
+  if (!trustedBrief && !extraContext) return null;
 
-  const out = { hookEventName: "SessionStart", additionalContext: brief.text };
-  if (brief.sessionTitle) out.sessionTitle = brief.sessionTitle;
-  const opening = brief.opening?.[result.mode === "resume" ? "resume" : "launch"];
+  const out = { hookEventName: "SessionStart", additionalContext: [trustedBrief?.text, extraContext].filter(Boolean).join("\n") };
+  if (!trustedBrief) return out;
+  if (trustedBrief.sessionTitle) out.sessionTitle = trustedBrief.sessionTitle;
+  const opening = trustedBrief.opening?.[result.mode === "resume" ? "resume" : "launch"];
   if (source === "startup" && opening) out.initialUserMessage = opening;
   return out;
 }
@@ -1484,7 +1487,7 @@ export async function main() {
 
   const message = sessionStartMessage({ verdict, identity, provisioning });
 
-  const payload = sessionStartOutput(result, { source: hookInput?.source ?? null });
+  const payload = sessionStartOutput(result, { source: hookInput?.source ?? null, extraContext: identity.warning });
   // Plain text when there is no brief: stdout alone is still added to the session, and a folder with
   // no launch of its own must not be handed someone else's instructions.
   if (payload) console.log(JSON.stringify({ systemMessage: message, hookSpecificOutput: payload }));
