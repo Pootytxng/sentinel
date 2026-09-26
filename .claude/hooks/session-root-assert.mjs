@@ -1421,10 +1421,11 @@ export function sessionStartOutput(result, { briefDir = BRIEF_DIR, source = null
   const trustedBrief = brief?.text && (!result.briefHash || createHash("sha256").update(String(brief.text), "utf8").digest("hex") === result.briefHash)
     ? brief
     : null;
-  if (!trustedBrief && !extraContext) return null;
+  // Without a trusted brief, keep plain stdout so Claude receives the verified-session
+  // verdict and provisioning line along with any identity warning.
+  if (!trustedBrief) return null;
 
-  const out = { hookEventName: "SessionStart", additionalContext: [trustedBrief?.text, extraContext].filter(Boolean).join("\n") };
-  if (!trustedBrief) return out;
+  const out = { hookEventName: "SessionStart", additionalContext: [trustedBrief.text, extraContext].filter(Boolean).join("\n") };
   if (trustedBrief.sessionTitle) out.sessionTitle = trustedBrief.sessionTitle;
   const opening = trustedBrief.opening?.[result.mode === "resume" ? "resume" : "launch"];
   if (source === "startup" && opening) out.initialUserMessage = opening;
