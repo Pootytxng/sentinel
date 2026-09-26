@@ -1,0 +1,73 @@
+{
+  "inheritedWork": true,
+  "branch": "codex/579-no-brief-context",
+  "gateResults": [
+    {
+      "status": "passed",
+      "summary": "461 files, 7695 passed, one expected failure, nine skipped.",
+      "command": "npm test",
+      "head": "fe7976f29d27e9b04f627d47509db3ee516869b7",
+      "evidence": "logs/verify-local-2026-09-26T11-04-59Z.log; raw bytes PR #581 comment 5845741119; SHA-256 D22E566DE7B3E81EDDBC9EDCB575636EE171D07A918EEC82B89117F70296786A"
+    },
+    {
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "command": "npm run build",
+      "head": "fe7976f29d27e9b04f627d47509db3ee516869b7",
+      "evidence": "logs/verify-local-2026-09-26T11-04-59Z.log; raw bytes PR #581 comment 5845741119; SHA-256 D22E566DE7B3E81EDDBC9EDCB575636EE171D07A918EEC82B89117F70296786A"
+    },
+    {
+      "status": "passed",
+      "summary": "1350 passed, zero failed, 24 ignored.",
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "head": "fe7976f29d27e9b04f627d47509db3ee516869b7",
+      "evidence": "logs/verify-local-2026-09-26T11-04-59Z.log; raw bytes PR #581 comment 5845741119; SHA-256 D22E566DE7B3E81EDDBC9EDCB575636EE171D07A918EEC82B89117F70296786A"
+    },
+    {
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "head": "fe7976f29d27e9b04f627d47509db3ee516869b7",
+      "evidence": "logs/verify-local-2026-09-26T11-04-59Z.log; raw bytes PR #581 comment 5845741119; SHA-256 D22E566DE7B3E81EDDBC9EDCB575636EE171D07A918EEC82B89117F70296786A"
+    }
+  ],
+  "mutationAuthors": [
+    "codex"
+  ],
+  "transition": "close-issue",
+  "overlapExclusiveNote": "Only this lane prepared the new #579 close receipt. The earlier receipt-carrier claim was released; no live overlapping claim exists.",
+  "actor": "codex",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/579#issuecomment-5845769867",
+  "closingNote": "PR #581 merged as 5216d615. Origin/main at fe7976f2 contains the reviewed correction and ready/merge receipts. Close #579 after the receipt-preparation Handoff releases its lease; preserve this close receipt on main under a new receipt-only claim and native gate.",
+  "currentHead": "fe7976f29d27e9b04f627d47509db3ee516869b7",
+  "mutationAuthorsNote": "Codex authored the one-commit hook/test repair and both receipt-only main commits; ChatGPT HQ authored no mutation.",
+  "pr": 581,
+  "gateEvidenceNote": "Native direct-main pre-push gate passed at exact carrier head fe7976f2 after checkout CRLF normalization. The first attempt failed the line-ending guard and did not push. ChatGPT HQ independently decoded the successful second raw log, verified SHA-256 and every gate stage, and confirmed the receipt blobs are LF.",
+  "kind": "lane",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "leaseEvidenceNote": "Close-receipt preparation claim at reviewed main head. It will be released before the close-issue gate and closure.",
+  "issue": 579,
+  "independentReview": {
+    "reviewerNote": "Separate ChatGPT Work context verified source blob equality, both landing receipts, live claims and PR state, raw native gate, and complete relevant discussions; explicit exact-main-head PASS.",
+    "head": "fe7976f29d27e9b04f627d47509db3ee516869b7",
+    "reviewer": "chatgpt-hq",
+    "status": "passed",
+    "practical": true,
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/581#issuecomment-5845764720",
+    "verdict": "PASS"
+  },
+  "overlapExclusive": true,
+  "inspection": {
+    "repository": true,
+    "worktree": true,
+    "dirtyState": true,
+    "liveProcesses": true,
+    "remoteState": true,
+    "branch": true
+  }
+}
