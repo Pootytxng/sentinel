@@ -126,7 +126,14 @@ removed the dependency, only you can remove the symptom.
 
 ### A_spent. Spent checkouts to remove  ·  ⏳ NEW 2026-09-01, A_stale folded in 2026-09-26  ·  [#520](https://github.com/Pootytxng/sentinel/issues/520)
 
-**The ask:** from `C:\Users\Kuya\code\sentinel`, `git worktree remove` for `.claude\worktrees\compy-health-parity`, `..\sentinel-recon-261`, `..\sentinel-remote-design-286` and (`--force`) `.claude\worktrees\license-tests`: superseded or salvaged, evidence on #520. Then the other dead checkouts. That list changes daily, so ask any session for it; it re-derives it with `node scripts/fleet-snapshot.mjs` (nothing on no remote, no open PR). Branches survive removal, and removal is denied to sessions. **Why it matters:** `git worktree list` is how every session learns what is live, and each dead folder in it is a false lead.
+**The ask:** open a terminal in `C:\Users\Kuya\code\sentinel` and run these four lines one at a time. Each folder is superseded or salvaged; the evidence is on #520.
+
+- `git worktree remove .claude\worktrees\compy-health-parity`
+- `git worktree remove ..\sentinel-recon-261`
+- `git worktree remove ..\sentinel-remote-design-286`
+- `git worktree remove --force .claude\worktrees\license-tests`
+
+The last line needs `--force` because that folder still holds one uncommitted file, and its tests are already on main (PR #537). Then the other dead checkouts. That list changes daily, so ask any session for it. `node scripts/fleet-snapshot.mjs` reads only git, so the session also checks each folder's branch for an open PR and a live Work Control claim, then hands you one checked command per folder. Branches survive removal, and removal is denied to sessions. **Why it matters:** `git worktree list` is how every session learns what is live, and each dead folder in it is a false lead.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
