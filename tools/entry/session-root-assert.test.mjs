@@ -442,11 +442,13 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
     expect(result.warning).toMatch(/GIT_AUTHOR_IDENT.*codex/);
     expect(result.warning).toMatch(/GIT_COMMITTER_IDENT.*codex/);
     const shown = tracked.sessionStartMessage({
-      verdict: { message: "compy-entry: verified" },
+      verdict: { message: "compy-entry: session verified — #579 on codex/579-no-brief-context" },
       identity: result,
-      provisioning: { action: "skipped", line: null },
+      provisioning: { action: "checked", line: "compy-entry: provisioning check — hooksPath, line endings, branch" },
     });
-    expect(shown).toContain(result.warning); // Plain-text SessionStart stdout when there is no JSON payload.
+    expect(shown).toContain("session verified");
+    expect(shown).toContain(result.warning);
+    expect(shown).toContain("provisioning check");
     writeFileSync(join(bed, "574.json"), JSON.stringify({ text: "launch brief" }));
     const withBrief = tracked.sessionStartOutput(
       { ok: true, issue: 574, briefHash: null },
@@ -458,7 +460,12 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
       { ok: true, issue: 575, briefHash: null },
       { briefDir: bed, source: "startup", extraContext: result.warning },
     );
-    expect(withoutBrief.additionalContext).toBe(result.warning);
+    expect(withoutBrief).toBeNull(); // main() must print all three lines as plain stdout to Claude.
+    const mismatchedBrief = tracked.sessionStartOutput(
+      { ok: true, issue: 574, briefHash: "0".repeat(64) },
+      { briefDir: bed, source: "startup", extraContext: result.warning },
+    );
+    expect(mismatchedBrief).toBeNull();
     const correct = {
       GIT_AUTHOR_NAME: "claude-code",
       GIT_AUTHOR_EMAIL: "claude-code@desk.local",
