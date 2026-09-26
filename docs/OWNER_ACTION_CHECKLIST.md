@@ -124,9 +124,9 @@ stalling — but anything else on this PC that asks WMI will stay slow or empty 
 back. **Why it matters:** two pre-push gates went red on a kill that had already happened; the fix
 removed the dependency, only you can remove the symptom.
 
-### A_spent. Four spent checkouts to remove  ·  ⏳ NEW 2026-09-23  ·  [#520](https://github.com/Pootytxng/sentinel/issues/520)
+### A_spent. Spent checkouts to remove  ·  ⏳ NEW 2026-09-01, merged with A_stale 2026-09-26  ·  [#520](https://github.com/Pootytxng/sentinel/issues/520)
 
-**The ask:** `git worktree remove` for `.claudeworktreescompy-health-parity`, `..sentinel-recon-261`, `..sentinel-remote-design-286`, and (`--force`, once #520's PR is on `main`) `.claudeworktreeslicense-tests`. All four are superseded or salvaged; evidence on #520. Branches survive removal. **Why it matters:** the fleet report shows them as unpushed work on every run.
+**The ask:** from `C:\Users\Kuya\code\sentinel`, `git worktree remove` for `.claude\worktrees\compy-health-parity`, `..\sentinel-recon-261`, `..\sentinel-remote-design-286` and (`--force`) `.claude\worktrees\license-tests`: superseded or salvaged, evidence on #520. Then the other dead checkouts. That list changes daily, so ask any session for it; it re-derives it with `node scripts/fleet-snapshot.mjs` (nothing on no remote, no open PR). Branches survive removal, and removal is denied to sessions. **Why it matters:** `git worktree list` is how every session learns what is live, and each dead folder in it is a false lead.
 
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
@@ -134,7 +134,7 @@ None of them is waiting on you (A0's key backup closed 2026-08-18; record and th
 corrections in the archive). **§A holds SEVEN things:** ① A0's residual — delete the
 redundant `Desktop\COMPY KEY\` copy; ② A0's *"expand to the remaining invitees"* — a **distribution call**,
 yours by definition; ③ **A_settings**, one paste in a file only you may edit; ④ **A_prune**,
-one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches; ⑦ **A_spent**, four folder removals.
+one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches; ⑦ **A_spent**, the spent-folder removals.
 Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_ci · A_rig · A_ref2 · B1 · B7 · B_arc · A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**.
 
 ---
@@ -253,22 +253,6 @@ section is waiting on you:**
 - **You said "there's more I'm missing" + "capture it first"** — preserved here as historical evidence. This record does not ask you to reconstruct a list and does not authorize its former
   Instrument Bench build target. Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; current
   sequence comes from `docs/product/ROADMAP.md`.
-
-### A_stale. Fourteen dead checkouts and ten rewritten Codex configs  ·  ⏳ NEW 2026-09-01
-
-**The ask, once [#290](https://github.com/Pootytxng/sentinel/pull/290) lands:** `git worktree remove`
-for the fourteen checkouts that carry no commit `main` lacks, and `git restore .codex/config.toml` in
-the ten holding a rewritten copy of it. Both were **denied to this session**, and a denial is a stop,
-so neither was reached by another route. **Nothing is lost by either.** The only real content any of
-those folders held was six work-control proof receipts — evidence for merges and closes that existed
-on no branch at all, one of them a full independent-review record — and they were copied onto this
-lane first, which is why the removal waits for #290 rather than happening in either order. What
-remains in the four "dirty" ones is a line-endings-only `CLAUDE.md`, a tool scratch folder, and the
-Codex file. That file is not authored work either: it is the app-server re-sync its own header warns
-about, re-adding two Claude env-vars that do nothing for Codex plus an MCP entry the lane had
-removed on purpose. It keeps the read-only safety floor on its first two lines, so nothing is unsafe
-while it waits. **Why it matters:** `git worktree list` is the list every session reads to learn what
-is live, and fourteen dead folders in it is why sessions keep re-deriving the same wrong picture.
 
 ### B-closed6. Six items closed 2026-08-18/22 — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 **None of them is waiting on you.** `B_startup` (a Windows mutation outside `actions.rs` — already fixed the day after it was filed) · `B_gpu` (the finished GPU-profile screen, now mounted in the Lab, advisory forever) · `B_write` (the unverified-session write refusal, armed) · `B_shelter` (a row that was simply wrong — the collision guard had been on `main` since 2026-08-21, and a guard now fails the build if that stale-ask class recurs) · `B_land` (feedback and analytics post to your own site, into Cloudflare D1 — **your one residual is a single site deploy when the Q9b endpoints are built**) · `B_eu` (analytics default-ON, decided US-first; revisit the day Compy is downloadable by Europeans — that trigger is the reason it is archived rather than deleted). Closing verdicts preserved verbatim in the archive.
