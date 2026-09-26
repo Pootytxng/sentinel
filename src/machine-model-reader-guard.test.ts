@@ -29,6 +29,11 @@ import { join } from "path";
 //      `import { … } from`, and nothing touches the package root or the global Tauri objects.
 //   Every rule reads the source as it runs: comments blanked, escapes decoded (see decodeEscapes).
 //
+// What it cannot decide: code written to hide a call while it runs. Examples are `eval`,
+// `new Function`, or a global looked up under a key built from pieces. Text cannot follow a value
+// through execution, so review catches those. Everything written the ordinary way, and every
+// construction or escape form a review has named, is decided here.
+//
 // The corpus is INVERTED on purpose (walk everything, exempt explicitly), the lesson the
 // mutation-boundary guard learned: a new surface is in scope the moment it exists. Test files and
 // the `src/test/` support folder are out of the corpus because they MOCK these commands; a mock is
