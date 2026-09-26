@@ -218,9 +218,10 @@ if ($modes.ContainsKey($Scenario)) {
     Write-Output ("THREW=" + $_.Exception.Message)
   }
 } elseif ($Scenario -eq "timeout-kill-fallback") {
-  # The taskkill path, forced. On a host whose WMI is down taskkill itself hangs (~60s, measured
-  # 2026-09-02) and, started with inherited handles, holds the caller's pipes for as long as it
-  # lives. The library must kill its own killer so this harness reaches EOF inside the drain budget.
+  # The no-job path, forced. It once ran taskkill, which on a host whose WMI is down hangs (~60s,
+  # measured 2026-09-02) and, started with inherited handles, holds the caller's pipes for as long as
+  # it lives. It now kills the root alone and starts no helper, so this harness must reach EOF inside
+  # the drain budget.
   $env:COMPY_NATIVE_TREE_KILL_FALLBACK = "1"
   try {
     $result = Invoke-NativeProcess -Command $NodeExe -ArgumentList @($FakeGh, "hang") -TimeoutMs 2000
@@ -645,10 +646,9 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
   // bug->guard (2026-09-02): taskkill answers through WMI and hung ~60s on the dev machine, and the
   // abandoned killer held inherited duplicates of THIS pipe, so spawnSync could not see EOF until
   // it died -- a 7s kill read as a 64s hang and failed the gate on a test the library had passed.
-  // The tree kill no longer uses taskkill at all (toolhelp snapshot + Process.Kill); this forces the
-  // fallback that still does and proves the killer cannot outlive its wait: whatever taskkill does,
-  // the harness reaches EOF inside the drain budget.
-  it("kills its own killer when the taskkill fallback outlives the timeout", () => {
+  // Neither the tree kill (a job object) nor its no-job fallback (the root alone) starts a helper any
+  // more; this forces the fallback and proves the harness still reaches EOF inside the drain budget.
+  it("reaches EOF promptly when the no-job fallback is forced", () => {
     const { field, wall } = run("timeout-kill-fallback");
     expect(field("TIMEDOUT")).toBe("True");
     expect(field("TERMINATION_ATTEMPTED")).toBe("True");

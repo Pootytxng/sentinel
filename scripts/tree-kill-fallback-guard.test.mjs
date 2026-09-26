@@ -2,17 +2,18 @@
 //
 // #562 bug->guard: when the process tree cannot be read (no toolhelp snapshot, no Add-Type, or
 // COMPY_NATIVE_TREE_KILL_FALLBACK=1), Stop-NativeProcessTree used to run `taskkill /PID <n> /T /F`.
-// taskkill /T walks the OS-recorded parent pids with no start-time check -- the exact walk #559 made
-// safe in Get-NativeDescendantIds -- so a stranger that inherited a recycled parent pid could be
-// killed with 0xFFFFFFFF, which Git Bash prints as exit 127.
+// taskkill /T walks the OS-recorded parent pids unchecked, so a stranger that inherited a recycled
+// parent pid could be killed with 0xFFFFFFFF, which Git Bash prints as exit 127.
 //
-// The fallback now kills the root alone and reports "root-only". This guard starts a root with a
-// GENUINE detached child, forces the fallback, and requires: the root dies, the child is left alive
-// (the fallback proves nothing about descendants, so it must touch none), the function says
-// "root-only", and Invoke-NativeProcess carries that as TreeKill. The normal path must still say
-// "tree". Against the taskkill fallback the child dies (whenever WMI answers) and no verdict is
-// returned; the static half fails regardless of WMI, because a hung WMI (dev PC, 2026-09-02) makes
-// taskkill kill nothing and would let the behavioural half pass on the old code.
+// With no job object (the helper did not compile, the assignment failed, or
+// COMPY_NATIVE_TREE_KILL_FALLBACK=1) the kill now ends the root alone and reports "root-only". This
+// guard starts a root with a GENUINE detached child, kills it with no job, and requires: the root
+// dies, the child is left alive (nothing proves it is ours, so it must not be touched), the function
+// says "root-only", and Invoke-NativeProcess carries that as TreeKill when the fallback is forced.
+// The normal path must still say "tree". Against the taskkill fallback the child dies (whenever WMI
+// answers) and no verdict is returned; the static half fails regardless of WMI, because a hung WMI
+// (dev PC, 2026-09-02) makes taskkill kill nothing and would let the behavioural half pass on the old
+// code.
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -69,9 +70,8 @@ try {
   $started += $child
   $childStart = $child.StartTime
 
-  $env:COMPY_NATIVE_TREE_KILL_FALLBACK = '1'
-  try { $verdict = Stop-NativeProcessTree -ProcessId $rootProc.Id }
-  finally { Remove-Item Env:COMPY_NATIVE_TREE_KILL_FALLBACK -ErrorAction SilentlyContinue }
+  # No -Job: the root was never placed in one, which is the fallback's situation.
+  $verdict = Stop-NativeProcessTree -Process $rootProc
   "VERDICT=$verdict"
   "ROOT_DEAD=$($rootProc.WaitForExit(5000))"
   # Give a tree kill time to land before calling the child a survivor.
@@ -127,7 +127,7 @@ afterAll(() => {
 describe("tree-kill fallback walks no unproven tree (#562)", () => {
   it("starts no taskkill and no WMI walk: both follow recorded parent pids unchecked", () => {
     const body = stopTreeCode();
-    expect(body).toMatch(/GetProcessById/);
+    expect(body).toMatch(/\$Process\.Kill\(\)/);
     expect(body).not.toMatch(/taskkill/i);
     expect(body).not.toMatch(/["'\s]\/T["'\s]/);
     expect(body).not.toMatch(/Win32_Process|CimInstance|WmiObject/i);

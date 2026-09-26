@@ -23,6 +23,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/.test(k)));
 const git = (cwd, ...args) => spawnSync("git", args, { cwd, env, encoding: "utf8", windowsHide: true });
 
+// The same environment with Windows PowerShell's folder taken off PATH, the only place powershell.exe
+// lives; git and its sh stay reachable.
+const pathKey = Object.keys(env).find((k) => k.toUpperCase() === "PATH");
+const noPowerShell = {
+  ...env,
+  [pathKey]: env[pathKey].split(";").filter((p) => !/WindowsPowerShell/i.test(p)).join(";"),
+};
+
 let dir;
 let work;
 let n = 0;
@@ -46,13 +54,13 @@ afterAll(() => {
 });
 
 // One push whose gate ends with `code`. Each push carries a new commit, so none is a no-op.
-const pushWithGateExit = (code) => {
+const pushWithGateExit = (code, pushEnv = env) => {
   writeFileSync(join(work, "scripts", "verify-local.ps1"), `[Environment]::Exit(${code})\n`, "utf8");
   n += 1;
   writeFileSync(join(work, "f.txt"), `${n}\n`, "utf8");
   expect(git(work, "add", "-A").status).toBe(0);
   expect(git(work, "commit", "-qm", `c${n}`).status).toBe(0);
-  const r = git(work, "push", "-q", "../remote.git", "HEAD:refs/heads/x");
+  const r = spawnSync("git", ["push", "-q", "../remote.git", "HEAD:refs/heads/x"], { cwd: work, env: pushEnv, encoding: "utf8", windowsHide: true });
   return { status: r.status, err: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 };
 
@@ -68,6 +76,21 @@ describe.runIf(windows)("pre-push names a killed gate (#559)", () => {
     const { status, err } = pushWithGateExit(-1073740791);
     expect(status, err).not.toBe(0);
     expect(err, err).toContain("the gate process was TERMINATED, not failed (exit 127)");
+  }, 60000);
+
+  it("says the same for 0xC000013A (Ctrl+C or its console closed), which Git Bash prints as 130", () => {
+    const { status, err } = pushWithGateExit(-1073741510);
+    expect(status, err).not.toBe(0);
+    expect(err, err).toContain("the gate process was TERMINATED, not failed (exit 130)");
+  }, 60000);
+
+  it("refuses when powershell.exe is not on PATH, and does not call that a kill", () => {
+    // The shell's own "command not found" is also 127, so without the hook's own check this case
+    // would read as a killed gate. The stub gate exits 0: only the missing check can refuse here.
+    const { status, err } = pushWithGateExit(0, noPowerShell);
+    expect(status, err).not.toBe(0);
+    expect(err, err).toContain("powershell.exe is not on PATH, so the gate cannot run");
+    expect(err, err).not.toContain("TERMINATED");
   }, 60000);
 
   it("refuses an ordinary red gate WITHOUT calling it a kill", () => {
