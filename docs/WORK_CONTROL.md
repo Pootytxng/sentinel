@@ -288,15 +288,16 @@ or transfers a mutation lease.
 - `Local\Compy.InstalledBinary.v1` is held by `scripts/ship-reinstall.ps1` through installed-binary
   replacement/proof/relaunch.
 - `Local\Compy.TestGate.v1` is held by `scripts/verify-local.ps1` from its `npm test` stage through
-  build, cargo test and clippy (#522), and by `scripts/run-vitest.mjs` for an unfiltered, non-watch
-  full-suite run, through `scripts/lib/gate-mutex-hold.ps1` (#543), so gates and ad-hoc full suites
+  build, cargo test and clippy (#522), and by `scripts/run-vitest.mjs` for a non-watch run of every
+  test file, through `scripts/lib/gate-mutex-hold.ps1` (#543), so gates and ad-hoc full suites
   take turns instead of starving each other into timeouts. It guards a read-only proof, not a
   mutation, so a later caller waits, naming the holder, and gives up only after one holder has kept
   it 30 minutes: the deadline restarts whenever the holder changes (#541). A holder that died is
   taken over with a WARN; it leaves no recovery state.
   For `run-vitest.mjs`, the holder's exit 3 (gave up after that wait) refuses the run with exit 1;
-  its exit 4, or a holder that cannot start, only warns and the suite runs unqueued. Filtered
-  (including `--changed`/`--shard`), watch, `related`, `list`, `bench` and `init` runs never queue.
+  its exit 4, or a holder that cannot start, only warns and the suite runs unqueued. A test-name
+  filter (`-t`) still loads every file, so it queues; a file filter, `--changed`, `--shard`, watch,
+  `related`, `list`, `bench` and `init` never queue.
   Nor does a run whose `COMPY_TEST_GATE_HELD=<pid>` names a live pid: `verify-local.ps1` exports its
   own pid while it holds the gate (cleared in `finally`), so its `npm test` does not wait on itself.
   `scripts/lib/gate-mutex.ps1` and `scripts/lib/gate-mutex.mjs`, pinned by
