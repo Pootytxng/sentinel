@@ -1,0 +1,27 @@
+{
+  "actor": "codex",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/573#issuecomment-5842086394",
+  "leaseEvidenceNote": "Landing-only claim on #573; author lease released before this claim.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "Only this carrier writes the three new receipt paths; no reviewed source file is edited.",
+  "inheritedWork": true,
+  "inspection": {"repository": true, "remoteState": true, "worktree": true, "branch": true, "dirtyState": true, "liveProcesses": true},
+  "currentHead": "6a70aabbb94f6e4e1a2abf7a8625a5161a92ebf5",
+  "pr": 575,
+  "issue": 573,
+  "kind": "lane",
+  "branch": "codex/575-landing",
+  "mutationAuthors": ["claude-code", "codex"],
+  "mutationAuthorsNote": "Claude wrote the code; inherited Git variables labeled its commit codex. Both identities are included conservatively.",
+  "requiredGates": ["npm test", "npm run build", "cargo test --manifest-path src-tauri/Cargo.toml", "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"],
+  "gateResults": [
+    {"command": "npm test", "status": "passed", "head": "6a70aabbb94f6e4e1a2abf7a8625a5161a92ebf5", "evidence": "Native pre-push log logs/verify-local-2026-09-25T16-46-03Z.log, SHA-256 0D65373FE6B614173484C74DA8B10941615169AC694A28B85DB1B83FC8C31519; raw bytes PR comment 5842020863", "summary": "461 files, 7694 passed, one expected fail, nine skipped."},
+    {"command": "npm run build", "status": "passed", "head": "6a70aabbb94f6e4e1a2abf7a8625a5161a92ebf5", "evidence": "Same decoded native pre-push log and SHA-256", "summary": "Type check and production build passed."},
+    {"command": "cargo test --manifest-path src-tauri/Cargo.toml", "status": "passed", "head": "6a70aabbb94f6e4e1a2abf7a8625a5161a92ebf5", "evidence": "Same decoded native pre-push log and SHA-256", "summary": "1350 passed, zero failed, 24 ignored."},
+    {"command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings", "status": "passed", "head": "6a70aabbb94f6e4e1a2abf7a8625a5161a92ebf5", "evidence": "Same decoded native pre-push log and SHA-256", "summary": "Clean with -D warnings."}
+  ],
+  "gateEvidenceNote": "The native pre-push gate passed at the exact remote PR head. ChatGPT HQ decoded the raw log from PR comment 5842020863, checked length 235016 bytes and SHA-256, and verified each stage including scope drift and lease overlap. The reviewed head has not changed.",
+  "independentReview": {"practical": true, "reviewer": "chatgpt-hq", "status": "passed", "head": "6a70aabbb94f6e4e1a2abf7a8625a5161a92ebf5", "verdict": "PASS", "evidence": "https://github.com/Pootytxng/sentinel/pull/575#pullrequestreview-5324044659", "reviewerNote": "Separate ChatGPT Work context, no mutation author, issued explicit PASS after full diff review, red-first falsification, focused rerun, and native gate verification. GitHub records COMMENTED because connected account owns the PR."},
+  "transition": "merge-pr",
+  "closingNote": "Land reviewed PR #575 through scripts/land-pr.mjs. PR closingIssuesReferences is empty; #573 closes only after main proof and a separate close receipt."
+}
