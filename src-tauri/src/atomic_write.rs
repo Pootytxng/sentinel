@@ -93,6 +93,49 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 thread_local! {
     static FORCED: std::cell::Cell<FailPoint> = const { std::cell::Cell::new(FailPoint::None) };
     static FORCE_SERIALIZE_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static FORCE_TEMP_UNLINK_FAILURES: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+}
+
+/// Make the next `n` attempts on this thread to unlink a failed write's temp fail, the way they do
+/// when another process holds the temp open without delete sharing. Test-only.
+#[cfg(test)]
+pub(crate) fn force_next_temp_unlink_failures(n: u8) {
+    FORCE_TEMP_UNLINK_FAILURES.with(|c| c.set(n));
+}
+
+/// Get rid of this call's own temp after a failed write.
+///
+/// One caller (the license store) writes a signed token through here, so a temp that survives a
+/// failed save is a second plaintext copy of it. When the unlink fails, for example because another
+/// process holds the temp open without delete sharing, the temp is emptied and the unlink is tried
+/// once more. Emptying is not a secure erase: on a journalling filesystem the old blocks can
+/// outlive it. It removes the readable copy, which is the realistic exposure. A holder that also
+/// refuses writes defeats it, and the save returns its original error whatever happens here.
+///
+/// Every caller gets this, not only the license store. A failed write's temp is garbage to all of
+/// them, and an opt-in flag would let a future sensitive caller forget it.
+fn discard_temp(tmp: &Path) {
+    if remove_temp(tmp).is_ok() {
+        return;
+    }
+    // `truncate` without `create`: if the temp is already gone this opens nothing and makes nothing.
+    drop(std::fs::OpenOptions::new().write(true).truncate(true).open(tmp));
+    let _ = remove_temp(tmp);
+}
+
+fn remove_temp(tmp: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if FORCE_TEMP_UNLINK_FAILURES.with(|c| {
+        let left = c.get();
+        c.set(left.saturating_sub(1));
+        left > 0
+    }) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "injected temp unlink failure",
+        ));
+    }
+    std::fs::remove_file(tmp)
 }
 
 /// Arm [`FORCED`] for the next write on this thread. Test-only, and deliberately not `pub`.
@@ -185,7 +228,7 @@ pub(crate) fn write_atomic_at(
         // rename succeed — the whole point is that the old bytes survive a failure.
         let result = write_and_replace(file, &tmp, path, bytes, fail_at);
         if result.is_err() {
-            let _ = std::fs::remove_file(&tmp);
+            discard_temp(&tmp);
         }
         return result;
     }
@@ -373,6 +416,44 @@ mod tests {
         // the OLD file, not a mixture: this is the "either old or complete new, never mixed" claim.
         assert_eq!(std::fs::read(&target).unwrap(), b"OLD");
         assert!(leftovers(&dir).is_empty(), "temp file not cleaned up");
+    }
+
+    #[test]
+    fn a_temp_that_cannot_be_unlinked_is_emptied_before_it_is_left_behind() {
+        // #292: the license store writes a signed token through here, so a temp that survives a
+        // failed save is a second plaintext copy of it. BeforeRename is the point where the temp
+        // holds every byte; both unlink attempts fail, so the temp has to stay and must be empty.
+        let dir = scratch("unlink-fails");
+        let target = dir.join("store.json");
+        std::fs::write(&target, b"OLD").unwrap();
+
+        force_next_temp_unlink_failures(2);
+        write_atomic_at(&target, b"NEW-SECRET-BYTES", FailPoint::BeforeRename)
+            .expect_err("injected failure should surface");
+
+        assert_eq!(std::fs::read(&target).unwrap(), b"OLD");
+        let left = leftovers(&dir);
+        // The scenario has to have happened for the next assertion to mean anything.
+        assert_eq!(left.len(), 1, "the forced unlink failures did not leave a temp: {left:?}");
+        assert_eq!(
+            std::fs::metadata(dir.join(&left[0])).unwrap().len(),
+            0,
+            "a temp that could not be removed still holds the payload"
+        );
+    }
+
+    #[test]
+    fn a_temp_whose_first_unlink_fails_is_still_removed() {
+        let dir = scratch("unlink-retry");
+        let target = dir.join("store.json");
+        std::fs::write(&target, b"OLD").unwrap();
+
+        force_next_temp_unlink_failures(1);
+        write_atomic_at(&target, b"NEW", FailPoint::BeforeRename)
+            .expect_err("injected failure should surface");
+
+        assert_eq!(std::fs::read(&target).unwrap(), b"OLD");
+        assert!(leftovers(&dir).is_empty(), "one failed unlink left the temp behind");
     }
 
     #[test]
