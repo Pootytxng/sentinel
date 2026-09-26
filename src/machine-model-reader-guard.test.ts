@@ -287,7 +287,10 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(sink(wrapped + "invoke<T>(cmd);", app)).toHaveLength(1);
     // The forms this codebase really uses.
     expect(sink('import { invoke } from "@tauri-apps/api/core";')).toEqual([]);
-    expect(sink('import {\n  invoke,\n  Channel,\n} from "@tauri-apps/api/core";')).toEqual([]);
+    // The specifier is spliced in so fixture-parity-guard, which reads imports as text, does not
+    // take this sample for a real multi-line import.
+    const core = '"@tauri-apps/api/core"';
+    expect(sink(`import {\n  invoke,\n  Channel,\n} from ${core};`)).toEqual([]);
     expect(sink('invoke<MachineModel>("get_machine_model")')).toEqual([]);
     expect(sink('invoke<{ network_pills?: NetworkPill[] } | null>("get_hardware_info")')).toEqual([]);
     expect(sink('invoke<Record<string, number>>("get_x", { id })')).toEqual([]);
