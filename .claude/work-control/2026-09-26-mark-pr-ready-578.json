@@ -1,0 +1,72 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/423#issuecomment-5849339150",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/578#issuecomment-5849198033",
+    "status": "passed",
+    "reviewerNote": "Local Codex CLI (gpt-5.6-sol, read-only sandbox) reviewed the exact pushed head through the GitHub connector: the /.agents/ rule is byte-identical and only its comment changed (one file, +4/-6); the state-neutral rationale matches the repository (a generated per-checkout mirror, .claude/skills canonical, ignored files outside the dirty-stamp input); no guard pins the old or new prose. Verdict PASS, four INFO notes, none blocking. It authored no mutation.",
+    "head": "543e59f2f9527745e53d942d2cc2dc4419739dea"
+  },
+  "branch": "claude/423-agents-gitignore-rationale",
+  "overlapExclusiveNote": "The landing claim holds only this lane's two new receipt paths; no other live claim owns them and no source path is edited.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "543e59f2f9527745e53d942d2cc2dc4419739dea",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "461 frontend files, 7698 passed, one expected failure, nine skipped.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/modest-nobel-bbc261/logs/verify-local-2026-09-26T03-16-33Z.log; SHA-256 426838627F93E36321DBC507BAD8A0CE9E9421B9A79221E01D262B282E88471B; gate-log comment https://github.com/Pootytxng/sentinel/pull/578#issuecomment-5842772687 (LOCAL CHECK RESULT: PASS, push exited 0 at the exact head)",
+      "head": "543e59f2f9527745e53d942d2cc2dc4419739dea"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/modest-nobel-bbc261/logs/verify-local-2026-09-26T03-16-33Z.log; SHA-256 426838627F93E36321DBC507BAD8A0CE9E9421B9A79221E01D262B282E88471B; gate-log comment https://github.com/Pootytxng/sentinel/pull/578#issuecomment-5842772687 (LOCAL CHECK RESULT: PASS, push exited 0 at the exact head)",
+      "head": "543e59f2f9527745e53d942d2cc2dc4419739dea"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1350 passed, zero failed, 24 ignored.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/modest-nobel-bbc261/logs/verify-local-2026-09-26T03-16-33Z.log; SHA-256 426838627F93E36321DBC507BAD8A0CE9E9421B9A79221E01D262B282E88471B; gate-log comment https://github.com/Pootytxng/sentinel/pull/578#issuecomment-5842772687 (LOCAL CHECK RESULT: PASS, push exited 0 at the exact head)",
+      "head": "543e59f2f9527745e53d942d2cc2dc4419739dea"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/modest-nobel-bbc261/logs/verify-local-2026-09-26T03-16-33Z.log; SHA-256 426838627F93E36321DBC507BAD8A0CE9E9421B9A79221E01D262B282E88471B; gate-log comment https://github.com/Pootytxng/sentinel/pull/578#issuecomment-5842772687 (LOCAL CHECK RESULT: PASS, push exited 0 at the exact head)",
+      "head": "543e59f2f9527745e53d942d2cc2dc4419739dea"
+    }
+  ],
+  "issue": 423,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Landing-only claim after the implementation claim was released (https://github.com/Pootytxng/sentinel/issues/423#issuecomment-5842781557).",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push moved the branch to the exact PR head; nothing was pushed after it. The log lives in the folder that pushed, modest-nobel-bbc261.",
+  "pr": 578,
+  "mutationAuthorsNote": "claude-code authored 543e59f2, the PR's only commit. Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "mark-pr-ready"
+}
