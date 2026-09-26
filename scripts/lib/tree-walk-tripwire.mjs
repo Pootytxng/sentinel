@@ -122,14 +122,21 @@ export function tripwireVerdict(timeout, o, budget) {
 // ── many git processes (#563) ──────────────────────────────────────────────────────────────────
 // A test that builds a fixture repository in os.tmpdir() walks nothing, but every git process it
 // starts pays for a process start, and the full suite's own parallelism starves those. The
-// 2026-09-24 gate that failed on seven such tests (logs/verify-local-2026-09-24T05-18-40Z.log in the
-// youthful-swartz-2f0580 checkout) ran their files 8.3 to 11.4 times slower than a census of the
-// whole suite on 2026-09-26: first-launch 81 s against 8.4 s, target-ownership 139 s against 12 s.
-// In that census 348 of 7,704 tests started git, at 60 ms a process at the median and 225 ms at
-// worst. The floor is the lowest count that keeps every test under it clear of the default at the
-// worst measured slowdown: the slowest default-timeout test starting fewer than 6 took 467 ms, 5.3 s
-// at 11.4 times, a third of the 15 s default. At 7 that would have been a 962 ms test (11 s), at 8 a
-// 1.6 s test (18 s, past the default). The count is deterministic where a time would flake.
+// 2026-09-24 gate that failed on seven such tests (logs/verify-local-2026-09-24T05-18-40Z.log, in a
+// checkout since removed, so its file times are kept here) ran their files 8.3 to 11.4 times slower
+// than a census of the whole suite on 2026-09-26: verify-release-state-guard 195.7 s against 23.5 s
+// (8.3), first-launch 81.0 s against 8.36 s (9.7), branch-disposition-audit 127.6 s against 12.61 s
+// (10.1), target-ownership 138.7 s against 12.14 s (11.4). In that census 348 of 7,704 tests started
+// git, at 60 ms a process at the median and 225 ms at worst. The floor is the lowest count that
+// keeps every test under it clear of the default at the worst measured slowdown: the slowest
+// default-timeout test starting fewer than 6 took 467 ms, 5.3 s at 11.4 times, a third of the 15 s
+// default. At 7 that would have been a 962 ms test (11.0 s), at 8 a 1.6 s test (18.3 s, past the
+// default). The count is deterministic where a time would flake.
+//
+// What counts as a git process: a direct git, and every git a shell runs, however it was reached
+// (see gitInvocations below). Git started by any other program, such as a child `node` process, an
+// npm script or a .ps1 or .sh file, is not counted: that program's own children are not in this
+// process. A shell loop's git counts once however often the loop runs.
 export const GIT_SPAWN_FLOOR = 6; // git processes one test, or one hook, starts
 
 // The failure a test that starts GIT_SPAWN_FLOOR or more git processes gets on too small a timeout,
@@ -146,11 +153,22 @@ export function gitSpawnVerdict(timeout, o, budget) {
   );
 }
 
-// The same rule for one hook: { kind, suite, timeout, gitSpawns }. vitest keeps a before-hook's
-// timeout on the hook and an after-hook's only inside a closure, so an after-hook's is unknown.
+// The same rule for one hook, or for the cleanup a before-hook returned: { kind, suite, timeout,
+// gitSpawns, cleanup?, overlap? }. vitest keeps a before-hook's timeout on the hook, and its cleanup
+// runs on that same timeout; it keeps an after-hook's only inside a closure, so that one is unknown.
 export function hookGitVerdict(h, budget) {
+  if (h.overlap) return overlapVerdict("hooks");
   if (h.gitSpawns < GIT_SPAWN_FLOOR || (typeof h.timeout === "number" && h.timeout >= budget)) return null;
-  const which = `the ${h.kind} hook of "${h.suite}" starts ${h.gitSpawns} git processes (the floor is ${GIT_SPAWN_FLOOR})`;
+  const count = `starts ${h.gitSpawns} git processes (the floor is ${GIT_SPAWN_FLOOR})`;
+  if (h.cleanup) {
+    return (
+      `git-spawn tripwire (#563): the cleanup returned by the ${h.kind} hook of "${h.suite}" ${count} ` +
+      `but runs on the ${h.timeout} ms timeout it takes from that hook. Give the hook the measured ` +
+      `budget as its second argument, \`${h.kind}(fn, GIT_SPAWN_TIMEOUT_MS)\` from ` +
+      `src/test/tree-walk-budget.ts (${budget} ms), or start fewer git processes.`
+    );
+  }
+  const which = `the ${h.kind} hook of "${h.suite}" ${count}`;
   if (typeof h.timeout !== "number") {
     return (
       `git-spawn tripwire (#563): ${which}, and vitest does not expose an ${h.kind} hook's timeout, so ` +
@@ -163,6 +181,21 @@ export function hookGitVerdict(h, budget) {
     `machine that is how a whole describe fails with "Hook timed out". Give it the measured budget ` +
     `as its second argument, \`${h.kind}(fn, GIT_SPAWN_TIMEOUT_MS)\` from src/test/tree-walk-budget.ts ` +
     `(${budget} ms), or start fewer git processes.`
+  );
+}
+
+// The failure for tests, or hooks, that ran at the same time in one worker. Everything above is
+// counted against the one test or hook that is running, so two at once cannot be told apart; the
+// tripwire fails closed rather than charge one for the other's work, or miss it.
+export function overlapVerdict(what) {
+  const which =
+    what === "tests"
+      ? "tests ran at the same time in one worker (test.concurrent, describe.concurrent or sequence.concurrent)"
+      : `hooks ran at the same time in one worker (sequence.hooks "parallel", or a hook that timed out and kept running)`;
+  return (
+    `tree-walk and git-spawn tripwire (#515, #563): ${which}. The tripwire counts git processes and ` +
+    `reads of this tree against the one test or hook that is running, so it cannot tell which of them ` +
+    `did what. Run them one at a time, as vitest does by default.`
   );
 }
 
@@ -250,6 +283,69 @@ const tokenize = (cmd) =>
     .split(/\s+/)
     .map((t) => t.replace(/^["']|["']$/g, ""));
 
+// ── how many git processes a command starts (#563) ────────────────────────────────────────────
+// A shell string (exec, execSync, `shell: true`) and a shell given a script (cmd /c or /k,
+// powershell or pwsh -Command or any prefix of it, sh, bash, zsh or dash -c) count every git at a
+// command position of the script, nested shells included: at its start, or after && || ; & | ( ) { }
+// $( or a backtick or newline outside quotes, past any VAR=value, env, exec, command, time, do, then
+// or else in front of it.
+const SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
+const POWERSHELLS = new Set(["powershell", "pwsh"]);
+const LEADING_WORDS = new Set(["env", "exec", "command", "time", "do", "then", "else"]);
+
+function scriptOf(prog, args) {
+  if (prog === "cmd") {
+    const at = args.findIndex((a) => /^\/[ck]$/i.test(a));
+    return at < 0 ? null : args.slice(at + 1).join(" ");
+  }
+  if (POWERSHELLS.has(prog)) {
+    const at = args.findIndex((a) => /^-c(o(m(m(a(n(d)?)?)?)?)?)?$/i.test(a));
+    return at < 0 ? null : args.slice(at + 1).join(" ");
+  }
+  if (SHELLS.has(prog)) {
+    const at = args.findIndex((a) => /^-[a-z]*c[a-z]*$/i.test(a));
+    return at < 0 ? null : args[at + 1] ?? null;
+  }
+  return null;
+}
+
+// One command, as its program and arguments: 1 for git, what its script starts for a shell, else 0.
+export function gitSpawnsOf(argv) {
+  const words = argv.map(String);
+  let i = 0;
+  while (i < words.length && (LEADING_WORDS.has(words[i]) || /^[A-Za-z_]\w*=/.test(words[i]))) i++;
+  if (i >= words.length) return 0;
+  const prog = programOf(words[i]);
+  if (prog === "git") return 1;
+  const script = scriptOf(prog, words.slice(i + 1));
+  return script == null ? 0 : gitInvocations(script);
+}
+
+// A shell script: the git processes its commands start.
+export function gitInvocations(script) {
+  const s = String(script);
+  let n = 0;
+  let from = 0;
+  let quote = null;
+  const command = (end) => {
+    const words = [...s.slice(from, end).matchAll(/"([^"]*)"|'([^']*)'|[^\s"']+/g)].map((m) => m[1] ?? m[2] ?? m[0]);
+    n += gitSpawnsOf(words);
+  };
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if ("&|;(){}`\r\n".includes(c) || (c === "$" && s[i + 1] === "(")) {
+      command(i);
+      from = i + 1;
+    }
+  }
+  command(s.length);
+  return n;
+}
+
 function splitArgs(rest) {
   const [first, second] = rest;
   const args = Array.isArray(first) ? first : [];
@@ -278,7 +374,12 @@ function install(root) {
   const state = {
     current: null,
     fileLevel: emptyObservation(),
-    hooks: [], // { kind, suite, timeout, gitSpawns, ms } for each hook run that started git (#563)
+    hooks: [], // { kind, suite, timeout, gitSpawns, ms, overlap? } for each hook run that started git (#563)
+    spawned: 0, // every git process this worker started; a hook's share is the difference across it
+    running: 0, // tests between beginTest and endTest, and whether two ever were at once
+    testOverlap: false,
+    inFlight: new Set(), // hooks and cleanups running now, and whether two ever were at once
+    hookOverlap: false,
     locate: createLocator(root, () => registeredCheckouts(root, orig)),
   };
   const obs = () => state.current ?? state.fileLevel;
@@ -291,13 +392,17 @@ function install(root) {
     return where;
   };
 
-  // A child process: record git runs against the tree or fleet, and `node` children in the tree.
+  // A child process: count the git processes it starts, record git runs against the tree or fleet,
+  // and `node` children in the tree.
   const noteChild = (cmd, args, opts, shellString) => {
     const argv = shellString || (opts.shell && args.length === 0) ? tokenize(cmd) : [String(cmd), ...args.map(String)];
     const prog = programOf(argv[0]);
     const cwd = opts.cwd ? pathOf(opts.cwd) ?? process.cwd() : process.cwd();
+    const command = [String(cmd), ...args.map(String)];
+    const spawns = shellString || opts.shell ? gitInvocations(command.join(" ")) : gitSpawnsOf(command);
+    obs().gitSpawns += spawns;
+    state.spawned += spawns;
     if (prog === "git") {
-      obs().gitSpawns++;
       const g = parseGit(argv.slice(1), cwd);
       const where = touch(g.dir);
       if (!where) return null;
@@ -453,17 +558,35 @@ export function currentObservation() {
   return globalThis[STATE]?.current ?? null;
 }
 
+// A test that begins while another is running marks every test running until none is: the
+// observation of each is then `overlap: true`, and the setup file fails it (#563).
 export function beginTest() {
   const s = globalThis[STATE];
-  if (s) s.current = emptyObservation();
+  if (!s) return;
+  if (s.running++ > 0) s.testOverlap = true;
+  s.current = emptyObservation();
 }
 
 export function endTest() {
   const s = globalThis[STATE];
   if (!s) return emptyObservation();
   const o = s.current ?? emptyObservation();
+  if (s.testOverlap) o.overlap = true;
+  s.running = Math.max(0, s.running - 1);
+  if (s.running === 0) s.testOverlap = false;
   s.current = null;
   return o;
+}
+
+// A new test file: nothing still running from the last file in this worker, such as a hook that
+// timed out and never returned, counts as running at the same time as this file's hooks.
+export function beginFile() {
+  const s = globalThis[STATE];
+  if (!s) return;
+  s.running = 0;
+  s.testOverlap = false;
+  s.inFlight = new Set();
+  s.hookOverlap = false;
 }
 
 export function takeFileLevel() {
@@ -479,29 +602,74 @@ const HOOK_KINDS = ["beforeAll", "beforeEach", "afterEach", "afterAll"];
 const HOOK_TIMEOUT = Symbol.for("VITEST_CLEANUP_TIMEOUT"); // where @vitest/runner keeps a before-hook's timeout
 const WATCHED = Symbol.for("compy.git-spawn-hook");
 
-function watchHook(s, hook, kind, suite) {
+// One hook or cleanup run: the git processes this worker started while it ran, and whether anything
+// else (another hook, or a second test) was running at the same time, which makes that count
+// unattributable.
+function watching(s) {
+  const token = {};
+  if (s.inFlight.size > 0) s.hookOverlap = true;
+  s.inFlight.add(token);
+  const before = s.spawned;
+  const t0 = performance.now();
+  const testsOverlapped = s.testOverlap;
+  return () => {
+    const overlap = s.hookOverlap || testsOverlapped || s.testOverlap;
+    s.inFlight.delete(token);
+    if (s.inFlight.size === 0) s.hookOverlap = false;
+    return { n: s.spawned - before, ms: Math.round(performance.now() - t0), overlap };
+  };
+}
+
+function watchHook(s, hook, kind, suite, judge) {
   const w = async function (...args) {
     const target = s.current ?? s.fileLevel;
-    const before = target.gitSpawns;
-    const t0 = performance.now();
+    const done = watching(s);
+    let result;
     try {
-      return await hook.apply(this, args);
+      result = await hook.apply(this, args);
     } finally {
-      const n = target.gitSpawns - before;
+      const { n, ms, overlap } = done();
       if (kind.endsWith("Each")) target.hookGitSpawns += n;
-      if (n > 0) s.hooks.push({ kind, suite, timeout: hook[HOOK_TIMEOUT], gitSpawns: n, ms: Math.round(performance.now() - t0) });
+      if (n > 0 || overlap) s.hooks.push({ kind, suite, timeout: hook[HOOK_TIMEOUT], gitSpawns: n, ms, ...(overlap ? { overlap } : {}) });
     }
+    // A function a before-hook returns is its cleanup, run after the matching after-hooks: after the
+    // setup file's afterEach or afterAll has judged everything else, so it is judged where it runs.
+    return typeof result === "function" && kind.startsWith("before")
+      ? watchCleanup(s, result, kind, suite, hook[HOOK_TIMEOUT], judge)
+      : result;
   };
   w[WATCHED] = true;
   return keep(w, hook); // carries the timeout and stack-trace keys the runner reads back
+}
+
+// The cleanup runs on the timeout of the hook that returned it, so it is judged against that
+// timeout. A cleanup that throws on its own keeps its own error.
+function watchCleanup(s, cleanup, kind, suite, timeout, judge) {
+  return keep(async function (...args) {
+    const done = watching(s);
+    let result;
+    let seen;
+    try {
+      result = await cleanup.apply(this, args);
+    } finally {
+      seen = done();
+    }
+    if (seen.n > 0 || seen.overlap) {
+      const record = { kind, cleanup: true, suite, timeout, gitSpawns: seen.n, ms: seen.ms, ...(seen.overlap ? { overlap: true } : {}) };
+      const failure = judge?.(record);
+      if (failure) throw new Error(failure);
+    }
+    return result;
+  }, cleanup);
 }
 
 // Wrap every hook of one test file, in place, so each hook's git processes are counted against it.
 // Called from the setup file's own beforeAll, which runs first and after collection, so every suite
 // and hook is registered. vitest iterates a suite's beforeAll hooks from the very array it keeps, so
 // the file's own top-level beforeAll hooks, still ahead in that loop, run wrapped as well. `getHooks`
-// is vitest's TestRunner.getSuiteHooks, passed in so this module stays free of the runner.
-export function watchHooks(fileSuite, getHooks) {
+// is vitest's TestRunner.getSuiteHooks, passed in so this module stays free of the runner. `judge`
+// receives each cleanup's record when it runs and returns a failure message or null.
+export function watchHooks(fileSuite, getHooks, judge) {
   const s = globalThis[STATE];
   if (!s || !fileSuite) return 0;
   let watched = 0;
@@ -515,7 +683,7 @@ export function watchHooks(fileSuite, getHooks) {
       const list = hooks?.[kind] ?? [];
       for (let i = 0; i < list.length; i++) {
         if (list[i][WATCHED]) continue;
-        list[i] = watchHook(s, list[i], kind, suite === fileSuite ? "<file>" : suite.fullName ?? suite.name);
+        list[i] = watchHook(s, list[i], kind, suite === fileSuite ? "<file>" : suite.fullName ?? suite.name, judge);
         watched++;
       }
     }

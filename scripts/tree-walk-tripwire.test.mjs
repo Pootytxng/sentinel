@@ -1,7 +1,7 @@
 // #515: the tree-walk tripwire (scripts/lib/tree-walk-tripwire.mjs) — its rule, where it says a path
 // lives, and live proof, inside this very runner, that it is armed and fails a walker on the default
 // timeout. A tripwire nobody has seen fire is a comment; the last describe watches it fire.
-import { execFile, execFileSync } from "node:child_process";
+import { execFile, execFileSync, execSync } from "node:child_process";
 import fs, { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -20,14 +20,18 @@ import {
   currentObservation,
   emptyObservation,
   enumerates,
+  gitInvocations,
+  gitSpawnsOf,
   gitSpawnVerdict,
   hookGitVerdict,
   hookRecords,
   measures,
+  overlapVerdict,
   parseGit,
   registeredCheckouts,
   tripwireVerdict,
   walkReason,
+  watchHooks,
 } from "./lib/tree-walk-tripwire.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -140,9 +144,49 @@ describe("the git-spawn verdict (#563)", () => {
     expect(hookGitVerdict(hook({ kind: "afterAll", timeout: undefined, gitSpawns: GIT_SPAWN_FLOOR - 1 }), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
   });
 
+  it("fails a cleanup a before-hook returns on the timeout it takes from that hook, naming the hook's second argument", () => {
+    const v = hookGitVerdict(hook({ kind: "beforeEach", cleanup: true }), GIT_SPAWN_TIMEOUT_MS);
+    expect(v).toContain(`the cleanup returned by the beforeEach hook of "a fixture repo" starts ${GIT_SPAWN_FLOOR} git processes`);
+    expect(v).toMatch(/beforeEach\(fn, GIT_SPAWN_TIMEOUT_MS\)/);
+    expect(hookGitVerdict(hook({ cleanup: true, timeout: GIT_SPAWN_TIMEOUT_MS }), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+    expect(hookGitVerdict(hook({ cleanup: true, gitSpawns: GIT_SPAWN_FLOOR - 1 }), GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+  });
+
+  it("fails tests or hooks that ran at the same time whatever they started, since neither can be charged", () => {
+    expect(overlapVerdict("tests")).toMatch(/tests ran at the same time in one worker \(test\.concurrent/);
+    expect(overlapVerdict("hooks")).toMatch(/hooks ran at the same time in one worker \(sequence\.hooks "parallel"/);
+    expect(hookGitVerdict(hook({ gitSpawns: 0, overlap: true, timeout: GIT_SPAWN_TIMEOUT_MS }), GIT_SPAWN_TIMEOUT_MS)).toBe(overlapVerdict("hooks"));
+  });
+
   it("is a budget well above the 15 s default and below the whole-tree one", () => {
     expect(GIT_SPAWN_TIMEOUT_MS).toBeGreaterThan(15_000 * 2);
     expect(GIT_SPAWN_TIMEOUT_MS).toBeLessThan(TREE_WALK_TIMEOUT_MS);
+  });
+});
+
+describe("what counts as a git process (#563)", () => {
+  it("counts git, and every git a shell runs: cmd /c, PowerShell -Command, sh -c", () => {
+    expect(gitSpawnsOf(["git", "status"])).toBe(1);
+    expect(gitSpawnsOf(["C:\\Program Files\\Git\\cmd\\git.exe", "status"])).toBe(1);
+    expect(gitSpawnsOf(["env", "GIT_DIR=x", "git", "status"])).toBe(1);
+    expect(gitSpawnsOf(["cmd", "/d", "/s", "/c", "git init && git add . && git commit -m x"])).toBe(3);
+    expect(gitSpawnsOf(["powershell", "-NoProfile", "-Command", "git status; git log -1"])).toBe(2);
+    expect(gitSpawnsOf(["pwsh", "-c", "& 'C:\\Program Files\\Git\\cmd\\git.exe' status"])).toBe(1);
+    expect(gitSpawnsOf(["bash", "-lc", "cd x && git init && GIT_AUTHOR_NAME=a git commit -m 'a && b'"])).toBe(2);
+  });
+
+  it("reads a script's quotes: git named inside a quoted argument is not a command", () => {
+    expect(gitInvocations('git commit -m "fix git; git config"')).toBe(1);
+    expect(gitInvocations('cmd /c "git a && git b"')).toBe(2);
+    expect(gitInvocations("x=$(git rev-parse HEAD) && git log -1 $x")).toBe(2);
+    expect(gitInvocations("echo git && npm run build")).toBe(0);
+  });
+
+  it("pins what it cannot see: git a child program starts, and a loop's git, counted once", () => {
+    expect(gitSpawnsOf(["node", "cli.mjs"])).toBe(0);
+    expect(gitSpawnsOf(["npm", "run", "build"])).toBe(0);
+    expect(gitSpawnsOf(["powershell", "-File", "x.ps1"])).toBe(0);
+    expect(gitInvocations("for i in 1 2 3; do git commit; done")).toBe(1);
   });
 });
 
@@ -259,6 +303,54 @@ describe("armed in this run", () => {
     expect(stdout).toMatch(/^git version/);
   });
 
+  it("counts every git a shell command runs, and none a child node process runs (#563)", () => {
+    const before = currentObservation().gitSpawns;
+    execSync("git --version && git --version", { cwd: os.tmpdir() });
+    expect(currentObservation().gitSpawns - before).toBe(2);
+    const [shell, args] =
+      process.platform === "win32" ? ["cmd", ["/d", "/s", "/c", "git --version && git --version"]] : ["sh", ["-c", "git --version && git --version"]];
+    execFileSync(shell, args, { cwd: os.tmpdir() });
+    expect(currentObservation().gitSpawns - before).toBe(4);
+    // The stated limit: git a child node process starts is in that process, not this one.
+    execFileSync(process.execPath, ["-e", "require('node:child_process').execFileSync('git', ['--version'])"], { cwd: os.tmpdir() });
+    expect(currentObservation().gitSpawns - before).toBe(4);
+  });
+
+  it("judges a beforeAll's cleanup where it runs, on the timeout it takes from that hook (#563)", { timeout: GIT_SPAWN_TIMEOUT_MS }, async () => {
+    const make = (timeout) => {
+      const h = () => () => startGit(GIT_SPAWN_FLOOR);
+      h[Symbol.for("VITEST_CLEANUP_TIMEOUT")] = timeout;
+      return h;
+    };
+    const hooks = { beforeAll: [make(15_000), make(GIT_SPAWN_TIMEOUT_MS)], beforeEach: [], afterEach: [], afterAll: [] };
+    const judged = [];
+    const judge = (h) => (judged.push(h), hookGitVerdict(h, GIT_SPAWN_TIMEOUT_MS));
+    expect(watchHooks({ tasks: [] }, () => hooks, judge)).toBe(2);
+    const onDefault = await hooks.beforeAll[0]();
+    await expect(onDefault()).rejects.toThrow(`the cleanup returned by the beforeAll hook of "<file>" starts ${GIT_SPAWN_FLOOR} git processes`);
+    const onBudget = await hooks.beforeAll[1]();
+    await expect(onBudget()).resolves.toBeUndefined();
+    expect(judged).toMatchObject([
+      { kind: "beforeAll", cleanup: true, timeout: 15_000, gitSpawns: GIT_SPAWN_FLOOR },
+      { kind: "beforeAll", cleanup: true, timeout: GIT_SPAWN_TIMEOUT_MS, gitSpawns: GIT_SPAWN_FLOOR },
+    ]);
+  });
+
+  it("records hooks that ran at the same time as overlapping, whatever they started, and hooks one at a time as nothing (#563)", async () => {
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 20));
+    const hooks = { beforeAll: [], beforeEach: [pause, pause], afterEach: [], afterAll: [] };
+    expect(watchHooks({ tasks: [] }, () => hooks, () => null)).toBe(2);
+    const before = hookRecords().length;
+    await Promise.all(hooks.beforeEach.map((h) => h())); // what sequence.hooks "parallel" does
+    const overlapped = hookRecords().splice(before);
+    expect(overlapped).toMatchObject([
+      { kind: "beforeEach", suite: "<file>", gitSpawns: 0, overlap: true },
+      { kind: "beforeEach", suite: "<file>", gitSpawns: 0, overlap: true },
+    ]);
+    for (const h of hooks.beforeEach) await h();
+    expect(hookRecords()).toHaveLength(before);
+  });
+
   it("does not count a fixture in os.tmpdir()", () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "tree-walk-fixture-"));
     try {
@@ -355,5 +447,55 @@ describe.skipIf(CENSUS)("fails a hook that starts many git processes on the defa
     const budgeted = claim("specimen beforeAll on the budget");
     expect(budgeted).toMatchObject({ kind: "beforeAll", timeout: GIT_SPAWN_TIMEOUT_MS, gitSpawns: GIT_SPAWN_FLOOR });
     expect(hookGitVerdict(budgeted, GIT_SPAWN_TIMEOUT_MS)).toBeNull();
+  });
+});
+
+// A cleanup a beforeEach returns runs after every afterEach, the setup file's included, so the
+// setup cannot judge it there: the wrapper judges it when it runs, and that fails the test.
+describe.skipIf(CENSUS)("fails a hook's cleanup that starts many git processes, in the real runner (#563)", () => {
+  let caught = "";
+  let armed = true;
+  beforeEach(() => {
+    if (!armed) return undefined;
+    armed = false;
+    return () => startGit(GIT_SPAWN_FLOOR);
+  });
+
+  it.fails("specimen: its beforeEach returns a cleanup that starts the floor's worth of git processes (its failure is the expected outcome)", () => {
+    onTestFailed(({ task }) => {
+      caught = (task.result?.errors ?? []).map((e) => e.message).join("\n");
+    });
+  });
+
+  it("…and the specimen failed on the cleanup's verdict, nothing else", () => {
+    expect(caught).toContain(`the cleanup returned by the beforeEach hook of "`);
+    expect(caught).toMatch(/beforeEach\(fn, GIT_SPAWN_TIMEOUT_MS\)/);
+  });
+});
+
+// Two tests at once in one worker: every git process and read lands in one shared count, so neither
+// can be charged. Both must fail, naming why, and the hooks that ran beside each other are recorded
+// as overlapping; the test after them claims those records so this file's afterAll does not fail.
+describe.skipIf(CENSUS)("fails tests and hooks that run at the same time in one worker, in the real runner (#563)", () => {
+  const caught = [];
+  describe.concurrent("specimen: two tests at once", () => {
+    beforeEach(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    for (const n of [1, 2]) {
+      it.fails(`specimen ${n}: runs beside the other (its failure is the expected outcome)`, async ({ onTestFailed: failed }) => {
+        failed(({ task }) => {
+          caught.push((task.result?.errors ?? []).map((e) => e.message).join("\n"));
+        });
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+    }
+  });
+
+  it("…and both failed on the overlap verdict, and the hooks that overlapped were recorded as such", () => {
+    expect(caught).toHaveLength(2);
+    for (const c of caught) expect(c).toContain(overlapVerdict("tests"));
+    const overlapped = [];
+    for (let i = hookRecords().length - 1; i >= 0; i--) if (hookRecords()[i].overlap) overlapped.push(hookRecords().splice(i, 1)[0]);
+    expect(overlapped.some((h) => h.suite.endsWith("specimen: two tests at once"))).toBe(true);
+    for (const h of overlapped) expect(hookGitVerdict(h, GIT_SPAWN_TIMEOUT_MS)).toBe(overlapVerdict("hooks"));
   });
 });

@@ -20,6 +20,6 @@ export const TREE_WALK_TIMEOUT_MS = 600_000;
 // process start that the full suite's own parallelism starves. On 2026-09-24 seven of them took
 // turns failing the pre-push gate on the 15 s default, their files running 8.3 to 11.4 times slower
 // than in a 2026-09-26 census of the whole suite. The slowest git test in that census took 4.3 s; at
-// 11.4 times that is 50 s, and this leaves 2.4 times on top. Like the budget above it is a HANG
+// 11.4 times that is 49 s, and this leaves 2.4 times on top. Like the budget above it is a HANG
 // GUARD: nothing it checks gets weaker, and a hung test still fails, at this number.
 export const GIT_SPAWN_TIMEOUT_MS = 120_000;
