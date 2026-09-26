@@ -19,7 +19,12 @@ import { join } from "path";
 //      named callers need a field the model does not carry, or feed a list the model does not own.
 //   4. Everywhere, the reader and the exempt files included, a watched name appears only as the
 //      first argument of a call. A name kept in a constant could be imported and invoked from a
-//      file this guard would pass; a name assembled from pieces is never a literal at all.
+//      file this guard would pass.
+//   5. The sink: every `invoke` names its command as ONE plain string literal. A name assembled
+//      from pieces or handed over in a variable is never a watched literal, so rules 1-4 cannot see
+//      it, and there are too many ways to build a string to list them. `invoke` is imported under
+//      its own name and never passed around as a value; the one wrapper that forwards its parameter
+//      to `invoke` is named below and held to the same rule at its own call sites.
 //
 // The corpus is INVERTED on purpose (walk everything, exempt explicitly), the lesson the
 // mutation-boundary guard learned: a new surface is in scope the moment it exists. Test files and
@@ -72,28 +77,74 @@ export function detect(source: string): string[] {
 // What sits right before a call's first argument: `invoke(`, `invoke<T>(`, `ipc.run<T[]>(`.
 const CALL_BEFORE = /[\w$.]+\s*(?:<[^()]*>)?\s*\(\s*$/;
 
-// Every proper prefix of a command that ends at an underscore after its verb: "get_machine_".
-function prefixes(cmd: string): string[] {
-  const out: string[] = [];
-  for (let i = cmd.indexOf("_", cmd.indexOf("_") + 1); i > 0; i = cmd.indexOf("_", i + 1)) {
-    out.push(cmd.slice(0, i + 1));
-  }
-  return out;
-}
-
 // Rule 4: the watched names a source mentions OUTSIDE call position (a constant, an array, an
-// object value) or builds from pieces (`get_machine_${x}`, "get_hardware_" + kind). A violation in
-// every file, whatever its exemption.
+// object value). A violation in every file, whatever its exemption.
 export function loose(source: string): string[] {
   const code = stripComments(source);
-  return WATCHED.filter((cmd) => {
-    for (const m of code.matchAll(new RegExp(`(["'\`])${cmd}\\1`, "g"))) {
-      if (!CALL_BEFORE.test(code.slice(Math.max(0, m.index - 200), m.index))) return true;
+  return WATCHED.filter((cmd) =>
+    [...code.matchAll(new RegExp(`(["'\`])${cmd}\\1`, "g"))].some(
+      (m) => !CALL_BEFORE.test(code.slice(Math.max(0, m.index - 200), m.index)),
+    ),
+  );
+}
+
+// A call's first argument written out as one plain string: quotes, or a backtick string with no
+// `${`, followed by the next argument or the closing paren.
+const PLAIN_FIRST = /^\s*(?:(["'])[^"'\n]*\1|`[^`$]*`)\s*[,)]/;
+
+// The text after a callee name, if it is being called: past an optional type-argument list (nested
+// `<…>` included, the `>` of `=>` ignored) to the opening paren. null when the name is not called.
+function argsAfter(rest: string): string | null {
+  let i = rest.search(/\S/);
+  if (rest[i] === "<") {
+    for (let depth = 0; i < rest.length; i++) {
+      if (rest[i] === "<") depth++;
+      else if (rest[i] === ">" && rest[i - 1] !== "=" && --depth === 0) break;
     }
-    return prefixes(cmd).some((p) =>
-      new RegExp(`\`${p}\\w*\\$\\{|(["'])${p}\\w*\\1\\s*\\+`).test(code),
-    );
-  });
+    i = i + 1 + rest.slice(i + 1).search(/\S/);
+  }
+  return rest[i] === "(" ? rest.slice(i + 1) : null;
+}
+
+// The one wrapper that forwards its own parameter to `invoke`, by file: the forwarding call, which
+// is exempt once, and the name its callers use, whose every call must pass a plain literal. Rule 5
+// then holds one hop out, and a second forwarding helper is a violation until it is named here.
+const WRAPPERS: Record<string, { forward: string; name: string }> = {
+  [join("src", "App.tsx")]: { forward: "invoke<T>(cmd)", name: "run" },
+};
+
+// Rule 5, per file: every place `invoke` (or the file's wrapper) appears other than as a call with
+// a plain literal first argument or a bare `import { invoke }`, as "line N: <that line>".
+export function sink(source: string, wrapper?: { forward: string; name: string }): string[] {
+  const code = stripComments(source);
+  const bad: string[] = [];
+  const flag = (at: number) => {
+    const from = code.lastIndexOf("\n", at - 1) + 1;
+    const to = code.indexOf("\n", at);
+    const line = code.slice(from, to < 0 ? undefined : to).trim();
+    bad.push(`line ${code.slice(0, at).split("\n").length}: ${line}`);
+  };
+  let forwarded = false;
+  for (const m of code.matchAll(/\binvoke\b/g)) {
+    const rest = code.slice(m.index + "invoke".length);
+    if (/\bimport\s*\{[^}]*$/.test(code.slice(Math.max(0, m.index - 300), m.index))) {
+      if (!/^\s*[,}]/.test(rest)) flag(m.index); // `import { invoke as call }`
+      continue;
+    }
+    if (wrapper && !forwarded && rest.startsWith(wrapper.forward.slice("invoke".length))) {
+      forwarded = true;
+      continue;
+    }
+    const args = argsAfter(rest);
+    if (args === null || !PLAIN_FIRST.test(args)) flag(m.index);
+  }
+  for (const m of wrapper ? code.matchAll(new RegExp(`\\b${wrapper.name}\\b`, "g")) : []) {
+    const rest = code.slice(m.index + wrapper!.name.length);
+    if (/^\s*=[^=>]/.test(rest)) continue; // its declaration
+    const args = argsAfter(rest);
+    if (args === null || !PLAIN_FIRST.test(args)) flag(m.index);
+  }
+  return bad;
 }
 
 // ── Exemptions ──────────────────────────────────────────────────────────────────────────────────
@@ -149,6 +200,28 @@ describe("screens read machine truth through the Machine Model, never around it"
     ).toEqual([]);
   });
 
+  it("every invoke names its command as one plain literal, so a built or forwarded name cannot slip past", () => {
+    const offenders = files.flatMap((file) =>
+      sink(readFileSync(file, "utf8"), WRAPPERS[file]).map((hit) => `${file} ${hit}`),
+    );
+    expect(
+      offenders,
+      'write the command out: invoke("command_name", …). A name built from pieces, kept in a ' +
+        "variable, or forwarded by a new helper hides which command a screen reads",
+    ).toEqual([]);
+  });
+
+  it("keeps the wrapper entry live and tied to its name, so the exemption cannot outlive the wrapper", () => {
+    for (const [file, { forward, name }] of Object.entries(WRAPPERS)) {
+      const code = stripComments(readFileSync(file, "utf8"));
+      const escaped = forward.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      expect(
+        new RegExp(`\\b${name}\\s*=[^;]*?${escaped}`).test(code),
+        `${file} no longer declares ${name} as the wrapper around ${forward}; rename or delete its entry`,
+      ).toBe(true);
+    }
+  });
+
   it("the one reader still reads the model", () => {
     expect(detect(readFileSync(READER, "utf8"))).toContain(MODEL);
   });
@@ -177,20 +250,50 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(detect('const source = "hardware::get_hardware_info";')).toEqual([]);
   });
 
-  it("a watched name kept or built outside a call is caught, and every real call form passes", () => {
+  it("a watched name kept outside a call is caught, and every real call form passes", () => {
     // Kept for import elsewhere: the invoking file would carry no literal at all.
     expect(loose('export const MODEL_CMD = "get_machine_model";')).toEqual([MODEL]);
     expect(loose("const cmds = ['get_hardware_info', 'x'];")).toEqual(["get_hardware_info"]);
     expect(loose('const t = { cmd: "get_applied_changes" };')).toEqual(["get_applied_changes"]);
-    // Built from pieces.
-    expect(loose('invoke(`get_machine_${"model"}`)')).toEqual([MODEL]);
-    expect(loose('invoke("get_hardware_" + kind)')).toEqual(["get_hardware_info"]);
     // The forms this codebase really uses.
     expect(loose('invoke<MachineModel>("get_machine_model")')).toEqual([]);
     expect(loose('invoke<{ network_pills?: NetworkPill[] } | null>("get_hardware_info")')).toEqual([]);
     expect(loose('run<AppliedChange[]>("get_applied_changes", setChanges)')).toEqual([]);
     expect(loose('ipc.invoke(\n  "get_hardware_info",\n)')).toEqual([]);
     expect(loose('// const OLD = "get_machine_model";\nconst y = 1;')).toEqual([]);
+  });
+
+  it("the sink rule catches every name that is not written out, and every real call form passes", () => {
+    // The three forms Codex found passing the prefix check this rule replaced (#582, at f9581d5a).
+    expect(sink('invoke(`get_${"machine_model"}`)')).toHaveLength(1);
+    expect(sink('invoke(`get_machine${"_model"}`)')).toHaveLength(1);
+    expect(sink('invoke("get_" + "hardware_info")')).toHaveLength(1);
+    // Other constructions and hand-overs.
+    expect(sink('invoke(`get_machine_${"model"}`)')).toHaveLength(1);
+    expect(sink('invoke("get_hardware_" + kind)')).toHaveLength(1);
+    expect(sink('invoke(["get", "machine", "model"].join("_"))')).toHaveLength(1);
+    expect(sink("invoke(CMD)")).toHaveLength(1);
+    expect(sink("invoke<T>(cmd)")).toHaveLength(1);
+    expect(sink('import { invoke as call } from "@tauri-apps/api/core";')).toHaveLength(1);
+    expect(sink('export { invoke } from "@tauri-apps/api/core";')).toHaveLength(1);
+    expect(sink("const call = invoke;")).toHaveLength(1);
+    expect(sink('invoke.call(null, "get_machine_model")')).toHaveLength(1);
+    // The named wrapper forwards once; its own callers are held to the rule, and a second forward is not exempt.
+    const app = WRAPPERS[join("src", "App.tsx")];
+    const wrapped = "const run = <T,>(cmd: string) =>\n  invoke<T>(cmd);\n";
+    expect(sink(wrapped, app)).toEqual([]);
+    expect(sink(wrapped + 'run<X>("get_" + kind, set);', app)).toHaveLength(1);
+    expect(sink(wrapped + "run<X>(name, set);", app)).toHaveLength(1);
+    expect(sink(wrapped + "invoke<T>(cmd);", app)).toHaveLength(1);
+    // The forms this codebase really uses.
+    expect(sink('import { invoke } from "@tauri-apps/api/core";')).toEqual([]);
+    expect(sink('import {\n  invoke,\n  Channel,\n} from "@tauri-apps/api/core";')).toEqual([]);
+    expect(sink('invoke<MachineModel>("get_machine_model")')).toEqual([]);
+    expect(sink('invoke<{ network_pills?: NetworkPill[] } | null>("get_hardware_info")')).toEqual([]);
+    expect(sink('invoke<Record<string, number>>("get_x", { id })')).toEqual([]);
+    expect(sink('ipc.invoke(\n  "get_hardware_info",\n)')).toEqual([]);
+    expect(sink(wrapped + 'run<AppliedChange[]>("get_applied_changes", setChanges);', app)).toEqual([]);
+    expect(sink("// invoke(name) used to live here\nconst y = 1;")).toEqual([]);
   });
 
   it("a planted direct reader in any other screen is a violation", () => {
