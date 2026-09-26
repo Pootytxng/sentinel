@@ -1424,8 +1424,8 @@ impl ChronologyProducers {
 }
 
 /// Read every canonical producer once and compose. READ-ONLY by construction: each call below is a
-/// documented reader. In particular it uses `intelligence::load_store` rather than
-/// `intelligence::refresh_identity_snapshots_async` (which writes snapshots) and
+/// documented reader. In particular it uses `intelligence::load_store` rather than the
+/// snapshot-refreshing intelligence path (which appends snapshots) and
 /// `hwchange::persisted_baseline` rather than `get_hardware_changes` (which writes a first-run
 /// baseline). Picking the writing variant of either would silently make this module a mutator.
 pub(crate) fn build() -> MachineModel {
@@ -2319,9 +2319,10 @@ mod machine_model_tests {
             (format!("refresh_identity_{}", "snapshots_async"), 0),
             (format!("{}_elevated_powershell", "run"), 0),
             (format!("acknowledge_hardware_{}", "changes"), 0),
-            // build()'s doc comment names the two WRITING variants it deliberately does not call.
-            // Exactly one mention each: prose. A second would be a call.
-            (format!("get_intelligence_{}", "timeline"), 1),
+            // Retired with its writing refresh (#453): no mention may return.
+            (format!("get_intelligence_{}", "timeline"), 0),
+            // build()'s doc comment names the WRITING variant it deliberately does not call.
+            // Exactly one mention: prose. A second would be a call.
             (format!("get_hardware_{}", "changes"), 1),
         ];
         for (needle, allowed) in banned {
