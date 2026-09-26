@@ -62,6 +62,24 @@ function stripComments(source: string): string {
     .replace(/(?<!:)\/\/[^\n]*/g, " ");
 }
 
+// JavaScript runs an identifier or a string written with \u escapes as the characters they stand
+// for: `inv\u006fke` IS `invoke`. So the source is read as it runs. Every \uXXXX or \u{…} escape
+// that stands for an identifier character is decoded before any rule looks. Any other escape, a
+// quote included, stays as written, since decoding it could end a string early. So does one that
+// follows a literal backslash, which is text, not an escape (#582, at 9105a072).
+function decodeEscapes(code: string): string {
+  return code.replace(/(?<=(?:^|[^\\])(?:\\\\)*)\\u(?:\{([0-9a-fA-F]{1,6})\}|([0-9a-fA-F]{4}))/g, (m, braced, four) => {
+    const point = parseInt(braced ?? four, 16);
+    const ch = point <= 0x10ffff ? String.fromCodePoint(point) : "";
+    return /^[\w$]$/.test(ch) ? ch : m;
+  });
+}
+
+// What every rule scans: executable source, comments blanked, escapes read as they run.
+function executable(source: string): string {
+  return decodeEscapes(stripComments(source));
+}
+
 const MODEL = "get_machine_model";
 const RETIRED = "get_intelligence_timeline";
 const PRODUCERS = ["get_hardware_info", "get_applied_changes"] as const;
@@ -70,7 +88,7 @@ const WATCHED = [MODEL, RETIRED, ...PRODUCERS];
 // A command is named to `invoke` as a string literal; the quote pair is what separates a call from
 // a type name, a comment, or a `source: "hardware::get_hardware_info"` provenance label.
 export function detect(source: string): string[] {
-  const code = stripComments(source);
+  const code = executable(source);
   return WATCHED.filter((cmd) => new RegExp(`(["'\`])${cmd}\\1`).test(code));
 }
 
@@ -80,7 +98,7 @@ const CALL_BEFORE = /[\w$.]+\s*(?:<[^()]*>)?\s*\(\s*$/;
 // Rule 4: the watched names a source mentions OUTSIDE call position (a constant, an array, an
 // object value). A violation in every file, whatever its exemption.
 export function loose(source: string): string[] {
-  const code = stripComments(source);
+  const code = executable(source);
   return WATCHED.filter((cmd) =>
     [...code.matchAll(new RegExp(`(["'\`])${cmd}\\1`, "g"))].some(
       (m) => !CALL_BEFORE.test(code.slice(Math.max(0, m.index - 200), m.index)),
@@ -116,7 +134,7 @@ const WRAPPERS: Record<string, { forward: string; name: string }> = {
 // Rule 5, per file: every place `invoke` (or the file's wrapper) appears other than as a call with
 // a plain literal first argument or a bare `import { invoke }`, as "line N: <that line>".
 export function sink(source: string, wrapper?: { forward: string; name: string }): string[] {
-  const code = stripComments(source);
+  const code = executable(source);
   const bad: string[] = [];
   const flag = (at: number) => {
     const from = code.lastIndexOf("\n", at - 1) + 1;
@@ -213,7 +231,7 @@ describe("screens read machine truth through the Machine Model, never around it"
 
   it("keeps the wrapper entry live and tied to its name, so the exemption cannot outlive the wrapper", () => {
     for (const [file, { forward, name }] of Object.entries(WRAPPERS)) {
-      const code = stripComments(readFileSync(file, "utf8"));
+      const code = executable(readFileSync(file, "utf8"));
       const escaped = forward.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       expect(
         new RegExp(`\\b${name}\\s*=[^;]*?${escaped}`).test(code),
@@ -285,6 +303,15 @@ describe("screens read machine truth through the Machine Model, never around it"
     expect(sink(wrapped + 'run<X>("get_" + kind, set);', app)).toHaveLength(1);
     expect(sink(wrapped + "run<X>(name, set);", app)).toHaveLength(1);
     expect(sink(wrapped + "invoke<T>(cmd);", app)).toHaveLength(1);
+    // An escaped identifier runs as the name it spells, so it is read as that name (#582, at 9105a072).
+    expect(sink('core.inv\\u006fke(["get", "machine", "model"].join("_"))')).toHaveLength(1);
+    expect(sink(wrapped + 'r\\u0075n(["get", "machine", "model"].join("_"), set);', app)).toHaveLength(1);
+    expect(sink('inv\\u{6f}ke(name)')).toHaveLength(1);
+    expect(detect('invoke("get_m\\u0061chine_model")')).toEqual([MODEL]);
+    // An escape that stands for anything else, a quote included, stays as written: decoding it could
+    // end a string early. A literal backslash before the escape leaves it text, not an escape.
+    expect(sink('invoke("get_x\\u0022")')).toEqual([]);
+    expect(sink('const text = "\\\\u0069nvoke(name)";')).toEqual([]);
     // The forms this codebase really uses.
     expect(sink('import { invoke } from "@tauri-apps/api/core";')).toEqual([]);
     // The specifier is spliced in so fixture-parity-guard, which reads imports as text, does not
