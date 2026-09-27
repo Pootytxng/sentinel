@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { execFileSync } from "child_process";
+import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { TREE_WALK_TIMEOUT_MS } from "./test/tree-walk-budget";
@@ -299,8 +300,8 @@ describe("perf evidence integrity: the guard itself is armed", () => {
     // Written and read here rather than kept on disk: the artifact this describes was a mistake, and
     // parking a permanent example of one inside docs/perf/raw invites exactly the citation the guard
     // above exists to stop.
-    const tmp = `${process.env.TEMP ?? "."}/compy-coldstart-null-rail.json`;
-    const control = `${process.env.TEMP ?? "."}/compy-coldstart-painted.json`;
+    const tmp = join(tmpdir(), "compy-coldstart-null-rail.json");
+    const control = join(tmpdir(), "compy-coldstart-painted.json");
     writeFileSync(
       tmp,
       JSON.stringify({ task: "coldstart", sampleCount: 3, summary: { railPaintedMs: null, documentReadyMs: { median: 2727 } } }),
