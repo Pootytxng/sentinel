@@ -16,6 +16,13 @@
 // to UTF-16 puts NUL bytes in it) yields no hunks, so it is reported NOT MEASURED, never "no lines
 // deleted". `--text` is deliberately not used: NUL bytes in the patch could collide with COMMIT_MARK.
 //
+// Root invariant (after three config-dependent false passes): `git log` is limited to the watched
+// paths, so every commit it lists touches a watched doc, and `--raw` names each touched file from the
+// trees alone, whatever diff driver is configured. A listed commit, or a raw-named watched file, whose
+// patch carries no readable watched diff header is reported NOT MEASURED — never dropped, never
+// "(no lines deleted)". The git invocation is also made hermetic against the user's config/env
+// (`--no-literal-pathspecs`, `--no-textconv`, `--no-ext-diff`, `--no-relative`, `--no-color`).
+//
 // Usage: node scripts/adoption-deletions.mjs [<range>]   (default: $(git merge-base origin/main HEAD)..HEAD)
 
 import { execFileSync } from "node:child_process";
@@ -30,6 +37,11 @@ export const LOG_FORMAT = "%x00commit %H %s";
 
 const BINARY = /^Binary files (.+) and (.+) differ$/;
 export const BINARY_REASON = "binary diff (likely an encoding change, e.g. a UTF-16 rewrite) — its deletions cannot be read";
+
+export const UNREADABLE_REASON = "touches a watched doc but its diff could not be read (a diff driver, textconv or config hid it)";
+
+// `git log --raw` line: ":<old mode> <new mode> <old sha> <new sha> <status>\t<path>" (one path: --no-renames).
+const RAW = /^:\d{6} \d{6} [0-9a-f]+ [0-9a-f]+ [A-Z]\d*\t(.+)$/;
 
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
@@ -49,7 +61,7 @@ export function parseDiff(text) {
   let oldNo = 0;
   let newNo = 0;
   const entry = (path) => {
-    if (!files.has(path)) files.set(path, { removed: [], added: [], binary: false });
+    if (!files.has(path)) files.set(path, { removed: [], added: [], binary: false, modeLine: false });
     return files.get(path);
   };
   for (const raw of text.split("\n")) {
@@ -79,6 +91,11 @@ export function parseDiff(text) {
     if (line.startsWith("diff --git ")) {
       const m = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
       current = m ? entry(unquote(m[1])) : null;
+      continue;
+    }
+    if (/^(old|new) mode |^(new|deleted) file mode /.test(line)) {
+      // A mode change, or creating/deleting an empty file, is a real change with no hunks.
+      if (current) current.modeLine = true;
       continue;
     }
     const bin = BINARY.exec(line);
@@ -117,19 +134,41 @@ export function parseDiff(text) {
   return files;
 }
 
+// Paths `--raw` names as touched. Only lines before the first "diff --git" are read, so document
+// content inside a patch can never add a path.
+export function rawTouched(text) {
+  const paths = new Set();
+  for (const raw of text.split("\n")) {
+    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    if (line.startsWith("diff --git ")) break;
+    const m = RAW.exec(line);
+    if (m) paths.add(unquote(m[1]));
+  }
+  return paths;
+}
+
 // Removed lines of the watched files, each marked `moved` when the same patch re-adds identical text
 // to the same file (matched as a multiset, so two deletions of a line re-added once leave one lost).
 export function collectDeletions(diffText, watched = WATCHED) {
   const parsed = parseDiff(diffText);
+  const touched = rawTouched(diffText);
   const out = [];
   for (const file of watched) {
     const f = parsed.get(file);
-    if (!f) continue;
+    if (!f) {
+      // --raw says the commit changed this file, but no header for it survived into the patch.
+      if (touched.has(file)) out.push({ file, lines: [], notMeasured: UNREADABLE_REASON });
+      continue;
+    }
     if (f.binary) {
       out.push({ file, lines: [], notMeasured: BINARY_REASON });
       continue;
     }
-    if (f.removed.length === 0) continue;
+    if (f.removed.length === 0) {
+      // Under -U0 every content change has a +/- line; a bare header means the hunks were hidden.
+      if (f.added.length === 0 && !f.modeLine) out.push({ file, lines: [], notMeasured: UNREADABLE_REASON });
+      continue;
+    }
     const pool = new Map();
     for (const a of f.added) pool.set(a.text, (pool.get(a.text) ?? 0) + 1);
     const lines = f.removed.map((r) => {
@@ -159,10 +198,20 @@ export function splitLog(logText) {
   return commits;
 }
 
+// Every commit is kept: the log is pathspec-limited, so each one touches a watched doc. One whose
+// patch yields no watched header and no raw-named watched file is NOT MEASURED as a whole commit.
 export function analyzeLog(logText, watched = WATCHED) {
-  return splitLog(logText)
-    .filter((c) => /\S/.test(c.patch))
-    .map((c) => ({ sha: c.sha, subject: c.subject, files: collectDeletions(c.patch, watched) }));
+  return splitLog(logText).map((c) => {
+    const files = collectDeletions(c.patch, watched);
+    const parsed = parseDiff(c.patch);
+    const readable = watched.some((w) => parsed.has(w));
+    return {
+      sha: c.sha,
+      subject: c.subject,
+      ...(readable || files.some((f) => f.notMeasured) ? {} : { notMeasured: UNREADABLE_REASON }),
+      files,
+    };
+  });
 }
 
 export function notMeasured(range, reason) {
@@ -178,11 +227,13 @@ export function formatReport(range, commits) {
   let lost = 0;
   let moved = 0;
   let unmeasured = 0;
-  for (const c of commits)
+  for (const c of commits) {
+    if (c.notMeasured) unmeasured++;
     for (const f of c.files) {
       if (f.notMeasured) unmeasured++;
       for (const l of f.lines) l.moved ? moved++ : lost++;
     }
+  }
   if (unmeasured) {
     out.push(
       `adoption-deletions: NOT MEASURED (${range}) — ${unmeasured} watched file diff(s) could not be read; ` +
@@ -196,6 +247,10 @@ export function formatReport(range, commits) {
   }
   for (const c of commits) {
     out.push(`  ${c.sha.slice(0, 10)} ${c.subject}`);
+    if (c.notMeasured) {
+      out.push(`    NOT MEASURED — ${c.notMeasured}`);
+      continue;
+    }
     if (c.files.length === 0) {
       out.push("    (no lines deleted)");
       continue;
@@ -242,11 +297,18 @@ export function run(argv, git, shallow = () => readShallow(git)) {
   let log;
   try {
     log = git([
+      // GIT_LITERAL_PATHSPECS=1 in the env would read ":(top)docs/..." as a literal filename that
+      // matches nothing, so every commit vanished into a "no commit touches" clean pass.
+      "--no-literal-pathspecs",
       "log",
       "-p",
+      // Names each touched file from the trees, independent of any diff driver (see the root invariant).
+      "--raw",
       "-U0",
       "--no-color",
       "--no-ext-diff",
+      // A user's textconv (core.attributesFile `*.md diff=x` + diff.x.textconv) emptied the patch.
+      "--no-textconv",
       "--no-renames",
       // A user's diff.relative=true would print headers relative to the cwd (a/SESSION_HANDOFF.md from
       // docs/), so no watched key matched and deletions read as "(no lines deleted)"; keep them root-relative.
