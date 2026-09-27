@@ -11,8 +11,9 @@
 // only what its last editor wanted it to say.
 //
 // THE RULE. Every `.claude/work-control/*.json` held by the merge-base of HEAD and `origin/main`
-// must still be in the working tree, byte for byte. A wrong receipt is corrected by ADDING a dated
-// `<date>-correct-<receipt>.json`; `work-control-receipt-reviewer-claims.test.mjs` defines its shape.
+// must still be in HEAD, the index and the working tree, byte for byte. A wrong receipt is corrected
+// by ADDING a dated `<date>-correct-<receipt>.json`; `work-control-receipt-reviewer-claims.test.mjs`
+// defines its shape.
 //
 // WHY THE MERGE-BASE AND NOT `origin/main`. A receipt that `main` added after this lane branched is
 // not this lane's to hold yet. Comparing against `origin/main` itself would redden every lane that
@@ -20,17 +21,28 @@
 // part of the base and are not re-litigated: #178's receipt was deleted on 2026-08-20, and the #220
 // and #277 receipts were edited in place between 2026-08-25 and 2026-09-01.
 //
-// TWO GIT PROCESSES. `git diff <base>` compares that commit with the working tree, so a committed,
-// a staged and an unstaged edit all count, and git applies its own line-ending rules. `--no-renames`
-// makes a rename read as a deletion plus an addition. An unresolvable `origin/main` throws, which
-// fails the test rather than counting as zero findings.
+// THREE LAYERS, EACH ON ITS OWN. The first cut compared the base with the working tree in one
+// `git diff <base>`. That is only the net result: a rewrite committed or staged, with the
+// working-tree copy put back to the base bytes, reads as no change there, and the push then carries
+// the rewrite in HEAD. Codex's review of 198cc2b6 found it. So base to HEAD, base to the index and
+// the index to the working tree are three separate diffs; any one of them names the receipt. The
+// last one only counts receipts the base holds, since a receipt this lane adds is its own to edit
+// until it lands. Git applies its own line-ending rules to each diff. `--no-renames` makes a rename
+// read as a deletion plus an addition. An unresolvable `origin/main`, or one with no common ancestor
+// in shallow history, throws, which fails the test rather than counting as zero findings.
 
 import { execFileSync } from "node:child_process";
-import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-const git = (args) =>
-  execFileSync("git", args, { encoding: "utf8", windowsHide: true, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
+// A hook runs with the repository's own git locations set; a fixture must never inherit them.
+const { GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE, ...gitEnv } = process.env;
+const gitIn = (cwd) => (args) =>
+  execFileSync("git", args, { cwd, encoding: "utf8", windowsHide: true, env: { ...gitEnv, GIT_OPTIONAL_LOCKS: "0" } });
 
+const DIR = ".claude/work-control/";
 const RECEIPT = /^\.claude\/work-control\/[^/]+\.json$/i;
 
 // Each receipt that a `git diff --name-status` listing shows as anything but added.
@@ -41,6 +53,17 @@ export function rewrittenReceipts(listing) {
     .map((line) => line.split("\t"))
     .filter(([status, path]) => status !== "A" && RECEIPT.test(path ?? ""))
     .map(([status, path]) => `${status} ${path}`);
+}
+
+// Each receipt `base` holds that HEAD, the index or the working tree no longer carries byte for
+// byte, prefixed with the layer it diverges in. `git` runs one git command in the repository.
+export function receiptRewrites(git, base) {
+  const held = new Set(git(["ls-tree", "-r", "--name-only", base, "--", DIR]).split(/\r?\n/).filter((path) => RECEIPT.test(path)));
+  const layer = (name, range) =>
+    rewrittenReceipts(git(["diff", "--no-renames", "--name-status", ...range, "--", DIR]))
+      .filter((entry) => held.has(entry.slice(entry.indexOf(" ") + 1)))
+      .map((entry) => `${name}: ${entry}`);
+  return [...layer("HEAD", [base, "HEAD"]), ...layer("index", ["--cached", base]), ...layer("working tree", [])];
 }
 
 describe("a transition receipt is added once and never edited or deleted (#307)", () => {
@@ -62,13 +85,94 @@ describe("a transition receipt is added once and never edited or deleted (#307)"
     ]);
   });
 
-  it("every receipt the merge-base with origin/main holds is still here, byte for byte", () => {
+  it("every receipt the merge-base with origin/main holds is still in HEAD, the index and the working tree", () => {
+    const git = gitIn(process.cwd());
     const base = git(["merge-base", "HEAD", "origin/main"]).trim();
     expect(base).toMatch(/^[0-9a-f]{40}$/);
-    const listing = git(["diff", "--no-renames", "--name-status", base, "--", ".claude/work-control/"]);
     expect(
-      rewrittenReceipts(listing),
+      receiptRewrites(git, base),
       "a receipt is never edited or deleted; correct it by adding a dated <date>-correct-<receipt>.json",
     ).toEqual([]);
+  });
+});
+
+// A throwaway repository whose first commit is the base. Every case starts back at that commit.
+describe("each layer is checked on its own, so restoring the working tree hides nothing (#307)", () => {
+  const HELD = ".claude/work-control/2026-01-01-merge-pr-1.json";
+  const BASE_BYTES = '{ "transition": "merge-pr", "pr": 1 }\n';
+  const EDITED_BYTES = '{ "transition": "merge-pr", "pr": 1, "note": "rewritten" }\n';
+  let root;
+  let git;
+  let base;
+  const write = (path, bytes) => {
+    mkdirSync(join(root, DIR), { recursive: true });
+    writeFileSync(join(root, path), bytes);
+  };
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), "compy-receipt-append-only-"));
+    git = gitIn(root);
+    git(["init", "-q", "-b", "main"]);
+    git(["config", "user.email", "t@t"]);
+    git(["config", "user.name", "t"]);
+    git(["config", "core.autocrlf", "false"]);
+    write(HELD, BASE_BYTES);
+    git(["add", "-A"]);
+    git(["commit", "-q", "-m", "base"]);
+    base = git(["rev-parse", "HEAD"]).trim();
+  });
+
+  beforeEach(() => {
+    git(["reset", "-q", "--hard", base]);
+    git(["clean", "-q", "-fd"]);
+  });
+
+  afterAll(() => {
+    try {
+      rmSync(root, { recursive: true, force: true });
+    } catch {
+      /* a locked file on Windows must not fail the suite */
+    }
+  });
+
+  it("passes an untouched base receipt beside a new receipt this lane adds, commits and then edits", () => {
+    const added = ".claude/work-control/2026-01-02-merge-pr-2.json";
+    write(added, BASE_BYTES);
+    git(["add", "-A"]);
+    git(["commit", "-q", "-m", "add a receipt"]);
+    write(added, EDITED_BYTES);
+    expect(receiptRewrites(git, base)).toEqual([]);
+  });
+
+  it("fails a committed rewrite whose index and working tree were put back to the base bytes", () => {
+    write(HELD, EDITED_BYTES);
+    git(["commit", "-q", "-am", "rewrite"]);
+    git(["checkout", "-q", base, "--", HELD]);
+    expect(receiptRewrites(git, base)).toEqual([`HEAD: M ${HELD}`]);
+  });
+
+  it("fails a staged rewrite whose working tree was put back to the base bytes", () => {
+    write(HELD, EDITED_BYTES);
+    git(["add", HELD]);
+    write(HELD, BASE_BYTES);
+    expect(receiptRewrites(git, base)).toEqual([`index: M ${HELD}`, `working tree: M ${HELD}`]);
+  });
+
+  it("fails an unstaged edit", () => {
+    write(HELD, EDITED_BYTES);
+    expect(receiptRewrites(git, base)).toEqual([`working tree: M ${HELD}`]);
+  });
+
+  it("fails a committed deletion even with the base bytes left behind as an untracked file", () => {
+    git(["rm", "-q", HELD]);
+    git(["commit", "-q", "-m", "delete"]);
+    write(HELD, BASE_BYTES);
+    expect(receiptRewrites(git, base)).toEqual([`HEAD: D ${HELD}`, `index: D ${HELD}`]);
+  });
+
+  it("fails a committed rename as a deletion", () => {
+    git(["mv", HELD, ".claude/work-control/2026-01-01-merge-pr-1-renamed.json"]);
+    git(["commit", "-q", "-m", "rename"]);
+    expect(receiptRewrites(git, base)).toEqual([`HEAD: D ${HELD}`, `index: D ${HELD}`]);
   });
 });
