@@ -35,7 +35,7 @@ release, sign, or touch credentials (owner territory).
 ### Now — finish what's open
 - [ ] **P2-exit** Four-screen agreement check on the owner rig (#453): Health, Test, History, Live
       agree on machine truth. Needs: PC idle (computer use). Record in `BACKLOG.md` P2.
-- [ ] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
+- [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
       Process PRs (#685, #679, #654, #644, #642, #606, #605, #492, #471, #470, #464): close with a
       one-line "parked under OWNER_DIRECTIVE_2026-10-23" comment.
@@ -44,7 +44,8 @@ release, sign, or touch credentials (owner territory).
       2026-10-24: #661 landed (merge of e1cf6f96; Debrief shows "—" + Not graded for unmeasured FPS,
       jsdom 58/58 + Chromium layout 6/6).
       #627 landed (merge of b48bd156; Check/Fix writes now refresh the Test bench without a
-      refocus; 23 files / 266 tests). Next: #604.
+      refocus; 23 files / 266 tests). #604 landed 2026-10-23 evening (8 test files, 96 tests;
+      its monitor-v2 cases moved to `monitor-v2-verdict-cases.test.ts` beside the newer file on main).
 - [ ] **WT-prune** Remove the 17 remaining worktrees whose commits already exist on main or on GitHub;
       bundle any unique commits first (pattern: `_archive/compy-sessions/worktree-salvage-2026-10-23`).
 
