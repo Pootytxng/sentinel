@@ -62,7 +62,6 @@
     "allow-get-hardware-info",
     "allow-get-intelligence-headline",
     "allow-get-intelligence-patterns",
-    "allow-get-intelligence-timeline",
     "allow-get-latency-diagnostics",
     "allow-get-latest-comparison",
     "allow-get-ledger-health",

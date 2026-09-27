@@ -64,7 +64,6 @@ const APP_COMMANDS: &[&str] = &[
     "get_hardware_info",
     "get_intelligence_headline",
     "get_intelligence_patterns",
-    "get_intelligence_timeline",
     "get_latency_diagnostics",
     "get_latest_comparison",
     "get_ledger_health",

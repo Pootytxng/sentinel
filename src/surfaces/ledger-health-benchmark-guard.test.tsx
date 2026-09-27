@@ -23,7 +23,6 @@ import { invalidateProbe } from "../data/probe-cache";
 import wire from "../test/fixtures/machine-model.wire.json";
 
 const health: { value: unknown; reject: boolean } = { value: null, reject: false };
-const applied: { changes: AppliedChange[]; reject: boolean } = { changes: [], reject: false };
 const bench: { state: BenchmarkState | null } = { state: null };
 // The attribution reads the Machine Model (#452): its `compy_changes` rows, and its own word on
 // whether the ledger behind them was readable.
@@ -34,9 +33,6 @@ vi.mock("@tauri-apps/api/core", () => ({
     switch (cmd) {
       case "get_benchmark_state":
         return Promise.resolve(bench.state);
-      case "get_applied_changes":
-        // The real collapse: the tab swallows the failure so one bad ledger can't blank it.
-        return applied.reject ? Promise.reject(new Error("locked")) : Promise.resolve(applied.changes);
       case "get_ledger_health":
         return health.reject ? Promise.reject(new Error("ipc down")) : Promise.resolve(health.value);
       case "get_machine_model":
@@ -55,6 +51,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   }),
 }));
 
+import { invoke } from "@tauri-apps/api/core";
 import { BenchmarkTab } from "./Benchmark";
 
 const BASELINE_AT = "2026-08-01T10:00:00.000Z";
@@ -142,8 +139,6 @@ function unreadableModel(reason: string): MachineModel {
 beforeEach(() => {
   health.value = HEALTHY;
   health.reject = false;
-  applied.changes = [];
-  applied.reject = false;
   bench.state = MEASURED;
   model.value = modelWith([]);
   invalidateProbe();
@@ -156,7 +151,7 @@ afterEach(() => {
 
 async function mount(provingGround = false) {
   const r = render(<BenchmarkTab provingGround={provingGround} />);
-  // Flush get_benchmark_state / get_applied_changes, then the health probe those results key.
+  // Flush get_benchmark_state, then the health probe its result keys.
   // …and the Machine Model read the attribution keys off (one IPC, shared while in flight).
   await act(async () => {
     for (let i = 0; i < 12; i++) await Promise.resolve();
@@ -167,7 +162,6 @@ async function mount(provingGround = false) {
 describe("the efficacy card may not blame the user for a ledger it can't read", () => {
   it("an unreadable ledger withdraws the attribution instead of assigning it", async () => {
     health.value = UNREADABLE;
-    applied.reject = true; // the real shape: the collapse and the bad health arrive together
     const { container } = await mount();
 
     expect(efficacyClaim(container)?.textContent).toBe(WITHDRAWN);
@@ -204,7 +198,6 @@ describe("the efficacy card may not blame the user for a ledger it can't read", 
 
   it("a PARTIAL list still gets the disclosure — it is the dangerous case, because it looks whole", async () => {
     health.value = QUARANTINED;
-    applied.changes = [CHANGE];
     model.value = modelWith([row(CHANGE.id, CHANGE.rec_title, CHANGE.applied_at, true)]);
     const { container } = await mount();
 
@@ -217,7 +210,6 @@ describe("the efficacy card may not blame the user for a ledger it can't read", 
 describe("Two Futures subsumes the efficacy card, so it inherits the same refusal", () => {
   it("an unreadable ledger withdraws the split view's attribution too", async () => {
     health.value = UNREADABLE;
-    applied.reject = true;
     const { container } = await mount(true);
 
     expect(splitClaim(container)?.textContent).toBe(WITHDRAWN);
@@ -261,11 +253,20 @@ describe("Two Futures subsumes the efficacy card, so it inherits the same refusa
   });
 });
 
+describe("the tab reads no ledger list of its own (#453)", () => {
+  it("never calls get_applied_changes; the model and the health probe are its only ledger sources", async () => {
+    await mount();
+    const called = vi.mocked(invoke).mock.calls.map(([cmd]) => cmd);
+    expect(called).not.toContain("get_applied_changes");
+    expect(called).toContain("get_ledger_health");
+    expect(called).toContain("get_machine_model");
+  });
+});
+
 describe("no claim, no disclosure", () => {
   it("a tab with no measured pair makes no attribution, so it gets no warning either", async () => {
     bench.state = UNMEASURED;
     health.value = QUARANTINED;
-    applied.reject = true;
     const { container } = await mount(true);
 
     // The honest empty state, not a claim about the ledger — nothing here to qualify.
@@ -295,9 +296,8 @@ describe("UNKNOWN health is not incompleteness — a failed probe may not manufa
     expect(unknown).toBe(healthy);
   });
 
-  it("a ledger that reports itself COMPLETE is left alone even when the read collapsed", async () => {
+  it("a ledger that reports itself COMPLETE is left alone", async () => {
     // complete:true is the backend vouching for the list. Not our place to second-guess it.
-    applied.reject = true;
     const { container } = await mount();
 
     expect(efficacyClaim(container)?.textContent).toContain(CAUSAL_CLAIM);
