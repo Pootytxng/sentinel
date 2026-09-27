@@ -1,0 +1,172 @@
+diff --git a/.claude/hooks/shell-ownership-assert.mjs b/.claude/hooks/shell-ownership-assert.mjs
+index a29d6f6..4ccf327 100644
+--- a/.claude/hooks/shell-ownership-assert.mjs
++++ b/.claude/hooks/shell-ownership-assert.mjs
+@@ -59,9 +59,12 @@ export const SHELL_TOOLS = new Set(["Bash", "PowerShell"]);
+ export const OFF_SWITCH = "COMPY_SHELL_OWNERSHIP_OFF";
+
+ // ── lexing ───────────────────────────────────────────────────────────────────────────────────────
+
+-const OPERATORS = ["&&", "||", "2>&", "&>>", "2>>", "2>", "&>", ">&", ">>", ">", "<<<", "<<-", "<<", "<", "|", ";", "&", "(", ")", "\n"];
++// `>|` and `2>|` are the clobber forms of `>` and `2>`, and they are listed before them for the same
++// reason `>>` is: matched as `>` then `|`, the pipe ended the segment and the target became the NEXT
++// segment's verb, so `echo hi >| <sibling>/x` was allowed while `>` refused the same path (#485).
++const OPERATORS = ["&&", "||", "2>&", "&>>", "2>>", "2>|", "2>", "&>", ">&", ">>", ">|", ">", "<<<", "<<-", "<<", "<", "|", ";", "&", "(", ")", "\n"];
+
+ /**
+  * The characters an escape may precede INSIDE double quotes. POSIX: `$`, backtick, `"`, `\` and a
+  * newline; everything else keeps its backslash. PowerShell's backtick escapes `$`, backtick and `"`.
+@@ -92,8 +95,53 @@ export function stripHeredocs(text) {
+   }
+   return out.join("\n");
+ }
+
++/**
++ * Where a command substitution that starts at `src[i]` ends: the index of its closing `)` or backtick,
++ * or `src.length` when it never closes. `open` is "$(" or "`".
++ *
++ * `$(` counts nesting and steps over quoted strings and escapes, so a `)` inside `'…'` does not close
++ * it. A backtick body ends at the first unescaped backtick — nesting there needs escaping, which is
++ * what the escape step consumes.
++ */
++function substitutionEnd(src, i, open, escapeChar) {
++  if (open === "`") {
++    let j = i + 1;
++    while (j < src.length && src[j] !== "`") j += src[j] === escapeChar ? 2 : 1;
++    return Math.min(j, src.length);
++  }
++  let depth = 1;
++  let j = i + 2;
++  while (j < src.length) {
++    const ch = src[j];
++    if (ch === escapeChar) j += 2;
++    else if (ch === "'") {
++      j += 1;
++      while (j < src.length && src[j] !== "'") j += 1;
++      j += 1;
++    } else if (ch === '"') {
++      j += 1;
++      while (j < src.length && src[j] !== '"') j += src[j] === escapeChar ? 2 : 1;
++      j += 1;
++    } else if (ch === "(") {
++      depth += 1;
++      j += 1;
++    } else if (ch === ")") {
++      depth -= 1;
++      if (depth === 0) return j;
++      j += 1;
++    } else j += 1;
++  }
++  return src.length;
++}
++
++/**
++ * A backtick body as the shell runs it: inside backticks `\` keeps its meaning only before `$`, a
++ * backtick or another `\`, so those three lose the backslash and everything else keeps it.
++ */
++const backtickBody = (body) => body.replace(/\\([$`\\])/g, "$1");
++
+ /**
+  * A token is a word or an operator. `dynamic` means the word's VALUE is not knowable from the text:
+  * a variable, a substitution, a glob. That flag is the whole reason this lexer exists — a guard that
+  * cannot tell `rm build.log` from `rm $TARGET` will either wave the second through or refuse the
+@@ -107,13 +155,22 @@ export function lex(text, dialect = "posix") {
+   const src = String(text ?? "");
+   const out = [];
+   let word = null;
+   let braces = [];
++  // COMMAND SUBSTITUTIONS THE WORD CARRIES (#484). A backtick, or a `$(` inside double quotes, runs
++  // a command whose output becomes part of this word. That command was folded into the word as text
++  // and never analyzed, so `` echo hi `rm -rf <sibling>/src` `` was allowed while the unquoted `$(…)`
++  // spelling was refused. Each body is lexed on its own and emitted after the word as a `(`…`)`
++  // group: the same token shape an unquoted `$(…)` already produces, so every later stage reads it
++  // as the separate command it is. The word itself stays dynamic — its value is still not knowable.
++  let substitutions = [];
+
+   const push = () => {
+     if (word !== null) out.push({ type: "word", ...word });
+     word = null;
+     braces = [];
++    for (const body of substitutions) out.push({ type: "op", value: "(" }, ...lex(body, dialect), { type: "op", value: ")" });
++    substitutions = [];
+   };
+   const add = (ch, { dynamic = false, raw = ch } = {}) => {
+     if (word === null) word = { value: "", dynamic: false, raw: "" };
+     word.value += ch;
+@@ -163,8 +220,20 @@ export function lex(text, dialect = "posix") {
+           value += src[j + 1];
+           j += 2;
+           continue;
+         }
++        // A substitution inside the quotes runs its command all the same (#484). The quotes only
++        // stop the OUTPUT from splitting into words; they do not make the command text.
++        const open = src.startsWith("$(", j) ? "$(" : dialect === "posix" && src[j] === "`" ? "`" : null;
++        if (open) {
++          const end = substitutionEnd(src, j, open, escapeChar);
++          const body = src.slice(j + open.length, end);
++          substitutions.push(open === "`" ? backtickBody(body) : body);
++          value += src.slice(j, Math.min(end + 1, src.length));
++          dynamic = true;
++          j = end + 1;
++          continue;
++        }
+         if (src[j] === "$" || (dialect === "posix" && src[j] === "`")) dynamic = true;
+         value += src[j++];
+       }
+       add(value, { dynamic, raw: src.slice(i, Math.min(j + 1, src.length)) });
+@@ -221,9 +290,18 @@ export function lex(text, dialect = "posix") {
+           word.globStart = Math.min(word.globStart ?? Infinity, brace.start);
+         }
+       }
+     }
+-    if (c === "$" || (dialect === "posix" && c === "`")) {
++    if (dialect === "posix" && c === "`") {
++      // An unquoted backtick substitution (#484): its body is a command, lexed and emitted after
++      // this word by `push`, exactly like the quoted form above.
++      const end = substitutionEnd(src, i, "`", escapeChar);
++      substitutions.push(backtickBody(src.slice(i + 1, end)));
++      add(src.slice(i, Math.min(end + 1, src.length)), { dynamic: true });
++      i = end + 1;
++      continue;
++    }
++    if (c === "$") {
+       add(c, { dynamic: true });
+       i += 1;
+       continue;
+     }
+@@ -242,9 +320,9 @@ export function lex(text, dialect = "posix") {
+   return out;
+ }
+
+ const CHAIN_OPS = new Set(["&&", "||", ";", "|", "&", "\n", "(", ")"]);
+-const REDIRECTS = new Set([">", ">>", "2>", "2>>", "&>", "&>>"]);
++const REDIRECTS = new Set([">", ">>", ">|", "2>", "2>>", "2>|", "&>", "&>>"]);
+ /** `2>&1` redirects to a file DESCRIPTOR. The word after it is a number, not a path to guard. */
+ const FD_REDIRECTS = new Set(["2>&", ">&"]);
+
+ /**
+diff --git a/tools/entry/shell-ownership-assert.test.mjs b/tools/entry/shell-ownership-assert.test.mjs
+index 891f59e..645c8b6 100644
+--- a/tools/entry/shell-ownership-assert.test.mjs
++++ b/tools/entry/shell-ownership-assert.test.mjs
+@@ -1615,14 +1615,15 @@ describe("no command may hide in a spared redirect operand (review of the 2026-0
+   // Backticks inside template literals are noise; build these by concatenation, as the repro is
+   // quoted in the issue.
+   const tick = (body) => `cd "${LANE}" && echo hi > \`${body}\``;
+
+-  it("defers, never exempts, on the reviewer's backtick repro, from inside the claim", () => {
++  it("DENIES the reviewer's backtick repro, from inside the claim, exactly as it denies $( … )", () => {
++    // It used to defer here, because the backtick body was never analyzed. Since #484 the lexer
++    // emits it as the command it is, so the inner `rm` zones as a sibling and the two spellings
++    // finally agree.
+     const d = ask(tick(`rm -rf ${TREE}`));
+-    expect(d.permission).toBe("allow");
+-    // It defers for the right reason: the redirect operand, not something incidental.
+-    expect(d.why).toContain("not knowable from the text");
+-    // And the exemption's context line is NOT attached - it was not spared, it was deferred.
++    expect(d.permission).toBe("deny");
++    // And the exemption's context line is NOT attached - it was not spared.
+     expect(d.additionalContext ?? "").not.toContain("Shell ownership");
+   });
+
+   it("still DENIES the $( … ) spelling, which never leaked", () => {
