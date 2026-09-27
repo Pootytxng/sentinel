@@ -156,7 +156,8 @@ The three gaps that matter most for this case:
   Optimizer); MPO disabled. Baseline window: 7 days, ending 2026-10-03.
 - [ ] Flicker outcome with MPO off, cable unchanged.
 - [ ] Crash-free for the week? The BIOS flash, stock CPU and MPO change landed together, so a clean
-  week says the combination helped, not which change did. Attribution stays unresolved.
+  week is consistent with the combination helping; it does not prove it, or show which change did.
+  The four earlier shutdowns were spread unevenly over about 35 days. Attribution stays unresolved.
 
 ## Artifacts (owner machine, outside the repo)
 
