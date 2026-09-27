@@ -22,13 +22,17 @@
 // - `corrects.field`, `independentReview.reviewer`;
 // - `corrects.original`, the field's EXACT text;
 // - `corrects.standing`, the sentence that stands instead, which may state neither overstatement;
-// - `corrects.correction`, the full note: it opens with `standing` and records `original` verbatim.
+// - `corrects.correction`, the full note: `<standing> CORRECTED <why> ORIGINAL: "<original>"`. It
+//   opens with what stands, says why, and ends with the original, labelled and quoted, as history.
 // The receipt keeps what was claimed and the correction says what stands. Neither is rewritten.
 //
 // EVERY FIELD IS CHECKED. At 198cc2b6 only the target, the field and the original were: an empty
 // `standing`, a bare file name for `receipt`, and a missing `addedIn` or `correction` all silenced a
 // real overstatement. Codex's review of that head found it. A correction that is malformed in any
 // field is now a finding itself and answers nothing, and so is a second correction of one receipt.
+// At 9ec38223 the note only had to open with `standing` and contain `original`, so `standing`
+// followed by the bare original passed, the false claim unlabelled; Codex's review of that head found
+// it. The whole envelope is now checked.
 //
 // ONE RECEIPT PREDATES BOTH RULES. #277's was corrected in place on 2026-09-01, and its correction
 // prose names both phrases. It is pinned by the sha-256 of that field, so any further edit fails here
@@ -75,6 +79,14 @@ const RECEIPT_PATH = /^\.claude\/work-control\/([^/]+\.json)$/;
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const filled = (value) => typeof value === "string" && value.trim() !== "";
 
+// True when `correction` is exactly `<standing> CORRECTED <why> ORIGINAL: "<original>"`, <why> not blank.
+export function correctionEnvelopeHolds(correction, standing, original) {
+  const head = `${standing} CORRECTED `;
+  const tail = ` ORIGINAL: "${original}"`;
+  if (!filled(correction) || !correction.startsWith(head) || !correction.endsWith(tail)) return false;
+  return correction.length > head.length + tail.length && filled(correction.slice(head.length, -tail.length));
+}
+
 // Why a correction receipt answers nothing, or null when every field is well-formed.
 // `commitAdded(sha, path)` says whether that commit, in this history, added that path.
 export function correctionDefect(name, corrects, receipts, commitAdded) {
@@ -86,7 +98,7 @@ export function correctionDefect(name, corrects, receipts, commitAdded) {
   if (field !== FIELD) return `corrects ${field}; only ${FIELD} is read`;
   if (!filled(original) || original !== receipts.get(target)?.independentReview?.reviewer) return `its original is not ${target}'s exact ${FIELD}`;
   if (!filled(standing) || overstatementsIn(standing).length) return "its standing sentence is empty or states an overstatement";
-  if (!filled(correction) || !correction.startsWith(standing) || !correction.includes(original)) return "its correction does not open with the standing sentence and record the original verbatim";
+  if (!correctionEnvelopeHolds(correction, standing, original)) return 'its correction is not `<standing> CORRECTED <why> ORIGINAL: "<original>"`';
   return null;
 }
 
@@ -141,7 +153,7 @@ describe("a receipt's reviewer field claims no independence it did not have (#30
       field: FIELD,
       original: ORIGINAL_290,
       standing: STANDING,
-      correction: `${STANDING} CORRECTED: both claims were false. ORIGINAL: "${ORIGINAL_290}"`,
+      correction: `${STANDING} CORRECTED because both claims were false. ORIGINAL: "${ORIGINAL_290}"`,
     };
     const run = (...corrections) =>
       reviewerFindings(new Map([["r.json", receipt], ...corrections.map((corrects, i) => [`c${i}.json`, correction(corrects)])]), addedBy);
@@ -165,6 +177,12 @@ describe("a receipt's reviewer field claims no independence it did not have (#30
       "no correction": { ...withoutBoth, addedIn },
       "a correction that is only the standing sentence": { ...valid, correction: STANDING },
       "a correction that does not open with the standing sentence": { ...valid, correction: `ORIGINAL: "${ORIGINAL_290}" ${STANDING}` },
+      "the standing sentence, then the bare original": { ...valid, correction: `${STANDING} ${ORIGINAL_290}` },
+      "no CORRECTED label": { ...valid, correction: `${STANDING} because both claims were false. ORIGINAL: "${ORIGINAL_290}"` },
+      "no reason given": { ...valid, correction: `${STANDING} CORRECTED  ORIGINAL: "${ORIGINAL_290}"` },
+      "an unlabelled original": { ...valid, correction: `${STANDING} CORRECTED because both claims were false. "${ORIGINAL_290}"` },
+      "an unquoted original": { ...valid, correction: `${STANDING} CORRECTED because both claims were false. ORIGINAL: ${ORIGINAL_290}` },
+      "text after the original": { ...valid, correction: `${valid.correction} It had no stake in it landing.` },
     };
     for (const [label, corrects] of Object.entries(malformed)) {
       expect(run(corrects), label).toEqual([expect.stringMatching(/^c0\.json: /), expect.stringMatching(/^r\.json: /)]);

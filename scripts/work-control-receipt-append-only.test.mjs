@@ -11,7 +11,8 @@
 // only what its last editor wanted it to say.
 //
 // THE RULE. Every `.claude/work-control/*.json` held by the merge-base of HEAD and `origin/main`
-// must still be in HEAD, the index and the working tree, byte for byte. A wrong receipt is corrected
+// keeps its bytes in every commit after that base, and is still in HEAD, the index and the working
+// tree, byte for byte. A wrong receipt is corrected
 // by ADDING a dated `<date>-correct-<receipt>.json`; `work-control-receipt-reviewer-claims.test.mjs`
 // defines its shape.
 //
@@ -30,6 +31,18 @@
 // until it lands. Git applies its own line-ending rules to each diff. `--no-renames` makes a rename
 // read as a deletion plus an addition. An unresolvable `origin/main`, or one with no common ancestor
 // in shallow history, throws, which fails the test rather than counting as zero findings.
+//
+// EVERY COMMIT, NOT ONLY THE ENDPOINTS. Codex's review of 9ec38223 found that a rewrite committed and
+// then put back by a later commit leaves all three endpoints clean, while the history a merge carries
+// still holds the rewrite. So every commit between the base and HEAD is read too: each merge against
+// its first parent (`--diff-merges=first-parent`), and both sides of every merge. That flag already
+// stops git pruning a side branch; `--full-history` says so rather than lean on it. A commit is
+// named when it leaves a base receipt with other bytes, another mode, or none; the commit that puts
+// the bytes back is not.
+// This lane's own first cut is that shape: 829a9f2a rewrote the #290 receipt and 28deb2fe put it back.
+// Rewriting the pushed PR branch to drop it is a force-push, which is the owner's call, and the dated
+// correction receipt already records it, so the live check excuses that one commit and path, exactly.
+// Once it lands, 829a9f2a sits under every lane's base and the excuse matches nothing.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -37,13 +50,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-// A hook runs with the repository's own git locations set; a fixture must never inherit them.
-const { GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE, ...gitEnv } = process.env;
+// A hook runs with the repository's own git locations set, and a fixture must never inherit them.
+// Codex's review of 9ec38223 found that clearing only GIT_DIR, GIT_INDEX_FILE and GIT_WORK_TREE left
+// GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY and the rest, so every variable git itself lists as local to
+// a repository is cleared.
+const LOCAL_ENV_VARS = execFileSync("git", ["rev-parse", "--local-env-vars"], { encoding: "utf8", windowsHide: true })
+  .split(/\r?\n/)
+  .filter(Boolean);
+
+export function withoutRepositoryEnv(env) {
+  const local = new Set(LOCAL_ENV_VARS);
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !local.has(key.toUpperCase())));
+}
+
 const gitIn = (cwd) => (args) =>
-  execFileSync("git", args, { cwd, encoding: "utf8", windowsHide: true, env: { ...gitEnv, GIT_OPTIONAL_LOCKS: "0" } });
+  execFileSync("git", args, { cwd, encoding: "utf8", windowsHide: true, env: { ...withoutRepositoryEnv(process.env), GIT_OPTIONAL_LOCKS: "0" } });
 
 const DIR = ".claude/work-control/";
 const RECEIPT = /^\.claude\/work-control\/[^/]+\.json$/i;
+const EXCUSED = new Set(["commit 829a9f2aeb04d38fa60edeb62dfa289afc741b63: M .claude/work-control/2026-09-01-merge-pr-290.json"]);
 
 // Each receipt that a `git diff --name-status` listing shows as anything but added.
 export function rewrittenReceipts(listing) {
@@ -55,15 +80,29 @@ export function rewrittenReceipts(listing) {
     .map(([status, path]) => `${status} ${path}`);
 }
 
-// Each receipt `base` holds that HEAD, the index or the working tree no longer carries byte for
-// byte, prefixed with the layer it diverges in. `git` runs one git command in the repository.
+// Each receipt `base` holds that a commit after it, HEAD, the index or the working tree no longer
+// carries byte for byte, prefixed with where it diverges. `git` runs one git command in the repository.
 export function receiptRewrites(git, base) {
-  const held = new Set(git(["ls-tree", "-r", "--name-only", base, "--", DIR]).split(/\r?\n/).filter((path) => RECEIPT.test(path)));
+  const held = new Map();
+  for (const line of git(["ls-tree", "-r", base, "--", DIR]).split(/\r?\n/)) {
+    const entry = /^(\d{6}) blob ([0-9a-f]+)\t(.+)$/.exec(line);
+    if (entry && RECEIPT.test(entry[3])) held.set(entry[3], `${entry[1]} ${entry[2]}`);
+  }
+  const commits = [];
+  let commit = "";
+  const history = ["log", "--full-history", "--diff-merges=first-parent", "--no-renames", "--raw", "--no-abbrev", "--reverse", "--format=commit %H"];
+  for (const line of git([...history, `${base}..HEAD`, "--", DIR]).split(/\r?\n/)) {
+    if (line.startsWith("commit ")) commit = line.slice("commit ".length);
+    const change = /^:\d{6} (\d{6}) [0-9a-f]+ ([0-9a-f]+) ([A-Z])\d*\t(.+)$/.exec(line);
+    if (change && held.has(change[4]) && held.get(change[4]) !== `${change[1]} ${change[2]}`) {
+      commits.push(`commit ${commit}: ${change[3]} ${change[4]}`);
+    }
+  }
   const layer = (name, range) =>
     rewrittenReceipts(git(["diff", "--no-renames", "--name-status", ...range, "--", DIR]))
       .filter((entry) => held.has(entry.slice(entry.indexOf(" ") + 1)))
       .map((entry) => `${name}: ${entry}`);
-  return [...layer("HEAD", [base, "HEAD"]), ...layer("index", ["--cached", base]), ...layer("working tree", [])];
+  return [...commits, ...layer("HEAD", [base, "HEAD"]), ...layer("index", ["--cached", base]), ...layer("working tree", [])];
 }
 
 describe("a transition receipt is added once and never edited or deleted (#307)", () => {
@@ -85,14 +124,22 @@ describe("a transition receipt is added once and never edited or deleted (#307)"
     ]);
   });
 
-  it("every receipt the merge-base with origin/main holds is still in HEAD, the index and the working tree", () => {
+  it("every receipt the merge-base with origin/main holds keeps its bytes in every commit since, HEAD, the index and the working tree", () => {
     const git = gitIn(process.cwd());
     const base = git(["merge-base", "HEAD", "origin/main"]).trim();
     expect(base).toMatch(/^[0-9a-f]{40}$/);
     expect(
-      receiptRewrites(git, base),
+      receiptRewrites(git, base).filter((finding) => !EXCUSED.has(finding)),
       "a receipt is never edited or deleted; correct it by adding a dated <date>-correct-<receipt>.json",
     ).toEqual([]);
+  });
+
+  it("gives git none of the repository-local variables a hook may export", () => {
+    expect(LOCAL_ENV_VARS).toEqual(
+      expect.arrayContaining(["GIT_DIR", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_INDEX_FILE", "GIT_WORK_TREE"]),
+    );
+    const env = Object.fromEntries([...LOCAL_ENV_VARS.map((key) => [key, "x"]), ["Git_Common_Dir", "x"], ["PATH", "p"]]);
+    expect(withoutRepositoryEnv(env)).toEqual({ PATH: "p" });
   });
 });
 
@@ -123,6 +170,7 @@ describe("each layer is checked on its own, so restoring the working tree hides 
   });
 
   beforeEach(() => {
+    git(["checkout", "-q", "-f", "main"]);
     git(["reset", "-q", "--hard", base]);
     git(["clean", "-q", "-fd"]);
   });
@@ -144,11 +192,55 @@ describe("each layer is checked on its own, so restoring the working tree hides 
     expect(receiptRewrites(git, base)).toEqual([]);
   });
 
+  const commit = (message) => {
+    git(["commit", "-q", "-am", message]);
+    return git(["rev-parse", "HEAD"]).trim();
+  };
+
   it("fails a committed rewrite whose index and working tree were put back to the base bytes", () => {
     write(HELD, EDITED_BYTES);
-    git(["commit", "-q", "-am", "rewrite"]);
+    const rewrite = commit("rewrite");
     git(["checkout", "-q", base, "--", HELD]);
-    expect(receiptRewrites(git, base)).toEqual([`HEAD: M ${HELD}`]);
+    expect(receiptRewrites(git, base)).toEqual([`commit ${rewrite}: M ${HELD}`, `HEAD: M ${HELD}`]);
+  });
+
+  it("fails a rewrite that a later commit put back", () => {
+    write(HELD, EDITED_BYTES);
+    const rewrite = commit("rewrite");
+    write(HELD, BASE_BYTES);
+    commit("put it back");
+    expect(receiptRewrites(git, base)).toEqual([`commit ${rewrite}: M ${HELD}`]);
+  });
+
+  it("fails a rewrite made and put back on a side branch that a merge brings in", () => {
+    git(["checkout", "-q", "-B", "side", base]);
+    write(HELD, EDITED_BYTES);
+    const rewrite = commit("rewrite on a side branch");
+    write(HELD, BASE_BYTES);
+    commit("put it back");
+    git(["checkout", "-q", "main"]);
+    // Work outside the receipts on this side too: a merge that matches such a parent there is what
+    // git's default history simplification follows alone, dropping the side branch unread.
+    writeFileSync(join(root, "notes.txt"), "work\n");
+    git(["add", "notes.txt"]);
+    commit("other work");
+    git(["merge", "-q", "--no-ff", "-m", "merge the side branch", "side"]);
+    expect(receiptRewrites(git, base)).toEqual([`commit ${rewrite}: M ${HELD}`]);
+  });
+
+  it("fails a rewrite slipped into a merge commit and put back after it", () => {
+    git(["checkout", "-q", "-B", "side", base]);
+    writeFileSync(join(root, "notes.txt"), "side\n");
+    git(["add", "notes.txt"]);
+    commit("side work");
+    git(["checkout", "-q", "main"]);
+    git(["merge", "-q", "--no-ff", "--no-commit", "side"]);
+    write(HELD, EDITED_BYTES);
+    git(["add", HELD]);
+    const merge = commit("merge the side branch, with a rewrite");
+    write(HELD, BASE_BYTES);
+    commit("put it back");
+    expect(receiptRewrites(git, base)).toEqual([`commit ${merge}: M ${HELD}`]);
   });
 
   it("fails a staged rewrite whose working tree was put back to the base bytes", () => {
@@ -165,14 +257,14 @@ describe("each layer is checked on its own, so restoring the working tree hides 
 
   it("fails a committed deletion even with the base bytes left behind as an untracked file", () => {
     git(["rm", "-q", HELD]);
-    git(["commit", "-q", "-m", "delete"]);
+    const deletion = commit("delete");
     write(HELD, BASE_BYTES);
-    expect(receiptRewrites(git, base)).toEqual([`HEAD: D ${HELD}`, `index: D ${HELD}`]);
+    expect(receiptRewrites(git, base)).toEqual([`commit ${deletion}: D ${HELD}`, `HEAD: D ${HELD}`, `index: D ${HELD}`]);
   });
 
   it("fails a committed rename as a deletion", () => {
     git(["mv", HELD, ".claude/work-control/2026-01-01-merge-pr-1-renamed.json"]);
-    git(["commit", "-q", "-m", "rename"]);
-    expect(receiptRewrites(git, base)).toEqual([`HEAD: D ${HELD}`, `index: D ${HELD}`]);
+    const rename = commit("rename");
+    expect(receiptRewrites(git, base)).toEqual([`commit ${rename}: D ${HELD}`, `HEAD: D ${HELD}`, `index: D ${HELD}`]);
   });
 });
