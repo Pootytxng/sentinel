@@ -252,7 +252,9 @@ export function run(argv, git, shallow = () => readShallow(git)) {
       `--format=${LOG_FORMAT}`,
       range,
       "--",
-      ...WATCHED,
+      // :(top) anchors each path at the repository root: a bare pathspec is cwd-relative, so run from
+      // docs/ it matched nothing and printed a false "no commit touches" clean pass.
+      ...WATCHED.map((path) => `:(top)${path}`),
     ]);
   } catch (e) {
     const shallow = /shallow|unknown revision|bad revision|ambiguous argument/i.test(String(e?.stderr ?? e?.message ?? e));

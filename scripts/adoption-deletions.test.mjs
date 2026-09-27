@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -187,18 +189,59 @@ describe("run — honest measurement, never a silent pass, never blocks", () => 
     const out = run([], git, () => "");
     expect(logArgs).toContain("base..HEAD");
     expect(logArgs).toContain("--diff-merges=first-parent");
-    expect(logArgs.slice(-2)).toEqual(WATCHED);
+    expect(logArgs.slice(-2)).toEqual(WATCHED.map((path) => `:(top)${path}`));
     expect(out).toContain(`-L5: ${RETRACTION}`);
   });
 });
 
 describe("CLI smoke against the real tree", () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const SCRIPT = join(root, "scripts", "adoption-deletions.mjs");
+
   it("prints one verdict line — measured or NOT MEASURED — and exits 0", () => {
-    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-    const out = execFileSync(process.execPath, [join(root, "scripts", "adoption-deletions.mjs")], {
+    const out = execFileSync(process.execPath, [SCRIPT], {
       cwd: root,
       encoding: "utf8",
     });
     expect(out).toMatch(/^adoption-deletions: (NOT MEASURED|.* — (measured|\d+ commit))/);
   });
+
+  // 4 git spawns here plus the CLI's own log, rev-list and rev-parse: 7 in all, so this test carries
+  // its own timeout instead of leaning on the suite-wide testTimeout.
+  const GIT_SPAWN_TIMEOUT_MS = 60_000;
+
+  it("anchors the watched paths at the repo root, so a run from docs/ still lists the deletion", () => {
+    const repo = mkdtempSync(join(tmpdir(), "adoption-deletions-"));
+    // A git hook's GIT_DIR / GIT_INDEX_FILE would point both git and the CLI back at this checkout.
+    const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, ...inherited } = process.env;
+    const env = {
+      ...inherited,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: join(repo, "absent-global-gitconfig"),
+      GIT_AUTHOR_NAME: "t",
+      GIT_AUTHOR_EMAIL: "t@t",
+      GIT_COMMITTER_NAME: "t",
+      GIT_COMMITTER_EMAIL: "t@t",
+    };
+    const git = (...args) => execFileSync("git", args, { cwd: repo, env, stdio: "pipe" });
+    try {
+      mkdirSync(join(repo, "docs"));
+      const doc = join(repo, "docs", "SESSION_HANDOFF.md");
+      writeFileSync(doc, `keep\n${RETRACTION}\n`);
+      git("init", "-q");
+      git("add", "docs/SESSION_HANDOFF.md");
+      git("commit", "-q", "-m", "seed");
+      writeFileSync(doc, "keep\n");
+      git("commit", "-q", "-a", "-m", "adopt");
+      const out = execFileSync(process.execPath, [SCRIPT, "HEAD~1..HEAD"], {
+        cwd: join(repo, "docs"),
+        env,
+        encoding: "utf8",
+      });
+      expect(out).toContain(`-L2: ${RETRACTION}`);
+      expect(out).not.toContain("no commit touches");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  }, GIT_SPAWN_TIMEOUT_MS);
 });
