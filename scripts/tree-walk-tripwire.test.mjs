@@ -207,6 +207,34 @@ describe("what counts as a git process (#563)", () => {
     expect(gitSpawnsOf(["$out=git", "status"])).toBe(0);
   });
 
+  // Each shell reads only its own words in front of a command. Every rule runs through sh -c,
+  // pwsh -Command, cmd /c and a program started with no shell (its words as the argv), and starts git
+  // only where the rule belongs. A specimen is the word straight in front of git, as the scanner reads a
+  // command position; the scripts each word stands in are pinned above. Measured 2026-09-27: cmd ran
+  // git after @, do and else in any case, and PowerShell after none of the sh words. env is a program,
+  // not a shell word, so it counts in all four: cmd /c "env X=1 git --version" ran git under Git
+  // Bash's PATH, where the push gate runs.
+  const READERS = {
+    sh: (script) => ["sh", "-c", script],
+    powershell: (script) => ["pwsh", "-Command", script],
+    cmd: (script) => ["cmd", "/c", script],
+    "no shell": (script) => script.split(" "),
+  };
+  it.each([
+    ["VAR=value", "OUT=x git status", ["sh"]],
+    ...["exec", "command", "time", "then", "if", "elif", "while", "until", "!"].map((word) => [word, `${word} git status`, ["sh"]]),
+    ["do", "do git status", ["sh", "cmd"]],
+    ["else", "else git status", ["sh", "cmd"]],
+    ["DO, in a case only cmd reads", "DO git status", ["cmd"]],
+    ["@", "@git status", ["cmd"]],
+    ["@ alone", "@ git status", ["cmd"]],
+    ["a PowerShell assignment", "$out = git status", ["powershell"]],
+    ["env, a program", "env GIT_DIR=x git status", Object.keys(READERS)],
+  ])("reads %s in front of a command only where it belongs: %s", (_rule, specimen, readers) => {
+    const counts = Object.fromEntries(Object.entries(READERS).map(([reader, argv]) => [reader, gitSpawnsOf(argv(specimen))]));
+    expect(counts).toEqual(Object.fromEntries(Object.keys(READERS).map((reader) => [reader, readers.includes(reader) ? 1 : 0])));
+  });
+
   it("counts the git a double-quoted $(...) runs in sh-family shells and PowerShell; single quotes and cmd are literal", () => {
     expect(gitSpawnsOf(["sh", "-c", 'echo "$(git status)"'])).toBe(1);
     expect(gitInvocations(`sh -c 'echo "head: $(git rev-parse "HEAD") ok"; git log -1'`, "cmd")).toBe(2);

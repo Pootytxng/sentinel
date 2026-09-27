@@ -143,8 +143,9 @@ export function tripwireVerdict(timeout, o, budget) {
 // - Escapes (cmd's ^, sh's \, PowerShell's `) are not read. An escaped quote still quotes, and so does
 //   a lone apostrophe in cmd (echo it's done & git status), so either can hide the git after it.
 // - An escaped separator still separates, each shell's separators separate in all three, and a
-//   comment or here-document is read as commands, so a git that never runs can be counted. That
-//   over-counts, and an over-count fails loud as a budget demand, never silently.
+//   comment or here-document is read as commands, so a git that never runs can be counted. So is the
+//   git after env where no env is installed: a cmd or PowerShell without Git's Unix tools on its PATH.
+//   That over-counts, and an over-count fails loud as a budget demand, never silently.
 export const GIT_SPAWN_FLOOR = 6; // git processes one test, or one hook, starts
 
 // The failure a test that starts GIT_SPAWN_FLOOR or more git processes gets on too small a timeout,
@@ -295,14 +296,21 @@ const tokenize = (cmd) =>
 // A shell string (exec, execSync, `shell: true`) and a shell given a script (cmd /c or /k,
 // powershell or pwsh -Command or any prefix of it, sh, bash, zsh or dash -c) count every git at a
 // command position of the script, nested shells included: at its start, or after && || ; & | ( ) { }
-// $( or a backtick or newline outside quotes, past any VAR=value, env, exec, command, time, do, then,
-// else, if, elif, while, until or ! in front of it, and in PowerShell only past an assignment ($out = ,
-// $out=, $all += and the other assignment operators). Inside double quotes a $(...) runs its script in sh-family shells and PowerShell, and a backtick pair does in sh-family
-// shells; cmd has neither. Single quotes are literal, in cmd too, where the program cmd runs reads
-// them (cmd /c "sh -c '...'"). The limits are listed above GIT_SPAWN_FLOOR.
+// $( or a backtick or newline outside quotes. Each shell reads only its own words in front of a command:
+// - sh-family shells: any VAR=value, exec, command, time, do, then, else, if, elif, while, until or !.
+// - PowerShell: an assignment ($out = , $out=, $all += and the other assignment operators).
+// - cmd: an @ (@git, @ git), and do or else in any case (for %i in (a) do git, if x (y) else git).
+// A program started with no shell reads none of them: it runs its first word.
+// env is a program, not a shell's word: wherever it is the program, the command after its NAME=value
+// settings counts, started with no shell. Inside double quotes a $(...) runs its script in sh-family
+// shells and PowerShell, and a backtick pair does in sh-family shells; cmd has neither. Single quotes
+// are literal, in cmd too, where the program cmd runs reads them (cmd /c "sh -c '...'"). The limits
+// are listed above GIT_SPAWN_FLOOR.
 const SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
 const POWERSHELLS = new Set(["powershell", "pwsh"]);
-const LEADING_WORDS = new Set(["env", "exec", "command", "time", "do", "then", "else", "if", "elif", "while", "until", "!"]);
+const SH_WORDS = new Set(["exec", "command", "time", "do", "then", "else", "if", "elif", "while", "until", "!"]);
+const CMD_WORDS = new Set(["do", "else"]);
+const SETTING = /^[A-Za-z_]\w*=/; // VAR=value: sh's assignment in front of a command, and env's settings
 const PS_OPERATOR = /^(?:[-+*/%]|\?\?)?=/;
 const PS_ASSIGNMENT = /^\$[A-Za-z_][\w:]*(?:[-+*/%]|\?\?)?=/;
 
@@ -334,20 +342,29 @@ function scriptOf(prog, args) {
 export function gitSpawnsOf(argv, dialect = null) {
   const words = argv.map(String);
   const powershell = dialect === "powershell";
+  const cmd = dialect === "cmd";
+  const sh = dialect === "sh";
   let i = 0;
   while (i < words.length) {
     // PowerShell's assignment, spaced or not: $out = git ..., $out=git ..., $all += git ...
     if (powershell && /^\$[A-Za-z_][\w:]*$/.test(words[i]) && PS_OPERATOR.test(words[i + 1] ?? "")) words.splice(i, 2, words[i] + words[i + 1]);
-    const value = powershell ? words[i].replace(PS_ASSIGNMENT, "") : words[i];
+    // What a word leaves once its shell reads a prefix off it: PowerShell an assignment, cmd an @.
+    const value = powershell ? words[i].replace(PS_ASSIGNMENT, "") : cmd ? words[i].replace(/^@+/, "") : words[i];
     if (value !== words[i]) {
       if (value) words[i] = value;
       else i += 1;
-    } else if (LEADING_WORDS.has(words[i]) || /^[A-Za-z_]\w*=/.test(words[i])) i += 1;
+    } else if (sh && (SH_WORDS.has(words[i]) || SETTING.test(words[i]))) i += 1;
+    else if (cmd && CMD_WORDS.has(words[i].toLowerCase())) i += 1;
     else break;
   }
   if (i >= words.length) return 0;
   const prog = programOf(words[i]);
   if (prog === "git") return 1;
+  if (prog === "env") {
+    let at = i + 1;
+    while (at < words.length && SETTING.test(words[at])) at += 1;
+    return gitSpawnsOf(words.slice(at));
+  }
   const script = scriptOf(prog, words.slice(i + 1));
   return script == null ? 0 : gitInvocations(script, dialectOf(prog));
 }
