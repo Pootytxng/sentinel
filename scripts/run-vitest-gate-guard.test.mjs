@@ -120,6 +120,7 @@ describe("scripts/run-vitest.mjs routes every run through the queue", () => {
 // stamps when it started and what marker it was handed, so no case starts a real suite.
 
 const DRIVER = `
+console.log("STARTED " + Date.now());
 const [argsJson, name, stateDir, timeout, mode] = process.argv.slice(2);
 const { runQueued } = await import(${JSON.stringify(libUrl)});
 console.log("PID " + process.pid);
@@ -174,20 +175,31 @@ const cleanEnv = (marker) => {
   return env;
 };
 
+// Every spawned child keeps what it printed, when it was spawned, and whether its output is complete
+// ("close": the child and every grandchild holding its pipes are gone), so a wait on it can say why
+// it failed (#596).
+const track = (child, spawnedAt) => {
+  child.spawnedAt = spawnedAt;
+  child.out = "";
+  child.err = "";
+  child.closed = false;
+  child.stdout.on("data", (chunk) => (child.out += chunk));
+  child.stderr.on("data", (chunk) => (child.err += chunk));
+  child.once("close", () => (child.closed = true));
+  child.done = new Promise((resolve) => child.once("exit", (code) => resolve({ code, stdout: child.out, stderr: child.err })));
+  live.add(child);
+  return child;
+};
+
 const drive = (testCase, args, { timeout = 60, marker, mode = "" } = {}) => {
+  const spawnedAt = Date.now();
   const child = spawn(process.execPath, [driverPath, JSON.stringify(args), testCase.name, testCase.stateDir, String(timeout), mode], {
     cwd: root,
     env: cleanEnv(marker),
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  child.out = "";
-  child.err = "";
-  child.stdout.on("data", (chunk) => (child.out += chunk));
-  child.stderr.on("data", (chunk) => (child.err += chunk));
-  child.done = new Promise((resolve) => child.once("exit", (code) => resolve({ code, stdout: child.out, stderr: child.err })));
-  live.add(child);
-  return child;
+  return track(child, spawnedAt);
 };
 
 const hold = async (testCase, label, timeoutSeconds = 60) => {
@@ -200,10 +212,32 @@ const release = async (lease) => {
   return lease.release();
 };
 
-const waitFor = async (predicate, what, timeoutMs = 60_000) => {
-  const deadline = Date.now() + timeoutMs;
+// #596: this wait once failed a gate with nothing but "timed out waiting for the full run to report
+// the gate busy" -- no way to tell a slow start from a run that never queued or had already exited,
+// or a starved child from a starved test worker. A failed wait now says all of it: the child's state
+// and age, everything it printed, and the widest gap between this worker's own looks. A child whose
+// output is complete fails the wait at once, since nothing more can arrive.
+const clip = (text) => JSON.stringify(text.length > 2000 ? `...${text.slice(-2000)}` : text);
+const childState = (child) => {
+  const state = child.exitCode !== null || child.signalCode !== null ? `exited (${child.signalCode ?? `code ${child.exitCode}`})` : "still running";
+  // The driver stamps its first line, which splits "node never came up" from "the holder never spoke".
+  const up = /^STARTED (\d+)/m.exec(child.out);
+  const boot = up ? `; node was up ${Number(up[1]) - child.spawnedAt}ms after spawn` : "";
+  return `child pid ${child.pid} ${state}, ${Date.now() - child.spawnedAt}ms after spawn${boot}\n  stdout: ${clip(child.out)}\n  stderr: ${clip(child.err)}`;
+};
+const waitFor = async (predicate, what, { child = null, timeoutMs = 60_000 } = {}) => {
+  const started = Date.now();
+  const deadline = started + timeoutMs;
+  let last = started;
+  let widestGap = 0;
   while (!predicate()) {
-    if (Date.now() >= deadline) throw new Error(`timed out waiting for ${what}`);
+    const now = Date.now();
+    widestGap = Math.max(widestGap, now - last);
+    last = now;
+    const over = child?.closed ? "its output ended" : now >= deadline ? "timed out" : null;
+    if (over) {
+      throw new Error(`${over} waiting for ${what} after ${now - started}ms (widest gap between looks ${widestGap}ms)${child ? `\n  ${childState(child)}` : ""}`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 };
@@ -217,8 +251,8 @@ describe.runIf(process.platform === "win32")("a full ad-hoc suite queues on the 
     const testCase = makeCase();
     const peer = await hold(testCase, "verify-local.ps1 in peer-lane");
     const run = drive(testCase, ["run"]);
-    await waitFor(() => /TEST GATE: busy/.test(run.err), "the full run to report the gate busy");
-    await waitFor(() => /TEST GATE: still queued after \d+s/.test(run.err), "a still-queued notice");
+    await waitFor(() => /TEST GATE: busy/.test(run.err), "the full run to report the gate busy", { child: run });
+    await waitFor(() => /TEST GATE: still queued after \d+s/.test(run.err), "a still-queued notice", { child: run });
     expect(run.err).toContain(`held by pid ${peer.pid} (verify-local.ps1 in peer-lane)`);
     expect(run.out).not.toMatch(/^LAUNCHED /m);
 
@@ -278,7 +312,7 @@ describe.runIf(process.platform === "win32")("a full ad-hoc suite queues on the 
   it("lets go of the gate when the run dies mid-suite, without leaving it abandoned", async () => {
     const testCase = makeCase();
     const run = drive(testCase, ["run"], { mode: "hang" });
-    await waitFor(() => /^LAUNCHED /m.test(run.out), "the full run to start its suite");
+    await waitFor(() => /^LAUNCHED /m.test(run.out), "the full run to start its suite", { child: run });
     run.kill();
     await run.done;
     // The holder saw its stdin close and released: the next taker gets it without a takeover.
@@ -340,5 +374,30 @@ describe.runIf(process.platform === "win32")("a full ad-hoc suite queues on the 
     const outcome = await holdWithUnwritableStderr(`${testCase.name}\\not-a-name`, testCase.stateDir);
     expect(outcome.gaveUp, outcome.message).toBe(false);
     expect(outcome.message).toContain("(code 4)");
+  });
+});
+
+// #596: the wait's own failure is the only evidence a flaky gate leaves, so it is pinned too.
+describe("a failed wait on a child says what that child was doing", () => {
+  const node = (code) => track(spawn(process.execPath, ["-e", code], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }), Date.now());
+  const failure = (promise) => promise.then(() => null, (error) => error.message);
+
+  it("fails at once, naming the exit and everything printed, when the child's output has ended", async () => {
+    const child = node("console.log('STARTED ' + Date.now()); console.log('said on stdout'); console.error('said on stderr'); process.exit(5)");
+    await new Promise((resolve) => child.once("close", resolve));
+    const message = await failure(waitFor(() => false, "a line that never comes", { child }));
+    expect(message).toMatch(/^its output ended waiting for a line that never comes after \d+ms \(widest gap between looks \d+ms\)/);
+    expect(message).toMatch(/child pid \d+ exited \(code 5\), \d+ms after spawn; node was up -?\d+ms after spawn\n/);
+    expect(message).toContain("said on stdout");
+    expect(message).toContain("said on stderr");
+  });
+
+  it("times out on a child that is still running, and says so", async () => {
+    const child = node("console.error('still here'); setTimeout(() => {}, 60_000)");
+    await waitFor(() => /still here/.test(child.err), "the child to start", { child });
+    const message = await failure(waitFor(() => false, "a line that never comes", { child, timeoutMs: 200 }));
+    expect(message).toMatch(/^timed out waiting for a line that never comes after \d+ms/);
+    expect(message).toMatch(/child pid \d+ still running, \d+ms after spawn\n/);
+    expect(message).toContain("still here");
   });
 });
