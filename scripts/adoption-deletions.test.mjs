@@ -4,15 +4,17 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   LOG_FORMAT,
+  UNREADABLE_REASON,
   WATCHED,
   analyzeLog,
   collectDeletions,
   formatReport,
   parseDiff,
+  rawTouched,
   run,
   splitLog,
   truncatedAt,
@@ -41,7 +43,7 @@ const adoption = patch(HANDOFF, [
 ]);
 
 const fake = (answers) => (args) => {
-  const key = args[0];
+  const key = args.find((a) => !a.startsWith("--")); // skip global options such as --no-literal-pathspecs
   const a = answers[key];
   if (a instanceof Error) throw a;
   if (a === undefined) throw new Error(`unexpected git ${args.join(" ")}`);
@@ -159,6 +161,71 @@ describe("binary diff of a watched doc — NOT MEASURED, never a false clean", (
   });
 });
 
+describe("a listed commit whose watched diff cannot be read — NOT MEASURED, never dropped", () => {
+  // `git log` is pathspec-limited, so every listed commit touches a watched doc. A user's textconv
+  // (or any config that hides the patch) leaves such a commit with no watched header at all.
+  const raw = (file) => `:100644 100644 1111111 2222222 M\t${file}`;
+  const log = [
+    "\0commit eeeeeeeeeeee textconv hid the patch",
+    "",
+    "\0commit ffffffffffff raw names the doc, no header",
+    "",
+    raw(HANDOFF),
+    "",
+    "\0commit 111111111111 header under a cwd-relative path",
+    patch("SESSION_HANDOFF.md", ["@@ -2 +1,0 @@", "-lost"]),
+    "\0commit 222222222222 one of two touched docs hidden",
+    raw(HANDOFF),
+    raw(DISPO),
+    patch(DISPO, ["@@ -2 +1,0 @@", "-lost row"]),
+    "\0commit 333333333333 mode-only change",
+    raw(HANDOFF),
+    `diff --git a/${HANDOFF} b/${HANDOFF}`,
+    "old mode 100644",
+    "new mode 100755",
+  ].join("\n");
+
+  it("keeps every commit and marks the unreadable ones NOT MEASURED, whole-commit or per file", () => {
+    const commits = analyzeLog(log);
+    expect(commits.map((c) => c.sha.slice(0, 4))).toEqual(["eeee", "ffff", "1111", "2222", "3333"]);
+    expect(commits[0].notMeasured).toBe(UNREADABLE_REASON);
+    expect(commits[1].files).toEqual([{ file: HANDOFF, lines: [], notMeasured: UNREADABLE_REASON }]);
+    expect(commits[2].notMeasured).toBe(UNREADABLE_REASON);
+    expect(commits[3].files.map((f) => [f.file, f.notMeasured ?? null])).toEqual([
+      [HANDOFF, UNREADABLE_REASON],
+      [DISPO, null],
+    ]);
+    expect(commits[4].notMeasured).toBeUndefined();
+    expect(commits[4].files).toEqual([]);
+  });
+
+  it("prints NOT MEASURED for them and never '(no lines deleted)'; a mode-only change stays measured", () => {
+    const out = formatReport("r", analyzeLog(log));
+    expect(out).toMatch(/^adoption-deletions: NOT MEASURED \(r\) — 4 watched file diff\(s\) could not be read/);
+    expect(out).not.toMatch(/no commit touches/);
+    expect(out).toContain(`eeeeeeeeee textconv hid the patch\n    NOT MEASURED — ${UNREADABLE_REASON}`);
+    expect(out).toContain(`ffffffffff raw names the doc, no header\n    ${HANDOFF}: NOT MEASURED`);
+    expect(out).toContain(`1111111111 header under a cwd-relative path\n    NOT MEASURED`);
+    expect(out).toContain("-L2: lost row");
+    for (const sha of ["eeeeeeeeee", "ffffffffff", "1111111111", "2222222222"])
+      expect(out).not.toMatch(new RegExp(`${sha}[^\n]*\n\\s+\\(no lines deleted\\)`));
+    expect(out).toContain("3333333333 mode-only change\n    (no lines deleted)");
+  });
+
+  it("marks a watched header with no hunks NOT MEASURED, but keeps an empty-file create measured", () => {
+    const bare = [`diff --git a/${HANDOFF} b/${HANDOFF}`, "index 1111111..2222222 100644"].join("\n");
+    expect(collectDeletions(bare)).toEqual([{ file: HANDOFF, lines: [], notMeasured: UNREADABLE_REASON }]);
+    const empty = [`diff --git a/${DISPO} b/${DISPO}`, "new file mode 100644", "index 0000000..e69de29"].join("\n");
+    expect(collectDeletions(empty)).toEqual([]);
+  });
+
+  it("reads raw paths only before the first diff header, so document content cannot add one", () => {
+    const text = [raw(DISPO), patch(DISPO, ["@@ -0,0 +1 @@", `+${raw(HANDOFF)}`])].join("\n");
+    expect([...rawTouched(text)]).toEqual([DISPO]);
+    expect(collectDeletions(text)).toEqual([]);
+  });
+});
+
 describe("run — honest measurement, never a silent pass, never blocks", () => {
   const LOG = `\0commit ${"a".repeat(40)} adopt\n${adoption}\n`;
 
@@ -190,6 +257,10 @@ describe("run — honest measurement, never a silent pass, never blocks", () => 
     expect(logArgs).toContain("base..HEAD");
     expect(logArgs).toContain("--diff-merges=first-parent");
     expect(logArgs).toContain("--no-relative");
+    expect(logArgs[0]).toBe("--no-literal-pathspecs");
+    expect(logArgs.slice(1, 3)).toEqual(["log", "-p"]);
+    expect(logArgs).toContain("--no-textconv");
+    expect(logArgs).toContain("--raw");
     expect(logArgs.slice(-2)).toEqual(WATCHED.map((path) => `:(top)${path}`));
     expect(out).toContain(`-L5: ${RETRACTION}`);
   });
@@ -207,25 +278,47 @@ describe("CLI smoke against the real tree", () => {
     expect(out).toMatch(/^adoption-deletions: (NOT MEASURED|.* — (measured|\d+ commit))/);
   });
 
-  // 4 git spawns here plus the CLI's own log, rev-list and rev-parse: 7 in all, so this test carries
-  // its own timeout instead of leaning on the suite-wide testTimeout.
+  // One temp repo shared by the three config/env cases below: 5 git spawns to build it, then each CLI
+  // run adds its own log, rev-list and rev-parse (14 in all), so the block carries its own timeout
+  // instead of leaning on the suite-wide testTimeout.
   const GIT_SPAWN_TIMEOUT_MS = 60_000;
 
-  it("anchors the watched paths at the repo root, so a run from docs/ still lists the deletion — even under diff.relative=true", () => {
-    const repo = mkdtempSync(join(tmpdir(), "adoption-deletions-"));
-    // A git hook's GIT_DIR / GIT_INDEX_FILE would point both git and the CLI back at this checkout.
-    const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, ...inherited } = process.env;
-    const env = {
-      ...inherited,
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_CONFIG_GLOBAL: join(repo, "absent-global-gitconfig"),
-      GIT_AUTHOR_NAME: "t",
-      GIT_AUTHOR_EMAIL: "t@t",
-      GIT_COMMITTER_NAME: "t",
-      GIT_COMMITTER_EMAIL: "t@t",
+  describe("temp repo: config and env that once turned a deletion into a clean pass", () => {
+    let repo;
+    let env;
+    const cli = (cwd, extraEnv) =>
+      execFileSync(process.execPath, [SCRIPT, "HEAD~2..HEAD"], { cwd, env: { ...env, ...extraEnv }, encoding: "utf8" });
+    // GIT_CONFIG_* env triples add config without a spawn.
+    const config = (pairs) =>
+      Object.fromEntries([
+        ["GIT_CONFIG_COUNT", String(pairs.length)],
+        ...pairs.flatMap(([k, v], i) => [
+          [`GIT_CONFIG_KEY_${i}`, k],
+          [`GIT_CONFIG_VALUE_${i}`, v],
+        ]),
+      ]);
+    const expectDeletionAndUtf16 = (out) => {
+      expect(out).toContain(`-L2: ${RETRACTION}`);
+      expect(out).not.toContain("no commit touches");
+      // The UTF-16 rewrite commit is NOT MEASURED, so the run as a whole is not a clean pass.
+      expect(out).toMatch(/^adoption-deletions: NOT MEASURED/);
+      expect(out).toMatch(/utf-16 rewrite\n    docs\/SESSION_HANDOFF\.md: NOT MEASURED/);
     };
-    const git = (...args) => execFileSync("git", args, { cwd: repo, env, stdio: "pipe" });
-    try {
+
+    beforeAll(() => {
+      repo = mkdtempSync(join(tmpdir(), "adoption-deletions-"));
+      // A git hook's GIT_DIR / GIT_INDEX_FILE would point both git and the CLI back at this checkout.
+      const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_LITERAL_PATHSPECS, ...inherited } = process.env;
+      env = {
+        ...inherited,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: join(repo, "absent-global-gitconfig"),
+        GIT_AUTHOR_NAME: "t",
+        GIT_AUTHOR_EMAIL: "t@t",
+        GIT_COMMITTER_NAME: "t",
+        GIT_COMMITTER_EMAIL: "t@t",
+      };
+      const git = (...args) => execFileSync("git", args, { cwd: repo, env, stdio: "pipe" });
       mkdirSync(join(repo, "docs"));
       const doc = join(repo, "docs", "SESSION_HANDOFF.md");
       writeFileSync(doc, `keep\n${RETRACTION}\n`);
@@ -234,18 +327,30 @@ describe("CLI smoke against the real tree", () => {
       git("commit", "-q", "-m", "seed");
       writeFileSync(doc, "keep\n");
       git("commit", "-q", "-a", "-m", "adopt");
-      // diff.relative=true via the GIT_CONFIG_* env triple (no extra spawn) would make the CLI's diff
-      // headers cwd-relative (a/SESSION_HANDOFF.md) unless it passes --no-relative.
-      const cliEnv = { ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "diff.relative", GIT_CONFIG_VALUE_0: "true" };
-      const out = execFileSync(process.execPath, [SCRIPT, "HEAD~1..HEAD"], {
-        cwd: join(repo, "docs"),
-        env: cliEnv,
-        encoding: "utf8",
-      });
-      expect(out).toContain(`-L2: ${RETRACTION}`);
-      expect(out).not.toContain("no commit touches");
-    } finally {
-      rmSync(repo, { recursive: true, force: true });
-    }
-  }, GIT_SPAWN_TIMEOUT_MS);
+      // A PowerShell `>` rewrite: UTF-16LE with a BOM, so git classes the new blob as binary.
+      writeFileSync(doc, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("keep\n", "utf16le")]));
+      git("commit", "-q", "-a", "-m", "utf-16 rewrite");
+      writeFileSync(join(repo, "hide.attributes"), "*.md diff=hide\n");
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    afterAll(() => {
+      if (repo) rmSync(repo, { recursive: true, force: true });
+    });
+
+    it("anchors the watched paths at the repo root, so a run from docs/ still lists the deletion — even under diff.relative=true", () => {
+      expectDeletionAndUtf16(cli(join(repo, "docs"), config([["diff.relative", "true"]])));
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("ignores a user's textconv (core.attributesFile `*.md diff=hide` + diff.hide.textconv) that empties the patch", () => {
+      const textconv = config([
+        ["core.attributesFile", join(repo, "hide.attributes")],
+        ["diff.hide.textconv", "true"],
+      ]);
+      expectDeletionAndUtf16(cli(repo, textconv));
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("keeps :(top) magic under GIT_LITERAL_PATHSPECS=1", () => {
+      expectDeletionAndUtf16(cli(repo, { GIT_LITERAL_PATHSPECS: "1" }));
+    }, GIT_SPAWN_TIMEOUT_MS);
+  });
 });
