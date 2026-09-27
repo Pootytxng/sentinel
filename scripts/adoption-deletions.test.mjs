@@ -189,6 +189,7 @@ describe("run — honest measurement, never a silent pass, never blocks", () => 
     const out = run([], git, () => "");
     expect(logArgs).toContain("base..HEAD");
     expect(logArgs).toContain("--diff-merges=first-parent");
+    expect(logArgs).toContain("--no-relative");
     expect(logArgs.slice(-2)).toEqual(WATCHED.map((path) => `:(top)${path}`));
     expect(out).toContain(`-L5: ${RETRACTION}`);
   });
@@ -210,7 +211,7 @@ describe("CLI smoke against the real tree", () => {
   // its own timeout instead of leaning on the suite-wide testTimeout.
   const GIT_SPAWN_TIMEOUT_MS = 60_000;
 
-  it("anchors the watched paths at the repo root, so a run from docs/ still lists the deletion", () => {
+  it("anchors the watched paths at the repo root, so a run from docs/ still lists the deletion — even under diff.relative=true", () => {
     const repo = mkdtempSync(join(tmpdir(), "adoption-deletions-"));
     // A git hook's GIT_DIR / GIT_INDEX_FILE would point both git and the CLI back at this checkout.
     const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, ...inherited } = process.env;
@@ -233,9 +234,12 @@ describe("CLI smoke against the real tree", () => {
       git("commit", "-q", "-m", "seed");
       writeFileSync(doc, "keep\n");
       git("commit", "-q", "-a", "-m", "adopt");
+      // diff.relative=true via the GIT_CONFIG_* env triple (no extra spawn) would make the CLI's diff
+      // headers cwd-relative (a/SESSION_HANDOFF.md) unless it passes --no-relative.
+      const cliEnv = { ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "diff.relative", GIT_CONFIG_VALUE_0: "true" };
       const out = execFileSync(process.execPath, [SCRIPT, "HEAD~1..HEAD"], {
         cwd: join(repo, "docs"),
-        env,
+        env: cliEnv,
         encoding: "utf8",
       });
       expect(out).toContain(`-L2: ${RETRACTION}`);
