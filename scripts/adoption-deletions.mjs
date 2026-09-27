@@ -12,6 +12,9 @@
 //
 // Honest measurement: with no merge base (CI fetches --depth=1) or no readable history it prints an
 // explicit "not measured" line instead of a clean pass — a silent pass is exactly #322's failure.
+// The same holds per file: a watched doc whose diff git reports as binary (a PowerShell `>` rewrite
+// to UTF-16 puts NUL bytes in it) yields no hunks, so it is reported NOT MEASURED, never "no lines
+// deleted". `--text` is deliberately not used: NUL bytes in the patch could collide with COMMIT_MARK.
 //
 // Usage: node scripts/adoption-deletions.mjs [<range>]   (default: $(git merge-base origin/main HEAD)..HEAD)
 
@@ -24,6 +27,9 @@ export const WATCHED = Object.freeze(["docs/SESSION_HANDOFF.md", "docs/BRANCH_DI
 // A line that begins with NUL cannot be a diff line, so it cannot be forged by document content.
 const COMMIT_MARK = "\0commit ";
 export const LOG_FORMAT = "%x00commit %H %s";
+
+const BINARY = /^Binary files (.+) and (.+) differ$/;
+export const BINARY_REASON = "binary diff (likely an encoding change, e.g. a UTF-16 rewrite) — its deletions cannot be read";
 
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
@@ -43,7 +49,7 @@ export function parseDiff(text) {
   let oldNo = 0;
   let newNo = 0;
   const entry = (path) => {
-    if (!files.has(path)) files.set(path, { removed: [], added: [] });
+    if (!files.has(path)) files.set(path, { removed: [], added: [], binary: false });
     return files.get(path);
   };
   for (const raw of text.split("\n")) {
@@ -75,7 +81,18 @@ export function parseDiff(text) {
       current = m ? entry(unquote(m[1])) : null;
       continue;
     }
+    const bin = BINARY.exec(line);
+    if (bin) {
+      // Marks the file under its "diff --git" path; when that header was missing, falls back to the paths the line names.
+      if (current) current.binary = true;
+      else
+        for (const [p, pre] of [[bin[1], "a/"], [bin[2], "b/"]])
+          if (p !== "/dev/null") entry(unquote(p).replace(new RegExp(`^${pre}`), "")).binary = true;
+      continue;
+    }
     if (line.startsWith("--- ")) {
+      // Files a rename's hunks under the OLD path. That is correct only because run() passes
+      // --no-renames, so git never emits a rename pair here; drop that flag and this must key on "+++".
       const p = line.slice(4);
       if (p !== "/dev/null") {
         current = entry(unquote(p).replace(/^a\//, ""));
@@ -107,7 +124,12 @@ export function collectDeletions(diffText, watched = WATCHED) {
   const out = [];
   for (const file of watched) {
     const f = parsed.get(file);
-    if (!f || f.removed.length === 0) continue;
+    if (!f) continue;
+    if (f.binary) {
+      out.push({ file, lines: [], notMeasured: BINARY_REASON });
+      continue;
+    }
+    if (f.removed.length === 0) continue;
     const pool = new Map();
     for (const a of f.added) pool.set(a.text, (pool.get(a.text) ?? 0) + 1);
     const lines = f.removed.map((r) => {
@@ -155,11 +177,23 @@ export function formatReport(range, commits) {
   }
   let lost = 0;
   let moved = 0;
-  for (const c of commits) for (const f of c.files) for (const l of f.lines) l.moved ? moved++ : lost++;
-  out.push(
-    `adoption-deletions: ${range} — ${commits.length} commit(s) touch the watched docs; ` +
-      `${lost} line(s) deleted, ${moved} moved within the file. Review every deleted line before adopting.`,
-  );
+  let unmeasured = 0;
+  for (const c of commits)
+    for (const f of c.files) {
+      if (f.notMeasured) unmeasured++;
+      for (const l of f.lines) l.moved ? moved++ : lost++;
+    }
+  if (unmeasured) {
+    out.push(
+      `adoption-deletions: NOT MEASURED (${range}) — ${unmeasured} watched file diff(s) could not be read; ` +
+        `of the rest, ${lost} line(s) deleted, ${moved} moved. This is not a clean pass; review the unmeasured files by hand.`,
+    );
+  } else {
+    out.push(
+      `adoption-deletions: ${range} — ${commits.length} commit(s) touch the watched docs; ` +
+        `${lost} line(s) deleted, ${moved} moved within the file. Review every deleted line before adopting.`,
+    );
+  }
   for (const c of commits) {
     out.push(`  ${c.sha.slice(0, 10)} ${c.subject}`);
     if (c.files.length === 0) {
@@ -167,6 +201,10 @@ export function formatReport(range, commits) {
       continue;
     }
     for (const f of c.files) {
+      if (f.notMeasured) {
+        out.push(`    ${f.file}: NOT MEASURED — ${f.notMeasured}`);
+        continue;
+      }
       const fl = f.lines.filter((l) => !l.moved).length;
       out.push(`    ${f.file}: ${fl} deleted, ${f.lines.length - fl} moved`);
       for (const l of f.lines) out.push(`      -L${l.line}${l.moved ? " [moved]" : ""}: ${l.text}`);
