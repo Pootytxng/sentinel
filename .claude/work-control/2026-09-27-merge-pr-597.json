@@ -1,0 +1,73 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "kind": "lane",
+  "issue": 596,
+  "pr": 597,
+  "branch": "claude/596-gate-guard-busy-wait",
+  "currentHead": "60b292617fd01d947403db92b956309c8e170685",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/596#issuecomment-5852662040",
+  "leaseEvidenceNote": "Landing claim by session 0dfb64a4, which adopted the released #596 row and authored the round-2 fix 60b29261. c104424c was authored by claude-code session 13f0417f under its own released lease.",
+  "inheritedWork": true,
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "Both commits in the delta (c104424c, 60b29261) are claude-code, across sequential leases. Codex reviewed and authored nothing.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "The landing claim names the PR's one-file delta plus this receipt path; no other live claim holds them.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "466/466 test files; 7742 passed, one expected failure, nine skipped.",
+      "evidence": "logs/verify-local-2026-09-27T06-06-01Z.log (SHA-256 72656A70BD2EE52AB7809398E584417A077E12304AC969ECDF5C64A8394F60E1); push log logs/push-597-r2.log (LOCAL CHECK RESULT: PASS, c104424c..60b29261 pushed, exit 0)",
+      "head": "60b292617fd01d947403db92b956309c8e170685"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-27T06-06-01Z.log (SHA-256 72656A70BD2EE52AB7809398E584417A077E12304AC969ECDF5C64A8394F60E1); push log logs/push-597-r2.log",
+      "head": "60b292617fd01d947403db92b956309c8e170685"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1355 passed, zero failed, 24 ignored.",
+      "evidence": "logs/verify-local-2026-09-27T06-06-01Z.log (SHA-256 72656A70BD2EE52AB7809398E584417A077E12304AC969ECDF5C64A8394F60E1); push log logs/push-597-r2.log",
+      "head": "60b292617fd01d947403db92b956309c8e170685"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-27T06-06-01Z.log (SHA-256 72656A70BD2EE52AB7809398E584417A077E12304AC969ECDF5C64A8394F60E1); push log logs/push-597-r2.log",
+      "head": "60b292617fd01d947403db92b956309c8e170685"
+    }
+  ],
+  "gateEvidenceNote": "Native pre-push gate (scripts/verify-local.ps1) returned LOCAL CHECK RESULT: PASS and the push exited zero at the exact PR head. Main then moved to 8f72c416 (#580: work-control receipts and two new receipt tests, no overlap with this PR's file). Rebasing would need a force-push, so the PR head was kept; instead the local merge c07b59c8 (parents 60b29261, 8f72c416) ran the same full gate: PASS, 468/468 test files, 7764 passed, 1355 Rust tests, clippy clean (logs/verify-local-2026-09-27T06-23-46Z.log, SHA-256 E62A90CF9012A17B174623A86BFF5FD86D1CCDFF2BEE47CE7C072D6B08530DB4). The local merge was then reset away; it was never pushed.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "status": "passed",
+    "head": "60b292617fd01d947403db92b956309c8e170685",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/597#issuecomment-5853350061",
+    "reviewerNote": "Codex (`codex exec -m gpt-5.6-sol -s read-only`, run by claude-code, output posted verbatim) reviewed two heads. Round 1 at c104424c returned FAIL (https://github.com/Pootytxng/sentinel/pull/597#issuecomment-5853209488): one blocking finding, the output clip kept only the tail, and two non-blocking notes. Commit 60b29261 answered all three; round 2 at 60b29261 returned PASS with no findings and re-checked the fail-fast ordering, unchanged assertions and timeouts, self-test flake risk and one-file scope. Its sandbox could not start local git, so it read base, head and scope from GitHub for the same SHAs. Codex authored no commit."
+  },
+  "closingNote": "Land PR #597 through scripts/land-pr.mjs. closingIssuesReferences is empty (the PR says Refs #596); #596 stays open because the root cause of the 60 s miss is still unknown."
+}
