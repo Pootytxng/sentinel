@@ -127,6 +127,36 @@ describe("per-commit log analysis", () => {
   });
 });
 
+describe("binary diff of a watched doc — NOT MEASURED, never a false clean", () => {
+  // A PowerShell `>` / Out-File rewrite writes UTF-16 with NUL bytes; git then prints no hunks.
+  const binary = (file) =>
+    [`diff --git a/${file} b/${file}`, "index 1111111..2222222 100644", `Binary files a/${file} and b/${file} differ`].join("\n");
+  const log = [
+    "\0commit cccccccccccc re-save handoff from PowerShell",
+    binary(HANDOFF),
+    "\0commit dddddddddddd adopt dispositions",
+    patch(DISPO, ["@@ -2 +1,0 @@", "-lost row"]),
+  ].join("\n");
+
+  it("marks the binary file NOT MEASURED instead of listing zero deletions", () => {
+    expect(parseDiff(binary(HANDOFF)).get(HANDOFF).binary).toBe(true);
+    expect(collectDeletions(binary(HANDOFF))).toEqual([{ file: HANDOFF, lines: [], notMeasured: expect.stringMatching(/binary diff/) }]);
+  });
+
+  it("prints the commit's file as NOT MEASURED with the reason, and the summary is not a clean pass", () => {
+    const out = formatReport("r", analyzeLog(log));
+    expect(out).toMatch(/^adoption-deletions: NOT MEASURED \(r\) — 1 watched file diff\(s\) could not be read/);
+    expect(out).toMatch(/not a clean pass/);
+    expect(out).toContain(`cccccccccc re-save handoff from PowerShell\n    ${HANDOFF}: NOT MEASURED — binary diff (likely an encoding change`);
+    expect(out).not.toMatch(/cccccccccc[^\n]*\n\s+\(no lines deleted\)/);
+    expect(out).toContain("-L2: lost row");
+  });
+
+  it("still marks a binary diff whose diff --git header is missing, by the paths the line names", () => {
+    expect(parseDiff(`Binary files /dev/null and b/${DISPO} differ`).get(DISPO).binary).toBe(true);
+  });
+});
+
 describe("run — honest measurement, never a silent pass, never blocks", () => {
   const LOG = `\0commit ${"a".repeat(40)} adopt\n${adoption}\n`;
 
