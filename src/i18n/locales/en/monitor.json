@@ -36,6 +36,7 @@
       "smoothHeadline": "Last session ran smooth — {{game}} at {{fps}} fps average.",
       "someDipsHeadline": "Last session had some dips — {{game}}'s 1% lows fell to {{low}} fps against a {{fps}} fps average.",
       "roughHeadline": "Last session ran rough — {{game}}'s 1% lows fell to {{low}} fps against a {{fps}} fps average.",
+      "unmeasuredLowHeadline": "Last session averaged {{fps}} fps in {{game}} — 1% lows weren't measured.",
       "sub": "Measured over {{duration}} · {{samples}} samples · a live estimate, not a benchmark."
     }
   },

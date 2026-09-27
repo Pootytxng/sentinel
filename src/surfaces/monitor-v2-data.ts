@@ -30,14 +30,19 @@ export function monitorVerdict(sessions: SessionSummary[], t: TFunction): Monito
   const game =
     prettyGameName(latest.process_name) || t("monitor.monitorV2.verdict.lastGameFallback");
   const fps = Math.round(latest.avg_fps);
+  // An unmeasured 1% low arrives as 0 (the sampler's "unknown"), missing, or non-finite — the
+  // backend only treats > 0 as known (blackbox.rs). Honest-measurement law: state only the
+  // measured average and say the lows weren't measured, never "fell to 0 fps" (#602).
+  const lowKnown = Number.isFinite(latest.low1_fps_est) && latest.low1_fps_est > 0;
   const low = Math.round(latest.low1_fps_est);
   const grade = shortVerdict(latest);
   // The grade names its evidence in the same breath (V2-9 punch h): shortVerdict grades on the
   // 1%-low/average ratio, so a non-smooth verdict states the lows that earned it — otherwise
   // "ran rough — 336 fps average" argues with itself. The sub's "live estimate" framing covers
   // that the lows are estimated.
-  const headline =
-    grade === "Smooth"
+  const headline = !lowKnown
+    ? t("monitor.monitorV2.verdict.unmeasuredLowHeadline", { game, fps })
+    : grade === "Smooth"
       ? t("monitor.monitorV2.verdict.smoothHeadline", { game, fps })
       : grade === "Some dips"
         ? t("monitor.monitorV2.verdict.someDipsHeadline", { game, low, fps })
