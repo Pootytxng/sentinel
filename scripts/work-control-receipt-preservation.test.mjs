@@ -90,9 +90,11 @@ export function preservationFailures(entries) {
       worktree: e.worktree,
       file: e.file,
       verdict: e.verdict,
-      // The newest commit that carries readable content for a stale shadow, when the sweep found
-      // one; the fix line names it so the reader can restore the record without re-deriving it.
+      // The commit the verdict compared against (see `comparisonTarget`), and whether that commit is
+      // `origin/main`'s tip. The fix line restores from this SAME commit, so the remedy it prints is
+      // the one that clears the verdict — the #606 review finding, where they could differ.
       carrier: e.carrier,
+      onMain: e.onMain === true,
       why:
         e.verdict === "stranded"
           ? "no committed counterpart — this is the only copy of the proof"
@@ -112,22 +114,41 @@ export function judgedReceipts(failures, { own, fleet = fleetMode() } = {}) {
 }
 
 /**
- * #302: WHICH committed copy a stale shadow is restored from, decided from values the sweep has
- * already resolved — no git here, so every branch is provable without a repository.
+ * #302: the ONE commit a receipt is judged against, which is also the one its fix restores from.
+ * Pure: the sweep resolves the candidate copies, this decides.
  *
- * "The committed copy" was ambiguous. The carrier is the newest commit touching the path on ANY ref,
- * and on 2026-09-01 that was `64ef701b`, an UNPUSHED commit on `lane/rule-e-negation`; the operator
- * following the remedy seeded the shared checkout from a branch that might never land, and nothing
- * in the message said so. So:
- *   - `origin/main` carries the file  -> restore from its tip, labelled `(origin/main)`.
- *   - it does not, but a carrier does -> restore from the carrier, labelled with the refs containing
- *     it, and marked `fallback` so the message says in words that this is NOT `origin/main`.
- *   - neither                         -> `null`; the message names no source rather than invent one.
+ *   - `origin/main`'s tip carries the file -> that copy. The canonical record wins over a newer lane.
+ *   - it does not, but some ref does      -> the newest readable carrier on ANY ref, so a receipt
+ *     committed only on a lane still reads as preserved rather than stranded.
+ *   - neither                              -> no target; the receipt is stranded.
+ *
+ * The first cut of #302 judged against the carrier but pointed the fix at `origin/main`. When the two
+ * copies differed the printed remedy could not clear its own failure — #302's own incident, where
+ * the disk already held `origin/main`'s 13284B copy and the 14268B carrier sat on an unpushed lane
+ * (#606 review). One function choosing both is what keeps them from drifting apart again.
+ */
+export function comparisonTarget({ mainTip = null, mainCopy = null, carrier = null, carrierCopy = null } = {}) {
+  if (mainTip && mainCopy !== null && mainCopy !== undefined) return { sha: mainTip, committed: mainCopy, onMain: true };
+  if (carrier && carrierCopy !== null && carrierCopy !== undefined) return { sha: carrier, committed: carrierCopy, onMain: false };
+  return { sha: null, committed: null, onMain: false };
+}
+
+/**
+ * #302: how a stale shadow's restore source is LABELLED, from values the sweep already resolved.
+ * The source is always the failure's own comparison commit (`comparisonTarget`); this only names it.
+ *
+ * "The committed copy" was ambiguous: on 2026-09-01 the commit behind it was `64ef701b`, an UNPUSHED
+ * commit on `lane/rule-e-negation`, and the operator following the remedy seeded the shared checkout
+ * from a branch that might never land with nothing in the message saying so. So:
+ *   - compared against `origin/main`   -> labelled `(origin/main)`.
+ *   - compared against another carrier -> labelled with the refs containing it, and marked
+ *     `fallback` so the message says in words that this is NOT `origin/main`.
+ *   - no commit                        -> `null`; the message names no source rather than invent one.
  * `mainResolved: false` means `origin/main` itself did not resolve (a fetch-less or shallow clone),
  * which the message states instead of claiming `origin/main` was checked and lacks the file.
  */
-export function reconciliationSource({ mainSha = null, mainResolved = true, carrier = null, carrierRefs = [] } = {}) {
-  if (mainSha) return { sha: mainSha, ref: "origin/main", fallback: false };
+export function reconciliationSource({ carrier = null, onMain = false, mainResolved = true, carrierRefs = [] } = {}) {
+  if (carrier && onMain) return { sha: carrier, ref: "origin/main", fallback: false };
   if (carrier) {
     const ref = carrierRefs.length ? carrierRefs.join(", ") : "no named ref contains it";
     return { sha: carrier, ref, fallback: true, mainResolved };
@@ -386,7 +407,9 @@ describe("a work-control receipt survives the worktree it was written in", () =>
     // object and the push carries it — so comparing against `origin/main` alone would redden this
     // guard for the whole life of every lane that fixes it, including the one that added it. That is
     // the muted-guard failure this file's header warns about, and it would land on the author first.
-    // So each receipt is judged against the newest commit that touches it ON ANY REF.
+    // So a receipt `origin/main` does not carry is judged against the newest commit that touches it
+    // ON ANY REF. One `origin/main` DOES carry is judged against that copy (#302): the canonical
+    // record, and the one the fix line restores, so the two can never disagree.
     let anyRefResolves;
     try {
       anyRefResolves = git(["rev-parse", "--verify", "HEAD"]).trim();
@@ -400,6 +423,20 @@ describe("a work-control receipt survives the worktree it was written in", () =>
     // every folder under fleet mode, still throws: an unmeasurable own folder is a broken
     // measurement, never a pass. Failures of the SHARED repository below (rev-list, show) stay
     // fatal everywhere; they are fixable from any folder.
+    // `origin/main`, resolved at most once. Absent (a shallow or fetch-less clone) is not an error: it
+    // is the fallback case, and the fix line says so rather than pretending a carrier is `origin/main`.
+    let mainTip;
+    const originMain = () => {
+      if (mainTip === undefined) {
+        try {
+          mainTip = git(["rev-parse", "--verify", "--quiet", "origin/main^{commit}"]).trim() || null;
+        } catch {
+          mainTip = null;
+        }
+      }
+      return mainTip;
+    };
+
     const fleet = fleetMode();
     const entries = [];
     const unswept = [];
@@ -435,68 +472,63 @@ describe("a work-control receipt survives the worktree it was written in", () =>
         }
       };
       for (const file of uncommittedReceipts(status, isPureRename)) {
-        // Every commit on ANY ref that touches this path, newest first. Empty means the proof has
-        // never been committed anywhere — the stranded case.
-        let carriers;
-        try {
-          carriers = git(["rev-list", "--all", "--", file]).trim().split(/\r?\n/).filter(Boolean);
-        } catch (error) {
-          throw new Error(`could not search the refs for ${file}: ${error.message}`);
+        // `origin/main` first (#302). When it carries the file, that copy is the comparison target
+        // and the ref walk below is skipped entirely — the common case costs one `show`, not a
+        // `rev-list --all`. The leading `./` is the same Git Bash rewrite documented below.
+        const tip = originMain();
+        let mainCopy = null;
+        if (tip) {
+          try {
+            mainCopy = git(["show", `${tip}:./${file}`]);
+          } catch {
+            // Not on `origin/main`'s tip (never landed, or deleted there): fall through to the walk.
+          }
         }
 
         let committed = null;
         let readableCarrier = null;
-        for (const carrier of carriers) {
-          // The leading `./` is not cosmetic. Git Bash on this machine rewrites a bare
-          // `<rev>:<path>` argument into `<rev>;<path>` with backslashes and git rejects it — the
-          // measurement error that made six committed receipts read as missing when #298 was filed.
+        if (mainCopy === null) {
+          // Every commit on ANY ref that touches this path, newest first. Empty means the proof has
+          // never been committed anywhere — the stranded case.
+          let carriers;
           try {
-            committed = git(["show", `${carrier}:./${file}`]);
-            readableCarrier = carrier;
-            break;
-          } catch {
-            // The newest commit touching a path can be the one that DELETED it. Walk back to the
-            // newest commit that actually carries content rather than reading a deletion as absence.
+            carriers = git(["rev-list", "--all", "--", file]).trim().split(/\r?\n/).filter(Boolean);
+          } catch (error) {
+            throw new Error(`could not search the refs for ${file}: ${error.message}`);
+          }
+          for (const carrier of carriers) {
+            // The leading `./` is not cosmetic. Git Bash on this machine rewrites a bare
+            // `<rev>:<path>` argument into `<rev>;<path>` with backslashes and git rejects it — the
+            // measurement error that made six committed receipts read as missing when #298 was filed.
+            try {
+              committed = git(["show", `${carrier}:./${file}`]);
+              readableCarrier = carrier;
+              break;
+            } catch {
+              // The newest commit touching a path can be the one that DELETED it. Walk back to the
+              // newest commit that actually carries content rather than reading a deletion as absence.
+            }
+          }
+          if (carriers.length && committed === null) {
+            // A path with carriers but no readable content anywhere is a broken measurement, and a
+            // broken measurement is never reported as a clean bill of health.
+            throw new Error(`${file} is touched by ${carriers.length} commit(s) but readable in none`);
           }
         }
-        if (carriers.length && committed === null) {
-          // A path with carriers but no readable content anywhere is a broken measurement, and a
-          // broken measurement is never reported as a clean bill of health.
-          throw new Error(`${file} is touched by ${carriers.length} commit(s) but readable in none`);
-        }
+        const target = comparisonTarget({ mainTip: tip, mainCopy, carrier: readableCarrier, carrierCopy: committed });
         entries.push({
           worktree,
           file,
           local: readFileSync(join(worktree, file), "utf8"),
-          committed,
-          carrier: readableCarrier,
+          committed: target.committed,
+          carrier: target.sha,
+          onMain: target.onMain,
         });
       }
     }
 
-    // #302: a stale shadow's remedy names its source. Resolved only for failures, never for the
-    // benign shadows, so a clean sweep spawns no extra git; `origin/main` is resolved at most once.
-    // An absent `origin/main` (a shallow or fetch-less clone) is not an error here — it is the
-    // fallback case, and the message says so rather than pretending a carrier is `origin/main`.
-    let mainTip;
-    const originMain = () => {
-      if (mainTip === undefined) {
-        try {
-          mainTip = git(["rev-parse", "--verify", "--quiet", "origin/main^{commit}"]).trim() || null;
-        } catch {
-          mainTip = null;
-        }
-      }
-      return mainTip;
-    };
-    const carries = (rev, file) => {
-      try {
-        git(["cat-file", "-e", `${rev}:./${file}`]);
-        return true;
-      } catch {
-        return false;
-      }
-    };
+    // #302: a stale shadow's remedy is labelled with where its source lives. The refs lookup runs
+    // only for a failure judged against a non-`origin/main` carrier, so a clean sweep spawns none.
     const refsContaining = (sha) => {
       try {
         return git(["for-each-ref", "--contains", sha, "--format=%(refname:short)", "refs/heads", "refs/remotes"])
@@ -508,10 +540,9 @@ describe("a work-control receipt survives the worktree it was written in", () =>
     };
     const failures = preservationFailures(entries).map((f) => {
       if (f.verdict !== "stale-shadow") return f;
-      const tip = originMain();
-      const mainSha = tip && carries(tip, f.file) ? tip : null;
-      const carrierRefs = !mainSha && f.carrier ? refsContaining(f.carrier) : [];
-      return { ...f, source: reconciliationSource({ mainSha, mainResolved: tip !== null, carrier: f.carrier, carrierRefs }) };
+      const carrierRefs = !f.onMain && f.carrier ? refsContaining(f.carrier) : [];
+      const mainResolved = originMain() !== null;
+      return { ...f, source: reconciliationSource({ carrier: f.carrier, onMain: f.onMain, mainResolved, carrierRefs }) };
     });
     // #488: this folder's failures block; a peer's are warned with the folder and the fix and block
     // only under fleet mode. The fleet is still swept and still printed on every push.
@@ -599,60 +630,94 @@ describe("a work-control receipt survives the worktree it was written in", () =>
   describe("#302: the stale-shadow remedy names its source", () => {
     const MAIN = "f8f87af4e5cb261c8f515493760d2274e3d061f5";
     const LANE = "64ef701b0000000000000000000000000000beef";
-    const failure = (source) => ({
-      worktree: "/w/sentinel",
-      file: ".claude/work-control/2026-09-01-merge-pr-290.json",
-      verdict: "stale-shadow",
-      carrier: LANE,
-      source,
+    const FILE = ".claude/work-control/2026-09-01-merge-pr-290.json";
+    const MAIN_COPY = "m".repeat(13284);
+    const LANE_COPY = "l".repeat(14268);
+    // The sweep's own path from resolved copies to a labelled failure, with no repository: pick the
+    // target, classify against it, label the source from the same commit.
+    const judge = ({ local, mainTip = MAIN, mainCopy = null, carrierCopy = null, mainResolved = true, carrierRefs = [] }) => {
+      const t = comparisonTarget({ mainTip, mainCopy, carrier: LANE, carrierCopy });
+      const failures = preservationFailures([
+        { worktree: "/w/sentinel", file: FILE, local, committed: t.committed, carrier: t.sha, onMain: t.onMain },
+      ]);
+      return failures.map((f) =>
+        f.verdict === "stale-shadow"
+          ? { ...f, source: reconciliationSource({ carrier: f.carrier, onMain: f.onMain, mainResolved, carrierRefs }) }
+          : f,
+      );
+    };
+
+    it("comparisonTarget: origin/main's copy wins over a newer lane carrier; else the carrier; else none", () => {
+      expect(comparisonTarget({ mainTip: MAIN, mainCopy: MAIN_COPY, carrier: LANE, carrierCopy: LANE_COPY })).toEqual({
+        sha: MAIN,
+        committed: MAIN_COPY,
+        onMain: true,
+      });
+      expect(comparisonTarget({ mainTip: MAIN, mainCopy: null, carrier: LANE, carrierCopy: LANE_COPY })).toEqual({
+        sha: LANE,
+        committed: LANE_COPY,
+        onMain: false,
+      });
+      // origin/main unresolved in this checkout: the carrier, never a copy attributed to main.
+      expect(comparisonTarget({ mainTip: null, mainCopy: MAIN_COPY, carrier: LANE, carrierCopy: LANE_COPY }).onMain).toBe(false);
+      expect(comparisonTarget({ mainTip: MAIN, carrier: LANE })).toEqual({ sha: null, committed: null, onMain: false });
+      expect(comparisonTarget()).toEqual({ sha: null, committed: null, onMain: false });
     });
 
-    it("origin/main carries the file: it wins over a newer lane carrier, labelled (origin/main)", () => {
-      const src = reconciliationSource({ mainSha: MAIN, carrier: LANE, carrierRefs: ["lane/rule-e-negation"] });
-      expect(src).toEqual({ sha: MAIN, ref: "origin/main", fallback: false });
-      const fix = receiptFix(failure(src));
-      expect(fix).toContain(`show ${MAIN.slice(0, 12)}:./.claude/work-control/2026-09-01-merge-pr-290.json`);
+    // The #606 review finding, pinned: origin/main and the carrier differ, and the disk already holds
+    // origin/main's copy. The first cut judged against the carrier and printed a no-op restore from
+    // origin/main that could never clear the failure. Now there is no failure to clear.
+    it("disk == origin/main's copy while a newer lane carrier differs: a benign shadow, no restore printed", () => {
+      expect(judge({ local: MAIN_COPY, mainCopy: MAIN_COPY, carrierCopy: LANE_COPY })).toEqual([]);
+    });
+
+    it("disk == the lane copy while origin/main differs: the fix restores origin/main, and applying it clears", () => {
+      const [f] = judge({ local: LANE_COPY, mainCopy: MAIN_COPY, carrierCopy: LANE_COPY, carrierRefs: ["lane/rule-e-negation"] });
+      expect(f.verdict).toBe("stale-shadow");
+      expect(f.source).toEqual({ sha: MAIN, ref: "origin/main", fallback: false });
+      const fix = receiptFix(f);
+      expect(fix).toContain(`show ${MAIN.slice(0, 12)}:./${FILE}`);
       expect(fix).toContain(`source: ${MAIN.slice(0, 12)} (origin/main)`);
       expect(fix).not.toContain(LANE.slice(0, 12));
       expect(fix).not.toMatch(/FALLBACK/);
+      // The why line and the fix name the same commit.
+      expect(f.why).toContain(`14268B here, 13284B committed at ${MAIN.slice(0, 12)})`);
+      // The restore writes the source commit's copy to disk; re-judged, nothing fails.
+      expect(judge({ local: MAIN_COPY, mainCopy: MAIN_COPY, carrierCopy: LANE_COPY })).toEqual([]);
     });
 
-    it("origin/main does not carry it: falls back to the carrier, names its refs, and says so", () => {
-      const src = reconciliationSource({ mainSha: null, carrier: LANE, carrierRefs: ["lane/rule-e-negation"] });
-      expect(src).toEqual({ sha: LANE, ref: "lane/rule-e-negation", fallback: true, mainResolved: true });
-      const fix = receiptFix(failure(src));
+    it("origin/main does not carry it: falls back to the carrier, names its refs, says so, and applying it clears", () => {
+      const [f] = judge({ local: MAIN_COPY, mainCopy: null, carrierCopy: LANE_COPY, carrierRefs: ["lane/rule-e-negation"] });
+      expect(f.source).toEqual({ sha: LANE, ref: "lane/rule-e-negation", fallback: true, mainResolved: true });
+      const fix = receiptFix(f);
       expect(fix).toContain(`show ${LANE.slice(0, 12)}:./`);
       expect(fix).toContain(`source: ${LANE.slice(0, 12)} (lane/rule-e-negation)`);
       expect(fix).toContain("FALLBACK, NOT origin/main: origin/main does not carry this file");
       expect(fix).toContain("only on the ref(s) named");
-      // A checkout where origin/main itself is missing says THAT, not that main was checked.
-      const unresolved = reconciliationSource({ mainResolved: false, carrier: LANE, carrierRefs: ["lane/rule-e-negation"] });
-      expect(unresolved.fallback).toBe(true);
-      expect(receiptFix(failure(unresolved))).toContain("origin/main did not resolve in this checkout");
-      expect(receiptFix(failure(unresolved))).not.toContain("does not carry this file");
       expect(fix).toContain("confirm it will land before seeding a shared checkout");
+      expect(f.why).toContain(`committed at ${LANE.slice(0, 12)})`);
+      expect(judge({ local: LANE_COPY, mainCopy: null, carrierCopy: LANE_COPY })).toEqual([]);
+      // A checkout where origin/main itself is missing says THAT, not that main was checked.
+      const [u] = judge({ local: MAIN_COPY, mainTip: null, carrierCopy: LANE_COPY, mainResolved: false });
+      expect(u.source.fallback).toBe(true);
+      expect(receiptFix(u)).toContain("origin/main did not resolve in this checkout");
+      expect(receiptFix(u)).not.toContain("does not carry this file");
       // An unpushed commit may be reachable from no named ref at all; that is said, not left blank.
       const orphan = reconciliationSource({ carrier: LANE });
       expect(orphan.ref).toBe("no named ref contains it");
-      expect(receiptFix(failure(orphan))).toContain(`${LANE.slice(0, 12)} (no named ref contains it)`);
+      expect(receiptFix({ ...f, source: orphan })).toContain(`${LANE.slice(0, 12)} (no named ref contains it)`);
       // Several refs are all named, so a lane commit that also sits on a remote branch reads as such.
       expect(reconciliationSource({ carrier: LANE, carrierRefs: ["a", "origin/a"] }).ref).toBe("a, origin/a");
     });
 
-    it("neither: no source is invented, and the message says none was resolved", () => {
+    it("neither: the receipt is stranded, no source is invented, and a sourceless fix says none was resolved", () => {
+      expect(judge({ local: MAIN_COPY }).map((f) => f.verdict)).toEqual(["stranded"]);
       expect(reconciliationSource({})).toBeNull();
       expect(reconciliationSource()).toBeNull();
-      const fix = receiptFix(failure(null));
+      const fix = receiptFix({ worktree: "/w/sentinel", file: FILE, verdict: "stale-shadow", source: null });
       expect(fix).toContain("show <carrier>:./");
       expect(fix).toContain("source: NONE resolved");
       expect(fix).not.toContain("origin/main)");
-    });
-
-    it("the why line names the commit its byte count was measured against", () => {
-      const [f] = preservationFailures([
-        { worktree: "/w", file: "r.json", local: "x".repeat(13284), committed: "y".repeat(14268), carrier: LANE },
-      ]);
-      expect(f.why).toContain(`(13284B here, 14268B committed at ${LANE.slice(0, 12)})`);
     });
   });
 });
