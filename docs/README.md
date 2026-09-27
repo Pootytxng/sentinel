@@ -22,6 +22,7 @@ These files own different domains of truth. Do not use one as a substitute for a
 - [product/RISK_MODEL.md](product/RISK_MODEL.md) — Safe / Advanced / Experimental / Unsupported capability boundaries and user-agency rules.
 - [product/UX_SYSTEM.md](product/UX_SYSTEM.md) — simple-outside/deep-inside interaction doctrine, intent routing, progressive disclosure, and contextual education.
 - [product/VALIDATION.md](product/VALIDATION.md) — real-user proof, demand validation, stop/go criteria, and product evidence requirements.
+  - [product/care-cases/2026-09-26-owner-display-flicker-silent-crashes.md](product/care-cases/2026-09-26-owner-display-flicker-silent-crashes.md) — real-case evidence, not authority: the owner's rig diagnosed by hand (Compy did not run), with a Compy-today gap table.
 - [product/MONETIZATION.md](product/MONETIZATION.md) — commercial model derived from demonstrated value; no historical price decree is canonical.
 - [product/COMPETITIVE_POSITIONING.md](product/COMPETITIVE_POSITIONING.md) — jobs to absorb, interfaces not to copy, and Compy's differentiation contract.
 - [product/SUPERSESSION_MANIFEST.md](product/SUPERSESSION_MANIFEST.md) — migration map for pre-rebirth direction sources.
