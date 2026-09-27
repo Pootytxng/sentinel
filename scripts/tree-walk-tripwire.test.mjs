@@ -201,6 +201,10 @@ describe("what counts as a git process (#563)", () => {
     expect(gitSpawnsOf(["pwsh", "-Command", '$out="git status"; $env:X="1"'])).toBe(0);
     expect(gitSpawnsOf(["pwsh", "-Command", "Write-Output $out = git"])).toBe(0);
     expect(gitSpawnsOf(["pwsh", "-Command", "Write-Output $out=git status"])).toBe(0);
+    // Only PowerShell assigns this way: sh expands $out, cmd runs the word as a program, and neither runs git.
+    expect(gitSpawnsOf(["sh", "-c", "$out=git status; $all += git log -1"])).toBe(0);
+    expect(gitSpawnsOf(["cmd", "/c", "$out=git status & $all += git log -1"])).toBe(0);
+    expect(gitSpawnsOf(["$out=git", "status"])).toBe(0);
   });
 
   it("counts the git a double-quoted $(...) runs in sh-family shells and PowerShell; single quotes and cmd are literal", () => {

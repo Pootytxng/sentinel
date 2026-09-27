@@ -295,10 +295,9 @@ const tokenize = (cmd) =>
 // A shell string (exec, execSync, `shell: true`) and a shell given a script (cmd /c or /k,
 // powershell or pwsh -Command or any prefix of it, sh, bash, zsh or dash -c) count every git at a
 // command position of the script, nested shells included: at its start, or after && || ; & | ( ) { }
-// $( or a backtick or newline outside quotes, past any VAR=value, PowerShell assignment ($out = ,
-// $out=, $all += and the other assignment operators), env, exec, command, time, do, then, else, if,
-// elif, while, until or ! in front of it. Inside double quotes a
-// $(...) runs its script in sh-family shells and PowerShell, and a backtick pair does in sh-family
+// $( or a backtick or newline outside quotes, past any VAR=value, env, exec, command, time, do, then,
+// else, if, elif, while, until or ! in front of it, and in PowerShell only past an assignment ($out = ,
+// $out=, $all += and the other assignment operators). Inside double quotes a $(...) runs its script in sh-family shells and PowerShell, and a backtick pair does in sh-family
 // shells; cmd has neither. Single quotes are literal, in cmd too, where the program cmd runs reads
 // them (cmd /c "sh -c '...'"). The limits are listed above GIT_SPAWN_FLOOR.
 const SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
@@ -331,13 +330,15 @@ function scriptOf(prog, args) {
 }
 
 // One command, as its program and arguments: 1 for git, what its script starts for a shell, else 0.
-export function gitSpawnsOf(argv) {
+// `dialect` is the shell reading the command, or null when a program is started with no shell.
+export function gitSpawnsOf(argv, dialect = null) {
   const words = argv.map(String);
+  const powershell = dialect === "powershell";
   let i = 0;
   while (i < words.length) {
     // PowerShell's assignment, spaced or not: $out = git ..., $out=git ..., $all += git ...
-    if (/^\$[A-Za-z_][\w:]*$/.test(words[i]) && PS_OPERATOR.test(words[i + 1] ?? "")) words.splice(i, 2, words[i] + words[i + 1]);
-    const value = words[i].replace(PS_ASSIGNMENT, "");
+    if (powershell && /^\$[A-Za-z_][\w:]*$/.test(words[i]) && PS_OPERATOR.test(words[i + 1] ?? "")) words.splice(i, 2, words[i] + words[i + 1]);
+    const value = powershell ? words[i].replace(PS_ASSIGNMENT, "") : words[i];
     if (value !== words[i]) {
       if (value) words[i] = value;
       else i += 1;
@@ -378,7 +379,7 @@ export function gitInvocations(script, dialect = "sh") {
   let quote = null;
   const command = (end) => {
     const words = [...s.slice(from, end).matchAll(/"([^"]*)"|'([^']*)'|[^\s"']+/g)].map((m) => m[1] ?? m[2] ?? m[0]);
-    n += gitSpawnsOf(words);
+    n += gitSpawnsOf(words, dialect);
   };
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
