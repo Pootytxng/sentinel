@@ -137,6 +137,11 @@ export function tripwireVerdict(timeout, o, budget) {
 // gitInvocations below lists. It reads those forms; it is not a shell parser, and these are its limits:
 // - Git another program or builtin starts is not counted, such as a child `node` process, an npm
 //   script, a .ps1 or .sh file, eval or xargs. That program's own children are not in this process.
+// - The command after env's own options is not read. Env's NAME=value settings are, but not --, -i,
+//   -0, -v, -u NAME or --unset=NAME, -C DIR, -S STRING or any other option, so `env -- git status`
+//   and `env -u X git status` count 0 where each starts one git. That under-count is silent, and it
+//   is accepted because no test starts git that way and reading -S would need a shell's word
+//   splitting of its string.
 // - A loop's or a function's git counts once however often it runs.
 // - Git anywhere but a command position it reads is not counted, such as the command of a cmd
 //   `for /f` or a program named by a substitution ("$(which git)" status).
