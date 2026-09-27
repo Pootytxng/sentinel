@@ -100,16 +100,6 @@ pub(crate) struct EventRecord {
     pub rec_id: Option<String>,
 }
 
-/// The assembled timeline plus honesty counters.
-#[derive(Serialize, Clone, Debug)]
-pub(crate) struct TimelineView {
-    /// Newest first (assembly is ascending; the command reverses).
-    pub events: Vec<EventRecord>,
-    /// Source records whose timestamps failed to parse — dropped, never guessed at.
-    pub dropped_unparseable: usize,
-    pub generated_at: String,
-}
-
 // ─── Identity snapshots (decision 3 — honest from-now-on persistence) ────
 
 /// One probe of the machine's software/hardware identity. Appended only when something
@@ -190,8 +180,8 @@ pub(crate) fn load_store_from(path: &Path) -> IntelligenceStore {
     }
 }
 
-/// Read the persisted store. READ-ONLY: unlike `get_intelligence_timeline`, this never refreshes
-/// or appends a snapshot, which is why the Machine Model composes from it.
+/// Read the persisted store. READ-ONLY: this never refreshes or appends a snapshot (the retired
+/// timeline command did, #453), which is why the Machine Model composes from it.
 pub(crate) fn load_store() -> IntelligenceStore {
     load_store_from(&store_path())
 }
@@ -2268,20 +2258,6 @@ fn assemble_from(g: &Gathered) -> TimelineAssembly {
         snapshots: &g.snapshots,
         drift_notices: &g.drift_notices,
     })
-}
-
-/// The local event timeline, newest first. Read-only; local data only.
-#[tauri::command]
-pub(crate) fn get_intelligence_timeline() -> TimelineView {
-    refresh_identity_snapshots_async();
-    let g = gather();
-    let mut asm = assemble_from(&g);
-    asm.events.reverse();
-    TimelineView {
-        events: asm.events,
-        dropped_unparseable: asm.dropped_unparseable,
-        generated_at: Utc::now().to_rfc3339(),
-    }
 }
 
 fn what_changed_impl(g: &Gathered, started_at: &str) -> WhatChangedOutcome {

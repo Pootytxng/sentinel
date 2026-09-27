@@ -1348,7 +1348,6 @@ pub fn run() {
             gaming_session_is_live,
             tray::set_close_to_tray,
             game_mode_persist::set_keep_game_mode,
-            intelligence::get_intelligence_timeline,
             intelligence::what_changed_for_session,
             intelligence::what_changed_between,
             intelligence::get_intelligence_headline,

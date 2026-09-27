@@ -1,0 +1,71 @@
+{
+  "actor": "claude-code",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/593#issuecomment-5852121119",
+  "leaseEvidenceNote": "Landing claim issuecomment-5852121119 on #593, released by this session's Handoff issuecomment-5852129616 before this close. No other lane has claimed #593.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "The claim names the PR's one changed path plus three new receipt paths. The #517 lease-overlap check at push time read no other lane holding scripts/context-headroom-guard.test.mjs.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "currentHead": "95f192fbc8164057c3e5f278e1038dc98739ee20",
+  "issue": 593,
+  "kind": "lane",
+  "branch": "claude/593-headroom-transcript-budget",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "Both PR #595 commits, b48cb4ba and 95f192fb, are authored and committed by claude-code <claude-code@desk.local> (git log origin/main..95f192fb).",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "95f192fbc8164057c3e5f278e1038dc98739ee20",
+      "evidence": "logs/verify-local-2026-09-27T02-32-58Z.log in this worktree, 161163 bytes, SHA-256 1dc9b7e3351973cac281a52020539aeefa6f697cb2c299ce4a7b10c8f482e1b1",
+      "summary": "465 frontend files; 7728 passed, one expected fail, nine skipped, zero failed."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "95f192fbc8164057c3e5f278e1038dc98739ee20",
+      "evidence": "Same native pre-push log and SHA-256",
+      "summary": "tsc and vite production build passed."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "95f192fbc8164057c3e5f278e1038dc98739ee20",
+      "evidence": "Same native pre-push log and SHA-256",
+      "summary": "1355 passed, zero failed, 24 ignored."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "95f192fbc8164057c3e5f278e1038dc98739ee20",
+      "evidence": "Same native pre-push log and SHA-256",
+      "summary": "Finished clean with -D warnings; no warning or error line."
+    }
+  ],
+  "gateEvidenceNote": "The real native pre-push gate ran for the push of 95f192fb from this worktree (queued 680 s on LocalCompy.TestGate.v1, then acquired and released). The console printed LOCAL CHECK RESULT: PASS and the push created origin/claude/593-headroom-transcript-budget at 95f192fb (git ls-remote). The log file itself ends at the TestGate release; the PASS line is console-only.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "status": "passed",
+    "head": "95f192fbc8164057c3e5f278e1038dc98739ee20",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/595#issuecomment-5852108009",
+    "reviewerNote": "codex exec -m gpt-5.6-sol -s read-only reviewed git diff 274ea8cb..95f192fb: reader correctness on every input shape, equivalence with a whole-file scan, fixture falsifiability, the vitest 4 options signature and .ts import, and comment claims. No findings. Its sandbox could not start vitest (missing Windows sandbox helper), so the gate log is the test evidence."
+  },
+  "transition": "close-issue",
+  "closingNote": "Close #593: PR #595 merged as 861f0473 at the reviewed head 95f192fb. The test carries TREE_WALK_TIMEOUT_MS and reads each transcript only to its first turn, and fixture tests pin the reader. The tripwire extension to ~/.claude/projects is the separate, blocked #594, not a remainder of this issue."
+}

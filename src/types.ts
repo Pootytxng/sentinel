@@ -574,7 +574,8 @@ export type LicenseStatus = {
 };
 
 // ── Intelligence Phase 1 (mirrors src-tauri/src/intelligence.rs — read-only commands
-// get_intelligence_timeline / what_changed_for_session / get_intelligence_headline).
+// what_changed_for_session / get_intelligence_headline; the timeline now reaches screens only
+// through the Machine Model, #453).
 // Confidence is a BAND, never a number — no calibration data exists, so a percentage would be
 // probability theater. NOTE: named ConfidenceBand because this file's existing `Confidence`
 // (PriorityItem's high|medium|low) has no "unknown" and the two must not be conflated.
@@ -606,14 +607,6 @@ export type IntelEvent = {
   /** Trust-Ledger events only: the catalog rec id, copied verbatim off the ledger row.
    *  `null` for every other source, which has no rec behind it. */
   rec_id: string | null;
-};
-
-export type IntelligenceTimeline = {
-  /** Newest first. */
-  events: IntelEvent[];
-  /** Records dropped for unparseable timestamps — counted, never coerced into rows. */
-  dropped_unparseable: number;
-  generated_at: string;
 };
 
 export type IntelSessionRef = {

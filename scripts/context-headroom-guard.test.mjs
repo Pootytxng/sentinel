@@ -24,9 +24,20 @@
 // This guard performs it. It fails the build when the configured window and the real measured floor
 // leave a session too little room to work in — the one condition that produces the dialog.
 
-import { readdirSync, statSync, readFileSync, existsSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdtempSync,
+  openSync,
+  readSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
+import { StringDecoder } from "node:string_decoder";
 import { describe, expect, it } from "vitest";
 import {
   MIN_WORKING_HEADROOM,
@@ -34,6 +45,7 @@ import {
   resolveCompactionWindow,
   usableHeadroom,
 } from "./lib/compaction-window.mjs";
+import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 // Walk up to the checkout that owns .claude/settings.json. Not import.meta.url: vitest rewrites it
 // to a non-file scheme, which is how the first version of this guard failed to load at all.
@@ -50,6 +62,50 @@ function findRepoRoot(start) {
 const REPO_ROOT = findRepoRoot(process.cwd());
 const PROJECTS_DIR = join(homedir(), ".claude", "projects");
 const FRESH_DAYS = 14;
+
+/**
+ * A transcript's first main-thread assistant turn, as total context tokens, or null when it has
+ * none. Reads the file line by line and stops at that turn.
+ *
+ * #593: this used to read every recent transcript WHOLE and then slice the first 256 KB, claiming
+ * that was "comfortably past the first assistant message of any session". Measured 2026-09-27, both
+ * halves were wrong: the 178 recent sessions were 798 MB read to use a fraction of it (the test
+ * timed out the pre-push gate), and in 101 of them the first turn ended past 256 KB (up to 372 KB),
+ * so the heaviest sessions silently fell out of the p75: 89,945 measured, 104,413 true. Reading
+ * exactly as far as the turn has no window to fall out of, and costs only the bytes before it.
+ */
+function firstTurnTokens(file) {
+  const fd = openSync(file, "r");
+  try {
+    const chunk = Buffer.alloc(64 * 1024);
+    const decoder = new StringDecoder("utf8"); // a character split across two chunks stays whole
+    let pending = "";
+    let pos = 0;
+    for (;;) {
+      const n = readSync(fd, chunk, 0, chunk.length, pos);
+      pos += n;
+      const lines = (pending + (n > 0 ? decoder.write(chunk.subarray(0, n)) : decoder.end())).split("\n");
+      pending = n > 0 ? lines.pop() : "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let o;
+        try {
+          o = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (o?.isSidechain === true) continue;
+        const u = o?.message?.usage;
+        if (o?.type !== "assistant" || !u) continue;
+        const t = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+        if (t > 0) return t;
+      }
+      if (n === 0) return null;
+    }
+  } finally {
+    closeSync(fd);
+  }
+}
 
 /**
  * The fixed per-turn floor, measured rather than estimated: a session's FIRST recorded assistant
@@ -83,31 +139,13 @@ function measureFloor() {
         continue;
       }
       if (st.mtimeMs < cutoff || st.size < 32 * 1024) continue; // skip stale + trivial sessions
-      // The floor is in the first few turns; reading the whole transcript to find it would itself be
-      // the disease. 256 KB is comfortably past the first assistant message of any session.
-      let head;
+      let t;
       try {
-        head = readFileSync(full, "utf8").slice(0, 256 * 1024);
+        t = firstTurnTokens(full);
       } catch {
         continue;
       }
-      for (const line of head.split("\n")) {
-        if (!line.trim()) continue;
-        let o;
-        try {
-          o = JSON.parse(line);
-        } catch {
-          continue; // last line of the slice is usually partial
-        }
-        if (o?.isSidechain === true) continue;
-        const u = o?.message?.usage;
-        if (o?.type !== "assistant" || !u) continue;
-        const t = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-        if (t > 0) {
-          floors.push(t);
-          break;
-        }
-      }
+      if (t !== null) floors.push(t);
     }
   }
   if (floors.length < 3) return null;
@@ -173,6 +211,47 @@ describe("working headroom (ceiling − floor) is the number that decides thrash
   });
 });
 
+describe("the floor reader measures every session's first turn, wherever it lies (#593)", () => {
+  const line = (o) => `${JSON.stringify(o)}\n`;
+  const turn = (tokens, extra = {}) =>
+    line({ type: "assistant", ...extra, message: { usage: { input_tokens: 3, cache_read_input_tokens: tokens - 3 } } });
+
+  function transcript(body) {
+    const dir = mkdtempSync(join(tmpdir(), "headroom-floor-"));
+    const file = join(dir, "session.jsonl");
+    writeFileSync(file, body);
+    return { file, done: () => rmSync(dir, { recursive: true, force: true }) };
+  }
+
+  it("finds a first turn that ends past the old 256 KB head, in a line that spans read chunks", () => {
+    // ~600 KB of payload before the first turn, the shape 101 of 178 real sessions had on
+    // 2026-09-27, and a 150 KB turn line, which no chunk of 64 KB or less can hold whole.
+    const text = String.fromCodePoint(0xe9, 0x2014, 0x2713).repeat(60);
+    const payload = Array.from({ length: 1200 }, (_, i) => line({ type: "user", n: i, text })).join("");
+    const first = turn(98_765, { pad: "x".repeat(150_000) });
+    const t = transcript(payload + turn(104_413, { isSidechain: true }) + first + turn(5));
+    try {
+      expect(Buffer.byteLength(payload)).toBeGreaterThan(512 * 1024);
+      expect(first.length).toBeGreaterThan(128 * 1024);
+      expect(firstTurnTokens(t.file)).toBe(98_765); // the sidechain turn is not the session's floor
+    } finally {
+      t.done();
+    }
+  });
+
+  it("reads a last line with no trailing newline, and returns null when there is no turn", () => {
+    const withTurn = transcript(line({ type: "user" }) + turn(61_000).trimEnd());
+    const without = transcript(line({ type: "user" }) + line({ type: "assistant", message: {} }));
+    try {
+      expect(firstTurnTokens(withTurn.file)).toBe(61_000);
+      expect(firstTurnTokens(without.file)).toBeNull();
+    } finally {
+      withTurn.done();
+      without.done();
+    }
+  });
+});
+
 describe("this repo's live configuration, against this machine's measured floor", () => {
   const resolved = resolveCompactionWindow({ settings: loadProjectSettings(REPO_ROOT) });
 
@@ -182,7 +261,11 @@ describe("this repo's live configuration, against this machine's measured floor"
     expect(resolved.ignored).toEqual([]);
   });
 
-  it("leaves a real session enough room to work in", () => {
+  // #593: its cost is this machine's transcript store, not the repo (178 recent sessions and 1.3 GB
+  // of sentinel transcripts on 2026-09-27, growing with every session), and that store is outside
+  // what the #515 tripwire counts. On the 15 s default it timed out the 2026-09-27T02:02Z pre-push
+  // gate, so it rides the same hang-guard budget as a whole-tree walk.
+  it("leaves a real session enough room to work in", { timeout: TREE_WALK_TIMEOUT_MS }, () => {
     const floor = measureFloor();
     if (floor === null) {
       // Honest skip, not a silent pass: without transcripts there is nothing to measure.

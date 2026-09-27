@@ -52,9 +52,11 @@ const FILES = walk(SRC).map((p) => {
   return { path: p.slice(SRC.length + 1).replace(/[\\/]+/g, "/"), raw, code: strip(raw) };
 });
 
-/** The Windows-mutation / rollback / ledger IPC surface, as named on the Rust side. */
+/** The Windows-mutation / rollback / ledger IPC surface, as named on the Rust side. The trial commands
+ *  belong here: an A/B trial applies a real change and rolls it back (lib.rs marks them Mutating), and
+ *  Benchmark, their only caller, had been counted only through a ledger read that #453 removed. */
 const SAFETY_IPC =
-  /apply_recommendation|rollback_change|get_applied_changes|dispatch_rollback|resolve_rollback|start_gaming_session|stop_gaming_session|recover_orphan|set_startup_entry_enabled|apply_startup_entry_enabled/;
+  /apply_recommendation|rollback_change|get_applied_changes|dispatch_rollback|resolve_rollback|start_gaming_session|stop_gaming_session|recover_orphan|set_startup_entry_enabled|apply_startup_entry_enabled|start_tweak_trial|start_stack_trial|cancel_trial/;
 
 const USES_PRO = /\bProGate\b|\busePro\b|\bshowsProFeature\b|\bproStateFrom\b/;
 

@@ -65,6 +65,11 @@ changes, sessions/baselines, incidents, chronology, and evidence provenance.
 
 No duplicate Care-vs-Performance machine truth.
 
+**Status 2026-09-26:** screens read machine truth only through `src/data/machine-model.ts`;
+`src/machine-model-reader-guard.test.ts` fails the build on a new direct reader, and the unused
+`get_intelligence_timeline` command is retired (#453). Phase 2 exit still needs the live four-screen
+agreement proof on the owner's machine (#453).
+
 ---
 
 ## P3 — Roadmap Phase 3: Trial Protocol v1
