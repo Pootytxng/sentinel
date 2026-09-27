@@ -26,7 +26,8 @@ these lines:
 - **MPO disable is permanently blocked.** The session turned off multi-plane overlay (MPO) as an
   owner-run experiment. MPO disable is on the permanent tweak blocklist
   (`.claude/rules/tweak-catalog.md`; `CLAUDE.md` locked rule 6), and measurement does not make it
-  safe. Compy may read MPO state and explain the tradeoff. It may not apply the change.
+  safe. Compy may read MPO state and explain the tradeoff. It may not apply the change. It can
+  restore MPO to the Windows default (`actions.rs`, "MPO: restore default-on").
 - **One mutation boundary.** The session shipped standalone undo scripts. In Compy every change goes
   through `src-tauri/src/actions.rs` with snapshot, apply, verify, receipt and rollback. Loose
   scripts are not a Compy pattern.
@@ -35,8 +36,8 @@ these lines:
   uploading machine data.
 - **Unknown stays unknown.** Temperatures and SMART detail were unavailable without elevation or a
   sensor driver. They stay unknown, never estimated.
-- **Stop points stay owner-bound.** BIOS flash, UAC-gated registry changes and cable swaps are the
-  user's hands. See "Where the tool must stop" below.
+- **Stop points stay owner-bound.** BIOS flash, cable swaps and blocklisted changes are the user's
+  hands. See "Where the tool must stop" below.
 
 ## The machine (measured, not assumed)
 
@@ -55,7 +56,8 @@ white-line flicker on the primary. The owner suspected drivers, shader cache or 
 **Found** (System, Application and Kernel-PnP logs, 30–90 days):
 
 - 0 GPU driver resets (Event 4101), 0 WHEA/PCIe errors, 0 monitor re-enumerations on the incident
-  days. The blackouts happen below Windows' view (the display link layer), not in the driver.
+  days. Supported inference, not proven: the blackouts happen below Windows' view (the display link
+  layer), because the driver logged nothing.
 - 4 unexpected shutdowns the owner had **not** mentioned: 08/10 BSOD 0x7E; 08/29 hard power-off,
   bugcheck 0 (no BSOD); 09/09 and 09/14 BSOD 0x7A KERNEL_DATA_INPAGE_ERROR, with **no dump written**
   either time.
@@ -79,7 +81,7 @@ white-line flicker on the primary. The owner suspected drivers, shader cache or 
 | 1 | What happened? | Decoded Kernel-Power 41 bugcheck codes (decimal to hex) into plain English; correlated events 6008, 41, 1001 and 2004. |
 | 3 | What changed? | Driver reinstall the same day; BIOS age against the CPU launch date; Firefox commit spikes 1–7 days before crashes; a prior undervolt that was never recorded, so unknown. |
 | 2 | Evidence hierarchy | Observed facts (events, versions), supported inference (display link errors; undervolt as crash cause), external case intelligence (MSI, AMD, Crucial and a PSU review, each attributed), unknown (temperatures, Re-Size BAR state, FCLK). |
-| 4 | One next action | One variable at a time: MPO off first, cable swap second, 7 days at stock CPU, MemTest only if crashes recur. Not a list of ten fixes. |
+| 4 | One next action | A short ordered plan: MPO off first, cable swap second, 7 days at stock CPU, MemTest only if crashes recur. Not a list of ten fixes. The BIOS flash, stock CPU and MPO change still landed on the same day (see Outcome tracking). |
 | 5–6 | Recovery / known-good | Every change had its undo. The BIOS flash was framed as owner-only with pre-flight guardrails: photograph the OC pages, expect EXPO to reset, check Device Encryption first (recovery-key trap). |
 | 7 | Presentation | The summary led with the finding he did not ask about (silent crashes) and stated calibrated confidence ("BIOS: medium, not certain"). Raw IDs stayed in the written report. |
 | 9 | Anti-goals | Not an event-log dump: about 15 targeted queries, with the absence of events used as evidence. Not a causal-claim generator: every cause labeled ranked or unverified. |
@@ -94,16 +96,21 @@ white-line flicker on the primary. The owner suspected drivers, shader cache or 
    own support feed (version, date, URL, size), and the release note inside the zip naming MS-7E49.
    The verification, not the download, was the product.
 3. **The owner keeps no notes.** He forgot the undervolt and had to be told his own crash history.
-   Care must record BIOS version and date transitions and user-applied tuning, so "what changed?" can
-   answer later.
-4. He accepted 7 days at stock only because the experiment was explained: two hypotheses that do not
-   interfere, each with a decisive outcome.
+   Nothing recorded the BIOS version history or his tuning, so "what changed?" had no answer. See
+   question 1 at the end.
+4. He accepted 7 days at stock only because the experiment was explained. The explanation overstated
+   it: three changes landed together, so the week cannot attribute a result to one of them.
 
 ## Where the tool must stop, and what it owes the user there
 
-BIOS flash, UAC-gated registry changes, a physical cable swap. The value at that boundary is guidance
-quality: the exact file path, the exact BIOS menu path, what resets, what to photograph, the encryption
-pre-check. Compy cannot do these, must not pretend to, and must not go silent either.
+BIOS flash, a physical cable swap, and any blocklisted change such as MPO disable. The value at that
+boundary is guidance quality: the exact file path, the exact BIOS menu path, what resets, what to
+photograph, the encryption pre-check. Compy cannot or may not do these, must not pretend to, and must
+not go silent either.
+
+UAC elevation alone is not the line. Compy already makes some elevated registry changes through
+`src-tauri/src/actions.rs`, each with a snapshot and rollback (for example Fast Startup and the MPO
+default restore above).
 
 ## Detection feasibility (user-mode, non-admin)
 
@@ -125,7 +132,7 @@ What the current build could have done with this machine. Read from source, not 
 | Firefox memory blowouts (Resource-Exhaustion 2004) | **Missing.** Not in the event list; no commit telemetry | `blackbox.rs` |
 | GPU driver resets (4101) | **Has**, with a repeat-driver rule | `blackbox.rs` |
 | WHEA / PCIe errors | **Partial.** Counted, but no device or severity | `blackbox.rs` |
-| BIOS, GPU driver version and age | **Partial.** Shown as age only; chipset and SSD firmware not read | `src-tauri/src/hardware.rs` |
+| BIOS, GPU driver version and age | **Partial.** Version and age shown; chipset and SSD firmware not read | `src-tauri/src/hardware.rs`, `src/surfaces/HardwareGrid.tsx` |
 | "Is it current?" against the vendor | **Missing.** Deliberately never claims out-of-date; the signed advisory path is built but dark | `hardware.rs`, `src-tauri/src/case_intelligence.rs` |
 | Remember BIOS flashes and undervolts | **Missing.** Identity snapshots omit BIOS; no tuning log | `src-tauri/src/intelligence.rs`, `src-tauri/src/hwchange.rs` |
 | PCIe link speed/width, DP vs HDMI | **Missing** | `hardware.rs` |
@@ -148,7 +155,9 @@ The three gaps that matter most for this case:
 - 2026-09-26 17:18 local: BIOS 1.AA7 flashed by the owner; EXPO re-applied; stock CPU (no Curve
   Optimizer); MPO disabled. Baseline window: 7 days, ending 2026-10-03.
 - [ ] Flicker outcome with MPO off, cable unchanged.
-- [ ] Crash-free at stock? This confirms or denies the undervolt hypothesis.
+- [ ] Crash-free for the week? The BIOS flash, stock CPU and MPO change landed together, so a clean
+  week cannot isolate the undervolt. Isolating it would take re-applying the old Curve Optimizer
+  setting alone on the new BIOS and watching for the same crash shape. That is the owner's call.
 
 ## Artifacts (owner machine, outside the repo)
 
