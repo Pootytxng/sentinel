@@ -34,11 +34,17 @@
 //
 // EVERY COMMIT, NOT ONLY THE ENDPOINTS. Codex's review of 9ec38223 found that a rewrite committed and
 // then put back by a later commit leaves all three endpoints clean, while the history a merge carries
-// still holds the rewrite. So every commit between the base and HEAD is read too: each merge against
-// its first parent (`--diff-merges=first-parent`), and both sides of every merge. That flag already
-// stops git pruning a side branch; `--full-history` says so rather than lean on it. A commit is
-// named when it leaves a base receipt with other bytes, another mode, or none; the commit that puts
-// the bytes back is not.
+// still holds the rewrite. So every commit between the base and HEAD is read too, including both
+// sides of every merge. A commit is named when it leaves a base receipt with other bytes, another
+// mode, or none; the commit that puts the bytes back is not.
+// At 4ad7f244 each merge was read against its first parent only. Codex's review of that head found
+// the gap. A lane that forked before `main` changed a receipt can merge the base as its second
+// parent and keep its own older bytes. That merge matches its first parent, so it showed no change.
+// Each merge is now read against every parent (`--diff-merges=separate`), and one finding is kept
+// per commit and path. So any commit after the base that departs from the base bytes is named: on
+// any path of parents back to the base, the first commit that departs differs from the parent
+// before it. That flag also stops git pruning a side branch, and `--full-history` makes that
+// explicit rather than leaning on the flag.
 // This lane's own first cut is that shape: 829a9f2a rewrote the #290 receipt and 28deb2fe put it back.
 // Rewriting the pushed PR branch to drop it is a force-push, which is the owner's call, and the dated
 // correction receipt already records it, so the live check excuses that one commit and path, exactly.
@@ -88,14 +94,14 @@ export function receiptRewrites(git, base) {
     const entry = /^(\d{6}) blob ([0-9a-f]+)\t(.+)$/.exec(line);
     if (entry && RECEIPT.test(entry[3])) held.set(entry[3], `${entry[1]} ${entry[2]}`);
   }
-  const commits = [];
+  const commits = new Set();
   let commit = "";
-  const history = ["log", "--full-history", "--diff-merges=first-parent", "--no-renames", "--raw", "--no-abbrev", "--reverse", "--format=commit %H"];
+  const history = ["log", "--full-history", "--diff-merges=separate", "--no-renames", "--raw", "--no-abbrev", "--reverse", "--format=commit %H"];
   for (const line of git([...history, `${base}..HEAD`, "--", DIR]).split(/\r?\n/)) {
     if (line.startsWith("commit ")) commit = line.slice("commit ".length);
     const change = /^:\d{6} (\d{6}) [0-9a-f]+ ([0-9a-f]+) ([A-Z])\d*\t(.+)$/.exec(line);
     if (change && held.has(change[4]) && held.get(change[4]) !== `${change[1]} ${change[2]}`) {
-      commits.push(`commit ${commit}: ${change[3]} ${change[4]}`);
+      commits.add(`commit ${commit}: ${change[3]} ${change[4]}`);
     }
   }
   const layer = (name, range) =>
@@ -241,6 +247,23 @@ describe("each layer is checked on its own, so restoring the working tree hides 
     write(HELD, BASE_BYTES);
     commit("put it back");
     expect(receiptRewrites(git, base)).toEqual([`commit ${merge}: M ${HELD}`]);
+  });
+
+  it("fails a merge that brings in the base as its second parent but keeps older bytes from before it", () => {
+    // main changes the receipt before the base, as main's own pre-guard history did; the lane forked
+    // before that change.
+    write(HELD, EDITED_BYTES);
+    const before = commit("older bytes, before the base");
+    write(HELD, BASE_BYTES);
+    const newer = commit("the base bytes");
+    git(["checkout", "-q", "-B", "lane", before]);
+    git(["merge", "-q", "--no-ff", "--no-commit", "main"]);
+    git(["checkout", "-q", "HEAD", "--", HELD]);
+    const merge = commit("merge the base, keeping the older bytes");
+    write(HELD, BASE_BYTES);
+    commit("put it back");
+    expect(git(["merge-base", "HEAD", "main"]).trim()).toBe(newer);
+    expect(receiptRewrites(git, newer)).toEqual([`commit ${merge}: M ${HELD}`]);
   });
 
   it("fails a staged rewrite whose working tree was put back to the base bytes", () => {

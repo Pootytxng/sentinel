@@ -32,7 +32,9 @@
 // field is now a finding itself and answers nothing, and so is a second correction of one receipt.
 // At 9ec38223 the note only had to open with `standing` and contain `original`, so `standing`
 // followed by the bare original passed, the false claim unlabelled; Codex's review of that head found
-// it. The whole envelope is now checked.
+// it. The whole envelope is now checked. At 4ad7f244 the reason only had to be non-blank, so the
+// original itself could stand as the reason, unlabelled and unquoted; Codex's review of that head
+// found it. The reason may not restate the original, whatever its case or spacing.
 //
 // ONE RECEIPT PREDATES BOTH RULES. #277's was corrected in place on 2026-09-01, and its correction
 // prose names both phrases. It is pinned by the sha-256 of that field, so any further edit fails here
@@ -79,12 +81,18 @@ const RECEIPT_PATH = /^\.claude\/work-control\/([^/]+\.json)$/;
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const filled = (value) => typeof value === "string" && value.trim() !== "";
 
-// True when `correction` is exactly `<standing> CORRECTED <why> ORIGINAL: "<original>"`, <why> not blank.
+// Case and runs of whitespace aside, so a restated original is still found.
+const loose = (text) => String(text).toLowerCase().replace(/\s+/g, " ").trim();
+
+// True when `correction` is exactly `<standing> CORRECTED <why> ORIGINAL: "<original>"`, with <why>
+// not blank and not restating the original: the original appears only in its labelled quotation.
 export function correctionEnvelopeHolds(correction, standing, original) {
   const head = `${standing} CORRECTED `;
   const tail = ` ORIGINAL: "${original}"`;
   if (!filled(correction) || !correction.startsWith(head) || !correction.endsWith(tail)) return false;
-  return correction.length > head.length + tail.length && filled(correction.slice(head.length, -tail.length));
+  if (correction.length <= head.length + tail.length) return false;
+  const why = correction.slice(head.length, -tail.length);
+  return filled(why) && !loose(why).includes(loose(original));
 }
 
 // Why a correction receipt answers nothing, or null when every field is well-formed.
@@ -183,6 +191,11 @@ describe("a receipt's reviewer field claims no independence it did not have (#30
       "an unlabelled original": { ...valid, correction: `${STANDING} CORRECTED because both claims were false. "${ORIGINAL_290}"` },
       "an unquoted original": { ...valid, correction: `${STANDING} CORRECTED because both claims were false. ORIGINAL: ${ORIGINAL_290}` },
       "text after the original": { ...valid, correction: `${valid.correction} It had no stake in it landing.` },
+      "the original again as the reason": { ...valid, correction: `${STANDING} CORRECTED ${ORIGINAL_290} ORIGINAL: "${ORIGINAL_290}"` },
+      "the original restated in other case and spacing": {
+        ...valid,
+        correction: `${STANDING} CORRECTED as said: ${ORIGINAL_290.toUpperCase().replace(/ /g, "  ")}. ORIGINAL: "${ORIGINAL_290}"`,
+      },
     };
     for (const [label, corrects] of Object.entries(malformed)) {
       expect(run(corrects), label).toEqual([expect.stringMatching(/^c0\.json: /), expect.stringMatching(/^r\.json: /)]);
