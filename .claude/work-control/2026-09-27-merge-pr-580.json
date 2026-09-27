@@ -1,0 +1,72 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/307#issuecomment-5853331916",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/580#issuecomment-5853328914",
+    "status": "passed",
+    "reviewerNote": "Local Codex CLI (gpt-5.6-sol, read-only sandbox) reviewed the exact pushed head in round 5: both guard files in full, the delta 4ad7f244..6df63d46, origin/main...6df63d46 and the correction receipt. Verdict PASS, one INFO note (a per-parent status difference can list one commit and path twice; diagnostic duplication, not a bypass), none blocking. Its CHANGES REQUIRED at 829a9f2a, 198cc2b6, 9ec38223 and 4ad7f244 are fixed in 28deb2fe, 9ec38223, 4ad7f244 and 6df63d46, each confirmed resolved by the next round. It could not run Vitest in its sandbox. It authored no mutation.",
+    "head": "6df63d46af43e6a781306fad553fd680e553a62f"
+  },
+  "branch": "claude/307-receipt-290-reviewer-correction",
+  "overlapExclusiveNote": "The landing claim holds the PR's four paths and the three new receipt paths; no other live claim owns them.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "6df63d46af43e6a781306fad553fd680e553a62f",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "463 frontend files, 7722 passed, one expected failure, eight skipped.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/modest-germain-cfa2af/logs/verify-local-2026-09-27T06-10-21Z.log; SHA-256 1BEEC20F0955E1EBC27110ADC1A28B208C507CBC0189507793EE747592395B12; gate-log comment https://github.com/Pootytxng/sentinel/pull/580#issuecomment-5853291364 (LOCAL CHECK RESULT: PASS, push exited 0 at the exact head)",
+      "head": "6df63d46af43e6a781306fad553fd680e553a62f"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/modest-germain-cfa2af/logs/verify-local-2026-09-27T06-10-21Z.log; SHA-256 1BEEC20F0955E1EBC27110ADC1A28B208C507CBC0189507793EE747592395B12; gate-log comment https://github.com/Pootytxng/sentinel/pull/580#issuecomment-5853291364 (LOCAL CHECK RESULT: PASS, push exited 0 at the exact head)",
+      "head": "6df63d46af43e6a781306fad553fd680e553a62f"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1350 passed, zero failed, 24 ignored.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/modest-germain-cfa2af/logs/verify-local-2026-09-27T06-10-21Z.log; SHA-256 1BEEC20F0955E1EBC27110ADC1A28B208C507CBC0189507793EE747592395B12; gate-log comment https://github.com/Pootytxng/sentinel/pull/580#issuecomment-5853291364 (LOCAL CHECK RESULT: PASS, push exited 0 at the exact head)",
+      "head": "6df63d46af43e6a781306fad553fd680e553a62f"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/modest-germain-cfa2af/logs/verify-local-2026-09-27T06-10-21Z.log; SHA-256 1BEEC20F0955E1EBC27110ADC1A28B208C507CBC0189507793EE747592395B12; gate-log comment https://github.com/Pootytxng/sentinel/pull/580#issuecomment-5853291364 (LOCAL CHECK RESULT: PASS, push exited 0 at the exact head)",
+      "head": "6df63d46af43e6a781306fad553fd680e553a62f"
+    }
+  ],
+  "issue": 307,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Landing-only claim after the implementation claim was released (https://github.com/Pootytxng/sentinel/issues/307#issuecomment-5853329999).",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push moved the branch to the exact PR head; nothing was pushed after it. The log lives in the folder that pushed, modest-germain-cfa2af.",
+  "pr": 580,
+  "mutationAuthorsNote": "claude-code authored all six commits (829a9f2a, 28deb2fe, 198cc2b6, 9ec38223, 4ad7f244, 6df63d46). Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "merge-pr"
+}
