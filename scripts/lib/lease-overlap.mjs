@@ -135,7 +135,18 @@ export function renderLeaseOverlap(verdict, { base = "origin/main", changed = []
   for (const u of verdict.unreadable) {
     lines.push(`REFUSED: ${u.number ? `#${u.number}` : "open issues"} — ${u.why}; an unknown lease is a locked lease (collision rule 5)`);
   }
-  if (verdict.findings.length) {
+  if (verdict.findings.length && !verdict.own) {
+    // #559: with no session record the gate cannot tell a lane's OWN claim from someone else's, so
+    // "take these paths out, or wait" sent a lane to wait on itself. Bind the folder first.
+    const nums = verdict.findings.map((f) => f.number);
+    lines.push(
+      "This checkout has no session record, so the gate cannot tell which issue is this lane's. If " +
+        `${nums.map((n) => `#${n}`).join(" or ")} is YOUR claim, bind this folder to it and push again: ` +
+        nums.map((n) => `\`node tools/entry/cli.mjs adopt --issue ${n} --session <your session id>\``).join(" / ") +
+        ".",
+    );
+    lines.push("If it is another lane's, overlapping scopes serialize (collision rule 2): take these paths out of this push, or wait for that lane's `### Handoff` with `- Claim: released`.");
+  } else if (verdict.findings.length) {
     lines.push(
       "Overlapping scopes serialize, so the earlier lease goes first (collision rule 2): take these paths out of this push, or wait for that lane's `### Handoff` with `- Claim: released`.",
     );

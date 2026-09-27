@@ -30,8 +30,9 @@ use serde::{Deserialize, Serialize};
 /// `remote_rules::RULES_SIGNING_PUBKEY_BYTES`.
 const LICENSE_SIGNING_PUBKEY_BYTES: [u8; 32] = [0u8; 32];
 
-/// A license token is a few hundred bytes; this caps the hex string we'll even look at (DoS guard).
-const LICENSE_KEY_MAX_CHARS: usize = 8192;
+/// A license token is a few hundred bytes; this caps how many BYTES of it we'll even look at (DoS
+/// guard). Bytes, not characters: `str::len()` counts bytes, and a size ceiling is what this is for.
+const LICENSE_KEY_MAX_BYTES: usize = 8192;
 
 /// Licensing is "armed" only when a real public key has replaced the placeholder. Until then no license
 /// can be valid → free tier for everyone (the owner also keeps the private signing key offline). This is
@@ -100,7 +101,7 @@ pub(crate) fn verify_license(key: &str, pubkey_bytes: &[u8; 32], now: DateTime<U
     if key.is_empty() {
         return LicenseStatus::free("no license");
     }
-    if key.len() > LICENSE_KEY_MAX_CHARS {
+    if key.len() > LICENSE_KEY_MAX_BYTES {
         return LicenseStatus::free("license malformed");
     }
     // A valid (non-all-zeros) public key is required; the placeholder yields an Err here → free.
@@ -227,12 +228,18 @@ pub(crate) fn set_license_key(key: String) -> Result<LicenseStatus, String> {
 fn set_license_key_at(path: &std::path::Path, key: &str) -> Result<LicenseStatus, String> {
     let trimmed = key.trim();
     if trimmed.is_empty() {
-        let _ = std::fs::remove_file(path); // clearing is fine whether or not it existed
+        // Nothing stored is already cleared. Any other failure (a lock, a permission) leaves the
+        // license on disk, so saying "cleared" would be contradicted by the next status read.
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("Couldn't clear the saved license.".into()),
+        }
         let mut cleared = LicenseStatus::free("no license");
         cleared.armed = licensing_armed();
         return Ok(cleared);
     }
-    if trimmed.len() > LICENSE_KEY_MAX_CHARS {
+    if trimmed.len() > LICENSE_KEY_MAX_BYTES {
         return Err("That doesn't look like a Compy license key.".into());
     }
     if let Some(dir) = path.parent() {
@@ -325,6 +332,52 @@ mod license_storage_tests {
     }
 
     #[test]
+    fn a_failed_save_whose_temp_cannot_be_removed_leaves_no_readable_copy_of_the_new_token() {
+        // #292: the unlink of the failed save's temp fails twice, so a temp is left behind. It must
+        // not be a readable second copy of the token the user just typed.
+        let dir = scratch("unlink-fails");
+        let path = dir.join("license.key");
+        let old = token("a1");
+        let new = token("b2");
+        set_license_key_at(&path, &old).unwrap();
+
+        force_next_failure(FailPoint::BeforeRename);
+        crate::atomic_write::force_next_temp_unlink_failures(2);
+        assert_eq!(set_license_key_at(&path, &new).unwrap_err(), "Couldn't save the license locally.");
+
+        assert_eq!(read_stored_key_from(&path).as_deref(), Some(old.as_str()));
+        let names: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names.len(), 2, "the forced unlink failures did not leave a temp: {names:?}");
+        for name in &names {
+            let bytes = std::fs::read(dir.join(name)).unwrap();
+            assert!(
+                !String::from_utf8_lossy(&bytes).contains(&new),
+                "{name} still holds the rejected token in plaintext"
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn clearing_says_so_when_the_stored_license_cannot_be_deleted() {
+        // #292: a delete that fails for any reason but "nothing there" left the license on disk
+        // while the user was told it was cleared.
+        let path = scratch("clear-locked").join("license.key");
+        let kept = token("a1");
+        set_license_key_at(&path, &kept).unwrap();
+
+        let held = crate::atomic_write::hold_without_share(&path);
+        let err = set_license_key_at(&path, "").expect_err("a failed delete is not a clear");
+        drop(held);
+
+        assert_eq!(err, "Couldn't clear the saved license.");
+        assert_eq!(read_stored_key_from(&path).as_deref(), Some(kept.as_str()));
+    }
+
+    #[test]
     fn blank_input_still_clears_by_deleting_and_stays_harmless_when_nothing_is_stored() {
         let path = scratch("clear").join("license.key");
         set_license_key_at(&path, &token("a1")).unwrap();
@@ -344,7 +397,7 @@ mod license_storage_tests {
         let good = token("a1");
         set_license_key_at(&path, &good).unwrap();
 
-        let huge = "a".repeat(LICENSE_KEY_MAX_CHARS + 1);
+        let huge = "a".repeat(LICENSE_KEY_MAX_BYTES + 1);
         let err = set_license_key_at(&path, &huge).unwrap_err();
         assert_eq!(err, "That doesn't look like a Compy license key.");
         assert_eq!(read_stored_key_from(&path).as_deref(), Some(good.as_str()));
@@ -598,8 +651,8 @@ mod license_tests {
     #[test]
     fn the_length_cap_is_inclusive_and_is_checked_before_the_key_is_looked_at() {
         let pk = [7u8; 32];
-        let at_cap = "a".repeat(LICENSE_KEY_MAX_CHARS);
-        let over = "a".repeat(LICENSE_KEY_MAX_CHARS + 1);
+        let at_cap = "a".repeat(LICENSE_KEY_MAX_BYTES);
+        let over = "a".repeat(LICENSE_KEY_MAX_BYTES + 1);
         // At the cap it is parsed (and fails for having no dot); over the cap it is refused outright —
         // even against the placeholder key, which would otherwise answer "licensing not active".
         assert_eq!(verify_license(&at_cap, &pk, now()).reason, "license malformed");
@@ -607,6 +660,10 @@ mod license_tests {
         // Surrounding whitespace does not count toward the cap.
         let padded = format!("   {at_cap}   ");
         assert_eq!(verify_license(&padded, &LICENSE_SIGNING_PUBKEY_BYTES, now()).reason, "licensing not active");
+        // The cap counts bytes (#292): a key of two-byte characters is refused at half the length.
+        let wide = "é".repeat(LICENSE_KEY_MAX_BYTES / 2 + 1);
+        assert!(wide.chars().count() <= LICENSE_KEY_MAX_BYTES && wide.len() > LICENSE_KEY_MAX_BYTES);
+        assert_eq!(verify_license(&wide, &LICENSE_SIGNING_PUBKEY_BYTES, now()).reason, "license malformed");
     }
 
     #[test]

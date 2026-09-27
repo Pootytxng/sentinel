@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/559#issuecomment-5848355877",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/566#issuecomment-5848325167",
+    "status": "passed",
+    "reviewerNote": "Read-only Codex run (codex exec -m gpt-5.6-sol -s read-only) by claude-code, posted verbatim. Codex read the exact head through the GitHub connector: the printed adopt command matches the real interface, the verdict and exit status are unchanged, the new test fails against the old renderer, and nothing parses the refusal text. Five findings, all INFO. It authored no mutation.",
+    "head": "c8678347d5c8f2766f4d6b9d975ae97196437775"
+  },
+  "branch": "claude/559-lease-overlap-adopt",
+  "overlapExclusiveNote": "The landing claim holds only this receipt path; no other live claim owns it and no source path is edited.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "c8678347d5c8f2766f4d6b9d975ae97196437775",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "460 frontend files passed; 7639 tests passed, one expected failure, nine skipped.",
+      "evidence": "brave-wiles-1ab121/logs/verify-local-2026-09-24T06-30-31Z.log; SHA-256 df34f1c5ea876efcd20375bc8918f263852ec3a9b7934fb5109773029d525111; the push of c8678347 to origin completed at 2026-09-24T06:39:10Z (remote-tracking reflog in that folder), after this run and with c8678347 as the branch head",
+      "head": "c8678347d5c8f2766f4d6b9d975ae97196437775"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "brave-wiles-1ab121/logs/verify-local-2026-09-24T06-30-31Z.log; SHA-256 df34f1c5ea876efcd20375bc8918f263852ec3a9b7934fb5109773029d525111; the push of c8678347 to origin completed at 2026-09-24T06:39:10Z (remote-tracking reflog in that folder), after this run and with c8678347 as the branch head",
+      "head": "c8678347d5c8f2766f4d6b9d975ae97196437775"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1343 passed, zero failed, 24 ignored.",
+      "evidence": "brave-wiles-1ab121/logs/verify-local-2026-09-24T06-30-31Z.log; SHA-256 df34f1c5ea876efcd20375bc8918f263852ec3a9b7934fb5109773029d525111; the push of c8678347 to origin completed at 2026-09-24T06:39:10Z (remote-tracking reflog in that folder), after this run and with c8678347 as the branch head",
+      "head": "c8678347d5c8f2766f4d6b9d975ae97196437775"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "brave-wiles-1ab121/logs/verify-local-2026-09-24T06-30-31Z.log; SHA-256 df34f1c5ea876efcd20375bc8918f263852ec3a9b7934fb5109773029d525111; the push of c8678347 to origin completed at 2026-09-24T06:39:10Z (remote-tracking reflog in that folder), after this run and with c8678347 as the branch head",
+      "head": "c8678347d5c8f2766f4d6b9d975ae97196437775"
+    }
+  ],
+  "issue": 559,
+  "inheritedWork": true,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Landing-only claim after a verified takeover of the expired implementation lease (session 385396b9, released in issuecomment-5847511718).",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate ran all seven stages at c8678347 (diff check, write-scope, lease overlap, vitest, build, cargo test, clippy) and the push that followed put c8678347 on origin. Main has changed the PR's two files once since its base (893be540, #554); that combination was gated in the same folder at merge 24f06636 (logs/verify-local-2026-09-24T07-09-27Z.log), where only two unrelated tools/entry files failed.",
+  "pr": 566,
+  "mutationAuthorsNote": "claude-code (session 385396b9) authored the single source commit; this landing session inherits it. Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "merge-pr",
+  "closingNote": "Land PR #566 through scripts/land-pr.mjs. It is part 3 of #559 and closes nothing; #559 stays open for its other parts (PR #561)."
+}

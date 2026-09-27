@@ -62,11 +62,9 @@ site/assets/og-card*
 CompyEntry/
 
 # /.agents/ — machine-local, auto-generated `.claude`->Codex mirror of the canonical tracked
-# `.claude/skills/`. It is NOT the source of truth (that is `.claude/skills/`, committed) and it is
-# currently broken: its SKILL.md files instruct `node .Codex/skills/.../scripts/*.mjs`, a path that
-# does not exist (the real scripts live under `.agents/skills/.../scripts/`) — a naive find-replace
-# rewrote the prose but not the file layout. Ignored (not committed: would double-track + bless broken
-# paths) purely so the broken mirror does not dirty the build stamp.
+# `.claude/skills/`. It is NOT the source of truth (that is `.claude/skills/`, committed); each
+# checkout's copy is generated separately and may be stale. Ignored so it is never committed (that
+# would double-track the canonical skills) and never dirties the build stamp.
 #
 # ROOT-ANCHORED (`/.agents/`, corrective follow-up 2026-07-20): a bare `.agents/` matches a dir of
 # that name at ANY depth, so it could silently hide a real nested project dir that happens to be
@@ -75,7 +73,7 @@ CompyEntry/
 # gitignore IS NOT A SKILL-DISABLE MECHANISM: ignoring this dir only keeps it OUT OF GIT — the files
 # stay on disk and Codex still DISCOVERS and can load these skills at runtime (Codex reads
 # `.codex/`/`.agents/` from the filesystem, not from git's index). So this entry does NOT neutralize
-# the broken mirror for a Codex session; it only stops git from tracking it. To actually stop Codex
+# the mirror for a Codex session; it only stops git from tracking it. To actually stop Codex
 # from using it, the dir must be QUARANTINED or DELETED on disk — that is an OWNER decision (it is
 # generated, non-obvious, and irreversible without a regenerate step), and it must NOT be regenerated
 # until a Codex-native copy is intentionally designed. The reviewable, hand-authored Codex scaffold

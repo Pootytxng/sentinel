@@ -153,10 +153,84 @@ function Set-NativeEnvironment {
 # terminal) therefore blocked ~60s past a kill that had already happened. Two defects, one root: the
 # kill path leaned on a service that can be down, and let its own helper outlive the timeout.
 #
-# The tree is now read from a toolhelp snapshot (kernel32; no service between us and the answer;
-# ~5ms measured) and terminated through .NET Process.Kill, leaves first, root last. taskkill remains
-# only as the fallback for a host where the helper type cannot be compiled, and a fallback killer
-# that outlives its wait is itself killed: nothing this function starts may survive its return.
+# A tree read from recorded parent pids is no proof either (#559, #562). Windows never clears a
+# process's recorded parent pid when the parent exits, and hands the freed pid to a new process within
+# seconds, so every orphan reads as a child of whatever holds that pid now. On the dev PC, 2026-09-23:
+# explorer.exe, a second claude.exe, Discord, Firefox and every MSYS program started by a
+# cygwin-to-cygwin exec had a dead parent. Killing such a "child" with Process.Kill()'s 0xFFFFFFFF is
+# what Git Bash printed as exit 127 on two `git push` deaths that day. taskkill /T follows the same
+# pids. Comparing start times does not close it: they are wall-clock stamps, which can tie, and the
+# system clock can move backward (Codex review of #561).
+#
+# So the tree is never inferred. A child started with -KillTreeOnTimeout joins a job object as soon
+# as it starts, and the kernel adds every process it creates to that job. A timeout terminates the
+# job: exactly the processes the kernel placed in it, whatever pids they hold. Two kinds of
+# descendant are outside the job and are left running, never guessed at: one started in the moment
+# between CreateProcess returning and the assignment, and one started with CREATE_BREAKAWAY_FROM_JOB
+# (allowed, so no tool that asks for it starts failing). With no job -- the helper type did not
+# compile, the assignment failed, or COMPY_NATIVE_TREE_KILL_FALLBACK=1 -- only the root is killed,
+# through the Process object the caller holds, whose open handle keeps its pid from being reused.
+# Nothing here starts a helper process.
+$script:NativeProcessJobSource = @'
+using System;
+using System.Runtime.InteropServices;
+namespace Compy {
+  public static class NativeProcessJob {
+    [StructLayout(LayoutKind.Sequential)]
+    struct BASIC_LIMIT { public long PerProcessUserTimeLimit; public long PerJobUserTimeLimit; public uint LimitFlags; public UIntPtr MinimumWorkingSetSize; public UIntPtr MaximumWorkingSetSize; public uint ActiveProcessLimit; public UIntPtr Affinity; public uint PriorityClass; public uint SchedulingClass; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct IO_COUNTERS { public ulong ReadOperationCount; public ulong WriteOperationCount; public ulong OtherOperationCount; public ulong ReadTransferCount; public ulong WriteTransferCount; public ulong OtherTransferCount; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct EXTENDED_LIMIT { public BASIC_LIMIT BasicLimitInformation; public IO_COUNTERS IoInfo; public UIntPtr ProcessMemoryLimit; public UIntPtr JobMemoryLimit; public UIntPtr PeakProcessMemoryUsed; public UIntPtr PeakJobMemoryUsed; }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateJobObjectW(IntPtr lpJobAttributes, string lpName);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetInformationJobObject(IntPtr hJob, int infoClass, ref EXTENDED_LIMIT info, uint cbInfo);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateJobObject(IntPtr hJob, uint uExitCode);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr h);
+    // A job holding hProcess, or IntPtr.Zero when none could be made. Unnamed and not inheritable, so
+    // no child receives the handle. No KILL_ON_JOB_CLOSE: closing it after a normal exit kills nothing.
+    public static IntPtr Attach(IntPtr hProcess) {
+      IntPtr job = CreateJobObjectW(IntPtr.Zero, null);
+      if (job == IntPtr.Zero) return IntPtr.Zero;
+      var info = new EXTENDED_LIMIT();
+      info.BasicLimitInformation.LimitFlags = 0x800; // JOB_OBJECT_LIMIT_BREAKAWAY_OK
+      if (SetInformationJobObject(job, 9 /* JobObjectExtendedLimitInformation */, ref info, (uint)Marshal.SizeOf(typeof(EXTENDED_LIMIT)))
+          && AssignProcessToJobObject(job, hProcess)) return job;
+      CloseHandle(job);
+      return IntPtr.Zero;
+    }
+    public static bool Terminate(IntPtr job) { return job != IntPtr.Zero && TerminateJobObject(job, 1); }
+    public static void Close(IntPtr job) { if (job != IntPtr.Zero) CloseHandle(job); }
+  }
+}
+'@
+
+# Compiles the job helper once. Called BEFORE the child starts, so that nothing but the assignment
+# itself sits between CreateProcess returning and the child joining its job. $false means no job:
+# the caller's timeout then kills the root alone.
+function Initialize-NativeProcessJob {
+  if ($env:COMPY_NATIVE_TREE_KILL_FALLBACK -eq "1") { return $false }
+  if (-not ('Compy.NativeProcessJob' -as [type])) {
+    try { Add-Type -TypeDefinition $script:NativeProcessJobSource -ErrorAction Stop } catch { return $false }
+  }
+  return $true
+}
+
+# Returns "tree" when the child's job was terminated, which ends every process the kernel placed in
+# it, or "root-only" when there is no job: then only the root is killed and its descendants are NOT,
+# because nothing proves they are ours. The caller reports that as TreeKill so a survivor is never a
+# silent pass. No parent pid and no start time is read here; scripts/tree-kill-stale-parent-guard.test.mjs.
+function Stop-NativeProcessTree {
+  param(
+    [Parameter(Mandatory = $true)][System.Diagnostics.Process]$Process,
+    [IntPtr]$Job = [IntPtr]::Zero
+  )
+  if ($Job -ne [IntPtr]::Zero -and [Compy.NativeProcessJob]::Terminate($Job)) { return "tree" }
+  try { if (-not $Process.HasExited) { $Process.Kill() } } catch { }
+  return "root-only"
+}
+
+
 $script:NativeProcessSnapshotSource = @'
 using System;
 using System.Collections.Generic;
@@ -185,9 +259,11 @@ namespace Compy {
 }
 '@
 
-# One row per process: ProcessId, ParentProcessId, ExeName. THROWS when the snapshot cannot be
-# taken -- a caller that wants "unknown" must catch, because an empty answer here would read as
-# "no descendants", which is the false pass.
+# One row per process: ProcessId, ParentProcessId, ExeName, read from a toolhelp snapshot (kernel32;
+# no service between us and the answer; ~5ms measured). The tree kill does not use it: a recorded
+# parent pid is a claim, not a fact (above). Guards use it to poll for a survivor without WMI.
+# THROWS when the snapshot cannot be taken -- a caller that wants "unknown" must catch, because an
+# empty answer here would read as "no process", which is the false pass.
 function Get-NativeProcessSnapshot {
   if (-not ('Compy.NativeProcessSnapshot' -as [type])) {
     Add-Type -TypeDefinition $script:NativeProcessSnapshotSource -ErrorAction Stop
@@ -201,98 +277,6 @@ function Get-NativeProcessSnapshot {
   # A snapshot that cannot see the process taking it is not a process list.
   if (-not $seenSelf) { throw "process snapshot did not include this process ($PID); refusing to read it as a process list" }
   return @($out)
-}
-
-# Every descendant of ProcessId, parents before children, each pid once. Parent-pid values are
-# inherited from creators that may be dead and recycled, so a cycle is possible on paper and must
-# not be an infinite loop here.
-function Get-NativeDescendantIds {
-  param(
-    [Parameter(Mandatory = $true)][int]$ProcessId,
-    [object[]]$Snapshot
-  )
-  if (-not $Snapshot) { $Snapshot = Get-NativeProcessSnapshot }
-  $byParent = @{}
-  foreach ($row in $Snapshot) {
-    if (-not $byParent.ContainsKey($row.ParentProcessId)) { $byParent[$row.ParentProcessId] = New-Object System.Collections.ArrayList }
-    $null = $byParent[$row.ParentProcessId].Add($row.ProcessId)
-  }
-  $order = New-Object System.Collections.ArrayList
-  $seen = @{ $ProcessId = $true }
-  $queue = New-Object System.Collections.Queue
-  $queue.Enqueue($ProcessId)
-  while ($queue.Count -gt 0) {
-    $current = $queue.Dequeue()
-    if ($byParent.ContainsKey($current)) {
-      foreach ($child in $byParent[$current]) {
-        if (-not $seen.ContainsKey($child)) { $seen[$child] = $true; $null = $order.Add($child); $queue.Enqueue($child) }
-      }
-    }
-  }
-  return @($order)
-}
-
-function Stop-NativeProcessTree {
-  param(
-    [Parameter(Mandatory = $true)][int]$ProcessId,
-    [int]$TimeoutMs = 10000
-  )
-  $descendants = $null
-  $snapshotTakenAt = $null
-  # COMPY_NATIVE_TREE_KILL_FALLBACK=1 forces the taskkill path. The guard sets it to prove the
-  # fallback cannot strand its caller; a release run never does.
-  if ($env:COMPY_NATIVE_TREE_KILL_FALLBACK -ne "1") {
-    try {
-      $snapshotTakenAt = Get-Date
-      $descendants = Get-NativeDescendantIds -ProcessId $ProcessId
-    } catch {
-      $descendants = $null
-    }
-  }
-  if ($null -ne $descendants) {
-    # Leaves first, root last, so nothing is orphaned mid-walk and re-parented out of reach. Each
-    # kill re-checks identity: a pid freed since the snapshot may already belong to a process that
-    # was never ours (measured 2026-08-29: a freed pid re-occupied within 3s in 4 of 12 trials), and
-    # a process that started AFTER the snapshot cannot be one the snapshot listed.
-    $targets = @($descendants)
-    [array]::Reverse($targets)
-    foreach ($id in @($targets + @($ProcessId))) {
-      try {
-        $victim = [System.Diagnostics.Process]::GetProcessById($id)
-        if ($victim.StartTime -le $snapshotTakenAt) { $victim.Kill() }
-      } catch { }
-    }
-    return
-  }
-  $taskkill = Join-Path $env:SystemRoot "System32\taskkill.exe"
-  if (Test-Path -LiteralPath $taskkill -PathType Leaf) {
-    $info = New-Object System.Diagnostics.ProcessStartInfo
-    $info.FileName = $taskkill
-    $info.Arguments = ConvertTo-NativeArgumentString @("/PID", "$ProcessId", "/T", "/F")
-    $info.UseShellExecute = $false
-    $info.CreateNoWindow = $true
-    $info.RedirectStandardOutput = $true
-    $info.RedirectStandardError = $true
-    $killer = New-Object System.Diagnostics.Process
-    $killer.StartInfo = $info
-    try {
-      if ($killer.Start()) {
-        $null = $killer.StandardOutput.ReadToEndAsync()
-        $null = $killer.StandardError.ReadToEndAsync()
-        if (-not $killer.WaitForExit($TimeoutMs)) {
-          # A killer still running past its wait is the pipe-holder described above. It is killed
-          # here; the caller's own Process.Kill on the root is the next line of defence.
-          try { $killer.Kill() } catch { }
-          $killer.WaitForExit(2000) | Out-Null
-        }
-      }
-    } catch {
-      # The tracked-process fallback below still runs. Timeout handling must never pretend a failed
-      # tree-kill attempt succeeded.
-    } finally {
-      $killer.Dispose()
-    }
-  }
 }
 
 # Runs a native executable and returns its stdout, stderr and exit code as DATA. Never raises a
@@ -338,9 +322,13 @@ function Invoke-CapturedProcess {
   $exitCode = -1
   $timedOut = $false
   $terminationAttempted = $false
+  $treeKill = "none"
+  $job = [IntPtr]::Zero
+  $jobReady = $KillTreeOnTimeout -and (Initialize-NativeProcessJob)
   $processId = -1
   try {
     if (-not $process.Start()) { throw "Could not start '$FilePath'." }
+    if ($jobReady) { $job = [Compy.NativeProcessJob]::Attach($process.Handle) }
     $processId = $process.Id
     $process.StandardInput.Close()
     # Read both pipes concurrently: reading one to the end while the other fills can deadlock.
@@ -350,7 +338,7 @@ function Invoke-CapturedProcess {
       $timedOut = $true
       if ($KillTreeOnTimeout) {
         $terminationAttempted = $true
-        Stop-NativeProcessTree -ProcessId $process.Id -TimeoutMs $DrainMs
+        $treeKill = Stop-NativeProcessTree -Process $process -Job $job
         if (-not $process.HasExited) {
           try { $process.Kill() } catch { }
         }
@@ -363,6 +351,7 @@ function Invoke-CapturedProcess {
     try { if ($errReader.Wait($DrainMs)) { $stderr = $errReader.Result } } catch { $stderr = "" }
     if ($process.HasExited) { $exitCode = $process.ExitCode }
   } finally {
+    if ($job -ne [IntPtr]::Zero) { [Compy.NativeProcessJob]::Close($job) }
     $process.Dispose()
   }
 
@@ -376,6 +365,7 @@ function Invoke-CapturedProcess {
     ProcessId            = $processId
     DurationMs           = $clock.ElapsedMilliseconds
     TerminationAttempted = $terminationAttempted
+    TreeKill             = $treeKill
     EnvironmentKeys      = @($(if ($Environment) { $Environment.Keys | Sort-Object } else { @() }))
   }
 }
@@ -416,9 +406,13 @@ function Invoke-CheckedProcess {
   # The message text is unchanged; the classification, exit code and full redacted stderr ride along
   # as exception Data so a wrapper can print a real diagnosis instead of "exit 1".
   if ($result.TimedOut) {
+    $timeoutMessage = if ($result.TreeKill -eq "root-only") {
+      "$Label timed out after $TimeoutMs ms; no job object held its descendants, so only the root was terminated and any descendants may still be running."
+    } else {
+      "$Label timed out after $TimeoutMs ms and was terminated."
+    }
     throw (New-NativeProcessFailure -Label $Label -Classification "timeout" -Command $result.Arguments `
-      -StdOut $result.StdOut -StdErr $result.StdErr `
-      -Message "$Label timed out after $TimeoutMs ms and was terminated.")
+      -StdOut $result.StdOut -StdErr $result.StdErr -Message $timeoutMessage)
   }
   if ($result.ExitCode -ne 0 -and -not ($AllowExitCodes -contains $result.ExitCode)) {
     $detail = Get-FirstNonEmptyLine $result.StdErr
@@ -702,10 +696,14 @@ function Invoke-StreamedProcess {
   $exitUnknown = $false
   $timedOut = $false
   $terminationAttempted = $false
+  $treeKill = "none"
+  $job = [IntPtr]::Zero
+  $jobReady = $KillTreeOnTimeout -and (Initialize-NativeProcessJob)
   try {
     if (-not $process.Start()) {
       throw "$Label could not start '$($resolved.Source)'."
     }
+    if ($jobReady) { $job = [Compy.NativeProcessJob]::Attach($process.Handle) }
     $processId = $process.Id
     # Deliberately NOT BeginOutputReadLine: that raises OutputDataReceived through PowerShell's event
     # plumbing, and BOTH routes into it dispatch through the thread pool - an -Action handler, and the
@@ -731,7 +729,7 @@ function Invoke-StreamedProcess {
     if ($timedOut) {
       if ($KillTreeOnTimeout) {
         $terminationAttempted = $true
-        Stop-NativeProcessTree -ProcessId $process.Id -TimeoutMs $DrainMs
+        $treeKill = Stop-NativeProcessTree -Process $process -Job $job
         if (-not $process.HasExited) {
           try { $process.Kill() } catch { }
         }
@@ -754,13 +752,16 @@ function Invoke-StreamedProcess {
       $exitUnknown = $true
     }
   } finally {
+    if ($job -ne [IntPtr]::Zero) { [Compy.NativeProcessJob]::Close($job) }
     $process.Dispose()
   }
   $stdOutText = ($stdOutLines -join "`r`n")
   $stdErrText = ($stdErrLines -join "`r`n")
 
   if ($timedOut) {
-    $timeoutMessage = if ($KillTreeOnTimeout) {
+    $timeoutMessage = if ($treeKill -eq "root-only") {
+      "$Label timed out after $TimeoutMs ms; no job object held its descendants, so only the root was terminated and any descendants may still be running."
+    } elseif ($KillTreeOnTimeout) {
       "$Label timed out after $TimeoutMs ms and process-tree termination was attempted."
     } else {
       "$Label timed out after $TimeoutMs ms; the process was intentionally left running for inspection."
@@ -792,6 +793,7 @@ function Invoke-StreamedProcess {
     ProcessId            = $processId
     DurationMs           = $clock.ElapsedMilliseconds
     TerminationAttempted = $terminationAttempted
+    TreeKill             = $treeKill
     EnvironmentKeys      = @($(if ($Environment) { $Environment.Keys | Sort-Object } else { @() }))
   }
 }

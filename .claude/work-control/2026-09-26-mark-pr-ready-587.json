@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/585#issuecomment-5847978804",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/587#issuecomment-5847970492",
+    "status": "passed",
+    "reviewerNote": "Local Codex CLI (gpt-5.6-sol, read-only sandbox) re-reviewed the exact pushed head after its CHANGES REQUIRED at 663331922ccc: the four one-folder remove commands resolve from the stated directory, each new guard assertion fails when its defect is reintroduced and none passes vacuously, the PR #537, fleet-snapshot and #520 facts hold, no assertion was removed or weakened, and the checklist is within its doc budget. None blocking. It authored no mutation.",
+    "head": "21d905415f3fe131fd53081da37a3ba049e459b4"
+  },
+  "branch": "claude/585-owner-checklist-astale",
+  "overlapExclusiveNote": "The landing claim holds only this lane's two new receipt paths; no other live claim owns them and no source path is edited.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "21d905415f3fe131fd53081da37a3ba049e459b4",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "462 frontend files, 7705 passed, one expected failure, nine skipped.",
+      "evidence": "logs/verify-local-2026-09-26T16-27-28Z.log; SHA-256 0F3652BE0F347D4487E75CB38100F1DD0F24D122CD42570DA216AF4F938793BC; push log logs/push585b.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "21d905415f3fe131fd53081da37a3ba049e459b4"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-26T16-27-28Z.log; SHA-256 0F3652BE0F347D4487E75CB38100F1DD0F24D122CD42570DA216AF4F938793BC; push log logs/push585b.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "21d905415f3fe131fd53081da37a3ba049e459b4"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1351 passed, zero failed; no Rust path changed.",
+      "evidence": "logs/verify-local-2026-09-26T16-27-28Z.log; SHA-256 0F3652BE0F347D4487E75CB38100F1DD0F24D122CD42570DA216AF4F938793BC; push log logs/push585b.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "21d905415f3fe131fd53081da37a3ba049e459b4"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-26T16-27-28Z.log; SHA-256 0F3652BE0F347D4487E75CB38100F1DD0F24D122CD42570DA216AF4F938793BC; push log logs/push585b.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "21d905415f3fe131fd53081da37a3ba049e459b4"
+    }
+  ],
+  "issue": 585,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Landing-only claim after the implementation claim was released.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push moved the branch to the exact PR head; nothing was pushed after it.",
+  "pr": 587,
+  "mutationAuthorsNote": "claude-code authored the three source commits. Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "mark-pr-ready",
+  "closingNote": "Mark draft PR #587 ready at the independently reviewed exact pushed head; merge requires its own receipt."
+}
