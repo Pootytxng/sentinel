@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
 
 // UI-VISION STATUS GUARD (bug → guard, 2026-08-22).
@@ -329,7 +330,7 @@ describe("UI vision status guard: an archived row cannot advertise itself as liv
 // ── Falsification — drive the same functions with synthetic docs that must trip them ──────
 describe("UI vision status guard: the guard itself is armed", () => {
   it("rule A's tagger puts an archived heading inside the block and the live one outside", () => {
-    const tmp = `${process.env.TEMP ?? "."}/compy-vision-guard-fixture.md`;
+    const tmp = join(tmpdir(), "compy-vision-guard-fixture.md");
     writeFileSync(
       tmp,
       [
@@ -351,7 +352,7 @@ describe("UI vision status guard: the guard itself is armed", () => {
   });
 
   it("rule B's entry splitter keeps an id and a citation on different lines together", () => {
-    const tmp = `${process.env.TEMP ?? "."}/compy-backlog-guard-fixture.md`;
+    const tmp = join(tmpdir(), "compy-backlog-guard-fixture.md");
     writeFileSync(
       tmp,
       ["4. **COLOR-9 · room accents collide** —", "   UI_VISION_BACKLOG.md 🔴 OPEN. Build it."].join(

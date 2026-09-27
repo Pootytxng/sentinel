@@ -31,6 +31,7 @@ declare module "path" {
 }
 declare module "os" {
   export function homedir(): string;
+  export function tmpdir(): string;
 }
 declare module "child_process" {
   // Typed at the one call shape a guard uses: capture stdout as text, feed stdin, tolerate a
