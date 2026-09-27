@@ -161,8 +161,8 @@ export function splitLog(logText) {
 
 export function analyzeLog(logText, watched = WATCHED) {
   return splitLog(logText)
-    .map((c) => ({ sha: c.sha, subject: c.subject, files: collectDeletions(c.patch, watched) }))
-    .filter((c) => c.files.length > 0 || /\S/.test(c.patch));
+    .filter((c) => /\S/.test(c.patch))
+    .map((c) => ({ sha: c.sha, subject: c.subject, files: collectDeletions(c.patch, watched) }));
 }
 
 export function notMeasured(range, reason) {
@@ -248,6 +248,9 @@ export function run(argv, git, shallow = () => readShallow(git)) {
       "--no-color",
       "--no-ext-diff",
       "--no-renames",
+      // A user's diff.relative=true would print headers relative to the cwd (a/SESSION_HANDOFF.md from
+      // docs/), so no watched key matched and deletions read as "(no lines deleted)"; keep them root-relative.
+      "--no-relative",
       "--diff-merges=first-parent",
       `--format=${LOG_FORMAT}`,
       range,
