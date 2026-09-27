@@ -223,14 +223,16 @@ describe("the floor reader measures every session's first turn, wherever it lies
     return { file, done: () => rmSync(dir, { recursive: true, force: true }) };
   }
 
-  it("finds a first turn that ends past the old 256 KB head, across chunk and character splits", () => {
+  it("finds a first turn that ends past the old 256 KB head, in a line that spans read chunks", () => {
     // ~600 KB of payload before the first turn, the shape 101 of 178 real sessions had on
-    // 2026-09-27. Two- and three-byte characters make chunk edges land inside characters.
+    // 2026-09-27, and a 150 KB turn line, which no chunk of 64 KB or less can hold whole.
     const text = String.fromCodePoint(0xe9, 0x2014, 0x2713).repeat(60);
     const payload = Array.from({ length: 1200 }, (_, i) => line({ type: "user", n: i, text })).join("");
-    const t = transcript(payload + turn(104_413, { isSidechain: true }) + turn(98_765) + turn(5));
+    const first = turn(98_765, { pad: "x".repeat(150_000) });
+    const t = transcript(payload + turn(104_413, { isSidechain: true }) + first + turn(5));
     try {
       expect(Buffer.byteLength(payload)).toBeGreaterThan(512 * 1024);
+      expect(first.length).toBeGreaterThan(128 * 1024);
       expect(firstTurnTokens(t.file)).toBe(98_765); // the sidechain turn is not the session's floor
     } finally {
       t.done();
