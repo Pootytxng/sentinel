@@ -156,8 +156,7 @@ The three gaps that matter most for this case:
   Optimizer); MPO disabled. Baseline window: 7 days, ending 2026-10-03.
 - [ ] Flicker outcome with MPO off, cable unchanged.
 - [ ] Crash-free for the week? The BIOS flash, stock CPU and MPO change landed together, so a clean
-  week cannot isolate the undervolt. Isolating it would take re-applying the old Curve Optimizer
-  setting alone on the new BIOS and watching for the same crash shape. That is the owner's call.
+  week says the combination helped, not which change did. Attribution stays unresolved.
 
 ## Artifacts (owner machine, outside the repo)
 
