@@ -254,7 +254,7 @@ describe("closing-keyword guard: a lane that merges origin/main (#494)", { timeo
   });
 });
 
-describe("closing-keyword guard: live scan of commits this checkout would push", () => {
+describe("closing-keyword guard: live scan of commits this checkout would push", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
   it("finds no closing keyword next to an issue/PR number in any commit ahead of the push base", () => {
     const offenders = scanPushRange();
     expect(
