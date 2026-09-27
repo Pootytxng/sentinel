@@ -29,6 +29,7 @@ import {
   overlapVerdict,
   parseGit,
   registeredCheckouts,
+  shellDialect,
   tripwireVerdict,
   walkReason,
   watchHooks,
@@ -182,11 +183,64 @@ describe("what counts as a git process (#563)", () => {
     expect(gitInvocations("echo git && npm run build")).toBe(0);
   });
 
+  it("counts git after the keywords that start a command, and not the same words as arguments", () => {
+    expect(gitInvocations("if git diff --quiet; then git commit -m x; fi")).toBe(2);
+    expect(gitInvocations("if x; then y; elif git status; then z; fi")).toBe(1);
+    expect(gitInvocations("while ! git pull; do sleep 1; done")).toBe(1);
+    expect(gitInvocations("until git fetch; do sleep 1; done")).toBe(1);
+    expect(gitInvocations("echo if git status")).toBe(0);
+    expect(gitInvocations("echo ! git until git")).toBe(0);
+  });
+
+  it("counts the git a double-quoted $(...) runs in sh-family shells and PowerShell; single quotes and cmd are literal", () => {
+    expect(gitSpawnsOf(["sh", "-c", 'echo "$(git status)"'])).toBe(1);
+    expect(gitInvocations(`sh -c 'echo "head: $(git rev-parse "HEAD") ok"; git log -1'`, "cmd")).toBe(2);
+    expect(gitSpawnsOf(["pwsh", "-Command", 'Write-Output "$(git status)"'])).toBe(1);
+    expect(gitSpawnsOf(["sh", "-c", "echo '$(git status)'"])).toBe(0);
+    expect(gitSpawnsOf(["pwsh", "-Command", "Write-Output '$(git status)'"])).toBe(0);
+    expect(gitSpawnsOf(["cmd", "/c", 'echo "$(git status)"'])).toBe(0);
+  });
+
+  it("counts the git a double-quoted backtick pair runs in sh-family shells only", () => {
+    expect(gitSpawnsOf(["bash", "-c", 'echo "`git status`"'])).toBe(1);
+    expect(gitSpawnsOf(["bash", "-c", "echo '`git status`'"])).toBe(0);
+    expect(gitSpawnsOf(["powershell", "-Command", 'Write-Output "`git status`"'])).toBe(0);
+  });
+
+  it("reads a shell string by the shell it runs in: the one `shell` names, else cmd on Windows and sh elsewhere", () => {
+    expect(shellDialect(undefined, "win32")).toBe("cmd");
+    expect(shellDialect(true, "linux")).toBe("sh");
+    expect(shellDialect("/bin/bash", "win32")).toBe("sh");
+    expect(shellDialect("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "linux")).toBe("powershell");
+    expect(shellDialect("C:\\Windows\\System32\\cmd.exe", "linux")).toBe("cmd");
+    expect(gitInvocations('echo "$(git status)"', shellDialect(undefined, "linux"))).toBe(1);
+    expect(gitInvocations('echo "$(git status)"', shellDialect(undefined, "win32"))).toBe(0);
+  });
+
   it("pins what it cannot see: git a child program starts, and a loop's git, counted once", () => {
     expect(gitSpawnsOf(["node", "cli.mjs"])).toBe(0);
     expect(gitSpawnsOf(["npm", "run", "build"])).toBe(0);
     expect(gitSpawnsOf(["powershell", "-File", "x.ps1"])).toBe(0);
+    expect(gitSpawnsOf(["sh", "-c", 'eval "git status"'])).toBe(0);
     expect(gitInvocations("for i in 1 2 3; do git commit; done")).toBe(1);
+  });
+
+  // The documented limits, each beside the ordinary form it is mistaken for, so a change to either shows.
+  it("pins a stated limit: an escaped quote hides the git after it; a plain one does not", () => {
+    expect(gitSpawnsOf(["sh", "-c", 'echo "a\\"b"; git status'])).toBe(0);
+    expect(gitSpawnsOf(["sh", "-c", 'echo "a b"; git status'])).toBe(1);
+  });
+
+  it("pins a stated limit: a program named by a substitution is not seen; one named directly is", () => {
+    expect(gitSpawnsOf(["sh", "-c", '"$(command -v git)" status'])).toBe(0);
+    expect(gitSpawnsOf(["sh", "-c", 'command -v git && git status'])).toBe(1);
+  });
+
+  it("pins a stated limit: an escaped separator over-counts, loud; a quoted one does not count", () => {
+    expect(gitSpawnsOf(["cmd", "/c", "echo ^& git status"])).toBe(1);
+    expect(gitSpawnsOf(["sh", "-c", "echo \\; git status"])).toBe(1);
+    expect(gitSpawnsOf(["cmd", "/c", 'echo "&" git status'])).toBe(0);
+    expect(gitSpawnsOf(["sh", "-c", "echo ';' git status"])).toBe(0);
   });
 });
 

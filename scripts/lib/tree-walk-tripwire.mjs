@@ -133,10 +133,15 @@ export function tripwireVerdict(timeout, o, budget) {
 // default. At 7 that would have been a 962 ms test (11.0 s), at 8 a 1.6 s test (18.3 s, past the
 // default). The count is deterministic where a time would flake.
 //
-// What counts as a git process: a direct git, and every git a shell runs, however it was reached
-// (see gitInvocations below). Git started by any other program, such as a child `node` process, an
-// npm script or a .ps1 or .sh file, is not counted: that program's own children are not in this
-// process. A shell loop's git counts once however often the loop runs.
+// What counts as a git process: a direct git, and a git a shell runs in the ordinary forms that
+// gitInvocations below lists. It reads those forms; it is not a shell parser, and these are its limits:
+// - Git started by any other program is not counted: a child `node` process, an npm script, a .ps1 or
+//   .sh file, eval or xargs. That program's own children are not in this process.
+// - A shell loop's git counts once however often the loop runs.
+// - Other nested or quoted forms are not counted. An escaped quote (\" or `") is read as a quote and
+//   can hide the git after it; a program named by a substitution ("$(which git)" status) is not seen.
+// - An escaped separator (cmd's ^&, sh's \;) still separates, so the git after it is counted though it
+//   never runs. That over-counts, and an over-count fails loud as a budget demand, never silently.
 export const GIT_SPAWN_FLOOR = 6; // git processes one test, or one hook, starts
 
 // The failure a test that starts GIT_SPAWN_FLOOR or more git processes gets on too small a timeout,
@@ -287,11 +292,20 @@ const tokenize = (cmd) =>
 // A shell string (exec, execSync, `shell: true`) and a shell given a script (cmd /c or /k,
 // powershell or pwsh -Command or any prefix of it, sh, bash, zsh or dash -c) count every git at a
 // command position of the script, nested shells included: at its start, or after && || ; & | ( ) { }
-// $( or a backtick or newline outside quotes, past any VAR=value, env, exec, command, time, do, then
-// or else in front of it.
+// $( or a backtick or newline outside quotes, past any VAR=value, env, exec, command, time, do, then,
+// else, if, elif, while, until or ! in front of it. Inside double quotes a $(...) runs its script in
+// sh-family shells and PowerShell, and a backtick pair does in sh-family shells; cmd has neither.
+// Single quotes are literal. The limits are listed above GIT_SPAWN_FLOOR.
 const SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
 const POWERSHELLS = new Set(["powershell", "pwsh"]);
-const LEADING_WORDS = new Set(["env", "exec", "command", "time", "do", "then", "else"]);
+const LEADING_WORDS = new Set(["env", "exec", "command", "time", "do", "then", "else", "if", "elif", "while", "until", "!"]);
+
+// "cmd", "powershell" or "sh": which of the rules above a program's script is read by.
+const dialectOf = (prog) => (prog === "cmd" ? "cmd" : POWERSHELLS.has(prog) ? "powershell" : "sh");
+
+// The shell a shell string runs in: the one `shell` names, else cmd on Windows and sh elsewhere.
+export const shellDialect = (shell, platform = process.platform) =>
+  dialectOf(typeof shell === "string" ? programOf(shell) : platform === "win32" ? "cmd" : "sh");
 
 function scriptOf(prog, args) {
   if (prog === "cmd") {
@@ -318,11 +332,30 @@ export function gitSpawnsOf(argv) {
   const prog = programOf(words[i]);
   if (prog === "git") return 1;
   const script = scriptOf(prog, words.slice(i + 1));
-  return script == null ? 0 : gitInvocations(script);
+  return script == null ? 0 : gitInvocations(script, dialectOf(prog));
 }
 
-// A shell script: the git processes its commands start.
-export function gitInvocations(script) {
+// The index of the ")" that closes the "(" at `open`, past quoted text; the end if there is none.
+function closeOf(s, open) {
+  let depth = 0;
+  let quote = null;
+  for (let i = open; i < s.length; i++) {
+    const c = s[i];
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === "(") {
+      depth++;
+    } else if (c === ")" && --depth === 0) {
+      return i;
+    }
+  }
+  return s.length;
+}
+
+// A shell script: the git processes its commands start, read by `dialect` (see dialectOf).
+export function gitInvocations(script, dialect = "sh") {
   const s = String(script);
   let n = 0;
   let from = 0;
@@ -333,7 +366,16 @@ export function gitInvocations(script) {
   };
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
-    if (quote) {
+    if (quote === '"' && dialect !== "cmd" && c === "$" && s[i + 1] === "(") {
+      const end = closeOf(s, i + 1);
+      n += gitInvocations(s.slice(i + 2, end), dialect);
+      i = end;
+    } else if (quote === '"' && dialect === "sh" && c === "`") {
+      const close = s.indexOf("`", i + 1);
+      const end = close < 0 ? s.length : close;
+      n += gitInvocations(s.slice(i + 1, end), dialect);
+      i = end;
+    } else if (quote) {
       if (c === quote) quote = null;
     } else if (c === '"' || c === "'") {
       quote = c;
@@ -399,7 +441,7 @@ function install(root) {
     const prog = programOf(argv[0]);
     const cwd = opts.cwd ? pathOf(opts.cwd) ?? process.cwd() : process.cwd();
     const command = [String(cmd), ...args.map(String)];
-    const spawns = shellString || opts.shell ? gitInvocations(command.join(" ")) : gitSpawnsOf(command);
+    const spawns = shellString || opts.shell ? gitInvocations(command.join(" "), shellDialect(opts.shell)) : gitSpawnsOf(command);
     obs().gitSpawns += spawns;
     state.spawned += spawns;
     if (prog === "git") {
