@@ -25,7 +25,8 @@ import ts from "typescript";
 //      from pieces or handed over in a variable is never a watched literal, so rules 1-4 cannot see
 //      it, and there are too many ways to build a string to list them. `invoke` is imported under
 //      its own name and never passed around as a value; the one wrapper that forwards its parameter
-//      to `invoke` is named below and held to the same rule at its own call sites.
+//      to `invoke` is named below, hands `invoke` that parameter as its caller wrote it, and is held
+//      to the same rule at its own call sites.
 //   6. `invoke` is reached only by its name: `@tauri-apps/api/core` is imported with a static
 //      `import { … } from`, and nothing touches the package root, another spelling of the core
 //      module, or the global Tauri objects.
@@ -147,9 +148,9 @@ export function loose(source: string, file = SAMPLE): string[] {
 
 // The one wrapper that forwards its own parameter to `invoke`, by file and by the name its callers
 // use. It is found by its shape: `const <name> = (<param>, …) => … invoke(<param>) …`, with that call
-// in the wrapper's own body. The forward is exempt once, and every other use of the name must be a
-// call with a plain literal first. So rule 5 holds one hop out, and a second forwarding helper is a
-// violation until it is named here.
+// in the wrapper's own body and nothing there rewriting or shadowing `<param>`. The forward is exempt
+// once, and every other use of the name must be a call with a plain literal first. So rule 5 holds
+// one hop out, and a second forwarding helper is a violation until it is named here.
 type Wrapper = { name: string };
 const WRAPPERS: Record<string, Wrapper> = {
   [join("src", "App.tsx")]: { name: "run" },
@@ -163,6 +164,54 @@ function ownerOf(node: ts.Node): ts.Node | undefined {
   return undefined;
 }
 
+// A name in a place that writes it: the left of `=`, `+=` or another assignment, inside a
+// destructuring target or not, a `++`/`--` operand, or a `for (… of/in …)` target.
+function isWritten(node: ts.Node): boolean {
+  let at: ts.Node = node;
+  let up = node.parent;
+  while (
+    ts.isParenthesizedExpression(up) ||
+    ts.isAsExpression(up) ||
+    ts.isTypeAssertionExpression(up) ||
+    ts.isNonNullExpression(up) ||
+    ts.isSatisfiesExpression(up) ||
+    ts.isArrayLiteralExpression(up) ||
+    ts.isObjectLiteralExpression(up) ||
+    ts.isSpreadElement(up) ||
+    ts.isSpreadAssignment(up) ||
+    (ts.isShorthandPropertyAssignment(up) && up.name === at) ||
+    (ts.isPropertyAssignment(up) && up.initializer === at)
+  ) {
+    at = up;
+    up = up.parent;
+  }
+  if (ts.isBinaryExpression(up)) {
+    const op = up.operatorToken.kind;
+    return up.left === at && op >= ts.SyntaxKind.FirstAssignment && op <= ts.SyntaxKind.LastAssignment;
+  }
+  if (ts.isPrefixUnaryExpression(up) || ts.isPostfixUnaryExpression(up)) {
+    return up.operator === ts.SyntaxKind.PlusPlusToken || up.operator === ts.SyntaxKind.MinusMinusToken;
+  }
+  return (ts.isForOfStatement(up) || ts.isForInStatement(up)) && up.initializer === at;
+}
+
+// The parameter reaches `invoke` as the caller wrote it only while the wrapper's body never writes
+// it and never declares another binding under its name in the wrapper's own scope. After
+// `cmd = \`get_${cmd}\``, a caller's plain literal no longer names the command (#582, round 11).
+function rebinds(fn: ts.ArrowFunction | ts.FunctionExpression, name: string): boolean {
+  let hit = false;
+  walk(fn.body, (node) => {
+    if (hit || !ts.isIdentifier(node) || node.text !== name) return;
+    const up = node.parent;
+    const declares =
+      (ts.isVariableDeclaration(up) || ts.isBindingElement(up) || ts.isFunctionDeclaration(up) || ts.isClassDeclaration(up)) &&
+      up.name === node &&
+      ownerOf(up) === fn;
+    hit = declares || isWritten(node);
+  });
+  return hit;
+}
+
 function forwardOf(tree: ts.SourceFile, wrapper: Wrapper): Forward | undefined {
   let found: Forward | undefined;
   walk(tree, (node) => {
@@ -170,7 +219,7 @@ function forwardOf(tree: ts.SourceFile, wrapper: Wrapper): Forward | undefined {
     const fn = node.initializer;
     if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn))) return;
     const param = fn.parameters[0]?.name;
-    if (!param || !ts.isIdentifier(param)) return;
+    if (!param || !ts.isIdentifier(param) || rebinds(fn, param.text)) return;
     walk(fn.body, (inner) => {
       if (found || !ts.isCallExpression(inner) || !ts.isIdentifier(inner.expression)) return;
       const arg = inner.arguments[0];
@@ -422,6 +471,29 @@ describe("screens read machine truth through the Machine Model, never around it"
     // The exemption is the wrapper's shape, so a forward under another name, or from a nested function, is not it.
     expect(sink("const go = <T,>(cmd: string) =>\n  invoke<T>(cmd);\n", app)).toHaveLength(1);
     expect(sink("const run = (cmd: string) => [1].map(() => invoke(cmd));", app)).toHaveLength(1);
+    // A wrapper that rewrites or shadows its parameter builds the name itself, so the caller's plain
+    // literal no longer names the command (Codex, #582 round 11, at bee748e5).
+    const call = 'run<X>("machine_model", set);';
+    const rebound = [
+      "const run = <T,>(cmd: string) => {\n  cmd = `get_${cmd}`;\n  return invoke<T>(cmd);\n};\n",
+      'const run = <T,>(cmd: string) => {\n  cmd += "_v2";\n  return invoke<T>(cmd);\n};\n',
+      "const run = <T,>(cmd: string) => {\n  [cmd] = [`get_${cmd}`];\n  return invoke<T>(cmd);\n};\n",
+      "const run = <T,>(cmd: string) => {\n  ({ cmd } = { cmd: `get_${cmd}` });\n  return invoke<T>(cmd);\n};\n",
+      "const run = <T,>(cmd: string) => {\n  const fix = () => {\n    cmd = `get_${cmd}`;\n  };\n  fix();\n  return invoke<T>(cmd);\n};\n",
+      "const run = <T,>(cmd: string) => {\n  if (legacy) {\n    const cmd = `get_${name}`;\n    return invoke<T>(cmd);\n  }\n  return invoke<T>(cmd);\n};\n",
+    ];
+    for (const shape of rebound) {
+      expect(forwardOf(parse(shape, SAMPLE), app), shape).toBeUndefined();
+      expect(sink(shape + call, app), shape).toContain("line 1: " + shape.split("\n")[0]);
+    }
+    expect(sink(rebound[0] + call, app)).toContain("line 3: return invoke<T>(cmd);");
+    // Reading the parameter again, or a nested function's own `cmd`, leaves the forward as written.
+    const reads = [
+      "const run = <T,>(cmd: string) =>\n  invoke<T>(cmd).catch((e) => fail(`${cmd} failed`, e));\n",
+      "const run = <T,>(cmd: string, set: (v: T) => void) =>\n  invoke<T>(cmd).then((cmd) => set(cmd));\n",
+      "const run = <T,>(cmd: string) => {\n  const label = cmd;\n  log(label);\n  return invoke<T>(cmd);\n};\n",
+    ];
+    for (const shape of reads) expect(sink(shape + call, app), shape).toEqual([]);
     // An escaped identifier runs as the name it spells, and the compiler reads it as that name (#582, at 9105a072).
     expect(sink('core.inv\\u006fke(["get", "machine", "model"].join("_"))')).toHaveLength(1);
     expect(sink(wrapped + 'r\\u0075n(["get", "machine", "model"].join("_"), set);', app)).toHaveLength(1);
