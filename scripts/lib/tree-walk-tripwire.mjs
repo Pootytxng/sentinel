@@ -135,13 +135,16 @@ export function tripwireVerdict(timeout, o, budget) {
 //
 // What counts as a git process: a direct git, and a git a shell runs in the ordinary forms that
 // gitInvocations below lists. It reads those forms; it is not a shell parser, and these are its limits:
-// - Git started by any other program is not counted: a child `node` process, an npm script, a .ps1 or
-//   .sh file, eval or xargs. That program's own children are not in this process.
-// - A shell loop's git counts once however often the loop runs.
-// - Other nested or quoted forms are not counted. An escaped quote (\" or `") is read as a quote and
-//   can hide the git after it; a program named by a substitution ("$(which git)" status) is not seen.
-// - An escaped separator (cmd's ^&, sh's \;) still separates, so the git after it is counted though it
-//   never runs. That over-counts, and an over-count fails loud as a budget demand, never silently.
+// - Git another program or builtin starts is not counted, such as a child `node` process, an npm
+//   script, a .ps1 or .sh file, eval or xargs. That program's own children are not in this process.
+// - A loop's or a function's git counts once however often it runs.
+// - Git anywhere but a command position it reads is not counted, such as the command of a cmd
+//   `for /f` or a program named by a substitution ("$(which git)" status).
+// - Escapes (cmd's ^, sh's \, PowerShell's `) are not read. An escaped quote still quotes, and so does
+//   a lone apostrophe in cmd (echo it's done & git status), so either can hide the git after it.
+// - An escaped separator still separates, each shell's separators separate in all three, and a
+//   comment or here-document is read as commands, so a git that never runs can be counted. That
+//   over-counts, and an over-count fails loud as a budget demand, never silently.
 export const GIT_SPAWN_FLOOR = 6; // git processes one test, or one hook, starts
 
 // The failure a test that starts GIT_SPAWN_FLOOR or more git processes gets on too small a timeout,
@@ -292,10 +295,11 @@ const tokenize = (cmd) =>
 // A shell string (exec, execSync, `shell: true`) and a shell given a script (cmd /c or /k,
 // powershell or pwsh -Command or any prefix of it, sh, bash, zsh or dash -c) count every git at a
 // command position of the script, nested shells included: at its start, or after && || ; & | ( ) { }
-// $( or a backtick or newline outside quotes, past any VAR=value, env, exec, command, time, do, then,
-// else, if, elif, while, until or ! in front of it. Inside double quotes a $(...) runs its script in
-// sh-family shells and PowerShell, and a backtick pair does in sh-family shells; cmd has neither.
-// Single quotes are literal. The limits are listed above GIT_SPAWN_FLOOR.
+// $( or a backtick or newline outside quotes, past any VAR=value, PowerShell $name =, env, exec,
+// command, time, do, then, else, if, elif, while, until or ! in front of it. Inside double quotes a
+// $(...) runs its script in sh-family shells and PowerShell, and a backtick pair does in sh-family
+// shells; cmd has neither. Single quotes are literal, in cmd too, where the program cmd runs reads
+// them (cmd /c "sh -c '...'"). The limits are listed above GIT_SPAWN_FLOOR.
 const SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
 const POWERSHELLS = new Set(["powershell", "pwsh"]);
 const LEADING_WORDS = new Set(["env", "exec", "command", "time", "do", "then", "else", "if", "elif", "while", "until", "!"]);
@@ -327,7 +331,11 @@ function scriptOf(prog, args) {
 export function gitSpawnsOf(argv) {
   const words = argv.map(String);
   let i = 0;
-  while (i < words.length && (LEADING_WORDS.has(words[i]) || /^[A-Za-z_]\w*=/.test(words[i]))) i++;
+  while (i < words.length) {
+    if (LEADING_WORDS.has(words[i]) || /^[A-Za-z_]\w*=/.test(words[i])) i += 1;
+    else if (/^\$[A-Za-z_][\w:]*$/.test(words[i]) && words[i + 1] === "=") i += 2; // PowerShell's $out = git ...
+    else break;
+  }
   if (i >= words.length) return 0;
   const prog = programOf(words[i]);
   if (prog === "git") return 1;

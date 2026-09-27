@@ -192,6 +192,13 @@ describe("what counts as a git process (#563)", () => {
     expect(gitInvocations("echo ! git until git")).toBe(0);
   });
 
+  it("counts the git a PowerShell assignment runs, and not git named in the value assigned", () => {
+    expect(gitSpawnsOf(["pwsh", "-Command", "$out = git status; $head = git rev-parse HEAD"])).toBe(2);
+    expect(gitSpawnsOf(["powershell", "-Command", "$env:GIT_DIR = 'x'; $n = git log -1"])).toBe(1);
+    expect(gitSpawnsOf(["pwsh", "-Command", '$out = "git status"'])).toBe(0);
+    expect(gitSpawnsOf(["pwsh", "-Command", "Write-Output $out = git"])).toBe(0);
+  });
+
   it("counts the git a double-quoted $(...) runs in sh-family shells and PowerShell; single quotes and cmd are literal", () => {
     expect(gitSpawnsOf(["sh", "-c", 'echo "$(git status)"'])).toBe(1);
     expect(gitInvocations(`sh -c 'echo "head: $(git rev-parse "HEAD") ok"; git log -1'`, "cmd")).toBe(2);
@@ -223,12 +230,21 @@ describe("what counts as a git process (#563)", () => {
     expect(gitSpawnsOf(["powershell", "-File", "x.ps1"])).toBe(0);
     expect(gitSpawnsOf(["sh", "-c", 'eval "git status"'])).toBe(0);
     expect(gitInvocations("for i in 1 2 3; do git commit; done")).toBe(1);
+    expect(gitInvocations("f() { git status; }; f; f")).toBe(1);
   });
 
   // The documented limits, each beside the ordinary form it is mistaken for, so a change to either shows.
   it("pins a stated limit: an escaped quote hides the git after it; a plain one does not", () => {
     expect(gitSpawnsOf(["sh", "-c", 'echo "a\\"b"; git status'])).toBe(0);
+    expect(gitSpawnsOf(["pwsh", "-Command", 'Write-Output "a`"b"; git status'])).toBe(0);
     expect(gitSpawnsOf(["sh", "-c", 'echo "a b"; git status'])).toBe(1);
+    expect(gitSpawnsOf(["pwsh", "-Command", 'Write-Output "a b"; git status'])).toBe(1);
+  });
+
+  it("pins a stated limit: a lone apostrophe in cmd hides the git after it; a paired one quotes the script cmd runs", () => {
+    expect(gitSpawnsOf(["cmd", "/c", "echo it's done & git status"])).toBe(0);
+    expect(gitSpawnsOf(["cmd", "/c", "echo done & git status"])).toBe(1);
+    expect(gitSpawnsOf(["cmd", "/c", "sh -c 'git init; git status'"])).toBe(2);
   });
 
   it("pins a stated limit: a program named by a substitution is not seen; one named directly is", () => {
@@ -236,11 +252,28 @@ describe("what counts as a git process (#563)", () => {
     expect(gitSpawnsOf(["sh", "-c", 'command -v git && git status'])).toBe(1);
   });
 
+  it("pins a stated limit: the command of a cmd for /f is not seen; the command after do is", () => {
+    expect(gitSpawnsOf(["cmd", "/c", "for /f %i in ('git rev-parse HEAD') do echo %i"])).toBe(0);
+    expect(gitSpawnsOf(["cmd", "/c", "for %i in (a b) do git log %i"])).toBe(1);
+  });
+
   it("pins a stated limit: an escaped separator over-counts, loud; a quoted one does not count", () => {
     expect(gitSpawnsOf(["cmd", "/c", "echo ^& git status"])).toBe(1);
     expect(gitSpawnsOf(["sh", "-c", "echo \\; git status"])).toBe(1);
     expect(gitSpawnsOf(["cmd", "/c", 'echo "&" git status'])).toBe(0);
     expect(gitSpawnsOf(["sh", "-c", "echo ';' git status"])).toBe(0);
+  });
+
+  it("pins a stated limit: another shell's separator over-counts, loud; a quoted one does not count", () => {
+    expect(gitSpawnsOf(["cmd", "/c", "echo a; git status"])).toBe(1);
+    expect(gitSpawnsOf(["cmd", "/c", 'echo "a; git status"'])).toBe(0);
+  });
+
+  it("pins a stated limit: a comment or here-document is read as commands, loud; its plain words are not", () => {
+    expect(gitSpawnsOf(["sh", "-c", "echo x # ; git status"])).toBe(1);
+    expect(gitSpawnsOf(["sh", "-c", "cat <<EOF\ngit status\nEOF"])).toBe(1);
+    expect(gitSpawnsOf(["sh", "-c", "echo x # git status"])).toBe(0);
+    expect(gitSpawnsOf(["sh", "-c", "cat <<EOF\nsee git status\nEOF"])).toBe(0);
   });
 });
 
