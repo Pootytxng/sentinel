@@ -215,9 +215,12 @@ const release = async (lease) => {
 // #596: this wait once failed a gate with nothing but "timed out waiting for the full run to report
 // the gate busy" -- no way to tell a slow start from a run that never queued or had already exited,
 // or a starved child from a starved test worker. A failed wait now says all of it: the child's state
-// and age, everything it printed, and the widest gap between this worker's own looks. A child whose
+// and age, what it printed, and the widest gap between this worker's own looks. A child whose
 // output is complete fails the wait at once, since nothing more can arrive.
-const clip = (text) => JSON.stringify(text.length > 2000 ? `...${text.slice(-2000)}` : text);
+// A long stream keeps both ends -- the head holds the first words (the STARTED stamp), the tail the
+// latest state -- and names how much of the middle it left out, so nothing is dropped silently.
+const clip = (text, keep = 2000) =>
+  JSON.stringify(text.length > 2 * keep ? `${text.slice(0, keep)}...[${text.length - 2 * keep} chars omitted]...${text.slice(-keep)}` : text);
 const childState = (child) => {
   const state = child.exitCode !== null || child.signalCode !== null ? `exited (${child.signalCode ?? `code ${child.exitCode}`})` : "still running";
   // The driver stamps its first line, which splits "node never came up" from "the holder never spoke".
@@ -385,15 +388,29 @@ describe("a failed wait on a child says what that child was doing", () => {
   it("fails at once, naming the exit and everything printed, when the child's output has ended", async () => {
     const child = node("console.log('STARTED ' + Date.now()); console.log('said on stdout'); console.error('said on stderr'); process.exit(5)");
     await new Promise((resolve) => child.once("close", resolve));
+    const waited = Date.now();
     const message = await failure(waitFor(() => false, "a line that never comes", { child }));
+    // "At once" is measured, not read off the message: a wait that sat out its 60 s deadline and then
+    // blamed the ended output would still word it the same.
+    expect(Date.now() - waited).toBeLessThan(30_000);
     expect(message).toMatch(/^its output ended waiting for a line that never comes after \d+ms \(widest gap between looks \d+ms\)/);
     expect(message).toMatch(/child pid \d+ exited \(code 5\), \d+ms after spawn; node was up -?\d+ms after spawn\n/);
     expect(message).toContain("said on stdout");
     expect(message).toContain("said on stderr");
   });
 
+  it("keeps both ends of a long stream and names what it left out", async () => {
+    const child = node("console.log('STARTED ' + Date.now()); console.log('x'.repeat(10_000)); console.log('last words')");
+    await new Promise((resolve) => child.once("close", resolve));
+    const message = await failure(waitFor(() => false, "a line that never comes", { child }));
+    expect(message).toMatch(/stdout: "STARTED \d+/);
+    expect(message).toMatch(/\.\.\.\[\d+ chars omitted\]\.\.\./);
+    expect(message).toContain("last words");
+  });
+
   it("times out on a child that is still running, and says so", async () => {
-    const child = node("console.error('still here'); setTimeout(() => {}, 60_000)");
+    // Alive until afterEach kills it, so even a worker starved past any fixed lifetime still sees it running.
+    const child = node("console.error('still here'); setInterval(() => {}, 60_000)");
     await waitFor(() => /still here/.test(child.err), "the child to start", { child });
     const message = await failure(waitFor(() => false, "a line that never comes", { child, timeoutMs: 200 }));
     expect(message).toMatch(/^timed out waiting for a line that never comes after \d+ms/);
