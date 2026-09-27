@@ -295,14 +295,17 @@ const tokenize = (cmd) =>
 // A shell string (exec, execSync, `shell: true`) and a shell given a script (cmd /c or /k,
 // powershell or pwsh -Command or any prefix of it, sh, bash, zsh or dash -c) count every git at a
 // command position of the script, nested shells included: at its start, or after && || ; & | ( ) { }
-// $( or a backtick or newline outside quotes, past any VAR=value, PowerShell $name =, env, exec,
-// command, time, do, then, else, if, elif, while, until or ! in front of it. Inside double quotes a
+// $( or a backtick or newline outside quotes, past any VAR=value, PowerShell assignment ($out = ,
+// $out=, $all += and the other assignment operators), env, exec, command, time, do, then, else, if,
+// elif, while, until or ! in front of it. Inside double quotes a
 // $(...) runs its script in sh-family shells and PowerShell, and a backtick pair does in sh-family
 // shells; cmd has neither. Single quotes are literal, in cmd too, where the program cmd runs reads
 // them (cmd /c "sh -c '...'"). The limits are listed above GIT_SPAWN_FLOOR.
 const SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
 const POWERSHELLS = new Set(["powershell", "pwsh"]);
 const LEADING_WORDS = new Set(["env", "exec", "command", "time", "do", "then", "else", "if", "elif", "while", "until", "!"]);
+const PS_OPERATOR = /^(?:[-+*/%]|\?\?)?=/;
+const PS_ASSIGNMENT = /^\$[A-Za-z_][\w:]*(?:[-+*/%]|\?\?)?=/;
 
 // "cmd", "powershell" or "sh": which of the rules above a program's script is read by.
 const dialectOf = (prog) => (prog === "cmd" ? "cmd" : POWERSHELLS.has(prog) ? "powershell" : "sh");
@@ -332,8 +335,13 @@ export function gitSpawnsOf(argv) {
   const words = argv.map(String);
   let i = 0;
   while (i < words.length) {
-    if (LEADING_WORDS.has(words[i]) || /^[A-Za-z_]\w*=/.test(words[i])) i += 1;
-    else if (/^\$[A-Za-z_][\w:]*$/.test(words[i]) && words[i + 1] === "=") i += 2; // PowerShell's $out = git ...
+    // PowerShell's assignment, spaced or not: $out = git ..., $out=git ..., $all += git ...
+    if (/^\$[A-Za-z_][\w:]*$/.test(words[i]) && PS_OPERATOR.test(words[i + 1] ?? "")) words.splice(i, 2, words[i] + words[i + 1]);
+    const value = words[i].replace(PS_ASSIGNMENT, "");
+    if (value !== words[i]) {
+      if (value) words[i] = value;
+      else i += 1;
+    } else if (LEADING_WORDS.has(words[i]) || /^[A-Za-z_]\w*=/.test(words[i])) i += 1;
     else break;
   }
   if (i >= words.length) return 0;

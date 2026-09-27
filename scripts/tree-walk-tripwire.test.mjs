@@ -195,8 +195,12 @@ describe("what counts as a git process (#563)", () => {
   it("counts the git a PowerShell assignment runs, and not git named in the value assigned", () => {
     expect(gitSpawnsOf(["pwsh", "-Command", "$out = git status; $head = git rev-parse HEAD"])).toBe(2);
     expect(gitSpawnsOf(["powershell", "-Command", "$env:GIT_DIR = 'x'; $n = git log -1"])).toBe(1);
+    expect(gitSpawnsOf(["pwsh", "-Command", "$out=git status; $a =git log -1; $b= git diff"])).toBe(3);
+    expect(gitSpawnsOf(["pwsh", "-Command", "$all += git log -1; $all+=git status; $x ??= git rev-parse HEAD"])).toBe(3);
     expect(gitSpawnsOf(["pwsh", "-Command", '$out = "git status"'])).toBe(0);
+    expect(gitSpawnsOf(["pwsh", "-Command", '$out="git status"; $env:X="1"'])).toBe(0);
     expect(gitSpawnsOf(["pwsh", "-Command", "Write-Output $out = git"])).toBe(0);
+    expect(gitSpawnsOf(["pwsh", "-Command", "Write-Output $out=git status"])).toBe(0);
   });
 
   it("counts the git a double-quoted $(...) runs in sh-family shells and PowerShell; single quotes and cmd are literal", () => {
