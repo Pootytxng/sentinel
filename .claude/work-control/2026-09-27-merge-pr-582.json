@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/453#issuecomment-5852095419",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/582#issuecomment-5852092171",
+    "status": "passed",
+    "reviewerNote": "Codex (`codex exec -m gpt-5.6-sol -s read-only`, run by claude-code, output posted verbatim) reviewed the exact head against the round-11 scope: rules 1-6 and their assertions unchanged from bc6b2348, the header's ordinary-drift claim, and ordinary code that could reach a machine-fact command around the model. Codex authored no mutation.",
+    "head": "5e97c6b7cc9a50da2b1818692212b0a866c6a335"
+  },
+  "branch": "claude/453-machine-model-reader-guard",
+  "overlapExclusiveNote": "The landing claim names the PR's delta plus these per-transition receipt paths; no other live claim holds them.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "5e97c6b7cc9a50da2b1818692212b0a866c6a335",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "Frontend suite: 7711 passed, one expected failure, nine skipped.",
+      "evidence": "logs/verify-local-2026-09-27T02-37-41Z.log; push log logs/push-453-r11c.log (LOCAL CHECK RESULT: PASS, push exit 0); SHA-256 02F5D55FB8754A925985A07208676860FCFC93FBCCF11DA90D6FAD037B2EDBEC",
+      "head": "5e97c6b7cc9a50da2b1818692212b0a866c6a335"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-27T02-37-41Z.log; push log logs/push-453-r11c.log (LOCAL CHECK RESULT: PASS, push exit 0); SHA-256 02F5D55FB8754A925985A07208676860FCFC93FBCCF11DA90D6FAD037B2EDBEC",
+      "head": "5e97c6b7cc9a50da2b1818692212b0a866c6a335"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1350 passed, zero failed, 24 ignored.",
+      "evidence": "logs/verify-local-2026-09-27T02-37-41Z.log; push log logs/push-453-r11c.log (LOCAL CHECK RESULT: PASS, push exit 0); SHA-256 02F5D55FB8754A925985A07208676860FCFC93FBCCF11DA90D6FAD037B2EDBEC",
+      "head": "5e97c6b7cc9a50da2b1818692212b0a866c6a335"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-27T02-37-41Z.log; push log logs/push-453-r11c.log (LOCAL CHECK RESULT: PASS, push exit 0); SHA-256 02F5D55FB8754A925985A07208676860FCFC93FBCCF11DA90D6FAD037B2EDBEC",
+      "head": "5e97c6b7cc9a50da2b1818692212b0a866c6a335"
+    }
+  ],
+  "issue": 453,
+  "inheritedWork": true,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Landing claim by the session that authored round 11; earlier rounds were claude-code under sequential leases.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate (scripts/verify-local.ps1) returned LOCAL CHECK RESULT: PASS and the push exited zero at the exact PR head.",
+  "pr": 582,
+  "mutationAuthorsNote": "Every commit in the delta is claude-code, across sequential leases. Codex reviewed and authored nothing.",
+  "actor": "claude-code",
+  "transition": "merge-pr",
+  "closingNote": "Land PR #582 through scripts/land-pr.mjs. closingIssuesReferences is empty; #453 stays open for the Phase 2 live four-screen proof and the Benchmark self-review."
+}
