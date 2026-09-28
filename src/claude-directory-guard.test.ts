@@ -146,3 +146,26 @@ describe(".claude/hooks are either wired or say they are not", () => {
     expect(read(join(HOOKS, "target-ownership.mjs"))).toMatch(/this is a LIBRARY, not a hook/i);
   });
 });
+
+// STEWARD GUARD (2026-09-28). The owner caught a coordinator plus five child and repair lanes
+// re-arming hourly check-ins on draft PRs #603-#609. Every remaining gate on those PRs needed his
+// Windows machine, a non-author review, or his hands, so no wake could ever find a change. The
+// cloud harness reads .claude/skills/steward/SKILL.md by name to decide how proactive a PR session
+// is. That makes the file load-bearing: deleting it, or dropping one of these rules, silently
+// restores the harness default of "keep a check-in armed until the PR is done".
+describe(".claude/skills/steward keeps the no-polling rules the harness reads", () => {
+  const STEWARD = join(SKILLS, "steward", "SKILL.md");
+
+  it("exists at the exact path the cloud harness looks for", () => {
+    expect(existsSync(STEWARD), `${STEWARD} is missing — cloud PR sessions fall back to polling`).toBe(true);
+  });
+
+  it("still parks owner-gated PRs, caps timers, and allows one watcher per PR", () => {
+    const body = read(STEWARD);
+    expect(body).toMatch(/Park owner-gated PRs/);
+    expect(body).toMatch(/Arm \*\*no\*\* timer/);
+    expect(body).toMatch(/One watcher per PR/);
+    expect(body).toMatch(/3 no-change wakes/);
+    expect(body).toMatch(/subscribe_pr_activity/);
+  });
+});

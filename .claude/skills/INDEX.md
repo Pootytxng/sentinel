@@ -24,6 +24,7 @@
 | `guard-forge` | a defect was caught, BEFORE its fix is claimed done | any | bug→guard law; red→green proof required; tiers: test > rubric > memory. |
 | `doc-sync` | any state change; any two docs disagreeing | any | Precedence (RELEASE_STATE=current state · PRODUCT_CONSTITUTION=product truth · ARCHITECTURE_LOCKS=safety · WORK_CONTROL=ownership · CLAUDE.md=bootstrap, not law · code>any doc on what is built) + same-commit ordering. |
 | `usage-audit` | owner asks about usage/tokens/budget; a 🔴 in `docs/usage-audit/LATEST.md` | layer 1: `node scripts/usage-audit.mjs` (no LLM) · layer 2: any (terse) | Session/token discipline meter. Weekly report auto-written by the `CompyUsageAudit` scheduled task (Mondays, zero tokens). |
+| `steward` | a cloud session is about to arm (or is woken by) a check-in on a PR | any (it's a rule set) | Added 2026-09-28 after 3 Routines + ~6 lanes hourly re-polled owner-gated drafts #603–#609 for hours with zero change. Park owner-gated PRs, one watcher per PR, events not timers. The cloud harness reads this file by name for "how proactive to be". |
 | `status` | "where are we" / "what's left" / "show me" / end of any train | dispatcher: any · doc reads: **sonnet** | Added 2026-08-05: >50% of the owner's short messages are status questions and there was no surface for them. Reconstructs from git + the state docs; never answers from session memory. |
 
 ### Evaluated and rejected — do not re-add without reading this
