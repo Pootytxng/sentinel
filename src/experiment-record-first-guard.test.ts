@@ -255,13 +255,17 @@ describe("a Trial measures one change, and says so only when it can (#611 review
     expect(resolve, "the treatment is timed against created_at again").not.toMatch(/rec\.created_at/);
   });
 
-  it("a failed apply reads the setting before it says nothing changed", () => {
+  it("a failed apply reads the setting and always leaves a loud record", () => {
     expect(start).toMatch(
       /Err\(e\) => \{\s*let check = crate::history::probe_rec_target\([^)]*\);\s*return Err\(settle_failed_apply\(&mut store, idx, &e, check\)\);/,
     );
-    expect(start, "the start drops its record without a read again").not.toContain("experiments.remove(");
+    expect(start, "the start drops its record again").not.toContain("experiments.remove(");
+    // #611 r3: an apply that writes in several steps can stop part-way and still read as unchanged,
+    // so no read, however it comes back, drops the record.
     const settle = fnBody(EXPERIMENT, "fn settle_failed_apply(");
-    expect(settle).toMatch(/let Some\(message\) = mark_failed_apply\([\s\S]*?\) else \{\s*store\.experiments\.remove\(idx\)/);
+    expect(settle).toContain("let message = mark_failed_apply(&mut store.experiments[idx], err, check);");
+    expect(settle, "a failed apply drops its record again").not.toContain("experiments.remove(");
+    expect(fnBody(EXPERIMENT, "fn mark_failed_apply("), "a read can excuse a record again").not.toMatch(/return None|-> Option</);
   });
 
   it("§3 at conclude: another Compy change during the test confounds, ahead of the target check", () => {
@@ -306,32 +310,42 @@ describe("a Trial never reads a lost history as a quiet one (#611 review round 2
 // Codex review of 93a2458b on #611: a missing crash session still let the crash alone record a
 // high-confidence regression; an empty ledger (set aside as damaged, or a receipt that failed to save)
 // let the launch reconcile drop a start whose change may be in place; and settings with no live read
-// count as active whether or not they stayed put.
+// count as active whether or not they stayed put. Codex round 3 (e8e5b725): a crash pair with nothing
+// recorded in common was still pinned; a live read of "unchanged" still dropped a start, though an
+// apply cut off part-way reads that way; and a cap still let an unconfirmed Better keep.
 describe("a Trial claims nothing it can't tie to its own change (#611 review round 3)", () => {
   it("a crash reaches the change's verdict only through a found, later, comparable pair", () => {
     const crash = fnBody(EXPERIMENT, "pub(crate) fn crash_outcome(");
     expect(crash, "a crash with a missing session is pinned on the change again").not.toMatch(/return \(crash,/);
     expect(crash).toContain('unpinned("crash-session-missing"');
     expect(crash).toContain('unpinned("crash-baseline-missing"');
+    expect(crash).toMatch(/Comparability::NotComparable => \{[\s\S]*?unpinned\("crash-session-not-comparable"/);
+    expect(crash, "a crash pair with no shared context is pinned again").toMatch(
+      /Comparability::Unknown => \{[\s\S]*?unpinned\("crash-session-comparability-unknown"/,
+    );
+    expect(crash).toContain("Comparability::Comparable | Comparability::Partial => {}");
     expect(crash.trimEnd().endsWith("(with_comparability(crash, &pairing), Some(pairing))\n}")).toBe(true);
   });
 
-  it("an interrupted start is dropped only after a live read shows the setting unchanged", () => {
+  it("an interrupted start is never dropped: a live read only words its loud record", () => {
     const pure = fnBody(EXPERIMENT, "pub(crate) fn reconcile_interrupted_starts_in(");
-    expect(pure).toMatch(/None if changed\(&store\.experiments\[i\]\.rec_id\) == Some\(false\) => InterruptedStart::Dropped/);
-    expect(pure.match(/=> InterruptedStart::Dropped/g), "a second way to drop a start").toHaveLength(1);
+    expect(pure, "the reconcile drops a start again").not.toContain("experiments.remove(");
+    expect(EXPERIMENT, "a way to drop an interrupted start is back").not.toContain("InterruptedStart::Dropped");
+    expect(pure).toMatch(/None => \{\s*live_read = changed\(&store\.experiments\[i\]\.rec_id\);\s*InterruptedStart::ChangeUnrecorded/);
     expect(fnBody(EXPERIMENT, "fn reconcile_pending_locked(")).toContain(
       "target_verification(Some(crate::history::probe_rec_target(rec_id)))",
     );
   });
 
-  it("§3 at conclude: other settings that can't be read back cap the result, ahead of the target check", () => {
+  it("§3/§7/§9 at conclude: other settings that can't be read back leave the result unjudged, ahead of the target check", () => {
     const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
     const fold = conclude.indexOf("with_unverified_changes(judged, unverified)");
     expect(fold, "the conclude no longer weighs settings it can't read back").toBeGreaterThanOrEqual(0);
     expect(fold).toBeGreaterThan(conclude.indexOf("with_compy_state(judged,"));
     expect(fold).toBeLessThan(conclude.indexOf("guard_target_at_conclude(judged,"));
-    expect(fnBody(EXPERIMENT, "pub(crate) fn with_unverified_changes(")).toContain("outcome.confidence.min(Confidence::Low)");
+    const unverified = fnBody(EXPERIMENT, "pub(crate) fn with_unverified_changes(");
+    expect(unverified).toMatch(/verdict: "insufficient-evidence"\.into\(\),\s*keep: false,/);
+    expect(unverified, "an unconfirmed result is only capped again, and can still keep").not.toContain("confidence.min(");
   });
 });
 

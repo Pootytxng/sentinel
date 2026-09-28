@@ -98,10 +98,10 @@ adding another isolated tweak.
   crash is checked for comparability, and one whose setting can't be read back isn't blamed; a
   failed apply says "nothing changed" only after a read proves it. Review round 2: a change history
   once set aside as damaged never backs a one-change claim; a crash counts only in a session begun
-  after the apply; the bench offers only Restore on a Trial an older Compy started. Codex r2 fixes:
-  a crash whose session or baseline is missing is never blamed on the change; an interrupted start
-  with no change record is dropped only after a live read shows the setting unchanged; a result is
-  capped at low confidence, and says why, when other applied settings can't be read back.
+  after the apply; the bench offers only Restore on a Trial an older Compy started. Codex r2+r3
+  fixes: a crash is never blamed without a found, comparable session pair; an interrupted start or
+  failed apply always leaves a loud record, since a part-way apply can read as unchanged; a result
+  is left unjudged and restored when other applied settings can't be read back.
   All three lanes built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** owner-rig
   live proof on `game-bar-disable`, including a kill mid-start then relaunch · independent review of
   the final head · merge.

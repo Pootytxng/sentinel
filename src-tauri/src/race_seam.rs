@@ -301,8 +301,8 @@ impl StoreLock {
 ///   `conclude_experiment` and `restore_experiment` hold it and call `history::rollback_change`.
 ///   Each of those enters `HISTORY_LOCK`. **Direction matters and is asserted, not assumed:** nothing in the
 ///   crate calls into `experiment` at all except `lib.rs` (its command registration, and the
-///   launch-time `reconcile_interrupted_starts` in `.setup`, which holds no store lock), so no production
-///   path takes `History` and then `Experiment` — which is why
+///   launch-time `reconcile_interrupted_starts` in `.setup`, which takes the Experiment gate first and
+///   only reads the ledger inside it), so no production path takes `History` and then `Experiment` — which is why
 ///   `the_inverted_history_to_experiment_edge_is_undeclared_and_panics` can use that direction as a
 ///   live positive control.
 /// - `Experiment -> SupportEvidence` — required by the all-held-lock rule, on two distinct real
