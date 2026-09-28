@@ -309,8 +309,9 @@ impl StoreLock {
 ///   paths. **Two-deep:** `apply_recommendation` and `rollback_change` call
 ///   `record_operation_failure` on their error branch, and that call happens after the inner
 ///   function has released `HISTORY_LOCK` but while `start_experiment` still holds the Experiment
-///   gate; likewise `active_change_count`, `comparison::arm_watermark`, `ledger_len_checked`
-///   and the read-only launch `reconcile_interrupted_starts`
+///   gate; likewise `active_change_count`, `applied_changes_summary`, `comparison::arm_watermark`,
+///   `ledger_len_checked`, the §3 one-change ledger reads in `start_experiment` and
+///   `conclude_experiment`, and the read-only launch `reconcile_interrupted_starts`
 ///   (#583) each run `load_history` under the Experiment gate and
 ///   reach `support_evidence::record` on the corrupt-ledger branch. **Three-deep:** inside
 ///   `apply_recommendation_inner`, `HISTORY_LOCK` is held and `begin_mutation` → `load_history_for`

@@ -71,6 +71,8 @@ const RUNNING_EXPERIMENT = {
   verdict: null,
   kept: false,
   concluded_at: null,
+  baseline_session_id: "2026-07-16T22:00:00Z",
+  applied_at: "2026-07-17T00:00:00Z",
 };
 
 // A concluded experiment whose treatment session measured a DIFFERENT game than the baseline: the
@@ -651,6 +653,43 @@ describe("ExperimentBench (armed)", () => {
     });
     expect(reason.textContent).toMatch(/^The setting didn't read back as changed; /);
     expect(reason.textContent).not.toContain("start-aborted");
+  });
+
+  // #611 review round 2: a crash whose conclude-time read failed, and whose read after the restore
+  // still showed the setting changed, carries two stacked tags (experiment.rs); both must go.
+  it("strips every stacked machine tag from an aborted crash's reason", async () => {
+    state.gate = true;
+    state.experiments = [
+      {
+        ...NOT_COMPARABLE_EXPERIMENT, id: "crash", status: "aborted", verdict: "insufficient-evidence", noise_evidence: null,
+        stop_reason:
+          "crash-during-treatment; target-unreadable-at-conclude; a read afterwards shows the setting as changed — check it in Test → Applied & history",
+      },
+    ];
+    render(<ExperimentBench />);
+    const reason = await waitFor(() => {
+      const el = document.querySelector(".exp-bench-abort");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(reason.textContent).toMatch(/^A read afterwards shows the setting as changed/);
+    expect(reason.textContent).not.toMatch(/crash-during-treatment|target-unreadable/);
+  });
+
+  // #611 review round 2: a Trial an older Compy started has no baseline id or no apply time, and the
+  // backend refuses to conclude it. The bench must not offer a button that can only fail.
+  it.each([
+    ["no apply time", { applied_at: null }],
+    ["no baseline session id", { baseline_session_id: null }],
+  ])("offers only Restore for a running Trial with %s", async (_what, missing) => {
+    state.gate = true;
+    state.experiments = [{ ...RUNNING_EXPERIMENT, ...missing }];
+    state.sessions = [VALORANT_SESSION, { ...VALORANT_SESSION, started_at: "2026-07-17T04:00:00Z" }];
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-running");
+    expect(screen.getByText(/An older version of Compy started this experiment/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Conclude/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Restore now" })).toBeEnabled();
   });
 
   // #583 lane 2b: the backend now refuses a start or conclude on the sessions it reads (missing,

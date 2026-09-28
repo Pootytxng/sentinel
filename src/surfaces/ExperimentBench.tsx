@@ -186,11 +186,18 @@ function noteMark(i: number): string {
   return ["*", "†", "‡"][i] ?? String(i + 1);
 }
 
-// The backend tags a stop reason with a machine prefix ("start-aborted: …", "user-restored; …") so
-// the record stays sortable. The owner reads the sentence after it, never the tag.
+// The backend tags a stop reason with machine prefixes ("start-aborted: …", "user-restored; …",
+// stacked as "crash-during-treatment; target-unreadable-at-conclude; …") so the record stays
+// sortable. The owner reads the sentence after them, never a tag.
 function abortReasonText(reason: string): string {
-  const text = reason.replace(/^[a-z]+(?:-[a-z]+)*[:;]\s+/, "");
+  const text = reason.replace(/^(?:[a-z]+(?:-[a-z]+)+[:;]\s+)+/, "") || reason;
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// A Trial started by an older Compy lacks the baseline session id (pre lane 2b) or the apply time
+// (pre #611 r1). The backend refuses to conclude it and says so, so the bench offers only Restore.
+function canConclude(exp: Experiment): exp is Experiment & { applied_at: string; baseline_session_id: string } {
+  return !!exp.baseline_session_id && !!exp.applied_at;
 }
 
 // The treatment session for a running experiment: the most recent monitored session of the SAME game
@@ -198,7 +205,8 @@ function abortReasonText(reason: string): string {
 // the owner simply hasn't played a qualifying session yet. Timed as the backend times it: from when
 // the apply returned, since a session begun while the apply was pending can't measure the change.
 function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSummary | null {
-  const started = new Date(exp.applied_at ?? exp.created_at).getTime();
+  if (!canConclude(exp)) return null;
+  const started = new Date(exp.applied_at).getTime();
   const candidates = sessions
     .filter(
       (s) =>
@@ -624,6 +632,7 @@ function RunningPanel({
 }) {
   const { t } = useTranslation();
   const game = prettyGameName(exp.game) || t("lab.experimentBench.yourGame");
+  const legacy = !canConclude(exp);
   return (
     <div className="exp-running" data-testid="experiment-running">
       <div className="exp-running-head">
@@ -636,21 +645,23 @@ function RunningPanel({
       </p>
       {exp.attribution_warning && <p className="exp-bench-warn">{exp.attribution_warning}</p>}
       <p className="exp-running-step">
-        {t("lab.experimentBench.runningStep", { game })}
+        {legacy ? t("lab.experimentBench.runningLegacy") : t("lab.experimentBench.runningStep", { game })}
       </p>
 
       <div className="exp-running-actions">
-        <button
-          className="exp-cta"
-          disabled={!treatment || busy}
-          onClick={() => treatment && onConclude(exp, treatment)}
-        >
-          {busy
-            ? t("lab.experimentBench.working")
-            : treatment
-              ? t("lab.experimentBench.concludeWithLatest", { game })
-              : t("lab.experimentBench.noNewSession", { game })}
-        </button>
+        {!legacy && (
+          <button
+            className="exp-cta"
+            disabled={!treatment || busy}
+            onClick={() => treatment && onConclude(exp, treatment)}
+          >
+            {busy
+              ? t("lab.experimentBench.working")
+              : treatment
+                ? t("lab.experimentBench.concludeWithLatest", { game })
+                : t("lab.experimentBench.noNewSession", { game })}
+          </button>
+        )}
         <button
           className="exp-cta-ghost"
           disabled={busy}
@@ -659,7 +670,7 @@ function RunningPanel({
           {t("lab.experimentBench.restoreNow")}
         </button>
       </div>
-      {treatment ? (
+      {legacy ? null : treatment ? (
         <p className="exp-fineprint">
           {t("lab.experimentBench.runningLatestPre", { game })} <b>{Math.round(treatment.avg_fps)}</b> {t("lab.experimentBench.baselineMid")}{" "}
           <b>{Math.round(treatment.low1_fps_est)}</b>{" "}

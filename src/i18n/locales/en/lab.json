@@ -411,6 +411,7 @@
     "runningBaselinePre": "Baseline · {{game}} — avg",
     "fpsUnit": "fps",
     "runningStep": "The change is applied. Play a {{game}} session, then conclude — Compy compares it to the baseline and restores the change unless it clearly wins.",
+    "runningLegacy": "An older version of Compy started this experiment and didn’t record everything a fair comparison needs, so it can’t be concluded. Restore it, then start a new one.",
     "working": "Working…",
     "concludeWithLatest": "Conclude with my latest {{game}} session",
     "noNewSession": "No new {{game}} session yet",

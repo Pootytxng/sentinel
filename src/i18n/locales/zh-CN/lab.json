@@ -406,6 +406,7 @@
     "runningBaselinePre": "基准 · {{game}} —— 平均",
     "fpsUnit": "fps",
     "runningStep": "这项更改已应用。玩一局 {{game}},然后点击结束——Compy 会将结果与基准比较,除非明显更优,否则会恢复这项更改。",
+    "runningLegacy": "这项实验由旧版 Compy 启动,当时没有记录公平比较所需的全部信息,因此无法结束。请先恢复,再开始新的实验。",
     "working": "处理中…",
     "concludeWithLatest": "用我最近一局 {{game}} 结束实验",
     "noNewSession": "还没有新的 {{game}} 对局",

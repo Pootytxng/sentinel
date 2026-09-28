@@ -156,14 +156,15 @@ const RUNNING = {
   attribution_warning: "3 other changes are already applied — a win here is the stack's, not this change's alone.",
   noise_floor_pct: 3, treatment: null, verdict: null, kept: false, stop_reason: null,
   concluded_at: null, verdict_confidence: null, verdict_note: null,
-  baseline_session_id: BASELINE_AT, noise_evidence: null,
+  baseline_session_id: BASELINE_AT, applied_at: iso(40), noise_evidence: null,
 };
 
 // Per-state answers. The bench matches a treatment session by game name AND a start time strictly
-// LATER than the experiment's `created_at` (treatmentFor in ExperimentBench.tsx), so 'running'
-// carries a second session at 12 minutes ago against the experiment's 40 — that arms the conclude
+// LATER than the experiment's `applied_at` (treatmentFor in ExperimentBench.tsx), so 'running'
+// carries a second session at 12 minutes ago against the apply's 40 — that arms the conclude
 // CTA. 'running-no-session' omits it, which is the state the owner actually lands in the moment
-// after starting: the CTA reads "no new session yet" and stays disabled.
+// after starting: the CTA reads "no new session yet" and stays disabled. 'running-legacy' is a Trial
+// an older Compy started without an apply time: it can only be restored.
 const STATES: Record<string, { experiments: unknown[]; sessions: unknown[] }> = {
   start: { experiments: HISTORY, sessions: [session()] },
   running: {
@@ -174,6 +175,10 @@ const STATES: Record<string, { experiments: unknown[]; sessions: unknown[] }> = 
     ],
   },
   "running-no-session": { experiments: [RUNNING, ...HISTORY], sessions: [session()] },
+  "running-legacy": {
+    experiments: [{ ...RUNNING, applied_at: null }, ...HISTORY],
+    sessions: [session(), session({ started_at: iso(12), duration_secs: 700, samples: 690, avg_fps: 148.9, low1_fps_est: 104.8 })],
+  },
 };
 
 // CPU-TEMP OFFER STATES (Q9c).

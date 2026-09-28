@@ -201,7 +201,7 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
       /crash_overrides_refusal\(\s*resolve_treatment\([\s\S]*?\),\s*crashed,?\s*\)\s*\.map_err\([\s\S]*?\)\?;/,
     );
     expect(conclude, "a crash whose session can't be used no longer restores").toMatch(
-      /None => crash_outcome\(baseline, treatment\)/,
+      /None => crash_outcome\(rec\.applied_at\.as_deref\(\), baseline, treatment\)/,
     );
     for (const later of ["conclude_outcome(", ".treatment = resolved", "crate::history::rollback_change(", "save_store("]) {
       expect(conclude.indexOf(later), `${later} moved ahead of the treatment check`).toBeGreaterThan(resolve);
@@ -267,7 +267,7 @@ describe("a Trial measures one change, and says so only when it can (#611 review
   it("§3 at conclude: another Compy change during the test confounds, ahead of the target check", () => {
     const fold = conclude.indexOf("with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()))");
     expect(fold, "the conclude no longer checks Compy's other changes").toBeGreaterThanOrEqual(0);
-    expect(fold).toBeGreaterThan(conclude.indexOf("crash_outcome(baseline, treatment)"));
+    expect(fold).toBeGreaterThan(conclude.indexOf("crash_outcome(rec.applied_at.as_deref(), baseline, treatment)"));
     expect(fold).toBeLessThan(conclude.indexOf("guard_target_at_conclude(judged,"));
   });
 
@@ -275,6 +275,31 @@ describe("a Trial measures one change, and says so only when it can (#611 review
     const crash = fnBody(EXPERIMENT, "pub(crate) fn crash_outcome(");
     expect(crash).toContain("crate::comparability::derive(baseline, treatment)");
     expect(crash).toContain("with_comparability(crash, &pairing)");
+  });
+});
+
+// Review of b47fb6c1 on #611: a damaged ledger is set aside once, then loads as a fresh EMPTY one
+// forever, which the one-change checks would read as "nothing moved". And a crash was pinned on the
+// change even when its session began before the change took effect.
+describe("a Trial never reads a lost history as a quiet one (#611 review round 2)", () => {
+  const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
+  const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
+  const read = /ledger_for_one_change_checks\(\s*crate::history::load_history\(\),\s*crate::history::ledger_was_quarantined\(\),?\s*\)/;
+
+  it("start and conclude read the ledger through the set-aside check, never raw", () => {
+    for (const [name, body] of [["start", start], ["conclude", conclude]] as const) {
+      expect(body, `${name} no longer counts a set-aside ledger as incomplete`).toMatch(read);
+      expect(body.replace(read, ""), `${name} reads the ledger raw again`).not.toContain("crate::history::load_history()");
+    }
+    expect(fnBody(EXPERIMENT, "fn ledger_for_one_change_checks<")).toMatch(/if set_aside \{\s*return Err/);
+  });
+
+  it("a crash is pinned on the change only in a session begun after it took effect", () => {
+    const crash = fnBody(EXPERIMENT, "pub(crate) fn crash_outcome(");
+    const after = crash.indexOf("began_after_apply(treatment, at)) != Some(true)");
+    expect(after, "a crash no longer checks when its session began").toBeGreaterThanOrEqual(0);
+    expect(after).toBeLessThan(crash.indexOf("crate::comparability::derive("));
+    expect(fnBody(EXPERIMENT, "pub(crate) fn resolve_treatment<")).toContain("began_after_apply(treatment, applied_at)");
   });
 });
 

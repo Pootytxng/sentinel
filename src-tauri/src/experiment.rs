@@ -557,6 +557,19 @@ pub(crate) struct LedgerEntryRef<'a> {
     pub rolled_back_at: Option<&'a str>,
 }
 
+/// The Trust Ledger the §3 one-change checks read, or why it can't back them, in words.
+/// `load_history` fails loud only once on a damaged ledger: it sets the file aside, and every later
+/// load returns a fresh, EMPTY ledger that would read as "no Compy change moved". The marker left on
+/// disk is the only evidence that the silence is a loss, so it counts as incomplete here, as it does
+/// in `intelligence::gather`.
+fn ledger_for_one_change_checks<T>(loaded: Result<Vec<T>, String>, set_aside: bool) -> Result<Vec<T>, String> {
+    let history = loaded.map_err(|_| "Compy can't read its change history".to_string())?;
+    if set_aside {
+        return Err("Compy's change history was damaged earlier and set aside, so part of it is missing".into());
+    }
+    Ok(history)
+}
+
 /// The Trust Ledger as the pure checks here read it.
 fn ledger_rows(history: &[crate::history::AppliedChange]) -> Vec<LedgerEntryRef<'_>> {
     history
@@ -988,17 +1001,16 @@ pub(crate) fn resolve_baseline<'a>(
 /// place as now, so the before/after differs by this one change alone. Refuses when a Compy change was
 /// applied or undone after the baseline session began, when the number of active Compy changes differs
 /// from the one that session recorded (a change reverted outside Compy, or an undo too old to carry a
-/// date), and when the change history can't be read to check. `active_now` must be counted the way a
-/// session counts it (`history::applied_changes_summary().active`).
+/// date), and when the change history can't back the check (`ledger` is then why, in words, from
+/// [`ledger_for_one_change_checks`]). `active_now` must be counted the way a session counts it
+/// (`history::applied_changes_summary().active`).
 pub(crate) fn baseline_is_current(
     baseline: &SessionSummary,
     ledger: Result<&[LedgerEntryRef<'_>], &str>,
     active_now: usize,
 ) -> Result<(), String> {
-    let ledger = ledger.map_err(|_| {
-        "Compy can't read its change history, so it can't check that nothing else changed since the \
-         baseline session"
-            .to_string()
+    let ledger = ledger.map_err(|why| {
+        format!("{why}, so it can't check that nothing else changed since the baseline session")
     })?;
     let replay = "so the before/after would measure more than this one change — play a new baseline \
                   session, then start";
@@ -1135,16 +1147,10 @@ pub(crate) fn resolve_treatment<'a>(
                     be shown to have been played after it — restore it and start a new one"
             .into());
     };
-    let played_after = match (
-        DateTime::parse_from_rfc3339(&treatment.started_at),
-        DateTime::parse_from_rfc3339(applied_at),
-    ) {
-        (Ok(t), Ok(a)) => t > a,
-        _ => {
-            return Err("Compy can't tell whether that session was played after the change was \
-                        applied, so it can't be the after-reading"
-                .into())
-        }
+    let Some(played_after) = began_after_apply(treatment, applied_at) else {
+        return Err("Compy can't tell whether that session was played after the change was \
+                    applied, so it can't be the after-reading"
+            .into());
     };
     if !played_after {
         return Err(format!(
@@ -1170,6 +1176,18 @@ pub(crate) fn resolve_treatment<'a>(
         Comparability::Comparable | Comparability::Partial => {}
     }
     Ok((treatment, pairing))
+}
+
+/// Whether `session` began after the change took effect (`applied_at`, stamped when the apply
+/// returned). None when either time can't be read: an unknown is never taken as "after".
+fn began_after_apply(session: &SessionSummary, applied_at: &str) -> Option<bool> {
+    match (
+        DateTime::parse_from_rfc3339(&session.started_at),
+        DateTime::parse_from_rfc3339(applied_at),
+    ) {
+        (Ok(t), Ok(a)) => Some(t > a),
+        _ => None,
+    }
 }
 
 /// §4F "stop on crash" beats every session refusal: a game that crashed on launch is the session least
@@ -1200,18 +1218,39 @@ fn crash_without_reading() -> ConcludeOutcome {
     }
 }
 
-/// A reported crash whose session couldn't be judged still restores, but when both sessions can be
-/// found their recorded conditions are checked first, exactly as for a measured session: a crash in
-/// another game or on another rig, or under a changed driver, Windows build or resolution, can't be
-/// pinned on this setting. Only when a session is missing does the crash alone decide.
-pub(crate) fn crash_outcome(baseline: Option<&SessionSummary>, treatment: Option<&SessionSummary>) -> ConcludeOutcome {
+/// A reported crash whose session couldn't be judged still restores, but the session it names is
+/// checked first, exactly as for a measured one: a crash in a session that can't be shown to have
+/// begun after the change took effect, in another game or on another rig, or under a changed driver,
+/// Windows build or resolution, can't be pinned on this setting. Only when a session is missing does
+/// the crash alone decide. Returns the pairing it judged by, for the §11 receipt.
+pub(crate) fn crash_outcome(
+    applied_at: Option<&str>,
+    baseline: Option<&SessionSummary>,
+    treatment: Option<&SessionSummary>,
+) -> (ConcludeOutcome, Option<SessionComparability>) {
     let crash = crash_without_reading();
-    let (Some(baseline), Some(treatment)) = (baseline, treatment) else {
-        return crash;
+    let Some(treatment) = treatment else {
+        return (crash, None);
+    };
+    if applied_at.and_then(|at| began_after_apply(treatment, at)) != Some(true) {
+        let outcome = ConcludeOutcome {
+            verdict: "not-comparable".into(),
+            keep: false,
+            stop_reason: Some("crash-session-not-after-change".into()),
+            confidence: Confidence::Unknown,
+            note: "The game crashed, but Compy can't show that session began after the change took \
+                   effect, so the crash can't be pinned on this setting. Compy restored the change."
+                .into(),
+            ..crash
+        };
+        return (outcome, None);
+    }
+    let Some(baseline) = baseline else {
+        return (crash, None);
     };
     let pairing = crate::comparability::derive(baseline, treatment);
     if pairing.verdict == Comparability::NotComparable {
-        return ConcludeOutcome {
+        let outcome = ConcludeOutcome {
             verdict: "not-comparable".into(),
             keep: false,
             stop_reason: Some("crash-session-not-comparable".into()),
@@ -1223,8 +1262,9 @@ pub(crate) fn crash_outcome(baseline: Option<&SessionSummary>, treatment: Option
             ),
             ..crash
         };
+        return (outcome, Some(pairing));
     }
-    with_comparability(crash, &pairing)
+    (with_comparability(crash, &pairing), Some(pairing))
 }
 
 /// The outcomes whose verdict was actually judged against the noise band: a measured
@@ -1525,7 +1565,10 @@ pub(crate) fn start_experiment(
     let baseline = resolve_baseline(&sessions, &baseline_session_id)
         .map_err(|why| format!("experiment not started — {why}"))?;
     // §3: the baseline must still describe the Compy changes in place now.
-    let history = crate::history::load_history();
+    let history = ledger_for_one_change_checks(
+        crate::history::load_history(),
+        crate::history::ledger_was_quarantined(),
+    );
     let rows = history.as_deref().map(ledger_rows);
     let ledger = match &rows {
         Ok(rows) => Ok(rows.as_slice()),
@@ -1829,7 +1872,10 @@ pub(crate) fn conclude_experiment(
     .map_err(|why| format!("experiment not concluded — {why}"))?;
 
     let now = Utc::now();
-    let history = crate::history::load_history();
+    let history = ledger_for_one_change_checks(
+        crate::history::load_history(),
+        crate::history::ledger_was_quarantined(),
+    );
     let rows = history.as_deref().ok().map(ledger_rows);
     // `.ok()` is the honest direction here, not a collapse: an unreadable ledger becomes `None`,
     // which the confound guard REFUSES to attribute. It is never silently treated as a count.
@@ -1840,8 +1886,9 @@ pub(crate) fn conclude_experiment(
     let rec = &store.experiments[idx];
     let baseline = found(&sessions, rec.baseline_session_id.as_deref());
     let treatment = found(&sessions, Some(&treatment_session_id));
-    let judged = match &resolved {
-        Some((treatment, pairing)) => with_comparability(
+    let (judged, crash_pairing) = match &resolved {
+        Some((treatment, pairing)) => (
+            with_comparability(
             conclude_outcome(
                 rec,
                 treatment.low1_fps_est,
@@ -1852,8 +1899,10 @@ pub(crate) fn conclude_experiment(
                 now,
             ),
             pairing,
+            ),
+            None,
         ),
-        None => crash_outcome(baseline, treatment),
+        None => crash_outcome(rec.applied_at.as_deref(), baseline, treatment),
     };
     let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()));
     let outcome = guard_target_at_conclude(judged, target_verification(Some(target_now)));
@@ -1867,10 +1916,11 @@ pub(crate) fn conclude_experiment(
         recorded_at: now.to_rfc3339(),
         session_id: Some(treatment.started_at.clone()),
     });
-    store.experiments[idx].session_pairing = resolved.as_ref().map(|(_, pairing)| SessionPairing {
-        verdict: pairing.verdict,
-        missing_context: pairing.missing_context.clone(),
-    });
+    store.experiments[idx].session_pairing = resolved
+        .as_ref()
+        .map(|(_, pairing)| pairing)
+        .or(crash_pairing.as_ref())
+        .map(|pairing| SessionPairing { verdict: pairing.verdict, missing_context: pairing.missing_context.clone() });
     // §11: the band this verdict was judged against, when it was.
     let band_pct = store.experiments[idx].noise_floor_pct;
     store.experiments[idx].noise_evidence = noise_evidence_for(&outcome, band_pct);
@@ -3336,9 +3386,26 @@ mod experiment_tests {
         let why = baseline_is_current(&base, Ok(&settled), 3).unwrap_err();
         assert!(why.contains("(2 then, 3 now)"), "{why}");
 
-        // A history Compy can't read is refused, never assumed unchanged.
-        let why = baseline_is_current(&base, Err("disk error"), 2).unwrap_err();
-        assert!(why.contains("can't read its change history"), "{why}");
+        // A history Compy can't read is refused, never assumed unchanged, and the refusal says why.
+        let why = baseline_is_current(&base, Err("Compy can't read its change history"), 2).unwrap_err();
+        assert!(why.starts_with("Compy can't read its change history, so it can't check"), "{why}");
+    }
+
+    // #611 r1 review: a damaged ledger is set aside once, then every load returns a fresh, EMPTY one
+    // that would read as "no Compy change moved" forever. The marker makes that silence a loss.
+    #[test]
+    fn a_ledger_set_aside_as_damaged_never_backs_a_one_change_claim() {
+        let unread = ledger_for_one_change_checks::<u8>(Err("sharing violation".into()), false).unwrap_err();
+        assert_eq!(unread, "Compy can't read its change history");
+        let lost = ledger_for_one_change_checks(Ok(Vec::<u8>::new()), true).unwrap_err();
+        assert!(lost.contains("set aside") && lost.contains("part of it is missing"), "{lost}");
+        // Even a fresh ledger that has rows since is only part of the story.
+        assert!(ledger_for_one_change_checks(Ok(vec!["c1"]), true).is_err());
+        assert_eq!(ledger_for_one_change_checks(Ok(vec!["c1"]), false), Ok(vec!["c1"]));
+
+        let base = SessionSummary { compy_changes_active: 0, ..session(BASE_ID, 150.0) };
+        let why = baseline_is_current(&base, Err(lost.as_str()), 0).unwrap_err();
+        assert!(why.contains("set aside") && why.contains("nothing else changed"), "{why}");
     }
 
     #[test]
@@ -3403,17 +3470,40 @@ mod experiment_tests {
     #[test]
     fn a_crash_is_still_checked_against_the_baseline_conditions() {
         let base = session(BASE_ID, 150.0);
+        let after = session(TREAT_ID, 180.0);
+        let crash = |b, t| crash_outcome(Some(APPLIED), b, t);
         // A session that can't be found: the crash alone decides, and restores.
-        assert_eq!(crash_outcome(None, None), crash_without_reading());
-        assert_eq!(crash_outcome(Some(&base), None), crash_without_reading());
-        assert_eq!(crash_outcome(None, Some(&base)), crash_without_reading());
-        // A comparable session: the same crash verdict.
-        assert_eq!(crash_outcome(Some(&base), Some(&session(TREAT_ID, 180.0))), crash_without_reading());
+        assert_eq!(crash(None, None), (crash_without_reading(), None));
+        assert_eq!(crash(Some(&base), None), (crash_without_reading(), None));
+        assert_eq!(crash(None, Some(&after)), (crash_without_reading(), None));
+        // A comparable session: the same crash verdict, and the pairing it was judged by (§11).
+        let (o, pairing) = crash(Some(&base), Some(&after));
+        assert_eq!(o, crash_without_reading());
+        assert_eq!(pairing.map(|p| p.verdict), Some(Comparability::Comparable));
+
+        // #611 r1 review: a crash in a session that can't be shown to follow the change is never
+        // pinned on it: begun before the apply returned, undated, or on a record with no apply time.
+        let mut undated = after.clone();
+        undated.started_at = "yesterday".into();
+        for (applied_at, t) in [
+            (Some(APPLIED), &session(STARTED, 180.0)),
+            (Some(APPLIED), &undated),
+            (None, &after),
+        ] {
+            let (o, pairing) = crash_outcome(applied_at, Some(&base), Some(t));
+            assert_eq!(o.verdict, "not-comparable", "{} / {applied_at:?}", t.started_at);
+            assert!(!o.keep);
+            assert_eq!(o.stop_reason.as_deref(), Some("crash-session-not-after-change"));
+            assert_eq!(o.confidence, Confidence::Unknown);
+            assert!(o.note.contains("began after the change took effect"), "{}", o.note);
+            assert_eq!(trial_result_for(&o.verdict), TrialResult::Unmeasurable);
+            assert_eq!(pairing, None);
+        }
 
         // A changed driver: the crash can't be pinned on the setting (Codex r1 on #611).
         let mut new_driver = session(TREAT_ID, 180.0);
         new_driver.hw_fingerprint.as_mut().unwrap().gpu_driver = "25.8.1".into();
-        let o = crash_outcome(Some(&base), Some(&new_driver));
+        let (o, _) = crash(Some(&base), Some(&new_driver));
         assert_eq!(o.verdict, "confounded");
         assert!(!o.keep);
         assert_eq!(o.stop_reason.as_deref(), Some("conditions-changed-between-sessions"));
@@ -3425,8 +3515,9 @@ mod experiment_tests {
         let mut other_gpu = session(TREAT_ID, 180.0);
         other_gpu.hw_fingerprint.as_mut().unwrap().gpu = "GeForce RTX 5080".into();
         for t in [other_game, other_gpu] {
-            let o = crash_outcome(Some(&base), Some(&t));
+            let (o, pairing) = crash_outcome(Some(APPLIED), Some(&base), Some(&t));
             assert_eq!(o.verdict, "not-comparable", "{}", t.process_name);
+            assert_eq!(pairing.map(|p| p.verdict), Some(Comparability::NotComparable));
             assert!(!o.keep);
             assert_eq!(o.stop_reason.as_deref(), Some("crash-session-not-comparable"));
             assert_eq!(o.confidence, Confidence::Unknown);

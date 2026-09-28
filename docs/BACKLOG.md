@@ -96,7 +96,9 @@ adding another isolated tweak.
   Codex r1 fixes: a start refuses a baseline older than a Compy change; the after-session is timed
   from when the apply returned; another Compy change during the test confounds and restores; a
   crash is checked for comparability, and one whose setting can't be read back isn't blamed; a
-  failed apply says "nothing changed" only after a read proves it.
+  failed apply says "nothing changed" only after a read proves it. Review round 2: a change history
+  once set aside as damaged never backs a one-change claim; a crash counts only in a session begun
+  after the apply; the bench offers only Restore on a Trial an older Compy started.
   All three lanes built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** owner-rig
   live proof on `game-bar-disable`, including a kill mid-start then relaunch · independent review of
   the final head · merge.
