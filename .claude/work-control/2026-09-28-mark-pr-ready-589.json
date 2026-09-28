@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/563#issuecomment-5877744577",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/589#issuecomment-5877947345",
+    "status": "passed",
+    "reviewerNote": "Local Codex CLI (gpt-5.6-sol, read-only sandbox) reviewed the exact pushed head after its round-5 CHANGES REQUIRED at eb7205923159: the one-commit change is comment-only, and the restated env rule exactly describes the scanner (it skips only SETTING words, then takes the next word as a no-shell command), so every other env form is a documented limit. No findings. It authored no mutation.",
+    "head": "e55e3fa6c1fc9ea7c5658b2aaa2b3e02000bb6f5"
+  },
+  "branch": "claude/563-git-spawn-budget",
+  "overlapExclusiveNote": "The claim on #563 names the PR's whole 29-path delta since origin/main plus this lane's two receipt paths; the lease-overlap and write-scope gates both returned OK against every open issue's live lease.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "e55e3fa6c1fc9ea7c5658b2aaa2b3e02000bb6f5",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "468 frontend files, 7815 passed, five expected failures, nine skipped.",
+      "evidence": "logs/verify-local-2026-09-28T20-20-20Z.log; SHA-256 0417C5DA989B90C645EDCCB65C56B4C71BCB65AF2059880404C0974726285DF5; push log logs/push-r6.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded eb720592..e55e3fa6 at the exact head)",
+      "head": "e55e3fa6c1fc9ea7c5658b2aaa2b3e02000bb6f5"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-28T20-20-20Z.log; SHA-256 0417C5DA989B90C645EDCCB65C56B4C71BCB65AF2059880404C0974726285DF5; push log logs/push-r6.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded eb720592..e55e3fa6 at the exact head)",
+      "head": "e55e3fa6c1fc9ea7c5658b2aaa2b3e02000bb6f5"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1355 passed, zero failed; no Rust path changed.",
+      "evidence": "logs/verify-local-2026-09-28T20-20-20Z.log; SHA-256 0417C5DA989B90C645EDCCB65C56B4C71BCB65AF2059880404C0974726285DF5; push log logs/push-r6.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded eb720592..e55e3fa6 at the exact head)",
+      "head": "e55e3fa6c1fc9ea7c5658b2aaa2b3e02000bb6f5"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-28T20-20-20Z.log; SHA-256 0417C5DA989B90C645EDCCB65C56B4C71BCB65AF2059880404C0974726285DF5; push log logs/push-r6.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded eb720592..e55e3fa6 at the exact head)",
+      "head": "e55e3fa6c1fc9ea7c5658b2aaa2b3e02000bb6f5"
+    }
+  ],
+  "issue": 563,
+  "inheritedWork": true,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Round-6 claim by a successor session; it inherited the branch at eb720592 from the round-5 Handoff and re-derived git, PR, issue and board state before writing.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push moved the branch to the exact PR head; nothing was pushed after it.",
+  "pr": 589,
+  "mutationAuthorsNote": "claude-code authored every source commit on the branch across rounds 1-6. Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "mark-pr-ready",
+  "closingNote": "Mark draft PR #589 ready at the independently reviewed exact pushed head; merge requires its own receipt."
+}
