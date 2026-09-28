@@ -380,22 +380,29 @@ pub(crate) fn interrupted_start_change<'a>(
         .map(|c| c.id)
 }
 
-/// What a launch reconcile did to one interrupted start.
+/// What a reconcile did to one interrupted start.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum InterruptedStart {
     /// No change was applied: the record is dropped, as a failed apply always was.
     Dropped,
     /// A change was applied and is still in place: the record becomes a loud `Aborted` naming it.
     ChangeStillApplied,
-    /// The ledger could not be read, so Compy can't say whether the change was applied.
+    /// The start recorded its change and the ledger shows it rolled back: `Restored`, nothing kept.
+    ChangeAlreadyRolledBack,
+    /// The start recorded a change the ledger no longer has: a loud `Aborted` naming it.
+    ChangeMissing,
+    /// The ledger could not be read. The record stays `Pending`, untouched, for the next reconcile,
+    /// so a transient read failure never turns into a guess or a lost link to the change.
     LedgerUnreadable,
 }
 
-/// PURE launch reconcile (injected ledger + clock). Every `Pending` record left by a start that never
+/// PURE reconcile (injected ledger + clock). Every `Pending` record left by a start that never
 /// finished is resolved; nothing is silently kept and nothing is mutated here. There is no automatic
-/// restore at launch: no measurement exists, so §9 says restore, but a rollback may need elevation
-/// and nobody asked for a prompt at launch. The change stays in the Fix surface's active list, where
-/// its rollback lives, and the record says so.
+/// restore: no measurement exists, so §9 says restore, but a rollback may need elevation and nobody
+/// asked for a prompt. The change stays in the Fix surface's active list, where its rollback lives,
+/// and the record says so. A start that recorded its change id is matched by that id alone; only a
+/// start interrupted inside the apply itself (id never saved) falls back to
+/// [`interrupted_start_change`].
 pub(crate) fn reconcile_interrupted_starts_in(
     store: &mut ExperimentStore,
     ledger: Result<&[LedgerEntryRef<'_>], &str>,
@@ -408,45 +415,68 @@ pub(crate) fn reconcile_interrupted_starts_in(
             i += 1;
             continue;
         }
-        let claimed: Vec<&str> = store
-            .experiments
-            .iter()
-            .map(|e| e.applied_change_id.as_str())
-            .filter(|id| !id.is_empty())
-            .collect();
-        let resolution = match ledger {
-            Err(e) => Err(e.to_string()),
-            Ok(rows) => Ok(interrupted_start_change(&store.experiments[i], rows, &claimed).map(str::to_string)),
+        let Ok(rows) = ledger else {
+            outcomes.push(InterruptedStart::LedgerUnreadable);
+            i += 1;
+            continue;
+        };
+        let recorded = store.experiments[i].applied_change_id.clone();
+        let resolution = if recorded.is_empty() {
+            let claimed: Vec<&str> = store
+                .experiments
+                .iter()
+                .map(|e| e.applied_change_id.as_str())
+                .filter(|id| !id.is_empty())
+                .collect();
+            match interrupted_start_change(&store.experiments[i], rows, &claimed) {
+                None => InterruptedStart::Dropped,
+                Some(id) => {
+                    store.experiments[i].applied_change_id = id.to_string();
+                    InterruptedStart::ChangeStillApplied
+                }
+            }
+        } else {
+            match rows.iter().find(|r| r.id == recorded) {
+                Some(r) if r.applied => InterruptedStart::ChangeStillApplied,
+                Some(_) => InterruptedStart::ChangeAlreadyRolledBack,
+                None => InterruptedStart::ChangeMissing,
+            }
         };
         let rec = &mut store.experiments[i];
         match resolution {
-            Ok(None) => {
+            InterruptedStart::Dropped => {
                 store.experiments.remove(i);
                 outcomes.push(InterruptedStart::Dropped);
                 continue;
             }
-            Ok(Some(change_id)) => {
-                rec.applied_change_id = change_id;
+            InterruptedStart::ChangeStillApplied => {
+                rec.status = ExperimentStatus::Aborted;
                 rec.stop_reason = Some(
                     "interrupted-start: Compy closed while this experiment was starting, after the \
                      change was applied. Nothing was measured, so restore it from Fix."
                         .into(),
                 );
-                outcomes.push(InterruptedStart::ChangeStillApplied);
             }
-            Err(e) => {
+            InterruptedStart::ChangeAlreadyRolledBack => {
+                rec.status = ExperimentStatus::Restored;
+                rec.stop_reason = Some(
+                    "interrupted-start: Compy closed while this experiment was starting; its change \
+                     history shows the change already rolled back. Nothing was measured."
+                        .into(),
+                );
+            }
+            InterruptedStart::ChangeMissing | InterruptedStart::LedgerUnreadable => {
+                rec.status = ExperimentStatus::Aborted;
                 rec.stop_reason = Some(format!(
-                    "interrupted-start: Compy closed while this experiment was starting and could \
-                     not read its change history to see whether the change was applied — verify in \
-                     Fix: {e}"
+                    "interrupted-start: Compy closed while this experiment was starting, and its \
+                     change ({recorded}) is no longer in the change history — verify in Fix."
                 ));
-                outcomes.push(InterruptedStart::LedgerUnreadable);
             }
         }
-        rec.status = ExperimentStatus::Aborted;
         rec.kept = false;
         rec.trial_result = Some(TrialResult::Unmeasurable);
         rec.concluded_at = Some(now.to_rfc3339());
+        outcomes.push(resolution);
         i += 1;
     }
     outcomes
@@ -873,13 +903,24 @@ pub(crate) fn start_experiment(
     // One store read serves the single-active check, the id counter and the read-modify-write, all
     // under this one lock.
     let mut store = load_store();
+    // Under this lock no start is in flight, so any `Pending` here is an interrupted one: resolve it
+    // now rather than letting it block until the next launch.
+    reconcile_pending_locked(&mut store)?;
     // §3 one causal question at a time — enforced here, not only by the UI hiding the button.
     if let Some(active) = active_trial(&store) {
-        return Err(format!(
-            "another experiment ({}) is still {} — conclude or restore it before starting a new one",
-            active.rec_title,
-            if active.status == ExperimentStatus::Pending { "starting" } else { "running" },
-        ));
+        return Err(if active.status == ExperimentStatus::Pending {
+            format!(
+                "an earlier experiment start ({}) was interrupted and Compy can't read its change \
+                 history yet to resolve it — open Fix to check the change history, then try again",
+                active.rec_title,
+            )
+        } else {
+            format!(
+                "another experiment ({}) is still running — conclude or restore it before starting \
+                 a new one",
+                active.rec_title,
+            )
+        });
     }
 
     // Single-variable honesty context BEFORE we apply (§4F): how many changes are already active.
@@ -923,13 +964,22 @@ pub(crate) fn start_experiment(
         Ok(applied) => applied,
         Err(e) => {
             // Nothing changed, so nothing is recorded — the pre-#583 contract. If this save fails the
-            // Pending record stays on disk, and the next launch finds no applied change and drops it.
+            // Pending record stays on disk, and the next reconcile finds no applied change and drops it.
             store.experiments.pop();
             let _ = save_store(&store);
             return Err(format!("experiment aborted — apply failed, nothing changed: {e}"));
         }
     };
     store.experiments[idx].applied_change_id = applied.id().to_string();
+    // Name the change on disk before any further step can fail or crash, so a reconcile matches it
+    // by id instead of inferring it. A record that can't be saved can't own a change: restore it.
+    if let Err(e) = save_store(&store) {
+        return Err(abort_start(
+            &mut store,
+            idx,
+            &format!("the experiment record could not be saved after the apply ({e})"),
+        ));
+    }
 
     // Step 5 (§4.5): the live probe must not read the target state as OFF straight after the apply.
     let target = target_verification(applied.active_check);
@@ -951,7 +1001,15 @@ pub(crate) fn start_experiment(
     };
     store.experiments[idx].ledger_watermark = ledger_watermark;
     store.experiments[idx].status = ExperimentStatus::Running;
-    save_store(&store)?;
+    // A start the caller sees fail must not leave its change applied: restore when the promotion
+    // can't be saved.
+    if let Err(e) = save_store(&store) {
+        return Err(abort_start(
+            &mut store,
+            idx,
+            &format!("the experiment record could not be saved as running ({e})"),
+        ));
+    }
     Ok(store.experiments[idx].clone())
 }
 
@@ -993,17 +1051,15 @@ fn abort_start(store: &mut ExperimentStore, idx: usize, why: &str) -> String {
     };
     match save_store(store) {
         Ok(()) => message,
-        // The record on disk is still Pending; the next launch reconciles it against the ledger.
+        // The record on disk is still Pending; the next reconcile resolves it against the ledger.
         Err(e) => format!("{message} (the experiment record could not be saved: {e})"),
     }
 }
 
-/// Launch-time reconcile of starts that never finished (#583: no hidden state). Runs once from
-/// `.setup` before the first window can read the store. Reads the ledger only when a `Pending` record
-/// exists, and never mutates Windows: see [`reconcile_interrupted_starts_in`].
-pub(crate) fn reconcile_interrupted_starts() -> Result<Vec<InterruptedStart>, String> {
-    let _g = lock_store()?;
-    let mut store = load_store();
+/// Resolve every `Pending` record in `store` against the ledger and save when anything changed.
+/// The caller holds `lock_store()`. Reads the ledger only when a `Pending` record exists, and never
+/// mutates Windows: see [`reconcile_interrupted_starts_in`].
+fn reconcile_pending_locked(store: &mut ExperimentStore) -> Result<Vec<InterruptedStart>, String> {
     if !store.experiments.iter().any(|e| e.status == ExperimentStatus::Pending) {
         return Ok(Vec::new());
     }
@@ -1023,9 +1079,20 @@ pub(crate) fn reconcile_interrupted_starts() -> Result<Vec<InterruptedStart>, St
         Ok(_) => Ok(rows.as_slice()),
         Err(e) => Err(e.as_str()),
     };
-    let outcomes = reconcile_interrupted_starts_in(&mut store, ledger, Utc::now());
-    save_store(&store)?;
+    let outcomes = reconcile_interrupted_starts_in(store, ledger, Utc::now());
+    if outcomes.iter().any(|o| *o != InterruptedStart::LedgerUnreadable) {
+        save_store(store)?;
+    }
     Ok(outcomes)
+}
+
+/// Launch-time reconcile of starts that never finished (#583: no hidden state). Runs once from
+/// `.setup` before the first window can read the store. `start_experiment` repeats it under the same
+/// lock, so a launch whose save failed can't leave a stale `Pending` blocking every later start.
+pub(crate) fn reconcile_interrupted_starts() -> Result<Vec<InterruptedStart>, String> {
+    let _g = lock_store()?;
+    let mut store = load_store();
+    reconcile_pending_locked(&mut store)
 }
 
 /// True iff a `rollback_change` failure means the change is ALREADY off — i.e. it was rolled back
@@ -1933,15 +2000,50 @@ mod experiment_tests {
     }
 
     #[test]
-    fn reconcile_with_an_unreadable_ledger_says_so_instead_of_guessing() {
+    fn reconcile_with_an_unreadable_ledger_leaves_the_start_pending_for_a_retry() {
         let mut store = ExperimentStore { schema_version: 1, experiments: vec![pending_at(START)] };
+        let before = serde_json::to_string(&store).unwrap();
         let out = reconcile_interrupted_starts_in(&mut store, Err("parse: bad json"), Utc::now());
         assert_eq!(out, vec![InterruptedStart::LedgerUnreadable]);
+        assert_eq!(serde_json::to_string(&store).unwrap(), before, "no guess, no terminal state, no lost link");
+        assert!(active_trial(&store).is_some(), "still unresolved, so a new start stays refused");
+    }
+
+    #[test]
+    fn a_start_that_saved_its_change_id_is_matched_by_that_id_alone() {
+        // The reviewer's case: the start named "ours", then a later Fix apply of the same rec landed
+        // before any reconcile ran. The heuristic would pick the earliest; the saved id must win.
+        let mut p = pending_at(START);
+        p.applied_change_id = "ours".into();
+        let ledger = [
+            row("fix-later", "test-rec", "2026-09-28T12:00:01+00:00", true),
+            row("ours", "test-rec", "2026-09-28T12:00:02+00:00", true),
+        ];
+        let mut store = ExperimentStore { schema_version: 1, experiments: vec![p] };
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&ledger), Utc::now());
+        assert_eq!(out, vec![InterruptedStart::ChangeStillApplied]);
+        assert_eq!(store.experiments[0].applied_change_id, "ours");
+        assert_eq!(store.experiments[0].status, ExperimentStatus::Aborted);
+    }
+
+    #[test]
+    fn a_saved_change_that_is_rolled_back_or_gone_is_reported_as_such() {
+        let mut p = pending_at(START);
+        p.applied_change_id = "ours".into();
+        let rolled_back = [row("ours", "test-rec", "2026-09-28T12:00:02+00:00", false)];
+        let mut store = ExperimentStore { schema_version: 1, experiments: vec![p.clone()] };
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&rolled_back), Utc::now());
+        assert_eq!(out, vec![InterruptedStart::ChangeAlreadyRolledBack]);
         let r = &store.experiments[0];
-        assert_eq!(r.status, ExperimentStatus::Aborted);
-        assert!(r.applied_change_id.is_empty(), "no change is named without evidence");
+        assert_eq!((r.status, r.kept, r.trial_result), (ExperimentStatus::Restored, false, Some(TrialResult::Unmeasurable)));
+
+        let mut store = ExperimentStore { schema_version: 1, experiments: vec![p] };
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&[]), Utc::now());
+        assert_eq!(out, vec![InterruptedStart::ChangeMissing]);
+        let r = &store.experiments[0];
+        assert_eq!(r.status, ExperimentStatus::Aborted, "a named change the ledger lost is loud, never dropped");
         let why = r.stop_reason.as_deref().unwrap();
-        assert!(why.contains("verify in Fix") && why.contains("parse: bad json"), "{why}");
+        assert!(why.contains("ours") && why.contains("verify in Fix"), "{why}");
     }
 
     #[test]

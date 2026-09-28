@@ -12,7 +12,8 @@ import { join } from "path";
 // order is pinned here as source text:
 //
 //   1. the backend refuses a second start while one is starting or running (§3, one causal question);
-//   2. a Pending record is SAVED before `apply_recommendation` runs (record first);
+//   2. a Pending record is SAVED before `apply_recommendation` runs (record first), and the applied
+//      change's id is saved before any later step can fail, so a reconcile matches it by id;
 //   3. the app resolves interrupted starts at launch, before the first window reads the store;
 //   4. the UI never receives a Pending record.
 //
@@ -34,10 +35,21 @@ function fnBody(src: string, signature: string): string {
 describe("experiment start is record-first and single-active (#583)", () => {
   const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
 
-  it("refuses a second start before touching anything", () => {
+  it("resolves a stale Pending, then refuses a second start, before touching anything", () => {
+    const resolve = start.indexOf("reconcile_pending_locked(&mut store)?");
     const refuse = start.indexOf("active_trial(&store)");
-    expect(refuse, "single-active refusal is gone").toBeGreaterThanOrEqual(0);
+    expect(resolve, "start no longer resolves an interrupted start under its lock").toBeGreaterThanOrEqual(0);
+    expect(refuse, "single-active refusal is gone").toBeGreaterThan(resolve);
     expect(refuse).toBeLessThan(start.indexOf("apply_recommendation("));
+  });
+
+  it("names the applied change on disk before any later step can fail", () => {
+    const named = start.indexOf("applied_change_id = applied.id()");
+    const save = start.indexOf("save_store(&store)", named);
+    expect(named, "the start no longer records its change id").toBeGreaterThanOrEqual(0);
+    expect(save, "no save between naming the change and the next step").toBeGreaterThan(named);
+    expect(save).toBeLessThan(start.indexOf("target_verification("));
+    expect(save).toBeLessThan(start.indexOf("arm_watermark()"));
   });
 
   it("saves a Pending record before the apply", () => {
@@ -69,8 +81,10 @@ describe("interrupted starts are resolved at launch, read-only (#583)", () => {
 
   it("the launch reconcile never mutates Windows", () => {
     const reconcile = fnBody(EXPERIMENT, "pub(crate) fn reconcile_interrupted_starts(");
+    const locked = fnBody(EXPERIMENT, "fn reconcile_pending_locked(");
     const pure = fnBody(EXPERIMENT, "pub(crate) fn reconcile_interrupted_starts_in(");
-    for (const body of [reconcile, pure]) {
+    expect(reconcile).toContain("reconcile_pending_locked(");
+    for (const body of [reconcile, locked, pure]) {
       expect(body).not.toMatch(/rollback_change|apply_recommendation|actions::/);
     }
   });

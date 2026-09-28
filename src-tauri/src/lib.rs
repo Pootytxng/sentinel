@@ -1406,9 +1406,30 @@ pub fn run() {
             );
             // Trial Protocol #583: resolve any experiment start that a crash or kill interrupted, before
             // the first window can read the store. Read-only against Windows (it never restores at
-            // launch); a store it can't open leaves the records for the next launch, loudly logged.
-            if let Err(e) = crate::experiment::reconcile_interrupted_starts() {
-                eprintln!("[compy] experiment reconcile skipped: {e}");
+            // launch). Anything left unresolved stays Pending for the next start or launch to retry,
+            // and is written to support evidence so it is never only a console line.
+            match crate::experiment::reconcile_interrupted_starts() {
+                Ok(outcomes) => {
+                    if outcomes.contains(&crate::experiment::InterruptedStart::LedgerUnreadable) {
+                        support_evidence::record(
+                            support_evidence::EventKind::Operation,
+                            "experiment_reconcile",
+                            "ledger_unreadable",
+                            support_evidence::Outcome::Failed,
+                            "an interrupted experiment start could not be resolved because the change history could not be read",
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[compy] experiment reconcile skipped: {e}");
+                    support_evidence::record(
+                        support_evidence::EventKind::Operation,
+                        "experiment_reconcile",
+                        "store_unavailable",
+                        support_evidence::Outcome::Failed,
+                        &e,
+                    );
+                }
             }
             // Capture the handle so the session recorder thread can fire the debrief toast.
             let _ = APP_HANDLE.set(app.handle().clone());

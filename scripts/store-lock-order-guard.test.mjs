@@ -879,13 +879,22 @@ describe("#398: the source half of the Experiment -> History claim", () => {
   };
 
   // The three lifecycle sections (start, conclude, restore) enter HISTORY_LOCK; the fourth is the
-  // launch reconcile (#583), which only READS the ledger through load_history under the gate —
-  // an Experiment -> SupportEvidence path on a corrupt ledger, never Experiment -> History.
-  const isLaunchReconcile = (s) => /reconcile_interrupted_starts_in\s*\(/.test(s);
+  // launch reconcile (#583), which only READS the ledger through load_history under the gate (via
+  // reconcile_pending_locked, which start_experiment also calls) — an Experiment -> SupportEvidence
+  // path on a corrupt ledger, never Experiment -> History.
+  const fnBody = (src, sig) => {
+    const at = src.indexOf(sig);
+    expect(at, `${sig} is missing`).toBeGreaterThanOrEqual(0);
+    const rest = src.slice(at + sig.length);
+    const end = rest.search(/\n(?:pub\(crate\) |pub )?fn\s/);
+    return end === -1 ? rest : rest.slice(0, end);
+  };
 
   it("all four experiment gate sections take the gate through the recorded helper", () => {
     expect(experimentGateSections()).toHaveLength(4);
-    expect(experimentGateSections().filter(isLaunchReconcile)).toHaveLength(1);
+    expect(fnBody(code("experiment"), "fn reconcile_interrupted_starts()")).toMatch(
+      /let\s+_g\s*=\s*lock_store\(\)\?;/,
+    );
     const src = code("experiment");
     expect(
       [...src.matchAll(/store_write_gate\s*\(\s*\)\s*\.\s*lock\s*\(/g)].length,
@@ -897,10 +906,12 @@ describe("#398: the source half of the Experiment -> History claim", () => {
     const entering = experimentGateSections().filter((s) =>
       /crate::history::(apply_recommendation|rollback_change)\s*\(/.test(s),
     );
-    const reconcile = experimentGateSections().find(isLaunchReconcile);
-    expect(reconcile, "the launch reconcile must stay read-only against the ledger").not.toMatch(
-      /crate::history::(apply_recommendation|rollback_change)\s*\(/,
-    );
+    for (const sig of ["fn reconcile_interrupted_starts()", "fn reconcile_pending_locked("]) {
+      expect(
+        fnBody(code("experiment"), sig),
+        `${sig} must stay read-only against the ledger`,
+      ).not.toMatch(/crate::history::(apply_recommendation|rollback_change)\s*\(/);
+    }
     expect(
       entering,
       "Experiment -> History is declared in race_seam::ALLOWED_NESTING and exercised by " +
