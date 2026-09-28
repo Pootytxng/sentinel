@@ -201,7 +201,7 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
       /crash_overrides_refusal\(\s*resolve_treatment\([\s\S]*?\),\s*crashed,?\s*\)\s*\.map_err\([\s\S]*?\)\?;/,
     );
     expect(conclude, "a crash whose session can't be used no longer restores").toMatch(
-      /None => crash_without_reading\(\)/,
+      /None => crash_outcome\(baseline, treatment\)/,
     );
     for (const later of ["conclude_outcome(", ".treatment = resolved", "crate::history::rollback_change(", "save_store("]) {
       expect(conclude.indexOf(later), `${later} moved ahead of the treatment check`).toBeGreaterThan(resolve);
@@ -228,6 +228,53 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
     const noise = fnBody(EXPERIMENT, "pub(crate) fn noise_evidence_for(");
     expect(noise).toContain("measured_noise_pct: None");
     expect(fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(")).toContain("noise_evidence_for(&outcome");
+  });
+});
+
+// Codex round 1 on #611 (b99a6c57): five ways a Trial could still credit, blame or lose track of a
+// change. The pure decisions are Rust-tested; these pin that the live commands call them, in order.
+describe("a Trial measures one change, and says so only when it can (#611 review round 1)", () => {
+  const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
+  const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
+
+  it("§3: the baseline must still match Compy's changes before anything is recorded or applied", () => {
+    const check = start.indexOf("baseline_is_current(baseline, ledger, crate::history::applied_changes_summary().active)");
+    expect(check, "the start no longer checks that the baseline is current").toBeGreaterThanOrEqual(0);
+    expect(check).toBeGreaterThan(start.indexOf("resolve_baseline("));
+    expect(check).toBeLessThan(start.indexOf("status: ExperimentStatus::Pending"));
+    expect(check).toBeLessThan(start.indexOf("apply_recommendation("));
+  });
+
+  it("the after-session is timed against when the apply returned, not when the start began", () => {
+    const apply = start.indexOf("apply_recommendation(");
+    const stamp = start.indexOf("applied_at = Some(Utc::now().to_rfc3339())");
+    expect(stamp, "the start no longer records when its change took effect").toBeGreaterThan(apply);
+    expect(stamp, "the stamp is not saved with the change id").toBeLessThan(start.indexOf("save_store(&store)", stamp));
+    const resolve = fnBody(EXPERIMENT, "pub(crate) fn resolve_treatment<");
+    expect(resolve).toMatch(/let Some\(applied_at\) = rec\.applied_at\.as_deref\(\) else \{\s*return Err/);
+    expect(resolve, "the treatment is timed against created_at again").not.toMatch(/rec\.created_at/);
+  });
+
+  it("a failed apply reads the setting before it says nothing changed", () => {
+    expect(start).toMatch(
+      /Err\(e\) => \{\s*let check = crate::history::probe_rec_target\([^)]*\);\s*return Err\(settle_failed_apply\(&mut store, idx, &e, check\)\);/,
+    );
+    expect(start, "the start drops its record without a read again").not.toContain("experiments.remove(");
+    const settle = fnBody(EXPERIMENT, "fn settle_failed_apply(");
+    expect(settle).toMatch(/let Some\(message\) = mark_failed_apply\([\s\S]*?\) else \{\s*store\.experiments\.remove\(idx\)/);
+  });
+
+  it("§3 at conclude: another Compy change during the test confounds, ahead of the target check", () => {
+    const fold = conclude.indexOf("with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()))");
+    expect(fold, "the conclude no longer checks Compy's other changes").toBeGreaterThanOrEqual(0);
+    expect(fold).toBeGreaterThan(conclude.indexOf("crash_outcome(baseline, treatment)"));
+    expect(fold).toBeLessThan(conclude.indexOf("guard_target_at_conclude(judged,"));
+  });
+
+  it("a crash is checked against the baseline's conditions when both sessions exist", () => {
+    const crash = fnBody(EXPERIMENT, "pub(crate) fn crash_outcome(");
+    expect(crash).toContain("crate::comparability::derive(baseline, treatment)");
+    expect(crash).toContain("with_comparability(crash, &pairing)");
   });
 });
 

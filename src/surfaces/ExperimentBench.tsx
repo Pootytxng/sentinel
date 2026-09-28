@@ -53,6 +53,8 @@ type Experiment = {
   baseline_low1_fps: number;
   /** The baseline session's id (its started_at). null on records started before #583 lane 2b. */
   baseline_session_id?: string | null;
+  /** When the apply returned; only a session started later can conclude. null on older records. */
+  applied_at?: string | null;
   active_changes_at_start: number;
   attribution_warning: string | null;
   noise_floor_pct: number;
@@ -192,10 +194,11 @@ function abortReasonText(reason: string): string {
 }
 
 // The treatment session for a running experiment: the most recent monitored session of the SAME game
-// that started AFTER the experiment began and carries real frames. Never fabricated — if none exists
-// the owner simply hasn't played a qualifying session yet.
+// that started AFTER the change took effect and carries real frames. Never fabricated — if none exists
+// the owner simply hasn't played a qualifying session yet. Timed as the backend times it: from when
+// the apply returned, since a session begun while the apply was pending can't measure the change.
 function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSummary | null {
-  const started = new Date(exp.created_at).getTime();
+  const started = new Date(exp.applied_at ?? exp.created_at).getTime();
   const candidates = sessions
     .filter(
       (s) =>
@@ -406,6 +409,9 @@ export default function ExperimentBench() {
       setError(String(e));
       await reload();
     } finally {
+      // Every conclude that doesn't keep restores through the audited path, and a failed one may have
+      // restored too: the ledger may have moved either way, so siblings re-derive.
+      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       setBusy(false);
     }
   }
@@ -416,12 +422,13 @@ export default function ExperimentBench() {
     try {
       await invoke<Experiment>("restore_experiment", { experimentId: exp.id });
       await reload();
-      // Restoring rolled the change back through the audited path — ledger changed, siblings re-derive.
-      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
     } catch (e) {
       setError(String(e));
       await reload();
     } finally {
+      // Restoring rolls the change back through the audited path, and a failed restore may have got
+      // part of the way — the ledger may have moved either way, so siblings re-derive.
+      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       setBusy(false);
     }
   }

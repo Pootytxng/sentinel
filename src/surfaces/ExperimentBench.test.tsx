@@ -440,6 +440,23 @@ describe("ExperimentBench (armed)", () => {
     });
   });
 
+  // Codex r1 on #611: the backend times the after-session from when the apply returned, so a session
+  // begun while the apply (or its UAC prompt) was pending is never offered as the after-reading.
+  it("offers only a session that started after the change took effect", async () => {
+    state.gate = true;
+    const appliedAt = "2026-07-17T03:00:00Z"; // after VALORANT_SESSION started, after created_at
+    state.experiments = [{ ...RUNNING_EXPERIMENT, applied_at: appliedAt }];
+    state.sessions = [VALORANT_SESSION];
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-running");
+    expect(screen.queryByRole("button", { name: /Conclude with my latest/ })).toBeNull();
+
+    cleanup();
+    state.sessions = [VALORANT_SESSION, { ...VALORANT_SESSION, started_at: "2026-07-17T04:00:00Z" }];
+    render(<ExperimentBench />);
+    expect(await screen.findByRole("button", { name: /Conclude with my latest/ })).toBeEnabled();
+  });
+
   it("concludes with the treatment by session id, never by frame rates it supplies", async () => {
     state.gate = true;
     state.experiments = [RUNNING_EXPERIMENT];
@@ -692,6 +709,31 @@ describe("ExperimentBench (armed)", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent("Compy restored it");
       await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(1));
       expect(ledger).toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, ledger);
+    }
+  });
+
+  // Codex r1 on #611: a conclude that doesn't keep restores the change, and a failed conclude or
+  // restore may have moved it too — sibling surfaces must re-derive or they show it still applied.
+  it.each([
+    ["a conclude", "Conclude with my latest", undefined],
+    ["a failed conclude", "Conclude with my latest", { conclude_experiment: "restore failed — the setting still reads changed" }],
+    ["a restore", "Restore now", undefined],
+    ["a failed restore", "Restore now", { restore_experiment: "restore failed — the setting still reads changed" }],
+  ])("signals the ledger after %s", async (_what, button, refuse) => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    state.refuse = refuse ?? {};
+    render(<ExperimentBench />);
+    const control = await screen.findByRole("button", { name: new RegExp(button) });
+    const ledger = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, ledger);
+    try {
+      fireEvent.click(control);
+      await waitFor(() => expect(ledger).toHaveBeenCalled());
+      if (refuse) expect(await screen.findByRole("alert")).toHaveTextContent("still reads changed");
     } finally {
       window.removeEventListener(LEDGER_CHANGED_EVENT, ledger);
     }

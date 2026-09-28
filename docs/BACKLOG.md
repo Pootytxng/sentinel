@@ -93,6 +93,10 @@ adding another isolated tweak.
   not-comparable pair (`comparability::derive`) and caps a Partial pair's confidence; a changed
   driver/Windows/resolution aborts and restores (§7), and a reported crash always restores; the §11
   receipt records the floor the verdict was judged against, with the game's own noise left unknown.
+  Codex r1 fixes: a start refuses a baseline older than a Compy change; the after-session is timed
+  from when the apply returned; another Compy change during the test confounds and restores; a
+  crash is checked for comparability, and one whose setting can't be read back isn't blamed; a
+  failed apply says "nothing changed" only after a read proves it.
   All three lanes built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** owner-rig
   live proof on `game-bar-disable`, including a kill mid-start then relaunch · independent review of
   the final head · merge.
