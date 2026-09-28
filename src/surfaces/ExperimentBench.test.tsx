@@ -510,7 +510,6 @@ describe("ExperimentBench (armed)", () => {
     state.experiments = [
       { ...KEPT_EXPERIMENT, noise_evidence: judged },
       { ...KEPT_EXPERIMENT, id: "exp:3-0", noise_evidence: judged },
-      { ...NOT_COMPARABLE_EXPERIMENT, noise_evidence: null },
     ];
     render(<ExperimentBench />);
     const shared = await waitFor(() => {
@@ -533,6 +532,25 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     await waitFor(() => expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(2));
     expect(document.querySelector(".exp-bench-noise-shared")).toBeNull();
+  });
+
+  // IPC audit W2 (#583 lane 2b): a row with no line (a restore, a crash, a confounded result) was
+  // never judged against a floor. A list-wide line would claim one for it, so the lines stay on the
+  // rows they describe.
+  it("never hoists a noise line over a row that was not judged against it", async () => {
+    state.gate = true;
+    const judged = { band_pct: 3, measured_noise_pct: null };
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: judged },
+      { ...KEPT_EXPERIMENT, id: "exp:4-0", noise_evidence: judged },
+      { ...NOT_COMPARABLE_EXPERIMENT, noise_evidence: null },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(2));
+    expect(document.querySelector(".exp-bench-noise-shared")).toBeNull();
+    const rows = document.querySelectorAll(".exp-bench-row");
+    expect(rows).toHaveLength(3);
+    expect(rows[2].querySelector(".exp-bench-noise")).toBeNull();
   });
 
   // #583 lane 2b: the backend now refuses a start or conclude on the sessions it reads (missing,
@@ -566,5 +584,33 @@ describe("ExperimentBench (armed)", () => {
     fireEvent.click(start);
     expect(await screen.findByRole("alert")).toHaveTextContent("no longer in your session history");
     expect(screen.queryByTestId("experiment-running")).toBeNull();
+  });
+
+  // IPC audit W1 (#583 lane 2b): a start can fail AFTER it applied — a failed target check restores
+  // (or fails to) and writes a record. The screen must re-read and tell the sibling surfaces, or it
+  // disagrees with what is applied on the PC.
+  it("re-reads and signals the ledger when a start fails after applying", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    state.refuse = { start_experiment: "experiment aborted — the setting didn't read back as changed; Compy restored it" };
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    // The failed start restored the change and recorded it; only a re-read can show that row.
+    state.experiments = [{ ...NOT_COMPARABLE_EXPERIMENT, id: "exp:5-0", verdict: null, noise_evidence: null }];
+    const ledger = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, ledger);
+    try {
+      fireEvent.click(start);
+      expect(await screen.findByRole("alert")).toHaveTextContent("Compy restored it");
+      await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(1));
+      expect(ledger).toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, ledger);
+    }
   });
 });

@@ -308,11 +308,13 @@ export default function ExperimentBench() {
       .filter(isUsableReading)
       .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0] ?? null;
 
-  // §11 lines for the past experiments. When every row that carries one says the same thing, it is
-  // said once for the list: the same sentence under each row buries the rows it describes.
+  // §11 lines for the past experiments. When EVERY row says the same thing, it is said once for the
+  // list: the same sentence under each row buries the rows it describes. A row with no line (a
+  // restore, a crash, a confounded or older result) was never judged against a floor, so one such row
+  // keeps the lines on their own rows — a list-wide line would claim a floor for it.
   const noiseLines = history.map((x) => (x.noise_evidence ? noiseLine(x.noise_evidence, t) : null));
-  const distinctNoise = new Set(noiseLines.filter((l): l is string => l !== null));
-  const sharedNoise = distinctNoise.size === 1 ? [...distinctNoise][0] : null;
+  const sharedNoise =
+    noiseLines.length > 0 && noiseLines.every((l) => l !== null && l === noiseLines[0]) ? noiseLines[0] : null;
 
   // The testable universe: catalog changes this rig can use and hasn't already applied.
   const pickable = recs.filter((r) => r.eligible && !r.currently_applied);
@@ -344,7 +346,11 @@ export default function ExperimentBench() {
       // sibling surfaces (Optimize's applicable list, the Trust Ledger) re-derive. See types.ts note.
       window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
     } catch (e) {
+      // A start can fail AFTER it applied (a failed target check restores, or fails to): the record
+      // and the ledger may both have moved, so re-read and tell the siblings, as restore does.
       setError(String(e));
+      await reload();
+      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
     } finally {
       setBusy(false);
     }
