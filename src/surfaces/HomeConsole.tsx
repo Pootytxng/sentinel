@@ -341,15 +341,15 @@ function InEffectLine({ inEffect, t }: { inEffect: InEffectCounts; t: TFunction 
           <span className="hc-in-effect-v">
             {t("home.homeConsole.inEffect.active", { count: inEffect.activeNow })}
           </span>
+          {/* The separator rides INSIDE the phrase it introduces, so a narrow window wraps the two
+              together instead of leaving a "·" dangling at the end of the first row. */}
           {inEffect.unknown > 0 && (
-            <>
+            <span className="hc-in-effect-v hc-in-effect-unknown">
               <span className="hc-in-effect-sep" aria-hidden="true">
                 ·
               </span>
-              <span className="hc-in-effect-v hc-in-effect-unknown">
-                {t("home.homeConsole.inEffect.unconfirmed", { count: inEffect.unknown })}
-              </span>
-            </>
+              {t("home.homeConsole.inEffect.unconfirmed", { count: inEffect.unknown })}
+            </span>
           )}
         </>
       )}

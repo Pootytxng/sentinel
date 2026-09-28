@@ -660,6 +660,10 @@
 :root[data-v2="on"] .hc-in-effect-sep {
   color: var(--v2-muted);
 }
+/* Inside the unconfirmed phrase now, so it carries the flex gap itself. */
+:root[data-v2="on"] .hc-in-effect-sep {
+  margin-inline-end: 8px;
+}
 
 /* ── Quiet view controls — OFF the glass (issue #49). They used to float bottom-center over the
    canvas, between the two lower gauges; now they are a real row under it, on the panel, where they

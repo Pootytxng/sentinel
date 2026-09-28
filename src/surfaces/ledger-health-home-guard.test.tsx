@@ -603,6 +603,16 @@ describe("HomeConsole — the face a default-flag user actually lands on", () =>
       compy_changes: { ...m.compy_changes, total_recorded: total },
     });
 
+    // Self-review of #599 caught a "·" left dangling at the end of row 1 when a narrow window (the
+    // app shrinks to 380px) wrapped the phrase; the separator must travel with the phrase it opens.
+    it("the separator lives inside the unconfirmed phrase, never as a loose flex item", async () => {
+      model.value = countedModel(2, 1);
+      const { container } = await mountConsole();
+      const l = line(container)!;
+      expect(l.querySelector(".hc-in-effect-unknown > .hc-in-effect-sep")).not.toBeNull();
+      expect(l.querySelector(":scope > .hc-in-effect-sep")).toBeNull();
+    });
+
     it("one change Compy can't confirm is named — never folded into a 0, never 'no changes'", async () => {
       model.value = countedModel(0, 1);
       const { container } = await mountConsole();
