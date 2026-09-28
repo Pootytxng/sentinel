@@ -137,11 +137,11 @@ export function tripwireVerdict(timeout, o, budget) {
 // gitInvocations below lists. It reads those forms; it is not a shell parser, and these are its limits:
 // - Git another program or builtin starts is not counted, such as a child `node` process, an npm
 //   script, a .ps1 or .sh file, eval or xargs. That program's own children are not in this process.
-// - The command after env's own options is not read. Env's NAME=value settings are, but not --, -i,
-//   -0, -v, -u NAME or --unset=NAME, -C DIR, -S STRING or any other option, so `env -- git status`
-//   and `env -u X git status` count 0 where each starts one git. That under-count is silent, and it
-//   is accepted because no test starts git that way and reading -S would need a shell's word
-//   splitting of its string.
+// - After env, only a setting with a shell-style name ([A-Za-z_]\w*=) is read. The first other word
+//   is taken as the command, whether an option, --, or a setting with any other name such as A.B=1,
+//   so `env -- git status`, `env -u X git status` and `env A.B=1 git status` count 0 where each
+//   starts one git. That under-count is silent, and it is accepted because no test starts git that
+//   way and reading -S would need env's own -S split-string parsing.
 // - A loop's or a function's git counts once however often it runs.
 // - Git anywhere but a command position it reads is not counted, such as the command of a cmd
 //   `for /f` or a program named by a substitution ("$(which git)" status).
@@ -306,16 +306,16 @@ const tokenize = (cmd) =>
 // - PowerShell: an assignment ($out = , $out=, $all += and the other assignment operators).
 // - cmd: an @ (@git, @ git), and do or else in any case (for %i in (a) do git, if x (y) else git).
 // A program started with no shell reads none of them: it runs its first word.
-// env is a program, not a shell's word: wherever it is the program, the command after its NAME=value
-// settings counts, started with no shell. Inside double quotes a $(...) runs its script in sh-family
-// shells and PowerShell, and a backtick pair does in sh-family shells; cmd has neither. Single quotes
-// are literal, in cmd too, where the program cmd runs reads them (cmd /c "sh -c '...'"). The limits
-// are listed above GIT_SPAWN_FLOOR.
+// env is a program, not a shell's word: wherever it is the program, the command after its leading
+// shell-style VAR=value settings counts, started with no shell; env's other forms are a limit.
+// Inside double quotes a $(...) runs its script in sh-family shells and PowerShell, and a backtick
+// pair does in sh-family shells; cmd has neither. Single quotes are literal, in cmd too, where the
+// program cmd runs reads them (cmd /c "sh -c '...'"). The limits are listed above GIT_SPAWN_FLOOR.
 const SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
 const POWERSHELLS = new Set(["powershell", "pwsh"]);
 const SH_WORDS = new Set(["exec", "command", "time", "do", "then", "else", "if", "elif", "while", "until", "!"]);
 const CMD_WORDS = new Set(["do", "else"]);
-const SETTING = /^[A-Za-z_]\w*=/; // VAR=value: sh's assignment in front of a command, and env's settings
+const SETTING = /^[A-Za-z_]\w*=/; // VAR=value: a sh prefix assignment, or an env setting of that shape
 const PS_OPERATOR = /^(?:[-+*/%]|\?\?)?=/;
 const PS_ASSIGNMENT = /^\$[A-Za-z_][\w:]*(?:[-+*/%]|\?\?)?=/;
 
