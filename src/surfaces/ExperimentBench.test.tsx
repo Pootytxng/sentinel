@@ -480,15 +480,29 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
     // Only the judged row carries evidence, so its line is the list's one line; the not-comparable
-    // row adds none.
-    const lines = await waitFor(() => {
-      const found = document.querySelectorAll(".exp-bench-noise, .exp-bench-noise-shared");
-      expect(found).toHaveLength(1);
-      return found;
+    // row says it has no record rather than falling under it.
+    const shared = await waitFor(() => {
+      const el = document.querySelector(".exp-bench-noise-shared");
+      expect(el).not.toBeNull();
+      return el!;
     });
-    expect(lines[0].textContent).toBe(
+    expect(shared.textContent).toBe(
       "Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
     );
+    const perRow = document.querySelectorAll(".exp-bench-noise");
+    expect(perRow).toHaveLength(1);
+    expect(perRow[0].textContent).toBe("No noise-floor record for this result.");
+  });
+
+  it("says nothing about noise when no past result was judged against the floor", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...NOT_COMPARABLE_EXPERIMENT, noise_evidence: null },
+      { ...NOT_COMPARABLE_EXPERIMENT, id: "exp:6-0", noise_evidence: null },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(2));
+    expect(document.querySelectorAll(".exp-bench-noise, .exp-bench-noise-shared")).toHaveLength(0);
   });
 
   it("states a measured noise level when the record carries one", async () => {
@@ -534,23 +548,32 @@ describe("ExperimentBench (armed)", () => {
     expect(document.querySelector(".exp-bench-noise-shared")).toBeNull();
   });
 
-  // IPC audit W2 (#583 lane 2b): a row with no line (a restore, a crash, a confounded result) was
-  // never judged against a floor. A list-wide line would claim one for it, so the lines stay on the
-  // rows they describe.
-  it("never hoists a noise line over a row that was not judged against it", async () => {
+  // IPC audit W2 + self-review item 3 (#583 lane 2b): a row with no record (a restore, a crash, a
+  // confounded result) must not fall silently under the list-wide line, AND the judged rows must not
+  // each re-print the full sentence. The rule is said once; the exception says it has no record.
+  it("says the floor once and marks the rows that have no noise record", async () => {
     state.gate = true;
     const judged = { band_pct: 3, measured_noise_pct: null };
     state.experiments = [
       { ...KEPT_EXPERIMENT, noise_evidence: judged },
       { ...KEPT_EXPERIMENT, id: "exp:4-0", noise_evidence: judged },
+      { ...KEPT_EXPERIMENT, id: "exp:7-0", noise_evidence: judged },
       { ...NOT_COMPARABLE_EXPERIMENT, noise_evidence: null },
     ];
     render(<ExperimentBench />);
-    await waitFor(() => expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(2));
-    expect(document.querySelector(".exp-bench-noise-shared")).toBeNull();
-    const rows = document.querySelectorAll(".exp-bench-row");
-    expect(rows).toHaveLength(3);
-    expect(rows[2].querySelector(".exp-bench-noise")).toBeNull();
+    const rows = await waitFor(() => {
+      const found = document.querySelectorAll(".exp-bench-row");
+      expect(found).toHaveLength(4);
+      return found;
+    });
+    const sentence = "Judged against Compy's 3% noise floor.";
+    const copies = [...document.querySelectorAll(".exp-bench-noise, .exp-bench-noise-shared")].filter((el) =>
+      el.textContent?.startsWith(sentence),
+    );
+    expect(copies).toHaveLength(1);
+    expect(copies[0]).toHaveClass("exp-bench-noise-shared");
+    for (const row of [...rows].slice(0, 3)) expect(row.querySelector(".exp-bench-noise")).toBeNull();
+    expect(rows[3].querySelector(".exp-bench-noise")?.textContent).toBe("No noise-floor record for this result.");
   });
 
   // #583 lane 2b: the backend now refuses a start or conclude on the sessions it reads (missing,

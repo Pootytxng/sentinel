@@ -102,6 +102,20 @@ const HISTORY = [
     verdict_confidence: "high" as Confidence, verdict_note: "Clear of the 3% noise floor across a full session.",
     baseline_session_id: iso(9900), noise_evidence: { band_pct: 3, measured_noise_pct: null },
   },
+  {
+    // A Trial aborted because the driver changed between readings: never judged against the floor,
+    // so it carries no noise record and must not fall under the list-wide line.
+    id: "fx-h3", rec_id: "fixture-rec-7", rec_title: "Turn off fullscreen optimizations",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(12000),
+    status: "aborted" as ExperimentStatus,
+    baseline_avg_fps: 131.0, baseline_low1_fps: 86.0, active_changes_at_start: 1,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: { avg_fps: 136.0, low1_fps: 90.3, samples: 2800, crashed: false, delta_low1_pct: 5.0, recorded_at: iso(11800) },
+    verdict: "confounded", kept: false, stop_reason: "conditions-changed-between-sessions", concluded_at: iso(11790),
+    verdict_confidence: "low" as Confidence,
+    verdict_note: "Something besides this setting changed between the before and after readings (GPU driver: 25.5.1 → 25.6.1).",
+    baseline_session_id: iso(12100), noise_evidence: null,
+  },
 ];
 
 const RUNNING = {

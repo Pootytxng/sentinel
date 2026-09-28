@@ -420,6 +420,7 @@
     "runningNoTreatment": "Play a monitored {{game}} session to give the experiment a real after-reading.",
     "yourGame": "your game",
     "noiseUnmeasured": "Judged against Compy's {{band}}% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
-    "noiseMeasured": "Judged against a {{band}}% noise floor. This game's own run-to-run noise on your PC measured ±{{measured}}%."
+    "noiseMeasured": "Judged against a {{band}}% noise floor. This game's own run-to-run noise on your PC measured ±{{measured}}%.",
+    "noiseNotRecorded": "No noise-floor record for this result."
   }
 }

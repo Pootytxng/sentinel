@@ -308,13 +308,17 @@ export default function ExperimentBench() {
       .filter(isUsableReading)
       .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0] ?? null;
 
-  // §11 lines for the past experiments. When EVERY row says the same thing, it is said once for the
-  // list: the same sentence under each row buries the rows it describes. A row with no line (a
-  // restore, a crash, a confounded or older result) was never judged against a floor, so one such row
-  // keeps the lines on their own rows — a list-wide line would claim a floor for it.
+  // §11 lines for the past experiments: the rule once, then the exceptions. When every judged row
+  // says the same thing, it is said once for the list — the same sentence under each row buries the
+  // rows it describes (C-11). A row with no record (a restore, a crash, a confounded or older result)
+  // must not fall silently under that list-wide line, so it says it has none. Lines that differ stay
+  // on their own rows, and then no list-wide claim is made at all.
   const noiseLines = history.map((x) => (x.noise_evidence ? noiseLine(x.noise_evidence, t) : null));
-  const sharedNoise =
-    noiseLines.length > 0 && noiseLines.every((l) => l !== null && l === noiseLines[0]) ? noiseLines[0] : null;
+  const judgedLines = new Set(noiseLines.filter((l): l is string => l !== null));
+  const sharedNoise = judgedLines.size === 1 ? [...judgedLines][0] : null;
+  const rowNoise = noiseLines.map((l) =>
+    sharedNoise ? (l === null ? t("lab.experimentBench.noiseNotRecorded") : null) : l,
+  );
 
   // The testable universe: catalog changes this rig can use and hasn't already applied.
   const pickable = recs.filter((r) => r.eligible && !r.currently_applied);
@@ -553,7 +557,7 @@ export default function ExperimentBench() {
                 {x.stop_reason && x.status === "aborted" && (
                   <span className="exp-bench-abort">{x.stop_reason}</span>
                 )}
-                {!sharedNoise && noiseLines[i] && <span className="exp-bench-noise">{noiseLines[i]}</span>}
+                {rowNoise[i] && <span className="exp-bench-noise">{rowNoise[i]}</span>}
               </li>
             ))}
           </ul>
