@@ -643,6 +643,24 @@
   color: var(--v2-faint);
 }
 
+/* ── What Compy has in effect on this PC (#599). One row of type under the latest change, the same
+   register as the check line beneath it: a quiet label, then the counts. The unconfirmed count is
+   its own phrase after a separator — beside the verified count, never summed into it. ── */
+:root[data-v2="on"] .hc-in-effect {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  font-family: var(--v2-font-sans);
+  font-size: var(--type-label);
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hc-in-effect-k,
+:root[data-v2="on"] .hc-in-effect-sep {
+  color: var(--v2-muted);
+}
+
 /* ── Quiet view controls — OFF the glass (issue #49). They used to float bottom-center over the
    canvas, between the two lower gauges; now they are a real row under it, on the panel, where they
    cover nothing. Same controls, same order, same persisted state. ── */

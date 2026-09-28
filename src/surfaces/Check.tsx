@@ -10,6 +10,7 @@ import { WalkthroughDisclosure } from "../design/WalkthroughDisclosure";
 import { walkthroughForKeyForLanguage, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
+import { setStartupEntryEnabled } from "../data/startup-toggle";
 import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
 import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
 import { useExpertView } from "../design/use-expert-view";
@@ -262,9 +263,11 @@ export default function Check({
   const disableStartup = async (entry: StartupEntry) => {
     setTogglingStartup(entry.name);
     try {
-      await invoke("set_startup_entry_enabled", { name: entry.name, enabled: false });
-      setStartup(await invoke<StartupEntry[]>("get_startup_entries"));
-      onChanged();
+      // A disable is a ledger change (#599): the helper announces it before this re-read.
+      await setStartupEntryEnabled(entry.name, false, async () => {
+        setStartup(await invoke<StartupEntry[]>("get_startup_entries"));
+        onChanged();
+      });
     } catch (e) {
       setTogglingStartup(null);
       await confirm({

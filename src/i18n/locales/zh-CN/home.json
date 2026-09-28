@@ -109,6 +109,11 @@
       "attentionSub_one": "{{total}} 项检查中有 {{count}} 项表现良好。",
       "attentionSub_other": "{{total}} 项检查中有 {{count}} 项表现良好。",
       "attentionNext": "处理方式在「{{room}}」里。"
+    },
+    "inEffect": {
+      "label": "Compy 在这台电脑上的更改",
+      "active_other": "当前生效 {{count}} 项",
+      "unconfirmed_other": "{{count}} 项无法确认是否仍然生效"
     }
   },
   "interview": {

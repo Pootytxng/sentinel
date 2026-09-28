@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Fragment, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
@@ -138,7 +138,18 @@ export function AttributionLine({
     <p className="bench-change">
       {credited.length > 0 ? (
         <>
-          {attr.lead} <strong>{credited.map((c) => c.title).join(", ")}</strong>.
+          {attr.lead}{" "}
+          {credited.map((c, i) => (
+            <Fragment key={c.id}>
+              {i > 0 && ", "}
+              <strong>{c.title}</strong>
+              {/* Still credited — the runs measured it on — but never read as still on (#599). */}
+              {c.rolledBack && (
+                <span className="bench-rolled-back"> {t("common.attribution.sinceRolledBack")}</span>
+              )}
+            </Fragment>
+          ))}
+          .
           {attr.caveat ? ` ${attr.caveat}` : ""}
         </>
       ) : (

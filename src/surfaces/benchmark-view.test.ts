@@ -265,6 +265,33 @@ describe("benchmarkAttribution — the Test verdict's claim, read off the Machin
     expect(a).toMatchObject({ otherRig: 0, rigUnknown: 1 });
   });
 
+  // #599: status was ignored, so a change undone after the runs still read as part of the setup.
+  it("a credited row the ledger says was rolled back stays credited, and is marked rolled back", () => {
+    const undone: CompyChangeFact = {
+      ...row("undone", "2026-07-01T12:00:00Z"),
+      status: fact("rolled_back"),
+      still_active: fact<boolean>(null),
+      rolled_back_at: fact("2026-07-03T09:00:00Z"),
+    };
+    const a = benchmarkAttribution(window, modelWith([undone, row("kept", "2026-07-01T13:00:00Z")]), false);
+    expect(a.kind === "counted" && a.credited).toEqual([
+      { id: "undone", title: "undone", rolledBack: true },
+      { id: "kept", title: "kept", rolledBack: false },
+    ]);
+  });
+
+  it("the shipped wire fixture's rolled-back row is marked from its real status field", () => {
+    // chg-2 in the fixture is rolled_back with an unknown PC — credited, rigUnknown, and rolled back.
+    const a = benchmarkAttribution(
+      { baseline_at: "2026-07-05T00:00:00Z", latest_at: "2026-07-05T23:00:00Z" },
+      WIRE,
+      false,
+    );
+    expect(a.kind === "counted" && a.credited).toEqual([
+      { id: "chg-2", title: "Turn on hardware-accelerated GPU scheduling", rolledBack: true },
+    ]);
+  });
+
   it("a ledger known incomplete withdraws only the EMPTY claim — a named row is still named", () => {
     expect(benchmarkAttribution(window, modelWith([]), true)).toEqual({ kind: "unknown" });
     expect(benchmarkAttribution(window, modelWith([row("x", "2026-07-01T13:00:00Z", false)]), true)).toEqual({ kind: "unknown" });

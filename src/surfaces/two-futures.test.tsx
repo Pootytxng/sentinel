@@ -287,7 +287,7 @@ function modelWith(rows: CompyChangeFact[]): MachineModel {
 function counted(titles: string[]): BenchmarkAttribution {
   return {
     kind: "counted",
-    credited: titles.map((title, i) => ({ id: `c${i}`, title })),
+    credited: titles.map((title, i) => ({ id: `c${i}`, title, rolledBack: false })),
     otherRig: 0,
     rigUnknown: 0,
     truncated: false,
@@ -385,6 +385,35 @@ describe("attribution off the Machine Model — the line says what it does not k
     expect(c.container.querySelector(".bench-change")!.textContent).toContain(
       "1 of these was recorded before Compy stamped which PC it was on, so it may not have been this one.",
     );
+  });
+
+  // #599: a change undone after the runs is still what they measured, so it keeps its credit —
+  // but the line must not read as if it were still on.
+  it("a credited row rolled back since keeps its credit and says it was rolled back", () => {
+    const attr = {
+      ...base,
+      credited: [
+        { id: "a", title: "Game Mode", rolledBack: true },
+        { id: "b", title: "Power plan", rolledBack: false },
+      ],
+      listed: 2,
+      totalRecorded: 2,
+    };
+    const c = render(<TwoFutures bench={pair} hw={null} attribution={attr} />);
+    const line = c.container.querySelector(".bench-change")!;
+    expect(line.textContent).toContain(
+      "Measuring the combined effect of: Game Mode (since rolled back), Power plan.",
+    );
+    const marks = line.querySelectorAll(".bench-rolled-back");
+    expect(marks).toHaveLength(1);
+    expect([...line.querySelectorAll("strong")].map((n) => n.textContent)).toEqual(["Game Mode", "Power plan"]);
+  });
+
+  it("a row still in place carries no rolled-back mark", () => {
+    const c = render(<TwoFutures bench={pair} hw={null} attribution={base} />);
+    const line = c.container.querySelector(".bench-change")!;
+    expect(line.textContent).not.toContain("rolled back");
+    expect(line.querySelector(".bench-rolled-back")).toBeNull();
   });
 
   it("a display-capped list is called a floor, with the exact shown-of-total", () => {

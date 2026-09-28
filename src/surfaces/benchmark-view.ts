@@ -151,7 +151,9 @@ export type BenchmarkAttribution =
   | { kind: "unknown" }
   | {
       kind: "counted";
-      credited: { id: string; title: string }[];
+      /** `rolledBack`: the ledger says this change was undone after it was applied. It stays
+       *  credited — the runs measured it while it was on — but the line must say so (#599). */
+      credited: { id: string; title: string; rolledBack: boolean }[];
       otherRig: number;
       rigUnknown: number;
       truncated: boolean;
@@ -177,7 +179,7 @@ export function benchmarkAttribution(
   const inWindow = changesBetweenRuns(bench, placed);
   const credited = inWindow
     .filter((c) => c.on_this_rig.value !== false)
-    .map((c) => ({ id: c.id, title: c.title }));
+    .map((c) => ({ id: c.id, title: c.title, rolledBack: c.status.value === "rolled_back" }));
   if (ledgerIncomplete && credited.length === 0) return { kind: "unknown" };
   const otherRig = inWindow.length - credited.length;
   const rigUnknown = inWindow.filter((c) => c.on_this_rig.value === null).length;
