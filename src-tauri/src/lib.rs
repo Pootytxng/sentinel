@@ -1404,6 +1404,12 @@ pub fn run() {
                 support_evidence::Outcome::Ok,
                 &format!("Compy {} started ({})", env!("CARGO_PKG_VERSION"), build_stamp()),
             );
+            // Trial Protocol #583: resolve any experiment start that a crash or kill interrupted, before
+            // the first window can read the store. Read-only against Windows (it never restores at
+            // launch); a store it can't open leaves the records for the next launch, loudly logged.
+            if let Err(e) = crate::experiment::reconcile_interrupted_starts() {
+                eprintln!("[compy] experiment reconcile skipped: {e}");
+            }
             // Capture the handle so the session recorder thread can fire the debrief toast.
             let _ = APP_HANDLE.set(app.handle().clone());
             // Care trigger 1 of 3 (Tier 1 task 9): the launch scan. This is the one that catches a

@@ -62,6 +62,12 @@ pub(crate) fn experiment_gate() -> bool {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum ExperimentStatus {
+    /// Written to disk BEFORE the change is applied (Trial Protocol §4 record-first, #583), so a crash
+    /// at any point of a start leaves a record naming the change. Promoted to `Running` once the apply
+    /// succeeded and the evidence watermark was read. Never shown to the UI (`get_experiments` drops
+    /// it); a Pending record found at launch means Compy stopped mid-start, and
+    /// [`reconcile_interrupted_starts`] resolves it before the first window can read the store.
+    Pending,
     /// Baseline captured + the one change applied; awaiting the treatment session.
     Running,
     /// Treatment measured, evidence justified keeping the change (verdict `improved`, no crash).
@@ -136,6 +142,65 @@ pub(crate) struct ExperimentRecord {
     /// one sentence. None while Running or on pre-existing records.
     #[serde(default)]
     pub verdict_note: Option<String>,
+    /// The verdict in the Trial Protocol's five result classes (§8), which the keep rule (§9) is
+    /// judged on. None while Running, after a user restore (nothing was classified), and on records
+    /// written before this field existed.
+    #[serde(default)]
+    pub trial_result: Option<TrialResult>,
+    /// What the live probe read straight after the apply (§4.5 "verify target state"): `Some(true)`
+    /// the setting reads in the target state, `Some(false)` it does not (the start is aborted and the
+    /// change restored), `None` the probe could not read it or no probe exists for this rec. Unknown
+    /// stays unknown; it is never recorded as verified.
+    #[serde(default)]
+    pub target_verified: Option<bool>,
+}
+
+/// Trial Protocol §8 — the five result classes a Trial is judged in (#583). Persisted (kebab-case).
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum TrialResult {
+    /// Improvement beyond the noise floor with no disqualifying tradeoff.
+    Better,
+    /// A measured regression, or a crash during treatment (§6: instability is never a win).
+    Worse,
+    /// Any effect is inside the noise floor — too small to justify the change.
+    Negligible,
+    /// Evidence is too thin (too few frames) or conflicts (another change landed mid-Trial).
+    Inconclusive,
+    /// No defensible comparison is possible: a different game, a baseline too old to compare, or
+    /// no measurement was taken at all.
+    Unmeasurable,
+}
+
+/// Every verdict string the engine can write, in one place so the §8 mapping is tested exhaustively.
+#[cfg(test)]
+const KNOWN_VERDICTS: [&str; 7] = [
+    "improved",
+    "regressed",
+    "no-change",
+    "insufficient-evidence",
+    "confounded",
+    "expired",
+    "not-comparable",
+];
+
+/// Map the engine's verdict string to its §8 class. An unrecognised verdict is `Unmeasurable`, which
+/// the keep rule restores: an unknown can never be kept by accident.
+pub(crate) fn trial_result_for(verdict: &str) -> TrialResult {
+    match verdict {
+        "improved" => TrialResult::Better,
+        "regressed" => TrialResult::Worse,
+        "no-change" => TrialResult::Negligible,
+        "insufficient-evidence" | "confounded" => TrialResult::Inconclusive,
+        _ => TrialResult::Unmeasurable, // "expired" · "not-comparable" · anything unknown
+    }
+}
+
+/// Trial Protocol §9 keep rule, v1: only `Better` is eligible to keep; everything else restores.
+/// `Inconclusive` restores too, because v1 offers no supported "keep it anyway" choice (§9 allows one
+/// only "within a supported risk boundary").
+pub(crate) const fn keep_rule(result: TrialResult) -> bool {
+    matches!(result, TrialResult::Better)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -256,6 +321,135 @@ fn delta_low1_pct(baseline_low1: f64, treatment_low1: f64) -> f64 {
     }
     let raw = (treatment_low1 - baseline_low1) / baseline_low1 * 100.0;
     (raw * 10.0).round() / 10.0
+}
+
+// ─── Trial lifecycle integrity (#583 lane 1: record-first, one at a time, no hidden state) ──
+
+/// The experiment that blocks a new start: one still starting (`Pending`) or awaiting its treatment
+/// session (`Running`). Trial Protocol §3 asks one causal question at a time, so the backend refuses a
+/// second start rather than trusting the UI to hide the button.
+pub(crate) fn active_trial(store: &ExperimentStore) -> Option<&ExperimentRecord> {
+    store
+        .experiments
+        .iter()
+        .find(|e| matches!(e.status, ExperimentStatus::Pending | ExperimentStatus::Running))
+}
+
+/// §4.5 — what the post-apply live probe established. Only a read that came back OFF is evidence the
+/// apply did not take; an unreadable or unprobed setting is unknown, never "verified".
+pub(crate) fn target_verification(check: Option<crate::history::ActiveCheck>) -> Option<bool> {
+    use crate::history::ActiveCheck;
+    match check {
+        Some(ActiveCheck::On) => Some(true),
+        Some(ActiveCheck::Off) => Some(false),
+        Some(ActiveCheck::Unreadable) | Some(ActiveCheck::Unrecognised) | None => None,
+    }
+}
+
+/// The ledger fields the launch reconcile needs, borrowed so the matcher stays pure and testable.
+pub(crate) struct LedgerEntryRef<'a> {
+    pub id: &'a str,
+    pub rec_id: &'a str,
+    pub applied_at: &'a str,
+    /// Ledger status is "applied" (not rolled back).
+    pub applied: bool,
+}
+
+/// Which ledger entry, if any, an interrupted (`Pending`) start applied: the earliest still-applied
+/// entry for the same rec that no other experiment already owns and that was not provably applied
+/// BEFORE this start began. An entry whose date can't be read is treated as possibly ours, so an
+/// unknown resolves to "tell the user loudly", never to "nothing was changed".
+pub(crate) fn interrupted_start_change<'a>(
+    pending: &ExperimentRecord,
+    ledger: &[LedgerEntryRef<'a>],
+    claimed: &[&str],
+) -> Option<&'a str> {
+    let started = DateTime::parse_from_rfc3339(&pending.created_at).ok();
+    ledger
+        .iter()
+        .filter(|c| c.applied && c.rec_id == pending.rec_id && !claimed.iter().any(|id| *id == c.id))
+        .filter(|c| match (started, DateTime::parse_from_rfc3339(c.applied_at).ok()) {
+            (Some(s), Some(a)) => a >= s,
+            _ => true,
+        })
+        // Earliest provable apply first; an undated entry only when nothing dated qualifies.
+        .min_by_key(|c| {
+            let at = DateTime::parse_from_rfc3339(c.applied_at).ok();
+            (at.is_none(), at)
+        })
+        .map(|c| c.id)
+}
+
+/// What a launch reconcile did to one interrupted start.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum InterruptedStart {
+    /// No change was applied: the record is dropped, as a failed apply always was.
+    Dropped,
+    /// A change was applied and is still in place: the record becomes a loud `Aborted` naming it.
+    ChangeStillApplied,
+    /// The ledger could not be read, so Compy can't say whether the change was applied.
+    LedgerUnreadable,
+}
+
+/// PURE launch reconcile (injected ledger + clock). Every `Pending` record left by a start that never
+/// finished is resolved; nothing is silently kept and nothing is mutated here. There is no automatic
+/// restore at launch: no measurement exists, so §9 says restore, but a rollback may need elevation
+/// and nobody asked for a prompt at launch. The change stays in the Fix surface's active list, where
+/// its rollback lives, and the record says so.
+pub(crate) fn reconcile_interrupted_starts_in(
+    store: &mut ExperimentStore,
+    ledger: Result<&[LedgerEntryRef<'_>], &str>,
+    now: DateTime<Utc>,
+) -> Vec<InterruptedStart> {
+    let mut outcomes = Vec::new();
+    let mut i = 0;
+    while i < store.experiments.len() {
+        if store.experiments[i].status != ExperimentStatus::Pending {
+            i += 1;
+            continue;
+        }
+        let claimed: Vec<&str> = store
+            .experiments
+            .iter()
+            .map(|e| e.applied_change_id.as_str())
+            .filter(|id| !id.is_empty())
+            .collect();
+        let resolution = match ledger {
+            Err(e) => Err(e.to_string()),
+            Ok(rows) => Ok(interrupted_start_change(&store.experiments[i], rows, &claimed).map(str::to_string)),
+        };
+        let rec = &mut store.experiments[i];
+        match resolution {
+            Ok(None) => {
+                store.experiments.remove(i);
+                outcomes.push(InterruptedStart::Dropped);
+                continue;
+            }
+            Ok(Some(change_id)) => {
+                rec.applied_change_id = change_id;
+                rec.stop_reason = Some(
+                    "interrupted-start: Compy closed while this experiment was starting, after the \
+                     change was applied. Nothing was measured, so restore it from Fix."
+                        .into(),
+                );
+                outcomes.push(InterruptedStart::ChangeStillApplied);
+            }
+            Err(e) => {
+                rec.stop_reason = Some(format!(
+                    "interrupted-start: Compy closed while this experiment was starting and could \
+                     not read its change history to see whether the change was applied — verify in \
+                     Fix: {e}"
+                ));
+                outcomes.push(InterruptedStart::LedgerUnreadable);
+            }
+        }
+        rec.status = ExperimentStatus::Aborted;
+        rec.kept = false;
+        rec.trial_result = Some(TrialResult::Unmeasurable);
+        rec.concluded_at = Some(now.to_rfc3339());
+        i += 1;
+    }
+    outcomes
 }
 
 /// The honest outcome of concluding an experiment. `verdict` is the surfaced string; `keep` decides
@@ -460,9 +654,9 @@ pub(crate) fn conclude_outcome(
     let verdict =
         comparison::classify_with_guards(&armed, delta, rec.noise_floor_pct, ledger_now, now)
             .to_string();
-    // Keep ONLY a clean, attributable improvement. no-change / regressed / confounded / expired all
-    // restore — a change that didn't measurably help has no justification to stay.
-    let keep = verdict == "improved";
+    // Keep ONLY a clean, attributable improvement (§9 keep rule). no-change / regressed / confounded /
+    // expired all restore — a change that didn't measurably help has no justification to stay.
+    let keep = keep_rule(trial_result_for(&verdict));
     let confidence = verdict_confidence(&verdict, treatment_samples, false);
     let note = verdict_note(&verdict, treatment_samples, false, game);
     ConcludeOutcome { verdict, keep, delta_low1_pct: delta, stop_reason: None, confidence, note }
@@ -633,7 +827,10 @@ pub(crate) fn get_experiment_gate() -> bool {
 /// experiment on the armed build.
 #[tauri::command]
 pub(crate) fn get_experiments() -> Vec<ExperimentRecord> {
-    load_store().experiments
+    // `Pending` is the start's own bookkeeping, only on disk while `start_experiment` holds the store
+    // lock (or until the launch reconcile resolves it). This read takes no lock, so a refresh during
+    // the apply (a UAC prompt steals focus) must not render it as a finished row.
+    load_store().experiments.into_iter().filter(|e| e.status != ExperimentStatus::Pending).collect()
 }
 
 /// §4G — estimate whether a change is worth a controlled test. Refuses while dark. Read-only; NEVER
@@ -648,8 +845,12 @@ pub(crate) fn simulate_optimization(rec_id: String) -> Result<SimulatorReport, S
 }
 
 /// §4F step 1–4 — capture baseline, snapshot + apply ONE reversible change through the audited
-/// ledger boundary, and record a Running experiment. Refuses while dark. Stops (returns Err, records
-/// NOTHING) on a failed apply — never continue after an error, never a half-started experiment.
+/// ledger boundary, and record a Running experiment. Refuses while dark, and while another experiment
+/// is starting or running. RECORD FIRST (#583): a `Pending` record naming the change is saved before
+/// anything is applied, so no crash point can leave an applied change that no experiment names. A
+/// failed apply drops that record and changes nothing. After a successful apply, a start that can't
+/// finish (the target didn't take, or the evidence watermark is unreadable) restores the change
+/// through the audited boundary before returning the error, never leaves it applied unrecorded.
 #[tauri::command]
 pub(crate) fn start_experiment(
     rec_id: String,
@@ -669,36 +870,37 @@ pub(crate) fn start_experiment(
     let game: String = game.chars().take(MAX_TEXT_LEN).collect();
     let hypothesis: String = hypothesis.chars().take(MAX_TEXT_LEN).collect();
 
+    // One store read serves the single-active check, the id counter and the read-modify-write, all
+    // under this one lock.
+    let mut store = load_store();
+    // §3 one causal question at a time — enforced here, not only by the UI hiding the button.
+    if let Some(active) = active_trial(&store) {
+        return Err(format!(
+            "another experiment ({}) is still {} — conclude or restore it before starting a new one",
+            active.rec_title,
+            if active.status == ExperimentStatus::Pending { "starting" } else { "running" },
+        ));
+    }
+
     // Single-variable honesty context BEFORE we apply (§4F): how many changes are already active.
     let active = crate::history::active_change_count();
     let warning = attribution_warning(active);
 
-    // Step 3–4: apply exactly ONE reversible change via the audited boundary. This captures the
-    // typed rollback contract + prior-state snapshot at apply time (mutation-gate item 2). A failed
-    // apply aborts the whole experiment — nothing is recorded, nothing is left half-applied.
-    let applied = crate::history::apply_recommendation(rec_id.clone(), rec_title.clone())
-        .map_err(|e| format!("experiment aborted — apply failed, nothing changed: {e}"))?;
-
-    // Watermark AFTER our apply so a LATER external change trips the confound guard, not our own.
-    // An unreadable ledger refuses to start the experiment rather than banking a fabricated count —
-    // the change is already applied and stays applied, but nothing is recorded that would later
-    // claim a fair before/after it could never prove. See `comparison::arm_watermark`.
-    let ledger_watermark = crate::comparison::arm_watermark()?;
+    // Step 0 — RECORD FIRST. Saved before the apply; a failed save stops here with nothing changed.
     let now = Utc::now();
-    // One store read serves both the id counter and the read-modify-write under this single lock.
-    let mut store = load_store();
-    let rec = ExperimentRecord {
+    store.schema_version = STORE_SCHEMA_VERSION;
+    store.experiments.push(ExperimentRecord {
         id: format!("exp:{}-{}", store.experiments.len() + 1, now.timestamp_millis()),
-        rec_id,
-        rec_title,
+        rec_id: rec_id.clone(),
+        rec_title: rec_title.clone(),
         game,
         hypothesis,
         created_at: now.to_rfc3339(),
-        status: ExperimentStatus::Running,
+        status: ExperimentStatus::Pending,
         baseline_avg_fps,
         baseline_low1_fps,
-        ledger_watermark,
-        applied_change_id: applied.id().to_string(),
+        ledger_watermark: 0,
+        applied_change_id: String::new(),
         active_changes_at_start: active,
         attribution_warning: warning,
         noise_floor_pct: DEFAULT_NOISE_FLOOR_PCT,
@@ -709,11 +911,121 @@ pub(crate) fn start_experiment(
         concluded_at: None,
         verdict_confidence: None,
         verdict_note: None,
-    };
-    store.schema_version = STORE_SCHEMA_VERSION;
-    store.experiments.push(rec.clone());
+        trial_result: None,
+        target_verified: None,
+    });
+    let idx = store.experiments.len() - 1;
     save_store(&store)?;
-    Ok(rec)
+
+    // Step 3–4: apply exactly ONE reversible change via the audited boundary. This captures the
+    // typed rollback contract + prior-state snapshot at apply time (mutation-gate item 2).
+    let applied = match crate::history::apply_recommendation(rec_id, rec_title) {
+        Ok(applied) => applied,
+        Err(e) => {
+            // Nothing changed, so nothing is recorded — the pre-#583 contract. If this save fails the
+            // Pending record stays on disk, and the next launch finds no applied change and drops it.
+            store.experiments.pop();
+            let _ = save_store(&store);
+            return Err(format!("experiment aborted — apply failed, nothing changed: {e}"));
+        }
+    };
+    store.experiments[idx].applied_change_id = applied.id().to_string();
+
+    // Step 5 (§4.5): the live probe must not read the target state as OFF straight after the apply.
+    let target = target_verification(applied.active_check);
+    store.experiments[idx].target_verified = target;
+    if target == Some(false) {
+        return Err(abort_start(
+            &mut store,
+            idx,
+            "the setting did not read as changed after the apply, so there is nothing to measure",
+        ));
+    }
+
+    // Watermark AFTER our apply so a LATER external change trips the confound guard, not our own. An
+    // unreadable ledger means a fair before/after could never be proven (§7 "the app loses required
+    // evidence"), so the start is aborted and the change restored. See `comparison::arm_watermark`.
+    let ledger_watermark = match crate::comparison::arm_watermark() {
+        Ok(w) => w,
+        Err(e) => return Err(abort_start(&mut store, idx, &e)),
+    };
+    store.experiments[idx].ledger_watermark = ledger_watermark;
+    store.experiments[idx].status = ExperimentStatus::Running;
+    save_store(&store)?;
+    Ok(store.experiments[idx].clone())
+}
+
+/// Abort a start AFTER its change was applied: restore through the audited boundary and record why.
+/// Nothing was measured, so the result is `Unmeasurable` and §9 says restore. A restore that doesn't
+/// complete leaves a loud `Aborted` record naming the change, exactly like a failed conclude.
+/// Returns the error message for the caller to surface.
+fn abort_start(store: &mut ExperimentStore, idx: usize, why: &str) -> String {
+    let change_id = store.experiments[idx].applied_change_id.clone();
+    let restored = crate::history::rollback_change(change_id);
+    let rec = &mut store.experiments[idx];
+    rec.kept = false;
+    rec.trial_result = Some(TrialResult::Unmeasurable);
+    rec.concluded_at = Some(Utc::now().to_rfc3339());
+    let message = match restored {
+        Ok(()) => {
+            rec.status = ExperimentStatus::Restored;
+            rec.stop_reason = Some(format!("start-aborted: {why}; the change was restored"));
+            format!("experiment aborted before measuring — {why}. Compy restored the change.")
+        }
+        Err(e) if restore_already_reverted(&e) => {
+            rec.status = ExperimentStatus::Restored;
+            rec.stop_reason = Some(format!(
+                "start-aborted: {why}; the change was already reverted outside Compy"
+            ));
+            format!("experiment aborted before measuring — {why}. The change is already reverted.")
+        }
+        Err(e) => {
+            rec.status = ExperimentStatus::Aborted;
+            rec.stop_reason = Some(format!(
+                "start-aborted: {why}; automatic restore did not complete — verify in Fix: {e}"
+            ));
+            format!(
+                "experiment aborted before measuring — {why} — and the automatic restore did not \
+                 complete. Compy could not confirm the change was rolled back; open the Fix surface \
+                 to check and roll it back. ({e})"
+            )
+        }
+    };
+    match save_store(store) {
+        Ok(()) => message,
+        // The record on disk is still Pending; the next launch reconciles it against the ledger.
+        Err(e) => format!("{message} (the experiment record could not be saved: {e})"),
+    }
+}
+
+/// Launch-time reconcile of starts that never finished (#583: no hidden state). Runs once from
+/// `.setup` before the first window can read the store. Reads the ledger only when a `Pending` record
+/// exists, and never mutates Windows: see [`reconcile_interrupted_starts_in`].
+pub(crate) fn reconcile_interrupted_starts() -> Result<Vec<InterruptedStart>, String> {
+    let _g = lock_store()?;
+    let mut store = load_store();
+    if !store.experiments.iter().any(|e| e.status == ExperimentStatus::Pending) {
+        return Ok(Vec::new());
+    }
+    let history = crate::history::load_history();
+    let rows: Vec<LedgerEntryRef<'_>> = history
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|c| LedgerEntryRef {
+            id: &c.id,
+            rec_id: &c.rec_id,
+            applied_at: &c.applied_at,
+            applied: c.status == "applied",
+        })
+        .collect();
+    let ledger = match &history {
+        Ok(_) => Ok(rows.as_slice()),
+        Err(e) => Err(e.as_str()),
+    };
+    let outcomes = reconcile_interrupted_starts_in(&mut store, ledger, Utc::now());
+    save_store(&store)?;
+    Ok(outcomes)
 }
 
 /// True iff a `rollback_change` failure means the change is ALREADY off — i.e. it was rolled back
@@ -784,6 +1096,7 @@ pub(crate) fn conclude_experiment(
         recorded_at: now.to_rfc3339(),
     });
     store.experiments[idx].verdict = Some(outcome.verdict.clone());
+    store.experiments[idx].trial_result = Some(trial_result_for(&outcome.verdict));
     store.experiments[idx].verdict_confidence = Some(outcome.confidence);
     store.experiments[idx].verdict_note = Some(outcome.note.clone());
     store.experiments[idx].concluded_at = Some(now.to_rfc3339());
@@ -1002,6 +1315,8 @@ mod experiment_tests {
             concluded_at: None,
             verdict_confidence: None,
             verdict_note: None,
+            trial_result: None,
+            target_verified: None,
         }
     }
 
@@ -1456,5 +1771,196 @@ mod experiment_tests {
         assert_eq!(back.experiments.len(), 0, "corrupt store → empty, never a partial parse");
         assert!(path.with_extension("json.corrupt").exists(), "damaged file preserved for recovery");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Trial Protocol §8/§9: typed result + keep rule (#583) ──
+
+    #[test]
+    fn every_verdict_maps_to_its_protocol_class_and_only_better_keeps() {
+        use TrialResult::*;
+        let table = [
+            ("improved", Better, true),
+            ("regressed", Worse, false),
+            ("no-change", Negligible, false),
+            ("insufficient-evidence", Inconclusive, false),
+            ("confounded", Inconclusive, false),
+            ("expired", Unmeasurable, false),
+            ("not-comparable", Unmeasurable, false),
+        ];
+        assert_eq!(table.len(), KNOWN_VERDICTS.len(), "a new verdict needs a row in this table");
+        for (verdict, class, keep) in table {
+            assert!(KNOWN_VERDICTS.contains(&verdict), "{verdict} is not a known verdict");
+            assert_eq!(trial_result_for(verdict), class, "{verdict}");
+            assert_eq!(keep_rule(class), keep, "{verdict} → {class:?}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_verdict_is_unmeasurable_and_never_kept() {
+        assert_eq!(trial_result_for("some-future-verdict"), TrialResult::Unmeasurable);
+        assert_eq!(trial_result_for(""), TrialResult::Unmeasurable);
+        assert!(!keep_rule(trial_result_for("some-future-verdict")));
+    }
+
+    #[test]
+    fn conclude_keeps_exactly_when_the_keep_rule_says_so_on_every_path() {
+        let now = Utc::now();
+        let r = rec(90.0, 5);
+        let cases = [
+            conclude_outcome(&r, 100.0, 5000, false, None, Some(5), now), // improved
+            conclude_outcome(&r, 91.0, 5000, false, None, Some(5), now),  // no-change
+            conclude_outcome(&r, 70.0, 5000, false, None, Some(5), now),  // regressed
+            conclude_outcome(&r, 120.0, 5000, true, None, Some(5), now),  // crash
+            conclude_outcome(&r, 120.0, 10, false, None, Some(5), now),   // too few frames
+            conclude_outcome(&r, 120.0, 5000, false, None, Some(6), now), // confounded
+            conclude_outcome(&r, 120.0, 5000, false, Some("Other"), Some(5), now), // other game
+            conclude_outcome(&r, 120.0, 5000, false, None, Some(5), now + chrono::Duration::days(365)), // expired
+        ];
+        let mut seen: Vec<&str> = Vec::new();
+        for o in &cases {
+            assert!(KNOWN_VERDICTS.contains(&o.verdict.as_str()), "unlisted verdict {}", o.verdict);
+            assert_eq!(o.keep, keep_rule(trial_result_for(&o.verdict)), "{}", o.verdict);
+            seen.push(&o.verdict);
+        }
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), KNOWN_VERDICTS.len(), "every verdict path is exercised: {seen:?}");
+        assert_eq!(cases.iter().filter(|o| o.keep).count(), 1, "only the clean improvement keeps");
+    }
+
+    #[test]
+    fn trial_result_serializes_kebab_case_and_old_records_load_without_it() {
+        assert_eq!(serde_json::to_string(&TrialResult::Unmeasurable).unwrap(), "\"unmeasurable\"");
+        assert_eq!(serde_json::to_string(&ExperimentStatus::Pending).unwrap(), "\"pending\"");
+        let mut old = serde_json::to_value(rec(90.0, 5)).unwrap();
+        let obj = old.as_object_mut().unwrap();
+        obj.remove("trial_result");
+        obj.remove("target_verified");
+        let back: ExperimentRecord = serde_json::from_value(old).unwrap();
+        assert_eq!(back.trial_result, None, "a pre-#583 record reads as unclassified, never guessed");
+        assert_eq!(back.target_verified, None, "and its target as unverified");
+    }
+
+    // ── Record-first lifecycle integrity (#583 lane 1) ──
+
+    fn with_status(status: ExperimentStatus) -> ExperimentRecord {
+        let mut r = rec(90.0, 5);
+        r.status = status;
+        r
+    }
+
+    #[test]
+    fn only_a_starting_or_running_experiment_blocks_a_new_start() {
+        use ExperimentStatus::*;
+        for (status, blocks) in [(Pending, true), (Running, true), (Kept, false), (Restored, false), (Aborted, false)] {
+            let store = ExperimentStore { schema_version: 1, experiments: vec![with_status(status)] };
+            assert_eq!(active_trial(&store).is_some(), blocks, "{status:?}");
+        }
+        assert!(active_trial(&ExperimentStore::default()).is_none());
+    }
+
+    #[test]
+    fn only_a_probe_that_reads_off_fails_the_target_check() {
+        use crate::history::ActiveCheck;
+        assert_eq!(target_verification(Some(ActiveCheck::On)), Some(true));
+        assert_eq!(target_verification(Some(ActiveCheck::Off)), Some(false));
+        assert_eq!(target_verification(Some(ActiveCheck::Unreadable)), None, "unread is unknown");
+        assert_eq!(target_verification(Some(ActiveCheck::Unrecognised)), None, "unprobed is unknown");
+        assert_eq!(target_verification(None), None);
+    }
+
+    fn pending_at(created_at: &str) -> ExperimentRecord {
+        let mut r = with_status(ExperimentStatus::Pending);
+        r.id = "exp:9-0".into();
+        r.created_at = created_at.into();
+        r.applied_change_id = String::new();
+        r
+    }
+
+    fn row<'a>(id: &'a str, rec_id: &'a str, applied_at: &'a str, applied: bool) -> LedgerEntryRef<'a> {
+        LedgerEntryRef { id, rec_id, applied_at, applied }
+    }
+
+    const START: &str = "2026-09-28T12:00:00+00:00";
+
+    #[test]
+    fn an_interrupted_start_owns_the_first_later_apply_of_its_own_rec() {
+        let p = pending_at(START);
+        let ledger = [
+            row("older", "test-rec", "2026-09-28T11:59:59+00:00", true), // applied before the start
+            row("other-rec", "game-mode", "2026-09-28T12:00:01+00:00", true),
+            row("undone", "test-rec", "2026-09-28T12:00:01+00:00", false), // rolled back
+            row("ours", "test-rec", "2026-09-28T12:00:02+00:00", true),
+            row("later", "test-rec", "2026-09-28T12:05:00+00:00", true),
+        ];
+        assert_eq!(interrupted_start_change(&p, &ledger, &[]), Some("ours"));
+        assert_eq!(interrupted_start_change(&p, &ledger, &["ours"]), Some("later"), "claimed ids are skipped");
+        assert_eq!(interrupted_start_change(&p, &ledger[..3], &[]), None, "nothing of ours was applied");
+    }
+
+    #[test]
+    fn an_undated_apply_is_treated_as_possibly_ours_but_a_dated_one_wins() {
+        let p = pending_at(START);
+        let undated = [row("undated", "test-rec", "not-a-date", true)];
+        assert_eq!(interrupted_start_change(&p, &undated, &[]), Some("undated"), "unknown → loud, never dropped");
+        let both = [row("undated", "test-rec", "not-a-date", true), row("dated", "test-rec", "2026-09-28T12:00:02+00:00", true)];
+        assert_eq!(interrupted_start_change(&p, &both, &[]), Some("dated"));
+    }
+
+    #[test]
+    fn reconcile_drops_a_start_that_changed_nothing() {
+        let mut store = ExperimentStore { schema_version: 1, experiments: vec![with_status(ExperimentStatus::Kept), pending_at(START)] };
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&[]), Utc::now());
+        assert_eq!(out, vec![InterruptedStart::Dropped]);
+        assert_eq!(store.experiments.len(), 1, "the kept record is untouched");
+        assert_eq!(store.experiments[0].status, ExperimentStatus::Kept);
+    }
+
+    #[test]
+    fn reconcile_names_a_change_that_is_still_applied_and_never_keeps_it() {
+        let mut store = ExperimentStore { schema_version: 1, experiments: vec![pending_at(START)] };
+        let ledger = [row("ours", "test-rec", "2026-09-28T12:00:02+00:00", true)];
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&ledger), Utc::now());
+        assert_eq!(out, vec![InterruptedStart::ChangeStillApplied]);
+        let r = &store.experiments[0];
+        assert_eq!(r.status, ExperimentStatus::Aborted, "loud, never a silent keep");
+        assert!(!r.kept);
+        assert_eq!(r.applied_change_id, "ours", "the record now names the change so Fix can undo it");
+        assert_eq!(r.trial_result, Some(TrialResult::Unmeasurable), "nothing was measured");
+        assert!(r.concluded_at.is_some());
+        assert!(r.stop_reason.as_deref().unwrap().contains("restore it from Fix"));
+        assert!(active_trial(&store).is_none(), "an interrupted start no longer blocks the next one");
+    }
+
+    #[test]
+    fn reconcile_with_an_unreadable_ledger_says_so_instead_of_guessing() {
+        let mut store = ExperimentStore { schema_version: 1, experiments: vec![pending_at(START)] };
+        let out = reconcile_interrupted_starts_in(&mut store, Err("parse: bad json"), Utc::now());
+        assert_eq!(out, vec![InterruptedStart::LedgerUnreadable]);
+        let r = &store.experiments[0];
+        assert_eq!(r.status, ExperimentStatus::Aborted);
+        assert!(r.applied_change_id.is_empty(), "no change is named without evidence");
+        let why = r.stop_reason.as_deref().unwrap();
+        assert!(why.contains("verify in Fix") && why.contains("parse: bad json"), "{why}");
+    }
+
+    #[test]
+    fn reconcile_leaves_settled_and_running_experiments_alone() {
+        use ExperimentStatus::*;
+        let before: Vec<ExperimentRecord> = [Running, Kept, Restored, Aborted].into_iter().map(with_status).collect();
+        let mut store = ExperimentStore { schema_version: 1, experiments: before.clone() };
+        let ledger = [row("x", "test-rec", "2026-09-28T12:00:02+00:00", true)];
+        assert!(reconcile_interrupted_starts_in(&mut store, Ok(&ledger), Utc::now()).is_empty());
+        let statuses: Vec<_> = store.experiments.iter().map(|e| e.status).collect();
+        assert_eq!(statuses, vec![Running, Kept, Restored, Aborted], "a Running experiment legitimately spans restarts");
+    }
+
+    #[test]
+    fn get_experiments_never_hands_the_ui_a_pending_record() {
+        // Source check: the unlocked read path filters Pending (a refresh mid-apply must not show it).
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn get_experiments()").unwrap()..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        assert!(body.contains("ExperimentStatus::Pending"), "get_experiments must drop Pending records");
     }
 }

@@ -81,6 +81,14 @@ baseline → prior-state snapshot → apply → verify → measure → noise-awa
 This is the first implementation milestone that proves the reborn optimizer architecture rather than
 adding another isolated tweak.
 
+- [~] #583 lane 1 — record-first start, backend single-active guard, restore on a failed §4.5 target
+  check or unreadable watermark, read-only launch reconcile of interrupted starts, typed §8
+  `TrialResult` + §9 keep rule (`experiment.rs`; guard `src/experiment-record-first-guard.test.ts`).
+  Built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** lane 2 (§4.1 refuse-if-already
+  -in-target and §4.10 final read-back need a read-only probe in ★ `history.rs`; backend-owned session
+  refs; noise evidence in the receipt) · owner-rig live proof on `game-bar-disable`, including a kill
+  mid-start then relaunch · verify-local + independent review.
+
 ---
 
 ## P4 — Roadmap Phase 4/5: Optimization Engine + guided journey
