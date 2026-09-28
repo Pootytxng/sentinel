@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
 
 // Settable per-test leftovers response (vi.mock factories are hoisted — this must be too).
 const leftoversMock = vi.hoisted(() => ({
@@ -27,9 +27,28 @@ const prioritiesMock = vi.hoisted(() => ({
   } as Record<string, unknown>,
 }));
 
+// Settable startup list for the startup-load limiter. `rereadFails` makes every read after the
+// disable reject, and `steps` records the order of the disable, the re-read and App's refresh.
+const startupMock = vi.hoisted(() => ({
+  entries: [] as { name: string; command: string; enabled: boolean }[],
+  disabled: false,
+  rereadFails: false,
+  steps: [] as string[],
+}));
+
 // useScan polls real commands on mount; mock invoke to feed a tiny readiness/priorities scan.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
+    if (cmd === "get_startup_entries") {
+      if (startupMock.disabled) startupMock.steps.push("reread");
+      if (startupMock.disabled && startupMock.rereadFails) return Promise.reject(new Error("probe failed"));
+      return Promise.resolve(startupMock.entries);
+    }
+    if (cmd === "set_startup_entry_enabled") {
+      startupMock.steps.push("disable");
+      startupMock.disabled = true;
+      return Promise.resolve(null);
+    }
     if (cmd === "get_leftovers") return Promise.resolve(leftoversMock.report);
     if (cmd === "get_nic_driver_info") return Promise.resolve(leftoversMock.nics);
     if (cmd === "get_game_readiness")
@@ -59,6 +78,10 @@ import type { SessionSummary } from "../types";
 
 afterEach(() => {
   cleanup();
+  startupMock.entries = [];
+  startupMock.disabled = false;
+  startupMock.rereadFails = false;
+  startupMock.steps = [];
   readinessMock.drifts = [];
   prioritiesMock.payload = {
     limiters: [],
@@ -443,6 +466,68 @@ describe("Check", () => {
     const copied = writeText.mock.calls[0][0] as string;
     expect(copied).toMatch(/^Compy setup summary/);
     expect(copied).toMatch(/measured on this rig/i);
+  });
+
+  // #599 review (PR 612): the disable writes the Trust Ledger, so App's refresh (History, Health) must
+  // run once it has landed — even when this list's own re-read fails, which is not a failed disable.
+  describe("turning a startup app off from the startup-load row", () => {
+    const withStartupLimiter = () => {
+      prioritiesMock.payload = {
+        ...prioritiesMock.payload,
+        limiters: [
+          {
+            id: "startup-load",
+            title: "Startup apps",
+            reason: "Several apps start with Windows",
+            linked: null,
+            confidence: "medium",
+            status: "attention",
+          },
+        ],
+      };
+      startupMock.entries = [{ name: "Discord", command: "discord.exe", enabled: true }];
+    };
+
+    it("still runs and awaits App's refresh when the list re-read fails, and reports no failure", async () => {
+      withStartupLimiter();
+      startupMock.rereadFails = true;
+      let refreshed = false;
+      const onChanged = vi.fn(async () => {
+        startupMock.steps.push("app-refresh");
+        await new Promise((r) => setTimeout(r, 0));
+        refreshed = true;
+      });
+      render(
+        <ConfirmProvider>
+          <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={onChanged} vendor="any" />
+        </ConfirmProvider>,
+      );
+      fireEvent.click(await screen.findByRole("button", { name: "Turn off at startup" }));
+      // The button leaves its busy state only after the helper's refresh settles, App's included.
+      await screen.findByRole("button", { name: "Turn off at startup" });
+      expect(onChanged).toHaveBeenCalledTimes(1);
+      expect(refreshed).toBe(true);
+      expect(startupMock.steps[0]).toBe("disable");
+      expect(startupMock.steps).toContain("app-refresh");
+      expect(startupMock.steps).toContain("reread");
+      expect(screen.queryByText("Couldn't change that startup item")).not.toBeInTheDocument();
+    });
+
+    it("re-reads the list after a disable that landed, and the app drops off it", async () => {
+      withStartupLimiter();
+      const onChanged = vi.fn();
+      render(
+        <ConfirmProvider>
+          <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={onChanged} vendor="any" />
+        </ConfirmProvider>,
+      );
+      const btn = await screen.findByRole("button", { name: "Turn off at startup" });
+      startupMock.entries = [{ name: "Discord", command: "discord.exe", enabled: false }];
+      fireEvent.click(btn);
+      await waitFor(() => expect(screen.queryByText("Discord")).not.toBeInTheDocument());
+      expect(onChanged).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText("Couldn't change that startup item")).not.toBeInTheDocument();
+    });
   });
 
   it("renders NO upgrade-path block when no verdict names hardware", async () => {

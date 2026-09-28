@@ -191,7 +191,8 @@
   "attribution": {
     "otherRig_other": "这个区间内有 {{count}} 项 Compy 更改是在另一台电脑上做的,这里不计入。",
     "rigUnknown_other": "其中 {{count}} 项记录于 Compy 开始标记所在电脑之前,所以未必是这台电脑。",
-    "listTruncated": "Compy 的模型只列出最新的 {{shown}} 项(共 {{total}} 项记录),这个区间内更早的更改不会在这里列名。"
+    "listTruncated": "Compy 的模型只列出最新的 {{shown}} 项(共 {{total}} 项记录),这个区间内更早的更改不会在这里列名。",
+    "sinceRolledBack": "(之后已回滚)"
   },
   "ledgerHealth": {
     "activeUnknown": "未知 —— Compy 读不到自己的记录",

@@ -195,7 +195,8 @@
     "otherRig_other": "{{count}} Compy changes in this window were made on another PC and are not counted here.",
     "rigUnknown_one": "{{count}} of these was recorded before Compy stamped which PC it was on, so it may not have been this one.",
     "rigUnknown_other": "{{count}} of these were recorded before Compy stamped which PC they were on, so they may not have been this one.",
-    "listTruncated": "Compy's model lists only its newest {{shown}} of {{total}} recorded changes, so older changes in this window are not named here."
+    "listTruncated": "Compy's model lists only its newest {{shown}} of {{total}} recorded changes, so older changes in this window are not named here.",
+    "sinceRolledBack": "(since rolled back)"
   },
   "ledgerHealth": {
     "activeUnknown": "unknown — Compy can't read its own record",

@@ -35,6 +35,7 @@ import { LEDGER_CHANGED_EVENT } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
+import { setStartupEntryEnabled } from "./data/startup-toggle";
 import type { LabStationKey } from "./surfaces/lab-guided-data";
 import Settings from "./surfaces/Settings";
 import {
@@ -851,13 +852,14 @@ function App() {
     setBusyId(`startup:${entry.name}`);
     setError(null);
     try {
-      await invoke("set_startup_entry_enabled", {
-        name: entry.name,
-        enabled: !entry.enabled,
+      // A toggle is a ledger change (#599): the helper announces it and waits for the re-read, as
+      // apply/rollback do. The row flips first so the switch moves before the slower probes land.
+      await setStartupEntryEnabled(entry.name, !entry.enabled, () => {
+        setStartup((prev) =>
+          prev.map((e) => (e.name === entry.name ? { ...e, enabled: !e.enabled } : e))
+        );
+        return refresh();
       });
-      setStartup((prev) =>
-        prev.map((e) => (e.name === entry.name ? { ...e, enabled: !e.enabled } : e))
-      );
     } catch (e) {
       fail(t("app.errors.startupToggleFailed"), e);
     } finally {

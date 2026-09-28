@@ -26,7 +26,7 @@ import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeCpuTempC, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
-import { inEffectCounts, useMachineModel } from "../data/machine-model";
+import { inEffectCounts, useMachineModel, type InEffectCounts } from "../data/machine-model";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
@@ -319,6 +319,41 @@ function SpecBox({ title, rows }: { title: string; rows: [string, string][] }) {
         ))}
       </dl>
     </div>
+  );
+}
+
+// WHAT COMPY HAS IN EFFECT ON THIS PC (#599). The default Health face never said: the count only fed
+// the interview, so a change Compy has no live check for (a startup entry is one) left no trace
+// here at all. HomeHud's pattern: the verified count, and BESIDE it — never added to it — the ones
+// Compy can't confirm, because an unconfirmed change is neither on nor off and "0" alone would
+// read as nothing applied. Silent while reading and before Compy has recorded anything, so the
+// cold open stays as it was; an unreadable record is a word, never a silence.
+function InEffectLine({ inEffect, t }: { inEffect: InEffectCounts; t: TFunction }) {
+  if (inEffect.kind === "pending") return null;
+  if (inEffect.kind === "counted" && inEffect.totalRecorded === 0) return null;
+  return (
+    <p className="hc-in-effect" data-testid="hc-in-effect">
+      <span className="hc-in-effect-k">{t("home.homeConsole.inEffect.label")}</span>
+      {inEffect.kind === "unreadable" ? (
+        <span className="hc-in-effect-v">{t("common.ledgerHealth.activeUnknown")}</span>
+      ) : (
+        <>
+          <span className="hc-in-effect-v">
+            {t("home.homeConsole.inEffect.active", { count: inEffect.activeNow })}
+          </span>
+          {/* The separator rides INSIDE the phrase it introduces, so a narrow window wraps the two
+              together instead of leaving a "·" dangling at the end of the first row. */}
+          {inEffect.unknown > 0 && (
+            <span className="hc-in-effect-v hc-in-effect-unknown">
+              <span className="hc-in-effect-sep" aria-hidden="true">
+                ·
+              </span>
+              {t("home.homeConsole.inEffect.unconfirmed", { count: inEffect.unknown })}
+            </span>
+          )}
+        </>
+      )}
+    </p>
   );
 }
 
@@ -1203,6 +1238,7 @@ export function HomeConsole({
             did it check" — and it is BELOW the fold because the approved comp's first viewport is
             the verdict, the one action and the rig. Reachable, subordinate, unmodified. */}
         {latestChange}
+        <InEffectLine inEffect={inEffect} t={t} />
         {/* The check line and its Re-run affordance, relocated out of the shell's `measured`
             slot (see the note above it). It leads `below` rather than trailing it: a reader
             who scrolls past the fold is asking "what did you actually check?", and this

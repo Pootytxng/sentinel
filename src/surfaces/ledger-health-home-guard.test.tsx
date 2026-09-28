@@ -594,6 +594,74 @@ describe("HomeConsole — the face a default-flag user actually lands on", () =>
     expect(container.querySelector(".hc-verdict-line")).toBeTruthy();
   });
 
+  // #599: this face counted only activeNow, and fed it to the interview alone — so a change the
+  // model can't confirm (every startup toggle: Compy has no live check for one) left no trace here.
+  describe("the in-effect line names what Compy can't confirm beside what it can", () => {
+    const line = (c: HTMLElement) => c.querySelector<HTMLElement>("[data-testid='hc-in-effect']");
+    const withTotal = (m: MachineModel, total: number): MachineModel => ({
+      ...m,
+      compy_changes: { ...m.compy_changes, total_recorded: total },
+    });
+
+    // Self-review of #599 caught a "·" left dangling at the end of row 1 when a narrow window (the
+    // app shrinks to 380px) wrapped the phrase; the separator must travel with the phrase it opens.
+    it("the separator lives inside the unconfirmed phrase, never as a loose flex item", async () => {
+      model.value = countedModel(2, 1);
+      const { container } = await mountConsole();
+      const l = line(container)!;
+      expect(l.querySelector(".hc-in-effect-unknown > .hc-in-effect-sep")).not.toBeNull();
+      expect(l.querySelector(":scope > .hc-in-effect-sep")).toBeNull();
+    });
+
+    it("one change Compy can't confirm is named — never folded into a 0, never 'no changes'", async () => {
+      model.value = countedModel(0, 1);
+      const { container } = await mountConsole();
+
+      const l = line(container);
+      expect(l).toBeTruthy();
+      expect(l!.textContent).toContain("0 active now");
+      expect(l!.textContent).toContain("1 change Compy can't confirm is still in place");
+      expect(container.textContent!.toLowerCase()).not.toContain("no changes");
+    });
+
+    it("the unconfirmed count sits BESIDE the verified one, never added to it", async () => {
+      model.value = countedModel(2, 1);
+      const { container } = await mountConsole();
+
+      const l = line(container)!;
+      expect(l.textContent).toContain("2 active now");
+      expect(l.textContent).toContain("1 change Compy can't confirm");
+      expect(l.textContent).not.toContain("3");
+    });
+
+    it("once that change is rolled back, the unconfirmed phrase goes and nothing claims it is on", async () => {
+      // A rolled-back row leaves both counts: the model files it under rolled_back, not in effect.
+      model.value = countedModel(0, 0);
+      const { container } = await mountConsole();
+
+      const l = line(container)!;
+      expect(l.textContent).toContain("0 active now");
+      expect(l.textContent).not.toContain("can't confirm");
+    });
+
+    it("an unreadable record is a word, not a silence", async () => {
+      model.value = unreadableModel("history.json is locked");
+      const { container } = await mountConsole();
+
+      expect(line(container)!.textContent).toContain(ACTIVE_WITHDRAWN);
+    });
+
+    it("before Compy has recorded anything, and while it is still reading, the line is absent", async () => {
+      model.value = withTotal(countedModel(0, 0), 0);
+      expect(line((await mountConsole()).container)).toBeNull();
+      cleanup();
+
+      model.value = undefined;
+      model.hang = true;
+      expect(line((await mountConsole()).container)).toBeNull();
+    });
+  });
+
   it("UNKNOWN health leaves the room BYTE-IDENTICAL to a healthy ledger", async () => {
     // Same failsafe the two faces above carry, and the same reason for freezing Date: the console
     // prints a dateline, so a midnight straddle would read as a false red on a byte-identity pin.

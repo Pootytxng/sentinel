@@ -215,6 +215,12 @@
   color: var(--accent-bright, var(--accent));
 }
 
+/* A credited change the ledger says was undone since (#599): named, but quieter than the ones
+   still on, so the eye does not read it as part of the current setup. */
+.bench-change .bench-rolled-back {
+  color: var(--muted);
+}
+
 .bench-eff {
   display: flex;
   flex-direction: column;
