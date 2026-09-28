@@ -175,6 +175,15 @@ function looksJudged(x: Experiment): boolean {
   return x.verdict === "improved" || x.verdict === "no-change" || x.verdict === "regressed";
 }
 
+// A §11 note a row carries: its noise line, or "no record" for a row that looks judged without one.
+const NO_RECORD = Symbol("no-noise-record");
+type RowNote = string | typeof NO_RECORD;
+
+// Marks tie a row to a note said once under the list. Past three, plain numbers.
+function noteMark(i: number): string {
+  return ["*", "†", "‡"][i] ?? String(i + 1);
+}
+
 // The backend tags a stop reason with a machine prefix ("start-aborted: …", "user-restored; …") so
 // the record stays sortable. The owner reads the sentence after it, never the tag.
 function abortReasonText(reason: string): string {
@@ -321,20 +330,24 @@ export default function ExperimentBench() {
       .filter(isUsableReading)
       .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0] ?? null;
 
-  // §11 lines for the past experiments: the rule once, then only the exceptions a reader could not
-  // tell apart. When every judged row says the same thing, it is said once for the list — the same
-  // sentence under each row buries the rows it describes (C-11). A row whose verdict already says it
-  // wasn't judged ("—", interfered, not comparable, not enough evidence) needs no note. A row that
-  // LOOKS judged (Better / No change / Worse) but has no record — a crash, an older result — says
-  // so, rather than falling silently under the list-wide line. Lines that differ stay on their own
-  // rows, and then no list-wide claim is made at all.
-  const noiseLines = history.map((x) => (x.noise_evidence ? noiseLine(x.noise_evidence, t) : null));
-  const judgedLines = new Set(noiseLines.filter((l): l is string => l !== null));
+  // §11 notes for the past experiments. Every sentence is said once per list, however many rows it
+  // covers — the same sentence down the rows buries the rows it describes (C-11). When every judged
+  // row says the same thing, that line is the list's rule, said under the label. A row whose verdict
+  // already says it wasn't judged ("—", interfered, not comparable, not enough evidence) needs no
+  // note. Every other note — a row that LOOKS judged (Better / No change / Worse) but has no record
+  // (a crash, an older result), or noise lines that differ between rows — is said once under the
+  // list, and its rows carry only its mark.
+  const rowNotes = history.map((x): RowNote | null =>
+    x.noise_evidence ? noiseLine(x.noise_evidence, t) : looksJudged(x) ? NO_RECORD : null,
+  );
+  const judgedLines = new Set(rowNotes.filter((n): n is string => typeof n === "string"));
   const sharedNoise = judgedLines.size === 1 ? [...judgedLines][0] : null;
-  const rowNoise = noiseLines.map((l, i) => {
-    if (!sharedNoise) return l;
-    return l === null && looksJudged(history[i]) ? t("lab.experimentBench.noiseNotRecorded") : null;
-  });
+  const footnotes = [...new Set(rowNotes.filter((n): n is RowNote => n !== null && n !== sharedNoise))];
+  const footnoteText = (n: RowNote) =>
+    n === NO_RECORD
+      ? t("lab.experimentBench.noiseNotRecorded", { count: rowNotes.filter((r) => r === NO_RECORD).length })
+      : n;
+  const rowMark = rowNotes.map((n) => (n === null || n === sharedNoise ? null : noteMark(footnotes.indexOf(n))));
 
   // The testable universe: catalog changes this rig can use and hasn't already applied.
   const pickable = recs.filter((r) => r.eligible && !r.currently_applied);
@@ -562,6 +575,7 @@ export default function ExperimentBench() {
                 <span className="exp-bench-rec">{x.rec_title}</span>
                 <span className="exp-bench-verdict">
                   {x.verdict ? verdictCopy(t)[x.verdict] ?? x.verdict : "—"}
+                  {rowMark[i] && <span className="exp-bench-noise-mark">{rowMark[i]}</span>}
                 </span>
                 {x.treatment && (
                   <span className="exp-bench-delta">
@@ -573,10 +587,14 @@ export default function ExperimentBench() {
                 {x.stop_reason && x.status === "aborted" && (
                   <span className="exp-bench-abort">{abortReasonText(x.stop_reason)}</span>
                 )}
-                {rowNoise[i] && <span className="exp-bench-noise">{rowNoise[i]}</span>}
               </li>
             ))}
           </ul>
+          {footnotes.map((n, k) => (
+            <p key={k} className="exp-fineprint exp-bench-noise">
+              <span className="exp-bench-noise-mark">{noteMark(k)}</span> <span>{footnoteText(n)}</span>
+            </p>
+          ))}
         </div>
       )}
       </div>

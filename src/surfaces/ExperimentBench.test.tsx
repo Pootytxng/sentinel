@@ -535,22 +535,48 @@ describe("ExperimentBench (armed)", () => {
     expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(0);
   });
 
-  it("keeps a noise line on its row when rows differ", async () => {
+  // C-11 as a class, not an instance (self-review #4, #583 lane 2b): every §11 sentence appears once
+  // per list however many rows it covers, and no row carries a sentence — only a note's mark.
+  function expectEachNoteOnceAndOffTheRows() {
+    const sentences = [
+      ...[...document.querySelectorAll(".exp-bench-noise-shared")].map((el) => el.textContent ?? ""),
+      ...[...document.querySelectorAll(".exp-bench-noise")].map((el) => el.lastElementChild?.textContent ?? ""),
+    ];
+    expect(new Set(sentences).size, sentences.join("\n")).toBe(sentences.length);
+    for (const row of document.querySelectorAll(".exp-bench-row")) {
+      for (const s of sentences) expect(row.textContent).not.toContain(s);
+    }
+  }
+  const rowMarks = () =>
+    [...document.querySelectorAll(".exp-bench-row")].map((r) => r.querySelector(".exp-bench-noise-mark")?.textContent ?? null);
+
+  it("says each differing noise line once, and marks its rows", async () => {
     state.gate = true;
+    const unmeasured = { band_pct: 3, measured_noise_pct: null };
+    const measured = { band_pct: 3, measured_noise_pct: 1.25 };
     state.experiments = [
-      { ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: null } },
-      { ...KEPT_EXPERIMENT, id: "exp:3-0", noise_evidence: { band_pct: 3, measured_noise_pct: 1.25 } },
+      { ...KEPT_EXPERIMENT, noise_evidence: unmeasured },
+      { ...KEPT_EXPERIMENT, id: "exp:3-0", noise_evidence: measured },
+      { ...KEPT_EXPERIMENT, id: "exp:3-1", noise_evidence: unmeasured },
+      { ...KEPT_EXPERIMENT, id: "exp:3-2", noise_evidence: measured },
     ];
     render(<ExperimentBench />);
     await waitFor(() => expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(2));
     expect(document.querySelector(".exp-bench-noise-shared")).toBeNull();
+    expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
+      "* Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
+      "† Judged against a 3% noise floor. This game's own run-to-run noise on your PC measured ±1.3%.",
+    ]);
+    expect(rowMarks()).toEqual(["*", "†", "*", "†"]);
+    expectEachNoteOnceAndOffTheRows();
   });
 
-  // IPC audit W2 + self-review items 3 (#583 lane 2b, two passes): a row with no record must not fall
-  // silently under the list-wide line, yet neither the floor sentence nor a "no record" note may
-  // repeat down the list (C-11). The rule is said once; only a row that LOOKS judged — a crash reads
-  // "Worse" — says it has no record. Rows whose verdict already says so stay quiet.
-  it("says the floor once and notes only the rows that look judged but have no record", async () => {
+  // IPC audit W2 + self-review item 3 (#583 lane 2b, three passes): a row with no record must not
+  // fall silently under the list-wide line, yet neither the floor sentence nor the "no record" note
+  // may repeat down the list (C-11). The rule is said once; the note is said once; only rows that
+  // LOOK judged — a crash reads "Worse", an older result "Better" — carry its mark. Rows whose
+  // verdict already says they weren't judged stay quiet.
+  it("says the floor once and the missing-record note once, marking only rows that look judged", async () => {
     state.gate = true;
     const judged = { band_pct: 3, measured_noise_pct: null };
     const unjudged = (id: string, verdict: string | null) => ({
@@ -564,18 +590,30 @@ describe("ExperimentBench (armed)", () => {
       unjudged("u8", "confounded"),
       // A crash: restored, "Worse", never judged against the floor.
       { ...NOT_COMPARABLE_EXPERIMENT, id: "crash", verdict: "regressed", stop_reason: "crash-during-treatment", noise_evidence: null },
+      // Results saved before the record existed.
+      { ...KEPT_EXPERIMENT, id: "old-1", noise_evidence: null },
+      { ...KEPT_EXPERIMENT, id: "old-2", verdict: "no-change", noise_evidence: undefined },
     ];
     render(<ExperimentBench />);
-    const rows = await waitFor(() => {
-      const found = document.querySelectorAll(".exp-bench-row");
-      expect(found).toHaveLength(11);
-      return found;
-    });
-    const texts = [...document.querySelectorAll(".exp-bench-noise, .exp-bench-noise-shared")].map((el) => el.textContent);
-    expect(texts.filter((s) => s?.startsWith("Judged against Compy's 3% noise floor."))).toHaveLength(1);
-    expect(document.querySelector(".exp-bench-noise-shared")).not.toBeNull();
-    expect(texts.filter((s) => s === "No noise-floor record for this result.")).toHaveLength(1);
-    expect(rows[10].querySelector(".exp-bench-noise")?.textContent).toBe("No noise-floor record for this result.");
+    await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(13));
+    expect(document.querySelector(".exp-bench-noise-shared")?.textContent).toMatch(/^Judged against Compy's 3% noise floor\./);
+    expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
+      "* No noise-floor record was kept for these results.",
+    ]);
+    expect(rowMarks()).toEqual([null, null, null, null, null, null, null, null, null, null, "*", "*", "*"]);
+    expectEachNoteOnceAndOffTheRows();
+  });
+
+  it("says the missing-record note in the singular for one row", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: null } },
+      { ...NOT_COMPARABLE_EXPERIMENT, id: "crash", verdict: "regressed", stop_reason: "crash-during-treatment", noise_evidence: null },
+    ];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("No noise-floor record was kept for this result.")).toBeInTheDocument();
+    expect(rowMarks()).toEqual([null, "*"]);
+    expectEachNoteOnceAndOffTheRows();
   });
 
   // Self-review #583 lane 2b: an aborted row showed the backend's machine tag ("start-aborted: …").

@@ -416,6 +416,6 @@
     "yourGame": "你的游戏",
     "noiseUnmeasured": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的自身波动尚未测量。",
     "noiseMeasured": "按 {{band}}% 噪声下限判定。这款游戏在你电脑上的自身波动实测为 ±{{measured}}%。",
-    "noiseNotRecorded": "此结果没有噪声下限记录。"
+    "noiseNotRecorded_other": "标记的结果没有保存噪声下限记录。"
   }
 }

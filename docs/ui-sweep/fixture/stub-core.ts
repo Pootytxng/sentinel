@@ -133,6 +133,19 @@ const HISTORY = [
     concluded_at: iso(13990), verdict_confidence: null, verdict_note: null,
     baseline_session_id: iso(14100), noise_evidence: null,
   },
+  {
+    // A result saved before the noise record existed: reads "Better", so it shares fx-h3's one
+    // "no record" note (said once, plural) and carries its mark.
+    id: "fx-h5", rec_id: "fixture-rec-5", rec_title: "Turn off pointer precision",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(16000),
+    status: "kept" as ExperimentStatus,
+    baseline_avg_fps: 129.0, baseline_low1_fps: 84.2, active_changes_at_start: 0,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: { avg_fps: 133.0, low1_fps: 89.1, samples: 2900, crashed: false, delta_low1_pct: 5.8, recorded_at: iso(15700) },
+    verdict: "improved", kept: true, stop_reason: null, concluded_at: iso(15690),
+    verdict_confidence: "medium" as Confidence, verdict_note: "One full session either side, same game, same rig.",
+    baseline_session_id: null, noise_evidence: null,
+  },
 ];
 
 const RUNNING = {
