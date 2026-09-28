@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/599#issuecomment-5877742844",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/612#issuecomment-5879356433",
+    "status": "passed",
+    "reviewerNote": "Local Codex CLI (gpt-5.6-sol, read-only sandbox) reviewed the exact pushed head after its round-1 CHANGES REQUIRED at 5791267b. Round 1's finding: Check's startup disable skipped App's refresh when its own list re-read failed. It is RESOLVED: App's refresh now starts independently of the best-effort re-read, both are awaited, and a behavioral test covers the rejected re-read. It read the full 18-file base...head delta through GitHub's exact-SHA compare. No findings. It authored no mutation.",
+    "head": "ec407d373a659eed467ffd6bb14f6507f9ced395"
+  },
+  "branch": "claude/599-ledger-truth",
+  "overlapExclusiveNote": "The claim on #599 names a 22-path scope covering the PR's whole 18-path delta since origin/main; docs/BACKLOG.md was dropped from the delta and the claim because #583 holds it, and the lease-overlap and write-scope gates both returned OK at push.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "ec407d373a659eed467ffd6bb14f6507f9ced395",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "469 frontend files, 7833 passed, five expected failures, eight skipped.",
+      "evidence": "logs/verify-local-2026-09-28T21-39-33Z.log; SHA-256 7DA2270DBCC0D0AFEEC9EAAAB9FCACC0F71D2E50676DF898632183E252751085; push log logs/push-599-r4.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded 5791267b..ec407d37 at the exact head); PR gate comment https://github.com/Pootytxng/sentinel/pull/612#issuecomment-5879294757",
+      "head": "ec407d373a659eed467ffd6bb14f6507f9ced395"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-28T21-39-33Z.log; SHA-256 7DA2270DBCC0D0AFEEC9EAAAB9FCACC0F71D2E50676DF898632183E252751085; push log logs/push-599-r4.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded 5791267b..ec407d37 at the exact head); PR gate comment https://github.com/Pootytxng/sentinel/pull/612#issuecomment-5879294757",
+      "head": "ec407d373a659eed467ffd6bb14f6507f9ced395"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1355 passed, zero failed, 24 ignored; no Rust path changed.",
+      "evidence": "logs/verify-local-2026-09-28T21-39-33Z.log; SHA-256 7DA2270DBCC0D0AFEEC9EAAAB9FCACC0F71D2E50676DF898632183E252751085; push log logs/push-599-r4.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded 5791267b..ec407d37 at the exact head); PR gate comment https://github.com/Pootytxng/sentinel/pull/612#issuecomment-5879294757",
+      "head": "ec407d373a659eed467ffd6bb14f6507f9ced395"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-28T21-39-33Z.log; SHA-256 7DA2270DBCC0D0AFEEC9EAAAB9FCACC0F71D2E50676DF898632183E252751085; push log logs/push-599-r4.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded 5791267b..ec407d37 at the exact head); PR gate comment https://github.com/Pootytxng/sentinel/pull/612#issuecomment-5879294757",
+      "head": "ec407d373a659eed467ffd6bb14f6507f9ced395"
+    }
+  ],
+  "issue": 599,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Fresh claim by this session in its own worktree, after the prior lease was released unworked; git, PR, issue and board state were re-derived before any write.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push moved the branch to the exact PR head; nothing was pushed after it.",
+  "pr": 612,
+  "mutationAuthorsNote": "claude-code authored all three source commits on the branch, including ec407d37, which answers Codex's round-1 finding. Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "mark-pr-ready",
+  "closingNote": "Mark draft PR #612 ready at the independently reviewed exact pushed head; merge requires its own receipt."
+}
