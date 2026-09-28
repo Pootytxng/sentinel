@@ -878,8 +878,14 @@ describe("#398: the source half of the Experiment -> History claim", () => {
     return sections;
   };
 
-  it("all three experiment lifecycle sections take the gate through the recorded helper", () => {
-    expect(experimentGateSections()).toHaveLength(3);
+  // The three lifecycle sections (start, conclude, restore) enter HISTORY_LOCK; the fourth is the
+  // launch reconcile (#583), which only READS the ledger through load_history under the gate —
+  // an Experiment -> SupportEvidence path on a corrupt ledger, never Experiment -> History.
+  const isLaunchReconcile = (s) => /reconcile_interrupted_starts_in\s*\(/.test(s);
+
+  it("all four experiment gate sections take the gate through the recorded helper", () => {
+    expect(experimentGateSections()).toHaveLength(4);
+    expect(experimentGateSections().filter(isLaunchReconcile)).toHaveLength(1);
     const src = code("experiment");
     expect(
       [...src.matchAll(/store_write_gate\s*\(\s*\)\s*\.\s*lock\s*\(/g)].length,
@@ -890,6 +896,10 @@ describe("#398: the source half of the Experiment -> History claim", () => {
   it("each of those sections still enters the Trust Ledger under the gate", () => {
     const entering = experimentGateSections().filter((s) =>
       /crate::history::(apply_recommendation|rollback_change)\s*\(/.test(s),
+    );
+    const reconcile = experimentGateSections().find(isLaunchReconcile);
+    expect(reconcile, "the launch reconcile must stay read-only against the ledger").not.toMatch(
+      /crate::history::(apply_recommendation|rollback_change)\s*\(/,
     );
     expect(
       entering,

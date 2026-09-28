@@ -300,7 +300,8 @@ impl StoreLock {
 ///   at `679`; `conclude_experiment` holds it from `748` and calls `history::rollback_change` at
 ///   `798`; `restore_experiment` holds it from `840` and calls `rollback_change` at `852`. Each of
 ///   those enters `HISTORY_LOCK`. **Direction matters and is asserted, not assumed:** nothing in the
-///   crate calls into `experiment` at all except `lib.rs`'s command registration, so no production
+///   crate calls into `experiment` at all except `lib.rs` (its command registration, and the
+///   launch-time `reconcile_interrupted_starts` in `.setup`, which holds no store lock), so no production
 ///   path takes `History` and then `Experiment` — which is why
 ///   `the_inverted_history_to_experiment_edge_is_undeclared_and_panics` can use that direction as a
 ///   live positive control.
@@ -309,7 +310,8 @@ impl StoreLock {
 ///   `record_operation_failure` on their error branch, and that call happens after the inner
 ///   function has released `HISTORY_LOCK` but while `start_experiment` still holds the Experiment
 ///   gate; likewise `active_change_count` (`experiment.rs:673`), `comparison::arm_watermark`
-///   (`686`) and `ledger_len_checked` (`767`) each run `load_history` under the Experiment gate and
+///   (`686`), `ledger_len_checked` (`767`) and the read-only launch `reconcile_interrupted_starts`
+///   (#583) each run `load_history` under the Experiment gate and
 ///   reach `support_evidence::record` on the corrupt-ledger branch. **Three-deep:** inside
 ///   `apply_recommendation_inner`, `HISTORY_LOCK` is held and `begin_mutation` → `load_history_for`
 ///   takes the same corrupt-ledger branch, so the thread holds `[Experiment, History]` and takes
