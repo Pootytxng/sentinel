@@ -21,7 +21,9 @@
 // trees alone, whatever diff driver is configured. A listed commit, or a raw-named watched file, whose
 // patch carries no readable watched diff header is reported NOT MEASURED — never dropped, never
 // "(no lines deleted)". The git invocation is also made hermetic against the user's config/env
-// (`--no-literal-pathspecs`, `--no-textconv`, `--no-ext-diff`, `--no-relative`, `--no-color`).
+// (`--no-literal-pathspecs`, `-c diff.suppressBlankEmpty=false`, `--no-textconv`, `--no-ext-diff`,
+// `--no-relative`, `--no-color`, `--no-show-signature`, no GIT_DIFF_OPTS). The parser fails safe too:
+// a hunk whose body does not match its @@ counts makes that file NOT MEASURED.
 //
 // Usage: node scripts/adoption-deletions.mjs [<range>]   (default: $(git merge-base origin/main HEAD)..HEAD)
 
@@ -38,6 +40,8 @@ export const LOG_FORMAT = "%x00commit %H %s";
 const BINARY = /^Binary files (.+) and (.+) differ$/;
 export const BINARY_REASON = "binary diff (likely an encoding change, e.g. a UTF-16 rewrite) — its deletions cannot be read";
 
+export const MALFORMED_REASON = "a hunk did not match its @@ line counts — its deletions cannot be read reliably";
+
 export const UNREADABLE_REASON = "touches a watched doc but its diff could not be read (a diff driver, textconv or config hid it)";
 
 // `git log --raw` line: ":<old mode> <new mode> <old sha> <new sha> <status>\t<path>" (one path: --no-renames).
@@ -51,8 +55,9 @@ function unquote(path) {
 }
 
 // Parse unified-diff text (one patch or many concatenated) into per-file removed/added lines.
-// Hunk line counts are tracked, so a removed line whose text is "--- x" or "diff --git" is still
-// read as content rather than as a header.
+// Each hunk is parsed by its @@ header counts, so a removed line whose text is "--- x" or "diff --git"
+// is still read as content rather than as a header, and a body that does not consume exactly its
+// counts marks the file `malformed` (reported NOT MEASURED) instead of silently losing lines.
 export function parseDiff(text) {
   const files = new Map();
   let current = null;
@@ -61,32 +66,45 @@ export function parseDiff(text) {
   let oldNo = 0;
   let newNo = 0;
   const entry = (path) => {
-    if (!files.has(path)) files.set(path, { removed: [], added: [], binary: false, modeLine: false });
+    if (!files.has(path)) files.set(path, { removed: [], added: [], binary: false, modeLine: false, malformed: false });
     return files.get(path);
   };
-  for (const raw of text.split("\n")) {
+  const short = () => {
+    if (current) current.malformed = true;
+    oldLeft = newLeft = 0;
+  };
+  // Lines are "\n"-terminated: the empty tail after a final "\n" is not a line, so it cannot pass for
+  // a "" context line and hide a hunk that ended short.
+  const lines = text.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  for (const raw of lines) {
     const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
     if (oldLeft > 0 || newLeft > 0) {
-      if (line.startsWith("-")) {
+      // Every body line is read against the @@ counts. "" is a context line while counts remain:
+      // diff.suppressBlankEmpty prints a blank context line with no leading space, and ending the
+      // hunk there once dropped the "-" line after it — a false "(no lines deleted)".
+      const ctx = line === "" || line.startsWith(" ");
+      if (line.startsWith("\\")) continue; // "\ No newline at end of file"
+      if (line.startsWith("-") && oldLeft > 0) {
         current?.removed.push({ line: oldNo++, text: line.slice(1) });
         oldLeft--;
         continue;
       }
-      if (line.startsWith("+")) {
+      if (line.startsWith("+") && newLeft > 0) {
         current?.added.push({ line: newNo++, text: line.slice(1) });
         newLeft--;
         continue;
       }
-      if (line.startsWith(" ")) {
+      if (ctx && oldLeft > 0 && newLeft > 0) {
         oldNo++;
         newNo++;
         oldLeft--;
         newLeft--;
         continue;
       }
-      if (line.startsWith("\\")) continue; // "\ No newline at end of file"
-      // Anything else ends the hunk early (malformed or truncated input); fall through to headers.
-      oldLeft = newLeft = 0;
+      // The body did not consume exactly its header counts: an unknown formatting quirk or truncated
+      // input. Fail safe — that file is NOT MEASURED — and fall through to header parsing.
+      short();
     }
     if (line.startsWith("diff --git ")) {
       const m = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
@@ -131,6 +149,7 @@ export function parseDiff(text) {
       newLeft = h[4] === undefined ? 1 : Number(h[4]);
     }
   }
+  if (oldLeft > 0 || newLeft > 0) short(); // input ended inside a hunk
   return files;
 }
 
@@ -162,6 +181,10 @@ export function collectDeletions(diffText, watched = WATCHED) {
     }
     if (f.binary) {
       out.push({ file, lines: [], notMeasured: BINARY_REASON });
+      continue;
+    }
+    if (f.malformed) {
+      out.push({ file, lines: [], notMeasured: MALFORMED_REASON });
       continue;
     }
     if (f.removed.length === 0) {
@@ -300,12 +323,17 @@ export function run(argv, git, shallow = () => readShallow(git)) {
       // GIT_LITERAL_PATHSPECS=1 in the env would read ":(top)docs/..." as a literal filename that
       // matches nothing, so every commit vanished into a "no commit touches" clean pass.
       "--no-literal-pathspecs",
+      // diff.suppressBlankEmpty=true prints blank context lines as "" (see parseDiff); pin it off.
+      "-c",
+      "diff.suppressBlankEmpty=false",
       "log",
       "-p",
       // Names each touched file from the trees, independent of any diff driver (see the root invariant).
       "--raw",
       "-U0",
       "--no-color",
+      // log.showSignature=true put gpg: lines into the log, read as a phantom unmeasured commit.
+      "--no-show-signature",
       "--no-ext-diff",
       // A user's textconv (core.attributesFile `*.md diff=x` + diff.x.textconv) emptied the patch.
       "--no-textconv",
@@ -334,8 +362,11 @@ export function run(argv, git, shallow = () => readShallow(git)) {
   return formatReport(range, analyzeLog(log));
 }
 
+// GIT_DIFF_OPTS (e.g. -u3) overrides -U0 and adds context lines; drop it from the child env. Global
+// config is deliberately not blanked (GIT_CONFIG_GLOBAL) — that would also drop safe.directory.
+const { GIT_DIFF_OPTS: _diffOpts, ...gitEnv } = process.env;
 const realGit = (args) =>
-  execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  execFileSync("git", args, { encoding: "utf8", env: gitEnv, maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   console.log(run(process.argv.slice(2), realGit));
