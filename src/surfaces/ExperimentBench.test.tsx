@@ -480,7 +480,7 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
     // Only the judged row carries evidence, so its line is the list's one line; the not-comparable
-    // row says it has no record rather than falling under it.
+    // row's verdict already says it wasn't judged, so it adds nothing.
     const shared = await waitFor(() => {
       const el = document.querySelector(".exp-bench-noise-shared");
       expect(el).not.toBeNull();
@@ -489,9 +489,7 @@ describe("ExperimentBench (armed)", () => {
     expect(shared.textContent).toBe(
       "Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
     );
-    const perRow = document.querySelectorAll(".exp-bench-noise");
-    expect(perRow).toHaveLength(1);
-    expect(perRow[0].textContent).toBe("No noise-floor record for this result.");
+    expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(0);
   });
 
   it("says nothing about noise when no past result was judged against the floor", async () => {
@@ -548,32 +546,56 @@ describe("ExperimentBench (armed)", () => {
     expect(document.querySelector(".exp-bench-noise-shared")).toBeNull();
   });
 
-  // IPC audit W2 + self-review item 3 (#583 lane 2b): a row with no record (a restore, a crash, a
-  // confounded result) must not fall silently under the list-wide line, AND the judged rows must not
-  // each re-print the full sentence. The rule is said once; the exception says it has no record.
-  it("says the floor once and marks the rows that have no noise record", async () => {
+  // IPC audit W2 + self-review items 3 (#583 lane 2b, two passes): a row with no record must not fall
+  // silently under the list-wide line, yet neither the floor sentence nor a "no record" note may
+  // repeat down the list (C-11). The rule is said once; only a row that LOOKS judged — a crash reads
+  // "Worse" — says it has no record. Rows whose verdict already says so stay quiet.
+  it("says the floor once and notes only the rows that look judged but have no record", async () => {
     state.gate = true;
     const judged = { band_pct: 3, measured_noise_pct: null };
+    const unjudged = (id: string, verdict: string | null) => ({
+      ...NOT_COMPARABLE_EXPERIMENT, id, verdict, treatment: null, noise_evidence: null,
+    });
     state.experiments = [
       { ...KEPT_EXPERIMENT, noise_evidence: judged },
       { ...KEPT_EXPERIMENT, id: "exp:4-0", noise_evidence: judged },
-      { ...KEPT_EXPERIMENT, id: "exp:7-0", noise_evidence: judged },
-      { ...NOT_COMPARABLE_EXPERIMENT, noise_evidence: null },
+      unjudged("u1", null), unjudged("u2", null), unjudged("u3", "confounded"), unjudged("u4", "confounded"),
+      unjudged("u5", "not-comparable"), unjudged("u6", "insufficient-evidence"), unjudged("u7", null),
+      unjudged("u8", "confounded"),
+      // A crash: restored, "Worse", never judged against the floor.
+      { ...NOT_COMPARABLE_EXPERIMENT, id: "crash", verdict: "regressed", stop_reason: "crash-during-treatment", noise_evidence: null },
     ];
     render(<ExperimentBench />);
     const rows = await waitFor(() => {
       const found = document.querySelectorAll(".exp-bench-row");
-      expect(found).toHaveLength(4);
+      expect(found).toHaveLength(11);
       return found;
     });
-    const sentence = "Judged against Compy's 3% noise floor.";
-    const copies = [...document.querySelectorAll(".exp-bench-noise, .exp-bench-noise-shared")].filter((el) =>
-      el.textContent?.startsWith(sentence),
-    );
-    expect(copies).toHaveLength(1);
-    expect(copies[0]).toHaveClass("exp-bench-noise-shared");
-    for (const row of [...rows].slice(0, 3)) expect(row.querySelector(".exp-bench-noise")).toBeNull();
-    expect(rows[3].querySelector(".exp-bench-noise")?.textContent).toBe("No noise-floor record for this result.");
+    const texts = [...document.querySelectorAll(".exp-bench-noise, .exp-bench-noise-shared")].map((el) => el.textContent);
+    expect(texts.filter((s) => s?.startsWith("Judged against Compy's 3% noise floor."))).toHaveLength(1);
+    expect(document.querySelector(".exp-bench-noise-shared")).not.toBeNull();
+    expect(texts.filter((s) => s === "No noise-floor record for this result.")).toHaveLength(1);
+    expect(rows[10].querySelector(".exp-bench-noise")?.textContent).toBe("No noise-floor record for this result.");
+  });
+
+  // Self-review #583 lane 2b: an aborted row showed the backend's machine tag ("start-aborted: …").
+  it("shows an aborted result's reason as a sentence, without the machine tag", async () => {
+    state.gate = true;
+    state.experiments = [
+      {
+        ...NOT_COMPARABLE_EXPERIMENT, id: "ab", status: "aborted", verdict: null, treatment: null, noise_evidence: null,
+        stop_reason:
+          "start-aborted: the setting didn't read back as changed; automatic restore did not complete — check it in Test → Applied & history: Access is denied.",
+      },
+    ];
+    render(<ExperimentBench />);
+    const reason = await waitFor(() => {
+      const el = document.querySelector(".exp-bench-abort");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(reason.textContent).toMatch(/^The setting didn't read back as changed; /);
+    expect(reason.textContent).not.toContain("start-aborted");
   });
 
   // #583 lane 2b: the backend now refuses a start or conclude on the sessions it reads (missing,

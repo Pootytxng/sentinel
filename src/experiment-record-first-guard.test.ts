@@ -230,3 +230,15 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
     expect(fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(")).toContain("noise_evidence_for(&outcome");
   });
 });
+
+// Self-review #583 lane 2b: the Trial's abort and restore messages reach the owner verbatim (the
+// bench's alert and aborted-row line), and eighteen of them sent him to "Fix" — a room the rail
+// retired (83b91afb, 59249bb6). Undo lives in Test → Applied & history. Comments may still name the
+// old surface; only code lines, where the string literals live, are held to this.
+describe("the Trial's messages name a room that exists", () => {
+  it("no experiment.rs string sends the owner to the retired Fix room", () => {
+    const code = EXPERIMENT.split("\n").filter((l) => !/^\s*\/\//.test(l));
+    const stale = code.filter((l) => /\b(?:in|from|open) (?:the )?Fix\b|Fix surface/.test(l));
+    expect(stale, stale.join("\n")).toEqual([]);
+  });
+});

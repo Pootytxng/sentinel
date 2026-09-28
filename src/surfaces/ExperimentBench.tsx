@@ -169,6 +169,19 @@ function isUsableReading(s: SessionSummary): boolean {
   );
 }
 
+// A past result whose verdict reads like a measured judgment (Better / No change / Worse). Only such
+// a row can be mistaken for one judged against the noise floor, so only it needs saying when it wasn't.
+function looksJudged(x: Experiment): boolean {
+  return x.verdict === "improved" || x.verdict === "no-change" || x.verdict === "regressed";
+}
+
+// The backend tags a stop reason with a machine prefix ("start-aborted: …", "user-restored; …") so
+// the record stays sortable. The owner reads the sentence after it, never the tag.
+function abortReasonText(reason: string): string {
+  const text = reason.replace(/^[a-z]+(?:-[a-z]+)*[:;]\s+/, "");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 // The treatment session for a running experiment: the most recent monitored session of the SAME game
 // that started AFTER the experiment began and carries real frames. Never fabricated — if none exists
 // the owner simply hasn't played a qualifying session yet.
@@ -308,17 +321,20 @@ export default function ExperimentBench() {
       .filter(isUsableReading)
       .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0] ?? null;
 
-  // §11 lines for the past experiments: the rule once, then the exceptions. When every judged row
-  // says the same thing, it is said once for the list — the same sentence under each row buries the
-  // rows it describes (C-11). A row with no record (a restore, a crash, a confounded or older result)
-  // must not fall silently under that list-wide line, so it says it has none. Lines that differ stay
-  // on their own rows, and then no list-wide claim is made at all.
+  // §11 lines for the past experiments: the rule once, then only the exceptions a reader could not
+  // tell apart. When every judged row says the same thing, it is said once for the list — the same
+  // sentence under each row buries the rows it describes (C-11). A row whose verdict already says it
+  // wasn't judged ("—", interfered, not comparable, not enough evidence) needs no note. A row that
+  // LOOKS judged (Better / No change / Worse) but has no record — a crash, an older result — says
+  // so, rather than falling silently under the list-wide line. Lines that differ stay on their own
+  // rows, and then no list-wide claim is made at all.
   const noiseLines = history.map((x) => (x.noise_evidence ? noiseLine(x.noise_evidence, t) : null));
   const judgedLines = new Set(noiseLines.filter((l): l is string => l !== null));
   const sharedNoise = judgedLines.size === 1 ? [...judgedLines][0] : null;
-  const rowNoise = noiseLines.map((l) =>
-    sharedNoise ? (l === null ? t("lab.experimentBench.noiseNotRecorded") : null) : l,
-  );
+  const rowNoise = noiseLines.map((l, i) => {
+    if (!sharedNoise) return l;
+    return l === null && looksJudged(history[i]) ? t("lab.experimentBench.noiseNotRecorded") : null;
+  });
 
   // The testable universe: catalog changes this rig can use and hasn't already applied.
   const pickable = recs.filter((r) => r.eligible && !r.currently_applied);
@@ -555,7 +571,7 @@ export default function ExperimentBench() {
                   </span>
                 )}
                 {x.stop_reason && x.status === "aborted" && (
-                  <span className="exp-bench-abort">{x.stop_reason}</span>
+                  <span className="exp-bench-abort">{abortReasonText(x.stop_reason)}</span>
                 )}
                 {rowNoise[i] && <span className="exp-bench-noise">{rowNoise[i]}</span>}
               </li>

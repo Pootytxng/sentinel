@@ -464,15 +464,15 @@ fn settle_restore(
     rec.kept = false;
     let before = rec.stop_reason.take().unwrap_or_else(|| "restored".into());
     rec.stop_reason = Some(format!(
-        "{before}; a read afterwards shows the setting as changed — verify in Fix"
+        "{before}; a read afterwards shows the setting as changed — check it in Test → Applied & history"
     ));
     Some(if compy_restored {
         "Compy restored the change, but the setting still reads as changed afterwards — something \
-         else may have set it again. Open the Fix surface to check it."
+         else may have set it again. Check it in Test → Applied & history."
             .into()
     } else {
         "The change was already undone outside Compy, but the setting now reads as changed again — \
-         something else is setting it. Open the Fix surface to check it."
+         something else is setting it. Check it in Test → Applied & history."
             .into()
     })
 }
@@ -632,7 +632,7 @@ pub(crate) fn reconcile_interrupted_starts_in(
                 rec.status = ExperimentStatus::Aborted;
                 rec.stop_reason = Some(
                     "interrupted-start: Compy closed while this experiment was starting, after the \
-                     change was applied. Nothing was measured, so restore it from Fix."
+                     change was applied. Nothing was measured, so undo it in Test → Applied & history."
                         .into(),
                 );
             }
@@ -648,7 +648,7 @@ pub(crate) fn reconcile_interrupted_starts_in(
                 rec.status = ExperimentStatus::Aborted;
                 rec.stop_reason = Some(format!(
                     "interrupted-start: Compy closed while this experiment was starting, and its \
-                     change ({recorded}) is no longer in the change history — verify in Fix."
+                     change ({recorded}) is no longer in the change history — check it in Test → Applied & history."
                 ));
             }
         }
@@ -1330,7 +1330,7 @@ pub(crate) fn start_experiment(
         return Err(if active.status == ExperimentStatus::Pending {
             format!(
                 "an earlier experiment start ({}) was interrupted and Compy can't read its change \
-                 history yet to resolve it — open Fix to check the change history, then try again",
+                 history yet to resolve it — check Test → Applied & history, then try again",
                 active.rec_title,
             )
         } else {
@@ -1489,12 +1489,12 @@ fn abort_start(store: &mut ExperimentStore, idx: usize, why: &str) -> String {
         Err(e) => {
             rec.status = ExperimentStatus::Aborted;
             rec.stop_reason = Some(format!(
-                "start-aborted: {why}; automatic restore did not complete — verify in Fix: {e}"
+                "start-aborted: {why}; automatic restore did not complete — check it in Test → Applied & history: {e}"
             ));
             format!(
                 "experiment aborted before measuring — {why} — and the automatic restore did not \
-                 complete. Compy could not confirm the change was rolled back; open the Fix surface \
-                 to check and roll it back. ({e})"
+                 complete. Compy could not confirm the change was rolled back; check it in \
+                 Test → Applied & history and undo it there. ({e})"
             )
         }
     };
@@ -1677,12 +1677,12 @@ pub(crate) fn conclude_experiment(
                 store.experiments[idx].status = ExperimentStatus::Aborted;
                 store.experiments[idx].kept = false;
                 store.experiments[idx].stop_reason =
-                    Some(format!("automatic restore did not complete — verify in Fix: {e}"));
+                    Some(format!("automatic restore did not complete — check it in Test → Applied & history: {e}"));
                 save_store(&store)?;
                 return Err(format!(
                     "experiment concluded '{}' but the automatic restore did not complete — Compy \
-                     could not confirm the change was rolled back; open the Fix surface to check and \
-                     roll it back. ({e})",
+                     could not confirm the change was rolled back; check it in Test → Applied & \
+                     history and undo it there. ({e})",
                     outcome.verdict
                 ));
             }
@@ -1728,12 +1728,12 @@ pub(crate) fn restore_experiment(experiment_id: String) -> Result<ExperimentReco
             store.experiments[idx].status = ExperimentStatus::Aborted;
             store.experiments[idx].kept = false;
             store.experiments[idx].stop_reason =
-                Some(format!("restore did not complete — verify in Fix: {e}"));
+                Some(format!("restore did not complete — check it in Test → Applied & history: {e}"));
             store.experiments[idx].concluded_at = Some(now.to_rfc3339());
             save_store(&store)?;
             return Err(format!(
                 "restore did not complete — Compy could not confirm the change was rolled back; \
-                 open the Fix surface to check and roll it back. ({e})"
+                 check it in Test → Applied & history and undo it there. ({e})"
             ));
         }
     };
@@ -2500,17 +2500,17 @@ mod experiment_tests {
         use crate::history::ActiveCheck;
         let mut r = restored();
         let msg = settle_restore(&mut r, true, ActiveCheck::On).expect("a still-changed read is never silent");
-        assert!(msg.contains("Fix") && msg.starts_with("Compy restored"), "{msg}");
+        assert!(msg.contains("Applied & history") && msg.starts_with("Compy restored"), "{msg}");
         assert_eq!(r.status, ExperimentStatus::Aborted);
         assert!(!r.kept);
         assert_eq!(r.final_state_verified, Some(false));
         let why = r.stop_reason.unwrap();
-        assert!(why.starts_with("user-restored; ") && why.contains("verify in Fix"), "{why}");
+        assert!(why.starts_with("user-restored; ") && why.contains("Applied & history"), "{why}");
 
         // Reverted outside Compy, then set again: loud too, but never claims Compy restored it.
         let mut outside = restored();
         let msg = settle_restore(&mut outside, false, ActiveCheck::On).expect("never silent");
-        assert!(!msg.contains("Compy restored") && msg.contains("outside Compy") && msg.contains("Fix"), "{msg}");
+        assert!(!msg.contains("Compy restored") && msg.contains("outside Compy") && msg.contains("Applied & history"), "{msg}");
         assert_eq!((outside.status, outside.final_state_verified), (ExperimentStatus::Aborted, Some(false)));
     }
 
@@ -2623,7 +2623,7 @@ mod experiment_tests {
         assert_eq!(r.applied_change_id, "ours", "the record now names the change so Fix can undo it");
         assert_eq!(r.trial_result, Some(TrialResult::Unmeasurable), "nothing was measured");
         assert!(r.concluded_at.is_some());
-        assert!(r.stop_reason.as_deref().unwrap().contains("restore it from Fix"));
+        assert!(r.stop_reason.as_deref().unwrap().contains("undo it in Test → Applied & history"));
         assert!(active_trial(&store).is_none(), "an interrupted start no longer blocks the next one");
     }
 
@@ -2671,7 +2671,7 @@ mod experiment_tests {
         let r = &store.experiments[0];
         assert_eq!(r.status, ExperimentStatus::Aborted, "a named change the ledger lost is loud, never dropped");
         let why = r.stop_reason.as_deref().unwrap();
-        assert!(why.contains("ours") && why.contains("verify in Fix"), "{why}");
+        assert!(why.contains("ours") && why.contains("Applied & history"), "{why}");
     }
 
     #[test]

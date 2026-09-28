@@ -102,19 +102,36 @@ const HISTORY = [
     verdict_confidence: "high" as Confidence, verdict_note: "Clear of the 3% noise floor across a full session.",
     baseline_session_id: iso(9900), noise_evidence: { band_pct: 3, measured_noise_pct: null },
   },
+  // Backend-reachable shapes the list must also carry (#583 lane 2b). None was judged against the
+  // floor, so none carries a noise record.
   {
-    // A Trial aborted because the driver changed between readings: never judged against the floor,
-    // so it carries no noise record and must not fall under the list-wide line.
+    // A crash during the treatment: restored, verdict "regressed" — it reads "Worse", so it is the one
+    // row that must say it has no noise record.
     id: "fx-h3", rec_id: "fixture-rec-7", rec_title: "Turn off fullscreen optimizations",
     game: "fixture-game.exe", hypothesis: "", created_at: iso(12000),
-    status: "aborted" as ExperimentStatus,
+    status: "restored" as ExperimentStatus,
     baseline_avg_fps: 131.0, baseline_low1_fps: 86.0, active_changes_at_start: 1,
     attribution_warning: null, noise_floor_pct: 3,
-    treatment: { avg_fps: 136.0, low1_fps: 90.3, samples: 2800, crashed: false, delta_low1_pct: 5.0, recorded_at: iso(11800) },
-    verdict: "confounded", kept: false, stop_reason: "conditions-changed-between-sessions", concluded_at: iso(11790),
-    verdict_confidence: "low" as Confidence,
-    verdict_note: "Something besides this setting changed between the before and after readings (GPU driver: 25.5.1 → 25.6.1).",
+    treatment: { avg_fps: 128.0, low1_fps: 84.0, samples: 900, crashed: true, delta_low1_pct: -2.3, recorded_at: iso(11800) },
+    verdict: "regressed", kept: false, stop_reason: "crash-during-treatment", concluded_at: iso(11790),
+    verdict_confidence: "high" as Confidence,
+    verdict_note: "The game crashed during the test session. This verdict does not rely on the frame-rate reading.",
     baseline_session_id: iso(12100), noise_evidence: null,
+  },
+  {
+    // A start whose automatic restore failed (experiment.rs `abort_start`): Aborted, nothing measured,
+    // the stop reason shown on the row. The bench drops the "start-aborted:" machine tag.
+    id: "fx-h4", rec_id: "fixture-rec-6", rec_title: "Disable background app refresh",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(14000),
+    status: "aborted" as ExperimentStatus,
+    baseline_avg_fps: 130.0, baseline_low1_fps: 85.0, active_changes_at_start: 0,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: null,
+    verdict: null, kept: false,
+    stop_reason:
+      "start-aborted: the setting didn't read back as changed after the apply; automatic restore did not complete — check it in Test → Applied & history: Access is denied. (os error 5)",
+    concluded_at: iso(13990), verdict_confidence: null, verdict_note: null,
+    baseline_session_id: iso(14100), noise_evidence: null,
   },
 ];
 
