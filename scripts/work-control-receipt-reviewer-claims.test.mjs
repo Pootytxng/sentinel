@@ -45,6 +45,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 const ROOT = process.cwd();
 const RECEIPTS = join(ROOT, ".claude", "work-control");
@@ -223,7 +224,7 @@ describe("a receipt's reviewer field claims no independence it did not have (#30
     expect(reviewerFindings(receipts, addedInThisHistory)).toEqual([]);
   });
 
-  it("addedIn is read from history: the commit that added #290's receipt passes, its parent does not", () => {
+  it("addedIn is read from history: the commit that added #290's receipt passes, its parent does not", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const path = ".claude/work-control/2026-09-01-merge-pr-290.json";
     expect(addedInThisHistory("ac0eea519c2b1ee7850cf77c497b3d4245f8119c", path)).toBe(true);
     expect(addedInThisHistory("6d3283c95a213bbb8d17b8de72ce6ca21a114a8e", path)).toBe(false);

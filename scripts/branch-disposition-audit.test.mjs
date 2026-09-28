@@ -33,6 +33,7 @@ import {
   auditReport,
 } from "./branch-disposition-audit.mjs";
 import { DIR, readAll, slugOf, write } from "./lib/dispositions.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -89,7 +90,7 @@ beforeAll(() => {
   git(narrow, ["init", "-b", "main"]);
   git(narrow, ["remote", "add", "origin", join(root, "origin.git")]);
   git(narrow, ["config", "--replace-all", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main"]);
-});
+}, GIT_SPAWN_TIMEOUT_MS);
 
 afterAll(() => {
   try {
@@ -171,7 +172,7 @@ describe("the record store", () => {
 describe("git facts the audit rests on", () => {
   // origin/HEAD and the trunk itself are not dispositionable branches; demanding rows for them
   // would make the record permanently red for no reason.
-  it("lists origin refs and excludes origin/HEAD and the trunk", () => {
+  it("lists origin refs and excludes origin/HEAD and the trunk", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     git(fixture, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/landed"]);
     git(fixture, ["update-ref", "refs/remotes/origin/main", git(fixture, ["rev-parse", "main"])]);
 
@@ -189,7 +190,7 @@ describe("git facts the audit rests on", () => {
   // a private bookmark nobody is obliged to move. When this preferred local `main`, a worktree
   // whose `main` sat a week behind origin reported a genuinely merged branch as "still changes the
   // tree" — confident, specific, and wrong, because the tree it changed was the stale one.
-  it("prefers origin/main over a local main that has fallen behind", () => {
+  it("prefers origin/main over a local main that has fallen behind", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     git(fixture, ["update-ref", "refs/remotes/origin/main", git(fixture, ["rev-parse", "origin/ahead"])]);
     try {
       expect(resolveBase(fixture)).toBe("origin/main");
@@ -210,14 +211,14 @@ describe("git facts the audit rests on", () => {
 });
 
 describe("what the audit refuses to pass", () => {
-  it("passes when every ref has an accurate row", () => {
+  it("passes when every ref has an accurate row", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     expect(run([["origin/landed", "PRESERVE"], ["origin/ahead", "UNLANDED"]])).toEqual([]);
   });
 
   // #355 narrowed the original defect (#65: "every branch has a verified disposition" while nothing
   // checked one) to the half a machine cannot settle. A landed ref with no record needs a HUMAN
   // call — LANDED (kept, for a reason) or MERGED (pruned) — so its absence is still the defect.
-  it("fails when a LANDED ref has no row — the original defect, narrowed by #355", () => {
+  it("fails when a LANDED ref has no row — the original defect, narrowed by #355", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const problems = run([["origin/ahead", "UNLANDED"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("origin/landed");
@@ -229,7 +230,7 @@ describe("what the audit refuses to pass", () => {
   // The other half needs no human: merge-tree says the ref carries work main lacks, and "UNLANDED"
   // is exactly that sentence. Blocking every lane on a record that merely repeats the measurement
   // was the rule that made each pushed branch every other lane's red gate (#355).
-  it("reports — does not fail — a DIVERGED ref with no row, as a measured UNLANDED (#355)", () => {
+  it("reports — does not fail — a DIVERGED ref with no row, as a measured UNLANDED (#355)", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     layRecords(fixture, [["origin/landed", "PRESERVE"]]);
     const { problems, derived } = auditReport({ repoRoot: fixture });
     expect(problems).toEqual([]);
@@ -257,18 +258,18 @@ describe("what the audit refuses to pass", () => {
   // A stale ref and an undispositioned one are the same bytes in refs/remotes/origin, so this
   // message is read by lanes that did nothing wrong. It has to send them to the local, reversible
   // cure BEFORE it names a command that deletes a branch on the shared remote.
-  it("sends an unrowed ref to `fetch --prune` before it names a destructive command", () => {
+  it("sends an unrowed ref to `fetch --prune` before it names a destructive command", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const [problem] = run([["origin/ahead", "UNLANDED"]]);
     expect(problem).toMatch(/git fetch origin --prune/);
     expect(problem.indexOf("git fetch origin --prune")).toBeLessThan(problem.indexOf("--delete"));
   });
 
   // It also may not assert that the ref is live on origin: a cache is the only thing it read.
-  it("does not claim an unrowed ref exists on origin", () => {
+  it("does not claim an unrowed ref exists on origin", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     expect(run([["origin/ahead", "UNLANDED"]])[0]).not.toMatch(/exists on origin/);
   });
 
-  it("fails when a row names a ref that is gone", () => {
+  it("fails when a row names a ref that is gone", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const problems = run([
       ["origin/landed", "PRESERVE"],
       ["origin/ahead", "UNLANDED"],
@@ -279,7 +280,7 @@ describe("what the audit refuses to pass", () => {
   });
 
   // The rot case: the row was true once. The audit re-proves it instead of believing it.
-  it("fails when a MERGED row is no longer a no-op", () => {
+  it("fails when a MERGED row is no longer a no-op", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const problems = run([["origin/landed", "PRESERVE"], ["origin/ahead", "MERGED"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/origin\/ahead is recorded MERGED but merging it into main still changes/);
@@ -292,7 +293,7 @@ describe("what the audit refuses to pass", () => {
     expect(problems[0]).toMatch(/prune the ref and delete the record/);
   });
 
-  it("fails when an UNLANDED row has quietly landed", () => {
+  it("fails when an UNLANDED row has quietly landed", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const problems = run([["origin/landed", "UNLANDED"], ["origin/ahead", "UNLANDED"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/origin\/landed is recorded UNLANDED but merging it into main is a no-op/);
@@ -326,14 +327,14 @@ describe("what the audit refuses to pass", () => {
   // prune had been attempted as `gh api -X DELETE` and refused, so it read as a task for the owner.
   // Two harms, one check: the record drifts from origin, and the MERGED proof rots the next time
   // `main` moves (see the perishability case above), after which it can never be re-produced.
-  it("fails while a prunable row's ref is still on origin, and names the command that removes it", () => {
+  it("fails while a prunable row's ref is still on origin, and names the command that removes it", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const problems = run([["origin/landed", "MERGED"], ["origin/ahead", "UNLANDED"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("origin/landed is recorded MERGED, which means prunable");
     expect(problems[0]).toContain("git push origin --delete landed");
   });
 
-  it("says the same of SUPERSEDED, the other word that means prunable", () => {
+  it("says the same of SUPERSEDED, the other word that means prunable", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const problems = run([["origin/landed", "PRESERVE"], ["origin/ahead", "SUPERSEDED"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("git push origin --delete ahead");
@@ -350,11 +351,11 @@ describe("what the audit refuses to pass", () => {
   // matters -- has the ref, in fact, already landed -- while still making no demand in the other:
   // a genuinely still-diverged CLAIMED ref is exactly what "a lane is actively working this" looks
   // like, and must not be flagged.
-  it("tolerates a CLAIMED row whose ref genuinely has not landed yet", () => {
+  it("tolerates a CLAIMED row whose ref genuinely has not landed yet", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     expect(run([["origin/landed", "PRESERVE"], ["origin/ahead", "CLAIMED"]])).toEqual([]);
   });
 
-  it("fails a CLAIMED row whose ref has already landed -- the claim is dead", () => {
+  it("fails a CLAIMED row whose ref has already landed -- the claim is dead", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const problems = run([["origin/landed", "CLAIMED"], ["origin/ahead", "UNLANDED"]]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(
@@ -380,7 +381,7 @@ describe("every request for a ref to go carries the command that works", () => {
     expect(pruneCommand("lane/foo")).toBe("git push origin --delete lane/foo");
   });
 
-  it("names it in every failure that asks for a deletion, and never names `gh api`", () => {
+  it("names it in every failure that asks for a deletion, and never names `gh api`", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const asksForDeletion = [
       run([["origin/ahead", "UNLANDED"]]), // a LANDED ref with no row at all (#355: a diverged one is reported, not deleted)
       run([["origin/landed", "MERGED"], ["origin/ahead", "UNLANDED"]]), // prunable, still standing
@@ -407,7 +408,7 @@ describe("what a checkout is entitled to say about origin", () => {
   const blind = { tracksEveryBranch: false, shallow: false, reason: "test" };
   const noHistory = { tracksEveryBranch: true, shallow: true, reason: "test" };
 
-  it("knows a clone that tracks every branch from one that tracks a single branch", () => {
+  it("knows a clone that tracks every branch from one that tracks a single branch", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     expect(refSetCoverage(fixture)).toMatchObject({ tracksEveryBranch: true, shallow: false });
     expect(refSetCoverage(fixture).reason).toBe(null);
 
@@ -503,7 +504,7 @@ describe("the live docs do not prescribe the blocked prune", () => {
 describe("this repository", () => {
   // The 13 CLAIMED rows #350 found already landed were swept on 2026-09-02 (#355): MERGED, pruned,
   // records deleted. Nothing is filtered here any more; a stale CLAIMED row reds this outright.
-  it("has a true branch-disposition record right now", () => {
+  it("has a true branch-disposition record right now", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     expect(audit({ repoRoot })).toEqual([]);
   });
 
@@ -675,7 +676,7 @@ describe("PR-to-merge-commit citations", () => {
     expect(() => falseMergeCitations([{ pr: 1, sha: "abc1234" }], subjectOf)).toThrow(/landing reader/);
   });
 
-  it("holds for THIS repository's record, and proves it read something", () => {
+  it("holds for THIS repository's record, and proves it read something", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     // The record is the store now, not one table (#291). Citations live in the evidence text of the
     // per-ref files, so the corpus is every record's own prose joined -- the same bytes the table
     // used to hold, minus the shared file that made every lane collide on it.

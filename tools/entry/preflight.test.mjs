@@ -16,6 +16,7 @@ import { discoverCheckouts } from "./checkouts.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
 import { verdictLines } from "./render.mjs";
 import { samePath } from "./worktree-field.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-workflow";
 const BRANCH = "feat/single-entry-workflow";
@@ -677,7 +678,7 @@ describe("git.branchElsewhere on real repositories — git discovers, reconcile(
     inCode = discoverCheckouts({ roots: [code] });
     inBoth = discoverCheckouts({ roots: [code, extra] });
     hostCommonDir = inCode.find((c) => c.kind === "host").commonDir;
-  }, 60_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   afterAll(() => {
     try {

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
+import { GIT_SPAWN_TIMEOUT_MS, TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 // Every source file under scripts/, tools/, src/, docs/ and src-tauri/src/ must be plain text: no
 // control character other than tab, newline and carriage return.
@@ -131,7 +131,7 @@ describe("source files under every source root carry no raw control characters",
     expect(report()).toEqual([]);
   });
 
-  it("git names exactly the files offendersIn flags, for every byte value — fixture repository", () => {
+  it("git names exactly the files offendersIn flags, for every byte value — fixture repository", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const repo = mkdtempSync(join(tmpdir(), "control-chars-"));
     temps.push(repo);
     mkdirSync(join(repo, "scripts"));

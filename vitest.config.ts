@@ -15,7 +15,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     // #515: the second file fails any test that walks the real tree or worktree fleet on less than
-    // the measured TREE_WALK_TIMEOUT_MS (src/test/tree-walk-budget.ts).
+    // the measured TREE_WALK_TIMEOUT_MS (src/test/tree-walk-budget.ts). #563: it also fails any test
+    // or hook that starts GIT_SPAWN_FLOOR or more git processes on less than GIT_SPAWN_TIMEOUT_MS.
     setupFiles: ["./src/test/setup.ts", "./scripts/lib/tree-walk-tripwire-setup.mjs"],
     css: false,
     // Don't scan gitignored local git worktrees (.claude/worktrees/wf_*) — they hold STALE frozen

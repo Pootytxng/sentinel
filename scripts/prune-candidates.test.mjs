@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { readAll } from "./lib/dispositions.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CHECKLIST = "docs/OWNER_ACTION_CHECKLIST.md";
@@ -146,7 +147,7 @@ describe("the live checklist", () => {
     ).toEqual([]);
   });
 
-  it("names nothing whose commits exist only at origin — the checklist's own premise, checked", () => {
+  it("names nothing whose commits exist only at origin — the checklist's own premise, checked", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     // §A_prune's justification for naming refs that are NOT ancestors of main is that "the local
     // refs and their clean worktrees still hold every commit, so any of them can be pushed back in
     // one command". That is a factual claim about this machine, it is the entire reason the ask is

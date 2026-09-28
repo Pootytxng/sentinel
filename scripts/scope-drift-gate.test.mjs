@@ -29,6 +29,7 @@ import {
   writeClaimCache,
 } from "./lib/scope-drift.mjs";
 import { exitCode, gate, parseArgs, render, resolveClaim } from "./scope-drift-gate.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 const ROOT = resolve(process.cwd());
 const read = (rel) => readFileSync(join(ROOT, ...rel.split("/")), "utf8");
@@ -258,7 +259,7 @@ describe("gate, over a real temporary repository", () => {
     // The base this gate measures against, without a network: origin/main IS this commit.
     git(["update-ref", "refs/remotes/origin/main", "HEAD"]);
     writeClaimCache({ issue: 999, scopeText: "`docs/`", folder: repo, branch: "lane/x" }, { dir: cacheDir });
-  });
+  }, GIT_SPAWN_TIMEOUT_MS);
   afterAll(() => {
     rmSync(repo, { recursive: true, force: true });
     rmSync(cacheDir, { recursive: true, force: true });
@@ -377,14 +378,14 @@ describe("gate, over a real temporary repository", () => {
       fgit(["remote", "add", "origin", "https://github.com/Pootytxng/sentinel.git"]);
       mkdirSync(join(repo, ".claude", "work-control"), { recursive: true });
       writeFileSync(join(repo, ...RECEIPT.split("/")), "{}\n");
-    });
+    }, GIT_SPAWN_TIMEOUT_MS);
     afterAll(() => {
       vi.unstubAllEnvs();
       vi.resetModules();
       for (const d of dirs) rmSync(d, { recursive: true, force: true });
     });
 
-    it("1. the #540 shape: a Done row, a live receipt-only claim naming this folder, prose on its Branch line: measured OK; one path outside it is red, exit 1", () => {
+    it("1. the #540 shape: a Done row, a live receipt-only claim naming this folder, prose on its Branch line: measured OK; one path outside it is red, exit 1", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
       const s = seams();
       const r = run(s);
       expect(r).toMatchObject({ ok: true, measured: true, issue: 540, issueSource: "board", claimSource: "thread", stale: false });
@@ -529,7 +530,7 @@ describe("gate, over a real temporary repository", () => {
       }
     });
 
-    it("8, over real git: the default live reader passes this folder as it is, and refuses it detached, re-pointed, or entered from a subfolder", () => {
+    it("8, over real git: the default live reader passes this folder as it is, and refuses it detached, re-pointed, or entered from a subfolder", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
       // Control: the folder as it really is agrees, so the refusals below are the reader's, not a setup fault.
       expect(run(seams({ live: undefined }))).toMatchObject({ ok: true, measured: true, issue: 540 });
 
@@ -557,7 +558,7 @@ describe("gate, over a real temporary repository", () => {
       expect(r.reason).toMatch(/not the git top-level/);
     });
 
-    it("9. --offline, --issue, a CORRUPT record, or any session record: the board is never read", () => {
+    it("9. --offline, --issue, a CORRUPT record, or any session record: the board is never read", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
       const variants = [
         ["--offline", { offline: true }, null],
         ["--issue", { issue: 540 }, null],

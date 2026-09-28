@@ -14,6 +14,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const CLI = join(process.cwd(), "tools", "entry", "control-update.mjs");
 let root;
@@ -75,7 +76,7 @@ beforeAll(() => {
   git(root, ["clone", origin, clone]);
   git(clone, ["config", "user.email", "t@t"]);
   git(clone, ["config", "user.name", "t"]);
-});
+}, GIT_SPAWN_TIMEOUT_MS);
 
 afterAll(() => {
   try {

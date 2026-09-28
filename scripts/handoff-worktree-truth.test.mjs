@@ -202,6 +202,7 @@ import { ORIGIN_HEADS_KEY, providedLsRemote } from "./lib/vitest-global-setup.mj
 // #488: which folder a rule-C finding may block a push from. This checkout's own stranding blocks;
 // a peer checkout's is warned with its fix; under fleet mode every one blocks.
 import { peerWarning, splitByFolder } from "./lib/fleet-scope.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -1226,7 +1227,7 @@ describe("the handoff tells the truth about the worktrees", () => {
   // It is also the only proof of the live path available to a single-checkout clone: rule C itself
   // returns at `s.total <= 1` there, so on CI, and in any container that cloned this repo once, the
   // branch that #439 broke would otherwise never execute.
-  it("C: measured against a real fleet — a contained detached head is safe, an orphaned one is not", () => {
+  it("C: measured against a real fleet — a contained detached head is safe, an orphaned one is not", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const root = mkdtempSync(join(tmpdir(), "compy-rule-c-fleet-"));
     // git exports GIT_DIR and friends to hooks, and this suite runs from one. Inherited, they would
     // point every command below at the REAL repository -- the exact way this repo's own pre-push
@@ -1330,7 +1331,7 @@ describe("the handoff tells the truth about the worktrees", () => {
   // a ref (`git branch <name> <sha>`) or push it. Neither is a shared write. Everything else the old
   // rule reported is still measured and still printed every run -- by scripts/fleet-snapshot.mjs,
   // which is the same code -- it just no longer bills an unrelated lane for saying so.
-  it("C: work only a removable checkout can find must be given a ref", () => {
+  it("C: work only a removable checkout can find must be given a ref", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     // #339: origin is asked ONCE, in the main process before the worker pool exists, by
     // scripts/lib/vitest-global-setup.mjs; its answer arrives here through vitest's provide/inject.
     // Asked from inside the pool, this file competed with 400 others for the same cores, and a
@@ -1515,7 +1516,7 @@ describe("the handoff tells the truth about the worktrees", () => {
   // is not protected by policing the names. It is protected by not carrying them: a name that is
   // never written cannot go stale. Rule A stays as written and judges any name that does appear, so
   // this ban and that rule fail in opposite directions and neither can be satisfied by silence.
-  it("D: the handoff names no lanes — a name here is a claim that rots", () => {
+  it("D: the handoff names no lanes — a name here is a claim that rots", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const claimed = laneNamesIn(markdown, isTrackedPath);
     expect(
       claimed,

@@ -30,6 +30,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import * as tracked from "../../.claude/hooks/session-root-assert.mjs";
 import * as shim from "./session-assert.mjs";
 import { canonicalizePath as fieldCanonicalize, samePath as fieldSamePath } from "./worktree-field.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HOOK_FILE = join(HERE, "..", "..", ".claude", "hooks", "session-root-assert.mjs");
@@ -416,7 +417,7 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
     expect(() => git(host, "config", "--local", "user.name")).toThrow();
     // Idempotent: the second session in the same folder keeps what the first set.
     expect(tracked.ensureWorktreeIdentity(linked).action).toBe("kept");
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("warns when inherited Git variables make both effective identities codex despite claude-code worktree config", () => {
     setup();
@@ -479,7 +480,7 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
     expect(committerOnly.warning).toMatch(/GIT_COMMITTER_IDENT.*codex/);
     expect(committerOnly.warning).not.toMatch(/GIT_AUTHOR_IDENT/);
     expect(worktreeName(linked)).toBe("claude-code");
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("(b) a linked worktree that already carries a --worktree identity is left exactly as it was", () => {
     setup();
@@ -493,7 +494,7 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
     expect(r.line).toBeNull();
     expect(worktreeName(linked)).toBe("codex");
     expect(git(linked, "config", "--worktree", "user.email")).toBe("codex@desk.local");
-  }, 30_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("(c) the main checkout is never touched, even with nothing set", () => {
     setup();

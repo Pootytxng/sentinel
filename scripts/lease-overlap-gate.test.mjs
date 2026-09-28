@@ -19,6 +19,7 @@ import { threadLease } from "../tools/entry/claim.mjs";
 import { GH_READ_TIMEOUT_MS } from "../tools/entry/gather.mjs";
 import { asyncGhReader, gate, parseArgs, pushedPaths, readLeases, render } from "./lease-overlap-gate.mjs";
 import { heldSince, leaseOverlapVerdict, renderLeaseOverlap } from "./lib/lease-overlap.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 const ROOT = resolve(process.cwd());
 const read = (rel) => readFileSync(join(ROOT, ...rel.split("/")), "utf8");
@@ -323,7 +324,7 @@ describe("pushedPaths, over a real temporary repository", () => {
     git("mv", "held.ts", "moved.ts");
     git("commit", "-q", "-m", "rename");
     writeFileSync(join(dir, "uncommitted.ts"), "u\n");
-  }, 60_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   it("reports both names of a rename, and nothing uncommitted: a push carries commits", () => {
@@ -390,7 +391,7 @@ describe("a new receipt is nobody's path (#538)", () => {
     put(`${WC}/sub/nested.json`, "{}\n");
     git("add", ".");
     git("commit", "-q", "-m", "mixed");
-  }, 60_000);
+  }, GIT_SPAWN_TIMEOUT_MS);
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   it("passes the receipts-only carrier push #528's glob claim refused, and names the receipts it let through", async () => {

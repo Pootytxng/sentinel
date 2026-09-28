@@ -38,6 +38,7 @@ import {
   resolveWindowFromSnapshot,
 } from "./settings-resolve.mjs";
 import { establishTier } from "./tier.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const POLICY = { default: 150000, tiers: [{ window: 300000, issues: [15, 16, 19], note: "the marathon tier" }] };
 
@@ -230,7 +231,7 @@ describe("against a real repository — the argv form of `git show` survives Win
     git(["add", PROJECT_SETTINGS_PATH]);
     git(["-c", "commit.gpgsign=false", "commit", "-q", "-m", "settings"]);
     head = git(["rev-parse", "--short", "HEAD"]);
-  });
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   it("reads tracked settings out of a commit with no working tree involved", () => {
     const e = resolveWindowFromSnapshot({ hostDir: repo, ref: "HEAD", home: emptyHome, env: {} });
@@ -311,9 +312,9 @@ describe("time of check == time of use — the base is pinned to one commit", ()
     mkdirSync(join(author, ".claude"), { recursive: true });
     advance();
     git(bed, ["clone", "-q", upstream, host]);
-  });
+  }, GIT_SPAWN_TIMEOUT_MS);
 
-  it("REPRODUCTION: resolving the NAME twice verifies one commit and creates another", () => {
+  it("REPRODUCTION: resolving the NAME twice verifies one commit and creates another", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     // The exact sequence that shipped. Kept permanently, because this is what the fix prevents —
     // and it is a property of a movable ref, not of any one version of our code.
     const verified = git(host, ["rev-parse", CREATE_BASE_REF]);
@@ -330,7 +331,7 @@ describe("time of check == time of use — the base is pinned to one commit", ()
     expect(moved).not.toBe(verified); // verified A, created B — and the report said neither
   });
 
-  it("THE FIX: the commit whose settings were verified IS the commit the worktree is created from", () => {
+  it("THE FIX: the commit whose settings were verified IS the commit the worktree is created from", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const preliminary = resolveCreateBase({ hostDir: host }); // stage 1 — read-only, no fetch
     expect(preliminary.ok).toBe(true);
     expect(preliminary.sha).toBe(git(host, ["rev-parse", CREATE_BASE_REF]));
@@ -352,7 +353,7 @@ describe("time of check == time of use — the base is pinned to one commit", ()
     expect(out.verdict.checks.find((c) => c.name === "base.pinned").actual).toBe(out.created);
   });
 
-  it("a base that moves to a DISAGREEING commit refuses, and creates nothing", () => {
+  it("a base that moves to a DISAGREEING commit refuses, and creates nothing", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     // Re-verifying after the fetch is only worth anything if the second verdict can still say no.
     //
     // The disagreement used to be the window. It no longer can be: #23 gave the launcher the power to
@@ -376,7 +377,7 @@ describe("time of check == time of use — the base is pinned to one commit", ()
   // left Kuya with a folder he could not create; adopting 300000 would be worse. The launcher creates
   // from the refreshed commit, says on the row what it will establish, and then establishes it — the
   // session runs at the window its policy names, not the one its branch happened to carry.
-  it("a base that moves to a window this train does not intend is ESTABLISHED, never adopted", () => {
+  it("a base that moves to a window this train does not intend is ESTABLISHED, never adopted", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const preliminary = resolveCreateBase({ hostDir: host });
     const moved = advance(snapshots.marathon());
     const target = { path: join(bed, "wt-established"), branch: "fix/established-base" };
@@ -409,7 +410,7 @@ describe("time of check == time of use — the base is pinned to one commit", ()
     expect(existsSync(path)).toBe(false);
   });
 
-  it("refreshCreateBase is the only fetch, and it re-pins to what it just fetched", () => {
+  it("refreshCreateBase is the only fetch, and it re-pins to what it just fetched", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const moved = advance();
     expect(resolveCreateBase({ hostDir: host }).sha).not.toBe(moved); // stale until something fetches
     expect(refreshCreateBase({ hostDir: host })).toMatchObject({ ok: true, fetched: true, sha: moved });

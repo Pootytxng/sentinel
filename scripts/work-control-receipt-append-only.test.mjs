@@ -55,6 +55,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 // A hook runs with the repository's own git locations set, and a fixture must never inherit them.
 // Codex's review of 9ec38223 found that clearing only GIT_DIR, GIT_INDEX_FILE and GIT_WORK_TREE left
@@ -130,7 +131,7 @@ describe("a transition receipt is added once and never edited or deleted (#307)"
     ]);
   });
 
-  it("every receipt the merge-base with origin/main holds keeps its bytes in every commit since, HEAD, the index and the working tree", () => {
+  it("every receipt the merge-base with origin/main holds keeps its bytes in every commit since, HEAD, the index and the working tree", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const git = gitIn(process.cwd());
     const base = git(["merge-base", "HEAD", "origin/main"]).trim();
     expect(base).toMatch(/^[0-9a-f]{40}$/);
@@ -150,7 +151,7 @@ describe("a transition receipt is added once and never edited or deleted (#307)"
 });
 
 // A throwaway repository whose first commit is the base. Every case starts back at that commit.
-describe("each layer is checked on its own, so restoring the working tree hides nothing (#307)", () => {
+describe("each layer is checked on its own, so restoring the working tree hides nothing (#307)", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
   const HELD = ".claude/work-control/2026-01-01-merge-pr-1.json";
   const BASE_BYTES = '{ "transition": "merge-pr", "pr": 1 }\n';
   const EDITED_BYTES = '{ "transition": "merge-pr", "pr": 1, "note": "rewritten" }\n';
@@ -173,7 +174,7 @@ describe("each layer is checked on its own, so restoring the working tree hides 
     git(["add", "-A"]);
     git(["commit", "-q", "-m", "base"]);
     base = git(["rev-parse", "HEAD"]).trim();
-  });
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   beforeEach(() => {
     git(["checkout", "-q", "-f", "main"]);

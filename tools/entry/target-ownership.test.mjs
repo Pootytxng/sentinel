@@ -28,6 +28,7 @@ import {
   toComparable,
   zoneOf,
 } from "../../.claude/hooks/target-ownership.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
 
@@ -71,7 +72,7 @@ beforeAll(() => {
   mkdirSync(join(HOME, ".claude"), { recursive: true });
   mkdirSync(join(HOME, ".codex"), { recursive: true });
   writeFileSync(join(HOME, ".claude", "settings.json"), "{}");
-});
+}, GIT_SPAWN_TIMEOUT_MS);
 
 afterAll(() => {
   if (base) {
@@ -255,13 +256,13 @@ describe("a Git-Bash drive path names the same place a Windows one does", () => 
     expect(fromPosixDrive("/c/Users/Kuya/x.md", false)).toBeNull();
   });
 
-  it("gives a sibling checkout the same zone in either spelling", () => {
+  it("gives a sibling checkout the same zone in either spelling", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const target = join(LANE, "src", "App.css");
     expect(zone(target).zone).toBe(ZONES.SIBLING);
     expect(zone(msys(target)).zone).toBe(ZONES.SIBLING);
   });
 
-  it("leaves an unrelated repository unprotected in either spelling — translation is not promotion", () => {
+  it("leaves an unrelated repository unprotected in either spelling — translation is not promotion", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const target = join(OTHER, "readme.md");
     expect(zone(target).zone).toBe(ZONES.UNPROTECTED);
     expect(zone(msys(target)).zone).toBe(ZONES.UNPROTECTED);
@@ -343,7 +344,7 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
     symlinkSync(join(NMAIN, "src"), join(LANE_A, "link-main-src"), "junction");
     symlinkSync(LANE_B, join(LANE_A, "link-peer"), "junction");
     symlinkSync(TOP, join(LANE_A, "link-top"), "junction");
-  });
+  }, GIT_SPAWN_TIMEOUT_MS);
 
   afterAll(() => {
     if (nest) {
@@ -357,7 +358,7 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
 
   const nz = (target, { root = NMAIN, cwd = root } = {}) => zoneOf({ target, sessionRoot: root, cwd, deps: { home: NHOME } });
 
-  it("from the main checkout, a file in a registered nested lane is the lane's, however it is spelled", () => {
+  it("from the main checkout, a file in a registered nested lane is the lane's, however it is spelled", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     const file = join(LANE_A, "src", "App.css");
     for (const target of [file, LANE_A, join(LANE_A, ".git"), ".claude/worktrees/laneA/src/App.css", msys(file), join(NMAIN, "link-laneA", "src", "App.css")]) {
       const z = nz(target);
@@ -409,7 +410,7 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
     expect(zoneOf(q).zone).toBe(ZONES.OWN);
   });
 
-  it("from a nested lane, its peer, the checkout it sits inside and a top-level sibling all belong to someone else", () => {
+  it("from a nested lane, its peer, the checkout it sits inside and a top-level sibling all belong to someone else", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
     // Each owner is reached directly, relatively where that applies, and through a junction that sits
     // inside the lane itself.
     const cases = [
@@ -504,7 +505,7 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
       expect(shell(command).permission).toBe(permission);
     });
 
-    it("denies an absolute wildcard whose static prefix is already in a sibling (#428)", () => {
+    it("denies an absolute wildcard whose static prefix is already in a sibling (#428)", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
       expect(shell('rm -rf ' + msys(LANE_A) + '/*').permission).toBe("deny");
     });
 
@@ -545,7 +546,7 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
       expect(result.permission).toBe(permission);
     });
 
-    it("the shell guard refuses a main-rooted command that reaches into a nested lane, verified or not", () => {
+    it("the shell guard refuses a main-rooted command that reaches into a nested lane, verified or not", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
       for (const verdict of [null, UNCLAIMED]) {
         for (const command of [
           `rm "${msys(join(LANE_A, "src", "App.css"))}"`,
@@ -562,14 +563,14 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
       expect(shell(`rm "${msys(join(NMAIN, "src", "App.css"))}"`).permission).toBe("allow");
     });
 
-    it("the shell guard, from a nested lane, refuses its peer, its parent checkout and a top-level sibling, and not its own files", () => {
+    it("the shell guard, from a nested lane, refuses its peer, its parent checkout and a top-level sibling, and not its own files", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
       for (const target of [join(LANE_B, "src", "App.css"), join(NMAIN, "src", "App.css"), join(TOP, "src", "App.css")]) {
         expect(shell(`rm "${msys(target)}"`, { root: LANE_A }).permission, target).toBe("deny");
       }
       expect(shell(`rm "${msys(join(LANE_A, "src", "App.css"))}"`, { root: LANE_A }).permission).toBe("allow");
     });
 
-    it("the direct-write guard refuses a Write into a nested lane, verified or not, and asks about a stale one", () => {
+    it("the direct-write guard refuses a Write into a nested lane, verified or not, and asks about a stale one", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
       for (const verdict of [VERIFIED, UNCLAIMED]) {
         for (const target of [join(LANE_A, "src", "App.css"), join(LANE_A, "src", "deep", "New.tsx"), join(NMAIN, "link-top", "src", "App.css")]) {
           const d = write(target, { verdict });
@@ -588,7 +589,7 @@ describe("a checkout registered INSIDE another checkout answers to itself (#425)
       }
     });
 
-    it("the direct-write guard, from a nested lane, refuses its peer, its parent checkout and a top-level sibling, and not its own files", () => {
+    it("the direct-write guard, from a nested lane, refuses its peer, its parent checkout and a top-level sibling, and not its own files", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
       // The junctions are the spellings this guard used to wave through: lexically, they are inside the lane.
       for (const target of [
         join(LANE_B, "src", "App.css"),
