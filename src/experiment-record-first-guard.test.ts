@@ -303,6 +303,38 @@ describe("a Trial never reads a lost history as a quiet one (#611 review round 2
   });
 });
 
+// Codex review of 93a2458b on #611: a missing crash session still let the crash alone record a
+// high-confidence regression; an empty ledger (set aside as damaged, or a receipt that failed to save)
+// let the launch reconcile drop a start whose change may be in place; and settings with no live read
+// count as active whether or not they stayed put.
+describe("a Trial claims nothing it can't tie to its own change (#611 review round 3)", () => {
+  it("a crash reaches the change's verdict only through a found, later, comparable pair", () => {
+    const crash = fnBody(EXPERIMENT, "pub(crate) fn crash_outcome(");
+    expect(crash, "a crash with a missing session is pinned on the change again").not.toMatch(/return \(crash,/);
+    expect(crash).toContain('unpinned("crash-session-missing"');
+    expect(crash).toContain('unpinned("crash-baseline-missing"');
+    expect(crash.trimEnd().endsWith("(with_comparability(crash, &pairing), Some(pairing))\n}")).toBe(true);
+  });
+
+  it("an interrupted start is dropped only after a live read shows the setting unchanged", () => {
+    const pure = fnBody(EXPERIMENT, "pub(crate) fn reconcile_interrupted_starts_in(");
+    expect(pure).toMatch(/None if changed\(&store\.experiments\[i\]\.rec_id\) == Some\(false\) => InterruptedStart::Dropped/);
+    expect(pure.match(/=> InterruptedStart::Dropped/g), "a second way to drop a start").toHaveLength(1);
+    expect(fnBody(EXPERIMENT, "fn reconcile_pending_locked(")).toContain(
+      "target_verification(Some(crate::history::probe_rec_target(rec_id)))",
+    );
+  });
+
+  it("§3 at conclude: other settings that can't be read back cap the result, ahead of the target check", () => {
+    const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
+    const fold = conclude.indexOf("with_unverified_changes(judged, unverified)");
+    expect(fold, "the conclude no longer weighs settings it can't read back").toBeGreaterThanOrEqual(0);
+    expect(fold).toBeGreaterThan(conclude.indexOf("with_compy_state(judged,"));
+    expect(fold).toBeLessThan(conclude.indexOf("guard_target_at_conclude(judged,"));
+    expect(fnBody(EXPERIMENT, "pub(crate) fn with_unverified_changes(")).toContain("outcome.confidence.min(Confidence::Low)");
+  });
+});
+
 // Self-review #583 lane 2b: the Trial's abort and restore messages reach the owner verbatim (the
 // bench's alert and aborted-row line), and eighteen of them sent him to "Fix" — a room the rail
 // retired (83b91afb, 59249bb6). Undo lives in Test → Applied & history. Comments may still name the

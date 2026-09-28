@@ -637,6 +637,9 @@ pub(crate) enum InterruptedStart {
     /// The ledger could not be read. The record stays `Pending`, untouched, for the next reconcile,
     /// so a transient read failure never turns into a guess or a lost link to the change.
     LedgerUnreadable,
+    /// No change record was found, but a live read can't show the setting unchanged (it reads as
+    /// changed, or can't be read): a loud `Aborted`. Compy has no receipt for it, so no undo to run.
+    ChangeUnrecorded,
 }
 
 /// PURE reconcile (injected ledger + clock). Every `Pending` record left by a start that never
@@ -645,10 +648,14 @@ pub(crate) enum InterruptedStart {
 /// asked for a prompt. The change stays in the Fix surface's active list, where its rollback lives,
 /// and the record says so. A start that recorded its change id is matched by that id alone; only a
 /// start interrupted inside the apply itself (id never saved) falls back to
-/// [`interrupted_start_change`].
+/// [`interrupted_start_change`]. When that finds no change, the record is dropped only if `changed`
+/// (a live read of the rec's setting, as [`target_verification`] answers it) proves it unchanged:
+/// a ledger set aside as damaged, or an apply that changed Windows and then failed to save its
+/// receipt, leaves no row to find, and an empty ledger is never taken as "nothing was changed".
 pub(crate) fn reconcile_interrupted_starts_in(
     store: &mut ExperimentStore,
     ledger: Result<&[LedgerEntryRef<'_>], &str>,
+    changed: impl Fn(&str) -> Option<bool>,
     now: DateTime<Utc>,
 ) -> Vec<InterruptedStart> {
     let mut outcomes = Vec::new();
@@ -672,11 +679,12 @@ pub(crate) fn reconcile_interrupted_starts_in(
                 .filter(|id| !id.is_empty())
                 .collect();
             match interrupted_start_change(&store.experiments[i], rows, &claimed) {
-                None => InterruptedStart::Dropped,
                 Some(id) => {
                     store.experiments[i].applied_change_id = id.to_string();
                     InterruptedStart::ChangeStillApplied
                 }
+                None if changed(&store.experiments[i].rec_id) == Some(false) => InterruptedStart::Dropped,
+                None => InterruptedStart::ChangeUnrecorded,
             }
         } else {
             match rows.iter().find(|r| r.id == recorded) {
@@ -705,6 +713,16 @@ pub(crate) fn reconcile_interrupted_starts_in(
                 rec.stop_reason = Some(
                     "interrupted-start: Compy closed while this experiment was starting; its change \
                      history shows the change already rolled back. Nothing was measured."
+                        .into(),
+                );
+            }
+            InterruptedStart::ChangeUnrecorded => {
+                rec.status = ExperimentStatus::Aborted;
+                rec.stop_reason = Some(
+                    "interrupted-start: Compy closed while this experiment was starting. Its change \
+                     history has no record of a change, but the setting doesn't read as unchanged, so \
+                     Compy has no undo for it and it won't be listed in Test → Applied & history. \
+                     Check the setting in Windows."
                         .into(),
                 );
             }
@@ -1079,6 +1097,45 @@ pub(crate) fn with_compy_state(outcome: ConcludeOutcome, other: Option<String>) 
     }
 }
 
+/// How many other settings Compy has applied (its own change excluded) can't be read back live:
+/// `changed` answers None for them, as [`target_verification`] does for an unreadable or unprobed
+/// setting. Sessions count those as active whether or not they are still in place, so the active-change
+/// counts can't show one reverted during the test. Counted once per setting.
+pub(crate) fn unverified_other_changes(
+    ledger: &[LedgerEntryRef<'_>],
+    own: Option<&str>,
+    changed: impl Fn(&str) -> Option<bool>,
+) -> usize {
+    let recs: std::collections::BTreeSet<&str> = ledger
+        .iter()
+        .filter(|c| c.applied && Some(c.id) != own)
+        .map(|c| c.rec_id)
+        .collect();
+    recs.into_iter().filter(|rec| changed(rec).is_none()).count()
+}
+
+/// §3 when other Compy changes can't be read back: the measured verdict stands, but its confidence is
+/// capped at Low and the note says what it assumes. Refusing instead would bar every Trial on a PC
+/// with one such change, since most applied settings have no live read; this treats them as the
+/// `Partial` pairing treats an unrecorded condition. A verdict not judged on the readings is unchanged.
+pub(crate) fn with_unverified_changes(outcome: ConcludeOutcome, unverified: usize) -> ConcludeOutcome {
+    if unverified == 0 || !judged_against_noise(&outcome) {
+        return outcome;
+    }
+    let which = match unverified {
+        1 => "1 other setting Compy changed earlier can't be read back, so Compy can't confirm it".to_string(),
+        n => format!("{n} other settings Compy changed earlier can't be read back, so Compy can't confirm they"),
+    };
+    ConcludeOutcome {
+        confidence: outcome.confidence.min(Confidence::Low),
+        note: format!(
+            "{} {which} stayed as they were during the test; this result assumes so.",
+            outcome.note
+        ),
+        ..outcome
+    }
+}
+
 /// The session with this id, when there is exactly one.
 fn found<'a>(sessions: &'a [SessionSummary], id: Option<&str>) -> Option<&'a SessionSummary> {
     match session_by_id(sessions, id?) {
@@ -1218,51 +1275,46 @@ fn crash_without_reading() -> ConcludeOutcome {
     }
 }
 
-/// A reported crash whose session couldn't be judged still restores, but the session it names is
-/// checked first, exactly as for a measured one: a crash in a session that can't be shown to have
-/// begun after the change took effect, in another game or on another rig, or under a changed driver,
-/// Windows build or resolution, can't be pinned on this setting. Only when a session is missing does
-/// the crash alone decide. Returns the pairing it judged by, for the §11 receipt.
+/// A reported crash always restores, but it is pinned on the change only when the sessions prove it
+/// could be, exactly as for a measured result: the crash session is found and began after the change
+/// took effect, the baseline is found, and the two are comparable. A missing session, one that can't
+/// be shown to follow the change, another game or rig, or a changed driver, Windows build or
+/// resolution each leave the crash unpinned. Returns the pairing it judged by, for the §11 receipt.
 pub(crate) fn crash_outcome(
     applied_at: Option<&str>,
     baseline: Option<&SessionSummary>,
     treatment: Option<&SessionSummary>,
 ) -> (ConcludeOutcome, Option<SessionComparability>) {
     let crash = crash_without_reading();
+    let unpinned = |stop_reason: &str, why: String| ConcludeOutcome {
+        verdict: "not-comparable".into(),
+        keep: false,
+        stop_reason: Some(stop_reason.into()),
+        confidence: Confidence::Unknown,
+        note: format!(
+            "The game crashed, but {why} So the crash can't be pinned on this setting. Compy restored \
+             the change."
+        ),
+        ..crash_without_reading()
+    };
     let Some(treatment) = treatment else {
-        return (crash, None);
+        let why = "Compy couldn't pick out that session, so it can't show the session began after the \
+                   change took effect.";
+        return (unpinned("crash-session-missing", why.into()), None);
     };
     if applied_at.and_then(|at| began_after_apply(treatment, at)) != Some(true) {
-        let outcome = ConcludeOutcome {
-            verdict: "not-comparable".into(),
-            keep: false,
-            stop_reason: Some("crash-session-not-after-change".into()),
-            confidence: Confidence::Unknown,
-            note: "The game crashed, but Compy can't show that session began after the change took \
-                   effect, so the crash can't be pinned on this setting. Compy restored the change."
-                .into(),
-            ..crash
-        };
-        return (outcome, None);
+        let why = "Compy can't show that session began after the change took effect.";
+        return (unpinned("crash-session-not-after-change", why.into()), None);
     }
     let Some(baseline) = baseline else {
-        return (crash, None);
+        let why = "Compy couldn't pick out the baseline session, so it can't check that nothing else \
+                   changed.";
+        return (unpinned("crash-baseline-missing", why.into()), None);
     };
     let pairing = crate::comparability::derive(baseline, treatment);
     if pairing.verdict == Comparability::NotComparable {
-        let outcome = ConcludeOutcome {
-            verdict: "not-comparable".into(),
-            keep: false,
-            stop_reason: Some("crash-session-not-comparable".into()),
-            confidence: Confidence::Unknown,
-            note: format!(
-                "The game crashed, but that session isn't comparable to the baseline: {} So the crash \
-                 can't be pinned on this setting. Compy restored the change.",
-                pairing.reasons.join(" ")
-            ),
-            ..crash
-        };
-        return (outcome, Some(pairing));
+        let why = format!("that session isn't comparable to the baseline: {}", pairing.reasons.join(" "));
+        return (unpinned("crash-session-not-comparable", why), Some(pairing));
     }
     (with_comparability(crash, &pairing), Some(pairing))
 }
@@ -1703,8 +1755,8 @@ fn settle_failed_apply(
 ) -> String {
     let Some(message) = mark_failed_apply(&mut store.experiments[idx], err, check) else {
         store.experiments.remove(idx);
-        // If this save fails the Pending record stays on disk, and the next reconcile finds no applied
-        // change for it and drops it.
+        // If this save fails the Pending record stays on disk, and the next reconcile drops it only
+        // after its own live read still shows the setting unchanged.
         let _ = save_store(store);
         return format!("experiment aborted — apply failed, and the setting still reads unchanged: {err}");
     };
@@ -1808,7 +1860,9 @@ fn reconcile_pending_locked(store: &mut ExperimentStore) -> Result<Vec<Interrupt
         Ok(_) => Ok(rows.as_slice()),
         Err(e) => Err(e.as_str()),
     };
-    let outcomes = reconcile_interrupted_starts_in(store, ledger, Utc::now());
+    // The live read that decides whether a start with no change record may be dropped.
+    let changed = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target(rec_id)));
+    let outcomes = reconcile_interrupted_starts_in(store, ledger, changed, Utc::now());
     if outcomes.iter().any(|o| *o != InterruptedStart::LedgerUnreadable) {
         save_store(store)?;
     }
@@ -1905,6 +1959,11 @@ pub(crate) fn conclude_experiment(
         None => crash_outcome(rec.applied_at.as_deref(), baseline, treatment),
     };
     let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()));
+    // §3: other settings Compy changed that can't be read back limit what this result can claim.
+    let own = Some(rec.applied_change_id.as_str()).filter(|id| !id.is_empty());
+    let read_back = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target(rec_id)));
+    let unverified = rows.as_deref().map_or(0, |rows| unverified_other_changes(rows, own, read_back));
+    let judged = with_unverified_changes(judged, unverified);
     let outcome = guard_target_at_conclude(judged, target_verification(Some(target_now)));
 
     store.experiments[idx].treatment = resolved.as_ref().map(|(treatment, _)| TreatmentRecord {
@@ -2907,20 +2966,57 @@ mod experiment_tests {
         assert_eq!(interrupted_start_change(&p, &both, &[]), Some("dated"));
     }
 
+    /// The live read, when the setting reads unchanged.
+    fn unchanged(_: &str) -> Option<bool> {
+        Some(false)
+    }
+
+    /// The live read, on a path that must never need it: a start whose change the ledger shows.
+    fn never_read(rec_id: &str) -> Option<bool> {
+        panic!("the live read is only for a start with no change record ({rec_id})")
+    }
+
     #[test]
     fn reconcile_drops_a_start_that_changed_nothing() {
         let mut store = ExperimentStore { schema_version: 1, experiments: vec![with_status(ExperimentStatus::Kept), pending_at(START)] };
-        let out = reconcile_interrupted_starts_in(&mut store, Ok(&[]), Utc::now());
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&[]), unchanged, Utc::now());
         assert_eq!(out, vec![InterruptedStart::Dropped]);
         assert_eq!(store.experiments.len(), 1, "the kept record is untouched");
         assert_eq!(store.experiments[0].status, ExperimentStatus::Kept);
     }
 
     #[test]
+    fn reconcile_never_reads_an_empty_ledger_as_nothing_changed() {
+        // #611 r2 review: a ledger set aside as damaged loads empty, and an apply that changed Windows
+        // then failed to save its receipt leaves no row. Neither may drop the record on the ledger's
+        // word alone: only a live read showing the setting unchanged does.
+        for live in [Some(true), None] {
+            let mut store = ExperimentStore { schema_version: 1, experiments: vec![pending_at(START)] };
+            let asked = std::cell::RefCell::new(Vec::new());
+            let read = |rec_id: &str| {
+                asked.borrow_mut().push(rec_id.to_string());
+                live
+            };
+            let out = reconcile_interrupted_starts_in(&mut store, Ok(&[]), read, Utc::now());
+            assert_eq!(out, vec![InterruptedStart::ChangeUnrecorded], "{live:?}");
+            assert_eq!(asked.into_inner(), vec!["test-rec".to_string()], "the Trial's own setting is read");
+            let r = &store.experiments[0];
+            assert_eq!(r.status, ExperimentStatus::Aborted, "loud, never dropped: {live:?}");
+            assert!(!r.kept);
+            assert_eq!(r.trial_result, Some(TrialResult::Unmeasurable));
+            assert!(r.concluded_at.is_some());
+            let why = r.stop_reason.as_deref().unwrap();
+            assert!(why.starts_with("interrupted-start: "), "{why}");
+            assert!(why.contains("no undo") && why.contains("Check the setting in Windows"), "{why}");
+            assert!(active_trial(&store).is_none(), "a loud record no longer blocks the next start");
+        }
+    }
+
+    #[test]
     fn reconcile_names_a_change_that_is_still_applied_and_never_keeps_it() {
         let mut store = ExperimentStore { schema_version: 1, experiments: vec![pending_at(START)] };
         let ledger = [row("ours", "test-rec", "2026-09-28T12:00:02+00:00", true)];
-        let out = reconcile_interrupted_starts_in(&mut store, Ok(&ledger), Utc::now());
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&ledger), never_read, Utc::now());
         assert_eq!(out, vec![InterruptedStart::ChangeStillApplied]);
         let r = &store.experiments[0];
         assert_eq!(r.status, ExperimentStatus::Aborted, "loud, never a silent keep");
@@ -2936,7 +3032,7 @@ mod experiment_tests {
     fn reconcile_with_an_unreadable_ledger_leaves_the_start_pending_for_a_retry() {
         let mut store = ExperimentStore { schema_version: 1, experiments: vec![pending_at(START)] };
         let before = serde_json::to_string(&store).unwrap();
-        let out = reconcile_interrupted_starts_in(&mut store, Err("parse: bad json"), Utc::now());
+        let out = reconcile_interrupted_starts_in(&mut store, Err("parse: bad json"), never_read, Utc::now());
         assert_eq!(out, vec![InterruptedStart::LedgerUnreadable]);
         assert_eq!(serde_json::to_string(&store).unwrap(), before, "no guess, no terminal state, no lost link");
         assert!(active_trial(&store).is_some(), "still unresolved, so a new start stays refused");
@@ -2953,7 +3049,7 @@ mod experiment_tests {
             row("ours", "test-rec", "2026-09-28T12:00:02+00:00", true),
         ];
         let mut store = ExperimentStore { schema_version: 1, experiments: vec![p] };
-        let out = reconcile_interrupted_starts_in(&mut store, Ok(&ledger), Utc::now());
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&ledger), never_read, Utc::now());
         assert_eq!(out, vec![InterruptedStart::ChangeStillApplied]);
         assert_eq!(store.experiments[0].applied_change_id, "ours");
         assert_eq!(store.experiments[0].status, ExperimentStatus::Aborted);
@@ -2965,13 +3061,13 @@ mod experiment_tests {
         p.applied_change_id = "ours".into();
         let rolled_back = [row("ours", "test-rec", "2026-09-28T12:00:02+00:00", false)];
         let mut store = ExperimentStore { schema_version: 1, experiments: vec![p.clone()] };
-        let out = reconcile_interrupted_starts_in(&mut store, Ok(&rolled_back), Utc::now());
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&rolled_back), never_read, Utc::now());
         assert_eq!(out, vec![InterruptedStart::ChangeAlreadyRolledBack]);
         let r = &store.experiments[0];
         assert_eq!((r.status, r.kept, r.trial_result), (ExperimentStatus::Restored, false, Some(TrialResult::Unmeasurable)));
 
         let mut store = ExperimentStore { schema_version: 1, experiments: vec![p] };
-        let out = reconcile_interrupted_starts_in(&mut store, Ok(&[]), Utc::now());
+        let out = reconcile_interrupted_starts_in(&mut store, Ok(&[]), never_read, Utc::now());
         assert_eq!(out, vec![InterruptedStart::ChangeMissing]);
         let r = &store.experiments[0];
         assert_eq!(r.status, ExperimentStatus::Aborted, "a named change the ledger lost is loud, never dropped");
@@ -2985,7 +3081,7 @@ mod experiment_tests {
         let before: Vec<ExperimentRecord> = [Running, Kept, Restored, Aborted].into_iter().map(with_status).collect();
         let mut store = ExperimentStore { schema_version: 1, experiments: before.clone() };
         let ledger = [row("x", "test-rec", "2026-09-28T12:00:02+00:00", true)];
-        assert!(reconcile_interrupted_starts_in(&mut store, Ok(&ledger), Utc::now()).is_empty());
+        assert!(reconcile_interrupted_starts_in(&mut store, Ok(&ledger), never_read, Utc::now()).is_empty());
         let statuses: Vec<_> = store.experiments.iter().map(|e| e.status).collect();
         assert_eq!(statuses, vec![Running, Kept, Restored, Aborted], "a Running experiment legitimately spans restarts");
     }
@@ -3468,15 +3564,70 @@ mod experiment_tests {
     }
 
     #[test]
+    fn other_changes_that_cant_be_read_back_cap_the_result_and_say_so() {
+        // #611 r2 review: sessions count an unreadable or unprobed setting as active whether or not it
+        // is still in place, so equal counts can't show it stayed put. Such settings are counted once
+        // each; this Trial's own change, rolled-back ones and ones that read back are not.
+        const AT: &str = "2026-09-28T11:00:00+00:00";
+        let ledger = [
+            row("ours", "test-rec", AT, true),
+            row("s1", "startup-entry", AT, true),
+            row("s2", "startup-entry", AT, true),
+            row("gm", "game-mode", AT, true),
+            row("gone", "service-suspend", AT, false),
+        ];
+        let read = |rec: &str| match rec {
+            "game-mode" => Some(true),
+            "startup-entry" => None,
+            other => panic!("{other} should not be read"),
+        };
+        assert_eq!(unverified_other_changes(&ledger, Some("ours"), read), 1);
+        assert_eq!(unverified_other_changes(&ledger[..1], Some("ours"), read), 0);
+
+        let better = measured(180.0);
+        assert_eq!(better.verdict, "improved");
+        assert!(better.confidence > Confidence::Low, "the fixture starts above the cap");
+        assert_eq!(with_unverified_changes(better.clone(), 0), better, "all read back: untouched");
+        for (n, says) in [(1, "1 other setting"), (3, "3 other settings")] {
+            let o = with_unverified_changes(better.clone(), n);
+            assert_eq!((o.verdict.as_str(), o.keep), ("improved", true), "the measured verdict stands");
+            assert_eq!(o.confidence, Confidence::Low);
+            assert!(o.note.starts_with(&better.note), "{}", o.note);
+            assert!(o.note.contains(says) && o.note.contains("can't be read back"), "{}", o.note);
+            assert_eq!(noise_evidence_for(&o, DEFAULT_NOISE_FLOOR_PCT), noise_evidence_for(&better, DEFAULT_NOISE_FLOOR_PCT));
+        }
+        // A verdict not judged on the readings (a crash, a confound) is left as it is.
+        let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
+        let confounded = with_compy_state(measured(180.0), Some("another change".into()));
+        for o in [crash, confounded] {
+            assert_eq!(with_unverified_changes(o.clone(), 2), o);
+        }
+    }
+
+    #[test]
     fn a_crash_is_still_checked_against_the_baseline_conditions() {
         let base = session(BASE_ID, 150.0);
         let after = session(TREAT_ID, 180.0);
         let crash = |b, t| crash_outcome(Some(APPLIED), b, t);
-        // A session that can't be found: the crash alone decides, and restores.
-        assert_eq!(crash(None, None), (crash_without_reading(), None));
-        assert_eq!(crash(Some(&base), None), (crash_without_reading(), None));
-        assert_eq!(crash(None, Some(&after)), (crash_without_reading(), None));
-        // A comparable session: the same crash verdict, and the pairing it was judged by (§11).
+        // #611 r2 review: a session that can't be found never lets the crash alone decide. It
+        // restores, but no high-confidence regression is pinned on a change it can't be tied to.
+        for ((b, t), stop) in [
+            ((None, None), "crash-session-missing"),
+            ((Some(&base), None), "crash-session-missing"),
+            ((None, Some(&after)), "crash-baseline-missing"),
+        ] {
+            let (o, pairing) = crash(b, t);
+            assert_eq!(o.verdict, "not-comparable", "{stop}");
+            assert!(!o.keep);
+            assert_eq!(o.stop_reason.as_deref(), Some(stop));
+            assert_eq!(o.confidence, Confidence::Unknown);
+            assert!(o.note.contains("crashed") && o.note.contains("can't be pinned"), "{}", o.note);
+            assert_eq!(trial_result_for(&o.verdict), TrialResult::Unmeasurable);
+            assert_eq!(noise_evidence_for(&o, DEFAULT_NOISE_FLOOR_PCT), None);
+            assert_eq!(pairing, None);
+        }
+        // A comparable session begun after the apply: the crash is the change's, and the pairing it
+        // was judged by is kept (§11).
         let (o, pairing) = crash(Some(&base), Some(&after));
         assert_eq!(o, crash_without_reading());
         assert_eq!(pairing.map(|p| p.verdict), Some(Comparability::Comparable));
