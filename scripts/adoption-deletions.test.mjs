@@ -261,6 +261,18 @@ describe("hunks parsed by their @@ counts — a blank context line or a count mi
     expect(out).toMatch(/docs\/SESSION_HANDOFF\.md: NOT MEASURED — .*@@ line counts/);
     expect(out).not.toContain("(no lines deleted)");
   });
+  it("marks a hunk whose body runs past its header counts NOT MEASURED, never skipping the extra lines", () => {
+    // "-3 +3" counts one removed and one added line; the second "-" line lies past them and was
+    // once skipped as a non-header, so the retraction vanished from a clean-looking report.
+    const overlong = patch(HANDOFF, ["@@ -3 +3 @@", "-row A", "+row A2", `-${RETRACTION}`]);
+    const f = collectDeletions(overlong).find((d) => d.file === HANDOFF);
+    expect(f.notMeasured).toMatch(/@@ line counts/);
+    const out = formatReport("r", analyzeLog(`\0commit ${"d".repeat(40)} overlong hunk\n${overlong}\n`));
+    expect(out).toMatch(/^adoption-deletions: NOT MEASURED \(r\)/);
+    // A well-formed multi-hunk, multi-file patch with a no-newline marker stays measured.
+    const ok = [patch(HANDOFF, ["@@ -3 +3 @@", "-a", "+b", "\\ No newline at end of file", "@@ -9 +9 @@", "-x", "+y"]), patch(DISPO, ["@@ -1 +0,0 @@", "-gone"])].join("\n");
+    expect(collectDeletions(ok).every((d) => !d.notMeasured)).toBe(true);
+  });
 });
 
 describe("run — honest measurement, never a silent pass, never blocks", () => {
@@ -296,6 +308,7 @@ describe("run — honest measurement, never a silent pass, never blocks", () => 
     expect(logArgs).toContain("--no-relative");
     expect(logArgs.slice(0, 5)).toEqual(["--no-literal-pathspecs", "-c", "diff.suppressBlankEmpty=false", "log", "-p"]);
     expect(logArgs).toContain("--no-show-signature");
+    expect(logArgs).toContain("--encoding=UTF-8");
     expect(logArgs).toContain("--no-textconv");
     expect(logArgs).toContain("--raw");
     expect(logArgs.slice(-2)).toEqual(WATCHED.map((path) => `:(top)${path}`));
@@ -395,6 +408,10 @@ describe("CLI smoke against the real tree", () => {
 
     it("keeps :(top) magic under GIT_LITERAL_PATHSPECS=1", () => {
       expectDeletionAndUtf16(cli(repo, { GIT_LITERAL_PATHSPECS: "1" }));
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("still splits commits under i18n.logOutputEncoding=UTF-16", () => {
+      expectDeletionAndUtf16(cli(repo, config([["i18n.logOutputEncoding", "UTF-16"]])));
     }, GIT_SPAWN_TIMEOUT_MS);
 
     it("still lists a deletion after a blank context line under diff.suppressBlankEmpty (+ interHunkContext or GIT_DIFF_OPTS)", () => {
