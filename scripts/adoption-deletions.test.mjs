@@ -43,7 +43,8 @@ const adoption = patch(HANDOFF, [
 ]);
 
 const fake = (answers) => (args) => {
-  const key = args.find((a) => !a.startsWith("--")); // skip global options such as --no-literal-pathspecs
+  // Skip global options such as --no-literal-pathspecs and `-c <key=value>` pairs.
+  const key = args.find((a, i) => !a.startsWith("--") && a !== "-c" && args[i - 1] !== "-c");
   const a = answers[key];
   if (a instanceof Error) throw a;
   if (a === undefined) throw new Error(`unexpected git ${args.join(" ")}`);
@@ -85,7 +86,7 @@ describe("collectDeletions — content, not row keys", () => {
   });
 
   it("marks a line re-added verbatim in the same file as moved, matched as a multiset", () => {
-    const text = patch(DISPO, ["@@ -1,3 +1,1 @@", "-dup", "-dup", "-gone", "@@ -9,0 +8,1 @@", "+dup"]);
+    const text = patch(DISPO, ["@@ -1,3 +0,0 @@", "-dup", "-dup", "-gone", "@@ -9,0 +8,1 @@", "+dup"]);
     const [d] = collectDeletions(text);
     expect(d.lines.map((l) => [l.text, l.moved])).toEqual([
       ["dup", true],
@@ -226,6 +227,42 @@ describe("a listed commit whose watched diff cannot be read — NOT MEASURED, ne
   });
 });
 
+describe("hunks parsed by their @@ counts — a blank context line or a count mismatch is never a false clean", () => {
+  // diff.suppressBlankEmpty=true + diff.interHunkContext=1 merges the two -U0 hunks below across the
+  // blank line and prints that context line as "" rather than " ". The retraction after it is real.
+  const blankCtx = patch(HANDOFF, ["@@ -3,2 +3,2 @@", "+- row A2", "", `-${RETRACTION}`]);
+
+  it("reads a pure \"\" line as context while counts remain, so the deletion after it is kept", () => {
+    const f = parseDiff(blankCtx).get(HANDOFF);
+    expect(f.removed).toEqual([{ line: 4, text: RETRACTION }]);
+    expect(f.added).toEqual([{ line: 3, text: "- row A2" }]);
+    const out = formatReport("r", analyzeLog(`\0commit ${"b".repeat(40)} add A2, drop retraction\n${blankCtx}\n`));
+    expect(out).toContain(`-L4: ${RETRACTION}`);
+    expect(out).not.toContain("(no lines deleted)");
+    expect(out).not.toMatch(/NOT MEASURED/);
+  });
+
+  it("marks a hunk whose body does not consume exactly its header counts NOT MEASURED", () => {
+    // Body ends one line short of "-3,2 +3,2" (truncated), and a second hunk is cut off by the next header.
+    const shortBody = patch(HANDOFF, ["@@ -3,2 +3,2 @@", "+- row A2", `-${RETRACTION}`]);
+    const cutByHeader = [patch(DISPO, ["@@ -1,3 +1,1 @@", "-gone"]), patch(HANDOFF, ["@@ -9 +9 @@", "-x", "+y"])].join("\n");
+    for (const [text, file] of [
+      [shortBody, HANDOFF],
+      [cutByHeader, DISPO],
+    ]) {
+      const f = collectDeletions(text).find((d) => d.file === file);
+      expect(f).toMatchObject({ file, lines: [] });
+      expect(f.notMeasured).toMatch(/@@ line counts/);
+    }
+    // The file after the cut is still read normally.
+    expect(collectDeletions(cutByHeader).find((d) => d.file === HANDOFF).lines).toEqual([{ line: 9, text: "x", moved: false }]);
+    const out = formatReport("r", analyzeLog(`\0commit ${"c".repeat(40)} short hunk\n${shortBody}\n`));
+    expect(out).toMatch(/^adoption-deletions: NOT MEASURED \(r\)/);
+    expect(out).toMatch(/docs\/SESSION_HANDOFF\.md: NOT MEASURED — .*@@ line counts/);
+    expect(out).not.toContain("(no lines deleted)");
+  });
+});
+
 describe("run — honest measurement, never a silent pass, never blocks", () => {
   const LOG = `\0commit ${"a".repeat(40)} adopt\n${adoption}\n`;
 
@@ -257,8 +294,8 @@ describe("run — honest measurement, never a silent pass, never blocks", () => 
     expect(logArgs).toContain("base..HEAD");
     expect(logArgs).toContain("--diff-merges=first-parent");
     expect(logArgs).toContain("--no-relative");
-    expect(logArgs[0]).toBe("--no-literal-pathspecs");
-    expect(logArgs.slice(1, 3)).toEqual(["log", "-p"]);
+    expect(logArgs.slice(0, 5)).toEqual(["--no-literal-pathspecs", "-c", "diff.suppressBlankEmpty=false", "log", "-p"]);
+    expect(logArgs).toContain("--no-show-signature");
     expect(logArgs).toContain("--no-textconv");
     expect(logArgs).toContain("--raw");
     expect(logArgs.slice(-2)).toEqual(WATCHED.map((path) => `:(top)${path}`));
@@ -278,8 +315,8 @@ describe("CLI smoke against the real tree", () => {
     expect(out).toMatch(/^adoption-deletions: (NOT MEASURED|.* — (measured|\d+ commit))/);
   });
 
-  // One temp repo shared by the three config/env cases below: 5 git spawns to build it, then each CLI
-  // run adds its own log, rev-list and rev-parse (14 in all), so the block carries its own timeout
+  // One temp repo shared by the config/env cases below: 5 git spawns to build it, then each CLI run
+  // adds its own log, rev-list and rev-parse (20 in all), so the block carries its own timeout
   // instead of leaning on the suite-wide testTimeout.
   const GIT_SPAWN_TIMEOUT_MS = 60_000;
 
@@ -297,8 +334,10 @@ describe("CLI smoke against the real tree", () => {
           [`GIT_CONFIG_VALUE_${i}`, v],
         ]),
       ]);
+    const DISPO_RETRACTION = "  - RETRACTED: #300 is still open.";
     const expectDeletionAndUtf16 = (out) => {
       expect(out).toContain(`-L2: ${RETRACTION}`);
+      expect(out).toContain(`-L4: ${DISPO_RETRACTION}`);
       expect(out).not.toContain("no commit touches");
       // The UTF-16 rewrite commit is NOT MEASURED, so the run as a whole is not a clean pass.
       expect(out).toMatch(/^adoption-deletions: NOT MEASURED/);
@@ -321,11 +360,16 @@ describe("CLI smoke against the real tree", () => {
       const git = (...args) => execFileSync("git", args, { cwd: repo, env, stdio: "pipe" });
       mkdirSync(join(repo, "docs"));
       const doc = join(repo, "docs", "SESSION_HANDOFF.md");
+      const dispo = join(repo, "docs", "BRANCH_DISPOSITIONS.md");
       writeFileSync(doc, `keep\n${RETRACTION}\n`);
+      // The second watched doc carries the suppressBlankEmpty case: a blank line between an added row
+      // and a dropped retraction, so interHunkContext merges them across a "" context line.
+      writeFileSync(dispo, `# Dispositions\n- row A\n\n${DISPO_RETRACTION}\n- row B\n`);
       git("init", "-q");
-      git("add", "docs/SESSION_HANDOFF.md");
+      git("add", "docs");
       git("commit", "-q", "-m", "seed");
       writeFileSync(doc, "keep\n");
+      writeFileSync(dispo, "# Dispositions\n- row A\n- row A2\n\n- row B\n");
       git("commit", "-q", "-a", "-m", "adopt");
       // A PowerShell `>` rewrite: UTF-16LE with a BOM, so git classes the new blob as binary.
       writeFileSync(doc, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("keep\n", "utf16le")]));
@@ -351,6 +395,12 @@ describe("CLI smoke against the real tree", () => {
 
     it("keeps :(top) magic under GIT_LITERAL_PATHSPECS=1", () => {
       expectDeletionAndUtf16(cli(repo, { GIT_LITERAL_PATHSPECS: "1" }));
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("still lists a deletion after a blank context line under diff.suppressBlankEmpty (+ interHunkContext or GIT_DIFF_OPTS)", () => {
+      const blank = [["diff.suppressBlankEmpty", "true"]];
+      expectDeletionAndUtf16(cli(repo, config([...blank, ["diff.interHunkContext", "1"]])));
+      expectDeletionAndUtf16(cli(repo, { ...config(blank), GIT_DIFF_OPTS: "-u3" }));
     }, GIT_SPAWN_TIMEOUT_MS);
   });
 });
