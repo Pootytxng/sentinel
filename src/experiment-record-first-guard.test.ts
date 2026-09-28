@@ -74,6 +74,65 @@ describe("experiment start is record-first and single-active (#583)", () => {
   });
 });
 
+// LANE 2 (§4.1 / §4.5 / §4.10): a Trial reads the setting before it changes anything, requires the
+// target to read as changed after the apply, and reads it back after every keep or restore. The pure
+// decisions are Rust-tested; the READS happen against the live machine, so where they sit is pinned
+// here.
+const HISTORY = readFileSync(join("src-tauri", "src", "history.rs"), "utf8");
+const PROBE = "crate::history::probe_rec_target(";
+
+describe("a Trial verifies the setting before, during and after (#583 lane 2)", () => {
+  const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
+
+  it("§4.1: reads the setting before anything is recorded or applied", () => {
+    const gate = start.indexOf(`pre_apply_refusal(${PROBE}`);
+    expect(gate, "the pre-apply read is gone").toBeGreaterThanOrEqual(0);
+    expect(gate).toBeGreaterThan(start.indexOf("active_trial(&store)"));
+    expect(gate).toBeLessThan(start.indexOf("status: ExperimentStatus::Pending"));
+    expect(gate).toBeLessThan(start.indexOf("apply_recommendation("));
+    expect(start).toContain("prior_state_verified: true");
+  });
+
+  it("§4.5: an unread target aborts the start just like an unchanged one", () => {
+    const check = start.slice(start.indexOf("target_verification("));
+    expect(check).toMatch(/Some\(false\) => \{\s*return Err\(abort_start\(/);
+    expect(check).toMatch(/None => \{\s*return Err\(abort_start\(/);
+  });
+
+  it("§7 at conclude: the target is read before the keep/restore decision and can overrule it", () => {
+    const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
+    const read = conclude.indexOf(PROBE);
+    const guard = conclude.indexOf("guard_target_at_conclude(");
+    expect(read, "conclude no longer reads the target").toBeGreaterThanOrEqual(0);
+    expect(guard).toBeGreaterThan(read);
+    expect(guard).toBeLessThan(conclude.indexOf("conclude_outcome("));
+    expect(guard).toBeLessThan(conclude.indexOf("if outcome.keep"));
+  });
+
+  it("§4.10: every restore path reads the setting back after the rollback", () => {
+    for (const sig of ["fn abort_start(", "pub(crate) fn conclude_experiment(", "pub(crate) fn restore_experiment("]) {
+      const body = fnBody(EXPERIMENT, sig);
+      const rollback = body.indexOf("crate::history::rollback_change(");
+      const settle = body.indexOf("settle_restore(");
+      expect(rollback, `${sig} no longer restores`).toBeGreaterThanOrEqual(0);
+      expect(settle, `${sig} no longer reads the setting back after its restore`).toBeGreaterThan(rollback);
+    }
+  });
+
+  it("every one-click rec has a live probe, so no appliable rec is refused as unreadable by design", () => {
+    const ids = (body: string) => [...body.matchAll(/^\s*"([a-z0-9-]+)" =>/gm)].map((m) => m[1]).sort();
+    const appliable = ids(fnBody(HISTORY, "fn apply_fn_for("));
+    const probed = ids(fnBody(HISTORY, "pub(crate) fn probe_rec_target("));
+    expect(appliable.length, "the apply dispatch moved").toBeGreaterThan(0);
+    expect(probed).toEqual(appliable);
+  });
+
+  it("the probe is read-only", () => {
+    const probe = fnBody(HISTORY, "pub(crate) fn probe_rec_target(");
+    expect(probe).not.toMatch(/apply_|rollback_|actions::|save_history/);
+  });
+});
+
 describe("interrupted starts are resolved at launch, read-only (#583)", () => {
   it("lib.rs setup calls the reconcile", () => {
     expect(LIB).toMatch(/crate::experiment::reconcile_interrupted_starts\(\)/);

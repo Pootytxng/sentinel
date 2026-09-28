@@ -148,11 +148,22 @@ pub(crate) struct ExperimentRecord {
     #[serde(default)]
     pub trial_result: Option<TrialResult>,
     /// What the live probe read straight after the apply (§4.5 "verify target state"): `Some(true)`
-    /// the setting reads in the target state, `Some(false)` it does not (the start is aborted and the
-    /// change restored), `None` the probe could not read it or no probe exists for this rec. Unknown
-    /// stays unknown; it is never recorded as verified.
+    /// the setting reads in the target state, `Some(false)` it does not, `None` the probe could not
+    /// read it. Only `Some(true)` lets a start run; anything else aborts it and restores the change
+    /// (§7 "target state cannot be verified"). Unknown stays unknown; it is never recorded as verified.
     #[serde(default)]
     pub target_verified: Option<bool>,
+    /// §4.1 "verify current state": the live probe read the setting as NOT yet in the target state
+    /// before the apply, so a restore is expected to read it back that way. Every start since #583
+    /// lane 2 sets it (a start refuses otherwise); `false` on older records, whose prior state was
+    /// never read, so their restore read-back stays unknown.
+    #[serde(default)]
+    pub prior_state_verified: bool,
+    /// §4.10 "verify final state": whether the live read after the keep or restore matched the
+    /// decision. `Some(false)` is always said out loud (see [`settle_restore`]); `None` means the
+    /// setting couldn't be read, the prior state was never verified, or the Trial hasn't concluded.
+    #[serde(default)]
+    pub final_state_verified: Option<bool>,
 }
 
 /// Trial Protocol §8 — the five result classes a Trial is judged in (#583). Persisted (kebab-case).
@@ -346,6 +357,129 @@ pub(crate) fn target_verification(check: Option<crate::history::ActiveCheck>) ->
     }
 }
 
+/// §4.1 "verify current state" — why a Trial can't start from what the live probe reads BEFORE the
+/// apply, or `None` when it can. Only a read that says the setting is NOT yet changed qualifies:
+/// already changed leaves nothing to test, and a setting Compy can't read could never be verified
+/// after the apply or after a restore (§7 "target state cannot be verified").
+pub(crate) fn pre_apply_refusal(check: crate::history::ActiveCheck) -> Option<&'static str> {
+    use crate::history::ActiveCheck;
+    match check {
+        ActiveCheck::Off => None,
+        ActiveCheck::On => Some(
+            "this setting already reads as changed on this PC, so there's nothing to test — the \
+             experiment would compare the setting against itself",
+        ),
+        ActiveCheck::Unreadable => Some(
+            "Compy can't read this setting right now, so it couldn't prove the change took effect or \
+             that a restore put it back — nothing was changed; try again in a moment",
+        ),
+        ActiveCheck::Unrecognised => Some(
+            "Compy has no way to read this setting back, so it can't verify a before/after for it — \
+             nothing was changed",
+        ),
+    }
+}
+
+/// §4.10 "verify final state" — does the live read after the keep/restore decision match it? A kept
+/// change must still read as changed. A restored one must read back as not changed, which is only
+/// judged when §4.1 proved that is where it started; otherwise its prior state is unknown, and so is
+/// the answer. An unread setting is unknown either way.
+pub(crate) fn final_state_check(
+    kept: bool,
+    prior_state_verified: bool,
+    check: crate::history::ActiveCheck,
+) -> Option<bool> {
+    use crate::history::ActiveCheck;
+    match (kept, check) {
+        (true, ActiveCheck::On) => Some(true),
+        (true, ActiveCheck::Off) => Some(false),
+        (false, ActiveCheck::Off) if prior_state_verified => Some(true),
+        (false, ActiveCheck::On) if prior_state_verified => Some(false),
+        _ => None,
+    }
+}
+
+/// Record §4.10 after a restore, from a live read taken AFTER the rollback. A read that still shows
+/// the change means Compy can't say the machine is back where it started, so the record turns
+/// `Aborted` and names it — the same loud path as a restore that failed outright. Returns the
+/// user-facing message in that case, `None` otherwise (including an honest unknown).
+/// `compy_restored` is false when the ledger said the change was already reverted outside Compy, so
+/// the message never claims a restore Compy didn't perform.
+fn settle_restore(
+    rec: &mut ExperimentRecord,
+    compy_restored: bool,
+    check: crate::history::ActiveCheck,
+) -> Option<String> {
+    let verified = final_state_check(false, rec.prior_state_verified, check);
+    rec.final_state_verified = verified;
+    if verified != Some(false) {
+        return None;
+    }
+    rec.status = ExperimentStatus::Aborted;
+    rec.kept = false;
+    let before = rec.stop_reason.take().unwrap_or_else(|| "restored".into());
+    rec.stop_reason = Some(format!(
+        "{before}; a read afterwards shows the setting as changed — verify in Fix"
+    ));
+    Some(if compy_restored {
+        "Compy restored the change, but the setting still reads as changed afterwards — something \
+         else may have set it again. Open the Fix surface to check it."
+            .into()
+    } else {
+        "The change was already undone outside Compy, but the setting now reads as changed again — \
+         something else is setting it. Open the Fix surface to check it."
+            .into()
+    })
+}
+
+/// §7 at conclude: the change must still read as applied for its treatment session to be evidence
+/// about it. Read before the keep/restore decision, so it can overrule a keep:
+/// - reads OFF → it was reverted at some point during the test, so no effect in the session can be
+///   attributed to it: `confounded`, restore. A wrong-game session keeps its stronger reason.
+/// - unreadable → the result can't be verified, so a keep becomes `insufficient-evidence` and
+///   restores (§9: only a verified Better keeps). A restore stays a restore.
+pub(crate) fn guard_target_at_conclude(outcome: ConcludeOutcome, still_applied: Option<bool>) -> ConcludeOutcome {
+    match still_applied {
+        Some(true) => outcome,
+        Some(false) if outcome.verdict != "not-comparable" => ConcludeOutcome {
+            verdict: "confounded".into(),
+            keep: false,
+            stop_reason: Some("target-reverted-during-treatment".into()),
+            confidence: Confidence::Low,
+            note: "The setting no longer read as changed when the test ended — it was reverted \
+                   during the test, so nothing in this session can be attributed to it. Compy \
+                   restored the change."
+                .into(),
+            ..outcome
+        },
+        None if outcome.keep => ConcludeOutcome {
+            verdict: "insufficient-evidence".into(),
+            keep: false,
+            stop_reason: Some("target-unreadable-at-conclude".into()),
+            confidence: Confidence::Unknown,
+            note: "Compy couldn't read the setting back when the test ended, so it can't confirm \
+                   the change was in effect for the measurement — it restored the change rather \
+                   than keep an unverified result."
+                .into(),
+            ..outcome
+        },
+        _ => outcome,
+    }
+}
+
+/// The simulator's "already in the target state?" — the live probe wins when it can read the
+/// setting, so a change reverted outside Compy is testable again and a setting that was already
+/// right before Compy touched it is never offered as a test. Only an unread setting falls back to
+/// the ledger.
+pub(crate) fn already_in_target(live: crate::history::ActiveCheck, ledger_active: bool) -> bool {
+    use crate::history::ActiveCheck;
+    match live {
+        ActiveCheck::On => true,
+        ActiveCheck::Off => false,
+        ActiveCheck::Unreadable | ActiveCheck::Unrecognised => ledger_active,
+    }
+}
+
 /// The ledger fields the launch reconcile needs, borrowed so the matcher stays pure and testable.
 pub(crate) struct LedgerEntryRef<'a> {
     pub id: &'a str,
@@ -367,7 +501,7 @@ pub(crate) fn interrupted_start_change<'a>(
     let started = DateTime::parse_from_rfc3339(&pending.created_at).ok();
     ledger
         .iter()
-        .filter(|c| c.applied && c.rec_id == pending.rec_id && !claimed.iter().any(|id| *id == c.id))
+        .filter(|c| c.applied && c.rec_id == pending.rec_id && !claimed.contains(&c.id))
         .filter(|c| match (started, DateTime::parse_from_rfc3339(c.applied_at).ok()) {
             (Some(s), Some(a)) => a >= s,
             _ => true,
@@ -709,7 +843,8 @@ pub(crate) struct SimContext {
     /// the verdict is `not-applicable`. False for a real one-click tweak AND for an unknown id
     /// (which stays `insufficient-evidence`, never fabricated).
     pub advisory_only: bool,
-    /// Already active in the Trust Ledger ⇒ already-configured.
+    /// The setting already reads as changed (live probe), or, when it can't be read, is active in the
+    /// Trust Ledger ⇒ already-configured. See [`already_in_target`].
     pub already_active: bool,
     /// On the permanent safety/anti-cheat blocklist (LOCKED rule 6) ⇒ never a testable candidate.
     pub barred: bool,
@@ -923,6 +1058,12 @@ pub(crate) fn start_experiment(
         });
     }
 
+    // Step 1 (§4.1): read the setting before anything is recorded or changed. Only a setting that
+    // reads as not yet changed can start, so the restore has a verified state to return to.
+    if let Some(why) = pre_apply_refusal(crate::history::probe_rec_target(&rec_id)) {
+        return Err(format!("experiment not started — {why}"));
+    }
+
     // Single-variable honesty context BEFORE we apply (§4F): how many changes are already active.
     let active = crate::history::active_change_count();
     let warning = attribution_warning(active);
@@ -954,6 +1095,8 @@ pub(crate) fn start_experiment(
         verdict_note: None,
         trial_result: None,
         target_verified: None,
+        prior_state_verified: true,
+        final_state_verified: None,
     });
     let idx = store.experiments.len() - 1;
     save_store(&store)?;
@@ -981,15 +1124,27 @@ pub(crate) fn start_experiment(
         ));
     }
 
-    // Step 5 (§4.5): the live probe must not read the target state as OFF straight after the apply.
+    // Step 5 (§4.5): the live probe must read the target state straight after the apply. Not
+    // changed, or not readable, is a target Compy can't verify — §7 aborts and restores.
     let target = target_verification(applied.active_check);
     store.experiments[idx].target_verified = target;
-    if target == Some(false) {
-        return Err(abort_start(
-            &mut store,
-            idx,
-            "the setting did not read as changed after the apply, so there is nothing to measure",
-        ));
+    match target {
+        Some(true) => {}
+        Some(false) => {
+            return Err(abort_start(
+                &mut store,
+                idx,
+                "the setting did not read as changed after the apply, so there is nothing to measure",
+            ))
+        }
+        None => {
+            return Err(abort_start(
+                &mut store,
+                idx,
+                "Compy could not read the setting back after the apply, so it can't prove the change \
+                 took effect",
+            ))
+        }
     }
 
     // Watermark AFTER our apply so a LATER external change trips the confound guard, not our own. An
@@ -1020,11 +1175,12 @@ pub(crate) fn start_experiment(
 fn abort_start(store: &mut ExperimentStore, idx: usize, why: &str) -> String {
     let change_id = store.experiments[idx].applied_change_id.clone();
     let restored = crate::history::rollback_change(change_id);
+    let compy_restored = restored.is_ok();
     let rec = &mut store.experiments[idx];
     rec.kept = false;
     rec.trial_result = Some(TrialResult::Unmeasurable);
     rec.concluded_at = Some(Utc::now().to_rfc3339());
-    let message = match restored {
+    let mut message = match restored {
         Ok(()) => {
             rec.status = ExperimentStatus::Restored;
             rec.stop_reason = Some(format!("start-aborted: {why}; the change was restored"));
@@ -1049,6 +1205,13 @@ fn abort_start(store: &mut ExperimentStore, idx: usize, why: &str) -> String {
             )
         }
     };
+    // §4.10: a restore is only as good as the read that follows it.
+    if rec.status == ExperimentStatus::Restored {
+        let check = crate::history::probe_rec_target(&rec.rec_id);
+        if let Some(still) = settle_restore(rec, compy_restored, check) {
+            message = format!("experiment aborted before measuring — {why}. {still}");
+        }
+    }
     match save_store(store) {
         Ok(()) => message,
         // The record on disk is still Pending; the next reconcile resolves it against the ledger.
@@ -1144,14 +1307,20 @@ pub(crate) fn conclude_experiment(
     // `.ok()` is the honest direction here, not a collapse: an unreadable ledger becomes `None`,
     // which the confound guard REFUSES to attribute. It is never silently treated as a count.
     let ledger_now = crate::history::ledger_len_checked().ok();
-    let outcome = conclude_outcome(
-        &store.experiments[idx],
-        treatment_low1_fps,
-        treatment_samples,
-        crashed,
-        treatment_game.as_deref(),
-        ledger_now,
-        now,
+    // §7: the change must still read as applied for the treatment session to be evidence about it.
+    // Read before the keep/restore decision so a reverted or unreadable setting can overrule a keep.
+    let target_now = crate::history::probe_rec_target(&store.experiments[idx].rec_id);
+    let outcome = guard_target_at_conclude(
+        conclude_outcome(
+            &store.experiments[idx],
+            treatment_low1_fps,
+            treatment_samples,
+            crashed,
+            treatment_game.as_deref(),
+            ledger_now,
+            now,
+        ),
+        target_verification(Some(target_now)),
     );
 
     store.experiments[idx].treatment = Some(TreatmentRecord {
@@ -1172,14 +1341,19 @@ pub(crate) fn conclude_experiment(
         store.experiments[idx].status = ExperimentStatus::Kept;
         store.experiments[idx].kept = true;
         store.experiments[idx].stop_reason = outcome.stop_reason;
+        // §4.10: keeping changes nothing, so the read just taken IS the final state (a keep needs it
+        // to read as changed — see `guard_target_at_conclude`).
+        let prior = store.experiments[idx].prior_state_verified;
+        store.experiments[idx].final_state_verified = final_state_check(true, prior, target_now);
     } else {
         // Restore through the audited boundary (resolves from history.json alone).
         let change_id = store.experiments[idx].applied_change_id.clone();
-        match crate::history::rollback_change(change_id) {
+        let compy_restored = match crate::history::rollback_change(change_id) {
             Ok(()) => {
                 store.experiments[idx].status = ExperimentStatus::Restored;
                 store.experiments[idx].kept = false;
                 store.experiments[idx].stop_reason = outcome.stop_reason;
+                true
             }
             Err(e) if restore_already_reverted(&e) => {
                 // The change was already reverted outside Compy before our restore ran — the desired
@@ -1188,6 +1362,7 @@ pub(crate) fn conclude_experiment(
                 store.experiments[idx].kept = false;
                 store.experiments[idx].stop_reason =
                     Some("the change was already reverted outside Compy before the automatic restore".into());
+                false
             }
             Err(e) => {
                 // NEVER hide a partial: Compy could not confirm the change was rolled back. We do NOT
@@ -1204,6 +1379,13 @@ pub(crate) fn conclude_experiment(
                     outcome.verdict
                 ));
             }
+        };
+        // §4.10: read the setting back after the restore.
+        let rec_id = store.experiments[idx].rec_id.clone();
+        let check = crate::history::probe_rec_target(&rec_id);
+        if let Some(still) = settle_restore(&mut store.experiments[idx], compy_restored, check) {
+            save_store(&store)?;
+            return Err(format!("experiment concluded '{}' — {still}", outcome.verdict));
         }
     }
     save_store(&store)?;
@@ -1229,10 +1411,10 @@ pub(crate) fn restore_experiment(experiment_id: String) -> Result<ExperimentReco
     }
     let change_id = store.experiments[idx].applied_change_id.clone();
     let now = Utc::now();
-    match crate::history::rollback_change(change_id) {
+    let compy_restored = match crate::history::rollback_change(change_id) {
         // Rolled back now, or already off outside Compy — either way the change is reverted (honest).
-        Ok(()) => {}
-        Err(e) if restore_already_reverted(&e) => {}
+        Ok(()) => true,
+        Err(e) if restore_already_reverted(&e) => false,
         Err(e) => {
             // Compy could not confirm the change is off — persist the halt loudly (don't leave it
             // showing "running" forever) and do NOT fabricate certainty about the change's state.
@@ -1247,11 +1429,18 @@ pub(crate) fn restore_experiment(experiment_id: String) -> Result<ExperimentReco
                  open the Fix surface to check and roll it back. ({e})"
             ));
         }
-    }
+    };
     store.experiments[idx].status = ExperimentStatus::Restored;
     store.experiments[idx].kept = false;
     store.experiments[idx].stop_reason = Some("user-restored".into());
     store.experiments[idx].concluded_at = Some(now.to_rfc3339());
+    // §4.10: read the setting back after the restore.
+    let rec_id = store.experiments[idx].rec_id.clone();
+    let check = crate::history::probe_rec_target(&rec_id);
+    if let Some(still) = settle_restore(&mut store.experiments[idx], compy_restored, check) {
+        save_store(&store)?;
+        return Err(still);
+    }
     save_store(&store)?;
     Ok(store.experiments[idx].clone())
 }
@@ -1284,9 +1473,13 @@ pub(crate) fn restore_experiment(experiment_id: String) -> Result<ExperimentReco
 ///   won't invite a Start that would dead-end at the apply boundary. `false` for the unknown-id
 ///   fallback so it stays `insufficient-evidence`, not a fabricated not-applicable.
 fn build_sim_context(rec_id: &str) -> Result<SimContext, String> {
-    // Already active? — the Trust Ledger is the source of truth, independent of catalog membership,
-    // so a still-applied retired rec still reads `already-configured`.
-    let already_active = crate::history::rec_is_active(rec_id);
+    // Already in the target state? — the live probe when it can read the setting (the same read a
+    // start refuses on, §4.1), else the Trust Ledger, independent of catalog membership, so a
+    // still-applied retired rec still reads `already-configured`.
+    let already_active = already_in_target(
+        crate::history::probe_rec_target(rec_id),
+        crate::history::rec_is_active(rec_id),
+    );
 
     // Read the live, hardware-tailored catalog through the serde JSON boundary (fields are private;
     // there is no find-by-id — mirrors leftovers.rs / export.rs). Filter by id.
@@ -1384,6 +1577,8 @@ mod experiment_tests {
             verdict_note: None,
             trial_result: None,
             target_verified: None,
+            prior_state_verified: false,
+            final_state_verified: None,
         }
     }
 
@@ -1903,9 +2098,13 @@ mod experiment_tests {
         let obj = old.as_object_mut().unwrap();
         obj.remove("trial_result");
         obj.remove("target_verified");
+        obj.remove("prior_state_verified");
+        obj.remove("final_state_verified");
         let back: ExperimentRecord = serde_json::from_value(old).unwrap();
         assert_eq!(back.trial_result, None, "a pre-#583 record reads as unclassified, never guessed");
         assert_eq!(back.target_verified, None, "and its target as unverified");
+        assert!(!back.prior_state_verified, "its prior state was never read");
+        assert_eq!(back.final_state_verified, None, "nor its final state");
     }
 
     // ── Record-first lifecycle integrity (#583 lane 1) ──
@@ -1927,13 +2126,131 @@ mod experiment_tests {
     }
 
     #[test]
-    fn only_a_probe_that_reads_off_fails_the_target_check() {
+    fn the_target_check_keeps_changed_unchanged_and_unread_apart() {
         use crate::history::ActiveCheck;
         assert_eq!(target_verification(Some(ActiveCheck::On)), Some(true));
         assert_eq!(target_verification(Some(ActiveCheck::Off)), Some(false));
         assert_eq!(target_verification(Some(ActiveCheck::Unreadable)), None, "unread is unknown");
         assert_eq!(target_verification(Some(ActiveCheck::Unrecognised)), None, "unprobed is unknown");
         assert_eq!(target_verification(None), None);
+    }
+
+    // ── §4.1 / §4.10 target reads (#583 lane 2) ──
+
+    #[test]
+    fn a_trial_starts_only_from_a_setting_that_reads_unchanged() {
+        use crate::history::ActiveCheck;
+        assert_eq!(pre_apply_refusal(ActiveCheck::Off), None);
+        for check in [ActiveCheck::On, ActiveCheck::Unreadable, ActiveCheck::Unrecognised] {
+            let why = pre_apply_refusal(check).unwrap_or_else(|| panic!("{check:?} must refuse"));
+            if check != ActiveCheck::On {
+                assert!(why.contains("nothing was changed"), "{check:?}: {why}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_final_state_is_judged_against_the_decision_and_a_verified_prior() {
+        use crate::history::ActiveCheck::*;
+        // A keep must still read as changed.
+        assert_eq!(final_state_check(true, true, On), Some(true));
+        assert_eq!(final_state_check(true, true, Off), Some(false));
+        assert_eq!(final_state_check(true, false, On), Some(true), "a keep needs no prior read");
+        // A restore must read back as unchanged — judged only when §4.1 proved that's where it began.
+        assert_eq!(final_state_check(false, true, Off), Some(true));
+        assert_eq!(final_state_check(false, true, On), Some(false));
+        assert_eq!(final_state_check(false, false, On), None, "an unread prior can't be judged");
+        assert_eq!(final_state_check(false, false, Off), None);
+        for kept in [true, false] {
+            assert_eq!(final_state_check(kept, true, Unreadable), None, "unread is unknown");
+            assert_eq!(final_state_check(kept, true, Unrecognised), None);
+        }
+    }
+
+    fn restored() -> ExperimentRecord {
+        let mut r = with_status(ExperimentStatus::Restored);
+        r.prior_state_verified = true;
+        r.stop_reason = Some("user-restored".into());
+        r
+    }
+
+    #[test]
+    fn a_restore_that_reads_back_unchanged_stays_restored() {
+        use crate::history::ActiveCheck;
+        let mut r = restored();
+        assert_eq!(settle_restore(&mut r, true, ActiveCheck::Off), None);
+        assert_eq!(r.status, ExperimentStatus::Restored);
+        assert_eq!(r.final_state_verified, Some(true));
+        assert_eq!(r.stop_reason.as_deref(), Some("user-restored"));
+    }
+
+    #[test]
+    fn a_restore_that_still_reads_changed_is_said_out_loud() {
+        use crate::history::ActiveCheck;
+        let mut r = restored();
+        let msg = settle_restore(&mut r, true, ActiveCheck::On).expect("a still-changed read is never silent");
+        assert!(msg.contains("Fix") && msg.starts_with("Compy restored"), "{msg}");
+        assert_eq!(r.status, ExperimentStatus::Aborted);
+        assert!(!r.kept);
+        assert_eq!(r.final_state_verified, Some(false));
+        let why = r.stop_reason.unwrap();
+        assert!(why.starts_with("user-restored; ") && why.contains("verify in Fix"), "{why}");
+
+        // Reverted outside Compy, then set again: loud too, but never claims Compy restored it.
+        let mut outside = restored();
+        let msg = settle_restore(&mut outside, false, ActiveCheck::On).expect("never silent");
+        assert!(!msg.contains("Compy restored") && msg.contains("outside Compy") && msg.contains("Fix"), "{msg}");
+        assert_eq!((outside.status, outside.final_state_verified), (ExperimentStatus::Aborted, Some(false)));
+    }
+
+    #[test]
+    fn an_unknown_final_read_stays_unknown_and_leaves_the_restore_alone() {
+        use crate::history::ActiveCheck;
+        let mut unread = restored();
+        assert_eq!(settle_restore(&mut unread, true, ActiveCheck::Unreadable), None);
+        assert_eq!((unread.status, unread.final_state_verified), (ExperimentStatus::Restored, None));
+        // A pre-lane-2 record never read its prior state, so a changed read proves nothing about it.
+        let mut legacy = restored();
+        legacy.prior_state_verified = false;
+        assert_eq!(settle_restore(&mut legacy, true, ActiveCheck::On), None);
+        assert_eq!((legacy.status, legacy.final_state_verified), (ExperimentStatus::Restored, None));
+    }
+
+    #[test]
+    fn a_change_reverted_during_the_test_is_never_credited_or_kept() {
+        let now = Utc::now();
+        let r = rec(90.0, 5);
+        let improved = conclude_outcome(&r, 120.0, 5000, false, Some("Test"), Some(5), now);
+        assert!(improved.keep, "fixture: a clean improvement");
+
+        assert_eq!(guard_target_at_conclude(improved.clone(), Some(true)), improved, "still applied: unchanged");
+
+        let reverted = guard_target_at_conclude(improved.clone(), Some(false));
+        assert_eq!(reverted.verdict, "confounded");
+        assert!(!reverted.keep);
+        assert_eq!(trial_result_for(&reverted.verdict), TrialResult::Inconclusive);
+        assert_eq!(reverted.stop_reason.as_deref(), Some("target-reverted-during-treatment"));
+        assert_eq!(reverted.delta_low1_pct, improved.delta_low1_pct, "the measured delta is kept as evidence");
+
+        let unread = guard_target_at_conclude(improved.clone(), None);
+        assert_eq!(unread.verdict, "insufficient-evidence");
+        assert!(!unread.keep, "§9: only a verified Better keeps");
+        assert_eq!(unread.confidence, Confidence::Unknown);
+
+        // A restore stays a restore, and a wrong-game session keeps its stronger reason.
+        let flat = conclude_outcome(&r, 90.0, 5000, false, Some("Test"), Some(5), now);
+        assert_eq!(guard_target_at_conclude(flat.clone(), None), flat);
+        let other_game = conclude_outcome(&r, 120.0, 5000, false, Some("Other"), Some(5), now);
+        assert_eq!(guard_target_at_conclude(other_game.clone(), Some(false)), other_game);
+    }
+
+    #[test]
+    fn the_simulator_trusts_a_live_read_over_the_ledger() {
+        use crate::history::ActiveCheck::*;
+        assert!(already_in_target(On, false), "set outside Compy: nothing to test");
+        assert!(!already_in_target(Off, true), "reverted outside Compy: testable again");
+        assert!(already_in_target(Unreadable, true), "unread falls back to the ledger");
+        assert!(!already_in_target(Unrecognised, false));
     }
 
     fn pending_at(created_at: &str) -> ExperimentRecord {

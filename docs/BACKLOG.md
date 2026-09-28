@@ -84,10 +84,15 @@ adding another isolated tweak.
 - [~] #583 lane 1 — record-first start, backend single-active guard, restore on a failed §4.5 target
   check or unreadable watermark, read-only launch reconcile of interrupted starts, typed §8
   `TrialResult` + §9 keep rule (`experiment.rs`; guard `src/experiment-record-first-guard.test.ts`).
-  Built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** lane 2 (§4.1 refuse-if-already
-  -in-target and §4.10 final read-back need a read-only probe in ★ `history.rs`; backend-owned session
-  refs; noise evidence in the receipt) · owner-rig live proof on `game-bar-disable`, including a kill
-  mid-start then relaunch · verify-local + independent review.
+- [~] #583 lane 2a — read-only `history::probe_rec_target`: §4.1 refuses a start unless the setting
+  reads unchanged; §4.5 aborts on an unread target too; §7 at conclude turns a reverted/unreadable
+  target into no-keep; §4.10 reads back after every keep/restore and turns a still-changed restore
+  into a loud `Aborted`; the simulator trusts the live read over the ledger.
+  Both lanes built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** lane 2b
+  (backend-owned session refs instead of UI-supplied fps; noise evidence in the §11 receipt — both
+  change the IPC contract and the bench, so they need owner-rig visual self-review) · owner-rig live
+  proof on `game-bar-disable`, including a kill mid-start then relaunch · verify-local + independent
+  review.
 
 ---
 
