@@ -131,7 +131,7 @@ export default function Check({
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
-  onChanged: () => void;
+  onChanged: () => Promise<unknown> | void;
   vendor: GpuVendor;
   sessions?: SessionSummary[];
   gpus?: GpuDriverInfo[];
@@ -263,11 +263,17 @@ export default function Check({
   const disableStartup = async (entry: StartupEntry) => {
     setTogglingStartup(entry.name);
     try {
-      // A disable is a ledger change (#599): the helper announces it before this re-read.
-      await setStartupEntryEnabled(entry.name, false, async () => {
-        setStartup(await invoke<StartupEntry[]>("get_startup_entries"));
-        onChanged();
-      });
+      // A disable is a ledger change (#599): the helper announces it before these re-reads. Once it
+      // has landed, App's refresh (History, Health) runs and is awaited on its own — this list's
+      // re-read is a best-effort probe like the first one, and its failure is not a failed disable.
+      await setStartupEntryEnabled(entry.name, false, () =>
+        Promise.all([
+          onChanged(),
+          invoke<StartupEntry[]>("get_startup_entries").then(setStartup, () => {
+            /* the list keeps its last read; the disable itself succeeded */
+          }),
+        ]),
+      );
     } catch (e) {
       setTogglingStartup(null);
       await confirm({
