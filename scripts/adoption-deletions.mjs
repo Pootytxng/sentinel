@@ -65,6 +65,7 @@ export function parseDiff(text) {
   let newLeft = 0;
   let oldNo = 0;
   let newNo = 0;
+  let afterHunk = false; // inside a file's hunks: only "diff --git", "@@" or "\" may follow a spent hunk
   const entry = (path) => {
     if (!files.has(path)) files.set(path, { removed: [], added: [], binary: false, modeLine: false, malformed: false });
     return files.get(path);
@@ -105,8 +106,13 @@ export function parseDiff(text) {
       // The body did not consume exactly its header counts: an unknown formatting quirk or truncated
       // input. Fail safe — that file is NOT MEASURED — and fall through to header parsing.
       short();
+    } else if (afterHunk && !line.startsWith("diff --git ") && !HUNK.test(line) && !line.startsWith("\\")) {
+      // Counts exhausted, yet the hunk body runs on: git never prints a line here that is not the next
+      // header, so the body outgrew its @@ counts and lines past them would be skipped. Fail safe.
+      if (current) current.malformed = true;
     }
     if (line.startsWith("diff --git ")) {
+      afterHunk = false;
       const m = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
       current = m ? entry(unquote(m[1])) : null;
       continue;
@@ -143,6 +149,7 @@ export function parseDiff(text) {
     }
     const h = HUNK.exec(line);
     if (h) {
+      afterHunk = true;
       oldNo = Number(h[1]);
       oldLeft = h[2] === undefined ? 1 : Number(h[2]);
       newNo = Number(h[3]);
@@ -334,6 +341,8 @@ export function run(argv, git, shallow = () => readShallow(git)) {
       "--no-color",
       // log.showSignature=true put gpg: lines into the log, read as a phantom unmeasured commit.
       "--no-show-signature",
+      // i18n.logOutputEncoding=UTF-16 re-encoded the %x00commit header lines, so splitLog found no commits.
+      "--encoding=UTF-8",
       "--no-ext-diff",
       // A user's textconv (core.attributesFile `*.md diff=x` + diff.x.textconv) emptied the patch.
       "--no-textconv",
