@@ -105,7 +105,12 @@ describe("a Trial verifies the setting before, during and after (#583 lane 2)", 
     const guard = conclude.indexOf("guard_target_at_conclude(");
     expect(read, "conclude no longer reads the target").toBeGreaterThanOrEqual(0);
     expect(guard).toBeGreaterThan(read);
-    expect(guard).toBeLessThan(conclude.indexOf("conclude_outcome("));
+    // It wraps whatever was judged (a measured reading or a crash), after the judging and before
+    // the keep/restore decision.
+    expect(conclude, "the target check no longer wraps every judged outcome").toMatch(
+      /let outcome = guard_target_at_conclude\(judged,/,
+    );
+    expect(guard).toBeGreaterThan(conclude.indexOf("conclude_outcome("));
     expect(guard).toBeLessThan(conclude.indexOf("if outcome.keep"));
   });
 
@@ -151,5 +156,77 @@ describe("interrupted starts are resolved at launch, read-only (#583)", () => {
   it("the UI never receives a Pending record", () => {
     const list = fnBody(EXPERIMENT, "pub(crate) fn get_experiments(");
     expect(list).toMatch(/\.filter\([^)]*!= ExperimentStatus::Pending/);
+  });
+});
+
+// LANE 2b (§4.2 / §4.6 / §11): the baseline and the treatment are Compy's own session records, looked
+// up by id. The command signatures carry no frame rate, sample count or game from the webview, and a
+// pair that can't be looked up or compared is refused before anything is recorded, judged or restored.
+describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)", () => {
+  const signature = (sig: string) => {
+    const at = EXPERIMENT.indexOf(sig);
+    expect(at, `${sig} is missing`).toBeGreaterThanOrEqual(0);
+    return EXPERIMENT.slice(at, EXPERIMENT.indexOf(") -> Result<", at));
+  };
+
+  it("start and conclude take session ids, never numbers the webview measured", () => {
+    for (const sig of ["pub(crate) fn start_experiment(", "pub(crate) fn conclude_experiment("]) {
+      const params = signature(sig);
+      expect(params, `${sig} takes a frame rate, sample count or game again`).not.toMatch(
+        /fps|samples|game\s*:|f64|u32/,
+      );
+    }
+    expect(signature("pub(crate) fn start_experiment(")).toMatch(/baseline_session_id: String/);
+    expect(signature("pub(crate) fn conclude_experiment(")).toMatch(/treatment_session_id: String/);
+  });
+
+  it("§4.2: the baseline is resolved before anything is recorded or applied", () => {
+    const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
+    const resolve = start.indexOf("resolve_baseline(&sessions, &baseline_session_id)");
+    expect(resolve, "the start no longer resolves its baseline by id").toBeGreaterThanOrEqual(0);
+    expect(start.indexOf("crate::sessions::get_session_summaries()")).toBeLessThan(resolve);
+    expect(resolve).toBeLessThan(start.indexOf("status: ExperimentStatus::Pending"));
+    expect(resolve).toBeLessThan(start.indexOf("apply_recommendation("));
+    expect(start).toMatch(/baseline_low1_fps: baseline\.low1_fps_est/);
+    expect(start).toMatch(/game: baseline\.process_name/);
+  });
+
+  it("§4.6: the treatment is resolved and compared before anything is judged, recorded or restored", () => {
+    const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
+    const resolve = conclude.indexOf("resolve_treatment(");
+    expect(resolve, "the conclude no longer resolves its treatment by id").toBeGreaterThanOrEqual(0);
+    // A refusal returns before anything is judged, recorded or restored, except after a reported
+    // crash: that always restores, even when its session can't be used.
+    expect(conclude, "a refused treatment no longer returns early, or a crash no longer overrides it").toMatch(
+      /crash_overrides_refusal\(\s*resolve_treatment\([\s\S]*?\),\s*crashed,?\s*\)\s*\.map_err\([\s\S]*?\)\?;/,
+    );
+    expect(conclude, "a crash whose session can't be used no longer restores").toMatch(
+      /None => crash_without_reading\(\)/,
+    );
+    for (const later of ["conclude_outcome(", ".treatment = resolved", "crate::history::rollback_change(", "save_store("]) {
+      expect(conclude.indexOf(later), `${later} moved ahead of the treatment check`).toBeGreaterThan(resolve);
+    }
+    expect(conclude).toMatch(/with_comparability\(/);
+  });
+
+  // A changed condition is not a wrong pick: no later session undoes a driver or Windows update, so
+  // refusing it would leave the Trial stuck. It aborts and restores (§7), ahead of any verdict.
+  it("the pairing reuses comparability.rs; a changed condition aborts and restores ahead of any verdict", () => {
+    const resolve = fnBody(EXPERIMENT, "pub(crate) fn resolve_treatment<");
+    expect(resolve).toContain("crate::comparability::derive(baseline, treatment)");
+    expect(resolve).toMatch(/Comparability::NotComparable => \{\s*return Err/);
+    expect(resolve).toMatch(/Comparability::Unknown => \{\s*return Err/);
+    const fold = fnBody(EXPERIMENT, "pub(crate) fn with_comparability(");
+    const changed = fold.indexOf("if !pairing.changed_context.is_empty() {");
+    const rest = fold.indexOf("let confidence =");
+    expect(changed, "a changed condition no longer aborts the Trial").toBeGreaterThanOrEqual(0);
+    expect(changed, "something is judged before a changed condition is checked").toBeLessThan(rest);
+    expect(fold.slice(changed, rest)).toMatch(/keep: false/);
+  });
+
+  it("§11: the noise evidence never fills in an unmeasured noise level", () => {
+    const noise = fnBody(EXPERIMENT, "pub(crate) fn noise_evidence_for(");
+    expect(noise).toContain("measured_noise_pct: None");
+    expect(fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(")).toContain("noise_evidence_for(&outcome");
   });
 });

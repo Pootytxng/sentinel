@@ -416,8 +416,10 @@
     "noNewSession": "No new {{game}} session yet",
     "restoreNow": "Restore now",
     "runningLatestPre": "Latest {{game}} session: avg",
-    "runningLatestPost": "fps · {{samples}} frames.",
+    "runningLatestPost": "fps · {{samples}} readings.",
     "runningNoTreatment": "Play a monitored {{game}} session to give the experiment a real after-reading.",
-    "yourGame": "your game"
+    "yourGame": "your game",
+    "noiseUnmeasured": "Judged against Compy's {{band}}% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
+    "noiseMeasured": "Judged against a {{band}}% noise floor. This game's own run-to-run noise on your PC measured ±{{measured}}%."
   }
 }

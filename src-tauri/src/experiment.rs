@@ -25,17 +25,21 @@ use std::sync::{Mutex, OnceLock};
 
 use chrono::{DateTime, Utc};
 
+use crate::comparability::{Comparability, SessionComparability};
 use crate::comparison::{self, ArmedComparison, ComparisonKind, DEFAULT_NOISE_FLOOR_PCT};
 use crate::intelligence::Confidence;
+use crate::sessions::SessionSummary;
 
 const STORE_SCHEMA_VERSION: u32 = 1;
 
-/// Below this many captured frames a treatment session's aggregate delta is noise, not signal —
+/// Below this many frame-rate readings a treatment session's aggregate delta is noise, not signal —
 /// the honest floor for "insufficient samples" (§4F stop-rule). Conservative + owner-tunable,
-/// same spirit as `DEFAULT_NOISE_FLOOR_PCT`. ~10 s at 60 fps.
+/// same spirit as `DEFAULT_NOISE_FLOOR_PCT`. A reading is one of the session's ~1 Hz ticks
+/// (`SessionSummary::samples`), so this is about 10 minutes of play, not a frame count.
 pub(crate) const MIN_TREATMENT_SAMPLES: u32 = 600;
 
-/// Free-text cap for persisted experiment fields (title / game / hypothesis). Defense-in-depth at
+/// Free-text cap for persisted experiment fields (title / hypothesis; the game comes from Compy's own
+/// session store since #583 lane 2b). Defense-in-depth at
 /// the webview trust boundary, mirroring `history::MAX_REC_TITLE_LEN` — a compromised UI must not be
 /// able to bloat `experiments.json` with megabyte strings. Truncate, don't reject.
 const MAX_TEXT_LEN: usize = 200;
@@ -80,8 +84,8 @@ pub(crate) enum ExperimentStatus {
     Aborted,
 }
 
-/// The treatment session's recorded metrics (§4F step 5). `samples` is the captured frame count —
-/// the honesty gate against a too-short session.
+/// The treatment session's recorded metrics (§4F step 5). `samples` is the session's count of ~1 Hz
+/// frame-rate readings — the honesty gate against a too-short session.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct TreatmentRecord {
     pub avg_fps: f64,
@@ -91,6 +95,34 @@ pub(crate) struct TreatmentRecord {
     /// 1%-low %-delta vs baseline — the signal the verdict is judged on. Rounded to 0.1.
     pub delta_low1_pct: f64,
     pub recorded_at: String,
+    /// The session these numbers were read from (its `started_at`), looked up by the backend in
+    /// `sessions.json` (#583 lane 2b). None on records concluded while the webview supplied the numbers.
+    #[serde(default)]
+    pub session_id: Option<String>,
+}
+
+/// §11 "what uncertainty/noise existed": the credible-noise band a verdict was judged against.
+/// Recorded only when the verdict really was judged against it (see [`noise_evidence_for`]).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct NoiseEvidence {
+    /// ± band on the 1% low, in percent. A delta inside it is `no-change`, never a win (§5).
+    pub band_pct: f64,
+    /// This game's own run-to-run noise on this PC, when Compy has measured it. `None` means it was
+    /// never measured: the band is Compy's fixed default, not a calibration for this game, and the
+    /// receipt says so instead of implying one. Never estimated.
+    #[serde(default)]
+    pub measured_noise_pct: Option<f64>,
+}
+
+/// How comparable the baseline and treatment sessions were (`comparability::derive` at conclude) —
+/// the §11 "machine/workload context". Only `Comparable` or `Partial` ever concludes; see
+/// [`resolve_treatment`].
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct SessionPairing {
+    pub verdict: crate::comparability::Comparability,
+    /// What Compy couldn't check because one of the sessions didn't record it. Empty when Comparable.
+    #[serde(default)]
+    pub missing_context: Vec<String>,
 }
 
 /// One full experiment record, persisted to `experiments.json`. Every optional is `#[serde(default)]`
@@ -164,6 +196,19 @@ pub(crate) struct ExperimentRecord {
     /// setting couldn't be read, the prior state was never verified, or the Trial hasn't concluded.
     #[serde(default)]
     pub final_state_verified: Option<bool>,
+    /// §4.2 the baseline session (its `started_at`), looked up by the backend in `sessions.json` at
+    /// start; the baseline numbers above are copied from it (#583 lane 2b). None on records started
+    /// while the webview supplied the numbers — such a record can't be concluded, only restored.
+    #[serde(default)]
+    pub baseline_session_id: Option<String>,
+    /// How comparable the baseline and treatment sessions were. None until concluded, and on older
+    /// records.
+    #[serde(default)]
+    pub session_pairing: Option<SessionPairing>,
+    /// The noise band the verdict was judged against. None while Running, on older records, and when
+    /// the verdict never reached the band (a crash, too few readings, a confound).
+    #[serde(default)]
+    pub noise_evidence: Option<NoiseEvidence>,
 }
 
 /// Trial Protocol §8 — the five result classes a Trial is judged in (#583). Persisted (kebab-case).
@@ -176,7 +221,7 @@ pub(crate) enum TrialResult {
     Worse,
     /// Any effect is inside the noise floor — too small to justify the change.
     Negligible,
-    /// Evidence is too thin (too few frames) or conflicts (another change landed mid-Trial).
+    /// Evidence is too thin (too few readings) or conflicts (another change landed mid-Trial).
     Inconclusive,
     /// No defensible comparison is possible: a different game, a baseline too old to compare, or
     /// no measurement was taken at all.
@@ -632,11 +677,10 @@ pub(crate) struct ConcludeOutcome {
     pub note: String,
 }
 
-/// Whether the treatment session measured the SAME game as the baseline — the defense-in-depth
-/// game-identity check at the webview trust boundary (the same posture as `MAX_TEXT_LEN`: a
-/// compromised or buggy UI must not be able to make Compy compare two different games and call it a
-/// clean single-variable result). The FE already offers only a same-game treatment session, but the
-/// BACKEND re-verifies rather than trusting the UI's filter. Decision doc
+/// Whether the treatment session measured the SAME game as the baseline. Since #583 lane 2b both
+/// names come from Compy's own session store and `resolve_treatment` refuses different games first
+/// (via `comparability::derive`); this stays as defense-in-depth inside the pure verdict, so no
+/// caller can make Compy compare two different games and call it a clean result. Decision doc
 /// `docs/decisions/2026-07-18-experiment-comparability.md` §3/§4.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GameMatch {
@@ -684,7 +728,7 @@ fn game_match(baseline: &str, treatment: Option<&str>) -> GameMatch {
 /// - **confounded / expired → Low** — another change happened mid-test, or the baseline is too old:
 ///   the before/after is no longer a clean single-variable compare.
 /// - **improved / no-change / regressed** (clean guards + enough samples) → High when the treatment
-///   session is comfortably long (≥ 2× the minimum frames), else Medium — a valid but shorter sample.
+///   session is comfortably long (≥ 2× the minimum readings), else Medium — a valid but shorter sample.
 fn verdict_confidence(verdict: &str, treatment_samples: u32, crashed: bool) -> Confidence {
     // A different-game treatment is not comparable evidence at all — Unknown, ahead of the crash
     // signal (kept in step with `conclude_outcome`'s top-precedence game-match guard).
@@ -716,9 +760,10 @@ fn verdict_note(verdict: &str, treatment_samples: u32, crashed: bool, game: Game
     }
     if treatment_samples < MIN_TREATMENT_SAMPLES {
         return format!(
-            "Only {treatment_samples} frames were captured — below the {MIN_TREATMENT_SAMPLES} Compy \
-             needs for a fair before/after. That is not enough comparable evidence to judge this \
-             change, so it was restored and the result is left as unknown."
+            "Only {treatment_samples} frame-rate readings (about one a second) were captured — below \
+             the {MIN_TREATMENT_SAMPLES} (about 10 minutes of play) Compy needs for a fair \
+             before/after. That is not enough comparable evidence to judge this change, so it was \
+             restored and the result is left as unknown."
         );
     }
     match verdict {
@@ -731,17 +776,20 @@ fn verdict_note(verdict: &str, treatment_samples: u32, crashed: bool, game: Game
             .into(),
         _ => {
             // Only claim the games matched when the backend actually VERIFIED it — never a silent
-            // "same game" assumption (decision doc 2026-07-18-experiment-comparability §4). When the
-            // treatment game wasn't supplied we drop the claim rather than assert something unproven;
+            // "same game" assumption (decision doc 2026-07-18-experiment-comparability §4). When
+            // either game name is blank we drop the claim rather than assert something unproven;
             // a genuine Mismatch never reaches here (it returns "not-comparable" upstream).
             let same_rig_and_game = match game {
                 GameMatch::Match => "on the same rig and game",
                 _ => "on the same rig",
             };
+            // No "back-to-back" claim: the baseline can be any earlier session, not the one before.
+            // "No other change" is only what the ledger watermark proves: Compy's own changes during
+            // the test. It never claims the baseline was taken just before the change.
             format!(
-                "Baseline and treatment were captured back-to-back {same_rig_and_game}, changing only \
-                 this one setting — a clean single-variable comparison. Only the 1% low frame rate \
-                 was judged, against the same noise floor the rest of Compy uses."
+                "Baseline and treatment were captured {same_rig_and_game}, and Compy made no other \
+                 change during the test. Only the 1% low frame rate was judged, against the same \
+                 noise floor the rest of Compy uses."
             )
         }
     }
@@ -801,7 +849,7 @@ pub(crate) fn conclude_outcome(
         };
     }
 
-    // Too few frames ⇒ no honest verdict; restore rather than keep on thin evidence
+    // Too few readings ⇒ no honest verdict; restore rather than keep on thin evidence
     // (§1 "missing evidence renders as unknown, not zero"; §4F "stop on insufficient samples").
     if treatment_samples < MIN_TREATMENT_SAMPLES {
         return ConcludeOutcome {
@@ -824,6 +872,243 @@ pub(crate) fn conclude_outcome(
     let confidence = verdict_confidence(&verdict, treatment_samples, false);
     let note = verdict_note(&verdict, treatment_samples, false, game);
     ConcludeOutcome { verdict, keep, delta_low1_pct: delta, stop_reason: None, confidence, note }
+}
+
+// ─── Backend-owned evidence (#583 lane 2b: sessions looked up by id, never numbers from the UI) ──
+
+/// What looking a session up by id found.
+enum SessionLookup<'a> {
+    Found(&'a SessionSummary),
+    Missing,
+    /// Two sessions share the id. Refused rather than guessing which one was meant.
+    Ambiguous,
+}
+
+/// The session whose id (its `started_at`) is `id`.
+fn session_by_id<'a>(sessions: &'a [SessionSummary], id: &str) -> SessionLookup<'a> {
+    let mut hits = sessions.iter().filter(|s| s.started_at == id);
+    match (hits.next(), hits.next()) {
+        (None, _) => SessionLookup::Missing,
+        (Some(s), None) => SessionLookup::Found(s),
+        (Some(_), Some(_)) => SessionLookup::Ambiguous,
+    }
+}
+
+/// A session carries a real frame-rate reading: both the average and the 1% low were measured.
+/// Without a 1% low there is nothing to judge a Trial on.
+fn has_frame_reading(s: &SessionSummary) -> bool {
+    s.avg_fps.is_finite() && s.avg_fps > 0.0 && s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0
+}
+
+/// §4.2 — the baseline session a start is judged against, looked up in Compy's own session store.
+/// Refuses one it can't find, one without a frame-rate reading (an unmeasured 1% low would make every
+/// later delta meaningless), and one that didn't record which game was running.
+pub(crate) fn resolve_baseline<'a>(
+    sessions: &'a [SessionSummary],
+    id: &str,
+) -> Result<&'a SessionSummary, String> {
+    let session = match session_by_id(sessions, id) {
+        SessionLookup::Missing => {
+            return Err("the baseline session isn't in your session history any more — play a \
+                        monitored session, then try again"
+                .into())
+        }
+        SessionLookup::Ambiguous => {
+            return Err("two sessions in your history share that baseline's start time, so Compy \
+                        can't tell which one to use"
+                .into())
+        }
+        SessionLookup::Found(s) => s,
+    };
+    if !has_frame_reading(session) {
+        return Err("the baseline session has no frame-rate reading, so there's nothing to compare \
+                    the change against"
+            .into());
+    }
+    if session.process_name.trim().is_empty() {
+        return Err("the baseline session didn't record which game was running, so there's no game \
+                    to measure the change in"
+            .into());
+    }
+    Ok(session)
+}
+
+/// §4.6 — the treatment session a conclude is judged on, and how comparable it is to the baseline.
+/// Both are looked up in Compy's own session store; nothing here trusts a number from the webview.
+/// Refuses (the Trial stays Running, nothing is changed) when either session is missing, when the
+/// treatment isn't a real reading played after the change was applied, or when the two sessions
+/// aren't comparable or share too little recorded context to tell. Those are a wrong pick the user can
+/// fix by playing the right session. A recorded condition that CHANGED (a driver or Windows update, a
+/// new resolution) is not refused here: a driver or Windows update can't be undone by any later session,
+/// so [`with_comparability`] aborts the Trial instead (§7 "another change invalidates attribution").
+pub(crate) fn resolve_treatment<'a>(
+    rec: &ExperimentRecord,
+    sessions: &'a [SessionSummary],
+    treatment_id: &str,
+) -> Result<(&'a SessionSummary, SessionComparability), String> {
+    let game = crate::intelligence::pretty_game_name(&rec.game);
+    let Some(baseline_id) = rec.baseline_session_id.as_deref() else {
+        return Err("this experiment was started before Compy kept a reference to its baseline \
+                    session, so the before/after can't be checked — restore it and start a new one"
+            .into());
+    };
+    if treatment_id == baseline_id {
+        return Err("the session picked as the after-reading is the baseline itself".into());
+    }
+    let baseline = match session_by_id(sessions, baseline_id) {
+        SessionLookup::Found(s) => s,
+        _ => {
+            return Err("the baseline session is no longer in your session history, so the \
+                        before/after can't be checked — restore the experiment and start a new one"
+                .into())
+        }
+    };
+    let treatment = match session_by_id(sessions, treatment_id) {
+        SessionLookup::Missing => {
+            return Err(format!(
+                "that session isn't in your session history — play a monitored {game} session, \
+                 then conclude"
+            ))
+        }
+        SessionLookup::Ambiguous => {
+            return Err("two sessions in your history share that start time, so Compy can't tell \
+                        which one to judge"
+                .into())
+        }
+        SessionLookup::Found(s) => s,
+    };
+    if !has_frame_reading(treatment) {
+        return Err("that session has no frame-rate reading to judge".into());
+    }
+    if treatment.process_name.trim().is_empty() {
+        return Err(format!(
+            "that session didn't record which game was running, so Compy can't confirm it measured \
+             {game}"
+        ));
+    }
+    let played_after = match (
+        DateTime::parse_from_rfc3339(&treatment.started_at),
+        DateTime::parse_from_rfc3339(&rec.created_at),
+    ) {
+        (Ok(t), Ok(c)) => t > c,
+        _ => {
+            return Err("Compy can't tell whether that session was played after the change was \
+                        applied, so it can't be the after-reading"
+                .into())
+        }
+    };
+    if !played_after {
+        return Err(format!(
+            "that session was played before the change was applied, so it can't measure it — play \
+             a new {game} session, then conclude"
+        ));
+    }
+
+    let pairing = crate::comparability::derive(baseline, treatment);
+    match pairing.verdict {
+        Comparability::NotComparable => {
+            return Err(format!(
+                "the two sessions aren't comparable — {} Play a {game} session under the same \
+                 conditions as the baseline, or restore the experiment.",
+                pairing.reasons.join(" ")
+            ))
+        }
+        Comparability::Unknown => {
+            return Err("the two sessions don't share any recorded rig or conditions, so Compy can't \
+                        check they're comparable — restore the experiment and start a new one"
+                .into())
+        }
+        Comparability::Comparable | Comparability::Partial => {}
+    }
+    Ok((treatment, pairing))
+}
+
+/// §4F "stop on crash" beats every session refusal: a game that crashed on launch is the session least
+/// likely to have left a usable reading, so a reported crash restores even when the named session
+/// can't be judged (`Ok(None)`). Every other refusal stands.
+pub(crate) fn crash_overrides_refusal<T>(
+    resolved: Result<T, String>,
+    crashed: bool,
+) -> Result<Option<T>, String> {
+    match resolved {
+        Ok(found) => Ok(Some(found)),
+        Err(_) if crashed => Ok(None),
+        Err(why) => Err(why),
+    }
+}
+
+/// The outcome of a reported crash whose session couldn't be used: the crash alone decides, so the
+/// change is restored and no frame-rate reading is claimed.
+fn crash_without_reading() -> ConcludeOutcome {
+    ConcludeOutcome {
+        verdict: "regressed".into(),
+        keep: false,
+        // Never persisted: without a usable session there is no treatment record to carry a delta.
+        delta_low1_pct: 0.0,
+        stop_reason: Some("crash-during-treatment".into()),
+        confidence: Confidence::High,
+        note: verdict_note("regressed", 0, true, GameMatch::Unverified),
+    }
+}
+
+/// The outcomes whose verdict was actually judged against the noise band: a measured
+/// improved / no-change / regressed with nothing stopping it first (a crash is "regressed" too, but
+/// it carries a stop reason and never looked at the band).
+fn judged_against_noise(outcome: &ConcludeOutcome) -> bool {
+    outcome.stop_reason.is_none()
+        && matches!(outcome.verdict.as_str(), "improved" | "no-change" | "regressed")
+}
+
+/// Fold the sessions' comparability into the outcome:
+/// - a recorded condition that changed between the two sessions (driver, Windows, resolution) aborts
+///   the Trial as `confounded`, which restores (§7 "another change invalidates attribution"). This
+///   comes first, ahead of even a crash: under a changed driver the crash can't be pinned on the
+///   setting either. The measured delta stays as evidence;
+/// - confidence never exceeds what the pairing supports (`confidence_limit`);
+/// - a `Partial` pairing (a condition went unrecorded) never claims the like-for-like match it
+///   couldn't check.
+pub(crate) fn with_comparability(outcome: ConcludeOutcome, pairing: &SessionComparability) -> ConcludeOutcome {
+    if !pairing.changed_context.is_empty() {
+        return ConcludeOutcome {
+            verdict: "confounded".into(),
+            keep: false,
+            stop_reason: Some("conditions-changed-between-sessions".into()),
+            confidence: Confidence::Low.min(pairing.confidence_limit),
+            note: format!(
+                "Something besides this setting changed between the before and after readings ({}), \
+                 so the result can't be pinned on this setting. Compy restored it; start a new test \
+                 to measure it under the new conditions.",
+                pairing.changed_context.join("; ")
+            ),
+            ..outcome
+        };
+    }
+    let confidence = outcome.confidence.min(pairing.confidence_limit);
+    if pairing.verdict != Comparability::Partial {
+        return ConcludeOutcome { confidence, ..outcome };
+    }
+    let unchecked = match (pairing.missing_context.is_empty(), pairing.reasons.is_empty()) {
+        (false, _) => pairing.missing_context.join(" "),
+        (true, false) => pairing.reasons.join(" "),
+        (true, true) => "Some conditions couldn't be confirmed.".to_string(),
+    };
+    let note = if judged_against_noise(&outcome) {
+        format!(
+            "Compy made no other change during the test, but not every condition could be checked: \
+             {unchecked} So this comparison is limited to what both sessions recorded. Only the 1% \
+             low frame rate was judged, against the same noise floor the rest of Compy uses."
+        )
+    } else {
+        format!("{} Not every condition could be checked either: {unchecked}", outcome.note)
+    };
+    ConcludeOutcome { confidence, note, ..outcome }
+}
+
+/// §11 — the noise evidence for a concluded Trial: the band the verdict was judged against, and only
+/// when it was (see [`judged_against_noise`]). This game's own run-to-run noise has never been
+/// measured, so `measured_noise_pct` stays `None` rather than a guess.
+pub(crate) fn noise_evidence_for(outcome: &ConcludeOutcome, band_pct: f64) -> Option<NoiseEvidence> {
+    judged_against_noise(outcome).then_some(NoiseEvidence { band_pct, measured_noise_pct: None })
 }
 
 // ─── §4G Optimization simulator (pure, read-only advisory — never a promise) ──
@@ -1016,13 +1301,13 @@ pub(crate) fn simulate_optimization(rec_id: String) -> Result<SimulatorReport, S
 /// failed apply drops that record and changes nothing. After a successful apply, a start that can't
 /// finish (the target didn't take, or the evidence watermark is unreadable) restores the change
 /// through the audited boundary before returning the error, never leaves it applied unrecorded.
+/// The baseline is named by its session id and read from Compy's own session store (#583 lane 2b):
+/// the game and the frame rates come from there, never from the webview.
 #[tauri::command]
 pub(crate) fn start_experiment(
     rec_id: String,
     rec_title: String,
-    game: String,
-    baseline_avg_fps: f64,
-    baseline_low1_fps: f64,
+    baseline_session_id: String,
     hypothesis: String,
 ) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
@@ -1032,7 +1317,6 @@ pub(crate) fn start_experiment(
 
     // Cap the persisted free-text at the trust boundary (see MAX_TEXT_LEN). Truncate, don't reject.
     let rec_title: String = rec_title.chars().take(MAX_TEXT_LEN).collect();
-    let game: String = game.chars().take(MAX_TEXT_LEN).collect();
     let hypothesis: String = hypothesis.chars().take(MAX_TEXT_LEN).collect();
 
     // One store read serves the single-active check, the id counter and the read-modify-write, all
@@ -1058,6 +1342,12 @@ pub(crate) fn start_experiment(
         });
     }
 
+    // Step 2 (§4.2): the baseline, from Compy's own session store. Refused before anything is
+    // recorded or changed, so a missing or unmeasured baseline costs the user nothing.
+    let sessions = crate::sessions::get_session_summaries();
+    let baseline = resolve_baseline(&sessions, &baseline_session_id)
+        .map_err(|why| format!("experiment not started — {why}"))?;
+
     // Step 1 (§4.1): read the setting before anything is recorded or changed. Only a setting that
     // reads as not yet changed can start, so the restore has a verified state to return to.
     if let Some(why) = pre_apply_refusal(crate::history::probe_rec_target(&rec_id)) {
@@ -1075,12 +1365,15 @@ pub(crate) fn start_experiment(
         id: format!("exp:{}-{}", store.experiments.len() + 1, now.timestamp_millis()),
         rec_id: rec_id.clone(),
         rec_title: rec_title.clone(),
-        game,
+        game: baseline.process_name.clone(),
         hypothesis,
         created_at: now.to_rfc3339(),
         status: ExperimentStatus::Pending,
-        baseline_avg_fps,
-        baseline_low1_fps,
+        baseline_avg_fps: baseline.avg_fps,
+        baseline_low1_fps: baseline.low1_fps_est,
+        baseline_session_id: Some(baseline.started_at.clone()),
+        session_pairing: None,
+        noise_evidence: None,
         ledger_watermark: 0,
         applied_change_id: String::new(),
         active_changes_at_start: active,
@@ -1271,18 +1564,15 @@ fn restore_already_reverted(err: &str) -> bool {
 /// §4F step 5–8 — record the treatment session, judge it against the noise floor, and KEEP or
 /// auto-RESTORE. Refuses while dark. On restore, the change is rolled back through the audited
 /// `rollback_change` boundary; a failed restore is surfaced loudly (status Aborted), never hidden.
+/// The treatment is named by its session id and read from Compy's own session store, like the
+/// baseline (#583 lane 2b). A session that can't be the after-reading is refused before anything is
+/// judged or changed, and the Trial stays Running, except after a reported crash, which always
+/// restores. A pair whose recorded conditions changed aborts and restores (see `with_comparability`).
 #[tauri::command]
 pub(crate) fn conclude_experiment(
     experiment_id: String,
-    treatment_avg_fps: f64,
-    treatment_low1_fps: f64,
-    treatment_samples: u32,
+    treatment_session_id: String,
     crashed: bool,
-    // The game the treatment session actually measured, for the backend's defense-in-depth
-    // same-game check (the FE offers only a same-game session, but we re-verify — decision doc
-    // 2026-07-18-experiment-comparability §3/§4). `Option` ⇒ IPC-backward-compatible: an older FE
-    // that omits it reads as `Unverified` and the verdict proceeds exactly as before.
-    treatment_game: Option<String>,
 ) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
@@ -1298,10 +1588,15 @@ pub(crate) fn conclude_experiment(
         return Err("experiment is not running — nothing to conclude".into());
     }
 
-    // Cap the treatment game at the trust boundary like the other free-text fields (MAX_TEXT_LEN) —
-    // a compromised UI must not be able to smuggle an unbounded string through this command.
-    let treatment_game: Option<String> =
-        treatment_game.map(|g| g.chars().take(MAX_TEXT_LEN).collect());
+    // §4.6: the treatment session and its comparability to the baseline, before anything is judged,
+    // recorded or restored. A refusal leaves the Trial Running with the change applied; a reported
+    // crash is never refused (`crash_overrides_refusal`).
+    let sessions = crate::sessions::get_session_summaries();
+    let resolved = crash_overrides_refusal(
+        resolve_treatment(&store.experiments[idx], &sessions, &treatment_session_id),
+        crashed,
+    )
+    .map_err(|why| format!("experiment not concluded — {why}"))?;
 
     let now = Utc::now();
     // `.ok()` is the honest direction here, not a collapse: an unreadable ledger becomes `None`,
@@ -1310,27 +1605,39 @@ pub(crate) fn conclude_experiment(
     // §7: the change must still read as applied for the treatment session to be evidence about it.
     // Read before the keep/restore decision so a reverted or unreadable setting can overrule a keep.
     let target_now = crate::history::probe_rec_target(&store.experiments[idx].rec_id);
-    let outcome = guard_target_at_conclude(
-        conclude_outcome(
-            &store.experiments[idx],
-            treatment_low1_fps,
-            treatment_samples,
-            crashed,
-            treatment_game.as_deref(),
-            ledger_now,
-            now,
+    let judged = match &resolved {
+        Some((treatment, pairing)) => with_comparability(
+            conclude_outcome(
+                &store.experiments[idx],
+                treatment.low1_fps_est,
+                treatment.samples,
+                crashed,
+                Some(&treatment.process_name),
+                ledger_now,
+                now,
+            ),
+            pairing,
         ),
-        target_verification(Some(target_now)),
-    );
+        None => crash_without_reading(),
+    };
+    let outcome = guard_target_at_conclude(judged, target_verification(Some(target_now)));
 
-    store.experiments[idx].treatment = Some(TreatmentRecord {
-        avg_fps: treatment_avg_fps,
-        low1_fps: treatment_low1_fps,
-        samples: treatment_samples,
+    store.experiments[idx].treatment = resolved.as_ref().map(|(treatment, _)| TreatmentRecord {
+        avg_fps: treatment.avg_fps,
+        low1_fps: treatment.low1_fps_est,
+        samples: treatment.samples,
         crashed,
         delta_low1_pct: outcome.delta_low1_pct,
         recorded_at: now.to_rfc3339(),
+        session_id: Some(treatment.started_at.clone()),
     });
+    store.experiments[idx].session_pairing = resolved.as_ref().map(|(_, pairing)| SessionPairing {
+        verdict: pairing.verdict,
+        missing_context: pairing.missing_context.clone(),
+    });
+    // §11: the band this verdict was judged against, when it was.
+    let band_pct = store.experiments[idx].noise_floor_pct;
+    store.experiments[idx].noise_evidence = noise_evidence_for(&outcome, band_pct);
     store.experiments[idx].verdict = Some(outcome.verdict.clone());
     store.experiments[idx].trial_result = Some(trial_result_for(&outcome.verdict));
     store.experiments[idx].verdict_confidence = Some(outcome.confidence);
@@ -1563,6 +1870,9 @@ mod experiment_tests {
             status: ExperimentStatus::Running,
             baseline_avg_fps: 120.0,
             baseline_low1_fps: baseline_low1,
+            baseline_session_id: None,
+            session_pairing: None,
+            noise_evidence: None,
             ledger_watermark: watermark,
             applied_change_id: "change-1".into(),
             active_changes_at_start: 0,
@@ -1599,7 +1909,8 @@ mod experiment_tests {
         // no-op lookup commands here (bogus id ⇒ nothing matches ⇒ no mutation). `start_experiment` is
         // deliberately NOT called — it applies a real reversible change through the ledger; that
         // round-trip is proven live on the rig by the ship QA (RELEASE_STATE), never in a unit run.
-        let concluded = conclude_experiment("nonexistent".into(), 120.0, 90.0, 1000, false, None).unwrap_err();
+        let concluded =
+            conclude_experiment("nonexistent".into(), "2026-01-01T00:00:00Z".into(), false).unwrap_err();
         assert!(!concluded.contains("isn't part of this build"), "gate no longer short-circuits: {concluded}");
         assert!(concluded.contains("not found"));
         let restored = restore_experiment("nonexistent".into()).unwrap_err();
@@ -1798,7 +2109,7 @@ mod experiment_tests {
         let o = conclude_outcome(&r, 100.0, MIN_TREATMENT_SAMPLES, false, None, Some(5), Utc::now());
         assert_eq!(o.verdict, "improved");
         assert_eq!(o.confidence, Confidence::Medium);
-        assert!(o.note.contains("single-variable comparison"));
+        assert!(o.note.contains("Compy made no other change during the test"), "{}", o.note);
     }
 
     /// …and rises to High once the treatment session is comfortably long (≥ 2× the minimum frames).
@@ -2381,5 +2692,349 @@ mod experiment_tests {
         let body = &src[src.find("pub(crate) fn get_experiments()").unwrap()..];
         let body = &body[..body.find("\n}\n").unwrap()];
         assert!(body.contains("ExperimentStatus::Pending"), "get_experiments must drop Pending records");
+    }
+
+    // ─── #583 lane 2b: sessions looked up by id, and the §11 noise evidence ───
+
+    const BASE_ID: &str = "2026-09-01T10:00:00.123456789+00:00";
+    const TREAT_ID: &str = "2026-09-01T12:00:00.987654321+00:00";
+    const STARTED: &str = "2026-09-01T11:00:00+00:00";
+
+    /// A fully recorded cs2 session on the owner-class rig; mutate the clone per test.
+    fn session(started_at: &str, low1: f64) -> SessionSummary {
+        SessionSummary {
+            started_at: started_at.into(),
+            duration_secs: 900,
+            process_name: "cs2.exe".into(),
+            samples: 900,
+            avg_fps: 200.0,
+            avg_frametime_ms: 5.0,
+            low1_fps_est: low1,
+            peak_gpu_temp_c: None,
+            peak_gpu_usage_pct: None,
+            peak_ram_used_bytes: None,
+            ram_total_bytes: None,
+            compy_changes_active: 0,
+            hw_fingerprint: Some(crate::hardware::HwFingerprint {
+                hash: "deadbeef".into(),
+                gpu: "Radeon RX 9070 XT".into(),
+                gpu_driver: "25.7.1".into(),
+                ram_gb: 32,
+                display: "2560x1440@165".into(),
+            }),
+            gaming_mode_active: Some(false),
+            stutter_insight: None,
+            stutter_timeline: Vec::new(),
+            stutter_events: Vec::new(),
+            fps_series: Vec::new(),
+            capture_capabilities: Some(crate::capture::CaptureCapabilities::etw_dxgi(None)),
+            game_state: Some(crate::game_state::GameStateFingerprint {
+                resolution_width: Some(2560),
+                resolution_height: Some(1440),
+                display_refresh_hz: Some(165),
+                graphics_api: Some("DirectX 12".into()),
+                windows_build: Some("26200.1".into()),
+                ..Default::default()
+            }),
+            peak_cpu_temp_c: None,
+            peak_gpu_hotspot_temp_c: None,
+        }
+    }
+
+    /// A Running cs2 experiment started at `STARTED` against the `BASE_ID` session.
+    fn running() -> ExperimentRecord {
+        ExperimentRecord {
+            game: "cs2.exe".into(),
+            created_at: STARTED.into(),
+            baseline_session_id: Some(BASE_ID.into()),
+            ..rec(150.0, 5)
+        }
+    }
+
+    fn treatment_err(rec: &ExperimentRecord, sessions: &[SessionSummary], id: &str) -> String {
+        resolve_treatment(rec, sessions, id).map(|_| ()).unwrap_err()
+    }
+
+    #[test]
+    fn the_baseline_is_read_from_the_session_store_by_id() {
+        let sessions = [session("2026-08-31T09:00:00+00:00", 90.0), session(BASE_ID, 150.0)];
+        let b = resolve_baseline(&sessions, BASE_ID).unwrap();
+        assert_eq!((b.started_at.as_str(), b.low1_fps_est, b.avg_fps), (BASE_ID, 150.0, 200.0));
+        assert_eq!(b.process_name, "cs2.exe");
+    }
+
+    #[test]
+    fn a_baseline_that_is_missing_unmeasured_gameless_or_ambiguous_is_refused() {
+        let why = resolve_baseline(&[], BASE_ID).unwrap_err();
+        assert!(why.contains("isn't in your session history"), "{why}");
+
+        for (avg, low1) in [(0.0, 150.0), (200.0, 0.0), (200.0, f64::NAN), (f64::INFINITY, 150.0)] {
+            let mut s = session(BASE_ID, low1);
+            s.avg_fps = avg;
+            let why = resolve_baseline(&[s], BASE_ID).unwrap_err();
+            assert!(why.contains("no frame-rate reading"), "avg {avg} low1 {low1}: {why}");
+        }
+
+        let mut s = session(BASE_ID, 150.0);
+        s.process_name = "   ".into();
+        let why = resolve_baseline(&[s], BASE_ID).unwrap_err();
+        assert!(why.contains("didn't record which game"), "{why}");
+
+        let why = resolve_baseline(&[session(BASE_ID, 150.0), session(BASE_ID, 140.0)], BASE_ID).unwrap_err();
+        assert!(why.contains("share"), "two sessions with one id are refused, never guessed: {why}");
+    }
+
+    #[test]
+    fn a_comparable_later_session_is_accepted_as_the_treatment() {
+        let sessions = [session(BASE_ID, 150.0), session(TREAT_ID, 180.0)];
+        let (t, pairing) = resolve_treatment(&running(), &sessions, TREAT_ID).unwrap();
+        assert_eq!((t.started_at.as_str(), t.low1_fps_est, t.samples), (TREAT_ID, 180.0, 900));
+        assert_eq!(pairing.verdict, Comparability::Comparable);
+        assert!(pairing.changed_context.is_empty() && pairing.missing_context.is_empty());
+    }
+
+    #[test]
+    fn a_session_that_did_not_record_its_conditions_concludes_as_partial() {
+        let mut t = session(TREAT_ID, 180.0);
+        t.game_state = None;
+        let sessions = [session(BASE_ID, 150.0), t];
+        let (_, pairing) = resolve_treatment(&running(), &sessions, TREAT_ID).unwrap();
+        assert_eq!(pairing.verdict, Comparability::Partial);
+        assert_eq!(pairing.confidence_limit, Confidence::Medium);
+        assert!(!pairing.missing_context.is_empty());
+    }
+
+    #[test]
+    fn broken_session_refs_are_refused_before_anything_is_judged() {
+        let sessions = [session(BASE_ID, 150.0), session(TREAT_ID, 180.0)];
+
+        let legacy = ExperimentRecord { baseline_session_id: None, ..running() };
+        let why = treatment_err(&legacy, &sessions, TREAT_ID);
+        assert!(why.contains("restore it and start a new one"), "a pre-lane-2b trial: {why}");
+
+        let why = treatment_err(&running(), &sessions, BASE_ID);
+        assert!(why.contains("the baseline itself"), "{why}");
+
+        let why = treatment_err(&running(), &[session(TREAT_ID, 180.0)], TREAT_ID);
+        assert!(why.contains("baseline session is no longer"), "a pruned baseline: {why}");
+
+        let why = treatment_err(&running(), &[session(BASE_ID, 150.0)], TREAT_ID);
+        assert!(why.contains("isn't in your session history"), "{why}");
+
+        let dup = [session(BASE_ID, 150.0), session(TREAT_ID, 180.0), session(TREAT_ID, 170.0)];
+        let why = treatment_err(&running(), &dup, TREAT_ID);
+        assert!(why.contains("share"), "{why}");
+
+        let mut unmeasured = session(TREAT_ID, 0.0);
+        unmeasured.avg_fps = 0.0;
+        let why = treatment_err(&running(), &[session(BASE_ID, 150.0), unmeasured], TREAT_ID);
+        assert!(why.contains("no frame-rate reading"), "{why}");
+
+        let mut gameless = session(TREAT_ID, 180.0);
+        gameless.process_name = String::new();
+        let why = treatment_err(&running(), &[session(BASE_ID, 150.0), gameless], TREAT_ID);
+        assert!(why.contains("didn't record which game"), "{why}");
+    }
+
+    #[test]
+    fn a_session_played_before_the_change_is_never_the_after_reading() {
+        let before = "2026-09-01T10:30:00+00:00"; // after the baseline, before the change
+        let sessions = [session(BASE_ID, 150.0), session(before, 180.0)];
+        let why = treatment_err(&running(), &sessions, before);
+        assert!(why.contains("played before the change was applied"), "{why}");
+
+        // A start time Compy can't read is refused, never assumed to be later.
+        let sessions = [session(BASE_ID, 150.0), session(TREAT_ID, 180.0)];
+        let garbled = ExperimentRecord { created_at: "not a time".into(), ..running() };
+        let why = treatment_err(&garbled, &sessions, TREAT_ID);
+        assert!(why.contains("can't tell whether"), "{why}");
+    }
+
+    #[test]
+    fn a_pair_that_is_not_comparable_is_refused() {
+        let base = session(BASE_ID, 150.0);
+
+        let mut other_game = session(TREAT_ID, 180.0);
+        other_game.process_name = "valorant.exe".into();
+        let why = treatment_err(&running(), &[base.clone(), other_game], TREAT_ID);
+        assert!(why.contains("aren't comparable") && why.contains("different games"), "{why}");
+
+        let mut other_gpu = session(TREAT_ID, 180.0);
+        other_gpu.hw_fingerprint.as_mut().unwrap().gpu = "GeForce RTX 5080".into();
+        let why = treatment_err(&running(), &[base.clone(), other_gpu], TREAT_ID);
+        assert!(why.contains("aren't comparable"), "{why}");
+
+        // Nothing recorded on either side: comparability is Unknown, never assumed equal.
+        let bare = |id: &str, low1: f64| SessionSummary {
+            hw_fingerprint: None,
+            game_state: None,
+            capture_capabilities: None,
+            ..session(id, low1)
+        };
+        let why = treatment_err(&running(), &[bare(BASE_ID, 150.0), bare(TREAT_ID, 180.0)], TREAT_ID);
+        assert!(why.contains("don't share any recorded rig or conditions"), "{why}");
+    }
+
+    #[test]
+    fn a_changed_condition_aborts_and_restores_instead_of_leaving_the_trial_stuck() {
+        // `derive` lists each change (driver and Windows stay Comparable, resolution goes Partial).
+        let mut new_driver = session(TREAT_ID, 180.0);
+        new_driver.hw_fingerprint.as_mut().unwrap().gpu_driver = "25.8.1".into();
+        let mut new_windows = session(TREAT_ID, 180.0);
+        new_windows.game_state.as_mut().unwrap().windows_build = Some("26200.2".into());
+        let mut new_res = session(TREAT_ID, 180.0);
+        new_res.game_state.as_mut().unwrap().resolution_width = Some(1920);
+        new_res.game_state.as_mut().unwrap().resolution_height = Some(1080);
+
+        for (what, treatment) in [("GPU driver", new_driver), ("Windows build", new_windows), ("Resolution", new_res)] {
+            // Accepted as the after-reading, so the Trial can end (§7 abort) rather than be refused
+            // forever.
+            let sessions = [session(BASE_ID, 150.0), treatment];
+            let (_, pairing) = resolve_treatment(&running(), &sessions, TREAT_ID).unwrap();
+            assert!(!pairing.changed_context.is_empty(), "{what}");
+
+            // Even a clear improvement, and even a crash, is confounded and restored — never kept.
+            let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
+            for judged in [measured(180.0), crash] {
+                let o = with_comparability(judged.clone(), &pairing);
+                assert_eq!(o.verdict, "confounded", "{what}");
+                assert!(!o.keep, "{what}: a confounded Trial restores");
+                assert_eq!(o.stop_reason.as_deref(), Some("conditions-changed-between-sessions"));
+                assert!(o.confidence <= Confidence::Low, "{what}: {:?}", o.confidence);
+                assert!(o.note.contains(what), "{what}: the note names the changed condition: {}", o.note);
+                assert_eq!(o.delta_low1_pct, judged.delta_low1_pct, "the measured delta stays as evidence");
+                assert_eq!(trial_result_for(&o.verdict), TrialResult::Inconclusive);
+                assert_eq!(noise_evidence_for(&o, DEFAULT_NOISE_FLOOR_PCT), None, "{what}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_reported_crash_restores_even_when_its_session_cannot_be_used() {
+        // A crash beats every session refusal; without a crash the refusal stands.
+        assert_eq!(crash_overrides_refusal::<u8>(Err("no session".into()), true), Ok(None));
+        assert_eq!(crash_overrides_refusal::<u8>(Err("no session".into()), false), Err("no session".into()));
+        assert_eq!(crash_overrides_refusal(Ok(7u8), true), Ok(Some(7)));
+        assert_eq!(crash_overrides_refusal(Ok(7u8), false), Ok(Some(7)));
+
+        // The crash outcome restores and claims no reading or noise band.
+        let o = crash_without_reading();
+        assert!(!o.keep);
+        assert_eq!(o.stop_reason.as_deref(), Some("crash-during-treatment"));
+        assert_eq!(noise_evidence_for(&o, DEFAULT_NOISE_FLOOR_PCT), None);
+        assert!(o.note.contains("does not rely on the frame-rate reading"), "{}", o.note);
+        // Same verdict, confidence and note as a crash judged on a real session.
+        let with_session = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, None, Some(5), Utc::now());
+        assert_eq!(
+            (&o.verdict, o.confidence, &o.note, &o.stop_reason),
+            (&with_session.verdict, with_session.confidence, &with_session.note, &with_session.stop_reason)
+        );
+    }
+
+    fn pairing_for(treatment: SessionSummary) -> crate::comparability::SessionComparability {
+        crate::comparability::derive(&session(BASE_ID, 150.0), &treatment)
+    }
+
+    fn partial_pairing() -> crate::comparability::SessionComparability {
+        let mut t = session(TREAT_ID, 180.0);
+        t.game_state = None;
+        let p = pairing_for(t);
+        assert_eq!(p.verdict, Comparability::Partial);
+        p
+    }
+
+    /// A clean, attributable outcome on `rec(150.0, 5)`: the 1% low moved to `treatment_low1`.
+    fn measured(treatment_low1: f64) -> ConcludeOutcome {
+        conclude_outcome(&rec(150.0, 5), treatment_low1, 5000, false, Some("Test"), Some(5), Utc::now())
+    }
+
+    #[test]
+    fn a_comparable_pairing_leaves_the_outcome_alone() {
+        let o = measured(180.0);
+        assert_eq!(o.verdict, "improved");
+        assert_eq!(with_comparability(o.clone(), &pairing_for(session(TREAT_ID, 180.0))), o);
+    }
+
+    #[test]
+    fn a_partial_pairing_caps_confidence_and_names_what_went_unchecked() {
+        let pairing = partial_pairing();
+        let o = with_comparability(measured(180.0), &pairing);
+        assert_eq!(o.verdict, "improved", "comparability limits trust, never flips the verdict");
+        assert!(o.confidence <= Confidence::Medium, "{:?}", o.confidence);
+        assert!(o.note.contains("not every condition could be checked"), "{}", o.note);
+        assert!(o.note.contains(&pairing.missing_context[0]), "{}", o.note);
+        assert!(!o.note.contains("same rig and game"), "no like-for-like claim it couldn't check: {}", o.note);
+
+        // A note that isn't the measured one keeps its own words and adds the caveat.
+        let thin = conclude_outcome(&rec(150.0, 5), 180.0, 10, false, Some("Test"), Some(5), Utc::now());
+        let o = with_comparability(thin.clone(), &pairing);
+        assert!(o.note.starts_with(&thin.note), "{}", o.note);
+        assert!(o.note.contains("Not every condition could be checked either"), "{}", o.note);
+    }
+
+    #[test]
+    fn the_noise_band_is_recorded_only_when_the_verdict_was_judged_against_it() {
+        let band = DEFAULT_NOISE_FLOOR_PCT;
+        for (low1, verdict) in [(180.0, "improved"), (150.5, "no-change"), (100.0, "regressed")] {
+            let o = measured(low1);
+            assert_eq!(o.verdict, verdict);
+            assert_eq!(
+                noise_evidence_for(&o, band),
+                Some(NoiseEvidence { band_pct: band, measured_noise_pct: None }),
+                "{verdict} was judged against the band"
+            );
+        }
+
+        let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
+        let thin = conclude_outcome(&rec(150.0, 5), 180.0, 10, false, Some("Test"), Some(5), Utc::now());
+        let confounded = conclude_outcome(&rec(150.0, 5), 180.0, 5000, false, Some("Test"), Some(6), Utc::now());
+        let wrong_game = conclude_outcome(&rec(150.0, 5), 180.0, 5000, false, Some("Other"), Some(5), Utc::now());
+        let reverted = guard_target_at_conclude(measured(180.0), Some(false));
+        let unread = guard_target_at_conclude(measured(180.0), None);
+        for o in [crash, thin, confounded, wrong_game, reverted, unread] {
+            assert_eq!(noise_evidence_for(&o, band), None, "{} never looked at the band", o.verdict);
+        }
+    }
+
+    #[test]
+    fn an_unmeasured_game_noise_is_written_as_unknown_not_guessed() {
+        let v = serde_json::to_value(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None }).unwrap();
+        assert!(v["measured_noise_pct"].is_null(), "{v}");
+        assert_eq!(v["band_pct"], 3.0);
+    }
+
+    #[test]
+    fn records_written_before_lane_2b_still_load() {
+        let mut v = serde_json::to_value(ExperimentRecord {
+            treatment: Some(TreatmentRecord {
+                avg_fps: 200.0,
+                low1_fps: 180.0,
+                samples: 900,
+                crashed: false,
+                delta_low1_pct: 20.0,
+                recorded_at: TREAT_ID.into(),
+                session_id: Some(TREAT_ID.into()),
+            }),
+            ..running()
+        })
+        .unwrap();
+        let obj = v.as_object_mut().unwrap();
+        for key in ["baseline_session_id", "session_pairing", "noise_evidence"] {
+            assert!(obj.remove(key).is_some(), "{key} is written");
+        }
+        obj.get_mut("treatment").unwrap().as_object_mut().unwrap().remove("session_id");
+        let old: ExperimentRecord = serde_json::from_value(v).unwrap();
+        assert_eq!(old.baseline_session_id, None);
+        assert_eq!(old.session_pairing, None);
+        assert_eq!(old.noise_evidence, None);
+        assert_eq!(old.treatment.unwrap().session_id, None);
+    }
+
+    #[test]
+    fn verdict_notes_say_readings_and_claim_no_back_to_back() {
+        let thin = verdict_note("insufficient-evidence", 10, false, GameMatch::Match);
+        assert!(thin.contains("readings") && !thin.contains("frames"), "{thin}");
+        let measured = verdict_note("improved", 5000, false, GameMatch::Match);
+        assert!(!measured.contains("back-to-back"), "{measured}");
     }
 }

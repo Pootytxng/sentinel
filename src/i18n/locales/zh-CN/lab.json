@@ -411,8 +411,10 @@
     "noNewSession": "还没有新的 {{game}} 对局",
     "restoreNow": "立即恢复",
     "runningLatestPre": "最近一局 {{game}}：平均",
-    "runningLatestPost": "fps · {{samples}} 帧。",
+    "runningLatestPost": "fps · {{samples}} 次读数。",
     "runningNoTreatment": "玩一局开启监测的 {{game}} 对局,为实验提供真实的「更改后」读数。",
-    "yourGame": "你的游戏"
+    "yourGame": "你的游戏",
+    "noiseUnmeasured": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的自身波动尚未测量。",
+    "noiseMeasured": "按 {{band}}% 噪声下限判定。这款游戏在你电脑上的自身波动实测为 ±{{measured}}%。"
   }
 }

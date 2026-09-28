@@ -88,11 +88,14 @@ adding another isolated tweak.
   reads unchanged; §4.5 aborts on an unread target too; §7 at conclude turns a reverted/unreadable
   target into no-keep; §4.10 reads back after every keep/restore and turns a still-changed restore
   into a loud `Aborted`; the simulator trusts the live read over the ledger.
-  Both lanes built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** lane 2b
-  (backend-owned session refs instead of UI-supplied fps; noise evidence in the §11 receipt — both
-  change the IPC contract and the bench, so they need owner-rig visual self-review) · owner-rig live
-  proof on `game-bar-disable`, including a kill mid-start then relaunch · verify-local + independent
-  review.
+- [~] #583 lane 2b — start/conclude take session ids and read the readings from `sessions.json`,
+  never UI-supplied fps; conclude refuses a missing, unmeasured, earlier, ambiguous or
+  not-comparable pair (`comparability::derive`) and caps a Partial pair's confidence; a changed
+  driver/Windows/resolution aborts and restores (§7), and a reported crash always restores; the §11
+  receipt records the floor the verdict was judged against, with the game's own noise left unknown.
+  All three lanes built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** owner-rig
+  live proof on `game-bar-disable`, including a kill mid-start then relaunch · independent review of
+  the final head · merge.
 
 ---
 

@@ -335,6 +335,15 @@
   font-size: var(--type-label);
   color: var(--ix-amber);
 }
+/* §11 receipt fine print: the noise band this verdict was judged against. Quiet, full width. */
+.exp-bench-noise {
+  grid-column: 1 / -1;
+  font-size: var(--type-label);
+  color: var(--ix-text-3);
+}
+.exp-bench-noise-shared {
+  margin-bottom: 8px;
+}
 
 /* Motion gates on the APP's resolved signal (<html data-motion>), never a raw
    prefers-reduced-motion query: use-motion.ts already folds the user's choice and the Windows

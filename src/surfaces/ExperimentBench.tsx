@@ -29,6 +29,16 @@ type Treatment = {
   crashed: boolean;
   delta_low1_pct: number;
   recorded_at: string;
+  /** The session these numbers were read from (its started_at), looked up by the backend. null on
+   *  records concluded before #583 lane 2b, when the webview supplied the numbers. */
+  session_id?: string | null;
+};
+
+/** §11 — the credible-noise band a verdict was judged against. Present only when it really was. */
+type NoiseEvidence = {
+  band_pct: number;
+  /** This game's own run-to-run noise on this PC. null = never measured (never estimated). */
+  measured_noise_pct: number | null;
 };
 
 type Experiment = {
@@ -41,6 +51,8 @@ type Experiment = {
   status: ExperimentStatus;
   baseline_avg_fps: number;
   baseline_low1_fps: number;
+  /** The baseline session's id (its started_at). null on records started before #583 lane 2b. */
+  baseline_session_id?: string | null;
   active_changes_at_start: number;
   attribution_warning: string | null;
   noise_floor_pct: number;
@@ -54,6 +66,8 @@ type Experiment = {
   verdict_confidence: Confidence | null;
   /** Plain-language "what supports / limits this verdict" line — the experiment's methodology. */
   verdict_note: string | null;
+  /** Absent on records concluded before #583 lane 2b, and on verdicts the band never judged. */
+  noise_evidence?: NoiseEvidence | null;
 };
 
 type SimulatorReport = {
@@ -122,6 +136,15 @@ function confidenceCopy(t: Translate): Record<Confidence, string> {
   };
 }
 
+// §11 receipt line: the band the verdict was judged against, and whether this game's own noise on
+// this PC is known. An unmeasured noise level is said to be unmeasured, never filled in.
+function noiseLine(n: NoiseEvidence, t: Translate): string {
+  const pct = (v: number) => String(Math.round(v * 10) / 10);
+  return n.measured_noise_pct == null
+    ? t("lab.experimentBench.noiseUnmeasured", { band: pct(n.band_pct) })
+    : t("lab.experimentBench.noiseMeasured", { band: pct(n.band_pct), measured: pct(n.measured_noise_pct) });
+}
+
 function whenLabel(iso: string, t: Translate): string {
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return "";
@@ -133,6 +156,19 @@ function whenLabel(iso: string, t: Translate): string {
   return t("lab.experimentBench.when.dAgo", { count: Math.round(hrs / 24) });
 }
 
+// A session the backend will accept as a reading: a real frame rate and 1% low (experiment.rs
+// `has_frame_reading`) and a recorded game. The one test the baseline, the hypothesis wording and the
+// after-session match all share, so the bench never offers a session the backend then refuses.
+function isUsableReading(s: SessionSummary): boolean {
+  return (
+    Number.isFinite(s.avg_fps) &&
+    s.avg_fps > 0 &&
+    Number.isFinite(s.low1_fps_est) &&
+    s.low1_fps_est > 0 &&
+    s.process_name.trim() !== ""
+  );
+}
+
 // The treatment session for a running experiment: the most recent monitored session of the SAME game
 // that started AFTER the experiment began and carries real frames. Never fabricated — if none exists
 // the owner simply hasn't played a qualifying session yet.
@@ -141,9 +177,7 @@ function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSumma
   const candidates = sessions
     .filter(
       (s) =>
-        s.process_name === exp.game &&
-        s.avg_fps > 0 &&
-        new Date(s.started_at).getTime() > started,
+        s.process_name === exp.game && isUsableReading(s) && new Date(s.started_at).getTime() > started,
     )
     .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
   return candidates[0] ?? null;
@@ -198,7 +232,7 @@ export default function ExperimentBench() {
 
   // Whether a real before-reading exists — governs the simulator's hypothesis wording. A primitive so
   // runSim's useCallback stays stable across renders (the focus-refresh effect below depends on it).
-  const hasBaseline = sessions.some((s) => s.avg_fps > 0);
+  const hasBaseline = sessions.some(isUsableReading);
 
   // Runs the optimization simulator for a pick. `quiet` (the refresh path) re-derives the verdict from
   // the live ledger WITHOUT the pick/spinner/hypothesis reset — a background refresh never flickers the
@@ -266,12 +300,19 @@ export default function ExperimentBench() {
   const running = experiments.find((x) => x.status === "running") ?? null;
   const history = experiments.filter((x) => x.status !== "running");
 
-  // The honest baseline: the most recent monitored session with real frames. The experiment locks to
-  // that game. No sessions → we cannot invent a baseline; the owner plays one monitored session first.
+  // The honest baseline: the most recent monitored session with a real frame-rate reading and a known
+  // game (the backend refuses anything less). The experiment locks to that game. No sessions → we
+  // cannot invent a baseline; the owner plays one monitored session first.
   const baseline =
-    [...sessions].filter((s) => s.avg_fps > 0).sort(
-      (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
-    )[0] ?? null;
+    [...sessions]
+      .filter(isUsableReading)
+      .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0] ?? null;
+
+  // §11 lines for the past experiments. When every row that carries one says the same thing, it is
+  // said once for the list: the same sentence under each row buries the rows it describes.
+  const noiseLines = history.map((x) => (x.noise_evidence ? noiseLine(x.noise_evidence, t) : null));
+  const distinctNoise = new Set(noiseLines.filter((l): l is string => l !== null));
+  const sharedNoise = distinctNoise.size === 1 ? [...distinctNoise][0] : null;
 
   // The testable universe: catalog changes this rig can use and hasn't already applied.
   const pickable = recs.filter((r) => r.eligible && !r.currently_applied);
@@ -292,9 +333,8 @@ export default function ExperimentBench() {
       await invoke<Experiment>("start_experiment", {
         recId: sim.rec_id,
         recTitle: sim.rec_title,
-        game: baseline.process_name,
-        baselineAvgFps: baseline.avg_fps,
-        baselineLow1Fps: baseline.low1_fps_est,
+        // By id only: the backend reads the game and the numbers from its own session store.
+        baselineSessionId: baseline.started_at,
         hypothesis,
       });
       setSim(null);
@@ -316,13 +356,10 @@ export default function ExperimentBench() {
     try {
       await invoke<Experiment>("conclude_experiment", {
         experimentId: exp.id,
-        treatmentAvgFps: treatment.avg_fps,
-        treatmentLow1Fps: treatment.low1_fps_est,
-        treatmentSamples: treatment.samples,
+        // By id only: the backend reads the session itself and refuses one that isn't comparable to
+        // the baseline, rather than trusting our same-game filter above.
+        treatmentSessionId: treatment.started_at,
         crashed: false,
-        // The game this treatment session actually measured — the backend re-verifies it matches the
-        // baseline (defense-in-depth) rather than trusting our same-game filter above.
-        treatmentGame: treatment.process_name,
       });
       await reload();
     } catch (e) {
@@ -492,8 +529,9 @@ export default function ExperimentBench() {
       {history.length > 0 && (
         <div className="exp-history">
           <SectionLabel>{t("lab.experimentBench.pastExperiments")}</SectionLabel>
+          {sharedNoise && <p className="exp-fineprint exp-bench-noise-shared">{sharedNoise}</p>}
           <ul className="exp-bench-list">
-            {history.map((x) => (
+            {history.map((x, i) => (
               <li key={x.id} className="exp-bench-row" data-status={x.status}>
                 <span className="exp-bench-rec">{x.rec_title}</span>
                 <span className="exp-bench-verdict">
@@ -509,6 +547,7 @@ export default function ExperimentBench() {
                 {x.stop_reason && x.status === "aborted" && (
                   <span className="exp-bench-abort">{x.stop_reason}</span>
                 )}
+                {!sharedNoise && noiseLines[i] && <span className="exp-bench-noise">{noiseLines[i]}</span>}
               </li>
             ))}
           </ul>

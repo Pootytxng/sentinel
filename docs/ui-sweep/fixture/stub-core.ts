@@ -39,8 +39,10 @@ const iso = (minsAgo: number) => new Date(Date.now() - minsAgo * 60000).toISOStr
 
 // Shape matches `SessionSummary` in src/types.ts. `low1_fps_est` is what the bench reads for the
 // 1% low; the null sensor fields are the honest "no external monitor running" case.
+// The baseline session: RUNNING below names it by id, exactly as the backend resolves it.
+const BASELINE_AT = iso(95);
 const session = (over: Record<string, unknown> = {}) => ({
-  started_at: iso(95),
+  started_at: BASELINE_AT,
   duration_secs: 2820,
   process_name: "fixture-game.exe",
   samples: 2780,
@@ -86,6 +88,8 @@ const HISTORY = [
     treatment: { avg_fps: 137.2, low1_fps: 93.1, samples: 2400, crashed: false, delta_low1_pct: -1.0, recorded_at: iso(4100) },
     verdict: "no-change", kept: false, stop_reason: null, concluded_at: iso(4090),
     verdict_confidence: "medium" as Confidence, verdict_note: "One full session either side, same game, same rig.",
+    // #583 lane 2b: the §11 noise line. The backend never measures a game's own noise yet, so null.
+    baseline_session_id: iso(4400), noise_evidence: { band_pct: 3, measured_noise_pct: null },
   },
   {
     id: "fx-h2", rec_id: "fixture-rec-8", rec_title: "Turn off startup delay for background apps",
@@ -96,6 +100,7 @@ const HISTORY = [
     treatment: { avg_fps: 139.9, low1_fps: 95.7, samples: 3100, crashed: false, delta_low1_pct: 8.3, recorded_at: iso(9500) },
     verdict: "improved", kept: true, stop_reason: null, concluded_at: iso(9490),
     verdict_confidence: "high" as Confidence, verdict_note: "Clear of the 3% noise floor across a full session.",
+    baseline_session_id: iso(9900), noise_evidence: { band_pct: 3, measured_noise_pct: null },
   },
 ];
 
@@ -107,6 +112,7 @@ const RUNNING = {
   attribution_warning: "3 other changes are already applied — a win here is the stack's, not this change's alone.",
   noise_floor_pct: 3, treatment: null, verdict: null, kept: false, stop_reason: null,
   concluded_at: null, verdict_confidence: null, verdict_note: null,
+  baseline_session_id: BASELINE_AT, noise_evidence: null,
 };
 
 // Per-state answers. The bench matches a treatment session by game name AND a start time strictly
