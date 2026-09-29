@@ -188,7 +188,7 @@ export function successorPrompt(handoffText) {
       why: `the text also carries an \`### Ownership claim\`, which the lease fold reads after the release, so the lease stays live. Pass only the Handoff`,
     };
   }
-  const stop = RESPAWN.test(handoffText)
+  const stop = RESPAWN.test(withoutQuotes(handoffText))
     ? "it tells its successor to re-spawn the same prompt, which is the loop the owner stopped"
     : nextActionStop(handoff.nextAction);
   if (stop) {
@@ -211,7 +211,9 @@ export function successorPrompt(handoffText) {
 // launch guard (successor-launch-guard.mjs) reuses it to spot a hand-written successor prompt.
 export const RESPAWN = new RegExp(
   [
-    /\bre-?(?:spawn|launch|run|send|queue)(?:s|ing)?\s+(?:this|the|its|your)\s+(?:own\s+)?(?:whole\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
+    // Present and -ing forms only: "re-spawned the same prompt" is history, not an instruction.
+    /\b(?:keep\s+)?re-?(?:spawn|launch|run|send|queue)(?:s|es|ing|ning)?\s+(?:this|the|its|your)\s+(?:own\s+)?(?:whole\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
+    /\bkeep\s+(?:spawn|launch|run|send|queue|start)(?:s|ing|ning)?\s+(?:this|the|its|your)\s+(?:own\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
     /\b(?:with|send|pass|reuse|launch|spawn|start|run|queue)\s+(?:this|the)\s+same\s+(?:prompt|task|chip)\b/,
     // "run it again" is how a gate or a test is re-run, so only a launch verb re-launches "it".
     /\b(?:launch|spawn|send|queue|trigger|fire)\s+it\s+again\b/,
@@ -222,18 +224,31 @@ export const RESPAWN = new RegExp(
     .join("|"),
   "i",
 );
+/** A double-quoted phrase is a mention ('the phrase "launch this task again"'), not an instruction. */
+export function withoutQuotes(text) {
+  return text.replace(/"[^"\n]*"|“[^”\n]*”/g, '""');
+}
 const CLAUSE_END = /[.;](?:\s|$)|,?\s+(?:and\s+)?then\b/i;
 // "Done — merged as …", "Landed in …": completion said as a state. "Complete the migration" is work,
 // so a completion word counts only when nothing but punctuation or "as/in/via/at/by/and" follows it.
-const NOTHING =
-  /^[^a-z0-9]*(?:none|nothing|n\/a|no (?:further|next|follow-?up|action|work))\b|^[^a-z0-9]*(?:all\s+|already\s+|work\s+(?:is\s+)?)?(?:done|complete[d]?|finished|merged|landed|shipped|closed|resolved)(?=\s*$|\s*[—–:.;,(!)]|\s+-\s|\s+(?:as|in|via|at|by|and)\b)/i;
+// "PR #633 is merged": the same state, said of the work as the clause's subject.
+const NOTHING = new RegExp(
+  [
+    /^[^a-z0-9]*(?:none|nothing|n\/a|no (?:further|next|follow-?up|action|work))\b/,
+    /^[^a-z0-9]*(?:all\s+|already\s+|work\s+(?:is\s+)?)?(?:done|complete[d]?|finished|merged|landed|shipped|closed|resolved)(?=\s*$|\s*[—–:.;,(!)]|\s+-\s|\s+(?:as|in|via|at|by|and)\b)/,
+    /^[^a-z0-9#]*(?:(?:the|this|that)\s+)?(?:(?:PR|pull request|issue|work|lane|task|fix|change|branch|patch|slice|train)\s*)?(?:#\d+|[0-9a-f]{7,40}|it|everything|all)?\s*(?:is|was|are|were|has\s+been|have\s+been|got)\s+(?:now\s+|already\s+|fully\s+|all\s+)?(?:done|complete[d]?|finished|merged|landed|shipped|closed|resolved)\b/,
+  ]
+    .map((part) => part.source)
+    .join("|"),
+  "i",
+);
 const CLOSE_ONLY = /^[^a-z0-9]*close\b(?:\s+(?:#\d+|it|the issue))?(?:\s+as\s+\w+|\s+with evidence\b.*)?$/i;
 const CONDITIONAL = /^[^a-z0-9]*(?:[a-z ]{1,30}:\s*)?(?:once|until|when|after)\b/i;
 const OTHER_LANES = /^[^a-z0-9#]*#\d+(?:\s*(?:,|and|&|\/)\s*#\d+)*\s+(?:may|can|could|should)\b/i;
 const AT_TIME = /\b(?:after|until|at|from)\s+\d{1,2}:\d{2}\s*Z?\b/i;
 const OWNER_FIRST = /^[^a-z0-9]*(?:the\s+)?(?:owner|kuya)\b/i;
 const OWNER_GATE =
-  /\b(?:owner|kuya)(?:[-\s]only\b|[-\s]hands?\b|[-\s]gated\b|['’]s\s+(?:proof|decision|call|word|approval|sign-?off|test|hands?|review|go-?ahead|answer|ruling|reboot)\b|\s+(?:to|must|should|needs? to|has to)\s+\w+|\s+(?:applies|runs|decides|approves|proves|tests|merges|reviews|reboots|installs|confirms|signs)\b)|\b(?:awaits?|awaiting|pending|needs?|requires?|get|obtain|ask(?:ing)?\s+for|request|seek)\s+(?:(?:an?|the|explicit)\s+)*(?:owner|kuya)\b(?!-)/i;
+  /\b(?:owner|kuya)(?:[-\s]only\b|[-\s]hands?\b|[-\s]gated\b|['’]s\s+(?:proof|decision|call|word|approval|sign-?off|test|hands?|review|go-?ahead|answer|ruling|reboot)\b|\s+(?:to|must|should|needs? to|has to)\s+\w+|\s+(?:applies|runs|decides|approves|proves|tests|merges|reviews|reboots|installs|confirms|signs)\b)|\b(?:awaits?|awaiting|pending|needs?|requires?|get|obtain|ask(?:ing)?\s+for|request|seek)\s+(?:(?:an?|the|explicit)\s+)*(?:owner|kuya)\b(?!-)|\b(?:approval|sign-?off|go-?ahead|decision|ruling|confirmation|answer|proof|permission|input)\s+(?:from|by|of)\s+(?:the\s+)?(?:owner|kuya)\b(?!-)|\b(?:owner|kuya)\s+(?:approval|sign-?off|go-?ahead|decision|ruling|confirmation|answer|proof|permission|input)\s+(?:is\s+|are\s+)?(?:still\s+)?(?:required|needed|pending|outstanding|missing)\b/i;
 // "await" opening the clause is a wait; mid-clause only with a gate as its object ("wrap it in an
 // await" is code).
 const WAITS =
@@ -255,7 +270,7 @@ const RECHECK = new RegExp(
   [
     /\bre-?check\w*\b|\bpoll\w*\b|\bcheck back\b/,
     // "Check whether PR #611 has merged", "Make sure #611 has merged": asking a gate, not moving it.
-    /\b(?:check|see|confirm|verify|find out|make sure|ensure)(?:s|es|ed|ing)?\s+(?:(?:whether|if|that)\b|(?=(?:the\s+)?(?:PR\s*)?#\d+))[^.;\n]{0,60}?(?:#\d+|\bPR\b|\blease\b|\bclaim\b|\bgate\b|\bowner\b)[^.;\n]{0,40}?\b(?:merg|land|releas|clos|approv|open|held|free|mov|chang)\w*/,
+    /\b(?:check|see|confirm|verify|find out|make sure|ensure|report|ask|tell|note|determine|watch|monitor|track)(?:s|es|ed|ing)?\s+(?:(?:whether|if|that)\b|(?=(?:the\s+)?(?:PR\s*)?#\d+))[^.;\n]{0,60}?(?:#\d+|\bPR\b|\blease\b|\bclaim\b|\bgate\b|\bowner\b)[^.;\n]{0,40}?\b(?:merg|land|releas|clos|approv|open|held|free|mov|chang)\w*/,
   ]
     .map((part) => part.source)
     .join("|"),

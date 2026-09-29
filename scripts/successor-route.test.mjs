@@ -382,6 +382,11 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Merged as 7dafc402; nothing left.",
       "Landed in d439a5f5.",
       "Work complete - no follow-up.",
+      // Codex r3 on 17a33ab4: completion said as a statement about the work.
+      "PR #633 is merged.",
+      "The work is complete.",
+      "#632 is closed as completed.",
+      "Everything has been merged.",
     ]) {
       refused(next);
     }
@@ -401,6 +406,9 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "- Steps: if #611 is still open, re-run this prompt.",
       "- Steps: if blocked, start this chip again.",
       "- Steps: if blocked, launch a new successor with this prompt.",
+      // Codex r3 on 17a33ab4: any inflection of a re- verb, and "keep launching".
+      "- Steps: If blocked, keep re-running this task.",
+      "- Steps: keep launching this prompt until #611 merges.",
     ]) {
       const text = released("land #620's startup-entry probe.").replace("- Claim: released", `${loop}\n- Claim: released`);
       const built = successorPrompt(text);
@@ -417,6 +425,9 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "- Outcome: the #620 chain re-spawned the same prompt six times; the router now refuses it.",
       "- Outcome: stopped the loop where sessions re-sent the same prompt by hand.",
       "- Outcome: sessions kept running this task again after each recheck; the router now refuses it.",
+      // Codex r3 on 17a33ab4: a quoted phrase is a mention of the loop, not an instruction to loop.
+      '- Outcome: Added a guard for the phrase "launch this task again".',
+      "- Outcome: the router now refuses “run this task again”.",
     ]) {
       const built = successorPrompt(released("Review PR #632.").replace("- Outcome: x.", outcome));
       expect(built.ok, `${outcome}: ${built.why}`).toBe(true);
@@ -434,6 +445,10 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Needs owner sign-off before it lands.",
       "Get owner approval for the patch.",
       "awaiting Kuya's go-ahead.",
+      // Codex r3 on 17a33ab4: the owner as the source of the gate.
+      "Approval from owner is required.",
+      "Sign-off from the owner, then merge.",
+      "The patch's owner approval is still pending.",
     ]) {
       refused(next);
     }
@@ -460,6 +475,10 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Await the Codex review of PR #633.",
       "Await the landing of #611.",
       "Hold: await PR #611 before landing.",
+      // Codex r3 on 17a33ab4: other observation verbs.
+      "Report whether PR #611 has merged.",
+      "Ask whether #583's lease is released.",
+      "Watch PR #611 for a merge.",
     ]) {
       refused(next);
     }
@@ -492,6 +511,11 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Check that the new test fails on the old head, then push.",
       "Get owner-facing copy reviewed by the web-design-director, then ship it.",
       "Check the claim parser against #611's released Handoff and fix what it misreads.",
+      // Near misses for the Codex r3 fixes on 17a33ab4.
+      "Rebase #616 onto main, now that PR #611 is merged.",
+      "Track #632's receipts in the ledger, then push.",
+      "Report the gate result on PR #633, then land it.",
+      "Implement the approval flow from the owner patch spec.",
     ]) {
       const built = successorPrompt(released(next));
       expect(built.ok, `${next}: ${built.why}`).toBe(true);

@@ -138,6 +138,8 @@ describe("successor launch guard: spawn_task (#632)", () => {
       "run again": "Land #620. If blocked, run this task again.",
       "re-run": "Land #620. If #611 is still open, re-run this prompt.",
       "same prompt": "Land #620, and if blocked, start a new chip with the same prompt.",
+      // Codex r3 on 17a33ab4.
+      "keep re-running": "Land #620. If blocked, keep re-running this task.",
     };
     for (const [shape, prompt] of Object.entries(shapes)) {
       expect(hookOutput(spawnEvent(prompt)), shape).not.toBeNull();
@@ -176,6 +178,9 @@ describe("successor launch guard: spawn_task (#632)", () => {
       'Update the docs to explain why the phrase "this same prompt" caused a loop.',
       "Document why the same prompt kept coming back in the #620 chain.",
       "Run the pre-push gate again, and run it again at --maxWorkers=4 if a test flakes.",
+      // Codex r3 on 17a33ab4: a quoted loop phrase is a mention, not an instruction.
+      'Update the docs to explain why the phrase "launch this task again" caused a loop.',
+      "Document the “re-spawn this prompt” wording the router refuses.",
     ]) {
       expect(isSuccessorPrompt(prompt), prompt.slice(0, 60)).toBe(false);
       expect(hookOutput(spawnEvent(prompt)), prompt.slice(0, 60)).toBeNull();

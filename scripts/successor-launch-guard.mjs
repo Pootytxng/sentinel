@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseClaim, parseHandoff } from "../tools/entry/claim.mjs";
-import { RESPAWN, SUCCESSOR_PREAMBLE, readScheduledTasks, successorPrompt } from "./successor-route.mjs";
+import { RESPAWN, SUCCESSOR_PREAMBLE, readScheduledTasks, successorPrompt, withoutQuotes } from "./successor-route.mjs";
 
 export const SPAWN_TOOL = "mcp__ccd_session__spawn_task";
 export const ROUTINE_TOOL = "mcp__scheduled-tasks__run_scheduled_task";
@@ -28,12 +28,12 @@ export const ROUTINE_TOOL = "mcp__scheduled-tasks__run_scheduled_task";
 const MARKER = "You are a Compy successor session";
 // The #616 chain had no preamble and no Handoff; it said "Write `Successor: chip` with this same prompt".
 // The loop wording is the router's own RESPAWN, so the guard and the router cannot drift apart; a chip
-// that only talks about "this same prompt" does not tell anyone to launch it.
+// that only talks about "this same prompt", or quotes a loop phrase, does not tell anyone to launch it.
 const SELF_LAUNCH = new RegExp(`\\bSuccessor:\\s*\`?\\s*(?:chip|launched)\\b|${RESPAWN.source}`, "i");
 
 /** Does this prompt claim to be a successor handoff? */
 export function isSuccessorPrompt(text) {
-  return text.includes(MARKER) || parseHandoff(text) !== null || parseClaim(text) !== null || SELF_LAUNCH.test(text);
+  return text.includes(MARKER) || parseHandoff(text) !== null || parseClaim(text) !== null || SELF_LAUNCH.test(withoutQuotes(text));
 }
 
 /**
