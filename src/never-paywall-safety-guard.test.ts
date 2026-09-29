@@ -64,16 +64,17 @@ describe("#195 §5 — safety is never behind Pro", () => {
   const safety = FILES.filter((f) => SAFETY_IPC.test(f.raw));
 
   it("finds a real safety surface to guard (the derivation is not silently empty)", () => {
-    // 16 files on 2026-09-28: 15 on 2026-08-26 (14 + FirstWin.tsx, which offers the undo on a
+    // 17 files on 2026-09-29: 15 on 2026-08-26 (14 + FirstWin.tsx, which offers the undo on a
     // user's first live change and so is squarely on the path this rule protects), then
-    // data/startup-toggle.ts, the one owner of the startup-toggle mutation since #599. Held near the real number, not at
+    // data/startup-toggle.ts, the one owner of the startup-toggle mutation since #599, then
+    // data/ledger-write.ts, which every frontend ledger write runs through since #619. Held near the real number, not at
     // a token 1, because the failure this catches is a derivation that quietly stops matching and
     // lets the guard pass on nothing. A NEW file here is expected to raise this number — the count
     // is a non-vacuity floor, not a cap on how much of the app may be safety-critical.
     expect(
       safety.map((f) => f.path),
       "the mutation/rollback surface shrank — either a refactor renamed the commands (update SAFETY_IPC) or the match is broken",
-    ).toHaveLength(16);
+    ).toHaveLength(17);
   });
 
   it("no file that applies, rolls back, or reads the Trust Ledger touches the Pro gate", () => {

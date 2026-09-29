@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { writeLedger } from "../../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import { IconCpuOff, IconShieldCheck, IconWifiOff } from "@tabler/icons-react";
 import type { HardwareInfo } from "../../App";
@@ -343,7 +343,7 @@ function StepCheck() {
     if (!ok) return;
     setApplyingId(rec.id);
     try {
-      await invoke("apply_recommendation", { recId: rec.id, recTitle: rec.title });
+      await writeLedger("apply_recommendation", { recId: rec.id, recTitle: rec.title });
       await rerun();
     } catch (e) {
       setApplyingId(null);
@@ -371,7 +371,7 @@ function StepCheck() {
     if (!ok) return;
     setApplyingId(rev.rec_id);
     try {
-      await invoke("apply_recommendation", { recId: rev.rec_id, recTitle: rev.title });
+      await writeLedger("apply_recommendation", { recId: rev.rec_id, recTitle: rev.title });
       await rerun();
     } catch (e) {
       setApplyingId(null);

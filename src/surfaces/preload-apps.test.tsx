@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Fix, { PRELOAD_APPS } from "./Fix";
+import { LEDGER_CHANGED_EVENT } from "../types";
 
 const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
@@ -108,5 +109,50 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
     ).toBeTruthy();
     // The button is live again — the user can retry.
     expect(screen.getByRole("button", { name: "Remove" })).toBeTruthy();
+  });
+
+  // #619: a removal writes the Trust Ledger, so one that lands announces it and runs App's refresh
+  // (onChanged); the refusal above does neither.
+  it("a removal that lands announces it once, then App's refresh runs", async () => {
+    const seen: string[] = [];
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "get_preload_apps") return Promise.resolve({ armed: true, installed: ["solitaire-collection"] });
+      if (cmd === "remove_known_preload_app") {
+        seen.push("remove");
+        return Promise.resolve(null);
+      }
+      return Promise.resolve(null);
+    });
+    const on = () => seen.push("event");
+    window.addEventListener(LEDGER_CHANGED_EVENT, on);
+    const onChanged = vi.fn(() => {
+      seen.push("app-refresh");
+    });
+    render(<Fix {...baseProps} onChanged={onChanged} />);
+    fireEvent.click(await screen.findByText("Preinstalled apps"));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    await screen.findByText("Removed · undo in History");
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    window.removeEventListener(LEDGER_CHANGED_EVENT, on);
+    expect(seen).toEqual(["remove", "event", "app-refresh"]);
+  });
+
+  it("a refused removal announces nothing and skips App's refresh", async () => {
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "get_preload_apps") return Promise.resolve({ armed: true, installed: ["bing-news"] });
+      if (cmd === "remove_known_preload_app") return Promise.reject(new Error("refused"));
+      return Promise.resolve(null);
+    });
+    const seen: string[] = [];
+    const on = () => seen.push("event");
+    window.addEventListener(LEDGER_CHANGED_EVENT, on);
+    const onChanged = vi.fn();
+    render(<Fix {...baseProps} onChanged={onChanged} />);
+    fireEvent.click(await screen.findByText("Preinstalled apps"));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    await screen.findByText("Couldn't remove it — nothing changed; try again.");
+    window.removeEventListener(LEDGER_CHANGED_EVENT, on);
+    expect(seen).toEqual([]);
+    expect(onChanged).not.toHaveBeenCalled();
   });
 });

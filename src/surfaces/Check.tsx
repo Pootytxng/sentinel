@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { PriorityItem, SessionSummary, StartupEntry } from "../types";
@@ -194,7 +195,9 @@ export default function Check({
     if (!ok) return;
     setApplyingId(r.id);
     try {
-      await invoke("apply_recommendation", { recId: r.id, recTitle: r.title });
+      // Announces the ledger change first: the Test room's experiment bench, mounted beside this
+      // surface, re-reads only on that event or a refocus (#619).
+      await writeLedger("apply_recommendation", { recId: r.id, recTitle: r.title });
       await rerun();
       onChanged(); // keep App's other surfaces in sync
     } catch (e) {
@@ -223,7 +226,7 @@ export default function Check({
     if (!ok) return;
     setApplyingId(rev.rec_id);
     try {
-      await invoke("apply_recommendation", { recId: rev.rec_id, recTitle: rev.title });
+      await writeLedger("apply_recommendation", { recId: rev.rec_id, recTitle: rev.title });
       await rerun();
       onChanged();
     } catch (e) {

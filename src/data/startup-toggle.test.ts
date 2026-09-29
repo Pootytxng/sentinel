@@ -78,11 +78,13 @@ describe("the startup toggle has one owner", () => {
   const rel = (p: string) => p.slice(SRC.length + 1).replace(/[\\/]+/g, "/");
   const code = (p: string) => strip(readFileSync(join(SRC, p), "utf8"));
 
-  it("only startup-toggle.ts names the command in code", () => {
+  // ledger-write.ts names it only in its command list (#619), never as a call.
+  it("only startup-toggle.ts names the command in code, besides the ledger-write command list", () => {
     const owners = walk(SRC)
       .filter((p) => strip(readFileSync(p, "utf8")).includes("set_startup_entry_enabled"))
-      .map(rel);
-    expect(owners).toEqual(["data/startup-toggle.ts"]);
+      .map(rel)
+      .sort();
+    expect(owners).toEqual(["data/ledger-write.ts", "data/startup-toggle.ts"]);
   });
 
   it("App's toggle and Check's disable both route through it, handing it their refresh", () => {

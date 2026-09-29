@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Fix from "./Fix";
+import { LEDGER_CHANGED_EVENT } from "../types";
+
+// Outside Tauri the real invoke rejects; the default here does the same, so the tests that never
+// touch the backend behave exactly as before. The #619 tests below give it the one command they use.
+const { invokeMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(
+    (_cmd: string, _args?: unknown): Promise<unknown> => Promise.reject(new Error("no Tauri in tests")),
+  ),
+}));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
 type Prov = "verified" | "measured-signal" | "expected-impact";
 type Sev = "safe" | "moderate" | "advanced";
@@ -403,5 +413,57 @@ describe("Fix advisory cards behave as doors", () => {
     // Opened a guided card: real detail, never the no-switch fallback.
     expect(container.querySelector(".fix-guided-detail")).toBeTruthy();
     expect(container.querySelector(".fix-guided-none")).toBeNull();
+  });
+});
+
+// #619: disabling a telemetry task writes the Trust Ledger. Other screens only learn about it through
+// LEDGER_CHANGED_EVENT and App's refresh (onChanged), so a disable that lands must announce it and
+// then refresh; a refused one does neither and says nothing changed.
+describe("Fix telemetry-task disable announces the ledger change", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    invokeMock.mockReset();
+  });
+
+  const disableFirstTask = async (onChanged: () => void) => {
+    render(<Fix recs={[]} {...baseProps} onChanged={onChanged} />);
+    fireEvent.click(await screen.findByText("Telemetry tasks"));
+    const buttons = await screen.findAllByRole("button", { name: "Disable" });
+    fireEvent.click(buttons[0]);
+  };
+
+  it("a disable that lands announces it once, then App's refresh runs", async () => {
+    const seen: string[] = [];
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "disable_known_bloat_task") {
+        seen.push("disable");
+        return Promise.resolve(null);
+      }
+      return Promise.reject(new Error("no Tauri in tests"));
+    });
+    const on = () => seen.push("event");
+    window.addEventListener(LEDGER_CHANGED_EVENT, on);
+    const onChanged = vi.fn(() => {
+      seen.push("app-refresh");
+    });
+    await disableFirstTask(onChanged);
+    await screen.findByRole("button", { name: "Disabled · undo in History" });
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    window.removeEventListener(LEDGER_CHANGED_EVENT, on);
+    expect(invokeMock).toHaveBeenCalledWith("disable_known_bloat_task", { taskId: "compatibility-appraiser" });
+    expect(seen).toEqual(["disable", "event", "app-refresh"]);
+  });
+
+  it("a refused disable announces nothing and skips App's refresh", async () => {
+    invokeMock.mockImplementation(() => Promise.reject(new Error("UAC declined")));
+    const seen: string[] = [];
+    const on = () => seen.push("event");
+    window.addEventListener(LEDGER_CHANGED_EVENT, on);
+    const onChanged = vi.fn();
+    await disableFirstTask(onChanged);
+    await screen.findByText(/Nothing changed; try again./);
+    window.removeEventListener(LEDGER_CHANGED_EVENT, on);
+    expect(seen).toEqual([]);
+    expect(onChanged).not.toHaveBeenCalled();
   });
 });

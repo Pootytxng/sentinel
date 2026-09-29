@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { AppliedChange, Recommendation } from "../types";
 import { friendlyLabel } from "../data/friendly-labels";
@@ -98,7 +99,7 @@ export function FirstWin({
     setPhase("undoing");
     setErrorMsg(null);
     try {
-      await invoke("rollback_change", { changeId: change.id });
+      await writeLedger("rollback_change", { changeId: change.id });
     } catch (e) {
       setErrorMsg(t("home.firstWin.errors.undoFailed", { error: String(e), historyRoom: t("common.rail.learn") }));
       setPhase("error");
