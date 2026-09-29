@@ -79,9 +79,9 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_patches. Three hook fixes waiting for your hands  ·  ⏳ NEW 2026-09-18
+### A_patches. Four hook fixes waiting for your hands  ·  ⏳ NEW 2026-09-18, #633 added 2026-09-29
 
-**The ask:** hook files are yours to change (#368), so each draft PR below carries its fix as a
+**The ask:** hook files are yours to change (#368), so each PR below carries its fix as a
 `.patch` in `docs/superpowers/specs/` plus tests. After a PR merges, in the repo folder:
 `git apply <patch> && git rm -q <patch>`, run its test, commit. Or tell HQ or Codex to do it.
 
@@ -90,6 +90,7 @@ session that had just re-read it.
 | #464 | #463 advisory names another folder's issue | `2026-09-18-known-issue-token-scope.patch` | `tools/entry/project-write-assert.test.mjs` (42 passed) |
 | #470 | #468 drift hook asks GitHub on every write | `2026-09-18-scope-drift-hook-thread-bound.patch` | `tools/entry/scope-drift-check-thread.test.mjs` (6 passed) |
 | #471 | #465 drift hook measures a released claim | `2026-09-18-scope-drift-hook-released-claim.patch` | `tools/entry/scope-drift-check.test.mjs` (19 passed) |
+| #633 (merged) | #632 hand-written successor prompts launch unchecked | `2026-09-29-successor-launch-guard-632.patch` | `scripts/successor-launch-guard.test.mjs` (its skipped owner-hook test then runs and passes) |
 
 #470 and #471 touch the same hook and apply in either order. **Why it matters:** until applied, the
 hooks keep issuing wrong or slow warnings that sessions learn to ignore.
