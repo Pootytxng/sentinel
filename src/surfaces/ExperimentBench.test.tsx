@@ -236,8 +236,32 @@ describe("ExperimentBench (armed)", () => {
     state.experiments = [NOT_COMPARABLE_EXPERIMENT];
     render(<ExperimentBench />);
     expect(await screen.findByTestId("experiment-bench")).toBeInTheDocument();
-    expect(await screen.findByText("Different game — not comparable, restored")).toBeInTheDocument();
+    expect(await screen.findByText("Not comparable — restored")).toBeInTheDocument();
     expect(screen.queryByText("not-comparable")).toBeNull();
+    // The label can't say which pair failed, so the backend's reason is said once under the list.
+    expect(screen.getByText(NOT_COMPARABLE_EXPERIMENT.verdict_note)).toBeInTheDocument();
+    expect(rowMarks()).toEqual(["*"]);
+    expectEachNoteOnceAndOffTheRows();
+  });
+
+  // Codex r4 (#611): a crash whose two sessions share no recorded rig context is restored as
+  // "not-comparable" with an unknown pairing. The label once read "Different game", a mismatch nobody
+  // measured; the bench now claims no cause of its own and says the backend's reason.
+  it("never names a cause the record doesn't carry: an unknown crash pairing is not a different game", async () => {
+    state.gate = true;
+    const why =
+      "The game crashed, but that session and the baseline share no recorded rig or conditions, so " +
+      "Compy can't check that nothing else changed. So the crash can't be pinned on this setting. " +
+      "Compy restored the change.";
+    state.experiments = [
+      { ...NOT_COMPARABLE_EXPERIMENT, stop_reason: "crash-session-comparability-unknown", verdict_note: why },
+    ];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("Not comparable — restored")).toBeInTheDocument();
+    expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/different game/i);
+    expect(screen.getByText(why)).toBeInTheDocument();
+    expect(screen.queryByText(/crash-session-comparability-unknown/)).toBeNull();
+    expectEachNoteOnceAndOffTheRows();
   });
 
   it("picking a change runs the simulator and offers Start against the real baseline", async () => {
@@ -499,7 +523,7 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
     // Only the judged row carries evidence, so its line is the list's one line; the not-comparable
-    // row's verdict already says it wasn't judged, so it adds nothing.
+    // row adds no noise line, only its own reason (Codex r4, #611).
     const shared = await waitFor(() => {
       const el = document.querySelector(".exp-bench-noise-shared");
       expect(el).not.toBeNull();
@@ -508,7 +532,10 @@ describe("ExperimentBench (armed)", () => {
     expect(shared.textContent).toBe(
       "Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
     );
-    expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(0);
+    expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
+      `* ${NOT_COMPARABLE_EXPERIMENT.verdict_note}`,
+    ]);
+    expect(rowMarks()).toEqual([null, "*"]);
   });
 
   it("says nothing about noise when no past result was judged against the floor", async () => {
@@ -519,7 +546,13 @@ describe("ExperimentBench (armed)", () => {
     ];
     render(<ExperimentBench />);
     await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(2));
-    expect(document.querySelectorAll(".exp-bench-noise, .exp-bench-noise-shared")).toHaveLength(0);
+    expect(document.querySelectorAll(".exp-bench-noise-shared")).toHaveLength(0);
+    expect(document.querySelector(".exp-history")?.textContent).not.toMatch(/noise/i);
+    // Their shared reason is said once, never hoisted as the list's rule (Codex r4, #611).
+    expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
+      `* ${NOT_COMPARABLE_EXPERIMENT.verdict_note}`,
+    ]);
+    expect(rowMarks()).toEqual(["*", "*"]);
   });
 
   it("states a measured noise level when the record carries one", async () => {
@@ -594,7 +627,8 @@ describe("ExperimentBench (armed)", () => {
   // fall silently under the list-wide line, yet neither the floor sentence nor the "no record" note
   // may repeat down the list (C-11). The rule is said once; the note is said once; only rows that
   // LOOK judged — a crash reads "Worse", an older result "Better" — carry its mark. Rows whose
-  // verdict already says they weren't judged stay quiet.
+  // verdict already says they weren't judged stay quiet, except "not comparable", which carries its
+  // reason (Codex r4, #611).
   it("says the floor once and the missing-record note once, marking only rows that look judged", async () => {
     state.gate = true;
     const judged = { band_pct: 3, measured_noise_pct: null };
@@ -617,9 +651,10 @@ describe("ExperimentBench (armed)", () => {
     await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(13));
     expect(document.querySelector(".exp-bench-noise-shared")?.textContent).toMatch(/^Judged against Compy's 3% noise floor\./);
     expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
-      "* No noise-floor record was kept for these results.",
+      `* ${NOT_COMPARABLE_EXPERIMENT.verdict_note}`,
+      "† No noise-floor record was kept for these results.",
     ]);
-    expect(rowMarks()).toEqual([null, null, null, null, null, null, null, null, null, null, "*", "*", "*"]);
+    expect(rowMarks()).toEqual([null, null, null, null, null, null, "*", null, null, null, "†", "†", "†"]);
     expectEachNoteOnceAndOffTheRows();
   });
 

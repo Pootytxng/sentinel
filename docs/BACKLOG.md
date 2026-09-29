@@ -101,7 +101,10 @@ adding another isolated tweak.
   after the apply; the bench offers only Restore on a Trial an older Compy started. Codex r2+r3
   fixes: a crash is never blamed without a found, comparable session pair; an interrupted start or
   failed apply always leaves a loud record, since a part-way apply can read as unchanged; a result
-  is left unjudged and restored when other applied settings can't be read back.
+  is left unjudged and restored when other applied settings aren't confirmed in place (unreadable
+  or set back), and a start is refused up front when they already aren't; an interrupted start
+  with an unreadable history is a loud record, never a hidden one; a not-comparable row gives its
+  own reason.
   All three lanes built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** owner-rig
   live proof on `game-bar-disable`, including a kill mid-start then relaunch · independent review of
   the final head · merge.

@@ -632,8 +632,9 @@ pub(crate) enum InterruptedStart {
     ChangeAlreadyRolledBack,
     /// The start recorded a change the ledger no longer has: a loud `Aborted` naming it.
     ChangeMissing,
-    /// The ledger could not be read. The record stays `Pending`, untouched, for the next reconcile,
-    /// so a transient read failure never turns into a guess or a lost link to the change.
+    /// The ledger could not be read: a loud `Aborted` saying Compy can't check the change, keeping any
+    /// change id the start saved. Left `Pending`, it would stay hidden from the bench while blocking
+    /// every later start for as long as the read keeps failing.
     LedgerUnreadable,
     /// No change record was found: a loud `Aborted`. Compy has no receipt for it, so no undo to run.
     /// Neither an empty ledger nor a live read proves nothing was changed: a setting written in
@@ -665,36 +666,33 @@ pub(crate) fn reconcile_interrupted_starts_in(
             i += 1;
             continue;
         }
-        let Ok(rows) = ledger else {
-            outcomes.push(InterruptedStart::LedgerUnreadable);
-            i += 1;
-            continue;
-        };
         let recorded = store.experiments[i].applied_change_id.clone();
         let mut live_read = None;
-        let resolution = if recorded.is_empty() {
-            let claimed: Vec<&str> = store
-                .experiments
-                .iter()
-                .map(|e| e.applied_change_id.as_str())
-                .filter(|id| !id.is_empty())
-                .collect();
-            match interrupted_start_change(&store.experiments[i], rows, &claimed) {
-                Some(id) => {
-                    store.experiments[i].applied_change_id = id.to_string();
-                    InterruptedStart::ChangeStillApplied
-                }
-                None => {
-                    live_read = changed(&store.experiments[i].rec_id);
-                    InterruptedStart::ChangeUnrecorded
+        let resolution = match ledger {
+            Err(_) => InterruptedStart::LedgerUnreadable,
+            Ok(rows) if recorded.is_empty() => {
+                let claimed: Vec<&str> = store
+                    .experiments
+                    .iter()
+                    .map(|e| e.applied_change_id.as_str())
+                    .filter(|id| !id.is_empty())
+                    .collect();
+                match interrupted_start_change(&store.experiments[i], rows, &claimed) {
+                    Some(id) => {
+                        store.experiments[i].applied_change_id = id.to_string();
+                        InterruptedStart::ChangeStillApplied
+                    }
+                    None => {
+                        live_read = changed(&store.experiments[i].rec_id);
+                        InterruptedStart::ChangeUnrecorded
+                    }
                 }
             }
-        } else {
-            match rows.iter().find(|r| r.id == recorded) {
+            Ok(rows) => match rows.iter().find(|r| r.id == recorded) {
                 Some(r) if r.applied => InterruptedStart::ChangeStillApplied,
                 Some(_) => InterruptedStart::ChangeAlreadyRolledBack,
                 None => InterruptedStart::ChangeMissing,
-            }
+            },
         };
         let rec = &mut store.experiments[i];
         match resolution {
@@ -731,7 +729,24 @@ pub(crate) fn reconcile_interrupted_starts_in(
                     .into(),
                 );
             }
-            InterruptedStart::ChangeMissing | InterruptedStart::LedgerUnreadable => {
+            InterruptedStart::LedgerUnreadable => {
+                rec.status = ExperimentStatus::Aborted;
+                rec.stop_reason = Some(if recorded.is_empty() {
+                    "interrupted-start: Compy closed while this experiment was starting, and its change \
+                     history can't be read, so Compy can't tell whether the change was made. Nothing was \
+                     measured. If it's listed in Test → Applied & history, undo it there; if not, check \
+                     the setting in Windows."
+                        .into()
+                } else {
+                    format!(
+                        "interrupted-start: Compy closed while this experiment was starting, after the \
+                         change ({recorded}) was applied, and its change history can't be read to check \
+                         on it. Nothing was measured, so undo it in Test → Applied & history; if it isn't \
+                         listed there, check the setting in Windows."
+                    )
+                });
+            }
+            InterruptedStart::ChangeMissing => {
                 rec.status = ExperimentStatus::Aborted;
                 rec.stop_reason = Some(format!(
                     "interrupted-start: Compy closed while this experiment was starting, and its \
@@ -1102,10 +1117,11 @@ pub(crate) fn with_compy_state(outcome: ConcludeOutcome, other: Option<String>) 
     }
 }
 
-/// How many other settings Compy has applied (its own change excluded) can't be read back live:
-/// `changed` answers None for them, as [`target_verification`] does for an unreadable or unprobed
-/// setting. Sessions count those as active whether or not they are still in place, so the active-change
-/// counts can't show one reverted during the test. Counted once per setting.
+/// How many other settings Compy has applied (its own change excluded) can't be confirmed still in
+/// place: `changed`, a live read as [`target_verification`] answers it, says None (unreadable or
+/// unprobed) or false (set back, e.g. undone in Windows). Sessions count every applied change as
+/// active whether or not it is still in place, so the active-change counts can't show one set back
+/// during the test. Counted once per setting.
 pub(crate) fn unverified_other_changes(
     ledger: &[LedgerEntryRef<'_>],
     own: Option<&str>,
@@ -1116,25 +1132,27 @@ pub(crate) fn unverified_other_changes(
         .filter(|c| c.applied && Some(c.id) != own)
         .map(|c| c.rec_id)
         .collect();
-    recs.into_iter().filter(|rec| changed(rec).is_none()).count()
+    recs.into_iter().filter(|rec| changed(rec) != Some(true)).count()
 }
 
-/// §3/§7 when other Compy changes can't be read back. Sessions count those as active whether or not
-/// they are still in place, so nothing shows they stayed put during the test, and no result can be
+/// §3/§7 when other Compy changes can't be confirmed still in place. Sessions count those as active
+/// whether or not they still are, so nothing shows they stayed put during the test, and no result can be
 /// pinned on this change alone (§3 isolation, §7 "another change invalidates attribution", §8
 /// insufficient evidence, §9 only a verified Better keeps). Every measured verdict, a crash included,
 /// becomes `insufficient-evidence` and restores, exactly as an unreadable target does in
 /// [`guard_target_at_conclude`]: the measured delta stays as evidence and no noise band is recorded. A
 /// verdict that already says it wasn't judged keeps its own reason. Every one-click change has a live
-/// read; what can't be read back is a startup-app toggle, a retired change, or a read that failed.
+/// read; what can't be read back is a startup-app toggle, a session service suspend, a retired change,
+/// or a read that failed, and a setting undone in Windows reads as set back. [`unverified_start_refusal`]
+/// turns such a Trial down before it starts; this catches one that changes only by the conclude.
 pub(crate) fn with_unverified_changes(outcome: ConcludeOutcome, unverified: usize) -> ConcludeOutcome {
     if unverified == 0 || !matches!(outcome.verdict.as_str(), "improved" | "no-change" | "regressed") {
         return outcome;
     }
     let crashed = outcome.stop_reason.as_deref() == Some("crash-during-treatment");
-    let (what, stayed) = match unverified {
-        1 => ("another setting Compy changed earlier can't be read back".to_string(), "it stayed as it was"),
-        n => (format!("{n} other settings Compy changed earlier can't be read back"), "they stayed as they were"),
+    let what = match unverified {
+        1 => "another setting Compy changed earlier can't be confirmed as still in place".to_string(),
+        n => format!("{n} other settings Compy changed earlier can't be confirmed as still in place"),
     };
     ConcludeOutcome {
         verdict: "insufficient-evidence".into(),
@@ -1146,17 +1164,38 @@ pub(crate) fn with_unverified_changes(outcome: ConcludeOutcome, unverified: usiz
         confidence: Confidence::Unknown,
         note: if crashed {
             format!(
-                "The game crashed during the test, but {what}, so Compy can't show {stayed} or pin the \
-                 crash on this setting. Compy restored the change without blaming it."
+                "The game crashed during the test, but {what}, so Compy can't pin the crash on this \
+                 setting. Compy restored the change without blaming it."
             )
         } else {
             format!(
-                "Compy can't tell whether this result is this setting's alone: {what}, so it can't show \
-                 {stayed} during the test. Compy restored the change and judged nothing."
+                "Compy can't tell whether this result is this setting's alone: {what}. Compy restored \
+                 the change and judged nothing."
             )
         },
         ..outcome
     }
+}
+
+/// §3 at start — the same rule as [`with_unverified_changes`], applied before anything is recorded or
+/// changed. Another applied setting not confirmed in place now would leave any result unjudged at
+/// the conclude, so the user is told the remedy before playing a test session for nothing.
+pub(crate) fn unverified_start_refusal(unverified: usize) -> Option<String> {
+    let (what, undo) = match unverified {
+        0 => return None,
+        1 => ("another setting Compy changed earlier can't be confirmed as still in place".to_string(), "undo it"),
+        n => (format!("{n} other settings Compy changed earlier can't be confirmed as still in place"), "undo them"),
+    };
+    Some(format!(
+        "{what}, so a test couldn't show that its result is this setting's alone — {undo} in \
+         Test → Applied & history, then start the test again"
+    ))
+}
+
+/// A live, read-only read of whether `rec_id`'s setting is changed; None when it can't be read or has
+/// no probe.
+fn read_back(rec_id: &str) -> Option<bool> {
+    target_verification(Some(crate::history::probe_rec_target(rec_id)))
 }
 
 /// The session with this id, when there is exactly one.
@@ -1598,8 +1637,8 @@ pub(crate) fn simulate_optimization(rec_id: String) -> Result<SimulatorReport, S
 /// ledger boundary, and record a Running experiment. Refuses while dark, and while another experiment
 /// is starting or running. RECORD FIRST (#583): a `Pending` record naming the change is saved before
 /// anything is applied, so no crash point can leave an applied change that no experiment names. A
-/// failed apply drops that record only when a live read shows nothing changed; otherwise the record
-/// stays, loudly Aborted (see `settle_failed_apply`). After a successful apply, a start that can't
+/// failed apply never drops that record: it stays, loudly Aborted, and a live read of the setting only
+/// words why (see `settle_failed_apply`). After a successful apply, a start that can't
 /// finish (the target didn't take, or the evidence watermark is unreadable) restores the change
 /// through the audited boundary before returning the error, never leaves it applied unrecorded.
 /// The baseline is named by its session id and read from Compy's own session store (#583 lane 2b):
@@ -1630,8 +1669,8 @@ pub(crate) fn start_experiment(
     if let Some(active) = active_trial(&store) {
         return Err(if active.status == ExperimentStatus::Pending {
             format!(
-                "an earlier experiment start ({}) was interrupted and Compy can't read its change \
-                 history yet to resolve it — check Test → Applied & history, then try again",
+                "an earlier experiment start ({}) was interrupted and isn't resolved yet — check \
+                 Test → Applied & history, then try again",
                 active.rec_title,
             )
         } else {
@@ -1660,6 +1699,11 @@ pub(crate) fn start_experiment(
     };
     baseline_is_current(baseline, ledger, crate::history::applied_changes_summary().active)
         .map_err(|why| format!("experiment not started — {why}"))?;
+    // §3: other applied settings not confirmed in place would leave the result unjudged at conclude.
+    let unverified = rows.as_deref().map_or(0, |rows| unverified_other_changes(rows, None, read_back));
+    if let Some(why) = unverified_start_refusal(unverified) {
+        return Err(format!("experiment not started — {why}"));
+    }
 
     // Step 1 (§4.1): read the setting before anything is recorded or changed. Only a setting that
     // reads as not yet changed can start, so the restore has a verified state to return to.
@@ -1891,10 +1935,10 @@ fn reconcile_pending_locked(store: &mut ExperimentStore) -> Result<Vec<Interrupt
         Ok(_) => Ok(rows.as_slice()),
         Err(e) => Err(e.as_str()),
     };
-    // The live read that decides whether a start with no change record may be dropped.
+    // The live read that words the loud record of a start with no change record; it never drops one.
     let changed = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target(rec_id)));
     let outcomes = reconcile_interrupted_starts_in(store, ledger, changed, Utc::now());
-    if outcomes.iter().any(|o| *o != InterruptedStart::LedgerUnreadable) {
+    if !outcomes.is_empty() {
         save_store(store)?;
     }
     Ok(outcomes)
@@ -1990,7 +2034,7 @@ pub(crate) fn conclude_experiment(
         None => crash_outcome(rec.applied_at.as_deref(), baseline, treatment),
     };
     let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()));
-    // §3: other settings Compy changed that can't be read back limit what this result can claim.
+    // §3: other settings Compy changed that aren't confirmed in place limit what this result can claim.
     let own = Some(rec.applied_change_id.as_str()).filter(|id| !id.is_empty());
     let read_back = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target(rec_id)));
     let unverified = rows.as_deref().map_or(0, |rows| unverified_other_changes(rows, own, read_back));
@@ -3072,13 +3116,27 @@ mod experiment_tests {
     }
 
     #[test]
-    fn reconcile_with_an_unreadable_ledger_leaves_the_start_pending_for_a_retry() {
-        let mut store = ExperimentStore { schema_version: 1, experiments: vec![pending_at(START)] };
-        let before = serde_json::to_string(&store).unwrap();
+    fn reconcile_with_an_unreadable_ledger_leaves_a_loud_record_never_a_hidden_pending() {
+        // Codex r4: left Pending, the record stays hidden from the bench while it blocks every later
+        // start for as long as the read keeps failing, and a change it may have made gets no record.
+        let mut named = pending_at(START);
+        named.applied_change_id = "ours".into();
+        let mut store = ExperimentStore { schema_version: 1, experiments: vec![pending_at(START), named] };
         let out = reconcile_interrupted_starts_in(&mut store, Err("parse: bad json"), never_read, Utc::now());
-        assert_eq!(out, vec![InterruptedStart::LedgerUnreadable]);
-        assert_eq!(serde_json::to_string(&store).unwrap(), before, "no guess, no terminal state, no lost link");
-        assert!(active_trial(&store).is_some(), "still unresolved, so a new start stays refused");
+        assert_eq!(out, vec![InterruptedStart::LedgerUnreadable, InterruptedStart::LedgerUnreadable]);
+        for r in &store.experiments {
+            assert_eq!(r.status, ExperimentStatus::Aborted, "loud, never left Pending");
+            assert!(!r.kept);
+            assert_eq!(r.trial_result, Some(TrialResult::Unmeasurable), "nothing was measured");
+            assert!(r.concluded_at.is_some());
+            let why = r.stop_reason.as_deref().unwrap();
+            assert!(why.contains("change history can't be read") && why.contains("check the setting in Windows"), "{why}");
+        }
+        let (unnamed, named) = (&store.experiments[0], &store.experiments[1]);
+        assert!(unnamed.stop_reason.as_deref().unwrap().contains("can't tell whether the change was made"));
+        assert_eq!(named.applied_change_id, "ours", "the saved link to the change is kept");
+        assert!(named.stop_reason.as_deref().unwrap().contains("(ours) was applied"));
+        assert!(active_trial(&store).is_none(), "an unreadable ledger no longer blocks every later start");
     }
 
     #[test]
@@ -3607,41 +3665,47 @@ mod experiment_tests {
     }
 
     #[test]
-    fn other_changes_that_cant_be_read_back_leave_the_result_unjudged() {
-        // #611 r2+r3 review: sessions count an unreadable or unprobed setting as active whether or not
-        // it is still in place, so equal counts can't show it stayed put. Such settings are counted
-        // once each; this Trial's own change, rolled-back ones and ones that read back are not.
+    fn other_changes_not_confirmed_in_place_leave_the_result_unjudged() {
+        // #611 r2+r3 review: sessions count an applied setting as active whether or not it is still
+        // in place, so equal counts can't show it stayed put. Codex r4: one that reads as set back
+        // (undone in Windows) moved as surely as an unreadable one may have. Each such setting is
+        // counted once; this Trial's own change, rolled-back ones and ones that read back are not.
         const AT: &str = "2026-09-28T11:00:00+00:00";
         let ledger = [
             row("ours", "test-rec", AT, true),
             row("s1", "startup-entry", AT, true),
             row("s2", "startup-entry", AT, true),
             row("gm", "game-mode", AT, true),
+            row("gb", "game-bar-disable", AT, true),
             row("gone", "service-suspend", AT, false),
         ];
         let read = |rec: &str| match rec {
             "game-mode" => Some(true),
+            "game-bar-disable" => Some(false),
             "startup-entry" => None,
             other => panic!("{other} should not be read"),
         };
-        assert_eq!(unverified_other_changes(&ledger, Some("ours"), read), 1);
+        assert_eq!(unverified_other_changes(&ledger, Some("ours"), read), 2);
+        assert_eq!(unverified_other_changes(&ledger[4..5], Some("ours"), read), 1, "set back counts on its own");
         assert_eq!(unverified_other_changes(&ledger[..1], Some("ours"), read), 0);
+        assert_eq!(unverified_other_changes(&ledger[3..4], Some("ours"), read), 0, "in place: not counted");
 
         let better = measured(180.0);
         assert_eq!((better.verdict.as_str(), better.keep), ("improved", true), "the fixture would keep");
         assert!(noise_evidence_for(&better, DEFAULT_NOISE_FLOOR_PCT).is_some());
         assert_eq!(with_unverified_changes(better.clone(), 0), better, "all read back: untouched");
         // §3/§7/§9: a Better that can't be shown to be this setting's alone is never kept.
-        for verdict in [measured(180.0), measured(150.0), measured(120.0)] {
-            for (n, says, stayed) in [(1, "another setting", "it stayed"), (3, "3 other settings", "they stayed")] {
+        for (verdict, was) in [(measured(180.0), "improved"), (measured(150.0), "no-change"), (measured(120.0), "regressed")] {
+            assert_eq!(verdict.verdict, was, "the fixture covers every measured verdict");
+            for (n, says) in [(1, "another setting"), (3, "3 other settings")] {
                 let o = with_unverified_changes(verdict.clone(), n);
                 assert_eq!(o.verdict, "insufficient-evidence", "{} / {n}", verdict.verdict);
                 assert!(!o.keep, "never kept: {} / {n}", verdict.verdict);
                 assert_eq!(o.stop_reason.as_deref(), Some("other-change-unverified-at-conclude"));
                 assert_eq!(o.confidence, Confidence::Unknown);
                 assert_eq!(o.delta_low1_pct, verdict.delta_low1_pct, "the measured delta stays as evidence");
-                assert!(o.note.contains(says) && o.note.contains("can't be read back"), "{}", o.note);
-                assert!(o.note.contains(stayed) && o.note.contains("judged nothing"), "{}", o.note);
+                assert!(o.note.contains(says) && o.note.contains("can't be confirmed as still in place"), "{}", o.note);
+                assert!(o.note.contains("judged nothing"), "{}", o.note);
                 assert_eq!(trial_result_for(&o.verdict), TrialResult::Inconclusive);
                 assert_eq!(noise_evidence_for(&o, DEFAULT_NOISE_FLOOR_PCT), None, "no band claimed");
             }
@@ -3655,7 +3719,25 @@ mod experiment_tests {
         assert!(o.note.contains("crashed") && o.note.contains("without blaming it"), "{}", o.note);
         // A verdict that already says it wasn't judged keeps its own reason.
         let confounded = with_compy_state(measured(180.0), Some("another change".into()));
-        assert_eq!(with_unverified_changes(confounded.clone(), 2), confounded);
+        let wrong_game = conclude_outcome(&rec(150.0, 5), 180.0, 5000, false, Some("Other"), Some(5), Utc::now());
+        let thin = conclude_outcome(&rec(150.0, 5), 180.0, MIN_TREATMENT_SAMPLES - 1, false, Some("Test"), Some(5), Utc::now());
+        assert_eq!(wrong_game.verdict, "not-comparable");
+        assert_eq!(thin.stop_reason.as_deref(), Some("insufficient-samples"));
+        for unjudged in [confounded, wrong_game, thin] {
+            assert_eq!(with_unverified_changes(unjudged.clone(), 2), unjudged);
+        }
+    }
+
+    #[test]
+    fn a_start_is_refused_when_other_changes_arent_confirmed_in_place() {
+        // #611 in-house review: the conclude would leave such a Trial unjudged anyway, so it is turned
+        // down before the user plays a test session for nothing, with the remedy named.
+        assert_eq!(unverified_start_refusal(0), None, "all read back: the start goes ahead");
+        for (n, says, undo) in [(1, "another setting", "undo it in"), (3, "3 other settings", "undo them in")] {
+            let why = unverified_start_refusal(n).expect("refused");
+            assert!(why.contains(says) && why.contains("can't be confirmed as still in place"), "{why}");
+            assert!(why.contains(undo) && why.contains("Test → Applied & history"), "{why}");
+        }
     }
 
     #[test]

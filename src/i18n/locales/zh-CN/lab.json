@@ -354,7 +354,7 @@
       "confounded": "另一项更改产生了干扰——已恢复,无法归因",
       "expired": "基准过旧,无法判定——已恢复",
       "insufficientEvidence": "数据不足,无法判定——已恢复",
-      "notComparable": "游戏不同,不可比较——已恢复"
+      "notComparable": "不可比较——已恢复"
     },
     "simVerdict": {
       "worthTesting": "值得一试",

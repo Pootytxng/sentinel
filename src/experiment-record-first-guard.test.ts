@@ -337,7 +337,7 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
     );
   });
 
-  it("§3/§7/§9 at conclude: other settings that can't be read back leave the result unjudged, ahead of the target check", () => {
+  it("§3/§7/§9 at conclude: other settings not confirmed in place leave the result unjudged, ahead of the target check", () => {
     const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
     const fold = conclude.indexOf("with_unverified_changes(judged, unverified)");
     expect(fold, "the conclude no longer weighs settings it can't read back").toBeGreaterThanOrEqual(0);
@@ -347,12 +347,49 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
     expect(unverified).toMatch(/verdict: "insufficient-evidence"\.into\(\),\s*keep: false,/);
     expect(unverified, "an unconfirmed result is only capped again, and can still keep").not.toContain("confidence.min(");
   });
+
+  it("§3 at start: a Trial that could only end unjudged is refused before anything is recorded or applied", () => {
+    const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
+    const count = start.indexOf("unverified_other_changes(rows, None, read_back)");
+    const refuse = start.indexOf("unverified_start_refusal(unverified)");
+    expect(count, "the start no longer counts other settings it can't read back").toBeGreaterThanOrEqual(0);
+    expect(refuse, "the start no longer refuses on them").toBeGreaterThan(count);
+    expect(count).toBeGreaterThan(start.indexOf("baseline_is_current("));
+    expect(refuse).toBeLessThan(start.indexOf("status: ExperimentStatus::Pending"));
+    expect(refuse).toBeLessThan(start.indexOf("apply_recommendation("));
+  });
+
+  // Codex r4 (#611): a Pending record is hidden from the bench yet blocks every later start, so an
+  // unreadable ledger that left it Pending hid a change it may have made for as long as the read failed.
+  it("an unreadable change history resolves an interrupted start loudly and saves it, never leaves it Pending", () => {
+    const pure = fnBody(EXPERIMENT, "pub(crate) fn reconcile_interrupted_starts_in(");
+    expect(pure, "an unreadable ledger skips the record again").not.toMatch(/LedgerUnreadable\);\s*i \+= 1;\s*continue;/);
+    expect(pure).toMatch(/InterruptedStart::LedgerUnreadable => \{\s*rec\.status = ExperimentStatus::Aborted;/);
+    const locked = fnBody(EXPERIMENT, "fn reconcile_pending_locked(");
+    expect(locked, "a resolution is left unsaved again").not.toContain("!= InterruptedStart::LedgerUnreadable");
+    expect(locked).toMatch(/if !outcomes\.is_empty\(\) \{\s*save_store\(store\)\?;/);
+  });
 });
 
 // Self-review #583 lane 2b: the Trial's abort and restore messages reach the owner verbatim (the
 // bench's alert and aborted-row line), and eighteen of them sent him to "Fix" — a room the rail
 // retired (83b91afb, 59249bb6). Undo lives in Test → Applied & history. Comments may still name the
 // old surface; only code lines, where the string literals live, are held to this.
+// Self-review #8 (#611): the fixture gave an unpinned crash a zeroed treatment, so the preview showed
+// a "+0%" reading the real app can never write, and a review judged a measurement that doesn't exist.
+describe("the fixture preview shows only Trial rows the backend can write", () => {
+  it("an unpinned crash row carries no treatment, because none was resolved", () => {
+    const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
+    expect(conclude).toContain("None => crash_outcome(");
+    expect(conclude).toContain("store.experiments[idx].treatment = resolved.as_ref().map(");
+    const stub = readFileSync(join("docs", "ui-sweep", "fixture", "stub-core.ts"), "utf8");
+    const rows = stub.split(/(?=\bid: "fx-)/).slice(1);
+    const unpinned = rows.filter((r) => /stop_reason: "crash-(?:session|baseline)-/.test(r));
+    expect(unpinned.length, "the fixture lost its unpinned-crash row").toBeGreaterThan(0);
+    for (const row of unpinned) expect(row, row.slice(0, 40)).toMatch(/\btreatment: null,/);
+  });
+});
+
 describe("the Trial's messages name a room that exists", () => {
   it("no experiment.rs string sends the owner to the retired Fix room", () => {
     const code = EXPERIMENT.split("\n").filter((l) => !/^\s*\/\//.test(l));

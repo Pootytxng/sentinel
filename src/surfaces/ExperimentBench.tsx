@@ -344,14 +344,17 @@ export default function ExperimentBench() {
   // §11 notes for the past experiments. Every sentence is said once per list, however many rows it
   // covers — the same sentence down the rows buries the rows it describes (C-11). When every judged
   // row says the same thing, that line is the list's rule, said under the label. A row whose verdict
-  // already says it wasn't judged ("—", interfered, not comparable, not enough evidence) needs no
-  // note. Every other note — a row that LOOKS judged (Better / No change / Worse) but has no record
-  // (a crash, an older result), or noise lines that differ between rows — is said once under the
-  // list, and its rows carry only its mark.
-  const rowNotes = history.map((x): RowNote | null =>
-    x.noise_evidence ? noiseLine(x.noise_evidence, t) : looksJudged(x) ? NO_RECORD : null,
+  // already says it wasn't judged ("—", interfered, not enough evidence) needs no note. "Not
+  // comparable" can't say which pair failed (another game, or a crash session Compy can't tie to the
+  // change or compare), so that row carries the backend's own reason — never the list's rule. Every
+  // other note — a row that LOOKS judged (Better / No change / Worse) but has no record (a crash, an
+  // older result), or noise lines that differ between rows — is said once under the list, and its
+  // rows carry only its mark.
+  const noiseLines = history.map((x) => (x.noise_evidence ? noiseLine(x.noise_evidence, t) : null));
+  const rowNotes = history.map((x, i): RowNote | null =>
+    noiseLines[i] ?? (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? x.verdict_note || null : null),
   );
-  const judgedLines = new Set(rowNotes.filter((n): n is string => typeof n === "string"));
+  const judgedLines = new Set(noiseLines.filter((n): n is string => n !== null));
   const sharedNoise = judgedLines.size === 1 ? [...judgedLines][0] : null;
   const footnotes = [...new Set(rowNotes.filter((n): n is RowNote => n !== null && n !== sharedNoise))];
   const footnoteText = (n: RowNote) =>

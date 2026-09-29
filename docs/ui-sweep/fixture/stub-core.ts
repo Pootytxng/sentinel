@@ -146,6 +146,37 @@ const HISTORY = [
     verdict_confidence: "medium" as Confidence, verdict_note: "One full session either side, same game, same rig.",
     baseline_session_id: null, noise_evidence: null,
   },
+  {
+    // A crash the backend couldn't pin (experiment.rs `crash_outcome`): "not-comparable", restored.
+    // Its row says the backend's own reason, never the list's "different game" rule (Codex r4, #611).
+    // No treatment record on the `crash_outcome` path: it runs only when no reading was resolved.
+    id: "fx-h6", rec_id: "fixture-rec-4", rec_title: "Disable mouse acceleration curve",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(17000),
+    status: "restored" as ExperimentStatus,
+    baseline_avg_fps: 128.0, baseline_low1_fps: 83.0, active_changes_at_start: 0,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: null,
+    verdict: "not-comparable", kept: false, stop_reason: "crash-session-comparability-unknown",
+    concluded_at: iso(16790), verdict_confidence: "unknown" as Confidence,
+    verdict_note:
+      "The game crashed, but that session and the baseline share no recorded rig or conditions, so Compy can't check that nothing else changed. So the crash can't be pinned on this setting. Compy restored the change.",
+    baseline_session_id: iso(17100), noise_evidence: null,
+  },
+  {
+    // A start interrupted while the change history couldn't be read (experiment.rs
+    // `InterruptedStart::LedgerUnreadable`): a loud Aborted row, never a hidden Pending (Codex r4, #611).
+    id: "fx-h7", rec_id: "fixture-rec-3", rec_title: "Turn off Xbox Game Bar",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(18000),
+    status: "aborted" as ExperimentStatus,
+    baseline_avg_fps: 127.0, baseline_low1_fps: 82.0, active_changes_at_start: 0,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: null,
+    verdict: null, kept: false,
+    stop_reason:
+      "interrupted-start: Compy closed while this experiment was starting, and its change history can't be read, so Compy can't tell whether the change was made. Nothing was measured. If it's listed in Test → Applied & history, undo it there; if not, check the setting in Windows.",
+    concluded_at: iso(17990), verdict_confidence: null, verdict_note: null,
+    baseline_session_id: iso(18100), noise_evidence: null,
+  },
 ];
 
 const RUNNING = {

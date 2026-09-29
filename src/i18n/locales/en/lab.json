@@ -359,7 +359,7 @@
       "confounded": "Another change interfered — restored, can't attribute",
       "expired": "Baseline too old to judge — restored",
       "insufficientEvidence": "Not enough data to judge — restored",
-      "notComparable": "Different game — not comparable, restored"
+      "notComparable": "Not comparable — restored"
     },
     "simVerdict": {
       "worthTesting": "Worth testing",
