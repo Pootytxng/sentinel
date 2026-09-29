@@ -224,17 +224,23 @@ impl ActiveCheck {
 /// action agrees with its rec id, and is `Unrecognised` otherwise; every other row is
 /// [`probe_rec_target`]. Read-only, and takes no lock.
 fn check_change_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
-    let action = c.applied_action.as_ref();
-    if let Some(name) = c.rec_id.strip_prefix("startup-entry:") {
+    live_check(&c.rec_id, c.applied_action.as_ref(), reads)
+}
+
+/// [`check_change_state`] from a rec id and its typed action, without a ledger row. The
+/// rollback-first commit (#616) reads an undone change back through this, because by then its
+/// receipt was never saved. Read-only, and takes no lock.
+fn live_check(rec_id: &str, action: Option<&AppliedAction>, reads: &LiveReads) -> ActiveCheck {
+    if let Some(name) = rec_id.strip_prefix("startup-entry:") {
         return startup_row_check(name, action, startup_approval_value);
     }
-    if let Some(id) = c.rec_id.strip_prefix("bloat-task:") {
+    if let Some(id) = rec_id.strip_prefix("bloat-task:") {
         return task_row_check(id, action, |task| reads.task_disabled(task));
     }
-    if let Some(svc) = c.rec_id.strip_prefix("service-suspend:") {
+    if let Some(svc) = rec_id.strip_prefix("service-suspend:") {
         return service_row_check(svc, action, |s| service_running_checked(s.name()));
     }
-    probe_rec_target(&c.rec_id)
+    probe_rec_target(rec_id)
 }
 
 /// One pass's shared live reads (#620): every task row of a History, Health or Machine Model pass
@@ -788,6 +794,196 @@ fn build_applied_change(
     })
 }
 
+/// A change Windows already has, waiting for its receipt: what the receipt will say, plus the
+/// `ApplyResult` its audited `apply_*` returned, which carries the typed undo for it.
+struct Made {
+    rec_id: String,
+    rec_title: String,
+    provenance: Option<&'static str>,
+    result: ApplyResult,
+}
+
+impl Made {
+    fn new(rec_id: &str, rec_title: &str, result: ApplyResult) -> Self {
+        Made { rec_id: rec_id.to_string(), rec_title: rec_title.to_string(), provenance: None, result }
+    }
+}
+
+/// What undoing a change needs from the machine. Production passes `actions::dispatch_rollback`
+/// (the one mutation boundary) and the ledger's own live re-check ([`live_check`], given the rec id
+/// and the typed action the apply returned, so a startup-app, bloat-task or service-suspend undo is
+/// read back as precisely as its ledger row would be); the guard tests pass fakes, so they never
+/// touch Windows.
+struct UndoEffects<'a> {
+    rollback: &'a dyn Fn(&RollbackAction, &Snapshot) -> Result<(), String>,
+    probe: &'a dyn Fn(&str, &AppliedAction) -> ActiveCheck,
+}
+
+/// Rollback-first receipt commit (#616), the ONLY way an apply gateway records what it did.
+///
+/// Every change in `made` is already on Windows. Their receipts are built, appended to `history`, and
+/// the ledger is saved once. If a receipt can't be built or the save fails, none of these changes may
+/// stay on the machine without an undo record. So each one is undone at once through the typed
+/// rollback its own apply produced (newest first), `history` is put back as it was, and the `Err` says
+/// for each change whether the undo ran and what a live read of the setting shows now. Before this, a
+/// failed save left the change applied with no undo in Test → Applied & history, behind an error that
+/// read as though nothing had happened.
+fn commit_receipts(
+    history: &mut Vec<AppliedChange>,
+    made: Vec<Made>,
+    save: &dyn Fn(&[AppliedChange]) -> Result<(), String>,
+    effects: &UndoEffects,
+) -> Result<Vec<AppliedChange>, String> {
+    // Copy each undo BEFORE the receipt builder consumes its result. Once a receipt fails, this copy
+    // is the only record of how to reverse what Windows now has.
+    let undos: Vec<Undo> = made
+        .iter()
+        .map(|m| Undo {
+            rec_id: m.rec_id.clone(),
+            title: m.rec_title.chars().take(MAX_REC_TITLE_LEN).collect(),
+            applied: m.result.applied_action.clone(),
+            action: m.result.rollback_action.clone(),
+            snapshot: m.result.snapshot.clone(),
+        })
+        .collect();
+    let before = history.len();
+    let committed = made
+        .into_iter()
+        .map(|m| {
+            let mut change = build_applied_change(&m.rec_id, &m.rec_title, m.result)?;
+            change.provenance = m.provenance.map(str::to_string);
+            Ok(change)
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .and_then(|changes| {
+            history.extend(changes.iter().cloned());
+            save(history).map(|()| changes)
+        });
+    committed.map_err(|why| {
+        history.truncate(before);
+        undo_unrecorded(&undos, &why, effects)
+    })
+}
+
+/// One change's typed undo, copied out of its `ApplyResult` before the receipt builder consumes it.
+struct Undo {
+    rec_id: String,
+    title: String,
+    /// What the apply did, so the live read after the undo knows which way to read.
+    applied: AppliedAction,
+    action: RollbackAction,
+    snapshot: Snapshot,
+}
+
+/// Undo every change whose receipt failed, newest first, and describe what happened to each. `why`
+/// is the build or save error that made the undo necessary. Each undo runs even when an earlier one
+/// failed, because every change left in place is one the user can't undo from Compy.
+fn undo_unrecorded(undos: &[Undo], why: &str, effects: &UndoEffects) -> String {
+    let mut outcomes: Vec<String> = undos
+        .iter()
+        .rev()
+        .map(|u| {
+            let undone = (effects.rollback)(&u.action, &u.snapshot);
+            let outcome = undo_outcome(&undone, (effects.probe)(&u.rec_id, &u.applied));
+            if undos.len() == 1 {
+                outcome
+            } else {
+                format!("{}: {outcome}", u.title)
+            }
+        })
+        .collect();
+    outcomes.reverse();
+    let head = if undos.len() == 1 {
+        format!(
+            "Compy made this change but couldn't save its undo record ({why}), so it tried to \
+             undo the change straight away."
+        )
+    } else {
+        format!(
+            "Compy made {} changes but couldn't save their undo records ({why}), so it tried to \
+             undo each one straight away.",
+            undos.len()
+        )
+    };
+    format!("{head} {}", outcomes.join(" "))
+}
+
+/// PURE: one change's undo outcome in plain English: did the typed rollback run, and what does a
+/// live read of the setting say now. Only a read that comes back OFF confirms the change is gone. A
+/// failed undo is stated plainly, because the change then stays on the machine with no undo record.
+fn undo_outcome(undone: &Result<(), String>, read: ActiveCheck) -> String {
+    const NOT_LISTED: &str =
+        "It isn't listed in Test → Applied & history, so Compy can't undo it later";
+    match (undone, read) {
+        (Ok(()), ActiveCheck::Off) => {
+            "Undone: a live read confirms the change is no longer in effect.".to_string()
+        }
+        (Ok(()), ActiveCheck::On) => format!(
+            "The undo ran, but a live read still shows the setting as changed (it may have been set \
+             this way before Compy touched it). {NOT_LISTED}; check the setting in Windows."
+        ),
+        (Ok(()), ActiveCheck::Unreadable) => {
+            "The undo ran, but Compy couldn't read the setting back to confirm it.".to_string()
+        }
+        (Ok(()), ActiveCheck::Unrecognised) => "The undo ran. Compy has no live read for this \
+             setting, so it can't confirm the result beyond that."
+            .to_string(),
+        (Err(e), ActiveCheck::Off) => format!(
+            "The undo reported an error ({e}), but a live read shows the change is not in effect. \
+             {NOT_LISTED}; check the setting in Windows."
+        ),
+        (Err(e), ActiveCheck::On) => format!(
+            "Undo failed ({e}): a live read shows the change is still in effect. {NOT_LISTED}; set \
+             it back in Windows."
+        ),
+        (Err(e), ActiveCheck::Unreadable) => format!(
+            "Undo failed ({e}): treat the change as still in effect, because Compy couldn't read the \
+             setting back to check. {NOT_LISTED}; set it back in Windows."
+        ),
+        (Err(e), ActiveCheck::Unrecognised) => format!(
+            "Undo failed ({e}): treat the change as still in effect, because Compy has no live read \
+             for this setting. {NOT_LISTED}; set it back in Windows."
+        ),
+    }
+}
+
+/// [`commit_receipts`] against the real machine: the ledger save under the proven root, the typed
+/// rollback through `actions::dispatch_rollback`, and the ledger's live re-check. Adds no mutation
+/// primitive; the undo is the same dispatch `rollback_change` uses.
+fn record_receipts(
+    root: &MutationRoot,
+    history: &mut Vec<AppliedChange>,
+    made: Vec<Made>,
+) -> Result<Vec<AppliedChange>, String> {
+    let save = |h: &[AppliedChange]| save_history(root, h);
+    let rollback = |a: &RollbackAction, s: &Snapshot| dispatch_rollback(root, a, s);
+    let probe = |rec_id: &str, applied: &AppliedAction| live_check(rec_id, Some(applied), &LiveReads::default());
+    let effects = UndoEffects { rollback: &rollback, probe: &probe };
+    commit_receipts(history, made, &save, &effects).inspect_err(|e| {
+        // A change that had to be undone because it couldn't be recorded, and above all one whose
+        // undo failed, is a case support must be able to see.
+        crate::support_evidence::record(
+            crate::support_evidence::EventKind::Ledger,
+            "receipt_commit",
+            "undone_unrecorded",
+            crate::support_evidence::Outcome::Failed,
+            e,
+        );
+    })
+}
+
+/// The one-change form of [`record_receipts`], used by every single-apply gateway.
+fn record_receipt(
+    root: &MutationRoot,
+    history: &mut Vec<AppliedChange>,
+    made: Made,
+) -> Result<AppliedChangeView, String> {
+    record_receipts(root, history, vec![made])?
+        .pop()
+        .map(into_view)
+        .ok_or_else(|| "internal error: the change was recorded but its receipt was not returned".to_string())
+}
+
 /// Leftovers v2 (R2-5) — ARMED 2026-07-16: restore one leftover to its Windows default.
 /// Registered Tauri command since the arming commit (previously double-dark: unregistered AND
 /// gate-refused), flipped only after the owner-present live-UAC QA harness passed all three
@@ -825,11 +1021,11 @@ pub(crate) fn restore_leftover(
         "tcp-autotuning-off" => crate::actions::restore_tcp_autotuning_default(),
         other => Err(format!("no restore resolver exists for '{other}' yet")),
     }?;
-    let mut change = build_applied_change(detector_id, display_title, result)?;
-    change.provenance = Some("leftover_adopted".to_string());
-    history.push(change.clone());
-    save_history(&root, &history)?;
-    Ok(into_view(change))
+    let made = Made {
+        provenance: Some("leftover_adopted"),
+        ..Made::new(detector_id, display_title, result)
+    };
+    record_receipt(&root, &mut history, made)
 }
 
 /// Support evidence (spec §12) for the mutation boundary. Only FAILURES are recorded: a
@@ -874,10 +1070,8 @@ fn apply_recommendation_inner(rec_id: &str, rec_title: &str) -> Result<AppliedCh
     // misfile its receipt. Refuse before elevation.
     let (root, mut history) = begin_mutation()?;
     let result = dispatch_apply(&root, rec_id)?;
-    let change = build_applied_change(rec_id, rec_title, result)?;
-    history.push(change.clone());
-    save_history(&root, &history)?;
-    Ok(into_view(change))
+    // Rollback-first (#616): a receipt that can't be saved undoes the change it describes.
+    record_receipt(&root, &mut history, Made::new(rec_id, rec_title, result))
 }
 
 /// Session-scoped service SUSPEND (Services module, BUILT DARK). Gated by `service_suspend_gate()` —
@@ -896,14 +1090,12 @@ pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChang
     let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_service_suspend(service)?;
-    let change = build_applied_change(
+    let made = Made::new(
         &format!("service-suspend:{}", service_name),
         &format!("Suspend {} for this session", service_name),
         result,
-    )?;
-    history.push(change.clone());
-    save_history(&root, &history)?;
-    Ok(into_view(change))
+    );
+    record_receipt(&root, &mut history, made)
 }
 
 /// Startup-entry toggle — the audited replacement for the raw registry write that used to live in
@@ -924,7 +1116,7 @@ pub(crate) fn set_startup_entry_enabled(
     let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_startup_entry_enabled(&name, enabled)?;
-    let change = build_applied_change(
+    let made = Made::new(
         &format!("startup-entry:{}", name),
         &format!(
             "{} startup entry: {}",
@@ -932,10 +1124,8 @@ pub(crate) fn set_startup_entry_enabled(
             name
         ),
         result,
-    )?;
-    history.push(change.clone());
-    save_history(&root, &history)?;
-    Ok(into_view(change))
+    );
+    record_receipt(&root, &mut history, made)
 }
 
 /// OS-debloat: disable a curated telemetry scheduled task (BUILT DARK). Gated by `bloat_removal_gate()`
@@ -953,14 +1143,12 @@ pub(crate) fn disable_known_bloat_task(task_id: String) -> Result<AppliedChangeV
     let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_disable_scheduled_task(task)?;
-    let change = build_applied_change(
+    let made = Made::new(
         &format!("bloat-task:{}", task_id),
         &format!("Disable telemetry task ({})", task_id),
         result,
-    )?;
-    history.push(change.clone());
-    save_history(&root, &history)?;
-    Ok(into_view(change))
+    );
+    record_receipt(&root, &mut history, made)
 }
 
 /// Phase-B preload-app removal (BUILT DARK 2026-07-06). Gated by `preload_removal_gate()` — refuses
@@ -979,14 +1167,12 @@ pub(crate) fn remove_known_preload_app(app_id: String) -> Result<AppliedChangeVi
     let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_remove_preload_app(app)?;
-    let change = build_applied_change(
+    let made = Made::new(
         &format!("preload-app:{}", app_id),
         &format!("Remove preinstalled app ({})", app_id),
         result,
-    )?;
-    history.push(change.clone());
-    save_history(&root, &history)?;
-    Ok(into_view(change))
+    );
+    record_receipt(&root, &mut history, made)
 }
 
 // ─── §4 one-elevation batch apply (spec 2026-06-06-beta-feedback-3 §4) ──────────────────
@@ -1090,10 +1276,14 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         cmds: std::ops::Range<usize>,
     }
     let mut staged: Vec<Deferred> = Vec::new();
+    // Changes phase 1 made at once. Their receipts are committed after the deferral sink closes, so
+    // an undo that needs elevation (#616) can never be parked in this batch's elevated script.
+    let mut made_now: Vec<Made> = Vec::new();
 
     // ── Phase 1 — every apply runs with the deferral sink armed. Non-elevated recs mutate
-    // (HKCU) and receipt immediately, exactly like a single apply. Elevated recs perform their
-    // READS and park their one PS command (no partial mutation — see the sink's safety note).
+    // (HKCU) and are receipted right after this block, exactly like a single apply. Elevated recs
+    // perform their READS and park their one PS command (no partial mutation — see the sink's
+    // safety note).
     let all_cmds: Vec<String> = {
         let guard = ElevationDeferral::begin()?;
         let mut cursor = 0usize;
@@ -1103,9 +1293,8 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
                 Ok(result) => {
                     let now = guard.deferred_count();
                     if now == cursor {
-                        // No elevated step → the mutation already happened → honest receipt now.
-                        let change = build_applied_change(&it.rec_id, &it.rec_title, result)?;
-                        history.push(change);
+                        // No elevated step → the mutation already happened → honest receipt below.
+                        made_now.push(Made::new(&it.rec_id, &it.rec_title, result));
                         applied += 1;
                         outcomes.push(outcome_applied(&it.rec_id, &it.rec_title));
                     } else {
@@ -1123,10 +1312,18 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         guard.take_deferred()
     };
     // Persist phase-1 receipts before the elevation step — a cancelled UAC must never cost the
-    // non-elevated items their ledger entries.
-    if applied > 0 {
-        save_history(&root, &history)?;
+    // non-elevated items their ledger entries. If they can't be recorded they are undone (#616) and
+    // the batch stops before its elevated step, so nothing else is changed.
+    if !made_now.is_empty() {
+        record_receipts(&root, &mut history, made_now).map_err(|e| {
+            if staged.is_empty() {
+                e
+            } else {
+                format!("{e} The rest of the batch was stopped before its admin step, so nothing else was changed.")
+            }
+        })?;
     }
+    let recorded_before_admin = applied > 0;
 
     // ── Phase 2 — ONE elevation for every deferred command, receipts to a result FILE (data,
     // not code: reading it never executes anything), then a ledger receipt per confirmed item.
@@ -1164,12 +1361,14 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
             }
             Ok(()) => {
                 let text = std::fs::read_to_string(&receipts_path).unwrap_or_default();
+                // Read once, so remove it now: a receipt commit that fails below returns early.
+                let _ = std::fs::remove_file(&receipts_path);
                 let receipts = parse_batch_receipts(&text);
+                let mut made_elevated: Vec<Made> = Vec::new();
                 for d in staged {
                     match resolve_receipt(&receipts, &d.rec_id) {
                         Ok(()) => {
-                            let change = build_applied_change(&d.rec_id, &d.rec_title, d.result)?;
-                            history.push(change);
+                            made_elevated.push(Made::new(&d.rec_id, &d.rec_title, d.result));
                             applied += 1;
                             outcomes.push(outcome_applied(&d.rec_id, &d.rec_title));
                         }
@@ -1178,7 +1377,15 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
                         }
                     }
                 }
-                save_history(&root, &history)?;
+                if !made_elevated.is_empty() {
+                    record_receipts(&root, &mut history, made_elevated).map_err(|e| {
+                        if recorded_before_admin {
+                            format!("{e} The changes made before the admin step are recorded as normal.")
+                        } else {
+                            e
+                        }
+                    })?;
+                }
             }
         }
         let _ = std::fs::remove_file(&receipts_path);
@@ -1594,6 +1801,290 @@ mod batch_apply_tests {
         let huge = "x".repeat(1_000_000);
         let c = build_applied_change("fast-startup-off", &huge, result()).expect("build");
         assert_eq!(c.rec_title.chars().count(), MAX_REC_TITLE_LEN, "a hostile title is capped");
+    }
+}
+
+// #616 guards: a change whose receipt can't be saved is undone at once through the typed rollback
+// its own apply produced, and the error says what happened to it. Every effect is a fake, so nothing
+// here touches Windows or the real ledger.
+#[cfg(test)]
+mod receipt_commit_tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    fn fast_startup() -> ApplyResult {
+        ApplyResult {
+            applied_action: AppliedAction::DisableFastStartup,
+            rollback_action: RollbackAction::RestoreFastStartupFromSnapshot,
+            snapshot: Snapshot::FastStartup { prior_hiberboot: Some(1) },
+            elevation_used: true,
+        }
+    }
+
+    fn game_mode() -> ApplyResult {
+        ApplyResult {
+            applied_action: AppliedAction::EnableGameMode,
+            rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
+            snapshot: Snapshot::GameMode { prior_enabled: Some(0), prior_allow: Some(1) },
+            elevation_used: false,
+        }
+    }
+
+    fn contract(action: &RollbackAction, snapshot: &Snapshot) -> (serde_json::Value, serde_json::Value) {
+        (
+            serde_json::to_value(action).expect("rollback action serializes"),
+            serde_json::to_value(snapshot).expect("snapshot serializes"),
+        )
+    }
+
+    /// Everything the effects saw, in order.
+    #[derive(Default)]
+    struct Seen {
+        saves: RefCell<Vec<usize>>,
+        rollbacks: RefCell<Vec<(serde_json::Value, serde_json::Value)>>,
+        probes: RefCell<Vec<String>>,
+    }
+
+    fn commit(
+        history: &mut Vec<AppliedChange>,
+        made: Vec<Made>,
+        saved: Result<(), String>,
+        undo: impl Fn(&RollbackAction) -> Result<(), String>,
+        read: ActiveCheck,
+        seen: &Seen,
+    ) -> Result<Vec<AppliedChange>, String> {
+        let save = |h: &[AppliedChange]| {
+            seen.saves.borrow_mut().push(h.len());
+            saved.clone()
+        };
+        let rollback = |a: &RollbackAction, s: &Snapshot| {
+            seen.rollbacks.borrow_mut().push(contract(a, s));
+            undo(a)
+        };
+        let probe = |rec_id: &str, _: &AppliedAction| {
+            seen.probes.borrow_mut().push(rec_id.to_string());
+            read
+        };
+        commit_receipts(history, made, &save, &UndoEffects { rollback: &rollback, probe: &probe })
+    }
+
+    fn earlier() -> AppliedChange {
+        build_applied_change("game-mode-on", "An earlier change", game_mode()).expect("build")
+    }
+
+    #[test]
+    fn a_failed_save_undoes_the_change_with_its_own_typed_rollback() {
+        let mut history = vec![earlier()];
+        let earlier_id = history[0].id.clone();
+        let seen = Seen::default();
+        let err = commit(
+            &mut history,
+            vec![Made::new("fast-startup-off", "Disable Fast Startup", fast_startup())],
+            Err("disk full".into()),
+            |_| Ok(()),
+            ActiveCheck::Off,
+            &seen,
+        )
+        .err().expect("a change with no saved receipt must never read as applied");
+
+        assert_eq!(*seen.saves.borrow(), vec![2], "the save was attempted with the new receipt in it");
+        let expected = fast_startup();
+        assert_eq!(
+            *seen.rollbacks.borrow(),
+            vec![contract(&expected.rollback_action, &expected.snapshot)],
+            "the undo ran exactly once, with the dispatch's own typed rollback and snapshot"
+        );
+        assert_eq!(*seen.probes.borrow(), vec!["fast-startup-off"], "the live read targets this change");
+        assert_eq!(history.len(), 1, "the unsaved receipt is taken back out of the ledger");
+        assert_eq!(history[0].id, earlier_id, "earlier receipts are untouched");
+        for phrase in ["disk full", "couldn't save its undo record", "Undone: a live read confirms"] {
+            assert!(err.contains(phrase), "error must say {phrase:?}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_failed_undo_is_loud_and_says_the_change_is_still_in_effect() {
+        for read in [ActiveCheck::On, ActiveCheck::Unreadable, ActiveCheck::Unrecognised] {
+            let mut history = Vec::new();
+            let seen = Seen::default();
+            let err = commit(
+                &mut history,
+                vec![Made::new("fast-startup-off", "Disable Fast Startup", fast_startup())],
+                Err("disk full".into()),
+                |_| Err("the admin prompt was declined".into()),
+                read,
+                &seen,
+            )
+            .err().expect("failed save");
+            assert_eq!(seen.rollbacks.borrow().len(), 1, "the undo was attempted");
+            assert!(history.is_empty());
+            for phrase in [
+                "disk full",
+                "Undo failed (the admin prompt was declined)",
+                "still in effect",
+                "isn't listed in Test → Applied & history",
+                "set it back in Windows",
+            ] {
+                assert!(err.contains(phrase), "{read:?}: error must say {phrase:?}: {err}");
+            }
+            assert!(!err.contains("Undone"), "{read:?}: a failed undo must never read as undone: {err}");
+        }
+    }
+
+    #[test]
+    fn every_undo_and_live_read_combination_has_its_own_honest_outcome() {
+        let reads = [ActiveCheck::On, ActiveCheck::Off, ActiveCheck::Unreadable, ActiveCheck::Unrecognised];
+        let mut all = std::collections::HashSet::new();
+        for undone in [Ok(()), Err("boom".to_string())] {
+            for read in reads {
+                let text = undo_outcome(&undone, read);
+                assert!(all.insert(text.clone()), "{undone:?}/{read:?} must not share another case's text");
+                let confirmed = undone.is_ok() && read == ActiveCheck::Off;
+                assert_eq!(
+                    text.contains("no longer in effect"),
+                    confirmed,
+                    "{undone:?}/{read:?}: only an undo a live read confirms may say the change is gone: {text}"
+                );
+                if undone.is_err() {
+                    assert!(text.contains("(boom)"), "{read:?}: the undo error is named: {text}");
+                    assert!(text.contains("isn't listed"), "{read:?}: says it can't be undone later: {text}");
+                }
+                if undone.is_err() && read != ActiveCheck::Off {
+                    assert!(text.starts_with("Undo failed"), "{read:?}: a failed undo leads loud: {text}");
+                    assert!(text.contains("set it back in Windows"), "{read:?}: {text}");
+                }
+                if read == ActiveCheck::On {
+                    assert!(text.contains("isn't listed"), "{undone:?}: a change still live is unlisted: {text}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_saved_receipt_runs_no_undo_and_keeps_its_provenance() {
+        let mut history = vec![earlier()];
+        let seen = Seen::default();
+        let made = Made {
+            provenance: Some("leftover_adopted"),
+            ..Made::new("fast-startup-off", "Disable Fast Startup", fast_startup())
+        };
+        let saved = commit(&mut history, vec![made], Ok(()), |_| Ok(()), ActiveCheck::Off, &seen)
+            .expect("a saved receipt is success");
+
+        assert!(seen.rollbacks.borrow().is_empty(), "nothing is undone when the receipt saves");
+        assert!(seen.probes.borrow().is_empty(), "the happy path does no extra live read");
+        assert_eq!(*seen.saves.borrow(), vec![2], "one save, with the new receipt in it");
+        assert_eq!(saved.len(), 1);
+        assert_eq!(history.len(), 2);
+        let c = &history[1];
+        assert_eq!(c.id, saved[0].id, "the returned receipt is the one in the ledger");
+        assert_eq!(c.rec_id, "fast-startup-off");
+        assert_eq!(c.status, "applied");
+        assert_eq!(c.provenance.as_deref(), Some("leftover_adopted"));
+        let expected = fast_startup();
+        assert_eq!(
+            serde_json::to_value(&c.rollback_action).expect("serializes"),
+            serde_json::to_value(Some(&expected.rollback_action)).expect("serializes"),
+            "the receipt carries the typed rollback"
+        );
+    }
+
+    #[test]
+    fn a_failed_batch_save_undoes_every_change_newest_first_even_past_a_failed_undo() {
+        let mut history = vec![earlier()];
+        let earlier_id = history[0].id.clone();
+        let seen = Seen::default();
+        let err = commit(
+            &mut history,
+            vec![
+                Made::new("fast-startup-off", "Disable Fast Startup", fast_startup()),
+                Made::new("game-mode-on", "Turn on Game Mode", game_mode()),
+            ],
+            Err("access denied".into()),
+            // The newest change's undo fails; the older one must still be undone after it.
+            |a| match a {
+                RollbackAction::RestoreGameModeFromSnapshot => Err("key locked".into()),
+                _ => Ok(()),
+            },
+            ActiveCheck::Unreadable,
+            &seen,
+        )
+        .err().expect("failed save");
+
+        let (fs, gm) = (fast_startup(), game_mode());
+        assert_eq!(
+            *seen.rollbacks.borrow(),
+            vec![
+                contract(&gm.rollback_action, &gm.snapshot),
+                contract(&fs.rollback_action, &fs.snapshot),
+            ],
+            "both are undone, newest first, each with its own contract"
+        );
+        assert_eq!(*seen.probes.borrow(), vec!["game-mode-on", "fast-startup-off"]);
+        assert_eq!(history.len(), 1, "neither unsaved receipt stays in the ledger");
+        assert_eq!(history[0].id, earlier_id);
+        assert!(err.contains("made 2 changes") && err.contains("access denied"), "{err}");
+        let fs_at = err.find("Disable Fast Startup: The undo ran").expect("names the first change's outcome");
+        let gm_at = err.find("Turn on Game Mode: Undo failed (key locked)").expect("names the failed undo");
+        assert!(fs_at < gm_at, "outcomes read in the order the changes were made: {err}");
+    }
+
+    /// Top-level fn enclosing each production-code call to `callee`, skipping comment lines.
+    fn callers_of(callee: &str) -> Vec<String> {
+        let src = include_str!("history.rs");
+        let production = &src[..src.find("\n#[cfg(test)]\nmod ").expect("test modules follow production code")];
+        let mut current = String::new();
+        let mut callers = Vec::new();
+        for line in production.lines() {
+            // A new top-level item starts at column 0; blank lines and closers do not.
+            if !line.is_empty() && !line.starts_with(char::is_whitespace) && !line.starts_with(['}', ')', '#', '/']) {
+                current = line
+                    .split_once("fn ")
+                    .and_then(|(_, rest)| rest.split(['(', '<']).next())
+                    .unwrap_or("<not a fn>")
+                    .to_string();
+            }
+            if !line.trim_start().starts_with("//") && line.contains(&format!("{callee}(")) {
+                callers.push(current.clone());
+            }
+        }
+        callers
+    }
+
+    // The class guard: a new apply gateway that builds or saves its own receipt would bring the
+    // orphaned-change bug back, so only the rollback-first commit may build receipts, and only it,
+    // the writable canary and the rollback path may save the ledger.
+    #[test]
+    fn every_apply_gateway_records_through_the_rollback_first_commit() {
+        let build: std::collections::BTreeSet<String> = callers_of("build_applied_change").into_iter().collect();
+        assert_eq!(
+            build,
+            ["build_applied_change", "commit_receipts"].map(String::from).into(),
+            "only commit_receipts may build a receipt"
+        );
+        let save: std::collections::BTreeSet<String> = callers_of("save_history").into_iter().collect();
+        assert_eq!(
+            save,
+            ["ensure_ledger_writable", "record_receipts", "rollback_change_inner", "save_history"]
+                .map(String::from)
+                .into(),
+            "an apply gateway must never save the ledger itself"
+        );
+        let recording: std::collections::BTreeSet<String> = callers_of("record_receipt")
+            .into_iter()
+            .chain(callers_of("record_receipts"))
+            .collect();
+        for gateway in [
+            "apply_recommendation_inner",
+            "restore_leftover",
+            "suspend_known_service",
+            "set_startup_entry_enabled",
+            "disable_known_bloat_task",
+            "remove_known_preload_app",
+            "apply_recommendations_batch",
+        ] {
+            assert!(recording.contains(gateway), "{gateway} must record through record_receipt(s)");
+        }
     }
 }
 
