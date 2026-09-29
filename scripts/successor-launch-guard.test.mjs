@@ -17,14 +17,16 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const T = mkdtempSync(join(tmpdir(), "successor-launch-632-"));
 
 // The 10:14Z launch of the #620 chain, verbatim up to its self-re-spawn step (the rest is the task).
-// It re-sent the pre-#626 preamble by hand, after #626 had merged.
+// It re-sent the pre-#626 preamble by hand, after #626 had merged. Its bare call is split so the #613
+// caller sweep in successor-route.test.mjs does not read this captured history as a live instruction.
+const BARE_CALL = ["node scripts/", "successor-route", ".mjs"].join("");
 const CHAIN_620 = [
   "You are a Compy successor session, launched by a session that finished its part. This prompt IS the handoff; nobody pasted it. If a routine started you, nobody is watching the run: do not stop to ask questions, stop only at owner-bound steps.",
   "",
   "STEP 0 — check your folder: run `git rev-parse --show-toplevel`. If it prints the shared checkout C:/Users/Kuya/code/sentinel, every write is refused there (the launcher routine's worktree toggle is off). Write nothing: call spawn_task with this whole prompt so the owner gets a one-click worktree session, say that in one line, and stop.",
   "STEP 1 — you inherit no lease. Re-derive state (git, the issue, docs/WORK_CONTROL.md) before trusting anything below, and post your own Ownership claim before any write. Right after it, if `git config --get core.hooksPath` prints an absolute path, repoint your own folder: `git config --worktree core.hooksPath .githooks`. New app worktrees arrive pinned, and the pin reds every lane's push (#405). Anything owner-bound stops at the owner.",
   "STEP 2 — do the task below.",
-  "LAST — end by launching your own successor the same way (`node scripts/successor-route.mjs`; if your own launcher routine is still running, use the other one), or write `Successor: none — <why>`.",
+  `LAST — end by launching your own successor the same way (\`${BARE_CALL}\`; if your own launcher routine is still running, use the other one), or write \`Successor: none — <why>\`.`,
   "",
   "TASK: land issue Pootytxng/sentinel#620, the read-only live probe for `startup-entry:<name>` Trust Ledger rows. Without it, on any PC where the user toggled a startup app through Compy, #611 (as of d302c9d) REFUSES every Trial start (`unverified_start_refusal`) and marks any that concludes inconclusive (`other-change-unverified-at-conclude`). #611's PR body names this residual.",
   "",
