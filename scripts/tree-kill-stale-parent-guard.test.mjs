@@ -77,6 +77,8 @@ try {
     "MARKED_DEAD=$($marked.WaitForExit(5000))"
     "STRANGER_STATE=$(Resolve-HeldProcessFate -ProcessId $stranger.Id -Marker @($PidFile) -WaitMs 1500)"
     "STRANGER_ALIVE=$(-not $stranger.HasExited)"
+    # pid 4 is the System process, which this user may not open: a refusal that proves nothing.
+    "REFUSED_STATE=$(Resolve-HeldProcessFate -ProcessId 4 -Marker @($PidFile) -WaitMs 0)"
     'SURVIVED'
     return
   }
@@ -182,6 +184,11 @@ describe("the harness judges a process by its identity, never by its pid (#598)"
     expect(marker).toBeGreaterThan(code.indexOf("::CommandLine($handle)"));
     expect(code.indexOf("::Exited($handle, $WaitMs)")).toBeGreaterThan(marker);
     expect(code.indexOf("::Kill($handle)")).toBeGreaterThan(code.indexOf("::Exited($handle, $WaitMs)"));
+    // A failed open earns a verdict only as "no such pid" (87); access denied (5) proves nothing about
+    // whose process holds the pid, and every other failure stays unopenable (#598 review).
+    const openFailure = code.slice(code.indexOf("::Open("), code.indexOf("try {"));
+    expect([...openFailure.matchAll(/LastOpenError -eq (\d+)\) \{ return '(\w+)' \}/g)].map((m) => `${m[1]}=${m[2]}`)).toEqual(["87=gone"]);
+    expect(openFailure).not.toMatch(/'reused'|'exited'|'alive'/);
     // The handle is closed on every path, so it pins the pid only while the verdict is being made.
     expect(code).toMatch(/\} finally \{\s*\[Compy\.HeldProcess\]::Close\(\$handle\)\s*\}/);
   });
@@ -249,5 +256,8 @@ describe.runIf(windows)("tree kill ends the job and nothing else (#559)", () => 
     expect(field("MARKED_DEAD"), out).toBe("True");
     expect(field("STRANGER_STATE"), `a stranger holding the pid was read as the grandchild:\n${out}`).toBe("reused");
     expect(field("STRANGER_ALIVE"), `the harness killed a process it does not own:\n${out}`).toBe("True");
+    // #598 review: an open refused as access denied once read as "reused", so a live grandchild the
+    // harness could not open would have passed as gone. A refusal is unproven, never a verdict.
+    expect(field("REFUSED_STATE"), `a refused open was read as proof of identity:\n${out}`).toBe("unopenable-5");
   }, 120000);
 });

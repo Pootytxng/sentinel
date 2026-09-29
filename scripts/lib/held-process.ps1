@@ -54,18 +54,18 @@ namespace Compy {
 # The fate of the process at $ProcessId, judged through one held handle:
 #   gone       no process holds the pid
 #   exited     the process at the pid has exited
-#   reused     a process that is not ours holds the pid (access refused to a same-user child, or a
-#              command line missing any marker), so ours no longer exists; it is left untouched
+#   reused     a process whose command line lacks a marker holds the pid, so ours no longer exists;
+#              it is left untouched
 #   alive      ours, still running after $WaitMs; it has been killed through the held handle
-#   unreadable / unopenable-<error>   identity could not be proven either way (fail closed)
+#   unreadable / unopenable-<error>   identity could not be proven either way (fail closed). A refused
+#              open (access denied, 5) is one of these: a refusal does not say whose process it is, and
+#              reading it as "reused" let a live grandchild we could not open pass (#598 review)
 function Resolve-HeldProcessFate([int]$ProcessId, [string[]]$Marker, [int]$WaitMs) {
   $handle = [Compy.HeldProcess]::Open($ProcessId)
   if ($handle -eq [IntPtr]::Zero) {
-    switch ([Compy.HeldProcess]::LastOpenError) {
-      87 { return 'gone' }
-      5 { return 'reused' }
-      default { return "unopenable-$([Compy.HeldProcess]::LastOpenError)" }
-    }
+    # Only "no such pid" is a verdict; no other open failure proves anything about identity.
+    if ([Compy.HeldProcess]::LastOpenError -eq 87) { return 'gone' }
+    return "unopenable-$([Compy.HeldProcess]::LastOpenError)"
   }
   try {
     if ([Compy.HeldProcess]::Exited($handle, 0)) { return 'exited' }
