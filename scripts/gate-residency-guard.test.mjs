@@ -216,6 +216,10 @@ const RESIDENCY = {
     kind: "npm-test",
     runner: "scripts/dist-site-staleness-guard.test.mjs",
   },
+  "successor-launch-guard.mjs": {
+    kind: "npm-test",
+    runner: "scripts/successor-launch-guard.test.mjs",
+  },
   "successor-route.mjs": {
     kind: "npm-test",
     runner: "scripts/successor-route.test.mjs",

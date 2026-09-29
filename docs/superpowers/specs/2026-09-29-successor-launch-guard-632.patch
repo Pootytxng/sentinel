@@ -1,0 +1,46 @@
+diff --git a/.claude/settings.json b/.claude/settings.json
+index c62040fb..330ee98f 100644
+--- a/.claude/settings.json
++++ b/.claude/settings.json
+@@ -110,6 +110,17 @@
+             "statusMessage": "isolation-worktree refusal (shared hooksPath, #362)"
+           }
+         ]
++      },
++      {
++        "matcher": "mcp__ccd_session__spawn_task|mcp__scheduled-tasks__run_scheduled_task",
++        "hooks": [
++          {
++            "type": "command",
++            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/successor-launch-guard.mjs\"",
++            "timeout": 10,
++            "statusMessage": "successor launch guard (#632)"
++          }
++        ]
+       }
+     ],
+     "PostToolUse": [
+diff --git a/.claude/hooks/successor-launch-guard.mjs b/.claude/hooks/successor-launch-guard.mjs
+new file mode 100644
+index 00000000..fbf9f8ac
+--- /dev/null
++++ b/.claude/hooks/successor-launch-guard.mjs
+@@ -0,0 +1,18 @@
++#!/usr/bin/env node
++// PreToolUse(spawn_task | run_scheduled_task) hook — successor launch guard (#632).
++//
++// A prompt that claims to be a successor handoff launches only as
++// `node scripts/successor-route.mjs --handoff <file>` prints it, for a Handoff whose next action can
++// start now; every other chip and routine passes untouched. The logic and its tests live in
++// scripts/successor-launch-guard.mjs; this file only wires it. Fails OPEN on any error: a broken
++// guard must not block every chip.
++
++import { readFileSync } from "node:fs";
++
++try {
++  const { hookOutput } = await import("../../scripts/successor-launch-guard.mjs");
++  const out = hookOutput(readFileSync(0, "utf8"));
++  if (out) process.stdout.write(JSON.stringify(out));
++} catch {
++  // fail open
++}
