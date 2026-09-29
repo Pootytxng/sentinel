@@ -374,6 +374,14 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "n/a",
       "close #452 as completed.",
       "Close with evidence: PR #314 merged as 7dafc402.",
+      // Codex r2 on 1234d58b: completion said without none/nothing.
+      "Done — merged as abc12345.",
+      "Complete.",
+      "All done.",
+      "Already merged (PR #626).",
+      "Merged as 7dafc402; nothing left.",
+      "Landed in d439a5f5.",
+      "Work complete - no follow-up.",
     ]) {
       refused(next);
     }
@@ -388,6 +396,11 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "- Steps: re-spawn this prompt, appending your gate check to the history line.",
       // Codex r1 on 0dce538f: the same loop without the words re-spawn or same prompt.
       "- Steps: if #611 is still open, launch this task again.",
+      // Codex r2 on 1234d58b: other verbs for the same loop.
+      "- Steps: if blocked, run this task again.",
+      "- Steps: if #611 is still open, re-run this prompt.",
+      "- Steps: if blocked, start this chip again.",
+      "- Steps: if blocked, launch a new successor with this prompt.",
     ]) {
       const text = released("land #620's startup-entry probe.").replace("- Claim: released", `${loop}\n- Claim: released`);
       const built = successorPrompt(text);
@@ -403,6 +416,7 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "- Outcome: fixed the re-spawn loop.",
       "- Outcome: the #620 chain re-spawned the same prompt six times; the router now refuses it.",
       "- Outcome: stopped the loop where sessions re-sent the same prompt by hand.",
+      "- Outcome: sessions kept running this task again after each recheck; the router now refuses it.",
     ]) {
       const built = successorPrompt(released("Review PR #632.").replace("- Outcome: x.", outcome));
       expect(built.ok, `${outcome}: ${built.why}`).toBe(true);
@@ -415,6 +429,11 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Kuya runs the live proof on his rig.",
       "wait for the owner’s decision on F1.",
       "the owner-only reboot (A_wmi), then re-run the probe.",
+      // Codex r2 on 1234d58b: the owner's gate without a possessive or an owner verb.
+      "Await owner approval.",
+      "Needs owner sign-off before it lands.",
+      "Get owner approval for the patch.",
+      "awaiting Kuya's go-ahead.",
     ]) {
       refused(next);
     }
@@ -430,6 +449,17 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "see if #583's lease is released yet.",
       "If #611 is still open, launch this task again.",
       "if PR 611 has not merged, stop.",
+      // Codex r2 on 1234d58b: the same gate asked the positive way, confirmed, or re-spawned by "run".
+      "land #620. If blocked, run this task again.",
+      "If PR #611 has merged, land #620.",
+      "if #611 merges, land #620.",
+      "if #583's lease is released, rebase #616.",
+      "Confirm that PR #611 has merged and report.",
+      "Make sure #611 has merged, then land #620.",
+      "Verify PR #611 merged and report.",
+      "Await the Codex review of PR #633.",
+      "Await the landing of #611.",
+      "Hold: await PR #611 before landing.",
     ]) {
       refused(next);
     }
@@ -450,6 +480,18 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "write the probe and its tests, and then Kuya runs it on his rig.",
       "Check whether the new test fails on the old head, then push.",
       "If the gate is red, fix it and push again.",
+      // Near misses for the Codex r2 fixes on 1234d58b: same words, startable work.
+      "Run the flaky test again at --maxWorkers=4, then push.",
+      "Complete the migration of the history.rs readers.",
+      "Merge the two receipts into one commit and push.",
+      "Done-state copy: rename the Done button to Finish.",
+      "Wrap the invoke in an await and cover it with a test.",
+      "Implement the Tier 2 off switch per the owner ruling of 2026-08-24.",
+      "If the gate passes, push.",
+      "Verify the fix from PR #611 is in main, then rebase #616 onto it.",
+      "Check that the new test fails on the old head, then push.",
+      "Get owner-facing copy reviewed by the web-design-director, then ship it.",
+      "Check the claim parser against #611's released Handoff and fix what it misreads.",
     ]) {
       const built = successorPrompt(released(next));
       expect(built.ok, `${next}: ${built.why}`).toBe(true);

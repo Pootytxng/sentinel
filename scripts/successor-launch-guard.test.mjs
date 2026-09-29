@@ -133,6 +133,11 @@ describe("successor launch guard: spawn_task (#632)", () => {
       "Successor: launched": "Land #620, then end with Successor: launched.",
       "re-spawn": "Land #620. If #611 is still open, re-spawn this prompt and stop.",
       marker: "You are a Compy successor session. TASK: land #620.",
+      // Codex r2 on 1234d58b: the router's re-spawn wording has to trip the guard too.
+      "launch again": "Land #620. If #611 is still open, launch this task again.",
+      "run again": "Land #620. If blocked, run this task again.",
+      "re-run": "Land #620. If #611 is still open, re-run this prompt.",
+      "same prompt": "Land #620, and if blocked, start a new chip with the same prompt.",
     };
     for (const [shape, prompt] of Object.entries(shapes)) {
       expect(hookOutput(spawnEvent(prompt)), shape).not.toBeNull();
@@ -167,6 +172,10 @@ describe("successor launch guard: spawn_task (#632)", () => {
       CHIP_BENCH,
       "Kill the stale tauri dev process and respawn it on port 1420, then capture the Health room.",
       "Update the successor-route docs: the preamble's LAST step now defaults to `Successor: none`.",
+      // Codex r2 on 1234d58b: talking about the loop is not a claim to be part of it.
+      'Update the docs to explain why the phrase "this same prompt" caused a loop.',
+      "Document why the same prompt kept coming back in the #620 chain.",
+      "Run the pre-push gate again, and run it again at --maxWorkers=4 if a test flakes.",
     ]) {
       expect(isSuccessorPrompt(prompt), prompt.slice(0, 60)).toBe(false);
       expect(hookOutput(spawnEvent(prompt)), prompt.slice(0, 60)).toBeNull();
