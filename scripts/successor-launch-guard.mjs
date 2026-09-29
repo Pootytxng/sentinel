@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseClaim, parseHandoff } from "../tools/entry/claim.mjs";
-import { RESPAWN, SUCCESSOR_PREAMBLE, readScheduledTasks, successorPrompt, withoutMentions, withoutQuotes } from "./successor-route.mjs";
+import { RESPAWN, SUCCESSOR_PREAMBLE, readScheduledTasks, successorPrompt, withoutMentions } from "./successor-route.mjs";
 
 export const SPAWN_TOOL = "mcp__ccd_session__spawn_task";
 export const ROUTINE_TOOL = "mcp__scheduled-tasks__run_scheduled_task";
@@ -27,19 +27,21 @@ export const ROUTINE_TOOL = "mcp__scheduled-tasks__run_scheduled_task";
 // for Compy successor sessions", which is not a claim to be one.
 const MARKER = "You are a Compy successor session";
 // The #616 chain had no preamble and no Handoff; it said "Write `Successor: chip` with this same prompt".
-// The loop wording is the router's own RESPAWN, so the guard and the router cannot drift apart; a chip
-// that only talks about "this same prompt", or quotes a loop phrase or the marker, launches nothing.
+// The loop wording is the router's own RESPAWN, and all three are read through the router's mention
+// rule, so the guard and the router cannot drift apart: a chip that only talks about "this same
+// prompt", or names a loop phrase, the marker or a Successor line as what a doc or test is about,
+// launches nothing.
 const SUCCESSOR_LINE = /\bSuccessor:\s*`?\s*(?:chip|launched)\b/i;
 
 /** Does this prompt claim to be a successor handoff? */
 export function isSuccessorPrompt(text) {
-  const unquoted = withoutQuotes(text);
+  const said = withoutMentions(text);
   return (
-    unquoted.includes(MARKER) ||
+    said.includes(MARKER) ||
     parseHandoff(text) !== null ||
     parseClaim(text) !== null ||
-    SUCCESSOR_LINE.test(unquoted) ||
-    RESPAWN.test(withoutMentions(text))
+    SUCCESSOR_LINE.test(said) ||
+    RESPAWN.test(said)
   );
 }
 

@@ -367,6 +367,8 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Land #620 — PR #611 (the ETW fix) must merge first.",
       "#583's lease on history.rs must be released first, then land #616.",
       "#611 has yet to merge, then land #620.",
+      // Codex r5 on 8d07e495: a quote that is the step itself, not a mention of it, is still read.
+      'Follow this step: "wait for #611 to merge".',
     ]) {
       refused(next);
     }
@@ -419,6 +421,19 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "- Steps: keep launching this prompt until #611 merges.",
       // Codex r4 on e7800a5d: an apostrophe inside a word does not open a quote around the loop.
       "- Steps: if it's blocked, launch this task again, per the owners' rule.",
+      // Codex r5 on 8d07e495: any verb that carries the loop on, and a loop quoted as the instruction.
+      "- Steps: Continue re-running this task until #611 merges.",
+      "- Steps: carry on re-launching this prompt.",
+      "- Steps: keep on re-spawning this chip.",
+      "- Steps: continue launching this prompt until #611 merges.",
+      "- Steps: If blocked, follow this instruction: `launch this task again`.",
+      "- Steps: If blocked, follow this instruction: 'launch this task again'.",
+      '- Steps: Run the tests, then follow this instruction: "launch this task again".',
+      // A cue word does not reach past a colon, or more than three words, to the quote.
+      "- Steps: if the tests stay red: `re-run this prompt`.",
+      '- Steps: if the tests fail again on main, do "launch this task again".',
+      // An apostrophe after a cue word does not open a quote that hides the loop.
+      "- Steps: note why it's blocked, then launch this task again, per the owners' rule.",
     ]) {
       const text = released("land #620's startup-entry probe.").replace("- Claim: released", `${loop}\n- Claim: released`);
       const built = successorPrompt(text);
@@ -543,6 +558,10 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Land PR #633 first, then carry the receipts.",
       "Explain in the docs why #611 had to merge first.",
       "Rebase #616 onto main; #616 needs to land before Friday's cut.",
+      // Near misses for the Codex r5 fixes on 8d07e495: a gate quoted as what a test or doc is about.
+      'Add a regression test for "PR #611 must merge first".',
+      'Add a test for "blocked on #611" and fix the parser.',
+      "Document the `once #611 merges` wording the router refuses.",
     ]) {
       const built = successorPrompt(released(next));
       expect(built.ok, `${next}: ${built.why}`).toBe(true);

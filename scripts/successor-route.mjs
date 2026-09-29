@@ -211,10 +211,10 @@ export function successorPrompt(handoffText) {
 // launch guard (successor-launch-guard.mjs) reuses it to spot a hand-written successor prompt.
 export const RESPAWN = new RegExp(
   [
-    // Present forms, and -ing only after "keep": "re-spawned the same prompt" and "kept re-running
-    // this task" are history, not an instruction.
-    /\b(?:keep\s+re-?(?:spawn|launch|run|send|queue)(?:ing|ning)|re-?(?:spawn|launch|run|send|queue)(?:s|es)?)\s+(?:this|the|its|your)\s+(?:own\s+)?(?:whole\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
-    /\bkeep\s+(?:spawn|launch|run|send|queue|start)(?:s|ing|ning)?\s+(?:this|the|its|your)\s+(?:own\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
+    // Present forms, and -ing only after a verb that carries the loop on ("keep", "continue", "carry
+    // on"): "re-spawned the same prompt" and "kept re-running this task" are history, not an instruction.
+    /\b(?:(?:keep|continue|carry\s+on|go\s+on)\s+(?:on\s+)?re-?(?:spawn|launch|run|send|queue)(?:ing|ning)|re-?(?:spawn|launch|run|send|queue)(?:s|es)?)\s+(?:this|the|its|your)\s+(?:own\s+)?(?:whole\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
+    /\b(?:keep|continue|carry\s+on|go\s+on)\s+(?:on\s+)?(?:spawn|launch|run|send|queue|start)(?:s|ing|ning)?\s+(?:this|the|its|your)\s+(?:own\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
     /\b(?:with|send|pass|reuse|launch|spawn|start|run|queue)\s+(?:this|the)\s+same\s+(?:prompt|task|chip)\b/,
     // "run it again" is how a gate or a test is re-run, so only a launch verb re-launches "it".
     /\b(?:launch|spawn|send|queue|trigger|fire)\s+it\s+again\b/,
@@ -225,16 +225,24 @@ export const RESPAWN = new RegExp(
     .join("|"),
   "i",
 );
-/**
- * A quoted phrase is a mention ('the phrase "launch this task again"'), not an instruction. A single
- * quote opens only after a space or bracket and closes before one, so "Kuya's" and "don't" stay.
- */
-export function withoutQuotes(text) {
-  return text.replace(/"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|(^|[\s([])'[^'\n]+'(?=$|[\s.,;:!?)\]])/g, (_, lead) => `${lead ?? ""}""`);
-}
-/** RESPAWN reads a code span as a mention too; "write `Successor: chip`" still counts to the guard. */
+// A quote or code span is a mention only when the words just before it say what it is ("the phrase
+// '…'", "explain why `…`", "a test for "…"", "the router refuses "…"") or a noun after it does ("the
+// ‘…’ wording"). Otherwise it is read as written: #616 put its loop in a code span ("write
+// `Successor: chip` with this same prompt"), and "follow this instruction: '…'" is the instruction. A
+// single quote opens only after a space or bracket and closes before one, so "Kuya's" and "don't" stay.
+const QUOTED = /"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|`[^`\n]*`|(?<=^|[\s([])'[^'\n]+'(?=$|[\s.,;:!?)\]])/g;
+// Up to three words may sit between the cue and the quote, but never a sentence break or a colon.
+const MENTION_BEFORE =
+  /\b(?:why|explain\w*|document\w*|describ\w*|mention\w*|quot\w*|phrase|wording|marker|regex(?:es)?|pattern|tests?|guard|case|named|called|refus\w*)\b(?:[^\w.!?;:\n]+\w+){0,3}[^\w.!?;:\n]*$/i;
+const MENTION_AFTER = /^[^\w.!?;:\n]*(?:wording|phrase|marker|pattern|regex)\b/i;
+/** The text with every quote or code span that is only mentioned blanked to `""`. */
 export function withoutMentions(text) {
-  return withoutQuotes(text).replace(/`[^`\n]*`/g, '""');
+  return text.replace(QUOTED, (span, at, whole) =>
+    MENTION_BEFORE.test(whole.slice(Math.max(0, at - 80), at)) ||
+    MENTION_AFTER.test(whole.slice(at + span.length, at + span.length + 20))
+      ? '""'
+      : span,
+  );
 }
 const CLAUSE_END = /[.;](?:\s|$)|,?\s+(?:and\s+)?then\b/i;
 // "Done — merged as …", "Landed in …": completion said as a state. "Complete the migration" is work,
@@ -298,7 +306,7 @@ const RECHECK = new RegExp(
 
 /** Why a Handoff's Exact next action gives a successor nothing to start now, or null when it does. */
 function nextActionStop(nextAction) {
-  const text = (nextAction ?? "").trim();
+  const text = withoutMentions((nextAction ?? "").trim());
   if (!/[a-z0-9]/i.test(text)) return "its Handoff names no `Exact next action`, so a successor would have nothing to start";
   const first = text.split(CLAUSE_END)[0];
   if (NOTHING.test(first) || CLOSE_ONLY.test(first)) return "its Exact next action says nothing is left: the work is complete";

@@ -142,6 +142,12 @@ describe("successor launch guard: spawn_task (#632)", () => {
       "keep re-running": "Land #620. If blocked, keep re-running this task.",
       // Codex r4 on e7800a5d: an apostrophe inside a word does not open a quote around the loop.
       apostrophes: "Land #620. If it's blocked, launch this task again, per the owners' rule.",
+      "cue before an apostrophe": "Land #620. Note why it's blocked, then launch this task again, per the owners' rule.",
+      // Codex r5 on 8d07e495: a verb that carries the loop on, and a loop quoted as the instruction.
+      "continue re-running": "Land #620. Continue re-running this task until #611 merges.",
+      "code-span instruction": "Land #620. If blocked, follow this instruction: `launch this task again`.",
+      "quoted instruction": "Land #620. If blocked, follow this instruction: 'launch this task again'.",
+      "code-span Successor line": "Land #620. If #611 is still open, end with `Successor: chip`.",
     };
     for (const [shape, prompt] of Object.entries(shapes)) {
       expect(hookOutput(spawnEvent(prompt)), shape).not.toBeNull();
@@ -189,6 +195,11 @@ describe("successor launch guard: spawn_task (#632)", () => {
       "Update the docs to explain why 'launch this task again' caused a loop.",
       "Document the ‘re-spawn this prompt’ wording the router refuses.",
       'Document why the marker "You are a Compy successor session" identifies routed prompts.',
+      // Codex r5 on 8d07e495: a code span named as what a doc or test is about is a mention too.
+      "Document why the marker `You are a Compy successor session` identifies routed prompts.",
+      "Document the `Successor: chip` line format in the preamble.",
+      'Add a test for "Successor: launched" parsing.',
+      "Remove the `launch this task again` wording from the old preamble.",
     ]) {
       expect(isSuccessorPrompt(prompt), prompt.slice(0, 60)).toBe(false);
       expect(hookOutput(spawnEvent(prompt)), prompt.slice(0, 60)).toBeNull();
