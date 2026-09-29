@@ -956,16 +956,20 @@ fn record_receipts(
     made: Vec<Made>,
 ) -> Result<Vec<AppliedChange>, String> {
     let save = |h: &[AppliedChange]| save_history(root, h);
-    let rollback = |a: &RollbackAction, s: &Snapshot| dispatch_rollback(root, a, s);
+    let undo_failed = std::cell::Cell::new(false);
+    let rollback = |a: &RollbackAction, s: &Snapshot| {
+        dispatch_rollback(root, a, s).inspect_err(|_| undo_failed.set(true))
+    };
     let probe = |rec_id: &str, applied: &AppliedAction| live_check(rec_id, Some(applied), &LiveReads::default());
     let effects = UndoEffects { rollback: &rollback, probe: &probe };
     commit_receipts(history, made, &save, &effects).inspect_err(|e| {
         // A change that had to be undone because it couldn't be recorded, and above all one whose
-        // undo failed, is a case support must be able to see.
+        // undo failed (it is still on the machine with no undo record), is a case support must be
+        // able to find.
         crate::support_evidence::record(
             crate::support_evidence::EventKind::Ledger,
             "receipt_commit",
-            "undone_unrecorded",
+            if undo_failed.get() { "undo_failed_unrecorded" } else { "undone_unrecorded" },
             crate::support_evidence::Outcome::Failed,
             e,
         );
@@ -1239,6 +1243,29 @@ fn resolve_receipt(receipts: &std::collections::HashMap<String, bool>, rec_id: &
     }
 }
 
+/// PURE: what the batch's one elevated step did for one staged item. Only an error that proves the
+/// elevated process never ran (UAC declined, launch failed) means nothing changed. Any other error
+/// means the script ran and failed part-way, so items that wrote an ok receipt before it stopped are
+/// on Windows and still get their ledger receipt (#616); the rest must not claim nothing changed.
+fn elevated_item_outcome(
+    run: &Result<(), String>,
+    receipts: &std::collections::HashMap<String, bool>,
+    rec_id: &str,
+) -> Result<(), String> {
+    match run {
+        Err(e) if elevation_error_nothing_ran(e) => Err(format!(
+            "Elevation did not complete — nothing was changed for this item. ({e})"
+        )),
+        Err(e) => resolve_receipt(receipts, rec_id).map_err(|reason| {
+            format!(
+                "{reason} The admin step also stopped with an error ({e}), so Compy can't be sure \
+                 it changed nothing: check this setting in Windows."
+            )
+        }),
+        Ok(()) => resolve_receipt(receipts, rec_id),
+    }
+}
+
 #[tauri::command]
 pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<BatchApplyReport, String> {
     // ── Validation — BEFORE the lock and before any mutation. The whole batch is refused (not
@@ -1347,48 +1374,34 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         }
         let script = compose_batch_script(&script_items, &receipts_path.to_string_lossy())?;
         elevation_prompts = 1;
-        match run_elevated_powershell(&script) {
-            Err(e) => {
-                // UAC declined or the elevated process failed to run: NOTHING elevated was
-                // applied. Honest per-item skip; the phase-1 items stand on their own receipts.
-                for d in staged {
-                    outcomes.push(outcome_skipped(
-                        &d.rec_id,
-                        &d.rec_title,
-                        format!("Elevation did not complete — nothing was changed for this item. ({e})"),
-                    ));
+        // A declined UAC ran nothing, so every item is skipped and the phase-1 items stand on their
+        // own receipts. Any other error means the script ran and stopped part-way: the result file
+        // is still the only evidence of which items finished, so it is read either way (#616).
+        let run = run_elevated_powershell(&script);
+        let text = std::fs::read_to_string(&receipts_path).unwrap_or_default();
+        // Read once, so remove it now: a receipt commit that fails below returns early.
+        let _ = std::fs::remove_file(&receipts_path);
+        let receipts = parse_batch_receipts(&text);
+        let mut made_elevated: Vec<Made> = Vec::new();
+        for d in staged {
+            match elevated_item_outcome(&run, &receipts, &d.rec_id) {
+                Ok(()) => {
+                    made_elevated.push(Made::new(&d.rec_id, &d.rec_title, d.result));
+                    applied += 1;
+                    outcomes.push(outcome_applied(&d.rec_id, &d.rec_title));
                 }
-            }
-            Ok(()) => {
-                let text = std::fs::read_to_string(&receipts_path).unwrap_or_default();
-                // Read once, so remove it now: a receipt commit that fails below returns early.
-                let _ = std::fs::remove_file(&receipts_path);
-                let receipts = parse_batch_receipts(&text);
-                let mut made_elevated: Vec<Made> = Vec::new();
-                for d in staged {
-                    match resolve_receipt(&receipts, &d.rec_id) {
-                        Ok(()) => {
-                            made_elevated.push(Made::new(&d.rec_id, &d.rec_title, d.result));
-                            applied += 1;
-                            outcomes.push(outcome_applied(&d.rec_id, &d.rec_title));
-                        }
-                        Err(reason) => {
-                            outcomes.push(outcome_skipped(&d.rec_id, &d.rec_title, reason))
-                        }
-                    }
-                }
-                if !made_elevated.is_empty() {
-                    record_receipts(&root, &mut history, made_elevated).map_err(|e| {
-                        if recorded_before_admin {
-                            format!("{e} The changes made before the admin step are recorded as normal.")
-                        } else {
-                            e
-                        }
-                    })?;
-                }
+                Err(reason) => outcomes.push(outcome_skipped(&d.rec_id, &d.rec_title, reason)),
             }
         }
-        let _ = std::fs::remove_file(&receipts_path);
+        if !made_elevated.is_empty() {
+            record_receipts(&root, &mut history, made_elevated).map_err(|e| {
+                if recorded_before_admin {
+                    format!("{e} The changes made before the admin step are recorded as normal.")
+                } else {
+                    e
+                }
+            })?;
+        }
     }
 
     let skipped = outcomes.iter().filter(|o| o.status == "skipped").count();
@@ -2029,10 +2042,49 @@ mod receipt_commit_tests {
         assert!(fs_at < gm_at, "outcomes read in the order the changes were made: {err}");
     }
 
+    // Reviewer W1: an admin step that starts and then stops with an error has already run the items
+    // before the failure. Those wrote an ok receipt and must be recorded, never reported as unchanged.
+    #[test]
+    fn an_admin_step_that_stops_part_way_still_records_what_it_finished() {
+        let mut receipts = std::collections::HashMap::new();
+        receipts.insert("done".to_string(), true);
+        receipts.insert("broke".to_string(), false);
+        let declined: Result<(), String> = Err(ELEVATION_DECLINED_MSG.to_string());
+        let stopped: Result<(), String> = Err(elevation_outcome(Ok(exit_status(1))).expect_err("exit 1"));
+        assert!(!elevation_error_nothing_ran(stopped.as_ref().expect_err("stopped")), "the script ran");
+
+        for id in ["done", "broke", "missing"] {
+            let skip = elevated_item_outcome(&declined, &receipts, id).expect_err("a declined UAC ran nothing");
+            assert!(skip.contains("nothing was changed"), "{id}: {skip}");
+        }
+        assert!(elevated_item_outcome(&stopped, &receipts, "done").is_ok(), "a finished item is recorded");
+        for id in ["broke", "missing"] {
+            let skip = elevated_item_outcome(&stopped, &receipts, id).expect_err("no ok receipt");
+            assert!(skip.contains("can't be sure it changed nothing"), "{id}: {skip}");
+            assert!(skip.contains("check this setting in Windows"), "{id}: {skip}");
+        }
+        let ran: Result<(), String> = Ok(());
+        assert!(elevated_item_outcome(&ran, &receipts, "done").is_ok());
+        assert_eq!(
+            elevated_item_outcome(&ran, &receipts, "missing"),
+            resolve_receipt(&receipts, "missing"),
+            "a clean run keeps the existing receipt rules"
+        );
+    }
+
+    fn exit_status(code: u32) -> std::process::ExitStatus {
+        use std::os::windows::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(code)
+    }
+
+    fn production() -> &'static str {
+        let src = include_str!("history.rs");
+        &src[..src.find("\n#[cfg(test)]\nmod ").expect("test modules follow production code")]
+    }
+
     /// Top-level fn enclosing each production-code call to `callee`, skipping comment lines.
     fn callers_of(callee: &str) -> Vec<String> {
-        let src = include_str!("history.rs");
-        let production = &src[..src.find("\n#[cfg(test)]\nmod ").expect("test modules follow production code")];
+        let production = production();
         let mut current = String::new();
         let mut callers = Vec::new();
         for line in production.lines() {
@@ -2085,6 +2137,28 @@ mod receipt_commit_tests {
         ] {
             assert!(recording.contains(gateway), "{gateway} must record through record_receipt(s)");
         }
+        let undoing: std::collections::BTreeSet<String> = callers_of("dispatch_rollback").into_iter().collect();
+        assert_eq!(
+            undoing,
+            ["record_receipts", "rollback_change_inner"].map(String::from).into(),
+            "production undoes a change only through the user's rollback and the receipt commit"
+        );
+
+        // The batch closes its deferral sink before any receipt commit, so an undo that needs admin
+        // runs instead of being parked in the batch script, and it reads the result file whatever
+        // the admin step returned.
+        let batch = production()
+            .split_once("fn apply_recommendations_batch(")
+            .and_then(|(_, rest)| rest.split_once("\n}\n"))
+            .map(|(body, _)| body)
+            .expect("the batch gateway exists");
+        let closed = batch.find(".take_deferred()").expect("the batch closes its deferral sink");
+        let first_commit = batch.find("record_receipts(").expect("the batch commits receipts");
+        assert!(closed < first_commit, "no receipt commit may run while the deferral sink is armed");
+        assert!(
+            batch.contains("elevated_item_outcome(&run,"),
+            "every admin-step result, error included, goes through elevated_item_outcome"
+        );
     }
 }
 
