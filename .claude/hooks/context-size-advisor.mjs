@@ -177,10 +177,13 @@ if (thrashResult?.thrashing) {
         `session starting from zero could carry on from it alone; short enough to stay under its ` +
         `doc-budget cap. Replace stale content, never append to it.\n` +
         `2. Commit anything worth keeping.\n` +
-        `3. Launch your successor now — do not ask the owner to relay anything (#466). Run ` +
-        `\`node scripts/successor-route.mjs\`, act on the route it prints (dispatch the ` +
-        `compy-successor routine, or spawn_task the chip) using the resume point you just wrote to ` +
-        `docs/SESSION_HANDOFF.md, then say a tab verdict and \`Successor: launched|chip — <what you ` +
+        `3. Launch your successor now — do not ask the owner to relay anything (#466). Post a ` +
+        `\`### Handoff\` on your issue ending \`- Claim: released\` that points at the resume point you ` +
+        `just wrote to docs/SESSION_HANDOFF.md, save it to a file, run ` +
+        `\`node scripts/successor-route.mjs --handoff <file>\` (it refuses a Handoff that leaves the ` +
+        `lease live), and launch the prompt it prints by the route it prints (dispatch the ` +
+        `compy-successor routine, or spawn_task the chip), then say a tab verdict and ` +
+        `\`Successor: launched|chip — <what you ` +
         `just launched>\` and end your turn. A fresh successor starting clean gives this session's ` +
         `context the same relief /clear would have — the owner does not have to notice this tab and ` +
         `type it himself.\n` +

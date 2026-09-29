@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, it, expect } from "vitest";
 
+import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import { pickRoute, readLauncherTasks, SUCCESSOR_PREAMBLE, successorPrompt } from "./successor-route.mjs";
 
 // Guard for #466: "launch the successor yourself" only works if the routing decision is provable.
@@ -283,6 +284,40 @@ describe("successorPrompt (#613)", () => {
   it("refuses a Claim: released that sits above the Handoff header, outside its section", () => {
     const above = ["- Claim: released", "", "### Handoff", "- Outcome: x"].join("\n");
     expect(successorPrompt(above).ok).toBe(false);
+  });
+
+  // Codex review of c1935955: the fold reads a comment's release first and its claim after, so a text
+  // carrying both leaves the lease live, whichever comes first on the page.
+  it("refuses a released Handoff that also carries an Ownership claim, in either order", () => {
+    const claim = ["### Ownership claim", "- Write scope: `scripts/x.mjs`"].join("\n");
+    for (const text of [`${RELEASED}\n\n${claim}`, `${claim}\n\n${RELEASED}`]) {
+      const built = successorPrompt(text);
+      expect(built.ok, text).toBe(false);
+      expect(built.why).toContain("Ownership claim");
+    }
+  });
+});
+
+// Codex review of c1935955: the CLI refuses without --handoff, so an instruction that still says to run
+// it bare sends every session following it into the refusal, and invites a hand-written prompt that
+// skips the check. Every live instruction has to pass the Handoff. Captured fixtures and receipts quote
+// history and are left as written.
+describe("successor-route callers (#613)", () => {
+  const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const INVOCATION = ["node scripts/", "successor-route", "\\.mjs"].join("");
+
+  it("every tracked instruction to run it passes --handoff", { timeout: TREE_WALK_TIMEOUT_MS }, () => {
+    const res = spawnSync(
+      "git",
+      ["grep", "-n", "-e", INVOCATION, "--", ".", ":!scripts/fixtures/", ":!.claude/work-control/"],
+      { cwd: ROOT, encoding: "utf8", windowsHide: true },
+    );
+    expect(res.status, res.stderr).toBe(0);
+    const lines = res.stdout.split("\n").filter(Boolean);
+    // The preamble, CLAUDE.md and the context-size advisor at least; fewer means the search went blind.
+    expect(lines.length).toBeGreaterThanOrEqual(3);
+    const bare = lines.filter((l) => !new RegExp(`${INVOCATION} --handoff\\b`).test(l));
+    expect(bare).toEqual([]);
   });
 });
 

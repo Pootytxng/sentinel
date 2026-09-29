@@ -110,8 +110,8 @@ only**. Treat a model **auto-switch on security-sensitive work as a STOP signal*
 
 ### Reports, subagents, self-review
 
-- **Handoffs launch, never paste** (#466): end by running `node scripts/successor-route.mjs`, then write a
-  tab verdict and `Successor: launched|chip|none — …`.
+- **Handoffs launch, never paste** (#466): end by running `node scripts/successor-route.mjs --handoff <file>`
+  (your released Handoff), then write a tab verdict and `Successor: launched|chip|none — …`.
 - **Subagent routing:** `.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` — **the
   setting is the guard, do not add per-session routing instructions**; `.claude/hooks/subagent-model-guard.mjs`
   allows one stronger pin, `web-design-director`. Effort: default high; x-high at the mutation/rollback boundary.

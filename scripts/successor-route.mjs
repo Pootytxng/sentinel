@@ -27,7 +27,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { parseHandoff } from "../tools/entry/claim.mjs";
+import { threadLease } from "../tools/entry/claim.mjs";
 
 // The two routines the owner would name "compy-successor-a"/"-b" if he creates them; anything else
 // in a scheduled-tasks.json is a different routine (e.g. a daily digest) and must be ignored here.
@@ -136,17 +136,18 @@ export const SUCCESSOR_PREAMBLE = `You are a Compy successor session, launched b
 STEP 0 — check your folder: run \`git rev-parse --show-toplevel\`. If it prints the shared checkout C:/Users/Kuya/code/sentinel, every write is refused there (the launcher routine's worktree toggle is off). Write nothing: call spawn_task with this whole prompt so the owner gets a one-click worktree session, say that in one line, and stop.
 STEP 1 — you inherit no lease. Re-derive state (git, the issue, docs/WORK_CONTROL.md) before trusting anything below, and post your own Ownership claim before any write. Right after it, if \`git config --get core.hooksPath\` prints an absolute path, repoint your own folder: \`git config --worktree core.hooksPath .githooks\`. New app worktrees arrive pinned, and the pin reds every lane's push (#405). Anything owner-bound stops at the owner.
 STEP 2 — do the task below.
-LAST — end by launching your own successor the same way (\`node scripts/successor-route.mjs\`; if your own launcher routine is still running, use the other one), or write \`Successor: none — <why>\`.
+LAST — end by launching your own successor the same way (\`node scripts/successor-route.mjs --handoff <file>\`, the file holding the Handoff you posted, ending \`- Claim: released\`; if your own launcher routine is still running, use the other one), or write \`Successor: none — <why>\`.
 
 TASK:`;
 
 // #613: two handoffs reached their successors with no `Claim:` line: #583 (an Ownership claim edited
 // to say "handed off") and #405 ("This lease is **released**" in prose). The lease fold reads only the
 // Claim line, so both leases stayed live after their writers left, and nothing refused either handoff.
-// So the preamble is only ever printed together with a Handoff that releases the lease, and it is read
-// by the lease fold's own parser, so this check and every gate agree on what counts as released. It
-// must be `released`: the preamble tells the successor it inherits no lease, and a transfer to a chip
-// that is never clicked holds its paths with nobody writing.
+// So the preamble is only ever printed together with a Handoff that releases the lease, and the text is
+// read by the lease fold itself, so this check and every gate agree on what counts as released: a
+// claim in the same text is read after the release and keeps the lease live. It must be `released`:
+// the preamble tells the successor it inherits no lease, and a transfer to a chip that is never clicked
+// holds its paths with nobody writing.
 const RELEASE_LINE = "`- Claim: released`";
 
 /**
@@ -162,7 +163,7 @@ export function successorPrompt(handoffText) {
       why: `no handoff text. Write the \`### Handoff\` you posted on the issue, ending ${RELEASE_LINE}, to a file and pass --handoff <file>`,
     };
   }
-  const handoff = parseHandoff(handoffText);
+  const { claim, handoff } = threadLease([{ body: handoffText }]);
   if (!handoff) {
     return {
       ok: false,
@@ -173,6 +174,12 @@ export function successorPrompt(handoffText) {
     return {
       ok: false,
       why: `its Handoff has no ${RELEASE_LINE} line, so the lease fold (threadLease, tools/entry/claim.mjs) still reads the lease as live. Saying "released" in prose, holding, or transferring does not count`,
+    };
+  }
+  if (claim) {
+    return {
+      ok: false,
+      why: `the text also carries an \`### Ownership claim\`, which the lease fold reads after the release, so the lease stays live. Pass only the Handoff`,
     };
   }
   return { ok: true, prompt: `${SUCCESSOR_PREAMBLE}\n${handoffText.trim()}` };

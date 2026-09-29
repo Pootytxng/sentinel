@@ -95,6 +95,9 @@ describe("context-size-advisor fires on the measured thrash signature", () => {
     const outs = runTurns([100_000, 100_000, 0, 100_000, 100_000, 0, 100_000]);
     const reason = outs[6].reason;
     expect(reason).toContain("successor-route");
+    // #613: the script refuses to print a prompt without a Handoff that releases the lease.
+    expect(reason).toContain("successor-route.mjs --handoff");
+    expect(reason).toContain("- Claim: released");
     expect(reason).not.toContain("that one line IS the handoff");
   });
 
