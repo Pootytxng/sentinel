@@ -78,9 +78,9 @@ pub(crate) enum ExperimentStatus {
     Kept,
     /// Change rolled back — no measurable benefit, regression, confound, crash, or a user restore.
     Restored,
-    /// Halted on an error before a fair verdict (failed apply / restore-failed). Carries `stop_reason`.
-    /// NB: a failed APPLY never creates a record (nothing to abort); this is for a failed RESTORE
-    /// where the change is still live and the user must be told loudly.
+    /// Halted on an error before a fair verdict. Carries `stop_reason`. A failed apply keeps its
+    /// record here (see `settle_failed_apply`), as does an interrupted start; a failed RESTORE lands
+    /// here too, with the change still live, so the user must be told loudly.
     Aborted,
 }
 
@@ -1117,19 +1117,21 @@ pub(crate) fn with_compy_state(outcome: ConcludeOutcome, other: Option<String>) 
     }
 }
 
-/// How many other settings Compy has applied (its own change excluded) can't be confirmed still in
-/// place: `changed`, a live read as [`target_verification`] answers it, says None (unreadable or
-/// unprobed) or false (set back, e.g. undone in Windows). Sessions count every applied change as
-/// active whether or not it is still in place, so the active-change counts can't show one set back
-/// during the test. Counted once per setting.
+/// How many other settings Compy has applied can't be confirmed still in place: `changed`, a live
+/// read as [`target_verification`] answers it, says None (unreadable or unprobed) or false (set back,
+/// e.g. undone in Windows). Sessions count every applied change as active whether or not it is still
+/// in place, so the active-change counts can't show one set back during the test. Counted once per
+/// setting. The setting under test (`own_rec`) is never "another setting", whatever its ledger rows
+/// say: the start's pre-apply read and the conclude's target check verify it themselves, and an
+/// older row for it undone in Windows leaves it testable again (see [`already_in_target`]).
 pub(crate) fn unverified_other_changes(
     ledger: &[LedgerEntryRef<'_>],
-    own: Option<&str>,
+    own_rec: &str,
     changed: impl Fn(&str) -> Option<bool>,
 ) -> usize {
     let recs: std::collections::BTreeSet<&str> = ledger
         .iter()
-        .filter(|c| c.applied && Some(c.id) != own)
+        .filter(|c| c.applied && c.rec_id != own_rec)
         .map(|c| c.rec_id)
         .collect();
     recs.into_iter().filter(|rec| changed(rec) != Some(true)).count()
@@ -1700,7 +1702,7 @@ pub(crate) fn start_experiment(
     baseline_is_current(baseline, ledger, crate::history::applied_changes_summary().active)
         .map_err(|why| format!("experiment not started — {why}"))?;
     // §3: other applied settings not confirmed in place would leave the result unjudged at conclude.
-    let unverified = rows.as_deref().map_or(0, |rows| unverified_other_changes(rows, None, read_back));
+    let unverified = rows.as_deref().map_or(0, |rows| unverified_other_changes(rows, &rec_id, read_back));
     if let Some(why) = unverified_start_refusal(unverified) {
         return Err(format!("experiment not started — {why}"));
     }
@@ -2035,9 +2037,8 @@ pub(crate) fn conclude_experiment(
     };
     let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()));
     // §3: other settings Compy changed that aren't confirmed in place limit what this result can claim.
-    let own = Some(rec.applied_change_id.as_str()).filter(|id| !id.is_empty());
     let read_back = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target(rec_id)));
-    let unverified = rows.as_deref().map_or(0, |rows| unverified_other_changes(rows, own, read_back));
+    let unverified = rows.as_deref().map_or(0, |rows| unverified_other_changes(rows, &rec.rec_id, read_back));
     let judged = with_unverified_changes(judged, unverified);
     let outcome = guard_target_at_conclude(judged, target_verification(Some(target_now)));
 
@@ -3670,9 +3671,11 @@ mod experiment_tests {
         // in place, so equal counts can't show it stayed put. Codex r4: one that reads as set back
         // (undone in Windows) moved as surely as an unreadable one may have. Each such setting is
         // counted once; this Trial's own change, rolled-back ones and ones that read back are not.
+        // Codex r5: nor is an older row for the setting under test, which is never "another setting".
         const AT: &str = "2026-09-28T11:00:00+00:00";
         let ledger = [
             row("ours", "test-rec", AT, true),
+            row("stale", "test-rec", AT, true),
             row("s1", "startup-entry", AT, true),
             row("s2", "startup-entry", AT, true),
             row("gm", "game-mode", AT, true),
@@ -3685,10 +3688,10 @@ mod experiment_tests {
             "startup-entry" => None,
             other => panic!("{other} should not be read"),
         };
-        assert_eq!(unverified_other_changes(&ledger, Some("ours"), read), 2);
-        assert_eq!(unverified_other_changes(&ledger[4..5], Some("ours"), read), 1, "set back counts on its own");
-        assert_eq!(unverified_other_changes(&ledger[..1], Some("ours"), read), 0);
-        assert_eq!(unverified_other_changes(&ledger[3..4], Some("ours"), read), 0, "in place: not counted");
+        assert_eq!(unverified_other_changes(&ledger, "test-rec", read), 2);
+        assert_eq!(unverified_other_changes(&ledger[5..6], "test-rec", read), 1, "set back counts on its own");
+        assert_eq!(unverified_other_changes(&ledger[..2], "test-rec", read), 0, "the setting under test never counts");
+        assert_eq!(unverified_other_changes(&ledger[4..5], "test-rec", read), 0, "in place: not counted");
 
         let better = measured(180.0);
         assert_eq!((better.verdict.as_str(), better.keep), ("improved", true), "the fixture would keep");

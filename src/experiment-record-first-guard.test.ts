@@ -350,13 +350,30 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
 
   it("§3 at start: a Trial that could only end unjudged is refused before anything is recorded or applied", () => {
     const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
-    const count = start.indexOf("unverified_other_changes(rows, None, read_back)");
+    const count = start.indexOf("unverified_other_changes(rows, &rec_id, read_back)");
     const refuse = start.indexOf("unverified_start_refusal(unverified)");
     expect(count, "the start no longer counts other settings it can't read back").toBeGreaterThanOrEqual(0);
     expect(refuse, "the start no longer refuses on them").toBeGreaterThan(count);
     expect(count).toBeGreaterThan(start.indexOf("baseline_is_current("));
     expect(refuse).toBeLessThan(start.indexOf("status: ExperimentStatus::Pending"));
     expect(refuse).toBeLessThan(start.indexOf("apply_recommendation("));
+  });
+
+  // Codex r5 (#611): the start passed no own setting, so an older row for the setting under test,
+  // undone in Windows, was refused as "another setting", though the simulator calls it testable again.
+  it("the setting under test is never counted as another setting, at the start or the conclude", () => {
+    const count = fnBody(EXPERIMENT, "pub(crate) fn unverified_other_changes(");
+    expect(count, "the count excludes only this Trial's change row again").toContain("c.rec_id != own_rec");
+    expect(fnBody(EXPERIMENT, "pub(crate) fn start_experiment(")).toContain("unverified_other_changes(rows, &rec_id, read_back)");
+    expect(fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(")).toContain(
+      "unverified_other_changes(rows, &rec.rec_id, read_back)",
+    );
+  });
+
+  it("launch diagnostics never call a closed interrupted start unresolved or Pending", () => {
+    expect(LIB, "support evidence misstates the record again").not.toContain("start could not be resolved");
+    expect(LIB).not.toContain("Anything left unresolved stays Pending");
+    expect(LIB).toContain("an interrupted experiment start was closed as Aborted with nothing measured");
   });
 
   // Codex r4 (#611): a Pending record is hidden from the bench yet blocks every later start, so an

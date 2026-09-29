@@ -1406,8 +1406,9 @@ pub fn run() {
             );
             // Trial Protocol #583: resolve any experiment start that a crash or kill interrupted, before
             // the first window can read the store. Read-only against Windows (it never restores at
-            // launch). Anything left unresolved stays Pending for the next start or launch to retry,
-            // and is written to support evidence so it is never only a console line.
+            // launch). Every interrupted start is closed and saved; one closed while the change history
+            // can't be read is written to support evidence so it is never only a console line. Only a
+            // store that can't be read or saved leaves a start Pending, for the next start or launch.
             match crate::experiment::reconcile_interrupted_starts() {
                 Ok(outcomes) => {
                     if outcomes.contains(&crate::experiment::InterruptedStart::LedgerUnreadable) {
@@ -1416,7 +1417,7 @@ pub fn run() {
                             "experiment_reconcile",
                             "ledger_unreadable",
                             support_evidence::Outcome::Failed,
-                            "an interrupted experiment start could not be resolved because the change history could not be read",
+                            "an interrupted experiment start was closed as Aborted with nothing measured, because the change history could not be read to check on its change",
                         );
                     }
                 }
