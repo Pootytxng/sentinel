@@ -27,6 +27,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { parseHandoff } from "../tools/entry/claim.mjs";
+
 // The two routines the owner would name "compy-successor-a"/"-b" if he creates them; anything else
 // in a scheduled-tasks.json is a different routine (e.g. a daily digest) and must be ignored here.
 const LAUNCHER_IDS = ["compy-successor-a", "compy-successor-b"];
@@ -138,15 +140,70 @@ LAST — end by launching your own successor the same way (\`node scripts/succes
 
 TASK:`;
 
-function main() {
+// #613: two handoffs reached their successors with no `Claim:` line: #583 (an Ownership claim edited
+// to say "handed off") and #405 ("This lease is **released**" in prose). The lease fold reads only the
+// Claim line, so both leases stayed live after their writers left, and nothing refused either handoff.
+// So the preamble is only ever printed together with a Handoff that releases the lease, and it is read
+// by the lease fold's own parser, so this check and every gate agree on what counts as released. It
+// must be `released`: the preamble tells the successor it inherits no lease, and a transfer to a chip
+// that is never clicked holds its paths with nobody writing.
+const RELEASE_LINE = "`- Claim: released`";
+
+/**
+ * The full successor prompt for a handoff, or the reason it is refused.
+ * @param {string|null|undefined} handoffText - the `### Handoff` block posted on the issue, plus any
+ *   task text; it follows `TASK:` verbatim.
+ * @returns {{ok: true, prompt: string} | {ok: false, why: string}}
+ */
+export function successorPrompt(handoffText) {
+  if (typeof handoffText !== "string" || !handoffText.trim()) {
+    return {
+      ok: false,
+      why: `no handoff text. Write the \`### Handoff\` you posted on the issue, ending ${RELEASE_LINE}, to a file and pass --handoff <file>`,
+    };
+  }
+  const handoff = parseHandoff(handoffText);
+  if (!handoff) {
+    return {
+      ok: false,
+      why: `the text has no \`### Handoff\` section (docs/WORK_CONTROL.md "Lightweight handoff"). An edited Ownership claim or a prose note does not release a lease`,
+    };
+  }
+  if (!handoff.released) {
+    return {
+      ok: false,
+      why: `its Handoff has no ${RELEASE_LINE} line, so the lease fold (threadLease, tools/entry/claim.mjs) still reads the lease as live. Saying "released" in prose, holding, or transferring does not count`,
+    };
+  }
+  return { ok: true, prompt: `${SUCCESSOR_PREAMBLE}\n${handoffText.trim()}` };
+}
+
+/** `--handoff <file>` → its text; null when the flag is absent, the path missing, or the file unreadable. */
+function readHandoffArg(argv) {
+  const at = argv.indexOf("--handoff");
+  if (at === -1 || !argv[at + 1]) return null;
+  try {
+    return readFileSync(argv[at + 1], "utf8").replace(/^\uFEFF/, "");
+  } catch {
+    return null;
+  }
+}
+
+function main(argv) {
   const { route, routine, why } = pickRoute(readLauncherTasks({}));
   console.log(`route: ${route}`);
   console.log(`why: ${why}`);
   if (routine.length) console.log(`routine: ${routine.join(", ")}`);
+  const built = successorPrompt(readHandoffArg(argv));
+  if (!built.ok) {
+    console.error(`prompt: refused — ${built.why}.`);
+    process.exitCode = 1;
+    return;
+  }
   console.log("");
-  console.log(SUCCESSOR_PREAMBLE);
+  console.log(built.prompt);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main();
+  main(process.argv.slice(2));
 }
