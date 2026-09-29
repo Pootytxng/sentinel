@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/613#issuecomment-5882557323",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/626#issuecomment-5882543752",
+    "status": "passed",
+    "reviewerNote": "Local Codex CLI (gpt-5.6-sol, read-only sandbox) reviewed the exact head after its round-1 FAIL at c1935955. Round 1 found two blocking issues. First, a released Handoff carrying an Ownership claim was accepted although the lease fold keeps it live. Second, three callers still ran the command bare. Both are RESOLVED in 1554c621: successorPrompt folds the text with threadLease, and a caller sweep test pins --handoff. It read the full base..head diff. No findings. It authored no mutation.",
+    "head": "1554c6213422c462f282c2031a3461eacecea5e2"
+  },
+  "branch": "claude/distracted-brattain-6b1207",
+  "overlapExclusiveNote": "The claim on #613 names the PR's whole 5-path delta since origin/main plus this landing's two receipts; the write-scope and lease-overlap stages both returned OK at push, and scope-drift-gate --issue 613 --refresh read OK against the landing claim.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "1554c6213422c462f282c2031a3461eacecea5e2",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "469 frontend files, 7846 passed, five expected failures, nine skipped.",
+      "evidence": "logs/verify-local-2026-09-29T02-25-47Z.log; SHA-256 7C2A4C037F7877F9F4A29B6F7642F04BABCD75B521C48A17A0685014323A7E3D; push log logs/push-613-r1.log (LOCAL CHECK RESULT: PASS, new branch pushed at the exact head)",
+      "head": "1554c6213422c462f282c2031a3461eacecea5e2"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-29T02-25-47Z.log; SHA-256 7C2A4C037F7877F9F4A29B6F7642F04BABCD75B521C48A17A0685014323A7E3D; push log logs/push-613-r1.log (LOCAL CHECK RESULT: PASS, new branch pushed at the exact head)",
+      "head": "1554c6213422c462f282c2031a3461eacecea5e2"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1355 passed, zero failed, 24 ignored; no Rust path changed.",
+      "evidence": "logs/verify-local-2026-09-29T02-25-47Z.log; SHA-256 7C2A4C037F7877F9F4A29B6F7642F04BABCD75B521C48A17A0685014323A7E3D; push log logs/push-613-r1.log (LOCAL CHECK RESULT: PASS, new branch pushed at the exact head)",
+      "head": "1554c6213422c462f282c2031a3461eacecea5e2"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-29T02-25-47Z.log; SHA-256 7C2A4C037F7877F9F4A29B6F7642F04BABCD75B521C48A17A0685014323A7E3D; push log logs/push-613-r1.log (LOCAL CHECK RESULT: PASS, new branch pushed at the exact head)",
+      "head": "1554c6213422c462f282c2031a3461eacecea5e2"
+    }
+  ],
+  "issue": 613,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Fresh claim by this session in its own worktree, refreshed twice to widen the write scope before each widening write; git, PR, issue and board state were re-derived before any write.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push created the branch at the exact PR head; nothing was pushed after it.",
+  "pr": 626,
+  "mutationAuthorsNote": "claude-code authored both source commits on the branch, including 1554c621, which answers Codex's round-1 findings. Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "mark-pr-ready",
+  "closingNote": "Mark draft PR #626 ready at the independently reviewed exact pushed head; merge requires its own receipt."
+}
