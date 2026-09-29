@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/598#issuecomment-5882022752",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/623#issuecomment-5882237949",
+    "status": "passed",
+    "reviewerNote": "Local Codex CLI (gpt-5.6-sol, read-only sandbox) reviewed the exact pushed head after its round-1 CHANGES REQUIRED at 666701f7 (https://github.com/Pootytxng/sentinel/pull/623#issuecomment-5882120701). Round 1 finding: an OpenProcess access-denied (5) was read as reused, a false-pass path. It is RESOLVED: only 87 earns a verdict, 5 stays unopenable-5, and a pid-4 behavioral probe plus a static pin guard it. It read the full 3-file base...head delta through the exact-SHA compare. No findings. It authored no mutation.",
+    "head": "6805efa74dd0017099c0854d186aae2899671144"
+  },
+  "branch": "claude/598-held-process-identity",
+  "overlapExclusiveNote": "The claim on #598 names a 5-path scope: the PR's whole 3-path delta since origin/main plus the two landing receipts; the lease-overlap and write-scope gates both returned OK at push.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "6805efa74dd0017099c0854d186aae2899671144",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "469 frontend files, 7834 passed, five expected failures, ten skipped.",
+      "evidence": "logs/verify-local-2026-09-29T01-51-12Z.log; SHA-256 4D6F463DD28015427F4987A958FE364FF6760E2EC79BDE48410BEB8D3DBA04CF; push log logs/push-598-r2.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded 666701f7..6805efa7 at the exact head); PR gate comment https://github.com/Pootytxng/sentinel/pull/623#issuecomment-5882185861",
+      "head": "6805efa74dd0017099c0854d186aae2899671144"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-29T01-51-12Z.log; SHA-256 4D6F463DD28015427F4987A958FE364FF6760E2EC79BDE48410BEB8D3DBA04CF; push log logs/push-598-r2.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded 666701f7..6805efa7 at the exact head); PR gate comment https://github.com/Pootytxng/sentinel/pull/623#issuecomment-5882185861",
+      "head": "6805efa74dd0017099c0854d186aae2899671144"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1355 passed, zero failed, 24 ignored; no Rust path changed.",
+      "evidence": "logs/verify-local-2026-09-29T01-51-12Z.log; SHA-256 4D6F463DD28015427F4987A958FE364FF6760E2EC79BDE48410BEB8D3DBA04CF; push log logs/push-598-r2.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded 666701f7..6805efa7 at the exact head); PR gate comment https://github.com/Pootytxng/sentinel/pull/623#issuecomment-5882185861",
+      "head": "6805efa74dd0017099c0854d186aae2899671144"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-29T01-51-12Z.log; SHA-256 4D6F463DD28015427F4987A958FE364FF6760E2EC79BDE48410BEB8D3DBA04CF; push log logs/push-598-r2.log (LOCAL CHECK RESULT: PASS, branch fast-forwarded 666701f7..6805efa7 at the exact head); PR gate comment https://github.com/Pootytxng/sentinel/pull/623#issuecomment-5882185861",
+      "head": "6805efa74dd0017099c0854d186aae2899671144"
+    }
+  ],
+  "issue": 598,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Fresh claim by this session in its own worktree after the prior lease (session ed0f4d0a) was released by its Handoff at https://github.com/Pootytxng/sentinel/issues/598#issuecomment-5878109819; git, PR, issue and board state were re-derived before any write.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push moved the branch to the exact PR head; nothing was pushed after it.",
+  "pr": 623,
+  "mutationAuthorsNote": "claude-code authored both commits on the branch: 666701f7 (applying the patch drafted by the prior claude-code session ed0f4d0a) and 6805efa7, which answers Codex round 1. Codex authored no mutation.",
+  "actor": "claude-code",
+  "transition": "mark-pr-ready",
+  "closingNote": "Mark draft PR #623 ready at the independently reviewed exact pushed head; merge requires its own receipt."
+}
