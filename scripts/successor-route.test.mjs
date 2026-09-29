@@ -386,11 +386,26 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
     for (const loop of [
       "- Steps: if #611 is still open, write `Successor: chip` with this same prompt and stop.",
       "- Steps: re-spawn this prompt, appending your gate check to the history line.",
+      // Codex r1 on 0dce538f: the same loop without the words re-spawn or same prompt.
+      "- Steps: if #611 is still open, launch this task again.",
     ]) {
       const text = released("land #620's startup-entry probe.").replace("- Claim: released", `${loop}\n- Claim: released`);
       const built = successorPrompt(text);
       expect(built.ok, loop).toBe(false);
       expect(built.why).toContain("re-spawn");
+    }
+  });
+
+  // Codex r1 on 0dce538f: a Handoff that only DESCRIBES the loop it fixed is not an instruction to
+  // loop, and its successor has real work.
+  it("builds the prompt for a Handoff that only describes a re-spawn loop", () => {
+    for (const outcome of [
+      "- Outcome: fixed the re-spawn loop.",
+      "- Outcome: the #620 chain re-spawned the same prompt six times; the router now refuses it.",
+      "- Outcome: stopped the loop where sessions re-sent the same prompt by hand.",
+    ]) {
+      const built = successorPrompt(released("Review PR #632.").replace("- Outcome: x.", outcome));
+      expect(built.ok, `${outcome}: ${built.why}`).toBe(true);
     }
   });
 
@@ -406,7 +421,16 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
   });
 
   it("refuses a next action that only rechecks, polls or re-spawns", () => {
-    for (const next of ["re-check #611's state and report.", "poll PR #611 for a change.", "respawn this same prompt."]) {
+    for (const next of [
+      "re-check #611's state and report.",
+      "poll PR #611 for a change.",
+      "respawn this same prompt.",
+      // Codex r1 on 0dce538f: the same observation and loop in other words.
+      "Check whether PR #611 has merged and report.",
+      "see if #583's lease is released yet.",
+      "If #611 is still open, launch this task again.",
+      "if PR 611 has not merged, stop.",
+    ]) {
       refused(next);
     }
   });
@@ -421,6 +445,11 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       // A later clause may be gated: the first step is work, and the gate is the successor's to meet.
       "Codex or HQ: review PR #464 at its head, and gate mark-ready and merge. Then the owner applies the patch.",
       "Independent exact-head review of e56c6395 (PR #412) by codex. On PASS, land it once the gate passes.",
+      // Codex r1 on 0dce538f: the later step inside the same sentence is still a later step.
+      "Implement X, then the owner applies the patch.",
+      "write the probe and its tests, and then Kuya runs it on his rig.",
+      "Check whether the new test fails on the old head, then push.",
+      "If the gate is red, fix it and push again.",
     ]) {
       const built = successorPrompt(released(next));
       expect(built.ok, `${next}: ${built.why}`).toBe(true);

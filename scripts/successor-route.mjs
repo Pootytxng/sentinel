@@ -205,8 +205,20 @@ export function successorPrompt(handoffText) {
 // complete or observation-only work. A released Handoff only proves the lease is free; its Exact next
 // action decides whether a successor has anything to start. Only the FIRST clause is judged: "review PR
 // #464, then the owner applies the patch" starts with work, and the later gate is the successor's to
-// meet. Tuned against the 326 released Handoffs on the repo's issues (2026-09-29).
-const RESPAWN = /\bre-?spawn\w*\b|\b(?:this|the) same prompt\b/i;
+// meet; a ", then" inside one sentence ends the clause too. Tuned against the 326 released Handoffs on
+// the repo's issues (2026-09-29). RESPAWN reads the whole text but only an instruction to loop: a
+// Handoff that describes the loop it fixed ("fixed the re-spawn loop") still has work to hand on.
+const RESPAWN = new RegExp(
+  [
+    /\bre-?(?:spawn|launch)(?:s|ing)?\s+(?:this|the|its|your)\s+(?:own\s+)?(?:whole\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
+    /\b(?:with|send|pass|reuse|launch|spawn|start|run|queue)\s+(?:this|the)\s+same\s+(?:prompt|task|chip)\b/,
+    /\b(?:launch|spawn|send|queue)\s+(?:it|(?:this|the|your)\s+(?:own\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session))\s+again\b/,
+  ]
+    .map((part) => part.source)
+    .join("|"),
+  "i",
+);
+const CLAUSE_END = /[.;](?:\s|$)|,?\s+(?:and\s+)?then\b/i;
 const NOTHING = /^[^a-z0-9]*(?:none|nothing|n\/a|no (?:further|next|follow-?up|action|work))\b/i;
 const CLOSE_ONLY = /^[^a-z0-9]*close\b(?:\s+(?:#\d+|it|the issue))?(?:\s+as\s+\w+|\s+with evidence\b.*)?$/i;
 const CONDITIONAL = /^[^a-z0-9]*(?:[a-z ]{1,30}:\s*)?(?:once|until|when|after)\b/i;
@@ -219,17 +231,29 @@ const WAITS =
   /\b(?:wait(?:s|ing)?\s+(?:on|for|until)|blocked\s+(?:on|by|until|behind)|gated\s+(?:on|by|behind)|parked\s+(?:on|until|behind)|held\s+(?:on|until|behind)|depends\s+on)\b/i;
 const AFTER =
   /\b(?:after|once|when|until|before)\b[^.;\n]{0,60}?(?:#\d+|\bPR\s*#?\d+|\bowner\b|\bkuya\b)[^.;\n]{0,40}?\b(?:merg\w*|land\w*|releas\w*|clos\w*|approv\w*|proof|prov\w*|appl\w*|decid\w*|decision|test\w*|review\w*|ship\w*)\b/i;
-const RECHECK = /\bre-?check\w*\b|\bpoll\w*\b|\bcheck back\b/i;
+// "If #611 is still open, …": the step is conditional on a gate that has not moved.
+const IF_GATE =
+  /^[^a-z0-9]*(?:if|unless)\b[^,.;\n]{0,60}?(?:#\d+|\bPR\s*#?\d+|\blease\b|\bclaim\b|\bgate\b)[^,.;\n]{0,40}?\b(?:still\s+(?:open|held|draft|blocked|red)|open|held|unmerged|(?:has\s+|is\s+|was\s+)?not\s+(?:yet\s+)?(?:merged|landed|released|closed|passed))\b/i;
+const RECHECK = new RegExp(
+  [
+    /\bre-?check\w*\b|\bpoll\w*\b|\bcheck back\b/,
+    // "Check whether PR #611 has merged": asking a gate, not moving it.
+    /\b(?:check|see|confirm|verify|find out)\w*\s+(?:whether|if)\b[^.;\n]{0,60}?(?:#\d+|\bPR\b|\blease\b|\bclaim\b|\bgate\b|\bowner\b)[^.;\n]{0,40}?\b(?:merg|land|releas|clos|approv|open|held|free|mov|chang)\w*/,
+  ]
+    .map((part) => part.source)
+    .join("|"),
+  "i",
+);
 
 /** Why a Handoff's Exact next action gives a successor nothing to start now, or null when it does. */
 function nextActionStop(nextAction) {
   const text = (nextAction ?? "").trim();
   if (!/[a-z0-9]/i.test(text)) return "its Handoff names no `Exact next action`, so a successor would have nothing to start";
-  const first = text.split(/[.;](?:\s|$)/)[0];
+  const first = text.split(CLAUSE_END)[0];
   if (NOTHING.test(first) || CLOSE_ONLY.test(first)) return "its Exact next action says nothing is left: the work is complete";
   if (OTHER_LANES.test(first)) return "its Exact next action is other issues' work, which their own lanes claim";
   if (OWNER_FIRST.test(first) || OWNER_GATE.test(first)) return "its Exact next action is the owner's, so the work is owner-gated";
-  if (CONDITIONAL.test(first) || WAITS.test(first) || AFTER.test(first) || AT_TIME.test(first)) {
+  if (CONDITIONAL.test(first) || IF_GATE.test(first) || WAITS.test(first) || AFTER.test(first) || AT_TIME.test(first)) {
     return "its Exact next action waits on another issue, PR, the owner or a time, so the work is blocked";
   }
   if (RECHECK.test(first)) return "its Exact next action only rechecks or polls, which is observation, not work";
