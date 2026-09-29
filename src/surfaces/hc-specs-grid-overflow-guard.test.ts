@@ -17,6 +17,14 @@ import { join } from "path";
 // catches the defect itself, not one spelling of it. It reads EVERY declaration that can set a
 // guarded property, in every sheet under src/, not the first rule it finds: a later override wins
 // the cascade, so one safe rule proves nothing (Codex review of PR 624, round 1).
+//
+// A rule reaches a card element when its subject names any class that element carries, read from
+// HomeConsole.tsx, so `.hc-mono` counts for a value. The subject can name it directly, through
+// :is() / :where() / `:nth-child(… of S)`, or through a class attribute selector. A bare type or
+// universal subject that matches the element's tag reaches it too. The card's own tree is read from
+// the markup, so a child combinator into a known parent can rule a rule out (`.bench > div` never
+// reaches the grid). Anything above the tile is unknown, so it is assumed to match. Before this,
+// `:is(.hc-specs-grid)` or `dd` slipped past the guard (Codex review of PR 624, round 2).
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 
@@ -53,6 +61,8 @@ function nest(parent: string | null, sel: string): string {
     .join(", ");
 }
 
+const KEYFRAMES = "@keyframes"; // a keyframe block styles no element, so its declarations are skipped
+
 /** Every declaration in one sheet, with the full selector of the style rule it sits in. At-rule
  *  blocks are descended, and nested rules are read (App.css nests under `:root[data-motion]`). */
 function declarations(file: string, text: string): Decl[] {
@@ -64,7 +74,7 @@ function declarations(file: string, text: string): Decl[] {
   const emit = () => {
     const selector = stack[stack.length - 1];
     const colon = buf.indexOf(":");
-    if (selector && colon > 0) {
+    if (selector && selector !== KEYFRAMES && colon > 0) {
       const value = buf.slice(colon + 1).replace(/!important/i, "").trim();
       out.push({ file, selector, prop: buf.slice(0, colon).trim().toLowerCase(), value });
     }
@@ -79,7 +89,8 @@ function declarations(file: string, text: string): Decl[] {
     else if (parens === 0 && c === "{") {
       const prelude = buf.trim();
       const parent = stack[stack.length - 1] ?? null;
-      stack.push(prelude.startsWith("@") ? parent : nest(parent, prelude));
+      if (parent === KEYFRAMES || /^@(-\w+-)?keyframes\b/.test(prelude)) stack.push(KEYFRAMES);
+      else stack.push(prelude.startsWith("@") ? parent : nest(parent, prelude));
       buf = "";
       continue;
     } else if (parens === 0 && (c === ";" || c === "}")) {
@@ -92,17 +103,182 @@ function declarations(file: string, text: string): Decl[] {
   return out;
 }
 
-/** Whether any selector in the list puts `.cls` on its subject, its last compound. */
-function targets(selectorList: string, cls: string): boolean {
-  const own = new RegExp(`\\.${cls}(?![\\w-])`);
-  return splitTop(selectorList, ",").some((sel) => {
-    let subject = sel.trim();
-    for (const comb of [" ", ">", "+", "~"]) subject = splitTop(subject, comb).pop()!.trim() || subject;
-    // `.x:not(.cls)` does not target .cls.
-    let bare = subject;
-    for (let prev = ""; prev !== bare; ) [prev, bare] = [bare, bare.replace(/\([^()]*\)/g, "")];
-    return own.test(bare);
-  });
+/** An element of the spec card: its tag, classes, class attribute, attribute names and parent. A
+ *  null parent is the page above the card, which the guard cannot see, so any selector may match it. */
+type El = { tag: string; classes: string[]; classAttr: string; attrs: string[]; parent: El | null };
+
+const TSX = readFileSync(join("src", "surfaces", "HomeConsole.tsx"), "utf8");
+const SITE_AT = TSX.indexOf('<section className="hc-specs"');
+const SITE = TSX.slice(SITE_AT, TSX.indexOf("</section>", SITE_AT) + "</section>".length);
+const SPECBOX_AT = TSX.indexOf("function SpecBox(");
+const SPECBOX = TSX.slice(SPECBOX_AT, TSX.indexOf("\n}\n", SPECBOX_AT));
+
+/** The card's element tree, read from the Detected tile's markup and SpecBox's. A component tag
+ *  renders markup the guard does not read, so what sits under it gets the unknown parent. */
+const CARD_ELS: El[] = (() => {
+  const els: El[] = [];
+  let boxParent: El | null = null;
+  const read = (src: string, stack: (El | null)[]) => {
+    for (const [, close, tag, rest, self] of src.matchAll(/<(\/?)([A-Za-z][\w.]*)([^<>]*?)(\/?)>/g)) {
+      if (close) {
+        stack.pop();
+        continue;
+      }
+      const parent = stack[stack.length - 1] ?? null;
+      if (/^[A-Z]/.test(tag)) {
+        if (tag === "SpecBox") boxParent = parent;
+        if (!self) stack.push(null);
+        continue;
+      }
+      const classAttr = /\bclassName="([^"]*)"/.exec(rest)?.[1] ?? "";
+      const attrs = [...rest.matchAll(/([a-zA-Z][\w-]*)=/g)].map((a) => (a[1] === "className" ? "class" : a[1]));
+      const el = { tag, classes: classAttr.split(/\s+/).filter(Boolean), classAttr, attrs: attrs.filter((a) => a !== "key"), parent };
+      els.push(el);
+      if (!self) stack.push(el);
+    }
+  };
+  if (SITE_AT < 0 || SPECBOX_AT < 0) throw new Error("the Detected tile's markup moved — point the guard at it");
+  read(SITE, []);
+  read(SPECBOX, [boxParent]);
+  return els;
+})();
+
+/** Every card element carrying `cls`. */
+function elements(cls: string): El[] {
+  const els = CARD_ELS.filter((el) => el.classes.includes(cls));
+  if (els.length === 0) throw new Error(`no spec-card element carries .${cls} in a static className`);
+  return els;
+}
+
+/** Whether a class attribute value satisfies `[class <op> "want"]`. */
+function attrMatch(have: string, op: string, want: string, fold: boolean): boolean {
+  const [h, w] = fold ? [have.toLowerCase(), want.toLowerCase()] : [have, want];
+  if (op === "=") return h === w;
+  if (op === "~=") return h.split(/\s+/).includes(w);
+  if (op === "|=") return h === w || h.startsWith(`${w}-`);
+  if (op === "^=") return w !== "" && h.startsWith(w);
+  if (op === "$=") return w !== "" && h.endsWith(w);
+  return w !== "" && h.includes(w); // *=
+}
+
+type Reach = "named" | "generic" | "no";
+
+/** A complex selector's compounds, and the combinator before each one after the first. */
+function compounds(sel: string): { cs: string[]; combs: string[] } {
+  const cs: string[] = [];
+  const combs: string[] = [];
+  let cur = "";
+  let comb = " ";
+  let depth = 0;
+  let quote = "";
+  for (const c of sel.trim()) {
+    if (quote) {
+      if (c === quote) quote = "";
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+    else if (depth === 0 && /[\s>+~]/.test(c)) {
+      if (cur) {
+        cs.push(cur);
+        cur = "";
+        comb = " ";
+      }
+      if (c.trim()) comb = c;
+      continue;
+    }
+    if (!cur && cs.length) combs.push(comb);
+    cur += c;
+  }
+  if (cur) cs.push(cur);
+  return { cs, combs };
+}
+
+/** Whether what sits left of compound k can match, given that compound k matched `el`. Only a
+ *  child combinator into a parent the guard knows can rule it out; the page above may match anything. */
+function above(cs: string[], combs: string[], k: number, el: El): boolean {
+  if (k === 0 || combs[k - 1] !== ">" || el.parent === null) return true;
+  return compound(cs[k - 1], el.parent) !== "no" && above(cs, combs, k - 1, el.parent);
+}
+
+/** How a selector list can reach `el`. "named": a subject (last compound) names one of its classes.
+ *  "generic": a bare type or universal subject that matches its tag. "no": neither. */
+function reach(list: string, el: El): Reach {
+  let best: Reach = "no";
+  for (const sel of splitTop(list, ",")) {
+    const { cs, combs } = compounds(sel);
+    const r = cs.length ? compound(cs[cs.length - 1], el) : "no";
+    if (r === "no" || !above(cs, combs, cs.length - 1, el)) continue;
+    if (r === "named") return r;
+    best = r;
+  }
+  return best;
+}
+
+/** Match one compound selector against `el`. It errs toward a match: a class `el` lacks rules the
+ *  compound out unless another part names `el`. :not() and :has() never exclude, and a
+ *  pseudo-element counts as its element. Forms it cannot read throw instead of passing. */
+function compound(s: string, el: El): Reach {
+  let named = false;
+  let foreign = false;
+  const type = /^(\*|[a-zA-Z][\w-]*)/.exec(s)?.[1];
+  if (type && type !== "*" && type.toLowerCase() !== el.tag) return "no";
+  let i = type?.length ?? 0;
+  const ident = () => {
+    const m = /^-?[\w-]+/.exec(s.slice(i))?.[0] ?? "";
+    i += m.length;
+    return m;
+  };
+  // s[i] is `open`. Returns what sits inside, and leaves i just past the matching `close`.
+  const group = (open: string, close: string) => {
+    const start = i + 1;
+    let depth = 0;
+    let quote = "";
+    for (; i < s.length; i++) {
+      const c = s[i];
+      if (quote) {
+        if (c === quote) quote = "";
+      } else if (c === '"' || c === "'") quote = c;
+      else if (c === open) depth++;
+      else if (c === close && --depth === 0) break;
+    }
+    return s.slice(start, i++);
+  };
+  const also = (r: Reach) => {
+    if (r === "named") named = true;
+    return r !== "no";
+  };
+  while (i < s.length) {
+    const c = s[i];
+    if (c === ".") {
+      i++;
+      if (el.classes.includes(ident())) named = true;
+      else foreign = true;
+    } else if (c === "#") {
+      i++;
+      ident();
+      if (!el.attrs.includes("id")) return "no";
+    } else if (c === "[") {
+      const a = /^\s*([\w-]+)\s*(?:([~|^$*]?=)\s*("[^"]*"|'[^']*'|[^\s\]]+)\s*([is])?)?\s*$/i.exec(group("[", "]"));
+      if (!a) throw new Error(`unreadable attribute selector in "${s}" — teach the guard its form`);
+      const name = a[1].toLowerCase();
+      if (name !== "class") {
+        if (!el.attrs.includes(name)) return "no";
+      } else if (!a[2] || attrMatch(el.classAttr, a[2], a[3].replace(/^["']|["']$/g, ""), /i/i.test(a[4] ?? ""))) {
+        named = true;
+      } else return "no";
+    } else if (c === ":") {
+      const element = s[i + 1] === ":";
+      i += element ? 2 : 1;
+      const name = ident().toLowerCase();
+      const arg = s[i] === "(" ? group("(", ")") : null;
+      if (element) continue;
+      if (name === "root") return "no"; // :scope stays open: inside @scope it can be a card element
+      if (/^(is|where|matches|-webkit-any|-moz-any)$/.test(name) && arg !== null && !also(reach(arg, el))) return "no";
+      const of = /^nth-(last-)?child$/.test(name) ? /\sof\s([\s\S]+)$/.exec(arg ?? "")?.[1] : undefined;
+      if (of !== undefined && !also(reach(of, el))) return "no";
+    } else throw new Error(`unreadable selector "${s}" — teach the guard its form`);
+  }
+  return named ? "named" : foreign ? "no" : "generic";
 }
 
 const SHEET = join("src", "surfaces", "home-console.css");
@@ -110,14 +286,18 @@ const ALL: Decl[] = (readdirSync("src", { recursive: true }) as string[])
   .filter((f) => f.endsWith(".css"))
   .flatMap((f) => declarations(join("src", f), stripComments(readFileSync(join("src", f), "utf8"))));
 
-/** Every declaration of `props`, in every sheet, on a rule whose subject is `.cls`. */
-const on = (cls: string, props: string[]) => ALL.filter((d) => props.includes(d.prop) && targets(d.selector, cls));
+/** Every declaration of `props`, in every sheet, whose rule can reach an element carrying `.cls`. */
+const on = (cls: string, props: string[]) => {
+  const els = elements(cls);
+  return ALL.filter((d) => props.includes(d.prop) && els.some((el) => reach(d.selector, el) !== "no"));
+};
 const V2 = '[data-v2="on"]';
 
-/** Every `repeat(auto-fit|auto-fill, minmax(<min>, <max>))` in a value: its minimum, and its end. */
-function autoRepeats(value: string): { min: string; start: number; end: number }[] {
-  const out: { min: string; start: number; end: number }[] = [];
-  for (const m of value.matchAll(/repeat\(\s*auto-(?:fit|fill)\s*,\s*minmax\(/g)) {
+/** Every `repeat(auto-fit|auto-fill, minmax(<min>, <max>))` in a value: its keyword, its minimum,
+ *  and where it starts and ends. */
+function autoRepeats(value: string): { kind: string; min: string; start: number; end: number }[] {
+  const out: { kind: string; min: string; start: number; end: number }[] = [];
+  for (const m of value.matchAll(/repeat\(\s*auto-(fit|fill)\s*,\s*minmax\(/g)) {
     // Walk minmax's first argument to its comma, then on to the `)` that closes repeat.
     let i = m.index! + m[0].length;
     let depth = 0;
@@ -133,7 +313,7 @@ function autoRepeats(value: string): { min: string; start: number; end: number }
       if (value[i] === "(") depth++;
       else if (value[i] === ")") depth--;
     }
-    out.push({ min: min.trim(), start: m.index!, end: i });
+    out.push({ kind: m[1], min: min.trim(), start: m.index!, end: i });
   }
   return out;
 }
@@ -153,7 +333,10 @@ function resolveMin(min: string, w: number): number {
 // the clamp stops mattering. 1280x720 and wider sit far above the top of this range.
 const WIDTHS = Array.from({ length: 70 }, (_, k) => 100 + k * 10);
 const GRID_PROPS = ["grid-template-columns", "grid-template", "grid"];
+const CARD = ["hc-specs", "hc-specs-grid", "hc-spec", "hc-spec-title", "hc-spec-rows", "hc-spec-row", "hc-spec-k", "hc-spec-v"];
 const where = (d: Decl) => `${d.file} "${d.selector}" { ${d.prop}: ${d.value} }`;
+/** A value the guard cannot read statically: a banned keyword could arrive through it. */
+const dynamic = (v: string) => /\b(var|env|attr)\(/.test(v);
 
 describe("Health's Detected tile — spec cards never overflow their tile (#614)", () => {
   it("every track list on .hc-specs-grid, in every sheet, is one auto-fit clamp that fits its container", () => {
@@ -167,12 +350,18 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
       const reps = autoRepeats(d.value);
       const whole = reps.length === 1 && reps[0].start === 0 && reps[0].end === d.value.length;
       expect(whole, `${where(d)}: must be exactly one repeat(auto-fit, minmax(...))`).toBe(true);
+      // auto-fill keeps empty tracks, so the cards stop filling the tile's width.
+      expect(reps[0].kind, `${where(d)}: the spec grid is auto-fit, not auto-fill`).toBe("fit");
       for (const w of WIDTHS) {
         expect(resolveMin(reps[0].min, w), `${where(d)}: wider than a ${w}px container`).toBeLessThanOrEqual(w);
       }
       // The clamp changes nothing where the tile is wide: the cards still ask for 230px there.
       for (const w of [230, 400, 700]) expect(resolveMin(reps[0].min, w), where(d)).toBe(230);
     }
+    // Those tracks only exist while the spec grid is a grid.
+    const displays = on("hc-specs-grid", ["display"]);
+    expect(displays.some((d) => d.selector.includes(V2))).toBe(true);
+    for (const d of displays) expect(d.value, `${where(d)}: the spec grid must stay a grid`).toBe("grid");
   });
 
   it("no auto-fit/auto-fill track in home-console.css asks for more width than its container has", () => {
@@ -203,15 +392,42 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
     pinned("hc-spec-title", ["overflow-wrap", "word-wrap"], anywhere, "a card title must break inside a narrow card");
     pinned("hc-spec-k", ["overflow-wrap", "word-wrap"], anywhere, "a key must break inside a narrow card");
     pinned("hc-spec-v", ["overflow-wrap", "word-wrap"], anywhere, "a value must break inside a narrow card");
+    pinned("hc-spec-row", ["display"], (v) => v === "flex", "a row wraps only while it is a flex row");
     pinned("hc-spec-row", ["flex-wrap", "flex-flow"], (v) => /(^|\s)wrap(\s|$)/.test(v), "a row must wrap its value under its key");
     pinned("hc-spec-k", ["max-width"], (v) => /^(\d+(\.\d+)?)%$/.test(v) && parseFloat(v) <= 100, "a key must never outgrow its row");
     pinned("hc-spec-v", ["min-width"], (v) => /^0(px)?$/.test(v), "a value must be able to shrink");
 
-    // Wrapping is inherited, so a `nowrap` anywhere in the card defeats every rule above.
-    for (const cls of ["hc-specs", "hc-specs-grid", "hc-spec", "hc-spec-title", "hc-spec-rows", "hc-spec-row", "hc-spec-k", "hc-spec-v"]) {
+    // Wrapping is inherited, so a `nowrap` anywhere in the card defeats every rule above. `all`
+    // resets every property at once, so no card element may set it.
+    for (const cls of CARD) {
       for (const d of on(cls, ["white-space", "text-wrap", "text-wrap-mode"])) {
-        expect(/(^|\s)(nowrap|pre)(\s|$)/.test(d.value), `${where(d)}: this stops a spec card's text from wrapping`).toBe(false);
+        const stops = /(^|\s)(nowrap|pre)(\s|$)/.test(d.value) || dynamic(d.value);
+        expect(stops, `${where(d)}: this stops a spec card's text from wrapping`).toBe(false);
       }
+      expect(on(cls, ["all"]).map(where), "`all` would reset the card's rules").toEqual([]);
+    }
+  });
+
+  // The clamp keeps the tracks inside the tile. A fixed width, a card spanning a second column, or
+  // a grid that flows into new columns would push past the tile anyway.
+  it("nothing else in a spec card asks for more width than its tile has", () => {
+    const fits = (v: string) => {
+      if (v === "auto" || v === "0") return true;
+      try {
+        return WIDTHS.every((w) => resolveMin(v, w) <= w);
+      } catch {
+        return false; // a length the guard cannot resolve (20ch, 12rem) is not proven to fit
+      }
+    };
+    for (const cls of CARD) {
+      for (const d of on(cls, ["width", "min-width", "inline-size", "min-inline-size"])) {
+        expect(fits(d.value), `${where(d)}: wider than a narrow tile`).toBe(true);
+      }
+    }
+    expect(on("hc-spec", ["grid-column", "grid-column-start", "grid-column-end", "grid-area"]).map(where)).toEqual([]);
+    expect(on("hc-specs-grid", ["grid-template-areas"]).map(where)).toEqual([]);
+    for (const d of on("hc-specs-grid", ["grid-auto-flow"])) {
+      expect(/column/.test(d.value) || dynamic(d.value), `${where(d)}: a column flow adds columns past the tile`).toBe(false);
     }
   });
 
@@ -232,15 +448,26 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
       (v) => (v.trim().split(/\s+/).pop() ?? "") === "12px",
       "the key–value gap must stay 12px",
     );
+    for (const d of on("hc-spec-row", ["flex-direction", "flex-flow"])) {
+      const turns = /column|reverse/.test(d.value) || dynamic(d.value);
+      expect(turns, `${where(d)}: a row keeps its key on the left of its value`).toBe(false);
+    }
   });
 
-  // An inline style beats every sheet, so the component must not set one on a spec card.
-  it("SpecBox sets no inline style that could override these rules", () => {
-    const tsx = readFileSync(join("src", "surfaces", "HomeConsole.tsx"), "utf8");
-    const start = tsx.indexOf("function SpecBox(");
-    expect(start).toBeGreaterThan(-1);
-    const body = tsx.slice(start, tsx.indexOf("\n}\n", start));
-    expect(body).toContain('className="hc-spec-v');
-    expect(body).not.toMatch(/\bstyle=/);
+  // An inline style beats every sheet, so the component must not set one on a spec card. The guard
+  // reads each card element's classes from its static className, so a computed one would hide a
+  // class from it.
+  it("SpecBox sets no inline style, and no class the guard cannot read", () => {
+    for (const src of [SITE, SPECBOX]) {
+      expect(src).not.toMatch(/\bstyle=/);
+      expect(src).not.toMatch(/className=\{/);
+    }
+    expect(SPECBOX).toContain('className="hc-spec-v');
+    // The tree it reads is the card as rendered: a value sits in a row, in the rows, in a card, in the grid.
+    const path = (el: El | null): string => (el ? `${path(el.parent)} > ${el.tag}.${el.classes[0]}` : "…");
+    expect(path(elements("hc-spec-v")[0])).toBe(
+      "… > section.hc-specs > div.hc-specs-grid > div.hc-spec > dl.hc-spec-rows > div.hc-spec-row > dd.hc-spec-v",
+    );
+    for (const cls of CARD) expect(elements(cls).length, `.${cls}`).toBeGreaterThan(0);
   });
 });
