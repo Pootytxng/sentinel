@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
+import ts from "typescript";
 import { LEDGER_CHANGED_EVENT } from "../types";
 
 const invokeMock = vi.fn();
@@ -61,7 +62,20 @@ describe("a startup toggle tells the ledger readers and re-reads, like apply and
 });
 
 // The fix only holds while nothing goes around the helper: a second direct invoke is the silent
-// toggle again. Comments are stripped, since prose may name the command (Fix.tsx does).
+// toggle again. The owner check reads string literals with the TypeScript parser, so prose that names
+// the command (Fix.tsx's does) is not code, and a `"/*"` string cannot hide a call that is (#619).
+const namesCommand = (source: string, file = "sample.tsx") => {
+  const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === "set_startup_entry_enabled") {
+      found = true;
+    } else node.forEachChild(visit);
+  };
+  visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest, false, kind));
+  return found;
+};
+
 describe("the startup toggle has one owner", () => {
   // Relative to the repo root, as the other static guards read the tree (no node types here).
   const SRC = "src";
@@ -81,10 +95,16 @@ describe("the startup toggle has one owner", () => {
   // ledger-write.ts names it only in its command list (#619), never as a call.
   it("only startup-toggle.ts names the command in code, besides the ledger-write command list", () => {
     const owners = walk(SRC)
-      .filter((p) => strip(readFileSync(p, "utf8")).includes("set_startup_entry_enabled"))
+      .filter((p) => namesCommand(readFileSync(p, "utf8"), p))
       .map(rel)
       .sort();
     expect(owners).toEqual(["data/ledger-write.ts", "data/startup-toggle.ts"]);
+  });
+
+  it("the owner check reads code, not prose", () => {
+    expect(namesCommand(`const open = "/*"; invoke("set_startup_entry_enabled", {}); const close = "*/";`)).toBe(true);
+    expect(namesCommand(`invoke("set_startup_\\u0065ntry_enabled", {});`)).toBe(true);
+    expect(namesCommand(`// invoke("set_startup_entry_enabled")\n/* set_startup_entry_enabled */ const x = 1;`)).toBe(false);
   });
 
   it("App's toggle and Check's disable both route through it, handing it their refresh", () => {
