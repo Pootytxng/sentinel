@@ -27,6 +27,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { threadLease } from "../tools/entry/claim.mjs";
+
 // The two routines the owner would name "compy-successor-a"/"-b" if he creates them; anything else
 // in a scheduled-tasks.json is a different routine (e.g. a daily digest) and must be ignored here.
 const LAUNCHER_IDS = ["compy-successor-a", "compy-successor-b"];
@@ -134,19 +136,81 @@ export const SUCCESSOR_PREAMBLE = `You are a Compy successor session, launched b
 STEP 0 — check your folder: run \`git rev-parse --show-toplevel\`. If it prints the shared checkout C:/Users/Kuya/code/sentinel, every write is refused there (the launcher routine's worktree toggle is off). Write nothing: call spawn_task with this whole prompt so the owner gets a one-click worktree session, say that in one line, and stop.
 STEP 1 — you inherit no lease. Re-derive state (git, the issue, docs/WORK_CONTROL.md) before trusting anything below, and post your own Ownership claim before any write. Right after it, if \`git config --get core.hooksPath\` prints an absolute path, repoint your own folder: \`git config --worktree core.hooksPath .githooks\`. New app worktrees arrive pinned, and the pin reds every lane's push (#405). Anything owner-bound stops at the owner.
 STEP 2 — do the task below.
-LAST — end by launching your own successor the same way (\`node scripts/successor-route.mjs\`; if your own launcher routine is still running, use the other one), or write \`Successor: none — <why>\`.
+LAST — end by launching your own successor the same way (\`node scripts/successor-route.mjs --handoff <file>\`, the file holding the Handoff you posted, ending \`- Claim: released\`; if your own launcher routine is still running, use the other one), or write \`Successor: none — <why>\`.
 
 TASK:`;
 
-function main() {
+// #613: two handoffs reached their successors with no `Claim:` line: #583 (an Ownership claim edited
+// to say "handed off") and #405 ("This lease is **released**" in prose). The lease fold reads only the
+// Claim line, so both leases stayed live after their writers left, and nothing refused either handoff.
+// So the preamble is only ever printed together with a Handoff that releases the lease, and the text is
+// read by the lease fold itself, so this check and every gate agree on what counts as released: a
+// claim in the same text is read after the release and keeps the lease live. It must be `released`:
+// the preamble tells the successor it inherits no lease, and a transfer to a chip that is never clicked
+// holds its paths with nobody writing.
+const RELEASE_LINE = "`- Claim: released`";
+
+/**
+ * The full successor prompt for a handoff, or the reason it is refused.
+ * @param {string|null|undefined} handoffText - the `### Handoff` block posted on the issue, plus any
+ *   task text; it follows `TASK:` verbatim.
+ * @returns {{ok: true, prompt: string} | {ok: false, why: string}}
+ */
+export function successorPrompt(handoffText) {
+  if (typeof handoffText !== "string" || !handoffText.trim()) {
+    return {
+      ok: false,
+      why: `no handoff text. Write the \`### Handoff\` you posted on the issue, ending ${RELEASE_LINE}, to a file and pass --handoff <file>`,
+    };
+  }
+  const { claim, handoff } = threadLease([{ body: handoffText }]);
+  if (!handoff) {
+    return {
+      ok: false,
+      why: `the text has no \`### Handoff\` section (docs/WORK_CONTROL.md "Lightweight handoff"). An edited Ownership claim or a prose note does not release a lease`,
+    };
+  }
+  if (!handoff.released) {
+    return {
+      ok: false,
+      why: `its Handoff has no ${RELEASE_LINE} line, so the lease fold (threadLease, tools/entry/claim.mjs) still reads the lease as live. Saying "released" in prose, holding, or transferring does not count`,
+    };
+  }
+  if (claim) {
+    return {
+      ok: false,
+      why: `the text also carries an \`### Ownership claim\`, which the lease fold reads after the release, so the lease stays live. Pass only the Handoff`,
+    };
+  }
+  return { ok: true, prompt: `${SUCCESSOR_PREAMBLE}\n${handoffText.trim()}` };
+}
+
+/** `--handoff <file>` → its text; null when the flag is absent, the path missing, or the file unreadable. */
+function readHandoffArg(argv) {
+  const at = argv.indexOf("--handoff");
+  if (at === -1 || !argv[at + 1]) return null;
+  try {
+    return readFileSync(argv[at + 1], "utf8").replace(/^\uFEFF/, "");
+  } catch {
+    return null;
+  }
+}
+
+function main(argv) {
   const { route, routine, why } = pickRoute(readLauncherTasks({}));
   console.log(`route: ${route}`);
   console.log(`why: ${why}`);
   if (routine.length) console.log(`routine: ${routine.join(", ")}`);
+  const built = successorPrompt(readHandoffArg(argv));
+  if (!built.ok) {
+    console.error(`prompt: refused — ${built.why}.`);
+    process.exitCode = 1;
+    return;
+  }
   console.log("");
-  console.log(SUCCESSOR_PREAMBLE);
+  console.log(built.prompt);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main();
+  main(process.argv.slice(2));
 }

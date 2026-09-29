@@ -1,10 +1,13 @@
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, it, expect } from "vitest";
 
-import { pickRoute, readLauncherTasks, SUCCESSOR_PREAMBLE } from "./successor-route.mjs";
+import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
+import { pickRoute, readLauncherTasks, SUCCESSOR_PREAMBLE, successorPrompt } from "./successor-route.mjs";
 
 // Guard for #466: "launch the successor yourself" only works if the routing decision is provable.
 // pickRoute is pure so every branch below is checkable without a real scheduled-tasks store; a
@@ -199,5 +202,165 @@ describe("SUCCESSOR_PREAMBLE", () => {
   it("is a non-empty string independent of any live machine state", () => {
     expect(typeof SUCCESSOR_PREAMBLE).toBe("string");
     expect(SUCCESSOR_PREAMBLE.length).toBeGreaterThan(40);
+  });
+});
+
+// #613: a successor handoff for #583 arrived with no `Claim:` line, and #405's Handoff released its
+// lease only in prose. The lease fold reads the Claim line alone, so both leases stayed live with
+// nobody writing, and nothing refused either handoff. The prompt now exists only beside a Handoff that
+// the lease fold itself reads as released.
+describe("successorPrompt (#613)", () => {
+  const RELEASED = [
+    "### Handoff",
+    "",
+    "- Outcome: guard landed.",
+    "- Exact next action: non-author review of the PR.",
+    "- Claim: released",
+  ].join("\n");
+
+  it("builds the prompt from a Handoff whose Claim line releases: preamble, then the handoff verbatim", () => {
+    const built = successorPrompt(`${RELEASED}\n`);
+    expect(built.ok).toBe(true);
+    expect(built.prompt.startsWith(SUCCESSOR_PREAMBLE)).toBe(true);
+    expect(built.prompt).toContain(`TASK:\n${RELEASED}`);
+  });
+
+  it("refuses when there is no handoff text at all", () => {
+    for (const none of [undefined, null, "", "   \n\t "]) {
+      const built = successorPrompt(none);
+      expect(built.ok).toBe(false);
+      expect(built.why).toContain("--handoff");
+      expect(built).not.toHaveProperty("prompt");
+    }
+  });
+
+  // The #583 shape: the outgoing session edited its Ownership claim to say it handed off.
+  it("refuses an edited Ownership claim that says it handed off, with no Handoff section", () => {
+    const edited = [
+      "### Ownership claim",
+      "- Executor/tool: claude-code",
+      "  **Handed off 2026-09-28T16:30Z** to a successor session. The successor's own claim supersedes this one.",
+      "- Write scope: `src/data/x.ts`",
+    ].join("\n");
+    const built = successorPrompt(edited);
+    expect(built.ok).toBe(false);
+    expect(built.why).toContain("### Handoff");
+  });
+
+  // The #405 shape: a real Handoff whose release is prose in the Outcome, with no Claim line.
+  it("refuses a Handoff that says released in prose but has no Claim line", () => {
+    const prose = [
+      "### Handoff",
+      "",
+      "- Outcome: the work is open as draft PR #492. This lease is **released**.",
+      "- Exact next action: an exact-head review of PR #492 by a non-author.",
+    ].join("\n");
+    const built = successorPrompt(prose);
+    expect(built.ok).toBe(false);
+    expect(built.why).toContain("- Claim: released");
+  });
+
+  it("refuses a Claim line that holds or transfers the lease", () => {
+    for (const state of [
+      "transferred to codex until 2026-09-30T00:00Z",
+      "**HELD.** Released only when a review verdict lands",
+      "active",
+    ]) {
+      const built = successorPrompt(`### Handoff\n- Outcome: x\n- Claim: ${state}`);
+      expect(built.ok, state).toBe(false);
+    }
+  });
+
+  it("refuses a release that another Claim line in the same Handoff contradicts", () => {
+    const both = `${RELEASED}\n- Claim: transferred to codex until 2026-09-30T00:00Z`;
+    expect(successorPrompt(both).ok).toBe(false);
+  });
+
+  // Shares the lease fold's parser: a release quoted inside a fence is an example, not a release.
+  it("refuses a Handoff that exists only as a fenced example", () => {
+    expect(successorPrompt(["```text", RELEASED, "```"].join("\n")).ok).toBe(false);
+  });
+
+  it("refuses a Claim: released that sits above the Handoff header, outside its section", () => {
+    const above = ["- Claim: released", "", "### Handoff", "- Outcome: x"].join("\n");
+    expect(successorPrompt(above).ok).toBe(false);
+  });
+
+  // Codex review of c1935955: the fold reads a comment's release first and its claim after, so a text
+  // carrying both leaves the lease live, whichever comes first on the page.
+  it("refuses a released Handoff that also carries an Ownership claim, in either order", () => {
+    const claim = ["### Ownership claim", "- Write scope: `scripts/x.mjs`"].join("\n");
+    for (const text of [`${RELEASED}\n\n${claim}`, `${claim}\n\n${RELEASED}`]) {
+      const built = successorPrompt(text);
+      expect(built.ok, text).toBe(false);
+      expect(built.why).toContain("Ownership claim");
+    }
+  });
+});
+
+// Codex review of c1935955: the CLI refuses without --handoff, so an instruction that still says to run
+// it bare sends every session following it into the refusal, and invites a hand-written prompt that
+// skips the check. Every live instruction has to pass the Handoff. Captured fixtures and receipts quote
+// history and are left as written.
+describe("successor-route callers (#613)", () => {
+  const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const INVOCATION = ["node scripts/", "successor-route", "\\.mjs"].join("");
+
+  it("every tracked instruction to run it passes --handoff", { timeout: TREE_WALK_TIMEOUT_MS }, () => {
+    const res = spawnSync(
+      "git",
+      ["grep", "-n", "-e", INVOCATION, "--", ".", ":!scripts/fixtures/", ":!.claude/work-control/"],
+      { cwd: ROOT, encoding: "utf8", windowsHide: true },
+    );
+    expect(res.status, res.stderr).toBe(0);
+    const lines = res.stdout.split("\n").filter(Boolean);
+    // The preamble, CLAUDE.md and the context-size advisor at least; fewer means the search went blind.
+    expect(lines.length).toBeGreaterThanOrEqual(3);
+    const bare = lines.filter((l) => !new RegExp(`${INVOCATION} --handoff\\b`).test(l));
+    expect(bare).toEqual([]);
+  });
+});
+
+describe("successor-route CLI (#613)", () => {
+  const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "successor-route.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "successor-route-cli-"));
+  // A store root that does not exist, so the route is chip whatever this machine has provisioned.
+  const env = { ...process.env, COMPY_ROUTINE_STORE_ROOT: join(dir, "no-store") };
+  const run = (...args) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: "utf8", env, windowsHide: true });
+  const file = (name, text) => {
+    const p = join(dir, name);
+    writeFileSync(p, text);
+    return p;
+  };
+  const PREAMBLE_START = SUCCESSOR_PREAMBLE.slice(0, 40);
+
+  it("with no --handoff: prints the route, withholds the prompt, exits 1", () => {
+    const res = run();
+    expect(res.error).toBeUndefined();
+    expect(res.status).toBe(1);
+    expect(res.stdout).toContain("route: chip");
+    expect(res.stdout).not.toContain(PREAMBLE_START);
+    expect(res.stderr).toContain("prompt: refused");
+  });
+
+  it("with a handoff that has no Claim line: withholds the prompt, exits 1", () => {
+    const res = run("--handoff", file("prose.md", "### Handoff\n- Outcome: This lease is **released**.\n"));
+    expect(res.status).toBe(1);
+    expect(res.stdout).not.toContain(PREAMBLE_START);
+    expect(res.stderr).toContain("- Claim: released");
+  });
+
+  it("with a --handoff path that cannot be read: withholds the prompt, exits 1", () => {
+    const res = run("--handoff", join(dir, "missing.md"));
+    expect(res.status).toBe(1);
+    expect(res.stdout).not.toContain(PREAMBLE_START);
+  });
+
+  it("with a releasing Handoff (BOM and CRLF included): prints the preamble then the handoff, exits 0", () => {
+    const res = run("--handoff", file("ok.md", "\uFEFF### Handoff\r\n- Outcome: done.\r\n- Claim: released\r\n"));
+    expect(res.status, res.stderr).toBe(0);
+    expect(res.stdout).toContain("route: chip");
+    expect(res.stdout).toContain(SUCCESSOR_PREAMBLE);
+    expect(res.stdout).toContain("- Claim: released");
   });
 });
