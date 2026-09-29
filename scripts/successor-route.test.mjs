@@ -298,6 +298,136 @@ describe("successorPrompt (#613)", () => {
   });
 });
 
+// #632: the #620 and #616 chains launched ten successors between 01:59Z and 10:14Z on 2026-09-29. Each
+// one rechecked a gate that had not moved and re-spawned itself. The owner's direction that day: no
+// successor for blocked, owner-gated, complete or observation-only work; the turn ends with a status on
+// the issue and `Successor: none`. A released Handoff is not enough on its own. Its Exact next action
+// has to be work a successor can start now.
+describe("successorPrompt refuses blocked, owner-gated, complete and recheck work (#632)", () => {
+  // #583's Handoff of 2026-09-29T02:45:45Z, verbatim
+  // (https://github.com/Pootytxng/sentinel/issues/583#issuecomment-5882659619). It releases the lease,
+  // and it leaves nothing for a successor: the rebase belongs to #616's and #617's own lanes, and #611
+  // waits on the owner's proof. Before #632 the router printed a successor prompt for it.
+  const REAL_583 = [
+    "### Handoff",
+    "- Outcome: lane 2b is code-complete and review-clean. Codex round 6 at `d302c9d` returned **PASS** with no blocking findings; its one non-blocking note is filed as #628. Draft PR #611 is ready for the owner's live proof and merge.",
+    "- Files/commits/PR: PR #611, branch `claude/determined-galileo-mb5z29`, final head `d302c9d1718e7e8fae73f46e87c1e768a9489bf7`. This claim added `8483c8e` (Codex r4 fixes) and `d302c9d` (Codex r5 notes) on top of `13a4e21`. Files: `src-tauri/src/experiment.rs`, `src-tauri/src/lib.rs`, `src/experiment-record-first-guard.test.ts`. `actions.rs` untouched; `history.rs` only read.",
+    "- Verification:",
+    "  - Native pre-push gate PASS at `d302c9d` (`logs/verify-local-2026-09-29T02-31-45Z.log`): #356 write-scope and #517 lease overlap OK; frontend 469/469 files, 7827 passed / 1 expected fail / 9 skipped; Rust 1401/0/24; clippy clean.",
+    "  - The new guards fail on the previous head; reverting each Rust fix reds its own test.",
+    "  - Codex (independent): r4 FAIL at `13a4e21` → fixed; r5 PASS at `8483c8e` (3 notes, fixed); r6 PASS at `d302c9d` ([comment](https://github.com/Pootytxng/sentinel/pull/611#issuecomment-5882632385)).",
+    "  - Self-review #8 PASS (12/12); `d302c9d` touches no UI.",
+    "- Remaining work: #628 (start note wording, after #611), #620 (startup-toggle live read), #616 and #617 (★ fixes that land after #611), hidden-state item 4 (corrupt `experiments.json` loses a Running trial's context). Full list in the PR body's Remaining section.",
+    "- Gates or owner actions: owner-only live proof on the owner's rig (`game-bar-disable` start → play → conclude, then kill Compy mid-start and relaunch), then the merge. The `work-control-gate.mjs` merge receipt is written at merge time against the final head. Flagged for a Cowork adversarial audit (mutation/rollback-adjacent).",
+    "- Worktree state: `C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\competent-northcutt-f84e33`, branch `claude/competent-northcutt-f84e33` at `d302c9d`, clean, equal to the remote PR branch.",
+    "- Active processes: none.",
+    "- Exact next action: #616 and #617 may rebase onto `d302c9d` now; nothing further lands on #611 before the owner's proof.",
+    "- Claim: released",
+  ].join("\n");
+
+  const released = (next) =>
+    ["### Handoff", "- Outcome: x.", ...(next === null ? [] : [`- Exact next action: ${next}`]), "- Claim: released"].join(
+      "\n",
+    );
+  const refused = (next) => {
+    const built = successorPrompt(released(next));
+    expect(built.ok, String(next)).toBe(false);
+    expect(built).not.toHaveProperty("prompt");
+    expect(built.why, String(next)).toContain("Successor: none");
+    return built.why;
+  };
+
+  it("refuses #583's real released Handoff, whose next step waits on the owner's proof", () => {
+    const built = successorPrompt(REAL_583);
+    expect(built.ok).toBe(false);
+    expect(built.why).toContain("Successor: none");
+  });
+
+  it("refuses the #620 and #616 chain shapes once they are written as released Handoffs", () => {
+    for (const next of [
+      "land #620's startup-entry probe after #611 merges; if #611 is still open, re-spawn this prompt.",
+      "land #616 once #583 releases history.rs.",
+      "land #620's live probe (gated on #611).",
+      "land #618 when PR 611 lands.",
+    ]) {
+      refused(next);
+    }
+  });
+
+  it("refuses a next action that waits on a condition or a time", () => {
+    for (const next of [
+      "once the native pre-push gate can pass, push 3d370073.",
+      "Claude Code or Codex: when an independent review appears on #555, post a landing claim.",
+      "after 09:37Z, re-run the Codex review.",
+    ]) {
+      refused(next);
+    }
+  });
+
+  it("refuses a Handoff whose work is complete, or that names no next action", () => {
+    for (const next of [
+      null,
+      "",
+      "—",
+      "none — merged as d439a5f5.",
+      "Nothing; #613 closed by the merge.",
+      "n/a",
+      "close #452 as completed.",
+      "Close with evidence: PR #314 merged as 7dafc402.",
+    ]) {
+      refused(next);
+    }
+  });
+
+  // The #616 chain's step 1: "stop. Write `Successor: chip` with this same prompt". Anywhere in the
+  // text, not only in the next action: the whole text is what the successor is handed.
+  it("refuses a Handoff that tells its successor to re-spawn itself, wherever it says so", () => {
+    expect(successorPrompt(released("land #620's startup-entry probe.")).ok).toBe(true);
+    for (const loop of [
+      "- Steps: if #611 is still open, write `Successor: chip` with this same prompt and stop.",
+      "- Steps: re-spawn this prompt, appending your gate check to the history line.",
+    ]) {
+      const text = released("land #620's startup-entry probe.").replace("- Claim: released", `${loop}\n- Claim: released`);
+      const built = successorPrompt(text);
+      expect(built.ok, loop).toBe(false);
+      expect(built.why).toContain("re-spawn");
+    }
+  });
+
+  it("refuses a next action that is the owner's", () => {
+    for (const next of [
+      "Owner applies docs/superpowers/specs/2026-09-29-x.patch.",
+      "Kuya runs the live proof on his rig.",
+      "wait for the owner’s decision on F1.",
+      "the owner-only reboot (A_wmi), then re-run the probe.",
+    ]) {
+      refused(next);
+    }
+  });
+
+  it("refuses a next action that only rechecks, polls or re-spawns", () => {
+    for (const next of ["re-check #611's state and report.", "poll PR #611 for a change.", "respawn this same prompt."]) {
+      refused(next);
+    }
+  });
+
+  it("still builds the prompt for work a successor can start now", () => {
+    for (const next of [
+      "non-author review of the PR.",
+      "fix the two Codex findings on PR #630, then run the pre-push gate again.",
+      "rebase #616 onto main now that #611 has merged, then push.",
+      "land PR #630 at head `abc12345` after its Codex PASS.",
+      "write the owner patch for the hook registration, with skipIf-gated tests.",
+      // A later clause may be gated: the first step is work, and the gate is the successor's to meet.
+      "Codex or HQ: review PR #464 at its head, and gate mark-ready and merge. Then the owner applies the patch.",
+      "Independent exact-head review of e56c6395 (PR #412) by codex. On PASS, land it once the gate passes.",
+    ]) {
+      const built = successorPrompt(released(next));
+      expect(built.ok, `${next}: ${built.why}`).toBe(true);
+    }
+  });
+});
+
 // Codex review of c1935955: the CLI refuses without --handoff, so an instruction that still says to run
 // it bare sends every session following it into the refusal, and invites a hand-written prompt that
 // skips the check. Every live instruction has to pass the Handoff. Captured fixtures and receipts quote
@@ -357,10 +487,23 @@ describe("successor-route CLI (#613)", () => {
   });
 
   it("with a releasing Handoff (BOM and CRLF included): prints the preamble then the handoff, exits 0", () => {
-    const res = run("--handoff", file("ok.md", "\uFEFF### Handoff\r\n- Outcome: done.\r\n- Claim: released\r\n"));
+    const res = run(
+      "--handoff",
+      file("ok.md", "\uFEFF### Handoff\r\n- Outcome: done.\r\n- Exact next action: non-author review of PR #626.\r\n- Claim: released\r\n"),
+    );
     expect(res.status, res.stderr).toBe(0);
     expect(res.stdout).toContain("route: chip");
     expect(res.stdout).toContain(SUCCESSOR_PREAMBLE);
     expect(res.stdout).toContain("- Claim: released");
+  });
+
+  it("with a released Handoff whose next action waits on the owner: withholds the prompt, says Successor: none, exits 1 (#632)", () => {
+    const res = run(
+      "--handoff",
+      file("gated.md", "### Handoff\n- Outcome: done.\n- Exact next action: nothing lands before the owner's proof.\n- Claim: released\n"),
+    );
+    expect(res.status).toBe(1);
+    expect(res.stdout).not.toContain(PREAMBLE_START);
+    expect(res.stderr).toContain("Successor: none");
   });
 });

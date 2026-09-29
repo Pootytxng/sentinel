@@ -38,16 +38,17 @@ function defaultRoot() {
 }
 
 /**
- * Read every scheduled task named like a #466 launcher, across every org/project folder under the
- * store root. Fail-safe at every level (missing root, missing org/project dir, unreadable or
- * malformed scheduled-tasks.json): a launcher store that does not exist yet is the EXPECTED state on
- * a machine that has not been provisioned, not an error — it degrades to "no tasks found", which
- * pickRoute turns into the chip route.
+ * Read every scheduled task, across every org/project folder under the store root. Fail-safe at
+ * every level (missing root, missing org/project dir, unreadable or malformed scheduled-tasks.json):
+ * a launcher store that does not exist yet is the EXPECTED state on a machine that has not been
+ * provisioned, not an error — it degrades to "no tasks found", which pickRoute turns into the chip
+ * route.
  * @param {{root?: string}} [opts] - root defaults to %APPDATA%\Claude, override via
  *   COMPY_ROUTINE_STORE_ROOT (used by tests, and by anyone running this from a non-default profile).
- * @returns {Array<object>} raw task objects for compy-successor-a/-b only
+ * @returns {Array<object>} raw task objects, every routine in the store (#632's launch guard reads a
+ *   routine's stored prompt through its `filePath`)
  */
-export function readLauncherTasks({ root = defaultRoot() } = {}) {
+export function readScheduledTasks({ root = defaultRoot() } = {}) {
   const found = [];
   const sessionsDir = join(root, "claude-code-sessions");
   let orgDirs;
@@ -81,11 +82,16 @@ export function readLauncherTasks({ root = defaultRoot() } = {}) {
             ? parsed.tasks
             : [];
       for (const task of list) {
-        if (task && LAUNCHER_IDS.includes(task?.id)) found.push(task);
+        if (task) found.push(task);
       }
     }
   }
   return found;
+}
+
+/** readScheduledTasks narrowed to the #466 launchers, compy-successor-a/-b. */
+export function readLauncherTasks(opts) {
+  return readScheduledTasks(opts).filter((task) => LAUNCHER_IDS.includes(task?.id));
 }
 
 // enabled defaults true (absence is not a disable); useWorktree must be explicitly true (absence is
@@ -136,7 +142,7 @@ export const SUCCESSOR_PREAMBLE = `You are a Compy successor session, launched b
 STEP 0 — check your folder: run \`git rev-parse --show-toplevel\`. If it prints the shared checkout C:/Users/Kuya/code/sentinel, every write is refused there (the launcher routine's worktree toggle is off). Write nothing: call spawn_task with this whole prompt so the owner gets a one-click worktree session, say that in one line, and stop.
 STEP 1 — you inherit no lease. Re-derive state (git, the issue, docs/WORK_CONTROL.md) before trusting anything below, and post your own Ownership claim before any write. Right after it, if \`git config --get core.hooksPath\` prints an absolute path, repoint your own folder: \`git config --worktree core.hooksPath .githooks\`. New app worktrees arrive pinned, and the pin reds every lane's push (#405). Anything owner-bound stops at the owner.
 STEP 2 — do the task below.
-LAST — end by launching your own successor the same way (\`node scripts/successor-route.mjs --handoff <file>\`, the file holding the Handoff you posted, ending \`- Claim: released\`; if your own launcher routine is still running, use the other one), or write \`Successor: none — <why>\`.
+LAST — if the work is blocked, owner-gated, complete or only waits to be rechecked, post its status on the issue and write \`Successor: none — <why>\`; never re-spawn to recheck a gate. If you have room, keep working here. Launch a successor only for work it can start now, and only with \`node scripts/successor-route.mjs --handoff <file>\` (the file holding the Handoff you posted, ending \`- Claim: released\`; if your own launcher routine is still running, use the other one).
 
 TASK:`;
 
@@ -182,7 +188,52 @@ export function successorPrompt(handoffText) {
       why: `the text also carries an \`### Ownership claim\`, which the lease fold reads after the release, so the lease stays live. Pass only the Handoff`,
     };
   }
+  const stop = RESPAWN.test(handoffText)
+    ? "it tells its successor to re-spawn the same prompt, which is the loop the owner stopped"
+    : nextActionStop(handoff.nextAction);
+  if (stop) {
+    return {
+      ok: false,
+      why: `${stop}. Launch nothing: post the status on the issue and board, and end with \`Successor: none — <why>\` (owner direction 2026-09-29, #632)`,
+    };
+  }
   return { ok: true, prompt: `${SUCCESSOR_PREAMBLE}\n${handoffText.trim()}` };
+}
+
+// #632: the #620 and #616 chains launched ten successors on 2026-09-29, each rechecking a gate that had
+// not moved and re-spawning itself. The owner's direction: no successor for blocked, owner-gated,
+// complete or observation-only work. A released Handoff only proves the lease is free; its Exact next
+// action decides whether a successor has anything to start. Only the FIRST clause is judged: "review PR
+// #464, then the owner applies the patch" starts with work, and the later gate is the successor's to
+// meet. Tuned against the 326 released Handoffs on the repo's issues (2026-09-29).
+const RESPAWN = /\bre-?spawn\w*\b|\b(?:this|the) same prompt\b/i;
+const NOTHING = /^[^a-z0-9]*(?:none|nothing|n\/a|no (?:further|next|follow-?up|action|work))\b/i;
+const CLOSE_ONLY = /^[^a-z0-9]*close\b(?:\s+(?:#\d+|it|the issue))?(?:\s+as\s+\w+|\s+with evidence\b.*)?$/i;
+const CONDITIONAL = /^[^a-z0-9]*(?:[a-z ]{1,30}:\s*)?(?:once|until|when|after)\b/i;
+const OTHER_LANES = /^[^a-z0-9#]*#\d+(?:\s*(?:,|and|&|\/)\s*#\d+)*\s+(?:may|can|could|should)\b/i;
+const AT_TIME = /\b(?:after|until|at|from)\s+\d{1,2}:\d{2}\s*Z?\b/i;
+const OWNER_FIRST = /^[^a-z0-9]*(?:the\s+)?(?:owner|kuya)\b/i;
+const OWNER_GATE =
+  /\b(?:owner|kuya)(?:[-\s]only\b|[-\s]hands?\b|[-\s]gated\b|['’]s\s+(?:proof|decision|call|word|approval|sign-?off|test|hands?|review|go-?ahead|answer|ruling|reboot)\b|\s+(?:to|must|should|needs? to|has to)\s+\w+|\s+(?:applies|runs|decides|approves|proves|tests|merges|reviews|reboots|installs|confirms|signs)\b)/i;
+const WAITS =
+  /\b(?:wait(?:s|ing)?\s+(?:on|for|until)|blocked\s+(?:on|by|until|behind)|gated\s+(?:on|by|behind)|parked\s+(?:on|until|behind)|held\s+(?:on|until|behind)|depends\s+on)\b/i;
+const AFTER =
+  /\b(?:after|once|when|until|before)\b[^.;\n]{0,60}?(?:#\d+|\bPR\s*#?\d+|\bowner\b|\bkuya\b)[^.;\n]{0,40}?\b(?:merg\w*|land\w*|releas\w*|clos\w*|approv\w*|proof|prov\w*|appl\w*|decid\w*|decision|test\w*|review\w*|ship\w*)\b/i;
+const RECHECK = /\bre-?check\w*\b|\bpoll\w*\b|\bcheck back\b/i;
+
+/** Why a Handoff's Exact next action gives a successor nothing to start now, or null when it does. */
+function nextActionStop(nextAction) {
+  const text = (nextAction ?? "").trim();
+  if (!/[a-z0-9]/i.test(text)) return "its Handoff names no `Exact next action`, so a successor would have nothing to start";
+  const first = text.split(/[.;](?:\s|$)/)[0];
+  if (NOTHING.test(first) || CLOSE_ONLY.test(first)) return "its Exact next action says nothing is left: the work is complete";
+  if (OTHER_LANES.test(first)) return "its Exact next action is other issues' work, which their own lanes claim";
+  if (OWNER_FIRST.test(first) || OWNER_GATE.test(first)) return "its Exact next action is the owner's, so the work is owner-gated";
+  if (CONDITIONAL.test(first) || WAITS.test(first) || AFTER.test(first) || AT_TIME.test(first)) {
+    return "its Exact next action waits on another issue, PR, the owner or a time, so the work is blocked";
+  }
+  if (RECHECK.test(first)) return "its Exact next action only rechecks or polls, which is observation, not work";
+  return null;
 }
 
 /** `--handoff <file>` → its text; null when the flag is absent, the path missing, or the file unreadable. */
