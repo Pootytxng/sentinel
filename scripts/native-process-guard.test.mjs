@@ -240,9 +240,11 @@ if ($modes.ContainsKey($Scenario)) {
   # over. It slept a fixed 1s -- under gate-wide CPU contention the kill can land later -- and it
   # probed with a bare pid (process.kill(pid, 0)), which under the gate's process churn can hit a
   # RECYCLED pid: measured on this machine 2026-08-29, a freed pid was re-occupied within 3s in 4 of
-  # 12 trials. A dead child then read as alive. This poll cannot make that mistake: a process only
-  # counts as OUR child while its CommandLine still carries the unique fixture path AND the
-  # child-hang mode; anything else at that pid means our child is gone.
+  # 12 trials. A dead child then read as alive. #598 found the same mistake one step later: the
+  # cleanup below killed by bare pid, and the verdict trusted a recorded parent pid. The verdict now
+  # comes from lib/held-process.ps1, through one held handle: a process only counts as OUR child
+  # while its CommandLine carries the unique fixture path AND the child-hang mode; anything else at
+  # that pid means our child is gone, and is never touched.
   $childPid = 0
   if (Test-Path -LiteralPath $pidFile) {
     $rawPid = Get-Content -LiteralPath $pidFile -Raw -ErrorAction SilentlyContinue
@@ -255,31 +257,16 @@ if ($modes.ContainsKey($Scenario)) {
     # No descendant existed, so tree termination was never exercised: inconclusive, not a verdict.
     Write-Output "TREE_CHILD_FATE=SPAWN_INCONCLUSIVE"
   } else {
-    $fate = "ALIVE"
-    $probe = [Diagnostics.Stopwatch]::StartNew()
-    while ($probe.ElapsedMilliseconds -lt 20000) {
-      $rows = $null
-      $queryOk = $true
-      # WMI-free on purpose (2026-09-02): the CIM Win32_Process query hung for minutes on the dev
-      # machine and this poll never returned, so the gate went red on a kill that had happened. The
-      # snapshot is the kernel's own process table. Identity is the child's PARENT pid: toolhelp
-      # keeps the creator's pid after the creator dies, and a recycled pid is a process some OTHER
-      # creator made -- which is exactly the reuse this poll must not mistake for our child.
-      try { $rows = @(Get-NativeProcessSnapshot) } catch { $queryOk = $false }
-      if ($queryOk) {
-        $live = $rows | Where-Object { $_.ProcessId -eq $childPid } | Select-Object -First 1
-        if ($null -eq $live) { $fate = "DEAD"; break }
-        if (($live.ParentProcessId -ne $result.ProcessId) -or ($live.ExeName -notlike "node*")) { $fate = "PID_REUSED"; break }
-      }
-      # A snapshot failure does NOT read as death: fail closed toward ALIVE, never toward a pass.
-      Start-Sleep -Milliseconds 250
-    }
-    if ($fate -eq "ALIVE") {
-      # A regression must FAIL the assertion, not also leak an immortal node that keeps holding
-      # inherited pipe duplicates and hangs the suite. Killed DIRECTLY, never through the library
-      # under test -- when tree-kill is the thing that broke, it cannot be the cleanup either.
-      try { [System.Diagnostics.Process]::GetProcessById($childPid).Kill() } catch { }
-    }
+    # WMI-free on purpose (2026-09-02): the CIM Win32_Process query hung for minutes on the dev
+    # machine. The command line is read through the handle instead. Waits up to 20s for the kill to
+    # land. A child still alive then is killed through that same handle: a regression must FAIL the
+    # assertion, not also leak an immortal node that holds inherited pipe duplicates and hangs the
+    # suite, and the kill goes DIRECTLY, never through the library under test -- when tree-kill is
+    # the thing that broke, it cannot be the cleanup either. An unproven identity is its own fate,
+    # which the test rejects: fail closed, never toward a pass.
+    . (Join-Path (Split-Path -Parent $LibPath) "held-process.ps1")
+    $held = Resolve-HeldProcessFate -ProcessId $childPid -Marker @($FakeGh, "child-hang") -WaitMs 20000
+    $fate = switch ($held) { "gone" { "DEAD" } "exited" { "DEAD" } "reused" { "PID_REUSED" } "alive" { "ALIVE" } default { "UNPROVEN-" + $held } }
     Write-Output ("TREE_CHILD_FATE=" + $fate)
   }
 } elseif ($Scenario -eq "checked-fails-closed") {
@@ -927,23 +914,24 @@ describe.runIf(windows)("native-process behaviour (bug->guard, both failed v0.9.
 // bring the original full-parallel races straight back while every test stays green. Runs on every
 // platform: it asserts on the HARNESS source, not on live processes.
 describe("tree-kill death probe stays deterministic (issue #254)", () => {
-  it("keeps the identity-checked, bounded, fail-closed poll in the harness", () => {
-    // Identity (WMI-free since 2026-09-02): a pid only counts as our child while the kernel's process
-    // table still shows a node.exe whose creator was the timed-out parent. Win32_Process was the
-    // previous witness; it hung for minutes on the dev machine and the poll never returned.
-    expect(HARNESS).toContain("Get-NativeProcessSnapshot");
+  it("keeps the identity-checked, bounded, fail-closed verdict in the harness", () => {
+    // Identity (#598): a pid only counts as our child while the process holding it carries the
+    // fixture path and the child-hang mode in its command line, read through one held handle.
+    // Win32_Process was an earlier witness; it hung for minutes on the dev machine (2026-09-02).
+    expect(HARNESS).toContain(
+      'Resolve-HeldProcessFate -ProcessId $childPid -Marker @($FakeGh, "child-hang") -WaitMs 20000',
+    );
     expect(HARNESS).not.toContain("Get-CimInstance");
-    expect(HARNESS).toContain("$live.ParentProcessId -ne $result.ProcessId");
-    expect(HARNESS).toContain('$fate = "PID_REUSED"');
-    // ...and a snapshot that could not be taken proves nothing: only a READ table may classify.
-    expect(HARNESS).toContain("$queryOk = $false");
+    expect(HARNESS).toContain('"reused" { "PID_REUSED" }');
+    // An identity that could not be proven is no verdict, and the test accepts only DEAD/PID_REUSED.
+    expect(HARNESS).toContain('default { "UNPROVEN-" + $held }');
     // Setup that never produced a descendant is inconclusive, not a verdict either way.
     expect(HARNESS).toContain("TREE_CHILD_FATE=SPAWN_INCONCLUSIVE");
-    // A failed run must not leak the immortal child-hang node -- and the cleanup must not route
-    // through the library under test, whose tree-kill is exactly what a red run says is broken.
-    expect(HARNESS).toContain("GetProcessById($childPid).Kill()");
-    // Fail-closed polarity: a CIM error may never read as death.
-    expect(HARNESS).toContain("catch { $queryOk = $false }");
+    // A failed run must not leak the immortal child-hang node, and the cleanup must not route
+    // through the library under test -- but it kills only through the held, identity-proven handle.
+    // By bare pid it once killed whatever held a recycled pid, such as a vitest worker (#598).
+    const code = HARNESS.split(/\r?\n/).filter((line) => !line.trim().startsWith("#")).join("\n");
+    expect(code).not.toMatch(/GetProcessById|GetProcesses|Get-Process\b|Stop-Process|taskkill/i);
   });
 
   it("keeps the discriminating fixture and the pipe-proof pid transport", () => {
