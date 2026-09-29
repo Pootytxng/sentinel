@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/632#issuecomment-5892163561",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/633#issuecomment-5896391375",
+    "status": "passed",
+    "reviewerNote": "Codex CLI (gpt-5.6-sol, read-only), not an author of any commit. Rounds 1-3 reviewed the whole PR and FAILed at 0dce538f, 1234d58b and 17a33ab4; round 4 at e7800a5d hit the Codex usage limit before a verdict, and its probe's findings were fixed in 8d07e495; round 5 FAILed at 8d07e495, fixed in d5e43ea9; round 6 FAILed at d5e43ea9, fixed in c3995311; round 7 PASSed at c3995311, incremental from d5e43ea9, which rounds 5-6 had reviewed incrementally back to e7800a5d.",
+    "head": "c399531174c904aa523610bb0081a8163e0e8130"
+  },
+  "branch": "claude/wonderful-brahmagupta-c01d28",
+  "overlapExclusiveNote": "The claim on #632 names the PR's whole 7-path delta since origin/main plus this landing's two receipts; the write-scope and lease-overlap stages both returned OK at push, and scope-drift-gate --issue 632 --refresh read OK against the landing claim.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "c399531174c904aa523610bb0081a8163e0e8130",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "470 files, 7876 passed (5 expected fail, 10 skipped).",
+      "evidence": "logs/verify-local-2026-09-29T18-30-08Z.log; SHA-256 bfe4091f218de3fac3f7f585ca315cc7467923dff77434cfded1a9a1426feeec; push log logs/push-632-r8.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "c399531174c904aa523610bb0081a8163e0e8130"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-29T18-30-08Z.log; SHA-256 bfe4091f218de3fac3f7f585ca315cc7467923dff77434cfded1a9a1426feeec; push log logs/push-632-r8.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "c399531174c904aa523610bb0081a8163e0e8130"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1355 passed, 0 failed.",
+      "evidence": "logs/verify-local-2026-09-29T18-30-08Z.log; SHA-256 bfe4091f218de3fac3f7f585ca315cc7467923dff77434cfded1a9a1426feeec; push log logs/push-632-r8.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "c399531174c904aa523610bb0081a8163e0e8130"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-29T18-30-08Z.log; SHA-256 bfe4091f218de3fac3f7f585ca315cc7467923dff77434cfded1a9a1426feeec; push log logs/push-632-r8.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "c399531174c904aa523610bb0081a8163e0e8130"
+    }
+  ],
+  "issue": 632,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Fresh claim by this session in its own worktree, widened to name the landing receipts before they were written. It was released by the Handoff at https://github.com/Pootytxng/sentinel/issues/632#issuecomment-5896408537 before this merge, as the merge gate requires.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push updated the branch to the exact PR head; nothing was pushed after it.",
+  "pr": 633,
+  "mutationAuthorsNote": "claude-code authored every commit on the branch; Codex reviewed read-only and authored no mutation.",
+  "actor": "claude-code",
+  "transition": "merge-pr",
+  "closingNote": "Land PR #633 through scripts/land-pr.mjs. Its closingIssuesReferences lists only #632, so the merge closes #632; this claim is released first, as the merge gate requires."
+}
