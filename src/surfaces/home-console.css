@@ -532,11 +532,12 @@
   color: var(--v2-muted);
 }
 /* The track minimum is CLAMPED TO THE TILE (#614). The Detected tile is the bento hero, 7 of 12
-   columns, beside a rail that stays 246px wide. So its content box falls from 539px at 1280 to
-   191px at a 684px window and 62px at the 380 minWidth. A bare `minmax(230px, 1fr)` kept one 230px
-   track at all three, and the cards ran 5–135px under Findings. `min(230px, 100%)` is 230px wherever
-   the tile can hold it, so 1280x720 and 1500x980 lay out exactly as before. It is no breakpoint,
-   because this file allows none. Guard: hc-specs-grid-overflow-guard.test.ts. */
+   columns, beside a rail that stays 246px wide. At 1280 its content box holds two 264.6px tracks,
+   but at 684 / 504 / 380 windows it is only 191 / 86 / 62px. A bare `minmax(230px, 1fr)` still
+   demanded one 230px track there, so the cards overran the tile by 21.5–151px and ran up to 135px
+   under Findings. `min(230px, 100%)` is 230px wherever the tile can hold it, so 1280x720 and
+   1500x980 lay out exactly as before. It is no breakpoint, because this file allows none.
+   Guard: hc-specs-grid-overflow-guard.test.ts. */
 :root[data-v2="on"] .hc-specs-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
