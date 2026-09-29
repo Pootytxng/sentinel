@@ -531,9 +531,15 @@
      Guarded: src/design/tokens-v2-guard.test.ts "caption-token usage". */
   color: var(--v2-muted);
 }
+/* The track minimum is CLAMPED TO THE TILE (#614). The Detected tile is the bento hero, 7 of 12
+   columns, beside a rail that stays 246px wide. So its content box falls from 539px at 1280 to
+   191px at a 684px window and 62px at the 380 minWidth. A bare `minmax(230px, 1fr)` kept one 230px
+   track at all three, and the cards ran 5–135px under Findings. `min(230px, 100%)` is 230px wherever
+   the tile can hold it, so 1280x720 and 1500x980 lay out exactly as before. It is no breakpoint,
+   because this file allows none. Guard: hc-specs-grid-overflow-guard.test.ts. */
 :root[data-v2="on"] .hc-specs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
   gap: 10px;
 }
 :root[data-v2="on"] .hc-spec {
@@ -547,11 +553,17 @@
   border-radius: var(--ix-radius);
   min-width: 0;
 }
+/* A card clamped to the tile can be 62px wide at the 380 minWidth, so its own contents yield
+   before they cross its frame (#614). Nothing below changes a card that is wide enough. A title
+   breaks only when the word is wider than the card. A key never grows past its row. The value's
+   basis is 6ch, so it sits beside its key exactly as before until the two cannot share one line,
+   and only then drops beneath it. */
 :root[data-v2="on"] .hc-spec-title {
   font: 600 var(--type-label) var(--v2-font-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--v2-text);
+  overflow-wrap: anywhere;
 }
 :root[data-v2="on"] .hc-spec-rows {
   display: flex;
@@ -561,20 +573,24 @@
 }
 :root[data-v2="on"] .hc-spec-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 2px 12px;
   font-size: var(--type-label);
 }
 :root[data-v2="on"] .hc-spec-k {
   color: var(--v2-muted);
   flex: none;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   margin: 0;
 }
 :root[data-v2="on"] .hc-spec-v {
   color: var(--v2-text);
   text-align: right;
   overflow-wrap: anywhere;
+  flex: 1 1 6ch;
   min-width: 0;
   margin: 0;
 }
