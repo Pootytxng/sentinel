@@ -140,6 +140,8 @@ describe("successor launch guard: spawn_task (#632)", () => {
       "same prompt": "Land #620, and if blocked, start a new chip with the same prompt.",
       // Codex r3 on 17a33ab4.
       "keep re-running": "Land #620. If blocked, keep re-running this task.",
+      // Codex r4 on e7800a5d: an apostrophe inside a word does not open a quote around the loop.
+      apostrophes: "Land #620. If it's blocked, launch this task again, per the owners' rule.",
     };
     for (const [shape, prompt] of Object.entries(shapes)) {
       expect(hookOutput(spawnEvent(prompt)), shape).not.toBeNull();
@@ -181,6 +183,12 @@ describe("successor launch guard: spawn_task (#632)", () => {
       // Codex r3 on 17a33ab4: a quoted loop phrase is a mention, not an instruction.
       'Update the docs to explain why the phrase "launch this task again" caused a loop.',
       "Document the “re-spawn this prompt” wording the router refuses.",
+      // Codex r4 on e7800a5d: history, a code span or a single-quoted phrase, and the quoted marker.
+      "Document why sessions kept re-running this task in the #620 chain.",
+      "Update the docs to explain why `launch this task again` caused a loop.",
+      "Update the docs to explain why 'launch this task again' caused a loop.",
+      "Document the ‘re-spawn this prompt’ wording the router refuses.",
+      'Document why the marker "You are a Compy successor session" identifies routed prompts.',
     ]) {
       expect(isSuccessorPrompt(prompt), prompt.slice(0, 60)).toBe(false);
       expect(hookOutput(spawnEvent(prompt)), prompt.slice(0, 60)).toBeNull();

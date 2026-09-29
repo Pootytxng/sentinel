@@ -359,6 +359,14 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "once the native pre-push gate can pass, push 3d370073.",
       "Claude Code or Codex: when an independent review appears on #555, post a landing claim.",
       "after 09:37Z, re-run the Codex review.",
+      // Codex r4 on e7800a5d: another lane's gate named as a precondition, anywhere in the next action.
+      "PR #611 must merge first.",
+      "#611 needs to land first.",
+      "Blocked: PR #611 must merge first.",
+      "Land #620; PR #611 must merge first.",
+      "Land #620 — PR #611 (the ETW fix) must merge first.",
+      "#583's lease on history.rs must be released first, then land #616.",
+      "#611 has yet to merge, then land #620.",
     ]) {
       refused(next);
     }
@@ -409,6 +417,8 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       // Codex r3 on 17a33ab4: any inflection of a re- verb, and "keep launching".
       "- Steps: If blocked, keep re-running this task.",
       "- Steps: keep launching this prompt until #611 merges.",
+      // Codex r4 on e7800a5d: an apostrophe inside a word does not open a quote around the loop.
+      "- Steps: if it's blocked, launch this task again, per the owners' rule.",
     ]) {
       const text = released("land #620's startup-entry probe.").replace("- Claim: released", `${loop}\n- Claim: released`);
       const built = successorPrompt(text);
@@ -428,6 +438,10 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       // Codex r3 on 17a33ab4: a quoted phrase is a mention of the loop, not an instruction to loop.
       '- Outcome: Added a guard for the phrase "launch this task again".',
       "- Outcome: the router now refuses “run this task again”.",
+      // Codex r4 on e7800a5d: "kept re-running" is history; a code span or single quotes are a mention.
+      "- Outcome: sessions kept re-running this task; the router now refuses it.",
+      "- Outcome: Added a guard for the phrase 'launch this task again'.",
+      "- Outcome: the docs now explain why `run this task again` looped.",
     ]) {
       const built = successorPrompt(released("Review PR #632.").replace("- Outcome: x.", outcome));
       expect(built.ok, `${outcome}: ${built.why}`).toBe(true);
@@ -449,6 +463,9 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Approval from owner is required.",
       "Sign-off from the owner, then merge.",
       "The patch's owner approval is still pending.",
+      // Codex r4 on e7800a5d.
+      "The patch cannot land without owner approval.",
+      "Owner-applied patch: apply it, then delete it.",
     ]) {
       refused(next);
     }
@@ -479,6 +496,8 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Report whether PR #611 has merged.",
       "Ask whether #583's lease is released.",
       "Watch PR #611 for a merge.",
+      // Codex r4 on e7800a5d narrowed recheck to a step or a gate; #129's released Handoff still stops.
+      "A fresh session opens issue #129 and rechecks HEAD/status before relying on any claim.",
     ]) {
       refused(next);
     }
@@ -516,6 +535,14 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "Track #632's receipts in the ledger, then push.",
       "Report the gate result on PR #633, then land it.",
       "Implement the approval flow from the owner patch spec.",
+      // Near misses for the Codex r4 fixes on e7800a5d: polling and recheck code, owner-facing work,
+      // and "first" for the successor's own step.
+      "Owner-facing copy: review and revise the dialog.",
+      "Fix the polling backoff and add tests.",
+      "Fix the recheck loop and add tests.",
+      "Land PR #633 first, then carry the receipts.",
+      "Explain in the docs why #611 had to merge first.",
+      "Rebase #616 onto main; #616 needs to land before Friday's cut.",
     ]) {
       const built = successorPrompt(released(next));
       expect(built.ok, `${next}: ${built.why}`).toBe(true);

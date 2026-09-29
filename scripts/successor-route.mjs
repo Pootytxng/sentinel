@@ -188,7 +188,7 @@ export function successorPrompt(handoffText) {
       why: `the text also carries an \`### Ownership claim\`, which the lease fold reads after the release, so the lease stays live. Pass only the Handoff`,
     };
   }
-  const stop = RESPAWN.test(withoutQuotes(handoffText))
+  const stop = RESPAWN.test(withoutMentions(handoffText))
     ? "it tells its successor to re-spawn the same prompt, which is the loop the owner stopped"
     : nextActionStop(handoff.nextAction);
   if (stop) {
@@ -211,8 +211,9 @@ export function successorPrompt(handoffText) {
 // launch guard (successor-launch-guard.mjs) reuses it to spot a hand-written successor prompt.
 export const RESPAWN = new RegExp(
   [
-    // Present and -ing forms only: "re-spawned the same prompt" is history, not an instruction.
-    /\b(?:keep\s+)?re-?(?:spawn|launch|run|send|queue)(?:s|es|ing|ning)?\s+(?:this|the|its|your)\s+(?:own\s+)?(?:whole\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
+    // Present forms, and -ing only after "keep": "re-spawned the same prompt" and "kept re-running
+    // this task" are history, not an instruction.
+    /\b(?:keep\s+re-?(?:spawn|launch|run|send|queue)(?:ing|ning)|re-?(?:spawn|launch|run|send|queue)(?:s|es)?)\s+(?:this|the|its|your)\s+(?:own\s+)?(?:whole\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
     /\bkeep\s+(?:spawn|launch|run|send|queue|start)(?:s|ing|ning)?\s+(?:this|the|its|your)\s+(?:own\s+)?(?:same\s+)?(?:prompt|task|chip|successor|session)\b/,
     /\b(?:with|send|pass|reuse|launch|spawn|start|run|queue)\s+(?:this|the)\s+same\s+(?:prompt|task|chip)\b/,
     // "run it again" is how a gate or a test is re-run, so only a launch verb re-launches "it".
@@ -224,9 +225,16 @@ export const RESPAWN = new RegExp(
     .join("|"),
   "i",
 );
-/** A double-quoted phrase is a mention ('the phrase "launch this task again"'), not an instruction. */
+/**
+ * A quoted phrase is a mention ('the phrase "launch this task again"'), not an instruction. A single
+ * quote opens only after a space or bracket and closes before one, so "Kuya's" and "don't" stay.
+ */
 export function withoutQuotes(text) {
-  return text.replace(/"[^"\n]*"|“[^”\n]*”/g, '""');
+  return text.replace(/"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|(^|[\s([])'[^'\n]+'(?=$|[\s.,;:!?)\]])/g, (_, lead) => `${lead ?? ""}""`);
+}
+/** RESPAWN reads a code span as a mention too; "write `Successor: chip`" still counts to the guard. */
+export function withoutMentions(text) {
+  return withoutQuotes(text).replace(/`[^`\n]*`/g, '""');
 }
 const CLAUSE_END = /[.;](?:\s|$)|,?\s+(?:and\s+)?then\b/i;
 // "Done — merged as …", "Landed in …": completion said as a state. "Complete the migration" is work,
@@ -246,9 +254,10 @@ const CLOSE_ONLY = /^[^a-z0-9]*close\b(?:\s+(?:#\d+|it|the issue))?(?:\s+as\s+\w
 const CONDITIONAL = /^[^a-z0-9]*(?:[a-z ]{1,30}:\s*)?(?:once|until|when|after)\b/i;
 const OTHER_LANES = /^[^a-z0-9#]*#\d+(?:\s*(?:,|and|&|\/)\s*#\d+)*\s+(?:may|can|could|should)\b/i;
 const AT_TIME = /\b(?:after|until|at|from)\s+\d{1,2}:\d{2}\s*Z?\b/i;
-const OWNER_FIRST = /^[^a-z0-9]*(?:the\s+)?(?:owner|kuya)\b/i;
+// "Owner-facing copy: …" is work for the successor; "Owner-only …" and "Owner-applied …" are OWNER_GATE's.
+const OWNER_FIRST = /^[^a-z0-9]*(?:the\s+)?(?:owner|kuya)\b(?!-)/i;
 const OWNER_GATE =
-  /\b(?:owner|kuya)(?:[-\s]only\b|[-\s]hands?\b|[-\s]gated\b|['’]s\s+(?:proof|decision|call|word|approval|sign-?off|test|hands?|review|go-?ahead|answer|ruling|reboot)\b|\s+(?:to|must|should|needs? to|has to)\s+\w+|\s+(?:applies|runs|decides|approves|proves|tests|merges|reviews|reboots|installs|confirms|signs)\b)|\b(?:awaits?|awaiting|pending|needs?|requires?|get|obtain|ask(?:ing)?\s+for|request|seek)\s+(?:(?:an?|the|explicit)\s+)*(?:owner|kuya)\b(?!-)|\b(?:approval|sign-?off|go-?ahead|decision|ruling|confirmation|answer|proof|permission|input)\s+(?:from|by|of)\s+(?:the\s+)?(?:owner|kuya)\b(?!-)|\b(?:owner|kuya)\s+(?:approval|sign-?off|go-?ahead|decision|ruling|confirmation|answer|proof|permission|input)\s+(?:is\s+|are\s+)?(?:still\s+)?(?:required|needed|pending|outstanding|missing)\b/i;
+  /\bwithout\s+(?:(?:an?|the|explicit)\s+)*(?:owner|kuya)(?:['’]s)?\s+(?:approval|sign-?off|go-?ahead|decision|ruling|confirmation|answer|proof|permission|input|ok)\b|\b(?:owner|kuya)(?:[-\s]only\b|[-\s]hands?\b|[-\s]gated\b|-(?:applied|approved|run|signed|decided|bound)\b|['’]s\s+(?:proof|decision|call|word|approval|sign-?off|test|hands?|review|go-?ahead|answer|ruling|reboot)\b|\s+(?:to|must|should|needs? to|has to)\s+\w+|\s+(?:applies|runs|decides|approves|proves|tests|merges|reviews|reboots|installs|confirms|signs)\b)|\b(?:awaits?|awaiting|pending|needs?|requires?|get|obtain|ask(?:ing)?\s+for|request|seek)\s+(?:(?:an?|the|explicit)\s+)*(?:owner|kuya)\b(?!-)|\b(?:approval|sign-?off|go-?ahead|decision|ruling|confirmation|answer|proof|permission|input)\s+(?:from|by|of)\s+(?:the\s+)?(?:owner|kuya)\b(?!-)|\b(?:owner|kuya)\s+(?:approval|sign-?off|go-?ahead|decision|ruling|confirmation|answer|proof|permission|input)\s+(?:is\s+|are\s+)?(?:still\s+)?(?:required|needed|pending|outstanding|missing)\b/i;
 // "await" opening the clause is a wait; mid-clause only with a gate as its object ("wrap it in an
 // await" is code).
 const WAITS =
@@ -266,9 +275,19 @@ const IF_GATE = new RegExp(
     .join("|"),
   "i",
 );
+// "PR #611 must merge first", "#611 has yet to land": another lane's gate named as the precondition.
+// "first" puts it before the next action wherever it sits, so the whole next action is read.
+const GATE_REF = String.raw`(?:#\d+|\bPR\s*#?\d+)(?:['’]s\s(?:[^.;,\n]|\.(?=\S)){0,40}?|\s*\([^)\n]{0,40}\))?\s+`;
+const GATE_MOVE = String.raw`(?:be\s+)?(?:merg|land|releas|clos|approv|free|expir|finish|ship)\w*`;
+const PRECONDITION = new RegExp(
+  `${GATE_REF}(?:must|needs?\\s+to|has\\s+to|have\\s+to|is\\s+to)\\s+${GATE_MOVE}\\s+first\\b|${GATE_REF}(?:has|have|is|are)\\s+(?:yet\\s+to|still\\s+to|not\\s+yet)\\s+${GATE_MOVE}`,
+  "i",
+);
 const RECHECK = new RegExp(
   [
-    /\bre-?check\w*\b|\bpoll\w*\b|\bcheck back\b/,
+    // A recheck or poll as the step itself, or aimed at a gate; "fix the polling backoff" is work.
+    /^[^a-z0-9]*(?:[a-z ]{1,30}:\s*)?(?:re-?check|poll|check\s+back)\b(?!-)|\bcheck\s+back\b/,
+    /\b(?:re-?check|poll)(?:s|ed|ing)?\s+(?:#\d+|PR\b|(?:HEAD|main|status|state)\b|(?:the|its|their)\s+(?:PR|issue|lease|claim|gate|board|state|status)\b|whether|if|for|until|again|every|each)/,
     // "Check whether PR #611 has merged", "Make sure #611 has merged": asking a gate, not moving it.
     /\b(?:check|see|confirm|verify|find out|make sure|ensure|report|ask|tell|note|determine|watch|monitor|track)(?:s|es|ed|ing)?\s+(?:(?:whether|if|that)\b|(?=(?:the\s+)?(?:PR\s*)?#\d+))[^.;\n]{0,60}?(?:#\d+|\bPR\b|\blease\b|\bclaim\b|\bgate\b|\bowner\b)[^.;\n]{0,40}?\b(?:merg|land|releas|clos|approv|open|held|free|mov|chang)\w*/,
   ]
@@ -285,7 +304,8 @@ function nextActionStop(nextAction) {
   if (NOTHING.test(first) || CLOSE_ONLY.test(first)) return "its Exact next action says nothing is left: the work is complete";
   if (OTHER_LANES.test(first)) return "its Exact next action is other issues' work, which their own lanes claim";
   if (OWNER_FIRST.test(first) || OWNER_GATE.test(first)) return "its Exact next action is the owner's, so the work is owner-gated";
-  if (CONDITIONAL.test(first) || IF_GATE.test(first) || WAITS.test(first) || AFTER.test(first) || AT_TIME.test(first)) {
+  const waits = [CONDITIONAL, IF_GATE, WAITS, AFTER, AT_TIME].some((gate) => gate.test(first));
+  if (waits || PRECONDITION.test(text)) {
     return "its Exact next action waits on another issue, PR, the owner or a time, so the work is blocked";
   }
   if (RECHECK.test(first)) return "its Exact next action only rechecks or polls, which is observation, not work";
