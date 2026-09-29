@@ -429,11 +429,18 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       "- Steps: If blocked, follow this instruction: `launch this task again`.",
       "- Steps: If blocked, follow this instruction: 'launch this task again'.",
       '- Steps: Run the tests, then follow this instruction: "launch this task again".',
-      // A cue word does not reach past a colon, or more than three words, to the quote.
+      // A cue word reaches the quote only across "the", "a", "an" or "for": never a colon, a comma or another word.
       "- Steps: if the tests stay red: `re-run this prompt`.",
       '- Steps: if the tests fail again on main, do "launch this task again".',
       // An apostrophe after a cue word does not open a quote that hides the loop.
       "- Steps: note why it's blocked, then launch this task again, per the owners' rule.",
+      "- Steps: if the guard's check fails, launch this task again, per the owners' rule.",
+      // Codex r6 on d5e43ea9: a cue word in ordinary prose does not hide the instruction after it.
+      "- Steps: If blocked, in that case, `launch this task again`.",
+      "- Steps: In any case 're-run this prompt'.",
+      "- Steps: if the tests fail, `re-run this prompt`.",
+      "- Steps: If blocked, document it and `launch this task again`.",
+      "- Steps: If it fails the tests, `launch this task again`.",
     ]) {
       const text = released("land #620's startup-entry probe.").replace("- Claim: released", `${loop}\n- Claim: released`);
       const built = successorPrompt(text);
@@ -562,6 +569,9 @@ describe("successorPrompt refuses blocked, owner-gated, complete and recheck wor
       'Add a regression test for "PR #611 must merge first".',
       'Add a test for "blocked on #611" and fix the parser.',
       "Document the `once #611 merges` wording the router refuses.",
+      // Codex r6 on d5e43ea9: the only words a cue reaches across.
+      'Add a regression test for a "PR #611 must merge first" line.',
+      'Add a test for an "until #611 merges" step.',
     ]) {
       const built = successorPrompt(released(next));
       expect(built.ok, `${next}: ${built.why}`).toBe(true);

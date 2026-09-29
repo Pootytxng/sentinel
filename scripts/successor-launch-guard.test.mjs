@@ -143,6 +143,11 @@ describe("successor launch guard: spawn_task (#632)", () => {
       // Codex r4 on e7800a5d: an apostrophe inside a word does not open a quote around the loop.
       apostrophes: "Land #620. If it's blocked, launch this task again, per the owners' rule.",
       "cue before an apostrophe": "Land #620. Note why it's blocked, then launch this task again, per the owners' rule.",
+      // Codex r6 on d5e43ea9.
+      "cue word in prose": "Land #620. If blocked, in that case, `launch this task again`.",
+      "cue word, no comma": "Land #620. If blocked, in that case `launch this task again`.",
+      "cue noun in a condition": "Land #620. If the tests fail, `re-run this prompt`.",
+      "comma after a cue": "Land #620. If it fails the tests, `launch this task again`.",
       // Codex r5 on 8d07e495: a verb that carries the loop on, and a loop quoted as the instruction.
       "continue re-running": "Land #620. Continue re-running this task until #611 merges.",
       "code-span instruction": "Land #620. If blocked, follow this instruction: `launch this task again`.",

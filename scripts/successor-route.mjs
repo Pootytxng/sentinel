@@ -225,15 +225,16 @@ export const RESPAWN = new RegExp(
     .join("|"),
   "i",
 );
-// A quote or code span is a mention only when the words just before it say what it is ("the phrase
-// '…'", "explain why `…`", "a test for "…"", "the router refuses "…"") or a noun after it does ("the
-// ‘…’ wording"). Otherwise it is read as written: #616 put its loop in a code span ("write
-// `Successor: chip` with this same prompt"), and "follow this instruction: '…'" is the instruction. A
-// single quote opens only after a space or bracket and closes before one, so "Kuya's" and "don't" stay.
+// A quote or code span is a mention only when the word right before it says what it is ("the phrase
+// '…'", "explain why `…`", "a test for "…"", "the router refuses "…"", "Document the `…`") or a noun
+// right after it does ("the ‘…’ wording"). Otherwise it is read as written: #616 put its loop in a code
+// span ("write `Successor: chip` with this same prompt"), and "follow this instruction: '…'", "if the
+// tests fail, `…`" and "in that case, `…`" are the instruction. A single quote opens only after a
+// space or bracket and closes before one, so "Kuya's" and "don't" stay.
 const QUOTED = /"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|`[^`\n]*`|(?<=^|[\s([])'[^'\n]+'(?=$|[\s.,;:!?)\]])/g;
-// Up to three words may sit between the cue and the quote, but never a sentence break or a colon.
+// Only "the", "a", "an" or "for" may sit between the cue and the quote: no other word, no punctuation.
 const MENTION_BEFORE =
-  /\b(?:why|explain\w*|document\w*|describ\w*|mention\w*|quot\w*|phrase|wording|marker|regex(?:es)?|pattern|tests?|guard|case|named|called|refus\w*)\b(?:[^\w.!?;:\n]+\w+){0,3}[^\w.!?;:\n]*$/i;
+  /\b(?:why|explain\w*|document\w*|describ\w*|mention\w*|quot\w*|phrase|wording|marker|regex(?:es)?|pattern|tests?|guard|named|called|refus\w*)(?:[^\S\n]+(?:the|a|an|for))*[^\S\n]*$/i;
 const MENTION_AFTER = /^[^\w.!?;:\n]*(?:wording|phrase|marker|pattern|regex)\b/i;
 /** The text with every quote or code span that is only mentioned blanked to `""`. */
 export function withoutMentions(text) {
