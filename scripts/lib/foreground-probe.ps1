@@ -369,10 +369,11 @@ try {
 } finally {
   $hook.Dispose()
   # Only ever the processes this script started. Killing anything else would be taking over another
-  # lane, which docs/WORK_CONTROL.md forbids outright.
+  # lane, which docs/WORK_CONTROL.md forbids outright. Killed through the handle Start-Process holds,
+  # never the bare pid, which Windows re-issues within seconds of an exit (#615).
   foreach ($p in @($relaunchProc, $proc)) {
     if ($p -and -not $p.HasExited) {
-      Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+      try { $p.Kill() } catch { }
       [void]$p.WaitForExit(5000)
     }
   }

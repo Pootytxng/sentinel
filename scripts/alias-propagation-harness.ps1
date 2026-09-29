@@ -11,12 +11,13 @@ param(
   [Parameter(Mandatory = $true)][string]$Sandbox,
   [ValidateSet(
     "http-classification", "stale-file-removed", "unique-cache-busting",
-    "cache-busting-query", "version-compare", "lag-refusals"
+    "cache-busting-query", "version-compare", "lag-refusals", "orphan-reap"
   )][string]$Case = "http-classification"
 )
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "lib\native-process.ps1")
+. (Join-Path $PSScriptRoot "lib\held-process.ps1")
 # release-artifacts.ps1 requires both ambients from its caller before it is dot-sourced.
 $repo = Split-Path -Parent $PSScriptRoot
 $releasesRepo = "sandbox/compy-releases"
@@ -65,21 +66,32 @@ function Get-HarnessRequests {
 # leaked, so each run sweeps the previous run's garbage before adding a process of its own.
 #
 # Selection is on a DEAD parent, never on the name alone: a concurrent lane's live harness is not
-# this run's garbage, and killing it would turn a leak into a flake.
+# this run's garbage, and killing it would turn a leak into a flake. The servers are listed before
+# the live set, so a harness that starts between the two reads cannot look parentless.
+#
+# The kill goes through a handle proven to hold the listed command line (#615). An orphan's watchdog
+# ends it within a second, and Windows re-issues a freed pid within seconds, so a pid read from the
+# listing can name a stranger by the time it is killed.
 function Stop-OrphanedAliasServer {
   try {
+    $servers = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction Stop |
+      Where-Object { $_.CommandLine -and $_.CommandLine -like "*alias-server.mjs*" })
     $live = @{}
     foreach ($id in (Get-CimInstance Win32_Process -ErrorAction Stop).ProcessId) { $live[[int]$id] = $true }
-    $servers = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction Stop |
-      Where-Object { $_.CommandLine -and $_.CommandLine -like "*alias-server.mjs*" }
-    foreach ($server in $servers) {
-      if (-not $live.ContainsKey([int]$server.ParentProcessId)) {
-        Stop-Process -Id $server.ProcessId -Force -ErrorAction SilentlyContinue
-      }
-    }
+    foreach ($server in $servers) { [void](Stop-ListedAliasOrphan $server $live) }
   } catch {
     # Reaping is opportunistic hygiene, never a reason to fail the run it is protecting.
   }
+}
+
+# One listed server: left alone while its parent lives, otherwise killed only if the process now
+# holding its pid carries its listed command line. Returns "parent-live", "unmarked" (a blank line is
+# contained in every command line, so it proves nothing), or the held verdict.
+function Stop-ListedAliasOrphan {
+  param($Server, [hashtable]$Live)
+  if ($Live.ContainsKey([int]$Server.ParentProcessId)) { return "parent-live" }
+  if ([string]::IsNullOrWhiteSpace($Server.CommandLine)) { return "unmarked" }
+  return Resolve-HeldProcessFate -ProcessId ([int]$Server.ProcessId) -Marker @($Server.CommandLine) -WaitMs 0
 }
 
 function Start-HarnessServer {
@@ -197,7 +209,8 @@ if (@("http-classification", "stale-file-removed", "unique-cache-busting") -cont
       $result.cache_control_values = @($requests | ForEach-Object { "" + $_.headers.'cache-control' })
     }
   } finally {
-    Stop-Process -Id $server.Process.Id -Force -ErrorAction SilentlyContinue
+    # Through the handle Start-Process -PassThru holds, never the bare pid (#615).
+    try { if (-not $server.Process.HasExited) { $server.Process.Kill() } } catch { }
   }
 }
 
@@ -244,6 +257,34 @@ if ($Case -eq "lag-refusals") {
     platforms = @{ "windows-x86_64" = @{ url = "https://github.com/$releasesRepo/releases/download/v9.9.7/Compy.exe"; signature = "s" } }
   } | ConvertTo-Json -Depth 6 -Compress))
   $result.older = & $probe (& $bound "9.9.8")
+}
+
+if ($Case -eq "orphan-reap") {
+  # #615: the reaper's kill step, fed listing rows it cannot tell from real ones. Both processes are
+  # held (Start-Process -PassThru keeps a handle), so neither pid can be re-issued during the case.
+  $node = (Resolve-NativeExecutable "node").Source
+  $orphanScript = Join-Path $Sandbox "alias-server.mjs"
+  $strangerScript = Join-Path $Sandbox "stranger.mjs"
+  Write-HarnessUtf8 $orphanScript "setTimeout(() => process.exit(0), 60000);`n"
+  Write-HarnessUtf8 $strangerScript "setTimeout(() => process.exit(0), 60000);`n"
+  $orphan = Start-Process -FilePath $node -ArgumentList @($orphanScript) -PassThru -WindowStyle Hidden
+  $stranger = Start-Process -FilePath $node -ArgumentList @($strangerScript) -PassThru -WindowStyle Hidden
+  try {
+    $handle = [Compy.HeldProcess]::Open($orphan.Id)
+    try { $orphanLine = [Compy.HeldProcess]::CommandLine($handle) } finally { [Compy.HeldProcess]::Close($handle) }
+    # 3 is never a process id (Windows issues multiples of 4), so these rows' parent is dead.
+    $row = { param([int]$ProcessId, [int]$ParentProcessId, [string]$Line = $orphanLine) [pscustomobject]@{ ProcessId = $ProcessId; ParentProcessId = $ParentProcessId; CommandLine = $Line } }
+    # The flake, staged: the listing recorded the orphan, and its pid now belongs to the stranger.
+    $result.reused_state = Stop-ListedAliasOrphan (& $row $stranger.Id 3) @{}
+    $result.parent_live_state = Stop-ListedAliasOrphan (& $row $stranger.Id $PID) @{ [int]$PID = $true }
+    $result.unmarked_state = Stop-ListedAliasOrphan (& $row $stranger.Id 3 "") @{}
+    $result.stranger_alive = -not $stranger.HasExited
+    # And the reaper still reaps: the real orphan's row, pid and command line intact.
+    $result.orphan_state = Stop-ListedAliasOrphan (& $row $orphan.Id 3) @{}
+    $result.orphan_dead = $orphan.WaitForExit(5000)
+  } finally {
+    foreach ($p in @($orphan, $stranger)) { try { if (-not $p.HasExited) { $p.Kill() } } catch { } }
+  }
 }
 
 # The result is written to the sandbox as well as to stdout, and the process is ended explicitly:

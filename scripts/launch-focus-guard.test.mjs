@@ -1132,7 +1132,7 @@ describe("the probe carries the event hook (#121)", () => {
   it("the runner tree is walked while the tree is still alive -- the kill destroys the evidence", () => {
     const walk = PROBE_SRC.indexOf("$runnerPids = @(Get-RunnerAncestry");
     const map = PROBE_SRC.indexOf("$parents = Get-ParentMap");
-    const kill = PROBE_SRC.indexOf("Stop-Process -Id $p.Id -Force");
+    const kill = PROBE_SRC.indexOf("try { $p.Kill() } catch { }");
     expect(walk).toBeGreaterThan(-1);
     expect(map).toBeGreaterThan(-1);
     expect(kill, "walk the ancestry before the finally block kills anything").toBeGreaterThan(walk);
@@ -1143,7 +1143,7 @@ describe("the probe carries the event hook (#121)", () => {
     const hookStart = PROBE_SRC.indexOf("$hook.Start()");
     const launch = PROBE_SRC.indexOf("$started = Start-Target");
     const resolve = PROBE_SRC.indexOf("Resolve-Trace -Hook $hook -Measurement $initial");
-    const kill = PROBE_SRC.indexOf("Stop-Process -Id $p.Id -Force");
+    const kill = PROBE_SRC.indexOf("try { $p.Kill() } catch { }");
     expect(hookStart).toBeGreaterThan(-1);
     expect(launch, "the hook must start before Start-Target, or the first CREATE is lost").toBeGreaterThan(hookStart);
     expect(resolve).toBeGreaterThan(launch);

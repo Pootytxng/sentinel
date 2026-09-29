@@ -112,7 +112,8 @@ while ((Get-Date) -lt $deadline) {
 Write-Output ("CHILDPID=" + $processId)
 Write-Output ("EXITEDEARLY=" + $child.HasExited)
 Write-Output ("VISIBLEWINDOWS=" + $peak)
-Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+# Through the handle the Process object holds, never the bare pid (#615).
+try { if (-not $child.HasExited) { $child.Kill() } } catch { }
 $child.Dispose()
 `;
 

@@ -112,11 +112,10 @@ describe("alias-propagation harness must not leak its HTTP server", () => {
         await waitFor(() => false, 1000);
         expect(exited, "the server died before the parent was killed").toBe(false);
 
-        // Hard kill — no signal the child could catch, exactly like a terminated session.
-        spawnSync("taskkill", ["/PID", String(parent.pid), "/T", "/F"], {
-          stdio: "ignore",
-          windowsHide: true,
-        });
+        // Hard kill — no signal the child could catch, exactly like a terminated session. On Windows
+        // kill() is TerminateProcess on the handle node holds, so it cannot reach a recycled pid;
+        // `taskkill /T` would also walk recorded parent pids onto strangers (#559, #615).
+        parent.kill("SIGKILL");
 
         const died = await waitFor(() => exited, 15000);
         if (!died) child.kill("SIGKILL");
@@ -127,6 +126,48 @@ describe("alias-propagation harness must not leak its HTTP server", () => {
     },
     30000,
   );
+
+  // #615: the reaper killed a LISTED pid. An orphan's watchdog ends it within a second of its
+  // parent's death and Windows re-issues a freed pid within seconds, so by kill time the pid could
+  // name a stranger. The kill now goes through a handle proven to hold the listed command line.
+  it("D. the reaper kills a listed orphan only through a handle proven to hold it", () => {
+    const code = source
+      .split(/\r?\n/)
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
+    expect(code.match(/Stop-Process|taskkill|GetProcessById|\.Kill\(\)/g) ?? []).toEqual([
+      // Both on processes the harness started itself, whose Process objects hold a handle.
+      ".Kill()",
+      ".Kill()",
+    ]);
+    expect(code).toMatch(
+      /Resolve-HeldProcessFate -ProcessId \(\[int\]\$Server\.ProcessId\) -Marker @\(\$Server\.CommandLine\) -WaitMs 0/,
+    );
+    expect(code).toMatch(/foreach \(\$server in \$servers\) \{ \[void\]\(Stop-ListedAliasOrphan \$server \$live\) \}/);
+  });
+
+  it.runIf(windows)(`E. a listed pid now held by a stranger is read as reused and left running ${WINDOWS_ONLY}`, () => {
+    const dir = mkdtempSync(join(tmpdir(), "alias-orphan-reap-"));
+    try {
+      const output = spawnSync(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-File", HARNESS, "-Sandbox", dir, "-Case", "orphan-reap"],
+        // A hang backstop, not a budget: vitest cannot interrupt a synchronous spawn.
+        { encoding: "utf8", shell: false, timeout: 90000, windowsHide: true },
+      );
+      expect(output.status, `${output.stderr}\n${output.stdout}`).toBe(0);
+      const result = JSON.parse(output.stdout.trim().split(/\r?\n/).at(-1));
+      expect(result.reused_state, "a stranger holding the listed pid was read as the orphan").toBe("reused");
+      expect(result.parent_live_state).toBe("parent-live");
+      expect(result.unmarked_state, "an empty marker matches every command line").toBe("unmarked");
+      expect(result.stranger_alive, "the reaper killed a process it does not own").toBe(true);
+      // The marked control: a verdict that never says "alive" cannot pass.
+      expect(result.orphan_state).toBe("alive");
+      expect(result.orphan_dead).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 120000);
 });
 
 async function waitFor(predicate, timeoutMs) {

@@ -143,7 +143,8 @@ try {
     }
   }
 } finally {
-  if ($child -and -not $child.HasExited) { Stop-Process -Id $child.Id -Force -ErrorAction SilentlyContinue }
+  # Through the handle Start-Process -PassThru holds, never the bare pid (#615).
+  if ($child -and -not $child.HasExited) { try { $child.Kill() } catch { } }
 }
 Write-Output ("ELAPSED_MS=" + $sw.ElapsedMilliseconds)
 # Reached only if nothing terminated this PowerShell session.
