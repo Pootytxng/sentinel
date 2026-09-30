@@ -23,6 +23,8 @@ const change = (over: Partial<AppliedChange> = {}): AppliedChange => ({
   snapshot: {},
   status: "applied",
   is_still_active: true,
+  // The live re-check's verdict — what History reads since #625, never the legacy bool above.
+  active_check: "on",
   ...over,
 });
 
@@ -156,13 +158,13 @@ describe("buildLogbook — undo flag rides only genuinely-active changes", () =>
   });
 
   it("applied but no longer active ⇒ active:false (no undo)", () => {
-    const r = buildLogbook({ changes: [change({ status: "applied", is_still_active: false })] });
+    const r = buildLogbook({ changes: [change({ status: "applied", is_still_active: false, active_check: "off" })] });
     expect(r[0]).toMatchObject({ active: false, rolledBack: false });
   });
 
   it("rolled back ⇒ active:false, rolledBack:true (stays on the tape as history)", () => {
     const r = buildLogbook({
-      changes: [change({ status: "rolled_back", is_still_active: false })],
+      changes: [change({ status: "rolled_back", is_still_active: false, active_check: "off" })],
     });
     expect(r[0]).toMatchObject({ active: false, rolledBack: true });
   });
@@ -183,6 +185,7 @@ describe("buildLogbook — repeats collapse into one row (C-11)", () => {
         applied_at: new Date(START + i * DAY).toISOString(),
         status: i === n - 1 ? "applied" : "rolled_back",
         is_still_active: i === n - 1,
+        active_check: i === n - 1 ? "on" : null,
       }),
     );
 
@@ -224,7 +227,7 @@ describe("buildLogbook — repeats collapse into one row (C-11)", () => {
     const r = buildLogbook({
       changes: [
         change({ id: "old", applied_at: "2026-06-01T10:00:00Z", status: "applied", is_still_active: true }),
-        change({ id: "new", applied_at: "2026-06-05T10:00:00Z", status: "rolled_back", is_still_active: false }),
+        change({ id: "new", applied_at: "2026-06-05T10:00:00Z", status: "rolled_back", is_still_active: false, active_check: "off" }),
       ],
     });
     const c = r[0] as Extract<LogbookRecord, { kind: "change" }>;
@@ -257,8 +260,8 @@ describe("buildLogbook — repeats collapse into one row (C-11)", () => {
   it("with nothing live, the newest apply represents the group", () => {
     const r = buildLogbook({
       changes: [
-        change({ id: "old", applied_at: "2026-06-01T10:00:00Z", status: "rolled_back", is_still_active: false }),
-        change({ id: "new", applied_at: "2026-06-05T10:00:00Z", status: "rolled_back", is_still_active: false }),
+        change({ id: "old", applied_at: "2026-06-01T10:00:00Z", status: "rolled_back", is_still_active: false, active_check: "off" }),
+        change({ id: "new", applied_at: "2026-06-05T10:00:00Z", status: "rolled_back", is_still_active: false, active_check: "off" }),
       ],
     });
     const c = r[0] as Extract<LogbookRecord, { kind: "change" }>;

@@ -71,7 +71,15 @@ const chronology = (entries: ChronologyEntry[] = []): ChangeChronology => ({
   causation_note: CAUSATION,
 });
 
-const modelWith = (entries: ChronologyEntry[] = []) => ({ chronology: chronology(entries) });
+// History reads the model's in-effect counts too (#625), so the stub carries an empty ledger.
+const modelWith = (entries: ChronologyEntry[] = []) => ({
+  chronology: chronology(entries),
+  compy_changes: {
+    total_recorded: 0, active_now: 0, in_effect_other_rig: 0, in_effect_rig_unknown: 0,
+    in_effect_total: 0, applied_but_not_in_effect: 0, in_effect_unknown: 0, rolled_back: 0,
+    on_this_rig: 0, not_on_this_rig: 0, rig_unknown: 0, changes: [], ledger_note: "",
+  },
+});
 
 beforeEach(() => {
   harness.calls = [];

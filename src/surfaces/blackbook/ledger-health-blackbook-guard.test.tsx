@@ -46,7 +46,8 @@ import { LedgerHealthNotice } from "../../design/LedgerHealthNotice";
 import { BlackbookV2 } from "../BlackbookV2";
 import type { LogbookRecord, LogbookChange, LogbookSession, LogbookAutopsy } from "./logbook";
 import { invalidateProbe } from "../../data/probe-cache";
-import type { ChangeChronology, LedgerHealth, SessionSummary } from "../../types";
+import type { InEffectCounts } from "../../data/machine-model";
+import type { AppliedChange, ChangeChronology, LedgerHealth, SessionSummary } from "../../types";
 
 beforeAll(() => {
   class RO {
@@ -97,6 +98,7 @@ const change = (over: Partial<LogbookChange> = {}): LogbookChange => ({
   recId: "hags",
   title: "Enable Hardware-accelerated GPU scheduling",
   active: true,
+  unconfirmed: false,
   rolledBack: false,
   restoresLabel: "Off",
   appliedLabel: "On",
@@ -133,21 +135,37 @@ const autopsy = (over: Partial<LogbookAutopsy> = {}): LogbookAutopsy => ({
 // `notice`, the changes tile is in the strip, the scent line and the empty state are in the tape --
 // so mounting any one of them alone would leave the rest unguarded. The ORDER here is the order
 // RoomShell renders them, which is what keeps the "caveat before its subject" assertion honest.
+// The Machine Model's in-effect count (#625): what the changes tile says is on. Default: one on.
+const counted = (activeNow: number, unknown = 0): InEffectCounts => ({
+  kind: "counted",
+  activeNow,
+  unknown,
+  totalRecorded: activeNow + unknown,
+});
+
 function Logbook({
   records,
   health,
   chronology = null,
+  inEffect = counted(1),
 }: {
   records: LogbookRecord[];
   health: LedgerHealth | null;
   chronology?: ChangeChronology | null;
+  inEffect?: InEffectCounts;
 }) {
   const view = useLogbookView(records, health);
   return (
     <>
       <LedgerHealthNotice health={health} />
       <LogbookTape view={view} reduced chronology={chronology} />
-      <BlackbookConsole view={view} vendor="amd" onOpenLab={vi.fn()} onOpenGuide={vi.fn()} />
+      <BlackbookConsole
+        view={view}
+        vendor="amd"
+        onOpenLab={vi.fn()}
+        onOpenGuide={vi.fn()}
+        inEffect={inEffect}
+      />
     </>
   );
 }
@@ -156,8 +174,11 @@ function mountConsole(
   records: LogbookRecord[],
   health: LedgerHealth | null,
   chronology: ChangeChronology | null = null,
+  inEffect: InEffectCounts = counted(1),
 ) {
-  return render(<Logbook records={records} health={health} chronology={chronology} />);
+  return render(
+    <Logbook records={records} health={health} chronology={chronology} inEffect={inEffect} />,
+  );
 }
 
 // Every claim is asserted through the ELEMENT that carries it, not a substring of the room: a text
@@ -231,7 +252,12 @@ describe("the Logbook may not speak for a ledger it could not read", () => {
 
   it("a quarantined ledger keeps its real number — that load succeeded, it just isn't everything", () => {
     useReduced();
-    const { container } = mountConsole([change(), change({ id: "c2" }), session()], QUARANTINED);
+    const { container } = mountConsole(
+      [change(), change({ id: "c2" }), session()],
+      QUARANTINED,
+      null,
+      counted(2),
+    );
 
     expect(tileN(container, "change")).toBe("2");
     expect(tileN(container, "change")).not.toBe("—");
@@ -478,11 +504,25 @@ describe("the room states an unreadable ledger ONCE, whichever read noticed it",
 
 // Same chain proof as the ledger-health pair above, for the model: probe → prop → rendered claim.
 describe("BlackbookV2 wires the Machine Model to the tape it qualifies", () => {
-  async function mountRoomWithModel(chronology: ChangeChronology) {
+  async function mountRoomWithModel(
+    chronology: ChangeChronology,
+    { changes, activeNow = 0, unknown = 0 }: { changes?: AppliedChange[]; activeNow?: number; unknown?: number } = {},
+  ) {
     useReduced();
     localStorage.setItem("compy_blackbook_console", "1");
-    ipc.model = { chronology };
-    const r = render(<BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} />);
+    // History reads the model's in-effect counts too (#625), so the stub carries an empty ledger.
+    ipc.model = {
+      chronology,
+      compy_changes: {
+        total_recorded: changes?.length ?? 0, active_now: activeNow, in_effect_other_rig: 0,
+        in_effect_rig_unknown: 0, in_effect_total: activeNow, applied_but_not_in_effect: 0,
+        in_effect_unknown: unknown, rolled_back: 0, on_this_rig: 0, not_on_this_rig: 0,
+        rig_unknown: 0, changes: [], ledger_note: "",
+      },
+    };
+    const r = render(
+      <BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} changes={changes} />,
+    );
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -521,5 +561,30 @@ describe("BlackbookV2 wires the Machine Model to the tape it qualifies", () => {
 
     expect(container.textContent).toContain("GPU driver changed: 24.10.1 → 25.1.1");
     expect(container.querySelector(".bc-tape-note")?.textContent).toBe(CAUSATION);
+  });
+
+  // #625: the changes tile's in-effect words are the model's numbers — the ones Health prints —
+  // wired from the room's one model read. The ledger rows here read "on"; the model disagrees, and
+  // the tile must say what the model says.
+  it("the changes tile prints the model's in-effect counts, not a fold over the rows", async () => {
+    ipc.health = HEALTHY;
+    const applied = (id: string): AppliedChange => ({
+      id,
+      rec_id: `rec_${id}`,
+      rec_title: `Change ${id}`,
+      applied_at: "2026-07-10T12:00:00Z",
+      snapshot: {},
+      status: "applied",
+      is_still_active: true,
+      active_check: "on",
+    });
+    const { container } = await mountRoomWithModel(chron(), {
+      changes: [applied("a"), applied("b"), applied("c")],
+      activeNow: 1,
+      unknown: 2,
+    });
+    expect(
+      container.querySelector('.bc-tile[data-kind="change"] .bc-tile-d')?.textContent,
+    ).toBe("1 still on · 2 can't confirm");
   });
 });

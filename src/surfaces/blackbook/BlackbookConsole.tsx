@@ -4,6 +4,9 @@ import { BentoGrid, BentoTile } from "../../design/bento/BentoGrid";
 import type { GpuVendor } from "../walkthroughs";
 import { startHereEntries, type LogbookRecord } from "./logbook";
 import type { LogbookView } from "./logbook-view";
+import type { InEffectCounts } from "../../data/machine-model";
+import type { LedgerHealth } from "../../types";
+import type { TFunction } from "i18next";
 import "../../i18n";
 import "./blackbook-console.css";
 
@@ -20,8 +23,11 @@ import "./blackbook-console.css";
 // state was hoisted into `useLogbookView` and both read the same object. Nothing was deleted to
 // make the picture fit: every tile, count, filter and door on this surface is the same one.
 //
-// Honesty contract (unchanged): every number here is a fold over the records buildLogbook already
-// proved real — the strip literally cannot disagree with the tape. Zero IPC, zero mutation. Undo
+// Honesty contract: every count here is a fold over the records buildLogbook already proved real —
+// the strip cannot disagree with the tape. The one exception is how many changes are IN EFFECT now
+// (#625): that is the Machine Model's number, handed in as `inEffect`, because a fold over the tape
+// counted "Compy can't check this" as "still on" and disagreed with Health. Zero IPC, zero
+// mutation. Undo
 // is NOT triggered here: the Lab's Optimize station is the ONE audited undo home (owner decision
 // 2026-07-10), so an active change routes there via a single jump.
 
@@ -35,9 +41,13 @@ export function BlackbookConsole({
   onOpenLab,
   onOpenGuide,
   patterns = null,
+  inEffect,
 }: {
   /** The Logbook's shared view state (see `logbook-view.ts`) — the same object the tape reads. */
   view: LogbookView;
+  /** How many Compy changes are in effect on this PC — the Machine Model's count, the one Health
+   *  prints (#625). Handed in so this file stays zero-IPC. */
+  inEffect: InEffectCounts;
   vendor: GpuVendor;
   /** Route to the Lab's Optimize station — the ONE audited undo home (owner decision 2026-07-10). */
   onOpenLab: () => void;
@@ -53,7 +63,7 @@ export function BlackbookConsole({
     () => startHereEntries(vendor, 4, i18n.language),
     [vendor, i18n.language],
   );
-  const { filter, toggleFilter, counts, activeChanges, incomplete } = view;
+  const { filter, toggleFilter, counts, undoableChanges, incomplete } = view;
 
   const tileProps = (kind: LogbookRecord["kind"]) => ({
     type: "button" as const,
@@ -92,25 +102,7 @@ export function BlackbookConsole({
                   "no number", where a 0 would say "nothing ever happened here". */}
               <span className="bc-tile-n bc-mono">{incomplete?.error ? "—" : counts.change}</span>
               <span className="bc-tile-d">
-                {incomplete ? (
-                  incomplete.error ? (
-                    t("blackbook.blackbookConsole.tiles.changesUnknown")
-                  ) : counts.change === 0 ? (
-                    t("blackbook.blackbookConsole.tiles.changesNonePartial")
-                  ) : activeChanges > 0 ? (
-                    t("blackbook.blackbookConsole.tiles.changesActivePartial", {
-                      count: activeChanges,
-                    })
-                  ) : (
-                    t("blackbook.blackbookConsole.tiles.changesInactivePartial")
-                  )
-                ) : counts.change === 0 ? (
-                  t("blackbook.blackbookConsole.tiles.changesNone")
-                ) : activeChanges > 0 ? (
-                  t("blackbook.blackbookConsole.tiles.changesActive", { count: activeChanges })
-                ) : (
-                  t("blackbook.blackbookConsole.tiles.changesInactive")
-                )}
+                {changesTileSub(t, counts.change, incomplete, inEffect)}
               </span>
             </button>
             <button {...tileProps("session")} disabled={counts.session === 0}>
@@ -152,9 +144,9 @@ export function BlackbookConsole({
           {/* Undo lives in the Lab (the ONE audited undo home) — the Logbook is a read view, so an
               active change routes there rather than rolling back in-room (no second undo surface).
               It sits in the strip tile because it is a follow-on to the change COUNT above it. */}
-          {activeChanges > 0 && (
+          {undoableChanges > 0 && (
             <button type="button" className="bc-manage" onClick={onOpenLab}>
-              <span>{t("blackbook.blackbookConsole.manageJump", { count: activeChanges })}</span>
+              <span>{t("blackbook.blackbookConsole.manageJump", { count: undoableChanges })}</span>
               <span className="bc-chevron" aria-hidden="true">
                 ▸
               </span>
@@ -196,6 +188,41 @@ export function BlackbookConsole({
       </BentoGrid>
     </div>
   );
+}
+
+// The "Changes to this PC" tile's sub-line. The record's own states come first — an unreadable
+// ledger has no count at all, and an empty one has nothing to be in effect. Past those, the
+// in-effect words are the Machine Model's (#625): the same numbers Health prints, never a fold over
+// the tape, whose legacy flag read "Compy can't check this" as "still on". Not read yet ⇒ nothing,
+// because a stand-in number is a claim.
+function changesTileSub(
+  t: TFunction,
+  changes: number,
+  incomplete: LedgerHealth | null,
+  inEffect: InEffectCounts,
+): string {
+  if (incomplete?.error) return t("blackbook.blackbookConsole.tiles.changesUnknown");
+  if (changes === 0) {
+    return incomplete
+      ? t("blackbook.blackbookConsole.tiles.changesNonePartial")
+      : t("blackbook.blackbookConsole.tiles.changesNone");
+  }
+  if (inEffect.kind === "pending") return "";
+  if (inEffect.kind === "unreadable") return t("blackbook.blackbookConsole.tiles.changesUnknown");
+  const { activeNow, unknown } = inEffect;
+  if (unknown > 0) {
+    return incomplete
+      ? t("blackbook.blackbookConsole.tiles.changesUnconfirmedPartial", { count: activeNow, unknown })
+      : t("blackbook.blackbookConsole.tiles.changesUnconfirmed", { count: activeNow, unknown });
+  }
+  if (activeNow > 0) {
+    return incomplete
+      ? t("blackbook.blackbookConsole.tiles.changesActivePartial", { count: activeNow })
+      : t("blackbook.blackbookConsole.tiles.changesActive", { count: activeNow });
+  }
+  return incomplete
+    ? t("blackbook.blackbookConsole.tiles.changesInactivePartial")
+    : t("blackbook.blackbookConsole.tiles.changesInactive");
 }
 
 export default BlackbookConsole;

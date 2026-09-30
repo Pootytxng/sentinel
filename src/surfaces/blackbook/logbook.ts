@@ -11,8 +11,9 @@ import { knowledgeForLanguage, type KnowledgeEntry } from "../../data/knowledge"
 // honesty spine of the room, so it is written and tested first:
 //   • Only REAL records — an unparseable/absent timestamp is DROPPED, never coerced to now/0, so
 //     the tape can never fabricate a row. Empty in ⇒ empty out ⇒ the room's honest empty state.
-//   • The rollback flag rides ONLY change records, and only while the change is genuinely active
-//     (the same status the Fix ledger reads). A rolled-back change stays on the tape as history
+//   • The rollback flag rides ONLY change records, and only while the change is on or cannot be
+//     confirmed off (the live re-check's `active_check`, the field the Machine Model's
+//     `still_active` Fact is built from, #625). A rolled-back change stays on the tape as history
 //     but carries no undo affordance.
 //   • vs-previous deltas are SAME-GAME only (nearest older session with the same process) — a
 //     cross-game gap is never rendered as a regression (the v4 Monitor-waterfall lesson, carried).
@@ -27,8 +28,12 @@ export type LogbookChange = {
   /** AppliedChange.rec_id — the tweak's identity, and the key repeats collapse on (C-11). */
   recId: string;
   title: string;
-  /** Genuinely on right now (status applied AND still active) — the only state that earns undo. */
+  /** The live re-check PROVED it is on right now (status applied, `active_check` "on") — the only
+   *  state that may say "still on". */
   active: boolean;
+  /** Applied, but the live re-check could not say (`active_check` "unreadable"/"unrecognised") — the
+   *  Machine Model's `still_active` is unknown for it. Never "still on", and undo stays reachable. */
+  unconfirmed: boolean;
   /** Recorded, then rolled back — history, no undo. */
   rolledBack: boolean;
   /** What a rollback restores to ("Running" / "On" / …) — computed-at-read, may be null. */
@@ -139,16 +144,36 @@ function collapseRepeats(applies: LogbookChange[]): LogbookChange[] {
     const newest = g.reduce((x, y) => (y.at > x.at ? y : x));
     const oldest = g.reduce((x, y) => (y.at < x.at ? y : x));
     // Prefer the live apply; among several, the newest live one. Several IS possible, and the
-    // comment here used to claim otherwise: `is_still_active` is a live-state probe per REC
+    // comment here used to claim otherwise: `active_check` is a live-state probe per REC
     // (history.rs), not a per-entry fact, and re-applying does not supersede the earlier
     // `applied` row — so a drift-then-reapply cycle, the exact pattern that produced the
     // owner's 37 toggles, leaves two rows both reading active. Taking the newest is then the
     // only defensible choice: it is the apply whose snapshot an undo would restore from.
-    const live = g.filter((r) => r.active).reduce<LogbookChange | null>((x, y) => (x && x.at > y.at ? x : y), null);
+    // "Live" includes an apply Compy cannot confirm either way (#625): it may still be in place,
+    // so it is still what an undo has to target.
+    const live = g
+      .filter((r) => r.active || r.unconfirmed)
+      .reduce<LogbookChange | null>((x, y) => (x && x.at > y.at ? x : y), null);
     const rep = live ?? newest;
     out.push({ ...rep, at: newest.at, firstAt: oldest.at, count: g.length });
   }
   return out;
+}
+
+// #625 — what History may say about a change being in effect. It reads `active_check`, the live
+// re-check's own verdict, and NOT the legacy `is_still_active` bool: that bool stays true for a
+// check that read nothing (so a rollback is never hidden), and History printed it as "still on" —
+// a state nobody measured. The mapping is the Machine Model's `still_active` Fact
+// (machine_model.rs), arm for arm, so History and Health cannot disagree about one change.
+// `src/history-still-active-source-guard.test.ts` pins both sides.
+export function changeLiveState(
+  c: Pick<AppliedChange, "status" | "active_check">,
+): { active: boolean; unconfirmed: boolean } {
+  if (c.status !== "applied") return { active: false, unconfirmed: false };
+  return {
+    active: c.active_check === "on",
+    unconfirmed: c.active_check === "unreadable" || c.active_check === "unrecognised",
+  };
 }
 
 export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookInput): LogbookRecord[] {
@@ -165,7 +190,7 @@ export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookIn
       id: c.id,
       recId: c.rec_id,
       title: c.rec_title,
-      active: c.status === "applied" && c.is_still_active,
+      ...changeLiveState(c),
       rolledBack: c.status === "rolled_back",
       restoresLabel: c.restores_label ?? null,
       appliedLabel: c.applied_label ?? null,

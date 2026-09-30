@@ -14,6 +14,7 @@ import type {
   LogbookAutopsy,
 } from "./logbook";
 import type { SessionSummary, LedgerHealth } from "../../types";
+import type { InEffectCounts } from "../../data/machine-model";
 
 // Guards for the Logbook console face (Console HUD Phase 4). Covers the T4 rails: honest empty
 // (never a fabricated row), title-header law (h1 = bare "Blackbook", status in the body),
@@ -54,6 +55,7 @@ const change = (over: Partial<LogbookChange> = {}): LogbookChange => ({
   recId: "hags",
   title: "Enable Hardware-accelerated GPU scheduling",
   active: true,
+  unconfirmed: false,
   rolledBack: false,
   restoresLabel: "Off",
   appliedLabel: "On",
@@ -88,10 +90,14 @@ const autopsy = (over: Partial<LogbookAutopsy> = {}): LogbookAutopsy => ({
 // drives the tape), `LogbookTape` is RoomShell's evidence column and `BlackbookConsole` is the
 // supporting grid beneath both columns -- see logbook-view.ts. Mounting them together is what
 // BlackbookV2 does, so it is what these guards must do: every assertion below is about the pair.
+// The Machine Model's in-effect count (#625). Default: one change on, none unconfirmed.
+const COUNTED_ONE: InEffectCounts = { kind: "counted", activeNow: 1, unknown: 0, totalRecorded: 1 };
+
 function Logbook({
   records,
   health = null,
   onReviewSession,
+  inEffect = COUNTED_ONE,
   ...over
 }: {
   records: LogbookRecord[];
@@ -108,6 +114,7 @@ function Logbook({
         vendor="amd"
         onOpenLab={() => {}}
         onOpenGuide={() => {}}
+        inEffect={inEffect}
         {...over}
       />
     </>
@@ -273,7 +280,55 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
   it("no active changes ⇒ no jump (rolled-back / no-longer-active never summon it)", () => {
     useReduced();
     mountConsole([change({ active: false, rolledBack: true }), change({ active: false })]);
-    expect(screen.queryByRole("button", { name: /roll back in Test/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /in Test/i })).toBeNull();
+  });
+
+  // #625: a change Compy cannot confirm is still in place may still be in place, so its undo
+  // stays one press away. It is counted beside the ones confirmed on.
+  it("a change Compy can't confirm still summons the jump, counted with the confirmed ones", () => {
+    useReduced();
+    const onOpenLab = vi.fn();
+    mountConsole(
+      [
+        change({ id: "c1", active: true }),
+        change({ id: "c2", active: false, unconfirmed: true }),
+        change({ id: "c3", active: false }),
+      ],
+      { onOpenLab },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /undo any of the 2 changes in Test/i }));
+    expect(onOpenLab).toHaveBeenCalledOnce();
+  });
+});
+
+// #625: Health said "can't confirm" where History said "still on" for the same change. A row whose
+// live check could not be read now says so, and never claims it is on.
+describe("BlackbookConsole — a change Compy can't confirm never reads 'still on' (#625)", () => {
+  it("the row states it can't confirm the change, not 'still on' or 'no longer active'", () => {
+    useReduced();
+    const { container } = mountConsole([change({ active: false, unconfirmed: true })]);
+    const row = container.querySelector(".bc-row")!;
+    expect(row.textContent).toContain("can't confirm it's still in place");
+    expect(row.textContent).not.toMatch(/still on/i);
+    expect(row.textContent).not.toMatch(/no longer active/i);
+  });
+
+  it("an unconfirmed row keeps its 'undo restores' note — the undo may still have work to do", () => {
+    useReduced();
+    const on = mountConsole([change({ active: true })]).container.querySelector(".bc-row")!
+      .textContent;
+    cleanup();
+    const unconfirmed = mountConsole([change({ active: false, unconfirmed: true })]).container
+      .querySelector(".bc-row")!.textContent;
+    cleanup();
+    const off = mountConsole([change({ active: false })]).container.querySelector(".bc-row")!
+      .textContent;
+    // The note names the value undo restores ("Off"); read it off the confirmed-on row so this
+    // test does not pin the copy around it.
+    const note = on!.slice(on!.indexOf("still on") + "still on".length).trim();
+    expect(note).toContain("Off");
+    expect(unconfirmed).toContain(note);
+    expect(off).not.toContain(note);
   });
 });
 
@@ -373,7 +428,7 @@ describe("BlackbookConsole — Receipts Strip filters the tape honestly", () => 
     expect(changeTile.textContent).toContain("nothing changed yet");
   });
 
-  it("tile subs state real composition: active changes + scam flags, from the records themselves", () => {
+  it("tile subs state real composition: scam flags from the records, in-effect words from the model", () => {
     useReduced();
     const { container } = mountConsole([
       change({ id: "c1", active: true }),
@@ -383,6 +438,41 @@ describe("BlackbookConsole — Receipts Strip filters the tape honestly", () => 
     const strip = container.querySelector(".bc-strip")!;
     expect(strip.textContent).toContain("1 still on · every one undoable");
     expect(strip.textContent).toContain("2 scam patterns flagged");
+  });
+
+  // #625: the changes tile prints how many are in effect from the Machine Model — the number Health
+  // prints — never a fold over the tape. These records say "2 on"; the model says otherwise, and
+  // the model wins.
+  const twoOn = () => [change({ id: "c1", active: true }), change({ id: "c2", active: true })];
+  const changesSub = (inEffect: InEffectCounts) =>
+    mountConsole(twoOn(), { inEffect }).container.querySelector('.bc-tile[data-kind="change"] .bc-tile-d')!
+      .textContent;
+
+  it("the changes tile prints the model's counts, unconfirmed ones named apart (#625)", () => {
+    useReduced();
+    expect(changesSub({ kind: "counted", activeNow: 10, unknown: 6, totalRecorded: 30 })).toBe(
+      "10 still on · 6 can't confirm",
+    );
+  });
+
+  it("with nothing unconfirmed the tile keeps its old words, from the model's number", () => {
+    useReduced();
+    expect(changesSub({ kind: "counted", activeNow: 7, unknown: 0, totalRecorded: 9 })).toBe(
+      "7 still on · every one undoable",
+    );
+    cleanup();
+    expect(changesSub({ kind: "counted", activeNow: 0, unknown: 0, totalRecorded: 9 })).toBe(
+      "none active now · every one undoable",
+    );
+  });
+
+  it("a model not read yet prints no in-effect words; an unreadable one says so", () => {
+    useReduced();
+    expect(changesSub({ kind: "pending" })).toBe("");
+    cleanup();
+    expect(changesSub({ kind: "unreadable", reason: "history.json is locked" })).toBe(
+      "can't be read right now",
+    );
   });
 });
 
