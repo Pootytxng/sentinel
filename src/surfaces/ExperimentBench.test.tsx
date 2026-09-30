@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   sim: null as unknown,
   simHang: false, // when true, simulate_optimization stays pending → lets a test observe the in-flight lock
   loadGate: null as Promise<void> | null, // when set, the initial ledger reads block on it
+  refuse: {} as Record<string, string>, // a lifecycle command the backend refuses, with its message
 }));
 
 /** Hold the initial ledger reads until the returned function is called.
@@ -70,6 +71,8 @@ const RUNNING_EXPERIMENT = {
   verdict: null,
   kept: false,
   concluded_at: null,
+  baseline_session_id: "2026-07-16T22:00:00Z",
+  applied_at: "2026-07-17T00:00:00Z",
 };
 
 // A concluded experiment whose treatment session measured a DIFFERENT game than the baseline: the
@@ -131,14 +134,22 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "start_experiment":
       case "conclude_experiment":
       case "restore_experiment":
-        return Promise.resolve({});
+        return cmd in state.refuse ? Promise.reject(state.refuse[cmd]) : Promise.resolve({});
       default:
         return Promise.resolve(null);
     }
   }),
 }));
 
+import { invoke } from "@tauri-apps/api/core";
 import ExperimentBench from "./ExperimentBench";
+
+/** The args of the one call to `cmd` since the last `mockClear`. */
+const callArgs = (cmd: string) => {
+  const calls = vi.mocked(invoke).mock.calls.filter(([c]) => c === cmd);
+  expect(calls, `exactly one ${cmd} call`).toHaveLength(1);
+  return calls[0][1];
+};
 
 afterEach(() => {
   cleanup();
@@ -149,6 +160,7 @@ afterEach(() => {
   state.sim = null;
   state.simHang = false;
   state.loadGate = null;
+  state.refuse = {};
 });
 
 // bug->guard (CI run 30696118350, 2026-08-01). Picking a value that has NO matching option yet is a
@@ -224,8 +236,32 @@ describe("ExperimentBench (armed)", () => {
     state.experiments = [NOT_COMPARABLE_EXPERIMENT];
     render(<ExperimentBench />);
     expect(await screen.findByTestId("experiment-bench")).toBeInTheDocument();
-    expect(await screen.findByText("Different game — not comparable, restored")).toBeInTheDocument();
+    expect(await screen.findByText("Not comparable — restored")).toBeInTheDocument();
     expect(screen.queryByText("not-comparable")).toBeNull();
+    // The label can't say which pair failed, so the backend's reason is said once under the list.
+    expect(screen.getByText(NOT_COMPARABLE_EXPERIMENT.verdict_note)).toBeInTheDocument();
+    expect(rowMarks()).toEqual(["*"]);
+    expectEachNoteOnceAndOffTheRows();
+  });
+
+  // Codex r4 (#611): a crash whose two sessions share no recorded rig context is restored as
+  // "not-comparable" with an unknown pairing. The label once read "Different game", a mismatch nobody
+  // measured; the bench now claims no cause of its own and says the backend's reason.
+  it("never names a cause the record doesn't carry: an unknown crash pairing is not a different game", async () => {
+    state.gate = true;
+    const why =
+      "The game crashed, but that session and the baseline share no recorded rig or conditions, so " +
+      "Compy can't check that nothing else changed. So the crash can't be pinned on this setting. " +
+      "Compy restored the change.";
+    state.experiments = [
+      { ...NOT_COMPARABLE_EXPERIMENT, stop_reason: "crash-session-comparability-unknown", verdict_note: why },
+    ];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("Not comparable — restored")).toBeInTheDocument();
+    expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/different game/i);
+    expect(screen.getByText(why)).toBeInTheDocument();
+    expect(screen.queryByText(/crash-session-comparability-unknown/)).toBeNull();
+    expectEachNoteOnceAndOffTheRows();
   });
 
   it("picking a change runs the simulator and offers Start against the real baseline", async () => {
@@ -404,5 +440,376 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.getByRole("button", { name: "Restore now" })).toBeInTheDocument();
     // Single-variable honesty: the launcher picker is hidden while an experiment is in flight.
     expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  // #583 lane 2b: the backend reads the baseline and the treatment from its own session store by id.
+  // The webview names a session; it never hands over the game or a frame rate to be trusted.
+  it("starts against the baseline by session id, never by frame rates it supplies", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(start);
+    await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
+    expect(callArgs("start_experiment")).toEqual({
+      recId: "test-rec",
+      recTitle: "Test tweak",
+      baselineSessionId: VALORANT_SESSION.started_at,
+      hypothesis: expect.any(String),
+    });
+  });
+
+  // Codex r1 on #611: the backend times the after-session from when the apply returned, so a session
+  // begun while the apply (or its UAC prompt) was pending is never offered as the after-reading.
+  it("offers only a session that started after the change took effect", async () => {
+    state.gate = true;
+    const appliedAt = "2026-07-17T03:00:00Z"; // after VALORANT_SESSION started, after created_at
+    state.experiments = [{ ...RUNNING_EXPERIMENT, applied_at: appliedAt }];
+    state.sessions = [VALORANT_SESSION];
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-running");
+    expect(screen.queryByRole("button", { name: /Conclude with my latest/ })).toBeNull();
+
+    cleanup();
+    state.sessions = [VALORANT_SESSION, { ...VALORANT_SESSION, started_at: "2026-07-17T04:00:00Z" }];
+    render(<ExperimentBench />);
+    expect(await screen.findByRole("button", { name: /Conclude with my latest/ })).toBeEnabled();
+  });
+
+  it("concludes with the treatment by session id, never by frame rates it supplies", async () => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    render(<ExperimentBench />);
+    const conclude = await screen.findByRole("button", { name: /Conclude with my latest/ });
+
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(conclude);
+    await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("conclude_experiment", expect.anything()));
+    expect(callArgs("conclude_experiment")).toEqual({
+      experimentId: RUNNING_EXPERIMENT.id,
+      treatmentSessionId: VALORANT_SESSION.started_at,
+      crashed: false,
+    });
+  });
+
+  it("never offers a session without a 1% low reading as the baseline (the backend would refuse it)", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [{ ...VALORANT_SESSION, low1_fps_est: 0 }];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    expect(await screen.findByText(/No baseline yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+  });
+
+  // §11: the receipt states the noise floor the verdict was judged against, and says plainly when
+  // this game's own noise on the PC was never measured. Absent evidence renders no line at all.
+  it("states the noise floor a past verdict was judged against, and that the game's own noise is unmeasured", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: null } },
+      { ...NOT_COMPARABLE_EXPERIMENT, noise_evidence: null },
+    ];
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    // Only the judged row carries evidence, so its line is the list's one line; the not-comparable
+    // row adds no noise line, only its own reason (Codex r4, #611).
+    const shared = await waitFor(() => {
+      const el = document.querySelector(".exp-bench-noise-shared");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(shared.textContent).toBe(
+      "Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
+    );
+    expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
+      `* ${NOT_COMPARABLE_EXPERIMENT.verdict_note}`,
+    ]);
+    expect(rowMarks()).toEqual([null, "*"]);
+  });
+
+  it("says nothing about noise when no past result was judged against the floor", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...NOT_COMPARABLE_EXPERIMENT, noise_evidence: null },
+      { ...NOT_COMPARABLE_EXPERIMENT, id: "exp:6-0", noise_evidence: null },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(2));
+    expect(document.querySelectorAll(".exp-bench-noise-shared")).toHaveLength(0);
+    expect(document.querySelector(".exp-history")?.textContent).not.toMatch(/noise/i);
+    // Their shared reason is said once, never hoisted as the list's rule (Codex r4, #611).
+    expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
+      `* ${NOT_COMPARABLE_EXPERIMENT.verdict_note}`,
+    ]);
+    expect(rowMarks()).toEqual(["*", "*"]);
+  });
+
+  it("states a measured noise level when the record carries one", async () => {
+    state.gate = true;
+    state.experiments = [{ ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: 1.25 } }];
+    render(<ExperimentBench />);
+    expect(
+      await screen.findByText(
+        "Judged against a 3% noise floor. This game's own run-to-run noise on your PC measured ±1.3%.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  // Self-review C-11 (#583 lane 2b): the same sentence under every row buries the rows. Identical
+  // lines are said once for the list; only lines that differ stay on their rows.
+  it("says an identical noise line once for the list, not under every row", async () => {
+    state.gate = true;
+    const judged = { band_pct: 3, measured_noise_pct: null };
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: judged },
+      { ...KEPT_EXPERIMENT, id: "exp:3-0", noise_evidence: judged },
+    ];
+    render(<ExperimentBench />);
+    const shared = await waitFor(() => {
+      const el = document.querySelector(".exp-bench-noise-shared");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(shared.textContent).toBe(
+      "Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
+    );
+    expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(0);
+  });
+
+  // C-11 as a class, not an instance (self-review #4, #583 lane 2b): every §11 sentence appears once
+  // per list however many rows it covers, and no row carries a sentence — only a note's mark.
+  function expectEachNoteOnceAndOffTheRows() {
+    const sentences = [
+      ...[...document.querySelectorAll(".exp-bench-noise-shared")].map((el) => el.textContent ?? ""),
+      ...[...document.querySelectorAll(".exp-bench-noise")].map((el) => el.lastElementChild?.textContent ?? ""),
+    ];
+    expect(new Set(sentences).size, sentences.join("\n")).toBe(sentences.length);
+    for (const row of document.querySelectorAll(".exp-bench-row")) {
+      for (const s of sentences) expect(row.textContent).not.toContain(s);
+    }
+  }
+  const rowMarks = () =>
+    [...document.querySelectorAll(".exp-bench-row")].map((r) => r.querySelector(".exp-bench-noise-mark")?.textContent ?? null);
+
+  it("says each differing noise line once, and marks its rows", async () => {
+    state.gate = true;
+    const unmeasured = { band_pct: 3, measured_noise_pct: null };
+    const measured = { band_pct: 3, measured_noise_pct: 1.25 };
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: unmeasured },
+      { ...KEPT_EXPERIMENT, id: "exp:3-0", noise_evidence: measured },
+      { ...KEPT_EXPERIMENT, id: "exp:3-1", noise_evidence: unmeasured },
+      { ...KEPT_EXPERIMENT, id: "exp:3-2", noise_evidence: measured },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(2));
+    expect(document.querySelector(".exp-bench-noise-shared")).toBeNull();
+    expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
+      "* Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
+      "† Judged against a 3% noise floor. This game's own run-to-run noise on your PC measured ±1.3%.",
+    ]);
+    expect(rowMarks()).toEqual(["*", "†", "*", "†"]);
+    expectEachNoteOnceAndOffTheRows();
+  });
+
+  // IPC audit W2 + self-review item 3 (#583 lane 2b, three passes): a row with no record must not
+  // fall silently under the list-wide line, yet neither the floor sentence nor the "no record" note
+  // may repeat down the list (C-11). The rule is said once; the note is said once; only rows that
+  // LOOK judged — a crash reads "Worse", an older result "Better" — carry its mark. Rows whose
+  // verdict already says they weren't judged stay quiet, except "not comparable", which carries its
+  // reason (Codex r4, #611).
+  it("says the floor once and the missing-record note once, marking only rows that look judged", async () => {
+    state.gate = true;
+    const judged = { band_pct: 3, measured_noise_pct: null };
+    const unjudged = (id: string, verdict: string | null) => ({
+      ...NOT_COMPARABLE_EXPERIMENT, id, verdict, treatment: null, noise_evidence: null,
+    });
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: judged },
+      { ...KEPT_EXPERIMENT, id: "exp:4-0", noise_evidence: judged },
+      unjudged("u1", null), unjudged("u2", null), unjudged("u3", "confounded"), unjudged("u4", "confounded"),
+      unjudged("u5", "not-comparable"), unjudged("u6", "insufficient-evidence"), unjudged("u7", null),
+      unjudged("u8", "confounded"),
+      // A crash: restored, "Worse", never judged against the floor.
+      { ...NOT_COMPARABLE_EXPERIMENT, id: "crash", verdict: "regressed", stop_reason: "crash-during-treatment", noise_evidence: null },
+      // Results saved before the record existed.
+      { ...KEPT_EXPERIMENT, id: "old-1", noise_evidence: null },
+      { ...KEPT_EXPERIMENT, id: "old-2", verdict: "no-change", noise_evidence: undefined },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(13));
+    expect(document.querySelector(".exp-bench-noise-shared")?.textContent).toMatch(/^Judged against Compy's 3% noise floor\./);
+    expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
+      `* ${NOT_COMPARABLE_EXPERIMENT.verdict_note}`,
+      "† No noise-floor record was kept for these results.",
+    ]);
+    expect(rowMarks()).toEqual([null, null, null, null, null, null, "*", null, null, null, "†", "†", "†"]);
+    expectEachNoteOnceAndOffTheRows();
+  });
+
+  it("says the missing-record note in the singular for one row", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: null } },
+      { ...NOT_COMPARABLE_EXPERIMENT, id: "crash", verdict: "regressed", stop_reason: "crash-during-treatment", noise_evidence: null },
+    ];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("No noise-floor record was kept for this result.")).toBeInTheDocument();
+    expect(rowMarks()).toEqual([null, "*"]);
+    expectEachNoteOnceAndOffTheRows();
+  });
+
+  // Self-review #583 lane 2b: an aborted row showed the backend's machine tag ("start-aborted: …").
+  it("shows an aborted result's reason as a sentence, without the machine tag", async () => {
+    state.gate = true;
+    state.experiments = [
+      {
+        ...NOT_COMPARABLE_EXPERIMENT, id: "ab", status: "aborted", verdict: null, treatment: null, noise_evidence: null,
+        stop_reason:
+          "start-aborted: the setting didn't read back as changed; automatic restore did not complete — check it in Test → Applied & history: Access is denied.",
+      },
+    ];
+    render(<ExperimentBench />);
+    const reason = await waitFor(() => {
+      const el = document.querySelector(".exp-bench-abort");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(reason.textContent).toMatch(/^The setting didn't read back as changed; /);
+    expect(reason.textContent).not.toContain("start-aborted");
+  });
+
+  // #611 review round 2: a crash whose conclude-time read failed, and whose read after the restore
+  // still showed the setting changed, carries two stacked tags (experiment.rs); both must go.
+  it("strips every stacked machine tag from an aborted crash's reason", async () => {
+    state.gate = true;
+    state.experiments = [
+      {
+        ...NOT_COMPARABLE_EXPERIMENT, id: "crash", status: "aborted", verdict: "insufficient-evidence", noise_evidence: null,
+        stop_reason:
+          "crash-during-treatment; target-unreadable-at-conclude; a read afterwards shows the setting as changed — check it in Test → Applied & history",
+      },
+    ];
+    render(<ExperimentBench />);
+    const reason = await waitFor(() => {
+      const el = document.querySelector(".exp-bench-abort");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(reason.textContent).toMatch(/^A read afterwards shows the setting as changed/);
+    expect(reason.textContent).not.toMatch(/crash-during-treatment|target-unreadable/);
+  });
+
+  // #611 review round 2: a Trial an older Compy started has no baseline id or no apply time, and the
+  // backend refuses to conclude it. The bench must not offer a button that can only fail.
+  it.each([
+    ["no apply time", { applied_at: null }],
+    ["no baseline session id", { baseline_session_id: null }],
+  ])("offers only Restore for a running Trial with %s", async (_what, missing) => {
+    state.gate = true;
+    state.experiments = [{ ...RUNNING_EXPERIMENT, ...missing }];
+    state.sessions = [VALORANT_SESSION, { ...VALORANT_SESSION, started_at: "2026-07-17T04:00:00Z" }];
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-running");
+    expect(screen.getByText(/An older version of Compy started this experiment/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Conclude/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Restore now" })).toBeEnabled();
+  });
+
+  // #583 lane 2b: the backend now refuses a start or conclude on the sessions it reads (missing,
+  // not comparable, played before the change). The refusal must reach the owner in words, and a
+  // refused conclude leaves the Trial running rather than looking finished.
+  it("shows a refused conclude and keeps the running panel", async () => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    state.refuse = {
+      conclude_experiment: "experiment not concluded — that session was played before the change was applied",
+    };
+    render(<ExperimentBench />);
+    fireEvent.click(await screen.findByRole("button", { name: /Conclude with my latest/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("that session was played before the change was applied");
+    expect(screen.getByTestId("experiment-running")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restore now" })).toBeInTheDocument();
+  });
+
+  it("shows a refused start and starts nothing", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    state.refuse = { start_experiment: "the baseline session is no longer in your session history" };
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+    expect(await screen.findByRole("alert")).toHaveTextContent("no longer in your session history");
+    expect(screen.queryByTestId("experiment-running")).toBeNull();
+  });
+
+  // IPC audit W1 (#583 lane 2b): a start can fail AFTER it applied — a failed target check restores
+  // (or fails to) and writes a record. The screen must re-read and tell the sibling surfaces, or it
+  // disagrees with what is applied on the PC.
+  it("re-reads and signals the ledger when a start fails after applying", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    state.refuse = { start_experiment: "experiment aborted — the setting didn't read back as changed; Compy restored it" };
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    // The failed start restored the change and recorded it; only a re-read can show that row.
+    state.experiments = [{ ...NOT_COMPARABLE_EXPERIMENT, id: "exp:5-0", verdict: null, noise_evidence: null }];
+    const ledger = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, ledger);
+    try {
+      fireEvent.click(start);
+      expect(await screen.findByRole("alert")).toHaveTextContent("Compy restored it");
+      await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(1));
+      expect(ledger).toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, ledger);
+    }
+  });
+
+  // Codex r1 on #611: a conclude that doesn't keep restores the change, and a failed conclude or
+  // restore may have moved it too — sibling surfaces must re-derive or they show it still applied.
+  it.each([
+    ["a conclude", "Conclude with my latest", undefined],
+    ["a failed conclude", "Conclude with my latest", { conclude_experiment: "restore failed — the setting still reads changed" }],
+    ["a restore", "Restore now", undefined],
+    ["a failed restore", "Restore now", { restore_experiment: "restore failed — the setting still reads changed" }],
+  ])("signals the ledger after %s", async (_what, button, refuse) => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    state.refuse = refuse ?? {};
+    render(<ExperimentBench />);
+    const control = await screen.findByRole("button", { name: new RegExp(button) });
+    const ledger = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, ledger);
+    try {
+      fireEvent.click(control);
+      await waitFor(() => expect(ledger).toHaveBeenCalled());
+      if (refuse) expect(await screen.findByRole("alert")).toHaveTextContent("still reads changed");
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, ledger);
+    }
   });
 });

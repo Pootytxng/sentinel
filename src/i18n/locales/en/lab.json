@@ -359,7 +359,7 @@
       "confounded": "Another change interfered — restored, can't attribute",
       "expired": "Baseline too old to judge — restored",
       "insufficientEvidence": "Not enough data to judge — restored",
-      "notComparable": "Different game — not comparable, restored"
+      "notComparable": "Not comparable — restored"
     },
     "simVerdict": {
       "worthTesting": "Worth testing",
@@ -411,13 +411,18 @@
     "runningBaselinePre": "Baseline · {{game}} — avg",
     "fpsUnit": "fps",
     "runningStep": "The change is applied. Play a {{game}} session, then conclude — Compy compares it to the baseline and restores the change unless it clearly wins.",
+    "runningLegacy": "An older version of Compy started this experiment and didn’t record everything a fair comparison needs, so it can’t be concluded. Restore it, then start a new one.",
     "working": "Working…",
     "concludeWithLatest": "Conclude with my latest {{game}} session",
     "noNewSession": "No new {{game}} session yet",
     "restoreNow": "Restore now",
     "runningLatestPre": "Latest {{game}} session: avg",
-    "runningLatestPost": "fps · {{samples}} frames.",
+    "runningLatestPost": "fps · {{samples}} readings.",
     "runningNoTreatment": "Play a monitored {{game}} session to give the experiment a real after-reading.",
-    "yourGame": "your game"
+    "yourGame": "your game",
+    "noiseUnmeasured": "Judged against Compy's {{band}}% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
+    "noiseMeasured": "Judged against a {{band}}% noise floor. This game's own run-to-run noise on your PC measured ±{{measured}}%.",
+    "noiseNotRecorded_one": "No noise-floor record was kept for this result.",
+    "noiseNotRecorded_other": "No noise-floor record was kept for these results."
   }
 }

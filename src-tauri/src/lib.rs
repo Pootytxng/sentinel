@@ -1404,6 +1404,34 @@ pub fn run() {
                 support_evidence::Outcome::Ok,
                 &format!("Compy {} started ({})", env!("CARGO_PKG_VERSION"), build_stamp()),
             );
+            // Trial Protocol #583: resolve any experiment start that a crash or kill interrupted, before
+            // the first window can read the store. Read-only against Windows (it never restores at
+            // launch). Every interrupted start is closed and saved; one closed while the change history
+            // can't be read is written to support evidence so it is never only a console line. Only a
+            // store that can't be read or saved leaves a start Pending, for the next start or launch.
+            match crate::experiment::reconcile_interrupted_starts() {
+                Ok(outcomes) => {
+                    if outcomes.contains(&crate::experiment::InterruptedStart::LedgerUnreadable) {
+                        support_evidence::record(
+                            support_evidence::EventKind::Operation,
+                            "experiment_reconcile",
+                            "ledger_unreadable",
+                            support_evidence::Outcome::Failed,
+                            "an interrupted experiment start was closed as Aborted with nothing measured, because the change history could not be read to check on its change",
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[compy] experiment reconcile skipped: {e}");
+                    support_evidence::record(
+                        support_evidence::EventKind::Operation,
+                        "experiment_reconcile",
+                        "store_unavailable",
+                        support_evidence::Outcome::Failed,
+                        &e,
+                    );
+                }
+            }
             // Capture the handle so the session recorder thread can fire the debrief toast.
             let _ = APP_HANDLE.set(app.handle().clone());
             // Care trigger 1 of 3 (Tier 1 task 9): the launch scan. This is the one that catches a

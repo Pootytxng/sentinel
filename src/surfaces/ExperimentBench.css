@@ -335,6 +335,21 @@
   font-size: var(--type-label);
   color: var(--ix-amber);
 }
+/* §11 receipt fine print: the noise floor the verdicts were judged against. The list's rule sits under
+   the label; a note that covers only some rows sits under the list, once, and its rows carry its mark. */
+.exp-bench-noise-shared {
+  margin-bottom: 8px;
+}
+.exp-bench-noise {
+  margin-top: 6px;
+}
+.exp-bench-noise-mark {
+  margin-left: 2px;
+  color: var(--ix-text-3);
+}
+.exp-bench-noise .exp-bench-noise-mark {
+  margin-left: 0;
+}
 
 /* Motion gates on the APP's resolved signal (<html data-motion>), never a raw
    prefers-reduced-motion query: use-motion.ts already folds the user's choice and the Windows

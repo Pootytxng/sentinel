@@ -81,6 +81,34 @@ baseline → prior-state snapshot → apply → verify → measure → noise-awa
 This is the first implementation milestone that proves the reborn optimizer architecture rather than
 adding another isolated tweak.
 
+- [~] #583 lane 1 — record-first start, backend single-active guard, restore on a failed §4.5 target
+  check or unreadable watermark, read-only launch reconcile of interrupted starts, typed §8
+  `TrialResult` + §9 keep rule (`experiment.rs`; guard `src/experiment-record-first-guard.test.ts`).
+- [~] #583 lane 2a — read-only `history::probe_rec_target`: §4.1 refuses a start unless the setting
+  reads unchanged; §4.5 aborts on an unread target too; §7 at conclude turns a reverted/unreadable
+  target into no-keep; §4.10 reads back after every keep/restore and turns a still-changed restore
+  into a loud `Aborted`; the simulator trusts the live read over the ledger.
+- [~] #583 lane 2b — start/conclude take session ids and read the readings from `sessions.json`,
+  never UI-supplied fps; conclude refuses a missing, unmeasured, earlier, ambiguous or
+  not-comparable pair (`comparability::derive`) and caps a Partial pair's confidence; a changed
+  driver/Windows/resolution aborts and restores (§7), and a reported crash always restores; the §11
+  receipt records the floor the verdict was judged against, with the game's own noise left unknown.
+  Codex r1 fixes: a start refuses a baseline older than a Compy change; the after-session is timed
+  from when the apply returned; another Compy change during the test confounds and restores; a
+  crash is checked for comparability, and one whose setting can't be read back isn't blamed; a
+  failed apply says "nothing changed" only after a read proves it. Review round 2: a change history
+  once set aside as damaged never backs a one-change claim; a crash counts only in a session begun
+  after the apply; the bench offers only Restore on a Trial an older Compy started. Codex r2+r3
+  fixes: a crash is never blamed without a found, comparable session pair; an interrupted start or
+  failed apply always leaves a loud record, since a part-way apply can read as unchanged; a result
+  is left unjudged and restored when other applied settings aren't confirmed in place (unreadable
+  or set back), and a start is refused up front when they already aren't; an interrupted start
+  with an unreadable history is a loud record, never a hidden one; a not-comparable row gives its
+  own reason.
+  All three lanes built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** owner-rig
+  live proof on `game-bar-disable`, including a kill mid-start then relaunch · independent review of
+  the final head · merge.
+
 ---
 
 ## P4 — Roadmap Phase 4/5: Optimization Engine + guided journey

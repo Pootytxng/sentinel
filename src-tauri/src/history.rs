@@ -219,12 +219,20 @@ impl ActiveCheck {
 }
 
 fn check_change_state(c: &AppliedChange) -> ActiveCheck {
+    probe_rec_target(&c.rec_id)
+}
+
+/// Read-only: does the live machine read as being in `rec_id`'s TARGET state right now? The same
+/// probe the ledger's live re-check uses, exposed so a Trial can read the setting before its apply
+/// (§4.1, verify current state) and after its keep/restore (§4.10, verify final state) without a
+/// ledger row. Never mutates; `Unrecognised` for any rec with no probe.
+pub(crate) fn probe_rec_target(rec_id: &str) -> ActiveCheck {
     let read = ActiveCheck::from_read;
     let not_running = |svc: &str| read(service_running_checked(svc).map(|r| !r));
     // The registry readers without a checked variant (game mode, visual effects, mouse, game bar,
     // Nagle, EEE) treat an absent key as the Windows default, which IS their "off" answer, so they
     // stay plain reads here.
-    match c.rec_id.as_str() {
+    match rec_id {
         "game-mode" => read(Some(game_mode_enabled())),
         "visual-effects" => read(Some(visual_effects_for_best_performance())),
         "sysmain-disable" => not_running("SysMain"),

@@ -199,8 +199,9 @@ pub(crate) fn panic_at(_seam: u8) {}
 /// **That boundary is narrower than "every process-wide lock", and the narrowing is the point.**
 /// The first version of this enum claimed to enumerate every process-wide store lock and did not —
 /// `experiment::store_write_gate`, `intelligence::store_write_gate` and `benchmark::state_cache`
-/// were all missing, and the Experiment gate is held across three entries into `HISTORY_LOCK`
-/// (`experiment.rs` 679, 798, 852). With the outer lock unrecorded the recorder saw an empty stack
+/// were all missing, and the Experiment gate is held across entries into `HISTORY_LOCK` from all
+/// three lifecycle commands (`start_experiment`, `conclude_experiment`, `restore_experiment`). With
+/// the outer lock unrecorded the recorder saw an empty stack
 /// and could not have detected Experiment re-entry, an inverted `History -> Experiment` edge, or a
 /// cycle through Experiment at all. A false "all locks" claim is worse than an honest partial one,
 /// because it tells a reader not to look.
@@ -296,20 +297,22 @@ impl StoreLock {
 ///   lock across those calls.
 /// - `Experiment -> History` — the live one, and the one the first version of this table missed
 ///   entirely because the Experiment gate was not recorded. `start_experiment` holds
-///   `experiment::store_write_gate` from `experiment.rs:665` and calls `history::apply_recommendation`
-///   at `679`; `conclude_experiment` holds it from `748` and calls `history::rollback_change` at
-///   `798`; `restore_experiment` holds it from `840` and calls `rollback_change` at `852`. Each of
-///   those enters `HISTORY_LOCK`. **Direction matters and is asserted, not assumed:** nothing in the
-///   crate calls into `experiment` at all except `lib.rs`'s command registration, so no production
-///   path takes `History` and then `Experiment` — which is why
+///   `experiment::store_write_gate` and calls `history::apply_recommendation` inside it;
+///   `conclude_experiment` and `restore_experiment` hold it and call `history::rollback_change`.
+///   Each of those enters `HISTORY_LOCK`. **Direction matters and is asserted, not assumed:** nothing in the
+///   crate calls into `experiment` at all except `lib.rs` (its command registration, and the
+///   launch-time `reconcile_interrupted_starts` in `.setup`, which takes the Experiment gate first and
+///   only reads the ledger inside it), so no production path takes `History` and then `Experiment` — which is why
 ///   `the_inverted_history_to_experiment_edge_is_undeclared_and_panics` can use that direction as a
 ///   live positive control.
 /// - `Experiment -> SupportEvidence` — required by the all-held-lock rule, on two distinct real
 ///   paths. **Two-deep:** `apply_recommendation` and `rollback_change` call
 ///   `record_operation_failure` on their error branch, and that call happens after the inner
 ///   function has released `HISTORY_LOCK` but while `start_experiment` still holds the Experiment
-///   gate; likewise `active_change_count` (`experiment.rs:673`), `comparison::arm_watermark`
-///   (`686`) and `ledger_len_checked` (`767`) each run `load_history` under the Experiment gate and
+///   gate; likewise `active_change_count`, `applied_changes_summary`, `comparison::arm_watermark`,
+///   `ledger_len_checked`, the §3 one-change ledger reads in `start_experiment` and
+///   `conclude_experiment`, and the read-only launch `reconcile_interrupted_starts`
+///   (#583) each run `load_history` under the Experiment gate and
 ///   reach `support_evidence::record` on the corrupt-ledger branch. **Three-deep:** inside
 ///   `apply_recommendation_inner`, `HISTORY_LOCK` is held and `begin_mutation` → `load_history_for`
 ///   takes the same corrupt-ledger branch, so the thread holds `[Experiment, History]` and takes
@@ -349,8 +352,8 @@ impl StoreLock {
 /// of `experiment.rs` and fails unless all three still reach `history::apply_recommendation` or
 /// `history::rollback_change` inside the gate. It matches on structure, not on line numbers: a call
 /// that MOVES inside its own section keeps it green, while a call that leaves the gate — or an
-/// acquisition that bypasses `lock_store()` — turns it red. The line numbers quoted in this file are
-/// therefore documentation, point-in-time and NOT enforced; the section shape is what is pinned.
+/// acquisition that bypasses `lock_store()` — turns it red. This file therefore cites functions, not
+/// line numbers, which went stale as the lifecycle grew; the section shape is what is pinned.
 /// Two bounded checks, each honest about its half; neither is upgraded into a claim about the whole.
 ///
 /// **UNVERIFIED COVERAGE — `Comparison -> SupportEvidence` and `History -> SupportEvidence`.**

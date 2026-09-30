@@ -39,8 +39,10 @@ const iso = (minsAgo: number) => new Date(Date.now() - minsAgo * 60000).toISOStr
 
 // Shape matches `SessionSummary` in src/types.ts. `low1_fps_est` is what the bench reads for the
 // 1% low; the null sensor fields are the honest "no external monitor running" case.
+// The baseline session: RUNNING below names it by id, exactly as the backend resolves it.
+const BASELINE_AT = iso(95);
 const session = (over: Record<string, unknown> = {}) => ({
-  started_at: iso(95),
+  started_at: BASELINE_AT,
   duration_secs: 2820,
   process_name: "fixture-game.exe",
   samples: 2780,
@@ -86,6 +88,8 @@ const HISTORY = [
     treatment: { avg_fps: 137.2, low1_fps: 93.1, samples: 2400, crashed: false, delta_low1_pct: -1.0, recorded_at: iso(4100) },
     verdict: "no-change", kept: false, stop_reason: null, concluded_at: iso(4090),
     verdict_confidence: "medium" as Confidence, verdict_note: "One full session either side, same game, same rig.",
+    // #583 lane 2b: the §11 noise line. The backend never measures a game's own noise yet, so null.
+    baseline_session_id: iso(4400), noise_evidence: { band_pct: 3, measured_noise_pct: null },
   },
   {
     id: "fx-h2", rec_id: "fixture-rec-8", rec_title: "Turn off startup delay for background apps",
@@ -96,6 +100,82 @@ const HISTORY = [
     treatment: { avg_fps: 139.9, low1_fps: 95.7, samples: 3100, crashed: false, delta_low1_pct: 8.3, recorded_at: iso(9500) },
     verdict: "improved", kept: true, stop_reason: null, concluded_at: iso(9490),
     verdict_confidence: "high" as Confidence, verdict_note: "Clear of the 3% noise floor across a full session.",
+    baseline_session_id: iso(9900), noise_evidence: { band_pct: 3, measured_noise_pct: null },
+  },
+  // Backend-reachable shapes the list must also carry (#583 lane 2b). None was judged against the
+  // floor, so none carries a noise record.
+  {
+    // A crash during the treatment: restored, verdict "regressed" — it reads "Worse", so it is the one
+    // row that must say it has no noise record.
+    id: "fx-h3", rec_id: "fixture-rec-7", rec_title: "Turn off fullscreen optimizations",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(12000),
+    status: "restored" as ExperimentStatus,
+    baseline_avg_fps: 131.0, baseline_low1_fps: 86.0, active_changes_at_start: 1,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: { avg_fps: 128.0, low1_fps: 84.0, samples: 900, crashed: true, delta_low1_pct: -2.3, recorded_at: iso(11800) },
+    verdict: "regressed", kept: false, stop_reason: "crash-during-treatment", concluded_at: iso(11790),
+    verdict_confidence: "high" as Confidence,
+    verdict_note: "The game crashed during the test session. This verdict does not rely on the frame-rate reading.",
+    baseline_session_id: iso(12100), noise_evidence: null,
+  },
+  {
+    // A start whose automatic restore failed (experiment.rs `abort_start`): Aborted, nothing measured,
+    // the stop reason shown on the row. The bench drops the "start-aborted:" machine tag.
+    id: "fx-h4", rec_id: "fixture-rec-6", rec_title: "Disable background app refresh",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(14000),
+    status: "aborted" as ExperimentStatus,
+    baseline_avg_fps: 130.0, baseline_low1_fps: 85.0, active_changes_at_start: 0,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: null,
+    verdict: null, kept: false,
+    stop_reason:
+      "start-aborted: the setting didn't read back as changed after the apply; automatic restore did not complete — check it in Test → Applied & history: Access is denied. (os error 5)",
+    concluded_at: iso(13990), verdict_confidence: null, verdict_note: null,
+    baseline_session_id: iso(14100), noise_evidence: null,
+  },
+  {
+    // A result saved before the noise record existed: reads "Better", so it shares fx-h3's one
+    // "no record" note (said once, plural) and carries its mark.
+    id: "fx-h5", rec_id: "fixture-rec-5", rec_title: "Turn off pointer precision",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(16000),
+    status: "kept" as ExperimentStatus,
+    baseline_avg_fps: 129.0, baseline_low1_fps: 84.2, active_changes_at_start: 0,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: { avg_fps: 133.0, low1_fps: 89.1, samples: 2900, crashed: false, delta_low1_pct: 5.8, recorded_at: iso(15700) },
+    verdict: "improved", kept: true, stop_reason: null, concluded_at: iso(15690),
+    verdict_confidence: "medium" as Confidence, verdict_note: "One full session either side, same game, same rig.",
+    baseline_session_id: null, noise_evidence: null,
+  },
+  {
+    // A crash the backend couldn't pin (experiment.rs `crash_outcome`): "not-comparable", restored.
+    // Its row says the backend's own reason, never the list's "different game" rule (Codex r4, #611).
+    // No treatment record on the `crash_outcome` path: it runs only when no reading was resolved.
+    id: "fx-h6", rec_id: "fixture-rec-4", rec_title: "Disable mouse acceleration curve",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(17000),
+    status: "restored" as ExperimentStatus,
+    baseline_avg_fps: 128.0, baseline_low1_fps: 83.0, active_changes_at_start: 0,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: null,
+    verdict: "not-comparable", kept: false, stop_reason: "crash-session-comparability-unknown",
+    concluded_at: iso(16790), verdict_confidence: "unknown" as Confidence,
+    verdict_note:
+      "The game crashed, but that session and the baseline share no recorded rig or conditions, so Compy can't check that nothing else changed. So the crash can't be pinned on this setting. Compy restored the change.",
+    baseline_session_id: iso(17100), noise_evidence: null,
+  },
+  {
+    // A start interrupted while the change history couldn't be read (experiment.rs
+    // `InterruptedStart::LedgerUnreadable`): a loud Aborted row, never a hidden Pending (Codex r4, #611).
+    id: "fx-h7", rec_id: "fixture-rec-3", rec_title: "Turn off Xbox Game Bar",
+    game: "fixture-game.exe", hypothesis: "", created_at: iso(18000),
+    status: "aborted" as ExperimentStatus,
+    baseline_avg_fps: 127.0, baseline_low1_fps: 82.0, active_changes_at_start: 0,
+    attribution_warning: null, noise_floor_pct: 3,
+    treatment: null,
+    verdict: null, kept: false,
+    stop_reason:
+      "interrupted-start: Compy closed while this experiment was starting, and its change history can't be read, so Compy can't tell whether the change was made. Nothing was measured. If it's listed in Test → Applied & history, undo it there; if not, check the setting in Windows.",
+    concluded_at: iso(17990), verdict_confidence: null, verdict_note: null,
+    baseline_session_id: iso(18100), noise_evidence: null,
   },
 ];
 
@@ -107,13 +187,15 @@ const RUNNING = {
   attribution_warning: "3 other changes are already applied — a win here is the stack's, not this change's alone.",
   noise_floor_pct: 3, treatment: null, verdict: null, kept: false, stop_reason: null,
   concluded_at: null, verdict_confidence: null, verdict_note: null,
+  baseline_session_id: BASELINE_AT, applied_at: iso(40), noise_evidence: null,
 };
 
 // Per-state answers. The bench matches a treatment session by game name AND a start time strictly
-// LATER than the experiment's `created_at` (treatmentFor in ExperimentBench.tsx), so 'running'
-// carries a second session at 12 minutes ago against the experiment's 40 — that arms the conclude
+// LATER than the experiment's `applied_at` (treatmentFor in ExperimentBench.tsx), so 'running'
+// carries a second session at 12 minutes ago against the apply's 40 — that arms the conclude
 // CTA. 'running-no-session' omits it, which is the state the owner actually lands in the moment
-// after starting: the CTA reads "no new session yet" and stays disabled.
+// after starting: the CTA reads "no new session yet" and stays disabled. 'running-legacy' is a Trial
+// an older Compy started without an apply time: it can only be restored.
 const STATES: Record<string, { experiments: unknown[]; sessions: unknown[] }> = {
   start: { experiments: HISTORY, sessions: [session()] },
   running: {
@@ -124,6 +206,10 @@ const STATES: Record<string, { experiments: unknown[]; sessions: unknown[] }> = 
     ],
   },
   "running-no-session": { experiments: [RUNNING, ...HISTORY], sessions: [session()] },
+  "running-legacy": {
+    experiments: [{ ...RUNNING, applied_at: null }, ...HISTORY],
+    sessions: [session(), session({ started_at: iso(12), duration_secs: 700, samples: 690, avg_fps: 148.9, low1_fps_est: 104.8 })],
+  },
 };
 
 // CPU-TEMP OFFER STATES (Q9c).
