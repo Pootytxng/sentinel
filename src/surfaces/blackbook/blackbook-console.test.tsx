@@ -466,6 +466,29 @@ describe("BlackbookConsole — Receipts Strip filters the tape honestly", () => 
     );
   });
 
+  // An empty ledger's words are the ledger's claim, qualified by ledger health — not the model's.
+  // The model is never read with the Intelligence flag off, so it must not be able to blank them,
+  // and an unreadable LEDGER still overrides everything (Codex r1 on PR 634, answered by design).
+  it("zero changes: the ledger's own words stand whatever the model's state", () => {
+    useReduced();
+    const zeroSub = (inEffect: InEffectCounts, health: LedgerHealth | null = null) =>
+      render(<Logbook records={[]} inEffect={inEffect} health={health} />).container.querySelector(
+        '.bc-tile[data-kind="change"] .bc-tile-d',
+      )!.textContent;
+    for (const inEffect of [
+      { kind: "pending" },
+      { kind: "unreadable", reason: "model read failed" },
+      { kind: "counted", activeNow: 0, unknown: 0, totalRecorded: 0 },
+    ] as InEffectCounts[]) {
+      expect(zeroSub(inEffect)).toBe("nothing changed yet");
+      cleanup();
+      expect(zeroSub(inEffect, { complete: false, error: "history.json is locked", quarantined: false })).toBe(
+        "can't be read right now",
+      );
+      cleanup();
+    }
+  });
+
   it("a model not read yet prints no in-effect words; an unreadable one says so", () => {
     useReduced();
     expect(changesSub({ kind: "pending" })).toBe("");

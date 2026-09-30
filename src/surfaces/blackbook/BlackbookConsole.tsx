@@ -194,7 +194,9 @@ export function BlackbookConsole({
 // ledger has no count at all, and an empty one has nothing to be in effect. Past those, the
 // in-effect words are the Machine Model's (#625): the same numbers Health prints, never a fold over
 // the tape, whose legacy flag read "Compy can't check this" as "still on". Not read yet ⇒ nothing,
-// because a stand-in number is a claim.
+// because a stand-in number is a claim. The empty-ledger words stay AHEAD of the model on purpose:
+// they are the ledger's own claim, qualified by ledger health, and the model is never read while
+// the Intelligence flag is off — ordering them after it would blank "nothing changed yet" for good.
 function changesTileSub(
   t: TFunction,
   changes: number,
