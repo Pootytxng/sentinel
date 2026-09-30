@@ -71,6 +71,8 @@
       "changesNonePartial": "none we can still show",
       "changesActivePartial": "{{count}} still on · part of the record is missing",
       "changesInactivePartial": "none active here · part of the record is missing",
+      "changesUnconfirmed": "{{count}} still on · {{unknown}} can't confirm",
+      "changesUnconfirmedPartial": "{{count}} still on · {{unknown}} can't confirm · part of the record is missing",
       "sessionsTitle": "Gaming sessions",
       "sessionsNone": "none watched yet",
       "sessionsSome": "measured, not guessed",
@@ -101,6 +103,7 @@
       "stillOn": "still on",
       "rolledBack": "rolled back",
       "noLongerActive": "no longer active",
+      "unconfirmed": "can't confirm it's still in place",
       "restoresPre": "undo returns to ",
       "repeat": "applied {{times}} times since {{since}}"
     },

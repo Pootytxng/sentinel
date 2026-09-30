@@ -15,7 +15,7 @@ import { useLogbookView } from "./blackbook/logbook-view";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { PatternsTile } from "./blackbook/PatternsTile";
 import { buildLogbook } from "./blackbook/logbook";
-import { useMachineModel } from "../data/machine-model";
+import { inEffectCounts, useMachineModel } from "../data/machine-model";
 import type { AppliedChange, SessionSummary } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
@@ -99,6 +99,9 @@ export function BlackbookV2({
   // nothing rather than a claim. A consumer that needs to tell those two apart must read `model`
   // itself — it cannot recover the difference from here (non-author review, #455 at 75cf3f6b).
   const chronology = model?.chronology ?? null;
+  // The strip's in-effect words (#625): the model's count, the one Health prints, so History and
+  // Health cannot disagree. Pending (flag off, or not read yet) prints nothing rather than a guess.
+  const inEffect = inEffectCounts(model);
   // Scope-filtered here AND in buildLogbook (defense in depth: the builder is the tested honesty
   // spine).
   const observed = useMemo(
@@ -216,6 +219,7 @@ export function BlackbookV2({
             patterns={<PatternsTile />}
             onOpenLab={() => onOpenLab?.()}
             onOpenGuide={openGuide}
+            inEffect={inEffect}
           />
         ) : undefined
       }
@@ -253,6 +257,7 @@ export function BlackbookV2({
                 patterns={<PatternsTile />}
                 onOpenLab={() => onOpenLab?.()}
                 onOpenGuide={openGuide}
+                inEffect={inEffect}
               />
             </>
           ) : (
@@ -263,10 +268,10 @@ export function BlackbookV2({
              option is a whole other library reads as a tab when it is really a door. The toggle
              still renders on the guide face, which is where a way back is what you need. */
           <div className="bbv2-routes">
-            {view.activeChanges > 0 && (
+            {view.undoableChanges > 0 && (
               <button type="button" className="bbv2-route" onClick={() => onOpenLab?.()}>
                 <span>
-                  {t("blackbook.blackbookConsole.manageJump", { count: view.activeChanges })}
+                  {t("blackbook.blackbookConsole.manageJump", { count: view.undoableChanges })}
                 </span>
                 <span className="bbv2-route-chev" aria-hidden="true">
                   ›

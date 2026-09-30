@@ -67,6 +67,11 @@ function ChangeBody({ r }: { r: LogbookChange }) {
           <span className="bc-state bc-state-on">
             {t("blackbook.blackbookConsole.changeBody.stillOn")}
           </span>
+        ) : r.unconfirmed ? (
+          /* #625: the live check could not say. Health's words, never "still on". */
+          <span className="bc-state">
+            {t("blackbook.blackbookConsole.changeBody.unconfirmed")}
+          </span>
         ) : r.rolledBack ? (
           <span className="bc-state">{t("blackbook.blackbookConsole.changeBody.rolledBack")}</span>
         ) : (
@@ -86,7 +91,7 @@ function ChangeBody({ r }: { r: LogbookChange }) {
           </span>
         )}
         {r.payoffLabel && <span className="bc-chip">{r.payoffLabel}</span>}
-        {r.active && r.restoresLabel && (
+        {(r.active || r.unconfirmed) && r.restoresLabel && (
           <span className="bc-row-note">
             {t("blackbook.blackbookConsole.changeBody.restoresPre")}
             {r.restoresLabel}

@@ -15,7 +15,8 @@ import type { LogbookRecord } from "./logbook";
 // It is a hook rather than a prop bag so the derivations that must never disagree — the strip's
 // counts and the tape's rows — are still computed once, from the same `records`, in one file.
 // Nothing here reads IPC, and nothing here can invent a row: every number is a fold over the
-// records buildLogbook already proved real.
+// records buildLogbook already proved real. The one number that is NOT (#625) — how many changes
+// are in effect now — is the Machine Model's, and BlackbookV2 hands it to the strip directly.
 
 export type LogbookKind = LogbookRecord["kind"];
 
@@ -39,11 +40,15 @@ export function useLogbookView(records: LogbookRecord[], health: LedgerHealth | 
   // rest — nothing is hidden, only deferred behind an honest count.
   const [tapeAll, setTapeAll] = useState(false);
 
-  // How many changes are still active — the read view states it and routes undo to the Lab.
-  const activeChanges = useMemo(
+  // How many changes an undo can still act on — on, or not confirmed off (#625). The read view
+  // routes them to the Lab. It is NOT the "still on" number: that one is the Machine Model's, handed
+  // to the strip, so History prints the same count Health does.
+  const undoableChanges = useMemo(
     () =>
-      records.filter((r): r is typeof r & { kind: "change" } => r.kind === "change" && r.active)
-        .length,
+      records.filter(
+        (r): r is typeof r & { kind: "change" } =>
+          r.kind === "change" && (r.active || r.unconfirmed),
+      ).length,
     [records],
   );
   // Per-kind counts + scam flags — the strip's numbers are DERIVED from the same records the tape
@@ -101,7 +106,7 @@ export function useLogbookView(records: LogbookRecord[], health: LedgerHealth | 
     toggleFilter,
     tapeAll,
     revealAll: () => setTapeAll(true),
-    activeChanges,
+    undoableChanges,
     counts,
     tape,
     older,
