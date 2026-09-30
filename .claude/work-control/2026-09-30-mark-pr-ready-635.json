@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/630#issuecomment-5902859035",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/635#issuecomment-5902854951",
+    "status": "passed",
+    "reviewerNote": "Codex CLI (gpt-5.6-sol, read-only, session 01a0f01b-44c5-7eb3-9977-a51afb7b142e), not an author of any commit. One round at the exact pushed head de506ce0 PASSed: the guard cannot pass while a tracked non-ASCII script lacks a UTF-8 BOM, and the compy-entry.ps1 change is comments plus one displayed string.",
+    "head": "de506ce0cd739954b55939e539a835be4cbadfce"
+  },
+  "branch": "claude/wonderful-brahmagupta-c01d28",
+  "overlapExclusiveNote": "The claim on #630 names the PR two-path delta since origin/main plus this landing two receipts; the write-scope and lease-overlap stages both returned OK at push, and scope-drift-gate --refresh read OK against the refreshed claim.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "de506ce0cd739954b55939e539a835be4cbadfce",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "472 files, 7905 passed (5 expected fail, 10 skipped).",
+      "evidence": "logs/verify-local-2026-09-30T02-17-29Z.log; SHA-256 37d526bcad40d1c3f481ad8b4026b324dfc8aae53bebf39821175f9acad1b036; push log logs/push-630-r1.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "de506ce0cd739954b55939e539a835be4cbadfce"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-30T02-17-29Z.log; SHA-256 37d526bcad40d1c3f481ad8b4026b324dfc8aae53bebf39821175f9acad1b036; push log logs/push-630-r1.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "de506ce0cd739954b55939e539a835be4cbadfce"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1355 passed, 0 failed.",
+      "evidence": "logs/verify-local-2026-09-30T02-17-29Z.log; SHA-256 37d526bcad40d1c3f481ad8b4026b324dfc8aae53bebf39821175f9acad1b036; push log logs/push-630-r1.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "de506ce0cd739954b55939e539a835be4cbadfce"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-30T02-17-29Z.log; SHA-256 37d526bcad40d1c3f481ad8b4026b324dfc8aae53bebf39821175f9acad1b036; push log logs/push-630-r1.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "de506ce0cd739954b55939e539a835be4cbadfce"
+    }
+  ],
+  "issue": 630,
+  "inheritedWork": true,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Verified takeover on #630 (issuecomment-5902743337) of the dormant elastic-cerf-b4059b lease (session stopped on a usage limit at 2026-09-29T02:55Z, claim expired 14:52Z, no remote branch or PR, folder left untouched), then a fresh claim by this session in its own worktree (issuecomment-5902743568), refreshed to name the landing receipts before they were written. Git, PR, issue, board and process state were re-derived before every write.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push updated the branch to the exact PR head; nothing was pushed after it.",
+  "pr": 635,
+  "mutationAuthorsNote": "claude-code authored every commit on the branch (the diff was first written by the dormant claude-code session in elastic-cerf-b4059b and carried forward under the takeover); Codex reviewed read-only and authored no mutation.",
+  "actor": "claude-code",
+  "transition": "mark-pr-ready",
+  "closingNote": "Mark draft PR #635 ready at the independently reviewed exact pushed head; merge requires its own receipt."
+}
