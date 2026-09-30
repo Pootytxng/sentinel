@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/625#issuecomment-5902460575",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/634#issuecomment-5902596791",
+    "status": "passed",
+    "reviewerNote": "Codex CLI (gpt-5.6-sol, read-only), not an author of any commit. Round 1 reviewed the whole fix at 90797bef and FAILed on one point (the empty-ledger words run before the model checks), answered by design with a pin test in 8a88a5c4 (https://github.com/Pootytxng/sentinel/pull/634#issuecomment-5902523812); round 2 PASSed at 8a88a5c4, judging that answer and the incremental commit.",
+    "head": "8a88a5c48cbb0192e4c29ac9b5c371ded6e5061b"
+  },
+  "branch": "claude/wonderful-brahmagupta-c01d28",
+  "overlapExclusiveNote": "The claim on #625 names the PR's whole 12-path delta since origin/main plus this landing's two receipts; the write-scope and lease-overlap stages both returned OK at push, and scope-drift-gate --refresh read OK against that claim.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "8a88a5c48cbb0192e4c29ac9b5c371ded6e5061b",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "471 files, 7896 passed (5 expected fail, 10 skipped).",
+      "evidence": "logs/verify-local-2026-09-30T01-53-19Z.log; SHA-256 31a29fc380dae97497db6856f9a2936d78fbe20be483ab6f8cef473d3c810bc3; push log logs/push-625-r2.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "8a88a5c48cbb0192e4c29ac9b5c371ded6e5061b"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-09-30T01-53-19Z.log; SHA-256 31a29fc380dae97497db6856f9a2936d78fbe20be483ab6f8cef473d3c810bc3; push log logs/push-625-r2.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "8a88a5c48cbb0192e4c29ac9b5c371ded6e5061b"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1355 passed, 0 failed.",
+      "evidence": "logs/verify-local-2026-09-30T01-53-19Z.log; SHA-256 31a29fc380dae97497db6856f9a2936d78fbe20be483ab6f8cef473d3c810bc3; push log logs/push-625-r2.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "8a88a5c48cbb0192e4c29ac9b5c371ded6e5061b"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-09-30T01-53-19Z.log; SHA-256 31a29fc380dae97497db6856f9a2936d78fbe20be483ab6f8cef473d3c810bc3; push log logs/push-625-r2.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "8a88a5c48cbb0192e4c29ac9b5c371ded6e5061b"
+    }
+  ],
+  "issue": 625,
+  "inheritedWork": false,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "Fresh claim by this session in its own worktree, widened to name the landing receipts before they were written. It is released by a Handoff on #625 before this merge.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push updated the branch to the exact PR head; nothing was pushed after it.",
+  "pr": 634,
+  "mutationAuthorsNote": "claude-code authored every commit on the branch; Codex reviewed read-only and authored no mutation.",
+  "actor": "claude-code",
+  "transition": "merge-pr",
+  "closingNote": "Land PR #634 through scripts/land-pr.mjs. Its closingIssuesReferences is empty on purpose: #625 stays open for acceptance 4 (live re-proof and visual self-review). The claim is released first."
+}
