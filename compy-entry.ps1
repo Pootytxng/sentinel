@@ -62,10 +62,10 @@ if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
 
 # Everything Kuya reads on success comes back through node's stdout, and PowerShell decodes a native
 # command's output with whatever [Console]::OutputEncoding says -- which on this machine is the OEM
-# code page. The first log that carried the success line proved it: "150k ΓÇö standard", the em dash
-# of an ASCII-safe label arriving as three characters of noise. The corruption is in the STRING, not
-# the file, so it reaches the console too, and it would reach a task name in the picker or a sentence
-# in a refusal the same way. Process-local, set before the first node call.
+# code page. The first log that carried the success line proved it: the label "150k <em dash> standard"
+# came back with its dash as three characters of noise (U+0393 U+00C7 U+00F6). The corruption is in
+# the STRING, not the file, so it reaches the console too, and it would reach a task name in the picker
+# or a sentence in a refusal the same way. Process-local, set before the first node call.
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
@@ -84,7 +84,7 @@ $Cli = Join-Path $ControlDir 'tools/entry/cli.mjs'
 # into $LogFile and stops there, so everything after it -- the editor, the two waits, the fallback,
 # the verdict -- was console-only, and a successful launch closes its window (guard 13). Scoring
 # journey 5 of the acceptance run proved the cost: the log ended at "launch token written" while the
-# journey ran on for another 18s. §8's refusal cites this file as "the account of this run"; it must
+# journey ran on for another 18s. Section 8's refusal cites this file as "the account of this run"; it must
 # not stop before the failure it is cited for.
 #
 # Buffered until the file exists, which is launch.mjs's doing: a run that ends at the picker still
@@ -362,11 +362,11 @@ if ($launchCode -ne 0) {
     # One "Do this:" is the glance; the count is what stops it reading as the whole story when it
     # is one of several. launch.mjs ranks them, so the first is the one to settle first.
     # @() around the whole assignment: a one-element array unrolls to a bare string on the way out
-    # of an if-block, and then $rem[0] indexes a CHARACTER — "Do this: s".
+    # of an if-block, and then $rem[0] indexes a CHARACTER -- "Do this: s".
     $rem = @(if ($result -and $result.remediation) { $result.remediation } else { @() })
     if ($rem.Count -gt 0) {
         Write-Host ''
-        if ($rem.Count -gt 1) { Note "$($rem.Count) checks need settling — this is the one to start with" }
+        if ($rem.Count -gt 1) { Note "$($rem.Count) checks need settling -- this is the one to start with" }
         Write-Host "  Do this: $($rem[0])"
     }
     Write-Host ''
