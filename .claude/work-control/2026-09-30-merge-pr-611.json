@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/610#issuecomment-5903173875",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/611#issuecomment-5882632385",
+    "status": "passed",
+    "reviewerNote": "Codex CLI (gpt-5.6-sol, read-only), not an author of any commit. Round 6 at the exact pushed head d302c9d PASSed with no blocking finding; its one non-blocking note (a same-setting row undone in Windows can show a false 'another change active' start note) is a filed follow-up and touches neither the verdict nor rollback.",
+    "head": "d302c9d1718e7e8fae73f46e87c1e768a9489bf7"
+  },
+  "branch": "claude/determined-galileo-mb5z29",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "The claim on #610 names the PR's own delta since origin/main plus this landing's two receipts. The lanes queued behind #611 (#618 and the #583 crash-check lane) recorded that #611 lands first; nothing in their folders is touched and no path in the delta is edited by this landing.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "d302c9d1718e7e8fae73f46e87c1e768a9489bf7",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "469 files, 7827 passed (1 expected fail, 9 skipped).",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/competent-northcutt-f84e33/logs/verify-local-2026-09-29T02-31-45Z.log (the #583 lane's pre-push gate at this exact head, started 18s after the d302c9d commit in the folder whose HEAD is d302c9d); SHA-256 db7fac6d0a71f302845db3bbc5a5dfa1108bea5e709cf83ccd87d47c3648a14e; every stage passed and the push that followed put the PR head at d302c9d",
+      "head": "d302c9d1718e7e8fae73f46e87c1e768a9489bf7"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed (built in 8.68s).",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/competent-northcutt-f84e33/logs/verify-local-2026-09-29T02-31-45Z.log (the #583 lane's pre-push gate at this exact head, started 18s after the d302c9d commit in the folder whose HEAD is d302c9d); SHA-256 db7fac6d0a71f302845db3bbc5a5dfa1108bea5e709cf83ccd87d47c3648a14e; every stage passed and the push that followed put the PR head at d302c9d",
+      "head": "d302c9d1718e7e8fae73f46e87c1e768a9489bf7"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1401 passed, 0 failed, 24 ignored.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/competent-northcutt-f84e33/logs/verify-local-2026-09-29T02-31-45Z.log (the #583 lane's pre-push gate at this exact head, started 18s after the d302c9d commit in the folder whose HEAD is d302c9d); SHA-256 db7fac6d0a71f302845db3bbc5a5dfa1108bea5e709cf83ccd87d47c3648a14e; every stage passed and the push that followed put the PR head at d302c9d",
+      "head": "d302c9d1718e7e8fae73f46e87c1e768a9489bf7"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "C:/Users/Kuya/code/sentinel/.claude/worktrees/competent-northcutt-f84e33/logs/verify-local-2026-09-29T02-31-45Z.log (the #583 lane's pre-push gate at this exact head, started 18s after the d302c9d commit in the folder whose HEAD is d302c9d); SHA-256 db7fac6d0a71f302845db3bbc5a5dfa1108bea5e709cf83ccd87d47c3648a14e; every stage passed and the push that followed put the PR head at d302c9d",
+      "head": "d302c9d1718e7e8fae73f46e87c1e768a9489bf7"
+    }
+  ],
+  "issue": 610,
+  "inheritedWork": true,
+  "leaseEvidenceNote": "Fresh claim by this session on #610 in its own worktree (issuecomment-5903173875), naming the landing receipts before they were written. The PR's authoring lane (#583 lanes 1-2b) had finished and handed #611 to landing; git, PR, issue, board and process state were re-derived before every write. This session also ran the PR head as a dev build on the owner's PC: the gate is armed and the start refusals work on real data (evidence on PR #611); the full play-and-conclude run is blocked on a UAC prompt this session must not click.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate (scripts/verify-local.ps1) ran every required stage at d302c9d and each passed; its PASS line goes to the console, not the log, and the push it guarded is what moved the PR head to d302c9d. Nothing was pushed after it. main's commits since the PR's merge base touch tooling and receipts only, none of the delta's app paths.",
+  "pr": 611,
+  "mutationAuthorsNote": "claude-code authored every commit on the branch; Codex reviewed read-only and authored no mutation.",
+  "actor": "claude-code",
+  "transition": "merge-pr",
+  "closingNote": "Merge PR #611 (merge commit, no squash) at the reviewed exact head d302c9d; closes #610. The owner-rig play-and-conclude Trial stays open on #583 as pre-release work."
+}
