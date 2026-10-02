@@ -1,0 +1,73 @@
+{
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/640#issuecomment-5951838412",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "PASS",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/641#issuecomment-5952177126",
+    "status": "passed",
+    "reviewerNote": "Codex CLI (gpt-5.6-sol, read-only, session 01a0fc84-8b27-7f42-8c44-f83b9ffd93fa) authored no commit. One round at the exact pushed head 53bf2524 returned VERDICT: APPROVE, no findings. It checked the B9 row and the BACKLOG §P3 text against PR #611's merge, #620, the #610 note, the #628 release and the #639 forks.",
+    "head": "53bf2524c205ef59bd1fc88c9749cf9ed5e8b58d"
+  },
+  "branch": "claude/practical-mccarthy-c0e203",
+  "overlapExclusiveNote": "The claim on #640 names the PR's two-path delta since origin/main (docs/OWNER_ACTION_CHECKLIST.md, docs/BACKLOG.md), plus .claude/work-control/** for this landing's receipts. At push, both the write-scope stage and the lease-overlap stage returned OK. That was after #628's dormant lease on docs/BACKLOG.md had been taken over and released.",
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "liveProcesses": true,
+    "branch": true,
+    "dirtyState": true,
+    "worktree": true
+  },
+  "currentHead": "53bf2524c205ef59bd1fc88c9749cf9ed5e8b58d",
+  "kind": "lane",
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "summary": "473 files, 7967 passed (5 expected fail, 11 skipped).",
+      "evidence": "logs/verify-local-2026-10-02T12-07-44Z.log; SHA-256 f977a9a842da136c71dce1684c785db94adc05eac1073c7d488ebaf2703cf222; push log logs/push-640-r2.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "53bf2524c205ef59bd1fc88c9749cf9ed5e8b58d"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "summary": "Type check and production build passed.",
+      "evidence": "logs/verify-local-2026-10-02T12-07-44Z.log; SHA-256 f977a9a842da136c71dce1684c785db94adc05eac1073c7d488ebaf2703cf222; push log logs/push-640-r2.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "53bf2524c205ef59bd1fc88c9749cf9ed5e8b58d"
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "summary": "1401 passed, 0 failed (24 ignored).",
+      "evidence": "logs/verify-local-2026-10-02T12-07-44Z.log; SHA-256 f977a9a842da136c71dce1684c785db94adc05eac1073c7d488ebaf2703cf222; push log logs/push-640-r2.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "53bf2524c205ef59bd1fc88c9749cf9ed5e8b58d"
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-10-02T12-07-44Z.log; SHA-256 f977a9a842da136c71dce1684c785db94adc05eac1073c7d488ebaf2703cf222; push log logs/push-640-r2.log (LOCAL CHECK RESULT: PASS, branch pushed at the exact head)",
+      "head": "53bf2524c205ef59bd1fc88c9749cf9ed5e8b58d"
+    }
+  ],
+  "issue": 640,
+  "inheritedWork": true,
+  "overlapExclusive": true,
+  "leaseEvidenceNote": "This session posted a fresh Ownership claim in its own worktree (issuecomment-5951838412), after the previous #640 Handoff released its claim (issuecomment-5946641378). #628's expired, unreleased lease on docs/BACKLOG.md refused the first push. A Verified takeover on #628 (issuecomment-5951952571) and a released Handoff (issuecomment-5951952810) cleared it. #628's folder was not touched. Git, PR, issue, board and process state were re-derived before every write.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateEvidenceNote": "Native pre-push gate returned LOCAL CHECK RESULT: PASS and the push updated the branch to the exact PR head; nothing was pushed after it.",
+  "pr": 641,
+  "mutationAuthorsNote": "claude-code authored the commit. The B9 row is the patch a previous claude-code session posted in the #640 Handoff (issuecomment-5946641378); Codex reviewed read-only and authored no mutation.",
+  "actor": "claude-code",
+  "transition": "mark-pr-ready",
+  "closingNote": "Mark draft PR #641 ready at the independently reviewed exact pushed head; merge requires its own receipt."
+}
