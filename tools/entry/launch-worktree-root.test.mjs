@@ -10,8 +10,8 @@
 // passes that file to every hook as `transcript_path`. That is the one fact about the launch folder
 // a `cd` cannot move, so it is the only one these tests let pick a lane.
 //
-// Gated on the `launchWorktree` export: before the hook carries the change, the suite skips rather
-// than fails.
+// Not gated: main carries the change, so a hook that loses `launchWorktree` fails this suite rather
+// than skipping it (review of PR #642).
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,7 +20,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import * as hook from "../../.claude/hooks/session-root-assert.mjs";
 
-const PATCHED = typeof hook.launchWorktree === "function";
 const BRANCH = "claude/lane-a";
 const NOW = new Date("2026-10-02T12:00:00Z");
 
@@ -61,7 +60,12 @@ afterAll(() => {
   }
 });
 
-describe.skipIf(!PATCHED)("the launch folder decides the root (#637)", () => {
+describe("the launch folder decides the root (#637)", () => {
+  it("is carried by the hook itself, not skipped when missing", () => {
+    expect(typeof hook.launchWorktree).toBe("function");
+    expect(typeof hook.transcriptFolderFor).toBe("function");
+  });
+
   it("names the lane a session was launched in, even though CLAUDE_PROJECT_DIR is the shared checkout", () => {
     const r = resolveFor({ launched: laneA });
     expect(r.root).toBe(hook.canonicalizePath(laneA));
@@ -104,7 +108,7 @@ describe.skipIf(!PATCHED)("the launch folder decides the root (#637)", () => {
   });
 });
 
-describe.skipIf(!PATCHED)("only a real lane of THIS repository can be named (#637)", () => {
+describe("only a real lane of THIS repository can be named (#637)", () => {
   it("names nobody when two lane folders spell the same transcript name", () => {
     const dash = lane("twin-x");
     lane("twin.x");
@@ -135,7 +139,7 @@ describe.skipIf(!PATCHED)("only a real lane of THIS repository can be named (#63
   });
 });
 
-describe.skipIf(!PATCHED)("the assertion runs on the lane, so a claimed lane verifies (#637)", () => {
+describe("the assertion runs on the lane, so a claimed lane verifies (#637)", () => {
   const board = () => ({ reachable: true, stale: false, rows: [{ issue: 637, folder: laneA, branch: BRANCH }] });
   const live = { isWorktree: true, branch: BRANCH, repo: "pootytxng/sentinel" };
   const assertFor = (hookInput) =>

@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 
 import { verdictFor } from "../.claude/hooks/session-root-assert.mjs";
+import { decideShell } from "../.claude/hooks/shell-ownership-assert.mjs";
+import { ZONES } from "../.claude/hooks/target-ownership.mjs";
 import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import { pickRoute, readLauncherTasks, SUCCESSOR_PREAMBLE, successorPrompt } from "./successor-route.mjs";
 
@@ -208,12 +210,44 @@ describe("SUCCESSOR_PREAMBLE", () => {
     const step0 = SUCCESSOR_PREAMBLE.slice(SUCCESSOR_PREAMBLE.indexOf("STEP 0"), SUCCESSOR_PREAMBLE.indexOf("\nSTEP 1 "));
     expect(step0).toContain("SessionStart");
     expect(step0).toContain("#637");
-    expect(step0.match(/Write nothing/g)).toHaveLength(2);
+    expect(step0.match(/Write nothing/g)).toHaveLength(3);
     const example = /"(on main in [^"]+)"/.exec(step0)?.[1];
     expect(example).toBeDefined();
     const line = (branch, root) => verdictFor({ ok: true, mode: "verify", issue: 419, branch, root }).message;
     expect(line("main", "C:\\Users\\Kuya\\code\\sentinel")).toContain(example);
     expect(line("claude/lane-a", "C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\lane-a")).not.toContain(example);
+  });
+
+  // Review of PR #642: the lines for an unclaimed folder and an unreadable board name no folder, and a
+  // new successor's folder is always unclaimed, so (b) cannot rest on the line alone. It falls back to
+  // a fetch, which the shell hook refuses in a bound session with the sentence quoted here, and lets
+  // through for a session rooted in its own folder.
+  it("falls back to a fetch the shell hook refuses only in a bound session, quoting that refusal", () => {
+    const step0 = SUCCESSOR_PREAMBLE.slice(SUCCESSOR_PREAMBLE.indexOf("STEP 0"), SUCCESSOR_PREAMBLE.indexOf("\nSTEP 1 "));
+    const probe = /names no folder[^]*?run `([^`]+)` now/.exec(step0)?.[1];
+    expect(probe).toBe("git fetch origin");
+    const quoted = /"(This session is working in [^"]+)"/.exec(step0)?.[1];
+    expect(quoted).toBe("This session is working in C:\\Users\\Kuya\\code\\sentinel,");
+
+    const shared = join(tmpdir(), "compy-fixture", "sentinel");
+    const lane = join(shared, ".claude", "worktrees", "lane-a");
+    const zone = ({ target, sessionRoot }) =>
+      target === sessionRoot
+        ? { zone: ZONES.OWN, abs: target, owner: sessionRoot, why: "this session's folder" }
+        : { zone: ZONES.SIBLING, abs: target, owner: target, why: "another checkout of this repository" };
+    const decide = (sessionRoot) =>
+      decideShell({
+        toolName: "Bash",
+        toolInput: { command: probe },
+        sessionRoot,
+        cwd: lane,
+        zone,
+        verify: () => ({ ok: false, code: "FOLDER_UNCLAIMED" }),
+      });
+    const bound = decide(shared);
+    expect(bound.permission).toBe("deny");
+    expect(bound.reason).toContain(quoted.replace("C:\\Users\\Kuya\\code\\sentinel", shared));
+    expect(decide(lane).permission).toBe("allow");
   });
 
   it("is a non-empty string independent of any live machine state", () => {
