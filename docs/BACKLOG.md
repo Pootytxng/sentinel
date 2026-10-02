@@ -105,9 +105,10 @@ adding another isolated tweak.
   or set back), and a start is refused up front when they already aren't; an interrupted start
   with an unreadable history is a loud record, never a hidden one; a not-comparable row gives its
   own reason.
-  All three lanes built on `claude/determined-galileo-mb5z29`, unlanded. **Remaining:** owner-rig
-  live proof on `game-bar-disable`, including a kill mid-start then relaunch · independent review of
-  the final head · merge.
+  All three lanes landed via PR #611 (`416a45de`, 2026-09-30). **Remaining:** owner-rig live proof
+  on `game-bar-disable`, including a kill mid-start then relaunch. Blocked on this rig: every rec is
+  already configured (`game-bar-disable` too), 5 applied rows with no read-back block every start
+  (#620), and recording needs an owner UAC click.
 
 ---
 
