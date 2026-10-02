@@ -149,6 +149,14 @@ Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verba
 
 ## §B — Waiting on input only you can give
 
+### B9. HQ's "performance assurance" strategy — two calls  ·  ⏳ NEW 2026-10-01  ·  [#639](https://github.com/Pootytxng/sentinel/issues/639)
+
+**The ask:** say **"yes"** (in chat or on #639) to take both recommendations, or redirect either.
+**Fork 1:** use "performance assurance" as an internal lens only; no public rename until Verifier v0
+can be shown. **Fork 2:** add Verifier v0 (a read-only "did that change actually help?" check) between
+Phase 3 and Phase 4. **Why it matters:** they set Compy's public category and what is built after
+Phase 3. Nothing waits on them today.
+
 ### B8. Your #224 board row carries another lane's data — still yours?  ·  ⏳ NEW 2026-09-03
 
 **The ask:** one word. The Work Control row for [#224](https://github.com/Pootytxng/sentinel/issues/224) is Lane = **Kuya**, so no agent retires
