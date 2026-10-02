@@ -1030,6 +1030,63 @@ export function diagnoseWorktreeProvisioning(
   };
 }
 
+// ── the launch folder (#637) ─────────────────────────────────────────────────────────────────────
+// Since 2026-09-30 the desktop app hands every hook CLAUDE_PROJECT_DIR = the SHARED checkout, even
+// for a session it opened in a lane worktree under `.claude\worktrees\`. Read alone, that bound every
+// lane session to the shared checkout and refused every write into its own lane (#637).
+//
+// The folder a session was LAUNCHED in is still on record, and nothing inside the session can move
+// it. The harness files the conversation under `<config>\projects\<launch folder, every character
+// that is not a letter or digit turned into "-">\` and hands that file to every hook as
+// `transcript_path`. A `cd` moves the payload's `cwd`; it never moves the transcript.
+//
+// So a lane replaces CLAUDE_PROJECT_DIR as the root only when ALL of these hold:
+//   * the transcript is filed under a folder name that is not the project dir's own;
+//   * exactly ONE folder directly inside `<project dir>\.claude\worktrees` spells that name — two
+//     that collide name nobody;
+//   * that folder is a linked worktree of the project dir's own repository: its `.git` file points
+//     into `<project dir>\.git\worktrees\`.
+// Anything else, a failed read included, leaves CLAUDE_PROJECT_DIR as the root: the fallback is the
+// old behaviour, never a wider one. Every check after this one still applies to the lane.
+
+/** The name the harness files a folder's transcripts under. */
+export function transcriptFolderFor(folder) {
+  return String(folder ?? "").replace(/[^a-zA-Z0-9]/g, "-");
+}
+
+/** The launch-folder name a transcript is filed under: the segment after the last `projects`. */
+export function launchFolderName(transcriptPath) {
+  if (typeof transcriptPath !== "string") return null;
+  const parts = transcriptPath.trim().split(/[\\/]+/);
+  for (let i = parts.length - 3; i >= 0; i--) {
+    if (parts[i].toLowerCase() === "projects") return parts[i + 1] || null;
+  }
+  return null;
+}
+
+/** The lane worktree this session was launched in, or null when its transcript does not prove one. */
+export function launchWorktree({ projectDir, transcriptPath, readdir = readdirSync, read = readFileSync } = {}) {
+  const launched = launchFolderName(transcriptPath)?.toLowerCase();
+  if (!projectDir || !launched) return null;
+  const spelling = (p) => transcriptFolderFor(canonicalizePath(p)).toLowerCase();
+  if (launched === spelling(projectDir)) return null;
+  try {
+    const lanes = join(projectDir, ".claude", "worktrees");
+    const named = readdir(lanes, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(lanes, entry.name))
+      .filter((lane) => spelling(lane) === launched);
+    if (named.length !== 1) return null;
+    const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(read(join(named[0], ".git"), "utf8"));
+    if (!pointer) return null;
+    const gitdir = canonicalizePath(isAbsolute(pointer[1]) ? pointer[1] : resolve(named[0], pointer[1])).toLowerCase();
+    const store = `${canonicalizePath(join(projectDir, ".git", "worktrees")).toLowerCase()}\\`;
+    return gitdir.startsWith(store) ? canonicalizePath(named[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── the assertion ────────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -1039,6 +1096,8 @@ export function diagnoseWorktreeProvisioning(
  */
 export function resolveSessionRoot({ env = process.env, hookInput = null, cwd = process.cwd() } = {}) {
   if (env?.CLAUDE_PROJECT_DIR) {
+    const lane = launchWorktree({ projectDir: env.CLAUDE_PROJECT_DIR, transcriptPath: hookInput?.transcript_path });
+    if (lane) return { root: lane, source: "launch worktree (transcript_path)", observed: true };
     return { root: canonicalizePath(env.CLAUDE_PROJECT_DIR), source: "CLAUDE_PROJECT_DIR", observed: true };
   }
   if (hookInput?.cwd) {

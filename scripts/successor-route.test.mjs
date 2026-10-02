@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, it, expect } from "vitest";
 
+import { verdictFor } from "../.claude/hooks/session-root-assert.mjs";
 import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import { pickRoute, readLauncherTasks, SUCCESSOR_PREAMBLE, successorPrompt } from "./successor-route.mjs";
 
@@ -197,6 +198,22 @@ describe("SUCCESSOR_PREAMBLE", () => {
     expect(SUCCESSOR_PREAMBLE.indexOf("core.hooksPath .githooks")).toBeGreaterThan(
       SUCCESSOR_PREAMBLE.indexOf("Ownership claim"),
     );
+  });
+
+  // #637 gap 1: a session sat in its own worktree, so show-toplevel printed the lane, while its hooks
+  // were bound to the shared checkout and refused every write. Only the SessionStart line shows that,
+  // so STEP 0 reads it before STEP 1's claim, and stops on it too. Its example must be the text the
+  // hook really prints for a bound session, and never text that a lane's own line also contains.
+  it("checks the SessionStart line before the claim, quoting what the hook prints when bound", () => {
+    const step0 = SUCCESSOR_PREAMBLE.slice(SUCCESSOR_PREAMBLE.indexOf("STEP 0"), SUCCESSOR_PREAMBLE.indexOf("\nSTEP 1 "));
+    expect(step0).toContain("SessionStart");
+    expect(step0).toContain("#637");
+    expect(step0.match(/Write nothing/g)).toHaveLength(2);
+    const example = /"(on main in [^"]+)"/.exec(step0)?.[1];
+    expect(example).toBeDefined();
+    const line = (branch, root) => verdictFor({ ok: true, mode: "verify", issue: 419, branch, root }).message;
+    expect(line("main", "C:\\Users\\Kuya\\code\\sentinel")).toContain(example);
+    expect(line("claude/lane-a", "C:\\Users\\Kuya\\code\\sentinel\\.claude\\worktrees\\lane-a")).not.toContain(example);
   });
 
   it("is a non-empty string independent of any live machine state", () => {

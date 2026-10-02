@@ -136,13 +136,17 @@ removed the dependency, only you can remove the symptom.
 
 The last line needs `--force` because that folder still holds one uncommitted file, and its tests are already on main (PR #537). Then the other dead checkouts. That list changes daily, so ask any session for it. `node scripts/fleet-snapshot.mjs` reads only git, so the session also checks each folder's branch for an open PR and a live Work Control claim, then hands you one checked command per folder. Branches survive removal, and removal is denied to sessions. **Why it matters:** `git worktree list` is how every session learns what is live, and each dead folder in it is a false lead.
 
+### A_routines. Turn on "worktree" for both successor routines  ·  ⏳ NEW 2026-10-02  ·  [#637](https://github.com/Pootytxng/sentinel/issues/637)
+
+**The ask:** Claude app → Routines → **Compy successor A** → Edit → turn on **worktree** → Save; then the same for **Compy successor B**. **Why it matters:** with it off, a launched successor starts in the shared checkout, where every write is refused, so it can only stop. With it on, each run gets its own folder.
+
 ### A-closed. Items you already closed — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 
 None of them is waiting on you (A0's key backup closed 2026-08-18; record and the two count
-corrections in the archive). **§A holds SEVEN things:** ① A0's residual — delete the
+corrections in the archive). **§A holds EIGHT things:** ① A0's residual — delete the
 redundant `Desktop\COMPY KEY\` copy; ② A0's *"expand to the remaining invitees"* — a **distribution call**,
 yours by definition; ③ **A_settings**, one paste in a file only you may edit; ④ **A_prune**,
-one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches; ⑦ **A_spent**, the spent-folder removals.
+one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, four hook patches; ⑦ **A_spent**, the spent-folder removals; ⑧ **A_routines**, two toggles.
 Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_ci · A_rig · A_ref2 · B1 · B7 · B_arc · A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**.
 
 ---
