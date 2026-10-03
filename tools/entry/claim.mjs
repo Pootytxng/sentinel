@@ -8,13 +8,18 @@
 // Its twin (#643) is `postRelease` in release.mjs, which measures who is asking before it ends a
 // lease. Every session posts through one GitHub account, so a released Handoff ends whichever lease is
 // live, whoever wrote it. Nothing exported here can post one: `execPlan` runs only a plan this file
-// built, whole and as built, and refuses one whose comment reads as a release or as a claim.
+// built, whole and as built, and refuses one whose comment reads as a release or as a claim. Both
+// writers here, `postClaim` and `execPlan`, run for the launcher alone: neither reads who holds the
+// board row it edits, so neither is left open to a seat nobody checked.
 //
 // Every board mutation is expressed as a PLAN of `gh` invocations before anything runs, so a dry run
 // shows exactly what would be written, and the field quirks stay pinned by tests: date fields need
 // `--date` (`--text` fails with "Did not receive a date value") and clearing an expiry needs `--clear`.
 
 import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { scopeTextFromMarkdown } from "../../scripts/lib/claim-scope.mjs";
 import { writeClaimCache } from "../../scripts/lib/scope-drift.mjs";
 import { samePath } from "./worktree-field.mjs";
@@ -81,7 +86,8 @@ export function renderHandoff(h) {
 }
 
 const esc = (s) => s.replace(/[.*+?^{}()|[\]\\/$]/g, "\\$&");
-// One enclosing backtick pair, trimmed — a hand-written claim quotes its folder or branch as code.
+// One enclosing backtick pair, trimmed — a hand-written claim quotes its folder or branch as code. So a
+// name that is itself one code span reads as the name inside it, and `postClaim` posts no such claim.
 const plain = (v) => (v && /^`[^`]*`$/.test(v) ? v.slice(1, -1) : v);
 
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
@@ -429,10 +435,26 @@ export function parseReleaseRecord(body) {
 const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 const instant = (v) => (typeof v === "string" && STAMP.test(v.trim()) ? Date.parse(v.trim()) : Number.NaN);
 
-/** Does this record name this claim and no other? Every stamp it holds is the claim's own posting time. */
-const endsClaim = (record, claim) => {
+/**
+ * The claims that were, or could have been, posted at `at`. GitHub's posting times are whole seconds,
+ * so two claims can share one; and a claim read without its time could have been posted at any.
+ */
+const claimsAt = (claims, at) =>
+  claims.filter((c) => {
+    const t = instant(c.postedAt);
+    return !Number.isFinite(t) || t === at;
+  });
+
+/**
+ * Does this record name this claim and no other? Every stamp it holds is the claim's own posting
+ * time, and no other claim on the thread so far (`seen`) was, or could have been, posted at that time.
+ * On e0362db5 the time alone decided, so where a second claim landed in the same second as the one a
+ * release was checked against, the release ended the second (review of PR 644, round 2). A time that
+ * two claims share names neither.
+ */
+const endsClaim = (record, claim, seen) => {
   const at = instant(claim?.postedAt);
-  return Number.isFinite(at) && record.ends.length > 0 && record.ends.every((s) => instant(s) === at);
+  return Number.isFinite(at) && record.ends.length > 0 && record.ends.every((s) => instant(s) === at) && claimsAt(seen, at).length === 1;
 };
 
 /**
@@ -449,10 +471,13 @@ const endsClaim = (record, claim) => {
  * A release that carries a Release record (#643) ends the claim it names and no other. Where that
  * claim is not the live one when the comment lands (a successor claimed in the seconds between the
  * check and the post, or the lease had already ended), its Handoff is not a lease event at all: it
- * ends nothing and is not the newest Handoff. The claim is named by its posting time alone, which both
- * readers carry, so they cannot disagree and an edited comment cannot revive a lease; a thread read
- * without posting times never matches one. A release with no record, which is every one written by
- * hand, still ends whichever claim is live.
+ * ends nothing and is not the newest Handoff. The claim is named by its posting time, which every
+ * reader carries (the batch reader in gather.mjs fetches no comment link), so no two readers can
+ * disagree about what a record ends. A time names a claim only while one claim on the thread so far
+ * was posted at it: two claims posted in the same second are named by neither's record, and that
+ * lease stays live until a refreshed claim, with a second of its own, is released. A claim read
+ * without its posting time matches no record and leaves every other claim's time unsure. A release
+ * with no record, which is every one written by hand, still ends whichever claim is live.
  *
  * `run` is every claim since the last release, oldest first; its last entry is `claim` (#517). A
  * refreshed claim restates the lease, it does not start a new one, so the push-time overlap gate
@@ -464,10 +489,11 @@ export function threadLease(comments) {
   let claim = null;
   let handoff = null;
   let run = [];
+  const seen = []; // every claim so far, released or not: what a record's time is told apart from
   for (const c of comments ?? []) {
     const read = parseHandoff(c.body);
     const record = read?.released ? parseReleaseRecord(c.body) : null;
-    const asHandoff = record === null || endsClaim(record, claim) ? read : null;
+    const asHandoff = record === null || endsClaim(record, claim, seen) ? read : null;
     if (asHandoff) {
       handoff = { ...asHandoff, postedAt: c.createdAt, ...(c.url ? { url: c.url } : {}) };
       if (asHandoff.released) {
@@ -479,6 +505,7 @@ export function threadLease(comments) {
     if (asClaim) {
       claim = asClaim;
       run.push(claim);
+      seen.push(claim);
     }
   }
   return { claim, handoff, run };
@@ -541,8 +568,28 @@ const runPlan = (plan, { dryRun = false } = {}) => {
 
 const planRefusal = (code, message) => Object.assign(new Error(message), { code });
 
+// The launcher, by its path: the program beside this file. `process.argv[1]` is the program node was
+// started with, so a session's own script, a test runner and `node -e` are not it. Both paths are read
+// through any link: node names this file by where it really is, and the program by how it was typed.
+const LAUNCHER = join(dirname(fileURLToPath(import.meta.url)), "launch.mjs");
+const throughLinks = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+};
+const runByLauncher = () => {
+  try {
+    const program = process.argv[1];
+    return typeof program === "string" && program !== "" && samePath(throughLinks(resolve(program)), throughLinks(LAUNCHER));
+  } catch {
+    return false;
+  }
+};
+
 /**
- * Run a plan that neither starts nor ends a lease: a renewal, a board edit (#643).
+ * Run a plan that neither starts nor ends a lease: the launcher's renewal (#643).
  *
  * It used to run whatever `gh` arguments it was handed, so hiding the release plan hid nothing: one
  * hand-written step, `issue comment … "### Handoff … - Claim: released"`, ended whichever lease was
@@ -553,8 +600,15 @@ const planRefusal = (code, message) => Object.assign(new Error(message), { code 
  *   of the caller's choosing;
  * - a comment reads as a release, whichever builder carried it (`planRenew`'s note, a claim's facts);
  * - a comment reads as a claim. A claim posted without its verdict makes its poster the holder, and
- *   the holder may release: two calls round the same check.
- * A claim goes through `postClaim`, and a release through `postRelease` in release.mjs.
+ *   the holder may release: two calls round the same check;
+ * - the program running is not the launcher. A renewal sets a board row's expiry and nothing here
+ *   reads who holds that row, so on e0362db5 a predecessor's `execPlan(planRenew(…))` wrote over its
+ *   successor's row (review of PR 644, round 2). The launcher is the one caller there is, and it
+ *   renews only after its own preflight. It is told by the path node was started with
+ *   (`runByLauncher`): that stops a script that calls this, not one that lies about what program it
+ *   is, which could as well run `gh` by hand.
+ * A claim goes through `postClaim`, and a release through `postRelease` in release.mjs. A session
+ * extends its own lease by posting a refreshed Ownership claim.
  */
 export function execPlan(plan, { dryRun = false } = {}) {
   if (!BUILT.has(plan)) {
@@ -576,10 +630,31 @@ export function execPlan(plan, { dryRun = false } = {}) {
       throw planRefusal("PLAN_WOULD_CLAIM", `Refusing to run a plan whose comment is an Ownership claim ("${s.describe}"). A claim is posted by postClaim, on a PASS verdict.`);
     }
   }
+  if (!runByLauncher()) {
+    throw planRefusal(
+      "PLAN_NOT_THE_LAUNCHER",
+      "Refusing to run a plan outside the launcher (tools/entry/launch.mjs). A renewal moves a board row's expiry without reading who holds that row, so only the launcher runs one, after its own preflight. A session extends its own lease by posting a refreshed Ownership claim, and ends it with `node tools/entry/release.mjs`.",
+    );
+  }
   return runPlan(plan, { dryRun });
 }
 
-/** The refusal that makes a claim mean something. */
+/**
+ * The refusal that makes a claim mean something.
+ *
+ * A claim is also refused, dry run or not, when the comment it would post does not read back as the
+ * folder and the branch it was asked to name. A lease is released by the seat its claim READS as
+ * (`releaseDecision`), and the claim block is plain Markdown: on e0362db5 a claim for the branch
+ * `` `claude/x` `` (git allows the backticks) read as one for `claude/x`, so the folder, moved to that
+ * other branch, was taken for the holder (review of PR 644, round 2). The whole comment is read, with
+ * the readers a release uses, so a line break or an open code fence in any other field is caught by
+ * the same check.
+ *
+ * And it runs for the launcher alone, dry run or not (`runByLauncher`). The verdict is its caller's to
+ * hand over, and a claim takes the lease and files the board row over whatever is there: the same
+ * unchecked seat `execPlan` is closed to. The launcher is the one caller there is, and it claims on
+ * the verdict of its own preflight.
+ */
 export function postClaim({ issue, verdict, facts, ids, dryRun = false, cacheDir = undefined }) {
   if (verdict?.verdict !== "PASS") {
     throw new Error(
@@ -588,8 +663,25 @@ export function postClaim({ issue, verdict, facts, ids, dryRun = false, cacheDir
     );
   }
   const plan = planPostClaim({ issue, ids, facts, verdict });
-  if (parseHandoff(plan[0].argv[plan[0].argv.length - 1])?.released) {
+  const body = plan[0].argv[plan[0].argv.length - 1];
+  if (parseHandoff(body)?.released) {
     throw planRefusal("PLAN_WOULD_RELEASE", `Refusing to post a claim on #${issue} whose text also reads as a released Handoff. A lease is ended by \`node tools/entry/release.mjs\`.`);
+  }
+  const read = parseClaim(body);
+  const reads = { folder: read ? namedFolder(read.folder) : "", branch: read ? namedBranch(read.branch) : null };
+  const named = (v) => typeof v === "string" && v !== "";
+  if (!named(facts.folder) || !named(facts.branch) || reads.folder !== facts.folder || reads.branch !== facts.branch) {
+    throw planRefusal(
+      "CLAIM_WOULD_NOT_READ_BACK",
+      `Refusing to post a claim on #${issue} that would not read back as the folder and branch it names. It was asked to name "${named(facts.folder) ? facts.folder : "(no folder)"} @ ${named(facts.branch) ? facts.branch : "(no branch)"}", and as written it reads "${reads.folder || "(no folder)"} @ ${reads.branch ?? "(no branch)"}". ` +
+        "A lease is released by the folder and branch its claim reads as, so this claim would lock out its own holder or admit another seat. On a claim line a name wrapped in backticks reads as the name inside them, a branch ends at its first space, and a line break ends the line.",
+    );
+  }
+  if (!runByLauncher()) {
+    throw planRefusal(
+      "CLAIM_NOT_THE_LAUNCHER",
+      `Refusing to post a claim on #${issue} outside the launcher (tools/entry/launch.mjs). A claim takes the lease and files the board row on a verdict its caller hands over, so only the launcher posts one this way, on the verdict of its own preflight. A lease is ended with \`node tools/entry/release.mjs\`.`,
+    );
   }
   const ran = runPlan(plan, { dryRun });
   if (!dryRun) {
@@ -618,8 +710,9 @@ export function postClaim({ issue, verdict, facts, ids, dryRun = false, cacheDir
  * the name: git allows all of them, and on d5890abb stripping "," read a claim for `claude/x,` as one
  * for `claude/x` (review of PR 644). A span counts only when a space or the line's end follows it, for
  * the same reason. So a line read wrongly refuses its own holder and admits nobody else, with one
- * limit Markdown leaves: a branch whose own name opens with a backtick cannot be written on a claim
- * line, and reads as the name inside its span.
+ * rule the format keeps: a value that is one whole code span names what is inside it, so a branch
+ * whose own name is wrapped in backticks cannot be told from a quoted one. `postClaim` posts no claim
+ * whose folder or branch does not read back as itself, so only a hand-written line is ever read so.
  */
 const leadingSpan = (v) => /^`([^`]+)`/.exec(v)?.[1].trim() || null;
 const wholeSpan = (v) => /^`([^`]+)`(?=\s|$)/.exec(v)?.[1].trim() || null;
@@ -879,6 +972,8 @@ const renderRecord = (claim) =>
  * that was checked and nothing else:
  * - the text carries a Release record of its own. The tool writes that, from the claim it checked;
  * - the live claim was read without its posting time, so nothing can name it;
+ * - another claim on the thread shares that time, or was read without its own. A time two claims
+ *   share names neither (`endsClaim`), so the release would be posted and end nothing;
  * - it does not release: no Handoff section, or a Claim line that holds or transfers;
  * - its record does not read back as written. A Handoff text that leaves a code fence or an HTML
  *   block open swallows the record after it, and the comment would be a release with no record, which
@@ -901,11 +996,19 @@ export function releaseComment({ issue, comments, decision, self, text, now = ne
       "Take that section out of the Handoff and run it again.",
     );
   }
-  if (!Number.isFinite(instant(claim.postedAt))) {
+  const at = instant(claim.postedAt);
+  if (!Number.isFinite(at)) {
     return refuse(
       "RELEASE_CLAIM_UNDATED",
       `The live claim on #${issue} was read without the time it was posted (${heldBy(claim)}), so a release could not name it and would end whichever claim is live when it lands.`,
       "Run it again when GitHub answers with the thread's posting times.",
+    );
+  }
+  if (claimsAt(comments.map(claimOf).filter(Boolean), at).length !== 1) {
+    return refuse(
+      "RELEASE_CLAIM_TIME_SHARED",
+      `Another Ownership claim on #${issue} was posted in the same second as the live one (${heldBy(claim)}), or was read without its time. A release names the claim it ends by that time, and a time two claims share names neither, so this release would be posted and end nothing.`,
+      "Post a refreshed Ownership claim from the holding folder, which gets a time of its own, and release that. Where no session is left there to post one, this tool cannot end the lease: mark the row Needs Kuya.",
     );
   }
   const body = `${[handoff.trimEnd(), ...(decision.via === "takeover" ? [renderTakeover({ claim, self, takeover: decision.takeover })] : []), renderRecord(claim)].join("\n\n")}\n`;
@@ -939,21 +1042,26 @@ export function releaseComment({ issue, comments, decision, self, text, now = ne
  * What a release did, read back off the thread once it is posted (#643). GitHub has no conditional
  * write, so the check before the post cannot see a claim that lands in the seconds after it. The fold
  * settles what such a release ended (`threadLease`), and this says which way it went before any board
- * field is touched. `index` is where the release sits in `comments`, and `claim` the one it was
- * checked against.
- * - "ended": that claim was the live one when the release landed, and nobody has claimed since.
- * - "nothing": another claim was live when it landed, or none was, so it ended nothing.
+ * field is touched. `index` is where the release sits in `comments`.
+ * - "ended": a claim was live when the release landed, the fold reads the release as ending it, and
+ *   nobody has claimed since.
+ * - "nothing": the fold does not read it as ending a lease. Another claim was live when it landed (a
+ *   later one, or one posted in the same second as the claim it names), or none was.
  * - "taken": it ended its claim, and a claim was posted after it. The board row is that claim's,
  *   whether or not it is still live: its own release files the row, and this one must not file over it.
  *
- * `before` is the claim that was live when it landed, and `next` the newest claim posted after it.
+ * The answer is the fold's own, never a second rule beside it: on e0362db5 this compared posting
+ * times itself, and called a release that landed on a same-second claim "ended" (review of PR 644,
+ * round 2). `before` is the claim that was live when it landed, and `next` the newest claim posted
+ * after it.
  *
  * @returns {{landed: "ended"|"nothing"|"taken", before: object|null, next: object|null}}
  */
-export function releaseOutcome({ comments, index, claim }) {
+export function releaseOutcome({ comments, index }) {
   const before = threadLease(comments.slice(0, index)).claim;
+  const ended = before !== null && threadLease(comments.slice(0, index + 1)).claim === null;
   const next = comments.slice(index + 1).map(claimOf).filter(Boolean).at(-1) ?? null;
-  if (!before || instant(before.postedAt) !== instant(claim.postedAt)) return { landed: "nothing", before, next };
+  if (!ended) return { landed: "nothing", before, next };
   return { landed: next ? "taken" : "ended", before, next };
 }
 

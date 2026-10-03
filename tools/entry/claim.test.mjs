@@ -15,10 +15,11 @@
 // time are pinned here rather than rediscovered: date fields need `--date` (`--text` fails with
 // "Did not receive a date value"), and clearing an expiry needs `--clear`.
 
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 // The release tests (#643) run the real postRelease against a simulated GitHub and git. `world.on` is
@@ -66,7 +67,7 @@ import { readBoard, readProjectIds } from "./gather.mjs";
 import * as releaseModule from "./release.mjs";
 import { cmdRelease, measureSeat, parseArgs, postRelease } from "./release.mjs";
 import { CORRUPT } from "./session-assert.mjs";
-import { samePath } from "./worktree-field.mjs";
+import { isValidBranch, samePath } from "./worktree-field.mjs";
 import { readClaimCache, writeClaimCache } from "../../scripts/lib/scope-drift.mjs";
 import { evaluateWorkControl } from "../../scripts/work-control-gate.mjs";
 import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
@@ -104,6 +105,21 @@ const IDS = {
   },
 };
 
+// The launcher is the one program `postClaim` and `execPlan` run for (#643 review, round 2): both
+// write a board row without reading who holds it, so they refuse every other caller by its program
+// path. A test that means to reach their run says so, standing in the launcher's seat for that call.
+const LAUNCHER_PATH = join(dirname(fileURLToPath(import.meta.url)), "launch.mjs");
+const asProgram = (program, run) => {
+  const was = process.argv[1];
+  process.argv[1] = program;
+  try {
+    return run();
+  } finally {
+    process.argv[1] = was;
+  }
+};
+const asLauncher = (run) => asProgram(LAUNCHER_PATH, run);
+
 describe("a claim may not be posted without a verdict", () => {
   it("throws on a REFUSE verdict", () => {
     expect(() => postClaim({ issue: 18, verdict: REFUSE, facts: FACTS, ids: IDS, dryRun: true })).toThrow(/verdict/i);
@@ -115,7 +131,7 @@ describe("a claim may not be posted without a verdict", () => {
   });
 
   it("proceeds on PASS", () => {
-    const r = postClaim({ issue: 18, verdict: PASS, facts: FACTS, ids: IDS, dryRun: true });
+    const r = asLauncher(() => postClaim({ issue: 18, verdict: PASS, facts: FACTS, ids: IDS, dryRun: true }));
     expect(r.plan.length).toBeGreaterThan(0);
   });
 });
@@ -859,6 +875,32 @@ const SIX_STEPS = [
   "set Last verified = 2026-10-03",
 ];
 
+// What a stop that leaves the row in doubt says to do (#643 review, round 2). On e0362db5 a failed
+// edit listed the edits left to run by hand, over whatever claim had landed meanwhile. No stop hands
+// out an edit now, and every one of them starts with reading the thread again.
+const UNFILED = `The row stays as it is until the next claim on #${ISSUE}, which sets its Status, Next action and Claim expires again. Before changing it by hand, read the thread again: once a claim follows this Handoff, the row is that claim's.`;
+const THEIRS = "the row is that claim's: restore it from the claim's own text (Status Active, its Next action, its Claim expires)";
+const CURES = {
+  RELEASE_UNVERIFIED: `Run this release again: it reads the thread first and writes nothing unless this folder still holds a live claim, so its answer says whether the comment ended the lease. ${UNFILED}`,
+  RELEASE_ROW_RACED: `Read the thread again. While that claim is live, ${THEIRS}. If it has been released since, check the row against the newest Handoff on the thread.`,
+  RELEASE_HALF_RUN: `Nothing more is run from this release, and running it again is refused: the lease it would end is gone. ${UNFILED}`,
+  RELEASE_HALF_RUN_UNCHECKED: `Nothing more is run from this release. Read the thread again. If a claim follows this Handoff, ${THEIRS}. If none does, the row stays as it is until the next claim on #${ISSUE}, which sets its Status, Next action and Claim expires again.`,
+  RELEASE_ROW_UNCHECKED: `Read the thread again. If a claim follows this Handoff, ${THEIRS}. If none does, nothing is left to do.`,
+};
+/** Nothing a stop prints hands out an edit: no "left to run  <step>" line (the cure "Nothing is left to run." is not one), no `gh` command line, no field or row id. */
+const noEditHandedOut = (text) => {
+  for (const part of ["left to run  ", "gh [", "item-edit", "--field-id", "F_status", "F_gate", "F_next", "F_exp", "F_ver", "PVTI_x"]) expect(text).not.toContain(part);
+};
+/** How a half-filed row is described when the edit numbered `failAt` (1 to 5) fails. */
+const PARTLY = [
+  null,
+  'no edit ran, "set Status = Review" failed (GraphQL: Could not resolve to a ProjectV2Item) and may or may not have been applied, and 4 more were not tried',
+  '"set Status = Review" ran, "set Gate = None" failed (GraphQL: Could not resolve to a ProjectV2Item) and may or may not have been applied, and 3 more were not tried',
+  '"set Status = Review", "set Gate = None" ran, "set Next action = Kuya reviews." failed (GraphQL: Could not resolve to a ProjectV2Item) and may or may not have been applied, and 2 more were not tried',
+  '"set Status = Review", "set Gate = None", "set Next action = Kuya reviews." ran, "clear Claim expires" failed (GraphQL: Could not resolve to a ProjectV2Item) and may or may not have been applied, and 1 more was not tried',
+  '"set Status = Review", "set Gate = None", "set Next action = Kuya reviews.", "clear Claim expires" ran, "set Last verified = 2026-10-03" failed (GraphQL: Could not resolve to a ProjectV2Item) and may or may not have been applied, and it was the last edit',
+];
+
 /**
  * One machine and one GitHub, as a release sees them.
  *
@@ -872,7 +914,8 @@ const SIX_STEPS = [
  *   lag             how many reads after the post still show the thread as it was before it
  *   beforePost      comments that land between the release's read and its post
  *   afterPost       comments that land straight after its post
- *   duringEdits     { at, comments }: comments that land after its `at`-th board edit
+ *   duringEdits     { at, comments }: comments that land after its `at`-th board edit; 0 is after the
+ *                   read-back and before the first edit
  *   failAt          the write that fails: 0 is the comment, 1 to 5 the board edits
  *   printUrl        false: `gh issue comment` prints nothing
  *   boardFails      the board read that fails: "item-list", "view" or "field-list"
@@ -935,6 +978,7 @@ function simulate({
     if (kind === "project view") return boardRead("view", project);
     if (kind === "project field-list") return boardRead("field-list", { fields });
     if (kind === "project item-edit") {
+      if (duringEdits?.at === 0 && writes === 1) comments = [...comments, ...duringEdits.comments];
       write(argv);
       if (duringEdits?.at === writes - 1) comments = [...comments, ...duringEdits.comments];
       return "";
@@ -1051,7 +1095,7 @@ describe("the simulated world the release tests run in (#643)", () => {
 
   it("is the only gh this file can reach: outside it a gh call is an error, not a request", () => {
     expect(readBoard()).toEqual({ reachable: false, items: [], error: "claim.test.mjs reached a real gh call outside the simulated world" });
-    expect(() => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, cacheDir: tmp })).toThrow(/outside the simulated world/);
+    expect(() => asLauncher(() => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, cacheDir: tmp }))).toThrow(/outside the simulated world/);
   });
 
   it("measures a seat from git's answers: the work tree's top level and the branch it is on", () => {
@@ -1069,7 +1113,6 @@ describe("postRelease: only the folder and branch the live claim names may end i
     for (const edit of sent.slice(1)) expect(edit.argv.slice(0, 6)).toEqual(["project", "item-edit", "--project-id", "PVT_x", "--id", "PVTI_x"]);
     expect(result.steps).toEqual(SIX_STEPS.map((describe) => ({ describe, ran: true })));
     expect(result.url).toBe(thread.at(-1).url);
-    expect(result.warning).toBeNull();
     expect(result.claim.url).toBe(B_CLAIM.url);
     expect(threadLease(thread).handoff).toMatchObject({ released: true, nextAction: "Kuya reviews.", postedAt: "2026-10-03T05:30:25Z" });
   });
@@ -1608,6 +1651,42 @@ describe("postRelease: the comment must be a release, and only a release (#643)"
       expect(error.reason).toContain(B_CLAIM.url);
     },
   );
+
+  // Round 2 of the review: a record names its claim by posting time, and GitHub stamps to the second.
+  // A time two claims share names neither, so the release is refused before anything is posted.
+  describe("refuses a release whose record would name a time two claims share", () => {
+    const T = B_CLAIM.createdAt;
+    const aAtT = posted(T, claimText(PREDECESSOR), 2);
+    const SHARED = `Another Ownership claim on #${ISSUE} was posted in the same second as the live one (${held(B_CLAIM)}), or was read without its time. A release names the claim it ends by that time, and a time two claims share names neither, so this release would be posted and end nothing.`;
+
+    it("the reviewer's input: the holder's claim and another, both stamped the same second", () => {
+      const error = refused("RELEASE_CLAIM_TIME_SHARED", { thread: [aAtT, B_CLAIM] });
+      expect(error.reason).toBe(SHARED);
+      expect(error.cure).toBe(
+        "Nothing was written. Post a refreshed Ownership claim from the holding folder, which gets a time of its own, and release that. Where no session is left there to post one, this tool cannot end the lease: mark the row Needs Kuya.",
+      );
+    });
+
+    it.each([
+      ["the other claim was released since", [aAtT, posted(T, RELEASED, 20), B_CLAIM]],
+      ["the other claim came after, over the holder's", [B_CLAIM, posted(T, claimText(PREDECESSOR), 2), posted(T, RELEASED, 21), posted(T, claimText(HOLDER), 22)]],
+      ["a claim elsewhere on the thread was read without its time", [{ body: A_CLAIM.body, url: A_CLAIM.url }, B_CLAIM]],
+    ])("refuses when %s", (_, thread) => {
+      const error = refused("RELEASE_CLAIM_TIME_SHARED", { thread });
+      expect(error.reason).toContain("A release names the claim it ends by that time, and a time two claims share names neither");
+    });
+
+    it("refuses a dry run the same way", () => {
+      expect(refused("RELEASE_CLAIM_TIME_SHARED", { thread: [aAtT, B_CLAIM], dryRun: true }).reason).toBe(SHARED);
+    });
+
+    it("releases a refreshed claim that has a second of its own, and its record names that second", () => {
+      const fresh = posted("2026-10-03T05:22:02Z", claimText(HOLDER), 4);
+      const run = allowed({ thread: [aAtT, B_CLAIM, fresh] });
+      expect(parseReleaseRecord(run.body)).toEqual({ ends: ["2026-10-03T05:22:02Z"] });
+      expect(run.result.claim.url).toBe(fresh.url);
+    });
+  });
 });
 
 // #643 review, finding 4: the check and the post are two calls, and GitHub has no conditional write.
@@ -1715,26 +1794,93 @@ describe("a release names the claim it ends (#643)", () => {
   describe("what a posted release did, read back off the thread", () => {
     const mine = posted(AT, withRecord(RELEASED, B_CLAIM), 9);
     const lateA = posted(AT, withRecord(RELEASED, A_CLAIM, PREDECESSOR), 9);
-    const B = threadLease(INCIDENT).claim;
-    const A = threadLease([A_CLAIM]).claim;
 
     it("ended its claim: that claim was live when it landed, and nobody has claimed since", () => {
-      expect(releaseOutcome({ comments: [...INCIDENT, mine], index: 3, claim: B })).toMatchObject({ landed: "ended", before: { url: B_CLAIM.url }, next: null });
+      expect(releaseOutcome({ comments: [...INCIDENT, mine], index: 3 })).toMatchObject({ landed: "ended", before: { url: B_CLAIM.url }, next: null });
     });
 
     it("ended nothing: another claim was live when it landed", () => {
-      expect(releaseOutcome({ comments: [...INCIDENT, lateA], index: 3, claim: A })).toMatchObject({ landed: "nothing", before: { url: B_CLAIM.url }, next: null });
-      expect(releaseOutcome({ comments: [A_CLAIM, B_CLAIM, lateA], index: 2, claim: A })).toMatchObject({ landed: "nothing", before: { url: B_CLAIM.url } });
+      expect(releaseOutcome({ comments: [...INCIDENT, lateA], index: 3 })).toMatchObject({ landed: "nothing", before: { url: B_CLAIM.url }, next: null });
+      expect(releaseOutcome({ comments: [A_CLAIM, B_CLAIM, lateA], index: 2 })).toMatchObject({ landed: "nothing", before: { url: B_CLAIM.url } });
     });
 
     it("ended nothing: no claim was live when it landed", () => {
-      expect(releaseOutcome({ comments: [A_CLAIM, A_RELEASE, lateA], index: 2, claim: A })).toEqual({ landed: "nothing", before: null, next: null });
+      expect(releaseOutcome({ comments: [A_CLAIM, A_RELEASE, lateA], index: 2 })).toEqual({ landed: "nothing", before: null, next: null });
     });
 
     it("was taken: it ended its claim, and a claim was posted after it, released since or not", () => {
       const cRelease = posted("2026-10-03T05:30:27Z", withRecord(RELEASED, C_CLAIM, THIRD), 10);
-      expect(releaseOutcome({ comments: [...INCIDENT, mine, C_CLAIM], index: 3, claim: B })).toMatchObject({ landed: "taken", next: { url: C_CLAIM.url } });
-      expect(releaseOutcome({ comments: [...INCIDENT, mine, C_CLAIM, cRelease], index: 3, claim: B })).toMatchObject({ landed: "taken", next: { url: C_CLAIM.url } });
+      expect(releaseOutcome({ comments: [...INCIDENT, mine, C_CLAIM], index: 3 })).toMatchObject({ landed: "taken", next: { url: C_CLAIM.url } });
+      expect(releaseOutcome({ comments: [...INCIDENT, mine, C_CLAIM, cRelease], index: 3 })).toMatchObject({ landed: "taken", next: { url: C_CLAIM.url } });
+    });
+
+    // Round 2 of the review: the fold compared posting times as instants, so a release naming one
+    // claim's time ended another claim posted in the same second. A time names a claim only while
+    // exactly one claim on the thread was posted at it.
+    it("ended nothing: the claim it names shares its second with the one that was live", () => {
+      const aAtT = posted(B_CLAIM.createdAt, claimText(PREDECESSOR), 2);
+      const lateA2 = posted(AT, withRecord(RELEASED, aAtT, PREDECESSOR), 9);
+      expect(releaseOutcome({ comments: [aAtT, B_CLAIM, lateA2], index: 2 })).toMatchObject({ landed: "nothing", before: { url: B_CLAIM.url }, next: null });
+      const lease = threadLease([aAtT, B_CLAIM, lateA2]);
+      expect(lease.claim?.url).toBe(B_CLAIM.url);
+      expect(lease.handoff).toBeNull();
+    });
+  });
+
+  // Round 2 of the review, the whole class: on e0362db5 the fold compared posting times as instants,
+  // so A's late release, naming A's claim at T, ended B's claim when B had also been stamped T. A
+  // time names a claim only while exactly one claim on the thread so far was posted at it.
+  describe("two claims in one second are named by neither", () => {
+    const T = B_CLAIM.createdAt;
+    const aAtT = posted(T, claimText(PREDECESSOR), 2);
+    const lateA = posted(AT, withRecord(RELEASED, aAtT, PREDECESSOR), 9);
+    const lateB = posted(AT, withRecord(RELEASED, B_CLAIM), 9);
+
+    it.each([
+      ["A's release, the reviewer's input", lateA],
+      ["B's own release", lateB],
+    ])("%s ends neither claim: B's lease stays live and the release is not the newest Handoff", (_, release) => {
+      const lease = threadLease([aAtT, B_CLAIM, release]);
+      expect(lease.claim?.url).toBe(B_CLAIM.url);
+      expect(lease.handoff).toBeNull();
+      expect(lease.run.map((c) => c.url)).toEqual([aAtT.url, B_CLAIM.url]);
+    });
+
+    it("counts a same-second claim that was released since: the time still names two", () => {
+      const byHand = posted(T, RELEASED, 20);
+      const lease = threadLease([aAtT, byHand, B_CLAIM, lateB]);
+      expect(lease.claim?.url).toBe(B_CLAIM.url);
+      expect(lease.handoff?.url, "the record-bearing release is not the newest Handoff; the hand-posted one before B's claim is").toBe(byHand.url);
+      expect(lease.run.map((c) => c.url)).toEqual([B_CLAIM.url]);
+    });
+
+    it("counts a claim read without its time as possibly posted at any time", () => {
+      const lease = threadLease([{ body: A_CLAIM.body, url: A_CLAIM.url }, B_CLAIM, lateB]);
+      expect(lease.claim?.url).toBe(B_CLAIM.url);
+      expect(lease.handoff).toBeNull();
+    });
+
+    it("ends a refreshed claim that has a second of its own, and a hand-posted release still ends the run", () => {
+      const fresh = posted("2026-10-03T05:22:02Z", claimText(HOLDER), 4);
+      const byTool = threadLease([aAtT, B_CLAIM, fresh, posted(AT, withRecord(RELEASED, fresh), 9)]);
+      expect(byTool.claim).toBeNull();
+      expect(byTool.handoff?.released).toBe(true);
+      const byHand = threadLease([aAtT, B_CLAIM, posted(AT, RELEASED, 9)]);
+      expect(byHand.claim).toBeNull();
+    });
+
+    it("folds the same thread alike whether or not the reader supplied comment links", () => {
+      const unlinked = (c) => ({ body: c.body, createdAt: c.createdAt });
+      for (const thread of [[aAtT, B_CLAIM, lateA], [aAtT, B_CLAIM, lateB], [A_CLAIM, B_CLAIM, lateA], [...INCIDENT, lateB]]) {
+        const linked = threadLease(thread);
+        const plain = threadLease(thread.map(unlinked));
+        expect([plain.claim?.postedAt, plain.claim?.folder, plain.handoff?.postedAt, plain.run.length]).toEqual([
+          linked.claim?.postedAt,
+          linked.claim?.folder,
+          linked.handoff?.postedAt,
+          linked.run.length,
+        ]);
+      }
     });
   });
 
@@ -1763,6 +1909,19 @@ describe("a release names the claim it ends (#643)", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("says so when the claim live as it landed shares its second with the one it names, and edits no board field", () => {
+    const bAtT = posted(A_CLAIM.createdAt, claimText(HOLDER), 3);
+    const { error, sent, thread, drops } = attempt({ thread: [A_CLAIM], self: PREDECESSOR, beforePost: [bAtT] });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ENDED_NOTHING");
+    expect(error.message).toContain(
+      `when it landed, the live claim was ${held(bAtT)}, and its posting time is not one claim's alone on this thread (another was posted in the same second, or read without a time), so a record naming that time ends neither.`,
+    );
+    expect(error.message).toContain(`It names the claim it was checked against (${held(A_CLAIM, PREDECESSOR)}) and can end no other. No board field was edited.`);
+    expect(sent.map((s) => s.describe)).toEqual([`comment on #${ISSUE}`]);
+    expect(threadLease(thread).claim?.url).toBe(bAtT.url);
+    expect(drops).toBe(0);
+  });
+
   it.each([
     ["a claim", [C_CLAIM], C_CLAIM.url],
     ["a claim, released since", [C_CLAIM, posted("2026-10-03T05:30:27Z", withRecord(RELEASED, C_CLAIM, THIRD), 10)], null],
@@ -1776,42 +1935,72 @@ describe("a release names the claim it ends (#643)", () => {
     expect(drops).toBe(0);
   });
 
-  it.each([1, 2, 3, 4, 5])("reports a claim that lands while the row is being edited (after edit %i), and says how to restore it", (at) => {
-    const { error, sent, thread, drops } = attempt({ duringEdits: { at, comments: [C_CLAIM] } });
+  it.each([0, 1, 2, 3, 4, 5])("reports a claim that lands while the row is being edited (after %i of the five edits), and sends hands to the thread first", (at) => {
+    const { error, sent, thread, drops, reads } = attempt({ duringEdits: { at, comments: [C_CLAIM] } });
     expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_RACED");
     expect(sent.map((s) => s.describe)).toEqual(SIX_WRITES);
-    expect(error.message).toContain(`a claim landed while the row was being edited (${held(C_CLAIM, THIRD)})`);
-    expect(error).toMatchObject({ posted: true, live: { url: C_CLAIM.url }, ran: SIX_STEPS });
-    expect(error.cure).toBe("Restore the row from that claim's own text: Status Active, its Next action and its Claim expires.");
+    expect(error.message).toContain(
+      `its lease is released and the board row is filed, but a claim landed while the row was being edited (${held(C_CLAIM, THIRD)}). The row may now hold this release's values over that claim's.`,
+    );
+    expect(error).toMatchObject({ posted: true, live: { url: C_CLAIM.url }, ran: SIX_STEPS, cure: CURES.RELEASE_ROW_RACED });
+    expect(error).not.toHaveProperty("failed");
+    noEditHandedOut(error.message);
     expect(threadLease(thread).claim?.url).toBe(C_CLAIM.url);
     expect(drops).toBe(1);
+    expect(reads).toBe(3);
+  });
+
+  it("reports a raced claim that has been released since all the same: the row was filed over it", () => {
+    const cRelease = posted("2026-10-03T05:30:27Z", withRecord(RELEASED, C_CLAIM, THIRD), 10);
+    const { error, thread } = attempt({ duringEdits: { at: 3, comments: [C_CLAIM, cRelease] } });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_RACED");
+    expect(error.live.url).toBe(C_CLAIM.url);
+    expect(error.cure).toContain("If it has been released since, check the row against the newest Handoff on the thread.");
+    expect(threadLease(thread).claim).toBeNull();
   });
 
   it.each([1, 2])("asks again when the thread is served without the comment it just posted (%i stale read(s))", (lag) => {
-    const { reads, result } = allowed({ lag });
+    const { reads } = allowed({ lag });
     expect(reads).toBe(3 + lag);
-    expect(result.warning).toBeNull();
   });
 
   it.each([
     ["is served stale three times", { lag: 3 }],
     ["cannot be read", { answer: (n) => (n >= 2 ? "<html>502 Bad Gateway</html>" : undefined) }],
     ["fails to read", { answer: (n) => { if (n >= 2) throw ghFailure(["issue", "view"]); } }],
-  ])("edits no board field when the thread %s after the post", (_, opts) => {
+  ])("edits no board field when the thread %s after the post, and hands out no edit", (_, opts) => {
     const { error, sent, reads, thread, drops } = attempt(opts);
     expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_UNVERIFIED");
     expect(sent.map((s) => s.describe)).toEqual([`comment on #${ISSUE}`]);
     expect(reads).toBe(4);
     expect(error.message).toContain("but the thread could not be read back to see what it ended, so no board field was edited.");
-    expect(error).toMatchObject({ posted: true, url: thread.at(-1).url, ran: [SIX_STEPS[0]] });
-    expect(error.remaining.map((s) => s.describe)).toEqual(SIX_STEPS.slice(1));
-    for (const step of error.remaining) expect(step.argv.slice(0, 2)).toEqual(["project", "item-edit"]);
+    expect(error).toMatchObject({ posted: true, url: thread.at(-1).url, ran: [SIX_STEPS[0]], cure: CURES.RELEASE_UNVERIFIED });
+    expect(error).not.toHaveProperty("remaining");
+    noEditHandedOut(error.message);
     expect(drops).toBe(0);
   });
 
-  it("files the row and says so when only the last look at the thread fails", () => {
-    const { result } = allowed({ answer: (n) => (n === 3 ? "<html>502 Bad Gateway</html>" : undefined) });
-    expect(result.warning).toMatch(/could not be read once more after the board edits/);
+  it("asks again when the first look after the board edits fails, and releases whole when the next answers", () => {
+    const { reads } = allowed({ answer: (n) => (n === 3 ? "<html>502 Bad Gateway</html>" : undefined) });
+    expect(reads).toBe(4);
+  });
+
+  it.each([
+    ["cannot be read", (n) => (n >= 3 ? "<html>502 Bad Gateway</html>" : undefined)],
+    ["fails to read", (n) => { if (n >= 3) throw ghFailure(["issue", "view"]); }],
+    ["is served without the comment", (n) => (n >= 3 ? JSON.stringify({ comments: INCIDENT }) : undefined)],
+  ])("files the row, then says it could not look again when the thread %s after the board edits", (_, answer) => {
+    const { error, sent, reads, drops, thread } = attempt({ answer });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_UNCHECKED");
+    expect(sent.map((s) => s.describe)).toEqual(SIX_WRITES);
+    expect(error.message).toContain(
+      "its lease is released and the board row is filed, but the thread could not be read once more after the board edits, so a claim landing in those seconds would not have been seen.",
+    );
+    expect(error).toMatchObject({ posted: true, url: thread.at(-1).url, ran: SIX_STEPS, cure: CURES.RELEASE_ROW_UNCHECKED });
+    expect(error).not.toHaveProperty("failed");
+    noEditHandedOut(error.message);
+    expect(reads).toBe(5);
+    expect(drops).toBe(1);
   });
 
   it("finds its comment by its text when gh prints no link", () => {
@@ -1833,16 +2022,21 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
   const renewal = (opts = {}) => planRenew({ issue: ISSUE, ids: IDS, until: "2026-10-04", ...opts });
   const claimPlan = () => planPostClaim({ issue: ISSUE, ids: IDS, facts: FACTS, verdict: PASS });
 
-  /** `make()` is refused with `code`, dry run or not, before anything is read or sent. Returns the refusal. */
+  /** The launcher's seat, and any other program's: what is refused on its content is refused from both. */
+  const SEATS = [asLauncher, (run) => run()];
+
+  /** `make()` is refused with `code`, dry run or not, launcher or not, before anything is read or sent. Returns the refusal. */
   function refusedPlan(code, make) {
     let last = null;
     for (const dryRun of [true, false]) {
-      const run = inWorld({}, () => execPlan(make(), { dryRun }));
-      expect(run.result, "the plan was not refused").toBeNull();
-      expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe(code);
-      expect(run.calls).toEqual([]);
-      expect(run.sent).toEqual([]);
-      last = run.error;
+      for (const seat of SEATS) {
+        const run = inWorld({}, () => seat(() => execPlan(make(), { dryRun })));
+        expect(run.result, "the plan was not refused").toBeNull();
+        expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe(code);
+        expect(run.calls).toEqual([]);
+        expect(run.sent).toEqual([]);
+        last = run.error;
+      }
     }
     return last;
   }
@@ -1895,14 +2089,156 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
   ])("postClaim refuses a claim that carries a release in %s", (_, facts) => {
     const dir = join(tmp, "claims-refused");
     for (const dryRun of [true, false]) {
-      const run = inWorld({ thread: [] }, () => postClaim({ issue: ISSUE, verdict: PASS, facts: { ...FACTS, ...facts }, ids: IDS, dryRun, cacheDir: dir }));
+      for (const seat of SEATS) {
+        const run = inWorld({ thread: [] }, () => seat(() => postClaim({ issue: ISSUE, verdict: PASS, facts: { ...FACTS, ...facts }, ids: IDS, dryRun, cacheDir: dir })));
+        expect(run.result, "the claim was not refused").toBeNull();
+        expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("PLAN_WOULD_RELEASE");
+        expect(run.error.message).toBe(`Refusing to post a claim on #${ISSUE} whose text also reads as a released Handoff. A lease is ended by \`node tools/entry/release.mjs\`.`);
+        expect(run.calls).toEqual([]);
+        expect(run.sent).toEqual([]);
+        expect(readClaimCache({ issue: ISSUE, dir })).toBeNull();
+      }
+    }
+  });
+
+  // Round 2 of the review: a predecessor's `execPlan(planRenew(…))` wrote over its successor's board
+  // row, and `postClaim` files a row on a verdict its caller hands over. Neither reads who holds the row,
+  // so both run for the launcher alone, told by the program node was started with.
+  const NOT_THE_LAUNCHER = [
+    ["the test runner itself", process.argv[1]],
+    ["a copy beside the launcher", `${LAUNCHER_PATH}.bak`],
+    ["a launch.mjs in a folder under tools/entry", join(HERE, "other", "launch.mjs")],
+    ["release.mjs", join(HERE, "release.mjs")],
+    ["claim.mjs", join(HERE, "claim.mjs")],
+    ["another checkout's launcher", "C:\\elsewhere\\sentinel\\tools\\entry\\launch.mjs"],
+    ["a bare launch.mjs, resolved against the working directory", "launch.mjs"],
+    ["an empty program", ""],
+    ["no program", undefined],
+    ["a null program", null],
+    ["a number", 7],
+    ["an object", { path: LAUNCHER_PATH }],
+  ];
+  const RENEWAL_REFUSAL =
+    "Refusing to run a plan outside the launcher (tools/entry/launch.mjs). A renewal moves a board row's expiry without reading who holds that row, so only the launcher runs one, after its own preflight. A session extends its own lease by posting a refreshed Ownership claim, and ends it with `node tools/entry/release.mjs`.";
+  const CLAIM_REFUSAL = `Refusing to post a claim on #${ISSUE} outside the launcher (tools/entry/launch.mjs). A claim takes the lease and files the board row on a verdict its caller hands over, so only the launcher posts one this way, on the verdict of its own preflight. A lease is ended with \`node tools/entry/release.mjs\`.`;
+
+  it("none of the programs it refuses is the launcher's path", () => {
+    for (const [, program] of NOT_THE_LAUNCHER) {
+      if (typeof program === "string" && program !== "") expect(samePath(resolve(program), LAUNCHER_PATH), program).toBe(false);
+    }
+  });
+
+  it.each(NOT_THE_LAUNCHER)("refuses to run a renewal for %s: only the launcher moves a row's expiry", (_, program) => {
+    for (const dryRun of [true, false]) {
+      const run = inWorld({}, () => asProgram(program, () => execPlan(renewal(), { dryRun })));
+      expect(run.result, "the renewal was not refused").toBeNull();
+      expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("PLAN_NOT_THE_LAUNCHER");
+      expect(run.error.message).toBe(RENEWAL_REFUSAL);
+      expect(run.calls).toEqual([]);
+      expect(run.sent).toEqual([]);
+    }
+  });
+
+  it.each(NOT_THE_LAUNCHER)("refuses to post a claim for %s: only the launcher claims on a verdict it was handed", (_, program) => {
+    const dir = join(tmp, "claims-elsewhere");
+    for (const dryRun of [true, false]) {
+      const run = inWorld({ thread: [] }, () => asProgram(program, () => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, dryRun, cacheDir: dir })));
       expect(run.result, "the claim was not refused").toBeNull();
-      expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("PLAN_WOULD_RELEASE");
-      expect(run.error.message).toBe(`Refusing to post a claim on #${ISSUE} whose text also reads as a released Handoff. A lease is ended by \`node tools/entry/release.mjs\`.`);
+      expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("CLAIM_NOT_THE_LAUNCHER");
+      expect(run.error.message).toBe(CLAIM_REFUSAL);
       expect(run.calls).toEqual([]);
       expect(run.sent).toEqual([]);
       expect(readClaimCache({ issue: ISSUE, dir })).toBeNull();
     }
+  });
+
+  it("refuses a claim on its content before it asks who is running: a bad claim is bad from the launcher too", () => {
+    const run = inWorld({ thread: [] }, () => postClaim({ issue: ISSUE, verdict: PASS, facts: { ...FACTS, branch: "`claude/x`" }, ids: IDS, dryRun: true }));
+    expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("CLAIM_WOULD_NOT_READ_BACK");
+    const refusedVerdict = inWorld({ thread: [] }, () => postClaim({ issue: ISSUE, verdict: REFUSE, facts: FACTS, ids: IDS, dryRun: true }));
+    expect(refusedVerdict.error?.message).toMatch(/preflight verdict is REFUSE/);
+  });
+
+  const SPELLINGS = [
+    ["as written", LAUNCHER_PATH],
+    ["with forward slashes", LAUNCHER_PATH.replaceAll("\\", "/")],
+    ["relative to the working directory", relative(process.cwd(), LAUNCHER_PATH)],
+    ["with a dot segment", `${HERE}/./launch.mjs`],
+    ...(process.platform === "win32" ? [["in upper case", LAUNCHER_PATH.toUpperCase()]] : []),
+  ];
+  /** Both writers run (dry) for `program`: the renewal's steps are planned and the claim's plan is built. */
+  const opensFor = (program) => {
+    const renew = inWorld({}, () => asProgram(program, () => execPlan(renewal(), { dryRun: true })));
+    expect(renew.error, String(renew.error?.stack ?? renew.error)).toBeNull();
+    expect(renew.result.map((s) => s.ran)).toEqual([false, false]);
+    const claim = inWorld({ thread: [] }, () => asProgram(program, () => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, dryRun: true })));
+    expect(claim.error, String(claim.error?.stack ?? claim.error)).toBeNull();
+    expect(claim.result.plan).toHaveLength(7);
+    expect(claim.calls).toEqual([]);
+  };
+  it.each(SPELLINGS)("runs for the launcher named %s", (_, program) => opensFor(program));
+
+  it("runs for the launcher reached through a junction: paths are compared through links", (ctx) => {
+    const link = join(tmp, "entry-junction");
+    try {
+      symlinkSync(HERE, link, "junction");
+    } catch (e) {
+      ctx.skip(`this machine would not make a junction: ${e.code ?? e.message}`);
+    }
+    expect(samePath(resolve(join(link, "launch.mjs")), LAUNCHER_PATH), "the junction path spells differently").toBe(false);
+    opensFor(join(link, "launch.mjs"));
+  });
+
+  it("the launcher is the caller the gate names: it renews and claims through these two writers, and the entry script starts it by its path", () => {
+    const launcher = readFileSync(LAUNCHER_PATH, "utf8");
+    expect(launcher).toContain("execPlan(planRenew(");
+    expect(launcher).toContain("postClaim({");
+    expect(launcher).toContain("pathToFileURL(process.argv[1])");
+    expect(readFileSync(join(ROOT, "compy-entry.ps1"), "utf8")).toContain("tools/entry/launch.mjs");
+  });
+
+  // In a real node process, as the launcher runs: node is started on the launcher's path, and the gate
+  // opens. A preload (`--import`) stands in for the launcher's own code, calls both writers dry and exits
+  // before the launcher itself runs; the control runs the same probe as the program and is refused. No
+  // `gh` or `git` is on the PATH of either.
+  it("opens for the launcher's own process and for no other, in a real node process", () => {
+    const dir = join(tmp, "probe");
+    mkdirSync(join(dir, "empty-path"), { recursive: true });
+    const probe = join(dir, "probe.mjs");
+    writeFileSync(
+      probe,
+      [
+        `import { execPlan, planRenew, postClaim } from ${JSON.stringify(pathToFileURL(join(HERE, "claim.mjs")).href)};`,
+        `const ids = ${JSON.stringify(IDS)};`,
+        `const facts = ${JSON.stringify(FACTS)};`,
+        `const verdict = ${JSON.stringify(PASS)};`,
+        "const out = { argv1: process.argv[1] };",
+        "const code = (run) => { try { run(); return 'ran'; } catch (e) { return e.code ?? e.message; } };",
+        "try {",
+        `  out.renew = code(() => execPlan(planRenew({ issue: ${ISSUE}, ids, until: "2026-10-04" }), { dryRun: true }));`,
+        `  out.claim = code(() => postClaim({ issue: ${ISSUE}, verdict, facts, ids, dryRun: true }));`,
+        "} finally {",
+        "  process.stdout.write(JSON.stringify(out) + '\\n');",
+        "  process.exit(0);",
+        "}",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^path$/i.test(k)));
+    env.PATH = join(dir, "empty-path");
+    const run = (args) => {
+      const r = spawnSync(process.execPath, args, { cwd: ROOT, env, encoding: "utf8", timeout: 60_000, windowsHide: true });
+      expect(r.error).toBeUndefined();
+      expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+      return JSON.parse(r.stdout.trim().split("\n").at(-1));
+    };
+    const asTheLauncher = run(["--import", pathToFileURL(probe).href, LAUNCHER_PATH, "--dry-run", "--quiet"]);
+    expect(samePath(asTheLauncher.argv1, LAUNCHER_PATH)).toBe(true);
+    expect(asTheLauncher).toMatchObject({ renew: "ran", claim: "ran" });
+    const asItself = run([probe]);
+    expect(samePath(asItself.argv1, probe)).toBe(true);
+    expect(asItself).toMatchObject({ renew: "PLAN_NOT_THE_LAUNCHER", claim: "CLAIM_NOT_THE_LAUNCHER" });
   });
 
   it("builds plans that cannot be edited into other plans afterwards", () => {
@@ -1921,7 +2257,7 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
   });
 
   it("still runs a renewal, and the lease stays where it was", () => {
-    const run = inWorld({}, () => execPlan(renewal({ note: "The review is still running." })));
+    const run = inWorld({}, () => asLauncher(() => execPlan(renewal({ note: "The review is still running." }))));
     expect(run.error, String(run.error?.stack ?? run.error)).toBeNull();
     expect(run.sent.map((s) => s.describe)).toEqual([`comment on #${ISSUE}`, "F_exp --date 2026-10-04"]);
     expect(run.sent[0].argv.at(-1)).toBe("Claim renewed until 2026-10-04. The review is still running.");
@@ -1930,7 +2266,7 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
   });
 
   it("runs nothing on a dry run", () => {
-    const run = inWorld({}, () => execPlan(renewal(), { dryRun: true }));
+    const run = inWorld({}, () => asLauncher(() => execPlan(renewal(), { dryRun: true })));
     expect(run.error, String(run.error?.stack ?? run.error)).toBeNull();
     expect(run.result.map((s) => s.ran)).toEqual([false, false]);
     expect(run.calls).toEqual([]);
@@ -1939,13 +2275,149 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
 
   it("still posts a claim on a PASS verdict: the comment, the row, and the local copy of its scope", () => {
     const dir = join(tmp, "claims");
-    const run = inWorld({ thread: [] }, () => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, cacheDir: dir }));
+    const run = inWorld({ thread: [] }, () => asLauncher(() => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, cacheDir: dir })));
     expect(run.error, String(run.error?.stack ?? run.error)).toBeNull();
     expect(run.sent).toHaveLength(7);
     expect(run.sent[0].argv.slice(0, 3)).toEqual(["issue", "comment", String(ISSUE)]);
     expect(run.result.ran.map((s) => s.ran)).toEqual(Array(7).fill(true));
     expect(threadLease(run.thread).claim).toMatchObject({ folder: FOLDER, branch: BRANCH });
     expect(readClaimCache({ issue: ISSUE, dir })).toMatchObject({ issue: ISSUE, folder: FOLDER, branch: BRANCH, source: "postClaim" });
+  });
+});
+
+// Round 2 of the review: `plain` reads a branch wrapped in backticks as the name inside them, so a claim
+// rendered for the branch `` `claude/successor` `` (git allows the backticks) read as one for
+// `claude/successor`, and the folder, moved to that other branch, was taken for the holder. A claim that
+// would not read back as the seat it names is refused before it is posted, with the readers a release
+// uses, so a release ever matches only a claim that reads as written.
+describe("postClaim posts no claim that would not read back as its own seat (#643)", () => {
+  const BASE = "claude/x";
+  const CACHE = join(tmp, "read-back");
+  const EXPIRES = "2026-10-03T17:22:01Z";
+  const claimFor = (facts, dryRun = true) =>
+    inWorld({ thread: [] }, () => asLauncher(() => postClaim({ issue: ISSUE, verdict: PASS, facts: { ...FACTS, expires: EXPIRES, ...facts }, ids: IDS, dryRun, cacheDir: CACHE })));
+  /** What a release makes of a posted claim: the seat `releaseDecision` admits for its body. */
+  const admits = (body, self) => releaseDecision({ issue: ISSUE, comments: [posted("2026-10-03T05:22:01Z", body, 3)], self, now: NOW });
+  const bodyOf = (run) => run.result.plan[0].argv.at(-1);
+  /** Printable ASCII, as git allows it in a ref name. */
+  const CHARS = Array.from({ length: 0x7e - 0x21 + 1 }, (_, i) => String.fromCharCode(0x21 + i));
+
+  it("refuses the reviewer's input, dry run or not: a branch whose own name is wrapped in backticks", () => {
+    for (const dryRun of [true, false]) {
+      const run = claimFor({ branch: "`claude/successor`" }, dryRun);
+      expect(run.result, "the claim was not refused").toBeNull();
+      expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("CLAIM_WOULD_NOT_READ_BACK");
+      expect(run.error.message).toContain(`It was asked to name "${FOLDER} @ \`claude/successor\`", and as written it reads "${FOLDER} @ claude/successor".`);
+      expect(run.error.message).toContain("this claim would lock out its own holder or admit another seat");
+      expect(run.calls).toEqual([]);
+      expect(run.sent).toEqual([]);
+      expect(readClaimCache({ issue: ISSUE, dir: CACHE })).toBeNull();
+    }
+  });
+
+  it.each([
+    ["leading", (c) => `${c}${BASE}`],
+    ["trailing", (c) => `${BASE}${c}`],
+    ["enclosing", (c) => `${c}${BASE}${c}`],
+    ["inner", (c) => `claude/${c}x`],
+    ["doubled trailing", (c) => `${BASE}${c}${c}`],
+  ])("every branch name git allows with a %s character is refused, or reads back as itself and admits no shorter name", (_, shape) => {
+    const names = CHARS.map(shape).filter(isValidBranch);
+    expect(names.length).toBeGreaterThan(60);
+    let refusals = 0;
+    let posted = 0;
+    for (const branch of names) {
+      const run = claimFor({ branch });
+      if (run.error) {
+        expect(run.error.code, `${JSON.stringify(branch)}: ${run.error.message}`).toBe("CLAIM_WOULD_NOT_READ_BACK");
+        refusals += 1;
+        continue;
+      }
+      const body = bodyOf(run);
+      expect(admits(body, { folder: FOLDER, branch }).ok, `${JSON.stringify(branch)} does not admit its own holder`).toBe(true);
+      expect(admits(body, { folder: FOLDER, branch: BASE }).code, `${JSON.stringify(branch)} admits ${BASE}`).toBe("RELEASE_BRANCH_MISMATCH");
+      posted += 1;
+    }
+    expect(posted).toBeGreaterThan(0);
+    expect(refusals + posted).toBe(names.length);
+  });
+
+  it("refuses the branch names that read as something else, and no others", () => {
+    const refusedNames = CHARS.flatMap((c) => [`${c}${BASE}${c}`, `${BASE}${c}`, `${c}${BASE}`]).filter(isValidBranch).filter((branch) => claimFor({ branch }).error);
+    expect(refusedNames).toEqual(["`claude/x`"]);
+  });
+
+  it.each([
+    ["leading", (c) => `${c}${FOLDER}`],
+    ["trailing", (c) => `${FOLDER}${c}`],
+    ["enclosing", (c) => `${c}${FOLDER}${c}`],
+    ["inner", (c) => `${FOLDER}\\lane${c}s`],
+  ])("every folder spelling with a %s character is refused, or reads back as itself and admits no other folder", (_, shape) => {
+    const names = CHARS.filter((c) => !'<>:"/\\|?*'.includes(c)).map(shape);
+    let refusals = 0;
+    for (const folder of names) {
+      const run = claimFor({ folder });
+      if (run.error) {
+        expect(run.error.code, `${JSON.stringify(folder)}: ${run.error.message}`).toBe("CLAIM_WOULD_NOT_READ_BACK");
+        refusals += 1;
+        continue;
+      }
+      const body = bodyOf(run);
+      expect(admits(body, { folder, branch: BRANCH }).ok, `${JSON.stringify(folder)} does not admit its own holder`).toBe(true);
+      if (!samePath(folder, FOLDER)) expect(admits(body, { folder: FOLDER, branch: BRANCH }).code, `${JSON.stringify(folder)} admits ${FOLDER}`).toBe("RELEASE_NOT_HOLDER");
+    }
+    expect(refusals + names.length - refusals).toBe(names.length);
+  });
+
+  it("refuses a folder whose own name is wrapped in backticks, and that alone", () => {
+    const refusedNames = CHARS.filter((c) => !'<>:"/\\|?*'.includes(c))
+      .flatMap((c) => [`${c}${FOLDER}${c}`, `${FOLDER}${c}`, `${c}${FOLDER}`])
+      .filter((folder) => claimFor({ folder }).error);
+    expect(refusedNames).toEqual([`\`${FOLDER}\``]);
+  });
+
+  it.each([
+    ["a line break and a second Branch line in the lane", { lane: "Claude Code\n- Branch: claude/other" }],
+    ["a line break and a second Worktree folder line in the lane", { lane: "Claude Code\n- Worktree folder: C:\\lanes\\other" }],
+    ["a code fence opened in the lane", { lane: "Claude Code\n```" }],
+    ["a code fence opened in the executor", { executor: "Claude Code\n~~~" }],
+    ["an HTML comment opened on a line of its own in the lane", { lane: "Claude Code\n<!--" }],
+    ["a line break in the branch", { branch: "claude/x\nclaude/y" }],
+    ["a space in the branch's line", { branch: "claude/x (cut from origin/main)" }],
+    ["a line break in the folder", { folder: "C:\\lanes\\x\nC:\\lanes\\y" }],
+  ])("refuses a claim with %s: it would not read back as the seat it names", (_, facts) => {
+    const run = claimFor(facts);
+    expect(run.result, "the claim was not refused").toBeNull();
+    expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("CLAIM_WOULD_NOT_READ_BACK");
+    expect(run.calls).toEqual([]);
+    expect(run.sent).toEqual([]);
+  });
+
+  it.each([
+    ["an empty branch", { branch: "" }, "(no branch)"],
+    ["a null branch", { branch: null }, "(no branch)"],
+    ["no branch", { branch: undefined }, "(no branch)"],
+    ["an empty folder", { folder: "" }, "(no folder)"],
+    ["a null folder", { folder: null }, "(no folder)"],
+    ["no folder", { folder: undefined }, "(no folder)"],
+  ])("refuses a claim with %s: a seat has both a folder and a branch", (_, facts, named) => {
+    const run = claimFor(facts);
+    expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("CLAIM_WOULD_NOT_READ_BACK");
+    expect(run.error.message).toContain(`It was asked to name "`);
+    expect(run.error.message).toContain(named);
+    expect(run.sent).toEqual([]);
+  });
+
+  it("refuses on a release in the text first: that claim is refused for what it is before how it reads", () => {
+    const run = claimFor({ branch: "`claude/x`", nextAction: "x\n\n### Handoff\n\n- Claim: released" });
+    expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("PLAN_WOULD_RELEASE");
+  });
+
+  it("still posts the claims the launcher writes: a plain folder and branch read back as themselves", () => {
+    const run = claimFor({});
+    expect(run.error, String(run.error?.stack ?? run.error)).toBeNull();
+    expect(parseClaim(bodyOf(run))).toMatchObject({ folder: FOLDER, branch: BRANCH });
+    expect(admits(bodyOf(run), { folder: FOLDER, branch: BRANCH }).ok).toBe(true);
   });
 });
 
@@ -2054,7 +2526,6 @@ describe("postRelease: what a run leaves behind (#643)", () => {
       body: withRecord(RELEASED, B_CLAIM),
       url: null,
       steps: SIX_STEPS.map((describe) => ({ describe, ran: false })),
-      warning: null,
     });
     expect(run.sent).toEqual([]);
     expect(run.reads).toBe(1);
@@ -2087,35 +2558,91 @@ describe("postRelease: what a run leaves behind (#643)", () => {
     expect(drops).toBe(1);
   });
 
-  it("says what ran and what is left when a board step fails after the Handoff is posted", () => {
+  it("says what ran, what failed and what was not tried when a board edit fails after the Handoff is posted, and hands out no edit", () => {
     seed();
     const run = attempt({ failAt: 2 });
     expect(run.result).toBeNull();
     expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_HALF_RUN");
     expect(run.error.posted).toBe(true);
     expect(run.error.url).toBe(run.thread.at(-1).url);
-    expect(run.error.message).toContain('"set Gate = None" failed (GraphQL: Could not resolve to a ProjectV2Item) and 4 step(s) remain.');
+    expect(run.error.message).toContain(`but the board row is only partly filed: ${PARTLY[2]}. No claim has been posted after the Handoff.`);
     expect(run.error.message).not.toContain("Command failed");
     expect(run.error.message).not.toContain("second line");
-    expect(run.error.ran).toEqual(SIX_STEPS.slice(0, 2));
-    expect(run.error.remaining.map((s) => s.describe)).toEqual(SIX_STEPS.slice(2));
-    expect(run.error.remaining.map((s) => said(s.argv))).toEqual(SIX_WRITES.slice(2));
+    expect(run.error).toMatchObject({ ran: SIX_STEPS.slice(0, 2), failed: "set Gate = None", untried: SIX_STEPS.slice(3), cure: CURES.RELEASE_HALF_RUN });
+    expect(run.error).not.toHaveProperty("remaining");
+    noEditHandedOut(run.error.message);
     expect(run.sent.map((s) => s.describe)).toEqual(SIX_WRITES.slice(0, 2));
     expect(threadLease(run.thread).claim, "the lease is released all the same").toBeNull();
     expect(cached()).toBeNull();
     expect(run.drops).toBe(1);
+    expect(run.reads).toBe(3);
   });
 
-  it("leaves the cached board alone when not one board field was edited", () => {
+  it("drops the cached board when the first board edit fails too: an edit gh gave up on may have been applied", () => {
     seed();
     const run = attempt({ failAt: 1 });
     expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_HALF_RUN");
-    expect(run.error.message).toContain('"set Status = Review" failed (GraphQL: Could not resolve to a ProjectV2Item) and 5 step(s) remain.');
-    expect(run.error.ran).toEqual(SIX_STEPS.slice(0, 1));
-    expect(run.error.remaining.map((s) => s.describe)).toEqual(SIX_STEPS.slice(1));
+    expect(run.error.message).toContain(`but the board row is only partly filed: ${PARTLY[1]}. No claim has been posted after the Handoff.`);
+    expect(run.error).toMatchObject({ ran: SIX_STEPS.slice(0, 1), failed: "set Status = Review", untried: SIX_STEPS.slice(2) });
     expect(run.sent.map((s) => s.describe)).toEqual(SIX_WRITES.slice(0, 1));
-    expect(run.drops).toBe(0);
+    expect(run.drops).toBe(1);
     expect(cached()).toBeNull();
+  });
+
+  // Round 2 of the review: on e0362db5 a failed edit threw at once, before the last look at the thread,
+  // so a claim that had landed during the edits went unseen, and the stop listed the edits left to run
+  // by hand, over that claim's row. The look is taken whether or not an edit failed, and no stop hands
+  // out an edit.
+  it("reports the reviewer's input: a claim lands before the edits and the Gate edit fails", () => {
+    seed();
+    const run = attempt({ duringEdits: { at: 0, comments: [C_CLAIM] }, failAt: 2 });
+    expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_ROW_RACED");
+    expect(run.error.message).toContain(
+      `and its lease is released, but a claim landed while the row was being edited (${held(C_CLAIM, THIRD)}), and the row is only partly filed: ${PARTLY[2]}. The row may now hold this release's values over that claim's, and no more of this release's edits are run.`,
+    );
+    expect(run.error).toMatchObject({ posted: true, live: { url: C_CLAIM.url }, ran: SIX_STEPS.slice(0, 2), failed: "set Gate = None", untried: SIX_STEPS.slice(3), cure: CURES.RELEASE_ROW_RACED });
+    expect(run.error).not.toHaveProperty("remaining");
+    noEditHandedOut(run.error.message);
+    expect(run.sent.map((s) => s.describe)).toEqual(SIX_WRITES.slice(0, 2));
+    expect(threadLease(run.thread).claim?.url).toBe(C_CLAIM.url);
+    expect(cached()).toBeNull();
+    expect(run.drops).toBe(1);
+    expect(run.reads).toBe(3);
+  });
+
+  const RACED_AND_FAILED = [1, 2, 3, 4, 5].flatMap((failAt) => Array.from({ length: failAt }, (_, at) => [failAt, at]));
+  it.each(RACED_AND_FAILED)("sees the claim when edit %i fails and the claim landed after %i edits", (failAt, at) => {
+    const run = attempt({ duringEdits: { at, comments: [C_CLAIM] }, failAt });
+    expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_ROW_RACED");
+    expect(run.error.message).toContain(`and the row is only partly filed: ${PARTLY[failAt]}. The row may now hold`);
+    expect(run.error).toMatchObject({ live: { url: C_CLAIM.url }, ran: SIX_STEPS.slice(0, failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_ROW_RACED });
+    noEditHandedOut(run.error.message);
+    expect(run.sent.map((s) => s.describe)).toEqual(SIX_WRITES.slice(0, failAt));
+    expect(run.drops).toBe(1);
+    expect(run.reads).toBe(3);
+  });
+
+  it.each([1, 2, 3, 4, 5])("says what ran, what failed and what was not tried when edit %i fails and no claim followed", (failAt) => {
+    const run = attempt({ failAt });
+    expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_HALF_RUN");
+    expect(run.error.message).toContain(`but the board row is only partly filed: ${PARTLY[failAt]}. No claim has been posted after the Handoff.`);
+    expect(run.error).toMatchObject({ ran: SIX_STEPS.slice(0, failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_HALF_RUN });
+    expect(run.error).not.toHaveProperty("live");
+    noEditHandedOut(run.error.message);
+    expect(run.reads).toBe(3);
+    expect(run.drops).toBe(1);
+  });
+
+  it.each([1, 2, 3, 4, 5])("says it could not look again when edit %i fails and the thread cannot be read after it", (failAt) => {
+    const run = attempt({ failAt, answer: (n) => (n >= 3 ? "<html>502 Bad Gateway</html>" : undefined) });
+    expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_HALF_RUN");
+    expect(run.error.message).toContain(
+      `but the board row is only partly filed: ${PARTLY[failAt]}. The thread could not be read again after that, so a claim landing in those seconds would not have been seen.`,
+    );
+    expect(run.error).toMatchObject({ ran: SIX_STEPS.slice(0, failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_HALF_RUN_UNCHECKED });
+    noEditHandedOut(run.error.message);
+    expect(run.reads).toBe(5);
+    expect(run.drops).toBe(1);
   });
 
   it("says so when gh gives up posting the Handoff: nothing is known to be written, and the lease is untouched", () => {
@@ -2133,9 +2660,8 @@ describe("postRelease: what a run leaves behind (#643)", () => {
   });
 
   it("releases all the same when the cached board cannot be dropped", () => {
-    const { drops, result } = allowed({ dropBoardCache: "throws" });
+    const { drops } = allowed({ dropBoardCache: "throws" });
     expect(drops).toBe(1);
-    expect(result.warning).toBeNull();
   });
 
   it("cannot finish a half-run release by running it again: the second finds no lease, and names the first", () => {
@@ -2222,8 +2748,6 @@ describe("release.mjs: the command (#643)", () => {
   const USAGE_LINE = "node tools/entry/release.mjs --issue N --handoff <file>";
   const COLOUR = new RegExp(`${String.fromCharCode(27)}\\[\\d+m`, "g");
   const plain = (lines) => lines.join("\n").replace(COLOUR, "");
-  /** The lines that list a step left for hands. The cure "Nothing is left to run." is not one. */
-  const leftToRun = (err) => err.split("\n").filter((l) => l.startsWith("  left to run  "));
 
   /**
    * The command, run in a simulated world from `self`'s seat. `handoffText` is what the --handoff file
@@ -2411,25 +2935,25 @@ describe("release.mjs: the command (#643)", () => {
     expect(sent).toEqual([]);
   });
 
-  it("exits 3 and lists the steps left when a board step fails after the post", () => {
+  it("exits 3 when a board edit fails after the post, says what ran and what did not, and hands out no edit", () => {
     const { exit, out, err, sent, drops } = runCli(ARGS, { failAt: 3 });
     expect(exit).toBe(3);
     expect(err).toContain("RELEASED, BOARD ROW INCOMPLETE — RELEASE_HALF_RUN");
     expect(err).not.toContain("REFUSE");
-    const left = leftToRun(err);
-    expect(left).toHaveLength(3);
-    SIX_STEPS.slice(3).forEach((words, i) => expect(left[i]).toContain(`left to run  ${words}  gh [`));
-    expect(err).toContain('"--clear"');
+    expect(err).toContain(`${PARTLY[3]}. No claim has been posted after the Handoff.`);
+    expect(err).toContain(CURES.RELEASE_HALF_RUN);
+    noEditHandedOut(err);
     expect(out).toBe("");
     expect(sent).toHaveLength(3);
     expect(drops).toBe(1);
   });
 
-  it("exits 3 when the thread cannot be read back after the post: the row is left for hands", () => {
+  it("exits 3 when the thread cannot be read back after the post: the row is left as it is, and no edit is handed out", () => {
     const { exit, err, sent, drops } = runCli(ARGS, { lag: 3 });
     expect(exit).toBe(3);
     expect(err).toContain("POSTED, NOT CONFIRMED — RELEASE_UNVERIFIED");
-    expect(leftToRun(err)).toHaveLength(5);
+    expect(err).toContain(CURES.RELEASE_UNVERIFIED);
+    noEditHandedOut(err);
     expect(sent).toHaveLength(1);
     expect(drops).toBe(0);
   });
@@ -2438,7 +2962,7 @@ describe("release.mjs: the command (#643)", () => {
     const { exit, err, sent, thread } = runCli(ARGS, { thread: [A_CLAIM], self: PREDECESSOR, beforePost: [B_CLAIM] });
     expect(exit).toBe(4);
     expect(err).toContain("POSTED, ENDED NOTHING — RELEASE_ENDED_NOTHING");
-    expect(leftToRun(err)).toEqual([]);
+    noEditHandedOut(err);
     expect(sent).toHaveLength(1);
     expect(threadLease(thread).claim).toMatchObject({ url: B_CLAIM.url });
   });
@@ -2447,16 +2971,28 @@ describe("release.mjs: the command (#643)", () => {
     const { exit, err, sent } = runCli(ARGS, { afterPost: [C_CLAIM] });
     expect(exit).toBe(4);
     expect(err).toContain("RELEASED, ROW LEFT TO THE NEW CLAIM — RELEASE_ROW_TAKEN");
-    expect(leftToRun(err)).toEqual([]);
+    noEditHandedOut(err);
     expect(sent).toHaveLength(1);
   });
 
-  it("exits 4 when a claim landed while the row was being filed, and says how to restore it", () => {
+  it("exits 4 when a claim landed while the row was being filed, and sends hands to the thread first", () => {
     const { exit, err, sent, drops } = runCli(ARGS, { duringEdits: { at: 3, comments: [C_CLAIM] } });
     expect(exit).toBe(4);
     expect(err).toContain("RELEASED, ROW RACED — RELEASE_ROW_RACED");
-    expect(err).toContain("Restore the row from that claim's own text");
+    expect(err).toContain(CURES.RELEASE_ROW_RACED);
+    noEditHandedOut(err);
     expect(sent).toHaveLength(6);
+    expect(drops).toBe(1);
+  });
+
+  it("exits 4 when a claim landed during the edits and one of them failed: what ran is said, and no edit is handed out", () => {
+    const { exit, err, sent, drops } = runCli(ARGS, { duringEdits: { at: 0, comments: [C_CLAIM] }, failAt: 2 });
+    expect(exit).toBe(4);
+    expect(err).toContain("RELEASED, ROW RACED — RELEASE_ROW_RACED");
+    expect(err).toContain(`and the row is only partly filed: ${PARTLY[2]}. The row may now hold this release's values over that claim's, and no more of this release's edits are run.`);
+    expect(err).toContain(CURES.RELEASE_ROW_RACED);
+    noEditHandedOut(err);
+    expect(sent).toHaveLength(2);
     expect(drops).toBe(1);
   });
 
@@ -2468,12 +3004,23 @@ describe("release.mjs: the command (#643)", () => {
     expect(sent).toEqual([]);
   });
 
-  it("releases and adds a note when the thread cannot be read once more after the board edits", () => {
-    const { exit, out, err, sent } = runCli(ARGS, { answer: (n) => (n === 3 ? "" : undefined) });
-    expect(exit).toBe(0);
+  it("exits 3 when the thread cannot be read once more after the board edits: the row is filed, and hands go to the thread", () => {
+    const { exit, out, err, sent, drops } = runCli(ARGS, { answer: (n) => (n >= 3 ? "" : undefined) });
+    expect(exit).toBe(3);
+    expect(err).toContain("RELEASED, ROW NOT CHECKED AGAIN — RELEASE_ROW_UNCHECKED");
+    expect(err).toContain(CURES.RELEASE_ROW_UNCHECKED);
+    noEditHandedOut(err);
+    expect(out).toBe("");
     expect(sent).toHaveLength(6);
+    expect(drops).toBe(1);
+  });
+
+  it("releases whole when one look after the board edits fails and the next answers", () => {
+    const { exit, out, err, reads } = runCli(ARGS, { answer: (n) => (n === 3 ? "" : undefined) });
+    expect(exit).toBe(0);
     expect(out).toContain("lease released");
-    expect(err).toContain("note  The thread could not be read once more after the board edits");
+    expect(err).toBe("");
+    expect(reads).toBe(4);
   });
 
   it("posts the Handoff file's text without its byte-order mark, and with plain line ends", () => {
@@ -2494,7 +3041,6 @@ describe("release.mjs: the command (#643)", () => {
       dryRun: true,
       url: null,
       steps: SIX_STEPS.map((describe) => ({ describe, ran: false })),
-      warning: null,
       body: withRecord(RELEASED, B_CLAIM),
     });
   });
@@ -2509,15 +3055,15 @@ describe("release.mjs: the command (#643)", () => {
     expect(sent).toEqual([]);
   });
 
-  it("--json prints a half run with what ran and what is left", () => {
+  it("--json prints a half run with what ran, what failed and what was not tried, and no edit to run", () => {
     const { exit, out, err } = runCli([...ARGS, "--json"], { failAt: 4 });
     expect(exit).toBe(3);
     expect(err).toBe("");
     const printed = JSON.parse(out);
-    expect(printed).toMatchObject({ ok: false, issue: ISSUE, code: "RELEASE_HALF_RUN", posted: true, ran: SIX_STEPS.slice(0, 4) });
+    expect(printed).toMatchObject({ ok: false, issue: ISSUE, code: "RELEASE_HALF_RUN", posted: true, ran: SIX_STEPS.slice(0, 4), failed: "clear Claim expires", untried: SIX_STEPS.slice(5) });
     expect(printed.url).toMatch(/#issuecomment-\d+$/);
-    expect(printed.remaining.map((s) => s.describe)).toEqual(SIX_STEPS.slice(4));
-    expect(printed.remaining.map((s) => said(s.argv))).toEqual(SIX_WRITES.slice(4));
+    expect(Object.keys(printed).sort()).toEqual(["code", "cure", "failed", "issue", "ok", "posted", "ran", "reason", "untried", "url"]);
+    noEditHandedOut(out);
   });
 
   it("measures its seat as the worktree's top level, from wherever inside it the command runs", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {

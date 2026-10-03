@@ -6,9 +6,10 @@
 // Exit 0 = released (with --dry-run: would be).
 //      1 = REFUSE: nothing was written. (FAILED: gh gave up posting the Handoff.)
 //      2 = usage.
-//      3 = the Handoff is posted; the board row is unfinished, or the thread could not be read back.
+//      3 = the Handoff is posted, and the board row is unfinished or unchecked: the thread could not be
+//          read back, a board edit failed, or the last look at the thread failed.
 //      4 = the Handoff is posted and another claim is on the thread: the board row was left to it, or
-//          was filed while it landed.
+//          was being filed while it landed.
 //
 // On 2026-10-03 a session that had already released #637 posted a second released Handoff eight
 // minutes after its successor claimed. Every session posts through one GitHub account, so the comment
@@ -25,6 +26,9 @@
 // another: a claim that lands in the seconds between the check and the post stays live
 // (`threadLease`). The thread is read back before any board field is touched, and the board row is
 // left alone when that claim was not the one this release ended, or when a claim was posted after it.
+// It is read once more after the board edits, whether they all ran or one failed, and no stop hands
+// out an edit to run: a row left unfinished stays as it is until the next claim on the issue files it,
+// and anything done to it by hand starts with reading the thread again.
 //
 // --handoff is the Handoff as Markdown: the docs/WORK_CONTROL.md block, ending "- Claim: released".
 // The board's Next action is read back out of it.
@@ -208,10 +212,16 @@ const optionId = (field, name) => {
  * - RELEASE_ENDED_NOTHING: another claim was live when the comment landed, so the comment ended
  *   nothing and the row is not this caller's to edit;
  * - RELEASE_ROW_TAKEN: it ended its claim and a claim was posted after it, so the row is that claim's;
- * - RELEASE_UNVERIFIED: the thread could not be read back, so the row is left for hands;
- * - RELEASE_HALF_RUN: a board step failed. The steps left are listed, because a second release is
- *   refused and cannot finish a half-finished one;
- * - RELEASE_ROW_RACED: a claim landed while the row was being edited. Reported, not prevented.
+ * - RELEASE_UNVERIFIED: the thread could not be read back, so no field is edited.
+ * The thread is read once more after the edits, whether they all ran or one failed:
+ * - RELEASE_ROW_RACED: a claim landed while the row was being edited. Reported, not prevented;
+ * - RELEASE_HALF_RUN: a board edit failed, and the edits after it were not tried;
+ * - RELEASE_ROW_UNCHECKED: every edit ran, and that last read failed.
+ * On e0362db5 a failed edit skipped the last read and listed the edits left for the caller to run by
+ * hand, over whatever claim had landed (review of PR 644, round 2). No stop lists an edit to run now.
+ * A row left unfinished stays as it is until the next claim on the issue (a claim sets its Status,
+ * Next action and Claim expires), and every stop that leaves the row in doubt says to read the thread
+ * again before anything is done to it by hand: once a claim follows the Handoff, the row is that claim's.
  */
 export function postRelease(request) {
   const asked = request !== null && typeof request === "object" ? request : {};
@@ -307,7 +317,7 @@ export function postRelease(request) {
     { describe: `set Last verified = ${today}`, argv: edit("lastVerified", "--date", today) },
   ];
   const result = { via: decision.via, claim: decision.claim, body: built.body };
-  if (dryRun) return { ...result, url: null, steps: plan.map((s) => ({ describe: s.describe, ran: false })), warning: null };
+  if (dryRun) return { ...result, url: null, steps: plan.map((s) => ({ describe: s.describe, ran: false })) };
 
   let printed;
   try {
@@ -324,7 +334,11 @@ export function postRelease(request) {
   } catch {}
   const url = /https:\/\/\S+#issuecomment-\d+/.exec(String(printed ?? ""))?.[0] ?? null;
   const link = url ? ` (${url})` : "";
-  const left = (from) => plan.slice(from).map((s) => ({ describe: s.describe, argv: s.argv }));
+  // What a person is told once this release stops with the row in doubt. Neither sentence hands out an
+  // edit to run: a row is filed by a claim or by a release, and anything done to it by hand starts from
+  // the thread as it reads then, not as it read here.
+  const unfiled = `The row stays as it is until the next claim on #${issue}, which sets its Status, Next action and Claim expires again. Before changing it by hand, read the thread again: once a claim follows this Handoff, the row is that claim's.`;
+  const theirs = "the row is that claim's: restore it from the claim's own text (Status Active, its Next action, its Claim expires)";
 
   const posted = { id: url ? url.slice(url.indexOf("#issuecomment-")) : null, body: built.body };
   const back = readBack(issue, posted);
@@ -332,17 +346,23 @@ export function postRelease(request) {
     throw afterPost(
       "RELEASE_UNVERIFIED",
       `The Handoff on #${issue} is posted${link}, but the thread could not be read back to see what it ended, so no board field was edited.`,
-      "Read the thread. If no claim is live after the Handoff, run the steps left by hand, in order. If another claim is live, the row is that claim's: leave it.",
-      { url, claim: decision.claim, ran: [plan[0].describe], remaining: left(1) },
+      `Run this release again: it reads the thread first and writes nothing unless this folder still holds a live claim, so its answer says whether the comment ended the lease. ${unfiled}`,
+      { url, claim: decision.claim, ran: [plan[0].describe] },
     );
   }
-  const outcome = releaseOutcome({ comments: back.comments, index: back.index, claim: decision.claim });
+  const outcome = releaseOutcome({ comments: back.comments, index: back.index });
   if (outcome.landed === "nothing") {
+    // The fold reads a record by the time it names. Where the live claim has that very time and the
+    // release still ended nothing, the time is not one claim's alone.
+    const sameTime = outcome.before && Date.parse(outcome.before.postedAt) === Date.parse(decision.claim.postedAt);
+    const why = !outcome.before
+      ? "no claim was live when it landed."
+      : sameTime
+        ? `when it landed, the live claim was ${describeClaim(outcome.before)}, and its posting time is not one claim's alone on this thread (another was posted in the same second, or read without a time), so a record naming that time ends neither.`
+        : `when it landed, the live claim was ${describeClaim(outcome.before)}, not the one it names.`;
     throw afterPost(
       "RELEASE_ENDED_NOTHING",
-      `The Handoff on #${issue} is posted${link}, but it ended nothing: ` +
-        (outcome.before ? `when it landed, the live claim was ${describeClaim(outcome.before)}, not the one it names.` : "no claim was live when it landed.") +
-        ` It names the claim it was checked against (${describeClaim(decision.claim)}) and can end no other. No board field was edited.`,
+      `The Handoff on #${issue} is posted${link}, but it ended nothing: ${why} It names the claim it was checked against (${describeClaim(decision.claim)}) and can end no other. No board field was edited.`,
       "Nothing is left to run. The comment stays on the thread as the record of a release that came too late.",
       { url, claim: decision.claim, live: outcome.before, ran: [plan[0].describe] },
     );
@@ -356,54 +376,71 @@ export function postRelease(request) {
     );
   }
 
+  // The board row. An edit that fails stops the ones after it, and nothing is thrown yet: what the
+  // thread shows after the edits decides what is said.
   let ran = 1;
-  try {
-    for (; ran < plan.length; ran += 1) {
-      try {
-        ghWrite(plan[ran].argv);
-      } catch (e) {
-        throw afterPost(
-          "RELEASE_HALF_RUN",
-          `The Handoff on #${issue} is posted${link} and its lease is released, but the board row is only partly updated: "${plan[ran].describe}" failed (${firstLine(e)}) and ${plan.length - ran} step(s) remain.`,
-          "Run the steps left by hand, in order. Running the release again is refused: the lease it would end is gone.",
-          { url, claim: decision.claim, ran: plan.slice(0, ran).map((s) => s.describe), remaining: left(ran), cause: e },
-        );
-      }
-    }
-  } finally {
-    // The board changed: the write guard's copy of it is stale.
-    if (ran > 1) {
-      try {
-        invalidateBoardCache();
-      } catch {}
+  let failure = null;
+  for (; ran < plan.length; ran += 1) {
+    try {
+      ghWrite(plan[ran].argv);
+    } catch (e) {
+      failure = e;
+      break;
     }
   }
+  // The board changed, or an edit gh gave up on may have changed it: the write guard's copy is stale.
+  try {
+    invalidateBoardCache();
+  } catch {}
 
   // GitHub has no conditional write, so a claim that landed during those edits could not be stopped.
-  // It is looked for once more, and said.
-  const after = readThread(issue);
-  const at = after ? findPosted(after, posted) : -1;
-  const raced = at >= 0 ? releaseOutcome({ comments: after, index: at, claim: decision.claim }).next : null;
+  // It is looked for once more, after every edit that ran and after one that failed, and said.
+  const after = readBack(issue, posted);
+  const raced = after ? releaseOutcome({ comments: after.comments, index: after.index }).next : null;
+  const edits = plan.slice(1, ran).map((s) => s.describe);
+  const untried = plan.slice(ran + 1).map((s) => s.describe);
+  const rest = untried.length === 0 ? "it was the last edit" : `${untried.length} more ${untried.length === 1 ? "was" : "were"} not tried`;
+  const partly = failure
+    ? `${edits.length ? `"${edits.join('", "')}" ran` : "no edit ran"}, "${plan[ran].describe}" failed (${firstLine(failure)}) and may or may not have been applied, and ${rest}`
+    : null;
+  const did = { url, claim: decision.claim, ran: plan.slice(0, ran).map((s) => s.describe), ...(failure ? { failed: plan[ran].describe, untried, cause: failure } : {}) };
   if (raced) {
     throw afterPost(
       "RELEASE_ROW_RACED",
-      `The Handoff on #${issue} is posted${link}, its lease is released and the board row is filed, but a claim landed while the row was being edited (${describeClaim(raced)}). The row may now hold this release's values over that claim's.`,
-      "Restore the row from that claim's own text: Status Active, its Next action and its Claim expires.",
-      { url, claim: decision.claim, live: raced, ran: plan.map((s) => s.describe) },
+      failure
+        ? `The Handoff on #${issue} is posted${link} and its lease is released, but a claim landed while the row was being edited (${describeClaim(raced)}), and the row is only partly filed: ${partly}. The row may now hold this release's values over that claim's, and no more of this release's edits are run.`
+        : `The Handoff on #${issue} is posted${link}, its lease is released and the board row is filed, but a claim landed while the row was being edited (${describeClaim(raced)}). The row may now hold this release's values over that claim's.`,
+      `Read the thread again. While that claim is live, ${theirs}. If it has been released since, check the row against the newest Handoff on the thread.`,
+      { ...did, live: raced },
     );
   }
-  return {
-    ...result,
-    url,
-    steps: plan.map((s) => ({ describe: s.describe, ran: true })),
-    warning: at >= 0 ? null : "The thread could not be read once more after the board edits, so a claim landing in those seconds would not have been seen.",
-  };
+  if (failure) {
+    throw afterPost(
+      "RELEASE_HALF_RUN",
+      `The Handoff on #${issue} is posted${link} and its lease is released, but the board row is only partly filed: ${partly}. ` +
+        (after ? "No claim has been posted after the Handoff." : "The thread could not be read again after that, so a claim landing in those seconds would not have been seen."),
+      after
+        ? `Nothing more is run from this release, and running it again is refused: the lease it would end is gone. ${unfiled}`
+        : `Nothing more is run from this release. Read the thread again. If a claim follows this Handoff, ${theirs}. If none does, the row stays as it is until the next claim on #${issue}, which sets its Status, Next action and Claim expires again.`,
+      did,
+    );
+  }
+  if (!after) {
+    throw afterPost(
+      "RELEASE_ROW_UNCHECKED",
+      `The Handoff on #${issue} is posted${link}, its lease is released and the board row is filed, but the thread could not be read once more after the board edits, so a claim landing in those seconds would not have been seen.`,
+      `Read the thread again. If a claim follows this Handoff, ${theirs}. If none does, nothing is left to do.`,
+      did,
+    );
+  }
+  return { ...result, url, steps: plan.map((s) => ({ describe: s.describe, ran: true })) };
 }
 
 /** How each way a release can stop is headed, and what it exits with. Anything else `RELEASE_` is a refusal: exit 1. */
 const STOPS = {
   RELEASE_POST_FAILED: ["FAILED", 1],
   RELEASE_HALF_RUN: ["RELEASED, BOARD ROW INCOMPLETE", 3],
+  RELEASE_ROW_UNCHECKED: ["RELEASED, ROW NOT CHECKED AGAIN", 3],
   RELEASE_UNVERIFIED: ["POSTED, NOT CONFIRMED", 3],
   RELEASE_ENDED_NOTHING: ["POSTED, ENDED NOTHING", 4],
   RELEASE_ROW_TAKEN: ["RELEASED, ROW LEFT TO THE NEW CLAIM", 4],
@@ -440,7 +477,17 @@ export function cmdRelease(argv, { file = (path) => readFileSync(path, "utf8"), 
     if (asJson) {
       log(
         JSON.stringify(
-          { ok: false, issue, code: e.code, reason: e.reason, cure: e.cure, posted: e.posted, ...(e.url ? { url: e.url } : {}), ...(e.ran ? { ran: e.ran } : {}), ...(e.remaining ? { remaining: e.remaining } : {}) },
+          {
+            ok: false,
+            issue,
+            code: e.code,
+            reason: e.reason,
+            cure: e.cure,
+            posted: e.posted,
+            ...(e.url ? { url: e.url } : {}),
+            ...(e.ran ? { ran: e.ran } : {}),
+            ...(e.failed ? { failed: e.failed, untried: e.untried } : {}),
+          },
           null,
           2,
         ),
@@ -448,12 +495,11 @@ export function cmdRelease(argv, { file = (path) => readFileSync(path, "utf8"), 
       return exit;
     }
     err(`\n  ${C.red}${label} — ${e.code}${C.off}\n  ${e.reason}\n  ${C.dim}${e.cure}${C.off}\n`);
-    for (const s of e.remaining ?? []) err(`  ${C.yellow}left to run${C.off}  ${s.describe}  ${C.dim}gh ${JSON.stringify(s.argv)}${C.off}`);
     return exit;
   }
 
   if (asJson) {
-    log(JSON.stringify({ ok: true, issue, via: done.via, dryRun, url: done.url, steps: done.steps, warning: done.warning, body: done.body }, null, 2));
+    log(JSON.stringify({ ok: true, issue, via: done.via, dryRun, url: done.url, steps: done.steps, body: done.body }, null, 2));
     return 0;
   }
   const whose = `${done.claim.folder} @ ${done.claim.branch}`;
@@ -464,7 +510,6 @@ export function cmdRelease(argv, { file = (path) => readFileSync(path, "utf8"), 
     for (const s of done.steps.slice(1)) log(`   ${s.describe}`);
   } else {
     log(`  ${C.green}lease released${C.off}  #${issue}  ${C.dim}(${whose}${done.via === "takeover" ? ", by takeover" : ""}; ${done.steps.length} steps run)${C.off}`);
-    if (done.warning) err(`  ${C.yellow}note${C.off}  ${done.warning}`);
   }
   return 0;
 }
