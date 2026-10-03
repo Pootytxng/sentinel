@@ -209,6 +209,10 @@ Outgoing executor posts:
 - Claim: released | transferred to <executor> until <time>
 ```
 
+Post a releasing Handoff with `node tools/entry/release.mjs --issue N --handoff <file>` (#643): it
+refuses unless the folder and branch it runs in hold the live claim; a dormant lease from another
+folder needs `--takeover "<evidence checked>"`.
+
 Incoming executor then re-derives current repository/remote/worktree/branch/dirty/process state and
 posts/refreshes its mutation lease. For ordinary engineering work this transfer does not require Kuya
 approval.

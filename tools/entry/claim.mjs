@@ -4,16 +4,24 @@
 // governing invariant holds, so a claim that can be posted without a verdict is a claim that can
 // describe a state nobody verified. That refusal is a guard, not a convention.
 //
+// Its twin (#643): postRelease THROWS unless the caller is the folder and branch the live claim names.
+// Every session posts through one GitHub account, so a released Handoff ends whichever lease is live,
+// whoever wrote it. The release plan is not exported, so there is no unguarded way to build one.
+//
 // Every board mutation is expressed as a PLAN of `gh` invocations before anything runs, so a dry run
 // shows exactly what would be written, and the field quirks stay pinned by tests: date fields need
 // `--date` (`--text` fails with "Did not receive a date value") and clearing an expiry needs `--clear`.
 
 import { execFileSync } from "node:child_process";
 import { scopeTextFromMarkdown } from "../../scripts/lib/claim-scope.mjs";
-import { writeClaimCache } from "../../scripts/lib/scope-drift.mjs";
+import { dropClaimCache, writeClaimCache } from "../../scripts/lib/scope-drift.mjs";
+import { samePath } from "./worktree-field.mjs";
 
 export const CLAIM_HEADER = "### Ownership claim";
 export const HANDOFF_HEADER = "### Handoff";
+export const TAKEOVER_HEADER = "### Verified takeover";
+/** docs/WORK_CONTROL.md, the claim template: "Claim expires: (default 12 hours; alarm only)". */
+export const DEFAULT_CLAIM_HOURS = 12;
 
 const line = (label, value) => `- ${label}: ${value}`;
 
@@ -411,7 +419,8 @@ export function parseHandoff(body) {
  * `run` is every claim since the last release, oldest first; its last entry is `claim` (#517). A
  * refreshed claim restates the lease, it does not start a new one, so the push-time overlap gate
  * measures how long a path has been held from the run, not from the newest comment. A comment's
- * `url`, when the reader supplied one, rides along so a refusal can link the claim it names.
+ * `url`, when the reader supplied one, rides along so a refusal can link the claim, or the release,
+ * it names.
  */
 export function threadLease(comments) {
   let claim = null;
@@ -420,7 +429,7 @@ export function threadLease(comments) {
   for (const c of comments ?? []) {
     const asHandoff = parseHandoff(c.body);
     if (asHandoff) {
-      handoff = { ...asHandoff, postedAt: c.createdAt };
+      handoff = { ...asHandoff, postedAt: c.createdAt, ...(c.url ? { url: c.url } : {}) };
       if (asHandoff.released) {
         claim = null;
         run = [];
@@ -464,13 +473,21 @@ export function planRenew({ issue, ids, until, note = null }) {
 
 /**
  * Release: the durable handoff is posted first, then the index is updated to agree with it —
- * which is why guard 7 passes by construction rather than by remembering.
+ * which is why guard 7 passes by construction rather than by remembering. `body` is the comment as
+ * it will be posted and `nextAction` the Exact next action read back out of it.
+ *
+ * Not exported (#643). On 2026-10-03 a session that had already released #637 built this plan by
+ * hand and ran it eight minutes after its successor claimed: the comment ended the successor's lease
+ * and the field edits overwrote its board row. Exported, this was a release anyone could run on
+ * anyone's lease. `postRelease` is the only caller.
  */
-export function planRelease({ issue, ids, handoff, status = "Review", gate = "None", lastVerified }) {
-  const steps = [comment(issue, renderHandoff(handoff))];
+function planRelease({ issue, ids, body, nextAction, status = "Review", gate = "None", lastVerified }) {
+  const steps = [comment(issue, body)];
   if (ids.fields.status.options[status]) steps.push(setOption(ids, ids.fields.status, status));
   if (ids.fields.gate.options[gate]) steps.push(setOption(ids, ids.fields.gate, gate));
-  steps.push(setText(ids, ids.fields.nextAction.id, handoff.nextAction ?? ""));
+  // A Handoff that names no next action clears the field: an empty --text is not empty, and a step
+  // that fails here fails AFTER the comment has released the lease.
+  steps.push(String(nextAction ?? "").trim() ? setText(ids, ids.fields.nextAction.id, nextAction) : clear(ids, ids.fields.nextAction.id));
   steps.push(clear(ids, ids.fields.claimExpires.id));
   if (lastVerified) steps.push(setDate(ids, ids.fields.lastVerified.id, lastVerified));
   return steps;
@@ -510,4 +527,332 @@ export function postClaim({ issue, verdict, facts, ids, dryRun = false, cacheDir
     } catch {}
   }
   return { plan, ran };
+}
+
+/**
+ * The folder and the branch a claim names. Real lines carry prose after the value ("`C:\x` (created
+ * fresh)", "claude/x (cut from origin/main)"): of the 558 claims on this repository on 2026-10-03, 13
+ * folder lines and 219 branch lines do. A code span the line opens with is the whole value. Without
+ * one, a branch is the line's first word, because a ref name cannot hold whitespace; a folder is the
+ * line as written, because a path can, and the push gate compares it whole
+ * (`scripts/scope-drift-gate.mjs`). A line read wrongly refuses its own holder, never admits another.
+ */
+const leadingSpan = (v) => /^`([^`]+)`/.exec(v)?.[1].trim() || null;
+const namedFolder = (value) => {
+  const v = String(value ?? "").trim();
+  return leadingSpan(v) ?? v;
+};
+const namedBranch = (value) => {
+  const v = String(value ?? "").trim();
+  return leadingSpan(v) ?? ((/^\S+/.exec(v)?.[0] ?? "").replace(/[,;.]+$/, "") || null);
+};
+
+const oneLine = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
+// gh's own complaint. An execFileSync error's message opens with the whole command, comment body and all.
+const firstLine = (e) => String(e?.stderr || e?.message || e).split("\n").filter(Boolean)[0] ?? "unknown error";
+
+/** The live claim as a refusal names it: who, since when, and the link when the reader gave one. */
+const heldBy = (claim) =>
+  `${claim.folder || "(no folder named)"} @ ${claim.branch || "(no branch named)"}, claimed ${claim.postedAt ?? "(time unknown)"}` +
+  (claim.url ? ` (${claim.url})` : "");
+
+/**
+ * When a claim's own clock runs out. Its `Claim expires` line when it has one; a line that cannot be
+ * read leaves the clock unknown, never assumed past (`claimExpiry`). With no line at all, the
+ * documented default: DEFAULT_CLAIM_HOURS after the claim was posted.
+ */
+const claimClock = (claim) => {
+  if (String(claim.expires ?? "").trim()) {
+    const at = claimExpiry(claim.expires, { anchor: claim.postedAt });
+    return { at, by: at ? "its Claim expires line" : null };
+  }
+  const posted = claim.postedAt ? new Date(claim.postedAt) : null;
+  if (!posted || Number.isNaN(posted.getTime())) return { at: null, by: null };
+  return { at: new Date(posted.getTime() + DEFAULT_CLAIM_HOURS * 3_600_000), by: `the ${DEFAULT_CLAIM_HOURS}-hour default` };
+};
+
+const HOLDER_STATES = new Set(["live", "dead", "none", "unknown"]);
+const HOLDER_WORDS = {
+  dead: "the holding session is dead (no live process, transcript cold)",
+  none: "no session record for the holding folder exists on this machine",
+  unknown: "whether the holding session is running could not be measured",
+  unmeasured: "there is no other session to measure (the claim names this folder, or no folder)",
+};
+
+/**
+ * May this caller release the lease on this thread? Every fact is injected: the thread as it was
+ * READ (`comments`; anything but an array is a thread nobody could read), the caller's own measured
+ * seat (`self`), and a probe for the holding session (`liveness`).
+ *
+ * The holder is the worktree folder AND the branch the live claim names, because that is all a claim
+ * says about who posted it (`renderClaim`). So:
+ * - the same folder on the same branch releases;
+ * - another folder is refused. That is the incident;
+ * - the same folder on another branch is refused too: a folder that moved on is not measurably the
+ *   lane the claim describes, and the cure is one checkout or a refreshed claim;
+ * - no live claim is refused, not skipped, so a second release exits non-zero and the board row,
+ *   which a successor may already have set, is never touched;
+ * - a thread, a caller or a holder that could not be measured is refused: unknown means locked.
+ *
+ * THE TAKEOVER EXCEPTION, the dormant-lease route (docs/WORK_CONTROL.md, "Lightweight handoff"): a
+ * dead lease is ended from another folder, and nothing else here allows that. It is never implied.
+ * The caller asks for it (`takeover`) and says what was inspected, and the words are recorded in the
+ * comment. A reason alone does not open it, and neither does expiry alone (collision rule 6: expiry
+ * is an alarm, not a takeover):
+ * - a holding session measured LIVE is never taken over, whatever its clock says;
+ * - one measured DEAD is, with the reason;
+ * - one that cannot be measured (no record on this machine, the caller's own folder, a claim that
+ *   names no folder) is, with the reason, only once the claim's own clock has run out (`claimClock`).
+ * The holder asking for it is refused, so the flag cannot become the habitual way to release.
+ *
+ * @returns {{ok: true, via: "holder"|"takeover", claim: object, takeover?: object}
+ *          | {ok: false, code: string, reason: string, cure: string, claim: object|null}}
+ */
+export function releaseDecision({ issue, comments, self, takeover = null, liveness = null, now = new Date() }) {
+  const refuse = (code, reason, cure, claim = null) => ({ ok: false, code, reason, cure: `Nothing was written. ${cure}`, claim });
+
+  if (!Array.isArray(comments)) {
+    return refuse(
+      "RELEASE_THREAD_UNREADABLE",
+      `The thread of #${issue} could not be read, so who holds its lease is unknown. An unknown lease is not the caller's lease.`,
+      "Run it again when GitHub answers.",
+    );
+  }
+  const lease = threadLease(comments);
+  const claim = lease.claim;
+  if (!claim) {
+    const last = lease.handoff;
+    return refuse(
+      "RELEASE_NO_LIVE_CLAIM",
+      `#${issue} has no live claim: ` +
+        (last?.released
+          ? `its lease was already released at ${last.postedAt ?? "(time unknown)"}${last.url ? ` (${last.url})` : ""}.`
+          : "no Ownership claim is in force on its thread.") +
+        " A release here would rewrite a board row this caller does not hold.",
+      "There is no lease here to release. A follow-up is a plain comment, not a Handoff that releases; changing the board row takes a claim of your own.",
+    );
+  }
+
+  const mine = String(self?.folder ?? "").trim();
+  const myBranch = String(self?.branch ?? "").trim();
+  if (!mine) {
+    return refuse(
+      "RELEASE_SELF_UNKNOWN",
+      `This caller's own worktree folder could not be measured, so it cannot be shown to hold #${issue}'s lease (${heldBy(claim)}).`,
+      "Run it from inside the holding worktree.",
+      claim,
+    );
+  }
+  const holderFolder = namedFolder(claim.folder);
+  const holderBranch = namedBranch(claim.branch);
+  const sameFolder = holderFolder !== "" && samePath(holderFolder, mine);
+  const isHolder = sameFolder && holderBranch !== null && myBranch !== "" && holderBranch === myBranch;
+  const here = `${mine} @ ${myBranch || "(detached HEAD)"}`;
+
+  if (takeover === null || takeover === undefined || takeover === false) {
+    if (isHolder) return { ok: true, via: "holder", claim };
+    if (!holderFolder || !holderBranch) {
+      const missing = !holderFolder && !holderBranch ? "its worktree folder or its branch" : !holderFolder ? "its worktree folder" : "its branch";
+      return refuse(
+        "RELEASE_HOLDER_UNKNOWN",
+        `The live claim on #${issue} does not name ${missing}, so nobody can be shown to hold it: ${heldBy(claim)}.`,
+        'Post a refreshed Ownership claim from the holding folder that names both, then release. A lease nobody holds any more is taken over with --takeover "<the evidence you checked>".',
+        claim,
+      );
+    }
+    if (!sameFolder) {
+      return refuse(
+        "RELEASE_NOT_HOLDER",
+        `#${issue}'s lease is held by another folder: ${heldBy(claim)}. This caller is ${here}. A Handoff posted from here would end that lease and overwrite its board row.`,
+        'Only the holding folder releases. If that session is gone, take the lease over with --takeover "<the worktree and process evidence you checked>".',
+        claim,
+      );
+    }
+    if (!myBranch) {
+      return refuse(
+        "RELEASE_SELF_UNKNOWN",
+        `This folder is the one #${issue}'s claim names (${heldBy(claim)}), but it is on no branch right now (a detached HEAD or a rebase in progress), so it cannot be shown to be on the claimed branch.`,
+        `Check out ${holderBranch}, then release.`,
+        claim,
+      );
+    }
+    return refuse(
+      "RELEASE_BRANCH_MISMATCH",
+      `#${issue}'s claim names this folder on another branch: ${heldBy(claim)}. This folder is on ${myBranch}. A folder that moved to another branch is not measurably the lane that claim describes.`,
+      `Check out ${holderBranch} and release, or post a refreshed Ownership claim that names ${myBranch} first.`,
+      claim,
+    );
+  }
+
+  if (isHolder) {
+    return refuse(
+      "RELEASE_TAKEOVER_NOT_NEEDED",
+      `This folder and branch hold #${issue}'s lease themselves (${heldBy(claim)}), so there is nothing to take over.`,
+      "Release without --takeover.",
+      claim,
+    );
+  }
+  const why = oneLine(typeof takeover === "string" ? takeover : takeover?.reason);
+  if (!why) {
+    return refuse(
+      "RELEASE_TAKEOVER_NO_REASON",
+      `Taking over #${issue}'s lease (${heldBy(claim)}) needs the evidence that was checked, in words: it is recorded in the comment.`,
+      'Pass --takeover "<what you inspected: the worktree, its processes, the session>".',
+      claim,
+    );
+  }
+  let holder = "unmeasured";
+  if (holderFolder && !sameFolder && typeof liveness === "function") {
+    try {
+      const measured = liveness(holderFolder);
+      if (HOLDER_STATES.has(measured)) holder = measured;
+    } catch {
+      holder = "unmeasured";
+    }
+  }
+  if (holder === "live") {
+    return refuse(
+      "RELEASE_HOLDER_LIVE",
+      `The session in the holding folder is live, so #${issue}'s lease is not dormant: ${heldBy(claim)}. A live holder is never taken over, whatever its expiry says.`,
+      "That session releases its own lease: ask it, or run the release from its folder.",
+      claim,
+    );
+  }
+  const clock = claimClock(claim);
+  const lapsed = clock.at !== null && clock.at.getTime() <= now.getTime();
+  if (holder !== "dead" && !lapsed) {
+    const ticking = clock.at
+      ? `its clock runs until ${clock.at.toISOString()} (${clock.by})`
+      : "its clock cannot be read, so it cannot be shown to have run out";
+    return refuse(
+      "RELEASE_LEASE_NOT_LAPSED",
+      `#${issue}'s lease is not shown to be dormant: ${heldBy(claim)}. Measured: ${HOLDER_WORDS[holder]}, and ${ticking}. A reason alone does not end another session's lease.`,
+      "Wait for the clock to run out, or have the holding session release it.",
+      claim,
+    );
+  }
+  return { ok: true, via: "takeover", claim, takeover: { reason: why, holder, lapsedAt: lapsed ? clock.at.toISOString() : null, clockBy: clock.by } };
+}
+
+/**
+ * What a takeover leaves on the thread, after the Handoff and in a section of its own (so none of it
+ * is read as a Handoff field): whose lease it was, where it was ended from, what was measured, and
+ * the caller's own words. The fold does not read this section; a person does.
+ */
+const renderTakeover = ({ claim, self, takeover }) =>
+  [
+    TAKEOVER_HEADER,
+    "",
+    line("Previous lease", `${claim.lane || "(no lane named)"} on ${heldBy(claim)}, expires ${claim.expires || `(none stated: the ${DEFAULT_CLAIM_HOURS}-hour default)`}`),
+    line("Released from", `${self.folder} @ ${self.branch || "(detached HEAD)"}`),
+    line("Measured", `${HOLDER_WORDS[takeover.holder]}; ${takeover.lapsedAt ? `the claim's clock ran out at ${takeover.lapsedAt} (${takeover.clockBy})` : "the claim's clock had not run out"}`),
+    line("Worktree/process evidence checked", takeover.reason),
+  ].join("\n");
+
+const refusal = (issue, d) =>
+  Object.assign(new Error(`Refusing to release the lease on #${issue} (${d.code}): ${d.reason} ${d.cure}`), {
+    code: d.code,
+    reason: d.reason,
+    cure: d.cure,
+    claim: d.claim ?? null,
+  });
+
+/**
+ * The refusal that makes a release mean something: it THROWS unless the caller holds the lease it
+ * would end (`releaseDecision`), and then nothing has run — no comment, no board edit.
+ *
+ * The thread is read HERE, through `read(issue)`, and it is the last read before the write. A caller
+ * that brings a lease it read earlier is the incident: the successor's claim was eight minutes old
+ * and the releasing session never looked. No reader, a reader that throws and a reader that answers
+ * with anything but a list of comments are all a thread that was not read. The read and the post are
+ * still two calls, so a claim posted between them is not seen; that gap is seconds, not minutes.
+ *
+ * Then the comment is checked against what it is for: folded after the thread it must leave no live
+ * claim. A Handoff that holds the lease, or one that carries a claim of its own, is refused here.
+ *
+ * `body` is the Handoff as Markdown (the file a session wrote); `handoff` its fields, for
+ * `renderHandoff`. The board's Next action is read back out of the comment, so guard 7 passes by
+ * construction. Steps run one at a time so a failure after the comment says what is left: a second
+ * release is refused, so a half-finished one cannot be finished by running this again.
+ */
+export function postRelease({
+  issue,
+  self,
+  ids,
+  handoff = null,
+  body = null,
+  read = null,
+  liveness = null,
+  takeover = null,
+  status = "Review",
+  gate = "None",
+  lastVerified,
+  dryRun = false,
+  now = new Date(),
+  exec = execPlan,
+  cacheDir = undefined,
+}) {
+  let comments = null;
+  try {
+    comments = typeof read === "function" ? read(issue) : null;
+  } catch {
+    comments = null; // refused below: a thread nobody could read is never guessed at
+  }
+  const decision = releaseDecision({ issue, comments, self, takeover, liveness, now });
+  if (!decision.ok) throw refusal(issue, decision);
+
+  const text = String(body ?? renderHandoff(handoff ?? {}));
+  const posted = decision.via === "takeover" ? `${text.trimEnd()}\n\n${renderTakeover({ claim: decision.claim, self, takeover: decision.takeover })}` : text;
+  const parsed = parseHandoff(posted);
+  if (!parsed?.released) {
+    throw refusal(issue, {
+      code: "RELEASE_WOULD_NOT_RELEASE",
+      reason: `The Handoff text does not end a lease: it needs a "${HANDOFF_HEADER}" section whose every Claim line opens with "released".`,
+      cure: "Nothing was written. A Handoff that holds or transfers the lease is a plain comment, not a release.",
+      claim: decision.claim,
+    });
+  }
+  if (threadLease([...comments, { body: posted, createdAt: now.toISOString() }]).claim) {
+    throw refusal(issue, {
+      code: "RELEASE_WOULD_NOT_RELEASE",
+      reason: "The comment carries an Ownership claim as well, so it would start a new lease as it ended this one.",
+      cure: "Nothing was written. Post the release alone; a new claim is a comment of its own.",
+      claim: decision.claim,
+    });
+  }
+
+  const plan = planRelease({ issue, ids, body: posted, nextAction: parsed.nextAction, status, gate, lastVerified });
+  const ran = [];
+  try {
+    for (const step of plan) {
+      try {
+        ran.push(...exec([step], { dryRun }));
+      } catch (e) {
+        if (ran.length === 0) {
+          const reason = `gh failed posting the Handoff on #${issue}: ${firstLine(e)}`;
+          const cure = "No board field was edited. Read the thread before running this again: a comment gh gave up on may still have been posted.";
+          throw Object.assign(new Error(`${reason} ${cure}`), { code: "RELEASE_POST_FAILED", reason, cure, claim: decision.claim, cause: e });
+        }
+        const remaining = plan.slice(ran.length);
+        throw Object.assign(
+          new Error(
+            `The Handoff on #${issue} is posted and its lease is released, but the board row is only partly updated: ` +
+              `"${remaining[0].describe}" failed and ${remaining.length} step(s) remain. Finish them by hand now; ` +
+              `running the release again is refused. ${firstLine(e)}`,
+          ),
+          { code: "RELEASE_HALF_RUN", ran, remaining, cause: e },
+        );
+      }
+    }
+  } finally {
+    if (!dryRun && ran.length > 0) {
+      // The local copy of the scope this lease declared (#356) is a copy of a claim that just ended,
+      // whether or not the board row caught up. Dropping it is a courtesy to the drift readers; the
+      // thread is the record.
+      try {
+        dropClaimCache({ issue, ...(cacheDir ? { dir: cacheDir } : {}) });
+      } catch {}
+    }
+  }
+  return { plan, ran, via: decision.via, claim: decision.claim, body: posted };
 }

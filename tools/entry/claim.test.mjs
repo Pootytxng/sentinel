@@ -4,22 +4,40 @@
 // statement that the invariant holds, so a claim that can be posted without a verdict is a claim
 // that can describe a state nobody verified — which is exactly the failure mode #14 exposed.
 //
+// Its twin (#643): postRelease throws unless the caller is the folder and branch the live claim names.
+// On 2026-10-03 a session that had already released #637 posted a second released Handoff eight
+// minutes after its successor claimed, and nothing mechanical stopped it. Every refusal below is
+// asserted together with the fact that nothing was sent.
+//
 // Every board mutation goes through a PLAN of `gh` invocations, so the field quirks that cost real
 // time are pinned here rather than rediscovered: date fields need `--date` (`--text` fails with
 // "Did not receive a date value"), and clearing an expiry needs `--clear`.
 
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterAll, describe, expect, it } from "vitest";
+import * as claimModule from "./claim.mjs";
 import {
   claimExpiry,
+  HANDOFF_HEADER,
   parseClaim,
   parseHandoff,
   planPostClaim,
-  planRelease,
   postClaim,
+  postRelease,
+  releaseDecision,
   renderClaim,
   renderHandoff,
+  TAKEOVER_HEADER,
   threadLease,
 } from "./claim.mjs";
+import { cmdRelease, measureSeat, parseArgs } from "./release.mjs";
+import { samePath } from "./worktree-field.mjs";
+import { readClaimCache, writeClaimCache } from "../../scripts/lib/scope-drift.mjs";
+import { evaluateWorkControl } from "../../scripts/work-control-gate.mjs";
+import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const FOLDER = "C:\\Users\\Kuya\\code\\sentinel-workflow";
 const BRANCH = "feat/single-entry-workflow";
@@ -728,36 +746,699 @@ describe("the gh plan pins the field quirks that cost real time", () => {
   });
 });
 
+// ── releasing a lease (#643) ─────────────────────────────────────
+//
+// The thread is the incident's: the predecessor claims, releases, and the successor claims. Every
+// release below goes through `attempt`, which hands postRelease a recorder in place of `gh`, so a test
+// can say what WOULD have been sent and nothing here can reach GitHub. The issue number names no issue.
+
+const ISSUE = 999_637;
+const HOLDER = { folder: "C:\\lanes\\successor", branch: "claude/successor" };
+const PREDECESSOR = { folder: "C:\\lanes\\predecessor", branch: "claude/predecessor" };
+const NOW = new Date("2026-10-03T05:30:25Z");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "..", "..");
+
+const posted = (createdAt, body, n) => ({ createdAt, body, url: `https://github.com/Pootytxng/sentinel/issues/${ISSUE}#issuecomment-${n}` });
+/** A claim as `renderClaim` writes it for a seat; `drop` removes whole lines by label. */
+const claimText = (seat, { drop = [], ...facts } = {}) =>
+  renderClaim({ ...FACTS, folder: seat.folder, branch: seat.branch, expires: "2026-10-03T17:22:01Z", verdict: PASS, ...facts })
+    .split("\n")
+    .filter((l) => !drop.some((label) => l.startsWith(`- ${label}:`)))
+    .join("\n");
+const RELEASED = renderHandoff({ outcome: "done", nextAction: "Kuya reviews.", claim: "released" });
+
+const A_CLAIM = posted("2026-10-03T03:10:00Z", claimText(PREDECESSOR, { expires: "2026-10-03T15:10:00Z" }), 1);
+const A_RELEASE = posted("2026-10-03T05:21:02Z", RELEASED, 2);
+const B_CLAIM = posted("2026-10-03T05:22:01Z", claimText(HOLDER), 3);
+const INCIDENT = [A_CLAIM, A_RELEASE, B_CLAIM];
+/** A thread holding one live claim, posted at the successor's time. */
+const claimedBy = (seat = HOLDER, opts = {}) => [posted("2026-10-03T05:22:01Z", claimText(seat, opts), 3)];
+/** The successor's claim, a day old and past its own expiry. */
+const lapsedClaim = (opts = {}) => [posted("2026-10-02T00:00:00Z", claimText(HOLDER, { expires: "2026-10-02T12:00:00Z", ...opts }), 4)];
+const LAPSED = lapsedClaim();
+
+const tmp = mkdtempSync(join(tmpdir(), "compy-release-test-"));
+afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+/** In place of `gh`: records each step it is handed, and fails the step at `failAt` the way gh does. */
+const recorder = (failAt = null) => {
+  const sent = [];
+  const exec = (plan, { dryRun = false } = {}) =>
+    plan.map((step) => {
+      if (dryRun) return { ...step, ran: false };
+      if (sent.length === failAt) {
+        throw Object.assign(new Error(`Command failed: gh ${step.argv.join(" ")}`), { stderr: "GraphQL: Could not resolve to a ProjectV2Item\nsecond line\n" });
+      }
+      sent.push(step);
+      return { ...step, ran: true };
+    });
+  return { sent, exec };
+};
+
+/** One release through the guard: what it returned or threw, and every step that was sent. */
+const attempt = ({ thread = INCIDENT, self = HOLDER, body = RELEASED, failAt = null, ...rest } = {}) => {
+  const { sent, exec } = recorder(failAt);
+  try {
+    const result = postRelease({ issue: ISSUE, self, ids: IDS, body, read: () => thread, now: NOW, exec, cacheDir: tmp, ...rest });
+    return { result, error: null, sent };
+  } catch (error) {
+    return { result: null, error, sent };
+  }
+};
+
+/** Refused with this code, and NOTHING was sent: no comment, no board edit. */
+const refused = (code, opts) => {
+  const { result, error, sent } = attempt(opts);
+  expect(result, "the release was not refused").toBeNull();
+  expect(error?.code, String(error?.stack ?? error)).toBe(code);
+  expect(sent.map((s) => s.describe)).toEqual([]);
+  return error;
+};
+
+/** Allowed: the whole plan was sent in order, the comment first. Returns the comment's text too. */
+const allowed = (opts, via = "holder") => {
+  const { result, error, sent } = attempt(opts);
+  expect(error, String(error?.stack ?? error)).toBeNull();
+  expect(result.via).toBe(via);
+  expect(sent.map((s) => s.describe)).toEqual(result.plan.map((s) => s.describe));
+  expect(sent[0].argv.slice(0, 3)).toEqual(["issue", "comment", String(ISSUE)]);
+  return { result, sent, body: sent[0].argv.at(-1) };
+};
+
+describe("postRelease: only the folder and branch the live claim names may end it (#643)", () => {
+  it("lets the holder release: the comment, then the board row", () => {
+    const { result, sent, body } = allowed();
+    expect(body).toBe(RELEASED);
+    expect(result.claim.url).toBe(B_CLAIM.url);
+    expect(sent.map((s) => s.describe)).toEqual([`comment on #${ISSUE}`, "set F_status=Review", "set F_gate=None", "set F_next", "clear F_exp"]);
+  });
+
+  it.each([
+    ["prose after the branch", { branch: `${HOLDER.branch} (cut from origin/main at 1780fef1)` }],
+    ["the branch in a code span, then prose", { branch: `\`${HOLDER.branch}\`, cut from origin/main` }],
+    ["a comma after the branch", { branch: `${HOLDER.branch}, cut from origin/main` }],
+    ["the folder in a code span, then prose", { folder: `\`${HOLDER.folder}\` (created fresh by the launcher)` }],
+    ["both in code spans", { folder: `\`${HOLDER.folder}\``, branch: `\`${HOLDER.branch}\`` }],
+  ])("reads the holder out of a claim written with %s", (_, facts) => {
+    allowed({ thread: claimedBy(HOLDER, facts) });
+  });
+
+  it.each(["c:/lanes/successor", "C:\\lanes\\successor\\", "C:\\LANES\\Successor"])("knows its own folder spelled %j", (folder) => {
+    allowed({ self: { ...HOLDER, folder } });
+  });
+
+  it("refuses the incident: a predecessor releasing after its successor claimed", () => {
+    const error = refused("RELEASE_NOT_HOLDER", { self: PREDECESSOR });
+    expect(error.message).toContain(B_CLAIM.url);
+    expect(error.message).toContain(`${HOLDER.folder} @ ${HOLDER.branch}`);
+    expect(error.message).toContain("2026-10-03T05:22:01Z");
+    expect(error.message).toContain(PREDECESSOR.folder);
+    expect(error.claim.url).toBe(B_CLAIM.url);
+  });
+
+  it.each([
+    ["another folder on a branch of the same name", { folder: PREDECESSOR.folder, branch: HOLDER.branch }],
+    ["a folder whose path only starts the same", { ...HOLDER, folder: `${HOLDER.folder}-2` }],
+    ["the folder above it", { ...HOLDER, folder: "C:\\lanes" }],
+    ["a folder inside it", { ...HOLDER, folder: `${HOLDER.folder}\\tools` }],
+  ])("refuses %s", (_, self) => {
+    refused("RELEASE_NOT_HOLDER", { self });
+  });
+
+  it.each([PREDECESSOR.branch, `${HOLDER.branch}-2`, "claude/success", "main"])("refuses the holding folder on another branch (%s)", (branch) => {
+    const error = refused("RELEASE_BRANCH_MISMATCH", { self: { ...HOLDER, branch } });
+    expect(error.message).toContain(B_CLAIM.url);
+  });
+
+  it.each([null, undefined, "", "  "])("refuses the holding folder on no branch (%j)", (branch) => {
+    const error = refused("RELEASE_SELF_UNKNOWN", { self: { folder: HOLDER.folder, branch } });
+    expect(error.message).toMatch(/on no branch/);
+  });
+
+  it.each([null, {}, { folder: null }, { folder: "  " }, { branch: HOLDER.branch }])("refuses a caller whose own folder was not measured (%j)", (self) => {
+    const error = refused("RELEASE_SELF_UNKNOWN", { self });
+    expect(error.message).toMatch(/could not be measured/);
+  });
+
+  it("refuses a caller that says nothing of itself", () => {
+    expect(releaseDecision({ issue: ISSUE, comments: INCIDENT, self: undefined, now: NOW })).toMatchObject({ ok: false, code: "RELEASE_SELF_UNKNOWN" });
+  });
+
+  it.each([
+    ["no folder line", { drop: ["Worktree folder"] }],
+    ["no branch line", { drop: ["Branch"] }],
+    ["neither line", { drop: ["Worktree folder", "Branch"] }],
+    ["an empty folder", { folder: "" }],
+    ["an empty branch", { branch: "" }],
+  ])("refuses everyone when the live claim has %s: nobody can be shown to hold it", (_, opts) => {
+    for (const self of [HOLDER, PREDECESSOR]) {
+      const error = refused("RELEASE_HOLDER_UNKNOWN", { thread: claimedBy(HOLDER, opts), self });
+      expect(error.message).toMatch(/does not name/);
+    }
+  });
+
+  it("refuses a second release, and names the first", () => {
+    for (const self of [PREDECESSOR, HOLDER]) {
+      const error = refused("RELEASE_NO_LIVE_CLAIM", { thread: [A_CLAIM, A_RELEASE], self });
+      expect(error.message).toContain(A_RELEASE.url);
+      expect(error.message).toContain("2026-10-03T05:21:02Z");
+    }
+  });
+
+  it("does not let a takeover reason open a thread that has no lease", () => {
+    refused("RELEASE_NO_LIVE_CLAIM", { thread: [A_CLAIM, A_RELEASE], self: PREDECESSOR, takeover: "the folder is gone", liveness: () => "dead" });
+  });
+
+  it.each([
+    ["an empty thread", []],
+    ["a note that only mentions a claim", [posted("2026-10-03T05:00:00Z", "I will post a `### Ownership claim` once the preflight passes.", 5)]],
+  ])("refuses a thread nobody claimed: %s", (_, thread) => {
+    const error = refused("RELEASE_NO_LIVE_CLAIM", { thread });
+    expect(error.message).toMatch(/no Ownership claim is in force/);
+  });
+
+  it.each([
+    ["no reader", null],
+    ["a reader that throws", () => { throw new Error("gh: HTTP 502"); }],
+    ["a reader that answers null", () => null],
+    ["a reader that answers nothing", () => undefined],
+    ["a reader that answers an object", () => ({ comments: INCIDENT })],
+    ["a reader that answers text", () => JSON.stringify(INCIDENT)],
+  ])("refuses when the thread was not read: %s", (_, read) => {
+    const error = refused("RELEASE_THREAD_UNREADABLE", { read });
+    expect(error.message).toMatch(/An unknown lease is not the caller's lease/);
+  });
+
+  it("reads the thread itself, once, and takes no lease the caller brought", () => {
+    const lease = threadLease(INCIDENT);
+    refused("RELEASE_THREAD_UNREADABLE", { read: null, comments: INCIDENT, lease, claim: lease.claim });
+    const asked = [];
+    allowed({ read: (...args) => { asked.push(args); return INCIDENT; } });
+    expect(asked).toEqual([[ISSUE]]);
+  });
+});
+
+describe("postRelease: a takeover is asked for, measured and recorded (#643)", () => {
+  const REASON = "worktree removed on 2026-10-02; no claude.exe has it open; its transcript is cold";
+  const dead = () => "dead";
+  const UNMEASURED = [
+    ["no session record", () => "none"],
+    ["a record that cannot be read", () => "unknown"],
+    ["an answer outside the vocabulary", () => "probably dead"],
+    ["no answer", () => undefined],
+    ["a probe that throws", () => { throw new Error("EPERM"); }],
+    ["no probe", null],
+    ["a word where a probe belongs", "dead"],
+  ];
+
+  it.each([undefined, null, false])("is never implied (takeover: %j): a dead holder on an expired claim is still not the caller's lease", (takeover) => {
+    refused("RELEASE_NOT_HOLDER", { thread: LAPSED, self: PREDECESSOR, liveness: dead, takeover });
+  });
+
+  it.each(["", "  \n\t ", true, {}, { reason: " " }])("refuses a takeover that gives no reason (%j)", (takeover) => {
+    refused("RELEASE_TAKEOVER_NO_REASON", { thread: LAPSED, self: PREDECESSOR, liveness: dead, takeover });
+  });
+
+  it("refuses the holder asking for one, so the flag cannot become the habit", () => {
+    refused("RELEASE_TAKEOVER_NOT_NEEDED", { thread: LAPSED, self: HOLDER, takeover: REASON, liveness: dead });
+  });
+
+  it.each([
+    ["an expired claim", LAPSED],
+    ["an unexpired claim", INCIDENT],
+  ])("never takes over a live holder on %s", (_, thread) => {
+    const error = refused("RELEASE_HOLDER_LIVE", { thread, self: PREDECESSOR, takeover: REASON, liveness: () => "live" });
+    expect(error.message).toContain(thread.at(-1).url);
+  });
+
+  it("takes over a dead holder before its clock runs out, and says both", () => {
+    const { body } = allowed({ self: PREDECESSOR, takeover: REASON, liveness: dead }, "takeover");
+    expect(body).toContain("the holding session is dead");
+    expect(body).toContain("the claim's clock had not run out");
+  });
+
+  it.each(UNMEASURED)("with %s, a reason does not end a lease whose own clock is running", (_, liveness) => {
+    const error = refused("RELEASE_LEASE_NOT_LAPSED", { self: PREDECESSOR, takeover: REASON, liveness });
+    expect(error.message).toContain("2026-10-03T17:22:01.000Z");
+    expect(error.message).toContain(B_CLAIM.url);
+  });
+
+  it.each(UNMEASURED)("with %s, takes over once the claim's own clock has run out", (_, liveness) => {
+    const { body } = allowed({ thread: LAPSED, self: PREDECESSOR, takeover: REASON, liveness }, "takeover");
+    expect(body).toContain("the claim's clock ran out at 2026-10-02T12:00:00.000Z (its Claim expires line)");
+  });
+
+  it("gives a claim with no expiry line the documented 12 hours, to the second", () => {
+    const ask = { thread: claimedBy(HOLDER, { drop: ["Claim expires"] }), self: PREDECESSOR, takeover: REASON, liveness: () => "none" };
+    refused("RELEASE_LEASE_NOT_LAPSED", { ...ask, now: new Date("2026-10-03T17:22:00Z") });
+    const { body } = allowed({ ...ask, now: new Date("2026-10-03T17:22:01Z") }, "takeover");
+    expect(body).toContain("the claim's clock ran out at 2026-10-03T17:22:01.000Z (the 12-hour default)");
+  });
+
+  it("never lets a clock it cannot read run out, and still takes over a dead holder", () => {
+    const ask = { thread: claimedBy(HOLDER, { expires: "when the review lands" }), self: PREDECESSOR, takeover: REASON, now: new Date("2027-10-03T00:00:00Z") };
+    const error = refused("RELEASE_LEASE_NOT_LAPSED", { ...ask, liveness: () => "none" });
+    expect(error.message).toMatch(/clock cannot be read/);
+    allowed({ ...ask, liveness: dead }, "takeover");
+  });
+
+  it("asks the probe about the folder the claim names, and nothing else", () => {
+    const asked = [];
+    const liveness = (...args) => {
+      asked.push(args);
+      return "dead";
+    };
+    allowed({ thread: claimedBy(HOLDER, { folder: `\`${HOLDER.folder}\` (created fresh by the launcher)` }), self: PREDECESSOR, takeover: REASON, liveness }, "takeover");
+    expect(asked).toEqual([[HOLDER.folder]]);
+  });
+
+  it("does not measure its own folder: a claim naming it on another branch lapses by its clock alone", () => {
+    const self = { folder: HOLDER.folder, branch: "claude/next-lane" };
+    const asked = [];
+    const probe = (answer) => (folder) => {
+      asked.push(folder);
+      return answer;
+    };
+    refused("RELEASE_LEASE_NOT_LAPSED", { self, takeover: REASON, liveness: probe("dead") });
+    const { body } = allowed({ thread: LAPSED, self, takeover: REASON, liveness: probe("live") }, "takeover");
+    expect(body).toContain("there is no other session to measure");
+    expect(asked).toEqual([]);
+  });
+
+  it("does not measure a claim that names no folder: it lapses by its clock alone", () => {
+    const asked = [];
+    const liveness = (folder) => {
+      asked.push(folder);
+      return "dead";
+    };
+    const drop = ["Worktree folder"];
+    refused("RELEASE_LEASE_NOT_LAPSED", { thread: claimedBy(HOLDER, { drop }), self: PREDECESSOR, takeover: REASON, liveness });
+    allowed({ thread: lapsedClaim({ drop }), self: PREDECESSOR, takeover: REASON, liveness }, "takeover");
+    expect(asked).toEqual([]);
+  });
+
+  it("records the takeover after the Handoff, in a section of its own, and still releases", () => {
+    const { result, sent, body } = allowed({ thread: LAPSED, self: PREDECESSOR, takeover: REASON, liveness: dead }, "takeover");
+    expect(body.startsWith(`${RELEASED}\n\n${TAKEOVER_HEADER}\n`)).toBe(true);
+    expect(body).toContain(`- Worktree/process evidence checked: ${REASON}`);
+    expect(body).toContain(`- Released from: ${PREDECESSOR.folder} @ ${PREDECESSOR.branch}`);
+    expect(body).toContain(`- Previous lease: Claude Code on ${HOLDER.folder} @ ${HOLDER.branch}, claimed 2026-10-02T00:00:00Z (${LAPSED[0].url}), expires 2026-10-02T12:00:00Z`);
+    expect(body).toContain("the holding session is dead");
+    expect(result.body).toBe(body);
+    expect(parseHandoff(body)).toMatchObject({ released: true, nextAction: "Kuya reviews." });
+    expect(threadLease([...LAPSED, { body, createdAt: NOW.toISOString() }]).claim).toBeNull();
+    expect(sent.find((s) => s.describe === "set F_next").argv).toContain("Kuya reviews.");
+  });
+
+  it("keeps the reason on one line, so it cannot write a header or a field of its own", () => {
+    const takeover = ["gone", HANDOFF_HEADER, "- Claim: HELD until review", "### Ownership claim", "- Worktree folder: C:\\lanes\\intruder", "- Branch: claude/intruder"].join("\n");
+    const { body } = allowed({ thread: LAPSED, self: PREDECESSOR, takeover, liveness: dead }, "takeover");
+    expect(body.split("\n").filter((l) => l.startsWith("#"))).toEqual([HANDOFF_HEADER, TAKEOVER_HEADER]);
+    expect(body).toContain("- Worktree/process evidence checked: gone ### Handoff - Claim: HELD until review ### Ownership claim - Worktree folder:");
+    expect(parseClaim(body)).toBeNull();
+    expect(parseHandoff(body).released).toBe(true);
+  });
+
+  it("takes the reason as { reason } too", () => {
+    const { body } = allowed({ thread: LAPSED, self: PREDECESSOR, takeover: { reason: REASON }, liveness: dead }, "takeover");
+    expect(body).toContain(`- Worktree/process evidence checked: ${REASON}`);
+  });
+});
+
+describe("postRelease: the comment must be a release, and only a release (#643)", () => {
+  const handoff = (...lines) => [HANDOFF_HEADER, "", "- Exact next action: Kuya reviews.", ...lines].join("\n");
+
+  it.each([
+    ["a Handoff that holds", handoff("- Claim: HELD until the review lands. Released only then.")],
+    ["a Handoff that transfers", handoff("- Claim: transferred to codex until 2026-10-04T08:00Z")],
+    ["a Handoff with no Claim line", handoff()],
+    ["one Claim line that releases beside one that holds", handoff("- Claim: released", "- Claim: HELD for the follow-up")],
+    ["a plain note", "Released. Kuya reviews."],
+    ["a Handoff header one space in", ` ${RELEASED}`],
+    ["an empty file", ""],
+  ])("refuses %s, and posts nothing", (_, body) => {
+    const error = refused("RELEASE_WOULD_NOT_RELEASE", { body });
+    expect(error.message).toMatch(/does not end a lease/);
+  });
+
+  it.each([
+    ["no Handoff at all", {}],
+    ["Handoff fields that say nothing of the claim", { handoff: { nextAction: "Kuya reviews." } }],
+    ["Handoff fields that hold", { handoff: { nextAction: "Kuya reviews.", claim: "HELD" } }],
+  ])("refuses %s", (_, opts) => {
+    refused("RELEASE_WOULD_NOT_RELEASE", { body: null, ...opts });
+  });
+
+  it("refuses a comment that releases and claims at once", () => {
+    const error = refused("RELEASE_WOULD_NOT_RELEASE", { body: `${RELEASED}\n\n${claimText(PREDECESSOR)}` });
+    expect(error.message).toMatch(/carries an Ownership claim/);
+  });
+
+  it("renders the Handoff from its fields when it is handed fields", () => {
+    const fields = { outcome: "done", nextAction: "Kuya reviews.", claim: "released" };
+    expect(allowed({ body: null, handoff: fields }).body).toBe(renderHandoff(fields));
+  });
+});
+
 describe("release", () => {
-  const plan = planRelease({
-    issue: 18,
-    ids: IDS,
-    handoff: { outcome: "done", nextAction: "Kuya reviews.", claim: "released" },
-    status: "Needs Kuya",
-    gate: "Kuya",
-    lastVerified: "2026-07-30",
-  }).map((s) => s.argv.join(" "));
+  // The plan is not exported (#643): it is read off the guarded release, as a dry run by the holder.
+  const planned = (handoff = { outcome: "done", nextAction: "Kuya reviews.", claim: "released" }) =>
+    attempt({ thread: claimedBy(), body: null, handoff, status: "Needs Kuya", gate: "Kuya", lastVerified: "2026-07-30", dryRun: true }).result.plan.map((s) =>
+      s.argv.join(" "),
+    );
 
   it("clears the expiry with --clear, because an empty --text is not empty", () => {
-    const step = plan.find((s) => s.includes("F_exp"));
+    const step = planned().find((s) => s.includes("F_exp"));
     expect(step).toMatch(/--clear/);
   });
 
   it("sets Last verified as a date", () => {
-    expect(plan.find((s) => s.includes("F_ver"))).toMatch(/--date 2026-07-30/);
+    expect(planned().find((s) => s.includes("F_ver"))).toMatch(/--date 2026-07-30/);
   });
 
   it("moves Status and Gate to what the handoff declares, not to a default", () => {
-    expect(plan.join("\n")).toContain("o_needs");
-    expect(plan.join("\n")).toContain("o_kuya");
+    expect(planned().join("\n")).toContain("o_needs");
+    expect(planned().join("\n")).toContain("o_kuya");
   });
 
   it("posts the handoff comment first — the durable record precedes the index", () => {
-    expect(plan[0]).toMatch(/^issue comment/);
+    expect(planned()[0]).toMatch(/^issue comment/);
   });
 
   it("sets Next action to the handoff's exact next action, so guard 7 passes by construction", () => {
-    const step = plan.find((s) => s.includes("F_next"));
+    const step = planned().find((s) => s.includes("F_next"));
     expect(step).toContain("Kuya reviews.");
+  });
+
+  it.each([undefined, "", "   "])("clears Next action when the handoff names none (%j), because an empty --text is not empty", (nextAction) => {
+    const step = planned({ outcome: "done", nextAction, claim: "released" }).find((s) => s.includes("F_next"));
+    expect(step).toMatch(/--clear/);
+    expect(step).not.toMatch(/--text/);
+  });
+});
+
+describe("postRelease: what a run leaves behind (#643)", () => {
+  const seed = () => writeClaimCache({ issue: ISSUE, scopeText: "`tools/entry/claim.mjs`", folder: HOLDER.folder, branch: HOLDER.branch }, { dir: tmp });
+  const cached = () => readClaimCache({ issue: ISSUE, dir: tmp });
+
+  it("a dry run sends nothing and forgets nothing", () => {
+    seed();
+    const { result, error, sent } = attempt({ dryRun: true });
+    expect(error).toBeNull();
+    expect(sent).toEqual([]);
+    expect(result.ran.map((s) => s.ran)).toEqual([false, false, false, false, false]);
+    expect(cached()).not.toBeNull();
+  });
+
+  it("a refusal forgets nothing", () => {
+    seed();
+    refused("RELEASE_NOT_HOLDER", { self: PREDECESSOR });
+    expect(cached()).not.toBeNull();
+  });
+
+  it("a release drops the local copy of the scope the lease declared", () => {
+    seed();
+    allowed();
+    expect(cached()).toBeNull();
+  });
+
+  it("says what is left when gh fails after the comment: the lease is released and the row is not finished", () => {
+    seed();
+    const { result, error, sent } = attempt({ failAt: 2, lastVerified: "2026-10-03" });
+    expect(result).toBeNull();
+    expect(error.code).toBe("RELEASE_HALF_RUN");
+    expect(sent.map((s) => s.describe)).toEqual([`comment on #${ISSUE}`, "set F_status=Review"]);
+    expect(error.ran.map((s) => s.describe)).toEqual(sent.map((s) => s.describe));
+    expect(error.remaining.map((s) => s.describe)).toEqual(["set F_gate=None", "set F_next", "clear F_exp", "set F_ver"]);
+    expect(error.message).toContain("GraphQL: Could not resolve to a ProjectV2Item");
+    expect(error.message).not.toContain("Command failed");
+    expect(error.message).not.toContain("second line");
+    expect(cached()).toBeNull();
+  });
+
+  it("says the comment never went when gh fails on it, and edits no board field", () => {
+    seed();
+    const error = refused("RELEASE_POST_FAILED", { failAt: 0 });
+    expect(error.message).toMatch(/No board field was edited/);
+    expect(error.message).toContain("GraphQL: Could not resolve to a ProjectV2Item");
+    expect(error.message).not.toContain("Command failed");
+    expect(cached()).not.toBeNull();
+  });
+});
+
+describe("there is no unguarded way to release (#643)", () => {
+  const sources = (dir) =>
+    readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
+      const rel = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return entry.name === "node_modules" ? [] : sources(rel);
+      return /\.(?:mjs|cjs|js|ts)$/.test(entry.name) && !/\.test\.[a-z]+$/.test(entry.name) ? [rel] : [];
+    });
+
+  it("claim.mjs exports the guarded release, and not the plan it runs", () => {
+    const names = Object.keys(claimModule);
+    expect(names).toContain("postRelease");
+    expect(names).toContain("releaseDecision");
+    expect(names).not.toContain("planRelease");
+  });
+
+  it("no other program builds a release plan", () => {
+    const files = [...sources("tools/entry"), ...sources("scripts"), ...sources(".claude/hooks")];
+    expect(files.length).toBeGreaterThan(60);
+    expect(files.filter((f) => readFileSync(join(ROOT, f), "utf8").includes("planRelease"))).toEqual(["tools/entry/claim.mjs"]);
+  });
+
+  it("the gate's live-lease blocker names the command", () => {
+    const { blockers } = evaluateWorkControl(
+      { transition: "close-issue", issue: ISSUE },
+      {
+        resolveHead: () => null,
+        headProvenance: () => ({ ok: true, why: "not under test" }),
+        issueComments: () => claimedBy(),
+        closingIssues: () => [],
+      },
+    );
+    const lease = blockers.filter((b) => b.includes("still has a live lease"));
+    expect(lease).toHaveLength(1);
+    expect(lease[0]).toContain(`node tools/entry/release.mjs --issue ${ISSUE} --handoff <file>`);
+  });
+
+  it("docs/WORK_CONTROL.md points the release step at the command", () => {
+    expect(readFileSync(join(ROOT, "docs/WORK_CONTROL.md"), "utf8")).toContain("node tools/entry/release.mjs --issue N --handoff <file>");
+  });
+});
+
+describe("release.mjs: the command (#643)", () => {
+  const ARGS = ["--issue", String(ISSUE), "--handoff", "handoff.md"];
+  const BOARD = { reachable: true, items: [{ number: ISSUE, itemId: "PVTI_x" }], error: null };
+  const gone = () => {
+    throw new Error("gh: HTTP 502");
+  };
+
+  /** The command with EVERY seam supplied, so no test here can reach gh, git or the real caches. */
+  const runCli = (argv, { thread = INCIDENT, seat = HOLDER, handoffText = RELEASED, failAt = null, ...seams } = {}) => {
+    const { sent, exec } = recorder(failAt);
+    const out = [];
+    const errs = [];
+    let dropped = 0;
+    const exit = cmdRelease(argv, {
+      seat: () => seat,
+      board: () => BOARD,
+      projectIds: () => IDS,
+      read: () => thread,
+      liveness: () => "none",
+      file: () => handoffText,
+      dropBoardCache: () => {
+        dropped += 1;
+      },
+      exec,
+      cacheDir: tmp,
+      now: NOW,
+      log: (s) => out.push(String(s)),
+      err: (s) => errs.push(String(s)),
+      ...seams,
+    });
+    return { exit, sent, out: out.join("\n"), err: errs.join("\n"), dropped };
+  };
+
+  it.each([
+    ["no --issue", ["--handoff", "h.md"], /--issue N is required/],
+    ["no --handoff", ["--issue", "5"], /--handoff <file> is required/],
+    ["an argument it does not know", [...ARGS, "--force"], /unknown argument "--force"/],
+    ["a misspelt --dry-run", [...ARGS, "--dryrun"], /unknown argument "--dryrun"/],
+    ["a stray word", [...ARGS, "now"], /unknown argument "now"/],
+    ["--folder", [...ARGS, "--folder", HOLDER.folder], /--folder is not an argument/],
+    ["a flag given twice", [...ARGS, "--issue", "6"], /--issue is given twice/],
+    ["a switch given twice", [...ARGS, "--dry-run", "--dry-run"], /--dry-run is given twice/],
+    ["a flag with no value", ["--issue", String(ISSUE), "--handoff"], /--handoff needs a value/],
+    ["a flag whose value is a flag", ["--issue", String(ISSUE), "--handoff", "--dry-run"], /--handoff needs a value/],
+    ["an issue that is not a number", ["--issue", "abc", "--handoff", "h.md"], /takes an issue number, not "abc"/],
+    ["issue 0", ["--issue", "0", "--handoff", "h.md"], /takes an issue number, not "0"/],
+    ["an issue number with a tail", ["--issue", "12x", "--handoff", "h.md"], /takes an issue number, not "12x"/],
+  ])("exits 2 on %s, and runs nothing", (_, argv, said) => {
+    const { exit, sent, err, dropped } = runCli(argv);
+    expect(exit).toBe(2);
+    expect(err).toMatch(said);
+    expect(err).toContain("node tools/entry/release.mjs --issue N --handoff <file>");
+    expect(sent).toEqual([]);
+    expect(dropped).toBe(0);
+  });
+
+  it("parses what it is given, and keeps an empty --takeover apart from none", () => {
+    expect(parseArgs(ARGS)).toEqual({ issue: ISSUE, handoff: "handoff.md", status: "Review", gate: "None", takeover: null, dryRun: false, asJson: false });
+    expect(parseArgs([...ARGS, "--status", "Needs Kuya", "--gate", "Kuya", "--takeover", "", "--dry-run", "--json"])).toEqual({
+      issue: ISSUE,
+      handoff: "handoff.md",
+      status: "Needs Kuya",
+      gate: "Kuya",
+      takeover: "",
+      dryRun: true,
+      asJson: true,
+    });
+  });
+
+  it.each([
+    [["--status", "Reveiw"], /--status "Reveiw" is not an option on the board\. It has: Active, Needs Kuya, Review\./],
+    [["--gate", "none"], /--gate "none" is not an option on the board\. It has: None, Kuya\./],
+  ])("exits 2 on %j: a misspelt option would end the lease and leave the row as it was", (extra, said) => {
+    const { exit, sent, err } = runCli([...ARGS, ...extra]);
+    expect(exit).toBe(2);
+    expect(err).toMatch(said);
+    expect(sent).toEqual([]);
+  });
+
+  it("exits 2 when the Handoff file cannot be read", () => {
+    const file = () => {
+      throw new Error("ENOENT: no such file or directory, open 'handoff.md'");
+    };
+    const { exit, sent, err } = runCli(ARGS, { file });
+    expect(exit).toBe(2);
+    expect(err).toMatch(/--handoff handoff\.md could not be read: ENOENT/);
+    expect(sent).toEqual([]);
+  });
+
+  it.each([
+    ["the board cannot be reached", { board: () => ({ reachable: false, items: [], error: "gh: HTTP 502" }) }, "RELEASE_BOARD_UNREADABLE"],
+    ["the board's field ids cannot be read", { projectIds: gone }, "RELEASE_BOARD_UNREADABLE"],
+    ["the issue has no row on the board", { board: () => ({ reachable: true, items: [{ number: 12, itemId: "PVTI_other" }], error: null }) }, "RELEASE_NO_BOARD_ROW"],
+    ["the thread cannot be read", { read: gone }, "RELEASE_THREAD_UNREADABLE"],
+    ["the caller is not the holder (the incident)", { seat: PREDECESSOR }, "RELEASE_NOT_HOLDER"],
+    ["the holding folder is on another branch", { seat: { ...HOLDER, branch: "main" } }, "RELEASE_BRANCH_MISMATCH"],
+    ["the lease was already released", { thread: [A_CLAIM, A_RELEASE] }, "RELEASE_NO_LIVE_CLAIM"],
+    ["the Handoff does not release", { handoffText: "### Handoff\n\n- Claim: HELD" }, "RELEASE_WOULD_NOT_RELEASE"],
+  ])("exits 1 and writes nothing when %s", (_, seams, code) => {
+    const { exit, sent, err, dropped } = runCli(ARGS, seams);
+    expect(exit).toBe(1);
+    expect(err).toContain(`REFUSE — ${code}`);
+    expect(err).toContain("Nothing was written.");
+    expect(sent).toEqual([]);
+    expect(dropped).toBe(0);
+  });
+
+  it("links the live claim when it refuses the incident", () => {
+    const { err } = runCli(ARGS, { seat: PREDECESSOR });
+    expect(err).toContain(B_CLAIM.url);
+    expect(err).toContain(`${HOLDER.folder} @ ${HOLDER.branch}`);
+  });
+
+  it("a dry run writes nothing, and shows the comment and the board steps in words", () => {
+    const { exit, sent, out, dropped } = runCli([...ARGS, "--dry-run"]);
+    expect(exit).toBe(0);
+    expect(sent).toEqual([]);
+    expect(dropped).toBe(0);
+    expect(out).toContain("nothing was written");
+    expect(out).toContain("- Claim: released");
+    for (const words of ["set Status=Review", "set Gate=None", "set Next action = Kuya reviews.", "clear Claim expires", "set Last verified = 2026-10-03"]) {
+      expect(out).toContain(words);
+    }
+  });
+
+  it("a release sends the comment and the board row, then drops the stale copy of the board", () => {
+    const { exit, sent, out, dropped } = runCli([...ARGS, "--status", "Needs Kuya", "--gate", "Kuya"]);
+    expect(exit).toBe(0);
+    expect(sent.map((s) => s.describe)).toEqual([`comment on #${ISSUE}`, "set F_status=Needs Kuya", "set F_gate=Kuya", "set F_next", "clear F_exp", "set F_ver"]);
+    expect(sent.at(-1).argv).toContain("2026-10-03");
+    expect(dropped).toBe(1);
+    expect(out).toContain("lease released");
+    expect(out).toContain("6 steps run");
+  });
+
+  it("takes over only with --takeover and its reason, measures the holder, and says so", () => {
+    const asked = [];
+    const seams = {
+      thread: LAPSED,
+      seat: PREDECESSOR,
+      liveness: (...args) => {
+        asked.push(args);
+        return "dead";
+      },
+    };
+    expect(runCli(ARGS, seams).err).toContain("REFUSE — RELEASE_NOT_HOLDER");
+    expect(runCli([...ARGS, "--takeover", ""], seams).err).toContain("REFUSE — RELEASE_TAKEOVER_NO_REASON");
+    expect(asked).toEqual([]);
+    const { exit, sent, out } = runCli([...ARGS, "--takeover", "worktree removed; no process has it open"], seams);
+    expect(exit).toBe(0);
+    expect(sent[0].argv.at(-1)).toContain(`\n\n${TAKEOVER_HEADER}\n`);
+    expect(sent[0].argv.at(-1)).toContain("- Worktree/process evidence checked: worktree removed; no process has it open");
+    expect(out).toContain("by takeover");
+    expect(asked).toEqual([[HOLDER.folder, { now: NOW }]]);
+  });
+
+  it("never takes over a holder it finds live, whatever the reason and the clock say", () => {
+    const { exit, sent, err } = runCli([...ARGS, "--takeover", "it looked idle"], { thread: LAPSED, seat: PREDECESSOR, liveness: () => "live" });
+    expect(exit).toBe(1);
+    expect(err).toContain("REFUSE — RELEASE_HOLDER_LIVE");
+    expect(sent).toEqual([]);
+  });
+
+  it("exits 3 when the comment went and the board row did not, and lists what is left to run", () => {
+    const { exit, sent, err, dropped } = runCli(ARGS, { failAt: 3 });
+    expect(exit).toBe(3);
+    expect(sent).toHaveLength(3);
+    expect(err).toContain("RELEASED, BOARD ROW INCOMPLETE — RELEASE_HALF_RUN");
+    for (const words of ["set Next action = Kuya reviews.", "clear Claim expires", "set Last verified = 2026-10-03"]) expect(err).toContain(words);
+    expect(err).toContain('"--clear"');
+    expect(err).not.toContain("REFUSE");
+    expect(dropped).toBe(1);
+  });
+
+  it("exits 1 when the comment itself failed, and does not call it a refusal", () => {
+    const { exit, sent, err, dropped } = runCli(ARGS, { failAt: 0 });
+    expect(exit).toBe(1);
+    expect(err).toContain("FAILED — RELEASE_POST_FAILED");
+    expect(err).not.toContain("REFUSE");
+    expect(sent).toEqual([]);
+    expect(dropped).toBe(0);
+  });
+
+  it("posts the Handoff file's text, without its byte-order mark or its carriage returns", () => {
+    const { exit, sent } = runCli(ARGS, { handoffText: String.fromCharCode(0xfeff) + RELEASED.replace(/\n/g, "\r\n") });
+    expect(exit).toBe(0);
+    expect(sent[0].argv.at(-1)).toBe(RELEASED);
+  });
+
+  it("--json answers in JSON, for a release and for a refusal", () => {
+    const ok = runCli([...ARGS, "--dry-run", "--json"]);
+    expect(ok.exit).toBe(0);
+    expect(JSON.parse(ok.out)).toMatchObject({ ok: true, issue: ISSUE, via: "holder", dryRun: true, body: RELEASED });
+    expect(JSON.parse(ok.out).steps.map((s) => s.ran)).toEqual([false, false, false, false, false, false]);
+    const no = runCli([...ARGS, "--json"], { seat: PREDECESSOR });
+    expect(no.exit).toBe(1);
+    expect(JSON.parse(no.out)).toMatchObject({ ok: false, issue: ISSUE, code: "RELEASE_NOT_HOLDER" });
+    expect(no.err).toBe("");
+    expect(no.sent).toEqual([]);
+  });
+
+  it("does not dress an unexpected failure as a refusal", () => {
+    const release = () => {
+      throw new TypeError("boom");
+    };
+    expect(() => runCli(ARGS, { release })).toThrow("boom");
+  });
+
+  it("measures its seat as the worktree's top level, from wherever inside it the command runs", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
+    const seat = measureSeat({ env: {}, cwd: HERE });
+    expect(samePath(seat.folder, ROOT)).toBe(true);
+    expect(seat.branch).not.toBe("HEAD");
   });
 });

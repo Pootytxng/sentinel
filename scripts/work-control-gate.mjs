@@ -171,7 +171,8 @@ function leaseBlockers(issues, issueComments, { how, then }) {
         `#${issue} still has a live lease: the ownership claim posted ${lease.claim.postedAt} has no newer ` +
           `Handoff releasing it. ${how ? `${how} ` : ""}Closing the issue sets its item Done (the project's "Item closed" ` +
           "workflow), which tells every reader that no writer holds it; #283 read Done that way on 2026-09-10. " +
-          `Post the Handoff first, ending "- Claim: released" (planRelease moves the item to Review), then ${then}.`,
+          `Post the Handoff first, ending "- Claim: released", from the holding folder with ` +
+          `node tools/entry/release.mjs --issue ${issue} --handoff <file> (it moves the item to Review), then ${then}.`,
       );
     }
   }
