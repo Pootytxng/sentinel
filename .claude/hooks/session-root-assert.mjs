@@ -58,10 +58,24 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
 /**
  * Where compy-entry keeps its records: the launch handshake, the per-folder leases, the board
@@ -1035,17 +1049,27 @@ export function diagnoseWorktreeProvisioning(
 // for a session it opened in a lane worktree under `.claude\worktrees\`. Read alone, that bound every
 // lane session to the shared checkout and refused every write into its own lane (#637).
 //
-// The folder a session was LAUNCHED in is still on record, and nothing inside the session can move
-// it. The harness files the conversation under `<config>\projects\<launch folder, every character
-// that is not a letter or digit turned into "-">\` and hands that file to every hook as
-// `transcript_path`. A `cd` moves the payload's `cwd`; it never moves the transcript.
+// The session's own folder is still on record. The harness files the conversation under
+// `<config>\projects\<folder, every character that is not a letter or digit turned into "-">\` and
+// hands that file to every hook as `transcript_path`. A `cd` does not move the file; a session that
+// moves to another folder takes its transcript along (three lanes' transcripts on 2026-10-02 start in
+// another folder). The name is lossy (`twin.x` and `twin-x` spell the same), so the folder itself is
+// read from the transcript, whose lines record the session's folder as `"cwd"`. Only the first 64 KB
+// and the last 1 MB are read, which keeps a hook cheap on a long transcript: a session records its
+// folder at the end while it is still there, and at the start if it began there and has since moved
+// its shell elsewhere.
 //
 // So a lane replaces CLAUDE_PROJECT_DIR as the root only when ALL of these hold:
 //   * the transcript is filed under a folder name that is not the project dir's own;
-//   * exactly ONE folder directly inside `<project dir>\.claude\worktrees` spells that name — two
-//     that collide name nobody;
-//   * that folder is a linked worktree of the project dir's own repository: its `.git` file points
-//     into `<project dir>\.git\worktrees\`.
+//   * the transcript records exactly one folder that spells that name. Before it records anything,
+//     the payload's `cwd` stands in, since nothing can have moved it yet. A subagent's own transcript
+//     starts wherever its parent's shell had gone, so a subagent reads its parent's transcript and
+//     never the payload;
+//   * that folder sits directly inside `<project dir>\.claude\worktrees` and is a real directory,
+//     not a link;
+//   * it is a linked worktree of the project dir's own repository: its `.git` file points, once `..`
+//     and links are resolved, at an entry directly inside `<project dir>\.git\worktrees`, and that
+//     entry's own `gitdir` file points back at this folder.
 // Anything else, a failed read included, leaves CLAUDE_PROJECT_DIR as the root: the fallback is the
 // old behaviour, never a wider one. Every check after this one still applies to the lane.
 
@@ -1064,24 +1088,73 @@ export function launchFolderName(transcriptPath) {
   return null;
 }
 
+/**
+ * The folders a transcript records its session in: every `"cwd"` in its first 64 KB and its last
+ * 1 MB. `fresh` is true when there is no transcript yet, or it is empty.
+ */
+export function transcriptCwds(transcriptPath, { headBytes = 64 * 1024, tailBytes = 1024 * 1024 } = {}) {
+  let fd = null;
+  try {
+    fd = openSync(transcriptPath, "r");
+    const size = fstatSync(fd).size;
+    if (size === 0) return { fresh: true, cwds: [] };
+    const cwds = [];
+    // Each window is searched on its own, so no value can be stitched together across the gap.
+    const search = (from, length) => {
+      if (length <= 0) return;
+      const window = Buffer.alloc(length);
+      const text = window.toString("utf8", 0, readSync(fd, window, 0, length, from));
+      for (const field of text.matchAll(/"cwd"\s*:\s*("(?:[^"\\]|\\.)*")/g)) {
+        try {
+          cwds.push(JSON.parse(field[1]));
+        } catch {
+          /* a value cut at the window's edge is not a record */
+        }
+      }
+    };
+    search(0, Math.min(headBytes, size));
+    const tailFrom = Math.max(headBytes, size - tailBytes);
+    search(tailFrom, size - tailFrom);
+    return { fresh: false, cwds };
+  } catch (err) {
+    return { fresh: err?.code === "ENOENT", cwds: [] };
+  } finally {
+    if (fd !== null) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* the answer is already decided */
+      }
+    }
+  }
+}
+
 /** The lane worktree this session was launched in, or null when its transcript does not prove one. */
-export function launchWorktree({ projectDir, transcriptPath, readdir = readdirSync, read = readFileSync } = {}) {
+export function launchWorktree({ projectDir, transcriptPath, cwd = null } = {}) {
   const launched = launchFolderName(transcriptPath)?.toLowerCase();
   if (!projectDir || !launched) return null;
   const spelling = (p) => transcriptFolderFor(canonicalizePath(p)).toLowerCase();
   if (launched === spelling(projectDir)) return null;
   try {
-    const lanes = join(projectDir, ".claude", "worktrees");
-    const named = readdir(lanes, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => join(lanes, entry.name))
-      .filter((lane) => spelling(lane) === launched);
+    // A subagent's transcript is `<session>\subagents\<agent>.jsonl`; its parent's is `<session>.jsonl`.
+    const subagent = basename(dirname(transcriptPath)).toLowerCase() === "subagents";
+    const record = transcriptCwds(subagent ? `${dirname(dirname(transcriptPath))}.jsonl` : transcriptPath);
+    const named = [];
+    for (const folder of record.fresh && !subagent ? [cwd] : record.cwds) {
+      if (typeof folder !== "string" || !isAbsolute(folder)) continue;
+      const exact = resolve(folder);
+      if (spelling(exact) === launched && !named.some((n) => samePath(n, exact))) named.push(exact);
+    }
     if (named.length !== 1) return null;
-    const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(read(join(named[0], ".git"), "utf8"));
+    const [lane] = named;
+    if (!samePath(dirname(lane), resolve(projectDir, ".claude", "worktrees"))) return null;
+    if (!lstatSync(lane).isDirectory()) return null;
+    const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(join(lane, ".git"), "utf8"));
     if (!pointer) return null;
-    const gitdir = canonicalizePath(isAbsolute(pointer[1]) ? pointer[1] : resolve(named[0], pointer[1])).toLowerCase();
-    const store = `${canonicalizePath(join(projectDir, ".git", "worktrees")).toLowerCase()}\\`;
-    return gitdir.startsWith(store) ? canonicalizePath(named[0]) : null;
+    const entry = realpathSync.native(resolve(lane, pointer[1]));
+    if (!samePath(dirname(entry), realpathSync.native(resolve(projectDir, ".git", "worktrees")))) return null;
+    const back = /^(.+?)\s*$/m.exec(readFileSync(join(entry, "gitdir"), "utf8"))?.[1];
+    return back && samePath(resolve(entry, back), join(lane, ".git")) ? canonicalizePath(lane) : null;
   } catch {
     return null;
   }
@@ -1096,7 +1169,11 @@ export function launchWorktree({ projectDir, transcriptPath, readdir = readdirSy
  */
 export function resolveSessionRoot({ env = process.env, hookInput = null, cwd = process.cwd() } = {}) {
   if (env?.CLAUDE_PROJECT_DIR) {
-    const lane = launchWorktree({ projectDir: env.CLAUDE_PROJECT_DIR, transcriptPath: hookInput?.transcript_path });
+    const lane = launchWorktree({
+      projectDir: env.CLAUDE_PROJECT_DIR,
+      transcriptPath: hookInput?.transcript_path,
+      cwd: hookInput?.cwd,
+    });
     if (lane) return { root: lane, source: "launch worktree (transcript_path)", observed: true };
     return { root: canonicalizePath(env.CLAUDE_PROJECT_DIR), source: "CLAUDE_PROJECT_DIR", observed: true };
   }
