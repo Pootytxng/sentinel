@@ -1,5 +1,6 @@
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,9 +8,9 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 
 import { verdictFor } from "../.claude/hooks/session-root-assert.mjs";
-import { decideShell } from "../.claude/hooks/shell-ownership-assert.mjs";
+import { decideShell, gitIsReadOnly } from "../.claude/hooks/shell-ownership-assert.mjs";
 import { ZONES } from "../.claude/hooks/target-ownership.mjs";
-import { TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
+import { GIT_SPAWN_TIMEOUT_MS, TREE_WALK_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 import { pickRoute, readLauncherTasks, SUCCESSOR_PREAMBLE, successorPrompt } from "./successor-route.mjs";
 
 // Guard for #466: "launch the successor yourself" only works if the routing decision is provable.
@@ -220,12 +221,12 @@ describe("SUCCESSOR_PREAMBLE", () => {
 
   // Review of PR #642: the lines for an unclaimed folder and an unreadable board name no folder, and a
   // new successor's folder is always unclaimed, so (b) cannot rest on the line alone. It falls back to
-  // a fetch, which the shell hook refuses in a bound session with the sentence quoted here, and lets
+  // a probe, which the shell hook refuses in a bound session with the sentence quoted here, and lets
   // through for a session rooted in its own folder.
-  it("falls back to a fetch the shell hook refuses only in a bound session, quoting that refusal", () => {
+  it("falls back to a probe the shell hook refuses only in a bound session, quoting that refusal", () => {
     const step0 = SUCCESSOR_PREAMBLE.slice(SUCCESSOR_PREAMBLE.indexOf("STEP 0"), SUCCESSOR_PREAMBLE.indexOf("\nSTEP 1 "));
     const probe = /names no folder[^]*?run `([^`]+)` now/.exec(step0)?.[1];
-    expect(probe).toBe("git fetch origin");
+    expect(probe).toBe("git remote prune --dry-run origin");
     const quoted = /"(This session is working in [^"]+)"/.exec(step0)?.[1];
     expect(quoted).toBe("This session is working in C:\\Users\\Kuya\\code\\sentinel,");
 
@@ -248,6 +249,68 @@ describe("SUCCESSOR_PREAMBLE", () => {
     expect(bound.permission).toBe("deny");
     expect(bound.reason).toContain(quoted.replace("C:\\Users\\Kuya\\code\\sentinel", shared));
     expect(decide(lane).permission).toBe("allow");
+  });
+
+  // Second review of PR #642: that probe was `git fetch origin`, which writes refs and FETCH_HEAD
+  // before STEP 1's claim (docs/WORK_CONTROL.md "Claim before write"). So of the git commands STEP 0
+  // names, the only one the shell hook reads as a write is the dry-run probe, and the real fetch is
+  // named after the claim.
+  it("names no git command that writes before the claim; the real fetch comes after it", () => {
+    const step0 = SUCCESSOR_PREAMBLE.slice(SUCCESSOR_PREAMBLE.indexOf("STEP 0"), SUCCESSOR_PREAMBLE.indexOf("\nSTEP 1 "));
+    const commands = [...step0.matchAll(/`(git [^`]+)`/g)].map((m) => m[1]);
+    expect(commands).toEqual(["git rev-parse --show-toplevel", "git remote prune --dry-run origin"]);
+    const readAsWrites = commands.filter((c) => !gitIsReadOnly(c.split(" ").slice(1)));
+    expect(readAsWrites).toEqual(["git remote prune --dry-run origin"]);
+    expect(SUCCESSOR_PREAMBLE.indexOf("`git fetch origin`")).toBeGreaterThan(SUCCESSOR_PREAMBLE.indexOf("Ownership claim"));
+    expect(SUCCESSOR_PREAMBLE.indexOf("`git ls-remote origin`")).toBeGreaterThan(SUCCESSOR_PREAMBLE.indexOf("\nSTEP 1 "));
+    expect(gitIsReadOnly(["ls-remote", "origin"])).toBe(true);
+  });
+
+  // "It changes nothing" is measured, not assumed. Against an origin that has moved on (a new commit,
+  // a new branch, a deleted branch) the probe reports what it would prune and leaves every file in
+  // the clone byte-identical. A dry-run fetch does not pass this: it still downloads the new objects.
+  it("the probe changes no file in the clone, against an origin that has moved on", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
+    const step0 = SUCCESSOR_PREAMBLE.slice(SUCCESSOR_PREAMBLE.indexOf("STEP 0"), SUCCESSOR_PREAMBLE.indexOf("\nSTEP 1 "));
+    const probe = /names no folder[^]*?run `git ([^`]+)` now/.exec(step0)?.[1];
+    expect(probe).toBeDefined();
+
+    const root = mkdtempSync(join(tmpdir(), "successor-probe-"));
+    // git exports GIT_DIR and friends to hooks, and the pre-push gate runs this suite from one.
+    // Inherited, they would aim every command below at the real repository.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+    const git = (cwd, ...args) =>
+      execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], {
+        cwd,
+        encoding: "utf8",
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+    const snapshot = (dir) =>
+      readdirSync(dir, { recursive: true, withFileTypes: true })
+        .filter((e) => e.isFile())
+        .map((e) => join(e.parentPath, e.name))
+        .sort()
+        .map((file) => `${file.slice(dir.length)} ${createHash("sha256").update(readFileSync(file)).digest("hex")}`);
+
+    git(root, "init", "-q", "--bare", "-b", "main", "origin.git");
+    git(root, "clone", "-q", "origin.git", "writer");
+    const writer = join(root, "writer");
+    git(writer, "commit", "-q", "--allow-empty", "-m", "base");
+    git(writer, "push", "-q", "origin", "HEAD:refs/heads/main", "HEAD:refs/heads/stale");
+    git(root, "clone", "-q", "origin.git", "lane");
+    const lane = join(root, "lane");
+    writeFileSync(join(writer, "new.txt"), "new\n");
+    git(writer, "add", "new.txt");
+    git(writer, "commit", "-q", "-m", "origin moves on");
+    git(writer, "push", "-q", "origin", "HEAD:refs/heads/main", "HEAD:refs/heads/fresh", ":refs/heads/stale");
+
+    const before = snapshot(lane);
+    expect(before.length).toBeGreaterThan(5);
+    const said = git(lane, ...probe.split(" "));
+    expect(snapshot(lane)).toEqual(before);
+    // It did reach origin and had something to report, so "no change" is not "nothing to do".
+    expect(said).toContain("[would prune] origin/stale");
   });
 
   it("is a non-empty string independent of any live machine state", () => {
