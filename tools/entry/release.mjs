@@ -7,7 +7,7 @@
 //      1 = REFUSE: nothing was written. (FAILED: gh gave up posting the Handoff.)
 //      2 = usage.
 //      3 = the Handoff is posted, and the board row is unfinished or unchecked: the thread could not be
-//          read back, a board edit failed, or the last look at the thread failed.
+//          read back, a board edit failed, or the last look at the thread could not be shown current.
 //      4 = the Handoff is posted and another claim is on the thread: the board row was left to it, or
 //          was being filed while it landed.
 //
@@ -26,9 +26,11 @@
 // another: a claim that lands in the seconds between the check and the post stays live
 // (`threadLease`). The thread is read back before any board field is touched, and the board row is
 // left alone when that claim was not the one this release ended, or when a claim was posted after it.
-// It is read once more after the board edits, whether they all ran or one failed, and no stop hands
-// out an edit to run: a row left unfinished stays as it is until the next claim on the issue files it,
-// and anything done to it by hand starts with reading the thread again.
+// After the board edits, whether they all ran or one failed, the comment is marked with how the row
+// was filed and the thread is read until the mark shows, so the last look is current and a claim that
+// landed during the edits is seen. No stop hands out an edit to run: a row left unfinished stays as it
+// is until the next claim on the issue files it, and anything done to it by hand starts with reading
+// the thread again.
 //
 // --handoff is the Handoff as Markdown: the docs/WORK_CONTROL.md block, ending "- Claim: released".
 // The board's Next action is read back out of it.
@@ -48,7 +50,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describeClaim, releaseComment, releaseDecision, releaseOutcome, renderHandoff } from "./claim.mjs";
+import { describeClaim, instant, releaseComment, releaseDecision, releaseOutcome, renderHandoff } from "./claim.mjs";
 import { ghReader, readBoard, readProjectIds, REPO } from "./gather.mjs";
 import { CORRUPT, invalidateBoardCache, observeLiveness, readLineage, resolveSessionRoot, samePath } from "./session-assert.mjs";
 import { liveFolder } from "../../scripts/scope-drift-gate.mjs";
@@ -131,20 +133,40 @@ const holderLiveness = (now) => (folder) => {
 };
 
 /**
- * The thread's comments as posted: body, time and link. Null when it could not be read, in any way. A
- * comment that arrived without its text may be the claim or the release that decides the lease, so a
- * thread holding one was not read.
+ * The thread's comments as posted: body, time and link. `comments` is null when the thread could not be
+ * read, in any way, and `why` says how. A comment that arrived without its text may be the claim or the
+ * release that decides the lease, and one that arrived without the time it was posted could have been
+ * posted at any (`claimsAt` in claim.mjs), so a thread holding either was not read. On 71bd4e38 a claim
+ * without its time was let through, and from then on every release on that thread was refused for a
+ * shared time, with a cure, a refreshed claim, that could not cure it (review of PR 644, round 3).
  */
 const readThread = (issue) => {
+  const unread = (why) => ({ comments: null, why });
+  let printed;
   try {
-    const comments = JSON.parse(ghReader()(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]))?.comments;
-    return Array.isArray(comments) && comments.every((c) => c !== null && typeof c === "object" && typeof c.body === "string") ? comments : null;
-  } catch {
-    return null;
+    printed = ghReader()(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]);
+  } catch (e) {
+    return unread(`GitHub did not answer: ${firstLine(e)}`);
   }
+  let answer;
+  try {
+    answer = JSON.parse(printed);
+  } catch {
+    return unread("GitHub's answer was not JSON");
+  }
+  const comments = answer?.comments;
+  if (!Array.isArray(comments)) return unread("GitHub's answer holds no list of comments");
+  for (const c of comments) {
+    if (c === null || typeof c !== "object" || typeof c.body !== "string") return unread("a comment arrived without its text");
+    if (!Number.isFinite(instant(c.createdAt))) return unread("a comment arrived without the time it was posted");
+  }
+  return { comments, why: null };
 };
 
 const ghWrite = (argv) => execFileSync("gh", argv, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+/** The number GitHub gave a comment, off its link. Null when the link names none. */
+const numericId = (url) => /#issuecomment-(\d+)$/.exec(String(url ?? ""))?.[1] ?? null;
 
 const sameText = (a, b) => String(a ?? "").replace(/\r\n?/g, "\n").trim() === String(b ?? "").replace(/\r\n?/g, "\n").trim();
 
@@ -164,12 +186,15 @@ const findPosted = (comments, { id, body }) => {
 const READ_BACK_TRIES = 3;
 const readBack = (issue, posted) => {
   for (let i = 0; i < READ_BACK_TRIES; i += 1) {
-    const comments = readThread(issue);
+    const { comments } = readThread(issue);
     const index = comments ? findPosted(comments, posted) : -1;
     if (index >= 0) return { comments, index };
   }
   return null;
 };
+
+/** The one step after the board edits: the posted Handoff is marked with how the row was filed. */
+const MARK = { describe: "mark the Handoff with how the row was filed" };
 
 const refusal = (issue, d, extra = {}) =>
   Object.assign(new Error(`Refusing to release the lease on #${issue} (${d.code}): ${d.reason} ${d.cure}`), {
@@ -213,10 +238,17 @@ const optionId = (field, name) => {
  *   nothing and the row is not this caller's to edit;
  * - RELEASE_ROW_TAKEN: it ended its claim and a claim was posted after it, so the row is that claim's;
  * - RELEASE_UNVERIFIED: the thread could not be read back, so no field is edited.
- * The thread is read once more after the edits, whether they all ran or one failed:
+ * After the edits, whether they all ran or one failed, the comment is marked with how the row was
+ * filed (`- Row filed: <time>`, or `- Row unfinished: <time>`, inside its Release record), by editing
+ * the one comment this release posted, by the number GitHub gave it and never "the newest comment",
+ * and the thread is read until a read shows the mark. Comments are written in order, so a read that
+ * holds the mark holds every claim posted before it. On 71bd4e38 the first read that showed the release
+ * was taken, and one served from before the edits showed no claim that had landed during them (review
+ * of PR 644, round 3).
  * - RELEASE_ROW_RACED: a claim landed while the row was being edited. Reported, not prevented;
  * - RELEASE_HALF_RUN: a board edit failed, and the edits after it were not tried;
- * - RELEASE_ROW_UNCHECKED: every edit ran, and that last read failed.
+ * - RELEASE_ROW_UNCHECKED: every edit ran, and no read showed the mark: the thread could not be read,
+ *   no read showed it yet, the mark could not be written, or the comment has no number to write it by.
  * On e0362db5 a failed edit skipped the last read and listed the edits left for the caller to run by
  * hand, over whatever claim had landed (review of PR 644, round 2). No stop lists an edit to run now.
  * A row left unfinished stays as it is until the next claim on the issue (a claim sets its Status,
@@ -297,8 +329,9 @@ export function postRelease(request) {
 
   const self = measureSeat();
   const now = new Date();
-  const comments = readThread(issue); // the last read before the post. Null is refused: a thread nobody could read is never guessed at
-  const decision = releaseDecision({ issue, comments, self, takeover, liveness: holderLiveness(now), now });
+  const thread = readThread(issue); // the last read before the post. An unread thread is refused: a thread nobody could read is never guessed at
+  const comments = thread.comments;
+  const decision = releaseDecision({ issue, comments, unread: thread.why, self, takeover, liveness: holderLiveness(now), now });
   if (!decision.ok) throw refusal(issue, decision);
   const built = releaseComment({ issue, comments, decision, self, text, now });
   if (!built.ok) throw refusal(issue, built);
@@ -317,7 +350,7 @@ export function postRelease(request) {
     { describe: `set Last verified = ${today}`, argv: edit("lastVerified", "--date", today) },
   ];
   const result = { via: decision.via, claim: decision.claim, body: built.body };
-  if (dryRun) return { ...result, url: null, steps: plan.map((s) => ({ describe: s.describe, ran: false })) };
+  if (dryRun) return { ...result, url: null, steps: [...plan, MARK].map((s) => ({ describe: s.describe, ran: false })) };
 
   let printed;
   try {
@@ -358,7 +391,7 @@ export function postRelease(request) {
     const why = !outcome.before
       ? "no claim was live when it landed."
       : sameTime
-        ? `when it landed, the live claim was ${describeClaim(outcome.before)}, and its posting time is not one claim's alone on this thread (another was posted in the same second, or read without a time), so a record naming that time ends neither.`
+        ? `when it landed, the live claim was ${describeClaim(outcome.before)}, and its posting time is not one claim's alone on this thread (another was posted in the same second), so a record naming that time ends neither.`
         : `when it landed, the live claim was ${describeClaim(outcome.before)}, not the one it names.`;
     throw afterPost(
       "RELEASE_ENDED_NOTHING",
@@ -393,17 +426,65 @@ export function postRelease(request) {
     invalidateBoardCache();
   } catch {}
 
-  // GitHub has no conditional write, so a claim that landed during those edits could not be stopped.
-  // It is looked for once more, after every edit that ran and after one that failed, and said.
-  const after = readBack(issue, posted);
+  // GitHub has no conditional write, so a claim that landed during those edits could not be stopped. It
+  // is looked for once more, after every edit that ran and after one that failed, and the look has to
+  // be CURRENT: on 71bd4e38 the first read that showed the release was taken, and a read served from
+  // before the edits showed the release and not the claim (review of PR 644, round 3). So the Handoff
+  // is first marked with how the row was filed, by editing the one comment this release posted, by the
+  // number GitHub gave it, and the thread is then read until a read shows the mark. Comments are one
+  // table written in order, so a read that holds the mark holds every claim posted before it. The mark
+  // is a line inside the Release record, and no label of its opens with "Claim" (see `renderRecord`).
+  const stamp = new Date().toISOString();
+  const marked = `${built.body.trimEnd()}\n- Row ${failure ? `unfinished: ${stamp} ("${plan[ran].describe}" failed)` : `filed: ${stamp}`}\n`;
+  const commentId = numericId(url) ?? numericId(back.comments[back.index]?.url);
+  let markSent = false;
+  let markFailure = null;
+  if (commentId) {
+    try {
+      ghWrite(["api", "--method", "PATCH", `repos/${REPO}/issues/comments/${commentId}`, "-f", `body=${marked}`]);
+      markSent = true;
+    } catch (e) {
+      markFailure = e;
+    }
+  }
+  // The look. A read is current when it shows the Handoff marked. With no mark sent there is no such
+  // read, and the first read that shows the Handoff is taken for what it is: a glimpse, which can show a
+  // claim but cannot show there is none.
+  const found = { id: posted.id ?? (commentId ? `#issuecomment-${commentId}` : null), body: posted.body };
+  let shown = null;
+  let glimpse = null;
+  for (let i = 0; i < READ_BACK_TRIES && !shown; i += 1) {
+    const { comments } = readThread(issue);
+    const index = comments ? findPosted(comments, found) : -1;
+    if (index < 0) continue;
+    glimpse = { comments, index };
+    if (markSent && sameText(comments[index].body, marked)) shown = glimpse;
+    if (!markSent) break;
+  }
+  const after = shown ?? glimpse;
   const raced = after ? releaseOutcome({ comments: after.comments, index: after.index }).next : null;
+  // Why the thread could not be shown current, when it could not.
+  const unshown = shown
+    ? null
+    : !commentId
+      ? "the Handoff carries no comment number to mark it by, so the thread could not be shown current, and a claim landing in those seconds would not have been seen."
+      : markFailure
+        ? `the Handoff could not be marked (${firstLine(markFailure)}), so the thread could not be shown current, and a claim landing in those seconds would not have been seen.`
+        : glimpse
+          ? "no read of the thread after the board edits showed the Handoff marked yet, so the thread could not be shown current, and a claim landing in those seconds would not have been seen."
+          : "the thread could not be read again after the board edits, so a claim landing in those seconds would not have been seen.";
   const edits = plan.slice(1, ran).map((s) => s.describe);
   const untried = plan.slice(ran + 1).map((s) => s.describe);
   const rest = untried.length === 0 ? "it was the last edit" : `${untried.length} more ${untried.length === 1 ? "was" : "were"} not tried`;
   const partly = failure
     ? `${edits.length ? `"${edits.join('", "')}" ran` : "no edit ran"}, "${plan[ran].describe}" failed (${firstLine(failure)}) and may or may not have been applied, and ${rest}`
     : null;
-  const did = { url, claim: decision.claim, ran: plan.slice(0, ran).map((s) => s.describe), ...(failure ? { failed: plan[ran].describe, untried, cause: failure } : {}) };
+  const did = {
+    url,
+    claim: decision.claim,
+    ran: [...plan.slice(0, ran).map((s) => s.describe), ...(markSent ? [MARK.describe] : [])],
+    ...(failure ? { failed: plan[ran].describe, untried, cause: failure } : {}),
+  };
   if (raced) {
     throw afterPost(
       "RELEASE_ROW_RACED",
@@ -418,22 +499,22 @@ export function postRelease(request) {
     throw afterPost(
       "RELEASE_HALF_RUN",
       `The Handoff on #${issue} is posted${link} and its lease is released, but the board row is only partly filed: ${partly}. ` +
-        (after ? "No claim has been posted after the Handoff." : "The thread could not be read again after that, so a claim landing in those seconds would not have been seen."),
-      after
+        (shown ? "No claim has been posted after the Handoff." : `${unshown[0].toUpperCase()}${unshown.slice(1)}`),
+      shown
         ? `Nothing more is run from this release, and running it again is refused: the lease it would end is gone. ${unfiled}`
         : `Nothing more is run from this release. Read the thread again. If a claim follows this Handoff, ${theirs}. If none does, the row stays as it is until the next claim on #${issue}, which sets its Status, Next action and Claim expires again.`,
       did,
     );
   }
-  if (!after) {
+  if (!shown) {
     throw afterPost(
       "RELEASE_ROW_UNCHECKED",
-      `The Handoff on #${issue} is posted${link}, its lease is released and the board row is filed, but the thread could not be read once more after the board edits, so a claim landing in those seconds would not have been seen.`,
+      `The Handoff on #${issue} is posted${link}, its lease is released and the board row is filed, but ${unshown}`,
       `Read the thread again. If a claim follows this Handoff, ${theirs}. If none does, nothing is left to do.`,
       did,
     );
   }
-  return { ...result, url, steps: plan.map((s) => ({ describe: s.describe, ran: true })) };
+  return { ...result, url, steps: [...plan, MARK].map((s) => ({ describe: s.describe, ran: true })) };
 }
 
 /** How each way a release can stop is headed, and what it exits with. Anything else `RELEASE_` is a refusal: exit 1. */

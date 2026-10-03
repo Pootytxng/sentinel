@@ -432,8 +432,11 @@ export function parseReleaseRecord(body) {
 }
 
 // A posting time as GitHub writes one, and nothing looser: a date or a sentence names no comment.
+// Exported so a thread reader can refuse a comment that carries none (release.mjs): a claim read
+// without its time could have been posted at any (`claimsAt`), so with one on the thread no release
+// could ever name the live claim.
 const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
-const instant = (v) => (typeof v === "string" && STAMP.test(v.trim()) ? Date.parse(v.trim()) : Number.NaN);
+export const instant = (v) => (typeof v === "string" && STAMP.test(v.trim()) ? Date.parse(v.trim()) : Number.NaN);
 
 /**
  * The claims that were, or could have been, posted at `at`. GitHub's posting times are whole seconds,
@@ -568,9 +571,21 @@ const runPlan = (plan, { dryRun = false } = {}) => {
 
 const planRefusal = (code, message) => Object.assign(new Error(message), { code });
 
-// The launcher, by its path: the program beside this file. `process.argv[1]` is the program node was
-// started with, so a session's own script, a test runner and `node -e` are not it. Both paths are read
-// through any link: node names this file by where it really is, and the program by how it was typed.
+// The launcher, by the command line node was started with: the program beside this file, and nothing
+// before it. Four witnesses, and all must agree:
+// - `process.report.getReport().header.commandLine[1]`, the first word after the executable in the
+//   argv the OS handed node. Assigning `process.argv` does not change it, and a flag given before the
+//   program (`--import`, `-r`, `-e`, `--inspect`) stands there in place of the program;
+// - `process.argv[1]`, the program node resolved and ran;
+// - `process.execArgv`, which must be empty: every node flag, and so every preload, is one;
+// - `NODE_OPTIONS`, which must be unset or blank: a preload named there shows in neither of the above.
+// So a session's own script, a test runner, `node -e`, a forged `process.argv` and a preload that runs
+// before the launcher are each named by one of them. On 71bd4e38 `process.argv[1]` alone was the
+// witness, and `node --import <a script> launch.mjs` ran that script with the launcher as its program
+// (review of PR 644, round 3). What is left is code loaded into the launcher's own process once it has
+// started, and that is the launcher's own code. Both paths are read through any link: node names this
+// file by where it really is, and the program by how it was typed. The refusal says what was measured;
+// a witness that cannot be read refuses, since unknown means locked.
 const LAUNCHER = join(dirname(fileURLToPath(import.meta.url)), "launch.mjs");
 const throughLinks = (path) => {
   try {
@@ -579,12 +594,40 @@ const throughLinks = (path) => {
     return path;
   }
 };
-const runByLauncher = () => {
+const isLauncherPath = (path) => typeof path === "string" && path !== "" && samePath(throughLinks(resolve(path)), throughLinks(LAUNCHER));
+const launcherWitness = () => {
   try {
+    const measured = [];
+    const quoted = (v) => (typeof v === "string" && v !== "" ? `"${v}"` : "no program");
+    let commandLine = null;
+    try {
+      const read = process.report.getReport().header.commandLine;
+      if (Array.isArray(read)) commandLine = read;
+    } catch {}
     const program = process.argv[1];
-    return typeof program === "string" && program !== "" && samePath(throughLinks(resolve(program)), throughLinks(LAUNCHER));
+    const programOk = isLauncherPath(program);
+    if (!commandLine) {
+      measured.push("the command line node was started with could not be read");
+      if (!programOk) measured.push(`process.argv names ${quoted(program)} as the program`);
+    } else {
+      const started = commandLine[1];
+      const startedOk = isLauncherPath(started);
+      const onePlace = typeof started === "string" && typeof program === "string" && started !== "" && program !== "" && samePath(throughLinks(resolve(started)), throughLinks(resolve(program)));
+      if (!startedOk && !programOk && (onePlace || started === program)) {
+        measured.push(typeof program === "string" && program !== "" ? `node was started with the program "${program}"` : "node was started with no program");
+      } else {
+        if (!startedOk) measured.push(`node was started with ${quoted(started)} after the executable`);
+        if (!programOk) measured.push(`process.argv names ${quoted(program)} as the program`);
+      }
+    }
+    const flags = process.execArgv;
+    if (!Array.isArray(flags)) measured.push("the flags node was started with could not be read");
+    else if (flags.length > 0) measured.push(`node was started with the flag${flags.length === 1 ? "" : "s"} ${flags.join(" ")}`);
+    const options = process.env.NODE_OPTIONS;
+    if (typeof options === "string" && options.trim() !== "") measured.push(`NODE_OPTIONS is set (${options.trim()})`);
+    return measured.length === 0 ? { ok: true } : { ok: false, measured: measured.join("; ") };
   } catch {
-    return false;
+    return { ok: false, measured: "the process could not be measured" };
   }
 };
 
@@ -604,9 +647,9 @@ const runByLauncher = () => {
  * - the program running is not the launcher. A renewal sets a board row's expiry and nothing here
  *   reads who holds that row, so on e0362db5 a predecessor's `execPlan(planRenew(…))` wrote over its
  *   successor's row (review of PR 644, round 2). The launcher is the one caller there is, and it
- *   renews only after its own preflight. It is told by the path node was started with
- *   (`runByLauncher`): that stops a script that calls this, not one that lies about what program it
- *   is, which could as well run `gh` by hand.
+ *   renews only after its own preflight. It is told by the command line node was started with
+ *   (`launcherWitness`): that stops a script that calls this, a preload that runs before the launcher
+ *   and a forged `process.argv`. Code loaded into the launcher's own process is the launcher's own.
  * A claim goes through `postClaim`, and a release through `postRelease` in release.mjs. A session
  * extends its own lease by posting a refreshed Ownership claim.
  */
@@ -630,10 +673,11 @@ export function execPlan(plan, { dryRun = false } = {}) {
       throw planRefusal("PLAN_WOULD_CLAIM", `Refusing to run a plan whose comment is an Ownership claim ("${s.describe}"). A claim is posted by postClaim, on a PASS verdict.`);
     }
   }
-  if (!runByLauncher()) {
+  const launcher = launcherWitness();
+  if (!launcher.ok) {
     throw planRefusal(
       "PLAN_NOT_THE_LAUNCHER",
-      "Refusing to run a plan outside the launcher (tools/entry/launch.mjs). A renewal moves a board row's expiry without reading who holds that row, so only the launcher runs one, after its own preflight. A session extends its own lease by posting a refreshed Ownership claim, and ends it with `node tools/entry/release.mjs`.",
+      `Refusing to run a plan outside the launcher (tools/entry/launch.mjs): ${launcher.measured}. A renewal moves a board row's expiry without reading who holds that row, so only the launcher runs one, after its own preflight. A session extends its own lease by posting a refreshed Ownership claim, and ends it with \`node tools/entry/release.mjs\`.`,
     );
   }
   return runPlan(plan, { dryRun });
@@ -650,7 +694,7 @@ export function execPlan(plan, { dryRun = false } = {}) {
  * the readers a release uses, so a line break or an open code fence in any other field is caught by
  * the same check.
  *
- * And it runs for the launcher alone, dry run or not (`runByLauncher`). The verdict is its caller's to
+ * And it runs for the launcher alone, dry run or not (`launcherWitness`). The verdict is its caller's to
  * hand over, and a claim takes the lease and files the board row over whatever is there: the same
  * unchecked seat `execPlan` is closed to. The launcher is the one caller there is, and it claims on
  * the verdict of its own preflight.
@@ -677,10 +721,11 @@ export function postClaim({ issue, verdict, facts, ids, dryRun = false, cacheDir
         "A lease is released by the folder and branch its claim reads as, so this claim would lock out its own holder or admit another seat. On a claim line a name wrapped in backticks reads as the name inside them, a branch ends at its first space, and a line break ends the line.",
     );
   }
-  if (!runByLauncher()) {
+  const launcher = launcherWitness();
+  if (!launcher.ok) {
     throw planRefusal(
       "CLAIM_NOT_THE_LAUNCHER",
-      `Refusing to post a claim on #${issue} outside the launcher (tools/entry/launch.mjs). A claim takes the lease and files the board row on a verdict its caller hands over, so only the launcher posts one this way, on the verdict of its own preflight. A lease is ended with \`node tools/entry/release.mjs\`.`,
+      `Refusing to post a claim on #${issue} outside the launcher (tools/entry/launch.mjs): ${launcher.measured}. A claim takes the lease and files the board row on a verdict its caller hands over, so only the launcher posts one this way, on the verdict of its own preflight. A lease is ended with \`node tools/entry/release.mjs\`.`,
     );
   }
   const ran = runPlan(plan, { dryRun });
@@ -788,13 +833,15 @@ const HOLDER_WORDS = {
  * @returns {{ok: true, via: "holder"|"takeover", claim: object, takeover?: object}
  *          | {ok: false, code: string, reason: string, cure: string, claim: object|null}}
  */
-export function releaseDecision({ issue, comments, self, takeover = null, liveness = null, now = new Date() }) {
+export function releaseDecision({ issue, comments, unread = null, self, takeover = null, liveness = null, now = new Date() }) {
   const refuse = (code, reason, cure, claim = null) => ({ ok: false, code, reason, cure: `Nothing was written. ${cure}`, claim });
 
+  // `unread` is the reader's own account of why there is no thread, when it gave one.
   if (!Array.isArray(comments)) {
+    const why = typeof unread === "string" && unread.trim() !== "" ? ` (${oneLine(unread)})` : "";
     return refuse(
       "RELEASE_THREAD_UNREADABLE",
-      `The thread of #${issue} could not be read, so who holds its lease is unknown. An unknown lease is not the caller's lease.`,
+      `The thread of #${issue} could not be read${why}, so who holds its lease is unknown. An unknown lease is not the caller's lease.`,
       "Run it again when GitHub answers.",
     );
   }
@@ -971,9 +1018,12 @@ const renderRecord = (claim) =>
  * It is refused unless the fold will read it as exactly what was decided, a release of the one claim
  * that was checked and nothing else:
  * - the text carries a Release record of its own. The tool writes that, from the claim it checked;
- * - the live claim was read without its posting time, so nothing can name it;
- * - another claim on the thread shares that time, or was read without its own. A time two claims
- *   share names neither (`endsClaim`), so the release would be posted and end nothing;
+ * - the live claim, or any other claim on the thread, was read without its posting time. A record
+ *   names a claim by that time, and a claim with no time could have been posted at any (`claimsAt`),
+ *   so nothing could name the live one. On 71bd4e38 this was read as a shared time, whose cure is a
+ *   refreshed claim, which cures nothing here (review of PR 644, round 3);
+ * - another claim on the thread was posted in the same second. A time two claims share names neither
+ *   (`endsClaim`), so the release would be posted and end nothing;
  * - it does not release: no Handoff section, or a Claim line that holds or transfers;
  * - its record does not read back as written. A Handoff text that leaves a code fence or an HTML
  *   block open swallows the record after it, and the comment would be a release with no record, which
@@ -1004,10 +1054,19 @@ export function releaseComment({ issue, comments, decision, self, text, now = ne
       "Run it again when GitHub answers with the thread's posting times.",
     );
   }
-  if (claimsAt(comments.map(claimOf).filter(Boolean), at).length !== 1) {
+  const claims = comments.map(claimOf).filter(Boolean);
+  const undated = claims.find((c) => !Number.isFinite(instant(c.postedAt)));
+  if (undated) {
+    return refuse(
+      "RELEASE_CLAIM_UNDATED",
+      `An Ownership claim on #${issue} was read without the time it was posted (${heldBy(undated)}). A release names the claim it ends by its posting time, and a claim with no time could have been posted at any, so this release would be posted and end nothing.`,
+      "Run it again when GitHub answers with the thread's posting times.",
+    );
+  }
+  if (claimsAt(claims, at).length !== 1) {
     return refuse(
       "RELEASE_CLAIM_TIME_SHARED",
-      `Another Ownership claim on #${issue} was posted in the same second as the live one (${heldBy(claim)}), or was read without its time. A release names the claim it ends by that time, and a time two claims share names neither, so this release would be posted and end nothing.`,
+      `Another Ownership claim on #${issue} was posted in the same second as the live one (${heldBy(claim)}). A release names the claim it ends by that time, and a time two claims share names neither, so this release would be posted and end nothing.`,
       "Post a refreshed Ownership claim from the holding folder, which gets a time of its own, and release that. Where no session is left there to post one, this tool cannot end the lease: mark the row Needs Kuya.",
     );
   }

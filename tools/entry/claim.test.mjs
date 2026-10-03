@@ -105,20 +105,32 @@ const IDS = {
   },
 };
 
-// The launcher is the one program `postClaim` and `execPlan` run for (#643 review, round 2): both
-// write a board row without reading who holds it, so they refuse every other caller by its program
-// path. A test that means to reach their run says so, standing in the launcher's seat for that call.
+// The launcher is the one program `postClaim` and `execPlan` run for (#643 review, rounds 2 and 4):
+// both write a board row without reading who holds it, so they refuse every other caller by the
+// command line node was started with. Four witnesses: the program the OS handed node (the report's
+// command line), the program node ran (`process.argv[1]`), no node flag (`process.execArgv`) and no
+// `NODE_OPTIONS`. A test that means to reach their run says so, standing in the launcher's seat for
+// that call: all four are arranged, unless `witnesses` says otherwise for one of them.
 const LAUNCHER_PATH = join(dirname(fileURLToPath(import.meta.url)), "launch.mjs");
-const asProgram = (program, run) => {
-  const was = process.argv[1];
+const asProgram = (program, run, witnesses = {}) => {
+  const was = { program: process.argv[1], report: process.report.getReport, flags: process.execArgv, options: process.env.NODE_OPTIONS };
+  const started = Object.hasOwn(witnesses, "started") ? witnesses.started : program;
   process.argv[1] = program;
+  process.report.getReport = Object.hasOwn(witnesses, "report") ? witnesses.report : () => ({ header: { commandLine: [process.execPath, started] } });
+  process.execArgv = Object.hasOwn(witnesses, "flags") ? witnesses.flags : [];
+  if (witnesses.options === undefined) delete process.env.NODE_OPTIONS;
+  else process.env.NODE_OPTIONS = witnesses.options;
   try {
     return run();
   } finally {
-    process.argv[1] = was;
+    process.argv[1] = was.program;
+    process.report.getReport = was.report;
+    process.execArgv = was.flags;
+    if (was.options === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = was.options;
   }
 };
-const asLauncher = (run) => asProgram(LAUNCHER_PATH, run);
+const asLauncher = (run, witnesses) => asProgram(LAUNCHER_PATH, run, witnesses);
 
 describe("a claim may not be posted without a verdict", () => {
   it("throws on a REFUSE verdict", () => {
@@ -855,9 +867,9 @@ const BOARD_ROWS = [{ id: "PVTI_x", title: "the release guard", content: { numbe
 /** `gh` failing as it does: the message is the command line, and the cause is the first line of stderr. */
 const ghFailure = (argv) =>
   Object.assign(new Error(`Command failed: gh ${argv.join(" ")}`), { stderr: "GraphQL: Could not resolve to a ProjectV2Item\nsecond line\n" });
-/** A write in words: the comment, or the field an edit sets and what it sets it to. */
-const said = (argv) => (argv[0] === "issue" ? `comment on #${argv[2]}` : argv.slice(argv.indexOf("--field-id") + 1).join(" "));
-/** The six writes of a release that files the row as Review, in order. */
+/** A write in words: the comment, the field an edit sets and what it sets it to, or the mark on the posted comment. */
+const said = (argv) => (argv[0] === "api" ? "mark the posted Handoff" : argv[0] === "issue" ? `comment on #${argv[2]}` : argv.slice(argv.indexOf("--field-id") + 1).join(" "));
+/** The six writes of a release that files the row as Review, in order: the comment, then the five board edits. */
 const SIX_WRITES = [
   `comment on #${ISSUE}`,
   "F_status --single-select-option-id o_review",
@@ -874,6 +886,18 @@ const SIX_STEPS = [
   "clear Claim expires",
   "set Last verified = 2026-10-03",
 ];
+// Round 4 of the review: the seventh write marks the posted Handoff with how the row was filed, so a
+// read that shows the mark is current. It follows the board edits whether they all ran or one failed.
+const MARK_WRITE = "mark the posted Handoff";
+const MARK_STEP = "mark the Handoff with how the row was filed";
+const SEVEN_WRITES = [...SIX_WRITES, MARK_WRITE];
+const SEVEN_STEPS = [...SIX_STEPS, MARK_STEP];
+/** The writes and steps of a release whose board edit numbered `failAt` (1 to 5) failed: what ran before it, then the mark. */
+const WRITES_TO = (failAt) => [...SIX_WRITES.slice(0, failAt), MARK_WRITE];
+const STEPS_TO = (failAt) => [...SIX_STEPS.slice(0, failAt), MARK_STEP];
+/** The mark a whole release leaves on its comment, at the fixed clock, and the one a half run leaves. */
+const FILED = (body) => `${body.trimEnd()}\n- Row filed: ${NOW.toISOString()}\n`;
+const UNFINISHED = (body, step) => `${body.trimEnd()}\n- Row unfinished: ${NOW.toISOString()} ("${step}" failed)\n`;
 
 // What a stop that leaves the row in doubt says to do (#643 review, round 2). On e0362db5 a failed
 // edit listed the edits left to run by hand, over whatever claim had landed meanwhile. No stop hands
@@ -910,14 +934,18 @@ const PARTLY = [
  *   projectDir      { dir, seat }: CLAUDE_PROJECT_DIR is `dir`, and git says `seat` of that folder
  *   holder          the session record of the holding folder: "none" (no record), "corrupt", a liveness
  *                   word, or a function of the folder that answers with one (or throws)
- *   answer          (n) => what the n-th thread read prints; undefined is the thread itself; may throw
+ *   answer          (n, thread) => what the n-th thread read prints, given the thread as it is;
+ *                   undefined is the thread itself; may throw
  *   lag             how many reads after the post still show the thread as it was before it
+ *   staleAfterMark  how many reads after the mark still show the thread as it was just after the post
  *   beforePost      comments that land between the release's read and its post
  *   afterPost       comments that land straight after its post
  *   duringEdits     { at, comments }: comments that land after its `at`-th board edit; 0 is after the
  *                   read-back and before the first edit
  *   failAt          the write that fails: 0 is the comment, 1 to 5 the board edits
+ *   markFails       true: the edit that marks the posted comment fails
  *   printUrl        false: `gh issue comment` prints nothing
+ *   unlinked        true: the posted comment comes back with no link, and `gh issue comment` prints none
  *   boardFails      the board read that fails: "item-list", "view" or "field-list"
  *   rows, truncated, project, fields   what the board reads answer with
  *   dropBoardCache  "throws": dropping the cached copy of the board fails
@@ -929,11 +957,14 @@ function simulate({
   holder = "none",
   answer = null,
   lag = 0,
+  staleAfterMark = 0,
   beforePost = [],
   afterPost = [],
   duringEdits = null,
   failAt = null,
+  markFails = false,
   printUrl = true,
+  unlinked = false,
   boardFails = null,
   rows = BOARD_ROWS,
   truncated = false,
@@ -944,6 +975,9 @@ function simulate({
   let comments = thread.map((c) => ({ ...c }));
   let before = null; // the thread as it was before the post, served to the first `lag` reads after it
   let late = 0;
+  let justPosted = null; // the thread as it was just after the post
+  let stale = null; // ... served to the first `staleAfterMark` reads after the mark
+  let staleReads = 0;
   let writes = 0;
   const seen = { sent: [], calls: [], git: [], asked: [], drops: 0, reads: 0 };
 
@@ -961,18 +995,20 @@ function simulate({
     seen.calls.push(`gh ${kind}`);
     if (kind === "issue view") {
       seen.reads += 1;
-      const printed = answer?.(seen.reads);
+      const printed = answer?.(seen.reads, comments);
       if (printed !== undefined) return printed;
       if (before && (late += 1) <= lag) return JSON.stringify({ comments: before });
+      if (stale && (staleReads += 1) <= staleAfterMark) return JSON.stringify({ comments: stale });
       return JSON.stringify({ comments });
     }
     if (kind === "issue comment") {
       write(argv);
       before = comments;
       const url = `https://github.com/Pootytxng/sentinel/issues/${argv[2]}#issuecomment-${9000 + writes + comments.length}`;
-      const mine = { body: argv.at(-1), createdAt: new Date().toISOString().replace(/\.\d+Z$/, "Z"), url };
+      const mine = { body: argv.at(-1), createdAt: new Date().toISOString().replace(/\.\d+Z$/, "Z"), ...(unlinked ? {} : { url }) };
       comments = [...comments, ...beforePost, mine, ...afterPost];
-      return printUrl ? `${url}\n` : "";
+      justPosted = comments;
+      return printUrl && !unlinked ? `${url}\n` : "";
     }
     if (kind === "project item-list") return boardRead("item-list", { items: rows, totalCount: rows.length + (truncated ? 1 : 0) });
     if (kind === "project view") return boardRead("view", project);
@@ -982,6 +1018,21 @@ function simulate({
       write(argv);
       if (duringEdits?.at === writes - 1) comments = [...comments, ...duringEdits.comments];
       return "";
+    }
+    if (kind === "api --method") {
+      // The one edit of a comment GitHub's REST route allows here: PATCH the comment numbered so, with
+      // its whole new text. The comment must be on the thread. gh prints the comment as edited.
+      const [, , method, route, flag, field] = argv;
+      const id = /^repos\/Pootytxng\/sentinel\/issues\/comments\/(\d+)$/.exec(route)?.[1];
+      const target = id ? comments.find((c) => String(c.url ?? "").endsWith(`#issuecomment-${id}`)) : undefined;
+      if (method !== "PATCH" || !target || flag !== "-f" || !String(field).startsWith("body=")) throw new Error(`the simulated gh does not answer "gh ${argv.join(" ")}"`);
+      if (markFails) throw ghFailure(argv);
+      writes += 1;
+      seen.sent.push({ argv, describe: said(argv) });
+      stale = justPosted;
+      const edited = { ...target, body: field.slice("body=".length) };
+      comments = comments.map((c) => (c === target ? edited : c));
+      return JSON.stringify(edited);
     }
     throw new Error(`the simulated gh does not answer "${kind}"`);
   };
@@ -1073,16 +1124,21 @@ function refusedRun(code, opts) {
 /** The same, returning the refusal itself. */
 const refused = (code, opts) => refusedRun(code, opts).error;
 
-/** The release ran whole: the comment, then the five board edits, and the thread holds no lease after it. */
+/** The release ran whole: the comment, the five board edits, then the mark, and the thread holds no lease after it. */
 function allowed(opts, via = "holder") {
   const run = attempt(opts);
   expect(run.error, String(run.error?.stack ?? run.error)).toBeNull();
   expect(run.result.via).toBe(via);
-  expect(run.sent).toHaveLength(6);
+  expect(run.sent).toHaveLength(7);
   expect(run.sent[0].argv.slice(0, 3)).toEqual(["issue", "comment", String(ISSUE)]);
-  expect(run.result.steps.map((s) => s.ran)).toEqual([true, true, true, true, true, true]);
+  expect(run.sent[6].describe).toBe(MARK_WRITE);
+  expect(run.result.steps.map((s) => s.ran)).toEqual([true, true, true, true, true, true, true]);
   const body = run.sent[0].argv.at(-1);
   expect(run.result.body).toBe(body);
+  // The filing time is the clock's at the mark, which some worlds set elsewhere than NOW.
+  const mark = run.sent[6].argv.at(-1);
+  expect(mark.startsWith(`body=${body.trimEnd()}\n- Row filed: `), "the mark is the posted text, filed").toBe(true);
+  expect(mark.slice(mark.lastIndexOf(": ") + 2)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\n$/);
   expect(threadLease(run.thread).claim, "the lease is still live after the release").toBeNull();
   return { ...run, body };
 }
@@ -1106,12 +1162,12 @@ describe("the simulated world the release tests run in (#643)", () => {
 });
 
 describe("postRelease: only the folder and branch the live claim names may end it (#643)", () => {
-  it("lets the holder release: the comment, then the board row", () => {
+  it("lets the holder release: the comment, then the board row, then the mark on the comment", () => {
     const { result, sent, body, thread } = allowed();
     expect(body).toBe(withRecord(RELEASED, B_CLAIM));
-    expect(sent.map((s) => s.describe)).toEqual(SIX_WRITES);
-    for (const edit of sent.slice(1)) expect(edit.argv.slice(0, 6)).toEqual(["project", "item-edit", "--project-id", "PVT_x", "--id", "PVTI_x"]);
-    expect(result.steps).toEqual(SIX_STEPS.map((describe) => ({ describe, ran: true })));
+    expect(sent.map((s) => s.describe)).toEqual(SEVEN_WRITES);
+    for (const edit of sent.slice(1, 6)) expect(edit.argv.slice(0, 6)).toEqual(["project", "item-edit", "--project-id", "PVT_x", "--id", "PVTI_x"]);
+    expect(result.steps).toEqual(SEVEN_STEPS.map((describe) => ({ describe, ran: true })));
     expect(result.url).toBe(thread.at(-1).url);
     expect(result.claim.url).toBe(B_CLAIM.url);
     expect(threadLease(thread).handoff).toMatchObject({ released: true, nextAction: "Kuya reviews.", postedAt: "2026-10-03T05:30:25Z" });
@@ -1123,7 +1179,7 @@ describe("postRelease: only the folder and branch the live claim names may end i
     expect(calls.slice(0, 3)).toEqual(["gh project item-list", "gh project view", "gh project field-list"]);
     expect(calls.slice(3, firstWrite - 1).every((c) => c.startsWith("git "))).toBe(true);
     expect(calls[firstWrite - 1], "the thread is the last thing read before the first write").toBe("gh issue view");
-    expect(calls.slice(firstWrite + 1)).toEqual(["gh issue view", ...Array(5).fill("gh project item-edit"), "gh issue view"]);
+    expect(calls.slice(firstWrite + 1)).toEqual(["gh issue view", ...Array(5).fill("gh project item-edit"), "gh api --method", "gh issue view"]);
     expect(reads).toBe(3);
     // The seat is the folder the command runs in, asked of git: four questions, all about that folder.
     expect(git.map((g) => g.ask).sort()).toEqual(["remote get-url origin", "rev-parse --abbrev-ref HEAD", "rev-parse --is-inside-work-tree", "rev-parse --show-toplevel"]);
@@ -1640,24 +1696,87 @@ describe("postRelease: the comment must be a release, and only a release (#643)"
     expect(run.body.endsWith(withRecord("", B_CLAIM).trimStart())).toBe(true);
   });
 
-  // A release names its claim by the time GitHub gave it. A thread read without that time leaves
-  // nothing to name it by.
-  it.each([undefined, null, "", "2026-10-03", "yesterday", "2026-10-03T07:22:01+02:00", "2026-10-03T05:22:01"])(
-    "refuses when the live claim was read with %j for its posting time",
-    (createdAt) => {
-      const answer = () => JSON.stringify({ comments: [{ body: B_CLAIM.body, url: B_CLAIM.url, ...(createdAt === undefined ? {} : { createdAt }) }] });
-      const error = refused("RELEASE_CLAIM_UNDATED", { answer });
-      expect(error.reason).toMatch(/was read without the time it was posted/);
-      expect(error.reason).toContain(B_CLAIM.url);
-    },
-  );
+  // A release names its claim by the time GitHub gave it. A comment read without that time, whatever
+  // it holds, makes the thread one that was not read (round 4 of the review: on 71bd4e38 such a thread
+  // was let through to a shared-time refusal whose cure, a refreshed claim, could not cure it). Every
+  // comment is held to the one shape GitHub writes.
+  const NO_TIME = [undefined, null, "", "2026-10-03", "yesterday", "2026-10-03T07:22:01+02:00", "2026-10-03T05:22:01", 1_759_468_921_000];
+  const timed = (comment, createdAt) => ({ body: comment.body, url: comment.url, ...(createdAt === undefined ? {} : { createdAt }) });
+  it.each(NO_TIME)("refuses to read a thread whose live claim carries %j for its posting time, from every seat", (createdAt) => {
+    const answer = () => JSON.stringify({ comments: [A_CLAIM, A_RELEASE, timed(B_CLAIM, createdAt)] });
+    for (const opts of [{ self: HOLDER }, { self: PREDECESSOR }, { self: PREDECESSOR, takeover: "it looked idle", holder: "dead" }, { self: HOLDER, dryRun: true }]) {
+      const error = refused("RELEASE_THREAD_UNREADABLE", { answer, ...opts });
+      expect(error.reason).toBe(`The thread of #${ISSUE} could not be read (a comment arrived without the time it was posted), so who holds its lease is unknown. An unknown lease is not the caller's lease.`);
+      expect(error.cure).toBe("Nothing was written. Run it again when GitHub answers.");
+    }
+  });
+
+  it.each(NO_TIME)("refuses to read a thread where any other comment carries %j for its posting time", (createdAt) => {
+    for (const comments of [
+      [timed(A_CLAIM, createdAt), A_RELEASE, B_CLAIM],
+      [A_CLAIM, timed(A_RELEASE, createdAt), B_CLAIM],
+      [...INCIDENT, timed(posted("", "Just a note.", 30), createdAt)],
+    ]) {
+      const error = refused("RELEASE_THREAD_UNREADABLE", { answer: () => JSON.stringify({ comments }) });
+      expect(error.reason).toContain("(a comment arrived without the time it was posted)");
+    }
+  });
+
+  it("reads a thread whose every comment carries its time, in the shape GitHub writes it", () => {
+    for (const createdAt of ["2026-10-03T05:22:01Z", "2026-10-03T05:22:01.000Z", " 2026-10-03T05:22:01Z\n"]) {
+      const run = allowed({ thread: [A_CLAIM, A_RELEASE, timed(B_CLAIM, createdAt)] });
+      expect(parseReleaseRecord(run.body)).toEqual({ ends: [createdAt.trim()] });
+    }
+  });
+
+  // `releaseComment` on its own, handed a thread the reader would have refused: it names no claim by a
+  // time it does not have, and says which claim had none. The decision above it is the holder's.
+  describe("names its claim by a time that is one claim's alone", () => {
+    const decide = (comments) => releaseDecision({ issue: ISSUE, comments, self: HOLDER, now: NOW });
+    const comment = (comments) => claimModule.releaseComment({ issue: ISSUE, comments, decision: decide(comments), self: HOLDER, text: RELEASED, now: NOW });
+    const WHEN = "Nothing was written. Run it again when GitHub answers with the thread's posting times.";
+
+    it("refuses when the live claim has no time: nothing could name it", () => {
+      const undated = { body: B_CLAIM.body, url: B_CLAIM.url };
+      expect(decide([A_CLAIM, A_RELEASE, undated]).ok, "the holder's decision stands; the time is the comment's problem").toBe(true);
+      const r = comment([A_CLAIM, A_RELEASE, undated]);
+      expect(r).toMatchObject({ ok: false, code: "RELEASE_CLAIM_UNDATED", cure: WHEN });
+      expect(r.reason).toBe(
+        `The live claim on #${ISSUE} was read without the time it was posted (${HOLDER.folder} @ ${HOLDER.branch}, claimed (time unknown) (${B_CLAIM.url})), so a release could not name it and would end whichever claim is live when it lands.`,
+      );
+    });
+
+    it.each([
+      ["a released predecessor's", [{ body: A_CLAIM.body, url: A_CLAIM.url }, A_RELEASE, B_CLAIM], A_CLAIM, PREDECESSOR],
+      ["a later, released claim's", [...INCIDENT, { body: claimText(THIRD), url: C_CLAIM.url }, posted("2026-10-03T05:30:27Z", RELEASED, 10), posted("2026-10-03T05:30:28Z", claimText(HOLDER), 11)], C_CLAIM, THIRD],
+    ])("refuses when another claim has no time (%s): it could have been posted at any", (_, comments, which, seat) => {
+      const r = comment(comments);
+      expect(r).toMatchObject({ ok: false, code: "RELEASE_CLAIM_UNDATED", cure: WHEN });
+      expect(r.reason).toBe(
+        `An Ownership claim on #${ISSUE} was read without the time it was posted (${seat.folder} @ ${seat.branch}, claimed (time unknown) (${which.url})). A release names the claim it ends by its posting time, and a claim with no time could have been posted at any, so this release would be posted and end nothing.`,
+      );
+    });
+
+    it("refuses two dated claims in one second as a shared time, and no undated claim that way", () => {
+      const shared = comment([posted(B_CLAIM.createdAt, claimText(PREDECESSOR), 2), B_CLAIM]);
+      expect(shared).toMatchObject({ ok: false, code: "RELEASE_CLAIM_TIME_SHARED" });
+      expect(shared.reason).not.toContain("without");
+      expect(shared.cure).toContain("Post a refreshed Ownership claim from the holding folder");
+    });
+
+    it("builds the comment when every claim has a time of its own", () => {
+      const r = comment([posted(B_CLAIM.createdAt, claimText(PREDECESSOR), 2), B_CLAIM, posted("2026-10-03T05:22:02Z", claimText(HOLDER), 4)]);
+      expect(r.ok, String(r.reason)).toBe(true);
+      expect(parseReleaseRecord(r.body)).toEqual({ ends: ["2026-10-03T05:22:02Z"] });
+    });
+  });
 
   // Round 2 of the review: a record names its claim by posting time, and GitHub stamps to the second.
   // A time two claims share names neither, so the release is refused before anything is posted.
   describe("refuses a release whose record would name a time two claims share", () => {
     const T = B_CLAIM.createdAt;
     const aAtT = posted(T, claimText(PREDECESSOR), 2);
-    const SHARED = `Another Ownership claim on #${ISSUE} was posted in the same second as the live one (${held(B_CLAIM)}), or was read without its time. A release names the claim it ends by that time, and a time two claims share names neither, so this release would be posted and end nothing.`;
+    const SHARED = `Another Ownership claim on #${ISSUE} was posted in the same second as the live one (${held(B_CLAIM)}). A release names the claim it ends by that time, and a time two claims share names neither, so this release would be posted and end nothing.`;
 
     it("the reviewer's input: the holder's claim and another, both stamped the same second", () => {
       const error = refused("RELEASE_CLAIM_TIME_SHARED", { thread: [aAtT, B_CLAIM] });
@@ -1670,7 +1789,6 @@ describe("postRelease: the comment must be a release, and only a release (#643)"
     it.each([
       ["the other claim was released since", [aAtT, posted(T, RELEASED, 20), B_CLAIM]],
       ["the other claim came after, over the holder's", [B_CLAIM, posted(T, claimText(PREDECESSOR), 2), posted(T, RELEASED, 21), posted(T, claimText(HOLDER), 22)]],
-      ["a claim elsewhere on the thread was read without its time", [{ body: A_CLAIM.body, url: A_CLAIM.url }, B_CLAIM]],
     ])("refuses when %s", (_, thread) => {
       const error = refused("RELEASE_CLAIM_TIME_SHARED", { thread });
       expect(error.reason).toContain("A release names the claim it ends by that time, and a time two claims share names neither");
@@ -1914,7 +2032,7 @@ describe("a release names the claim it ends (#643)", () => {
     const { error, sent, thread, drops } = attempt({ thread: [A_CLAIM], self: PREDECESSOR, beforePost: [bAtT] });
     expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ENDED_NOTHING");
     expect(error.message).toContain(
-      `when it landed, the live claim was ${held(bAtT)}, and its posting time is not one claim's alone on this thread (another was posted in the same second, or read without a time), so a record naming that time ends neither.`,
+      `when it landed, the live claim was ${held(bAtT)}, and its posting time is not one claim's alone on this thread (another was posted in the same second), so a record naming that time ends neither.`,
     );
     expect(error.message).toContain(`It names the claim it was checked against (${held(A_CLAIM, PREDECESSOR)}) and can end no other. No board field was edited.`);
     expect(sent.map((s) => s.describe)).toEqual([`comment on #${ISSUE}`]);
@@ -1938,11 +2056,11 @@ describe("a release names the claim it ends (#643)", () => {
   it.each([0, 1, 2, 3, 4, 5])("reports a claim that lands while the row is being edited (after %i of the five edits), and sends hands to the thread first", (at) => {
     const { error, sent, thread, drops, reads } = attempt({ duringEdits: { at, comments: [C_CLAIM] } });
     expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_RACED");
-    expect(sent.map((s) => s.describe)).toEqual(SIX_WRITES);
+    expect(sent.map((s) => s.describe)).toEqual(SEVEN_WRITES);
     expect(error.message).toContain(
       `its lease is released and the board row is filed, but a claim landed while the row was being edited (${held(C_CLAIM, THIRD)}). The row may now hold this release's values over that claim's.`,
     );
-    expect(error).toMatchObject({ posted: true, live: { url: C_CLAIM.url }, ran: SIX_STEPS, cure: CURES.RELEASE_ROW_RACED });
+    expect(error).toMatchObject({ posted: true, live: { url: C_CLAIM.url }, ran: SEVEN_STEPS, cure: CURES.RELEASE_ROW_RACED });
     expect(error).not.toHaveProperty("failed");
     noEditHandedOut(error.message);
     expect(threadLease(thread).claim?.url).toBe(C_CLAIM.url);
@@ -1992,21 +2110,141 @@ describe("a release names the claim it ends (#643)", () => {
   ])("files the row, then says it could not look again when the thread %s after the board edits", (_, answer) => {
     const { error, sent, reads, drops, thread } = attempt({ answer });
     expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_UNCHECKED");
-    expect(sent.map((s) => s.describe)).toEqual(SIX_WRITES);
+    expect(sent.map((s) => s.describe)).toEqual(SEVEN_WRITES);
     expect(error.message).toContain(
-      "its lease is released and the board row is filed, but the thread could not be read once more after the board edits, so a claim landing in those seconds would not have been seen.",
+      "its lease is released and the board row is filed, but the thread could not be read again after the board edits, so a claim landing in those seconds would not have been seen.",
     );
-    expect(error).toMatchObject({ posted: true, url: thread.at(-1).url, ran: SIX_STEPS, cure: CURES.RELEASE_ROW_UNCHECKED });
+    expect(error).toMatchObject({ posted: true, url: thread.at(-1).url, ran: SEVEN_STEPS, cure: CURES.RELEASE_ROW_UNCHECKED });
     expect(error).not.toHaveProperty("failed");
     noEditHandedOut(error.message);
     expect(reads).toBe(5);
     expect(drops).toBe(1);
   });
 
-  it("finds its comment by its text when gh prints no link", () => {
-    const { result, reads } = allowed({ printUrl: false });
+  it("finds its comment by its text when gh prints no link, and marks it by the number the thread gives it", () => {
+    const { result, reads, sent, thread } = allowed({ printUrl: false });
     expect(result.url).toBeNull();
     expect(reads).toBe(3);
+    expect(sent[6].argv[3]).toBe(`repos/Pootytxng/sentinel/issues/comments/${thread.at(-1).url.split("#issuecomment-")[1]}`);
+  });
+});
+
+// Round 4 of the review: on 71bd4e38 the look after the board edits took the first read that showed
+// the release, and a read served from before the edits showed the release and not the claim that had
+// landed during them. The Handoff is now marked after the edits, by editing the one comment this
+// release posted, by the number GitHub gave it, and a read counts as the look only once it shows the
+// mark: comments are one table written in order, so a read that holds the mark holds every claim
+// posted before it.
+describe("the look after the board edits is current (#643)", () => {
+  const BY_NUMBER = /^repos\/Pootytxng\/sentinel\/issues\/comments\/\d+$/;
+
+  it("marks its own comment, by the number GitHub gave it, with the posted text and a filing line, and reads until the mark shows", () => {
+    const { sent, thread, body, calls } = allowed();
+    const mark = sent[6];
+    expect(mark.argv.slice(0, 3)).toEqual(["api", "--method", "PATCH"]);
+    expect(mark.argv[3]).toMatch(BY_NUMBER);
+    expect(mark.argv[3].endsWith(`/${thread.at(-1).url.split("#issuecomment-")[1]}`), "the number is the posted comment's").toBe(true);
+    expect(mark.argv.slice(4)).toEqual(["-f", `body=${FILED(body)}`]);
+    expect(thread.at(-1).body).toBe(FILED(body));
+    expect(calls.at(-1), "the last read follows the mark").toBe("gh issue view");
+    expect(calls.at(-2)).toBe("gh api --method");
+  });
+
+  it("the marked comment folds as the unmarked one did: released, naming the same claim, ending it", () => {
+    const { thread, body } = allowed();
+    const marked = thread.at(-1).body;
+    expect(marked).not.toBe(body);
+    expect(parseHandoff(marked)).toEqual(parseHandoff(body));
+    expect(parseHandoff(marked).released).toBe(true);
+    expect(parseReleaseRecord(marked)).toEqual({ ends: [B_CLAIM.createdAt] });
+    expect(threadLease([...INCIDENT, { ...thread.at(-1), body: marked }]).claim).toBeNull();
+    expect(threadLease([...INCIDENT, { ...thread.at(-1), body: marked }]).handoff).toEqual(threadLease([...INCIDENT, { ...thread.at(-1), body }]).handoff);
+    expect(marked.split("\n").filter((l) => /^- Claim/.test(l))).toEqual(body.split("\n").filter((l) => /^- Claim/.test(l)));
+  });
+
+  it("the reviewer's input: a claim lands during the edits and the first read after them is served from before it", () => {
+    const { error, sent, reads, drops, thread } = attempt({ duringEdits: { at: 2, comments: [C_CLAIM] }, staleAfterMark: 1 });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_RACED");
+    expect(error).toMatchObject({ posted: true, live: { url: C_CLAIM.url }, ran: SEVEN_STEPS, cure: CURES.RELEASE_ROW_RACED });
+    expect(sent.map((s) => s.describe)).toEqual(SEVEN_WRITES);
+    expect(reads, "the stale read was not taken for the look").toBe(4);
+    expect(drops).toBe(1);
+    expect(threadLease(thread).claim?.url).toBe(C_CLAIM.url);
+  });
+
+  it.each([1, 2])("reads again while a read shows the Handoff unmarked (%i stale read(s)), and releases whole when one shows the mark", (staleAfterMark) => {
+    const { reads } = allowed({ staleAfterMark });
+    expect(reads).toBe(3 + staleAfterMark);
+  });
+
+  it("says the thread could not be shown current when no read after the edits shows the mark, and files the row all the same", () => {
+    const { error, sent, reads, drops } = attempt({ staleAfterMark: 3 });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_UNCHECKED");
+    expect(error.message).toContain(
+      "its lease is released and the board row is filed, but no read of the thread after the board edits showed the Handoff marked yet, so the thread could not be shown current, and a claim landing in those seconds would not have been seen.",
+    );
+    expect(error).toMatchObject({ posted: true, ran: SEVEN_STEPS, cure: CURES.RELEASE_ROW_UNCHECKED });
+    expect(error).not.toHaveProperty("live");
+    expect(sent.map((s) => s.describe)).toEqual(SEVEN_WRITES);
+    expect(reads).toBe(5);
+    expect(drops).toBe(1);
+  });
+
+  it("does not take an unmarked read for the look even when a claim landed: the row is said to be unchecked, not clear", () => {
+    // Every read after the mark is served from just after the post, which shows neither the mark nor the claim.
+    const { error } = attempt({ duringEdits: { at: 0, comments: [C_CLAIM] }, staleAfterMark: 3 });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_UNCHECKED");
+    expect(error.message).toContain("no read of the thread after the board edits showed the Handoff marked yet");
+  });
+
+  it("reports a claim an unmarked read shows all the same: a glimpse can show a claim, not that there is none", () => {
+    // The mark fails, so no read can show it; the one read taken shows the thread with the claim.
+    const { error, sent, reads } = attempt({ markFails: true, duringEdits: { at: 3, comments: [C_CLAIM] } });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_RACED");
+    expect(error).toMatchObject({ live: { url: C_CLAIM.url }, ran: SIX_STEPS });
+    expect(sent.map((s) => s.describe)).toEqual(SIX_WRITES);
+    expect(reads).toBe(3);
+  });
+
+  it("says so when the mark cannot be written: the row is filed, and the thread could not be shown current", () => {
+    const { error, sent, reads, drops } = attempt({ markFails: true });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_UNCHECKED");
+    expect(error.message).toContain(
+      "its lease is released and the board row is filed, but the Handoff could not be marked (GraphQL: Could not resolve to a ProjectV2Item), so the thread could not be shown current, and a claim landing in those seconds would not have been seen.",
+    );
+    expect(error.message).not.toContain("Command failed");
+    expect(error).toMatchObject({ posted: true, ran: SIX_STEPS, cure: CURES.RELEASE_ROW_UNCHECKED });
+    expect(sent.map((s) => s.describe)).toEqual(SIX_WRITES);
+    expect(reads, "one look, since no read could show a mark").toBe(3);
+    expect(drops).toBe(1);
+  });
+
+  it("says so when the posted comment has no number to mark it by", () => {
+    const { error, sent, reads } = attempt({ unlinked: true });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_UNCHECKED");
+    expect(error.message).toContain(
+      "its lease is released and the board row is filed, but the Handoff carries no comment number to mark it by, so the thread could not be shown current, and a claim landing in those seconds would not have been seen.",
+    );
+    expect(error).toMatchObject({ posted: true, url: null, ran: SIX_STEPS });
+    expect(sent.map((s) => s.describe)).toEqual(SIX_WRITES);
+    expect(reads).toBe(3);
+  });
+
+  it("marks a half run as unfinished, naming the edit that failed, and still reads for the mark", () => {
+    const { error, sent, thread } = attempt({ failAt: 2 });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_HALF_RUN");
+    expect(sent.map((s) => s.describe)).toEqual(WRITES_TO(2));
+    expect(sent.at(-1).argv.at(-1)).toBe(`body=${UNFINISHED(withRecord(RELEASED, B_CLAIM), "set Gate = None")}`);
+    expect(thread.at(-1).body).toBe(UNFINISHED(withRecord(RELEASED, B_CLAIM), "set Gate = None"));
+    expect(parseReleaseRecord(thread.at(-1).body)).toEqual({ ends: [B_CLAIM.createdAt] });
+    expect(threadLease(thread).claim).toBeNull();
+  });
+
+  it("never edits the newest comment as such: the mark goes by number, and release.mjs knows no --edit-last", () => {
+    const source = readFileSync(join(HERE, "release.mjs"), "utf8");
+    expect(source).not.toContain("edit-last");
+    expect(source.match(/issues\/comments\//g)).toHaveLength(1);
+    expect(source).toContain('"api", "--method", "PATCH", `repos/${REPO}/issues/comments/${commentId}`');
   });
 });
 
@@ -2103,7 +2341,11 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
 
   // Round 2 of the review: a predecessor's `execPlan(planRenew(…))` wrote over its successor's board
   // row, and `postClaim` files a row on a verdict its caller hands over. Neither reads who holds the row,
-  // so both run for the launcher alone, told by the program node was started with.
+  // so both run for the launcher alone. Round 4: on 71bd4e38 `process.argv[1]` alone told the launcher,
+  // and `node --import <a script> launch.mjs` ran that script with the launcher as its program. Four
+  // witnesses now have to agree: the first word after the executable in the command line the OS handed
+  // node, `process.argv[1]`, an empty `process.execArgv`, and a blank NODE_OPTIONS. The refusal says
+  // which spoke, and what it measured.
   const NOT_THE_LAUNCHER = [
     ["the test runner itself", process.argv[1]],
     ["a copy beside the launcher", `${LAUNCHER_PATH}.bak`],
@@ -2118,9 +2360,12 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
     ["a number", 7],
     ["an object", { path: LAUNCHER_PATH }],
   ];
-  const RENEWAL_REFUSAL =
-    "Refusing to run a plan outside the launcher (tools/entry/launch.mjs). A renewal moves a board row's expiry without reading who holds that row, so only the launcher runs one, after its own preflight. A session extends its own lease by posting a refreshed Ownership claim, and ends it with `node tools/entry/release.mjs`.";
-  const CLAIM_REFUSAL = `Refusing to post a claim on #${ISSUE} outside the launcher (tools/entry/launch.mjs). A claim takes the lease and files the board row on a verdict its caller hands over, so only the launcher posts one this way, on the verdict of its own preflight. A lease is ended with \`node tools/entry/release.mjs\`.`;
+  const RENEWAL_REFUSAL = (measured) =>
+    `Refusing to run a plan outside the launcher (tools/entry/launch.mjs): ${measured}. A renewal moves a board row's expiry without reading who holds that row, so only the launcher runs one, after its own preflight. A session extends its own lease by posting a refreshed Ownership claim, and ends it with \`node tools/entry/release.mjs\`.`;
+  const CLAIM_REFUSAL = (measured) =>
+    `Refusing to post a claim on #${ISSUE} outside the launcher (tools/entry/launch.mjs): ${measured}. A claim takes the lease and files the board row on a verdict its caller hands over, so only the launcher posts one this way, on the verdict of its own preflight. A lease is ended with \`node tools/entry/release.mjs\`.`;
+  /** What the witnesses say of a process started on `program`, which is its `process.argv[1]` too. */
+  const startedWith = (program) => (typeof program === "string" && program !== "" ? `node was started with the program "${program}"` : "node was started with no program");
 
   it("none of the programs it refuses is the launcher's path", () => {
     for (const [, program] of NOT_THE_LAUNCHER) {
@@ -2133,7 +2378,7 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
       const run = inWorld({}, () => asProgram(program, () => execPlan(renewal(), { dryRun })));
       expect(run.result, "the renewal was not refused").toBeNull();
       expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("PLAN_NOT_THE_LAUNCHER");
-      expect(run.error.message).toBe(RENEWAL_REFUSAL);
+      expect(run.error.message).toBe(RENEWAL_REFUSAL(startedWith(program)));
       expect(run.calls).toEqual([]);
       expect(run.sent).toEqual([]);
     }
@@ -2145,12 +2390,57 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
       const run = inWorld({ thread: [] }, () => asProgram(program, () => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, dryRun, cacheDir: dir })));
       expect(run.result, "the claim was not refused").toBeNull();
       expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("CLAIM_NOT_THE_LAUNCHER");
-      expect(run.error.message).toBe(CLAIM_REFUSAL);
+      expect(run.error.message).toBe(CLAIM_REFUSAL(startedWith(program)));
       expect(run.calls).toEqual([]);
       expect(run.sent).toEqual([]);
       expect(readClaimCache({ issue: ISSUE, dir })).toBeNull();
     }
   });
+
+  // One witness at a time, with the other three the launcher's. The program is the launcher's path
+  // unless the row says otherwise.
+  const OTHER = join(HERE, "other.mjs");
+  const ONE_WITNESS = [
+    ["the command line names another program after the executable", LAUNCHER_PATH, { started: OTHER }, `node was started with "${OTHER}" after the executable`],
+    ["the command line has a flag before the program", LAUNCHER_PATH, { started: "--import" }, 'node was started with "--import" after the executable'],
+    ["the command line has nothing after the executable", LAUNCHER_PATH, { started: undefined }, "node was started with no program after the executable"],
+    ["the command line cannot be read", LAUNCHER_PATH, { report: () => { throw new Error("no report"); } }, "the command line node was started with could not be read"],
+    ["the report holds no command line", LAUNCHER_PATH, { report: () => ({ header: {} }) }, "the command line node was started with could not be read"],
+    ["the report is empty", LAUNCHER_PATH, { report: () => null }, "the command line node was started with could not be read"],
+    ["process.argv is forged to the launcher's path", OTHER, { started: LAUNCHER_PATH }, `process.argv names "${OTHER}" as the program`],
+    ["node was started with flags", LAUNCHER_PATH, { flags: ["--import", "x"] }, "node was started with the flags --import x"],
+    ["node was started with one flag", LAUNCHER_PATH, { flags: ["--inspect"] }, "node was started with the flag --inspect"],
+    ["the flags cannot be read", LAUNCHER_PATH, { flags: null }, "the flags node was started with could not be read"],
+    ["NODE_OPTIONS is set", LAUNCHER_PATH, { options: "--import=x" }, "NODE_OPTIONS is set (--import=x)"],
+    ["NODE_OPTIONS is set, with space around it", LAUNCHER_PATH, { options: "  --require ./x.cjs  " }, "NODE_OPTIONS is set (--require ./x.cjs)"],
+    // A witness that throws while it is read: an array whose length cannot be read. Unknown means locked.
+    // Built inside the test: the runner formats a row's values when it collects the rows.
+    ["a witness throws while it is measured", LAUNCHER_PATH, () => ({ flags: new Proxy([], { get(t, k) { if (k === "length") throw new Error("no length"); return Reflect.get(t, k); } }) }), "the process could not be measured"],
+    [
+      "every witness speaks",
+      OTHER,
+      { started: "--import", flags: ["--import", "x"], options: "--import=x" },
+      `node was started with "--import" after the executable; process.argv names "${OTHER}" as the program; node was started with the flags --import x; NODE_OPTIONS is set (--import=x)`,
+    ],
+  ];
+  it.each(ONE_WITNESS)("refuses both writers when %s, and says so", (_, program, row, measured) => {
+    const witnesses = typeof row === "function" ? row() : row;
+    for (const dryRun of [true, false]) {
+      const renew = inWorld({}, () => asProgram(program, () => execPlan(renewal(), { dryRun }), witnesses));
+      expect(renew.result, "the renewal was not refused").toBeNull();
+      expect(renew.error?.code, String(renew.error?.stack ?? renew.error)).toBe("PLAN_NOT_THE_LAUNCHER");
+      expect(renew.error.message).toBe(RENEWAL_REFUSAL(measured));
+      expect(renew.calls).toEqual([]);
+      expect(renew.sent).toEqual([]);
+      const claim = inWorld({ thread: [] }, () => asProgram(program, () => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, dryRun }), witnesses));
+      expect(claim.result, "the claim was not refused").toBeNull();
+      expect(claim.error?.code, String(claim.error?.stack ?? claim.error)).toBe("CLAIM_NOT_THE_LAUNCHER");
+      expect(claim.error.message).toBe(CLAIM_REFUSAL(measured));
+      expect(claim.calls).toEqual([]);
+      expect(claim.sent).toEqual([]);
+    }
+  });
+
 
   it("refuses a claim on its content before it asks who is running: a bad claim is bad from the launcher too", () => {
     const run = inWorld({ thread: [] }, () => postClaim({ issue: ISSUE, verdict: PASS, facts: { ...FACTS, branch: "`claude/x`" }, ids: IDS, dryRun: true }));
@@ -2167,16 +2457,23 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
     ...(process.platform === "win32" ? [["in upper case", LAUNCHER_PATH.toUpperCase()]] : []),
   ];
   /** Both writers run (dry) for `program`: the renewal's steps are planned and the claim's plan is built. */
-  const opensFor = (program) => {
-    const renew = inWorld({}, () => asProgram(program, () => execPlan(renewal(), { dryRun: true })));
+  const opensFor = (program, witnesses) => {
+    const renew = inWorld({}, () => asProgram(program, () => execPlan(renewal(), { dryRun: true }), witnesses));
     expect(renew.error, String(renew.error?.stack ?? renew.error)).toBeNull();
     expect(renew.result.map((s) => s.ran)).toEqual([false, false]);
-    const claim = inWorld({ thread: [] }, () => asProgram(program, () => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, dryRun: true })));
+    const claim = inWorld({ thread: [] }, () => asProgram(program, () => postClaim({ issue: ISSUE, verdict: PASS, facts: FACTS, ids: IDS, dryRun: true }), witnesses));
     expect(claim.error, String(claim.error?.stack ?? claim.error)).toBeNull();
     expect(claim.result.plan).toHaveLength(7);
     expect(claim.calls).toEqual([]);
   };
   it.each(SPELLINGS)("runs for the launcher named %s", (_, program) => opensFor(program));
+
+  it.each([
+    ["NODE_OPTIONS is blank", { options: "   " }],
+    ["the command line spells the launcher with forward slashes", { started: LAUNCHER_PATH.replaceAll("\\", "/") }],
+    ["the command line names the launcher relative to the working directory", { started: relative(process.cwd(), LAUNCHER_PATH) }],
+    ["the command line names the launcher as the entry script types it", { started: `${HERE}/./launch.mjs` }],
+  ])("runs for the launcher when %s", (_, witnesses) => opensFor(LAUNCHER_PATH, witnesses));
 
   it("runs for the launcher reached through a junction: paths are compared through links", (ctx) => {
     const link = join(tmp, "entry-junction");
@@ -2197,23 +2494,25 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
     expect(readFileSync(join(ROOT, "compy-entry.ps1"), "utf8")).toContain("tools/entry/launch.mjs");
   });
 
-  // In a real node process, as the launcher runs: node is started on the launcher's path, and the gate
-  // opens. A preload (`--import`) stands in for the launcher's own code, calls both writers dry and exits
-  // before the launcher itself runs; the control runs the same probe as the program and is refused. No
-  // `gh` or `git` is on the PATH of either.
-  it("opens for the launcher's own process and for no other, in a real node process", () => {
+  // In a real node process, against the real witnesses. The launcher's own process cannot be entered
+  // from a test without the launcher's cooperation, so its opening is proved above, on the stubbed
+  // witnesses; here every way in from outside is tried: a preload (`--import`), which on 71bd4e38 ran
+  // both writers with the launcher as its program (review of PR 644, round 3); an inline script (`-e`);
+  // a preload named in NODE_OPTIONS; a forged `process.argv[1]`; and the probe run as the program. Each
+  // probe calls both writers dry and exits before the launcher itself would run. No `gh` or `git` is on
+  // the PATH of any.
+  it("refuses every way into the launcher's process from outside, in a real node process", () => {
     const dir = join(tmp, "probe");
     mkdirSync(join(dir, "empty-path"), { recursive: true });
-    const probe = join(dir, "probe.mjs");
-    writeFileSync(
-      probe,
+    const source = (forge) =>
       [
         `import { execPlan, planRenew, postClaim } from ${JSON.stringify(pathToFileURL(join(HERE, "claim.mjs")).href)};`,
         `const ids = ${JSON.stringify(IDS)};`,
         `const facts = ${JSON.stringify(FACTS)};`,
         `const verdict = ${JSON.stringify(PASS)};`,
-        "const out = { argv1: process.argv[1] };",
-        "const code = (run) => { try { run(); return 'ran'; } catch (e) { return e.code ?? e.message; } };",
+        ...(forge ? [`process.argv[1] = ${JSON.stringify(LAUNCHER_PATH)};`] : []),
+        "const out = { argv1: process.argv[1], commandLine: process.report.getReport().header.commandLine, messages: [] };",
+        "const code = (run) => { try { run(); return 'ran'; } catch (e) { out.messages.push(e.message); return e.code ?? e.message; } };",
         "try {",
         `  out.renew = code(() => execPlan(planRenew({ issue: ${ISSUE}, ids, until: "2026-10-04" }), { dryRun: true }));`,
         `  out.claim = code(() => postClaim({ issue: ${ISSUE}, verdict, facts, ids, dryRun: true }));`,
@@ -2222,23 +2521,53 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
         "  process.exit(0);",
         "}",
         "",
-      ].join("\n"),
-      "utf8",
-    );
-    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^path$/i.test(k)));
+      ].join("\n");
+    const probe = join(dir, "probe.mjs");
+    const forging = join(dir, "forging.mjs");
+    writeFileSync(probe, source(false), "utf8");
+    writeFileSync(forging, source(true), "utf8");
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(?:path|node_options)$/i.test(k)));
     env.PATH = join(dir, "empty-path");
-    const run = (args) => {
-      const r = spawnSync(process.execPath, args, { cwd: ROOT, env, encoding: "utf8", timeout: 60_000, windowsHide: true });
+    const run = (args, more = {}) => {
+      const r = spawnSync(process.execPath, args, { cwd: ROOT, env: { ...env, ...more }, encoding: "utf8", timeout: 60_000, windowsHide: true });
       expect(r.error).toBeUndefined();
       expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
       return JSON.parse(r.stdout.trim().split("\n").at(-1));
     };
-    const asTheLauncher = run(["--import", pathToFileURL(probe).href, LAUNCHER_PATH, "--dry-run", "--quiet"]);
-    expect(samePath(asTheLauncher.argv1, LAUNCHER_PATH)).toBe(true);
-    expect(asTheLauncher).toMatchObject({ renew: "ran", claim: "ran" });
+    const REFUSED = { renew: "PLAN_NOT_THE_LAUNCHER", claim: "CLAIM_NOT_THE_LAUNCHER" };
+    const href = pathToFileURL(probe).href;
+
+    const preload = run(["--import", href, LAUNCHER_PATH, "--dry-run", "--quiet"]);
+    expect(samePath(preload.argv1, LAUNCHER_PATH), "node names the launcher as the program all the same").toBe(true);
+    expect(preload.commandLine.slice(1), "the report holds the command line as the OS handed it").toEqual(["--import", href, LAUNCHER_PATH, "--dry-run", "--quiet"]);
+    expect(preload).toMatchObject(REFUSED);
+    expect(preload.messages).toHaveLength(2);
+    for (const m of preload.messages) {
+      expect(m).toContain('node was started with "--import" after the executable');
+      expect(m).toContain(`node was started with the flags --import ${href}`);
+    }
+
+    const inline = run(["-e", `import(${JSON.stringify(href)})`, LAUNCHER_PATH, "--dry-run", "--quiet"]);
+    expect(inline).toMatchObject(REFUSED);
+    for (const m of inline.messages) expect(m).toContain('node was started with "-e" after the executable');
+
+    const options = run([LAUNCHER_PATH, "--dry-run", "--quiet"], { NODE_OPTIONS: `--import=${href}` });
+    expect(samePath(options.argv1, LAUNCHER_PATH)).toBe(true);
+    expect(samePath(options.commandLine[1], LAUNCHER_PATH), "the command line is the launcher's: only NODE_OPTIONS tells").toBe(true);
+    expect(options).toMatchObject(REFUSED);
+    for (const m of options.messages) expect(m).toContain(`NODE_OPTIONS is set (--import=${href})`);
+
+    const forged = run([forging]);
+    expect(samePath(forged.argv1, LAUNCHER_PATH), "process.argv was forged").toBe(true);
+    expect(samePath(forged.commandLine[1], forging), "the report's command line was not").toBe(true);
+    expect(forged).toMatchObject(REFUSED);
+    for (const m of forged.messages) expect(m).toContain(`node was started with "${forging}" after the executable`);
+
     const asItself = run([probe]);
     expect(samePath(asItself.argv1, probe)).toBe(true);
-    expect(asItself).toMatchObject({ renew: "PLAN_NOT_THE_LAUNCHER", claim: "CLAIM_NOT_THE_LAUNCHER" });
+    expect(asItself).toMatchObject(REFUSED);
+    expect(asItself.messages).toHaveLength(2);
+    for (const m of asItself.messages) expect(m).toContain(`node was started with the program "${probe}"`);
   });
 
   it("builds plans that cannot be edited into other plans afterwards", () => {
@@ -2525,7 +2854,7 @@ describe("postRelease: what a run leaves behind (#643)", () => {
       claim: expect.objectContaining({ url: B_CLAIM.url }),
       body: withRecord(RELEASED, B_CLAIM),
       url: null,
-      steps: SIX_STEPS.map((describe) => ({ describe, ran: false })),
+      steps: SEVEN_STEPS.map((describe) => ({ describe, ran: false })),
     });
     expect(run.sent).toEqual([]);
     expect(run.reads).toBe(1);
@@ -2568,10 +2897,10 @@ describe("postRelease: what a run leaves behind (#643)", () => {
     expect(run.error.message).toContain(`but the board row is only partly filed: ${PARTLY[2]}. No claim has been posted after the Handoff.`);
     expect(run.error.message).not.toContain("Command failed");
     expect(run.error.message).not.toContain("second line");
-    expect(run.error).toMatchObject({ ran: SIX_STEPS.slice(0, 2), failed: "set Gate = None", untried: SIX_STEPS.slice(3), cure: CURES.RELEASE_HALF_RUN });
+    expect(run.error).toMatchObject({ ran: STEPS_TO(2), failed: "set Gate = None", untried: SIX_STEPS.slice(3), cure: CURES.RELEASE_HALF_RUN });
     expect(run.error).not.toHaveProperty("remaining");
     noEditHandedOut(run.error.message);
-    expect(run.sent.map((s) => s.describe)).toEqual(SIX_WRITES.slice(0, 2));
+    expect(run.sent.map((s) => s.describe)).toEqual(WRITES_TO(2));
     expect(threadLease(run.thread).claim, "the lease is released all the same").toBeNull();
     expect(cached()).toBeNull();
     expect(run.drops).toBe(1);
@@ -2583,8 +2912,8 @@ describe("postRelease: what a run leaves behind (#643)", () => {
     const run = attempt({ failAt: 1 });
     expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_HALF_RUN");
     expect(run.error.message).toContain(`but the board row is only partly filed: ${PARTLY[1]}. No claim has been posted after the Handoff.`);
-    expect(run.error).toMatchObject({ ran: SIX_STEPS.slice(0, 1), failed: "set Status = Review", untried: SIX_STEPS.slice(2) });
-    expect(run.sent.map((s) => s.describe)).toEqual(SIX_WRITES.slice(0, 1));
+    expect(run.error).toMatchObject({ ran: STEPS_TO(1), failed: "set Status = Review", untried: SIX_STEPS.slice(2) });
+    expect(run.sent.map((s) => s.describe)).toEqual(WRITES_TO(1));
     expect(run.drops).toBe(1);
     expect(cached()).toBeNull();
   });
@@ -2600,10 +2929,10 @@ describe("postRelease: what a run leaves behind (#643)", () => {
     expect(run.error.message).toContain(
       `and its lease is released, but a claim landed while the row was being edited (${held(C_CLAIM, THIRD)}), and the row is only partly filed: ${PARTLY[2]}. The row may now hold this release's values over that claim's, and no more of this release's edits are run.`,
     );
-    expect(run.error).toMatchObject({ posted: true, live: { url: C_CLAIM.url }, ran: SIX_STEPS.slice(0, 2), failed: "set Gate = None", untried: SIX_STEPS.slice(3), cure: CURES.RELEASE_ROW_RACED });
+    expect(run.error).toMatchObject({ posted: true, live: { url: C_CLAIM.url }, ran: STEPS_TO(2), failed: "set Gate = None", untried: SIX_STEPS.slice(3), cure: CURES.RELEASE_ROW_RACED });
     expect(run.error).not.toHaveProperty("remaining");
     noEditHandedOut(run.error.message);
-    expect(run.sent.map((s) => s.describe)).toEqual(SIX_WRITES.slice(0, 2));
+    expect(run.sent.map((s) => s.describe)).toEqual(WRITES_TO(2));
     expect(threadLease(run.thread).claim?.url).toBe(C_CLAIM.url);
     expect(cached()).toBeNull();
     expect(run.drops).toBe(1);
@@ -2615,9 +2944,9 @@ describe("postRelease: what a run leaves behind (#643)", () => {
     const run = attempt({ duringEdits: { at, comments: [C_CLAIM] }, failAt });
     expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_ROW_RACED");
     expect(run.error.message).toContain(`and the row is only partly filed: ${PARTLY[failAt]}. The row may now hold`);
-    expect(run.error).toMatchObject({ live: { url: C_CLAIM.url }, ran: SIX_STEPS.slice(0, failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_ROW_RACED });
+    expect(run.error).toMatchObject({ live: { url: C_CLAIM.url }, ran: STEPS_TO(failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_ROW_RACED });
     noEditHandedOut(run.error.message);
-    expect(run.sent.map((s) => s.describe)).toEqual(SIX_WRITES.slice(0, failAt));
+    expect(run.sent.map((s) => s.describe)).toEqual(WRITES_TO(failAt));
     expect(run.drops).toBe(1);
     expect(run.reads).toBe(3);
   });
@@ -2626,7 +2955,7 @@ describe("postRelease: what a run leaves behind (#643)", () => {
     const run = attempt({ failAt });
     expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_HALF_RUN");
     expect(run.error.message).toContain(`but the board row is only partly filed: ${PARTLY[failAt]}. No claim has been posted after the Handoff.`);
-    expect(run.error).toMatchObject({ ran: SIX_STEPS.slice(0, failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_HALF_RUN });
+    expect(run.error).toMatchObject({ ran: STEPS_TO(failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_HALF_RUN });
     expect(run.error).not.toHaveProperty("live");
     noEditHandedOut(run.error.message);
     expect(run.reads).toBe(3);
@@ -2637,9 +2966,9 @@ describe("postRelease: what a run leaves behind (#643)", () => {
     const run = attempt({ failAt, answer: (n) => (n >= 3 ? "<html>502 Bad Gateway</html>" : undefined) });
     expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_HALF_RUN");
     expect(run.error.message).toContain(
-      `but the board row is only partly filed: ${PARTLY[failAt]}. The thread could not be read again after that, so a claim landing in those seconds would not have been seen.`,
+      `but the board row is only partly filed: ${PARTLY[failAt]}. The thread could not be read again after the board edits, so a claim landing in those seconds would not have been seen.`,
     );
-    expect(run.error).toMatchObject({ ran: SIX_STEPS.slice(0, failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_HALF_RUN_UNCHECKED });
+    expect(run.error).toMatchObject({ ran: STEPS_TO(failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_HALF_RUN_UNCHECKED });
     noEditHandedOut(run.error.message);
     expect(run.reads).toBe(5);
     expect(run.drops).toBe(1);
@@ -2721,6 +3050,15 @@ describe("there is no unguarded way to release (#643)", () => {
   // above, only once it is shown that it cannot post a released Handoff.
   it("only two sources name the REST comments route, and neither can post a released Handoff", () => {
     expect(naming(/issues\/[^\s"'`?]*\/comments/)).toEqual(["scripts/ci-health-report.mjs", "scripts/lease-overlap-gate.mjs"]);
+  });
+
+  // The REST route to one comment, by number. release.mjs edits the comment it has just posted, to the
+  // text it posted plus a filing line (#643, round 4): that posts nothing, and it reaches no comment
+  // but its own. Nothing edits "the last comment": every session posts through one account, so the
+  // last comment may be a successor's claim.
+  it("only release.mjs names the route to one comment, and nothing names gh's --edit-last", () => {
+    expect(naming(/issues\/comments\//)).toEqual(["tools/entry/release.mjs"]);
+    expect(naming(/edit-last/)).toEqual([]);
   });
 
   it("no source posts a comment through GraphQL", () => {
@@ -2881,7 +3219,7 @@ describe("release.mjs: the command (#643)", () => {
     expect(out).toContain(`dry run  nothing was written. #${ISSUE}'s lease (${HOLDER.folder} @ ${HOLDER.branch}) would be released with this comment:`);
     for (const l of withRecord(RELEASED, B_CLAIM).trimEnd().split("\n")) expect(out).toContain(`  | ${l}`);
     expect(out).toContain("then, once the thread shows it ended that lease, in order:");
-    for (const words of SIX_STEPS.slice(1)) expect(out).toContain(`   ${words}`);
+    for (const words of SEVEN_STEPS.slice(1)) expect(out).toContain(`   ${words}`);
     expect(out).not.toContain(SIX_STEPS[0]);
   });
 
@@ -2896,9 +3234,9 @@ describe("release.mjs: the command (#643)", () => {
   it("releases, files the row as asked, and says so in one line", () => {
     const { exit, out, err, sent, drops } = runCli([...ARGS, "--status", "Needs Kuya", "--gate", "Kuya"]);
     expect(exit).toBe(0);
-    expect(sent).toHaveLength(6);
+    expect(sent).toHaveLength(7);
     expect(sent.slice(1, 3).map((s) => s.describe)).toEqual(["F_status --single-select-option-id o_needs", "F_gate --single-select-option-id o_kuya"]);
-    expect(out).toBe(`  lease released  #${ISSUE}  (${HOLDER.folder} @ ${HOLDER.branch}; 6 steps run)`);
+    expect(out).toBe(`  lease released  #${ISSUE}  (${HOLDER.folder} @ ${HOLDER.branch}; 7 steps run)`);
     expect(err).toBe("");
     expect(drops).toBe(1);
   });
@@ -2920,11 +3258,11 @@ describe("release.mjs: the command (#643)", () => {
     const taken = runCli([...ARGS, "--takeover", REASON], dormant);
     expect(taken.exit).toBe(0);
     expect(taken.asked).toEqual([HOLDER.folder]);
-    expect(taken.sent).toHaveLength(6);
+    expect(taken.sent).toHaveLength(7);
     const comment = taken.sent[0].argv.at(-1);
     expect(comment).toContain(`\n\n${TAKEOVER_HEADER}\n`);
     expect(comment).toContain(`- Worktree/process evidence checked: ${REASON}\n`);
-    expect(taken.out).toContain(`lease released  #${ISSUE}  (${HOLDER.folder} @ ${HOLDER.branch}, by takeover; 6 steps run)`);
+    expect(taken.out).toContain(`lease released  #${ISSUE}  (${HOLDER.folder} @ ${HOLDER.branch}, by takeover; 7 steps run)`);
     expect(threadLease(taken.thread).claim).toBeNull();
   });
 
@@ -2944,7 +3282,8 @@ describe("release.mjs: the command (#643)", () => {
     expect(err).toContain(CURES.RELEASE_HALF_RUN);
     noEditHandedOut(err);
     expect(out).toBe("");
-    expect(sent).toHaveLength(3);
+    expect(sent).toHaveLength(4);
+    expect(sent.at(-1).describe).toBe(MARK_WRITE);
     expect(drops).toBe(1);
   });
 
@@ -2981,7 +3320,7 @@ describe("release.mjs: the command (#643)", () => {
     expect(err).toContain("RELEASED, ROW RACED — RELEASE_ROW_RACED");
     expect(err).toContain(CURES.RELEASE_ROW_RACED);
     noEditHandedOut(err);
-    expect(sent).toHaveLength(6);
+    expect(sent).toHaveLength(7);
     expect(drops).toBe(1);
   });
 
@@ -2992,7 +3331,7 @@ describe("release.mjs: the command (#643)", () => {
     expect(err).toContain(`and the row is only partly filed: ${PARTLY[2]}. The row may now hold this release's values over that claim's, and no more of this release's edits are run.`);
     expect(err).toContain(CURES.RELEASE_ROW_RACED);
     noEditHandedOut(err);
-    expect(sent).toHaveLength(2);
+    expect(sent).toHaveLength(3);
     expect(drops).toBe(1);
   });
 
@@ -3004,14 +3343,14 @@ describe("release.mjs: the command (#643)", () => {
     expect(sent).toEqual([]);
   });
 
-  it("exits 3 when the thread cannot be read once more after the board edits: the row is filed, and hands go to the thread", () => {
+  it("exits 3 when the thread cannot be read again after the board edits: the row is filed, and hands go to the thread", () => {
     const { exit, out, err, sent, drops } = runCli(ARGS, { answer: (n) => (n >= 3 ? "" : undefined) });
     expect(exit).toBe(3);
     expect(err).toContain("RELEASED, ROW NOT CHECKED AGAIN — RELEASE_ROW_UNCHECKED");
     expect(err).toContain(CURES.RELEASE_ROW_UNCHECKED);
     noEditHandedOut(err);
     expect(out).toBe("");
-    expect(sent).toHaveLength(6);
+    expect(sent).toHaveLength(7);
     expect(drops).toBe(1);
   });
 
@@ -3040,7 +3379,7 @@ describe("release.mjs: the command (#643)", () => {
       via: "holder",
       dryRun: true,
       url: null,
-      steps: SIX_STEPS.map((describe) => ({ describe, ran: false })),
+      steps: SEVEN_STEPS.map((describe) => ({ describe, ran: false })),
       body: withRecord(RELEASED, B_CLAIM),
     });
   });
@@ -3060,7 +3399,7 @@ describe("release.mjs: the command (#643)", () => {
     expect(exit).toBe(3);
     expect(err).toBe("");
     const printed = JSON.parse(out);
-    expect(printed).toMatchObject({ ok: false, issue: ISSUE, code: "RELEASE_HALF_RUN", posted: true, ran: SIX_STEPS.slice(0, 4), failed: "clear Claim expires", untried: SIX_STEPS.slice(5) });
+    expect(printed).toMatchObject({ ok: false, issue: ISSUE, code: "RELEASE_HALF_RUN", posted: true, ran: STEPS_TO(4), failed: "clear Claim expires", untried: SIX_STEPS.slice(5) });
     expect(printed.url).toMatch(/#issuecomment-\d+$/);
     expect(Object.keys(printed).sort()).toEqual(["code", "cure", "failed", "issue", "ok", "posted", "ran", "reason", "untried", "url"]);
     noEditHandedOut(out);
