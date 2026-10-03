@@ -210,8 +210,10 @@ Outgoing executor posts:
 ```
 
 Post a releasing Handoff with `node tools/entry/release.mjs --issue N --handoff <file>` (#643): it
-refuses unless the folder and branch it runs in hold the live claim; a dormant lease from another
-folder needs `--takeover "<evidence checked>"`.
+refuses unless the folder and branch it runs in hold the live claim, and its comment ends with a
+`### Release record` naming that claim, so it ends no other (a Handoff posted by hand carries none
+and still ends whichever claim is live). A dormant lease from another folder needs
+`--takeover "<evidence checked>"`, refused while the holding session is measured live.
 
 Incoming executor then re-derives current repository/remote/worktree/branch/dirty/process state and
 posts/refreshes its mutation lease. For ordinary engineering work this transfer does not require Kuya
