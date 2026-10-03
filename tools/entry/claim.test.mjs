@@ -46,9 +46,11 @@ vi.mock("./session-assert.mjs", async (importOriginal) => {
 
 import * as claimModule from "./claim.mjs";
 import {
+  calendarMs,
   claimExpiry,
   execPlan,
   HANDOFF_HEADER,
+  instant,
   parseClaim,
   parseHandoff,
   parseReleaseRecord,
@@ -231,6 +233,76 @@ describe("claimExpiry — the expiry as writers actually spell it", () => {
   it("is null, never a guess, for anything else — a claim stays live until its expiry is read as past", () => {
     expect(claimExpiry(null)).toBeNull();
     expect(claimExpiry("next Tuesday")).toBeNull();
+  });
+
+  // Round 5 of the review of PR 644: `new Date("2026-02-30")` is March 2, so an expiry written on a day
+  // that is not on the calendar was read as another day's. The fields are read back off the calendar
+  // as written, and a zone, when one is written, is taken off the wall-clock reading.
+  it.each(["2026-02-30", "2026-02-29", "2026-04-31", "2026-13-01", "2026-00-10", "2026-01-00", "2026-01-32", "2100-02-29"])("is null for a day that is not on the calendar: %s", (day) => {
+    expect(claimExpiry(day)).toBeNull();
+    expect(claimExpiry(`${day}T05:22Z`)).toBeNull();
+    expect(claimExpiry(`${day}T05:22:01Z (12 hours)`)).toBeNull();
+  });
+
+  it.each(["2026-10-03T24:00Z", "2026-10-03T23:60Z", "2026-10-03T23:59:60Z", "2026-10-03T24:00:00Z"])("is null for a time that is not on the clock: %s", (time) => {
+    expect(claimExpiry(time)).toBeNull();
+  });
+
+  it("takes a written zone off the wall-clock time, reads none as UTC, and refuses a zone that is not one", () => {
+    expect(claimExpiry("2026-10-03T07:22:01+02:00").toISOString()).toBe("2026-10-03T05:22:01.000Z");
+    expect(claimExpiry("2026-10-03T00:22:01-05:00").toISOString()).toBe("2026-10-03T05:22:01.000Z");
+    expect(claimExpiry("2026-10-03T00:22-0500").toISOString()).toBe("2026-10-03T05:22:00.000Z");
+    expect(claimExpiry("2026-10-03T05:22:01").toISOString()).toBe("2026-10-03T05:22:01.000Z");
+    expect(claimExpiry("2026-10-03T07:22:01+25:00")).toBeNull();
+    expect(claimExpiry("2026-10-03T07:22:01+02:60")).toBeNull();
+  });
+
+  it("anchors a relative expiry on an instant it can read, and on nothing else", () => {
+    expect(claimExpiry("12 hours", { anchor: "2026-10-03T05:22:01Z" }).toISOString()).toBe("2026-10-03T17:22:01.000Z");
+    expect(claimExpiry("12 hours", { anchor: new Date("2026-10-03T05:22:01Z") }).toISOString()).toBe("2026-10-03T17:22:01.000Z");
+    expect(claimExpiry("2 days", { anchor: "2026-10-03T05:22:01Z" }).toISOString()).toBe("2026-10-05T05:22:01.000Z");
+    expect(claimExpiry("12 hours", { anchor: "2026-02-30T05:22:01Z" }), "a day off the calendar anchors nothing").toBeNull();
+    expect(claimExpiry("12 hours", { anchor: "2026-10-03" }), "a date alone is not an instant").toBeNull();
+    expect(claimExpiry("12 hours", { anchor: new Date(Number.NaN) })).toBeNull();
+    expect(claimExpiry("12 hours")).toBeNull();
+  });
+});
+
+// Round 5 of the review of PR 644 (round 4's third finding): `Date.parse` reads 2026-02-30T05:22:01Z as
+// March 2, February 29 off a leap year as March 1, April 31 as May 1 and a 24th hour as the next day.
+// On c5a085bd a claim stamped on a day that is not on the calendar was read as posted on another, its
+// default clock run out from there, and a takeover admitted. A stamp names an instant only when its
+// fields come back off the calendar as written.
+describe("instant: a posting time names an instant only when it is on the calendar", () => {
+  const ROLLED = ["2026-02-30T05:22:01Z", "2026-02-29T05:22:01Z", "2026-04-31T05:22:01Z", "2026-10-03T24:00:00Z", "2100-02-29T00:00:00Z"];
+  const OFF = ["2026-13-01T05:22:01Z", "2026-00-10T05:22:01Z", "2026-01-00T05:22:01Z", "2026-01-32T05:22:01Z", "2026-10-03T23:60:00Z", "2026-10-03T23:59:60Z"];
+
+  it.each(ROLLED)("names no instant for %s, which Date.parse rolls over into a day it does not name", (stamp) => {
+    expect(Number.isFinite(Date.parse(stamp)), "the premise: Date.parse takes this stamp").toBe(true);
+    expect(instant(stamp)).toBeNaN();
+  });
+
+  it.each(OFF)("names no instant for %s", (stamp) => {
+    expect(instant(stamp)).toBeNaN();
+  });
+
+  it.each(["2024-02-29T05:22:01Z", "2000-02-29T00:00:00Z", "2026-12-31T23:59:59Z", "2026-01-01T00:00:00Z", "2026-10-03T05:22:01.123Z"])("reads %s as Date.parse does", (stamp) => {
+    expect(Number.isFinite(instant(stamp))).toBe(true);
+    expect(instant(stamp)).toBe(Date.parse(stamp));
+  });
+
+  it("reads a fraction to the millisecond, as Date.parse does, and a stamp through blank space around it", () => {
+    expect(instant("2026-10-03T05:22:01.1Z")).toBe(Date.parse("2026-10-03T05:22:01.100Z"));
+    expect(instant("2026-10-03T05:22:01.1234567Z")).toBe(Date.parse("2026-10-03T05:22:01.123Z"));
+    expect(instant(" 2026-10-03T05:22:01Z\n")).toBe(Date.parse("2026-10-03T05:22:01Z"));
+  });
+
+  it("calendarMs rolls nothing over, and names no instant for a field that is not a whole number", () => {
+    expect(calendarMs("2026", "03", "02", "05", "22", "01")).toBe(Date.UTC(2026, 2, 2, 5, 22, 1));
+    expect(calendarMs("2026", "02", "30", "05", "22", "01")).toBeNaN();
+    expect(calendarMs("2026", "10", "03", "05", "22", "01", "5")).toBe(Date.UTC(2026, 9, 3, 5, 22, 1, 500));
+    expect(calendarMs("2026", "1x", "03", "05", "22", "01")).toBeNaN();
+    expect(calendarMs("2026", "10", "03", "05", "22", "1.5")).toBeNaN();
   });
 });
 
@@ -837,6 +909,8 @@ const B_CLAIM = posted("2026-10-03T05:22:01Z", claimText(HOLDER), 3);
 const INCIDENT = [A_CLAIM, A_RELEASE, B_CLAIM];
 /** A claim a third session posts while a release is in flight. */
 const C_CLAIM = posted("2026-10-03T05:30:26Z", claimText(THIRD, { expires: "2026-10-03T17:30:26Z" }), 8);
+/** The reviewer's thread (review of PR 644, round 4): the incident, then 96 plain notes, 99 comments in all; a Handoff makes 100 and a claim 101. */
+const NINETY_NINE = [...INCIDENT, ...Array.from({ length: 96 }, (_, i) => posted(new Date(Date.UTC(2026, 9, 3, 5, 23, i)).toISOString().replace(".000Z", "Z"), `Note ${i + 1}.`, 100 + i))];
 /** A thread holding one live claim, posted at the successor's time. */
 const claimedBy = (seat = HOLDER, opts = {}) => [posted("2026-10-03T05:22:01Z", claimText(seat, opts), 3)];
 /** The successor's claim, a day old and past its own expiry. */
@@ -971,6 +1045,8 @@ function simulate({
   project = { id: "PVT_x" },
   fields = BOARD_FIELDS,
   dropBoardCache = null,
+  count = null,
+  cut = null,
 } = {}) {
   let comments = thread.map((c) => ({ ...c }));
   let before = null; // the thread as it was before the post, served to the first `lag` reads after it
@@ -978,8 +1054,17 @@ function simulate({
   let justPosted = null; // the thread as it was just after the post
   let stale = null; // ... served to the first `staleAfterMark` reads after the mark
   let staleReads = 0;
+  let served = null; // the list the last `issue view` served, whole: GitHub's count agrees with it unless `count` says otherwise
   let writes = 0;
-  const seen = { sent: [], calls: [], git: [], asked: [], drops: 0, reads: 0 };
+  const seen = { sent: [], calls: [], git: [], asked: [], drops: 0, reads: 0, counts: 0, counted: [] };
+  const listIn = (printed) => {
+    try {
+      const list = JSON.parse(printed)?.comments;
+      return Array.isArray(list) ? list : null;
+    } catch {
+      return null;
+    }
+  };
 
   const write = (argv) => {
     if (failAt === writes) throw ghFailure(argv);
@@ -991,15 +1076,27 @@ function simulate({
     return JSON.stringify(value);
   };
   const gh = (argv) => {
-    const kind = `${argv[0]} ${argv[1]}`;
+    // GitHub's own count of an issue's comments: the REST route to the issue, read with nothing else.
+    const issueRoute = argv[0] === "api" && argv.length === 2 ? /^repos\/Pootytxng\/sentinel\/issues\/(\d+)$/.exec(argv[1]) : null;
+    const kind = issueRoute ? "api issue" : `${argv[0]} ${argv[1]}`;
     seen.calls.push(`gh ${kind}`);
     if (kind === "issue view") {
       seen.reads += 1;
       const printed = answer?.(seen.reads, comments);
-      if (printed !== undefined) return printed;
-      if (before && (late += 1) <= lag) return JSON.stringify({ comments: before });
-      if (stale && (staleReads += 1) <= staleAfterMark) return JSON.stringify({ comments: stale });
-      return JSON.stringify({ comments });
+      if (printed !== undefined) {
+        served = listIn(printed);
+        return printed;
+      }
+      served = before && (late += 1) <= lag ? before : stale && (staleReads += 1) <= staleAfterMark ? stale : comments;
+      // `cut` serves the list short, as a page's end would, while the count stays the whole list's.
+      return JSON.stringify({ comments: cut === null ? served : served.slice(0, cut) });
+    }
+    if (issueRoute) {
+      seen.counts += 1;
+      seen.counted.push(argv);
+      const n = typeof count === "function" ? count(seen.counts, comments) : count;
+      if (typeof n === "string") return n; // the answer as printed, for one that is not a count
+      return JSON.stringify({ number: Number(issueRoute[1]), comments: n ?? (served ?? comments).length });
     }
     if (kind === "issue comment") {
       write(argv);
@@ -1173,14 +1270,15 @@ describe("postRelease: only the folder and branch the live claim names may end i
     expect(threadLease(thread).handoff).toMatchObject({ released: true, nextAction: "Kuya reviews.", postedAt: "2026-10-03T05:30:25Z" });
   });
 
-  it("measures before it writes: the board, its own seat, then the thread, and the comment straight after", () => {
-    const { calls, git, reads } = allowed();
+  it("measures before it writes: the board, its own seat, then the thread and its count, and the comment straight after", () => {
+    const { calls, git, reads, counts } = allowed();
     const firstWrite = calls.indexOf("gh issue comment");
     expect(calls.slice(0, 3)).toEqual(["gh project item-list", "gh project view", "gh project field-list"]);
-    expect(calls.slice(3, firstWrite - 1).every((c) => c.startsWith("git "))).toBe(true);
-    expect(calls[firstWrite - 1], "the thread is the last thing read before the first write").toBe("gh issue view");
-    expect(calls.slice(firstWrite + 1)).toEqual(["gh issue view", ...Array(5).fill("gh project item-edit"), "gh api --method", "gh issue view"]);
+    expect(calls.slice(3, firstWrite - 2).every((c) => c.startsWith("git "))).toBe(true);
+    expect(calls.slice(firstWrite - 2, firstWrite), "the thread, then GitHub's count of it, are the last things read before the first write").toEqual(["gh issue view", "gh api issue"]);
+    expect(calls.slice(firstWrite + 1)).toEqual(["gh issue view", "gh api issue", ...Array(5).fill("gh project item-edit"), "gh api --method", "gh issue view", "gh api issue"]);
     expect(reads).toBe(3);
+    expect(counts).toBe(3);
     // The seat is the folder the command runs in, asked of git: four questions, all about that folder.
     expect(git.map((g) => g.ask).sort()).toEqual(["remote get-url origin", "rev-parse --abbrev-ref HEAD", "rev-parse --is-inside-work-tree", "rev-parse --show-toplevel"]);
     expect(git.every((g) => samePath(g.root, process.cwd()))).toBe(true);
@@ -1729,6 +1827,65 @@ describe("postRelease: the comment must be a release, and only a release (#643)"
     }
   });
 
+  // Round 5 of the review of PR 644 (round 4's third finding): a stamp in GitHub's shape naming a day
+  // that is not on the calendar, 2026-02-30T05:22:01Z, read as March 2 on c5a085bd. Such a stamp names
+  // no time, and the refusal says which stamp it was rather than that none arrived.
+  const OFF_CALENDAR = [
+    "2026-02-30T05:22:01Z",
+    "2026-02-29T05:22:01Z",
+    "2026-04-31T05:22:01Z",
+    "2026-13-01T05:22:01Z",
+    "2026-00-10T05:22:01Z",
+    "2026-01-00T05:22:01Z",
+    "2026-01-32T05:22:01Z",
+    "2026-10-03T24:00:00Z",
+    "2026-10-03T23:60:00Z",
+    "2026-10-03T23:59:60Z",
+    "2100-02-29T00:00:00Z",
+  ];
+  it.each(OFF_CALENDAR)("refuses to read a thread whose live claim was stamped %s, a time not on the calendar, from every seat", (createdAt) => {
+    const answer = () => JSON.stringify({ comments: [A_CLAIM, A_RELEASE, timed(B_CLAIM, createdAt)] });
+    for (const opts of [{ self: HOLDER }, { self: PREDECESSOR }, { self: PREDECESSOR, takeover: "it looked idle", holder: "dead" }, { self: HOLDER, dryRun: true }]) {
+      const error = refused("RELEASE_THREAD_UNREADABLE", { answer, ...opts });
+      expect(error.reason).toBe(
+        `The thread of #${ISSUE} could not be read (a comment carries the posting time ${createdAt}, which is not on the calendar), so who holds its lease is unknown. An unknown lease is not the caller's lease.`,
+      );
+      expect(error.cure).toBe("Nothing was written. Run it again when GitHub answers.");
+    }
+  });
+
+  it("refuses to read a thread where any other comment carries a time not on the calendar", () => {
+    for (const comments of [
+      [timed(A_CLAIM, "2026-02-30T03:10:00Z"), A_RELEASE, B_CLAIM],
+      [A_CLAIM, timed(A_RELEASE, "2026-02-30T05:21:02Z"), B_CLAIM],
+      [...INCIDENT, timed(posted("", "Just a note.", 30), "2026-02-30T05:25:00Z")],
+    ]) {
+      const error = refused("RELEASE_THREAD_UNREADABLE", { answer: () => JSON.stringify({ comments }) });
+      expect(error.reason).toMatch(/\(a comment carries the posting time 2026-02-30T\d{2}:\d{2}:\d{2}Z, which is not on the calendar\)/);
+    }
+  });
+
+  // The reviewer's scenario, whole: the live claim is stamped 2026-02-30T05:22:01Z and carries no expiry
+  // line; the caller is another folder with a takeover reason; the holder has no session record; the
+  // clock reads 2026-03-03. On c5a085bd the default clock ran from March 2, and the takeover went through.
+  describe("the reviewer's scenario: a claim stamped on a day that is not on the calendar, taken over", () => {
+    const ROLLED = "2026-02-30T05:22:01Z";
+    const comments = [A_CLAIM, A_RELEASE, posted(ROLLED, claimText(HOLDER, { drop: ["Claim expires"] }), 3)];
+    const later = new Date("2026-03-03T00:00:00Z");
+
+    it("is refused as a thread that was not read, before any takeover is weighed", () => {
+      const error = refused("RELEASE_THREAD_UNREADABLE", { thread: comments, self: PREDECESSOR, takeover: "it looked idle", holder: "none", now: later });
+      expect(error.reason).toContain(`(a comment carries the posting time ${ROLLED}, which is not on the calendar)`);
+    });
+
+    it("is no takeover even at the bare decision: a clock that cannot be read is never shown to have run out", () => {
+      const decision = releaseDecision({ issue: ISSUE, comments, self: PREDECESSOR, takeover: "it looked idle", liveness: () => "none", now: later });
+      expect(decision).toMatchObject({ ok: false, code: "RELEASE_LEASE_NOT_LAPSED" });
+      expect(decision.reason).toContain("its clock cannot be read, so it cannot be shown to have run out");
+      expect(decision.via).toBeUndefined();
+    });
+  });
+
   // `releaseComment` on its own, handed a thread the reader would have refused: it names no claim by a
   // time it does not have, and says which claim had none. The decision above it is the holder's.
   describe("names its claim by a time that is one claim's alone", () => {
@@ -2103,16 +2260,18 @@ describe("a release names the claim it ends (#643)", () => {
     expect(reads).toBe(4);
   });
 
+  // The stop names the reader's account of the last read it refused, when it refused one: a thread
+  // served without the comment was read, and refused by nobody.
   it.each([
-    ["cannot be read", (n) => (n >= 3 ? "<html>502 Bad Gateway</html>" : undefined)],
-    ["fails to read", (n) => { if (n >= 3) throw ghFailure(["issue", "view"]); }],
-    ["is served without the comment", (n) => (n >= 3 ? JSON.stringify({ comments: INCIDENT }) : undefined)],
-  ])("files the row, then says it could not look again when the thread %s after the board edits", (_, answer) => {
+    ["cannot be read", (n) => (n >= 3 ? "<html>502 Bad Gateway</html>" : undefined), " (the last read was refused: GitHub's answer was not JSON)"],
+    ["fails to read", (n) => { if (n >= 3) throw ghFailure(["issue", "view"]); }, " (the last read was refused: GitHub did not answer: GraphQL: Could not resolve to a ProjectV2Item)"],
+    ["is served without the comment", (n) => (n >= 3 ? JSON.stringify({ comments: INCIDENT }) : undefined), ""],
+  ])("files the row, then says it could not look again when the thread %s after the board edits", (_, answer, refusedAs) => {
     const { error, sent, reads, drops, thread } = attempt({ answer });
     expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_UNCHECKED");
     expect(sent.map((s) => s.describe)).toEqual(SEVEN_WRITES);
     expect(error.message).toContain(
-      "its lease is released and the board row is filed, but the thread could not be read again after the board edits, so a claim landing in those seconds would not have been seen.",
+      `its lease is released and the board row is filed, but the thread could not be read again after the board edits${refusedAs}, so a claim landing in those seconds would not have been seen.`,
     );
     expect(error).toMatchObject({ posted: true, url: thread.at(-1).url, ran: SEVEN_STEPS, cure: CURES.RELEASE_ROW_UNCHECKED });
     expect(error).not.toHaveProperty("failed");
@@ -2135,6 +2294,123 @@ describe("a release names the claim it ends (#643)", () => {
 // release posted, by the number GitHub gave it, and a read counts as the look only once it shows the
 // mark: comments are one table written in order, so a read that holds the mark holds every claim
 // posted before it.
+// Round 5 of the review of PR 644 (round 4's second finding): a list of comments can be cut short, at a
+// page's end or anywhere, and a cut list can hold this release's own marked Handoff and still leave out
+// a claim posted after it. So every read of the thread is followed by a read of GitHub's own count of
+// its comments, and the list is the thread only when it holds that many. Short of that the thread was
+// not read: at the decision, that refuses the release; after the board edits, no such read can show the
+// thread current.
+describe("the thread is read whole: GitHub's count must agree with the list (#643)", () => {
+  const COUNT_ROUTE = ["api", `repos/Pootytxng/sentinel/issues/${ISSUE}`];
+  const SEATS = [{ self: HOLDER }, { self: PREDECESSOR }, { self: PREDECESSOR, takeover: "it looked idle", holder: "dead" }, { self: HOLDER, dryRun: true }];
+
+  it("reads the count straight after every list, by the REST route to the issue and nothing else", () => {
+    const { calls, counted, reads, counts } = allowed();
+    expect(counts).toBe(reads);
+    for (const argv of counted) expect(argv).toEqual(COUNT_ROUTE);
+    calls.forEach((call, i) => {
+      if (call === "gh issue view") expect(calls[i + 1], `the list read at ${i} is followed by its count`).toBe("gh api issue");
+    });
+  });
+
+  it.each([
+    ["one more than the list", 4, `GitHub counts 4 comments on #${ISSUE} and the read held 3`],
+    ["one fewer than the list", 2, `GitHub counts 2 comments on #${ISSUE} and the read held 3`],
+    ["one", 1, `GitHub counts 1 comment on #${ISSUE} and the read held 3`],
+    ["none", 0, `GitHub counts 0 comments on #${ISSUE} and the read held 3`],
+    [
+      "a count gh could not fetch",
+      () => {
+        throw ghFailure(COUNT_ROUTE);
+      },
+      `GitHub did not answer with its count of the comments on #${ISSUE}: GraphQL: Could not resolve to a ProjectV2Item`,
+    ],
+    ["an answer that is not JSON", () => "<html>502 Bad Gateway</html>", `GitHub's count of the comments on #${ISSUE} was not JSON`],
+    ["an empty answer", () => "", `GitHub's count of the comments on #${ISSUE} was not JSON`],
+    ["an issue with no count", () => "{}", `GitHub's answer holds no count of the comments on #${ISSUE}`],
+    ["a count that is a word", () => '{"comments":"3"}', `GitHub's answer holds no count of the comments on #${ISSUE}`],
+    ["a count that is null", () => '{"comments":null}', `GitHub's answer holds no count of the comments on #${ISSUE}`],
+    ["a count that is not whole", 3.5, `GitHub's answer holds no count of the comments on #${ISSUE}`],
+    ["a count below zero", -1, `GitHub's answer holds no count of the comments on #${ISSUE}`],
+  ])("refuses the release, from every seat, when GitHub's count at the decision is %s", (_, count, why) => {
+    for (const opts of SEATS) {
+      const error = refused("RELEASE_THREAD_UNREADABLE", { count, ...opts });
+      expect(error.reason).toBe(`The thread of #${ISSUE} could not be read (${why}), so who holds its lease is unknown. An unknown lease is not the caller's lease.`);
+      expect(error.cure).toBe("Nothing was written. Run it again when GitHub answers.");
+    }
+  });
+
+  // The incident's own shape, one page short: the caller released, a third session claimed, and a list
+  // cut before both shows the caller's claim still live. Without the count, that release would have
+  // posted a released Handoff over the third session's lease.
+  const B_RELEASE = posted("2026-10-03T05:29:00Z", withRecord(RELEASED, B_CLAIM), 20);
+  const D_CLAIM = posted("2026-10-03T05:29:30Z", claimText(THIRD, { expires: "2026-10-03T17:29:30Z" }), 21);
+  const MOVED_ON = [...INCIDENT, B_RELEASE, D_CLAIM];
+
+  it("refuses, at the decision, a list cut before the claim that followed the caller's own release", () => {
+    expect(threadLease(MOVED_ON).claim?.url, "the premise: the thread's live claim is the third session's").toBe(D_CLAIM.url);
+    expect(threadLease(MOVED_ON.slice(0, 3)).claim?.url, "and the cut list shows the caller's").toBe(B_CLAIM.url);
+    for (const opts of [{ self: HOLDER }, { self: HOLDER, dryRun: true }]) {
+      const error = refused("RELEASE_THREAD_UNREADABLE", { thread: MOVED_ON, cut: 3, ...opts });
+      expect(error.reason).toContain(`(GitHub counts 5 comments on #${ISSUE} and the read held 3)`);
+    }
+  });
+
+  it("reads that thread whole for what it is: the caller holds nothing", () => {
+    refused("RELEASE_NOT_HOLDER", { thread: MOVED_ON, self: HOLDER });
+  });
+
+  it("stops unverified, editing no field, when every read after the post is cut before the Handoff", () => {
+    const { error, sent, reads, counts } = attempt({ cut: 3 });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_UNVERIFIED");
+    expect(sent.map((s) => s.describe)).toEqual([`comment on #${ISSUE}`]);
+    expect(reads).toBe(4);
+    expect(counts).toBe(4);
+  });
+
+  it("refuses a read-back whose list holds the Handoff but falls short of GitHub's count, and takes the next read that agrees", () => {
+    // The first read after the post holds the posted Handoff; GitHub already counts one comment more.
+    const run = allowed({ count: (n, comments) => (n === 2 ? comments.length + 1 : comments.length) });
+    expect(run.reads, "decision, a refused read-back, the read-back taken, the look after the edits").toBe(4);
+    expect(run.counts).toBe(4);
+  });
+
+  it("stops unverified, editing no field, when every read-back holds the Handoff but falls short of GitHub's count", () => {
+    const { error, sent, reads } = attempt({ count: (n, comments) => (n === 1 ? comments.length : comments.length + 1) });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_UNVERIFIED");
+    expect(sent.map((s) => s.describe)).toEqual([`comment on #${ISSUE}`]);
+    expect(reads).toBe(4);
+  });
+
+  // The reviewer's input (round 4): a thread of 99 comments, this release's Handoff the 100th, a claim
+  // landing as the 101st during the board edits, and every read served 100 long. The marked Handoff is
+  // in each read and the claim is not. On c5a085bd the first such read was taken as current, and the
+  // release reported the row filed over that claim's.
+  it("takes no read cut short of GitHub's count for the look after the edits, and says why the row is unchecked", () => {
+    expect(NINETY_NINE).toHaveLength(99);
+    const { error, sent, reads, counts, drops, thread } = attempt({ thread: NINETY_NINE, duringEdits: { at: 3, comments: [C_CLAIM] }, cut: 100 });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_UNCHECKED");
+    expect(error.message).toContain(
+      `its lease is released and the board row is filed, but the thread could not be read again after the board edits (the last read was refused: GitHub counts 101 comments on #${ISSUE} and the read held 100), so a claim landing in those seconds would not have been seen.`,
+    );
+    expect(error).toMatchObject({ posted: true, ran: SEVEN_STEPS, cure: CURES.RELEASE_ROW_UNCHECKED });
+    expect(error).not.toHaveProperty("live");
+    expect(sent.map((s) => s.describe)).toEqual(SEVEN_WRITES);
+    expect(reads).toBe(5);
+    expect(counts).toBe(5);
+    expect(drops).toBe(1);
+    expect(thread).toHaveLength(101);
+    expect(threadLease(thread).claim?.url, "the claim every cut read hid").toBe(C_CLAIM.url);
+  });
+
+  it("releases whole on that thread when the reads are served whole: the claim is seen, and the row is said to be its", () => {
+    const { error, thread } = attempt({ thread: NINETY_NINE, duringEdits: { at: 3, comments: [C_CLAIM] } });
+    expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_RACED");
+    expect(error).toMatchObject({ live: { url: C_CLAIM.url } });
+    expect(thread).toHaveLength(101);
+  });
+});
+
 describe("the look after the board edits is current (#643)", () => {
   const BY_NUMBER = /^repos\/Pootytxng\/sentinel\/issues\/comments\/\d+$/;
 
@@ -2146,8 +2422,8 @@ describe("the look after the board edits is current (#643)", () => {
     expect(mark.argv[3].endsWith(`/${thread.at(-1).url.split("#issuecomment-")[1]}`), "the number is the posted comment's").toBe(true);
     expect(mark.argv.slice(4)).toEqual(["-f", `body=${FILED(body)}`]);
     expect(thread.at(-1).body).toBe(FILED(body));
-    expect(calls.at(-1), "the last read follows the mark").toBe("gh issue view");
-    expect(calls.at(-2)).toBe("gh api --method");
+    expect(calls.slice(-2), "the last read, and its count, follow the mark").toEqual(["gh issue view", "gh api issue"]);
+    expect(calls.at(-3)).toBe("gh api --method");
   });
 
   it("the marked comment folds as the unmarked one did: released, naming the same claim, ending it", () => {
@@ -2570,6 +2846,50 @@ describe("execPlan runs only what claim.mjs built (#643)", () => {
     for (const m of asItself.messages) expect(m).toContain(`node was started with the program "${probe}"`);
   });
 
+  // THE LIMIT, stated (review of PR 644, round 4): all four witnesses are process state, and a program
+  // that rewrites all four before it imports claim.mjs is admitted. This test shows such a program
+  // reaching both writers, so the limit is on record, and a change that closes it turns this red. What
+  // holds against it is structural, the writers leaving claim.mjs for one only the launcher reaches,
+  // filed as a follow-up on #643: nothing measured inside a process can tell what ran in it earlier.
+  it("the stated limit: a program that forges all four witnesses before importing claim.mjs is admitted", () => {
+    const dir = join(tmp, "limit");
+    mkdirSync(join(dir, "empty-path"), { recursive: true });
+    const forger = join(dir, "forger.mjs");
+    writeFileSync(
+      forger,
+      [
+        "// Forge every witness, then load the module: nothing it can measure differs from the launcher's own process.",
+        `process.argv[1] = ${JSON.stringify(LAUNCHER_PATH)};`,
+        `process.report.getReport = () => ({ header: { commandLine: [process.execPath, ${JSON.stringify(LAUNCHER_PATH)}] } });`,
+        "process.execArgv = [];",
+        "delete process.env.NODE_OPTIONS;",
+        `const { execPlan, planRenew, postClaim } = await import(${JSON.stringify(pathToFileURL(join(HERE, "claim.mjs")).href)});`,
+        `const ids = ${JSON.stringify(IDS)};`,
+        `const facts = ${JSON.stringify(FACTS)};`,
+        `const verdict = ${JSON.stringify(PASS)};`,
+        "const out = { messages: [] };",
+        "const code = (run) => { try { run(); return 'ran'; } catch (e) { out.messages.push(e.message); return e.code ?? e.message; } };",
+        "try {",
+        `  out.renew = code(() => execPlan(planRenew({ issue: ${ISSUE}, ids, until: "2026-10-04" }), { dryRun: true }));`,
+        `  out.claim = code(() => postClaim({ issue: ${ISSUE}, verdict, facts, ids, dryRun: true }));`,
+        "} finally {",
+        "  process.stdout.write(JSON.stringify(out) + '\\n');",
+        "  process.exit(0);",
+        "}",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(?:path|node_options)$/i.test(k)));
+    env.PATH = join(dir, "empty-path");
+    // Started with a flag and with NODE_OPTIONS set, so every witness has something to forge.
+    const r = spawnSync(process.execPath, ["--no-warnings", forger], { cwd: ROOT, env: { ...env, NODE_OPTIONS: "--no-deprecation" }, encoding: "utf8", timeout: 60_000, windowsHide: true });
+    expect(r.error).toBeUndefined();
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    const admitted = JSON.parse(r.stdout.trim().split("\n").at(-1));
+    expect(admitted, "the limit: a forger of all four witnesses reaches both writers").toEqual({ messages: [], renew: "ran", claim: "ran" });
+  });
+
   it("builds plans that cannot be edited into other plans afterwards", () => {
     const plan = renewal();
     expect(() => plan.push(RELEASE_STEP)).toThrow(TypeError);
@@ -2966,7 +3286,7 @@ describe("postRelease: what a run leaves behind (#643)", () => {
     const run = attempt({ failAt, answer: (n) => (n >= 3 ? "<html>502 Bad Gateway</html>" : undefined) });
     expect(run.error?.code, String(run.error?.stack ?? run.error)).toBe("RELEASE_HALF_RUN");
     expect(run.error.message).toContain(
-      `but the board row is only partly filed: ${PARTLY[failAt]}. The thread could not be read again after the board edits, so a claim landing in those seconds would not have been seen.`,
+      `but the board row is only partly filed: ${PARTLY[failAt]}. The thread could not be read again after the board edits (the last read was refused: GitHub's answer was not JSON), so a claim landing in those seconds would not have been seen.`,
     );
     expect(run.error).toMatchObject({ ran: STEPS_TO(failAt), failed: SIX_STEPS[failAt], untried: SIX_STEPS.slice(failAt + 1), cure: CURES.RELEASE_HALF_RUN_UNCHECKED });
     noEditHandedOut(run.error.message);
@@ -3186,6 +3506,8 @@ describe("release.mjs: the command (#643)", () => {
       },
       "RELEASE_THREAD_UNREADABLE",
     ],
+    ["GitHub counts more comments than the read held", { count: 4 }, "RELEASE_THREAD_UNREADABLE"],
+    ["GitHub's count cannot be read", { count: () => "" }, "RELEASE_THREAD_UNREADABLE"],
     ["another folder holds the lease", { self: PREDECESSOR }, "RELEASE_NOT_HOLDER"],
     ["this folder is on another branch", { self: { ...HOLDER, branch: "main" } }, "RELEASE_BRANCH_MISMATCH"],
     ["this folder is no git work tree", { self: null }, "RELEASE_SELF_UNKNOWN"],
@@ -3352,6 +3674,18 @@ describe("release.mjs: the command (#643)", () => {
     expect(out).toBe("");
     expect(sent).toHaveLength(7);
     expect(drops).toBe(1);
+  });
+
+  it("exits 3, never 0, when every look after the edits is cut short of GitHub's count: the reviewer's 99, 100, 101", () => {
+    const { exit, out, err, sent, counts } = runCli(ARGS, { thread: NINETY_NINE, duringEdits: { at: 3, comments: [C_CLAIM] }, cut: 100 });
+    expect(exit).toBe(3);
+    expect(err).toContain("RELEASED, ROW NOT CHECKED AGAIN — RELEASE_ROW_UNCHECKED");
+    expect(err).toContain(`(the last read was refused: GitHub counts 101 comments on #${ISSUE} and the read held 100)`);
+    expect(err).toContain(CURES.RELEASE_ROW_UNCHECKED);
+    noEditHandedOut(err);
+    expect(out).toBe("");
+    expect(sent).toHaveLength(7);
+    expect(counts).toBe(5);
   });
 
   it("releases whole when one look after the board edits fails and the next answers", () => {

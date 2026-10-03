@@ -301,18 +301,24 @@ const field = (lines, label, aliases = []) => {
  */
 export function claimExpiry(text, { anchor = null } = {}) {
   const s = String(text ?? "");
-  const m = /^\s*(\d{4}-\d{2}-\d{2})(T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?)?/.exec(s);
+  const m = /^\s*(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:?\d{2})?)?/.exec(s);
   if (m) {
-    const time = m[2] ? (/(?:Z|[+-]\d{2}:?\d{2})$/.test(m[2]) ? m[2] : m[2] + "Z") : "T23:59:59Z";
-    const d = new Date(m[1] + time);
-    return Number.isNaN(d.getTime()) ? null : d;
+    const [, y, mo, d, h, mi, sec, zone] = m;
+    // A date alone means the end of its day; a time without seconds means the top of its minute.
+    const wall = h === undefined ? calendarMs(y, mo, d, "23", "59", "59") : calendarMs(y, mo, d, h, mi, sec ?? "00");
+    if (!Number.isFinite(wall)) return null;
+    // The zone, when one is written, is taken off the wall-clock reading; none or Z reads as UTC.
+    const z = zone && zone !== "Z" ? /^([+-])(\d{2}):?(\d{2})$/.exec(zone) : null;
+    if (z && (Number(z[2]) > 23 || Number(z[3]) > 59)) return null;
+    const offset = z ? (z[1] === "-" ? -1 : 1) * (Number(z[2]) * 60 + Number(z[3])) * 60_000 : 0;
+    return new Date(wall - offset);
   }
   const rel = /^\s*[(~]?\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|d|day|days)\b/i.exec(s);
   if (!rel || !anchor) return null;
-  const at = new Date(anchor);
-  if (Number.isNaN(at.getTime())) return null;
+  const at = anchor instanceof Date ? anchor.getTime() : instant(anchor);
+  if (!Number.isFinite(at)) return null;
   const n = Number(rel[1]);
-  return new Date(at.getTime() + n * (/^d/i.test(rel[2]) ? 86_400_000 : 3_600_000));
+  return new Date(at + n * (/^d/i.test(rel[2]) ? 86_400_000 : 3_600_000));
 }
 
 /**
@@ -434,9 +440,38 @@ export function parseReleaseRecord(body) {
 // A posting time as GitHub writes one, and nothing looser: a date or a sentence names no comment.
 // Exported so a thread reader can refuse a comment that carries none (release.mjs): a claim read
 // without its time could have been posted at any (`claimsAt`), so with one on the thread no release
-// could ever name the live claim.
-const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
-export const instant = (v) => (typeof v === "string" && STAMP.test(v.trim()) ? Date.parse(v.trim()) : Number.NaN);
+// could ever name the live claim. The fields must be on the calendar as written: `Date.parse` reads
+// 2026-02-30 as March 2, and on c5a085bd a claim stamped so was read as posted then, its default
+// clock run out from there, and a takeover admitted on a thread that should have read as unreadable
+// (review of PR 644, round 4). So the fields are put through the calendar and read back; a stamp
+// that does not come back as it was written names no time (`calendarMs`). The shape is exported so
+// that reader can say which it refused: a stamp shaped right but off the calendar, or no stamp.
+export const STAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
+export const instant = (v) => {
+  const m = typeof v === "string" ? STAMP.exec(v.trim()) : null;
+  return m ? calendarMs(m[1], m[2], m[3], m[4], m[5], m[6], m[7]) : Number.NaN;
+};
+
+/**
+ * The instant the UTC fields name, or NaN when they name none: a month, day, hour, minute or second
+ * out of its range, February 29 off a leap year, a 24th hour, a field that is not a whole number.
+ * `Date.UTC` rolls those over into the next unit, or truncates them; reading the result back shows
+ * it. The fraction, when there is one, is read to the millisecond, as `Date.parse` reads it.
+ */
+export function calendarMs(y, mo, d, h, mi, s, fraction = "") {
+  const [year, month, day, hour, minute, second] = [y, mo, d, h, mi, s].map(Number);
+  const millis = fraction ? Number(String(fraction).slice(0, 3).padEnd(3, "0")) : 0;
+  const ms = Date.UTC(year, month - 1, day, hour, minute, second, millis);
+  const back = new Date(ms);
+  const same =
+    back.getUTCFullYear() === year &&
+    back.getUTCMonth() === month - 1 &&
+    back.getUTCDate() === day &&
+    back.getUTCHours() === hour &&
+    back.getUTCMinutes() === minute &&
+    back.getUTCSeconds() === second;
+  return same ? ms : Number.NaN;
+}
 
 /**
  * The claims that were, or could have been, posted at `at`. GitHub's posting times are whole seconds,
@@ -582,10 +617,20 @@ const planRefusal = (code, message) => Object.assign(new Error(message), { code 
 // So a session's own script, a test runner, `node -e`, a forged `process.argv` and a preload that runs
 // before the launcher are each named by one of them. On 71bd4e38 `process.argv[1]` alone was the
 // witness, and `node --import <a script> launch.mjs` ran that script with the launcher as its program
-// (review of PR 644, round 3). What is left is code loaded into the launcher's own process once it has
-// started, and that is the launcher's own code. Both paths are read through any link: node names this
-// file by where it really is, and the program by how it was typed. The refusal says what was measured;
-// a witness that cannot be read refuses, since unknown means locked.
+// (review of PR 644, round 3).
+//
+// THE LIMIT: all four are process state, and a program that rewrites all four before it imports this
+// file is admitted; `process.argv[1]`, `process.report.getReport`, `process.execArgv` and NODE_OPTIONS
+// are each writable from any program (review of PR 644, round 4; the test "the stated limit" shows
+// such a program reaching the writers). No measurement made inside a process can tell what ran in it
+// earlier, so this gate refuses the programs that do not forge node's process state, and no more: a
+// hand-rolled script, a test runner, a preload, a flag. What holds against a forger is structural,
+// the writers leaving this file for one that only the launcher reaches, and that is filed as a
+// follow-up on #643, outside this change's write scope.
+//
+// Both paths are read through any link: node names this file by where it really is, and the program
+// by how it was typed. The refusal says what was measured; a witness that cannot be read refuses,
+// since unknown means locked.
 const LAUNCHER = join(dirname(fileURLToPath(import.meta.url)), "launch.mjs");
 const throughLinks = (path) => {
   try {
@@ -787,9 +832,9 @@ const claimClock = (claim) => {
     const at = claimExpiry(claim.expires, { anchor: claim.postedAt });
     return { at, by: at ? "its Claim expires line" : null };
   }
-  const posted = claim.postedAt ? new Date(claim.postedAt) : null;
-  if (!posted || Number.isNaN(posted.getTime())) return { at: null, by: null };
-  return { at: new Date(posted.getTime() + DEFAULT_CLAIM_HOURS * 3_600_000), by: `the ${DEFAULT_CLAIM_HOURS}-hour default` };
+  const posted = instant(claim.postedAt);
+  if (!Number.isFinite(posted)) return { at: null, by: null };
+  return { at: new Date(posted + DEFAULT_CLAIM_HOURS * 3_600_000), by: `the ${DEFAULT_CLAIM_HOURS}-hour default` };
 };
 
 const HOLDER_STATES = new Set(["live", "dead", "none", "unknown"]);

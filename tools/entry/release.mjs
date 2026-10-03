@@ -50,7 +50,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describeClaim, instant, releaseComment, releaseDecision, releaseOutcome, renderHandoff } from "./claim.mjs";
+import { describeClaim, instant, releaseComment, releaseDecision, releaseOutcome, renderHandoff, STAMP } from "./claim.mjs";
 import { ghReader, readBoard, readProjectIds, REPO } from "./gather.mjs";
 import { CORRUPT, invalidateBoardCache, observeLiveness, readLineage, resolveSessionRoot, samePath } from "./session-assert.mjs";
 import { liveFolder } from "../../scripts/scope-drift-gate.mjs";
@@ -139,12 +139,21 @@ const holderLiveness = (now) => (folder) => {
  * posted at any (`claimsAt` in claim.mjs), so a thread holding either was not read. On 71bd4e38 a claim
  * without its time was let through, and from then on every release on that thread was refused for a
  * shared time, with a cure, a refreshed claim, that could not cure it (review of PR 644, round 3).
+ *
+ * And the list has to be the WHOLE thread. A list cut short, at a page's end or anywhere, can hold
+ * this release's own marked Handoff and still leave out a claim posted after it: on c5a085bd such a
+ * read was taken as current, and the release reported the row filed over that claim's (review of
+ * PR 644, round 4). So after the list, GitHub's own count of the thread's comments is read, and the
+ * list is the thread only when it holds that many. The count is read AFTER the list: a comment that
+ * lands between the two raises the count above the list, and the read is refused rather than taken.
+ * A count that cannot be read leaves the list unproven, and unproven is unread.
  */
 const readThread = (issue) => {
   const unread = (why) => ({ comments: null, why });
+  const read = ghReader();
   let printed;
   try {
-    printed = ghReader()(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]);
+    printed = read(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]);
   } catch (e) {
     return unread(`GitHub did not answer: ${firstLine(e)}`);
   }
@@ -158,8 +167,30 @@ const readThread = (issue) => {
   if (!Array.isArray(comments)) return unread("GitHub's answer holds no list of comments");
   for (const c of comments) {
     if (c === null || typeof c !== "object" || typeof c.body !== "string") return unread("a comment arrived without its text");
-    if (!Number.isFinite(instant(c.createdAt))) return unread("a comment arrived without the time it was posted");
+    if (!Number.isFinite(instant(c.createdAt))) {
+      // A stamp shaped as GitHub writes one, but naming a day or a second that is not on the calendar,
+      // is said as such: on c5a085bd it read as the day it rolls over to (review of PR 644, round 4).
+      return unread(
+        typeof c.createdAt === "string" && STAMP.test(c.createdAt.trim())
+          ? `a comment carries the posting time ${c.createdAt.trim()}, which is not on the calendar`
+          : "a comment arrived without the time it was posted",
+      );
+    }
   }
+  let counted;
+  try {
+    counted = read(["api", `repos/${REPO}/issues/${issue}`]);
+  } catch (e) {
+    return unread(`GitHub did not answer with its count of the comments on #${issue}: ${firstLine(e)}`);
+  }
+  let count;
+  try {
+    count = JSON.parse(counted)?.comments;
+  } catch {
+    return unread(`GitHub's count of the comments on #${issue} was not JSON`);
+  }
+  if (!Number.isInteger(count) || count < 0) return unread(`GitHub's answer holds no count of the comments on #${issue}`);
+  if (count !== comments.length) return unread(`GitHub counts ${count} comment${count === 1 ? "" : "s"} on #${issue} and the read held ${comments.length}`);
   return { comments, why: null };
 };
 
@@ -387,7 +418,7 @@ export function postRelease(request) {
   if (outcome.landed === "nothing") {
     // The fold reads a record by the time it names. Where the live claim has that very time and the
     // release still ended nothing, the time is not one claim's alone.
-    const sameTime = outcome.before && Date.parse(outcome.before.postedAt) === Date.parse(decision.claim.postedAt);
+    const sameTime = outcome.before && instant(outcome.before.postedAt) === instant(decision.claim.postedAt);
     const why = !outcome.before
       ? "no claim was live when it landed."
       : sameTime
@@ -453,9 +484,14 @@ export function postRelease(request) {
   const found = { id: posted.id ?? (commentId ? `#issuecomment-${commentId}` : null), body: posted.body };
   let shown = null;
   let glimpse = null;
+  let unreadWhy = null; // the reader's account of the last read it refused, when it refused one
   for (let i = 0; i < READ_BACK_TRIES && !shown; i += 1) {
-    const { comments } = readThread(issue);
-    const index = comments ? findPosted(comments, found) : -1;
+    const { comments, why } = readThread(issue);
+    if (!comments) {
+      unreadWhy = why;
+      continue;
+    }
+    const index = findPosted(comments, found);
     if (index < 0) continue;
     glimpse = { comments, index };
     if (markSent && sameText(comments[index].body, marked)) shown = glimpse;
@@ -463,7 +499,9 @@ export function postRelease(request) {
   }
   const after = shown ?? glimpse;
   const raced = after ? releaseOutcome({ comments: after.comments, index: after.index }).next : null;
-  // Why the thread could not be shown current, when it could not.
+  // Why the thread could not be shown current, when it could not. A read the reader refused is named
+  // by its account: a thread read short of GitHub's own count is one of them, and it is not current.
+  const refusedRead = unreadWhy ? ` (the last read was refused: ${unreadWhy})` : "";
   const unshown = shown
     ? null
     : !commentId
@@ -471,8 +509,8 @@ export function postRelease(request) {
       : markFailure
         ? `the Handoff could not be marked (${firstLine(markFailure)}), so the thread could not be shown current, and a claim landing in those seconds would not have been seen.`
         : glimpse
-          ? "no read of the thread after the board edits showed the Handoff marked yet, so the thread could not be shown current, and a claim landing in those seconds would not have been seen."
-          : "the thread could not be read again after the board edits, so a claim landing in those seconds would not have been seen.";
+          ? `no read of the thread after the board edits showed the Handoff marked yet${refusedRead}, so the thread could not be shown current, and a claim landing in those seconds would not have been seen.`
+          : `the thread could not be read again after the board edits${refusedRead}, so a claim landing in those seconds would not have been seen.`;
   const edits = plan.slice(1, ran).map((s) => s.describe);
   const untried = plan.slice(ran + 1).map((s) => s.describe);
   const rest = untried.length === 0 ? "it was the last edit" : `${untried.length} more ${untried.length === 1 ? "was" : "were"} not tried`;
