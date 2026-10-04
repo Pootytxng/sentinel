@@ -143,10 +143,22 @@ const holderLiveness = (now) => (folder) => {
  * And the list has to be the WHOLE thread. A list cut short, at a page's end or anywhere, can hold
  * this release's own marked Handoff and still leave out a claim posted after it: on c5a085bd such a
  * read was taken as current, and the release reported the row filed over that claim's (review of
- * PR 644, round 4). So after the list, GitHub's own count of the thread's comments is read, and the
- * list is the thread only when it holds that many. The count is read AFTER the list: a comment that
- * lands between the two raises the count above the list, and the read is refused rather than taken.
- * A count that cannot be read leaves the list unproven, and unproven is unread.
+ * PR 644, round 4). The list `gh issue view --json comments` prints is whole by gh's own paging: gh
+ * v2.97.0 (`pkg/cmd/issue/view/http.go`, `preloadIssueComments`) asks for the comments 100 at a time
+ * and follows `endCursor` while `hasNextPage` is true, and measured on 2026-10-04 against the REST
+ * count, two threads longer than a page listed whole (cli/cli#13840: 149 of 149; cli/cli#326: 107 of
+ * 107). Rounds 4 and 5 of that review took a cut at 100 for gh's behaviour; measured, it is not. The
+ * count read after the list stays, as the guard for the day a list is cut anyway (a gh that pages
+ * otherwise, a page lost, a thread that grows between its pages): GitHub's own count of the thread's
+ * comments (`gh api repos/<repo>/issues/<n>`, its `comments` field) is read AFTER the list, and the
+ * list is the thread only when it holds that many. A comment that lands between the two raises the
+ * count above the list, and the read is refused rather than taken. A count that cannot be read leaves
+ * the list unproven, and unproven is unread. What two requests cannot prove is that the thread stood
+ * still between them in a way the count hides (one comment deleted, another posted); the count is
+ * not that proof. A claim posted after a read is met twice over instead: the Release record names
+ * the one claim this Handoff ends, so a Handoff landing after a newer claim ends nothing and the
+ * board is left alone (`threadLease`), and the look after the board edits finds the thread moved on
+ * (RELEASE_ROW_RACED).
  */
 const readThread = (issue) => {
   const unread = (why) => ({ comments: null, why });

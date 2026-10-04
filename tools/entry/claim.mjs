@@ -291,30 +291,50 @@ const field = (lines, label, aliases = []) => {
 };
 
 /**
- * A claim's expiry as a Date. Writers spell it "2026-09-03", "2026-09-02T04:55Z (12 hours)",
- * "2026-09-02T12:00:00Z" or "2026-08-03 (12-hour alarm; no automatic takeover)"; a date alone ends at
- * the end of its day (UTC). A bare term — "12 hours", "12h", "2 days" — means that long after the
- * claim was POSTED, and is readable only with the posting time (`anchor`) in hand: the claim on #313
- * spelled it that way, and read without an anchor it never expired, so a lane that finished on
- * 2026-09-01 refused every overlapping writer for good. Unparseable is null — a claim stays live
- * until its expiry is READ as past, never assumed past.
+ * A claim's expiry as a Date, or null when the line cannot be read as one. Writers spell it
+ * "2026-09-03", "2026-09-02T04:55Z (12 hours)", "2026-09-02T12:00:00Z", "2026-08-25 23:07 UTC" or
+ * "2026-08-03 (12-hour alarm; no automatic takeover)"; a date alone ends at the end of its day (UTC),
+ * a time without seconds at the top of its minute. A bare term — "12 hours", "12h", "2 days" — means
+ * that long after the claim was POSTED, and is readable only with the posting time (`anchor`) in
+ * hand: the claim on #313 spelled it that way, and read without an anchor it never expired, so a lane
+ * that finished on 2026-09-01 refused every overlapping writer for good.
+ *
+ * The reading is the whole time written, or none. On fb2b2908 the match stopped after the fields it
+ * knew, so "2026-10-03T07:22:01-02" read as 07:22Z with its "-02" dropped, and a takeover was admitted
+ * at 08:00Z against a claim written to run until 09:22Z (review of PR 644, round 5). A reading now has
+ * to be CLOSED (`closed`): what follows it is nothing, or a separator (space, comma, semicolon, full
+ * stop, closing bracket) and then no continuation of the time (a digit, a signed digit, a colon). So
+ * "-02" is a zone of whole hours; "-2", "-02:" and "12h30" are no reading; and "+12h" after a date is
+ * no reading either, since a term after a date names no instant the writer agreed to. A zone is read
+ * only after a time: Z, UTC and GMT are UTC, ±hh[:mm] is taken off the wall-clock reading, and any
+ * other word there (PDT, PT) is a zone this reader does not know, so no reading rather than a guess at
+ * UTC. A fraction of a second is read to the millisecond. The fields are read back off the calendar
+ * (`calendarMs`), so a day or an hour that is not on it reads as none. Unreadable is null, never a
+ * guess: a claim stays live until its expiry is READ as past, never assumed past.
  */
+const ABSOLUTE = /^\s*(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(?: ?(Z|[+-]\d{2}(?::?\d{2})?|[A-Za-z]{1,5}))?)?/;
+const RELATIVE = /^\s*[(~]?\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|d|day|days)\b/i;
+// What may follow a reading: nothing, or a separator and then no continuation of the time.
+const closed = (rest) => rest === "" || (/^[\s,;.)\]]/.test(rest) && !/^[\s,;.)\]]+(?:[+-]?\d|:)/.test(rest));
 export function claimExpiry(text, { anchor = null } = {}) {
   const s = String(text ?? "");
-  const m = /^\s*(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:?\d{2})?)?/.exec(s);
+  const m = ABSOLUTE.exec(s);
   if (m) {
-    const [, y, mo, d, h, mi, sec, zone] = m;
+    if (!closed(s.slice(m[0].length))) return null;
+    const [, y, mo, d, h, mi, sec, fraction, zone] = m;
     // A date alone means the end of its day; a time without seconds means the top of its minute.
-    const wall = h === undefined ? calendarMs(y, mo, d, "23", "59", "59") : calendarMs(y, mo, d, h, mi, sec ?? "00");
+    const wall = h === undefined ? calendarMs(y, mo, d, "23", "59", "59") : calendarMs(y, mo, d, h, mi, sec ?? "00", fraction ?? "");
     if (!Number.isFinite(wall)) return null;
-    // The zone, when one is written, is taken off the wall-clock reading; none or Z reads as UTC.
-    const z = zone && zone !== "Z" ? /^([+-])(\d{2}):?(\d{2})$/.exec(zone) : null;
-    if (z && (Number(z[2]) > 23 || Number(z[3]) > 59)) return null;
-    const offset = z ? (z[1] === "-" ? -1 : 1) * (Number(z[2]) * 60 + Number(z[3])) * 60_000 : 0;
+    // The zone, when one is written, is taken off the wall-clock reading; none, Z, UTC and GMT read as
+    // UTC, and a word this reader does not know as a zone is no reading at all.
+    if (zone === undefined || /^(?:Z|UTC|GMT)$/i.test(zone)) return new Date(wall);
+    const z = /^([+-])(\d{2})(?::?(\d{2}))?$/.exec(zone);
+    if (!z || Number(z[2]) > 23 || Number(z[3] ?? 0) > 59) return null;
+    const offset = (z[1] === "-" ? -1 : 1) * (Number(z[2]) * 60 + Number(z[3] ?? 0)) * 60_000;
     return new Date(wall - offset);
   }
-  const rel = /^\s*[(~]?\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|d|day|days)\b/i.exec(s);
-  if (!rel || !anchor) return null;
+  const rel = RELATIVE.exec(s);
+  if (!rel || !anchor || !closed(s.slice(rel[0].length))) return null;
   const at = anchor instanceof Date ? anchor.getTime() : instant(anchor);
   if (!Number.isFinite(at)) return null;
   const n = Number(rel[1]);
@@ -522,6 +542,16 @@ const endsClaim = (record, claim, seen) => {
  * measures how long a path has been held from the run, not from the newest comment. A comment's
  * `url`, when the reader supplied one, rides along so a refusal can link the claim, or the release,
  * it names.
+ *
+ * A renewal rides on the claim it renews (#643, review of PR 644, round 5). The launcher, finding a
+ * live claim of its own on the issue, posts "Claim renewed until <date>." and moves the board's Claim
+ * expires (`planRenew`); a Handoff may renew the same lease with "- Claim: renewed until …". A
+ * takeover that read the claim's own expiry line alone took a lease renewed that way as run out at
+ * its first expiry. So every claim carries `renewals`: each renewal comment posted while it was the
+ * live claim, in posting order, with its `until` as written, its posting time and its link
+ * (`parseRenewal`). A renewal posted before any claim, or after the release, renews nothing; a
+ * comment that posts a claim is a claim, not a renewal of the one before it. The fold does not read
+ * the renewal's time: `claimClock` does, when a takeover asks whether the clock has run out.
  */
 export function threadLease(comments) {
   let claim = null;
@@ -544,16 +574,47 @@ export function threadLease(comments) {
       claim = asClaim;
       run.push(claim);
       seen.push(claim);
+      continue;
     }
+    const renewal = claim ? parseRenewal(c.body) : null;
+    if (renewal) claim.renewals.push({ ...renewal, postedAt: c.createdAt, ...(c.url ? { url: c.url } : {}) });
   }
   return { claim, handoff, run };
 }
 
-/** The claim a comment posts, with when it was posted and its link, or null when it posts none. */
+/** The claim a comment posts, with when it was posted, its link and no renewals yet, or null when it posts none. */
 function claimOf(c) {
   const read = parseClaim(c.body);
-  return read ? { ...read, postedAt: c.createdAt, ...(c.url ? { url: c.url } : {}) } : null;
+  return read ? { ...read, postedAt: c.createdAt, ...(c.url ? { url: c.url } : {}), renewals: [] } : null;
 }
+
+/**
+ * The renewal a comment posts, as `{ until }` with the time as written, or null when it posts none.
+ * Two spellings are renewals and nothing else is: the launcher's, a comment whose first line is
+ * "Claim renewed until <time>." with a note allowed after the full stop (`planRenew`); and a Handoff's,
+ * whose every Claim line reads "renewed until <time>" (the last of them when it has several, as a
+ * Handoff that holds beside one that releases is read as neither). A sentence that mentions a
+ * renewal, a line inside fenced code, a bullet or a table row that is not a Handoff's Claim line, and a
+ * "Claim renewed until" that is not the first line of its comment are prose. The full stop that ends
+ * the sentence, and the launcher's note after it, are not part of the time.
+ */
+export function parseRenewal(body) {
+  const text = String(body ?? "");
+  const first = text.replace(/^\uFEFF/, "").split(/\r?\n/).find((l) => /\S/.test(l));
+  const launcher = first === undefined ? null : /^Claim renewed until\s+(\S.*)$/i.exec(first);
+  if (launcher) return renewalUntil(launcher[1]);
+  const handoff = handoffLines(text);
+  if (!handoff) return null;
+  const claims = handoff.flatMap((l) => field([l], "Claim") ?? []);
+  const renewed = claims.map((c) => /^[^a-z0-9]*renewed\s+until\s+(\S.*)$/i.exec(c));
+  if (claims.length === 0 || renewed.some((m) => m === null)) return null;
+  return renewalUntil(renewed.at(-1)[1]);
+}
+/** The time as written, without the full stop that ends the sentence or the note after it; nothing left is no renewal. */
+const renewalUntil = (raw) => {
+  const until = raw.replace(/\.(?:\s.*)?$/s, "").trim();
+  return until ? { until } : null;
+};
 
 const REPO = ["--repo", "Pootytxng/sentinel"];
 // Every plan this file built, whole and as built: `execPlan` runs these and nothing else (#643). A plan
@@ -823,18 +884,34 @@ const heldBy = (claim) =>
   (claim.url ? ` (${claim.url})` : "");
 
 /**
- * When a claim's own clock runs out. Its `Claim expires` line when it has one; a line that cannot be
- * read leaves the clock unknown, never assumed past (`claimExpiry`). With no line at all, the
- * documented default: DEFAULT_CLAIM_HOURS after the claim was posted.
+ * When a claim's clock runs out, and what says so: `at` the instant or null, `by` what set it. The
+ * claim's own clock is its `Claim expires` line when it has one, read with its posting time; a line
+ * that cannot be read leaves the clock unknown, never assumed past (`claimExpiry`). With no line at
+ * all, the documented default: DEFAULT_CLAIM_HOURS after the claim was posted. A renewal posted while
+ * the claim was live (`threadLease` attaches them as `renewals`) moves the clock to the renewal's time
+ * when that is later, and the latest of several wins; a renewal never shortens a clock. A renewal
+ * that cannot be read leaves the whole clock unknown and is returned as `unread`, so the refusal can
+ * name it: it may have moved the clock anywhere. A claim whose own clock cannot be read has none for a
+ * renewal to move: unknown stays unknown. On fb2b2908 the clock was the claim's own line
+ * alone, so a lease the launcher had renewed read as run out at its first expiry and could be taken
+ * over while renewed (review of PR 644, round 5). Exported for the test of that class.
  */
-const claimClock = (claim) => {
+export const claimClock = (claim) => {
+  let clock;
   if (String(claim.expires ?? "").trim()) {
     const at = claimExpiry(claim.expires, { anchor: claim.postedAt });
-    return { at, by: at ? "its Claim expires line" : null };
+    clock = { at, by: at ? "its Claim expires line" : null };
+  } else {
+    const posted = instant(claim.postedAt);
+    clock = Number.isFinite(posted) ? { at: new Date(posted + DEFAULT_CLAIM_HOURS * 3_600_000), by: `the ${DEFAULT_CLAIM_HOURS}-hour default` } : { at: null, by: null };
   }
-  const posted = instant(claim.postedAt);
-  if (!Number.isFinite(posted)) return { at: null, by: null };
-  return { at: new Date(posted + DEFAULT_CLAIM_HOURS * 3_600_000), by: `the ${DEFAULT_CLAIM_HOURS}-hour default` };
+  if (clock.at === null) return clock;
+  for (const r of claim.renewals ?? []) {
+    const at = claimExpiry(r.until, { anchor: r.postedAt });
+    if (at === null) return { at: null, by: null, unread: r };
+    if (at.getTime() > clock.at.getTime()) clock = { at, by: `its renewal posted ${r.postedAt ?? "(time unknown)"}${r.url ? `, ${r.url}` : ""}`, renewal: r };
+  }
+  return clock;
 };
 
 const HOLDER_STATES = new Set(["live", "dead", "none", "unknown"]);
@@ -1015,7 +1092,7 @@ export function releaseDecision({ issue, comments, unread = null, self, takeover
   if (holder !== "dead" && !lapsed) {
     const ticking = clock.at
       ? `its clock runs until ${clock.at.toISOString()} (${clock.by})`
-      : "its clock cannot be read, so it cannot be shown to have run out";
+      : `its clock cannot be read${clock.unread ? ` (${unreadRenewal(clock.unread)})` : ""}, so it cannot be shown to have run out`;
     return refuse(
       "RELEASE_LEASE_NOT_LAPSED",
       `#${issue}'s lease is not shown to be dormant: ${heldBy(claim)}. Measured: ${HOLDER_WORDS[holder]}, and ${ticking}. A reason alone does not end another session's lease.`,
@@ -1023,8 +1100,16 @@ export function releaseDecision({ issue, comments, unread = null, self, takeover
       claim,
     );
   }
-  return { ok: true, via: "takeover", claim, takeover: { reason: why, holder, lapsedAt: lapsed ? clock.at.toISOString() : null, clockBy: clock.by } };
+  return {
+    ok: true,
+    via: "takeover",
+    claim,
+    takeover: { reason: why, holder, lapsedAt: lapsed ? clock.at.toISOString() : null, clockBy: clock.by, clockUnread: clock.unread ?? null },
+  };
 }
+
+/** How a refusal, or a takeover's record, names a renewal whose time could not be read. */
+const unreadRenewal = (r) => `the renewal posted ${r.postedAt ?? "(time unknown)"}${r.url ? `, ${r.url}` : ""}, says "until ${r.until}", which is not a time this reader knows`;
 
 /**
  * What a takeover leaves on the thread, after the Handoff and in a section of its own (so none of it
@@ -1035,9 +1120,22 @@ const renderTakeover = ({ claim, self, takeover }) =>
   [
     TAKEOVER_HEADER,
     "",
-    line("Previous lease", `${claim.lane || "(no lane named)"} on ${heldBy(claim)}, expires ${claim.expires || `(none stated: the ${DEFAULT_CLAIM_HOURS}-hour default)`}`),
+    line(
+      "Previous lease",
+      `${claim.lane || "(no lane named)"} on ${heldBy(claim)}, expires ${claim.expires || `(none stated: the ${DEFAULT_CLAIM_HOURS}-hour default)`}` +
+        (claim.renewals ?? []).map((r) => `, renewed until ${r.until} (posted ${r.postedAt ?? "(time unknown)"})`).join(""),
+    ),
     line("Released from", `${self.folder} @ ${self.branch || "(detached HEAD)"}`),
-    line("Measured", `${HOLDER_WORDS[takeover.holder]}; ${takeover.lapsedAt ? `the claim's clock ran out at ${takeover.lapsedAt} (${takeover.clockBy})` : takeover.clockBy ? "the claim's clock had not run out" : "the claim's clock could not be read"}`),
+    line(
+      "Measured",
+      `${HOLDER_WORDS[takeover.holder]}; ${
+        takeover.lapsedAt
+          ? `the claim's clock ran out at ${takeover.lapsedAt} (${takeover.clockBy})`
+          : takeover.clockBy
+            ? "the claim's clock had not run out"
+            : `the claim's clock could not be read${takeover.clockUnread ? ` (${unreadRenewal(takeover.clockUnread)})` : ""}`
+      }`,
+    ),
     line("Worktree/process evidence checked", takeover.reason),
   ].join("\n");
 

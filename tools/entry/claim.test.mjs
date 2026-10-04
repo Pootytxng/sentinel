@@ -47,6 +47,7 @@ vi.mock("./session-assert.mjs", async (importOriginal) => {
 import * as claimModule from "./claim.mjs";
 import {
   calendarMs,
+  claimClock,
   claimExpiry,
   execPlan,
   HANDOFF_HEADER,
@@ -54,6 +55,7 @@ import {
   parseClaim,
   parseHandoff,
   parseReleaseRecord,
+  parseRenewal,
   planPostClaim,
   planRenew,
   postClaim,
@@ -266,6 +268,72 @@ describe("claimExpiry — the expiry as writers actually spell it", () => {
     expect(claimExpiry("12 hours", { anchor: new Date(Number.NaN) })).toBeNull();
     expect(claimExpiry("12 hours")).toBeNull();
   });
+
+  // Round 5 of the review of PR 644: `2026-10-03T07:22:01-02` was read as 07:22Z, the `-02` left unread
+  // after the time, and at 08:00Z a takeover was admitted of a lease that ran to 09:22Z. A reading ends
+  // where the text ends, or at a separator that no continuation of the time (a digit, a sign, a colon)
+  // follows; a zone is hours, or hours and minutes, with or without the colon.
+  it("reads a zone written as hours alone, and takes it off the wall clock", () => {
+    expect(claimExpiry("2026-10-03T07:22:01-02").toISOString()).toBe("2026-10-03T09:22:01.000Z");
+    expect(claimExpiry("2026-10-03T07:22:01+02").toISOString()).toBe("2026-10-03T05:22:01.000Z");
+    expect(claimExpiry("2026-10-03T07:22:01 -02").toISOString()).toBe("2026-10-03T09:22:01.000Z");
+    expect(claimExpiry("2026-10-03T07:22-02").toISOString()).toBe("2026-10-03T09:22:00.000Z");
+    expect(claimExpiry("2026-10-03T07:22:01-02 (12 hours)").toISOString()).toBe("2026-10-03T09:22:01.000Z");
+    expect(claimExpiry("2026-10-03T07:22:01-25")).toBeNull();
+    expect(claimExpiry("2026-10-03T07:22:01-0260")).toBeNull();
+  });
+
+  it.each([
+    "2026-10-03T07:22:01Z(x)",
+    "2026-10-03T07:22:01Z 2026-10-04",
+    "2026-10-03T07:22:01Z, 2026-10-04",
+    "2026-10-03T07:22:01Z +2",
+    "2026-10-03T07:22:01-02:00:00",
+    "2026-10-03T07:22:01:30Z",
+    "2026-10-03T07:22:01.1234567890Z",
+    "2026-10-03 +12h",
+    "2026-10-03.5",
+    "2026-10-03T07:22:01Z5",
+    "2026-10-03T07",
+    "2026-10-03T07:2",
+  ])("is null when the text runs on past where the reading stopped: %j", (text) => {
+    expect(claimExpiry(text)).toBeNull();
+    expect(claimExpiry(text, { anchor: "2026-10-03T05:22:01Z" })).toBeNull();
+  });
+
+  it.each(["PDT", "PT", "CEST", "EST", "pdt", "local", "hrs", "later"])("is null for a zone word it does not know: %s", (zone) => {
+    expect(claimExpiry(`2026-10-03T07:22:01 ${zone}`)).toBeNull();
+    expect(claimExpiry(`2026-10-03T07:22:01${zone}`)).toBeNull();
+    expect(claimExpiry(`2026-10-03T07:22 ${zone} (12 hours)`)).toBeNull();
+  });
+
+  it.each(["Z", "z", "UTC", "utc", "GMT", "gmt", " UTC", " Z"])("reads %j as UTC", (zone) => {
+    expect(claimExpiry(`2026-10-03T07:22:01${zone}`).toISOString()).toBe("2026-10-03T07:22:01.000Z");
+    expect(claimExpiry(`2026-10-03T07:22:01${zone}.`).toISOString()).toBe("2026-10-03T07:22:01.000Z");
+  });
+
+  it("reads a fraction of a second to the millisecond, and a date after a word as prose", () => {
+    expect(claimExpiry("2026-10-03T07:22:01.5Z").toISOString()).toBe("2026-10-03T07:22:01.500Z");
+    expect(claimExpiry("2026-10-03T07:22:01.123456789Z").toISOString()).toBe("2026-10-03T07:22:01.123Z");
+    expect(claimExpiry("2026-10-03T07:22:01.25-02").toISOString()).toBe("2026-10-03T09:22:01.250Z");
+    expect(claimExpiry("2026-10-03 UTC").toISOString()).toBe("2026-10-03T23:59:59.000Z");
+    expect(claimExpiry("2026-10-03, then the 2026-10-04 review").toISOString(), "a date after a word is prose").toBe("2026-10-03T23:59:59.000Z");
+    expect(claimExpiry("2026-10-03T07:22:01Z; by 2026-10-04 at the latest").toISOString()).toBe("2026-10-03T07:22:01.000Z");
+    expect(claimExpiry("2026-10-03T07:22:01Z. The review lands after.").toISOString()).toBe("2026-10-03T07:22:01.000Z");
+  });
+
+  it("reads a relative expiry only when nothing continues it", () => {
+    const anchor = "2026-10-03T05:22:01Z";
+    expect(claimExpiry("~12h", { anchor }).toISOString()).toBe("2026-10-03T17:22:01.000Z");
+    expect(claimExpiry("(12 hours)", { anchor }).toISOString()).toBe("2026-10-03T17:22:01.000Z");
+    expect(claimExpiry("12h, give or take", { anchor }).toISOString()).toBe("2026-10-03T17:22:01.000Z");
+    expect(claimExpiry("1.5 days", { anchor }).toISOString()).toBe("2026-10-04T17:22:01.000Z");
+    expect(claimExpiry("12h30", { anchor })).toBeNull();
+    expect(claimExpiry("12 hours 30 minutes", { anchor })).toBeNull();
+    expect(claimExpiry("12h:30", { anchor })).toBeNull();
+    expect(claimExpiry("12 hours, 2026-10-04", { anchor })).toBeNull();
+    expect(claimExpiry("12 months", { anchor })).toBeNull();
+  });
 });
 
 // Round 5 of the review of PR 644 (round 4's third finding): `Date.parse` reads 2026-02-30T05:22:01Z as
@@ -339,6 +407,108 @@ describe("the handoff, and guard 7's other half", () => {
 // live?) and answers it through this fold, the same one gather.readIssueThread uses, so the two
 // cannot disagree. Each case is the shape of a real comment found by reading all 840 comments in the
 // repository on 2026-09-10.
+// Round 5 of the review of PR 644: the launcher renews a live claim of its own by posting "Claim renewed
+// until <date>." and moving the board's Claim expires (`planRenew`), and a Handoff may renew with its
+// Claim line. The takeover read the claim's own expiry line alone, so a lease renewed either way read as
+// run out at its first expiry.
+describe("parseRenewal: a comment that renews the live claim, and nothing that merely mentions one", () => {
+  it.each([
+    ["the launcher's line", "Claim renewed until 2026-07-31.", "2026-07-31"],
+    ["the launcher's line with its note", "Claim renewed until 2026-08-25. Verified takeover posted above.", "2026-08-25"],
+    ["a note with full stops of its own", "Claim renewed until 2026-09-09. Renewed, not refreshed. See above.", "2026-09-09"],
+    ["a timestamp", "Claim renewed until 2026-09-05T07:16Z.", "2026-09-05T07:16Z"],
+    ["a timestamp with a fraction", "Claim renewed until 2026-09-05T07:16:01.5Z.", "2026-09-05T07:16:01.5Z"],
+    ["no full stop", "Claim renewed until 2026-07-31", "2026-07-31"],
+    ["a byte-order mark and blank lines first", "\uFEFF\n\nClaim renewed until 2026-07-31.\nposted by the launcher", "2026-07-31"],
+    ["any case", "claim RENEWED until 2026-07-31.", "2026-07-31"],
+    ["a Handoff's Claim line", "### Handoff\n- Claim: renewed until 2026-08-04.", "2026-08-04"],
+    ["a Handoff's bold Claim line with a note", "### Handoff\n- **Claim:** renewed until 2026-08-04 (owner flagged the pause).", "2026-08-04 (owner flagged the pause)"],
+    ["a Handoff's Claim line with a relative tail", "### Handoff\n- **Claim:** renewed until 2026-08-18 +12h from the claim comment.", "2026-08-18 +12h from the claim comment"],
+    ["the last of a Handoff's renewing Claim lines", "### Handoff\n- Claim: renewed until 2026-09-05\n- Claim: renewed until 2026-09-06", "2026-09-06"],
+  ])("reads %s as a renewal, with the time as written", (_, body, until) => {
+    expect(parseRenewal(body)).toEqual({ until });
+  });
+
+  it.each([
+    ["prose that mentions a renewal", "The launcher posted Claim renewed until 2026-07-31. earlier today."],
+    ["the launcher's line below a first line", "Note.\nClaim renewed until 2026-07-31."],
+    ["the launcher's line as a bullet", "- Claim renewed until 2026-07-31."],
+    ["the launcher's line in backticks", "`Claim renewed until 2026-07-31.`"],
+    ["the launcher's line inside fenced code", "```text\nClaim renewed until 2026-07-31.\n```"],
+    ["a renewal with no time", "Claim renewed until ."],
+    ["a renewal with nothing after until", "Claim renewed until"],
+    ["a renewal with only spaces after until", "Claim renewed until    "],
+    ["a Handoff that releases", "### Handoff\n- Claim: released."],
+    ["a Handoff that holds", "### Handoff\n- Claim: HELD until the review lands."],
+    ["a Handoff that holds beside one that renews", "### Handoff\n- Claim: HELD\n- Claim: renewed until 2026-09-05"],
+    ["a Handoff that releases beside one that renews", "### Handoff\n- Claim: renewed until 2026-09-05\n- Claim: released"],
+    ["a Handoff with no Claim line", "### Handoff\n- Exact next action: none"],
+    ["a Handoff's table row", "### Handoff\n| renewed until | 2026-09-02T12:00Z |"],
+    ["a Handoff's Claim line that mentions a renewal", "### Handoff\n- Claim: HELD; renewed until 2026-09-05 if the review runs long"],
+    ["a Claim line outside a Handoff", "- Claim: renewed until 2026-08-04."],
+    ["a claim comment", "### Ownership claim\n- Lane: Claude Code\n- Write scope: `x`\n- Claim expires: 2026-07-31"],
+    ["an empty comment", ""],
+    ["nothing", null],
+  ])("reads %s as no renewal", (_, body) => {
+    expect(parseRenewal(body)).toBeNull();
+  });
+});
+
+describe("claimClock: when a claim's clock runs out, its renewals counted", () => {
+  const claim = (expires, renewals = [], postedAt = "2026-10-03T05:22:01Z") => ({ folder: "C:\\lanes\\x", branch: "claude/x", expires, postedAt, renewals });
+  const renewal = (until, postedAt, url) => ({ until, postedAt, ...(url ? { url } : {}) });
+  const OWN = { at: new Date("2026-10-03T17:22:01Z"), by: "its Claim expires line" };
+
+  it("reads the claim's own line, the default when it has none, and nothing when neither can be read", () => {
+    expect(claimClock(claim("2026-10-03T17:22:01Z"))).toEqual(OWN);
+    expect(claimClock(claim(""))).toEqual({ at: new Date("2026-10-03T17:22:01Z"), by: "the 12-hour default" });
+    expect(claimClock(claim("when the review lands"))).toEqual({ at: null, by: null });
+    expect(claimClock(claim("", [], "not a time"))).toEqual({ at: null, by: null });
+  });
+
+  it("moves the clock to a renewal's time when that is later, the latest of several winning", () => {
+    const r1 = renewal("2026-10-04", "2026-10-03T16:00:00Z", "https://github.com/Pootytxng/sentinel/issues/1#issuecomment-5");
+    const r2 = renewal("2026-10-04T06:00Z", "2026-10-03T20:00:00Z");
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [r1]))).toEqual({ at: new Date("2026-10-04T23:59:59Z"), by: `its renewal posted 2026-10-03T16:00:00Z, ${r1.url}`, renewal: r1 });
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [r2]))).toEqual({ at: new Date("2026-10-04T06:00:00Z"), by: "its renewal posted 2026-10-03T20:00:00Z", renewal: r2 });
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [r1, r2]))).toMatchObject({ at: new Date("2026-10-04T23:59:59Z"), renewal: r1 });
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [r2, r1]))).toMatchObject({ at: new Date("2026-10-04T23:59:59Z"), renewal: r1 });
+    expect(claimClock(claim("", [r2]))).toMatchObject({ at: new Date("2026-10-04T06:00:00Z"), renewal: r2 });
+  });
+
+  it("never shortens a clock: a renewal to an earlier time, or to the same instant, leaves the claim's own", () => {
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [renewal("2026-10-03T10:00Z", "2026-10-03T06:00:00Z")]))).toEqual(OWN);
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [renewal("2026-10-03T17:22:01Z", "2026-10-03T06:00:00Z")]))).toEqual(OWN);
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [renewal("2026-10-02", "2026-10-03T06:00:00Z")]))).toEqual(OWN);
+  });
+
+  it("anchors a relative renewal on the renewal's own posting time, and on nothing else", () => {
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [renewal("12 hours", "2026-10-03T16:00:00Z")]))).toMatchObject({ at: new Date("2026-10-04T04:00:00Z") });
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [renewal("12 hours", "not a time")]))).toEqual({ at: null, by: null, unread: renewal("12 hours", "not a time") });
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [{ until: "12 hours" }]))).toEqual({ at: null, by: null, unread: { until: "12 hours" } });
+  });
+
+  it("leaves the whole clock unknown, naming the renewal, when a renewal's time cannot be read", () => {
+    const vague = renewal("2026-08-18 +12h from the claim comment", "2026-10-03T06:00:00Z");
+    const later = renewal("2026-10-05", "2026-10-03T07:00:00Z");
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [vague]))).toEqual({ at: null, by: null, unread: vague });
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [later, vague]))).toEqual({ at: null, by: null, unread: vague });
+    expect(claimClock(claim("2026-10-03T17:22:01Z", [vague, later]))).toEqual({ at: null, by: null, unread: vague });
+    expect(claimClock(claim("", [renewal("2026-10-03T07:22:01 PDT", "2026-10-03T06:00:00Z")]))).toMatchObject({ at: null, by: null, unread: { until: "2026-10-03T07:22:01 PDT" } });
+  });
+
+  it("reads no renewal when the claim's own clock cannot be read: unknown stays unknown", () => {
+    expect(claimClock(claim("when the review lands", [renewal("2026-10-05", "2026-10-03T07:00:00Z")]))).toEqual({ at: null, by: null });
+    expect(claimClock(claim("", [renewal("2026-10-05", "2026-10-03T07:00:00Z")], "not a time"))).toEqual({ at: null, by: null });
+  });
+
+  it("reads a claim with no renewals list as one with none", () => {
+    const { renewals, ...bare } = claim("2026-10-03T17:22:01Z");
+    expect(renewals).toEqual([]);
+    expect(claimClock(bare)).toEqual(OWN);
+  });
+});
+
 describe("threadLease: is a lease still live on this thread?", () => {
   const at = (createdAt, ...lines) => ({ createdAt, body: lines.join("\n") });
   const CLAIM = at("2026-09-10T06:41:51Z", "### Ownership claim", "- Lane: Claude Code", "- Write scope: `src-tauri/src/race_seam.rs`");
@@ -437,6 +607,63 @@ describe("threadLease: is a lease still live on this thread?", () => {
       expect(threadLease([{ ...CLAIM, url }]).claim).toMatchObject({ url });
       expect(threadLease([CLAIM]).claim).not.toHaveProperty("url");
     });
+  });
+
+  // Round 5 of the review of PR 644: the launcher renews a live claim with "Claim renewed until …"
+  // (`planRenew`), and the fold did not carry it, so a takeover read a renewed lease as run out.
+  describe("a renewal rides on the claim it renews", () => {
+    const RENEW = at("2026-09-10T07:00:00Z", "Claim renewed until 2026-09-12.");
+    const RENEW_HANDOFF = at("2026-09-10T07:30:00Z", "### Handoff", "- Outcome: still going", "- Claim: renewed until 2026-09-13T00:00Z");
+
+    it("gives every claim a renewals list, empty until a renewal is posted", () => {
+      expect(threadLease([CLAIM]).claim.renewals).toEqual([]);
+      expect(threadLease([CLAIM, RELEASE, { ...CLAIM, createdAt: "2026-09-10T08:00:00Z" }]).claim.renewals).toEqual([]);
+    });
+
+    it("attaches each renewal posted while the claim is live, in posting order, with its time as written, its posting time and its link", () => {
+      const url = "https://github.com/Pootytxng/sentinel/issues/1#issuecomment-7";
+      const lease = threadLease([CLAIM, { ...RENEW, url }, RENEW_HANDOFF]);
+      expect(lease.claim.renewals).toEqual([
+        { until: "2026-09-12", postedAt: RENEW.createdAt, url },
+        { until: "2026-09-13T00:00Z", postedAt: RENEW_HANDOFF.createdAt },
+      ]);
+      expect(lease.claim.postedAt, "a renewal restates the lease, it does not start one").toBe(CLAIM.createdAt);
+      expect(lease.run, "nor does it join the run").toHaveLength(1);
+    });
+
+    it("keeps the lease live after a Handoff that renews it, and reads that Handoff as the newest", () => {
+      const lease = threadLease([CLAIM, RENEW_HANDOFF]);
+      expect(lease.claim).not.toBeNull();
+      expect(lease.handoff).toMatchObject({ released: false, postedAt: RENEW_HANDOFF.createdAt });
+    });
+
+    it("renews nothing before a claim, after a release, or across one", () => {
+      expect(threadLease([RENEW, CLAIM]).claim.renewals).toEqual([]);
+      expect(threadLease([CLAIM, RELEASE, RENEW]).claim).toBeNull();
+      const RECLAIMED = { ...CLAIM, createdAt: "2026-09-10T09:00:00Z" };
+      expect(threadLease([CLAIM, RENEW, RELEASE, RECLAIMED]).claim.renewals, "the renewal was the released claim's").toEqual([]);
+    });
+
+    it("reads a comment that posts a claim as a claim, never as a renewal of the one before it", () => {
+      const REFRESH = at("2026-09-10T07:00:00Z", "Claim renewed until 2026-09-12.", "", "### Ownership claim", "- Lane: Claude Code", "- Write scope: `x`");
+      const lease = threadLease([CLAIM, REFRESH]);
+      expect(lease.claim.postedAt).toBe(REFRESH.createdAt);
+      expect(lease.run.map((c) => c.renewals)).toEqual([[], []]);
+    });
+
+    it("attaches a renewal to the newest claim of a run, not the first", () => {
+      const REFRESH = at("2026-09-10T07:00:00Z", "### Ownership claim", "- Lane: Claude Code", "- Write scope: `x`");
+      const lease = threadLease([CLAIM, REFRESH, { ...RENEW, createdAt: "2026-09-10T07:10:00Z" }]);
+      expect(lease.run[0].renewals).toEqual([]);
+      expect(lease.claim.renewals).toEqual([{ until: "2026-09-12", postedAt: "2026-09-10T07:10:00Z" }]);
+    });
+
+    it.each(["Note: Claim renewed until 2026-09-12.", "```\nClaim renewed until 2026-09-12.\n```", "- Claim renewed until 2026-09-12.", "- Claim: renewed until 2026-09-12."])(
+      "attaches nothing for a comment that only mentions a renewal: %j",
+      (body) => {
+        expect(threadLease([CLAIM, at("2026-09-10T07:00:00Z", body)]).claim.renewals).toEqual([]);
+      },
+    );
   });
 
   // HQ review 5165670535 on e56c6395, finding 1: a line-start regex read a release quoted inside fenced
@@ -1711,6 +1938,125 @@ describe("postRelease: a takeover is asked for, measured and recorded (#643)", (
     expect(decision).toMatchObject({ ok: true, via: "takeover", takeover: { reason: REASON, holder: "dead", lapsedAt: "2026-10-02T12:00:00.000Z", clockBy: "its Claim expires line" } });
     expect(decision.claim.url).toBe(LAPSED[0].url);
   });
+
+  // Round 5 of the review of PR 644, finding 2: `2026-10-03T07:22:01-02` was read as 07:22Z with the
+  // `-02` left unread, so at 08:00Z a takeover was admitted of a lease that ran to 09:22Z.
+  it("reads a zone written as hours alone: `-02` runs the clock two hours later, not two hours unread", () => {
+    const thread = claimedBy(HOLDER, { expires: "2026-10-03T07:22:01-02" });
+    const early = refused("RELEASE_LEASE_NOT_LAPSED", { thread, self: PREDECESSOR, takeover: REASON, now: new Date("2026-10-03T08:00:00Z") });
+    expect(early.reason).toContain(`Measured: ${NO_RECORD}, and its clock runs until 2026-10-03T09:22:01.000Z (its Claim expires line).`);
+    const { body } = allowed({ thread, self: PREDECESSOR, takeover: REASON, now: new Date("2026-10-03T09:22:01Z") }, "takeover");
+    expect(body).toContain(`- Measured: ${NO_RECORD}; the claim's clock ran out at 2026-10-03T09:22:01.000Z (its Claim expires line)\n`);
+  });
+
+  it.each(["2026-10-03T07:22:01 PDT", "2026-10-03T07:22:01Z 2026-10-04", "2026-10-02 +12h", "2026-10-03T07:22:01:30Z"])(
+    "does not take an expiry whose text runs past the reading as run out: %j",
+    (expires) => {
+      const thread = claimedBy(HOLDER, { expires });
+      const error = refused("RELEASE_LEASE_NOT_LAPSED", { thread, self: PREDECESSOR, takeover: REASON, now: new Date("2027-10-03T00:00:00Z") });
+      expect(error.reason).toContain(`Measured: ${NO_RECORD}, and its clock cannot be read, so it cannot be shown to have run out.`);
+    },
+  );
+
+  // Round 5 of the review of PR 644, finding 1: the launcher renews a live claim of its own with
+  // "Claim renewed until <date>." and moves the board's Claim expires (`planRenew`); on fb2b2908 the
+  // takeover read the claim's own expiry line alone, so a lease renewed that way was taken over at its
+  // first expiry. A dead holder still ends its lease whatever the clock says; a renewal matters when
+  // the holder cannot be shown dead and only the clock could end the lease.
+  describe("a renewed lease runs to its renewal", () => {
+    const RENEWED_TO = "2026-10-03T12:00:00Z";
+    const renewedBy = (until, createdAt = "2026-10-02T11:00:00Z", n = 5) => posted(createdAt, `Claim renewed until ${until}.`, n);
+    const RENEWAL = renewedBy(RENEWED_TO);
+    const RENEWED = [...LAPSED, RENEWAL];
+    const byRenewal = (comment) => `its renewal posted ${comment.createdAt}, ${comment.url}`;
+
+    it("refuses the takeover of a lapsed claim the launcher renewed past now, naming the renewal; the same claim unrenewed is taken over", () => {
+      const { error, asked } = refusedRun("RELEASE_LEASE_NOT_LAPSED", { thread: RENEWED, self: PREDECESSOR, takeover: REASON });
+      expect(error.reason).toContain(`Measured: ${NO_RECORD}, and its clock runs until 2026-10-03T12:00:00.000Z (${byRenewal(RENEWAL)}).`);
+      expect(error.message).toContain(LAPSED[0].url);
+      expect(asked).toEqual([HOLDER.folder]);
+      const { body } = allowed({ thread: LAPSED, self: PREDECESSOR, takeover: REASON }, "takeover");
+      expect(body).toContain(`- Measured: ${NO_RECORD}; the claim's clock ran out at 2026-10-02T12:00:00.000Z (its Claim expires line)\n`);
+    });
+
+    it("takes over once the renewal itself has run out, and records the renewal", () => {
+      const now = new Date(RENEWED_TO);
+      const decision = releaseDecision({ issue: ISSUE, comments: RENEWED, self: PREDECESSOR, takeover: REASON, liveness: () => "none", now });
+      expect(decision).toMatchObject({ ok: true, via: "takeover", takeover: { holder: "none", lapsedAt: "2026-10-03T12:00:00.000Z", clockBy: byRenewal(RENEWAL), clockUnread: null } });
+      const { body } = allowed({ thread: RENEWED, self: PREDECESSOR, takeover: REASON, now }, "takeover");
+      expect(body).toContain(`- Previous lease: Claude Code on ${held(LAPSED[0])}, expires 2026-10-02T12:00:00Z, renewed until ${RENEWED_TO} (posted ${RENEWAL.createdAt})\n`);
+      expect(body).toContain(`- Measured: ${NO_RECORD}; the claim's clock ran out at 2026-10-03T12:00:00.000Z (${byRenewal(RENEWAL)})\n`);
+      expect(parseReleaseRecord(body)).toEqual({ ends: [LAPSED[0].createdAt] });
+      const second = refusedRun("RELEASE_LEASE_NOT_LAPSED", { thread: RENEWED, self: PREDECESSOR, takeover: REASON, now: new Date("2026-10-03T11:59:59Z") });
+      expect(second.error.reason).toContain("its clock runs until 2026-10-03T12:00:00.000Z");
+    });
+
+    it("takes the latest of several renewals as the clock, however they are ordered on the thread", () => {
+      const early = renewedBy("2026-10-02T18:00:00Z", "2026-10-02T11:00:00Z", 5);
+      const late = renewedBy(RENEWED_TO, "2026-10-02T17:00:00Z", 6);
+      for (const thread of [[...LAPSED, early, late], [...LAPSED, late, early]]) {
+        const { error } = refusedRun("RELEASE_LEASE_NOT_LAPSED", { thread, self: PREDECESSOR, takeover: REASON });
+        expect(error.reason).toContain(`its clock runs until 2026-10-03T12:00:00.000Z (${byRenewal(late)})`);
+      }
+      const { body } = allowed({ thread: [...LAPSED, early, late], self: PREDECESSOR, takeover: REASON, now: new Date(RENEWED_TO) }, "takeover");
+      expect(body).toContain(`expires 2026-10-02T12:00:00Z, renewed until 2026-10-02T18:00:00Z (posted ${early.createdAt}), renewed until ${RENEWED_TO} (posted ${late.createdAt})\n`);
+    });
+
+    it("never lets a renewal shorten a clock: a renewal to an earlier time leaves the claim's own", () => {
+      const thread = [...claimedBy(HOLDER), renewedBy("2026-10-03T06:00:00Z", "2026-10-03T05:25:00Z")];
+      const { error } = refusedRun("RELEASE_LEASE_NOT_LAPSED", { thread, self: PREDECESSOR, takeover: REASON, now: new Date("2026-10-03T06:30:00Z") });
+      expect(error.reason).toContain("its clock runs until 2026-10-03T17:22:01.000Z (its Claim expires line)");
+    });
+
+    it("reads a Handoff that renews as a renewal", () => {
+      const byHandoff = posted("2026-10-02T11:00:00Z", renderHandoff({ outcome: "still going", nextAction: "Keep going.", claim: `renewed until ${RENEWED_TO}` }), 5);
+      const { error } = refusedRun("RELEASE_LEASE_NOT_LAPSED", { thread: [...LAPSED, byHandoff], self: PREDECESSOR, takeover: REASON });
+      expect(error.reason).toContain(`its clock runs until 2026-10-03T12:00:00.000Z (${byRenewal(byHandoff)})`);
+      allowed({ thread: [...LAPSED, byHandoff], self: PREDECESSOR, takeover: REASON, now: new Date(RENEWED_TO) }, "takeover");
+    });
+
+    it("renews nothing by a renewal posted before the claim, after its release, or by a comment that only mentions one", () => {
+      const before = renewedBy(RENEWED_TO, "2026-10-01T00:00:00Z", 2);
+      allowed({ thread: [before, ...LAPSED], self: PREDECESSOR, takeover: REASON }, "takeover");
+      for (const body of [`Note: Claim renewed until ${RENEWED_TO}.`, `- Claim renewed until ${RENEWED_TO}.`, `\`\`\`\nClaim renewed until ${RENEWED_TO}.\n\`\`\``]) {
+        allowed({ thread: [...LAPSED, posted("2026-10-02T11:00:00Z", body, 5)], self: PREDECESSOR, takeover: REASON }, "takeover");
+      }
+      refusedRun("RELEASE_NO_LIVE_CLAIM", { thread: [A_CLAIM, A_RELEASE, renewedBy(RENEWED_TO, "2026-10-03T05:25:00Z", 9)], self: PREDECESSOR, takeover: REASON });
+    });
+
+    it("refuses the takeover, naming the renewal, when a renewal's time cannot be read, however much later it is", () => {
+      const vague = renewedBy("2026-10-03 +12h from the claim comment", "2026-10-02T11:00:00Z", 5);
+      const { error } = refusedRun("RELEASE_LEASE_NOT_LAPSED", { thread: [...LAPSED, vague], self: PREDECESSOR, takeover: REASON, now: new Date("2027-10-03T00:00:00Z") });
+      expect(error.reason).toContain(
+        `Measured: ${NO_RECORD}, and its clock cannot be read (the renewal posted ${vague.createdAt}, ${vague.url}, says "until 2026-10-03 +12h from the claim comment", which is not a time this reader knows), so it cannot be shown to have run out.`,
+      );
+      const readable = renewedBy("2026-10-02T13:00:00Z", "2026-10-02T12:30:00Z", 6);
+      refusedRun("RELEASE_LEASE_NOT_LAPSED", { thread: [...LAPSED, readable, vague], self: PREDECESSOR, takeover: REASON, now: new Date("2027-10-03T00:00:00Z") });
+    });
+
+    it("records an unreadable renewal when a dead holder's lease is taken over anyway", () => {
+      const vague = renewedBy("2026-10-03 +12h from the claim comment", "2026-10-02T11:00:00Z", 5);
+      const decision = releaseDecision({ issue: ISSUE, comments: [...LAPSED, vague], self: PREDECESSOR, takeover: REASON, liveness: () => "dead", now: NOW });
+      expect(decision.takeover).toMatchObject({ holder: "dead", lapsedAt: null, clockBy: null, clockUnread: { until: "2026-10-03 +12h from the claim comment", postedAt: vague.createdAt, url: vague.url } });
+      const { body } = allowed({ thread: [...LAPSED, vague], self: PREDECESSOR, takeover: REASON, holder: "dead" }, "takeover");
+      expect(body).toContain(
+        `- Measured: ${DEAD}; the claim's clock could not be read (the renewal posted ${vague.createdAt}, ${vague.url}, says "until 2026-10-03 +12h from the claim comment", which is not a time this reader knows)\n`,
+      );
+      expect(body).toContain(`expires 2026-10-02T12:00:00Z, renewed until 2026-10-03 +12h from the claim comment (posted ${vague.createdAt})\n`);
+    });
+
+    it("ends a dead holder's lease whatever its renewal says, and still records the renewal", () => {
+      const { body } = allowed({ thread: RENEWED, self: PREDECESSOR, takeover: REASON, holder: "dead" }, "takeover");
+      expect(body).toContain(`- Measured: ${DEAD}; the claim's clock had not run out\n`);
+      expect(body).toContain(`renewed until ${RENEWED_TO} (posted ${RENEWAL.createdAt})\n`);
+    });
+
+    it("never lets a renewal end another folder's lease from the holder's seat, nor the holder renew past its own release", () => {
+      refusedRun("RELEASE_NOT_HOLDER", { thread: RENEWED, self: PREDECESSOR });
+      const { result } = allowed({ thread: RENEWED, self: HOLDER });
+      expect(result.via).toBe("holder");
+    });
+  });
 });
 
 describe("postRelease: the comment must be a release, and only a release (#643)", () => {
@@ -2408,6 +2754,20 @@ describe("the thread is read whole: GitHub's count must agree with the list (#64
     expect(error?.code, String(error?.stack ?? error)).toBe("RELEASE_ROW_RACED");
     expect(error).toMatchObject({ live: { url: C_CLAIM.url } });
     expect(thread).toHaveLength(101);
+  });
+
+  // Round 5 of the review of PR 644, finding 3, took the list as cut at 100 by gh; measured on
+  // 2026-10-04, `gh issue view --json comments` pages the thread whole (cli/cli#13840: 149 of 149;
+  // cli/cli#326: 107 of 107). This reader cuts nothing of its own: a claim past the hundredth comment
+  // is read, released and recorded, with the count agreeing.
+  it("reads a claim past the hundredth comment, and releases it as the holder's", () => {
+    const LONG = [...NINETY_NINE, posted("2026-10-03T05:25:00Z", "Note 97.", 200), posted("2026-10-03T05:25:01Z", "Note 98.", 201), posted("2026-10-03T05:25:02Z", claimText(HOLDER), 202)];
+    expect(LONG).toHaveLength(102);
+    const { body, result, counts, reads } = allowed({ thread: LONG });
+    expect(result.claim.url).toBe(LONG.at(-1).url);
+    expect(parseReleaseRecord(body)).toEqual({ ends: ["2026-10-03T05:25:02Z"] });
+    expect(counts).toBe(reads);
+    refusedRun("RELEASE_NOT_HOLDER", { thread: [...LONG, posted("2026-10-03T05:25:03Z", claimText(THIRD), 203)] });
   });
 });
 
@@ -3586,6 +3946,22 @@ describe("release.mjs: the command (#643)", () => {
     expect(comment).toContain(`- Worktree/process evidence checked: ${REASON}\n`);
     expect(taken.out).toContain(`lease released  #${ISSUE}  (${HOLDER.folder} @ ${HOLDER.branch}, by takeover; 7 steps run)`);
     expect(threadLease(taken.thread).claim).toBeNull();
+  });
+
+  // Round 5 of the review of PR 644: a lease the launcher renewed is not dormant until the renewal runs out.
+  it("reads a renewal on the thread, and takes the lease over only once the renewal has run out", () => {
+    const renewal = posted("2026-10-02T11:00:00Z", "Claim renewed until 2026-10-03T12:00:00Z.", 5);
+    const thread = [...LAPSED, renewal];
+    const early = runCli([...ARGS, "--takeover", REASON], { thread, self: PREDECESSOR });
+    expect(early.exit).toBe(1);
+    expect(early.err).toContain("REFUSE — RELEASE_LEASE_NOT_LAPSED");
+    expect(early.err).toContain(`its clock runs until 2026-10-03T12:00:00.000Z (its renewal posted ${renewal.createdAt}, ${renewal.url})`);
+    expect(early.sent).toEqual([]);
+    const late = runCli([...ARGS, "--takeover", REASON], { thread, self: PREDECESSOR, now: new Date("2026-10-03T12:00:00Z") });
+    expect(late.exit).toBe(0);
+    expect(late.sent).toHaveLength(7);
+    expect(late.sent[0].argv.at(-1)).toContain(`, renewed until 2026-10-03T12:00:00Z (posted ${renewal.createdAt})\n`);
+    expect(late.out).toContain(`lease released  #${ISSUE}  (${HOLDER.folder} @ ${HOLDER.branch}, by takeover; 7 steps run)`);
   });
 
   it("never takes over a holder that is live, whatever its expiry says", () => {
