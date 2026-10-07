@@ -41,6 +41,11 @@ import { join } from "path";
 // escaped `\31 widen`, a `var(--x, widen)` fallback, an `@property` initial value), so the animation
 // declarations that reach a card must be exactly the pinned ones, byte for byte, and only the
 // pinned names are looked up. A new card animation is a one-line change to the pin, made in review.
+//
+// Round 6 (Codex) closed three routes around the pin with prohibitions, not more reading: at-rule
+// names are matched ASCII-case-insensitively (`@KEYFRAMES`); every spelling of the animation
+// properties is held to the pin (`-webkit-animation`); and a pinned value may hold no var(), env()
+// or attr(), so the one sheet value is the whole story (the tile's `--ease-out` is written out).
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 /** The CSS parser's input preprocessing: CR, CRLF and form feed are each one newline. */
@@ -180,7 +185,7 @@ function declarations(file: string, text: string): Decl[] {
     else if (parens === 0 && c === "{") {
       const prelude = buf.trim();
       const parent = stack[stack.length - 1] ?? null;
-      const kf = /^@(?:-\w+-)?keyframes\s+(\S+)/.exec(prelude);
+      const kf = /^@(?:-\w+-)?keyframes\s+(\S+)/i.exec(prelude); // at-rule names are ASCII-case-insensitive
       if (parent?.startsWith(KEYFRAMES)) stack.push(parent);
       else if (kf) stack.push(KEYFRAMES + unescape(kf[1].replace(/^(["'])([\s\S]*)\1$/, "$2")));
       else stack.push(prelude.startsWith("@") ? parent : nest(parent, prelude));
@@ -383,54 +388,45 @@ function compound(s: string, el: El): Reach {
 }
 
 const SHEET = join("src", "surfaces", "home-console.css");
-const SHEETS: { file: string; text: string }[] = (readdirSync("src", { recursive: true }) as string[])
+const ALL: Decl[] = (readdirSync("src", { recursive: true }) as string[])
   .filter((f) => f.endsWith(".css"))
-  .map((f) => ({ file: join("src", f), text: prepare(readFileSync(join("src", f), "utf8")) }));
-const ALL: Decl[] = SHEETS.flatMap((sh) => declarations(sh.file, sh.text));
+  .flatMap((f) => declarations(join("src", f), prepare(readFileSync(join("src", f), "utf8"))));
 
 /** The animation declarations a card element may carry, byte for byte after `prepare`, each with the
  *  keyframes name it runs. The value is pinned whole so no reading of the shorthand is needed: which
- *  token is the name, what a var() falls back to, whether an escape hides a digit. */
+ *  token is the name, whether an escape hides a digit. A pinned value holds no var(), env() or attr()
+ *  (FUNCTIONAL_HOLE), so nothing set at runtime can change what it runs. */
 const ANIMATIONS = new Map<string, string>([
-  ["v2-hc-rise 0.5s var(--ease-out) backwards", "v2-hc-rise"], // the Detected tile's entrance
+  ["v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards", "v2-hc-rise"], // the Detected tile's entrance
   ["v2-sheet-rise 0.26s cubic-bezier(0.2, 0.7, 0.3, 1) both", "v2-sheet-rise"], // a sheet's children, cards among them
 ]);
-/** What a var() inside a pinned animation value may hold, in every sheet that sets it: one timing
- *  function and nothing else, so it can never stand for a keyframes name or another var(). */
-const TIMING = /^(linear|ease(-in|-out|-in-out)?|step-(start|end)|steps\(\s*\d+\s*(,\s*[\w-]+\s*)?\)|cubic-bezier\(\s*[\d.]+(\s*,\s*-?[\d.]+){3}\s*\))$/;
+const FUNCTIONAL_HOLE = /\b(var|env|attr)\(/;
+/** Every spelling of the two properties that choose a card's keyframes, vendor prefixes included. */
+const ANIMATION_PROP = /^(-\w+-)?animation(-name)?$/;
 /** Properties a card's keyframes may animate: paint, and transforms, which never move a grid track
  *  (the guard's contract is the tile's layout, not where a card is painted). */
 const NO_LAYOUT = /^(opacity|transform|translate|scale|rotate|filter|backdrop-filter|color|background(-color|-position)?|box-shadow|text-shadow|border-color|outline(-color|-offset)?|offset-distance)$/;
 
-/** A keyframes block can animate a width or a track onto a card, so every `animation` or
- *  `animation-name` that reaches a card must be a pinned value (ANIMATIONS); each pinned name must be
- *  declared, and every block of that name, in any sheet, may animate NO_LAYOUT properties only; each
- *  var() in a pinned value must be TIMING wherever it is set and must not be an `@property`.
- *  Returns one line per fault; an empty list is the proof (Codex review of PR 624, rounds 4 and 5). */
-function animationFaults(all: Decl[], cards: El[], sheets: { file: string; text: string }[]): string[] {
+/** A keyframes block can animate a width or a track onto a card, so every animation-choosing
+ *  declaration that reaches a card must be a pinned value (ANIMATIONS); each pinned name must be
+ *  declared, and every block of that name, in any sheet and any at-rule spelling, may animate
+ *  NO_LAYOUT properties only. Returns one line per fault; an empty list is the proof (Codex review of
+ *  PR 624, rounds 4 to 6). */
+function animationFaults(all: Decl[], cards: El[]): string[] {
   const frames = new Map<string, Decl[]>();
-  const custom = new Map<string, Decl[]>(); // every value a custom property is given, in any sheet
   for (const d of all) {
-    if (d.prop.startsWith("--")) custom.set(d.prop, [...(custom.get(d.prop) ?? []), d]);
     if (!d.selector.startsWith(KEYFRAMES)) continue;
     const name = d.selector.slice(KEYFRAMES.length);
     frames.set(name, [...(frames.get(name) ?? []), d]);
   }
-  const registered = new Set(sheets.flatMap((sh) => [...sh.text.matchAll(/@property\s+(--[\w-]+)/g)].map((m) => m[1])));
   const faults: string[] = [];
   for (const d of all) {
-    if (!["animation", "animation-name"].includes(d.prop) || d.selector.startsWith(KEYFRAMES)) continue;
+    if (!ANIMATION_PROP.test(d.prop) || d.selector.startsWith(KEYFRAMES)) continue;
     if (!cards.some((el) => reach(d.selector, el) !== "no")) continue;
     const name = ANIMATIONS.get(d.value);
     if (!name) {
       faults.push(`${where(d)}: not a pinned card animation`);
       continue;
-    }
-    for (const m of d.value.matchAll(/var\(\s*(--[\w-]+)/g)) {
-      if (registered.has(m[1])) faults.push(`${where(d)}: ${m[1]} is an @property, whose initial value this guard does not read`);
-      for (const def of custom.get(m[1]) ?? []) {
-        if (!TIMING.test(def.value)) faults.push(`${where(d)}: ${m[1]} is "${def.value}" in ${def.file}, not a timing function`);
-      }
     }
     const block = frames.get(name);
     if (!block) {
@@ -675,52 +671,55 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
   // A keyframes block is the one place a width can reach a card without a width declaration on a
   // rule that names it: `animation: widen 1ms forwards` leaves the card at the block's width. The
   // value is pinned whole, so the ways of smuggling a name past a reader (a name that is also a
-  // timing keyword, an escaped leading digit, a var() fallback, an @property) all read as "not pinned".
-  it("a spec card runs only the pinned animations, and those move paint, never layout (Codex rounds 4 and 5)", () => {
+  // timing keyword, an escaped leading digit, a var() fallback, a vendor-prefixed property) all read
+  // as "not pinned"; a pinned value holds no function that could be redefined at runtime.
+  it("a spec card runs only the pinned animations, and those move paint, never layout (Codex rounds 4 to 6)", () => {
     const cards = CARD.flatMap((cls) => elements(cls));
-    expect(animationFaults(ALL, cards, SHEETS)).toEqual([]);
+    expect(animationFaults(ALL, cards)).toEqual([]);
     expect(ANIMATIONS.size).toBe(2); // the pin is the whole allowance; widen it only in review
-    const fixture = (css: string) => ({ file: "fixture.css", text: prepare(css) });
-    const evasion = [
-      fixture(
-        "@keyframes widen { to { width: 400px } }\n" +
-          "@keyframes linear { to { width: 400px } }\n" +
-          "@keyframes \\31 widen { to { width: 400px } }\n" +
-          "@keyframes fade { from { opacity: 0 } to { opacity: 1 } }\n" +
-          ':root[data-v2="on"] .hc-spec { animation: widen 1ms forwards }\n' +
-          ".hc-spec-row { animation-name: linear; animation-duration: 1ms; animation-fill-mode: forwards }\n" +
-          ".hc-spec-v { animation-name: \\31 widen }\n" +
-          ".not-card { --anim: none }\n" +
-          ".hc-spec-k { animation-name: var(--anim, widen) }\n" +
-          ".hc-spec-row { animation: fade 1s }\n",
-      ),
-    ];
-    expect(animationFaults(evasion.flatMap((sh) => declarations(sh.file, sh.text)), cards, evasion)).toEqual([
+    for (const value of ANIMATIONS.keys()) expect(value).not.toMatch(FUNCTIONAL_HOLE);
+    const fixture = (css: string) => declarations("fixture.css", prepare(css));
+    const evasion = fixture(
+      "@keyframes widen { to { width: 400px } }\n" +
+        "@keyframes linear { to { width: 400px } }\n" +
+        "@keyframes \\31 widen { to { width: 400px } }\n" +
+        "@-webkit-keyframes slide { to { width: 400px } }\n" +
+        "@keyframes fade { from { opacity: 0 } to { opacity: 1 } }\n" +
+        ':root[data-v2="on"] .hc-spec { animation: widen 1ms forwards }\n' +
+        ".hc-spec-row { animation-name: linear; animation-duration: 1ms; animation-fill-mode: forwards }\n" +
+        ".hc-spec-v { animation-name: \\31 widen }\n" +
+        ".not-card { --anim: none }\n" +
+        ".hc-spec-k { animation-name: var(--anim, widen) }\n" +
+        ".hc-spec-row { -webkit-animation: slide 1ms forwards }\n" +
+        ".hc-spec-v { -WEBKIT-ANIMATION-NAME: slide }\n" +
+        ".hc-spec-row { animation: fade 1s }\n",
+    );
+    expect(animationFaults(evasion, cards)).toEqual([
       'fixture.css ":root[data-v2="on"] .hc-spec" { animation: widen 1ms forwards }: not a pinned card animation',
       'fixture.css ".hc-spec-row" { animation-name: linear }: not a pinned card animation',
       'fixture.css ".hc-spec-v" { animation-name: 1widen }: not a pinned card animation',
       'fixture.css ".hc-spec-k" { animation-name: var(--anim, widen) }: not a pinned card animation',
+      'fixture.css ".hc-spec-row" { -webkit-animation: slide 1ms forwards }: not a pinned card animation',
+      'fixture.css ".hc-spec-v" { -webkit-animation-name: slide }: not a pinned card animation',
       'fixture.css ".hc-spec-row" { animation: fade 1s }: not a pinned card animation',
     ]);
-    // The pinned value itself is only as safe as what stands behind it: a second block under the
-    // pinned name, a var() set to something other than a timing function, or an @property for it.
-    const behind = [
-      fixture(
-        "@keyframes v2-hc-rise { to { opacity: 1 } }\n" +
-          "@keyframes v2\\-hc-rise { to { width: 400px } }\n" +
-          ':root { --ease-out: widen } .other { --ease-out: cubic-bezier(0.22, 1, 0.36, 1) }\n' +
-          '@property --ease-out { syntax: "*"; inherits: false; initial-value: widen }\n' +
-          ".hc-spec { animation: v2-hc-rise 0.5s var(--ease-out) backwards }\n",
-      ),
-    ];
-    expect(animationFaults(behind.flatMap((sh) => declarations(sh.file, sh.text)), cards, behind)).toEqual([
-      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s var(--ease-out) backwards }: --ease-out is an @property, whose initial value this guard does not read',
-      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s var(--ease-out) backwards }: --ease-out is "widen" in fixture.css, not a timing function',
-      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s var(--ease-out) backwards }: @keyframes v2-hc-rise animates width, which changes layout',
+    // The pinned value itself is only as safe as the blocks behind it: a second block under the
+    // pinned name, in any at-rule spelling or nesting, and a missing block each fault.
+    const pinned = ".hc-spec { animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards }\n";
+    const behind = fixture(
+      "@keyframes v2-hc-rise { to { opacity: 1 } }\n" +
+        "@keyframes v2\\-hc-rise { to { width: 400px } }\n" +
+        "@media (max-width: 700px) { @KEYFRAMES v2-hc-rise { to { height: 400px } } }\n" +
+        "@-WEBKIT-KEYFRAMES v2-hc-rise { to { min-width: 400px } }\n" +
+        pinned,
+    );
+    expect(animationFaults(behind, cards)).toEqual([
+      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards }: @keyframes v2-hc-rise animates width, which changes layout',
+      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards }: @keyframes v2-hc-rise animates height, which changes layout',
+      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards }: @keyframes v2-hc-rise animates min-width, which changes layout',
     ]);
-    const missing = [fixture(".hc-spec { animation: v2-hc-rise 0.5s var(--ease-out) backwards }")];
-    expect(animationFaults(missing.flatMap((sh) => declarations(sh.file, sh.text)), cards, missing)).toEqual([
-      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s var(--ease-out) backwards }: "v2-hc-rise" names no keyframes block in any sheet under src/',
+    expect(animationFaults(fixture(pinned), cards)).toEqual([
+      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards }: "v2-hc-rise" names no keyframes block in any sheet under src/',
     ]);
   });
 
