@@ -61,6 +61,16 @@ describe("writeLedger announces a ledger write, then refreshes", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  // The other way the helper rejects, and the reason a rejection alone cannot be shown as "nothing
+  // changed": here the write landed and was announced first. Fix's armed rows run their own refresh.
+  it("a refresh that fails rejects after the write was announced", async () => {
+    invokeMock.mockResolvedValue(null);
+    const refresh = () => Promise.reject(new Error("refresh failed"));
+    await expect(writeLedger("disable_known_bloat_task", { taskId: "t" }, refresh)).rejects.toThrow("refresh failed");
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(steps).toEqual(["event"]);
+  });
+
   it("a write that recorded nothing (per the caller's check) skips the announcement but still refreshes", async () => {
     invokeMock.mockResolvedValue({ applied: 0, items: [] });
     const refresh = vi.fn(() => {
@@ -214,10 +224,77 @@ const rustFiles = (dir: string, fs: Folders = { readdirSync, statSync }, out: st
   return out;
 };
 
-// Comments and string/char literals out, so braces inside them cannot skew a body's extent. The
-// handler list goes too: it registers every command inside `run`, which calls none of them, and
-// reading it as a use made `run` a writer and every caller of any `run` one after it.
-const stripRust = (s: string) =>
+// Rust read the way Rust lexes it: one pass, left to right, and whichever of a comment, a string or
+// a char literal opens first owns everything up to its own end. So a `/*` inside a string is text, a
+// quote inside a comment is prose, and `'"'` is a char rather than the start of a string (Codex, #619
+// round 2). Code comes back as written; a comment becomes a space and a literal an empty one, so
+// nothing inside either can read as a call or skew a body's extent. It knows where literals and
+// comments end and nothing about what the code between them means.
+const RAW_STRING = /(?:b|c)?r(#*)"/y; // r"…"  r#"…"#  br"…"  cr#"…"#; `r#type` has no quote and stays a name
+const STRING = /(?:b|c)?"/y; // "…"  b"…"  c"…"
+// 'x'  '\''  '\x41'  '\u{1F600}'  b'"'. A lifetime or a loop label has no closing tick: `'a`, `'outer:`.
+const CHAR = /b?'(?:\\(?:x[0-9A-Fa-f]{2}|u\{[0-9A-Fa-f_]+\}|[^xu])|[^\\'\n])'/uy;
+const startingAt = (re: RegExp, src: string, i: number) => {
+  re.lastIndex = i;
+  return re.exec(src);
+};
+
+function lexRust(src: string): string {
+  const end = src.length;
+  let out = "";
+  let from = 0; // where the code not yet copied out begins
+  let i = 0;
+  // Stands `stand` in for src[i, to) and carries on from `to`.
+  const swap = (to: number, stand: string) => {
+    out += src.slice(from, i) + stand;
+    from = i = to;
+  };
+  while (i < end) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      const eol = src.indexOf("\n", i);
+      swap(eol < 0 ? end : eol, " ");
+    } else if (c === "/" && src[i + 1] === "*") {
+      // Block comments nest: `/* a /* b */ still a comment */`.
+      let depth = 1;
+      let j = i + 2;
+      while (j < end && depth > 0) {
+        const opens = src[j] === "/" && src[j + 1] === "*";
+        const closes = src[j] === "*" && src[j + 1] === "/";
+        if (opens) depth++;
+        if (closes) depth--;
+        j += opens || closes ? 2 : 1;
+      }
+      swap(j, " ");
+    } else if (c === '"' || c === "'" || ((c === "b" || c === "c" || c === "r") && !/\w/.test(src[i - 1] ?? ""))) {
+      // b, c and r prefix a literal only where a token starts; after a name character they are the
+      // rest of that name.
+      let m: RegExpExecArray | null;
+      if ((m = startingAt(RAW_STRING, src, i))) {
+        const close = src.indexOf(`"${m[1]}`, i + m[0].length);
+        swap(close < 0 ? end : close + 1 + m[1].length, '""');
+      } else if ((m = startingAt(STRING, src, i))) {
+        let j = i + m[0].length;
+        while (j < end && src[j] !== '"') j += src[j] === "\\" ? 2 : 1;
+        swap(Math.min(j + 1, end), '""');
+      } else if ((m = startingAt(CHAR, src, i))) {
+        swap(i + m[0].length, "' '");
+      } else i++; // a lifetime's tick, or a name that merely starts with b, c or r
+    } else i++;
+  }
+  return out + src.slice(from);
+}
+
+// The handler list registers every command inside `run`, which calls none of them: read as a use, it
+// made `run` a writer and every caller of any `run` one after it. Matched on lexed code, where a `]`
+// can no longer come from a comment.
+const HANDLER_LIST = /\bgenerate_handler!\s*\[([^\]]*)\]/;
+const stripRust = (src: string) => lexRust(src).replace(new RegExp(HANDLER_LIST, "g"), " ");
+
+// The reader this file used before, kept only as the control in the lexical test below. It took out
+// every comment before any string, so a delimiter inside a literal moved the line between code and
+// prose for the rest of the file.
+const stripRustByRegex = (s: string) =>
   s
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/\/\/[^\n]*/g, " ")
@@ -226,10 +303,11 @@ const stripRust = (s: string) =>
     .replace(/'(?:\\.|[^\\'\n])'/g, "' '")
     .replace(/generate_handler!\s*\[[\s\S]*?\]/g, " ");
 
+type Strip = (source: string) => string;
 type Fn = { name: string; body: string };
-function functionsIn(sources: string[]): Fn[] {
+function functionsIn(sources: string[], strip: Strip = stripRust): Fn[] {
   const out: Fn[] = [];
-  for (const src of sources.map(stripRust)) {
+  for (const src of sources.map(strip)) {
     const head = /\bfn\s+([A-Za-z_]\w*)/g;
     let m: RegExpExecArray | null;
     while ((m = head.exec(src))) {
@@ -257,9 +335,9 @@ function functionsIn(sources: string[]): Fn[] {
 }
 
 // `use a::name as other;` and `use a::{name as other, …};`: `other` is `name` under another name.
-function aliasesIn(sources: string[]): Map<string, string[]> {
+function aliasesIn(sources: string[], strip: Strip = stripRust): Map<string, string[]> {
   const out = new Map<string, string[]>();
-  for (const src of sources.map(stripRust)) {
+  for (const src of sources.map(strip)) {
     for (const use of src.matchAll(/\buse\s+([^;]+);/g)) {
       for (const [, name, alias] of use[1].matchAll(/\b([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w*)\b/g)) {
         out.set(name, [...(out.get(name) ?? []), alias]);
@@ -274,9 +352,9 @@ function aliasesIn(sources: string[]): Map<string, string[]> {
 const mentions = (body: string, name: string) =>
   new RegExp(`(?:^|[^\\w.])${name}\\s*(?:::<[^>]*>)?\\s*\\(|[(,]\\s*&?${name}\\s*[,)]`).test(body);
 
-function ledgerWriters(sources: string[]): Set<string> {
-  const fns = functionsIn(sources);
-  const aliases = aliasesIn(sources);
+function ledgerWriters(sources: string[], strip: Strip = stripRust): Set<string> {
+  const fns = functionsIn(sources, strip);
+  const aliases = aliasesIn(sources, strip);
   const writers = new Set(["save_history"]);
   const reach = new Set(["save_history", ...(aliases.get("save_history") ?? [])]);
   // `drop` is a trait method name (the trial RollbackGuard's), not a callable: every `drop(x)` in
@@ -297,16 +375,20 @@ function ledgerWriters(sources: string[]): Set<string> {
   return writers;
 }
 
-// Same parse as command-authority-guard.test.ts's registeredCommands (not imported: importing a
-// test file would run its tests here too).
+// The entries of the handler list, read from lexed code: a comment inside the list is gone before the
+// list is split, so a comma in one cannot register a command and a bracket in one cannot end the list.
+// What is left is command paths and nothing else. A `]` ahead of the list's own (an attribute's) ends
+// the read early and leaves its `[` in an entry, so the read is refused rather than returned short.
 const registered = (lib: string): string[] => {
-  const block = /generate_handler!\[([\s\S]*?)\]\s*\)/.exec(lib);
-  if (!block) throw new Error("could not find generate_handler![...] in lib.rs");
-  return block[1]
-    .split(/[,\n]/)
-    .map((line) => line.replace(/\/\/.*$/, "").trim())
-    .filter((entry) => /^[A-Za-z_][A-Za-z0-9_:]*$/.test(entry))
-    .map((entry) => entry.split("::").pop() as string);
+  const list = HANDLER_LIST.exec(lexRust(lib));
+  if (!list) throw new Error("could not find generate_handler![...] in lib.rs");
+  const entries = list[1]
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const unread = entries.filter((entry) => !/^[A-Za-z_][A-Za-z0-9_:]*$/.test(entry));
+  if (unread.length) throw new Error(`generate_handler![...] holds more than command paths: ${unread.join(" | ")}`);
+  return entries.map((entry) => entry.split("::").pop() as string);
 };
 
 describe("the ledger-writing command list matches src-tauri", () => {
@@ -326,6 +408,23 @@ describe("the ledger-writing command list matches src-tauri", () => {
       .filter((c) => writers.has(c))
       .sort();
     expect(derived).toEqual([...LEDGER_WRITE_COMMANDS, ...BACKGROUND_LEDGER_WRITERS].sort());
+  });
+
+  // The match above cannot tell a sound reader from a lucky one: measured 2026-10-07, the regex reader
+  // derived these same commands while pairing quotes wrongly in 39 of the tree's files and losing a
+  // sixth of its functions. This can. Rust's brackets balance once comments and literals are out, and
+  // no quote is left, so a file that fails either was misread.
+  it("every Rust file lexes to balanced code with no quote left over", () => {
+    const misread = rustFiles(RS).filter((p) => {
+      const code = lexRust(readFileSync(p, "utf8")).split('""').join("");
+      const open: string[] = [];
+      for (const c of code) {
+        if ("([{".includes(c)) open.push(c);
+        else if (")]}".includes(c) && "([{"[")]}".indexOf(c)] !== open.pop()) return true;
+      }
+      return open.length > 0 || code.includes('"');
+    });
+    expect(misread).toEqual([]);
   });
 
   it("the walk reads nested modules", () => {
@@ -365,5 +464,76 @@ describe("the ledger-writing command list matches src-tauri", () => {
     for (const cmd of ["reader_cmd", "prose_cmd", "field_cmd", "method_cmd", "run", "runner_cmd"]) {
       expect(writers, cmd).not.toContain(cmd);
     }
+  });
+
+  // Where a literal or a comment holds the other's delimiter, and the plain forms next to them (Codex,
+  // #619 round 2). Each case is its own file, so nothing spills from one into the next. `true`: the
+  // function really calls save_history. `false`: the only "call" is text inside a literal or a comment.
+  const LEXICAL_CASES: [name: string, writes: boolean, source: string][] = [
+    // A comment marker inside a string is text.
+    ["marks_in_strings_cmd", true, `fn marks_in_strings_cmd() { let open = "/*"; save_history(&h); let close = "*/"; }`],
+    ["url_cmd", true, `fn url_cmd() {\n  let docs = "https://compy.gg/ledger";\n  save_history(&h);\n  let label = "done";\n}`],
+    ["url_prose_cmd", false, `fn url_prose_cmd() {\n  let docs = "https://compy.gg/ledger";\n  let label = "then save_history(&h) runs";\n}`],
+    ["escaped_quote_cmd", true, String.raw`fn escaped_quote_cmd() { let s = "say \"hi\" // still text"; save_history(&h); }`],
+    ["prefixed_strings_cmd", true, `fn prefixed_strings_cmd() { let b = b"/*"; let c = c"//"; save_history(&h); let e = br#"*/"#; }`],
+    // A raw string ends at its own quote-and-hashes; an ordinary string that ends in `r` opens none.
+    ["raw_string_cmd", true, `fn raw_string_cmd() { let open = r#"/* "quoted" "#; save_history(&h); let close = r#" */"#; }`],
+    ["raw_prose_cmd", false, `fn raw_prose_cmd() { let a = r#"save_history(&h) "quoted" "#; let b = r"save_history(&h)"; }`],
+    ["string_ending_in_r_cmd", true, `fn string_ending_in_r_cmd() { let scope = "per-user"; save_history(&h); let label = "done"; }`],
+    ["raw_identifier_cmd", true, `fn raw_identifier_cmd() { let r#type = 1; save_history(&h); let label = "done"; }`],
+    // A char literal closes after one char or one escape; a lifetime or a loop label never closes.
+    ["quote_char_cmd", true, `fn quote_char_cmd() { let q = '"'; save_history(&h); let label = "done"; }`],
+    ["quote_char_prose_cmd", false, `fn quote_char_prose_cmd() { let q = '"'; let label = "save_history(&h)"; }`],
+    ["brace_chars_cmd", true, `fn brace_chars_cmd() { let open = '{'; save_history(&h); let close = '}'; }`],
+    ["escapes_cmd", true, String.raw`fn escapes_cmd() { let sep = "\\"; let tick = '\''; let slash = '\\'; let nl = b'\n'; save_history(&h); let s = "x"; }`],
+    ["escapes_prose_cmd", false, String.raw`fn escapes_prose_cmd() { let s = "a \" save_history(&h) \" b"; let tick = '\''; let t = "save_history(&h)"; }`],
+    ["lifetime_cmd", true, `fn lifetime_cmd<'a>(x: &'a str, y: &'a str) -> &'a str { save_history(&h); x }`],
+    ["lifetime_prose_cmd", false, `fn lifetime_prose_cmd<'a>(x: &'a str) -> &'a str { let s = "save_history(&h)"; x }`],
+    ["label_cmd", true, `fn label_cmd() { 'outer: loop { save_history(&h); break 'outer; } }`],
+    // A line comment runs to its line's end whatever it holds; block comments nest.
+    ["glob_in_comment_cmd", true, `fn glob_in_comment_cmd() {\n  // reads logs/*.json\n  save_history(&h);\n  // and every sub*/folder\n}`],
+    ["nested_comment_cmd", false, `fn nested_comment_cmd() { /* outer /* inner */ save_history(&h); still a comment */ }`],
+  ];
+
+  it("a call is read where Rust reads one: never inside a comment or a literal, and never hidden by one", () => {
+    const sources = LEXICAL_CASES.map(([, , source]) => source);
+    const wrongWith = (writers: Set<string>) =>
+      LEXICAL_CASES.filter(([name, writes]) => writers.has(name) !== writes).map(([name]) => name);
+    expect(wrongWith(ledgerWriters(sources))).toEqual([]);
+    // The control: the same cases through the reader this file used before. It hid eight real writes
+    // and invented three, so these cases are ones that reader got wrong and not ones any reader passes.
+    expect(wrongWith(ledgerWriters(sources, stripRustByRegex))).toEqual([
+      "marks_in_strings_cmd",
+      "url_cmd",
+      "url_prose_cmd",
+      "escaped_quote_cmd",
+      "prefixed_strings_cmd",
+      "raw_string_cmd",
+      "string_ending_in_r_cmd",
+      "quote_char_cmd",
+      "quote_char_prose_cmd",
+      "glob_in_comment_cmd",
+      "nested_comment_cmd",
+    ]);
+  });
+
+  it("the handler list is read as code: a comment inside it neither registers a command nor hides one", () => {
+    const lib = [
+      "pub fn run() {",
+      "  tauri::Builder::default().invoke_handler(tauri::generate_handler![",
+      "    history::real_cmd, // retired: old_cmd, ghost_cmd",
+      "    /* [bracketed] note, block_ghost_cmd */ other::second_cmd,",
+      '    // "quoted", line_ghost_cmd',
+      "  ])",
+      "}",
+    ].join("\n");
+    expect(registered(lib)).toEqual(["real_cmd", "second_cmd"]);
+  });
+
+  it("a handler list that holds more than command paths is refused, never read short", () => {
+    // An attribute's `]` is the first one in the list, so the read ends there: without the refusal
+    // this came back as ["first_cmd"], with the two commands after it gone and nothing said.
+    const lib = "fn run() { b.invoke_handler(tauri::generate_handler![first_cmd, #[cfg(debug_assertions)] gated_cmd, last_cmd]) }";
+    expect(() => registered(lib)).toThrow("more than command paths");
   });
 });
