@@ -553,6 +553,10 @@
   border-top-color: var(--ix-glass-top);
   border-radius: var(--ix-radius);
   min-width: 0;
+  /* The card declares its own wrapping, so nothing an ancestor sets is inherited into it; the
+     overflow guard pins both and reads no ancestor (#614). */
+  white-space: normal;
+  text-wrap: wrap;
 }
 /* A card clamped to the tile can be 62px wide at the 380 minWidth, so its own contents yield
    before they cross its frame (#614). Nothing below changes a card that is wide enough. A title
