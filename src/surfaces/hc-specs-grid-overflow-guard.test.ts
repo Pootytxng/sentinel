@@ -46,6 +46,13 @@ import { join } from "path";
 // names are matched ASCII-case-insensitively (`@KEYFRAMES`); every spelling of the animation
 // properties is held to the pin (`-webkit-animation`); and a pinned value may hold no var(), env()
 // or attr(), so the one sheet value is the whole story (the tile's `--ease-out` is written out).
+//
+// Round 7 (Codex) closed three more the same way: the card declares its own wrapping
+// (`white-space: normal`, `text-wrap: wrap` on `.hc-spec`), so nothing an ancestor sets is
+// inherited into it and the guard reads no ancestor; no card element may be `display: contents`
+// (which would hand its children to the grid as items) or carry a grid placement; and every inline
+// style write under src/ is pinned by file and property, with the Web Animations API banned
+// outright, so no runtime write can size a card.
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 /** The CSS parser's input preprocessing: CR, CRLF and form feed are each one newline. */
@@ -493,6 +500,8 @@ const CARD = ["hc-specs", "hc-specs-grid", "hc-spec", "hc-spec-title", "hc-spec-
 const where = (d: Decl) => `${d.file} "${d.selector}" { ${d.prop}: ${d.value} }`;
 /** A value the guard cannot read statically: a banned keyword could arrive through it. */
 const dynamic = (v: string) => /\b(var|env|attr)\(/.test(v);
+/** Wrapping values a card element may carry: each one wraps, and none is a cascade keyword. */
+const WRAPS = /^(normal|pre-wrap|pre-line|break-spaces|wrap|balance|pretty|stable|wrap\s+(balance|pretty|stable)|(balance|pretty|stable)\s+wrap)$/;
 
 describe("Health's Detected tile — spec cards never overflow their tile (#614)", () => {
   it("every track list on .hc-specs-grid, in every sheet, is one auto-fit clamp that fits its container", () => {
@@ -553,12 +562,16 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
     pinned("hc-spec-k", ["max-width"], (v) => /^(\d+(\.\d+)?)%$/.test(v) && parseFloat(v) <= 100, "a key must never outgrow its row");
     pinned("hc-spec-v", ["min-width"], (v) => /^0(px)?$/.test(v), "a value must be able to shrink");
 
-    // Wrapping is inherited, so a `nowrap` anywhere in the card defeats every rule above. `all`
-    // resets every property at once, so no card element may set it.
+    // Wrapping is inherited, so the card declares its own: `white-space: normal` and `text-wrap: wrap`
+    // on .hc-spec beat anything an ancestor sets, and the guard reads no ancestor (Codex round 7).
+    // Inside the card every wrapping value must be one that wraps; a cascade keyword (inherit, unset,
+    // revert) would reopen the inheritance the pin closes. `all` resets every property at once, so no
+    // card element may set it.
+    pinned("hc-spec", ["white-space"], (v) => v === "normal", "the card declares its own wrapping");
+    pinned("hc-spec", ["text-wrap"], (v) => v === "wrap", "the card declares its own wrapping");
     for (const cls of CARD) {
       for (const d of on(cls, ["white-space", "text-wrap", "text-wrap-mode"])) {
-        const stops = /(^|\s)(nowrap|pre)(\s|$)/.test(d.value) || dynamic(d.value);
-        expect(stops, `${where(d)}: this stops a spec card's text from wrapping`).toBe(false);
+        expect(WRAPS.test(d.value), `${where(d)}: this stops a spec card's text from wrapping, or reopens inheritance`).toBe(true);
       }
       expect(on(cls, ["all"]).map(where), "`all` would reset the card's rules").toEqual([]);
     }
@@ -580,7 +593,19 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
         expect(fits(d.value), `${where(d)}: wider than a narrow tile`).toBe(true);
       }
     }
-    expect(on("hc-spec", ["grid-column", "grid-column-start", "grid-column-end", "grid-area"]).map(where)).toEqual([]);
+    // `display: contents` on a card element hands its children to the grid as items of their own, and
+    // a placement on any of them could then open a second column (Codex round 7). So no card element
+    // may be `contents` or take a cascade keyword that could become it, and nothing from the spec
+    // grid inward carries a grid placement (the .hc-specs section is the bento grid's item, placed by it).
+    for (const cls of CARD) {
+      for (const d of on(cls, ["display"])) {
+        const promotes = /contents|inherit|unset|revert|initial/.test(d.value) || dynamic(d.value);
+        expect(promotes, `${where(d)}: a card element keeps its own display`).toBe(false);
+      }
+      if (cls === "hc-specs") continue;
+      const placement = ["grid-column", "grid-column-start", "grid-column-end", "grid-row", "grid-row-start", "grid-row-end", "grid-area"];
+      expect(on(cls, placement).map(where), `.${cls} takes no grid placement`).toEqual([]);
+    }
     expect(on("hc-specs-grid", ["grid-template-areas"]).map(where)).toEqual([]);
     for (const d of on("hc-specs-grid", ["grid-auto-flow"])) {
       expect(/column/.test(d.value) || dynamic(d.value), `${where(d)}: a column flow adds columns past the tile`).toBe(false);
@@ -745,5 +770,58 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
       expect(src, `${f}: a runtime stylesheet must not know the spec card`).not.toMatch(/hc-spec/);
     }
     expect(runtime, "the allowed runtime stylesheet still exists; retire it from RUNTIME_SHEET if not").toBe(RUNTIME_SHEET.size);
+  });
+
+  // A sheet is not the only way to size a card at runtime: an inline style write or a Web Animations
+  // call on the element does it with no sheet at all. Every TypeScript file under src/ is read: the
+  // Web Animations API is unused and stays so; the card's classes are known to the one file that
+  // renders it, which holds no card element and sets only custom properties; and every inline style
+  // write anywhere else is pinned by file and property, each a paint property or named here with its
+  // reason, so a new write is a visible review change (Codex round 7).
+  it("no TypeScript file under src/ sizes a spec card at runtime (Codex round 7)", () => {
+    const INLINE_WRITES = new Map<string, string[]>([
+      ["src/design/bento/Sheet.tsx", ["opacity", "transform", "transition"]], // a sheet's own panel, paint only
+      ["src/design/console/ReticleCursor.tsx", ["opacity", "transform"]], // the cursor's own element, paint only
+      ["src/design/vendor/ElectricBorder/ElectricBorder.tsx", ["height", "width"]], // sizes its own <canvas>, checked below
+      ["src/surfaces/rig/RigFan.tsx", ["cursor"]], // document.body's cursor
+      ["src/surfaces/rig/RigPart.tsx", ["cursor"]],
+    ]);
+    const RENDERS_CARD = "src/surfaces/HomeConsole.tsx";
+    const code = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const files = (readdirSync("src", { recursive: true }) as string[])
+      .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+      .map((f) => join("src", f).replace(/\\/g, "/"));
+    const found = new Map<string, string[]>();
+    for (const f of files) {
+      const src = code(f);
+      expect(src, `${f}: the Web Animations API could size a card with no sheet`).not.toMatch(/\.animate\(|KeyframeEffect|new Animation\(/);
+      if (f !== RENDERS_CARD) expect(src, `${f}: only HomeConsole.tsx may know the spec card's classes`).not.toMatch(/hc-spec/);
+      expect(src, `${f}: an inline style write the guard cannot read`).not.toMatch(
+        /\.style\s*=[^=]|\.style\[|cssText|setAttribute\(\s*["'`]style|Object\.assign\([^)]*\.style/,
+      );
+      const props = [...src.matchAll(/\.style\.([a-zA-Z]+)\s*=[^=]/g)].map((m) => m[1]);
+      if (props.length) found.set(f, [...new Set(props)].sort());
+    }
+    expect([...found.entries()].sort()).toEqual([...INLINE_WRITES.entries()].sort());
+    for (const [f, props] of INLINE_WRITES) {
+      for (const p of props) {
+        const paint = NO_LAYOUT.test(p) || p === "cursor" || p === "transition" || /ElectricBorder/.test(f);
+        expect(paint, `${f}: ${p} changes layout`).toBe(true);
+      }
+    }
+    // ElectricBorder's two writes size an element literally named `canvas`, and no card is one.
+    const eb = code("src/design/vendor/ElectricBorder/ElectricBorder.tsx");
+    expect(eb.match(/\.style\.(width|height)\s*=/g)?.length).toBe((eb.match(/\bcanvas\.style\.(width|height)\s*=/g) ?? []).length);
+    // The file that renders the card holds no card element (no ref on one, above; no query or walk
+    // here), writes no inline style, and sets only custom properties, which no card layout value
+    // reads (dynamic() faults them above).
+    const hc = code(RENDERS_CARD);
+    expect(hc).not.toMatch(/querySelector|getElementsBy|\.children\b|ElementChild|ElementSibling/);
+    for (const m of hc.matchAll(/setProperty\(\s*(["'`])([^"'`]*)\1/g)) {
+      expect(m[2], `${RENDERS_CARD}: setProperty("${m[2]}") is not a custom property`).toMatch(/^--/);
+    }
+    expect(hc.match(/setProperty\(/g)?.length, "every setProperty in HomeConsole.tsx names its property as a literal").toBe(
+      hc.match(/setProperty\(\s*["'`]/g)?.length,
+    );
   });
 });
