@@ -479,11 +479,18 @@ describe("the ledger-writing command list matches src-tauri", () => {
     // A raw string ends at its own quote-and-hashes; an ordinary string that ends in `r` opens none.
     ["raw_string_cmd", true, `fn raw_string_cmd() { let open = r#"/* "quoted" "#; save_history(&h); let close = r#" */"#; }`],
     ["raw_prose_cmd", false, `fn raw_prose_cmd() { let a = r#"save_history(&h) "quoted" "#; let b = r"save_history(&h)"; }`],
+    // The three below and `escaped_quote_char_cmd` further down each hold one odd quote. They are what
+    // tells a reader that knows raw strings, their hashes, their prefixes and a char's escapes from
+    // one that does not: the other cases read the same with any of those left out.
+    ["raw_quote_cmd", true, `fn raw_quote_cmd() { let q = r#"one " two"#; save_history(&h); let label = "done"; }`],
+    ["raw_quote_prose_cmd", false, `fn raw_quote_prose_cmd() { let q = br#"one " save_history(&h) "#; let label = "done"; }`],
+    ["raw_backslash_cmd", true, String.raw`fn raw_backslash_cmd() { let dir = r"C:\logs\"; save_history(&h); let label = "done"; }`],
     ["string_ending_in_r_cmd", true, `fn string_ending_in_r_cmd() { let scope = "per-user"; save_history(&h); let label = "done"; }`],
     ["raw_identifier_cmd", true, `fn raw_identifier_cmd() { let r#type = 1; save_history(&h); let label = "done"; }`],
     // A char literal closes after one char or one escape; a lifetime or a loop label never closes.
     ["quote_char_cmd", true, `fn quote_char_cmd() { let q = '"'; save_history(&h); let label = "done"; }`],
     ["quote_char_prose_cmd", false, `fn quote_char_prose_cmd() { let q = '"'; let label = "save_history(&h)"; }`],
+    ["escaped_quote_char_cmd", true, String.raw`fn escaped_quote_char_cmd() { let q = '\"'; save_history(&h); let label = "done"; }`],
     ["brace_chars_cmd", true, `fn brace_chars_cmd() { let open = '{'; save_history(&h); let close = '}'; }`],
     ["escapes_cmd", true, String.raw`fn escapes_cmd() { let sep = "\\"; let tick = '\''; let slash = '\\'; let nl = b'\n'; save_history(&h); let s = "x"; }`],
     ["escapes_prose_cmd", false, String.raw`fn escapes_prose_cmd() { let s = "a \" save_history(&h) \" b"; let tick = '\''; let t = "save_history(&h)"; }`],
@@ -500,8 +507,8 @@ describe("the ledger-writing command list matches src-tauri", () => {
     const wrongWith = (writers: Set<string>) =>
       LEXICAL_CASES.filter(([name, writes]) => writers.has(name) !== writes).map(([name]) => name);
     expect(wrongWith(ledgerWriters(sources))).toEqual([]);
-    // The control: the same cases through the reader this file used before. It hid eight real writes
-    // and invented three, so these cases are ones that reader got wrong and not ones any reader passes.
+    // The control: the same cases through the reader this file used before. It gets twelve of them
+    // wrong, hiding nine real writes and inventing three, so this is not a list any reader passes.
     expect(wrongWith(ledgerWriters(sources, stripRustByRegex))).toEqual([
       "marks_in_strings_cmd",
       "url_cmd",
@@ -512,6 +519,7 @@ describe("the ledger-writing command list matches src-tauri", () => {
       "string_ending_in_r_cmd",
       "quote_char_cmd",
       "quote_char_prose_cmd",
+      "escaped_quote_char_cmd",
       "glob_in_comment_cmd",
       "nested_comment_cmd",
     ]);
