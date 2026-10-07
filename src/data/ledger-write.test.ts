@@ -458,7 +458,9 @@ describe("the ledger-writing command list matches src-tauri", () => {
       'fn prose_cmd() {\n  // save_history(&h)\n  let s = "save_history(";\n  let r = r#"helper()"#;\n}',
       "fn field_cmd() { let x = state.helper_count; }",
       "fn method_cmd() { other.helper(); }",
-      "fn run() { tauri::Builder::default().invoke_handler(tauri::generate_handler![called_cmd, helper]); }",
+      // `helper` sits mid-list, between two commas: the one place a list entry reads as a function
+      // handed on. With two entries the list could be read as a use and this test would not notice.
+      "fn run() { tauri::Builder::default().invoke_handler(tauri::generate_handler![called_cmd, helper, reader_cmd]); }",
       "fn runner_cmd() { run(); }",
     ]);
     for (const cmd of ["called_cmd", "aliased_cmd", "grouped_cmd", "pointer_cmd", "array_cmd", "async_cmd"]) {
