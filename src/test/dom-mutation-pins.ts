@@ -69,3 +69,36 @@ export const DOM_WRITES: string[] = [
   "src/design/theme.ts Element.call appendChild on document.head",
   "src/design/theme.ts Element.call remove on el",
 ];
+
+/** JSX elements, anywhere under src/, whose literal class names carry a guarded `hc-spec*` token:
+ *  `file JSX <tag> class=<attribute> attrs=<names>`. None carries a style, id, markup or spread prop
+ *  (the census faults that). The overflow guard proves each is one of the card elements it reads. */
+export const JSX_CARDS: string[] = [
+  "src/surfaces/HomeConsole.tsx JSX <section> class=\"hc-specs\" attrs=aria-label,class",
+  "src/surfaces/HomeConsole.tsx JSX <div> class=\"hc-specs-grid\" attrs=class",
+  "src/surfaces/HomeConsole.tsx JSX <div> class=\"hc-spec\" attrs=class",
+  "src/surfaces/HomeConsole.tsx JSX <span> class=\"hc-spec-title\" attrs=class",
+  "src/surfaces/HomeConsole.tsx JSX <dl> class=\"hc-spec-rows\" attrs=class",
+  "src/surfaces/HomeConsole.tsx JSX <div> class=\"hc-spec-row\" attrs=class",
+  "src/surfaces/HomeConsole.tsx JSX <dt> class=\"hc-spec-k\" attrs=class",
+  "src/surfaces/HomeConsole.tsx JSX <dd> class=\"hc-spec-v hc-mono\" attrs=class",
+];
+
+/** JSX elements whose class names the checker cannot enumerate (a `string`-typed className, or a
+ *  spread that may carry one) and that carry a style, id, markup or spread prop: tags per file. Such
+ *  an element could render anything, so a new one is a visible change here. */
+export const JSX_STYLED = new Map<string, string[]>([
+  ["src/design/RoomAccentPicker.tsx", ["button"]],
+  ["src/design/StatusPill.tsx", ["span"]],
+  ["src/design/Term.tsx", ["span"]],
+  ["src/design/Walkthrough.tsx", ["span"]],
+  ["src/design/Wordmark.tsx", ["span"]],
+  ["src/design/vendor/DecryptedText/DecryptedText.tsx", ["motion.span"]],
+  ["src/design/vendor/ElectricBorder/ElectricBorder.tsx", ["div"]],
+  ["src/design/vendor/Stepper/Stepper.tsx", ["button","div","motion.div","svg"]],
+  ["src/surfaces/HomeHud.tsx", ["span"]],
+  ["src/surfaces/HomeV2.tsx", ["span"]],
+  ["src/surfaces/TuningPresets.tsx", ["button"]],
+  ["src/surfaces/blackbook/BlackbookConsole.tsx", ["button"]],
+  ["src/surfaces/blackbook/LogbookTape.tsx", ["li"]],
+]);

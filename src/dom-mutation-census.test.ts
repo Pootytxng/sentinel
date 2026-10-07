@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { readdirSync } from "fs";
 import { join } from "path";
 import ts from "typescript";
-import { CLASS_WRITES, DATA_WRITES, DOM_WRITES } from "./test/dom-mutation-pins";
+import { CLASS_WRITES, DATA_WRITES, DOM_WRITES, JSX_CARDS, JSX_STYLED } from "./test/dom-mutation-pins";
 import { PICKABLE_ROOMS, ROOM_ACCENT_SWATCHES, isSwatchHex, splitSwatchKey, swatchInk, swatchKey, swatchText } from "./design/room-identity";
 
 // Every runtime DOM write under src/, found by type, not by spelling (Codex review of PR 624,
@@ -74,12 +74,31 @@ const DOCUMENT_BANNED = new Set(["createElementNS", "write", "writeln", "execCom
 const ELEMENT_NEVER_WRITTEN = /^(className|innerHTML|outerHTML|attributeStyleMap|part|slot|innerText)$/;
 /** Inline style properties a pinned write may set: paint only. */
 const PAINT = /^(opacity|transform|transition|cursor)$/;
-/** Functions that reach into an object by reflection: with a DOM-typed (or laundered) target they
- *  write what the checker cannot see, so their first argument must be a plain in-repo record. */
-const REFLECTIVE = /^(Object\.(assign|defineProperty|defineProperties|setPrototypeOf)|Reflect\.(set|defineProperty|setPrototypeOf|apply|construct))$/;
+/** Library APIs, by the symbol a call resolves to (see libApi), never by spelling, so
+ *  `globalThis.Object.assign`, `const assign = Object.assign` and `Object["assign"]` are all the same API.
+ *  REFLECT_API reaches into an object past the checker: with a DOM-typed (or laundered) target it writes
+ *  what the census cannot see, so its first argument must be a plain in-repo record and no argument may
+ *  be a DOM value. INVOKE_API rebinds a function's receiver. CODE_API runs code from a string or proxies. */
+const REFLECT_API = /^(ObjectConstructor\.(assign|defineProperty|defineProperties|setPrototypeOf)|Reflect\.(set|defineProperty|setPrototypeOf|apply|construct))$/;
+const INVOKE_API = /^(CallableFunction|NewableFunction|Function)\.(call|apply|bind)$/;
+const CODE_API = /^(\.eval|FunctionConstructor\.|ProxyConstructor\.)$/;
+/** A class-name token the overflow guard owns: the spec card, its parts and its grid. */
+const GUARDED = /^hc-spec/;
+const GUARDED_TEXT = /hc-spec/;
+/** The pins module spells guarded names in its JSX_CARDS rows; the overflow guard proves each row is a card element. */
+const PINS = "src/test/dom-mutation-pins.ts";
 
 type Category = "element" | "document" | "styling" | null;
-type Found = { rows: string[]; classes: Map<string, Set<string>>; data: Map<string, Set<string>>; faults: string[] };
+type Found = {
+  rows: string[];
+  classes: Map<string, Set<string>>;
+  data: Map<string, Set<string>>;
+  /** JSX elements whose literal class names carry a guarded token: `file JSX <tag> class=... attrs=...`. */
+  jsx: string[];
+  /** JSX elements the checker cannot read the class names of that carry a style, id, markup or spread prop: tags per file. */
+  styled: Map<string, Set<string>>;
+  faults: string[];
+};
 
 let program: ts.Program;
 let checker: ts.TypeChecker;
@@ -90,6 +109,18 @@ const isDomLibDecl = (d: ts.Node) => DOM_LIB.test(d.getSourceFile().fileName);
 const isLibDecl = (d: ts.Node) => {
   const sf = d.getSourceFile();
   return program.isSourceFileDefaultLibrary(sf) || /[\\/]node_modules[\\/]/.test(sf.fileName);
+};
+/** The library API a call or construction resolves to, as `<owner>.<member>`: an interface member
+ *  (`ObjectConstructor.assign`, `CallableFunction.call`), a namespace function (`Reflect.set`), a global
+ *  function (`.eval`) or an interface's own call/construct signature (`FunctionConstructor.`,
+ *  `ProxyConstructor.`). Null when the signature is not from a library or did not resolve. */
+const libApi = (n: ts.CallExpression | ts.NewExpression): string | null => {
+  const d = checker.getResolvedSignature(n)?.declaration;
+  if (!d || ts.isJSDocSignature(d) || !isLibDecl(d)) return null;
+  const owner = ts.isInterfaceDeclaration(d.parent) || ts.isClassDeclaration(d.parent) ? (d.parent.name?.text ?? "")
+    : ts.isModuleBlock(d.parent) ? d.parent.parent.name.getText() : "";
+  const member = d.name && !ts.isComputedPropertyName(d.name) ? d.name.getText() : "";
+  return `${owner}.${member}`;
 };
 const decls = (t: ts.Type) => t.getSymbol()?.declarations ?? [];
 const parts = (t: ts.Type): ts.Type[] => (t.isUnionOrIntersection() ? t.types.flatMap(parts) : [t]);
@@ -311,6 +342,61 @@ function censusFile(f: string, out: Found) {
   const row = (kind: string, name: string, receiver: ts.Node) => out.rows.push(`${f} ${kind} ${name} on ${text(receiver)}`);
   const add = (m: Map<string, Set<string>>, v: string) => (m.get(f) ?? m.set(f, new Set()).get(f)!).add(v);
 
+  // JSX, by the AST and the checker. The class names of an element are read when they are literal
+  // (a string, or an expression whose type is string literals): an element whose literal names carry
+  // a guarded token is a census row with its tag, class attribute and attribute names, and may hold
+  // no style, id-less markup or spread prop, so a second render path for a spec card anywhere under
+  // src/ is a visible pin change. An element whose class names the checker cannot enumerate could
+  // render anything, so if it also carries a style, id, markup or spread prop it is pinned by tag.
+  const literalTokens = (e: ts.Expression | undefined): string[] | null => {
+    if (!e) return [];
+    if (ts.isStringLiteralLike(e)) return e.text.split(/\s+/).filter(Boolean);
+    if (ts.isJsxExpression(e)) return e.expression ? literalTokens(e.expression) : [];
+    if (ts.isParenthesizedExpression(e)) return literalTokens(e.expression);
+    const ps = parts(checker.getTypeAtLocation(e));
+    const blank = ts.TypeFlags.Undefined | ts.TypeFlags.Null;
+    if (ps.length && ps.every((p) => p.isStringLiteral() || p.flags & blank)) {
+      return ps.flatMap((p) => (p.isStringLiteral() ? p.value.split(/\s+/).filter(Boolean) : []));
+    }
+    return null;
+  };
+  const jsxRule = (el: ts.JsxOpeningLikeElement) => {
+    const tag = el.tagName.getText();
+    let tokens: string[] | null = [];
+    let classAttr = "";
+    let carries = false;
+    let spread = false;
+    const names: string[] = [];
+    for (const a of el.attributes.properties) {
+      if (ts.isJsxSpreadAttribute(a)) {
+        spread = true;
+        const t = checker.getTypeAtLocation(a.expression);
+        const has = (n: string) => isAny(t) || isUnknown(t) || !!checker.getPropertyOfType(t, n);
+        if (has("className") || has("class")) tokens = null;
+        if (has("style") || has("id") || has("dangerouslySetInnerHTML")) carries = true;
+        continue;
+      }
+      const n = a.name.getText();
+      names.push(n === "className" ? "class" : n);
+      if (n === "className" || n === "class") {
+        const lt = literalTokens(a.initializer);
+        if (lt === null) tokens = null;
+        else if (tokens !== null) tokens.push(...lt);
+        classAttr = a.initializer ? text(a.initializer).replace(/^\{|\}$/g, "") : "";
+      }
+      if (n === "style" || n === "id" || n === "dangerouslySetInnerHTML") carries = true;
+    }
+    if (tokens !== null && tokens.some((t) => GUARDED.test(t))) {
+      if (carries || spread) return fault(el, `a guarded JSX element <${tag}> carries a style, id, markup or spread prop`);
+      out.jsx.push(`${f} JSX <${tag}> class=${classAttr} attrs=${names.filter((n) => n !== "key").sort().join(",")}`);
+    } else if (tokens === null && (carries || spread)) add(out.styled, tag);
+  };
+  const isClassAttrValue = (n: ts.Node) => {
+    let p = n.parent;
+    if (ts.isJsxExpression(p)) p = p.parent;
+    return ts.isJsxAttribute(p) && /^(className|class)$/.test(p.name.getText());
+  };
+
   /** A DOM value flows into a slot: judge the slot. */
   const flow = (n: ts.Node, slot: ts.Type | undefined, lib: boolean, how: string) => {
     if (!slot) return;
@@ -338,8 +424,18 @@ function censusFile(f: string, out: Found) {
 
   const visit = (node: ts.Node) => {
     ts.forEachChild(node, visit);
+    if (ts.isJsxOpeningLikeElement(node)) jsxRule(node);
     if (!node.parent || inTypePosition(node) || !ts.isExpression(node) || isDeclarationName(node)) return;
     if (ts.isJsxAttribute(node.parent) && node.parent.name === node) return;
+
+    // A guarded class name may be spelled only as a class attribute: not handed to a component by
+    // another prop, not built into a selector, not kept for a later className.
+    if (f !== PINS && ts.isStringLiteralLike(node) && GUARDED_TEXT.test(node.text) && !isClassAttrValue(node)) {
+      fault(node, "a guarded class name in a string that is not a class attribute");
+    }
+    if (ts.isTemplateExpression(node) && [node.head, ...node.templateSpans.map((s) => s.literal)].some((l) => GUARDED_TEXT.test(l.text))) {
+      fault(node, "a guarded class name in a template");
+    }
 
     // Destructuring a DOM value hands its surfaces out as aliases.
     if (ts.isVariableDeclaration(node.parent) && node.parent.initializer === node && !ts.isIdentifier(node.parent.name)) {
@@ -349,8 +445,10 @@ function censusFile(f: string, out: Found) {
     const type = checker.getTypeAtLocation(node);
     const cat = category(type);
 
-    // Reflection: the first argument must be a plain in-repo record, never a DOM value or a laundered one.
-    if (ts.isCallExpression(node) && REFLECTIVE.test(text(node.expression))) {
+    // Reflection, by the symbol the call resolves to: the first argument must be a plain in-repo
+    // record, never a DOM value or a laundered one. Code from a string and proxies are out.
+    const api = ts.isCallExpression(node) || ts.isNewExpression(node) ? libApi(node) : null;
+    if (api && ts.isCallExpression(node) && REFLECT_API.test(api)) {
       const target = node.arguments[0];
       if (!target) return;
       const tt = checker.getTypeAtLocation(target);
@@ -358,8 +456,7 @@ function censusFile(f: string, out: Found) {
         (!judge(tt, false) && !mentionsDom(tt) && !parts(tt).some((p) => p.flags & ts.TypeFlags.Instantiable));
       if (!plain) fault(node, "reflection on a value that could be a DOM surface");
     }
-    if (ts.isCallExpression(node) && /^(eval|Function)$/.test(text(node.expression))) fault(node, "code from a string");
-    if (ts.isNewExpression(node) && /^(Function|Proxy)$/.test(text(node.expression))) fault(node, "code from a string, or a proxy");
+    if (api && CODE_API.test(api)) fault(node, "code from a string, or a proxy");
 
     // Assertions: a target that is a structural look-alike of a surface, or `any`, launders any value.
     if ((ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isTypeAssertionExpression(node))) {
@@ -394,8 +491,9 @@ function censusFile(f: string, out: Found) {
       if (ts.isSpreadElement(p) || ts.isSpreadAssignment(p)) return fault(p, `spreading a DOM ${cat}`);
       if (ts.isDeleteExpression(p)) return fault(p, "delete on a DOM value");
       if (cat === "styling" && !isComputedStyle(node)) return fault(node, "a styling surface held outside a property access");
-      if (ts.isCallExpression(p) && p.arguments.includes(node as ts.Expression)) {
-        if (ts.isPropertyAccessExpression(p.expression) && /^(call|apply|bind)$/.test(p.expression.name.text)) return fault(p, "a DOM value passed through call/apply/bind");
+      if ((ts.isCallExpression(p) || ts.isNewExpression(p)) && p.arguments?.includes(node as ts.Expression)) {
+        const api = libApi(p);
+        if (api && (REFLECT_API.test(api) || INVOKE_API.test(api))) return fault(p, "a DOM value passed through reflection or call/apply/bind");
         const sig = checker.getResolvedSignature(p);
         const decl = sig?.declaration;
         if (!decl || ts.isJSDocSignature(decl)) return fault(p, "a DOM value passed to an untyped function");
@@ -493,7 +591,7 @@ describe("DOM mutation census: every runtime DOM write under src/ is pinned by t
     const cfg = ts.parseJsonConfigFileContent(ts.readConfigFile("tsconfig.json", ts.sys.readFile).config, ts.sys, ".");
     program = ts.createProgram(SOURCES, { ...cfg.options, noUnusedLocals: false, noUnusedParameters: false });
     checker = program.getTypeChecker();
-    found = { rows: [], classes: new Map(), data: new Map(), faults: [] };
+    found = { rows: [], classes: new Map(), data: new Map(), jsx: [], styled: new Map(), faults: [] };
     for (const f of SOURCES) censusFile(f, found);
   }, 120_000);
 
@@ -522,11 +620,14 @@ describe("DOM mutation census: every runtime DOM write under src/ is pinned by t
     expect(found.faults).toEqual([]);
   });
 
-  it("the writes found are exactly the pinned rows, classes and data keys", () => {
+  it("the writes found are exactly the pinned rows, classes, data keys and JSX elements", () => {
     const sorted = (m: Map<string, Set<string>>) => [...m.entries()].map(([f, s]) => [f, [...s].sort()] as const).sort();
+    const pinned = (m: Map<string, string[]>) => [...m.entries()].map(([f, v]) => [f, [...v].sort()] as const).sort();
     expect([...new Set(found.rows)].sort()).toEqual([...DOM_WRITES].sort());
-    expect(sorted(found.classes)).toEqual([...CLASS_WRITES.entries()].map(([f, v]) => [f, [...v].sort()] as const).sort());
-    expect(sorted(found.data)).toEqual([...DATA_WRITES.entries()].map(([f, v]) => [f, [...v].sort()] as const).sort());
+    expect(sorted(found.classes)).toEqual(pinned(CLASS_WRITES));
+    expect(sorted(found.data)).toEqual(pinned(DATA_WRITES));
+    expect([...new Set(found.jsx)].sort()).toEqual([...JSX_CARDS].sort());
+    expect(sorted(found.styled)).toEqual(pinned(JSX_STYLED));
   });
 
   it("no pinned row can size, rename or restyle an element the sheets lay out", () => {

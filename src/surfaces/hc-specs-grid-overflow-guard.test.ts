@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
-import { CLASS_WRITES, DATA_WRITES } from "../test/dom-mutation-pins";
+import { CLASS_WRITES, DATA_WRITES, JSX_CARDS } from "../test/dom-mutation-pins";
 
 // Bug → guard (#614, found by the self-reviewer during the #599 review, 2026-09-28). Health's
 // Detected tile is the bento hero, 7 of 12 columns. Its spec cards (Graphics, Processor, Memory,
@@ -79,10 +79,26 @@ import { CLASS_WRITES, DATA_WRITES } from "../test/dom-mutation-pins";
 // `box-sizing: border-box`, the grid flows by row with no auto columns, and no pinned animation
 // value is dynamic.
 //
-// WHAT THIS GUARD CLAIMS. The sheets and the static markup that render the spec cards hold the
-// clamp, and the runtime writes pinned in src/test/dom-mutation-pins.ts (proved complete by the
-// census) cannot change a card's size, class set, attributes or id. It reads src/ and nothing else:
-// a browser extension, devtools or code outside src/ are not in its claim.
+// Round 11 found a second render path (another JSX element in HomeConsole.tsx spelling the card's
+// class with an inline style prop, which the DOM census does not see React apply) and reflection by
+// a qualified or aliased name (`globalThis.Object.assign`). The census now resolves reflective,
+// call/apply/bind and code-from-string APIs by symbol, and reads every JSX element under src/ by the
+// AST: an element whose literal class names carry an hc-spec* token is pinned (tag, class attribute,
+// attribute names) and may carry no style, id, markup or spread prop; a guarded name may be spelled
+// only as a class attribute; the test below proves every pinned element is one the card markup read
+// here shows.
+//
+// WHAT THIS GUARD CLAIMS, AND WHAT IT DOES NOT. In its claim: every sheet under src/ (a compound
+// selector naming a card class counts as reaching the card even with classes the card lacks); the
+// card markup as HomeConsole.tsx spells it; every JSX element under src/ whose class names the
+// checker can enumerate and that carry an hc-spec* token; every runtime DOM write under src/, pinned
+// by type in src/test/dom-mutation-pins.ts and proved complete by src/dom-mutation-census.test.ts;
+// and theme.ts's one runtime stylesheet, pinned whole. Outside it, by design: a browser extension,
+// devtools, code outside src/; an element whose class names the checker cannot enumerate (a
+// `string`-typed className may render anything, so such an element is pinned only when it also
+// carries a style, id, markup or spread prop, and is otherwise governed by the sheets alone); and the
+// browser's own layout, which only a Chromium regression can prove (a separate task). This is a
+// static proof over the shapes named here, not a proof that no program can draw a wide card.
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 /** The CSS parser's input preprocessing: CR, CRLF and form feed are each one newline. */
@@ -708,6 +724,15 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
       "… > section.hc-specs > div.hc-specs-grid > div.hc-spec > dl.hc-spec-rows > div.hc-spec-row > dd.hc-spec-v",
     );
     for (const cls of CARD) expect(elements(cls).length, `.${cls}`).toBeGreaterThan(0);
+    // The census pins, from the TypeScript JSX AST of every file under src/, each element whose
+    // literal class names carry an hc-spec* token. Each must be one of the card elements read above,
+    // with the same attribute names, so a second render path for a card anywhere under src/ (round 11)
+    // is a pin the census demands and this check refuses.
+    const seen = CARD_ELS.filter((el) => el.classes.some((c) => /^hc-spec/.test(c))).map(
+      (el) => `src/surfaces/HomeConsole.tsx JSX <${el.tag}> class="${el.classAttr}" attrs=${[...el.attrs].sort().join(",")}`,
+    );
+    expect(seen.length).toBeGreaterThanOrEqual(7);
+    expect([...new Set(JSX_CARDS)].sort(), "every guarded JSX element under src/ is a card element read here").toEqual([...new Set(seen)].sort());
   });
 
   // The readers above must see what a browser sees. Each spelling here passed the round-2 guard
@@ -816,13 +841,16 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
       .map((f) => join("src", f).replace(/\\/g, "/"));
     const RUNTIME_SHEET = new Set(["src/design/theme.ts"]);
     const RENDERS_CARD = "src/surfaces/HomeConsole.tsx";
+    // The pins module spells the card classes only inside its JSX_CARDS rows, each proved above to be a card element HomeConsole.tsx renders.
+    const PINS = "src/test/dom-mutation-pins.ts";
     expect(SOURCES.length).toBeGreaterThan(100);
     let runtime = 0;
     for (const f of SOURCES) {
       const src = code(f);
       expect(src, `${f}: a <style> element is document-scoped and would beat the sheets`).not.toMatch(/<style[\s>\/]/i);
       expect(src, `${f}: the Web Animations API could size a card with no sheet`).not.toMatch(/KeyframeEffect|new Animation\(/);
-      if (f !== RENDERS_CARD) expect(src, `${f}: only HomeConsole.tsx may know the spec card's classes`).not.toMatch(/hc-spec/);
+      if (f !== RENDERS_CARD && f !== PINS) expect(src, `${f}: only HomeConsole.tsx may know the spec card's classes`).not.toMatch(/hc-spec/);
+      if (f === PINS) expect(src.replace(/^export const JSX_CARDS[\s\S]*?\n\];$/m, ""), `${f}: the pins module spells the card only in JSX_CARDS`).not.toMatch(/hc-spec/);
       const builds = /createElement\(\s*["'`]style|insertRule|adoptedStyleSheets|<link[\s>\/]|dangerouslySetInnerHTML/.test(src);
       if (!builds) continue;
       runtime++;
