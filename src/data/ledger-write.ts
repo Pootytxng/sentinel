@@ -35,6 +35,9 @@ export const BACKGROUND_LEDGER_WRITERS = ["start_tweak_trial", "start_stack_tria
  *  `ledger-write.test.ts` pins that no ledger-writing command is invoked anywhere else.
  *
  *  A failed command throws before anything is announced: nothing was recorded, so nothing re-reads.
+ *  A refresh that fails throws too, but after the write is recorded and announced, so a rejection
+ *  alone does not mean nothing changed. A caller that tells the user which it was (Fix's two armed
+ *  rows) passes no refresh and runs its own afterwards.
  *  `changed` lets a caller skip the announcement when the command succeeded but wrote nothing (a
  *  batch that applied zero items); the refresh still runs.
  *

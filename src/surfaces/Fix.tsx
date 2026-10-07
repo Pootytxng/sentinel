@@ -489,6 +489,18 @@ const DEBLOAT_TASK_KEY: Record<string, string> = {
   "ceip-usb": "ceipUsb",
 };
 
+// App's refresh after one of the two writes below. By the time it runs the change is made, recorded
+// and announced, so a refresh that fails is reported as exactly that and never as a refused change:
+// the row keeps its done state (#619). App's own refresh already raises its banner for a read that
+// fails; this is for whatever it lets through.
+const refreshAfterWrite = async (refresh?: () => Promise<unknown> | void) => {
+  try {
+    await refresh?.();
+  } catch (e) {
+    console.error("[compy fix]", "the change was made and recorded, but the refresh after it failed", e);
+  }
+};
+
 // Self-contained: runs the gated `disable_known_bloat_task` command through `writeLedger`; the applied
 // change shows in the Trust Ledger (History) where it can be rolled back (re-enables the task).
 function DebloatTasks({
@@ -510,7 +522,8 @@ function DebloatTasks({
   const disable = async (id: string) => {
     setBusy(id);
     try {
-      await writeLedger("disable_known_bloat_task", { taskId: id }, onChanged);
+      // The command alone: only its own failure means nothing changed.
+      await writeLedger("disable_known_bloat_task", { taskId: id });
       setState((s) => ({ ...s, [id]: "done" }));
     } catch {
       // Plain-English, not the raw Rust string: this is an ARMED mutation, so make clear nothing changed.
@@ -518,9 +531,11 @@ function DebloatTasks({
         ...s,
         [id]: t("optimize.fix.debloatFailed"),
       }));
+      return;
     } finally {
       setBusy(null);
     }
+    await refreshAfterWrite(onChanged);
   };
   return (
     <CollapsibleSection title={t("optimize.fix.telemetryTasks")} count={DEBLOAT_TASKS.length}>
@@ -596,7 +611,8 @@ function PreloadApps({ onChanged }: { onChanged?: () => Promise<unknown> | void 
   const remove = async (id: string) => {
     setBusy(id);
     try {
-      await writeLedger("remove_known_preload_app", { appId: id }, onChanged);
+      // The command alone: only its own failure means nothing changed.
+      await writeLedger("remove_known_preload_app", { appId: id });
       setState((s) => ({ ...s, [id]: "done" }));
     } catch {
       // Plain-English, honest: nothing changed on a refusal/failure.
@@ -604,9 +620,11 @@ function PreloadApps({ onChanged }: { onChanged?: () => Promise<unknown> | void 
         ...s,
         [id]: t("optimize.fix.preloadRemoveFailed"),
       }));
+      return;
     } finally {
       setBusy(null);
     }
+    await refreshAfterWrite(onChanged);
   };
   return (
     <CollapsibleSection title={t("optimize.fix.preinstalledApps")} count={rows.length}>

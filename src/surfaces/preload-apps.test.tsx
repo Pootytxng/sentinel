@@ -146,13 +146,69 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
     const seen: string[] = [];
     const on = () => seen.push("event");
     window.addEventListener(LEDGER_CHANGED_EVENT, on);
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
     const onChanged = vi.fn();
-    render(<Fix {...baseProps} onChanged={onChanged} />);
-    fireEvent.click(await screen.findByText("Preinstalled apps"));
-    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
-    await screen.findByText("Couldn't remove it — nothing changed; try again.");
-    window.removeEventListener(LEDGER_CHANGED_EVENT, on);
-    expect(seen).toEqual([]);
-    expect(onChanged).not.toHaveBeenCalled();
+    try {
+      render(<Fix {...baseProps} onChanged={onChanged} />);
+      fireEvent.click(await screen.findByText("Preinstalled apps"));
+      fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+      await screen.findByText("Couldn't remove it — nothing changed; try again.");
+      expect(seen).toEqual([]);
+      expect(onChanged).not.toHaveBeenCalled();
+      // Still a refusal: the button is live for another go, and no refresh failure is reported.
+      expect((screen.getByRole("button", { name: "Remove" }) as HTMLButtonElement).disabled).toBe(false);
+      expect(reported).not.toHaveBeenCalledWith("[compy fix]", expect.anything(), expect.anything());
+    } finally {
+      reported.mockRestore();
+      window.removeEventListener(LEDGER_CHANGED_EVENT, on);
+    }
+  });
+
+  // A removal that landed is done whatever App's refresh then does. The refresh used to run inside the
+  // command's own try, so one that failed painted "nothing changed; try again." over an app that was
+  // already gone and recorded, and left the button live for a second run (Codex, #619 round 2).
+  const refreshError = new Error("refresh failed");
+  it.each<[string, () => Promise<never>]>([
+    ["rejects", () => Promise.reject(refreshError)],
+    [
+      "throws",
+      () => {
+        throw refreshError;
+      },
+    ],
+  ])("a removal that lands stays done when App's refresh %s, and that failure is reported", async (_how, failing) => {
+    const seen: string[] = [];
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "get_preload_apps") return Promise.resolve({ armed: true, installed: ["solitaire-collection"] });
+      if (cmd === "remove_known_preload_app") {
+        seen.push("remove");
+        return Promise.resolve(null);
+      }
+      return Promise.resolve(null);
+    });
+    const on = () => seen.push("event");
+    window.addEventListener(LEDGER_CHANGED_EVENT, on);
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onChanged = vi.fn(() => {
+      seen.push("app-refresh");
+      return failing();
+    });
+    try {
+      render(<Fix {...baseProps} onChanged={onChanged} />);
+      fireEvent.click(await screen.findByText("Preinstalled apps"));
+      fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+      const done = await screen.findByRole("button", { name: "Removed · undo in History" });
+      await waitFor(() => expect(reported).toHaveBeenCalledWith("[compy fix]", expect.any(String), refreshError));
+      // Terminal: the row's button is spent, and nothing says the app is still there.
+      expect((done as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.queryByText("Couldn't remove it — nothing changed; try again.")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+      // The write was announced once, before the refresh, and the command ran once.
+      expect(seen).toEqual(["remove", "event", "app-refresh"]);
+      expect(invokeMock.mock.calls.filter(([cmd]) => cmd === "remove_known_preload_app")).toHaveLength(1);
+    } finally {
+      reported.mockRestore();
+      window.removeEventListener(LEDGER_CHANGED_EVENT, on);
+    }
   });
 });
