@@ -85,6 +85,8 @@ const CODE_API = /^(\.eval|FunctionConstructor\.|ProxyConstructor\.)$/;
 /** A class-name token the overflow guard owns: the spec card, its parts and its grid. */
 const GUARDED = /^hc-spec/;
 const GUARDED_TEXT = /hc-spec/;
+/** A character reference as JSX spells one: `&amp;`, `&#45;`, `&#x2D;`. */
+const CHAR_REF = /&#?\w+;/;
 /** The pins module spells guarded names in its JSX_CARDS rows; the overflow guard proves each row is a card element. */
 const PINS = "src/test/dom-mutation-pins.ts";
 
@@ -435,6 +437,14 @@ function censusFile(f: string, out: Found) {
     }
     if (node.parent && ts.isTemplateExpression(node) && [node.head, ...node.templateSpans.map((s) => s.literal)].some((l) => GUARDED_TEXT.test(l.text))) {
       fault(node, "a guarded class name in a template");
+    }
+    // The compiler decodes a character reference in a JSX attribute string and this census reads the
+    // string as written: `className="hc&#45;spec"` renders the card's class and spells it nowhere, and
+    // `className="x&#32;hc-spec"` renders two class names where one is read. So no attribute string
+    // under src/ may hold a reference, and the string read here is the string React renders. (A string
+    // in braces is JavaScript: nothing decodes it, and its escapes are already resolved in `.text`.)
+    if (node.parent && ts.isStringLiteral(node) && ts.isJsxAttribute(node.parent) && CHAR_REF.test(node.getText())) {
+      fault(node, "a character reference in a JSX attribute string");
     }
 
     if (!node.parent || inTypePosition(node) || !ts.isExpression(node) || isDeclarationName(node)) return;
