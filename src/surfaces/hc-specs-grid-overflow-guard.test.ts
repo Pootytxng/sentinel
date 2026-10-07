@@ -25,22 +25,89 @@ import { join } from "path";
 // the markup, so a child combinator into a known parent can rule a rule out (`.bench > div` never
 // reaches the grid). Anything above the tile is unknown, so it is assumed to match. Before this,
 // `:is(.hc-specs-grid)` or `dd` slipped past the guard (Codex review of PR 624, round 2).
+//
+// Sheets are read after CSS escapes are resolved, so `grid-template-colum\6e s` is the guarded
+// property and `.hc-specs\2d grid` is the guarded class, with the escape's terminating space
+// consumed rather than read as a descendant combinator (Codex review of PR 624, round 3).
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 
+/** The index just past the string that opens at `s[i]`; a `\` inside it escapes the next character. */
+function skipString(s: string, i: number): number {
+  const q = s[i];
+  for (i++; i < s.length; i++) {
+    if (s[i] === "\\") i++;
+    else if (s[i] === q) return i + 1;
+  }
+  return s.length;
+}
+
+/** Drop the `\` from every escape left in a decoded token. */
+const unescape = (s: string) => s.replace(/\\([\s\S])/g, "$1");
+
+/** Resolve CSS escapes the way the tokenizer does: `\6e` is `n`, `\2d ` is `-` with its terminating
+ *  space consumed, `\.` is a literal dot. A decoded character that would change the parse stays
+ *  escaped (a delimiter outside a string, the quote or a backslash inside one); the readers below
+ *  take such a `\x` as one literal character and `unescape` it where a name is compared. */
+function decodeEscapes(text: string): string {
+  let out = "";
+  let quote = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c !== "\\") {
+      if (quote) {
+        if (c === quote) quote = "";
+      } else if (c === '"' || c === "'") quote = c;
+      out += c;
+      continue;
+    }
+    const next = text[i + 1] ?? "";
+    if (next === "" || next === "\n" || next === "\r") {
+      // Inside a string, backslash-newline is a line continuation. Outside one it is no escape.
+      if (quote && next) i += next === "\r" && text[i + 2] === "\n" ? 2 : 1;
+      else out += c;
+      continue;
+    }
+    const hex = /^[0-9a-fA-F]{1,6}/.exec(text.slice(i + 1, i + 7))?.[0];
+    let ch: string;
+    if (hex) {
+      const cp = parseInt(hex, 16);
+      ch = cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? "�" : String.fromCodePoint(cp);
+      i += hex.length;
+      const ws = text[i + 1];
+      if (ws === "\r" && text[i + 2] === "\n") i += 2;
+      else if (ws === " " || ws === "\t" || ws === "\n" || ws === "\r" || ws === "\f") i += 1;
+    } else {
+      ch = next;
+      i += 1;
+    }
+    const keep = quote ? ch === quote || ch === "\\" : ch.charCodeAt(0) < 0x80 && !/^[\w-]$/.test(ch);
+    out += keep ? `\\${ch}` : ch;
+  }
+  return out;
+}
+
 type Decl = { file: string; selector: string; prop: string; value: string };
 
-/** Split `s` on `sep` wherever it sits outside (), [] and quotes. */
+/** Split `s` on `sep` wherever it sits outside (), [], quotes and escapes. */
 function splitTop(s: string, sep: string): string[] {
   const out: string[] = [];
   let depth = 0;
-  let quote = "";
   let cur = "";
-  for (const c of s) {
-    if (quote) {
-      if (c === quote) quote = "";
-    } else if (c === '"' || c === "'") quote = c;
-    else if (c === "(" || c === "[") depth++;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "\\") {
+      cur += s.slice(i, i + 2);
+      i++;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      const j = skipString(s, i);
+      cur += s.slice(i, j);
+      i = j - 1;
+      continue;
+    }
+    if (c === "(" || c === "[") depth++;
     else if (c === ")" || c === "]") depth--;
     else if (c === sep && depth === 0) {
       out.push(cur);
@@ -70,21 +137,29 @@ function declarations(file: string, text: string): Decl[] {
   const stack: (string | null)[] = []; // the style selector in force at each depth; null = none
   let buf = "";
   let parens = 0;
-  let quote = "";
   const emit = () => {
     const selector = stack[stack.length - 1];
     const colon = buf.indexOf(":");
     if (selector && selector !== KEYFRAMES && colon > 0) {
       const value = buf.slice(colon + 1).replace(/!important/i, "").trim();
-      out.push({ file, selector, prop: buf.slice(0, colon).trim().toLowerCase(), value });
+      out.push({ file, selector, prop: unescape(buf.slice(0, colon).trim()).toLowerCase(), value });
     }
     buf = "";
   };
-  for (const c of text) {
-    if (quote) {
-      if (c === quote) quote = "";
-    } else if (c === '"' || c === "'") quote = c;
-    else if (c === "(") parens++;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "\\") {
+      buf += text.slice(i, i + 2);
+      i++;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      const j = skipString(text, i);
+      buf += text.slice(i, j);
+      i = j - 1;
+      continue;
+    }
+    if (c === "(") parens++;
     else if (c === ")") parens--;
     else if (parens === 0 && c === "{") {
       const prelude = buf.trim();
@@ -170,12 +245,18 @@ function compounds(sel: string): { cs: string[]; combs: string[] } {
   let cur = "";
   let comb = " ";
   let depth = 0;
-  let quote = "";
-  for (const c of sel.trim()) {
-    if (quote) {
-      if (c === quote) quote = "";
-    } else if (c === '"' || c === "'") quote = c;
-    else if (c === "(" || c === "[") depth++;
+  const t = sel.trim();
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    let piece = c;
+    if (c === "\\") {
+      piece = t.slice(i, i + 2);
+      i++;
+    } else if (c === '"' || c === "'") {
+      const j = skipString(t, i);
+      piece = t.slice(i, j);
+      i = j - 1;
+    } else if (c === "(" || c === "[") depth++;
     else if (c === ")" || c === "]") depth--;
     else if (depth === 0 && /[\s>+~]/.test(c)) {
       if (cur) {
@@ -187,7 +268,7 @@ function compounds(sel: string): { cs: string[]; combs: string[] } {
       continue;
     }
     if (!cur && cs.length) combs.push(comb);
-    cur += c;
+    cur += piece;
   }
   if (cur) cs.push(cur);
   return { cs, combs };
@@ -224,20 +305,18 @@ function compound(s: string, el: El): Reach {
   if (type && type !== "*" && type.toLowerCase() !== el.tag) return "no";
   let i = type?.length ?? 0;
   const ident = () => {
-    const m = /^-?[\w-]+/.exec(s.slice(i))?.[0] ?? "";
+    const m = /^(?:[\w-]|[^\x00-\x7f]|\\[\s\S])+/.exec(s.slice(i))?.[0] ?? "";
     i += m.length;
-    return m;
+    return unescape(m);
   };
   // s[i] is `open`. Returns what sits inside, and leaves i just past the matching `close`.
   const group = (open: string, close: string) => {
     const start = i + 1;
     let depth = 0;
-    let quote = "";
     for (; i < s.length; i++) {
       const c = s[i];
-      if (quote) {
-        if (c === quote) quote = "";
-      } else if (c === '"' || c === "'") quote = c;
+      if (c === "\\") i++;
+      else if (c === '"' || c === "'") i = skipString(s, i) - 1;
       else if (c === open) depth++;
       else if (c === close && --depth === 0) break;
     }
@@ -258,12 +337,16 @@ function compound(s: string, el: El): Reach {
       ident();
       if (!el.attrs.includes("id")) return "no";
     } else if (c === "[") {
-      const a = /^\s*([\w-]+)\s*(?:([~|^$*]?=)\s*("[^"]*"|'[^']*'|[^\s\]]+)\s*([is])?)?\s*$/i.exec(group("[", "]"));
+      const a =
+        /^\s*((?:[\w-]|\\[\s\S])+)\s*(?:([~|^$*]?=)\s*("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|(?:[^\s\]\\]|\\[\s\S])+)\s*([is])?)?\s*$/i.exec(
+          group("[", "]"),
+        );
       if (!a) throw new Error(`unreadable attribute selector in "${s}" — teach the guard its form`);
-      const name = a[1].toLowerCase();
+      const name = unescape(a[1]).toLowerCase();
+      const want = a[3] === undefined ? "" : unescape(a[3].replace(/^(["'])([\s\S]*)\1$/, "$2"));
       if (name !== "class") {
         if (!el.attrs.includes(name)) return "no";
-      } else if (!a[2] || attrMatch(el.classAttr, a[2], a[3].replace(/^["']|["']$/g, ""), /i/i.test(a[4] ?? ""))) {
+      } else if (!a[2] || attrMatch(el.classAttr, a[2], want, /i/i.test(a[4] ?? ""))) {
         named = true;
       } else return "no";
     } else if (c === ":") {
@@ -284,7 +367,7 @@ function compound(s: string, el: El): Reach {
 const SHEET = join("src", "surfaces", "home-console.css");
 const ALL: Decl[] = (readdirSync("src", { recursive: true }) as string[])
   .filter((f) => f.endsWith(".css"))
-  .flatMap((f) => declarations(join("src", f), stripComments(readFileSync(join("src", f), "utf8"))));
+  .flatMap((f) => declarations(join("src", f), decodeEscapes(stripComments(readFileSync(join("src", f), "utf8")))));
 
 /** Every declaration of `props`, in every sheet, whose rule can reach an element carrying `.cls`. */
 const on = (cls: string, props: string[]) => {
@@ -454,12 +537,16 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
     }
   });
 
-  // An inline style beats every sheet, so the component must not set one on a spec card. The guard
-  // reads each card element's classes from its static className, so a computed one would hide a
-  // class from it.
-  it("SpecBox sets no inline style, and no class the guard cannot read", () => {
+  // An inline style beats every sheet, so the component must not set one on a spec card, by any
+  // spelling: a style prop, a spread that could carry one, a <style> element, raw HTML, a ref that
+  // could style the node, or an element the guard does not read (Codex review of PR 624, round 3).
+  // The guard reads each card element's classes from its static className, so a computed one would
+  // hide a class from it.
+  it("SpecBox sets no inline style by any spelling, and no class the guard cannot read", () => {
     for (const src of [SITE, SPECBOX]) {
-      expect(src).not.toMatch(/\bstyle=/);
+      expect(src).not.toMatch(/\bstyle\b/i);
+      expect(src).not.toMatch(/\.\.\./);
+      expect(src).not.toMatch(/createElement|dangerouslySetInnerHTML|\bref=|<link/i);
       expect(src).not.toMatch(/className=\{/);
     }
     expect(SPECBOX).toContain('className="hc-spec-v');
@@ -469,5 +556,36 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
       "… > section.hc-specs > div.hc-specs-grid > div.hc-spec > dl.hc-spec-rows > div.hc-spec-row > dd.hc-spec-v",
     );
     for (const cls of CARD) expect(elements(cls).length, `.${cls}`).toBeGreaterThan(0);
+  });
+
+  // The readers above must see what a browser sees. Each spelling here passed the round-2 guard
+  // while overriding the clamp.
+  it("reads escaped spellings of a property or a class the way CSS does", () => {
+    const sheet = decodeEscapes(
+      stripComments(
+        '[data-v2="on"] .hc-specs\\2d grid { grid-template-colum\\6e s: 230px }\n' +
+          '[class=hc\\2d spec] { wid\\74 h: 400px; content: "a\\"b" }\n' +
+          ".hc-spec\\.x { width: 500px }\n" +
+          ".hc-spec\\:x { width: 600px }\n" +
+          ":is(.hc\\-specs-grid, .other) { grid-template-columns: 240px }",
+      ),
+    );
+    const decls = declarations("fixture.css", sheet);
+    expect(decls.map((d) => [d.selector, d.prop, d.value])).toEqual([
+      ['[data-v2="on"] .hc-specs-grid', "grid-template-columns", "230px"],
+      ["[class=hc-spec]", "width", "400px"],
+      ["[class=hc-spec]", "content", '"a\\"b"'],
+      [".hc-spec\\.x", "width", "500px"],
+      [".hc-spec\\:x", "width", "600px"],
+      [":is(.hc-specs-grid, .other)", "grid-template-columns", "240px"],
+    ]);
+    const grid = elements("hc-specs-grid")[0];
+    const card = elements("hc-spec")[0];
+    expect(reach(decls[0].selector, grid)).toBe("named");
+    expect(reach(decls[1].selector, card)).toBe("named");
+    // These two name the classes `hc-spec.x` and `hc-spec:x`, which no card carries.
+    expect(reach(decls[3].selector, card)).toBe("no");
+    expect(reach(decls[4].selector, card)).toBe("no");
+    expect(reach(decls[5].selector, grid)).toBe("named");
   });
 });
