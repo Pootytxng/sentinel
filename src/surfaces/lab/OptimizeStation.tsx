@@ -185,6 +185,7 @@ export function OptimizeStation(props: LabFastPathProps) {
         onApplyBatch={props.onApplyBatch}
         onOpenLibrary={props.onOpenLibrary}
         vendor={props.vendor}
+        onChanged={props.onChanged}
         view="fixes"
         v2Ia
         reverted={reverted}
@@ -218,6 +219,7 @@ export function OptimizeStation(props: LabFastPathProps) {
             onApplyBatch={props.onApplyBatch}
             onOpenLibrary={props.onOpenLibrary}
             vendor={props.vendor}
+            onChanged={props.onChanged}
             view="ledger"
           />
         </div>

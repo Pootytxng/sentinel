@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { Recommendation, AppliedChange } from "../types";
 import { friendlyLabel } from "../data/friendly-labels";
@@ -73,7 +73,7 @@ export function TrustMoment({
     setErrorMsg(null);
     let change: AppliedChange;
     try {
-      change = await invoke<AppliedChange>("apply_recommendation", {
+      change = await writeLedger<AppliedChange>("apply_recommendation", {
         recId: demoRec.id,
         recTitle: demoRec.title,
       });
@@ -88,7 +88,7 @@ export function TrustMoment({
     await new Promise((r) => setTimeout(r, 2600));
     setPhase("reverting");
     try {
-      await invoke("rollback_change", { changeId: change.id });
+      await writeLedger("rollback_change", { changeId: change.id });
     } catch (e) {
       // Honest, unsoftened: the change is real and still active — say exactly where to undo it.
       setErrorMsg(t("home.trustMoment.errors.rollbackFailed", { error: String(e) }));

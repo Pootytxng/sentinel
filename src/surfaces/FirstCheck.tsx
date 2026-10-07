@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { writeLedger } from "../data/ledger-write";
 import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { Wordmark } from "../design/Wordmark";
@@ -72,7 +72,7 @@ export default function FirstCheck({
     if (!ok) return;
     setApplyingId(rec.id);
     try {
-      await invoke("apply_recommendation", { recId: rec.id, recTitle: rec.title });
+      await writeLedger("apply_recommendation", { recId: rec.id, recTitle: rec.title });
       await rerun(); // re-run so the verdict + limiters reflect the change
     } catch (e) {
       setApplyingId(null);

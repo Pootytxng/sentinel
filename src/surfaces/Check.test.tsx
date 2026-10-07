@@ -36,6 +36,15 @@ const startupMock = vi.hoisted(() => ({
   steps: [] as string[],
 }));
 
+// Settable apply path (#619): the recs the scan offers, the ledger entries it reads back, and
+// whether apply_recommendation lands. Nothing here reaches Windows; invoke is mocked.
+const applyMock = vi.hoisted(() => ({
+  recs: [] as { id: string; title: string; currently_applied: boolean }[],
+  changes: [] as { rec_id: string; rec_title: string; status: string; is_still_active: boolean }[],
+  fails: false,
+  applied: [] as string[],
+}));
+
 // useScan polls real commands on mount; mock invoke to feed a tiny readiness/priorities scan.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
@@ -65,7 +74,13 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_priorities") return Promise.resolve(prioritiesMock.payload);
     // useScan/refresh now rank via priorities_from (pure) instead of re-running get_priorities.
     if (cmd === "priorities_from") return Promise.resolve(prioritiesMock.payload);
-    if (cmd === "get_recommendations") return Promise.resolve([]);
+    if (cmd === "get_recommendations") return Promise.resolve(applyMock.recs);
+    if (cmd === "get_applied_changes") return Promise.resolve(applyMock.changes);
+    if (cmd === "apply_recommendation") {
+      if (applyMock.fails) return Promise.reject(new Error("apply refused"));
+      applyMock.applied.push("apply");
+      return Promise.resolve({ id: "chg-1" });
+    }
     return Promise.resolve(null);
   }),
 }));
@@ -74,7 +89,7 @@ import Check, { LEFTOVER_LEARN_ID } from "./Check";
 import { KNOWLEDGE_BY_ID } from "../data/knowledge";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { fireEvent } from "@testing-library/react";
-import type { SessionSummary } from "../types";
+import { LEDGER_CHANGED_EVENT, type SessionSummary } from "../types";
 
 afterEach(() => {
   cleanup();
@@ -82,6 +97,10 @@ afterEach(() => {
   startupMock.disabled = false;
   startupMock.rereadFails = false;
   startupMock.steps = [];
+  applyMock.recs = [];
+  applyMock.changes = [];
+  applyMock.fails = false;
+  applyMock.applied = [];
   readinessMock.drifts = [];
   prioritiesMock.payload = {
     limiters: [],
@@ -527,6 +546,93 @@ describe("Check", () => {
       await waitFor(() => expect(screen.queryByText("Discord")).not.toBeInTheDocument());
       expect(onChanged).toHaveBeenCalledTimes(1);
       expect(screen.queryByText("Couldn't change that startup item")).not.toBeInTheDocument();
+    });
+  });
+
+  // #619: an apply from this room writes the Trust Ledger. The Test room's experiment bench, mounted
+  // beside it, re-reads the ledger only on focus or LEDGER_CHANGED_EVENT, so the apply must announce
+  // it (then App's refresh runs). A refused apply announces nothing.
+  describe("applying a fix from Check announces the ledger change", () => {
+    const countEvents = () => {
+      const seen: string[] = [];
+      const on = () => seen.push("event");
+      window.addEventListener(LEDGER_CHANGED_EVENT, on);
+      return { seen, off: () => window.removeEventListener(LEDGER_CHANGED_EVENT, on) };
+    };
+    const withApplyableLimiter = () => {
+      prioritiesMock.payload = {
+        ...prioritiesMock.payload,
+        limiters: [
+          {
+            id: "power-plan",
+            title: "Power plan",
+            reason: "Balanced plan parks cores",
+            linked: "rec-power",
+            confidence: "high",
+            status: "attention",
+          },
+        ],
+      };
+      applyMock.recs = [{ id: "rec-power", title: "High performance plan", currently_applied: false }];
+    };
+    const renderCheck = (onChanged: () => void) =>
+      render(
+        <ConfirmProvider>
+          <Check isAppliable={() => true} onOpenLibrary={vi.fn()} onChanged={onChanged} vendor="any" />
+        </ConfirmProvider>,
+      );
+
+    it("a limiter apply that lands announces it once, then App's refresh runs", async () => {
+      withApplyableLimiter();
+      const events = countEvents();
+      const onChanged = vi.fn(() => events.seen.push("app-refresh"));
+      renderCheck(onChanged);
+      fireEvent.click(await screen.findByRole("switch", { name: "Apply Power plan" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Apply" }));
+      await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+      events.off();
+      expect(applyMock.applied).toEqual(["apply"]);
+      expect(events.seen).toEqual(["event", "app-refresh"]);
+    });
+
+    it("a refused limiter apply announces nothing and skips App's refresh", async () => {
+      withApplyableLimiter();
+      applyMock.fails = true;
+      const events = countEvents();
+      const onChanged = vi.fn();
+      renderCheck(onChanged);
+      fireEvent.click(await screen.findByRole("switch", { name: "Apply Power plan" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Apply" }));
+      await screen.findByText("Couldn't apply that fix");
+      events.off();
+      expect(events.seen).toEqual([]);
+      expect(onChanged).not.toHaveBeenCalled();
+    });
+
+    it("turning a drifted change back on announces it once, then App's refresh runs", async () => {
+      prioritiesMock.payload = {
+        ...prioritiesMock.payload,
+        limiters: [
+          {
+            id: "applied-changes",
+            title: "Applied changes",
+            reason: "One drifted",
+            linked: null,
+            confidence: "high",
+            status: "attention",
+          },
+        ],
+      };
+      applyMock.changes = [{ rec_id: "game-bar", rec_title: "Xbox Game Bar off", status: "applied", is_still_active: false }];
+      const events = countEvents();
+      const onChanged = vi.fn(() => events.seen.push("app-refresh"));
+      renderCheck(onChanged);
+      fireEvent.click(await screen.findByRole("button", { name: "Turn it back on" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Turn it on" }));
+      await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+      events.off();
+      expect(applyMock.applied).toEqual(["apply"]);
+      expect(events.seen).toEqual(["event", "app-refresh"]);
     });
   });
 
