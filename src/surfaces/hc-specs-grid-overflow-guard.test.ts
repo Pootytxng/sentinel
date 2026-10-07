@@ -29,8 +29,18 @@ import { join } from "path";
 // Sheets are read after CSS escapes are resolved, so `grid-template-colum\6e s` is the guarded
 // property and `.hc-specs\2d grid` is the guarded class, with the escape's terminating space
 // consumed rather than read as a descendant combinator (Codex review of PR 624, round 3).
+//
+// Three more routes closed in round 4 (Codex): a sheet is preprocessed the way the CSS parser
+// does (CR, CRLF and form feed become one newline) before escapes are read, so a backslash before
+// a form feed is a string continuation; a <style> element or a runtime stylesheet anywhere in
+// src/ is document-scoped, so the whole tree is scanned for one, not just the card's markup; and a
+// keyframes block can animate a width onto a card, so a card may only animate paint properties.
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+/** The CSS parser's input preprocessing: CR, CRLF and form feed are each one newline. */
+const preprocess = (s: string) => s.replace(/\r\n?|\f/g, "\n");
+/** A sheet as the readers below take it: preprocessed, comment-free, escapes resolved. */
+const prepare = (s: string) => decodeEscapes(stripComments(preprocess(s)));
 
 /** The index just past the string that opens at `s[i]`; a `\` inside it escapes the next character. */
 function skipString(s: string, i: number): number {
@@ -128,7 +138,7 @@ function nest(parent: string | null, sel: string): string {
     .join(", ");
 }
 
-const KEYFRAMES = "@keyframes"; // a keyframe block styles no element, so its declarations are skipped
+const KEYFRAMES = "@keyframes "; // a keyframe block's declarations sit under "@keyframes <name>"
 
 /** Every declaration in one sheet, with the full selector of the style rule it sits in. At-rule
  *  blocks are descended, and nested rules are read (App.css nests under `:root[data-motion]`). */
@@ -140,7 +150,7 @@ function declarations(file: string, text: string): Decl[] {
   const emit = () => {
     const selector = stack[stack.length - 1];
     const colon = buf.indexOf(":");
-    if (selector && selector !== KEYFRAMES && colon > 0) {
+    if (selector && colon > 0) {
       const value = buf.slice(colon + 1).replace(/!important/i, "").trim();
       out.push({ file, selector, prop: unescape(buf.slice(0, colon).trim()).toLowerCase(), value });
     }
@@ -164,7 +174,9 @@ function declarations(file: string, text: string): Decl[] {
     else if (parens === 0 && c === "{") {
       const prelude = buf.trim();
       const parent = stack[stack.length - 1] ?? null;
-      if (parent === KEYFRAMES || /^@(-\w+-)?keyframes\b/.test(prelude)) stack.push(KEYFRAMES);
+      const kf = /^@(?:-\w+-)?keyframes\s+(\S+)/.exec(prelude);
+      if (parent?.startsWith(KEYFRAMES)) stack.push(parent);
+      else if (kf) stack.push(KEYFRAMES + unescape(kf[1].replace(/^(["'])([\s\S]*)\1$/, "$2")));
       else stack.push(prelude.startsWith("@") ? parent : nest(parent, prelude));
       buf = "";
       continue;
@@ -367,12 +379,68 @@ function compound(s: string, el: El): Reach {
 const SHEET = join("src", "surfaces", "home-console.css");
 const ALL: Decl[] = (readdirSync("src", { recursive: true }) as string[])
   .filter((f) => f.endsWith(".css"))
-  .flatMap((f) => declarations(join("src", f), decodeEscapes(stripComments(readFileSync(join("src", f), "utf8")))));
+  .flatMap((f) => declarations(join("src", f), prepare(readFileSync(join("src", f), "utf8"))));
+
+/** A keyframes block can animate a width or a track onto a card, so a card may only animate paint:
+ *  every keyframes a card element runs must be readable here and declare paint properties only.
+ *  Returns one line per fault; an empty list is the proof (Codex review of PR 624, round 4). */
+function animationFaults(all: Decl[], cards: El[]): string[] {
+  const PAINT = /^(opacity|transform|translate|scale|rotate|filter|backdrop-filter|color|background(-color|-position)?|box-shadow|text-shadow|border-color|outline(-color|-offset)?|offset-distance)$/;
+  const KEYWORD = /^(none|normal|reverse|alternate(-reverse)?|infinite|forwards|backwards|both|paused|running|linear|ease(-in|-out|-in-out)?|step-(start|end)|steps\(.*|cubic-bezier\(.*|initial|inherit|unset|revert(-layer)?|auto)$/i;
+  const frames = new Map<string, Decl[]>();
+  const custom = new Map<string, string[]>(); // every value a custom property is given, in any sheet
+  for (const d of all) {
+    if (d.prop.startsWith("--")) custom.set(d.prop, [...(custom.get(d.prop) ?? []), d.value]);
+    if (!d.selector.startsWith(KEYFRAMES)) continue;
+    const name = d.selector.slice(KEYFRAMES.length);
+    frames.set(name, [...(frames.get(name) ?? []), d]);
+  }
+  /** The tokens of an animation value that could be a keyframes name. */
+  const names = (v: string) =>
+    v
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .filter((t) => !KEYWORD.test(t) && !/^[\d.+-]/.test(t))
+      .map((t) => unescape(t.replace(/^(["'])([\s\S]*)\1$/, "$2")));
+  const faults: string[] = [];
+  for (const d of all) {
+    if (!["animation", "animation-name"].includes(d.prop) || d.selector.startsWith(KEYFRAMES)) continue;
+    if (!cards.some((el) => reach(d.selector, el) !== "no")) continue;
+    if (/\b(env|attr)\(/.test(d.value)) {
+      faults.push(`${where(d)}: the guard cannot read which keyframes this runs`);
+      continue;
+    }
+    // A var() may stand for the name itself, so each one must resolve, in every sheet that sets it,
+    // to a value holding no keyframes name and no further var(). `var(--ease-out)` passes that way.
+    let value = d.value;
+    for (const m of d.value.matchAll(/var\(\s*(--[\w-]+)[^)]*\)/g)) {
+      const defs = custom.get(m[1]);
+      if (!defs) faults.push(`${where(d)}: ${m[1]} is set in no sheet under src/, so it could carry a keyframes name`);
+      for (const def of defs ?? []) {
+        if (/var\(/.test(def) || names(def).length) faults.push(`${where(d)}: ${m[1]} is "${def}", which could name a keyframes block`);
+      }
+      value = value.replace(m[0], " ");
+    }
+    for (const name of names(value)) {
+      const block = frames.get(name);
+      if (!block) {
+        faults.push(`${where(d)}: "${name}" names no keyframes block in any sheet under src/`);
+        continue;
+      }
+      for (const k of block) {
+        if (!PAINT.test(k.prop)) faults.push(`${where(d)}: @keyframes ${name} animates ${k.prop}, which is not paint`);
+      }
+    }
+  }
+  return faults;
+}
 
 /** Every declaration of `props`, in every sheet, whose rule can reach an element carrying `.cls`. */
 const on = (cls: string, props: string[]) => {
   const els = elements(cls);
-  return ALL.filter((d) => props.includes(d.prop) && els.some((el) => reach(d.selector, el) !== "no"));
+  return ALL.filter(
+    (d) => props.includes(d.prop) && !d.selector.startsWith(KEYFRAMES) && els.some((el) => reach(d.selector, el) !== "no"),
+  );
 };
 const V2 = '[data-v2="on"]';
 
@@ -414,7 +482,7 @@ function resolveMin(min: string, w: number): number {
 
 // Content-box widths the hero tile really takes, from the 380px minWidth up past the point where
 // the clamp stops mattering. 1280x720 and wider sit far above the top of this range.
-const WIDTHS = Array.from({ length: 70 }, (_, k) => 100 + k * 10);
+const WIDTHS = Array.from({ length: 74 }, (_, k) => 60 + k * 10);
 const GRID_PROPS = ["grid-template-columns", "grid-template", "grid"];
 const CARD = ["hc-specs", "hc-specs-grid", "hc-spec", "hc-spec-title", "hc-spec-rows", "hc-spec-row", "hc-spec-k", "hc-spec-v"];
 const where = (d: Decl) => `${d.file} "${d.selector}" { ${d.prop}: ${d.value} }`;
@@ -561,14 +629,12 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
   // The readers above must see what a browser sees. Each spelling here passed the round-2 guard
   // while overriding the clamp.
   it("reads escaped spellings of a property or a class the way CSS does", () => {
-    const sheet = decodeEscapes(
-      stripComments(
+    const sheet = prepare(
         '[data-v2="on"] .hc-specs\\2d grid { grid-template-colum\\6e s: 230px }\n' +
           '[class=hc\\2d spec] { wid\\74 h: 400px; content: "a\\"b" }\n' +
           ".hc-spec\\.x { width: 500px }\n" +
           ".hc-spec\\:x { width: 600px }\n" +
           ":is(.hc\\-specs-grid, .other) { grid-template-columns: 240px }",
-      ),
     );
     const decls = declarations("fixture.css", sheet);
     expect(decls.map((d) => [d.selector, d.prop, d.value])).toEqual([
@@ -587,5 +653,63 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
     expect(reach(decls[3].selector, card)).toBe("no");
     expect(reach(decls[4].selector, card)).toBe("no");
     expect(reach(decls[5].selector, grid)).toBe("named");
+  });
+
+  // The CSS parser turns a form feed into a newline before tokenizing, so a backslash before one is a
+  // string continuation and vanishes: `[class="hc-specs-grid\<FF>"]` matches the grid in a browser.
+  it("reads a backslash before a form feed as the string continuation it is (Codex round 4)", () => {
+    const decls = declarations("fixture.css", prepare('[class="hc-specs-grid\\\f"] { grid-template-columns: 230px }'));
+    expect(decls.map((d) => [d.selector, d.prop, d.value])).toEqual([['[class="hc-specs-grid"]', "grid-template-columns", "230px"]]);
+    expect(reach(decls[0].selector, elements("hc-specs-grid")[0])).toBe("named");
+  });
+
+  // A keyframes block is the one place a width can reach a card without a width declaration on a
+  // rule that names it: `animation: widen 1ms forwards` leaves the card at the block's width.
+  it("a spec card animates paint only: no keyframes it runs can set a width or a track (Codex round 4)", () => {
+    const cards = CARD.flatMap((cls) => elements(cls));
+    expect(animationFaults(ALL, cards)).toEqual([]);
+    // The check is live: a width keyframes on a card, an unknown name and a var() each fail.
+    const evasion = declarations(
+      "fixture.css",
+      prepare(
+        "@keyframes widen { to { width: 400px } }\n" +
+          "@keyframes fade { from { opacity: 0 } to { opacity: 1 } }\n" +
+          ':root[data-v2="on"] .hc-spec { animation: widen 1ms forwards }\n' +
+          ".hc-spec-row { animation-name: fade, elsewhere }\n" +
+          ":root { --card-anim: widen 1ms; --ease: ease-out }\n" +
+          ".hc-spec-v { animation: var(--card-anim) }\n" +
+          ".hc-spec-k { animation: fade 1s var(--ease) var(--nowhere) }",
+      ),
+    );
+    expect(animationFaults(evasion, cards)).toEqual([
+      'fixture.css ":root[data-v2="on"] .hc-spec" { animation: widen 1ms forwards }: @keyframes widen animates width, which is not paint',
+      'fixture.css ".hc-spec-row" { animation-name: fade, elsewhere }: "elsewhere" names no keyframes block in any sheet under src/',
+      'fixture.css ".hc-spec-v" { animation: var(--card-anim) }: --card-anim is "widen 1ms", which could name a keyframes block',
+      'fixture.css ".hc-spec-k" { animation: fade 1s var(--ease) var(--nowhere) }: --nowhere is set in no sheet under src/, so it could carry a keyframes name',
+    ]);
+  });
+
+  // A <style> element or a runtime stylesheet is document-scoped wherever it is written, so the
+  // card's markup is not the only place one could reach the card from. Every TypeScript file under
+  // src/ is read: none may hold a <style> element, and the one file allowed to build a stylesheet at
+  // runtime (the per-room accent picks in theme.ts) must not know the card's classes.
+  it("no TypeScript file under src/ injects a stylesheet that could reach a spec card (Codex round 4)", () => {
+    const RUNTIME_SHEET = new Set(["src/design/theme.ts"]);
+    const code = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const files = (readdirSync("src", { recursive: true }) as string[])
+      .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+      .map((f) => join("src", f).replace(/\\/g, "/"));
+    expect(files.length).toBeGreaterThan(100);
+    let runtime = 0;
+    for (const f of files) {
+      const src = code(f);
+      expect(src, `${f}: a <style> element is document-scoped and would beat the sheets`).not.toMatch(/<style[\s>\/]/i);
+      const builds = /createElement\(\s*["'`]style|insertRule|adoptedStyleSheets|<link[\s>\/]|dangerouslySetInnerHTML/.test(src);
+      if (!builds) continue;
+      runtime++;
+      expect(RUNTIME_SHEET.has(f), `${f}: builds a stylesheet at runtime; the guard cannot read it`).toBe(true);
+      expect(src, `${f}: a runtime stylesheet must not know the spec card`).not.toMatch(/hc-spec/);
+    }
+    expect(runtime, "the allowed runtime stylesheet still exists; retire it from RUNTIME_SHEET if not").toBe(RUNTIME_SHEET.size);
   });
 });
