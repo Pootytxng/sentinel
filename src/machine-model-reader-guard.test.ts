@@ -154,8 +154,8 @@ export function loose(source: string, file = SAMPLE): string[] {
 type Wrapper = { name: string };
 const WRAPPERS: Record<string, Wrapper> = {
   [join("src", "App.tsx")]: { name: "run" },
-  // Every Trust Ledger write (#619). Its callers live in other files, so ledger-write.test.ts holds
-  // each of them to a written-out command name.
+  // The Trust Ledger's write helper (#619). Its callers live in other files, so ledger-write.test.ts
+  // holds each of them to a written-out command name.
   [join("src", "data", "ledger-write.ts")]: { name: "writeLedger" },
 };
 

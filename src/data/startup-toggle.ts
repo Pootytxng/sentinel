@@ -7,7 +7,7 @@ import { writeLedger } from "./ledger-write";
  *  toggle that only flipped its own row left Health and History counting the ledger as it was
  *  before the click (#599). This is the one place the command is named, so a new caller cannot
  *  bring the silent toggle back; `startup-toggle.test.ts` pins both the order and the single owner.
- *  The announcement itself is `writeLedger`'s, shared with every other ledger write (#619).
+ *  The announcement itself is `writeLedger`'s, the helper the other guarded ledger writes use (#619).
  *
  *  A failed toggle throws before anything is announced: nothing changed, so nothing re-reads. */
 export async function setStartupEntryEnabled(

@@ -67,7 +67,7 @@ describe("#195 §5 — safety is never behind Pro", () => {
     // 17 files on 2026-09-29: 15 on 2026-08-26 (14 + FirstWin.tsx, which offers the undo on a
     // user's first live change and so is squarely on the path this rule protects), then
     // data/startup-toggle.ts, the one owner of the startup-toggle mutation since #599, then
-    // data/ledger-write.ts, which every frontend ledger write runs through since #619. Held near the real number, not at
+    // data/ledger-write.ts, the helper the guarded ledger writes run through since #619. Held near the real number, not at
     // a token 1, because the failure this catches is a derivation that quietly stops matching and
     // lets the guard pass on nothing. A NEW file here is expected to raise this number — the count
     // is a non-vacuity floor, not a cap on how much of the app may be safety-critical.

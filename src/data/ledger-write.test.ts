@@ -12,7 +12,10 @@ vi.mock("@tauri-apps/api/core", () => ({
 import { writeLedger, LEDGER_WRITE_COMMANDS, BACKGROUND_LEDGER_WRITERS } from "./ledger-write";
 
 // #619: ledger readers outside App (the Test room's experiment bench, the Machine Model) re-read only
-// on LEDGER_CHANGED_EVENT or a refocus. Every ledger write announces through this one helper.
+// on LEDGER_CHANGED_EVENT or a refocus. This helper is where a ledger write announces. Held to it
+// below: every call of a LEDGER_WRITE_COMMANDS command except the three ExperimentBench calls in
+// EXEMPT_UNTIL_621. Not held to it: the two BACKGROUND_LEDGER_WRITERS, whose write lands after their
+// command has returned.
 describe("writeLedger announces a ledger write, then refreshes", () => {
   const steps: string[] = [];
   const onLedger = () => steps.push("event");

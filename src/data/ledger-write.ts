@@ -3,8 +3,10 @@ import { LEDGER_CHANGED_EVENT } from "../types";
 
 /** Every registered command that writes the Trust Ledger (`history.json`) before it returns.
  *
- *  `ledger-write.test.ts` derives the same set from `src-tauri` (the commands that reach
- *  `save_history`), so a new Rust ledger writer this list misses turns that test red. */
+ *  `ledger-write.test.ts` derives the registered commands that reach `save_history` from `src-tauri`
+ *  and holds them to this list plus BACKGROUND_LEDGER_WRITERS, so a new Rust ledger writer that
+ *  neither list names turns that test red. Which of the two lists a writer belongs in (does its write
+ *  land before the command returns?) is read from the Rust by hand; the test does not derive it. */
 export const LEDGER_WRITE_COMMANDS = [
   "apply_recommendation",
   "apply_recommendations_batch",
@@ -31,8 +33,11 @@ export const BACKGROUND_LEDGER_WRITERS = ["start_tweak_trial", "start_stack_tria
  *
  *  Ledger readers outside App (the Test room's experiment bench, the Machine Model) re-read only on
  *  LEDGER_CHANGED_EVENT or a window refocus, so a write that skips the announcement leaves them
- *  showing the ledger as it was (#599, #619). Every frontend ledger write goes through here;
- *  `ledger-write.test.ts` pins that no ledger-writing command is invoked anywhere else.
+ *  showing the ledger as it was (#599, #619). Every call of a LEDGER_WRITE_COMMANDS command goes
+ *  through here except three still in `surfaces/ExperimentBench.tsx` (start, conclude and restore an
+ *  experiment), which #621 moves: `ledger-write.test.ts` pins those three by name and fails on any
+ *  other. The two BACKGROUND_LEDGER_WRITERS do not come through here, and nothing here announces
+ *  them.
  *
  *  A failed command throws before anything is announced: nothing was recorded, so nothing re-reads.
  *  A refresh that fails throws too, but after the write is recorded and announced, so a rejection
