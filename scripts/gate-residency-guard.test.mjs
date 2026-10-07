@@ -49,6 +49,8 @@ const code = (text) =>
 // `why` is required for everything that is NOT resident in `npm test`, because "nobody runs this"
 // must be a decision on the record rather than an accident.
 const RESIDENCY = {
+  // Prints, never blocks: guard 1 of #322 (deletions a wholesale adoption of the handoff docs makes).
+  "adoption-deletions.mjs": { kind: "npm-test", runner: "scripts/adoption-deletions.test.mjs" },
   "alias-propagation-harness.ps1": {
     kind: "npm-test",
     runner: "scripts/alias-propagation-harness.test.mjs",
