@@ -35,6 +35,12 @@ import { join } from "path";
 // a form feed is a string continuation; a <style> element or a runtime stylesheet anywhere in
 // src/ is document-scoped, so the whole tree is scanned for one, not just the card's markup; and a
 // keyframes block can animate a width onto a card, so a card may only animate paint properties.
+//
+// Round 5 (Codex) turned the keyframes rule from a reader into a pin: an animation value can carry
+// a keyframes name in more ways than this file should learn to parse (`animation-name: linear`, an
+// escaped `\31 widen`, a `var(--x, widen)` fallback, an `@property` initial value), so the animation
+// declarations that reach a card must be exactly the pinned ones, byte for byte, and only the
+// pinned names are looked up. A new card animation is a one-line change to the pin, made in review.
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 /** The CSS parser's input preprocessing: CR, CRLF and form feed are each one newline. */
@@ -377,59 +383,62 @@ function compound(s: string, el: El): Reach {
 }
 
 const SHEET = join("src", "surfaces", "home-console.css");
-const ALL: Decl[] = (readdirSync("src", { recursive: true }) as string[])
+const SHEETS: { file: string; text: string }[] = (readdirSync("src", { recursive: true }) as string[])
   .filter((f) => f.endsWith(".css"))
-  .flatMap((f) => declarations(join("src", f), prepare(readFileSync(join("src", f), "utf8"))));
+  .map((f) => ({ file: join("src", f), text: prepare(readFileSync(join("src", f), "utf8")) }));
+const ALL: Decl[] = SHEETS.flatMap((sh) => declarations(sh.file, sh.text));
 
-/** A keyframes block can animate a width or a track onto a card, so a card may only animate paint:
- *  every keyframes a card element runs must be readable here and declare paint properties only.
- *  Returns one line per fault; an empty list is the proof (Codex review of PR 624, round 4). */
-function animationFaults(all: Decl[], cards: El[]): string[] {
-  const PAINT = /^(opacity|transform|translate|scale|rotate|filter|backdrop-filter|color|background(-color|-position)?|box-shadow|text-shadow|border-color|outline(-color|-offset)?|offset-distance)$/;
-  const KEYWORD = /^(none|normal|reverse|alternate(-reverse)?|infinite|forwards|backwards|both|paused|running|linear|ease(-in|-out|-in-out)?|step-(start|end)|steps\(.*|cubic-bezier\(.*|initial|inherit|unset|revert(-layer)?|auto)$/i;
+/** The animation declarations a card element may carry, byte for byte after `prepare`, each with the
+ *  keyframes name it runs. The value is pinned whole so no reading of the shorthand is needed: which
+ *  token is the name, what a var() falls back to, whether an escape hides a digit. */
+const ANIMATIONS = new Map<string, string>([
+  ["v2-hc-rise 0.5s var(--ease-out) backwards", "v2-hc-rise"], // the Detected tile's entrance
+  ["v2-sheet-rise 0.26s cubic-bezier(0.2, 0.7, 0.3, 1) both", "v2-sheet-rise"], // a sheet's children, cards among them
+]);
+/** What a var() inside a pinned animation value may hold, in every sheet that sets it: one timing
+ *  function and nothing else, so it can never stand for a keyframes name or another var(). */
+const TIMING = /^(linear|ease(-in|-out|-in-out)?|step-(start|end)|steps\(\s*\d+\s*(,\s*[\w-]+\s*)?\)|cubic-bezier\(\s*[\d.]+(\s*,\s*-?[\d.]+){3}\s*\))$/;
+/** Properties a card's keyframes may animate: paint, and transforms, which never move a grid track
+ *  (the guard's contract is the tile's layout, not where a card is painted). */
+const NO_LAYOUT = /^(opacity|transform|translate|scale|rotate|filter|backdrop-filter|color|background(-color|-position)?|box-shadow|text-shadow|border-color|outline(-color|-offset)?|offset-distance)$/;
+
+/** A keyframes block can animate a width or a track onto a card, so every `animation` or
+ *  `animation-name` that reaches a card must be a pinned value (ANIMATIONS); each pinned name must be
+ *  declared, and every block of that name, in any sheet, may animate NO_LAYOUT properties only; each
+ *  var() in a pinned value must be TIMING wherever it is set and must not be an `@property`.
+ *  Returns one line per fault; an empty list is the proof (Codex review of PR 624, rounds 4 and 5). */
+function animationFaults(all: Decl[], cards: El[], sheets: { file: string; text: string }[]): string[] {
   const frames = new Map<string, Decl[]>();
-  const custom = new Map<string, string[]>(); // every value a custom property is given, in any sheet
+  const custom = new Map<string, Decl[]>(); // every value a custom property is given, in any sheet
   for (const d of all) {
-    if (d.prop.startsWith("--")) custom.set(d.prop, [...(custom.get(d.prop) ?? []), d.value]);
+    if (d.prop.startsWith("--")) custom.set(d.prop, [...(custom.get(d.prop) ?? []), d]);
     if (!d.selector.startsWith(KEYFRAMES)) continue;
     const name = d.selector.slice(KEYFRAMES.length);
     frames.set(name, [...(frames.get(name) ?? []), d]);
   }
-  /** The tokens of an animation value that could be a keyframes name. */
-  const names = (v: string) =>
-    v
-      .split(/[\s,]+/)
-      .filter(Boolean)
-      .filter((t) => !KEYWORD.test(t) && !/^[\d.+-]/.test(t))
-      .map((t) => unescape(t.replace(/^(["'])([\s\S]*)\1$/, "$2")));
+  const registered = new Set(sheets.flatMap((sh) => [...sh.text.matchAll(/@property\s+(--[\w-]+)/g)].map((m) => m[1])));
   const faults: string[] = [];
   for (const d of all) {
     if (!["animation", "animation-name"].includes(d.prop) || d.selector.startsWith(KEYFRAMES)) continue;
     if (!cards.some((el) => reach(d.selector, el) !== "no")) continue;
-    if (/\b(env|attr)\(/.test(d.value)) {
-      faults.push(`${where(d)}: the guard cannot read which keyframes this runs`);
+    const name = ANIMATIONS.get(d.value);
+    if (!name) {
+      faults.push(`${where(d)}: not a pinned card animation`);
       continue;
     }
-    // A var() may stand for the name itself, so each one must resolve, in every sheet that sets it,
-    // to a value holding no keyframes name and no further var(). `var(--ease-out)` passes that way.
-    let value = d.value;
-    for (const m of d.value.matchAll(/var\(\s*(--[\w-]+)[^)]*\)/g)) {
-      const defs = custom.get(m[1]);
-      if (!defs) faults.push(`${where(d)}: ${m[1]} is set in no sheet under src/, so it could carry a keyframes name`);
-      for (const def of defs ?? []) {
-        if (/var\(/.test(def) || names(def).length) faults.push(`${where(d)}: ${m[1]} is "${def}", which could name a keyframes block`);
+    for (const m of d.value.matchAll(/var\(\s*(--[\w-]+)/g)) {
+      if (registered.has(m[1])) faults.push(`${where(d)}: ${m[1]} is an @property, whose initial value this guard does not read`);
+      for (const def of custom.get(m[1]) ?? []) {
+        if (!TIMING.test(def.value)) faults.push(`${where(d)}: ${m[1]} is "${def.value}" in ${def.file}, not a timing function`);
       }
-      value = value.replace(m[0], " ");
     }
-    for (const name of names(value)) {
-      const block = frames.get(name);
-      if (!block) {
-        faults.push(`${where(d)}: "${name}" names no keyframes block in any sheet under src/`);
-        continue;
-      }
-      for (const k of block) {
-        if (!PAINT.test(k.prop)) faults.push(`${where(d)}: @keyframes ${name} animates ${k.prop}, which is not paint`);
-      }
+    const block = frames.get(name);
+    if (!block) {
+      faults.push(`${where(d)}: "${name}" names no keyframes block in any sheet under src/`);
+      continue;
+    }
+    for (const k of block) {
+      if (!NO_LAYOUT.test(k.prop)) faults.push(`${where(d)}: @keyframes ${name} animates ${k.prop}, which changes layout`);
     }
   }
   return faults;
@@ -664,28 +673,54 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
   });
 
   // A keyframes block is the one place a width can reach a card without a width declaration on a
-  // rule that names it: `animation: widen 1ms forwards` leaves the card at the block's width.
-  it("a spec card animates paint only: no keyframes it runs can set a width or a track (Codex round 4)", () => {
+  // rule that names it: `animation: widen 1ms forwards` leaves the card at the block's width. The
+  // value is pinned whole, so the ways of smuggling a name past a reader (a name that is also a
+  // timing keyword, an escaped leading digit, a var() fallback, an @property) all read as "not pinned".
+  it("a spec card runs only the pinned animations, and those move paint, never layout (Codex rounds 4 and 5)", () => {
     const cards = CARD.flatMap((cls) => elements(cls));
-    expect(animationFaults(ALL, cards)).toEqual([]);
-    // The check is live: a width keyframes on a card, an unknown name and a var() each fail.
-    const evasion = declarations(
-      "fixture.css",
-      prepare(
+    expect(animationFaults(ALL, cards, SHEETS)).toEqual([]);
+    expect(ANIMATIONS.size).toBe(2); // the pin is the whole allowance; widen it only in review
+    const fixture = (css: string) => ({ file: "fixture.css", text: prepare(css) });
+    const evasion = [
+      fixture(
         "@keyframes widen { to { width: 400px } }\n" +
+          "@keyframes linear { to { width: 400px } }\n" +
+          "@keyframes \\31 widen { to { width: 400px } }\n" +
           "@keyframes fade { from { opacity: 0 } to { opacity: 1 } }\n" +
           ':root[data-v2="on"] .hc-spec { animation: widen 1ms forwards }\n' +
-          ".hc-spec-row { animation-name: fade, elsewhere }\n" +
-          ":root { --card-anim: widen 1ms; --ease: ease-out }\n" +
-          ".hc-spec-v { animation: var(--card-anim) }\n" +
-          ".hc-spec-k { animation: fade 1s var(--ease) var(--nowhere) }",
+          ".hc-spec-row { animation-name: linear; animation-duration: 1ms; animation-fill-mode: forwards }\n" +
+          ".hc-spec-v { animation-name: \\31 widen }\n" +
+          ".not-card { --anim: none }\n" +
+          ".hc-spec-k { animation-name: var(--anim, widen) }\n" +
+          ".hc-spec-row { animation: fade 1s }\n",
       ),
-    );
-    expect(animationFaults(evasion, cards)).toEqual([
-      'fixture.css ":root[data-v2="on"] .hc-spec" { animation: widen 1ms forwards }: @keyframes widen animates width, which is not paint',
-      'fixture.css ".hc-spec-row" { animation-name: fade, elsewhere }: "elsewhere" names no keyframes block in any sheet under src/',
-      'fixture.css ".hc-spec-v" { animation: var(--card-anim) }: --card-anim is "widen 1ms", which could name a keyframes block',
-      'fixture.css ".hc-spec-k" { animation: fade 1s var(--ease) var(--nowhere) }: --nowhere is set in no sheet under src/, so it could carry a keyframes name',
+    ];
+    expect(animationFaults(evasion.flatMap((sh) => declarations(sh.file, sh.text)), cards, evasion)).toEqual([
+      'fixture.css ":root[data-v2="on"] .hc-spec" { animation: widen 1ms forwards }: not a pinned card animation',
+      'fixture.css ".hc-spec-row" { animation-name: linear }: not a pinned card animation',
+      'fixture.css ".hc-spec-v" { animation-name: 1widen }: not a pinned card animation',
+      'fixture.css ".hc-spec-k" { animation-name: var(--anim, widen) }: not a pinned card animation',
+      'fixture.css ".hc-spec-row" { animation: fade 1s }: not a pinned card animation',
+    ]);
+    // The pinned value itself is only as safe as what stands behind it: a second block under the
+    // pinned name, a var() set to something other than a timing function, or an @property for it.
+    const behind = [
+      fixture(
+        "@keyframes v2-hc-rise { to { opacity: 1 } }\n" +
+          "@keyframes v2\\-hc-rise { to { width: 400px } }\n" +
+          ':root { --ease-out: widen } .other { --ease-out: cubic-bezier(0.22, 1, 0.36, 1) }\n' +
+          '@property --ease-out { syntax: "*"; inherits: false; initial-value: widen }\n' +
+          ".hc-spec { animation: v2-hc-rise 0.5s var(--ease-out) backwards }\n",
+      ),
+    ];
+    expect(animationFaults(behind.flatMap((sh) => declarations(sh.file, sh.text)), cards, behind)).toEqual([
+      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s var(--ease-out) backwards }: --ease-out is an @property, whose initial value this guard does not read',
+      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s var(--ease-out) backwards }: --ease-out is "widen" in fixture.css, not a timing function',
+      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s var(--ease-out) backwards }: @keyframes v2-hc-rise animates width, which changes layout',
+    ]);
+    const missing = [fixture(".hc-spec { animation: v2-hc-rise 0.5s var(--ease-out) backwards }")];
+    expect(animationFaults(missing.flatMap((sh) => declarations(sh.file, sh.text)), cards, missing)).toEqual([
+      'fixture.css ".hc-spec" { animation: v2-hc-rise 0.5s var(--ease-out) backwards }: "v2-hc-rise" names no keyframes block in any sheet under src/',
     ]);
   });
 
