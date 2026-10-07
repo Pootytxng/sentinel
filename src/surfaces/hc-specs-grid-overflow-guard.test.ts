@@ -53,6 +53,11 @@ import { join } from "path";
 // (which would hand its children to the grid as items) or carry a grid placement; and every inline
 // style write under src/ is pinned by file and property, with the Web Animations API banned
 // outright, so no runtime write can size a card.
+//
+// Round 8 (Codex) closed two more with pins, not reading: the spec grid's track value is pinned
+// whole, so a second track inside the repeat() cannot ride beside the clamp; and the card markup
+// carries no handler, id or class write, while every runtime class or id write under src/ is pinned
+// by file and name and no rule naming a pinned class may size an element that could be a card.
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 /** The CSS parser's input preprocessing: CR, CRLF and form feed are each one newline. */
@@ -495,6 +500,9 @@ function resolveMin(min: string, w: number): number {
 // Content-box widths the hero tile really takes, from the 380px minWidth up past the point where
 // the clamp stops mattering. 1280x720 and wider sit far above the top of this range.
 const WIDTHS = Array.from({ length: 74 }, (_, k) => 60 + k * 10);
+/** The spec grid's one track list. Pinned whole: a second track inside the repeat() would pass every
+ *  check on the first (Codex round 8), so the value itself is the guard. */
+const TRACKS = "repeat(auto-fit, minmax(min(230px, 100%), 1fr))";
 const GRID_PROPS = ["grid-template-columns", "grid-template", "grid"];
 const CARD = ["hc-specs", "hc-specs-grid", "hc-spec", "hc-spec-title", "hc-spec-rows", "hc-spec-row", "hc-spec-k", "hc-spec-v"];
 const where = (d: Decl) => `${d.file} "${d.selector}" { ${d.prop}: ${d.value} }`;
@@ -512,6 +520,8 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
       expect(d.prop, `${where(d)}: set the spec grid's tracks with grid-template-columns`).toBe(
         "grid-template-columns",
       );
+      expect(d.value.replace(/\s+/g, " ").trim(), `${where(d)}: the spec grid's tracks are pinned whole`).toBe(TRACKS);
+      // What the pin holds, spelled out: one auto-fit repeat whose minimum never exceeds the container.
       const reps = autoRepeats(d.value);
       const whole = reps.length === 1 && reps[0].start === 0 && reps[0].end === d.value.length;
       expect(whole, `${where(d)}: must be exactly one repeat(auto-fit, minmax(...))`).toBe(true);
@@ -640,12 +650,19 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
   // could style the node, or an element the guard does not read (Codex review of PR 624, round 3).
   // The guard reads each card element's classes from its static className, so a computed one would
   // hide a class from it.
+  // A handler on a card element would hand it to code as currentTarget, and a class or id added
+  // there at runtime could match a rule the guard reads as unreachable (Codex round 8). So the card
+  // markup carries no handler, no id and no class or attribute write: its class set is the static one.
   it("SpecBox sets no inline style by any spelling, and no class the guard cannot read", () => {
     for (const src of [SITE, SPECBOX]) {
       expect(src).not.toMatch(/\bstyle\b/i);
       expect(src).not.toMatch(/\.\.\./);
       expect(src).not.toMatch(/createElement|dangerouslySetInnerHTML|\bref=|<link/i);
       expect(src).not.toMatch(/className=\{/);
+      expect(src, "a handler on a card element would hand it to code").not.toMatch(/\bon[A-Z]\w*=/);
+      expect(src, "a card element carries no id and no runtime class or attribute write").not.toMatch(
+        /\bid=|classList|className\s*=[^"]|setAttribute/,
+      );
     }
     expect(SPECBOX).toContain('className="hc-spec-v');
     // The tree it reads is the card as rendered: a value sits in a row, in the rows, in a card, in the grid.
@@ -778,6 +795,11 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
   // renders it, which holds no card element and sets only custom properties; and every inline style
   // write anywhere else is pinned by file and property, each a paint property or named here with its
   // reason, so a new write is a visible review change (Codex round 7).
+  const code = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const SOURCES = (readdirSync("src", { recursive: true }) as string[])
+    .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+    .map((f) => join("src", f).replace(/\\/g, "/"));
+
   it("no TypeScript file under src/ sizes a spec card at runtime (Codex round 7)", () => {
     const INLINE_WRITES = new Map<string, string[]>([
       ["src/design/bento/Sheet.tsx", ["opacity", "transform", "transition"]], // a sheet's own panel, paint only
@@ -787,12 +809,8 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
       ["src/surfaces/rig/RigPart.tsx", ["cursor"]],
     ]);
     const RENDERS_CARD = "src/surfaces/HomeConsole.tsx";
-    const code = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    const files = (readdirSync("src", { recursive: true }) as string[])
-      .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
-      .map((f) => join("src", f).replace(/\\/g, "/"));
     const found = new Map<string, string[]>();
-    for (const f of files) {
+    for (const f of SOURCES) {
       const src = code(f);
       expect(src, `${f}: the Web Animations API could size a card with no sheet`).not.toMatch(/\.animate\(|KeyframeEffect|new Animation\(/);
       if (f !== RENDERS_CARD) expect(src, `${f}: only HomeConsole.tsx may know the spec card's classes`).not.toMatch(/hc-spec/);
@@ -823,5 +841,61 @@ describe("Health's Detected tile — spec cards never overflow their tile (#614)
     expect(hc.match(/setProperty\(/g)?.length, "every setProperty in HomeConsole.tsx names its property as a literal").toBe(
       hc.match(/setProperty\(\s*["'`]/g)?.length,
     );
+  });
+
+  // A class added at runtime is the one way a rule the guard reads as unreachable (its class is in
+  // no static className) could reach a card (Codex round 8). The card markup takes no handler and
+  // no write (above), so no code holds a card element to add one; and every class or id write under
+  // src/ is pinned here by file and literal name, so a new one is a visible review change. For each
+  // pinned class, no rule naming it may set a layout property on a subject that could be a card: the
+  // rule either styles only the element that took the class, which is never a card, or paints.
+  it("no runtime class or id write under src/ can reach a spec card (Codex round 8)", () => {
+    const CLASS_WRITES = new Map<string, string[]>([
+      ["src/design/console/ReticleCursor.tsx", ["lc-has-reticle"]], // the reticle's scope element
+      ["src/main.tsx", ["overlay-mode"]], // document.documentElement
+      ["src/surfaces/Learn.tsx", ["lx-flash"]], // a Learn entry it holds by ref
+    ]);
+    const ID_WRITES = new Map<string, string[]>([
+      ["src/design/theme.ts", ["ROOM_ACCENTS_STYLE_ID"]], // the <style> element it creates (RUNTIME_SHEET)
+    ]);
+    const classes = new Map<string, string[]>();
+    const ids = new Map<string, string[]>();
+    for (const f of SOURCES) {
+      const src = code(f);
+      expect(src, `${f}: a class or id write the guard cannot pin`).not.toMatch(
+        /\.className\s*[+]?=[^=]|classList\.value|classList\[|setAttribute\(\s*["'`](class|id)\b|setAttributeNode|setNamedItem/,
+      );
+      const names: string[] = [];
+      for (const m of src.matchAll(/\.classList\.(add|remove|toggle|replace)\(([^)]*)\)/g)) {
+        const args = m[2];
+        const lits = [...args.matchAll(/(["'`])([^"'`]*)\1/g)].map((l) => l[2]);
+        expect(args.replace(/(["'`])[^"'`]*\1|[\s,]/g, ""), `${f}: classList.${m[1]}(${args}) names a class the guard cannot read`).toBe("");
+        names.push(...lits);
+      }
+      if (names.length) classes.set(f, [...new Set(names)].sort());
+      const idw = [...src.matchAll(/\.id\s*=(?!=)\s*([^;\n]+)/g)].map((m) => m[1].trim());
+      if (idw.length) ids.set(f, [...new Set(idw)].sort());
+    }
+    expect([...classes.entries()].sort()).toEqual([...CLASS_WRITES.entries()].sort());
+    expect([...ids.entries()].sort()).toEqual([...ID_WRITES.entries()].sort());
+    // The one id write names a constant; it is the runtime stylesheet's own id, and no rule uses it.
+    const theme = code("src/design/theme.ts");
+    expect(theme).toContain('const ROOM_ACCENTS_STYLE_ID = "compy-room-accents"');
+    expect(ALL.filter((d) => d.selector.includes("#compy-room-accents")).map(where)).toEqual([]);
+    // A pinned class may style the element that took it; it may not size anything that could be a card.
+    const cards = CARD.map((cls) => elements(cls)[0]);
+    const PAINTS = (p: string) => NO_LAYOUT.test(p) || /^(cursor|pointer-events|user-select|animation(-[a-z]+)?)$/.test(p);
+    for (const name of [...CLASS_WRITES.values()].flat()) {
+      for (const d of ALL) {
+        if (!d.selector.includes("." + name)) continue;
+        for (const sel of splitTop(d.selector, ",")) {
+          const { cs } = compounds(sel);
+          const subject = cs[cs.length - 1];
+          if (subject.includes("." + name)) continue; // styles the element that took the class
+          const couldBeCard = cards.some((el) => compound(subject, el) !== "no");
+          if (couldBeCard) expect(PAINTS(d.prop), `${where(d)}: a runtime class sizes an element that could be a card`).toBe(true);
+        }
+      }
+    }
   });
 });
