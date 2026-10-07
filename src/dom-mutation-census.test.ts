@@ -425,17 +425,20 @@ function censusFile(f: string, out: Found) {
   const visit = (node: ts.Node) => {
     ts.forEachChild(node, visit);
     if (ts.isJsxOpeningLikeElement(node)) jsxRule(node);
-    if (!node.parent || inTypePosition(node) || !ts.isExpression(node) || isDeclarationName(node)) return;
-    if (ts.isJsxAttribute(node.parent) && node.parent.name === node) return;
 
     // A guarded class name may be spelled only as a class attribute: not handed to a component by
-    // another prop, not built into a selector, not kept for a later className.
-    if (f !== PINS && ts.isStringLiteralLike(node) && GUARDED_TEXT.test(node.text) && !isClassAttrValue(node)) {
+    // another prop, not built into a selector, not kept for a later className. Both checks run before
+    // the expression filter below, which takes a JSX attribute's own string for a declaration name:
+    // behind it `<div data-cls="hc-spec" />` was never read (round-11 falsification, route r11-1e).
+    if (node.parent && f !== PINS && ts.isStringLiteralLike(node) && GUARDED_TEXT.test(node.text) && !isClassAttrValue(node)) {
       fault(node, "a guarded class name in a string that is not a class attribute");
     }
-    if (ts.isTemplateExpression(node) && [node.head, ...node.templateSpans.map((s) => s.literal)].some((l) => GUARDED_TEXT.test(l.text))) {
+    if (node.parent && ts.isTemplateExpression(node) && [node.head, ...node.templateSpans.map((s) => s.literal)].some((l) => GUARDED_TEXT.test(l.text))) {
       fault(node, "a guarded class name in a template");
     }
+
+    if (!node.parent || inTypePosition(node) || !ts.isExpression(node) || isDeclarationName(node)) return;
+    if (ts.isJsxAttribute(node.parent) && node.parent.name === node) return;
 
     // Destructuring a DOM value hands its surfaces out as aliases.
     if (ts.isVariableDeclaration(node.parent) && node.parent.initializer === node && !ts.isIdentifier(node.parent.name)) {
