@@ -1,14 +1,20 @@
-// The command line the launcher calls. Prints a verdict; writes nothing.
+// The command line the launcher calls. Prints a verdict; writes nothing itself.
 //
 //   node tools/entry/cli.mjs preflight [--issue N] [--scope "<backticked paths>"] [--json]
 //   node tools/entry/cli.mjs choose                        (asks which task, prints the answer)
 //   node tools/entry/cli.mjs assert                        (runs inside the session)
 //   node tools/entry/cli.mjs adopt --issue N --session <id> (verifies a session nobody launched)
+//   node tools/entry/cli.mjs renew --issue N --session <id> (renews the lease that session holds)
 //   node tools/entry/cli.mjs bridge  --folder <path>       (waits for a LIVE editor on that folder)
 //   node tools/entry/cli.mjs handoff --folder <path>       (waits for the session to take the launch)
 //
 // Exit 0 = PASS, 1 = REFUSE, 2 = nothing to do / a choice is needed. The launcher branches on that,
 // so a refusal can never be mistaken for a launch.
+//
+// `renew` is the one command that ends in a write, and it is not this file that writes (#648). A
+// lease is posted from the launcher and nowhere else, so `renew` checks its two arguments and runs
+// launch.mjs as the program. The launcher asks the holder question, posts, and exits; that exit is
+// relayed unchanged, 3 included (the launcher could not finish).
 //
 // `bridge` and `handoff` are the two waits at the end of the journey, and they live here rather than
 // in the shell for one reason: a polling loop written in PowerShell is a polling loop no guard can
@@ -20,8 +26,9 @@
 // still looking at a live prompt. Cancelling prints nothing on stdout, which is what stops the
 // launcher from writing anything at all.
 
+import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gatherFacts, loadPolicy, readBoard, CODE_ROOT } from "./gather.mjs";
 import { BRIDGE_TIMEOUT_MS, HANDOFF_TIMEOUT_MS, waitForBridge, waitForHandoff } from "./ide-bridge.mjs";
@@ -169,6 +176,41 @@ export function cmdAdopt(argv, { run = adopt, log = console.log, err = console.e
   return result.ok ? 0 : 1;
 }
 
+/**
+ * The launcher, run as the program: this node, that file, and nothing between them. A lease is
+ * posted from the launcher alone (#643), so the renew command hands over to it instead of posting.
+ */
+export const renewLauncherCommand = ({ issue, session }) => ({
+  file: process.execPath,
+  args: [join(dirname(fileURLToPath(import.meta.url)), "launch.mjs"), "--renew", "--issue", String(issue), "--session", session],
+});
+
+const runLauncher = (command) => {
+  const { file, args } = renewLauncherCommand(command);
+  return spawnSync(file, args, { stdio: "inherit", windowsHide: true });
+};
+
+/**
+ * Renew the lease the calling session already holds (#648). Both arguments are required and neither
+ * has a default: a renewal that guessed its issue or its session would be renewing somebody's lease.
+ * Everything else is the launcher's to measure, and its exit is relayed as it stands.
+ */
+export function cmdRenew(argv, { run = runLauncher, err = console.error } = {}) {
+  const issueArg = argOf(argv, "--issue");
+  const session = argOf(argv, "--session");
+  if (typeof issueArg !== "string" || !/^[1-9]\d*$/.test(issueArg)) {
+    err(`\n  ${C.red}REFUSE${C.off}  --issue <number> is required: a renewal names the issue its lease is on. Nothing was run.\n`);
+    return 1;
+  }
+  if (typeof session !== "string" || session.trim() === "" || session.startsWith("--")) {
+    err(`\n  ${C.red}REFUSE${C.off}  --session <id> is required: a renewal names the session that holds the lease. Nothing was run.\n`);
+    return 1;
+  }
+  const result = run({ issue: Number(issueArg), session }) ?? {};
+  if (result.error) err(`\n  ${C.red}ERROR${C.off}  the launcher could not be run: ${String(result.error?.message ?? result.error)}\n`);
+  return Number.isInteger(result.status) ? result.status : 3;
+}
+
 /** Both waits take the same arguments and report the same way; only the question differs. */
 async function waitCommand(argv, { wait, ready, waiting, gaveUp, timeout }) {
   const folder = argOf(argv, "--folder");
@@ -229,9 +271,9 @@ const invokedDirectly = (() => {
 if (invokedDirectly) {
   const argv = process.argv.slice(2);
   const cmd = argv[0] ?? "preflight";
-  const run = { preflight: cmdPreflight, choose: () => cmdChoose(), assert: cmdAssert, adopt: cmdAdopt, bridge: cmdBridge, handoff: cmdHandoff }[cmd];
+  const run = { preflight: cmdPreflight, choose: () => cmdChoose(), assert: cmdAssert, adopt: cmdAdopt, renew: cmdRenew, bridge: cmdBridge, handoff: cmdHandoff }[cmd];
   if (!run) {
-    console.error(`unknown command "${cmd}" — expected preflight | choose | assert | adopt | bridge | handoff`);
+    console.error(`unknown command "${cmd}" — expected preflight | choose | assert | adopt | renew | bridge | handoff`);
     process.exit(2);
   }
   process.exit(await run(argv.slice(1)));

@@ -14,12 +14,16 @@
 //
 // Prints one JSON object on stdout for the launcher to consume. Human-facing narration goes to
 // stderr so the two never get mixed up.
+//
+// `--renew --issue N --session <id>` is the other entry (#648): it renews the lease a session already
+// holds, through the same claim step, and starts nothing. See `renew` below.
 
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { userInfo } from "node:os";
+import { basename, dirname, join, win32 } from "node:path";
 import {
   FULL_SHA,
   HOST_DIR,
@@ -32,15 +36,24 @@ import {
   refreshCreateBase,
   CODE_ROOT,
 } from "./gather.mjs";
-import { reconcile, selectTask } from "./preflight.mjs";
+import { CALLER_MAX_HOPS, callerWitness, isIdentified, isInstallerProgram, isSessionProgram, reconcile, reconcileHolder, selectTask } from "./preflight.mjs";
+import { classifyProcesses, WATCHED } from "./processes.mjs";
 import { verdictLines } from "./render.mjs";
 import { hookRepairPlan, repairHooks, verifyHooks } from "./hooks-verify.mjs";
 import { contextLabel } from "./select.mjs";
-import { postClaim, planRenew, execPlan } from "./claim.mjs";
+import { postClaim } from "./claim.mjs";
 import { writeBrief } from "./brief.mjs";
 import { resolveWindow } from "./settings-resolve.mjs";
 import { establishTier, restampTier } from "./tier.mjs";
-import { invalidateBoardCache, makeToken, writeToken } from "./session-assert.mjs";
+import {
+  canonicalizePath,
+  CORRUPT,
+  invalidateBoardCache,
+  makeToken,
+  readLineage,
+  samePath,
+  writeToken,
+} from "./session-assert.mjs";
 import { pruneDeadOverlay, writeOverlay } from "./overlay.mjs";
 
 // Narration goes to stderr so stdout stays exactly one JSON line — and, when a log file is named, to
@@ -238,6 +251,53 @@ export function repairHooksIfSafe({ facts, verdict, controlDir, dryRun = false, 
   return { attempted: true, ok: true, verdict: reconcile(repairedFacts), facts: repairedFacts, disclosure: plan.disclosure, regathered: Boolean(fresh) };
 }
 
+const UNDECLARED_SCOPE = "not declared at launch — narrow it before the first write (#358)";
+
+/**
+ * The claim step. A first claim and a renewal are the same write (#648).
+ *
+ * A renewal used to post one line saying the date had moved. That line has no claim header, so
+ * nothing that reads the thread could see it: the board showed the new date while the thread, which
+ * is where a lease is read from, kept the old one. A renewal now re-posts the whole claim through the
+ * writer a first claim uses, measured verdict included, and that writer still refuses any verdict
+ * that is not PASS.
+ *
+ * The writer posts the comment first and the board follows it, and the effect is recorded only once
+ * the writer returns: a comment that fails leaves nothing for a later stage to act on.
+ *
+ * A renewal restates the lease's own scope, never the scope this run was handed. A different scope
+ * is a different claim.
+ */
+export function postLeaseClaim({ task, target, facts, verdict, self, effects, post = postClaim, projectIds = readProjectIds }) {
+  const ids = projectIds(task.itemId);
+  const expires = new Date(facts.now.getTime() + 12 * 3600_000).toISOString().slice(0, 10);
+  const renewing = Boolean(facts.claim);
+  say(renewing ? "  renewing the existing claim" : "  posting the ownership claim");
+  post({
+    issue: task.number,
+    verdict,
+    ids,
+    facts: {
+      lane: self.lane,
+      executor: self.executor ?? self.lane,
+      repository: REPO,
+      folder: target.path,
+      branch: target.branch,
+      // The scope the drift readers and the next dispatch will be measured against (#358) —
+      // never the title, which names no path and so claims nothing.
+      scope: renewing ? (facts.claim.scope ?? UNDECLARED_SCOPE) : (facts.scope?.text ?? UNDECLARED_SCOPE),
+      started: facts.now.toISOString().slice(0, 10),
+      expires,
+      nextAction: task.nextAction ?? "(set by the session)",
+      processes: facts.processes,
+    },
+  });
+  const detail = `#${task.number} until ${expires}`;
+  if (renewing) effects.record("renewed the ownership claim", detail);
+  else effects.record("posted the ownership claim", detail);
+  return { expires, renewing };
+}
+
 export async function launch({ issue = null, dryRun = false, noOverlay = false, controlDir, self = { lane: "Claude Code" }, scope = null }) {
   // Every refusal below carries this, so "nothing was written" is proven rather than assumed.
   const effects = new Effects();
@@ -342,36 +402,9 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
     });
   }
 
-  // 3. claim -- refuses on its own if the verdict is not PASS
-  const ids = readProjectIds(task.itemId);
-  const expires = new Date(facts.now.getTime() + 12 * 3600_000).toISOString().slice(0, 10);
-  if (facts.claim) {
-    say("  renewing the existing claim");
-    execPlan(planRenew({ issue: task.number, ids, until: expires }), {});
-    effects.record("renewed the ownership claim", `#${task.number} until ${expires}`);
-  } else {
-    say("  posting the ownership claim");
-    postClaim({
-      issue: task.number,
-      verdict,
-      ids,
-      facts: {
-        lane: self.lane,
-        executor: self.executor ?? self.lane,
-        repository: REPO,
-        folder: target.path,
-        branch: target.branch,
-        // The scope the drift readers and the next dispatch will be measured against (#358) —
-        // never the title, which names no path and so claims nothing.
-        scope: facts.scope?.text ?? "not declared at launch — narrow it before the first write (#358)",
-        started: facts.now.toISOString().slice(0, 10),
-        expires,
-        nextAction: task.nextAction ?? "(set by the session)",
-        processes: facts.processes,
-      },
-    });
-    effects.record("posted the ownership claim", `#${task.number} until ${expires}`);
-  }
+  // 3. claim -- refuses on its own if the verdict is not PASS. A claim already on the thread is
+  //    renewed by the same write: the whole claim again, never a one-line note (#648).
+  const { expires } = postLeaseClaim({ task, target, facts, verdict, self, effects });
 
   // The claim IS the thing the session about to start will be verified against (#216), and the board
   // is cached for ten minutes so the write guard can ask on every keystroke. Against a cache written
@@ -464,18 +497,325 @@ export async function launch({ issue = null, dryRun = false, noOverlay = false, 
   };
 }
 
+/**
+ * How a renewing command asks the machine about itself (#648). Each reader below runs one bounded,
+ * read-only command and hands back a list. A reader that fails, times out or answers with anything
+ * else THROWS: a reading that was not taken is never an empty one, and the holder check refuses on it.
+ *
+ * The stock sweep (`listProcesses`) answers [] when it cannot run, because a fresh entry is not held
+ * up by a probe. A renewal is admitted on these readings, so the same silence here is a refusal.
+ */
+const probe = (file, args) => execFileSync(file, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 20000, windowsHide: true });
+const powershell = (script) => probe("pwsh", ["-NoProfile", "-NonInteractive", "-Command", script]);
+
+function listOf(text) {
+  const parsed = JSON.parse(String(text ?? "").trim());
+  if (!Array.isArray(parsed)) throw new Error("the reader did not answer with a list");
+  return parsed;
+}
+
+/**
+ * The native session program: the per-user install, and only that file. PATH is not searched and no
+ * environment variable is read, the home folder included, so nothing a command can be handed decides
+ * which program is asked for the session list, or which file a session program must be running from.
+ */
+export function nativeCli({ exists = existsSync, home = null } = {}) {
+  let base = home;
+  if (base === null) {
+    try {
+      // From the account itself. `os.homedir()` would take an environment variable's word first.
+      base = userInfo().homedir;
+    } catch {
+      base = null;
+    }
+  }
+  if (typeof base !== "string" || base.trim() === "") return null;
+  const file = win32.join(base, ".local", "bin", "claude.exe");
+  return exists(file) ? file : null;
+}
+
+/**
+ * The one script that reads a command's ancestry: from one process id upward, a process at a time,
+ * stopping at the first session program or after as many steps as the check will read. It asks who
+ * each process is (id, parent, creation instant, name, the file it runs from) and never for a command
+ * line. The id is the only thing put into the script, and only a positive whole number is.
+ */
+export function chainScript(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) throw new Error("a chain is read from one process id: a positive whole number, and nothing else");
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    `$id = ${pid}`,
+    "$rows = @()",
+    `for ($i = 0; $i -lt ${CALLER_MAX_HOPS}; $i++) { $p = Get-CimInstance Win32_Process -Filter "ProcessId = $id"; if ($null -eq $p) { break }; $c = $null; if ($null -ne $p.CreationDate) { $c = $p.CreationDate.ToUniversalTime().ToString('o') }; $rows += [pscustomobject]@{ pid = [int]$p.ProcessId; parentPid = [int]$p.ParentProcessId; created = $c; name = $p.Name; executable = $p.ExecutablePath }; if ($p.Name -ieq 'claude.exe') { break }; $id = [int]$p.ParentProcessId }`,
+    "ConvertTo-Json -InputObject @($rows) -Compress",
+  ].join("; ");
+}
+
+/** A command's process chain, the command first and whatever the read stopped at last. */
+export function readChain({ pid, run = powershell }) {
+  return listOf(run(chainScript(pid)));
+}
+
+/** The native program's own list of live sessions, asked of the program itself: no shell, no folder and no session id in the question. */
+export function readSessions({ cli, run = probe }) {
+  if (typeof cli !== "string" || cli.trim() === "") throw new Error("there is no native session program to ask");
+  return listOf(run(cli, ["agents", "--json"]));
+}
+
+/**
+ * Which processes the by-process reading asks for: everything the stock sweep watches, and the
+ * installers it does not. An install is machine-wide, and the stock list asks for none by name.
+ */
+export function snapshotFilter() {
+  return [...WATCHED.map((name) => `Name='${name}'`), "Name='msiexec.exe'", "Name LIKE '%setup.exe'", "Name LIKE '%installer.exe'"].join(" or ");
+}
+
+/**
+ * One reading of every watched process, each with its id and creation instant, so one process can be
+ * told from another of the same name. Command lines are read here to classify each process, and
+ * `observeHolder` drops them as soon as it has.
+ */
+export function readSnapshot({ run = powershell } = {}) {
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    `$rows = @(Get-CimInstance Win32_Process -Filter "${snapshotFilter()}" | ForEach-Object { $c = $null; if ($null -ne $_.CreationDate) { $c = $_.CreationDate.ToUniversalTime().ToString('o') }; [pscustomobject]@{ pid = [int]$_.ProcessId; created = $c; name = $_.Name; commandLine = $_.CommandLine } })`,
+    "ConvertTo-Json -InputObject $rows -Compress",
+  ].join("; ");
+  return listOf(run(script));
+}
+
+/**
+ * One process of a by-process reading, classified on its own by the stock classifier, its command
+ * line dropped. `contends` is true, false, or null where the machine did not say enough to tell: a
+ * builder or a session whose command line could not be read may be running anywhere, and unknown is
+ * not "elsewhere".
+ */
+function judgeProcess(p, { folder, classify }) {
+  const row = p && typeof p === "object" ? p : {};
+  const name = typeof row.name === "string" ? row.name : "";
+  const line = typeof row.commandLine === "string" ? row.commandLine : "";
+  const seen = { pid: Number.isInteger(row.pid) ? row.pid : null, created: typeof row.created === "string" ? row.created : null, name };
+  const as = (commandLine) => classify([{ name, commandLine }], { folder })[0] ?? null;
+  const group = as(line);
+  if (!group) return { ...seen, contends: null, note: "it could not be classified" };
+  if (group.contends) return { ...seen, contends: true, note: group.note };
+  if (line.trim() === "" && as(folder)?.contends) return { ...seen, contends: null, note: "its command line could not be read" };
+  return { ...seen, contends: false, note: null };
+}
+
+/**
+ * What a renewing command measures about itself (#648). Nothing here is taken from an argument or
+ * from the environment: the session id it is handed is only carried, for `callerWitness` to check.
+ *
+ *   1. Its own process chain, from `process.pid` up to the first session program.
+ *   2. The native session list, asked of the native program, kept only where it names that program's
+ *      process or the session id handed in. Nobody else's session leaves this function.
+ *   3. If, and only if, those establish the command (`callerWitness`): the root the native list gives
+ *      that session, and one by-process reading of what is running, each process classified on its
+ *      own. Kept: the command's own chain, whatever contends or could not be told, and whatever the
+ *      check refuses on sight (a process named twice, one not identified, an installer). The rest is
+ *      a count, and every command line is dropped.
+ *   4. The session record kept for that root, and whether it is live. Live is what was just measured
+ *      and nothing more is read for it: the command established under its session, and that root's
+ *      record naming the same session and the same folder. A record with no established command
+ *      behind it, or one that names another session or folder, is unknown. A process id written in a
+ *      record, the age of any file and whatever the command was handed are not readings of this session.
+ *
+ * Without an established command there is no native root. The work tree the command stands in is then
+ * read so a refusal can show it, and it is reported as the guess it is: `reconcileHolder` never admits
+ * on it. A reader that fails leaves its reading marked unread, never empty. Nothing is decided here,
+ * and a reading is one moment: `renew` takes it again immediately before the write.
+ */
+export function observeHolder({
+  sessionId,
+  cwd = process.cwd(),
+  pid = process.pid,
+  cli = nativeCli(),
+  chain = readChain,
+  sessions = readSessions,
+  sweep = readSnapshot,
+  classify = classifyProcesses,
+  clock = () => new Date(),
+  toplevel = (dir) => git(dir, ["rev-parse", "--show-toplevel"]),
+  read = readLineage,
+} = {}) {
+  // A reader that threw, or answered with something that is not a list, took no reading.
+  const taken = (reader) => {
+    try {
+      const answer = reader();
+      return Array.isArray(answer) ? answer : null;
+    } catch {
+      return null;
+    }
+  };
+  const isRow = (x) => Boolean(x) && typeof x === "object";
+
+  const traced = taken(() => chain({ pid }));
+  const hops = (traced ?? []).map((p) => (isRow(p) ? { pid: p.pid, parentPid: p.parentPid, created: p.created, name: p.name, executable: p.executable } : null));
+  const host = hops.length ? hops[hops.length - 1] : null;
+  const program = typeof cli === "string" && cli.trim() !== "" ? cli : null;
+
+  // Asked only once the chain has reached a session program, and only of the native program.
+  const fleet = host && isSessionProgram(host.name) && program ? taken(() => sessions({ cli: program })) : null;
+  const hostPid = Number.isInteger(host?.pid) ? host.pid : null;
+  const handed = typeof sessionId === "string" && sessionId !== "" ? sessionId : null;
+  const entries = (fleet ?? [])
+    .filter((e) => isRow(e) && ((hostPid !== null && e.pid === hostPid) || (handed !== null && e.sessionId === handed)))
+    .map((e) => ({ pid: e.pid, sessionId: e.sessionId, kind: e.kind, cwd: e.cwd, startedAt: e.startedAt }));
+
+  const measured = { pid, cli: program, chain: { ok: traced !== null, rows: hops }, sessions: { ok: fleet !== null, entries } };
+  const witness = callerWitness({ sessionId, caller: measured });
+
+  let root = { path: null, source: null };
+  let snapshot = { ok: false, takenAt: null, rows: [], others: null };
+  if (witness.verified) {
+    const folder = canonicalizePath(witness.root) || null;
+    root = { path: folder, source: "native session list" };
+    const raw = folder ? taken(() => sweep()) : null;
+    if (raw !== null) {
+      const judged = raw.map((p) => judgeProcess(p, { folder, classify }));
+      // What the check must see is never folded into the count, however quiet it was judged: a process
+      // named twice, one the reading did not identify, and an installer.
+      const times = new Map();
+      for (const p of judged) times.set(p.pid, (times.get(p.pid) ?? 0) + 1);
+      const telling = (p) => times.get(p.pid) > 1 || !isIdentified(p) || isInstallerProgram(p.name);
+      const kept = judged.filter((p) => witness.pids.includes(p.pid) || p.contends !== false || telling(p));
+      // Stamped once the reading is in hand: it says what was running at about this moment, and nothing about later.
+      snapshot = { ok: true, takenAt: clock().toISOString(), rows: kept, others: judged.length - kept.length };
+    }
+  } else {
+    // An inferred working directory may be a folder inside the work tree, and the session record is
+    // kept per work tree. Outside any work tree there is no root, and no record to look for.
+    try {
+      const top = canonicalizePath(toplevel(cwd));
+      if (top) root = { path: top, source: "git toplevel of the working directory" };
+    } catch {
+      // Left unmeasured: the holder check refuses a root nobody could read.
+    }
+  }
+
+  const found = root.path ? read({ root: root.path }) : null;
+  const record = found && found !== CORRUPT && typeof found === "object" ? found : null;
+  // Live is this measurement and no other: the command established under its session, and the record
+  // kept for that session's root naming the same session and the same folder. No reader is asked.
+  const own = witness.verified && record !== null && record.sessionId === witness.session.sessionId && typeof record.folder === "string" && samePath(record.folder, root.path);
+  return {
+    sessionId,
+    caller: { ...measured, snapshot },
+    root,
+    record,
+    recordState: found === CORRUPT ? "corrupt" : record ? "ok" : "absent",
+    liveness: record === null ? "none" : own ? "live" : "unknown",
+    // The program running this command. A process sweep that answered lists it.
+    sweeper: basename(process.execPath),
+  };
+}
+
+/**
+ * Renew the lease this session already holds (#648). The holder's own entry, and a narrow one.
+ *
+ * `launch` asks whether a session may BEGIN in a folder, and a session at work there fails that by
+ * working: its alarm may have passed, and its folder is not clean. This asks the holder question
+ * instead (`reconcileHolder`), creates nothing, opens nothing, and writes in the one order a failure
+ * cannot leave half-true: the full claim comment, then the board, then the cached board answer.
+ *
+ * It takes an issue and a session id, and nothing else that could move a lease. There is no folder,
+ * root or environment argument: the command is traced from its own process to its session
+ * (`observeHolder`), and the folder is that session's native root. There is no scope argument,
+ * because a renewal restates the scope the lease already has.
+ *
+ * The command is measured twice from the same seat: once to decide, and again immediately before the
+ * comment is posted. The second measurement must pass in full AND be the same witness the first one
+ * admitted, or nothing is posted. That narrows the gap between the check and the write; it does not
+ * close it, and the board and git facts are the ones gathered for the first decision.
+ */
+export function renew({
+  issue = null,
+  sessionId = null,
+  self = { lane: "Claude Code" },
+  cwd,
+  board = readBoard,
+  policy = loadPolicy,
+  gather = gatherFacts,
+  observe = observeHolder,
+  post = postClaim,
+  projectIds = readProjectIds,
+  invalidate = invalidateBoardCache,
+} = {}) {
+  // Every refusal below carries this, so "nothing was written" is proven rather than assumed.
+  const effects = new Effects();
+  const refused = (payload) => new Refused({ verdict: "REFUSE", ...payload, ...effects.payload() });
+
+  if (!Number.isInteger(issue) || issue <= 0) {
+    throw refused({ code: "RENEW_NO_ISSUE", reason: "A renewal names the issue its lease is on (--issue <number>). Nothing was read and nothing was written." });
+  }
+  if (typeof sessionId !== "string" || sessionId.trim() === "") {
+    throw refused({ code: "RENEW_NO_SESSION", reason: "A renewal names the session that holds the lease (--session <id>). Nothing was read and nothing was written." });
+  }
+
+  const theBoard = board();
+  if (!theBoard.reachable) throw refused({ reason: `Work Control unreachable: ${theBoard.error}` });
+
+  const picked = selectTask(theBoard.items, { issue, self, policy: policy(), codeRoot: CODE_ROOT });
+  if (picked.kind !== "task") throw refused({ reason: picked.reason });
+  const task = picked.task;
+
+  // No scope is handed to the gatherer, so the scope it measures is the lease's own.
+  const { target, facts } = gather({ issue: task.number, task, board: theBoard, self });
+  // One seat, measured from twice. No folder, root or environment is in it: the observer reads those from the machine.
+  const seat = { sessionId: sessionId.trim(), cwd, now: facts.now };
+  const holder = observe(seat);
+  const verdict = reconcileHolder({ ...facts, holder });
+  if (verdict.verdict !== "PASS") {
+    throw new Refused({ ...verdict, task, reason: `renewal refused for #${task.number}`, ...effects.payload() });
+  }
+  if (!target) throw refused({ reason: "No target folder resolved from the board field." });
+
+  // What was admitted, as itself: the chain by process id and creation instant, its session and its root.
+  const admitted = callerWitness(holder).identity;
+  let posted = verdict;
+  // The last thing before the comment. A command that ended, was replaced or was raced, a reading that
+  // failed, or a contender that started since: each refuses here, with nothing posted.
+  const measuredPost = (claim) => {
+    const again = observe(seat);
+    posted = reconcileHolder({ ...facts, holder: again && typeof again === "object" ? { ...again, since: admitted } : null });
+    if (posted.verdict !== "PASS") {
+      throw new Refused({
+        ...posted,
+        task,
+        code: "RENEW_WITNESS_CHANGED",
+        reason: `renewal refused for #${task.number} at the write: what this command measured about itself immediately before posting did not pass, or was not the witness it was admitted on. Nothing was posted.`,
+        ...effects.payload(),
+      });
+    }
+    return post({ ...claim, verdict: posted });
+  };
+
+  const { expires } = postLeaseClaim({ task, target, facts, verdict, self, effects, post: measuredPost, projectIds });
+
+  // The claim just posted is what the write guard reads next, and the board answer is cached for ten
+  // minutes. Cleared only here: a comment that failed threw above and left the cache alone.
+  invalidate();
+
+  return { renewed: true, issue: task.number, folder: target.path, branch: target.branch, expires, ...effects.payload(), verdict: posted };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : null);
   setNarration({ quiet: argv.includes("--quiet"), logFile: arg("--log") });
   try {
-    const result = await launch({
-      issue: arg("--issue") ? Number(arg("--issue")) : null,
-      dryRun: argv.includes("--dry-run"),
-      noOverlay: argv.includes("--no-overlay"),
-      scope: arg("--scope"),
-      controlDir: arg("--control") ?? process.cwd(),
-    });
+    // `--renew` is the holder's entry (#648): it renews the lease this session already holds and
+    // starts nothing. Every other invocation is a launch.
+    const result = argv.includes("--renew")
+      ? renew({ issue: arg("--issue") ? Number(arg("--issue")) : null, sessionId: arg("--session") })
+      : await launch({
+          issue: arg("--issue") ? Number(arg("--issue")) : null,
+          dryRun: argv.includes("--dry-run"),
+          noOverlay: argv.includes("--no-overlay"),
+          scope: arg("--scope"),
+          controlDir: arg("--control") ?? process.cwd(),
+        });
     console.log(JSON.stringify(result));
     process.exit(0);
   } catch (e) {

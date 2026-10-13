@@ -21,12 +21,15 @@
 // a snapshot that agrees.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { parseClaim, planPostClaim, threadLease } from "./claim.mjs";
 import { CREATE_BASE_REF, HERE, HOST_DIR, refreshCreateBase, resolveCreateBase, settingsSourceFor } from "./gather.mjs";
 import { createWorktree, refreshAndCreate } from "./launch.mjs";
+// By namespace, so the renewal guards below fail one by one on a launcher that has no claim step.
+import * as launcher from "./launch.mjs";
 import { reconcile } from "./preflight.mjs";
 import { DOCUMENTED_FALLBACK_WINDOW } from "../../scripts/lib/compaction-window.mjs";
 import {
@@ -432,5 +435,177 @@ describe("time of check == time of use — the base is pinned to one commit", ()
     expect(row.ok).toBe(true);
     expect(row.actual).toBe(b.sha);
     expect(row.note).toContain(b.sha.slice(0, 7));
+  });
+});
+
+// bug->guard (#648) — the launcher's renewal posted no claim.
+//
+// With a claim already on the thread the launcher posted "Claim renewed until DATE." and moved the
+// board's date. That line has no claim header, so the thread kept the old expiry while the board
+// showed the new one. A renewal now re-posts the full claim through the writer a first claim uses.
+//
+// `launch()` reads GitHub and this machine, and a module mock does not reach a natively loaded .mjs
+// (see gh-read-bound.test.mjs), so the claim step is driven on its own with the writer injected and
+// its place in `launch()` is pinned by source text.
+
+const RENEW_NOW = new Date("2026-10-13T10:00:00Z");
+const LEASED = { path: "C:\\Users\\Kuya\\code\\sentinel-renew", branch: "claude/renew-holder-648" };
+const LEASE_SCOPE = "`tools/entry/preflight.mjs`, `tools/entry/launch.mjs`";
+const SELF = { lane: "Claude Code" };
+const TASK_648 = { number: 648, itemId: "PVTI_x", nextAction: "Renew the lease, then carry on." };
+const PASSED = {
+  verdict: "PASS",
+  checks: [{ name: "task.claim", expected: "a thread-live lease held by this exact executor", actual: "held by this executor until 2026-10-12", ok: true }],
+};
+const IDS = {
+  projectId: "PVT_x",
+  itemId: "PVTI_x",
+  fields: {
+    status: { id: "F_status", options: { Active: "o_active" } },
+    lane: { id: "F_lane", options: { "Claude Code": "o_cc" } },
+    worktree: { id: "F_wt" },
+    nextAction: { id: "F_next" },
+    claimExpires: { id: "F_exp" },
+    lastVerified: { id: "F_ver" },
+  },
+};
+const HELD = { lane: "Claude Code", executor: "Claude Code", folder: LEASED.path, branch: LEASED.branch, scope: LEASE_SCOPE, expires: "2026-10-12", postedAt: "2026-10-12T07:59:55Z" };
+const OLD_CLAIM = [
+  "### Ownership claim",
+  "",
+  "- Lane: Claude Code",
+  "- Executor/tool: Claude Code",
+  `- Worktree folder: ${LEASED.path}`,
+  `- Branch: ${LEASED.branch}`,
+  `- Write scope: ${LEASE_SCOPE}`,
+  "- Claim expires: 2026-10-12",
+].join("\n");
+
+const leaseFacts = (over = {}) => ({ now: RENEW_NOW, claim: HELD, scope: { text: LEASE_SCOPE, source: "claim" }, processes: [], ...over });
+/** The comment the real plan builder would post for what the claim step handed the writer. */
+const bodyOf = (posted) => {
+  const [comment] = planPostClaim(posted);
+  return comment.argv[comment.argv.indexOf("--body") + 1];
+};
+
+function claimStep({ facts = leaseFacts(), verdict = PASSED, effects = new launcher.Effects(), post = null } = {}) {
+  const posted = [];
+  const out = launcher.postLeaseClaim({
+    task: TASK_648,
+    target: LEASED,
+    facts,
+    verdict,
+    self: SELF,
+    effects,
+    projectIds: () => IDS,
+    // `post: undefined` is the real writer. It is only ever reached here with a verdict it refuses.
+    ...(post === "real" ? {} : { post: post ?? ((claim) => void posted.push(claim)) }),
+  });
+  return { out, posted, effects };
+}
+
+describe("#648: the launcher's renewal posts a claim the thread can read", () => {
+  it("the line the old renewal posted is not a claim, so the thread kept the old expiry", () => {
+    const thread = [
+      { body: OLD_CLAIM, createdAt: HELD.postedAt },
+      { body: "Claim renewed until 2026-10-13.", createdAt: RENEW_NOW.toISOString() },
+    ];
+    expect(parseClaim(thread[1].body)).toBeNull();
+    expect(threadLease(thread).claim.expires).toBe("2026-10-12");
+  });
+
+  it("a renewal re-posts the full claim, and the thread reads the new expiry from it", () => {
+    const { out, posted, effects } = claimStep();
+    expect(posted).toHaveLength(1);
+    expect(posted[0]).toMatchObject({ issue: 648, verdict: PASSED, ids: IDS });
+
+    const body = bodyOf(posted[0]);
+    expect(body).not.toContain("Claim renewed until");
+    expect(body).toContain("#### Preflight verdict: PASS");
+    expect(parseClaim(body)).toMatchObject({ lane: "Claude Code", executor: "Claude Code", folder: LEASED.path, branch: LEASED.branch, expires: "2026-10-13" });
+
+    const lease = threadLease([
+      { body: OLD_CLAIM, createdAt: HELD.postedAt },
+      { body, createdAt: RENEW_NOW.toISOString() },
+    ]);
+    expect(lease.claim.expires).toBe("2026-10-13");
+    // It restates the lease rather than starting another: both claims are one run.
+    expect(lease.run).toHaveLength(2);
+
+    expect(out).toEqual({ expires: "2026-10-13", renewing: true });
+    expect(effects.done).toEqual([{ what: "renewed the ownership claim", detail: "#648 until 2026-10-13" }]);
+  });
+
+  it("a renewal restates the lease's own scope, whatever scope this run was handed", () => {
+    const { posted } = claimStep({ facts: leaseFacts({ scope: { text: "`tools/entry/` `docs/`", source: "cli" } }) });
+    expect(posted[0].facts.scope).toBe(LEASE_SCOPE);
+    expect(parseClaim(bodyOf(posted[0])).scope).toBe(LEASE_SCOPE);
+  });
+
+  it("the comment is the first step and the board follows it", () => {
+    const plan = planPostClaim(claimStep().posted[0]);
+    expect(plan[0].argv.slice(0, 2)).toEqual(["issue", "comment"]);
+    expect(plan.slice(1).every((step) => step.argv[0] === "project")).toBe(true);
+    expect(plan.find((step) => step.argv.includes("F_exp")).argv).toContain("2026-10-13");
+  });
+
+  it("a comment that fails records nothing, so nothing downstream acts on a claim that is not there", () => {
+    const effects = new launcher.Effects();
+    const failed = () => {
+      throw new Error("gh: the comment was not posted");
+    };
+    expect(() => claimStep({ effects, post: failed })).toThrow(/the comment was not posted/);
+    expect(effects.wroteAnything).toBe(false);
+  });
+
+  it("the writer still refuses an absent or a non-PASS verdict, on a renewal as on a first claim", () => {
+    for (const verdict of [null, { verdict: "REFUSE", checks: [] }]) {
+      for (const facts of [leaseFacts(), leaseFacts({ claim: null })]) {
+        const effects = new launcher.Effects();
+        expect(() => claimStep({ facts, verdict, effects, post: "real" })).toThrow(/Refusing to post a claim on #648: preflight verdict is/);
+        expect(effects.wroteAnything).toBe(false);
+      }
+    }
+  });
+
+  it("a first claim still posts, with the scope measured at launch", () => {
+    const { out, posted, effects } = claimStep({ facts: leaseFacts({ claim: null, scope: { text: "`tools/entry/cli.mjs`", source: "issue" } }) });
+    expect(out).toEqual({ expires: "2026-10-13", renewing: false });
+    expect(posted[0].facts).toMatchObject({ lane: "Claude Code", executor: "Claude Code", folder: LEASED.path, branch: LEASED.branch, scope: "`tools/entry/cli.mjs`", started: "2026-10-13" });
+    expect(effects.done).toEqual([{ what: "posted the ownership claim", detail: "#648 until 2026-10-13" }]);
+    // No scope measured is said in the claim itself, never filled in from the title (#358).
+    expect(claimStep({ facts: leaseFacts({ claim: null, scope: null }) }).posted[0].facts.scope).toMatch(/not declared at launch/);
+  });
+
+  it("`launch()` posts through that step, and still asks the fresh-entry question", () => {
+    const src = readFileSync(join(HERE, "launch.mjs"), "utf8").replace(/\r\n/g, "\n");
+    // The unparseable renewal and the two names that posted it are gone from the launcher.
+    expect(src).not.toMatch(/planRenew|execPlan/);
+    expect(src).not.toContain("Claim renewed until");
+    const start = src.indexOf("export async function launch(");
+    const body = src.slice(start, src.indexOf("\n}\n", start));
+    expect(body).toContain("postLeaseClaim({");
+    expect(body).toContain("reconcile(facts)");
+    // The holder path is the `--renew` entry's alone: a launch never borrows its leniency.
+    expect(body).not.toContain("reconcileHolder");
+    // Nor the holder's measurements: what a renewing command establishes about itself admits no fresh entry.
+    expect(body).not.toContain("observeHolder");
+    expect(body).not.toContain("callerWitness");
+    // And the renewal's own witness is real: the launcher has one, and `renew` re-measures with it.
+    expect(src).toContain("callerWitness(");
+  });
+
+  it("a fresh launch into an expired or dirty folder still refuses", () => {
+    const world = {
+      task: { number: 648, status: "Active", worktreeBranch: `${LEASED.path} @ ${LEASED.branch}` },
+      self: SELF,
+      claim: HELD,
+      now: new Date("2026-10-14T10:00:00Z"),
+      checkouts: [{ path: LEASED.path, branch: LEASED.branch }],
+      gitState: { ok: true, branch: LEASED.branch, detached: false, clean: false, modified: 1 },
+    };
+    const rows = Object.fromEntries(reconcile(world).checks.map((c) => [c.name, c.ok]));
+    expect(rows["task.claim"]).toBe(false);
+    expect(rows["git.clean"]).toBe(false);
   });
 });
