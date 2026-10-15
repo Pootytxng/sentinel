@@ -307,7 +307,7 @@ describe.runIf(process.platform === "win32")("a full ad-hoc suite queues on the 
     await new Promise((resolve) => gone.once("exit", resolve));
     const peer = await hold(testCase, "verify-local.ps1 in peer-lane");
     const result = await drive(testCase, ["run"], { timeout: 2, marker: String(deadPid) }).done;
-    expect(result.code).toBe(1);
+    expect(result.code, `deadPid=${deadPid} peerPid=${peer.pid}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`).toBe(1);
     expect(result.stdout).not.toMatch(/^LAUNCHED /m);
     expect(result.stderr).toContain(`held by pid ${peer.pid}`);
   });
