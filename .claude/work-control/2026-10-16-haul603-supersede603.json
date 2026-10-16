@@ -1,0 +1,77 @@
+{
+  "transition": "close-superseded-pr",
+  "actor": "claude-code",
+  "currentHead": "12fdec741d202588ca95ed4a3535c261e66d4cc3",
+  "issue": 600,
+  "pr": 603,
+  "kind": "lane",
+  "branch": "claude/haul-pr603-20261016",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/600#issuecomment-6218425941",
+  "leaseEvidenceNote": "Ownership claim posted 2026-10-16T15:07:17Z by claude-code session 2be71634-5852-45f6-844e-7eb5c7ea0e33 in worktree .claude/worktrees/haul-pr603-20261016. Its write scope is the PR's three paths plus exactly the four 2026-10-16-haul603-*.json receipts. The previous #600 lease had been released (Handoff issuecomment-5877753688).",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "The only concurrent author lane (#656, Monitor paths) holds disjoint paths. At push, write-scope drift measured 3 changed paths against the #600 claim, and lease overlap checked the 3 pushed paths against every open issue's live lease; both returned OK.",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Re-derived at 2026-10-16T18:53:57Z from this worktree: HEAD and origin's lane ref 12fdec74 (until land-pr pruned it), origin/main 3de0ccdae3ebd23ca928d2422e21a5b2dc6d1f6c, tree clean apart from these untracked receipts, PR #658 head 12fdec74, the #600 lease read by threadLease. No build, test or install process ran from this folder; the only other process naming it was the coordinator's read-only probe.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The one commit is claude-code's 9761cb24 (PR #603, cloud session), carried by this claude-code session with git cherry-pick -x onto main 7d621c86 as 12fdec74; git range-diff shows identical code, with only the cherry-picked-from line added. Codex reviewed read-only and authored nothing.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "12fdec741d202588ca95ed4a3535c261e66d4cc3",
+      "summary": "Test Files 473 passed (473); Tests 7962 passed | 5 expected fail | 10 skipped (7977).",
+      "evidence": "logs/verify-local-2026-10-16T15-15-26Z.log (SHA-256 b3b151afc7d70369661ab1db2c2c6213902d04a8303b2530af3a1658c340c7cd); push log logs/haul603/push.log (SHA-256 df4338f5478579e365c49ac9dacdc8b3863d20e098a16c44c7d0ab3349bd9040): LOCAL CHECK RESULT: PASS, push-exit=0, branch created at this exact head. Copies in GPT HQ operations/compy-haul-2026-10-16/pr603-evidence/."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "12fdec741d202588ca95ed4a3535c261e66d4cc3",
+      "summary": "tsc && vite build passed.",
+      "evidence": "logs/verify-local-2026-10-16T15-15-26Z.log (SHA-256 b3b151afc7d70369661ab1db2c2c6213902d04a8303b2530af3a1658c340c7cd); push log logs/haul603/push.log (SHA-256 df4338f5478579e365c49ac9dacdc8b3863d20e098a16c44c7d0ab3349bd9040): LOCAL CHECK RESULT: PASS, push-exit=0, branch created at this exact head. Copies in GPT HQ operations/compy-haul-2026-10-16/pr603-evidence/."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "12fdec741d202588ca95ed4a3535c261e66d4cc3",
+      "summary": "test result: ok. 1401 passed; 0 failed; 24 ignored.",
+      "evidence": "logs/verify-local-2026-10-16T15-15-26Z.log (SHA-256 b3b151afc7d70369661ab1db2c2c6213902d04a8303b2530af3a1658c340c7cd); push log logs/haul603/push.log (SHA-256 df4338f5478579e365c49ac9dacdc8b3863d20e098a16c44c7d0ab3349bd9040): LOCAL CHECK RESULT: PASS, push-exit=0, branch created at this exact head. Copies in GPT HQ operations/compy-haul-2026-10-16/pr603-evidence/."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "12fdec741d202588ca95ed4a3535c261e66d4cc3",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-10-16T15-15-26Z.log (SHA-256 b3b151afc7d70369661ab1db2c2c6213902d04a8303b2530af3a1658c340c7cd); push log logs/haul603/push.log (SHA-256 df4338f5478579e365c49ac9dacdc8b3863d20e098a16c44c7d0ab3349bd9040): LOCAL CHECK RESULT: PASS, push-exit=0, branch created at this exact head. Copies in GPT HQ operations/compy-haul-2026-10-16/pr603-evidence/."
+    }
+  ],
+  "gateEvidenceNote": "scripts/verify-local.ps1 ran as the pre-push hook at this exact committed clean head and returned PASS. It waited 147 s for Local\\Compy.TestGate.v1 behind #656's gate. Nothing was pushed to this branch after it. Observable evidence, from real guard runs with TEMP absent (probe TEMP=null): the fixed head wrote 0 fixtures in the repo and 4 in os.tmpdir(); pre-fix 7d621c86 in an isolated scratch clone wrote 4 into its working directory (GPT HQ operations/compy-haul-2026-10-16/pr603-evidence/evidence-summary.json).",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "APPROVE",
+    "status": "passed",
+    "head": "12fdec741d202588ca95ed4a3535c261e66d4cc3",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/658#issuecomment-6222444654",
+    "reviewerNote": "Codex coordinator, exact-head acceptance on PR #658 (APPROVE at 12fdec74, base 7d621c86, no blocking findings). It carries Codex's source review on #600 (https://github.com/Pootytxng/sentinel/issues/600#issuecomment-6218695752). Codex inspected the full three-file delta, the native gate log by its SHA-256 and the TEMP-absent filesystem evidence, and authored no part of the delta."
+  },
+  "closingNote": "Close PR #603 without merging: it is superseded by #658, which carries its exact change onto current main.",
+  "prHead": "9761cb24a4cb7e56e11bdde2ff504e661f016e99",
+  "supersededBy": "PR #658, merged into main as 3de0ccdae3ebd23ca928d2422e21a5b2dc6d1f6c. Its only commit 12fdec741d202588ca95ed4a3535c261e66d4cc3 is git cherry-pick -x of #603's only commit 9761cb24 (same author, identical code).",
+  "refDisposition": "PR #603's head ref claude/gracious-gates-wz562y is pruned right after this close (git push origin --delete). Its work is on main, so branch-disposition-audit reads the ref as landed. 9761cb24 stays fetchable at refs/pull/603/head."
+}
