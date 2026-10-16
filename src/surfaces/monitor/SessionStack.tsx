@@ -12,6 +12,7 @@ import {
   relativeDay,
   type StackRow,
 } from "./monitor-stack-profile";
+import { knownFps } from "../../lib/session-metrics";
 import "../../i18n";
 
 // SessionStack — Monitor v5's sessions half (owner pick 2026-07-11: "A's top + B's stack",
@@ -193,7 +194,11 @@ function RowCanvas({
   );
 }
 
-const fmtV = (v: number) => (Number.isFinite(v) ? String(Math.round(v)) : "—");
+// An unmeasured reading (knownFps: 0, negative, non-finite or missing) is the em dash, never "0".
+const fmtV = (v: unknown) => {
+  const k = knownFps(v);
+  return k == null ? "—" : String(Math.round(k));
+};
 
 export function SessionStack({
   sessions = [],

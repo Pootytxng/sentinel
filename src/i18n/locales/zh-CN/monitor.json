@@ -218,7 +218,8 @@
     "sessionNums": "平均 {{avg}} · 1% 最低帧 {{low1}}（估算）",
     "smoothVerdict": "流畅",
     "roughVerdict": "卡顿",
-    "someDipsVerdict": "偶有掉帧"
+    "someDipsVerdict": "偶有掉帧",
+    "notGradedVerdict": "未评级"
   },
   "sessionDebrief": {
     "comparisonHeader": "对比 · {{title}} · 两次 {{game}} 会话",

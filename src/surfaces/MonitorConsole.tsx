@@ -39,6 +39,7 @@ import { SessionStack } from "./monitor/SessionStack";
 import { deckDeltaFrom, fmtDeltaGlyph } from "./monitor/monitor-stack-profile";
 import { prettyGameName } from "./game-name";
 import { monitorVerdict } from "./monitor-v2-data";
+import { knownFps } from "../lib/session-metrics";
 import { fmtDurCoarse } from "./Play";
 import type { GpuVendor } from "./walkthroughs";
 import "../i18n";
@@ -365,6 +366,11 @@ export function MonitorConsole({
   // the h1 (the narrative now answers "can I start?") and INTO the panel that shows the session it
   // is about. Same sentence, same source, printed once.
   const sessionLine = monitorVerdict(sessions, t);
+  // The evidence Readings beneath that line obey the same question: an unmeasured average or 1% low
+  // (knownFps → null) is Reading's own "no reading", never a "0 fps" wearing the MEASURED tag, and
+  // a 1% low without its average has no ratio to grade.
+  const latestAvg = knownFps(latest?.avg_fps);
+  const latestLow = knownFps(latest?.low1_fps_est);
 
   // THE NARRATIVE'S ONE VERDICT is about readiness, because the action beneath it is Start capture.
   // Three states, all real: mid-command, recording, idle. Nothing is claimed about a game.
@@ -485,16 +491,20 @@ export function MonitorConsole({
                 <Reading
                   id="avgFps"
                   label={t("monitor.monitorConsole.deltaAvgFps")}
-                  value={latest.avg_fps}
+                  value={latestAvg}
                   unit="fps"
-                  tone={arcTone(gradeFps(latest.avg_fps, rig))}
+                  tone={latestAvg == null ? "neutral" : arcTone(gradeFps(latestAvg, rig))}
                 />
                 <Reading
                   id="low1"
                   label={<Term id="one-percent-lows">{t("monitor.monitorConsole.deltaOneLow")}</Term>}
-                  value={latest.low1_fps_est}
+                  value={latestLow}
                   unit="fps"
-                  tone={arcTone(gradeLow1(latest.low1_fps_est, latest.avg_fps))}
+                  tone={
+                    latestLow == null || latestAvg == null
+                      ? "neutral"
+                      : arcTone(gradeLow1(latestLow, latestAvg))
+                  }
                 />
                 <span className="mc-ev-changes">
                   {t("monitor.monitorConsole.changesOn", { count: latest.compy_changes_active })}

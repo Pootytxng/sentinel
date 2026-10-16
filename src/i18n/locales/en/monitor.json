@@ -218,7 +218,8 @@
     "sessionNums": "{{avg}} avg · {{low1}} 1% low (est)",
     "smoothVerdict": "Smooth",
     "roughVerdict": "Rough",
-    "someDipsVerdict": "Some dips"
+    "someDipsVerdict": "Some dips",
+    "notGradedVerdict": "Not graded"
   },
   "sessionDebrief": {
     "comparisonHeader": "COMPARISON · {{title}} · two {{game}} sessions",
