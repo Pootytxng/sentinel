@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import type { SessionSummary } from "../../types";
+import { knownFps } from "../../lib/session-metrics";
 
 // Monitor v5 "Flight Deck + Session Stack" pure math (plan 2026-07-11-monitor-v5-deck-stack,
 // T1). Everything here is flat 2D over REAL measured series — the v3→v4 chain law: no
@@ -68,12 +69,15 @@ export function zoomWindow<T>(buf: T[], sel: ZoomSel | null): T[] {
 
 export type SessionDelta = { avgFps: number | null; low1: number | null };
 
-const num = (a: number | null | undefined, b: number | null | undefined) =>
-  typeof a === "number" && Number.isFinite(a) && typeof b === "number" && Number.isFinite(b)
-    ? a - b
-    : null;
+// Both sides must be READINGS (knownFps: finite and above zero). The sampler's unknown is 0, so a
+// finiteness check alone subtracted against it and printed "▼240" for a session nobody measured.
+const num = (a: unknown, b: unknown) => {
+  const x = knownFps(a);
+  const y = knownFps(b);
+  return x != null && y != null ? x - y : null;
+};
 
-/** front − prev on the two aggregates; either side absent ⇒ null (em-dash, never 0). */
+/** front − prev on the two aggregates; either side unmeasured ⇒ null (em-dash, never 0). */
 export function sessionDelta(
   front: SessionSummary | null | undefined,
   prev: SessionSummary | null | undefined,

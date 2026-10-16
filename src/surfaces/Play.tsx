@@ -28,6 +28,7 @@ import {
 } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
+import { knownFps } from "../lib/session-metrics";
 import "../i18n";
 import "./Play.css";
 
@@ -75,6 +76,11 @@ export function shortVerdict(s: SessionSummary): string {
 // pinned verbatim by monitor-v2.test.tsx. This helper only picks which translated word to RENDER;
 // it never feeds back into shortVerdict's own return value or any comparison.
 export function verdictLabel(t: TFunction, s: SessionSummary): string {
+  // The grade IS the 1%-low/average ratio, so without both readings there is nothing to grade.
+  // shortVerdict's non-committal "Some dips" would otherwise describe a session nobody measured.
+  if (knownFps(s.avg_fps) == null || knownFps(s.low1_fps_est) == null) {
+    return t("monitor.play.notGradedVerdict");
+  }
   const grade = shortVerdict(s);
   return grade === "Smooth"
     ? t("monitor.play.smoothVerdict")
@@ -111,6 +117,14 @@ function gradeStyle(g: Grade): { color: string } | undefined {
   const c = gradeColor(g);
   return c ? { color: c } : undefined;
 }
+
+// A session aggregate is printed only when it is a reading (knownFps: finite and above zero); the
+// sampler's unknown is 0, so anything else is the em dash, never "0" (#656, #608). Average
+// frametime follows the same rule — a 0.0 ms frame is not a measurement either.
+const fmtReading = (v: unknown, digits = 0) => {
+  const k = knownFps(v);
+  return k == null ? "—" : k.toFixed(digits);
+};
 
 export default function Play({
   active,
@@ -272,6 +286,9 @@ export default function Play({
 
   const sample = fps?.sample ?? null;
   const latest = sessions[0] ?? null;
+  const heroAvg = knownFps(latest?.avg_fps);
+  const heroLow = knownFps(latest?.low1_fps_est);
+  const heroFt = knownFps(latest?.avg_frametime_ms);
 
   // Monitor restructure: which half(s) to render. "all" (flag-off) shows both, byte-identical to today.
   const showLive = view !== "sessions";
@@ -309,15 +326,15 @@ export default function Play({
           </div>
           <div className="play-hero-metrics">
             <div className="play-hero-metric">
-              <span className="play-hero-value" style={gradeStyle(gradeFps(latest.avg_fps, rig))}>{latest.avg_fps.toFixed(0)}</span>
+              <span className="play-hero-value" style={heroAvg == null ? undefined : gradeStyle(gradeFps(heroAvg, rig))}>{fmtReading(heroAvg)}</span>
               <span className="play-hero-label"><Term id="hz-vs-fps">{t("monitor.play.avgFpsTermLabel")}</Term></span>
             </div>
             <div className="play-hero-metric">
-              <span className="play-hero-value" style={gradeStyle(gradeLow1(latest.low1_fps_est, latest.avg_fps))}>{latest.low1_fps_est.toFixed(0)}</span>
+              <span className="play-hero-value" style={heroLow == null || heroAvg == null ? undefined : gradeStyle(gradeLow1(heroLow, heroAvg))}>{fmtReading(heroLow)}</span>
               <span className="play-hero-label"><Term id="one-percent-lows">{t("monitor.play.oneLowTermLabel")}</Term>{t("monitor.play.estSuffix")}</span>
             </div>
             <div className="play-hero-metric">
-              <span className="play-hero-value" style={gradeStyle(gradeFrametimeMs(latest.avg_frametime_ms, rig))}>{latest.avg_frametime_ms.toFixed(1)}</span>
+              <span className="play-hero-value" style={heroFt == null ? undefined : gradeStyle(gradeFrametimeMs(heroFt, rig))}>{fmtReading(heroFt, 1)}</span>
               <span className="play-hero-label">ms <Term id="frametime">{t("monitor.play.frametimeTermLabel")}</Term></span>
             </div>
             <div className="play-hero-metric">
@@ -477,8 +494,8 @@ export default function Play({
                     <span className="play-session-right">
                       <span className="play-session-nums">
                         {t("monitor.play.sessionNums", {
-                          avg: s.avg_fps.toFixed(0),
-                          low1: s.low1_fps_est.toFixed(0),
+                          avg: fmtReading(s.avg_fps),
+                          low1: fmtReading(s.low1_fps_est),
                         })}
                       </span>
                       <span className="cmp-door-chevron" aria-hidden="true">▸</span>
