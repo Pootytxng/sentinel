@@ -65,6 +65,7 @@ const ALLOWED: Record<string, string> = {
   "test/axe.ts": "the C-13 axe harness — imported by the a11y guards, never by the shipped app",
   "test/css-margin.ts": "CSS box-model reasoning shared by the #236 layout guards — tests only, never the app",
   "test/tree-walk-budget.ts": "the #515 whole-tree test timeout — the tripwire setup file and walker tests, never the app",
+  "test/dom-mutation-pins.ts": "the #614 pinned census of runtime DOM writes, shared by dom-mutation-census.test.ts and the overflow guard — tests only, never the app",
 };
 
 function walk(dir: string, out: string[] = []): string[] {
