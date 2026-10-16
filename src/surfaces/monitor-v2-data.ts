@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import type { SessionSummary } from "../types";
 import { prettyGameName } from "./game-name";
 import { shortVerdict, fmtDur } from "./Play";
+import { knownFps } from "../lib/session-metrics";
 
 // Pure verdict/measured derivations for the V2 Monitor room (V2-5, spec
 // 2026-07-02-v2-shell-sourcing-and-plan). Same contract as optimizeVerdict: measured facts
@@ -29,19 +30,35 @@ export function monitorVerdict(sessions: SessionSummary[], t: TFunction): Monito
   }
   const game =
     prettyGameName(latest.process_name) || t("monitor.monitorV2.verdict.lastGameFallback");
-  const fps = Math.round(latest.avg_fps);
-  const low = Math.round(latest.low1_fps_est);
-  const grade = shortVerdict(latest);
-  // The grade names its evidence in the same breath (V2-9 punch h): shortVerdict grades on the
-  // 1%-low/average ratio, so a non-smooth verdict states the lows that earned it — otherwise
-  // "ran rough — 336 fps average" argues with itself. The sub's "live estimate" framing covers
-  // that the lows are estimated.
-  const headline =
-    grade === "Smooth"
-      ? t("monitor.monitorV2.verdict.smoothHeadline", { game, fps })
-      : grade === "Some dips"
-        ? t("monitor.monitorV2.verdict.someDipsHeadline", { game, low, fps })
-        : t("monitor.monitorV2.verdict.roughHeadline", { game, low, fps });
+  // An unmeasured average or 1% low arrives as 0 (the sampler's "unknown"), missing, or
+  // non-finite (knownFps). Honest-measurement law: a headline states only what was measured and
+  // says what wasn't — never "fell to 0 fps" (#602) or "averaged 0 fps" (#645). With either
+  // reading unknown there is no ratio to grade, so only both-known reaches the graded wording.
+  const avg = knownFps(latest.avg_fps);
+  const low1 = knownFps(latest.low1_fps_est);
+  let headline: string;
+  if (avg === null) {
+    headline =
+      low1 === null
+        ? t("monitor.monitorV2.verdict.unmeasuredHeadline", { game })
+        : t("monitor.monitorV2.verdict.unmeasuredAverageHeadline", { game, low: Math.round(low1) });
+  } else if (low1 === null) {
+    headline = t("monitor.monitorV2.verdict.unmeasuredLowHeadline", { game, fps: Math.round(avg) });
+  } else {
+    const fps = Math.round(avg);
+    const low = Math.round(low1);
+    const grade = shortVerdict(latest);
+    // The grade names its evidence in the same breath (V2-9 punch h): shortVerdict grades on the
+    // 1%-low/average ratio, so a non-smooth verdict states the lows that earned it — otherwise
+    // "ran rough — 336 fps average" argues with itself. The sub's "live estimate" framing covers
+    // that the lows are estimated.
+    headline =
+      grade === "Smooth"
+        ? t("monitor.monitorV2.verdict.smoothHeadline", { game, fps })
+        : grade === "Some dips"
+          ? t("monitor.monitorV2.verdict.someDipsHeadline", { game, low, fps })
+          : t("monitor.monitorV2.verdict.roughHeadline", { game, low, fps });
+  }
   return {
     // "live estimate, not benchmark-grade" is the F3 honesty framing, kept on the room's
     // answer line so the verdict never overclaims what a 1 Hz sampler can prove.

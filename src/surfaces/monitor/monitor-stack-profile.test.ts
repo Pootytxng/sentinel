@@ -417,3 +417,44 @@ describe("relativeDay / clockLabel — plain-English recency, exact moments", ()
     expect(clockLabel("not-a-date", 720)).toBe("");
   });
 });
+
+describe("deltas never subtract an unmeasured reading (#656 visual FAIL item 3, #608)", () => {
+  // The sampler's unknown is 0; an older or malformed record can carry a negative, a non-finite
+  // value, a string or nothing. None of those is a reading, so no delta may be taken against one:
+  // "▼240 against a 0" states a measurement nobody took.
+  const UNKNOWN: unknown[] = [0, -0, -12, Number.NaN, Infinity, -Infinity, null, undefined, "150"];
+  const s = (over: Record<string, unknown>) => sess(over as Partial<SessionSummary>);
+
+  it("sessionDelta: an unknown side on either session ⇒ null for that metric only", () => {
+    for (const v of UNKNOWN) {
+      expect(sessionDelta(s({ avg_fps: v }), s({ avg_fps: 200 })).avgFps).toBeNull();
+      expect(sessionDelta(s({ avg_fps: 240 }), s({ avg_fps: v })).avgFps).toBeNull();
+      expect(sessionDelta(s({ low1_fps_est: v }), s({ low1_fps_est: 150 })).low1).toBeNull();
+      expect(sessionDelta(s({ low1_fps_est: 190 }), s({ low1_fps_est: v })).low1).toBeNull();
+      // The other metric is untouched when it was measured on both sides.
+      expect(sessionDelta(s({ avg_fps: v }), s({ avg_fps: 200, low1_fps_est: 150 })).low1).toBe(40);
+    }
+  });
+
+  it("measured control: real readings still subtract exactly", () => {
+    expect(sessionDelta(s({ avg_fps: 240, low1_fps_est: 190 }), s({ avg_fps: 200, low1_fps_est: 150 }))).toEqual({
+      avgFps: 40,
+      low1: 40,
+    });
+  });
+
+  it("deckDeltaFrom and the stack's row chips carry the same rule", () => {
+    for (const v of UNKNOWN) {
+      const deck = deckDeltaFrom([s({ avg_fps: v, low1_fps_est: v }), s({ started_at: "2026-07-08T20:00:00Z" })])!;
+      expect(deck.avgFps).toBeNull();
+      expect(deck.low1).toBeNull();
+      const back = deckDeltaFrom([s({}), s({ started_at: "2026-07-08T20:00:00Z", avg_fps: v, low1_fps_est: v })])!;
+      expect(back.avgFps).toBeNull();
+      expect(back.low1).toBeNull();
+      const rows = stackRowsFrom([s({ avg_fps: v }), s({ started_at: "2026-07-08T20:00:00Z", avg_fps: 200 })]).rows;
+      expect(rows[0].delta?.avgFps).toBeNull();
+    }
+    const rows = stackRowsFrom([s({ avg_fps: 240 }), s({ started_at: "2026-07-08T20:00:00Z", avg_fps: 200 })]).rows;
+    expect(rows[0].delta?.avgFps).toBe(40);
+  });
+});
