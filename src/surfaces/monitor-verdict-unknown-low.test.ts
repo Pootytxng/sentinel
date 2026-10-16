@@ -33,6 +33,11 @@ const unknownLows: Array<[string, Partial<SessionSummary>]> = [
   ["negative", { low1_fps_est: -1 }],
   ["missing", { low1_fps_est: undefined as unknown as number }],
   ["NaN", { low1_fps_est: Number.NaN }],
+  // #656: the rest of the shared knownFps contract (src/lib/session-metrics.ts).
+  ["null", { low1_fps_est: null as unknown as number }],
+  ["Infinity", { low1_fps_est: Number.POSITIVE_INFINITY }],
+  ["-Infinity", { low1_fps_est: Number.NEGATIVE_INFINITY }],
+  ["a numeric string", { low1_fps_est: "150" as unknown as number }],
 ];
 
 describe("monitorVerdict — an unmeasured 1% low stays unknown (#602)", () => {
@@ -47,7 +52,7 @@ describe("monitorVerdict — an unmeasured 1% low stays unknown (#602)", () => {
       "Last session averaged 240 fps in valorant — 1% lows weren't measured.",
     );
     expect(headline).not.toMatch(/fell to/);
-    expect(headline).not.toMatch(/\b0 fps|NaN|-1/);
+    expect(headline).not.toMatch(/\b0 fps|NaN|-1|Infinity|150/);
   });
 
   it.each(unknownLows)("zh-CN: %s low states only the measured average", async (_label, over) => {
@@ -56,7 +61,7 @@ describe("monitorVerdict — an unmeasured 1% low stays unknown (#602)", () => {
     expect(headline).toContain("240 fps");
     expect(headline).toContain("未测到");
     expect(headline).not.toContain("降到了");
-    expect(headline).not.toMatch(/\b0 fps|NaN|-1/);
+    expect(headline).not.toMatch(/\b0 fps|NaN|-1|Infinity|150/);
   });
 
   it("a measured low keeps today's wording", async () => {

@@ -37,6 +37,8 @@
       "someDipsHeadline": "上一局偶有掉帧——{{game}}的 1% 最低帧降到了 {{low}} fps,平均帧率为 {{fps}} fps。",
       "roughHeadline": "上一局明显卡顿——{{game}}的 1% 最低帧降到了 {{low}} fps,平均帧率为 {{fps}} fps。",
       "unmeasuredLowHeadline": "上一局{{game}}平均 {{fps}} fps——未测到 1% 最低帧。",
+      "unmeasuredAverageHeadline": "上一局{{game}}的 1% 最低帧为 {{low}} fps——未测到平均帧率。",
+      "unmeasuredHeadline": "上一局{{game}}未测到帧率。",
       "sub": "测量时长 {{duration}} · {{samples}} 个样本 · 实时估算,并非基准测试。"
     }
   },
