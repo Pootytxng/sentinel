@@ -20,6 +20,7 @@ import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grad
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { readDisplayRefreshHz } from "../design/theme";
 import { useExpertView } from "../design/use-expert-view";
+import { knownFps } from "../lib/session-metrics";
 import "../i18n";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
@@ -247,7 +248,11 @@ export function SessionDebrief({
   // Expert view (spec §2): the tiles show the raw measured value at 1 decimal instead of the
   // whole-FPS rounding. Same SessionSummary fields, display precision only.
   const expert = useExpertView();
-  const fmtFps = (n: number) => n.toFixed(expert ? 1 : 0);
+  // A session aggregate is printed only when it is a reading (knownFps: finite and above zero);
+  // the sampler's unknown is 0, so anything else is the em dash, never "0" (#608).
+  const fmtFps = (n: number | null) => (n == null ? "—" : n.toFixed(expert ? 1 : 0));
+  const avgFps = knownFps(s.avg_fps);
+  const lowFps = knownFps(s.low1_fps_est);
   // Honesty gate (LOCKED rule #5): NVIDIA GPU temp comes from NVML — implemented, NOT hardware-verified
   // — so it's never graded authoritatively. Routed through the shared gpu-sensor helper (one source,
   // can't drift) — same gate Play + the Home/Monitoring surfaces use.
@@ -260,8 +265,17 @@ export function SessionDebrief({
       .then((c) => setComparison(c && c.game === s.process_name && c.kind !== "tuning" ? c : null))
       .catch(() => {});
   }, [s.process_name]);
-  const ratio = s.avg_fps > 0 ? Math.min(1, s.low1_fps_est / s.avg_fps) : 1;
-  const v = verdictBand(t, ratio);
+  // The verdict, the insights and the clean line all argue from the 1%-low/average ratio, so with
+  // either reading unknown there is no ratio and nothing here concludes from one (#608). The old
+  // fallback of 1 called an unmeasured session "Smooth"; an unknown low of 0 called it "Rough".
+  const ratio = avgFps != null && lowFps != null ? Math.min(1, lowFps / avgFps) : null;
+  const v =
+    ratio == null
+      ? {
+          h: t("monitor.sessionDebrief.verdict.unmeasured.headline"),
+          sub: t("monitor.sessionDebrief.verdict.unmeasured.sub"),
+        }
+      : verdictBand(t, ratio);
 
   const fmtDur = (sec: number) => {
     const h = Math.floor(sec / 3600);
@@ -277,11 +291,12 @@ export function SessionDebrief({
 
   // At most ONE insight: (a) GPU-vs-system hint, (b) prime-suspect open limiter, else none.
   const topLimiter = priorities?.limiters?.[0] ?? null;
-  const gpuLoafed = s.peak_gpu_usage_pct != null && s.peak_gpu_usage_pct < 70 && ratio < 0.7;
+  const gpuLoafed =
+    s.peak_gpu_usage_pct != null && s.peak_gpu_usage_pct < 70 && ratio != null && ratio < 0.7;
   let insight: string | null = null;
   if (gpuLoafed) {
     insight = t("monitor.sessionDebrief.gpuLoafedInsight", { pct: s.peak_gpu_usage_pct });
-  } else if (topLimiter && ratio < 0.75) {
+  } else if (topLimiter && ratio != null && ratio < 0.75) {
     insight = t("monitor.sessionDebrief.primeSuspectInsight", {
       limiter: topLimiter.title.toLowerCase(),
       reason: topLimiter.reason,
@@ -309,8 +324,9 @@ export function SessionDebrief({
   // What is chosen on evidence is the FRAMING, exactly as Health picks between its symptom half and
   // its goal half on `somethingDetected`. Measured trouble → "Apply the #1 fix"; nothing measured →
   // "Try one change", under a clean line that no longer claims there is nothing worth changing.
-  const problemMeasured = ratio < 0.75 || !!shownInsight;
-  const cleanSession = !problemMeasured;
+  // "Good session" is itself a ratio verdict, so an unmeasured session never earns the clean line.
+  const problemMeasured = (ratio != null && ratio < 0.75) || !!shownInsight;
+  const cleanSession = ratio != null && !problemMeasured;
 
   // BACKLOG:236 Ledger half — the ComparisonCard above already owns the rollback control for ITS
   // rec ("Revert it"). In the common flow (apply a fix from this debrief → `arm_comparison` for that
@@ -361,14 +377,16 @@ export function SessionDebrief({
       <div className="debrief-tiles">
         <DebriefTile
           label={<Term id="hz-vs-fps">{t("monitor.sessionDebrief.avgFpsLabel")}</Term>}
-          value={fmtFps(s.avg_fps)}
-          grade={gradeFps(s.avg_fps, { refreshHz: readDisplayRefreshHz() })}
+          value={fmtFps(avgFps)}
+          note={avgFps == null ? t("common.arcGauge.noReading") : undefined}
+          grade={avgFps == null ? undefined : gradeFps(avgFps, { refreshHz: readDisplayRefreshHz() })}
         />
+        {/* A 1% low is graded against its average, so it needs both readings to carry a grade. */}
         <DebriefTile
           label={<Term id="one-percent-lows">{t("monitor.sessionDebrief.oneLowLabel")}</Term>}
-          value={fmtFps(s.low1_fps_est)}
-          note={t("monitor.sessionDebrief.estimateNote")}
-          grade={gradeLow1(s.low1_fps_est, s.avg_fps)}
+          value={fmtFps(lowFps)}
+          note={lowFps == null ? t("common.arcGauge.noReading") : t("monitor.sessionDebrief.estimateNote")}
+          grade={lowFps == null || avgFps == null ? undefined : gradeLow1(lowFps, avgFps)}
         />
         {/* Peak GPU is utilization — left neutral on purpose (high is good while gaming). */}
         <DebriefTile
