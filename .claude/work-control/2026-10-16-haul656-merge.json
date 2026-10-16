@@ -1,0 +1,74 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "currentHead": "30e2419d0c6708fb19bb727eb2922648c4d9a5f0",
+  "issue": 656,
+  "pr": 657,
+  "kind": "lane",
+  "branch": "claude/monitor-measurement-haul-20261016",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/656#issuecomment-6223373858",
+  "leaseEvidenceNote": "Ownership claim (same-holder amendment) posted 2026-10-16T19:44:42Z by claude-code session d6787d7c-2667-4a29-bbd7-54ebabe9edcd in worktree .claude/worktrees/monitor-measurement-haul-20261016. It went through stock gatherFacts -> reconcile (PASS 17/17) -> postClaim. Write scope: the PR's 14 paths plus exactly five 2026-10-16-haul656-*.json receipts (ready, merge, supersede607, close656, close602). Earlier claims by the same holder: launch claim issuecomment-6218310098 (15:01:10Z) and scope amendment issuecomment-6222533131 (18:53:51Z).",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "At push, write-scope drift measured 14 changed paths against the #656 claim, and lease overlap checked the 14 pushed paths against every open issue's live lease; both returned OK. Preflight scope.overlap at the 19:44Z amendment read disjoint from #614 (Claude Code), the only other live lease. origin/main has since gained #600 (PR 658) and #322 guard 1 (PR 659). Neither touches any of the 14 paths, and git merge-tree of origin/main with this head is clean.",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Re-derived at 2026-10-16T19:45:27Z from this worktree. HEAD is 30e2419d and origin's lane ref is 30e2419d (git ls-remote). origin/main is eda9c82076d3f1ec128006f3337dd67ef5efe099. The tree is clean apart from these untracked receipts. PR #657 head is 30e2419d with 14 files and empty closingIssuesReferences. The #656 lease was read by stock preflight (PASS). No build, test, dev or install process runs from this folder: the self-reviewer's tauri dev tree was stopped, and no-debug-port reported CLEAN, exit 0. The only processes naming this folder are this session (pid 24252), its bg daemon host and its shells.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "Three commits, all by claude-code: e55e57e0 is git cherry-pick -x of PR #607's e337bbd9 (claude-code, #602; byte-identical files), f1251cae is the #645 headline repair, and 30e2419d is the Readings/deltas/SessionStack/Play repair. Codex reviewed read-only and authored nothing. The self-reviewer only captured and edited nothing.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "30e2419d0c6708fb19bb727eb2922648c4d9a5f0",
+      "summary": "Test Files 478 passed (478); Tests 8144 passed | 5 expected fail | 9 skipped (8158).",
+      "evidence": "logs/verify-local-2026-10-16T19-00-05Z.log (SHA-256 e951430e40d36a1e27f13612ffcc200c9ab5280abedde6eb702f7df9bf7d97b6); push log GPT HQ operations/compy-haul-2026-10-16/logs/10-push-verify-local-30e2419d.log (SHA-256 6523c8d269af93c17dcc9956642322c4dfe413f2bc7e5a66eac1ab6ae37de017): LOCAL CHECK RESULT: PASS, PUSH_EXIT=0, f1251cae..30e2419d pushed at this exact head. Gate-log copy: GPT HQ operations/compy-haul-2026-10-16/logs/11-verify-local-30e2419d.log (same SHA-256)."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "30e2419d0c6708fb19bb727eb2922648c4d9a5f0",
+      "summary": "tsc && vite build passed (built in 6.30s).",
+      "evidence": "logs/verify-local-2026-10-16T19-00-05Z.log (SHA-256 e951430e40d36a1e27f13612ffcc200c9ab5280abedde6eb702f7df9bf7d97b6); push log GPT HQ operations/compy-haul-2026-10-16/logs/10-push-verify-local-30e2419d.log (SHA-256 6523c8d269af93c17dcc9956642322c4dfe413f2bc7e5a66eac1ab6ae37de017): LOCAL CHECK RESULT: PASS, PUSH_EXIT=0, f1251cae..30e2419d pushed at this exact head. Gate-log copy: GPT HQ operations/compy-haul-2026-10-16/logs/11-verify-local-30e2419d.log (same SHA-256)."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "30e2419d0c6708fb19bb727eb2922648c4d9a5f0",
+      "summary": "test result: ok. 1401 passed; 0 failed; 24 ignored.",
+      "evidence": "logs/verify-local-2026-10-16T19-00-05Z.log (SHA-256 e951430e40d36a1e27f13612ffcc200c9ab5280abedde6eb702f7df9bf7d97b6); push log GPT HQ operations/compy-haul-2026-10-16/logs/10-push-verify-local-30e2419d.log (SHA-256 6523c8d269af93c17dcc9956642322c4dfe413f2bc7e5a66eac1ab6ae37de017): LOCAL CHECK RESULT: PASS, PUSH_EXIT=0, f1251cae..30e2419d pushed at this exact head. Gate-log copy: GPT HQ operations/compy-haul-2026-10-16/logs/11-verify-local-30e2419d.log (same SHA-256)."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "30e2419d0c6708fb19bb727eb2922648c4d9a5f0",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-10-16T19-00-05Z.log (SHA-256 e951430e40d36a1e27f13612ffcc200c9ab5280abedde6eb702f7df9bf7d97b6); push log GPT HQ operations/compy-haul-2026-10-16/logs/10-push-verify-local-30e2419d.log (SHA-256 6523c8d269af93c17dcc9956642322c4dfe413f2bc7e5a66eac1ab6ae37de017): LOCAL CHECK RESULT: PASS, PUSH_EXIT=0, f1251cae..30e2419d pushed at this exact head. Gate-log copy: GPT HQ operations/compy-haul-2026-10-16/logs/11-verify-local-30e2419d.log (same SHA-256)."
+    }
+  ],
+  "gateEvidenceNote": "scripts/verify-local.ps1 ran as the pre-push hook at this exact committed clean head and returned PASS. Nothing was pushed to this branch after it. Focused proof, from GPT HQ operations/compy-haul-2026-10-16/logs/: before the f1251cae repair, RED was 4 files, 34 failed / 20 passed (01). Before the 30e2419d repair, RED was 2 files, 78 failed / 70 passed (06). After repair, GREEN was 148 focused tests (07) and 112 files / 1621 tests from vitest related (08), with tsc clean (09). Visual: one self-reviewer returned PASS at 30e2419d (https://github.com/Pootytxng/sentinel/pull/657#issuecomment-6223226020): 6 states x en + zh-CN x Live + Sessions x 1280x720 + 1920x1080 = 24/24, with 80 captures. These are fixture previews in this worktree's dev webview, not installed-binary acceptance. They resolve the item-3 FAIL at f1251cae (issuecomment-6219075113).",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "APPROVE",
+    "status": "passed",
+    "head": "30e2419d0c6708fb19bb727eb2922648c4d9a5f0",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/657#issuecomment-6223319620",
+    "reviewerNote": "Codex coordinator gave exact-head final acceptance on PR #657: APPROVE at 30e2419d, base 7d621c86, 14 files, empty closing references, no blocking finding. It carries Codex's source review issuecomment-6222722019: 869 independent pinned profile checks, plus the retained 416 headline checks on unchanged blobs. Codex inspected the native gate and the visual PASS, and viewed three retained captures. Codex authored no part of the delta. This is development-fixture acceptance, not installed-binary acceptance."
+  },
+  "closingNote": "Land PR #657 through scripts/land-pr.mjs (merge commit, no squash, head ref pruned). closingIssuesReferences is empty, so the merge closes nothing. #656 is released by a Handoff and closed by its own close-issue receipt. #602 is closed by its own close-issue receipt. PR #607 is closed by its own close-superseded-pr receipt. #645 and #608 stay open for their other surfaces."
+}
