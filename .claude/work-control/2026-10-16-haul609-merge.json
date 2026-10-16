@@ -1,0 +1,74 @@
+{
+  "transition": "merge-pr",
+  "actor": "claude-code",
+  "currentHead": "7ac411b1af65b4ae2d77b3d1054edba8526adc82",
+  "issue": 322,
+  "pr": 659,
+  "kind": "lane",
+  "branch": "claude/haul-609-20261016",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/322#issuecomment-6222770798",
+  "leaseEvidenceNote": "Ownership claim posted 2026-10-16T19:07:54Z by the Compy entrypoint for claude-code session b7d52025-0188-4d59-bb9f-176e9c30fab1 in worktree .claude/worktrees/haul-609-20261016, rendered from a PASS preflight. Write scope: the PR's three paths plus exactly the three 2026-10-16-haul609-*.json receipts. The previous #322 lease (PR #609's lane) was released by its Handoff of 2026-10-07T17:37:36Z. The lease stays live through the receipt carrier push.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "The only concurrent author lane (#656) holds disjoint paths. At push, write-scope drift measured 3 changed paths inside the #322 claim and lease overlap checked the 3 pushed paths against every open issue's live lease; both returned OK.",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Re-derived at 2026-10-16T19:20:05Z from this worktree: HEAD 7ac411b1 equal to origin's lane ref, origin/main ce63975d4bc39ba5baa464972f39b30f751bf375, tree clean apart from untracked haul609 receipts, PR #659 head 7ac411b1, the #322 lease read from its thread. No build, test or install process was running from this folder.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "The eight commits are PR #609's Claude Code commits (authors claude-code <claude-code@desk.local>, claude-code <noreply@anthropic.com>, and one Claude <noreply@anthropic.com> from a Claude Code cloud session), carried by this claude-code session with git cherry-pick -x onto main ce63975d. The three resulting blobs are byte-identical to PR #609's reviewed head 0db23d7a. Codex reviewed read-only and authored nothing.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "7ac411b1af65b4ae2d77b3d1054edba8526adc82",
+      "summary": "Test Files 474 passed (474); Tests 8058 passed | 5 expected fail | 10 skipped (8073).",
+      "evidence": "logs/verify-local-2026-10-16T19-10-25Z.log (SHA-256 6b48667c371b55e85ffa660b942d29496cc9d9e57ff75c4b270d258cb9225c18); push log logs/haul609/push-01.log (SHA-256 876bc7b4d92fc3b9cfaf3492eea176a2c1a32bf81bf117bc3ce93c18da00ae03): LOCAL CHECK RESULT: PASS, push exit 0, branch created at this exact head. Checkpoint copy in GPT HQ operations/compy-haul-2026-10-16/PR609_CHECKPOINT.md."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "7ac411b1af65b4ae2d77b3d1054edba8526adc82",
+      "summary": "frontend type-check and build passed.",
+      "evidence": "logs/verify-local-2026-10-16T19-10-25Z.log (SHA-256 6b48667c371b55e85ffa660b942d29496cc9d9e57ff75c4b270d258cb9225c18); push log logs/haul609/push-01.log (SHA-256 876bc7b4d92fc3b9cfaf3492eea176a2c1a32bf81bf117bc3ce93c18da00ae03): LOCAL CHECK RESULT: PASS, push exit 0, branch created at this exact head. Checkpoint copy in GPT HQ operations/compy-haul-2026-10-16/PR609_CHECKPOINT.md."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "7ac411b1af65b4ae2d77b3d1054edba8526adc82",
+      "summary": "test result: ok. 1401 passed; 0 failed; 24 ignored.",
+      "evidence": "logs/verify-local-2026-10-16T19-10-25Z.log (SHA-256 6b48667c371b55e85ffa660b942d29496cc9d9e57ff75c4b270d258cb9225c18); push log logs/haul609/push-01.log (SHA-256 876bc7b4d92fc3b9cfaf3492eea176a2c1a32bf81bf117bc3ce93c18da00ae03): LOCAL CHECK RESULT: PASS, push exit 0, branch created at this exact head. Checkpoint copy in GPT HQ operations/compy-haul-2026-10-16/PR609_CHECKPOINT.md."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "7ac411b1af65b4ae2d77b3d1054edba8526adc82",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-10-16T19-10-25Z.log (SHA-256 6b48667c371b55e85ffa660b942d29496cc9d9e57ff75c4b270d258cb9225c18); push log logs/haul609/push-01.log (SHA-256 876bc7b4d92fc3b9cfaf3492eea176a2c1a32bf81bf117bc3ce93c18da00ae03): LOCAL CHECK RESULT: PASS, push exit 0, branch created at this exact head. Checkpoint copy in GPT HQ operations/compy-haul-2026-10-16/PR609_CHECKPOINT.md."
+    }
+  ],
+  "gateEvidenceNote": "scripts/verify-local.ps1 ran as the pre-push hook at this exact committed clean head (2026-10-16T19:10:24Z-19:14:16Z) and returned PASS; the test mutex was acquired with no wait. Nothing was pushed to this branch after it. Focused plus neighbour run (6 files): 207 passed + 5 expected-fail, exit 0; tsc exit 0. PR #609's 48-case falsification was not repeated because it is pinned to these three byte-identical blobs.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "APPROVE",
+    "status": "passed",
+    "head": "7ac411b1af65b4ae2d77b3d1054edba8526adc82",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/659#issuecomment-6222932987",
+    "reviewerNote": "Codex, exact-head independent acceptance on PR #659: APPROVE at 7ac411b1, base ce63975d, no blocking finding. It carries Codex's current integration source review on #322 (issuecomment-6222892339) and the historical full review and falsification of the byte-identical original 0db23d7a (https://github.com/Pootytxng/sentinel/pull/609#issuecomment-6042734433). Codex verified the three final blobs equal 0db23d7a's, the full native pre-push stream by its SHA-256, the PR head/base and empty closing references, and authored no part of the delta."
+  },
+  "closingNote": "Land PR #659 through scripts/land-pr.mjs (merge commit, no squash, head ref pruned). closingIssuesReferences is empty, so the merge closes nothing; #322 stays open for guard 2 (#321) and guard 3 (rubric). PR #609 is closed by its own close-superseded-pr receipt."
+}
