@@ -10,15 +10,38 @@
 // never a pass: `findChromium()` throws and the test fails naming the paths it looked at.
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** `promise`, or a rejection saying `what` once `ms` pass; the timer never outlives the race. */
+function within(promise, ms, what) {
+  let timer;
+  const late = new Promise((_, fail) => {
+    timer = setTimeout(() => fail(new Error(what)), ms);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * A setup step threw before the caller received a handle: release everything acquired so far through
+ * the same `close` the caller would have used, then rethrow the setup failure (a teardown failure rides
+ * along). Without this, a failed launch leaves its browser, debugger, listener and temp dirs behind.
+ */
+async function unwind(error, close) {
+  try {
+    await close();
+  } catch (teardown) {
+    throw new AggregateError([error, teardown], `${error.message}\n(teardown after that failure also failed: ${teardown.message})`);
+  }
+  throw error;
+}
 
 /** Where a Chromium may already be installed, in the order they are tried. Env overrides first. */
 export function chromiumCandidates(env = process.env) {
@@ -73,21 +96,44 @@ const MIME = {
   ".mp4": "video/mp4",
 };
 
-/** Serve one directory on 127.0.0.1 at an OS-chosen port. Files only; no index magic. */
+/**
+ * The regular file a request URL names inside `base`, or null. Containment is by `relative()`, not by
+ * string prefix: `C:\out-peer\x` starts with `C:\out` and is still outside it. Undecodable paths,
+ * directories and anything unreadable are null too, so the handler answers 404 instead of throwing.
+ */
+function fileWithin(base, url) {
+  try {
+    const file = resolve(base, "." + decodeURIComponent(new URL(url, "http://127.0.0.1").pathname));
+    const rel = relative(base, file);
+    if (rel === "" || rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) return null;
+    return statSync(file, { throwIfNoEntry: false })?.isFile() ? file : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Serve one directory on 127.0.0.1 at an OS-chosen port. Files inside it only; no index magic. */
 export function serveDir(dir) {
+  const base = resolve(dir);
   const server = createServer((req, res) => {
-    const path = decodeURIComponent(new URL(req.url, "http://127.0.0.1").pathname);
-    const file = resolve(dir, "." + path);
-    if (!file.startsWith(resolve(dir)) || !existsSync(file)) {
+    const file = fileWithin(base, req.url);
+    let body = null;
+    try {
+      body = file && readFileSync(file);
+    } catch {
+      body = null;
+    }
+    if (!body) {
       res.writeHead(404).end();
       return;
     }
     res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
-    res.end(readFileSync(file));
+    res.end(body);
   });
-  return new Promise((ok) =>
-    server.listen(0, "127.0.0.1", () => ok({ origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => server.close(r)) })),
-  );
+  return new Promise((ok, fail) => {
+    server.once("error", fail);
+    server.listen(0, "127.0.0.1", () => ok({ origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => server.close(r)) }));
+  });
 }
 
 /**
@@ -133,6 +179,11 @@ export function connectCdp(wsUrl) {
     const pending = new Map();
     const listeners = new Map();
     ws.addEventListener("error", (e) => fail(new Error(`CDP socket error: ${e.message ?? e.type}`)));
+    // A browser that dies mid-call never answers: fail what is outstanding instead of waiting forever.
+    ws.addEventListener("close", () => {
+      for (const { rej } of pending.values()) rej(new Error("CDP socket closed"));
+      pending.clear();
+    });
     ws.addEventListener("message", (ev) => {
       const m = JSON.parse(String(ev.data));
       if (m.id && pending.has(m.id)) {
@@ -163,66 +214,81 @@ export function connectCdp(wsUrl) {
 
 /**
  * Launch a headless Chromium with a throwaway profile and attach to its first page. Returns the CDP
- * client and a `close()` that kills the browser and removes the profile.
+ * client and a `close()` that kills the browser and removes the profile. A launch that fails releases
+ * the browser and profile itself; `close()` may be called any number of times.
  */
 export async function launchChromium({ exe = findChromium(), width = 1600, height = 1000 } = {}) {
   const profile = mkdtempSync(join(tmpdir(), "compy-layout-"));
-  const args = [
-    "--headless=new",
-    "--remote-debugging-port=0",
-    `--user-data-dir=${profile}`,
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-extensions",
-    "--disable-background-networking",
-    "--disable-component-update",
-    "--disable-sync",
-    "--disable-gpu",
-    "--hide-scrollbars",
-    "--force-device-scale-factor=1",
-    `--window-size=${width},${height}`,
-    "about:blank",
-  ];
-  const child = spawn(exe, args, { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
-  let stderr = "";
-  child.stderr.on("data", (d) => (stderr += d));
-  const exited = new Promise((r) => child.once("exit", r));
-
-  const portFile = join(profile, "DevToolsActivePort");
-  const deadline = Date.now() + 30_000;
-  let port = 0;
-  while (!port) {
-    if (child.exitCode !== null) throw new Error(`Chromium exited (${child.exitCode}) before opening its debug port:\n${stderr}`);
-    if (Date.now() > deadline) throw new Error(`Chromium did not open its debug port within 30s:\n${stderr}`);
-    if (existsSync(portFile)) {
-      const [first] = readFileSync(portFile, "utf8").split(/\r?\n/);
-      if (Number(first) > 0) port = Number(first);
-    }
-    if (!port) await sleep(50);
-  }
-
-  let page = null;
-  while (!page) {
-    if (Date.now() > deadline) throw new Error("Chromium opened its debug port but listed no page target within 30s");
-    const list = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json()).catch(() => []);
-    page = list.find((t) => t.type === "page") ?? null;
-    if (!page) await sleep(50);
-  }
-  const cdp = await connectCdp(page.webSocketDebuggerUrl);
-  return {
-    exe,
-    cdp,
-    close: async () => {
+  let child = null;
+  let exited = null;
+  let cdp = null;
+  let closing = null;
+  const close = () =>
+    (closing ??= (async () => {
       try {
-        cdp.close();
+        cdp?.close();
       } catch {
         /* already closed */
       }
-      child.kill();
-      await Promise.race([exited, sleep(5000)]);
+      // Signal only the browser this launch spawned, and only while it runs: once it has exited (or
+      // never started) its pid may belong to somebody else's process.
+      if (child && child.pid !== undefined && child.exitCode === null && child.signalCode === null) {
+        child.kill();
+        await Promise.race([exited, sleep(5000)]);
+      }
       rmSync(profile, { recursive: true, force: true });
-    },
-  };
+    })());
+  try {
+    const args = [
+      "--headless=new",
+      "--remote-debugging-port=0",
+      `--user-data-dir=${profile}`,
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-component-update",
+      "--disable-sync",
+      "--disable-gpu",
+      "--hide-scrollbars",
+      "--force-device-scale-factor=1",
+      `--window-size=${width},${height}`,
+      "about:blank",
+    ];
+    child = spawn(exe, args, { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
+    let stderr = "";
+    let spawnError = null;
+    // Without a listener a failed spawn's "error" event is thrown out of the worker.
+    child.on("error", (e) => (spawnError ??= e));
+    child.stderr.on("data", (d) => (stderr += d));
+    exited = new Promise((r) => child.once("exit", r));
+
+    const portFile = join(profile, "DevToolsActivePort");
+    const deadline = Date.now() + 30_000;
+    let port = 0;
+    while (!port) {
+      if (spawnError) throw new Error(`Chromium could not be started (${exe}): ${spawnError.message}`);
+      if (child.exitCode !== null) throw new Error(`Chromium exited (${child.exitCode}) before opening its debug port:\n${stderr}`);
+      if (Date.now() > deadline) throw new Error(`Chromium did not open its debug port within 30s:\n${stderr}`);
+      if (existsSync(portFile)) {
+        const [first] = readFileSync(portFile, "utf8").split(/\r?\n/);
+        if (Number(first) > 0) port = Number(first);
+      }
+      if (!port) await sleep(50);
+    }
+
+    let page = null;
+    while (!page) {
+      if (Date.now() > deadline) throw new Error("Chromium opened its debug port but listed no page target within 30s");
+      const list = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json()).catch(() => []);
+      page = list.find((t) => t.type === "page") ?? null;
+      if (!page) await sleep(50);
+    }
+    cdp = await connectCdp(page.webSocketDebuggerUrl);
+    return { exe, cdp, close };
+  } catch (error) {
+    return unwind(error, close);
+  }
 }
 
 /**
@@ -232,43 +298,60 @@ export async function launchChromium({ exe = findChromium(), width = 1600, heigh
  */
 export async function openBundledPage({ entry, resolveDir, html, plugins, readyExpr = "true" }) {
   const outdir = mkdtempSync(join(tmpdir(), "compy-layout-out-"));
-  await bundlePage({ entry, resolveDir, outdir, plugins });
-  const { writeFileSync } = await import("node:fs");
-  writeFileSync(join(outdir, "index.html"), html);
-  const server = await serveDir(outdir);
-  const browser = await launchChromium();
-  const { cdp } = browser;
-  const errors = [];
-  await cdp.send("Runtime.enable");
-  await cdp.send("Page.enable");
-  cdp.on("Runtime.exceptionThrown", (p) => errors.push(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text ?? "unknown page exception"));
-  const loaded = cdp.once("Page.loadEventFired");
-  await cdp.send("Page.navigate", { url: `${server.origin}/index.html` });
-  await loaded;
+  let server = null;
+  let browser = null;
+  let closing = null;
+  // One teardown for the caller and for a failed setup: browser, then server, then the bundle directory,
+  // each attempted even when the one before it fails.
+  const close = () =>
+    (closing ??= (async () => {
+      try {
+        await browser?.close();
+      } finally {
+        try {
+          await server?.close();
+        } finally {
+          rmSync(outdir, { recursive: true, force: true });
+        }
+      }
+    })());
+  try {
+    await bundlePage({ entry, resolveDir, outdir, plugins });
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(join(outdir, "index.html"), html);
+    server = await serveDir(outdir);
+    browser = await launchChromium();
+    const { cdp } = browser;
+    const errors = [];
+    await cdp.send("Runtime.enable");
+    await cdp.send("Page.enable");
+    cdp.on("Runtime.exceptionThrown", (p) => errors.push(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text ?? "unknown page exception"));
+    const loaded = cdp.once("Page.loadEventFired");
+    await cdp.send("Page.navigate", { url: `${server.origin}/index.html` });
+    await within(loaded, 30_000, "page never fired its load event within 30s");
 
-  const evaluate = async (expression) => {
-    const { result, exceptionDetails } = await cdp.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
-    if (exceptionDetails) {
-      throw new Error(`page threw: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    const evaluate = async (expression) => {
+      const { result, exceptionDetails } = await cdp.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
+      if (exceptionDetails) {
+        throw new Error(`page threw: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+      }
+      return result.value;
+    };
+
+    const deadline = Date.now() + 30_000;
+    while (!(await evaluate(readyExpr))) {
+      if (errors.length) throw new Error(`page failed before it was ready:\n${errors.join("\n")}`);
+      if (Date.now() > deadline) throw new Error(`page never satisfied ready expression ${readyExpr}`);
+      await sleep(50);
     }
-    return result.value;
-  };
 
-  const deadline = Date.now() + 30_000;
-  while (!(await evaluate(readyExpr))) {
-    if (errors.length) throw new Error(`page failed before it was ready:\n${errors.join("\n")}`);
-    if (Date.now() > deadline) throw new Error(`page never satisfied ready expression ${readyExpr}`);
-    await sleep(50);
+    return {
+      evaluate,
+      errors,
+      screenshot: async () => (await cdp.send("Page.captureScreenshot", { format: "png" })).data,
+      close,
+    };
+  } catch (error) {
+    return unwind(error, close);
   }
-
-  return {
-    evaluate,
-    errors,
-    screenshot: async () => (await cdp.send("Page.captureScreenshot", { format: "png" })).data,
-    close: async () => {
-      await browser.close();
-      await server.close();
-      rmSync(outdir, { recursive: true, force: true });
-    },
-  };
 }
