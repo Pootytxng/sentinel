@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- The root attributes src/main.tsx sets unconditionally or by default (v2, dash_v2, living,
+     hud, room identity, the violet theme), written statically so the cascade the Health tab really
+     runs under applies without any runtime attribute write. -->
+<html lang="en" data-v2="on" data-dash-v2="on" data-living="on" data-hud="on" data-room-identity="on" data-itheme="violet">
+  <head>
+    <meta charset="utf-8" />
+    <title>hc-specs layout fixture</title>
+    <link rel="stylesheet" href="./page.css" />
+    <style>
+      /* The host is the app's width; the test sets it per step. Nothing in here styles a card. */
+      html, body { margin: 0; padding: 0; }
+      #host { width: 1280px; }
+    </style>
+  </head>
+  <body>
+    <div id="host"></div>
+    <script type="module" src="./page.js"></script>
+  </body>
+</html>
