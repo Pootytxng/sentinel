@@ -3162,7 +3162,12 @@ body::before {
   color: var(--muted);
   margin-top: 4px;
 }
-.debrief-tile-note { color: var(--faint); }
+.debrief-tile-note {
+  color: var(--faint);
+  /* The note wraps as one unit beside its label, never mid-note (#608). nowrap, not inline-block:
+     an atomic box drops the space before the dot. Pinned by tools/layout/debrief-note-layout.test.mjs. */
+  white-space: nowrap;
+}
 .debrief-insight {
   border: 1px solid var(--attention, #f5c451);
   background: rgba(245, 196, 81, 0.07);
