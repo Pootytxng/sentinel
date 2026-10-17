@@ -10,6 +10,12 @@
 //      is a 404, never a crash of the request handler.
 // Plus the teardown contract the layout test's afterAll relies on: close() is idempotent, and it
 // signals only the browser this harness spawned, and only while that browser still runs.
+// The review of 405ec102 widened both: every bootstrap wait (the debug target list, the debugger
+// handshake, each CDP command before the page is ready) is bounded and releases what it was waiting
+// on, and containment is decided on the canonical target, so an in-root symlink or junction that
+// lands outside is refused. The native gate of the same head added the third: a directory whose
+// removal is refused for a moment (EPERM, holder unknown) is retried, and one that stays refused
+// fails close() loudly after every other resource is released.
 //
 // Every resource here is FAKE. fs, child_process, http, os, esbuild, fetch and WebSocket are an
 // in-memory ledger, so each failure path runs the REAL helper's control flow without a browser, a
@@ -30,7 +36,7 @@ const { fake, forward } = vi.hoisted(() => {
   };
   return { fake, forward };
 });
-vi.mock("node:fs", () => forward(["existsSync", "mkdtempSync", "readFileSync", "rmSync", "statSync", "writeFileSync"], "fs"));
+vi.mock("node:fs", () => forward(["existsSync", "mkdtempSync", "readFileSync", "realpathSync", "rmSync", "statSync", "writeFileSync"], "fs"));
 vi.mock("node:child_process", () => forward(["spawn"], "childProcess"));
 vi.mock("node:http", () => forward(["createServer"], "http"));
 vi.mock("node:os", () => forward(["tmpdir"], "os"));
@@ -53,8 +59,10 @@ let processKill;
  */
 function makeWorld(knobs = {}) {
   const w = {
-    knobs: { chromium: true, bundle: "ok", write: "ok", listen: "ok", spawn: "ok", browser: "ok", ...knobs },
+    knobs: { chromium: true, bundle: "ok", write: "ok", listen: "ok", spawn: "ok", browser: "ok", mute: null, locks: {}, ...knobs },
     files: new Map(), // resolved path -> Buffer | "dir"
+    links: new Map(), // resolved link path -> resolved target (a symlink, or a junction when the target is a directory)
+    requests: [], // { url, pending, aborted } for every debug HTTP request
     dirs: [], // { path, removed }
     servers: [], // { handler, open, closes }
     children: [], // { child, running, kills, strayKills, exit }
@@ -72,36 +80,60 @@ function makeWorld(knobs = {}) {
     return Boolean(c?.running) && !["no-port", "exits-early"].includes(w.knobs.browser);
   };
 
+  /** Where a path really lands once every link along it is followed, as the real fs does. */
+  const follow = (p) => {
+    let at = resolve(String(p));
+    for (let hops = 0; hops < 32; hops++) {
+      const link = [...w.links.keys()].find((l) => at === l || at.startsWith(l + sep));
+      if (link === undefined) return at;
+      at = resolve(w.links.get(link) + at.slice(link.length));
+    }
+    throw errno("ELOOP", String(p));
+  };
+
   fake.fs = {
     existsSync: (p) => {
       const at = resolve(String(p));
       if (at === CHROME) return w.knobs.chromium;
       if (at.endsWith(sep + PORT_FILE)) return portReady();
-      return w.files.has(at);
+      return w.files.has(follow(at));
     },
     mkdtempSync: (prefix) => {
       const path = resolve(`${prefix}${String(w.dirs.length).padStart(6, "0")}`);
-      w.dirs.push({ path, removed: 0 });
+      const kind = String(prefix).endsWith("compy-layout-out-") ? "outdir" : "profile";
+      w.dirs.push({ path, kind, removed: 0, attempts: 0 });
       w.files.set(path, "dir");
       return path;
     },
     readFileSync: (p, encoding) => {
-      const at = resolve(String(p));
-      if (at.endsWith(sep + PORT_FILE)) return "9222\n/devtools/browser/fake";
+      if (resolve(String(p)).endsWith(sep + PORT_FILE)) return "9222\n/devtools/browser/fake";
+      const at = follow(p);
       const entry = w.files.get(at);
       if (entry === undefined) throw errno("ENOENT", at);
       if (entry === "dir") throw errno("EISDIR", at);
       w.reads.push(at);
       return encoding ? entry.toString(encoding) : entry;
     },
+    realpathSync: (p) => {
+      const at = follow(p);
+      if (!w.files.has(at)) throw errno("ENOENT", String(p));
+      return at;
+    },
     rmSync: (p) => {
       const at = resolve(String(p));
       const dir = w.dirs.find((d) => d.path === at);
-      if (dir) dir.removed++;
+      // A lock on the tree refuses removal with EPERM for its first `locks[kind]` attempts, whoever
+      // holds it (the native gate saw this on a profile; the holder was never identified). One call is
+      // one attempt whatever its options: measured on Node v24.20.0/win32, rmSync with maxRetries 10
+      // threw this refusal after 0 ms against a held file, so only a caller that calls again gets past it.
+      if (dir) {
+        if (dir.attempts++ < (w.knobs.locks[dir.kind] ?? 0)) throw errno("EPERM", `Permission denied: ${at}`);
+        dir.removed++;
+      }
       for (const key of [...w.files.keys()]) if (key === at || key.startsWith(at + sep)) w.files.delete(key);
     },
     statSync: (p, options) => {
-      const entry = w.files.get(resolve(String(p)));
+      const entry = w.files.get(follow(p));
       if (entry === undefined) {
         if (options?.throwIfNoEntry === false) return undefined;
         throw errno("ENOENT", p);
@@ -192,7 +224,12 @@ function makeWorld(knobs = {}) {
       this.record = { state: "connecting", closes: 0 };
       w.sockets.push(this.record);
       process.nextTick(() => {
-        if (w.knobs.browser === "socket-fails") {
+        if (w.knobs.browser === "socket-silent") return; // the handshake never completes
+        if (w.knobs.browser === "socket-closes") {
+          // Closed during the handshake with no error event first.
+          this.record.state = "closed";
+          this.dispatch("close", {});
+        } else if (w.knobs.browser === "socket-fails") {
           this.record.state = "failed";
           this.dispatch("error", { type: "error", message: "PROBE debugger refused" });
           this.dispatch("close", {});
@@ -213,6 +250,7 @@ function makeWorld(knobs = {}) {
     }
     send(raw) {
       const { id, method } = JSON.parse(raw);
+      if (method === w.knobs.mute) return; // the browser never answers this command
       const mode = w.knobs.browser;
       if (mode === "dies-after-attach") {
         // The browser crashes under the debugger: its process exits and the socket closes unanswered.
@@ -237,9 +275,17 @@ function makeWorld(knobs = {}) {
     }
   }
   vi.stubGlobal("WebSocket", FakeSocket);
-  vi.stubGlobal("fetch", async () => ({
-    json: async () => (w.knobs.browser === "no-page" ? [] : [{ type: "page", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/FAKE" }]),
-  }));
+  vi.stubGlobal("fetch", (url, init = {}) => {
+    const request = { url: String(url), pending: true, aborted: false };
+    w.requests.push(request);
+    init.signal?.addEventListener("abort", () => (request.aborted = true));
+    // A real fetch rejects once aborted; this one never settles at all, the worst case for the caller.
+    if (w.knobs.browser === "list-stalls") return new Promise(() => {});
+    request.pending = false;
+    return Promise.resolve({
+      json: async () => (w.knobs.browser === "no-page" ? [] : [{ type: "page", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/FAKE" }]),
+    });
+  });
 
   return w;
 }
@@ -250,6 +296,7 @@ const leaks = () => [
   ...world.servers.filter((s) => s.open).map(() => "loopback listener"),
   ...world.children.filter((c) => c.running).map((c) => `browser pid ${c.child.pid}`),
   ...world.sockets.filter((s) => s.state === "open" || s.state === "connecting").map(() => "debugger socket"),
+  ...world.requests.filter((r) => r.pending && !r.aborted).map((r) => `debug request ${r.url}`),
 ];
 
 /** Releases that happened more than once, and signals sent to a process that was no longer ours. */
@@ -305,6 +352,14 @@ describe("a failed setup releases everything it acquired and never hangs (#646 r
     { name: "the page never fires its load event", knobs: { browser: "no-load" }, error: /load event/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
     { name: "the page throws before it is ready", knobs: { browser: "page-throws" }, error: /page failed before it was ready/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
     { name: "the page never becomes ready", knobs: { browser: "never-ready" }, error: /never satisfied ready expression/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
+    // Review of 405ec102: waits the loop deadlines above could not reach, because each is one await.
+    { name: "the debug target list never answers", knobs: { browser: "list-stalls" }, error: /listed no page target within 30s/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
+    { name: "the debugger handshake never completes", knobs: { browser: "socket-silent" }, error: /CDP socket did not open within 30s/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
+    { name: "the debugger closes during its handshake", knobs: { browser: "socket-closes" }, error: /CDP socket closed before it opened/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
+    { name: "Runtime.enable is never answered", knobs: { mute: "Runtime.enable" }, error: /CDP Runtime\.enable got no answer within 30s/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
+    { name: "Page.enable is never answered", knobs: { mute: "Page.enable" }, error: /CDP Page\.enable got no answer within 30s/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
+    { name: "Page.navigate is never answered", knobs: { mute: "Page.navigate" }, error: /CDP Page\.navigate got no answer within 30s/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
+    { name: "the ready check is never answered", knobs: { mute: "Runtime.evaluate" }, error: /CDP Runtime\.evaluate got no answer within 30s/, acquired: { dirs: 2, listeners: 1, browsers: 1 } },
   ];
 
   it.each(SETUP_FAILURES)("$name", async ({ knobs, error, acquired }) => {
@@ -328,6 +383,21 @@ describe("a failed setup releases everything it acquired and never hangs (#646 r
     expect(world.children.map((c) => c.kills)).toEqual([1]);
     expect(world.dirs.map((d) => d.removed)).toEqual([1]);
     expect(leaks()).toEqual([]);
+  });
+
+  // The review's own probes at 405ec102: launchChromium pending at 45s with the browser and profile held.
+  it.each([
+    ["the debug target list never answers", { browser: "list-stalls" }, /listed no page target within 30s/, "requests"],
+    ["the debugger handshake never completes", { browser: "socket-silent" }, /CDP socket did not open within 30s/, "sockets"],
+  ])("launchChromium alone: when %s it gives up, kills its browser, removes its profile and drops what it waited on", async (_name, knobs, error, waitedOn) => {
+    world = makeWorld(knobs);
+    const outcome = await settle(launchChromium({ exe: CHROME }));
+    expect(outcome.state, "a stalled bootstrap must reject, not hang").toBe("rejected");
+    expect(outcome.error.message).toMatch(error);
+    expect(world[waitedOn].length, `it reached the ${waitedOn} it then waited on`).toBeGreaterThan(0);
+    expect(world.children.map((c) => c.kills)).toEqual([1]);
+    expect(world.dirs.map((d) => d.removed)).toEqual([1]);
+    expect(leaks(), "a timed-out request or socket is released, not just raced").toEqual([]);
   });
 
   it("control: the same fakes carry a healthy setup all the way to a live page", async () => {
@@ -367,9 +437,38 @@ describe("close() is idempotent and signals only its own running browser", () =>
   });
 });
 
+describe("close() outlasts a removal that is refused for a moment, and reports one that stays refused (#646 native gate at 405ec102)", () => {
+  it("a profile and bundle directory refused (EPERM) for their first attempts are still removed, once each", async () => {
+    world = makeWorld({ locks: { profile: 3, outdir: 3 } });
+    const page = (await settle(openBundledPage(PAGE))).value;
+    const closed = await settle(page.close());
+    expect(closed.state, closed.error?.message).toBe("resolved");
+    expect(world.dirs.map((d) => [d.kind, d.removed])).toEqual([["outdir", 1], ["profile", 1]]);
+    expect(world.dirs.every((d) => d.attempts > 3), "both locks were really in the way").toBe(true);
+    expect(leaks()).toEqual([]);
+    expect(overReleases()).toEqual([]);
+  });
+
+  it("a profile that stays refused fails close() with the EPERM, after the browser, listener and bundle directory are released", async () => {
+    world = makeWorld({ locks: { profile: Infinity } });
+    const page = (await settle(openBundledPage(PAGE))).value;
+    const closed = await settle(page.close());
+    expect(closed.state, "a permanent failure must be reported, and must not hang").toBe("rejected");
+    expect(closed.error.message).toMatch(/EPERM/);
+    const profile = world.dirs.find((d) => d.kind === "profile");
+    expect(leaks(), "only the refused profile is still held").toEqual([`directory ${profile.path}`]);
+    expect(world.dirs.find((d) => d.kind === "outdir").removed).toBe(1);
+    expect(overReleases()).toEqual([]);
+    // Nothing is signalled to free the lock: its holder is unknown, and only our own browser is ours.
+    expect(world.children.map((c) => c.kills)).toEqual([1]);
+    expect(processKill).not.toHaveBeenCalled();
+  });
+});
+
 describe("the loopback server serves its own directory and nothing else (#646 review P2 2)", () => {
   const ROOT = resolve("/compy-fake-out/layout");
   const PEER_SECRET = resolve("/compy-fake-out/layout-peer/secret.txt");
+  const LINKED_ROOT = resolve("/compy-fake-link/layout");
 
   async function serve() {
     world = makeWorld();
@@ -380,11 +479,17 @@ describe("the loopback server serves its own directory and nothing else (#646 re
     world.files.set(resolve("/compy-fake-out/layout-peer"), "dir");
     world.files.set(PEER_SECRET, Buffer.from("PEER SECRET"));
     world.files.set(resolve("/compy-fake-out/secret.txt"), Buffer.from("PARENT SECRET"));
+    // Links inside the root: two that land outside it, two that stay inside, and a linked path to the root.
+    world.links.set(join(ROOT, "linked.txt"), PEER_SECRET);
+    world.links.set(join(ROOT, "junction"), resolve("/compy-fake-out/layout-peer"));
+    world.links.set(join(ROOT, "alias.txt"), join(ROOT, "sub", "inner.txt"));
+    world.links.set(join(ROOT, "subjunction"), join(ROOT, "sub"));
+    world.links.set(LINKED_ROOT, ROOT);
     expect((await settle(serveDir(ROOT))).state).toBe("resolved");
   }
 
-  /** Drive the server's real request handler with one GET; a throw is recorded, not propagated. */
-  async function get(url) {
+  /** Drive a server's real request handler with one GET; a throw is recorded, not propagated. */
+  async function get(url, server = 0) {
     const res = { status: null, body: undefined };
     res.writeHead = (status) => {
       res.status = status;
@@ -396,7 +501,7 @@ describe("the loopback server serves its own directory and nothing else (#646 re
     };
     let threw = null;
     try {
-      await world.servers[0].handler({ method: "GET", url, headers: {} }, res);
+      await world.servers[server].handler({ method: "GET", url, headers: {} }, res);
     } catch (e) {
       threw = e.message;
     }
@@ -426,5 +531,29 @@ describe("the loopback server serves its own directory and nothing else (#646 re
     await serve();
     expect(await get(url)).toEqual({ status: 404, body: undefined, threw: null });
     expect(world.reads).toEqual([]);
+  });
+
+  // Review of 405ec102: the lexical check passed these, then stat and read followed the link outside.
+  it.each([
+    ["an in-root symlink to a file outside it", "/linked.txt"],
+    ["a file reached through an in-root junction to a directory outside it", "/junction/secret.txt"],
+  ])("refuses %s with a 404 and reads nothing", async (_name, url) => {
+    await serve();
+    expect(await get(url)).toEqual({ status: 404, body: undefined, threw: null });
+    expect(world.reads).toEqual([]);
+  });
+
+  it("control: links whose target stays inside its directory are served", async () => {
+    await serve();
+    expect(await get("/alias.txt")).toEqual({ status: 200, body: "INNER", threw: null });
+    expect(await get("/subjunction/inner.txt")).toEqual({ status: 200, body: "INNER", threw: null });
+  });
+
+  it("control: a root reached through a link serves its own files and still refuses an outside link", async () => {
+    await serve();
+    expect((await settle(serveDir(LINKED_ROOT))).state).toBe("resolved");
+    expect(await get("/index.html", 1)).toEqual({ status: 200, body: "INDEX", threw: null });
+    expect(await get("/linked.txt", 1)).toEqual({ status: 404, body: undefined, threw: null });
+    expect(world.reads).toEqual([join(ROOT, "index.html")]);
   });
 });

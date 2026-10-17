@@ -157,9 +157,11 @@ describe("hc-specs grid in a real Chromium (#646)", () => {
     steps = await page.evaluate(measureScript(HOST_WIDTHS, SECTION_WIDTHS));
   }, 90_000);
 
+  // close() is bounded but can outlast the default hook timeout: up to 5s for the browser to exit, then
+  // about 5s per temp directory whose removal is refused for a while. Its own error is the useful one.
   afterAll(async () => {
     await page?.close();
-  });
+  }, 30_000);
 
   it("rendered the real component without a page error and with every spec card", () => {
     expect(page.errors).toEqual([]);

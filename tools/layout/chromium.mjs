@@ -10,7 +10,7 @@
 // never a pass: `findChromium()` throws and the test fails naming the paths it looked at.
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +27,25 @@ function within(promise, ms, what) {
     timer = setTimeout(() => fail(new Error(what)), ms);
   });
   return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Remove a temp tree this harness created. Windows can refuse that for a moment (EPERM, EBUSY,
+ * ENOTEMPTY) while some process still has a file in it open, and the error does not say which. Node's
+ * own `maxRetries` did not retry the refusal (Node 24, win32: EPERM after 0 ms against a held file), so
+ * retry here, without blocking the event loop, for about 5s; a refusal that outlasts that is thrown,
+ * so the caller's close() reports it.
+ */
+export async function removeDir(dir) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt >= 20 || !["EPERM", "EBUSY", "ENOTEMPTY"].includes(error.code)) throw error;
+      await sleep(250);
+    }
+  }
 }
 
 /**
@@ -96,16 +115,24 @@ const MIME = {
   ".mp4": "video/mp4",
 };
 
+/** Whether `file` is strictly inside `base`: by `relative()`, since `C:\out-peer\x` starts with `C:\out`. */
+function inside(base, file) {
+  const rel = relative(base, file);
+  return !(rel === "" || rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel));
+}
+
 /**
- * The regular file a request URL names inside `base`, or null. Containment is by `relative()`, not by
- * string prefix: `C:\out-peer\x` starts with `C:\out` and is still outside it. Undecodable paths,
+ * The regular file a request URL names inside the canonical directory `base`, or null. The named path
+ * must be inside it, and so must the file it really leads to: an in-root symlink or junction can land
+ * anywhere, so the target is resolved and that canonical file is what gets read. Undecodable paths,
  * directories and anything unreadable are null too, so the handler answers 404 instead of throwing.
  */
 function fileWithin(base, url) {
   try {
-    const file = resolve(base, "." + decodeURIComponent(new URL(url, "http://127.0.0.1").pathname));
-    const rel = relative(base, file);
-    if (rel === "" || rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) return null;
+    const named = resolve(base, "." + decodeURIComponent(new URL(url, "http://127.0.0.1").pathname));
+    if (!inside(base, named)) return null;
+    const file = realpathSync(named);
+    if (!inside(base, file)) return null;
     return statSync(file, { throwIfNoEntry: false })?.isFile() ? file : null;
   } catch {
     return null;
@@ -114,7 +141,8 @@ function fileWithin(base, url) {
 
 /** Serve one directory on 127.0.0.1 at an OS-chosen port. Files inside it only; no index magic. */
 export function serveDir(dir) {
-  const base = resolve(dir);
+  // Canonical, so a directory reached through a link still contains its own files' real paths.
+  const base = realpathSync(resolve(dir));
   const server = createServer((req, res) => {
     const file = fileWithin(base, req.url);
     let body = null;
@@ -178,16 +206,31 @@ export function connectCdp(wsUrl) {
     let nextId = 0;
     const pending = new Map();
     const listeners = new Map();
-    ws.addEventListener("error", (e) => fail(new Error(`CDP socket error: ${e.message ?? e.type}`)));
+    // A handshake that never completes must not hold the launch. The caller never receives this socket,
+    // so it is closed here.
+    const handshake = setTimeout(() => {
+      fail(new Error("CDP socket did not open within 30s"));
+      ws.close();
+    }, 30_000);
+    ws.addEventListener("error", (e) => {
+      clearTimeout(handshake);
+      fail(new Error(`CDP socket error: ${e.message ?? e.type}`));
+    });
     // A browser that dies mid-call never answers: fail what is outstanding instead of waiting forever.
     ws.addEventListener("close", () => {
-      for (const { rej } of pending.values()) rej(new Error("CDP socket closed"));
+      clearTimeout(handshake);
+      fail(new Error("CDP socket closed before it opened"));
+      for (const { rej, timer } of pending.values()) {
+        clearTimeout(timer);
+        rej(new Error("CDP socket closed"));
+      }
       pending.clear();
     });
     ws.addEventListener("message", (ev) => {
       const m = JSON.parse(String(ev.data));
       if (m.id && pending.has(m.id)) {
-        const { res, rej } = pending.get(m.id);
+        const { res, rej, timer } = pending.get(m.id);
+        clearTimeout(timer);
         pending.delete(m.id);
         if (m.error) rej(new Error(`${m.error.message}${m.error.data ? `: ${m.error.data}` : ""}`));
         else res(m.result);
@@ -199,7 +242,13 @@ export function connectCdp(wsUrl) {
       send: (method, params = {}) =>
         new Promise((res, rej) => {
           const id = ++nextId;
-          pending.set(id, { res, rej });
+          // An unanswered command must not hold its caller forever: drop it, so the caller unwinds and
+          // closes the browser.
+          const timer = setTimeout(() => {
+            pending.delete(id);
+            rej(new Error(`CDP ${method} got no answer within 30s`));
+          }, 30_000);
+          pending.set(id, { res, rej, timer });
           ws.send(JSON.stringify({ id, method, params }));
         }),
       on: (method, fn) => {
@@ -208,7 +257,10 @@ export function connectCdp(wsUrl) {
       once: (method) => new Promise((res) => client.on(method, res)),
       close: () => ws.close(),
     };
-    ws.addEventListener("open", () => ok(client));
+    ws.addEventListener("open", () => {
+      clearTimeout(handshake);
+      ok(client);
+    });
   });
 }
 
@@ -236,7 +288,7 @@ export async function launchChromium({ exe = findChromium(), width = 1600, heigh
         child.kill();
         await Promise.race([exited, sleep(5000)]);
       }
-      rmSync(profile, { recursive: true, force: true });
+      await removeDir(profile);
     })());
   try {
     const args = [
@@ -280,7 +332,12 @@ export async function launchChromium({ exe = findChromium(), width = 1600, heigh
     let page = null;
     while (!page) {
       if (Date.now() > deadline) throw new Error("Chromium opened its debug port but listed no page target within 30s");
-      const list = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json()).catch(() => []);
+      // Bounded by what is left of the deadline and aborted afterwards: a request that never answers
+      // would hold this one await past the deadline check above.
+      const request = new AbortController();
+      const list = await within(fetch(`http://127.0.0.1:${port}/json/list`, { signal: request.signal }).then((r) => r.json()), Math.max(0, deadline - Date.now()), "debug target list did not answer")
+        .catch(() => [])
+        .finally(() => request.abort());
       page = list.find((t) => t.type === "page") ?? null;
       if (!page) await sleep(50);
     }
@@ -311,7 +368,7 @@ export async function openBundledPage({ entry, resolveDir, html, plugins, readyE
         try {
           await server?.close();
         } finally {
-          rmSync(outdir, { recursive: true, force: true });
+          await removeDir(outdir);
         }
       }
     })());

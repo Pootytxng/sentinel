@@ -27,7 +27,7 @@ scans `src/` for DOM writes, and a fixture that mounts a React root is not an ap
 | File | Proves | Issue |
 | --- | --- | --- |
 | `hc-specs-grid-layout.test.mjs` | The Health tab's Detected tile (`.hc-specs-grid`) never scrolls horizontally and no `.hc-spec` card leaves its grid track, host widths 320–1600px and section widths 150–720px. Red on `minmax(230px, 1fr)`, green on `minmax(min(230px, 100%), 1fr)`. | #614, #624, #646 |
-| `chromium-ownership-guard.test.mjs` | The harness itself, against fake resources (no browser needed): a setup that fails at any step releases every temp dir, listener, browser and debugger it acquired and never hangs; `close()` is idempotent and signals only its own still-running browser; the loopback server answers 404 for anything outside its directory (encoded sibling-prefix and parent escapes), malformed paths and directories. | #646 |
+| `chromium-ownership-guard.test.mjs` | The harness itself, against fake resources (no browser needed): a setup that fails at any step, including a debug request, handshake or CDP command that never answers, releases every temp dir, listener, browser and debugger it acquired and never hangs; `close()` is idempotent, signals only its own still-running browser, retries a temp-dir removal refused for a moment and reports one that stays refused; the loopback server answers 404 for anything outside its directory (encoded sibling-prefix and parent escapes, and symlinks or junctions that land outside), malformed paths and directories. | #646 |
 
 Fixture for it: `hc-specs-fixture.tsx` (the real `HomeConsole` with a long-model-string hardware
 record) and `hc-specs-fixture.html` (the root attributes `src/main.tsx` sets, written statically).
