@@ -9,8 +9,9 @@
 //   1. no `.hc-spec` card's border box leaves its grid track (±0.5px for subpixel rounding);
 //   2. the grid never scrolls horizontally (`scrollWidth <= clientWidth`) and never pokes out of its tile.
 //
-// RED on origin/main's `repeat(auto-fit, minmax(230px, 1fr))` (the grid's scrollWidth pins at 294px
-// while the tile shrinks below it); GREEN with PR #624's `minmax(min(230px, 100%), 1fr)`. Both runs
+// RED on the pre-#614 `repeat(auto-fit, minmax(230px, 1fr))` (the grid's scrollWidth pins at its fixed
+// track while the tile shrinks below it: 294px at 1780fef1, 230px on 2c6d8b8's cascade); GREEN with
+// PR #624's `minmax(min(230px, 100%), 1fr)`. Both runs
 // are recorded on #646. Width sweep: the host (the app's width) from 320px to 1600px, then the
 // `.hc-specs` section clamped from 150px to 720px so the 360–720px container range the review named
 // is hit exactly, including the 230px minimum on both sides.
