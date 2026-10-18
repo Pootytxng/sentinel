@@ -1511,6 +1511,7 @@ mod manual_elevation_qa {
     #[test]
     #[ignore = "manual §4 elevation QA — real UAC; click YES twice"]
     fn manual_qa_batch_one_prompt_receipts_and_per_item_rollback() {
+        crate::data_root::require_ignored_only_run();
         let before = load_history().expect("ledger readable").len();
         let report = apply_recommendations_batch(vec![
             qa_item("fast-startup-off", "QA · Disable Fast Startup"),
@@ -1564,6 +1565,7 @@ mod manual_elevation_qa {
     #[test]
     #[ignore = "manual §4 elevation QA — real UAC; click NO (cancel)"]
     fn manual_qa_uac_cancel_is_honest_per_item() {
+        crate::data_root::require_ignored_only_run();
         let before = load_history().expect("ledger readable").len();
         let report = apply_recommendations_batch(vec![
             qa_item("game-bar-disable", "QA · Game Bar off"), // non-elevated (HKCU)
@@ -1666,6 +1668,7 @@ mod manual_restore_qa {
     #[test]
     #[ignore = "manual leftovers-restore QA — real UAC; click YES on all 4 prompts"]
     fn manual_restore_qa_w32ps_full_loop() {
+        crate::data_root::require_ignored_only_run();
         let _qa = crate::leftovers::QaRestoreGateBypass::begin();
         // Run elevated commands under cargo test (Wave-0 seam) — without this the self-helper
         // relaunches the TEST binary elevated, which exits 101 (caught live 2026-07-16).
@@ -1731,6 +1734,7 @@ mod manual_restore_qa {
     #[test]
     #[ignore = "manual leftovers-restore QA — real UAC; click YES on all 4 prompts"]
     fn manual_restore_qa_mpo_full_loop() {
+        crate::data_root::require_ignored_only_run();
         let _qa = crate::leftovers::QaRestoreGateBypass::begin();
         let _direct = crate::actions::ForceDirectElevation::begin(); // Wave-0 seam (see w32ps loop)
         let original = read_overlay_test_mode();
@@ -1796,6 +1800,7 @@ mod manual_restore_qa {
     #[test]
     #[ignore = "manual leftovers-restore QA — real UAC ×6; OWNER FIXTURE SANCTION REQUIRED (toggles memory compression)"]
     fn manual_restore_qa_memcompress_full_loop() {
+        crate::data_root::require_ignored_only_run();
         let (state, needs_admin) = crate::leftovers::read_memory_compression_probe();
         assert!(
             state.is_none() && needs_admin,
