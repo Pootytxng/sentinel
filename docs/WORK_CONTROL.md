@@ -301,8 +301,10 @@ observed result at both. Each injection is posted on the PR in this format:
 ```
 
 The reviewer re-runs at least one injection at the exact head and names it in the verdict. No block,
-or "suite green" in place of results, is a blocking finding. An injection the head no longer catches
-is a regression, unless the PR names that narrowing and its reason.
+or "suite green" in place of results, is a blocking finding. Only an input caught at both base and
+head satisfies this item; one the head no longer catches never does, whatever reason the PR gives.
+Coverage removed on purpose is disclosed separately on the PR, with its reason, under the rules that
+already govern that guard, and it never replaces the retained injection.
 
 ## Windows-session collision guards
 
