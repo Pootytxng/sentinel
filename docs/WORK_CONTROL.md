@@ -278,6 +278,32 @@ impractical, the receipt must say why; it may not silently self-approve.
 
 Only `PASS` from the exact Work Control gate authorizes the transition.
 
+### A change that weakens a guard carries an injection (#322 guard 3)
+
+A green suite proves only that the cases it already lists still behave, never that a change making a
+guard pass more easily is safe (#308: a depth cap that could only turn a refusal into an allow). A
+guard is any hook, gate, guard test, detector or refusal path. Weakening includes adding a cap, limit,
+short-circuit, early return, skip or allow entry, narrowing a match, relaxing a threshold, and
+demoting a failure to a warning. In doubt, treat it as weakening.
+
+**Mandatory reviewer item:** the exact-head reviewer of such a delta requires at least one named
+injection: an input the guard caught at the base and must still catch at the head, with the exact
+observed result at both. Each injection is posted on the PR in this format:
+
+```text
+### Weakening injection
+- Guard: <path + function or rule>
+- Weakening: <cap | limit | short-circuit | early return | skip | allow entry | narrowed match | relaxed threshold | demoted failure>
+- Injection: <the exact input, verbatim>
+- Before (<base 40-char SHA>): <exact observed result, e.g. the refusal line>
+- After (<head 40-char SHA>): <exact observed result; it must still be caught>
+- Evidence: <command run at each SHA + log path or quoted output>
+```
+
+The reviewer re-runs at least one injection at the exact head and names it in the verdict. No block,
+or "suite green" in place of results, is a blocking finding. An injection the head no longer catches
+is a regression, unless the PR names that narrowing and its reason.
+
 ## Windows-session collision guards
 
 The Project claim and linked issue remain authoritative. Windows mutexes enforce only process-level
