@@ -590,17 +590,77 @@ pub(crate) fn gather() -> RootProbe {
 
 /// The capability the pre-existing rollback-contract suites need to keep calling `dispatch_rollback`
 /// directly. Those tests assert that a mismatched (action, snapshot) pair is REFUSED, so the root is
-/// never consulted — but the type still has to be produced, which is exactly the point.
+/// never consulted — but the type still has to be produced, which is exactly the point. It names the
+/// process's own test root (#665), not a fixed path every test process would share.
 #[cfg(test)]
 pub(crate) fn test_mutation_root() -> MutationRoot {
-    MutationRoot::for_test(std::env::temp_dir().join("compy-test-data-root"))
+    MutationRoot::for_test(decision().effective_root())
 }
 
 /// The process-wide decision. Resolved once — a decision that could change between two calls in one
 /// session would be worse than no decision at all.
+#[cfg(not(test))]
 pub(crate) fn decision() -> &'static DataRootDecision {
     static DECISION: OnceLock<DataRootDecision> = OnceLock::new();
     DECISION.get_or_init(|| resolve(&gather()))
+}
+
+/// Test-build decision (#665). An ordinary test process never resolves the environment: it gets a
+/// fresh `Compy` root it created under the temp dir, so every read wrapper (`compy_data_dir`), the
+/// gateway token and `test_mutation_root` name that one root, and no test can read or rewrite a user
+/// ledger. `resolve` itself is untouched and still proven variant by variant in the guards below.
+///
+/// The one exception is a process started with libtest's `--ignored`, which runs ONLY the
+/// `#[ignore]`d owner-present QA harnesses. Those make real Windows changes, so their receipts keep
+/// going to the real ledger, where the installed app can roll them back — exactly as before.
+#[cfg(test)]
+pub(crate) fn decision() -> &'static DataRootDecision {
+    static DECISION: OnceLock<DataRootDecision> = OnceLock::new();
+    DECISION.get_or_init(|| {
+        if runs_only_ignored_tests(std::env::args()) {
+            resolve(&gather())
+        } else {
+            DataRootDecision::Canonical {
+                root: owned_test_root(&std::env::temp_dir()),
+            }
+        }
+    })
+}
+
+/// True when libtest was asked for `--ignored` (only `#[ignore]`d tests run). `--include-ignored`
+/// runs the ordinary suite too, so it gets the owned root.
+#[cfg(test)]
+fn runs_only_ignored_tests(args: impl IntoIterator<Item = String>) -> bool {
+    args.into_iter().skip(1).any(|a| a == "--ignored")
+}
+
+/// Create a fresh `<base>\compy-test-roots\<pid>-<nanos>-<n>\Compy` and return it. `create_dir`
+/// fails on an existing directory, so two processes (or two calls) can never be handed the same
+/// root. Panics rather than fall back: a test with no root of its own must not run at all. The
+/// empty parent also means `migrate_legacy_data_once` finds no `Sentinel` beside it to copy.
+#[cfg(test)]
+fn owned_test_root(base: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let roots = base.join("compy-test-roots");
+    std::fs::create_dir_all(&roots).unwrap_or_else(|e| panic!("cannot create {roots:?}: {e}"));
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    loop {
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let owned = roots.join(format!("{}-{nanos}-{n}", std::process::id()));
+        match std::fs::create_dir(&owned) {
+            Ok(()) => {
+                let root = owned.join("Compy");
+                std::fs::create_dir(&root).unwrap_or_else(|e| panic!("cannot create {root:?}: {e}"));
+                return root;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => panic!("cannot create {owned:?}: {e}"),
+        }
+    }
 }
 
 /// The capability token, or the plain-English reason there isn't one. Pure, so every variant's
@@ -621,10 +681,12 @@ pub(crate) fn mutation_root() -> Result<MutationRoot, String> {
 
 /// Test-build escape, and the reasoning for it.
 ///
-/// The pre-existing mutation/rollback QA suites drive the real gateways against the real
-/// `%APPDATA%\Compy` ledger, and this dev machine is *currently in the `Conflict` state this module
-/// was written to detect* — 3 receipts canonically, 61 in the packaged-Claude overlay (#130). With
-/// the shipped rule they would all refuse, which would replace a real assertion with a tautology.
+/// The pre-existing mutation/rollback suites drive the real gateways. Ordinary tests now do so
+/// against this process's own test root (#665, see the test-build `decision`). The `--ignored`
+/// owner-present QA harnesses still use the real `%APPDATA%\Compy` ledger, and this dev machine was
+/// *in the `Conflict` state this module was written to detect* — 3 receipts canonically, 61 in the
+/// packaged-Claude overlay (#130). With the shipped rule they would all refuse, which would replace
+/// a real assertion with a tautology.
 ///
 /// So in `#[cfg(test)]` only, the token is issued for the effective root, preserving exactly the
 /// behavior those suites had before this module existed. **Release builds have no such path**, and
@@ -1031,8 +1093,8 @@ mod tests {
     /// GUARD 6 — the capability itself, variant by variant.
     ///
     /// `mutation_root()` is `#[cfg(test)]`-overridden so the pre-existing mutation suites can still
-    /// drive the real gateways on a desk that is *currently* in `Conflict` (#130). That escape would
-    /// be a hole if nothing else proved the refusal, so this is the proof: the pure
+    /// drive the real gateways (the QA harnesses on a desk that was in `Conflict`, #130). That escape
+    /// would be a hole if nothing else proved the refusal, so this is the proof: the pure
     /// `mutation_root_from` is the same function the shipped build calls, exercised against every
     /// decision variant without needing a container, a rewritten environment, or a second root.
     #[test]
@@ -1075,5 +1137,87 @@ mod tests {
                 "the refusal must be the decision's own explanation: {d:?}"
             );
         }
+    }
+
+    /// GUARD 7 (#665) — an ordinary test process never resolves the environment's data root.
+    ///
+    /// Before #665 this process resolved the real `%APPDATA%\Compy`, so every refused gateway call
+    /// still re-saved the user's ledger through `begin_mutation`'s write-ahead canary. Reads, the
+    /// gateway token and the rollback-suite token must all land on ONE fresh root that this process
+    /// created under the temp dir, so no test can read or rewrite a user ledger and no two test
+    /// processes can share a root.
+    #[test]
+    fn an_ordinary_test_process_never_resolves_the_environment_data_root() {
+        let root = decision().effective_root();
+        let text = normalize(&root.to_string_lossy());
+        let under = |base: &str| {
+            let base = normalize(base);
+            text == base || text.starts_with(&format!(r"{base}\"))
+        };
+
+        // Where the environment says the user's ledger and the installed app live.
+        let mut forbidden = Vec::new();
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            forbidden.push(appdata);
+        }
+        if let Ok(home) = std::env::var("USERPROFILE") {
+            forbidden.push(format!(r"{home}\AppData\Roaming"));
+        }
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            forbidden.push(format!(r"{local}\Compy"));
+        }
+        for base in &forbidden {
+            assert!(!under(base), "a test resolved the environment's data root {base}: {root:?}");
+        }
+
+        let temp = std::env::temp_dir();
+        assert!(under(&temp.to_string_lossy()), "the test root is not under the temp dir: {root:?}");
+        let owner = root
+            .parent()
+            .and_then(Path::file_name)
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        assert!(
+            owner.starts_with(&format!("{}-", std::process::id())),
+            "the test root is not a directory this process created: {root:?}"
+        );
+
+        assert_eq!(crate::compy_data_dir(), root, "reads must use the gateways' root");
+        let token = mutation_root().expect("the test gateway token");
+        assert_eq!(token.path(), root, "the gateway token must name the test root");
+        assert_eq!(test_mutation_root().path(), root, "the rollback-suite token must too");
+    }
+
+    /// GUARD 7b (#665) — every allocation is a new, empty directory under its own owner directory.
+    /// Across processes the same holds because `create_dir` refuses a directory that already exists.
+    #[test]
+    fn every_owned_test_root_is_fresh_and_distinct() {
+        let base = owned_test_root(&std::env::temp_dir());
+        let a = owned_test_root(&base);
+        let b = owned_test_root(&base);
+        assert_ne!(a, b, "two allocations must never share a root");
+        assert_ne!(a.parent(), b.parent(), "nor the directory that owns it");
+        for r in [&a, &b] {
+            assert!(r.ends_with("Compy") && r.starts_with(&base), "unexpected layout: {r:?}");
+            assert_eq!(std::fs::read_dir(r).expect("created").count(), 0, "not fresh: {r:?}");
+        }
+    }
+
+    /// GUARD 7c (#665) — only a libtest `--ignored` run (the owner-present QA harnesses alone) keeps
+    /// the environment's root; every run that includes ordinary tests gets an owned one.
+    #[test]
+    fn only_an_ignored_only_run_resolves_the_environment() {
+        let run = |args: &[&str]| {
+            runs_only_ignored_tests(
+                std::iter::once("compy_lib.exe").chain(args.iter().copied()).map(String::from),
+            )
+        };
+        assert!(run(&["--ignored"]));
+        assert!(run(&["manual_restore_qa", "--ignored", "--nocapture"]));
+        assert!(!run(&[]));
+        assert!(!run(&["--include-ignored"]));
+        assert!(!run(&["data_root::tests::x", "--exact"]));
+        assert!(!run(&["--test-threads", "4"]));
+        assert!(!runs_only_ignored_tests(["--ignored".to_string()]), "argv[0] is the program");
     }
 }
