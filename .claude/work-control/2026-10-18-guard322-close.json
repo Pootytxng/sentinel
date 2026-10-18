@@ -1,0 +1,77 @@
+{
+  "transition": "close-issue",
+  "authorizationState": "PREPARED_UNEXECUTED",
+  "authorizationNote": "This record is the gate input for a FUTURE close of #322. It was prepared while #322 was OPEN and while the lease below was live. It is not evidence that the close has run, and it authorizes nothing until scripts/work-control-gate.mjs returns PASS on it after a normal Handoff releases that lease. #322's own public closing comment and CLOSED state, not this file, establish whether and when the close ran.",
+  "actor": "claude-code",
+  "issue": 322,
+  "pr": 664,
+  "prNote": "Source context only: PR #664 (guard 3, merged as 841a693286cbee90f0422bb047d87ad72f711ed4) is the last source PR of #322's delta, and 0817e812 carries its landing receipts. This close is not a merge and closes no PR. Guard 1 is PR #659 (merged as 64cf1bc52033c5ce3bb49c2d7545e37debfdb01b).",
+  "currentHead": "0817e8122ec140349433895e0325ca5751d2a9ae",
+  "kind": "lane",
+  "branch": "claude/haul-609-20261016",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/322#issuecomment-6249404667",
+  "leaseEvidenceNote": "Fresh ownership claim posted 2026-10-18T11:32:13Z for claude-code session b7d52025-0188-4d59-bb9f-176e9c30fab1 in worktree .claude/worktrees/haul-609-20261016 on claude/haul-609-20261016, through the launcher's step 3 (gatherFacts, reconcile PASS, postClaim) after a read-only preflight PASS. Write scope: exactly this one receipt path. The previous #322 lease (guard 3) had been released by https://github.com/Pootytxng/sentinel/issues/322#issuecomment-6248799264 and is not reused. The close-issue gate refuses while this lease reads live, so the close can follow only after a Handoff releases it, in a separately reviewed sequence.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "The preflight for this claim measured scope.overlap ok: the one receipt path is disjoint from the two live writers on the board (#608 and #663), and no other live lease covers it. The path did not exist on origin/main 0817e812 when the claim was posted.",
+  "inheritedWork": true,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Re-derived at 2026-10-18T11:32:31Z from this worktree, before this file existed: HEAD 0817e812 equal to origin/main (git ls-remote), working tree clean with no untracked files, branch claude/haul-609-20261016 equal to the board's folder field, the native lineage binding session b7d52025 to #322 in this folder and branch, and one live Claude agent in this root (b7d52025, working; claude agents --json --all). Author and committer identity: claude-code <claude-code@desk.local>, with no GIT_AUTHOR or GIT_COMMITTER override in the environment. The inherited proof is PR #659 with its carrier eda9c820, and PR #664 with its carrier 0817e812, all on main. This lane started no build, test or install process that is still running. These facts were measured at preparation time; the future close gate re-derives the head, its provenance and the lease itself.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "#322's proof delta has two parts. PR #659's eight commits are Claude Code commits (authors claude-code <claude-code@desk.local>, claude-code <noreply@anthropic.com>, and one Claude <noreply@anthropic.com> from a Claude Code cloud session), as its own receipts record. PR #664's two commits and the carriers eda9c820 and 0817e812 were authored and committed as claude-code <claude-code@desk.local>. Codex reviewed read-only and authored none of them. Guard 2's detector, scripts/actions-health.mjs, is historical accepted baseline outside this delta: it was added in 8c590084 by \"t <t@t>\" on 2026-09-02. Its model authorship is unknown and is not inferred or attributed here.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "0817e8122ec140349433895e0325ca5751d2a9ae",
+      "summary": "Test Files 483 passed (483); Tests 8310 passed | 5 expected fail | 10 skipped.",
+      "evidence": "logs/verify-local-2026-10-18T10-26-30Z.log (SHA-256 3004f61cb9e457618cd2e0d066530bae2425e3bd23de873102b046e6022afa4c), the native pre-push gate for 841a6932..0817e812 -> main, LOCAL CHECK RESULT: PASS, push exit 0 (logs/guard322-guard3/carrier-push.log, SHA-256 a186a1b218c469c769dd7fc66ecea37e68420ab80efcd25d6eeb1b9cd1b9605d); also logs/verify-local-2026-10-18T10-08-07Z.log (SHA-256 8b7c636afc2e1988fe1b55bf289a3905b1d78b39c48db182d30a16bfc57d9994), a standalone full run of scripts/verify-local.ps1 at the same committed clean head 0817e812, PASS."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "0817e8122ec140349433895e0325ca5751d2a9ae",
+      "summary": "frontend type-check and build passed.",
+      "evidence": "logs/verify-local-2026-10-18T10-26-30Z.log (SHA-256 3004f61cb9e457618cd2e0d066530bae2425e3bd23de873102b046e6022afa4c), the native pre-push gate for 841a6932..0817e812 -> main, LOCAL CHECK RESULT: PASS, push exit 0 (logs/guard322-guard3/carrier-push.log, SHA-256 a186a1b218c469c769dd7fc66ecea37e68420ab80efcd25d6eeb1b9cd1b9605d); also logs/verify-local-2026-10-18T10-08-07Z.log (SHA-256 8b7c636afc2e1988fe1b55bf289a3905b1d78b39c48db182d30a16bfc57d9994), a standalone full run of scripts/verify-local.ps1 at the same committed clean head 0817e812, PASS."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "0817e8122ec140349433895e0325ca5751d2a9ae",
+      "summary": "test result: ok. 1401 passed; 0 failed; 24 ignored.",
+      "evidence": "logs/verify-local-2026-10-18T10-26-30Z.log (SHA-256 3004f61cb9e457618cd2e0d066530bae2425e3bd23de873102b046e6022afa4c), the native pre-push gate for 841a6932..0817e812 -> main, LOCAL CHECK RESULT: PASS, push exit 0 (logs/guard322-guard3/carrier-push.log, SHA-256 a186a1b218c469c769dd7fc66ecea37e68420ab80efcd25d6eeb1b9cd1b9605d); also logs/verify-local-2026-10-18T10-08-07Z.log (SHA-256 8b7c636afc2e1988fe1b55bf289a3905b1d78b39c48db182d30a16bfc57d9994), a standalone full run of scripts/verify-local.ps1 at the same committed clean head 0817e812, PASS."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "0817e8122ec140349433895e0325ca5751d2a9ae",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-10-18T10-26-30Z.log (SHA-256 3004f61cb9e457618cd2e0d066530bae2425e3bd23de873102b046e6022afa4c), the native pre-push gate for 841a6932..0817e812 -> main, LOCAL CHECK RESULT: PASS, push exit 0 (logs/guard322-guard3/carrier-push.log, SHA-256 a186a1b218c469c769dd7fc66ecea37e68420ab80efcd25d6eeb1b9cd1b9605d); also logs/verify-local-2026-10-18T10-08-07Z.log (SHA-256 8b7c636afc2e1988fe1b55bf289a3905b1d78b39c48db182d30a16bfc57d9994), a standalone full run of scripts/verify-local.ps1 at the same committed clean head 0817e812, PASS."
+    }
+  ],
+  "gateEvidenceNote": "Both runs are at the exact committed clean head 0817e812, and neither has been re-run for this record. Disclosed and unresolved: the frontend count is one lower than PR #664's source proof (8311 passed at d738084a, 8310 here) with identical file, expected-fail and skipped counts. The cause was not measured, and no claim of identical coverage is made.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "APPROVE",
+    "status": "passed",
+    "head": "0817e8122ec140349433895e0325ca5751d2a9ae",
+    "evidence": "https://github.com/Pootytxng/sentinel/issues/322#issuecomment-6249374176",
+    "reviewerNote": "Codex coordinator 01a143d1, read-only non-author operational closure review of the exact as-built main 0817e812 (GPT HQ operations/compy-haul-2026-10-16/REVIEW322_CLOSURE.md, building on ADJUDICATE322.md and the captured native scheduling evidence). It approves the engineering completion of #322's three safeguards for a FUTURE native close gate after the required normal lease release. By its own terms it does not execute the close, grant ownership, approve a future receipt or carrier head, or authorize resetting any branch."
+  },
+  "closingNote": "Close #322 as completed, once the gate passes on this record after the lease is released. Guard 1: the deletion-aware reporting tool, PR #659. Guard 2: scripts/actions-health.mjs (HOLLOW-JOB, GREEN-OVER-FAILURE), already run weekly as the second action of the CompyUsageAudit scheduled task; its 2026-10-12 report caught both, and the registered script bytes match 0817e812. Guard 3: the mandatory reviewer item that a guard-weakening change keeps an injection caught at both base and head, PR #664. #321 stays open, and the owner's zero hosted-CI budget is not re-asked."
+}
