@@ -1,0 +1,74 @@
+{
+  "transition": "mark-pr-ready",
+  "actor": "claude-code",
+  "currentHead": "d738084a86b50fdcfc0c8414901bd7ca068eba56",
+  "issue": 322,
+  "pr": 664,
+  "kind": "lane",
+  "branch": "claude/haul-609-20261016",
+  "leaseEvidence": "https://github.com/Pootytxng/sentinel/issues/322#issuecomment-6248264752",
+  "leaseEvidenceNote": "Ownership claim posted 2026-10-18T09:30:50Z for claude-code session b7d52025-0188-4d59-bb9f-176e9c30fab1 in worktree .claude/worktrees/haul-609-20261016, through the launcher's step 3 (gatherFacts, reconcile, postClaim) after a PASS read-only preflight. Write scope: the PR's two paths plus exactly the two 2026-10-18-guard322-*.json receipts. The previous #322 lease (PR #659's landing) was released by its Handoff of 2026-10-16T19:26:10Z (issuecomment-6223066559). The lease stays live through the receipt carrier's review and publication.",
+  "overlapExclusive": true,
+  "overlapExclusiveNote": "The preflight found no live lease overlapping the four claimed paths. At the push of this head, write-scope drift measured 2 changed paths inside the #322 claim and lease overlap checked both pushed paths against every open issue's live lease; both returned OK.",
+  "inheritedWork": false,
+  "inspection": {
+    "repository": true,
+    "remoteState": true,
+    "worktree": true,
+    "branch": true,
+    "dirtyState": true,
+    "liveProcesses": true
+  },
+  "inspectionNote": "Re-derived at 2026-10-18T10:05:46Z from this worktree: HEAD d738084a equal to origin's lane ref and PR #664's head, origin/main 1c089ec5c628687e1e442a47387f5350f2c6eb95, tree clean apart from untracked guard322 receipts, the #322 lease read from its thread as the latest claim or handoff record. This lane started no build, test or install process that is still running; both push gates exited.",
+  "mutationAuthors": [
+    "claude-code"
+  ],
+  "mutationAuthorsNote": "Both commits (1c397601, then the R1 repair d738084a) were authored and committed as claude-code <claude-code@desk.local> by this session on base 1c089ec5. Codex reviewed read-only (REQUEST_CHANGES at 1c397601, APPROVE at d738084a) and authored nothing.",
+  "requiredGates": [
+    "npm test",
+    "npm run build",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings"
+  ],
+  "gateResults": [
+    {
+      "command": "npm test",
+      "status": "passed",
+      "head": "d738084a86b50fdcfc0c8414901bd7ca068eba56",
+      "summary": "Test Files 483 passed (483); Tests 8311 passed | 5 expected fail | 10 skipped (8326).",
+      "evidence": "logs/verify-local-2026-10-18T09-44-38Z.log (SHA-256 5ed5f5ef3d0a4357cee95cd9cbde114eca6f8f8d34caa10ad19dbb9fbc00a823); push log logs/guard322-guard3/push-02.log (SHA-256 728efc9ecc6b15720067efa4141ff6271c243da53f4e3800a8f7b104e3261878): LOCAL CHECK RESULT: PASS, push exit 0, 1c397601..d738084a at this exact head. Gate comment https://github.com/Pootytxng/sentinel/pull/664#issuecomment-6248448087."
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "head": "d738084a86b50fdcfc0c8414901bd7ca068eba56",
+      "summary": "frontend type-check and build passed.",
+      "evidence": "logs/verify-local-2026-10-18T09-44-38Z.log (SHA-256 5ed5f5ef3d0a4357cee95cd9cbde114eca6f8f8d34caa10ad19dbb9fbc00a823); push log logs/guard322-guard3/push-02.log (SHA-256 728efc9ecc6b15720067efa4141ff6271c243da53f4e3800a8f7b104e3261878): LOCAL CHECK RESULT: PASS, push exit 0, 1c397601..d738084a at this exact head. Gate comment https://github.com/Pootytxng/sentinel/pull/664#issuecomment-6248448087."
+    },
+    {
+      "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+      "status": "passed",
+      "head": "d738084a86b50fdcfc0c8414901bd7ca068eba56",
+      "summary": "test result: ok. 1401 passed; 0 failed; 24 ignored.",
+      "evidence": "logs/verify-local-2026-10-18T09-44-38Z.log (SHA-256 5ed5f5ef3d0a4357cee95cd9cbde114eca6f8f8d34caa10ad19dbb9fbc00a823); push log logs/guard322-guard3/push-02.log (SHA-256 728efc9ecc6b15720067efa4141ff6271c243da53f4e3800a8f7b104e3261878): LOCAL CHECK RESULT: PASS, push exit 0, 1c397601..d738084a at this exact head. Gate comment https://github.com/Pootytxng/sentinel/pull/664#issuecomment-6248448087."
+    },
+    {
+      "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+      "status": "passed",
+      "head": "d738084a86b50fdcfc0c8414901bd7ca068eba56",
+      "summary": "Finished clean with -D warnings.",
+      "evidence": "logs/verify-local-2026-10-18T09-44-38Z.log (SHA-256 5ed5f5ef3d0a4357cee95cd9cbde114eca6f8f8d34caa10ad19dbb9fbc00a823); push log logs/guard322-guard3/push-02.log (SHA-256 728efc9ecc6b15720067efa4141ff6271c243da53f4e3800a8f7b104e3261878): LOCAL CHECK RESULT: PASS, push exit 0, 1c397601..d738084a at this exact head. Gate comment https://github.com/Pootytxng/sentinel/pull/664#issuecomment-6248448087."
+    }
+  ],
+  "gateEvidenceNote": "scripts/verify-local.ps1 ran as the pre-push hook at this exact committed clean head (push log 2026-10-18T09:44:36Z-09:49:12Z) and returned PASS; the test mutex was acquired with no wait. Nothing was pushed to this branch after it. The focused run (17 files, 601 tests, logs/guard322-guard3/focused.log) was at the first head; the R1 repair changed four prose lines in docs/WORK_CONTROL.md and the full gate above covers this head. No test was added: the item is a reviewer judgment, and a test matching its prose would only mirror it.",
+  "independentReview": {
+    "practical": true,
+    "reviewer": "codex",
+    "verdict": "APPROVE",
+    "status": "passed",
+    "head": "d738084a86b50fdcfc0c8414901bd7ca068eba56",
+    "evidence": "https://github.com/Pootytxng/sentinel/pull/664#issuecomment-6248552095",
+    "reviewerNote": "Codex coordinator 01a143d1, exact-head independent acceptance on PR #664: APPROVE at d738084a, base 1c089ec5, standards and spec PASS (GPT HQ operations/compy-haul-2026-10-16/REVIEW322_FINAL.md). It follows Codex's REQUEST_CHANGES at 1c397601 (REVIEW322_R1.md, finding P2: a stated reason could stand in for the retained injection), which d738084a repairs. Codex measured the gate and push log SHA-256 values above, the clean pushed head, the live claim and the empty closing references, and authored no part of the delta. It approves the source for ready and merge only, not the receipt carrier."
+  },
+  "closingNote": "Mark draft PR #664 ready at the independently accepted exact head. The merge needs its own receipt."
+}
