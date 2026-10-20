@@ -26,6 +26,7 @@ import {
   parseCargoLockPackages,
   parseCargoTreePackages,
   parseNpmLockPackages,
+  resolveNpmCli,
   runSupplyChainGate,
 } from "./supply-chain-gate.mjs";
 
@@ -446,6 +447,41 @@ describe("supply-chain gate: what it cannot prove, it blocks", () => {
       },
     });
     expect(statusOf(result, "dependency inventory")).toBe(BLOCKED);
+  });
+});
+
+// #672: on Linux and macOS, node lives in <prefix>/bin and npm in <prefix>/lib/node_modules, so a
+// resolver that only knew the Windows layout left the npm audit BLOCKED on every POSIX machine.
+describe("resolveNpmCli finds npm on each node install layout", () => {
+  const windowsNode = join("/nodejs", "node.exe");
+  const windowsCli = join("/nodejs", "node_modules", "npm", "bin", "npm-cli.js");
+  const posixNode = join("/opt/node22", "bin", "node");
+  const posixCli = join("/opt/node22", "lib", "node_modules", "npm", "bin", "npm-cli.js");
+  const onDisk = (...paths) => (candidate) => paths.includes(candidate);
+
+  it("finds npm beside node (the Windows layout)", () => {
+    expect(resolveNpmCli({ execPath: windowsNode, exists: onDisk(windowsCli), env: {} })).toEqual({
+      command: windowsNode,
+      argumentPrefix: [windowsCli],
+    });
+  });
+
+  it("finds npm under <prefix>/lib/node_modules when node is in <prefix>/bin (the POSIX layout)", () => {
+    expect(resolveNpmCli({ execPath: posixNode, exists: onDisk(posixCli), env: {} })).toEqual({
+      command: posixNode,
+      argumentPrefix: [posixCli],
+    });
+  });
+
+  it("still prefers npm beside node when both layouts exist", () => {
+    const besideNode = join("/opt/node22", "bin", "node_modules", "npm", "bin", "npm-cli.js");
+    expect(resolveNpmCli({ execPath: posixNode, exists: onDisk(besideNode, posixCli), env: {} })?.argumentPrefix).toEqual([
+      besideNode,
+    ]);
+  });
+
+  it("returns null when no layout has npm, which the gate reports as BLOCKED", () => {
+    expect(resolveNpmCli({ execPath: posixNode, exists: () => false, env: {} })).toBeNull();
   });
 });
 
