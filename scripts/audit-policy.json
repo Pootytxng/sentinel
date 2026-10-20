@@ -74,7 +74,7 @@
     }
   },
   "cargo": {
-    "note": "Compy's own Rust source references none of these crates: a case-sensitive search for quick_xml, crossbeam, rayon, anyhow and downcast_mut across the 55 .rs files under src-tauri/ and src-tauri/Cargo.toml returns nothing (re-run 2026-10-20). They arrive transitively: through Tauri and its plugins, through sysinfo (crossbeam-epoch) and through adlx (anyhow). Paths below are from `cargo tree --target x86_64-pc-windows-msvc -e normal -i <crate>` against the 2026-10-20 Cargo.lock. The rustls and rustls-webpki findings are deliberately not acknowledged: the updater reaches them on live TLS traffic and a semver-compatible Cargo.lock update fixes them (issue #672).",
+    "note": "Compy's own Rust source references none of these crates: a case-sensitive search for quick_xml, crossbeam, rayon, anyhow and downcast_mut across the 55 .rs files under src-tauri/ and src-tauri/Cargo.toml returns nothing (re-run 2026-10-20). They arrive transitively: through Tauri and its plugins, through sysinfo (crossbeam-epoch) and through adlx (anyhow). Paths below are from `cargo tree --target x86_64-pc-windows-msvc -e normal -i <crate>` against the 2026-10-20 Cargo.lock. The rustls and rustls-webpki findings (RUSTSEC-2026-0285, -0346, -0348, -0349 and -0382) were never acknowledged, because the updater reaches them on live TLS traffic. A semver-compatible Cargo.lock update (issue #675) fixed them instead: rustls 0.23.42 -> 0.23.46 and rustls-webpki 0.103.13 -> 0.103.16. The same update moved crossbeam-epoch 0.9.18 -> 0.9.21 and anyhow 1.0.102 -> 1.0.104, so the RUSTSEC-2026-0204 and RUSTSEC-2026-0190 acknowledgements were removed.",
     "acknowledged": {
       "RUSTSEC-2026-0194": {
         "package": "quick-xml",
@@ -97,28 +97,6 @@
           "quick-xml@0.39.4 <- plist@1.9.0 <- tauri-utils@2.9.2 <- tauri@2.11.2 (runtime) and tauri-build@2.6.2 (build)"
         ],
         "review_by": "2027-01-31"
-      },
-      "RUSTSEC-2026-0204": {
-        "package": "crossbeam-epoch",
-        "severity": "unscored",
-        "classification": "shipped-not-reachable",
-        "why": "Invalid pointer dereference in the fmt::Pointer impl of Atomic and Shared (crossbeam-epoch 0.9.18 src/atomic.rs); only formatting one of them with {:p} while it holds an invalid pointer triggers it. The path changed since the last review: it now comes through sysinfo 0.33.1's rayon feature, not Tauri. {:p} and fmt::Pointer occur 0 times in crossbeam-deque 0.8.6, rayon-core 1.13.0, rayon 1.12.0 and sysinfo 0.33.1, crossbeam-deque's Debug impls print fixed placeholders, and Compy names neither crossbeam nor rayon. A fix is semver-compatible: `cargo update -p crossbeam-epoch` moves 0.9.18 -> 0.9.21 (patched >=0.9.20) with no other change; that Cargo.lock edit is outside this review's write scope and is queued with the rustls update, so this entry is short-lived.",
-        "paths": [
-          "crossbeam-epoch@0.9.18 <- crossbeam-deque@0.8.6 <- rayon-core@1.13.0 <- rayon@1.12.0 <- sysinfo@0.33.1 <- compy"
-        ],
-        "review_by": "2026-12-31"
-      },
-      "RUSTSEC-2026-0190": {
-        "package": "anyhow",
-        "severity": "unsound",
-        "classification": "shipped-not-reachable",
-        "why": "Undefined behaviour only when Error::downcast_mut() is called on an error that had context added with Error::context. downcast_mut occurs 0 times in Compy's Rust source and 0 times in the three crates that link anyhow into the runtime build (adlx 0.0.0-alpha.1, tauri 2.11.2, tauri-utils 2.9.2); the other edges (tauri-build, tauri-plugin, and tauri-utils under the tauri-codegen/tauri-macros proc-macro) run only at compile time. No exploit path and no vulnerability rating. Patched at >=1.0.103, a semver-compatible `cargo update -p anyhow` queued with the rustls update.",
-        "paths": [
-          "anyhow@1.0.102 <- adlx@0.0.0-alpha.1 <- compy",
-          "anyhow@1.0.102 <- tauri@2.11.2 / tauri-utils@2.9.2 (runtime)",
-          "anyhow@1.0.102 <- tauri-build@2.6.2 / tauri-plugin@2.6.2 (build only)"
-        ],
-        "review_by": "2026-12-31"
       },
       "RUSTSEC-2026-0368": {
         "package": "zip",
