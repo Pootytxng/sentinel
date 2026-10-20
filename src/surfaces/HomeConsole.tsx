@@ -810,8 +810,10 @@ export function HomeConsole({
     // Not counted (pending or unreadable) is null, so the interview cannot quote it as a 0.
     activeChanges: inEffect.kind === "counted" ? inEffect.activeNow : null,
     sessionCount: sessions.length,
+    // The interview quotes this session's FPS as evidence, so a session that did not measure both
+    // readings is not handed over as one (#671): no quote beats a quoted "avg 0 fps".
     lastSession:
-      strip.kind === "data"
+      strip.kind === "data" && strip.avgFps != null && strip.low1Est != null
         ? { game: strip.game, avgFps: strip.avgFps, low1: strip.low1Est, peakTempC: strip.peakTempC }
         : null,
     readiness: readinessKnown

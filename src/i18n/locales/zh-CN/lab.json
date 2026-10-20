@@ -405,6 +405,8 @@
     "runningTitlePrefix": "实验进行中——",
     "runningBaselinePre": "基准 · {{game}} —— 平均",
     "fpsUnit": "fps",
+    "notMeasured": "未测到",
+    "lowMid": "· 1% 最低帧",
     "runningStep": "这项更改已应用。玩一局 {{game}},然后点击结束——Compy 会将结果与基准比较,除非明显更优,否则会恢复这项更改。",
     "runningLegacy": "这项实验由旧版 Compy 启动,当时没有记录公平比较所需的全部信息,因此无法结束。请先恢复,再开始新的实验。",
     "working": "处理中…",

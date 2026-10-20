@@ -318,7 +318,8 @@
     "smoothness": {
       "smooth": "流畅",
       "someDips": "偶有卡顿",
-      "rough": "不稳定"
+      "rough": "不稳定",
+      "notMeasured": "未测到"
     },
     "gaugeFoot": "只是仪表,不是控制开关——Compy 绝不会修改你的电压设置。 ",
     "gaugeFootSuffix": " + GPU 传感器,外部读取 · 不做任何注入。"

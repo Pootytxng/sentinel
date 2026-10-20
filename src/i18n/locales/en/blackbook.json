@@ -332,7 +332,8 @@
     "smoothness": {
       "smooth": "smooth",
       "someDips": "some dips",
-      "rough": "rough"
+      "rough": "rough",
+      "notMeasured": "not measured"
     },
     "gaugeFoot": "A gauge, not a control — Compy never touches your voltage. ",
     "gaugeFootSuffix": " + GPU sensors, external · no injection."
