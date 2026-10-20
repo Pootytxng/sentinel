@@ -29,6 +29,7 @@
 import type { TFunction } from "i18next";
 import type { LabStationKey } from "./lab-guided-data";
 import type { HomeIntakeRoom } from "./home-intake-data";
+import { knownFps } from "../lib/session-metrics";
 
 // ── The question tree ───────────────────────────────────────────────────────────────────────────
 
@@ -293,8 +294,11 @@ export type InterviewFacts = {
   activeChanges: number | null;
   /** How many monitored sessions are on record. */
   sessionCount: number;
-  /** The most recent recorded session, or null when there is none. Never a placeholder. */
-  lastSession: { game: string; avgFps: number; low1: number; peakTempC: number | null } | null;
+  /**
+   * The most recent recorded session, or null when there is none. Never a placeholder. A reading
+   * the session did not measure is null (#671); its FPS is quoted only when both were measured.
+   */
+  lastSession: { game: string; avgFps: number | null; low1: number | null; peakTempC: number | null } | null;
   /** The readiness checks, or null while they are still running. */
   readiness: { passed: number; total: number; attention: number } | null;
   /** The live GPU temperature poll, or null when the sensor did not report. */
@@ -365,13 +369,19 @@ export function interviewFinding(
     if (facts.readiness)
       ev.push(k("ev.readiness", { passed: facts.readiness.passed, total: facts.readiness.total }));
   };
+  // An unmeasured FPS is no FPS evidence: it quotes no number and earns no `measured` chip (#671).
+  // The session itself still counts, so its peak temperature stays quotable in gpuTempLine.
+  const avgFps = knownFps(facts.lastSession?.avgFps);
+  const low1 = knownFps(facts.lastSession?.low1);
+  const fpsSession =
+    facts.lastSession && avgFps != null && low1 != null ? { game: facts.lastSession.game, avgFps, low1 } : null;
   const sessionLine = () => {
-    if (facts.lastSession)
+    if (fpsSession)
       ev.push(
         k("ev.lastSession", {
-          game: facts.lastSession.game,
-          avg: Math.round(facts.lastSession.avgFps),
-          low: Math.round(facts.lastSession.low1),
+          game: fpsSession.game,
+          avg: Math.round(fpsSession.avgFps),
+          low: Math.round(fpsSession.low1),
         }),
       );
   };
@@ -441,7 +451,7 @@ export function interviewFinding(
     case "wantScores": {
       sessionCountLine();
       sessionLine();
-      direct = facts.lastSession != null;
+      direct = fpsSession != null;
       sentence = k("wantScores.sentence");
       action = station("benchmark", "lab", k("act.seeScores"));
       break;
@@ -490,7 +500,7 @@ export function interviewFinding(
     }
     case "slowSometimes": {
       sessionLine();
-      direct = facts.lastSession != null;
+      direct = fpsSession != null;
       sentence = k("slowSometimes.sentence");
       action =
         facts.sessionCount > 0
@@ -500,7 +510,7 @@ export function interviewFinding(
     }
     case "stutter": {
       sessionLine();
-      direct = facts.lastSession != null;
+      direct = fpsSession != null;
       sentence = k("stutter.sentence");
       action =
         facts.sessionCount > 0
@@ -511,7 +521,7 @@ export function interviewFinding(
     case "slowUnsure": {
       sessionLine();
       stackLine();
-      direct = facts.lastSession != null;
+      direct = fpsSession != null;
       sentence = k("slowUnsure.sentence");
       action = fastPathOr(station("benchmark", "lab", k("act.measure")));
       break;

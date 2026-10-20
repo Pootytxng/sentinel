@@ -54,6 +54,7 @@ import { liveStrip } from "./command-center-data";
 import { HomeConsole } from "./HomeConsole";
 import { HomeHud } from "./HomeHud";
 import { HomeV2 } from "./HomeV2";
+import { interviewFinding, interviewQuestions, type InterviewFacts } from "./home-interview-data";
 import { prettyGameName } from "./game-name";
 import { ShellV2 } from "../design/ShellV2";
 import { railFor } from "../design/homeRail";
@@ -584,6 +585,64 @@ describe.each(LOCALES)("unknown FPS on the bench, Care, Tuning and Home never re
       expect(text(c.querySelector(low))).toBe(`${t(`${ns}.onePercentLowLabel`)} ${t(`${ns}.notMeasured`)}`);
       ungraded(lowNum(c.querySelector(low)));
       expect(text(c.querySelector(avg)).replace(text(c.querySelector(unit)), "")).toBe("244");
+    });
+  });
+
+  // ── Home interview: the session it quotes as evidence ──
+  // The interview reads the strip's session. An unmeasured FPS is no FPS evidence: no quoted
+  // number, and no `measured` chip earned on it. The session's peak GPU temperature is a separate
+  // measured fact, so it stays quotable when the FPS was not measured.
+  describe("Home interview evidence", () => {
+    const facts = (lastSession: InterviewFacts["lastSession"]): InterviewFacts => ({
+      recsLoaded: false,
+      safeStackReady: 0,
+      fastPathWired: false,
+      activeChanges: null,
+      sessionCount: lastSession ? 1 : 0,
+      lastSession,
+      readiness: null,
+      gpuTempC: null,
+      rooms: ["play", "learn", "lab"],
+    });
+    const fpsLine = (game: string, avg: number, low: number) =>
+      t("home.interview.f.ev.lastSession", { game, avg, low });
+    const peakLine = (temp: number) => t("home.interview.f.ev.peakTemp", { temp });
+    // Every finding that quotes the session's FPS, and so may only earn `measured` on it.
+    const FPS_FINDINGS = ["wantScores", "slowSometimes", "stutter", "slowUnsure", "crashInGame"] as const;
+
+    it("measured: the finding quotes the session's FPS and earns its chip on it", () => {
+      const f = interviewFinding("wantScores", facts({ game: "Valorant", avgFps: 142.3, low1: 98.4, peakTempC: 61 }), i18n.t);
+      expect(f.evidence).toContain(fpsLine("Valorant", 142, 98));
+      expect(f.level).toBe("measured");
+    });
+
+    describe.each(cases)("unknown %s", (_label, v) => {
+      it.each(FPS_FINDINGS)("%s quotes no FPS and earns no measured chip on it", (id) => {
+        for (const s of [
+          { game: "Valorant", avgFps: v, low1: 98.4, peakTempC: 61 },
+          { game: "Valorant", avgFps: 142.3, low1: v, peakTempC: 61 },
+        ]) {
+          const f = interviewFinding(id, facts(s as InterviewFacts["lastSession"]), i18n.t);
+          for (const line of f.evidence) expect(line).not.toMatch(/FPS|NaN|Infinity/);
+          expect(f.evidence.some((line) => line.includes("Valorant")), f.evidence.join(" | ")).toBe(false);
+          expect(f.level).not.toBe("measured");
+        }
+      });
+
+      it("heat still quotes the session's measured peak temperature", () => {
+        const f = interviewFinding("heat", facts({ game: "Valorant", avgFps: v, low1: v, peakTempC: 61 } as InterviewFacts["lastSession"]), i18n.t);
+        expect(f.evidence).toEqual([peakLine(61)]);
+        expect(f.level).toBe("likely");
+      });
+
+      it("Home hands the interview the session, so heat quotes its peak temperature", async () => {
+        mountHome([sess({ avg_fps: v, low1_fps_est: v, peak_gpu_temp_c: 61 })]);
+        fireEvent.click(document.querySelector(".hc-front-door") as HTMLElement);
+        const heat = interviewQuestions(i18n.t).start.choices.find((c) => c.next.kind === "finding" && c.next.id === "heat")!;
+        fireEvent.click(Array.from(document.querySelectorAll(".hi-answer")).find((b) => b.textContent === heat.label) as HTMLElement);
+        await waitFor(() => expect(document.querySelector(".hi-level")?.getAttribute("data-level")).toBe("likely"));
+        expect(Array.from(document.querySelectorAll(".hi-evidence-list li")).map((li) => text(li))).toEqual([peakLine(61)]);
+      });
     });
   });
 });
