@@ -300,7 +300,11 @@ an executor can decide: engineering choices, aesthetic calls and sequencing are 
 recorded there; only the owner-bound list in `CLAUDE.md` waits for him. Hook files under
 `.claude/hooks/` are owner-applied (#368): a hosted session ships a hook change as a `.patch` in
 `docs/superpowers/specs/` with tests, and the hosted harness's own permission classifier refuses
-in-tree hook edits regardless, so the patch is the route, not a fallback.
+in-tree hook edits regardless, so the patch is the route, not a fallback. When the board is
+unreachable (`BOARD_UNREACHABLE`), the hosted lane finishes authoring and pre-proof and hands off
+blocked evidence: unknown board state is never a PASS or an exemption, and ready-for-review, merge,
+close and Done wait for an authenticated fresh board read plus every native gate (#445 option 2,
+owner-accepted 2026-10-21; a blocker contract, not an access repair).
 
 ### A change that weakens a guard carries an injection (#322 guard 3)
 

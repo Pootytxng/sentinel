@@ -34,3 +34,8 @@
 *.exe   binary
 *.wasm  binary
 *.bin   binary
+
+# Owner-applied hook patches (docs/superpowers/specs/*.patch, #368): a unified diff carries its blank
+# context lines as a single space, which `git diff --check` reads as trailing whitespace. The patch
+# bytes must stay exact for `git apply`, so the check stands down for patch files only.
+*.patch whitespace=-trailing-space,-blank-at-eol

@@ -1,30 +1,103 @@
 diff --git a/.claude/hooks/hookspath-guard.mjs b/.claude/hooks/hookspath-guard.mjs
-index 0ad3328..ac03476 100644
+index 0ad3328..c8efa04 100644
 --- a/.claude/hooks/hookspath-guard.mjs
 +++ b/.claude/hooks/hookspath-guard.mjs
-@@ -33,10 +33,19 @@ export function isAbsoluteHooksPath(value) {
+@@ -21,8 +21,8 @@
+ // It is a guard for one narrow, measured mistake.
+ 
+ import { execFileSync } from "node:child_process";
+-import { readFileSync } from "node:fs";
+-import { isAbsolute } from "node:path";
++import { existsSync, readFileSync } from "node:fs";
++import { isAbsolute, resolve } from "node:path";
+ 
+ export const RELATIVE_HOOKS = ".githooks";
+ 
+@@ -33,18 +33,33 @@ export function isAbsoluteHooksPath(value) {
    return isAbsolute(v) || /^[A-Za-z]:[\\/]/.test(v) || v.startsWith("\\\\") || v.startsWith("/");
  }
  
 -/** PreToolUse: only an isolation worktree is refused; every other Agent call is not this hook's. */
 -export function decideAgent(toolInput) {
++const REFUSAL =
++  "Blocked: Agent isolation \"worktree\" makes the harness rewrite the SHARED core.hooksPath to an " +
++  "absolute path, which reds scripts/hookspath-fleet-guard.test.mjs in every pre-push gate running on " +
++  "this machine (measured 2026-09-03, #362 case 12). The worktree could not write here anyway: the " +
++  "ownership hooks treat it as a sibling checkout. Run the agent in this folder without isolation.";
++
 +/** PreToolUse: only an isolation worktree is refused, and only while this checkout has a SHARED
-+ *  core.hooksPath to protect. `shared` is readSharedHooksPath(cwd): `{file, values}` or null when git
-+ *  cannot answer. A clone with the key unset (every hosted claude.ai/code container; measured
-+ *  2026-10-21) has nothing the harness can rewrite, so the refusal would only cost the lane its
-+ *  parallel agents. Omitting `shared` (the pre-2026-10-21 call shape) keeps the unconditional
-+ *  refusal, so no caller is loosened by accident. */
++ *  core.hooksPath to protect. `shared` is readSharedHooksPath(cwd). The ONE allow is a positively
++ *  established absence: git answered, the shared config file exists, and `--get-all core.hooksPath`
++ *  exited 1 (key absent), i.e. `values: []`. Every other shape keeps the refusal: `undefined` (the
++ *  pre-2026-10-21 call shape, so no caller is loosened by accident), `null` (git could not answer:
++ *  not a repository, no git, a parse or permission failure) and `values: null` (the key could not
++ *  be read). Unknown is never absent (PR #679 exact-head review, P1). A clone with the key unset
++ *  is every hosted claude.ai/code container (measured 2026-10-21); there the old unconditional
++ *  refusal only cost the lane its parallel agents. */
 +export function decideAgent(toolInput, shared) {
    const isolation = String(toolInput?.isolation ?? "").toLowerCase();
    if (isolation !== "worktree") return { deny: false };
-+  if (shared === null) return { deny: false, note: "not a repository" };
+-  return {
+-    deny: true,
+-    reason:
+-      "Blocked: Agent isolation \"worktree\" makes the harness rewrite the SHARED core.hooksPath to an " +
+-      "absolute path, which reds scripts/hookspath-fleet-guard.test.mjs in every pre-push gate running on " +
+-      "this machine (measured 2026-09-03, #362 case 12). The worktree could not write here anyway: the " +
+-      "ownership hooks treat it as a sibling checkout. Run the agent in this folder without isolation.",
+-  };
 +  if (shared && Array.isArray(shared.values) && shared.values.length === 0) {
 +    return { deny: false, note: "no shared core.hooksPath to protect" };
 +  }
-   return {
-     deny: true,
-     reason:
-@@ -99,7 +108,7 @@ function main() {
++  let why = "";
++  if (shared === null) why = " (git could not answer for this folder; unknown is not absent)";
++  else if (shared !== undefined && !Array.isArray(shared?.values)) {
++    why = ` (the shared config could not be read: ${shared?.error || "unknown"}; unknown is not absent)`;
++  }
++  return { deny: true, reason: REFUSAL + why };
+ }
+ 
+ /** What the PostToolUse repair should do, from the values the shared config holds right now. */
+@@ -57,21 +72,28 @@ function git(args, cwd) {
+   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+ }
+ 
+-/** Read every core.hooksPath the shared config holds. `[]` when unset; null when git cannot answer. */
+-export function readSharedHooksPath(cwd) {
++/** Read every core.hooksPath the shared config holds. Three shapes, and callers keep them apart:
++ *  `{file, values: [..]}` when git answered (`[]` ONLY for a positively established absence: the config
++ *  file exists and `git config --get-all` exited 1); `{file, values: null, error}` when the key could
++ *  not be read (any other exit, a spawn failure, a missing config file); `null` when git cannot name
++ *  the common dir at all. null and `values: null` mean UNKNOWN, never absent (PR #679 review, P1).
++ *  `run` and `exists` are injectable for failure-path tests only; the defaults are real git and fs. */
++export function readSharedHooksPath(cwd, { run = git, exists = existsSync } = {}) {
++  let common = "";
+   try {
+-    const common = git(["rev-parse", "--git-common-dir"], cwd);
+-    const file = `${common}/config`;
+-    let out = "";
+-    try {
+-      out = git(["config", "--file", file, "--get-all", "core.hooksPath"], cwd);
+-    } catch {
+-      return { file, values: [] }; // exit 1 = key absent, which is a value, not a failure
+-    }
+-    return { file, values: out.split(/\r?\n/).filter(Boolean) };
++    common = run(["rev-parse", "--git-common-dir"], cwd);
+   } catch {
+     return null;
+   }
++  const file = `${common}/config`;
++  if (!exists(resolve(cwd || process.cwd(), file))) return { file, values: null, error: "shared config file missing" };
++  try {
++    const out = run(["config", "--file", file, "--get-all", "core.hooksPath"], cwd);
++    return { file, values: out.split(/\r?\n/).filter(Boolean) };
++  } catch (err) {
++    if (err?.status === 1) return { file, values: [] }; // exit 1 = key absent, which is a value, not a failure
++    return { file, values: null, error: `git config exit ${err?.status ?? err?.code ?? "unknown"}` };
++  }
+ }
+ 
+ /** Restore the shared value to the relative path. Returns what was replaced, or null on failure. */
+@@ -99,7 +121,7 @@ function main() {
    const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
  
    if (event === "PreToolUse") {

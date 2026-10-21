@@ -1,0 +1,14 @@
+diff --git a/.claude/hooks/workflow-usage-guard.mjs b/.claude/hooks/workflow-usage-guard.mjs
+index 081b2b7..15e4dbf 100644
+--- a/.claude/hooks/workflow-usage-guard.mjs
++++ b/.claude/hooks/workflow-usage-guard.mjs
+@@ -35,7 +35,8 @@ const what = ti.name
+ 
+ const reason =
+   `Workflow-tool call (${what}). Reminder — .claude/USAGE_ECONOMICS.md "Owner directive 2026-10-21": ` +
+-  `the weekly budget is a resource to USE, and the Workflow tool is sanctioned for any genuinely ` +
++  `the weekly budget is a resource for verified outcomes, never a target on its own, and the Workflow ` +
++  `tool is sanctioned for any genuinely ` +
+   `multi-step work (audit, sweep, burst, implement-and-verify fan-outs), not only the repo-wide ` +
+   `class. The ultracode opt-in stands whenever a system-reminder says it is on. What this check ` +
+   `asks: keep the scope bounded and named, prefer pipeline() over barriers, and log() any coverage ` +

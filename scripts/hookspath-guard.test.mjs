@@ -6,7 +6,7 @@
 // .claude/hooks/hookspath-guard.mjs: the isolation worktree is refused before it is created, and the
 // shared value is restored after any Agent call regardless.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,26 +43,97 @@ describe("PreToolUse(Agent): an isolation worktree is refused, everything else i
 // core.hooksPath — every hosted claude.ai/code clone, where the launcher never set one — refused an
 // isolation worktree it could not have harmed. The owner patch
 // docs/superpowers/specs/2026-10-21-hookspath-guard-unset-allow.patch gives decideAgent a second
-// argument, the readSharedHooksPath() result, and allows when there is nothing to protect. Until the
-// patch is applied decideAgent.length is 1 and these cases skip; the legacy pin above keeps holding.
+// argument, the readSharedHooksPath() result, and allows ONLY when absence is positively established:
+// the shared config file exists and `git config --get-all` exited 1 (key absent). Unknown is never
+// absent (PR #679 exact-head review, P1): null (git could not answer), undefined (no reader) and
+// `values: null` (the config could not be read) all keep the denial. Until the patch is applied
+// decideAgent.length is 1 and these cases skip; the legacy pin above keeps holding.
 describe("PreToolUse(Agent): a checkout with no shared hooksPath has nothing to protect (owner patch)", () => {
   const PATCHED = decideAgent.length >= 2;
-  it.skipIf(!PATCHED)("allows an isolation worktree when the shared value is unset", () => {
-    const v = decideAgent({ subagent_type: "Explore", isolation: "worktree" }, { file: "x", values: [] });
+  const wt = { subagent_type: "Explore", isolation: "worktree" };
+  it.skipIf(!PATCHED)("allows an isolation worktree when the shared value is positively unset", () => {
+    const v = decideAgent(wt, { file: "x", values: [] });
     expect(v.deny).toBe(false);
     expect(String(v.note || "")).toMatch(/no shared core\.hooksPath/);
   });
-  it.skipIf(!PATCHED)("allows it outside a repository, where there is no shared config at all", () => {
-    expect(decideAgent({ subagent_type: "Explore", isolation: "worktree" }, null).deny).toBe(false);
-  });
   it.skipIf(!PATCHED)("still denies when a relative shared hooksPath is in force (the #362 case)", () => {
-    const v = decideAgent({ subagent_type: "Explore", isolation: "worktree" }, { file: "x", values: [RELATIVE_HOOKS] });
+    const v = decideAgent(wt, { file: "x", values: [RELATIVE_HOOKS] });
     expect(v.deny).toBe(true);
     expect(v.reason).toMatch(/hookspath-fleet-guard/);
   });
   it.skipIf(!PATCHED)("an omitted second argument keeps the unconditional refusal (no caller can widen it by accident)", () => {
-    expect(decideAgent({ subagent_type: "Explore", isolation: "worktree" }).deny).toBe(true);
+    expect(decideAgent(wt).deny).toBe(true);
   });
+  it.skipIf(!PATCHED)("keeps the denial when git could not answer for the folder (null is unknown, not absent)", () => {
+    const v = decideAgent(wt, null);
+    expect(v.deny).toBe(true);
+    expect(v.reason).toMatch(/unknown is not absent/);
+  });
+  it.skipIf(!PATCHED)("keeps the denial when the shared config could not be read, and says which failure", () => {
+    const v = decideAgent(wt, { file: "x", values: null, error: "git config exit 128" });
+    expect(v.deny).toBe(true);
+    expect(v.reason).toMatch(/git config exit 128/);
+    expect(v.reason).toMatch(/unknown is not absent/);
+    expect(decideAgent(wt, { file: "x", values: null, error: "shared config file missing" }).deny).toBe(true);
+  });
+});
+
+// The reader's failure paths, with git injected so each exit status is exercised deterministically
+// (the measured statuses: absent key -> 1; malformed config, or rev-parse outside a repository -> 128).
+// The patched reader takes { run, exists } with defaults, which Function.length does not count, so the
+// patch is detected by decideAgent's arity: both changes ship in the one patch file.
+describe("readSharedHooksPath distinguishes an absent key from a read it could not finish (owner patch)", () => {
+  const PATCHED = decideAgent.length >= 2;
+  const fail = (status) => {
+    const e = new Error(`git exit ${status}`);
+    e.status = status;
+    return e;
+  };
+  const answer = (configResult) => (args) => {
+    if (args[0] === "rev-parse") return ".git";
+    if (configResult instanceof Error) throw configResult;
+    return configResult;
+  };
+  it.skipIf(!PATCHED)("rev-parse failing (not a repository, malformed config) yields null", () => {
+    expect(readSharedHooksPath("/x", { run: () => { throw fail(128); }, exists: () => true })).toBeNull();
+  });
+  it.skipIf(!PATCHED)("a missing shared config file is a read failure (values null), not an absent key", () => {
+    const r = readSharedHooksPath("/x", { run: answer(""), exists: () => false });
+    expect(r.values).toBeNull();
+    expect(r.error).toMatch(/missing/);
+  });
+  it.skipIf(!PATCHED)("exit 1 is the absent key: the only value that reads as nothing to protect", () => {
+    expect(readSharedHooksPath("/x", { run: answer(fail(1)), exists: () => true }).values).toEqual([]);
+  });
+  it.skipIf(!PATCHED)("exit 128 (malformed config) is a read failure that names its status", () => {
+    const r = readSharedHooksPath("/x", { run: answer(fail(128)), exists: () => true });
+    expect(r.values).toBeNull();
+    expect(r.error).toMatch(/128/);
+  });
+  it.skipIf(!PATCHED)("a spawn error with no status (ENOENT) is a read failure too", () => {
+    const enoent = new Error("spawn git ENOENT");
+    enoent.code = "ENOENT";
+    const r = readSharedHooksPath("/x", { run: answer(enoent), exists: () => true });
+    expect(r.values).toBeNull();
+    expect(r.error).toMatch(/ENOENT/);
+  });
+  it.skipIf(!PATCHED)("a successful read returns every value, one per line", () => {
+    expect(readSharedHooksPath("/x", { run: answer(`${RELATIVE_HOOKS}\nC:\\x\\.githooks\n`), exists: () => true }).values)
+      .toEqual([RELATIVE_HOOKS, "C:\\x\\.githooks"]);
+  });
+  it.skipIf(!PATCHED)("end to end on real git: a malformed shared config reads as null and the worktree stays denied", () => {
+    const dir = mkdtempSync(join(tmpdir(), "hookspath-guard-badcfg-"));
+    try {
+      execFileSync("git", ["init", "-q", dir], { encoding: "utf8" });
+      writeFileSync(join(dir, ".git", "config"), "[core\n\tbare = false\n", "utf8");
+      const shared = readSharedHooksPath(dir);
+      expect(shared).toBeNull();
+      expect(decideAgent(wtInput(), shared).deny).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  const wtInput = () => ({ subagent_type: "Explore", isolation: "worktree" });
 });
 
 describe("what counts as an absolute hooksPath (git accepts all of these)", () => {
