@@ -18,13 +18,15 @@ invented head cannot be matched against the repository.
 Required inspection fields: `repository`, `remoteState`, `worktree`, `branch`, `dirtyState`.
 
 A proof-dependent receipt also records the board read it was written under, as `boardRead` (#445
-option 2, owner-accepted 2026-10-21): `status`, `authenticated`, `readAt` (ISO-8601), `via` (the read
-command) and `evidence` (where its output is). The gate refuses with the one machine-readable
-`BOARD_UNREACHABLE` blocker (`codes` and `structuredBlockers` in its output) unless that read is
-`"fresh"`, authenticated and under 10 minutes old at gate time: a missing, cached, unauthenticated or
-stale read is unknown board state, and unknown is never a PASS and never an exemption. A session that
-could not read the board writes `{ "status": "unreachable", "why": "<the error>" }` honestly; that
-receipt documents blocked evidence and authorizes nothing.
+option 2, owner-accepted 2026-10-21): `status`, `authenticated`, `readAt` (ISO-8601), `via` (the
+read command) and `evidence` (where its output is). The gate judges `status`, `authenticated` and
+`readAt`; `via` and `evidence` are for the exact-head reviewer, who checks that the read was the one
+claimed. The gate refuses with the one machine-readable `BOARD_UNREACHABLE` blocker (`codes` and
+`structuredBlockers` in its output) unless that read is `"fresh"`, authenticated and under 10
+minutes old at gate time: a missing, cached, unauthenticated or stale read is unknown board state,
+and unknown is never a PASS and never an exemption. A session that could not read the board writes
+`{ "status": "unreachable", "why": "<the error>" }` honestly; that receipt documents blocked
+evidence and authorizes nothing.
 
 A `close-issue` or `mark-done` receipt names its `issue`, and a `merge-pr` receipt names its `pr`: the
 gate refuses while an issue that transition closes still reads a live lease (#411, #413). For a merge

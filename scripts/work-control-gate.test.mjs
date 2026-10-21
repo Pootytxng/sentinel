@@ -1039,7 +1039,18 @@ describe("two read-only transports behind one reader (#445 option 1)", () => {
       expect(argv).not.toContain("-f");
       expect(argv).not.toContain("-F");
     }
-    for (const bad of ["repos/other/repo/issues/1/comments", "repos/Pootytxng/sentinel/issues/1 --method POST", "/repos/Pootytxng/sentinel/issues/1", "", null]) {
+    for (const bad of [
+      "repos/other/repo/issues/1/comments",
+      "repos/Pootytxng/sentinel/issues/1 --method POST",
+      "/repos/Pootytxng/sentinel/issues/1",
+      // Nothing that could leave this repository or rewrite the request: no `..`, query, fragment or backslash.
+      "repos/Pootytxng/sentinel/../other/issues/1",
+      "repos/Pootytxng/sentinel/issues/1?per_page=1",
+      "repos/Pootytxng/sentinel/issues/1#fragment",
+      "repos/Pootytxng/sentinel\\issues\\1",
+      "",
+      null,
+    ]) {
       expect(() => gate.restRead(bad, ".")).toThrow(/is not a path under repos\/Pootytxng\/sentinel\//);
       expect(() => gate.restList(() => "[]", bad)).toThrow(/is not a path under repos\/Pootytxng\/sentinel\//);
     }
@@ -1091,6 +1102,32 @@ describe("two read-only transports behind one reader (#445 option 1)", () => {
     expect(result.blockers.join("\n")).toMatch(/#283's thread could not be read/);
   });
 
+  it("a GraphQL read the bound killed is not retried over REST (#474): one hang costs one bound, and the thread stays unreadable", () => {
+    const calls = [];
+    const silent = (argv) => {
+      calls.push(argv);
+      throw Object.assign(new Error("spawnSync gh ETIMEDOUT"), { code: "ETIMEDOUT", killed: true });
+    };
+    const thread = gate.issueCommentsVia(silent);
+    expect(() => thread(283)).toThrow(
+      /#283's thread could not be read: gh gave no answer within 20 s over GraphQL \(spawnSync gh ETIMEDOUT\), and a read the bound killed is not retried over REST \(#474\)/,
+    );
+    expect(calls).toEqual([["issue", "view", "283", "--repo", "Pootytxng/sentinel", "--json", "comments"]]);
+    const refs = gate.closingIssuesVia(silent);
+    expect(() => refs(395)).toThrow(/PR #395's closing references could not be read: gh gave no answer within 20 s over GraphQL/);
+    expect(calls.map((argv) => argv[0])).toEqual(["issue", "pr"]);
+    // A child the bound killed without an error code is the same hang.
+    const killedOnly = gate.issueCommentsVia(() => {
+      throw Object.assign(new Error("killed"), { killed: true });
+    });
+    expect(() => killedOnly(283)).toThrow(/not retried over REST/);
+    // The bound every real read carries is the one the message names.
+    expect(gate.GH_TIMEOUT_MS).toBe(20_000);
+    const result = evaluateWorkControl(record({ transition: "close-issue", issue: 283 }), { issueComments: thread });
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/#283's thread could not be read: gh gave no answer within 20 s/);
+  });
+
   describe("closing references derived over REST when GraphQL's own list cannot be read", () => {
     const ref = (number, repo = "Pootytxng/sentinel", via = "body") => {
       const [login, name] = repo.split("/");
@@ -1132,21 +1169,33 @@ describe("two read-only transports behind one reader (#445 option 1)", () => {
       expect(calls.map((argv) => argv[0])).toEqual(["pr", "api", "api"]);
     });
 
-    it("a merge over a derived list is still BLOCKED by a live lease, and carries the derivation as a warning", () => {
+    it("a merge over a derived list is BLOCKED on the derivation itself, and still names every live lease the list reaches", () => {
+      // GitHub's closingIssuesReferences also carries the issues linked by hand in the PR sidebar, which no
+      // REST field exposes: a derived list can be short, so it holds the merge (collision rule 5), while
+      // the leases it does reach are still read and named.
       const derived = Object.assign([ref(283)], { derived: "GraphQL closingIssuesReferences could not be read (gh: HTTP 403); the list was derived over REST from closing keywords in the body and 0 commit messages (base main)" });
       const options = { closingIssues: () => derived, issueComments: (issue) => (issue === 283 ? [CLAIM] : []) };
       const held = evaluateWorkControl(record({ transition: "merge-pr", pr: 395 }), options);
       expect(held.decision).toBe("BLOCKED");
-      expect(held.blockers.join("\n")).toMatch(/#283 still has a live lease/);
-      expect(held.warnings).toHaveLength(1);
-      expect(held.warnings[0]).toMatch(/PR #395's closing references are derived, not GitHub's own list/);
-      expect(held.warnings[0]).toMatch(/can add lease reads, never drop one/);
+      const blockers = held.blockers.join("\n");
+      expect(blockers).toMatch(/PR #395's closing references are derived, not GitHub's own closingIssuesReferences list: GraphQL closingIssuesReferences could not be read \(gh: HTTP 403\)/);
+      expect(blockers).toMatch(/sidebar, which no REST field of a pull request exposes, so a derived list can be short/);
+      expect(blockers).toMatch(/unknown means locked/);
+      expect(blockers).toMatch(/#283 still has a live lease/);
+      expect(held.warnings).toEqual([]);
 
+      // A released lease removes that blocker and no other: the derivation alone still holds the merge.
       const released = evaluateWorkControl(record({ transition: "merge-pr", pr: 395 }), { ...options, issueComments: () => [CLAIM, RELEASED] });
-      expect(released.decision).toBe("PASS");
-      expect(released.blockers).toEqual([]);
-      expect(released.warnings).toHaveLength(1);
+      expect(released.decision).toBe("BLOCKED");
+      expect(released.blockers).toHaveLength(1);
+      expect(released.blockers[0]).toMatch(/closing references are derived/);
+      expect(released.warnings).toEqual([]);
       expect(released.codes).toEqual([]);
+
+      // GitHub's own list with the same reference: the released lease clears the merge.
+      const own = evaluateWorkControl(record({ transition: "merge-pr", pr: 395 }), { closingIssues: () => [ref(283)], issueComments: () => [CLAIM, RELEASED] });
+      expect(own.decision).toBe("PASS");
+      expect(own.blockers).toEqual([]);
     });
   });
 });

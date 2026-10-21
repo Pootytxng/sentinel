@@ -143,10 +143,14 @@ const LEASE_ENDING_TRANSITIONS = new Set(["close-issue", "mark-done"]);
 
 const REST_REPO_PATH = `repos/${CANONICAL_REPO}/`;
 
-/** A path this gate may read: under this repository, no whitespace. Anything else is refused here. */
+/**
+ * A path this gate may read: under this repository, and nothing that could leave it or rewrite the
+ * request — no whitespace, no `..` segment, no query (`?`, the pager owns that), no fragment, no
+ * backslash. Anything else is refused here.
+ */
 function restPath(path) {
   const p = String(path ?? "");
-  if (!p.startsWith(REST_REPO_PATH) || /[\s]/.test(p)) {
+  if (!p.startsWith(REST_REPO_PATH) || /[\s?#\\]/.test(p) || p.split("/").includes("..")) {
     throw new Error(`restRead: ${JSON.stringify(path)} is not a path under ${REST_REPO_PATH}`);
   }
   return p;
@@ -177,9 +181,24 @@ function parseJsonLines(raw) {
 const bothFailed = (what, primary, fallback) =>
   new Error(`${what} could not be read over GraphQL (${firstLineOf(primary)}) nor over REST (${firstLineOf(fallback)})`);
 
+/** How long one `gh` read may run before it is killed. Per read, on each transport. */
+export const GH_TIMEOUT_MS = 20_000;
+
+/**
+ * A read the bound killed (#474): GitHub, or the proxy in front of it, did not answer. That is not a
+ * refusal of one transport, so it is not retried over the other — a second transport asked after a
+ * hang would hold the gate for the same bound again. The same rule as tools/entry/gather.mjs.
+ */
+const hung = (e) => e?.code === "ETIMEDOUT" || e?.killed === true;
+const hungError = (what, error) =>
+  new Error(
+    `${what} could not be read: gh gave no answer within ${GH_TIMEOUT_MS / 1000} s over GraphQL ` +
+      `(${firstLineOf(error)}), and a read the bound killed is not retried over REST (#474)`,
+  );
+
 /**
  * A reader of an issue's comments, in posting order, through `gh` (injected): GraphQL first, REST
- * when GraphQL fails. The REST shape is folded to the one threadLease reads (`body`, `createdAt`,
+ * when GraphQL refuses. The REST shape is folded to the one threadLease reads (`body`, `createdAt`,
  * `url`), so the lease a thread shows does not depend on which transport answered.
  */
 export function issueCommentsVia(runner) {
@@ -191,6 +210,7 @@ export function issueCommentsVia(runner) {
       if (!Array.isArray(comments)) throw new Error("gh returned no comment list");
       return comments;
     } catch (error) {
+      if (hung(error)) throw hungError(`#${issue}'s thread`, error);
       primaryError = error;
     }
     try {
@@ -207,7 +227,7 @@ export function issueCommentsVia(runner) {
   };
 }
 
-const GH_RUN_OPTIONS = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20_000, maxBuffer: 64 * 1024 * 1024 };
+const GH_RUN_OPTIONS = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: GH_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 };
 const ghRunner = (args) => execFileSync("gh", args, GH_RUN_OPTIONS);
 
 /** The issue's comments in posting order, straight from GitHub. Throws when they cannot be read. */
@@ -271,11 +291,16 @@ function closeLeaseBlockers(record, issueComments) {
 // ---------------------------------------------------------------------------------------------
 
 // GitHub fills closingIssuesReferences from a closing keyword before an issue reference, in the PR
-// body or in any of its commits. REST has no such field, so the fallback derives the list from the
-// same two sources with the same keywords, and deliberately OVER-approximates: every keyword before a
-// `#n`, `owner/repo#n`, `GH-n` or issues URL counts, chained ones included, code fences included,
-// whatever the base branch. More references mean more leases read, never fewer, so a derived list can
-// only add refusals. The reader marks it `derived`, and the merge check carries that as a warning.
+// body or in any of its commits, AND from the issues linked by hand in the PR's Development sidebar.
+// REST has no such field. The fallback derives the keyword part from the same two sources with the
+// same keywords and deliberately OVER-approximates it: every keyword before a `#n`, `owner/repo#n`,
+// `GH-n` or issues URL counts, chained ones included, code fences included, whatever the base
+// branch. The sidebar part it cannot see at all: no REST field of a pull request lists those issues.
+// So a derived list reads more keyword leases than GitHub would, never fewer, and still may be short.
+// The reader marks it `derived`; the merge check reads the leases the list does reach, names every
+// live one, and holds the merge on the derivation itself — a lease the gate cannot read is not a
+// released one (collision rule 5: unknown means locked), and only GitHub's own list says the merge
+// closes nothing else.
 const CLOSING_KEYWORD = /\b(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\b:?/gi;
 const REFERENCE_AT_START =
   /^(?:#(\d+)|([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)|GH-(\d+)|https?:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)\b)/;
@@ -331,6 +356,7 @@ export function closingIssuesVia(runner) {
       if (!Array.isArray(refs)) throw new Error("gh returned no closingIssuesReferences list");
       return refs;
     } catch (error) {
+      if (hung(error)) throw hungError(`PR #${pr}'s closing references`, error);
       primaryError = error;
     }
     try {
@@ -366,7 +392,7 @@ const repoOf = (reference) => {
   return owner && name ? `${owner}/${name}` : null;
 };
 
-function mergeLeaseBlockers(record, { closingIssues, issueComments, warnings = [] }) {
+function mergeLeaseBlockers(record, { closingIssues, issueComments }) {
   const pr = record?.pr;
   if (!Number.isInteger(pr) || pr <= 0) {
     return [
@@ -384,13 +410,17 @@ function mergeLeaseBlockers(record, { closingIssues, issueComments, warnings = [
         "closes is unknown; environment inability is a blocker, not a pass.",
     ];
   }
+  const blockers = [];
   if (refs.derived) {
-    warnings.push(
-      `PR #${pr}'s closing references are derived, not GitHub's own list: ${refs.derived}. The derivation ` +
-        "over-approximates (every closing keyword before a reference counts), so it can add lease reads, never drop one.",
+    blockers.push(
+      `PR #${pr}'s closing references are derived, not GitHub's own closingIssuesReferences list: ${refs.derived}. ` +
+        "GitHub's list also carries the issues linked by hand in the PR's Development sidebar, which no REST field " +
+        "of a pull request exposes, so a derived list can be short, and a lease the gate cannot read is not a " +
+        "released one (collision rule 5: unknown means locked). The leases the derived list does reach are read " +
+        "below and any live one is named beside this; the merge waits for a transport that answers " +
+        "closingIssuesReferences itself.",
     );
   }
-  const blockers = [];
   const issues = [];
   for (const reference of refs) {
     const number = reference?.number;
@@ -696,7 +726,7 @@ export function evaluateWorkControl(
     blockers.push(...closeLeaseBlockers(record, issueComments));
   }
   if (record?.transition === "merge-pr") {
-    blockers.push(...mergeLeaseBlockers(record, { closingIssues, issueComments, warnings }));
+    blockers.push(...mergeLeaseBlockers(record, { closingIssues, issueComments }));
   }
 
   const codes = uniq(structuredBlockers.map((b) => b.code));

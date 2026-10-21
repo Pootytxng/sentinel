@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 // Through the namespace, so a reader that does not exist yet fails its own case, not the file.
 import * as gather from "./gather.mjs";
 import { overlapRemediation, scopeOverlapVerdict } from "./scope-overlap.mjs";
+import { parseScopePatterns } from "../../scripts/lib/claim-scope.mjs";
 
 const NOW = new Date("2026-09-11T12:00:00Z");
 const TRACKED = ["scripts/work-control-gate.mjs", "scripts/land-pr.mjs", "tools/entry/gather.mjs", "docs/WORK_CONTROL.md"];
@@ -249,7 +250,8 @@ describe("readIssueThread answers over GraphQL or over REST, the same lease eith
     // The one difference is the comment URL REST carries; every lease fact is the same.
     const { url, ...restClaim } = viaRest.claim;
     expect(restClaim).toEqual(viaGraphql.claim);
-    expect(gather.parseScopeOf?.(viaRest.claim) ?? viaRest.claim.scope).toEqual(viaGraphql.claim.scope);
+    // The scope REST folded is the same write authority: it parses to the one path the claim names.
+    expect(parseScopePatterns(viaRest.claim.scope)).toEqual(["scripts/land-pr.mjs"]);
   });
 
   it("a thread longer than one page is read to its end over REST: the release on page 2 counts", () => {

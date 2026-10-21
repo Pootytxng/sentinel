@@ -318,8 +318,11 @@ gate readers try GraphQL first and fall back to the REST API for issue threads a
 list is read page by explicit number, never `--paginate`, whose numeric Link URLs the hosted proxy
 refuses; `compy-entry adopt` reads its issue the same way, so a hosted folder can bind itself to its
 claim, and the scope-drift gate's claim read does too, so that folder measures its push against its
-own claim; a read the 20 s bound killed is never retried over the other transport); the Work Control
-board itself has no REST route, so from the hosted lane it stays unreachable. When the board is
+own claim; a read the 20 s bound killed is never retried over the other transport, in the gate as in
+the entry readers; closing references REST can only derive, from closing keywords, hold a merge rather
+than clear it, because GitHub's own list also carries sidebar-linked issues no REST field shows, and
+unknown means locked); the Work Control board itself has no REST route, so from the hosted lane it
+stays unreachable. When the board is
 unreachable (`BOARD_UNREACHABLE`), the hosted lane finishes authoring and pre-proof and hands off
 blocked evidence: unknown board state is never a PASS or an exemption, and ready-for-review, merge,
 close and Done wait for an authenticated fresh board read plus every native gate (#445 option 2,
