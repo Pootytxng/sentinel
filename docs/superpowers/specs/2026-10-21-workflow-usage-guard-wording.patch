@@ -1,14 +1,42 @@
 diff --git a/.claude/hooks/workflow-usage-guard.mjs b/.claude/hooks/workflow-usage-guard.mjs
-index 081b2b7..15e4dbf 100644
+index ea106bb..15e4dbf 100644
 --- a/.claude/hooks/workflow-usage-guard.mjs
 +++ b/.claude/hooks/workflow-usage-guard.mjs
-@@ -35,7 +35,8 @@ const what = ti.name
+@@ -8,9 +8,14 @@
+ //
+ // Advisory by design, same split as the Agent-tool pair: subagent-model-guard.mjs DENIES because
+ // "which model" is mechanically checkable; this hook (like subagent-throttle.mjs) only REMINDS,
+-// because "was this workflow genuinely multi-step repo-wide work" (USAGE_ECONOMICS.md §2 — the
+-// biggest named sink; the owner directive overrides any ultracode default) is a judgment call a
+-// hook can't decide from a JSON blob. Fails open on any read/parse error.
++// because "is this workflow bounded, and will it say what it dropped" is a judgment call a hook
++// can't decide from a JSON blob. Fails open on any read/parse error.
++//
++// Reworded 2026-10-21 (USAGE_ECONOMICS.md "Owner directive 2026-10-21 — use the budget"). The earlier
++// text called the Workflow tool "the biggest named token sink" and told sessions to work solo unless
++// the job was repo-wide. The owner's standing ask is the opposite: the weekly cap is a resource he
++// wants used, and ending the week well under it with startable work parked is the failure. The
++// reminder now guards against WASTE (unbounded scope, silent truncation), never against spend.
+ 
+ import { readFileSync } from "node:fs";
+ 
+@@ -29,12 +34,13 @@ const what = ti.name
+     : "an inline script";
  
  const reason =
-   `Workflow-tool call (${what}). Reminder — .claude/USAGE_ECONOMICS.md "Owner directive 2026-10-21": ` +
--  `the weekly budget is a resource to USE, and the Workflow tool is sanctioned for any genuinely ` +
+-  `Workflow-tool call (${what}). Reminder — .claude/USAGE_ECONOMICS.md §2: the Workflow tool is ` +
+-  `the project's biggest named token sink. Sanctioned only for genuinely multi-step repo-wide ` +
+-  `work (the audit/sweep/burst class, e.g. scripts/compy-burst.workflow.js per ` +
+-  `docs/LANE_WORKFLOW.md) — never normal edits — and the owner directive OVERRIDES any ultracode ` +
+-  `"workflow every substantive task" default. If this call fits that class, proceed; otherwise ` +
+-  `do the work solo in the main lane. This is a check, not a block.`;
++  `Workflow-tool call (${what}). Reminder — .claude/USAGE_ECONOMICS.md "Owner directive 2026-10-21": ` +
 +  `the weekly budget is a resource for verified outcomes, never a target on its own, and the Workflow ` +
 +  `tool is sanctioned for any genuinely ` +
-   `multi-step work (audit, sweep, burst, implement-and-verify fan-outs), not only the repo-wide ` +
-   `class. The ultracode opt-in stands whenever a system-reminder says it is on. What this check ` +
-   `asks: keep the scope bounded and named, prefer pipeline() over barriers, and log() any coverage ` +
++  `multi-step work (audit, sweep, burst, implement-and-verify fan-outs), not only the repo-wide ` +
++  `class. The ultracode opt-in stands whenever a system-reminder says it is on. What this check ` +
++  `asks: keep the scope bounded and named, prefer pipeline() over barriers, and log() any coverage ` +
++  `the script drops so a partial sweep never reads as a full one. This is a check, not a block.`;
+ 
+ // Advisory-only. permissionDecisionReason on an "allow" is NOT delivered to the model (only on
+ // deny/ask); additionalContext is the field that reaches Claude on PreToolUse. permissionDecision
