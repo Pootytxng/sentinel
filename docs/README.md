@@ -11,6 +11,7 @@ These files own different domains of truth. Do not use one as a substitute for a
 - [RELEASE_STATE.md](RELEASE_STATE.md) — **current implementation/release authority**: what is actually built, armed, installed, verified, or blocked.
 - [WORK_CONTROL.md](WORK_CONTROL.md) — **execution ownership authority**: active writers, scopes, claims, and proof-bound transitions.
 - [product/ROADMAP.md](product/ROADMAP.md) — derived build sequence; must conform to the Constitution and current safety/release truth.
+- [product/COMPLETION_ROADMAP.md](product/COMPLETION_ROADMAP.md) — derived completion map: what separates HEAD from a shippable 1.0 and from finalized, and who clears each gap (point-in-time; re-derive per its section 6).
 - [BACKLOG.md](BACKLOG.md) — living execution ledger only; it does not define product philosophy.
 
 ## Product architecture — derived from the Constitution

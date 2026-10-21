@@ -1,5 +1,5 @@
 diff --git a/.claude/settings.json b/.claude/settings.json
-index c62040f..8ed9876 100644
+index c62040f..34c0596 100644
 --- a/.claude/settings.json
 +++ b/.claude/settings.json
 @@ -12,10 +12,50 @@
@@ -15,7 +15,7 @@ index c62040f..8ed9876 100644
 +      "Bash(node scripts/lease-overlap-gate.mjs *)",
 +      "Bash(node scripts/markdown-link-guard.mjs*)",
 +      "Bash(node scripts/usage-audit.mjs*)",
-+      "Bash(node scripts/successor-route.mjs *)",
++      "Bash(node scripts/successor-route.mjs --handoff *)",
        "Bash(node scripts/work-control-gate.mjs *)",
 +      "Bash(node --check *)",
 +      "Bash(npx tsc --noEmit *)",
