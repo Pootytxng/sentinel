@@ -245,7 +245,13 @@ const POLICY = {
   reviewed_on: "2026-07-31",
   npm: {
     acknowledged: {
-      postcss: { severity: "high", classification: "build-time-only", why: "build only", review_by: "2026-10-31" },
+      postcss: {
+        severity: "high",
+        classification: "build-time-only",
+        why: "build only",
+        review_by: "2026-10-31",
+        advisories: ["GHSA-7fh5-64p2-3v2j"],
+      },
     },
   },
   cargo: {
@@ -262,7 +268,12 @@ const POLICY = {
 
 const NPM_REPORT = {
   vulnerabilities: {
-    postcss: { severity: "high", isDirect: false, range: "<8.4.31", via: [{ title: "traversal", url: "u" }] },
+    postcss: {
+      severity: "high",
+      isDirect: false,
+      range: "<8.4.31",
+      via: [{ title: "traversal", url: "https://github.com/advisories/GHSA-7fh5-64p2-3v2j" }],
+    },
   },
 };
 
@@ -381,6 +392,75 @@ describe("supply-chain gate: a reviewed finding passes, an unreviewed one does n
     expect(statusOf(result, "Cargo audit")).toBe(PASS);
     expect(result.findings.cargo[0].classification).toBe("not-in-shipped-build");
     expect(result.findings.cargo[0].why).toContain(SHIPPED_TARGET);
+  });
+});
+
+// #675: Codex's review of #676 found npm acknowledgements keyed by package name alone, so a new
+// advisory on an acknowledged package classified itself until review_by. An acknowledgement now
+// covers only the advisories it names, including those that reach its package through another one.
+describe("supply-chain gate: an npm acknowledgement covers only the advisories it names", () => {
+  const REVIEWED = "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm";
+  const report = (bracesVia) => ({
+    vulnerabilities: {
+      braces: { severity: "high", range: "<3.0.3", via: bracesVia },
+      micromatch: { severity: "high", range: "<=4.0.7", via: ["braces"] },
+    },
+  });
+  const ack = (advisories) => ({
+    severity: "high",
+    classification: "developer-tool-only",
+    why: "dev only",
+    review_by: "2026-10-31",
+    advisories,
+  });
+  const POLICY_PINNED = {
+    ...POLICY,
+    npm: { acknowledged: { braces: ack(["GHSA-vfj7-8cjw-p6xm"]), micromatch: ack(["GHSA-vfj7-8cjw-p6xm"]) } },
+  };
+  const npmGate = (npmReport, policy = POLICY_PINNED) =>
+    gate({ policy, script: { npmAudit: OK(JSON.stringify(npmReport)) } });
+  const classOf = (result, name) => result.findings.npm.find((finding) => finding.package === name)?.classification;
+
+  it("passes when the acknowledgements name every advisory that reaches the package", () => {
+    const result = npmGate(report([{ title: "redos", url: REVIEWED }]));
+    expect(statusOf(result, "npm audit")).toBe(PASS);
+    expect(classOf(result, "braces")).toBe("developer-tool-only");
+    expect(classOf(result, "micromatch")).toBe("developer-tool-only");
+  });
+
+  it("fails on a new advisory against an acknowledged package before its review date", () => {
+    const injected = { title: "new", url: "https://github.com/advisories/GHSA-zzzz-new0-0000" };
+    const result = npmGate(report([{ title: "redos", url: REVIEWED }, injected]));
+    expect(statusOf(result, "npm audit")).toBe(FAIL);
+    expect(classOf(result, "braces")).toBe("unclassified");
+    expect(classOf(result, "micromatch")).toBe("unclassified");
+    expect(detailOf(result, "npm audit")).toContain("GHSA-zzzz-new0-0000");
+  });
+
+  it("fails when an acknowledgement names no advisory", () => {
+    const policy = { ...POLICY, npm: { acknowledged: { ...POLICY_PINNED.npm.acknowledged, braces: ack(undefined) } } };
+    const result = npmGate(report([{ title: "redos", url: REVIEWED }]), policy);
+    expect(statusOf(result, "npm audit")).toBe(FAIL);
+    expect(classOf(result, "braces")).toBe("unclassified");
+  });
+
+  it("fails when a package is reached through one that npm audit does not report", () => {
+    const result = npmGate({ vulnerabilities: { micromatch: { severity: "high", via: ["braces"] } } });
+    expect(statusOf(result, "npm audit")).toBe(FAIL);
+    expect(detailOf(result, "npm audit")).toContain("braces");
+  });
+
+  it("fails when an advisory has no URL to pin an acknowledgement to", () => {
+    const result = npmGate(report([{ title: "redos" }]));
+    expect(statusOf(result, "npm audit")).toBe(FAIL);
+    expect(classOf(result, "braces")).toBe("unclassified");
+  });
+
+  it("terminates on a cycle of via packages and leaves both unclassified", () => {
+    const policy = { ...POLICY, npm: { acknowledged: { a: ack(["GHSA-vfj7-8cjw-p6xm"]), b: ack(["GHSA-vfj7-8cjw-p6xm"]) } } };
+    const result = npmGate({ vulnerabilities: { a: { via: ["b"] }, b: { via: ["a"] } } }, policy);
+    expect(classOf(result, "a")).toBe("unclassified");
+    expect(classOf(result, "b")).toBe("unclassified");
   });
 });
 
@@ -592,6 +672,13 @@ describe("scripts/audit-policy.json", () => {
         isAcknowledgementExpired(entry.review_by, new Date(`${policy.reviewed_on}T00:00:00Z`)),
         `${label} was already expired when it was reviewed`,
       ).toBe(false);
+    }
+  });
+
+  it("pins every npm acknowledgement to the advisories it was reviewed against", () => {
+    for (const [name, entry] of Object.entries(policy.npm.acknowledged)) {
+      expect(Array.isArray(entry.advisories) && entry.advisories.length > 0, `npm ${name} names no advisory`).toBe(true);
+      for (const id of entry.advisories) expect(id, `npm ${name}`).toMatch(/^GHSA(-[0-9a-z]{4}){3}$/);
     }
   });
 

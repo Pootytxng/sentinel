@@ -10,6 +10,7 @@
       "braces": {
         "severity": "high",
         "classification": "developer-tool-only",
+        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
         "why": "braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. This is the vulnerable package itself. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
         "paths": [
           "shadcn@4.13.0 -> fast-glob@3.3.3 -> micromatch@4.0.8 -> braces@3.0.3"
@@ -19,6 +20,7 @@
       "micromatch": {
         "severity": "high",
         "classification": "developer-tool-only",
+        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
         "why": "Listed only because it depends on braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
         "paths": [
           "shadcn@4.13.0 -> fast-glob@3.3.3 -> micromatch@4.0.8"
@@ -28,6 +30,7 @@
       "fast-glob": {
         "severity": "high",
         "classification": "developer-tool-only",
+        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
         "why": "Listed only because it depends on micromatch -> braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
         "paths": [
           "shadcn@4.13.0 -> fast-glob@3.3.3",
@@ -38,6 +41,7 @@
       "@ts-morph/common": {
         "severity": "high",
         "classification": "developer-tool-only",
+        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
         "why": "Listed only because it depends on fast-glob -> micromatch -> braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
         "paths": [
           "shadcn@4.13.0 -> ts-morph@26.0.0 -> @ts-morph/common@0.27.0"
@@ -47,6 +51,7 @@
       "ts-morph": {
         "severity": "high",
         "classification": "developer-tool-only",
+        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
         "why": "Listed only because it depends on @ts-morph/common -> fast-glob -> micromatch -> braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
         "paths": [
           "shadcn@4.13.0 -> ts-morph@26.0.0"
@@ -56,6 +61,7 @@
       "shadcn": {
         "severity": "high",
         "classification": "developer-tool-only",
+        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
         "why": "Listed only because it depends on fast-glob and ts-morph, which reach braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
         "paths": [
           "shadcn@4.13.0 (devDependency)"
@@ -65,6 +71,7 @@
       "fflate": {
         "severity": "moderate",
         "classification": "production-dependency-not-in-dist",
+        "advisories": ["GHSA-px8p-9vwx-vf98"],
         "why": "GHSA-px8p-9vwx-vf98: unzipSync can loop forever on a malformed ZIP64 archive. This is the one production-dependency finding: fflate 0.6.10 is nested under three-stdlib, which @react-three/drei depends on; the top-level fflate 0.8.3 is outside the vulnerable range. three-stdlib uses fflate only in its file loaders and exporters. src/ imports only Edges, Html, Grid, OrbitControls and shaderMaterial from drei and never imports three-stdlib or fflate, and the 2026-10-20 production build tree-shakes fflate out: three error strings present in fflate 0.6.10's own ESM build (invalid block type, invalid length/literal, unexpected EOF) occur nowhere in dist/. Compy also loads no ZIP, KMZ, 3MF, FBX or USDZ file at all. The patched fflate 0.6.11 is inside three-stdlib's declared ^0.6.9 range, but bumping a production dependency was outside #672's dev-only scope, so it is recommended there for a separate owner-approved change; the earlier review date reflects that a fix is available.",
         "paths": [
           "@react-three/drei@10.7.7 -> three-stdlib@2.36.1 -> fflate@0.6.10"
@@ -74,7 +81,7 @@
     }
   },
   "cargo": {
-    "note": "Compy's own Rust source references none of these crates: a case-sensitive search for quick_xml, crossbeam, rayon, anyhow and downcast_mut across the 55 .rs files under src-tauri/ and src-tauri/Cargo.toml returns nothing (re-run 2026-10-20). They arrive transitively: through Tauri and its plugins, through sysinfo (crossbeam-epoch) and through adlx (anyhow). Paths below are from `cargo tree --target x86_64-pc-windows-msvc -e normal -i <crate>` against the 2026-10-20 Cargo.lock. The rustls and rustls-webpki findings are deliberately not acknowledged: the updater reaches them on live TLS traffic and a semver-compatible Cargo.lock update fixes them (issue #672).",
+    "note": "Compy's own Rust source references none of these crates: a case-sensitive search for quick_xml, crossbeam, rayon, anyhow and downcast_mut across the 55 .rs files under src-tauri/ and src-tauri/Cargo.toml returns nothing (re-run 2026-10-20). They arrive transitively: through Tauri and its plugins, through sysinfo (crossbeam-epoch) and through adlx (anyhow). Paths below are from `cargo tree --target x86_64-pc-windows-msvc -e normal -i <crate>` against the 2026-10-20 Cargo.lock. The rustls and rustls-webpki findings (RUSTSEC-2026-0285, -0346, -0348, -0349 and -0382) were never acknowledged, because the updater reaches them on live TLS traffic. A semver-compatible Cargo.lock update (issue #675) fixed them instead: rustls 0.23.42 -> 0.23.46 and rustls-webpki 0.103.13 -> 0.103.16. The same update moved crossbeam-epoch 0.9.18 -> 0.9.21 and anyhow 1.0.102 -> 1.0.104, so the RUSTSEC-2026-0204 and RUSTSEC-2026-0190 acknowledgements were removed.",
     "acknowledged": {
       "RUSTSEC-2026-0194": {
         "package": "quick-xml",
@@ -97,28 +104,6 @@
           "quick-xml@0.39.4 <- plist@1.9.0 <- tauri-utils@2.9.2 <- tauri@2.11.2 (runtime) and tauri-build@2.6.2 (build)"
         ],
         "review_by": "2027-01-31"
-      },
-      "RUSTSEC-2026-0204": {
-        "package": "crossbeam-epoch",
-        "severity": "unscored",
-        "classification": "shipped-not-reachable",
-        "why": "Invalid pointer dereference in the fmt::Pointer impl of Atomic and Shared (crossbeam-epoch 0.9.18 src/atomic.rs); only formatting one of them with {:p} while it holds an invalid pointer triggers it. The path changed since the last review: it now comes through sysinfo 0.33.1's rayon feature, not Tauri. {:p} and fmt::Pointer occur 0 times in crossbeam-deque 0.8.6, rayon-core 1.13.0, rayon 1.12.0 and sysinfo 0.33.1, crossbeam-deque's Debug impls print fixed placeholders, and Compy names neither crossbeam nor rayon. A fix is semver-compatible: `cargo update -p crossbeam-epoch` moves 0.9.18 -> 0.9.21 (patched >=0.9.20) with no other change; that Cargo.lock edit is outside this review's write scope and is queued with the rustls update, so this entry is short-lived.",
-        "paths": [
-          "crossbeam-epoch@0.9.18 <- crossbeam-deque@0.8.6 <- rayon-core@1.13.0 <- rayon@1.12.0 <- sysinfo@0.33.1 <- compy"
-        ],
-        "review_by": "2026-12-31"
-      },
-      "RUSTSEC-2026-0190": {
-        "package": "anyhow",
-        "severity": "unsound",
-        "classification": "shipped-not-reachable",
-        "why": "Undefined behaviour only when Error::downcast_mut() is called on an error that had context added with Error::context. downcast_mut occurs 0 times in Compy's Rust source and 0 times in the three crates that link anyhow into the runtime build (adlx 0.0.0-alpha.1, tauri 2.11.2, tauri-utils 2.9.2); the other edges (tauri-build, tauri-plugin, and tauri-utils under the tauri-codegen/tauri-macros proc-macro) run only at compile time. No exploit path and no vulnerability rating. Patched at >=1.0.103, a semver-compatible `cargo update -p anyhow` queued with the rustls update.",
-        "paths": [
-          "anyhow@1.0.102 <- adlx@0.0.0-alpha.1 <- compy",
-          "anyhow@1.0.102 <- tauri@2.11.2 / tauri-utils@2.9.2 (runtime)",
-          "anyhow@1.0.102 <- tauri-build@2.6.2 / tauri-plugin@2.6.2 (build only)"
-        ],
-        "review_by": "2026-12-31"
       },
       "RUSTSEC-2026-0368": {
         "package": "zip",

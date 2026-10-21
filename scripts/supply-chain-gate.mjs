@@ -138,10 +138,42 @@ export function collectNpmFindings(report) {
       direct: entry?.isDirect === true,
       title: advisories.map((via) => via.title).filter(Boolean).join("; "),
       advisories: advisories.map((via) => via.url).filter(Boolean),
+      advisoryIds: advisories.map((via) => npmAdvisoryId(via)),
       reachedThrough: (entry?.via ?? []).filter((via) => typeof via === "string"),
     });
   }
   return findings.sort((a, b) => a.package.localeCompare(b.package));
+}
+
+// The GHSA id in the advisory URL is what an npm acknowledgement is pinned to; an advisory without
+// one is pinned by its URL, and an advisory with neither cannot be pinned at all (null).
+function npmAdvisoryId(via) {
+  const url = typeof via?.url === "string" ? via.url : "";
+  return url.match(/GHSA(-[0-9a-z]{4}){3}/i)?.[0] ?? (url || null);
+}
+
+// Every advisory that reaches a package: its own, plus those of each package npm says it is reached
+// through. An advisory with no id, or a package npm does not report, cannot be resolved.
+function npmAdvisoriesReaching(finding, byPackage, seen = new Set()) {
+  const ids = new Set();
+  const unresolved = [];
+  if (seen.has(finding.package)) return { ids, unresolved };
+  seen.add(finding.package);
+  for (const id of finding.advisoryIds ?? []) {
+    if (id) ids.add(id);
+    else unresolved.push(`an advisory on ${finding.package} with no URL`);
+  }
+  for (const name of finding.reachedThrough ?? []) {
+    const parent = byPackage.get(name);
+    if (!parent) {
+      unresolved.push(`${name}, which npm audit does not report`);
+      continue;
+    }
+    const inner = npmAdvisoriesReaching(parent, byPackage, seen);
+    for (const id of inner.ids) ids.add(id);
+    unresolved.push(...inner.unresolved);
+  }
+  return { ids, unresolved };
 }
 
 function applyAcknowledgement(finding, acknowledgement, now) {
@@ -189,9 +221,40 @@ export function classifyCargoFindings({ findings, shippedPackages, policy, now }
   });
 }
 
+// An npm acknowledgement covers only the advisories it names, so a new advisory on an acknowledged
+// package - or on one it is reached through - is unreviewed until someone adds it (#675).
 export function classifyNpmFindings({ findings, policy, now }) {
   const acknowledged = policy?.npm?.acknowledged ?? {};
-  return findings.map((finding) => applyAcknowledgement(finding, acknowledged[finding.package], now));
+  const byPackage = new Map(findings.map((finding) => [finding.package, finding]));
+  return findings.map((finding) => {
+    const acknowledgement = acknowledged[finding.package];
+    if (!acknowledgement) return applyAcknowledgement(finding, acknowledgement, now);
+    const reaching = npmAdvisoriesReaching(finding, byPackage);
+    if (reaching.unresolved.length) {
+      return {
+        ...finding,
+        classification: "unclassified",
+        problem: `${finding.package} is reached through ${reaching.unresolved.join(", ")}, so no acknowledgement can be pinned to it`,
+      };
+    }
+    if (!reaching.ids.size) {
+      return {
+        ...finding,
+        classification: "unclassified",
+        problem: `npm audit names no advisory for ${finding.package}, so no acknowledgement can be pinned to it`,
+      };
+    }
+    const named = new Set(acknowledgement.advisories ?? []);
+    const unnamed = [...reaching.ids].filter((id) => !named.has(id)).sort();
+    if (unnamed.length) {
+      return {
+        ...finding,
+        classification: "unclassified",
+        problem: `${finding.package} is reached by ${unnamed.join(", ")}, which its acknowledgement in scripts/audit-policy.json does not name`,
+      };
+    }
+    return applyAcknowledgement(finding, acknowledgement, now);
+  });
 }
 
 export function unresolvedFindings(classified) {
