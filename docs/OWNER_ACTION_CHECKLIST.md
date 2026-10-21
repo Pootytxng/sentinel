@@ -79,7 +79,7 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_patches. Four hook fixes waiting for your hands  ·  ⏳ NEW 2026-09-18, #633 added 2026-09-29
+### A_patches. Hook fixes waiting for your hands  ·  ⏳ NEW 2026-09-18, #633 added 2026-09-29, four more 2026-10-21
 
 **The ask:** hook files are yours to change (#368), so each PR below carries its fix as a
 `.patch` in `docs/superpowers/specs/` plus tests. After a PR merges, in the repo folder:
@@ -91,8 +91,12 @@ session that had just re-read it.
 | #470 | #468 drift hook asks GitHub on every write | `2026-09-18-scope-drift-hook-thread-bound.patch` | `tools/entry/scope-drift-check-thread.test.mjs` (6 passed) |
 | #471 | #465 drift hook measures a released claim | `2026-09-18-scope-drift-hook-released-claim.patch` | `tools/entry/scope-drift-check.test.mjs` (19 passed) |
 | #633 (merged) | #632 hand-written successor prompts launch unchecked | `2026-09-29-successor-launch-guard-632.patch` | `scripts/successor-launch-guard.test.mjs` (its skipped owner-hook test then runs and passes) |
+| `claude/cloud-lane-autonomy-20261021` | hosted sessions judge the thrash floor against the DESK window and hand off with most of the real window free | `2026-10-21-context-advisor-hosted-window.patch` | `scripts/context-thrash-guard.test.mjs` (its skipped "hosted session end-to-end" block then runs) |
+| same branch | a hosted clone commits as the harness default `Claude <noreply@anthropic.com>`, unreadable to the executor-identity rule | `2026-10-21-session-cloud-identity.patch` | `tools/entry/session-root-assert.test.mjs` (its skipped "hosted identity" block then runs) |
+| same branch | hookspath-guard refuses every isolated Agent run even where no shared `core.hooksPath` exists to protect (every hosted clone) | `2026-10-21-hookspath-guard-unset-allow.patch` | `scripts/hookspath-guard.test.mjs` (its skipped "owner patch" block then runs); guard weakening — the PR carries the #322 injection block |
+| same branch | the hosted allow list stops at 8 entries, so every `git`/`npm test`/`cargo test` call waits on a prompt | `2026-10-21-settings-allow-list.patch` | `tools/entry/project-settings.test.mjs`; adds `git push --force` to deny |
 
-#470 and #471 touch the same hook and apply in either order. **Why it matters:** until applied, the
+#470 and #471 touch the same hook and apply in either order; the four 2026-10-21 patches touch four different files and apply in any order. **Why it matters:** until applied, the
 hooks keep issuing wrong or slow warnings that sessions learn to ignore.
 
 ### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · re-derived 2026-09-03
@@ -247,28 +251,13 @@ push:
   but the fuller engine was deferred to "its own spec" and never built. Want it built, or leave it?
 
 ### B5. Historical UI evidence reconciled — no current owner action  ·  ✅  ·  [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md)
-The motion/interaction stack you were most excited about is **built and on by default** — magnetic
-cursor, Lenis spine, GSAP data-ticks and the room wipe shipped `1d310e12` (2026-07-12) and you
-approved them on sight ("everything looks good"). The panoramic drag gallery you rejected 2026-07-09
-and it was **deleted on your order** (`2de8d17c`); its drag/inertia feel lives on the rig hologram.
-Two doc lines kept paraphrasing all of that as unbuilt and sent a session at it on 2026-08-24;
-`src/ui-vision-status-guard.test.ts` rule D now fails the build on a pointer that names features
-instead of rows. What historical [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) still labels 🔴 OPEN
-is evidence to reconcile against the Product Constitution and roadmap, not current product priority
-or authorization: **DIR-1** (your intuitive-UI lens) and **§G**
-(the site's mini playable demo, which you flagged "maybe later"). **Yours — BOTH are now answered, so nothing in this
-section is waiting on you:**
-1. ~~**Do you want a panoramic drag surface back**~~ — ✅ **ANSWERED "no", 2026-08-25.** You took the
-   recommendation: no second drag canvas, the hologram's drag-orbit keeps that feel, and the sensory
-   load DIR-1 bars stays barred. Written into `UI_VISION_BACKLOG.md` §A.1 so it cannot come back as
-   a paraphrase. **Nothing on you here any more.**
-2. ~~**#49's B1–B5 needs your ChatGPT mockups**~~ — ✅ **RETRACTED 2026-08-25, it was never true.**
-   You approved four room comps on 2026-08-23 and they have been bundled and implementation-ready
-   since. Three of my ledgers said you still owed me pictures. **Nothing on you here — B1/B3/B4/B5
-   are mine to make and show you, and B2 is already your ruling.**
-- **You said "there's more I'm missing" + "capture it first"** — preserved here as historical evidence. This record does not ask you to reconstruct a list and does not authorize its former
-  Instrument Bench build target. Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; current
-  sequence comes from `docs/product/ROADMAP.md`.
+What historical [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) still labels 🔴 OPEN is evidence to
+reconcile against [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md) and the roadmap, not current
+product priority or authorization: **DIR-1** (your intuitive-UI lens) and **§G** (the site's mini
+playable demo, "maybe later"). Both asks this row carried are closed — the panoramic drag surface
+stays gone (your "no", 2026-08-25) and the #49 mockup ask was RETRACTED 2026-08-25 (it was never
+true). Full record, verbatim, in
+[`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md) §B5.
 
 ### B-closed6. Six items closed 2026-08-18/22 — moved to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md)
 **None of them is waiting on you.** `B_startup` (a Windows mutation outside `actions.rs` — already fixed the day after it was filed) · `B_gpu` (the finished GPU-profile screen, now mounted in the Lab, advisory forever) · `B_write` (the unverified-session write refusal, armed) · `B_shelter` (a row that was simply wrong — the collision guard had been on `main` since 2026-08-21, and a guard now fails the build if that stale-ask class recurs) · `B_land` (feedback and analytics post to your own site, into Cloudflare D1 — **your one residual is a single site deploy when the Q9b endpoints are built**) · `B_eu` (analytics default-ON, decided US-first; revisit the day Compy is downloadable by Europeans — that trigger is the reason it is archived rather than deleted). Closing verdicts preserved verbatim in the archive.

@@ -8,14 +8,21 @@
 // direct lesson of big-read-guard v1, which was dead in production (a `require` in an ESM file,
 // swallowed by a fail-open catch) and whose test suite would have caught it in one assertion.
 
-import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { THRASH_LIMITS, appendSeries, describeThrash, detectThrash } from "./lib/context-thrash.mjs";
+import {
+  THRASH_LIMITS,
+  appendSeries,
+  describeThrash,
+  detectThrash,
+  isHostedSession,
+  judgeableWindow,
+} from "./lib/context-thrash.mjs";
 
 // Derive the path the way scripts/big-read-guard.test.mjs does, and for the same reason: Vite
 // statically rewrites the `new URL("...", import.meta.url)` form for asset handling, so under Vitest
@@ -38,7 +45,7 @@ const freshSession = () => `test-${process.pid}-${randomUUID()}-${++seq}`;
  * Drive the hook turn by turn against a synthetic transcript, exactly as the Stop event does.
  * Returns one entry per turn: the parsed advisory, or null when the hook stayed silent.
  */
-function runTurns(ctxSeries, { sid = freshSession(), stopHookActive = false } = {}) {
+function runTurns(ctxSeries, { sid = freshSession(), stopHookActive = false, env = {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "ctx-advisor-"));
   const tp = join(dir, "transcript.jsonl");
   writeFileSync(tp, "");
@@ -58,7 +65,9 @@ function runTurns(ctxSeries, { sid = freshSession(), stopHookActive = false } = 
     const res = spawnSync(process.execPath, [HOOK], {
       input: JSON.stringify(payload),
       encoding: "utf8",
-      env: { ...process.env, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000", CLAUDE_PROJECT_DIR: dir },
+      // CLAUDE_CODE_REMOTE is pinned empty: a hosted container inherits "true" from process.env, and
+      // the desk-window cases below must run as the desk regardless of where the suite runs.
+      env: { ...process.env, CLAUDE_CODE_REMOTE: "", CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000", CLAUDE_PROJECT_DIR: dir, ...env },
     });
     expect(res.error).toBeUndefined();
     expect(res.status, `hook exited ${res.status}: ${res.stderr}`).toBe(0);
@@ -188,5 +197,79 @@ describe("thrash arithmetic", () => {
     expect(THRASH_LIMITS.MIN_REBOUNDS).toBeLessThanOrEqual(4);
     expect(THRASH_LIMITS.FLOOR_FRACTION).toBeGreaterThanOrEqual(0.6);
     expect(THRASH_LIMITS.FLOOR_FRACTION).toBeLessThanOrEqual(0.85);
+  });
+});
+
+describe("judgeableWindow / isHostedSession (2026-10-21: the desk literal is not the hosted window)", () => {
+  it("returns the configured window for an in-range series on the desk", () => {
+    expect(judgeableWindow(150_000, [100_000, 120_000], { hosted: false })).toBe(150_000);
+  });
+
+  it("returns 0 (unknown) when the harness marks the session hosted", () => {
+    expect(judgeableWindow(150_000, [100_000], { hosted: true })).toBe(0);
+  });
+
+  it("returns 0 when a measurement exceeds the window, whatever the marker says", () => {
+    expect(judgeableWindow(150_000, [100_000, 160_000], { hosted: false })).toBe(0);
+  });
+
+  it("returns 0 for an invalid window", () => {
+    expect(judgeableWindow(0, [1], { hosted: false })).toBe(0);
+    expect(judgeableWindow("x", [1], { hosted: false })).toBe(0);
+  });
+
+  it("reads only CLAUDE_CODE_REMOTE=true as hosted", () => {
+    expect(isHostedSession({ CLAUDE_CODE_REMOTE: "true" })).toBe(true);
+    expect(isHostedSession({ CLAUDE_CODE_REMOTE: "TRUE" })).toBe(true);
+    expect(isHostedSession({ CLAUDE_CODE_REMOTE: "1" })).toBe(false);
+    expect(isHostedSession({})).toBe(false);
+  });
+
+  it("defaults `hosted` from the live environment so the hook needs no env read of its own", () => {
+    const saved = process.env.CLAUDE_CODE_REMOTE;
+    try {
+      process.env.CLAUDE_CODE_REMOTE = "true";
+      expect(judgeableWindow(150_000, [100_000])).toBe(0);
+      delete process.env.CLAUDE_CODE_REMOTE;
+      expect(judgeableWindow(150_000, [100_000])).toBe(150_000);
+    } finally {
+      if (saved === undefined) delete process.env.CLAUDE_CODE_REMOTE;
+      else process.env.CLAUDE_CODE_REMOTE = saved;
+    }
+  });
+
+  it("floor hits need a window; rebounds never do", () => {
+    const floor = detectThrash([150_000, 110_000, 110_000, 115_000], 150_000);
+    expect(floor.floorHits.length).toBe(1);
+    const unknown = detectThrash([150_000, 110_000, 110_000, 115_000], 0);
+    expect(unknown.floorHits.length).toBe(0);
+    expect(unknown.thrashing).toBe(false);
+    const rebound = detectThrash([100_000, 100_000, 0, 100_000, 100_000, 0, 100_000], 0);
+    expect(rebound.thrashing).toBe(true);
+  });
+});
+
+// End-to-end through the hook itself. Hook files are the owner's to change (#368), so the hook half
+// of this fix ships as docs/superpowers/specs/2026-10-21-context-advisor-hosted-window.patch; these
+// cases run once it is applied and skip until then, exactly as #633's owner-hook test did.
+const HOSTED_AWARE = readFileSync(HOOK, "utf8").includes("judgeableWindow");
+
+describe.skipIf(!HOSTED_AWARE)("hosted session end-to-end (owner patch applied)", () => {
+  it("a healthy hosted summarization above the desk floor is not a floor hit", () => {
+    const outs = runTurns([150_000, 110_000, 110_000, 115_000], { env: { CLAUDE_CODE_REMOTE: "true" } });
+    expect(outs).toEqual([null, null, null, null]);
+  });
+
+  it("the size checkpoint stands down when the window is unknown", () => {
+    expect(runTurns([130_000], { env: { CLAUDE_CODE_REMOTE: "true" } })[0]).toBeNull();
+  });
+
+  it("the window-free rebound signal still fires when hosted", () => {
+    const outs = runTurns([100_000, 100_000, 0, 100_000, 100_000, 0, 100_000], {
+      env: { CLAUDE_CODE_REMOTE: "true" },
+    });
+    expect(outs[6]).not.toBeNull();
+    expect(outs[6].reason).toMatch(/THRASHING/);
+    expect(outs[6].reason).toContain("window unknown here");
   });
 });

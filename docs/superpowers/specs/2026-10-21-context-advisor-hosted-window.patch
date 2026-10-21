@@ -1,0 +1,49 @@
+diff --git a/.claude/hooks/context-size-advisor.mjs b/.claude/hooks/context-size-advisor.mjs
+index 381a403..8cee000 100644
+--- a/.claude/hooks/context-size-advisor.mjs
++++ b/.claude/hooks/context-size-advisor.mjs
+@@ -139,11 +139,19 @@ const writeMarker = (path, value) => {
+ // v4's bug in one line: it exited before recording anything, so it could only ever know the single
+ // number it was already ignoring. Velocity needs history, and history costs ~400 bytes of tmp file.
+ let thrashResult = null;
++// v7 (2026-10-21): the window the FLOOR test and the size checkpoint may judge against, or 0 when
++// the lib says the desk literal cannot be the window here (hosted session, or a measurement above
++// it). settings.json's CLAUDE_CODE_AUTO_COMPACT_WINDOW is the DESK window; a hosted claude.ai/code
++// session loads the same file but summarizes against a larger native window, so before v7 a healthy
++// hosted summarization read as a no-headroom floor hit and told the model to hand off. Rebounds
++// (refill velocity) need no window and keep firing everywhere.
++let judgeWindow = COMPACT_WINDOW;
+ if (thrash) {
+   const seriesMarker = join(tmpdir(), `compy-ctxadvisor-series-${sid}`);
+   const { series, serialized } = thrash.appendSeries(readMarker(seriesMarker), ctx, SERIES_TURNS);
+   writeMarker(seriesMarker, serialized);
+-  thrashResult = thrash.detectThrash(series, COMPACT_WINDOW);
++  judgeWindow = thrash.judgeableWindow(COMPACT_WINDOW, series);
++  thrashResult = thrash.detectThrash(series, judgeWindow);
+ }
+ 
+ const k = Math.round(ctx / 1000);
+@@ -163,8 +171,9 @@ if (thrashResult?.thrashing) {
+   if (!Number.isFinite(lastCount) || evidenceCount > lastCount) {
+     writeMarker(thrashMarker, evidenceCount);
+     emit(
+-      `CONTEXT IS THRASHING — ${thrash.describeThrash(thrashResult, COMPACT_WINDOW)}. Live context is ` +
+-        `~${k}k against a ~${windowK}k window. This is the harness's own "Autocompact is thrashing" ` +
++      `CONTEXT IS THRASHING — ${thrash.describeThrash(thrashResult, judgeWindow)}. Live context is ` +
++        `~${k}k${judgeWindow ? ` against a ~${windowK}k window` : " (window unknown here; the desk window literal does not apply)"}. ` +
++        `This is the harness's own "Autocompact is thrashing" ` +
+         `condition, measured from this session's transcript rather than guessed.\n` +
+         `Compaction cannot fix it. Compaction reclaims CONVERSATION, and at this refill speed almost ` +
+         `all of the context is fixed per-turn payload (system prompt, auto-loaded docs, tool ` +
+@@ -198,7 +207,10 @@ const marker = join(tmpdir(), `compy-ctxadvisor-${sid}`);
+ const rawLast = readMarker(marker);
+ const last = rawLast === "" ? NaN : Number(rawLast);
+ const compacted = Number.isFinite(last) && ctx < last; // context shrank → compaction happened → re-arm
+-if (ctx < WARN_TOKENS) {
++// The checkpoint is a desk instrument: WARN_TOKENS is 0.70 of the desk literal, and where that literal
++// is not the window (judgeWindow === 0) the line sits far below the real ceiling and would nag every
++// turn of a healthy session. Stand down rather than guess a window.
++if (!judgeWindow || ctx < WARN_TOKENS) {
+   if (compacted) writeMarker(marker, "0");
+   process.exit(0);
+ }

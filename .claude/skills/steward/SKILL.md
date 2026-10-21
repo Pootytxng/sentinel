@@ -21,8 +21,11 @@ the cloud:
 - **`scripts/verify-local.ps1` runs on the owner's Windows machine.** A Linux container records it
   **BLOCKED**, never PASS (`docs/WORK_CONTROL.md` "Proof order").
 - **Proof-dependent transitions need an independent reviewer who is not a mutation author**, plus a
-  `node scripts/work-control-gate.mjs` PASS receipt. A Claude session cannot review a Claude-authored
-  delta.
+  `node scripts/work-control-gate.mjs` PASS receipt. Independent means it wrote none of the proof
+  delta (`docs/WORK_CONTROL.md` "Proof order"): a second Claude Code session, Codex, ChatGPT HQ or
+  Grok reviewing the exact head qualifies; the authoring session reviewing itself never does. The
+  review still cannot stand in for the Windows gate, so a cloud lane ends at a draft PR with the
+  review recorded (`docs/WORK_CONTROL.md` "Hosted lane").
 - **Owner-hands items** (a `.patch` he applies under `.claude/hooks/`, a visual check that needs the
   running app, a decision) move only when he acts.
 

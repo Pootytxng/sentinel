@@ -1,0 +1,35 @@
+diff --git a/.claude/hooks/hookspath-guard.mjs b/.claude/hooks/hookspath-guard.mjs
+index 0ad3328..ac03476 100644
+--- a/.claude/hooks/hookspath-guard.mjs
++++ b/.claude/hooks/hookspath-guard.mjs
+@@ -33,10 +33,19 @@ export function isAbsoluteHooksPath(value) {
+   return isAbsolute(v) || /^[A-Za-z]:[\\/]/.test(v) || v.startsWith("\\\\") || v.startsWith("/");
+ }
+ 
+-/** PreToolUse: only an isolation worktree is refused; every other Agent call is not this hook's. */
+-export function decideAgent(toolInput) {
++/** PreToolUse: only an isolation worktree is refused, and only while this checkout has a SHARED
++ *  core.hooksPath to protect. `shared` is readSharedHooksPath(cwd): `{file, values}` or null when git
++ *  cannot answer. A clone with the key unset (every hosted claude.ai/code container; measured
++ *  2026-10-21) has nothing the harness can rewrite, so the refusal would only cost the lane its
++ *  parallel agents. Omitting `shared` (the pre-2026-10-21 call shape) keeps the unconditional
++ *  refusal, so no caller is loosened by accident. */
++export function decideAgent(toolInput, shared) {
+   const isolation = String(toolInput?.isolation ?? "").toLowerCase();
+   if (isolation !== "worktree") return { deny: false };
++  if (shared === null) return { deny: false, note: "not a repository" };
++  if (shared && Array.isArray(shared.values) && shared.values.length === 0) {
++    return { deny: false, note: "no shared core.hooksPath to protect" };
++  }
+   return {
+     deny: true,
+     reason:
+@@ -99,7 +108,7 @@ function main() {
+   const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+ 
+   if (event === "PreToolUse") {
+-    const verdict = decideAgent(input?.tool_input);
++    const verdict = decideAgent(input?.tool_input, readSharedHooksPath(cwd));
+     if (!verdict.deny) return;
+     process.stdout.write(
+       JSON.stringify({

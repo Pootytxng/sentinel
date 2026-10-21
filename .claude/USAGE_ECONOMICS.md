@@ -49,3 +49,25 @@ report for eleven days. **A measured constant is unmeasured the moment you chang
 - `scripts/usage-audit.mjs` — the weekly instrument. Reports cost-weighted spend shares, carried
   context against the real ceiling, per-turn floor week-over-week, and byte budgets. Written Mondays
   by the `CompyUsageAudit` scheduled task, zero tokens.
+
+## Owner directive 2026-10-21 — use the budget
+
+The weekly token cap is a **resource**, not a ceiling to stay well under. The owner's words
+(2026-10-21): sessions "constantly keep running into approval blocks or review blocks or some sort of
+hindrance", so he is "not reaching my normal token usage weekly cap". Thrift below the cap is not a
+goal; **a week that ends well under cap with startable work parked is the failure**, not spend.
+
+Every guard above stays, because each guards against **waste** — unbounded carried context, silent
+truncation, an opus subagent where sonnet answers the same — never against spend itself. What changes:
+
+- The Workflow tool is sanctioned for any genuinely multi-step work (audit, sweep, burst,
+  implement-and-verify fan-outs), not only the repo-wide class. `workflow-usage-guard.mjs` now asks
+  for bounded scope and logged drops; it no longer tells a session to work solo.
+- A hosted (claude.ai/code) session judges the thrash floor only when the window is known. The
+  `CLAUDE_CODE_AUTO_COMPACT_WINDOW` literal above is the **desk** window; the hosted harness
+  summarizes against a larger native window, so `context-size-advisor.mjs` v7 stands its
+  size-relative checks down there (`scripts/lib/context-thrash.mjs` `judgeableWindow`) and keeps the
+  window-free refill-velocity signal. Before v7 a healthy hosted summarization read as a no-headroom
+  floor hit and told the session to hand off.
+- The reader of the weekly audit treats under-use the way over-use was treated: a week well under cap
+  while `docs/BACKLOG.md` holds startable slices is a finding to explain, not a saving.

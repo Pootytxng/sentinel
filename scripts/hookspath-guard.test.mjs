@@ -39,6 +39,32 @@ describe("PreToolUse(Agent): an isolation worktree is refused, everything else i
   });
 });
 
+// 2026-10-21 (cloud-lane audit): the deny above was unconditional, so a checkout with NO shared
+// core.hooksPath — every hosted claude.ai/code clone, where the launcher never set one — refused an
+// isolation worktree it could not have harmed. The owner patch
+// docs/superpowers/specs/2026-10-21-hookspath-guard-unset-allow.patch gives decideAgent a second
+// argument, the readSharedHooksPath() result, and allows when there is nothing to protect. Until the
+// patch is applied decideAgent.length is 1 and these cases skip; the legacy pin above keeps holding.
+describe("PreToolUse(Agent): a checkout with no shared hooksPath has nothing to protect (owner patch)", () => {
+  const PATCHED = decideAgent.length >= 2;
+  it.skipIf(!PATCHED)("allows an isolation worktree when the shared value is unset", () => {
+    const v = decideAgent({ subagent_type: "Explore", isolation: "worktree" }, { file: "x", values: [] });
+    expect(v.deny).toBe(false);
+    expect(String(v.note || "")).toMatch(/no shared core\.hooksPath/);
+  });
+  it.skipIf(!PATCHED)("allows it outside a repository, where there is no shared config at all", () => {
+    expect(decideAgent({ subagent_type: "Explore", isolation: "worktree" }, null).deny).toBe(false);
+  });
+  it.skipIf(!PATCHED)("still denies when a relative shared hooksPath is in force (the #362 case)", () => {
+    const v = decideAgent({ subagent_type: "Explore", isolation: "worktree" }, { file: "x", values: [RELATIVE_HOOKS] });
+    expect(v.deny).toBe(true);
+    expect(v.reason).toMatch(/hookspath-fleet-guard/);
+  });
+  it.skipIf(!PATCHED)("an omitted second argument keeps the unconditional refusal (no caller can widen it by accident)", () => {
+    expect(decideAgent({ subagent_type: "Explore", isolation: "worktree" }).deny).toBe(true);
+  });
+});
+
 describe("what counts as an absolute hooksPath (git accepts all of these)", () => {
   it("drive, UNC and POSIX roots are absolute; the relative default is not", () => {
     expect(isAbsoluteHooksPath("C:\\Users\\Kuya\\code\\sentinel\\.githooks")).toBe(true);

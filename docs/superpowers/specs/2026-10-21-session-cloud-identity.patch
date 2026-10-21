@@ -1,0 +1,70 @@
+diff --git a/.claude/hooks/session-root-assert.mjs b/.claude/hooks/session-root-assert.mjs
+index 3a26b22..33060b9 100644
+--- a/.claude/hooks/session-root-assert.mjs
++++ b/.claude/hooks/session-root-assert.mjs
+@@ -598,6 +598,53 @@ export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKT
+   return { action: "set", line: `compy-entry: worktree identity set to ${identity.name}`, warning: effectiveWarning() };
+ }
+ 
++// ── hosted identity (2026-10-21) ─────────────────────────────────────────────────────────────────
++// A hosted claude.ai/code session runs in a fresh Linux container whose only checkout IS the main
++// checkout, so ensureWorktreeIdentity above correctly leaves it alone - and every commit then lands
++// as the harness default (`Claude <noreply@anthropic.com>`), which docs/WORK_CONTROL.md "Executor
++// identity" cannot attribute. The harness marks itself with CLAUDE_CODE_REMOTE=true; on that marker
++// alone, and only in the main checkout, set a `--local` identity: the same `claude-code` name the
++// desk worktrees use (so `mutationAuthors` stays one token) with a cloud email so `git log` tells the
++// lanes apart. Never over an identity another executor set: the harness default and an empty value
++// are the only things it replaces. Same isolation as the worktree step - one logged line, never the
++// verdict or the exit code.
++
++export const CLOUD_IDENTITY = Object.freeze({ name: "claude-code", email: "claude-code@cloud.local" });
++const HARNESS_DEFAULT_NAMES = new Set(["", "claude", "claude code"]);
++
++/** The harness's own hosted marker; nothing here guesses from paths or hostnames. */
++export function isHostedSession(env = process.env) {
++  return String(env?.CLAUDE_CODE_REMOTE ?? "").toLowerCase() === "true";
++}
++
++/**
++ * @returns {{action: "set"|"kept"|"skipped"|"failed", line: string|null, detail?: string}}
++ */
++export function ensureCloudIdentity(root, { run = gitResult, identity = CLOUD_IDENTITY, env = process.env } = {}) {
++  if (!isHostedSession(env)) return { action: "skipped", line: null, detail: "not hosted" };
++  if (!root) return { action: "skipped", line: null, detail: "no root" };
++  const gitDir = run(root, ["rev-parse", "--git-dir"]);
++  const commonDir = run(root, ["rev-parse", "--git-common-dir"]);
++  if (!gitDir.ok || !commonDir.ok) {
++    return { action: "skipped", line: null, detail: gitDir.out || commonDir.out || "not a git checkout" };
++  }
++  if (!samePath(resolve(root, gitDir.out), resolve(root, commonDir.out))) {
++    return { action: "skipped", line: null, detail: "linked worktree" };
++  }
++  const current = run(root, ["config", "--local", "--get", "user.name"]);
++  const name = current.ok ? current.out.trim() : "";
++  if (name && !HARNESS_DEFAULT_NAMES.has(name.toLowerCase())) {
++    return { action: "kept", line: null, detail: name };
++  }
++  const setName = run(root, ["config", "--local", "user.name", identity.name]);
++  const setEmail = setName.ok ? run(root, ["config", "--local", "user.email", identity.email]) : setName;
++  if (!setName.ok || !setEmail.ok) {
++    const failed = setName.ok ? setEmail : setName;
++    return { action: "failed", line: `compy-entry: hosted identity not set - ${failed.out}`, detail: failed.out };
++  }
++  return { action: "set", line: `compy-entry: hosted identity set to ${identity.name} <${identity.email}>` };
++}
++
+ // ── worktree provisioning (#405) ─────────────────────────────────────────────────────────────────
+ // A worktree the Claude Desktop harness made, rather than `compy-entry`, never traverses
+ // `tools/entry/launch.mjs`, so `createWorktree`'s guarantees have never applied to any of them. Two
+@@ -1468,6 +1515,11 @@ export async function main() {
+   let identity;
+   try {
+     identity = ensureWorktreeIdentity(result?.root ?? null);
++    if (identity.action === "main") {
++      // Hosted lane: the main checkout is the only checkout, so this is where its identity goes.
++      const hosted = ensureCloudIdentity(result?.root ?? null);
++      if (hosted.action !== "skipped") identity = hosted;
++    }
+   } catch (err) {
+     identity = { action: "failed", line: `compy-entry: worktree identity not set - ${err?.message ?? err}` };
+   }

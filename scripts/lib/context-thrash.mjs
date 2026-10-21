@@ -117,6 +117,51 @@ export function describeThrash(result, window) {
 }
 
 /**
+ * True when the harness says this session is hosted (claude.ai/code), i.e. not the desk checkout.
+ * CLAUDE_CODE_REMOTE=true is the harness's own marker; nothing here guesses from paths or hostnames.
+ *
+ * @param {NodeJS.ProcessEnv|Record<string,string|undefined>} [env]
+ * @returns {boolean}
+ */
+export function isHostedSession(env = process.env) {
+  return String(env?.CLAUDE_CODE_REMOTE ?? "").toLowerCase() === "true";
+}
+
+/**
+ * The window the thrash FLOOR test may judge against, or 0 when it must not judge at all.
+ *
+ * Why (bug→guard, 2026-10-21, found while auditing the owner's report that hosted sessions keep
+ * stopping on hindrances). The configured literal is the DESK window: settings.json sets
+ * CLAUDE_CODE_AUTO_COMPACT_WINDOW for the owner's Windows checkout. A hosted claude.ai/code session
+ * loads the same settings.json but summarizes against a far larger native window, so a healthy
+ * summarization that lands anywhere above 0.7 × the desk literal reads as a no-headroom floor hit and
+ * the advisory tells the model to write a handoff and leave — in a session with most of its real
+ * window still free. That is the mirror image of the 2026-08-07 bug above: not silent coverage but
+ * loud non-coverage, and the model obeys it.
+ *
+ * Two independent signals, either of which makes the window unknowable:
+ *   - the harness's own hosted marker (CLAUDE_CODE_REMOTE=true), passed in as `hosted`;
+ *   - a measurement in the series ABOVE the configured window, which no window that applied could
+ *     have allowed.
+ * The answer is then 0 ("unknown"), never a guess at the real window: detectThrash still finds
+ * rebounds — the refill-velocity signal needs no window at all — and only the floor test stands down.
+ *
+ * @param {number} configured the CLAUDE_CODE_AUTO_COMPACT_WINDOW literal in force
+ * @param {Array<number>} series the per-turn live-context measurements, oldest first
+ * @param {{hosted?: boolean}} [opts] defaults to isHostedSession() so a caller needs no env read
+ * @returns {number} the window to judge against, or 0
+ */
+export function judgeableWindow(configured, series, { hosted = isHostedSession() } = {}) {
+  const w = Number.isFinite(Number(configured)) && Number(configured) > 0 ? Number(configured) : 0;
+  if (!w || hosted) return 0;
+  const peak = (Array.isArray(series) ? series : [])
+    .map((n) => Number(n))
+    .filter((n) => Number.isFinite(n) && n >= 0)
+    .reduce((a, b) => (b > a ? b : a), 0);
+  return peak > w ? 0 : w;
+}
+
+/**
  * Keep a bounded per-session series. Bounded on purpose: the thing this module exists to fight is
  * unbounded carried state, and a monitor that grows without limit would be an instance of it.
  *

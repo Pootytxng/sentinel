@@ -136,6 +136,12 @@ reviewer-not-author rule can be checked against `git log` instead of trusted on 
   (`.claude/hooks/session-root-assert.mjs`, never the main checkout, never over an existing
   `--worktree` identity); Codex receives it from the global `~/.codex/config.toml` shell
   environment; Cowork HQ sets it per worktree by hand.
+- A hosted Claude Code session (claude.ai/code, `CLAUDE_CODE_REMOTE=true`) commits as `claude-code`
+  with `user.email claude-code@cloud.local`, set with `git config --local` on its single checkout at
+  SessionStart (`.claude/hooks/session-root-assert.mjs` `ensureCloudIdentity`, once the owner applies
+  `docs/superpowers/specs/2026-10-21-session-cloud-identity.patch`; until then the session sets it by
+  hand before its first commit). The name keeps `mutationAuthors` honest; the email tells the lanes
+  apart in `git log`. It never overwrites another executor's identity.
 - Commits authored as the bare desk identity (`t <t@t>`) are a defect; the next lease holder corrects
   the configuration before its first commit.
 
@@ -277,6 +283,24 @@ is being used to authorize a proof-dependent transition. If independent review i
 impractical, the receipt must say why; it may not silently self-approve.
 
 Only `PASS` from the exact Work Control gate authorizes the transition.
+
+### Hosted lane: author and pre-proof, never the proof
+
+A hosted Claude Code session (claude.ai/code; Linux container; `CLAUDE_CODE_REMOTE=true`) cannot run
+the Windows gates, so it is an authoring and pre-proof lane. It does the following without pausing
+for anyone: claim the lease, branch, commit, push, open a draft PR, run every host-neutral gate
+(`git diff --check`, `node scripts/scope-drift-gate.mjs`, `node scripts/lease-overlap-gate.mjs`,
+`npm test`, `npm run build`, `npx tsc --noEmit`, `node scripts/markdown-link-guard.mjs`), and review
+deltas it did not author. It records BLOCKED, never PASS, for `cargo test`, `cargo clippy`,
+`scripts/verify-local.ps1`, `scripts/doc-budget.ps1`, `npm run tauri build`,
+`scripts/ship-reinstall.ps1` and self-review captures. Its handoff is the draft PR plus a receipt with
+`verifyLocal: BLOCKED` naming the desk (the owner's Windows checkout, any executor) as the next
+executor for the proof and the landing transitions. A hosted session parks nothing on the owner that
+an executor can decide: engineering choices, aesthetic calls and sequencing are made in the PR and
+recorded there; only the owner-bound list in `CLAUDE.md` waits for him. Hook files under
+`.claude/hooks/` are owner-applied (#368): a hosted session ships a hook change as a `.patch` in
+`docs/superpowers/specs/` with tests, and the hosted harness's own permission classifier refuses
+in-tree hook edits regardless, so the patch is the route, not a fallback.
 
 ### A change that weakens a guard carries an injection (#322 guard 3)
 

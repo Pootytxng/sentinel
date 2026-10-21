@@ -529,4 +529,72 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
     expect(r.line).toMatch(/^compy-entry: worktree identity not set - fatal: --worktree/);
     expect(calls.filter((c) => c.startsWith("config --worktree user.name claude-code"))).toEqual([]);
   });
+  // 2026-10-21 (cloud-lane audit): a hosted claude.ai/code session runs in the MAIN checkout of a fresh
+  // clone, where (c) above correctly leaves identity alone - so every hosted commit landed as the
+  // harness default "Claude <noreply@anthropic.com>", an identity docs/WORK_CONTROL.md "Executor
+  // identity" cannot read. The owner patch docs/superpowers/specs/2026-10-21-session-cloud-identity.patch
+  // adds ensureCloudIdentity: hosted marker only, main checkout only, --local, never over a real name.
+  // Until it is applied the export is absent and this block skips; (c) keeps holding either way.
+  describe.skipIf(typeof tracked.ensureCloudIdentity !== "function")("hosted identity - --local claude-code in a hosted main checkout, nowhere else (owner patch)", () => {
+    const HOSTED = { CLAUDE_CODE_REMOTE: "true" };
+    const localName = (dir) => {
+      try {
+        return git(dir, "config", "--local", "user.name");
+      } catch {
+        return null;
+      }
+    };
+    const freshRepo = (name) => {
+      setup();
+      const dir = join(bed, name);
+      execFileSync("git", ["init", "-q", "-b", "main", dir], { stdio: "ignore" });
+      writeFileSync(join(dir, "README.md"), "fixture\n");
+      git(dir, "add", "-A");
+      git(dir, "commit", "-q", "-m", "fixture");
+      return dir;
+    };
+
+    it("does nothing at all when the harness does not say hosted", () => {
+      const dir = freshRepo("cloud-not-hosted");
+      const r = tracked.ensureCloudIdentity(dir, { env: {} });
+      expect(r.action).toBe("skipped");
+      expect(localName(dir)).toBeNull();
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("sets --local claude-code in a hosted main checkout, says so once, then keeps it", () => {
+      const dir = freshRepo("cloud-main");
+      const r = tracked.ensureCloudIdentity(dir, { env: HOSTED });
+      expect(r.action).toBe("set");
+      expect(r.line).toMatch(/^compy-entry: hosted identity set to claude-code/);
+      expect(localName(dir)).toBe(tracked.CLOUD_IDENTITY.name);
+      expect(git(dir, "config", "--local", "user.email")).toBe(tracked.CLOUD_IDENTITY.email);
+      expect(tracked.ensureCloudIdentity(dir, { env: HOSTED }).action).toBe("kept");
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("never overwrites another executor's identity, but does replace the harness default", () => {
+      const codex = freshRepo("cloud-codex");
+      git(codex, "config", "--local", "user.name", "codex");
+      git(codex, "config", "--local", "user.email", "codex@desk.local");
+      expect(tracked.ensureCloudIdentity(codex, { env: HOSTED }).action).toBe("kept");
+      expect(localName(codex)).toBe("codex");
+
+      const harness = freshRepo("cloud-harness-default");
+      git(harness, "config", "--local", "user.name", "Claude");
+      git(harness, "config", "--local", "user.email", "noreply@anthropic.com");
+      expect(tracked.ensureCloudIdentity(harness, { env: HOSTED }).action).toBe("set");
+      expect(localName(harness)).toBe("claude-code");
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("leaves a linked worktree to ensureWorktreeIdentity, and skips no-root / not-a-repo quietly", () => {
+      const dir = freshRepo("cloud-with-linked");
+      git(dir, "config", "extensions.worktreeConfig", "true");
+      const linked = join(bed, "cloud-linked");
+      git(dir, "worktree", "add", "-q", "-b", "lane/cloud", linked);
+      expect(tracked.ensureCloudIdentity(linked, { env: HOSTED }).action).toBe("skipped");
+      expect(localName(dir)).toBeNull();
+      expect(tracked.ensureCloudIdentity(null, { env: HOSTED }).action).toBe("skipped");
+      const plain = mkdtempSync(join(bed, "cloud-not-a-repo-"));
+      expect(tracked.ensureCloudIdentity(plain, { env: HOSTED, run: () => ({ ok: false, out: "fatal: not a git repository", status: 128 }) }).action).toBe("skipped");
+    }, GIT_SPAWN_TIMEOUT_MS);
+  });
 });
