@@ -7,67 +7,6 @@
   "npm": {
     "shipped_artifact": "The Compy installer contains the Rust executable and the Vite build output (tauri.conf.json build.frontendDist = ../dist). bundle.resources and bundle.externalBin are unset, so no node_modules content is packaged; only code the Vite build actually imports reaches dist/. Every devDependency advisory below is therefore a build-integrity or developer-workstation concern, which is a reachability statement, not a dismissal: a compromised build tool would reach the installer through dist/. The one production-dependency entry (fflate) carries its own evidence that its code is absent from dist/.",
     "acknowledged": {
-      "braces": {
-        "severity": "high",
-        "classification": "developer-tool-only",
-        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
-        "why": "braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. This is the vulnerable package itself. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
-        "paths": [
-          "shadcn@4.13.0 -> fast-glob@3.3.3 -> micromatch@4.0.8 -> braces@3.0.3"
-        ],
-        "review_by": "2027-01-31"
-      },
-      "micromatch": {
-        "severity": "high",
-        "classification": "developer-tool-only",
-        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
-        "why": "Listed only because it depends on braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
-        "paths": [
-          "shadcn@4.13.0 -> fast-glob@3.3.3 -> micromatch@4.0.8"
-        ],
-        "review_by": "2027-01-31"
-      },
-      "fast-glob": {
-        "severity": "high",
-        "classification": "developer-tool-only",
-        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
-        "why": "Listed only because it depends on micromatch -> braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
-        "paths": [
-          "shadcn@4.13.0 -> fast-glob@3.3.3",
-          "shadcn@4.13.0 -> ts-morph@26.0.0 -> @ts-morph/common@0.27.0 -> fast-glob@3.3.3"
-        ],
-        "review_by": "2027-01-31"
-      },
-      "@ts-morph/common": {
-        "severity": "high",
-        "classification": "developer-tool-only",
-        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
-        "why": "Listed only because it depends on fast-glob -> micromatch -> braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
-        "paths": [
-          "shadcn@4.13.0 -> ts-morph@26.0.0 -> @ts-morph/common@0.27.0"
-        ],
-        "review_by": "2027-01-31"
-      },
-      "ts-morph": {
-        "severity": "high",
-        "classification": "developer-tool-only",
-        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
-        "why": "Listed only because it depends on @ts-morph/common -> fast-glob -> micromatch -> braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
-        "paths": [
-          "shadcn@4.13.0 -> ts-morph@26.0.0"
-        ],
-        "review_by": "2027-01-31"
-      },
-      "shadcn": {
-        "severity": "high",
-        "classification": "developer-tool-only",
-        "advisories": ["GHSA-vfj7-8cjw-p6xm"],
-        "why": "Listed only because it depends on fast-glob and ts-morph, which reach braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
-        "paths": [
-          "shadcn@4.13.0 (devDependency)"
-        ],
-        "review_by": "2027-01-31"
-      },
       "fflate": {
         "severity": "moderate",
         "classification": "production-dependency-not-in-dist",

@@ -78,8 +78,10 @@ channel** for future sourcing rounds (replaces GitHub scraping):
   Item names carry the variant suffix — ours is always **`<Component>-TS-CSS`**
   (e.g. `TextType-TS-CSS`); suffixless/kebab names return the SPA HTML, not JSON.
 - `.mcp.json` runs the shadcn MCP server for Claude Code sessions (catalog browse/search;
-  loads on next fresh session). `shadcn` is pinned as a devDependency.
-- Inspect without writing: `npx shadcn view @react-bits/<Name>-TS-CSS`.
+  loads on next fresh session) through its own exact `npx shadcn@4.19.0` pin. There is no
+  `shadcn` devDependency: nothing ran it, and #672 removed it with its advisory chain.
+- Inspect without writing: `npx shadcn@4.19.0 view @react-bits/<Name>-TS-CSS` (keep the
+  version in step with `.mcp.json`).
 
 **Vendoring law unchanged:** never `shadcn add` straight into the tree. Fetch via the
 registry, then vendor by hand as before — license header, LF-normalize, token adaptation,
