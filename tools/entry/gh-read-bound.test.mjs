@@ -83,8 +83,11 @@ describe("every reader's default gh hands execFileSync the bound", () => {
     expect(gather.GH_READ_TIMEOUT_MS).toBe(BOUND_MS);
   });
 
+  // readIssueThread is two reads since #445 option 1: the GraphQL one the stub refuses fast, then the
+  // same thread over REST. Both carry the bound. A read the bound KILLED is not retried (the silent
+  // cases below see one ETIMEDOUT, never two).
   it.each([
-    ["readIssueThread", 1],
+    ["readIssueThread", 2],
     ["readIssueThreads", 1],
     ["readIssueBody", 1],
     ["readBoard", 1],
@@ -123,6 +126,7 @@ describe("a gh that never answers is killed at the bound, and the read is unread
     const errors = [];
     const { answer, ms } = timed(() => gather.readIssueThread(474, { run: silentGh(300, errors) }));
     expect(answer).toEqual({ claim: null, handoff: null, unreadable: true });
+    // One ETIMEDOUT: a hang is not retried over REST (#445 option 1), or the bound would be paid twice.
     expect(errors.map((e) => e.code)).toEqual(["ETIMEDOUT"]);
     expect(ms).toBeLessThan(4_500);
   });

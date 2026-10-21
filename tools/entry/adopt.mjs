@@ -31,6 +31,7 @@
 // vocabularies would let an adopt failure read as a session verdict.
 
 import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
 
 import {
   CORRUPT,
@@ -49,26 +50,47 @@ export const REPO = "Pootytxng/sentinel";
 /** The one repository an adopted session may be adopted into. */
 export const EXPECTED_REPO = normalizeRepo(REPO);
 
+/**
+ * One bounded `gh` read. Null when gh answered "no" (a refusal, a 404, a GraphQL the proxy will not
+ * carry); a THROW when the 20 s bound killed it (#474), because a GitHub that did not answer is not a
+ * transport to retry: the lookup below would otherwise wait the same 20 s again over REST.
+ */
 const gh = (args) => {
   try {
     return execFileSync("gh", args, { encoding: "utf8", timeout: 20_000, stdio: ["ignore", "pipe", "ignore"] });
-  } catch {
+  } catch (e) {
+    if (e?.code === "ETIMEDOUT" || e?.killed === true) throw e;
     return null;
   }
 };
 
 /**
+ * The issue's state, labels and title: over GraphQL (`gh issue view`) first, and over the REST API
+ * when that answers nothing (#445 option 1: the hosted lane's proxy refuses GraphQL, and the gate's
+ * own cure for a folder with no session record is this command, so the cure has to work there too).
+ * Both reads are read-only and bound to this repository; the shape is the same whichever answered.
+ *
  * @returns {{state: string, labels: string[], title: string}|null} null = could not be read, which
  * is NOT the same as "closed" and is refused with its own code.
  */
-export function lookupIssueViaGh(issue, { repo = REPO } = {}) {
-  const raw = gh(["issue", "view", String(issue), "--repo", repo, "--json", "state,labels,title"]);
+export function lookupIssueViaGh(issue, { repo = REPO, run = gh } = {}) {
+  const n = Number(issue);
+  let raw;
+  try {
+    raw =
+      run(["issue", "view", String(n), "--repo", repo, "--json", "state,labels,title"]) ??
+      run(["api", "--method", "GET", `repos/${repo}/issues/${n}`, "--jq", "{state, title, labels: [.labels[].name]}"]);
+  } catch {
+    // The bound killed a read: GitHub is not answering, and the second transport is not asked.
+    return null;
+  }
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     return {
       state: String(parsed.state ?? "").toUpperCase(),
-      labels: (parsed.labels ?? []).map((l) => l.name),
+      labels: (parsed.labels ?? []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean),
       title: parsed.title ?? "",
     };
   } catch {
@@ -261,15 +283,20 @@ export function adopt({
   write = writeLineage,
   liveness = observeLiveness,
 } = {}) {
+  // The record is keyed and written in the canonical (backslash) form the session hook compares
+  // with; git is asked about the folder as the filesystem spells it. On POSIX those differ, and the
+  // canonical form is not a path there at all (2026-10-21: every hosted adopt refused as "not a work
+  // tree" for that reason, so the push gate's own cure could not be taken from the hosted lane).
   const root = canonicalizePath(folder);
+  const fsRoot = resolve(String(folder ?? "").trim() || process.cwd());
   const rawWindow = String(env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW ?? "").trim();
   const existing = read({ root, dir });
   const plan = planAdoption({
     folder: root,
     issue,
     sessionId,
-    isWorktree: isWorktree(root),
-    live: live ?? observeLive(root),
+    isWorktree: isWorktree(fsRoot),
+    live: live ?? observeLive(fsRoot),
     issueFacts: Number.isInteger(Number(issue)) && Number(issue) > 0 ? lookupIssue(Number(issue)) : null,
     existing,
     liveness: liveness(existing, { now }).liveness,

@@ -195,3 +195,84 @@ describe("the read is one batched query, not one gh call per item (#414 correcti
     ]);
   });
 });
+
+// #445 option 1: `gh issue view` is a GraphQL read, and the hosted lane (claude.ai/code) is refused
+// GraphQL outright, so readIssueThread reads the same thread over REST, one numbered page at a time.
+// The cases below drive both transports through the one `gh` seam and check that the lease folded
+// from a REST page is the lease folded from the GraphQL answer: same claim, same release, same
+// "unreadable" when neither transport answers. Pages are asked for by explicit number, never
+// `--paginate` (its numeric Link URLs are refused by the hosted proxy), and a page that is not a JSON
+// array is a failed read, never an empty thread.
+describe("readIssueThread answers over GraphQL or over REST, the same lease either way (#445 option 1)", () => {
+  const REST_PATH = "repos/Pootytxng/sentinel/issues/7/comments";
+  const asRest = (c, i) => ({ body: c.body, created_at: c.createdAt, html_url: `https://github.com/Pootytxng/sentinel/issues/7#issuecomment-${i + 1}` });
+  /** A `gh` whose GraphQL read fails unless `graphql` is given, and whose REST pages come from `rest` (raw text or an array). */
+  function twoTransports({ graphql = null, rest = [] } = {}) {
+    const calls = [];
+    const run = (argv) => {
+      calls.push(argv);
+      if (argv[0] === "issue" && argv[1] === "view") {
+        if (!graphql) throw new Error("gh: GraphQL is not available from Claude Code sessions (HTTP 403)");
+        return JSON.stringify({ comments: graphql });
+      }
+      if (argv[0] === "api") {
+        if (typeof rest === "string") return rest;
+        const m = /^(.*)\?per_page=(\d+)&page=(\d+)$/.exec(argv[3] ?? "");
+        if (!m || m[1] !== REST_PATH) throw new Error(`fakeGh: unexpected gh ${argv.join(" ")}`);
+        const size = Number(m[2]);
+        const page = Number(m[3]);
+        return JSON.stringify(rest.map(asRest).slice((page - 1) * size, page * size));
+      }
+      throw new Error(`fakeGh: unexpected gh ${argv.join(" ")}`);
+    };
+    return { run, calls };
+  }
+  const restCalls = (calls) => calls.filter((a) => a[0] === "api");
+
+  it("a GraphQL answer is used as before, and REST is never asked", () => {
+    const gh = twoTransports({ graphql: [claimOn("scripts/land-pr.mjs")] });
+    const read = gather.readIssueThread(7, { run: gh.run });
+    expect(read.unreadable).toBe(false);
+    expect(read.claim).toMatchObject({ issue: 7, postedAt: "2026-09-07T10:00:00Z" });
+    expect(restCalls(gh.calls)).toEqual([]);
+  });
+
+  it("when GraphQL is refused, the thread is read over REST by explicit page, and folds the same claim", () => {
+    const thread = [claimOn("scripts/land-pr.mjs")];
+    const viaGraphql = gather.readIssueThread(7, { run: twoTransports({ graphql: thread }).run });
+    const gh = twoTransports({ rest: thread });
+    const viaRest = gather.readIssueThread(7, { run: gh.run });
+    expect(restCalls(gh.calls)).toEqual([["api", "--method", "GET", `${REST_PATH}?per_page=100&page=1`]]);
+    expect(gh.calls.flat()).not.toContain("--paginate");
+    expect(viaRest.unreadable).toBe(false);
+    expect(viaRest.claim).toMatchObject({ issue: 7, postedAt: "2026-09-07T10:00:00Z", url: "https://github.com/Pootytxng/sentinel/issues/7#issuecomment-1" });
+    // The one difference is the comment URL REST carries; every lease fact is the same.
+    const { url, ...restClaim } = viaRest.claim;
+    expect(restClaim).toEqual(viaGraphql.claim);
+    expect(gather.parseScopeOf?.(viaRest.claim) ?? viaRest.claim.scope).toEqual(viaGraphql.claim.scope);
+  });
+
+  it("a thread longer than one page is read to its end over REST: the release on page 2 counts", () => {
+    const filler = Array.from({ length: 99 }, (_, i) => at(`2026-09-07T11:${String(i % 60).padStart(2, "0")}:00Z`, `progress note ${i}`));
+    const gh = twoTransports({ rest: [claimOn("scripts/land-pr.mjs"), ...filler, RELEASED] });
+    const read = gather.readIssueThread(7, { run: gh.run });
+    expect(restCalls(gh.calls).map((a) => a[3])).toEqual([`${REST_PATH}?per_page=100&page=1`, `${REST_PATH}?per_page=100&page=2`]);
+    expect(read.unreadable).toBe(false);
+    expect(read.claim).toBeNull();
+    expect(read.handoff).toMatchObject({ released: true, postedAt: "2026-09-08T09:00:00Z" });
+  });
+
+  it("a thread neither transport can read is unreadable, which is not a thread with no claim", () => {
+    const refused = twoTransports({ rest: "gh: HTTP 403" });
+    refused.run = ((inner) => (argv) => {
+      if (argv[0] === "api") throw new Error("gh: HTTP 403");
+      return inner(argv);
+    })(refused.run);
+    expect(gather.readIssueThread(7, { run: refused.run })).toMatchObject({ claim: null, unreadable: true });
+    // A REST page that is not a JSON array is a failed read, never an empty thread.
+    expect(gather.readIssueThread(7, { run: twoTransports({ rest: "<html>502</html>" }).run })).toMatchObject({ claim: null, unreadable: true });
+    expect(gather.readIssueThread(7, { run: twoTransports({ rest: JSON.stringify({ message: "Not Found" }) }).run })).toMatchObject({ claim: null, unreadable: true });
+    // An empty REST page IS a thread with no claim.
+    expect(gather.readIssueThread(7, { run: twoTransports({ rest: [] }).run })).toMatchObject({ claim: null, handoff: null, unreadable: false });
+  });
+});

@@ -13,7 +13,7 @@
 | | |
 |---|---|
 | Installed | `d7fed835`, stamp byte-found in the installed exe (`d7fed835 · release · shell 0.9.26`, ship-reinstall OK), one installer on the Desktop; `main` is deliberately not pinned here — run `git log --oneline -4` |
-| Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push · a hosted (claude.ai/code) lane is author and pre-proof only: it ends at a draft PR with a `verifyLocal: BLOCKED` receipt ([`WORK_CONTROL.md`](WORK_CONTROL.md) "Hosted lane") |
+| Gate | doc-budget ALL PASS · doc-truth/capability-policy/citation/link guards green · pre-push local gate at push · a hosted (claude.ai/code) lane is author and pre-proof only: it ends at a draft PR with a `verifyLocal: BLOCKED` receipt whose `boardRead` names the one structured `BOARD_UNREACHABLE` blocker, its issue reads (push-gate leases, its own claim, `adopt`) falling back to REST by explicit page where GraphQL is refused, so the lease and drift gates reach a verdict there ([`WORK_CONTROL.md`](WORK_CONTROL.md) "Hosted lane"); patch application, proof and review are executor work, never parked on the owner (ruling 2026-10-21) |
 | Records | Q9b Stage 2 (#258), its 12/12 self-review and the Wave 1 Lane B landing (#224/#225, PR #401 at `3fe7a029`) are CLOSED and archived verbatim in [`archive/SESSION_HANDOFF_HISTORY.md`](archive/SESSION_HANDOFF_HISTORY.md) §2026-09-15; owner acceptance of Health/Test in the installed build is tracked in [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) §B8/§D_health, nowhere else |
 
 ## The rule that came out of the walk — read this before touching Health

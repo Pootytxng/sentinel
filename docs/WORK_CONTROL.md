@@ -209,6 +209,7 @@ Outgoing executor posts:
 - Verification:
 - Remaining work:
 - Gates or owner actions:
+- Board: fresh read at <ISO-8601> via <reader> | unreachable (<why>): BOARD_UNREACHABLE consequences apply
 - Worktree state:
 - Active processes:
 - Exact next action:
@@ -269,7 +270,11 @@ node scripts/work-control-gate.mjs <receipt.json>
 
 The receipt binds proof to the exact full 40-character current head and to canonical remote
 reachability. It should also record **all models that authored mutation in the proof delta** as
-`mutationAuthors` when more than one executor contributed through sequential leases.
+`mutationAuthors` when more than one executor contributed through sequential leases. It also records
+the board read it was written under as `boardRead` (`status`, `authenticated`, `readAt`, `via`,
+`evidence`; `.claude/work-control/README.md`): the gate holds every proof-dependent transition with the
+one machine-readable `BOARD_UNREACHABLE` blocker unless that read is authenticated and under 10 minutes
+old at gate time. Unknown board state is never a PASS and never an exemption (#445 option 2).
 
 Independent review is a **transition gate**, not a permanent implementation department. The reviewer:
 
@@ -281,6 +286,11 @@ Independent review is a **transition gate**, not a permanent implementation depa
 A handoff between executors does not by itself require independent review. Review happens when evidence
 is being used to authorize a proof-dependent transition. If independent review is genuinely
 impractical, the receipt must say why; it may not silently self-approve.
+
+Review is executor work: the owner is never a required reviewer, and a lane that cannot obtain a
+non-author exact-head review records that on the receipt and holds the transition rather than
+escalating (owner ruling 2026-10-21). This is the one reviewer rule; the standing grant in
+`RELEASE_AUTONOMY.md` removes check-ins, never this rigor.
 
 Only `PASS` from the exact Work Control gate authorizes the transition.
 
@@ -297,10 +307,19 @@ deltas it did not author. It records BLOCKED, never PASS, for `cargo test`, `car
 `verifyLocal: BLOCKED` naming the desk (the owner's Windows checkout, any executor) as the next
 executor for the proof and the landing transitions. A hosted session parks nothing on the owner that
 an executor can decide: engineering choices, aesthetic calls and sequencing are made in the PR and
-recorded there; only the owner-bound list in `CLAUDE.md` waits for him. Hook files under
-`.claude/hooks/` are owner-applied (#368): a hosted session ships a hook change as a `.patch` in
-`docs/superpowers/specs/` with tests, and the hosted harness's own permission classifier refuses
-in-tree hook edits regardless, so the patch is the route, not a fallback. When the board is
+recorded there; only the owner-bound list in `CLAUDE.md` waits for him, and nothing else in the lane's
+queue is exclusively owner-gated (owner ruling 2026-10-21: patch application, proof runs, independent
+review and board transitions are executor work). A hook change under `.claude/hooks/` authored from
+the hosted lane ships as a `.patch` in `docs/superpowers/specs/` with tests that skip until it is
+applied: the hosted harness's own permission classifier refuses in-tree hook edits, so the patch is
+the route, not a fallback, and applying it is the desk executor's first step, not the owner's. Its
+gate readers try GraphQL first and fall back to the REST API for issue threads and closing references
+(#445 option 1: a second read-only transport behind the same reader, never a write route; every REST
+list is read page by explicit number, never `--paginate`, whose numeric Link URLs the hosted proxy
+refuses; `compy-entry adopt` reads its issue the same way, so a hosted folder can bind itself to its
+claim, and the scope-drift gate's claim read does too, so that folder measures its push against its
+own claim; a read the 20 s bound killed is never retried over the other transport); the Work Control
+board itself has no REST route, so from the hosted lane it stays unreachable. When the board is
 unreachable (`BOARD_UNREACHABLE`), the hosted lane finishes authoring and pre-proof and hands off
 blocked evidence: unknown board state is never a PASS or an exemption, and ready-for-review, merge,
 close and Done wait for an authenticated fresh board read plus every native gate (#445 option 2,

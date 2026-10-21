@@ -38,6 +38,7 @@ import { promisify } from "node:util";
 import { CORRUPT, readLineage } from "../.claude/hooks/session-root-assert.mjs";
 import { threadLease } from "../tools/entry/claim.mjs";
 import { GH_READ_TIMEOUT_MS, REPO, ghReader } from "../tools/entry/gather.mjs";
+import { readAllPages } from "./lib/rest-pages.mjs";
 import { normalizePattern } from "./lib/claim-scope.mjs";
 import { isReceiptPath, leaseOverlapVerdict, renderLeaseOverlap } from "./lib/lease-overlap.mjs";
 
@@ -53,25 +54,21 @@ export function asyncGhReader({ exec = (cmd, args, opts) => execFileP(cmd, args,
 const defaultGit = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20_000 });
 const firstLine = (e) => String(e?.stderr || e?.message || e).split("\n").filter(Boolean)[0] ?? "unknown error";
 
-/** gh's `--jq` output: one compact JSON value per line. A line that does not parse is a failed read. */
-export function parseLines(raw) {
-  return String(raw ?? "")
-    .split(/\r?\n/)
-    .filter((l) => l.trim())
-    .map((l) => JSON.parse(l));
-}
-
-/** Every open issue (pull requests excluded) with its comment count. Throws when it cannot be read. */
+/**
+ * Every open issue (pull requests excluded) with its comment count. Throws when it cannot be read.
+ * Pages are numbered explicitly (scripts/lib/rest-pages.mjs): `--paginate` follows a Link header the
+ * hosted lane's proxy refuses, and 112 open issues and pull requests is already two pages.
+ */
 export async function readOpenIssues({ gh }) {
-  const raw = await gh(["api", "--paginate", `repos/${REPO}/issues?state=open&per_page=100`, "--jq", ".[] | select(.pull_request == null) | {number, comments}"]);
-  return parseLines(raw).map((i) => ({ number: Number(i.number), comments: Number(i.comments) }));
+  const issues = await readAllPages(gh, `repos/${REPO}/issues?state=open`);
+  return issues.filter((i) => i.pull_request == null).map((i) => ({ number: Number(i.number), comments: Number(i.comments) }));
 }
 
 /** One thread, folded. Never throws: a thread that could not be read comes back `unreadable`. */
 export async function readThread(number, { gh }) {
   try {
-    const raw = await gh(["api", "--paginate", `repos/${REPO}/issues/${number}/comments?per_page=100`, "--jq", ".[] | {body, created_at, html_url}"]);
-    const comments = parseLines(raw).map((c) => ({ body: c.body, createdAt: c.created_at, url: c.html_url }));
+    const page = await readAllPages(gh, `repos/${REPO}/issues/${number}/comments`);
+    const comments = page.map((c) => ({ body: c.body, createdAt: c.created_at, url: c.html_url }));
     return { number, run: threadLease(comments).run };
   } catch (e) {
     return { number, unreadable: true, why: `its thread could not be read (${e?.killed ? `no answer in ${GH_READ_TIMEOUT_MS / 1000} s` : firstLine(e)})` };

@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { threadLease } from "../tools/entry/claim.mjs";
+import { BOARD_UNREACHABLE, boardReadFreshness, boardUnreachableBlocker, renderBoardUnreachable } from "./lib/board-blocker.mjs";
+import { readAllPagesSync } from "./lib/rest-pages.mjs";
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
 
@@ -128,18 +130,88 @@ export const canonicalHeadProvenance = headProvenanceVia((args) =>
 
 const LEASE_ENDING_TRANSITIONS = new Set(["close-issue", "mark-done"]);
 
-/** The issue's comments in posting order, straight from GitHub. Throws when they cannot be read. */
-function readIssueComments(issue) {
-  const raw = execFileSync("gh", ["issue", "view", String(issue), "--repo", CANONICAL_REPO, "--json", "comments"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: 20_000,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const comments = JSON.parse(raw).comments;
-  if (!Array.isArray(comments)) throw new Error("gh returned no comment list");
-  return comments;
+// ---------------------------------------------------------------------------------------------
+// TWO READ-ONLY TRANSPORTS BEHIND ONE READER (#445 option 1)
+// `gh issue view --json` and `gh pr view --json` go through GitHub GraphQL, which the hosted lane's
+// proxy refuses (403) while REST (`gh api repos/...`) answers. So each reader tries GraphQL first and,
+// only when that read fails, the same facts over REST. Both transports are reads: every REST argv is
+// built by restRead(), which pins `--method GET` and a path under this repository, and the test pins
+// that no fallback ever issues anything else. A reader that fails both ways throws naming both: a
+// thread that cannot be read is still not a released one. This is a second transport for the SAME
+// answer, never a write route and never a substitute for the board read the receipt has to carry.
+// ---------------------------------------------------------------------------------------------
+
+const REST_REPO_PATH = `repos/${CANONICAL_REPO}/`;
+
+/** A path this gate may read: under this repository, no whitespace. Anything else is refused here. */
+function restPath(path) {
+  const p = String(path ?? "");
+  if (!p.startsWith(REST_REPO_PATH) || /[\s]/.test(p)) {
+    throw new Error(`restRead: ${JSON.stringify(path)} is not a path under ${REST_REPO_PATH}`);
+  }
+  return p;
 }
+
+/** The argv of one bounded REST read of ONE object. GET only, this repository only. Lists go through restList. */
+export function restRead(path, jq) {
+  return ["api", "--method", "GET", restPath(path), "--jq", String(jq)];
+}
+
+/**
+ * Every item of a list under this repository, page by explicit number (scripts/lib/rest-pages.mjs).
+ * Never `--paginate`: it follows a Link header in the numeric `repositories/{id}` form, which the
+ * hosted lane's proxy refuses, so the second page of anything failed from claude.ai/code.
+ */
+export function restList(runner, path) {
+  return readAllPagesSync(runner, restPath(path));
+}
+
+/** gh's `--jq` output: one compact JSON value per line. A line that does not parse is a failed read. */
+function parseJsonLines(raw) {
+  return String(raw ?? "")
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l));
+}
+
+const bothFailed = (what, primary, fallback) =>
+  new Error(`${what} could not be read over GraphQL (${firstLineOf(primary)}) nor over REST (${firstLineOf(fallback)})`);
+
+/**
+ * A reader of an issue's comments, in posting order, through `gh` (injected): GraphQL first, REST
+ * when GraphQL fails. The REST shape is folded to the one threadLease reads (`body`, `createdAt`,
+ * `url`), so the lease a thread shows does not depend on which transport answered.
+ */
+export function issueCommentsVia(runner) {
+  return (issue) => {
+    let primaryError;
+    try {
+      const raw = runner(["issue", "view", String(issue), "--repo", CANONICAL_REPO, "--json", "comments"]);
+      const comments = JSON.parse(raw).comments;
+      if (!Array.isArray(comments)) throw new Error("gh returned no comment list");
+      return comments;
+    } catch (error) {
+      primaryError = error;
+    }
+    try {
+      return restList(runner, `${REST_REPO_PATH}issues/${Number(issue)}/comments`).map((c) => ({
+        body: c.body,
+        createdAt: c.created_at,
+        url: c.html_url,
+        author: { login: c.user?.login ?? null },
+        transport: "rest",
+      }));
+    } catch (fallbackError) {
+      throw bothFailed(`#${issue}'s thread`, primaryError, fallbackError);
+    }
+  };
+}
+
+const GH_RUN_OPTIONS = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20_000, maxBuffer: 64 * 1024 * 1024 };
+const ghRunner = (args) => execFileSync("gh", args, GH_RUN_OPTIONS);
+
+/** The issue's comments in posting order, straight from GitHub. Throws when they cannot be read. */
+const readIssueComments = issueCommentsVia(ghRunner);
 
 /** The issues a close names: one positive issue number, or a list of them. Anything else is null. */
 function issuesClosedBy(record) {
@@ -198,19 +270,95 @@ function closeLeaseBlockers(record, issueComments) {
 // read is not a released one.
 // ---------------------------------------------------------------------------------------------
 
-/** A reader of a PR's closingIssuesReferences through `gh` (injected). Throws when they cannot be read. */
+// GitHub fills closingIssuesReferences from a closing keyword before an issue reference, in the PR
+// body or in any of its commits. REST has no such field, so the fallback derives the list from the
+// same two sources with the same keywords, and deliberately OVER-approximates: every keyword before a
+// `#n`, `owner/repo#n`, `GH-n` or issues URL counts, chained ones included, code fences included,
+// whatever the base branch. More references mean more leases read, never fewer, so a derived list can
+// only add refusals. The reader marks it `derived`, and the merge check carries that as a warning.
+const CLOSING_KEYWORD = /\b(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\b:?/gi;
+const REFERENCE_AT_START =
+  /^(?:#(\d+)|([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)|GH-(\d+)|https?:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)\b)/;
+const REFERENCE_SEPARATOR = /^[ \t]*(?:,|and\b|&)?[ \t]*/;
+
+/**
+ * Every issue reference a closing keyword in `text` points at, in the shape closingIssuesReferences
+ * uses (`number`, `repository.owner.login`, `repository.name`, `url`) plus `derived: true` and the
+ * source (`via`). A bare `#n` or `GH-n` is in this repository; `owner/repo#n` and a URL keep their
+ * repository, so the merge check can refuse a reference outside this one as it already does.
+ */
+export function closingReferencesIn(text, via = "body") {
+  const refs = [];
+  const seen = new Set();
+  const source = String(text ?? "");
+  CLOSING_KEYWORD.lastIndex = 0;
+  for (let m = CLOSING_KEYWORD.exec(source); m; m = CLOSING_KEYWORD.exec(source)) {
+    let rest = source.slice(m.index + m[0].length);
+    for (;;) {
+      rest = rest.replace(REFERENCE_SEPARATOR, "");
+      const r = REFERENCE_AT_START.exec(rest);
+      if (!r) break;
+      const [owner, name] = r[2] ? [r[2], r[3]] : r[6] ? [r[6], r[7]] : CANONICAL_REPO.split("/");
+      const number = Number(r[1] ?? r[4] ?? r[5] ?? r[8]);
+      const key = `${owner}/${name}#${number}`.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        refs.push({
+          number,
+          repository: { name, owner: { login: owner } },
+          url: `https://github.com/${owner}/${name}/issues/${number}`,
+          derived: true,
+          via,
+        });
+      }
+      rest = rest.slice(r[0].length);
+    }
+  }
+  return refs;
+}
+
+/**
+ * A reader of a PR's closingIssuesReferences through `gh` (injected): GraphQL first (GitHub's own
+ * list), and when that fails the list derived over REST from the PR body and every commit message.
+ * Throws when neither transport answers. A derived list is tagged `derived` on the array itself.
+ */
 export function closingIssuesVia(runner) {
   return (pr) => {
-    const refs = JSON.parse(runner(["pr", "view", String(pr), "--repo", CANONICAL_REPO, "--json", "closingIssuesReferences"]))
-      .closingIssuesReferences;
-    if (!Array.isArray(refs)) throw new Error("gh returned no closingIssuesReferences list");
-    return refs;
+    let primaryError;
+    try {
+      const refs = JSON.parse(runner(["pr", "view", String(pr), "--repo", CANONICAL_REPO, "--json", "closingIssuesReferences"]))
+        .closingIssuesReferences;
+      if (!Array.isArray(refs)) throw new Error("gh returned no closingIssuesReferences list");
+      return refs;
+    } catch (error) {
+      primaryError = error;
+    }
+    try {
+      const n = Number(pr);
+      const [view] = parseJsonLines(runner(restRead(`${REST_REPO_PATH}pulls/${n}`, "{body, base: .base.ref}")));
+      if (!view || typeof view !== "object") throw new Error("gh api returned no pull request");
+      const commits = restList(runner, `${REST_REPO_PATH}pulls/${n}/commits`).map((c) => ({ message: c?.commit?.message }));
+      const refs = closingReferencesIn(view.body, "body");
+      const seen = new Set(refs.map((r) => `${repoOf(r)}#${r.number}`.toLowerCase()));
+      for (const commit of commits) {
+        for (const ref of closingReferencesIn(commit?.message, "commit")) {
+          const key = `${repoOf(ref)}#${ref.number}`.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            refs.push(ref);
+          }
+        }
+      }
+      return Object.assign(refs, {
+        derived: `GraphQL closingIssuesReferences could not be read (${firstLineOf(primaryError)}); the list was derived over REST from closing keywords in the body and ${commits.length} commit message${commits.length === 1 ? "" : "s"} (base ${view.base ?? "unknown"})`,
+      });
+    } catch (fallbackError) {
+      throw bothFailed(`PR #${pr}'s closing references`, primaryError, fallbackError);
+    }
   };
 }
 
-const readClosingIssues = closingIssuesVia((args) =>
-  execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20_000 }),
-);
+const readClosingIssues = closingIssuesVia(ghRunner);
 
 const repoOf = (reference) => {
   const owner = reference?.repository?.owner?.login;
@@ -218,7 +366,7 @@ const repoOf = (reference) => {
   return owner && name ? `${owner}/${name}` : null;
 };
 
-function mergeLeaseBlockers(record, { closingIssues, issueComments }) {
+function mergeLeaseBlockers(record, { closingIssues, issueComments, warnings = [] }) {
   const pr = record?.pr;
   if (!Number.isInteger(pr) || pr <= 0) {
     return [
@@ -235,6 +383,12 @@ function mergeLeaseBlockers(record, { closingIssues, issueComments }) {
       `PR #${pr}'s closing references could not be read (${firstLineOf(error)}), so which issues its merge ` +
         "closes is unknown; environment inability is a blocker, not a pass.",
     ];
+  }
+  if (refs.derived) {
+    warnings.push(
+      `PR #${pr}'s closing references are derived, not GitHub's own list: ${refs.derived}. The derivation ` +
+        "over-approximates (every closing keyword before a reference counts), so it can add lease reads, never drop one.",
+    );
   }
   const blockers = [];
   const issues = [];
@@ -350,10 +504,13 @@ export function evaluateWorkControl(
     headProvenance = canonicalHeadProvenance,
     issueComments = readIssueComments,
     closingIssues = readClosingIssues,
+    now = new Date(),
   } = {},
 ) {
   const blockers = [];
   const warnings = [];
+  /** Blockers as data (#445 option 2): each carries a `code`; the prose twin is pushed to `blockers`. */
+  const structuredBlockers = [];
 
   const actor = String(record?.actor ?? "").trim();
   if (!IMPLEMENTATION_ACTORS.has(actor)) {
@@ -444,6 +601,18 @@ export function evaluateWorkControl(
       }
     }
 
+    // THE BOARD HAS TO HAVE BEEN READ (#445 option 2, owner-accepted 2026-10-21). A proof-dependent
+    // transition changes what the board says about a lane, so the receipt records the authenticated
+    // fresh read it was written against. No read, an unreachable one, a cached one, an unauthenticated
+    // one or a stale one is the same answer: the board's state is unknown, and unknown is never a
+    // PASS and never an exemption. The blocker is data (code + consequences) as well as prose.
+    const freshness = boardReadFreshness(record?.boardRead, { now });
+    if (!freshness.fresh) {
+      const blocker = boardUnreachableBlocker({ transition: record.transition, why: freshness.why });
+      structuredBlockers.push(blocker);
+      blockers.push(renderBoardUnreachable(blocker));
+    }
+
     if (requiredGates.length === 0) {
       blockers.push("A proof-dependent GitHub transition requires at least one exact named gate.");
     }
@@ -527,13 +696,17 @@ export function evaluateWorkControl(
     blockers.push(...closeLeaseBlockers(record, issueComments));
   }
   if (record?.transition === "merge-pr") {
-    blockers.push(...mergeLeaseBlockers(record, { closingIssues, issueComments }));
+    blockers.push(...mergeLeaseBlockers(record, { closingIssues, issueComments, warnings }));
   }
 
+  const codes = uniq(structuredBlockers.map((b) => b.code));
   return blockers.length > 0
-    ? { decision: "BLOCKED", blockers, warnings }
-    : { decision: "PASS", blockers, warnings };
+    ? { decision: "BLOCKED", blockers, warnings, codes, structuredBlockers }
+    : { decision: "PASS", blockers, warnings, codes, structuredBlockers };
 }
+
+/** True when a verdict is held by the board blocker, whatever else it says. */
+export const heldByBoard = (verdict) => Array.isArray(verdict?.codes) && verdict.codes.includes(BOARD_UNREACHABLE);
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const receiptPath = process.argv[2];

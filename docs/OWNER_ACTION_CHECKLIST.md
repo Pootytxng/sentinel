@@ -79,11 +79,11 @@ means editing the file above. The exact settings block to paste is in a comment 
 hook. **Why it matters:** it is the mechanical version of a rule that was already broken once by the
 session that had just re-read it.
 
-### A_patches. Hook fixes waiting for your hands  ·  ⏳ NEW 2026-09-18, #633 added 2026-09-29, five more 2026-10-21
+### A_patches. Hook fixes, executor-applied  ·  ⏳ NEW 2026-09-18, #633 2026-09-29, six more 2026-10-21
 
-**The ask:** hook files are yours to change (#368), so each PR below carries its fix as a
-`.patch` in `docs/superpowers/specs/` plus tests. After a PR merges, in the repo folder:
-`git apply <patch> && git rm -q <patch>`, run its test, commit. Or tell HQ or Codex to do it.
+**The ask:** none by default (your ruling 2026-10-21: nothing here is exclusively owner-gated). Each PR
+below carries its fix as a `.patch` in `docs/superpowers/specs/` plus tests (the hosted harness refuses
+in-tree hook edits); the desk executor runs `git apply <patch> && git rm -q <patch>` and its test.
 
 | PR | Fixes | Patch | Test (expect) |
 |---|---|---|---|
@@ -96,8 +96,9 @@ session that had just re-read it.
 | same branch | hookspath-guard refuses every isolated Agent run even where no shared `core.hooksPath` exists to protect (every hosted clone) | `2026-10-21-hookspath-guard-unset-allow.patch` | `scripts/hookspath-guard.test.mjs` (its two skipped "owner patch" blocks then run); guard weakening — the PR carries the #322 injection block; corrected after the PR #679 exact-head review (P1): only a positively absent key allows, a failed git read keeps the denial |
 | same branch | the hosted allow list stops at 8 entries, so every `git`/`npm test`/`cargo test` call waits on a prompt | `2026-10-21-settings-allow-list.patch` | `tools/entry/project-settings.test.mjs`; adds `git push --force` to deny |
 | same branch | the Workflow reminder calls the Workflow tool the project's biggest named token sink and tells sessions to work solo; the 2026-10-21 directive and the owner's verified-outcomes-per-usage ruling (PR #679 review) supersede both. The PR edits no hook file in-tree; the whole rewording is this patch | `2026-10-21-workflow-usage-guard-wording.patch` | `scripts/workflow-usage-guard.test.mjs` (its two skipped wording pins then run); advisory hook, allow-only |
+| same branch | `BOARD_UNREACHABLE` was prose only | `2026-10-21-board-unreachable-structured.patch` | `tools/entry/session-root-assert.test.mjs` (its skipped block then runs) |
 
-#470 and #471 touch the same hook and apply in either order; the five 2026-10-21 patches touch five different files and apply in any order. **Why it matters:** until applied, the
+#470 and #471 touch the same hook and apply in either order; the six 2026-10-21 patches touch six different files and apply in any order. **Why it matters:** until applied, the
 hooks keep issuing wrong or slow warnings that sessions learn to ignore.
 
 ### A_prune. Three dead branches I was not allowed to delete  ·  ⏳ NEW 2026-08-31 · re-derived 2026-09-03
@@ -147,7 +148,7 @@ None of them is waiting on you (A0's key backup closed 2026-08-18; record and th
 corrections in the archive). **§A holds SEVEN things:** ① A0's residual — delete the
 redundant `Desktop\COMPY KEY\` copy; ② A0's *"expand to the remaining invitees"* — a **distribution call**,
 yours by definition; ③ **A_settings**, one paste in a file only you may edit; ④ **A_prune**,
-one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, three hook patches; ⑦ **A_spent**, the spent-folder removals.
+one delete; ⑤ **A_wmi**, one reboot; ⑥ **A_patches**, the hook patches; ⑦ **A_spent**, the spent-folder removals.
 Archived (2026-08-04, 08-18, 08-20), each with its record and your verdict verbatim under its own heading in [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md): **A_ci · A_rig · A_ref2 · B1 · B7 · B_arc · A_crash · A_ref · A_hook · A_disk · A0b · A1 · A2 · A3 · A4 · A5 · A6 · A7 · A8 · A9**.
 
 ---

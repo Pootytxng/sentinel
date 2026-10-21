@@ -1,0 +1,72 @@
+diff --git a/.claude/hooks/session-root-assert.mjs b/.claude/hooks/session-root-assert.mjs
+index 3a26b22..bb53dc6 100644
+--- a/.claude/hooks/session-root-assert.mjs
++++ b/.claude/hooks/session-root-assert.mjs
+@@ -280,6 +280,39 @@ export const PROJECT = { number: 1, owner: "Pootytxng" };
+ export const REPO = "Pootytxng/sentinel";
+ export const EXPECTED_REPO = normalizeRepo(REPO);
+ 
++// ── the ONE machine-readable BOARD_UNREACHABLE blocker (#445 option 2, owner-accepted 2026-10-21) ──
++//
++// Duplicated from scripts/lib/board-blocker.mjs on purpose (this file imports nothing but `node:`)
++// and pinned equal to it by tools/entry/session-root-assert.test.mjs: the session's "the board was
++// unknown" and the gate's must be the same words, so no reader has to parse prose to learn it.
++// Unknown board state is never a PASS and never an exemption; the proof-dependent transitions wait
++// for an authenticated fresh read (within BOARD_TTL_MINUTES) plus every native gate on the head.
++
++export const BOARD_HELD_TRANSITIONS = Object.freeze(["mark-pr-ready", "close-superseded-pr", "merge-pr", "close-issue", "mark-done"]);
++
++export const BOARD_UNREACHABLE_CONSEQUENCES = Object.freeze([
++  "unknown board state is never a PASS and never an exemption",
++  `${BOARD_HELD_TRANSITIONS.join(", ")} wait for an authenticated fresh Work Control read (within ${BOARD_TTL_MINUTES} minutes, recorded as boardRead on the receipt)`,
++  "every native gate on the exact head stays required; this blocker cannot be substituted",
++  "the hosted lane finishes authoring and pre-proof and hands off blocked evidence",
++]);
++
++/** The blocker as data: the code, the transition being refused (when there is one), why, and the consequences. */
++export function boardUnreachableBlocker({ transition = null, why = "Work Control could not be read" } = {}) {
++  return {
++    code: "BOARD_UNREACHABLE",
++    ...(transition ? { transition } : {}),
++    why: String(why),
++    consequences: [...BOARD_UNREACHABLE_CONSEQUENCES],
++  };
++}
++
++/** One line a human and a grep can both read: the code first, then why, then the consequences. */
++export function renderBoardUnreachable(blocker) {
++  const head = `${blocker.code}${blocker.transition ? ` (${blocker.transition})` : ""}: ${blocker.why}`;
++  return `${head}. Consequences: ${blocker.consequences.join("; ")}.`;
++}
++
+ /**
+  * The `Worktree / branch` field grammar, in the subset this file needs: `path @ branch`, several
+  * entries joined by ` ; `. Duplicated from tools/entry/worktree-field.mjs on purpose (this file is
+@@ -1094,11 +1127,13 @@ export function assertSessionRoot({
+   }
+ 
+   if (!board || board.reachable === false) {
++    // #445 option 2: the refusal carries the one structured blocker, so what an unknown board costs
++    // travels with the code — into the SessionStart line, a receipt, a handoff — in the gate's words.
+     return refuse(
+       "BOARD_UNREACHABLE",
+       "Work Control could not be read, so there is no fact saying which issue this folder is working " +
+         "or on which branch. Unreachable is not the same as unclaimed, so nothing is asserted either way.",
+-      { root: resolved.root },
++      { root: resolved.root, blocker: boardUnreachableBlocker() },
+     );
+   }
+   if (board.stale) notes.push(`the board answer is cached from ${board.fetchedAt} (the live read failed)`);
+@@ -1355,7 +1390,11 @@ export function verdictFor(result) {
+   }
+ 
+   if (ADVISORY_CODES.has(result?.code)) {
+-    return { exit: 0, level: "advisory", message: ADVISORY_LINES[result.code] ?? `compy-entry: ${result.code}` };
++    const line = ADVISORY_LINES[result.code] ?? `compy-entry: ${result.code}`;
++    // An unreachable board adds its one blocker line (#445 option 2): still not a wall, and the
++    // consequences print in the same words the gates refuse with.
++    const blocker = result.blocker ? `\n${renderBoardUnreachable(result.blocker)}` : "";
++    return { exit: 0, level: "advisory", message: line + blocker };
+   }
+ 
+   // Everything else — including a code added later and never classified — blocks.

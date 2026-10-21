@@ -136,11 +136,11 @@ Trial, history, evidence, and rollback primitives as Performance.
 
 Owner-only actions remain indexed in [`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md).
 
-A product roadmap item is not blocked merely because an unrelated owner decision exists. Surface owner
-items when their dependency becomes real.
+Only `CLAUDE.md`'s owner-bound list is owner-gated (ruling 2026-10-21): patches, proof, review and
+board moves are executor work. Surface owner items when their dependency becomes real.
 
-Which gaps are owner-bound and which the desk or cloud lane clears is mapped in
-[`product/COMPLETION_ROADMAP.md`](product/COMPLETION_ROADMAP.md) (derived 2026-10-21, point-in-time; re-derive per its section 6).
+Which gaps are owner-bound and which a lane clears: [`product/COMPLETION_ROADMAP.md`](product/COMPLETION_ROADMAP.md)
+(2026-10-21, point-in-time; re-derive per its section 6).
 
 ---
 

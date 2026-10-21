@@ -32,22 +32,29 @@ const HOME_JSON = ["src/i18n/locales/en/home.json", "src/i18n/locales/zh-CN/home
 
 /**
  * A `gh` that answers the gate's two REST reads from the recorded threads, as they stood at `asOf`.
- * `fail` maps an issue number to the error its thread read throws, as execFile would.
+ * It answers one numbered page per call with the raw JSON array GitHub would send (no `--jq`), and
+ * `pages` lets a test hand a list longer than one page. `fail` maps an issue number to the error its
+ * thread read throws, as execFile would.
  */
-function fakeGh({ asOf, threads = FIXTURE.threads, fail = {}, listFails = null, calls = [] }) {
+function fakeGh({ asOf, threads = FIXTURE.threads, fail = {}, listFails = null, calls = [], pages = {} }) {
   const upTo = (n) => (threads[n] ?? []).filter((c) => Date.parse(c.created_at) <= Date.parse(asOf));
+  const pageOf = (path, items) => {
+    const m = /[?&]per_page=(\d+)&page=(\d+)$/.exec(path);
+    if (!m) throw new Error(`fake gh: ${path} names no page`);
+    const [size, page] = [Number(m[1]), Number(m[2])];
+    return JSON.stringify(items.slice((page - 1) * size, page * size));
+  };
   return async (args) => {
     calls.push(args);
     const path = args.find((a) => a.startsWith("repos/"));
     if (/\/issues\?state=open/.test(path)) {
       if (listFails) throw listFails;
-      return Object.keys(threads)
-        .map((n) => JSON.stringify({ number: Number(n), comments: upTo(n).length }))
-        .join("\n");
+      const list = pages.issues ?? Object.keys(threads).map((n) => ({ number: Number(n), comments: upTo(n).length }));
+      return pageOf(path, list);
     }
     const n = /\/issues\/(\d+)\/comments/.exec(path)?.[1];
     if (fail[n]) throw fail[n];
-    return upTo(n).map((c) => JSON.stringify(c)).join("\n");
+    return pageOf(path, pages[n] ?? upTo(n));
   };
 }
 
@@ -237,6 +244,9 @@ describe("leaseOverlapVerdict, over strings", () => {
     const v = leaseOverlapVerdict({ changed: [A], listError: "HTTP 502" });
     expect(v.ok).toBe(false);
     expect(renderLeaseOverlap(v, { changed: [A] })).toContain("REFUSED: open issues — the open-issue list could not be read: HTTP 502");
+    // #445 option 2: the refusal also carries the one structured BOARD_UNREACHABLE blocker.
+    expect(v.codes).toEqual(["BOARD_UNREACHABLE"]);
+    expect(renderLeaseOverlap(v, { changed: [A] })).toContain("BOARD_UNREACHABLE (push-branch): open issues: the open-issue list could not be read: HTTP 502");
   });
 });
 
@@ -269,9 +279,43 @@ describe("the reads: bounded, concurrent, and never a pass on failure", () => {
     const r = await pushAs({ own: 452, asOf: "2026-09-23T04:00:00Z", paths: [HOMEHUD], calls });
     // At 04:00 #513 has no comments yet: only the list and #452 were read.
     expect(calls.map((a) => a.find((x) => x.startsWith("repos/")))).toEqual([
-      "repos/Pootytxng/sentinel/issues?state=open&per_page=100",
-      "repos/Pootytxng/sentinel/issues/452/comments?per_page=100",
+      "repos/Pootytxng/sentinel/issues?state=open&per_page=100&page=1",
+      "repos/Pootytxng/sentinel/issues/452/comments?per_page=100&page=1",
     ]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("reads a list page by explicit number, never --paginate: the hosted proxy refuses the numeric Link URLs it follows", async () => {
+    // 112 open issues and pull requests on 2026-10-21: a full first page, then a second one. The
+    // PR rows (pull_request set) are dropped; the issue on page 2 is still read.
+    const issues = Array.from({ length: 112 }, (_, i) => ({ number: 1000 + i, comments: 0, ...(i % 2 ? { pull_request: { url: "x" } } : {}) }));
+    issues[111] = { number: 513, comments: 1 };
+    const calls = [];
+    const r = await pushAs({ own: 452, asOf: "2026-09-23T04:50:00Z", paths: [HOMEHUD], calls, pages: { issues } });
+    const paths = calls.map((a) => a.find((x) => x.startsWith("repos/")));
+    expect(paths.slice(0, 2)).toEqual([
+      "repos/Pootytxng/sentinel/issues?state=open&per_page=100&page=1",
+      "repos/Pootytxng/sentinel/issues?state=open&per_page=100&page=2",
+    ]);
+    expect(paths).toContain("repos/Pootytxng/sentinel/issues/513/comments?per_page=100&page=1");
+    expect(paths.some((p) => /issues\/1\d\d\d\/comments/.test(p))).toBe(false);
+    for (const a of calls) {
+      expect(a.slice(0, 3)).toEqual(["api", "--method", "GET"]);
+      expect(a).not.toContain("--paginate");
+      expect(a).not.toContain("--jq");
+    }
+    // #513 on page 2 holds HomeHud since 04:39:55Z: the second page was read, so the push is refused.
+    expect(r.ok).toBe(false);
+    expect(r.verdict.findings.map((f) => f.number)).toEqual([513]);
+  });
+
+  it("a thread longer than one page is read to its end: the release on page 2 counts", async () => {
+    const claim = FIXTURE.threads[513][0];
+    const filler = Array.from({ length: 99 }, (_, i) => ({ ...claim, body: `noise ${i}`, html_url: `${claim.html_url}-${i}` }));
+    const release = { ...claim, body: "### Handoff\n- Exact next action: none\n- Claim: released", created_at: "2026-09-23T04:45:00Z" };
+    const calls = [];
+    const r = await pushAs({ own: 452, asOf: "2026-09-23T04:50:00Z", paths: [HOMEHUD], calls, pages: { 513: [claim, ...filler, release] } });
+    expect(calls.map((a) => a.find((x) => x.startsWith("repos/")))).toContain("repos/Pootytxng/sentinel/issues/513/comments?per_page=100&page=2");
     expect(r.ok).toBe(true);
   });
 

@@ -66,8 +66,8 @@ truncation, an opus subagent where sonnet answers the same — never against spe
 - The Workflow tool is sanctioned for any genuinely multi-step work (audit, sweep, burst,
   implement-and-verify fan-outs), not only the repo-wide class, when a named, bounded outcome justifies
   the fan-out; unused allowance never does. `workflow-usage-guard.mjs` asks for bounded scope and
-  logged drops and stops telling a session to work solo once the owner applies
-  `docs/superpowers/specs/2026-10-21-workflow-usage-guard-wording.patch` (#368; the PR edits no hook in-tree).
+  logged drops and stops telling a session to work solo once the desk executor applies
+  `docs/superpowers/specs/2026-10-21-workflow-usage-guard-wording.patch` (owner ruling 2026-10-21: applying is executor work; the PR edits no hook in-tree).
 - A hosted (claude.ai/code) session judges the thrash floor only when the window is known. The
   `CLAUDE_CODE_AUTO_COMPACT_WINDOW` literal above is the **desk** window; the hosted harness
   summarizes against a larger native window, so `context-size-advisor.mjs` v7 stands its

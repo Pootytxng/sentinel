@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 
 import * as tracked from "../../.claude/hooks/session-root-assert.mjs";
+import * as blockerLib from "../../scripts/lib/board-blocker.mjs";
 import * as shim from "./session-assert.mjs";
 import { canonicalizePath as fieldCanonicalize, samePath as fieldSamePath } from "./worktree-field.mjs";
 import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
@@ -596,5 +597,61 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
       const plain = mkdtempSync(join(bed, "cloud-not-a-repo-"));
       expect(tracked.ensureCloudIdentity(plain, { env: HOSTED, run: () => ({ ok: false, out: "fatal: not a git repository", status: 128 }) }).action).toBe("skipped");
     }, GIT_SPAWN_TIMEOUT_MS);
+  });
+});
+
+// ── #445 option 2 (owner-accepted 2026-10-21): BOARD_UNREACHABLE carries the one structured blocker ──
+// The tracked hook gains this through docs/superpowers/specs/2026-10-21-board-unreachable-structured.patch
+// (a hook change authored from the hosted lane ships as a patch: docs/WORK_CONTROL.md). Until the patch
+// is applied the hook exports no boardUnreachableBlocker and this block skips; once it is, the block
+// runs and pins the hook's copy of the contract to scripts/lib/board-blocker.mjs. The hook may import
+// nothing but `node:` (tracked-hooks.test.mjs), so it duplicates the contract — and two copies that
+// drift would refuse the same unknown board in two different sets of words.
+describe.skipIf(typeof tracked.boardUnreachableBlocker !== "function")("BOARD_UNREACHABLE is one structured blocker, in the gate's words (#445 option 2, owner patch)", () => {
+  const BOARD_DOWN = { reachable: false, stale: false, fetchedAt: null, rows: [] };
+  const FACTS = {
+    board: BOARD_DOWN,
+    live: { isWorktree: true, branch: "feat/x", repo: "pootytxng/sentinel" },
+    env: { CLAUDE_PROJECT_DIR: FOLDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000" },
+    cwd: FOLDER,
+    hookInput: { session_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", cwd: FOLDER },
+  };
+  const assertWith = (over = {}) => tracked.assertSessionRoot({ ...FACTS, ...over });
+
+  it("duplicates scripts/lib/board-blocker.mjs exactly: transitions, consequences, blocker shape, render", () => {
+    expect([...tracked.BOARD_HELD_TRANSITIONS]).toEqual([...blockerLib.BOARD_HELD_TRANSITIONS]);
+    expect([...tracked.BOARD_UNREACHABLE_CONSEQUENCES]).toEqual([...blockerLib.BOARD_UNREACHABLE_CONSEQUENCES]);
+    for (const args of [undefined, { transition: "merge-pr", why: "gh: HTTP 403" }, { why: 42 }]) {
+      const mine = tracked.boardUnreachableBlocker(args);
+      expect(mine).toEqual(blockerLib.boardUnreachableBlocker(args));
+      expect(tracked.renderBoardUnreachable(mine)).toBe(blockerLib.renderBoardUnreachable(mine));
+    }
+    // One number for "fresh": the hook's cache TTL is the gate's freshness window.
+    expect(blockerLib.BOARD_FRESH_MINUTES).toBe(tracked.BOARD_TTL_MINUTES);
+  });
+
+  it("attaches the blocker to the BOARD_UNREACHABLE refusal and to nothing else", () => {
+    const r = assertWith();
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("BOARD_UNREACHABLE");
+    expect(r.advisory).toBe(true);
+    expect(r.blocker).toEqual(blockerLib.boardUnreachableBlocker({ why: "Work Control could not be read" }));
+    expect(r.blocker.transition).toBeUndefined();
+    const unclaimed = assertWith({ board: { ...BOARD_DOWN, reachable: true } });
+    expect(unclaimed.code).toBe("FOLDER_UNCLAIMED");
+    expect(unclaimed.blocker).toBeUndefined();
+  });
+
+  it("prints the advisory line, then the one blocker line — exit 0, still not a wall", () => {
+    const v = tracked.verdictFor(assertWith());
+    expect(v.exit).toBe(0);
+    expect(v.level).toBe("advisory");
+    const lines = v.message.split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toBe("compy-entry: Work Control could not be read — this session is unverified until it can be.");
+    expect(lines[1]).toBe(blockerLib.renderBoardUnreachable(blockerLib.boardUnreachableBlocker()));
+    expect(lines[1]).toMatch(/^BOARD_UNREACHABLE: Work Control could not be read\. Consequences: unknown board state is never a PASS and never an exemption; /);
+    // The other advisory stays one line.
+    expect(tracked.verdictFor({ ok: false, code: "FOLDER_UNCLAIMED" }).message).not.toContain("\n");
   });
 });

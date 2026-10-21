@@ -31,6 +31,7 @@
 
 import { claimExpiry } from "../../tools/entry/claim.mjs";
 import { coversPath, declaresNone, normalizePattern, parseScopePatterns } from "./claim-scope.mjs";
+import { boardUnreachableBlocker, renderBoardUnreachable } from "./board-blocker.mjs";
 
 /** A transition receipt: a `.json` directly in `.claude/work-control/`. */
 export const isReceiptPath = (path) => /^\.claude\/work-control\/[^/]+\.json$/i.test(normalizePattern(path));
@@ -112,7 +113,22 @@ export function leaseOverlapVerdict({ changed = [], added = [], own = null, thre
     });
   }
   findings.sort((a, b) => a.number - b.number);
-  return { ok: findings.length === 0 && unreadable.length === 0, findings, unreadable, own, ownLive: ownRun.length > 0, newReceipts };
+  // A lease the gate could not read is board state it does not know (#445 option 2): the verdict
+  // carries the one machine-readable BOARD_UNREACHABLE blocker next to the per-thread reasons, so a
+  // push refused for an unknown board is refused in the same words everywhere.
+  const structuredBlockers = unreadable.length
+    ? [boardUnreachableBlocker({ transition: "push-branch", why: unreadable.map((u) => `${u.number ? `#${u.number}` : "open issues"}: ${u.why}`).join("; ") })]
+    : [];
+  return {
+    ok: findings.length === 0 && unreadable.length === 0,
+    findings,
+    unreadable,
+    own,
+    ownLive: ownRun.length > 0,
+    newReceipts,
+    codes: structuredBlockers.map((b) => b.code),
+    structuredBlockers,
+  };
 }
 
 /** The refusal a lane is given: the issue, the claim's comment URL, and every overlapping path. */
@@ -135,6 +151,7 @@ export function renderLeaseOverlap(verdict, { base = "origin/main", changed = []
   for (const u of verdict.unreadable) {
     lines.push(`REFUSED: ${u.number ? `#${u.number}` : "open issues"} — ${u.why}; an unknown lease is a locked lease (collision rule 5)`);
   }
+  for (const b of verdict.structuredBlockers ?? []) lines.push(renderBoardUnreachable(b));
   if (verdict.findings.length && !verdict.own) {
     // #559: with no session record the gate cannot tell a lane's OWN claim from someone else's, so
     // "take these paths out, or wait" sent a lane to wait on itself. Bind the folder first.

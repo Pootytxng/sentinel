@@ -14,6 +14,10 @@ import {
 } from "./work-control-gate.mjs";
 // Read through the namespace so a missing export fails its own case, not every case in this file.
 import * as gate from "./work-control-gate.mjs";
+import { BOARD_FRESH_MINUTES, BOARD_UNREACHABLE_CONSEQUENCES, renderBoardUnreachable } from "./lib/board-blocker.mjs";
+import { leaseOverlapVerdict, renderLeaseOverlap } from "./lib/lease-overlap.mjs";
+import { BOARD_TTL_MINUTES } from "../.claude/hooks/session-root-assert.mjs";
+import { threadLease } from "../tools/entry/claim.mjs";
 import { GIT_SPAWN_TIMEOUT_MS } from "../src/test/tree-walk-budget.ts";
 
 // Provenance has its own describe block below, with its own falsifications. Every case in the
@@ -57,6 +61,16 @@ const EXACT_PASS = [
   { command: "cargo test --manifest-path src-tauri/Cargo.toml", status: "passed", head: HEAD },
 ];
 
+// #445 option 2: a proof-dependent receipt records the authenticated fresh board read it was written
+// against. Stamped at call time, so a slow run cannot age a fixture past BOARD_FRESH_MINUTES.
+const freshBoard = () => ({
+  status: "fresh",
+  authenticated: true,
+  readAt: new Date().toISOString(),
+  via: "gh project item-list 1 --owner Pootytxng --format json --limit 1000",
+  evidence: "stubbed in this test",
+});
+
 function record(overrides = {}) {
   return {
     actor: "codex",
@@ -68,6 +82,7 @@ function record(overrides = {}) {
     currentHead: HEAD,
     requiredGates: ["npm test", "cargo test --manifest-path src-tauri/Cargo.toml"],
     gateResults: EXACT_PASS,
+    boardRead: freshBoard(),
     independentReview: {
       practical: true,
       reviewer: "claude-code",
@@ -356,7 +371,7 @@ describe("proof-gated GitHub transitions", () => {
   });
 
   it("allows a proof-dependent transition only after exact current-head gates and independent review pass", () => {
-    expect(evaluateWorkControl(record())).toEqual({ decision: "PASS", blockers: [], warnings: [] });
+    expect(evaluateWorkControl(record())).toEqual({ decision: "PASS", blockers: [], warnings: [], codes: [], structuredBlockers: [] });
   });
 });
 
@@ -393,7 +408,7 @@ describe("a close ends the lease, so the lease has to end first (#411)", () => {
   const handoff = (claimLine) => at("2026-09-10T07:52:00Z", "### Handoff", "- Exact next action: none", `- Claim: ${claimLine}`);
   const thread = (...comments) => ({ issueComments: (issue) => (issue === 283 ? comments : []) });
   const close = (overrides = {}) => record({ transition: "close-issue", issue: 283, ...overrides });
-  const PASSED = { decision: "PASS", blockers: [], warnings: [] };
+  const PASSED = { decision: "PASS", blockers: [], warnings: [], codes: [], structuredBlockers: [] };
 
   it.each(["close-issue", "mark-done"])("blocks %s while the issue's lease is live, as #283's was at 07:50:17Z", (transition) => {
     const result = evaluateWorkControl(close({ transition }), thread(CLAIM_283, CLOSE_NOTE));
@@ -641,7 +656,13 @@ describe("a close ends the lease, so the lease has to end first (#411)", () => {
       });
       expect(read(395)).toEqual([ref(283)]);
       expect(calls).toEqual(["pr view 395 --repo Pootytxng/sentinel --json closingIssuesReferences"]);
-      expect(() => gate.closingIssuesVia(() => "{}")(395)).toThrow(/no closingIssuesReferences list/);
+      // A GraphQL answer with no list is a failed primary read; with REST refusing too, the reader
+      // throws naming both transports (#445 option 1), and the merge stays unread, so BLOCKED.
+      const neither = gate.closingIssuesVia((argv) => {
+        if (argv[0] === "pr") return "{}";
+        throw new Error("gh: HTTP 403");
+      });
+      expect(() => neither(395)).toThrow(/no closingIssuesReferences list.*nor over REST \(gh: HTTP 403\)/);
     });
 
     it("leaves the other proof transitions' PR alone: only a merge closes what a PR lists", () => {
@@ -839,6 +860,7 @@ describe("work-control receipt CLI", () => {
     return record({
       currentHead: head,
       gateResults: EXACT_PASS.map((gate) => ({ ...gate, head })),
+      boardRead: freshBoard(),
       independentReview: { ...record().independentReview, head },
     });
   }
@@ -847,7 +869,20 @@ describe("work-control receipt CLI", () => {
     const repo = makeRepo();
     const result = runReceipt(at(repo.pushed), repo.work);
     expect(result.status, result.stdout + result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual({ decision: "PASS", blockers: [], warnings: [] });
+    expect(JSON.parse(result.stdout)).toEqual({ decision: "PASS", blockers: [], warnings: [], codes: [], structuredBlockers: [] });
+  }, CLI_RECEIPT_TIMEOUT_MS);
+
+  it("exits nonzero with the one BOARD_UNREACHABLE code when the receipt carries no board read (#445 option 2)", () => {
+    const repo = makeRepo();
+    const { boardRead: _dropped, ...unread } = at(repo.pushed);
+    const result = runReceipt(unread, repo.work);
+    expect(result.status).toBe(1);
+    const printed = JSON.parse(result.stdout);
+    expect(printed.decision).toBe("BLOCKED");
+    expect(printed.codes).toEqual(["BOARD_UNREACHABLE"]);
+    expect(printed.structuredBlockers).toHaveLength(1);
+    expect(printed.structuredBlockers[0]).toMatchObject({ code: "BOARD_UNREACHABLE", transition: "close-superseded-pr" });
+    expect(printed.blockers).toContain(renderBoardUnreachable(printed.structuredBlockers[0]));
   }, CLI_RECEIPT_TIMEOUT_MS);
 
   it("exits nonzero and prints BLOCKED when an exact required gate is unavailable", () => {
@@ -930,6 +965,278 @@ describe("work-control receipt CLI", () => {
       /no remote points at Pootytxng\/sentinel/i,
     );
   }, CLI_RECEIPT_TIMEOUT_MS);
+});
+
+// ---------------------------------------------------------------------------------------------
+// #445 option 1 (lane work under the owner ruling of 2026-10-21): the hosted lane's proxy refuses
+// GraphQL (`gh issue view --json`, `gh pr view --json` → 403) while REST (`gh api repos/...`)
+// answers. Each reader tries GraphQL first and, only when that fails, reads the SAME facts over
+// REST. Both are reads; nothing here can write.
+// ---------------------------------------------------------------------------------------------
+describe("two read-only transports behind one reader (#445 option 1)", () => {
+  const at = (createdAt, ...lines) => ({ createdAt, body: lines.join("\n") });
+  const CLAIM = at("2026-10-21T09:00:00Z", "### Ownership claim", "- Lane: Claude Code", "- Write scope: `scripts/work-control-gate.mjs`", "- Next action: land the gate");
+  const RELEASED = at("2026-10-21T09:30:00Z", "### Handoff", "- Exact next action: none", "- Claim: released");
+  const restRow = (c, login = "Pootytxng") => ({ body: c.body, created_at: c.createdAt, html_url: `https://github.com/Pootytxng/sentinel/issues/678#issuecomment-${Date.parse(c.createdAt)}`, user: { login } });
+  const page = (argv) => Number(/[?&]page=(\d+)$/.exec(argv[3] ?? "")?.[1] ?? NaN);
+  const graphqlRefused = () => {
+    throw new Error("gh: HTTP 403: Forbidden (https://api.github.com/graphql)\nGraphQL is refused by this proxy");
+  };
+
+  it("reads an issue's thread over GraphQL first, with the argv pinned", () => {
+    const calls = [];
+    const read = gate.issueCommentsVia((argv) => {
+      calls.push(argv);
+      return JSON.stringify({ comments: [CLAIM, RELEASED] });
+    });
+    expect(read(678)).toEqual([CLAIM, RELEASED]);
+    expect(calls).toEqual([["issue", "view", "678", "--repo", "Pootytxng/sentinel", "--json", "comments"]]);
+  });
+
+  it("falls back to REST only after GraphQL fails, folds the REST shape to the one threadLease reads, and tags the transport", () => {
+    const calls = [];
+    const read = gate.issueCommentsVia((argv) => {
+      calls.push(argv);
+      if (argv[0] === "issue") graphqlRefused();
+      return JSON.stringify([restRow(CLAIM), restRow(RELEASED)]);
+    });
+    const comments = read(678);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual(["api", "--method", "GET", "repos/Pootytxng/sentinel/issues/678/comments?per_page=100&page=1"]);
+    expect(comments).toMatchObject([
+      { body: CLAIM.body, createdAt: CLAIM.createdAt, author: { login: "Pootytxng" }, transport: "rest" },
+      { body: RELEASED.body, createdAt: RELEASED.createdAt, transport: "rest" },
+    ]);
+    expect(comments[0].url).toMatch(/^https:\/\/github\.com\/Pootytxng\/sentinel\/issues\/678#issuecomment-/);
+    // The lease read from the REST shape is the same lease: released by the Handoff.
+    const lease = threadLease(comments);
+    expect(lease.claim).toBeNull();
+    expect(lease.run).toEqual([]);
+    expect(lease.handoff).toMatchObject({ released: true, postedAt: RELEASED.createdAt });
+    const live = threadLease(comments.slice(0, 1));
+    expect(live.claim).toMatchObject({ postedAt: CLAIM.createdAt, url: comments[0].url });
+  });
+
+  it("every REST argv is a GET under this repository, and restRead refuses anything else", () => {
+    const seen = [];
+    const runner = (argv) => {
+      seen.push(argv);
+      if (argv[0] !== "api") graphqlRefused();
+      if (argv.includes("repos/Pootytxng/sentinel/issues/12/comments?per_page=100&page=1")) return "[]";
+      if (argv.includes("repos/Pootytxng/sentinel/pulls/395")) return JSON.stringify({ body: "Closes #12", base: "main" });
+      if (argv.includes("repos/Pootytxng/sentinel/pulls/395/commits?per_page=100&page=1")) return "[]";
+      throw new Error(`unexpected argv ${argv.join(" ")}`);
+    };
+    gate.issueCommentsVia(runner)(12);
+    gate.closingIssuesVia(runner)(395);
+    const rest = seen.filter((argv) => argv[0] === "api");
+    expect(rest).toHaveLength(3);
+    for (const argv of rest) {
+      expect(argv.slice(0, 3)).toEqual(["api", "--method", "GET"]);
+      expect(argv[3]).toMatch(/^repos\/Pootytxng\/sentinel\//);
+      expect(argv).not.toContain("--paginate");
+      expect(argv).not.toContain("--input");
+      expect(argv).not.toContain("-f");
+      expect(argv).not.toContain("-F");
+    }
+    for (const bad of ["repos/other/repo/issues/1/comments", "repos/Pootytxng/sentinel/issues/1 --method POST", "/repos/Pootytxng/sentinel/issues/1", "", null]) {
+      expect(() => gate.restRead(bad, ".")).toThrow(/is not a path under repos\/Pootytxng\/sentinel\//);
+      expect(() => gate.restList(() => "[]", bad)).toThrow(/is not a path under repos\/Pootytxng\/sentinel\//);
+    }
+  });
+
+  it("reads a list page by explicit number and never --paginate: the hosted proxy refuses the numeric Link URLs --paginate follows", () => {
+    // A full page of 100 means another page may exist; the reader asks for page 2 and stops at the
+    // first short page. The thread's lease is read from both pages: the release on page 2 counts.
+    const filler = Array.from({ length: 99 }, (_, i) => restRow(at("2026-10-21T09:01:00Z", `noise ${i}`)));
+    const calls = [];
+    const read = gate.issueCommentsVia((argv) => {
+      calls.push(argv);
+      if (argv[0] === "issue") graphqlRefused();
+      return JSON.stringify(page(argv) === 1 ? [restRow(CLAIM), ...filler] : [restRow(RELEASED)]);
+    });
+    const comments = read(678);
+    expect(comments).toHaveLength(101);
+    expect(calls.slice(1).map((argv) => argv[3])).toEqual([
+      "repos/Pootytxng/sentinel/issues/678/comments?per_page=100&page=1",
+      "repos/Pootytxng/sentinel/issues/678/comments?per_page=100&page=2",
+    ]);
+    for (const argv of calls.slice(1)) expect(argv).not.toContain("--paginate");
+    expect(threadLease(comments).handoff).toMatchObject({ released: true, postedAt: RELEASED.createdAt });
+  });
+
+  it("a page that is not a JSON array is a failed read, never an empty thread: unknown is not released", () => {
+    const read = gate.issueCommentsVia((argv) => {
+      if (argv[0] === "issue") graphqlRefused();
+      return "<html>502</html>";
+    });
+    expect(() => read(678)).toThrow(/#678's thread could not be read over GraphQL .* nor over REST \(repos\/Pootytxng\/sentinel\/issues\/678\/comments page 1: not JSON/);
+    const object = gate.issueCommentsVia((argv) => {
+      if (argv[0] === "issue") graphqlRefused();
+      return JSON.stringify({ message: "Not Found" });
+    });
+    expect(() => object(678)).toThrow(/page 1: expected a JSON array, got object/);
+    const result = evaluateWorkControl(record({ transition: "close-issue", issue: 678 }), { issueComments: read });
+    expect(result.decision).toBe("BLOCKED");
+  });
+
+  it("throws naming both transports when neither answers, and the close gate stays BLOCKED on it", () => {
+    const read = gate.issueCommentsVia((argv) => {
+      if (argv[0] === "issue") graphqlRefused();
+      throw new Error("gh: HTTP 502: Bad Gateway");
+    });
+    expect(() => read(283)).toThrow(/#283's thread could not be read over GraphQL \(gh: HTTP 403: Forbidden \(https:\/\/api\.github\.com\/graphql\)\) nor over REST \(gh: HTTP 502: Bad Gateway\)/);
+    const result = evaluateWorkControl(record({ transition: "close-issue", issue: 283 }), { issueComments: read });
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.blockers.join("\n")).toMatch(/#283's thread could not be read/);
+  });
+
+  describe("closing references derived over REST when GraphQL's own list cannot be read", () => {
+    const ref = (number, repo = "Pootytxng/sentinel", via = "body") => {
+      const [login, name] = repo.split("/");
+      return { number, repository: { name, owner: { login } }, url: `https://github.com/${repo}/issues/${number}`, derived: true, via };
+    };
+
+    it("over-approximates on purpose: every reference after a closing keyword counts, chained, fenced, any case", () => {
+      const text = [
+        "Closes #283, #284 and #285",
+        "FIXES: Pootytxng/sentinel#286 & GH-287",
+        "```",
+        "resolved https://github.com/Pootytxng/sentinel/issues/288",
+        "```",
+        "See #289 (no keyword, so not closed)",
+      ].join("\n");
+      expect(gate.closingReferencesIn(text).map((r) => r.number)).toEqual([283, 284, 285, 286, 287, 288]);
+      expect(gate.closingReferencesIn(text)).toEqual([283, 284, 285, 286, 287, 288].map((n) => ref(n)));
+    });
+
+    it("keeps a foreign repository on its reference, so the merge check can refuse it as before", () => {
+      expect(gate.closingReferencesIn("Fixes other/repo#9 and closes https://github.com/someone/else/issues/10")).toEqual([
+        ref(9, "other/repo"),
+        ref(10, "someone/else"),
+      ]);
+    });
+
+    it("merges body and commit references, dedups across them, and says how the list was derived", () => {
+      const calls = [];
+      const read = gate.closingIssuesVia((argv) => {
+        calls.push(argv);
+        if (argv[0] === "pr") graphqlRefused();
+        if (argv.includes("repos/Pootytxng/sentinel/pulls/395")) return JSON.stringify({ body: "Closes #283", base: "main" });
+        return JSON.stringify([{ commit: { message: "fix: resolves #283 again" } }, { commit: { message: "chore\n\nCloses #284" } }]);
+      });
+      const refs = read(395);
+      expect([...refs]).toEqual([ref(283), ref(284, "Pootytxng/sentinel", "commit")]);
+      expect(refs.derived).toMatch(/derived over REST from closing keywords in the body and 2 commit messages \(base main\)/);
+      expect(refs.derived).toMatch(/GraphQL closingIssuesReferences could not be read \(gh: HTTP 403/);
+      expect(calls.map((argv) => argv[0])).toEqual(["pr", "api", "api"]);
+    });
+
+    it("a merge over a derived list is still BLOCKED by a live lease, and carries the derivation as a warning", () => {
+      const derived = Object.assign([ref(283)], { derived: "GraphQL closingIssuesReferences could not be read (gh: HTTP 403); the list was derived over REST from closing keywords in the body and 0 commit messages (base main)" });
+      const options = { closingIssues: () => derived, issueComments: (issue) => (issue === 283 ? [CLAIM] : []) };
+      const held = evaluateWorkControl(record({ transition: "merge-pr", pr: 395 }), options);
+      expect(held.decision).toBe("BLOCKED");
+      expect(held.blockers.join("\n")).toMatch(/#283 still has a live lease/);
+      expect(held.warnings).toHaveLength(1);
+      expect(held.warnings[0]).toMatch(/PR #395's closing references are derived, not GitHub's own list/);
+      expect(held.warnings[0]).toMatch(/can add lease reads, never drop one/);
+
+      const released = evaluateWorkControl(record({ transition: "merge-pr", pr: 395 }), { ...options, issueComments: () => [CLAIM, RELEASED] });
+      expect(released.decision).toBe("PASS");
+      expect(released.blockers).toEqual([]);
+      expect(released.warnings).toHaveLength(1);
+      expect(released.codes).toEqual([]);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// #445 option 2 (owner-accepted 2026-10-21): unknown board state is never a PASS and never an
+// exemption. A proof-dependent receipt carries the authenticated fresh read it was written against,
+// or the gate holds it with the ONE structured BOARD_UNREACHABLE blocker, in the same shape the push
+// gate and the session hook use. A blocker contract, not an access repair.
+// ---------------------------------------------------------------------------------------------
+describe("the board has to have been read: BOARD_UNREACHABLE is one structured blocker (#445 option 2)", () => {
+  const ready = (overrides = {}) => record({ transition: "mark-pr-ready", pr: 679, ...overrides });
+  const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
+
+  it("passes on an authenticated read inside the freshness window, with no codes", () => {
+    const result = evaluateWorkControl(ready({ boardRead: { ...freshBoard(), readAt: minutesAgo(BOARD_FRESH_MINUTES - 1) } }));
+    expect(result).toMatchObject({ decision: "PASS", blockers: [], codes: [], structuredBlockers: [] });
+  });
+
+  it.each([
+    ["no boardRead at all", undefined, /records no boardRead/],
+    ["a boardRead that admits the board was unreachable", { status: "unreachable", why: "gh: HTTP 403 (GraphQL refused)\nsecond line" }, /records the board as unreachable \(gh: HTTP 403 \(GraphQL refused\)\)/],
+    ["a boardRead with the code as its status", { status: "BOARD_UNREACHABLE" }, /records the board as unreachable/],
+    ["a cached read", { ...freshBoard(), status: "cached" }, /status is "cached", not "fresh"/],
+    ["an unauthenticated read", { ...freshBoard(), authenticated: false }, /authenticated is not true/],
+    ["a read older than the freshness window", { ...freshBoard(), readAt: minutesAgo(BOARD_FRESH_MINUTES + 1) }, /minutes old; a fresh read is under 10 minutes/],
+    ["a read stamped in the future", { ...freshBoard(), readAt: new Date(Date.now() + 5 * 60_000).toISOString() }, /is after now/],
+    ["a read with no timestamp", { ...freshBoard(), readAt: "yesterday" }, /is not an ISO-8601 timestamp/],
+    ["a boardRead that is a string", "fresh", /must be an object/],
+  ])("blocks mark-pr-ready on %s", (_, boardRead, why) => {
+    const base = ready();
+    if (boardRead === undefined) delete base.boardRead;
+    else base.boardRead = boardRead;
+    const result = evaluateWorkControl(base);
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.codes).toEqual(["BOARD_UNREACHABLE"]);
+    expect(result.structuredBlockers).toHaveLength(1);
+    const [blocker] = result.structuredBlockers;
+    expect(blocker).toMatchObject({ code: "BOARD_UNREACHABLE", transition: "mark-pr-ready" });
+    expect(blocker.why).toMatch(why);
+    expect(blocker.consequences).toEqual([...BOARD_UNREACHABLE_CONSEQUENCES]);
+    expect(result.blockers[0]).toBe(renderBoardUnreachable(blocker));
+    expect(result.blockers[0]).toMatch(/^BOARD_UNREACHABLE \(mark-pr-ready\): /);
+    expect(gate.heldByBoard(result)).toBe(true);
+  });
+
+  it("holds every proof-dependent transition and none of the others", () => {
+    for (const transition of ["mark-pr-ready", "close-superseded-pr", "merge-pr", "close-issue", "mark-done"]) {
+      const base = record({ transition, pr: 679, issue: 678 });
+      delete base.boardRead;
+      const result = evaluateWorkControl(base, { issueComments: () => [], closingIssues: () => [] });
+      expect(result.decision, transition).toBe("BLOCKED");
+      expect(result.codes, transition).toEqual(["BOARD_UNREACHABLE"]);
+      expect(result.structuredBlockers[0].transition, transition).toBe(transition);
+    }
+    for (const transition of ["claim", "comment", "open-draft-pr", "project-active", "project-review", "push-branch", "update-pr-description"]) {
+      const base = record({ transition });
+      delete base.boardRead;
+      const result = evaluateWorkControl(base);
+      expect(result.decision, transition).toBe("PASS");
+      expect(result.codes, transition).toEqual([]);
+      expect(gate.heldByBoard(result)).toBe(false);
+    }
+  });
+
+  it("sits next to the other blockers rather than replacing them", () => {
+    const base = ready({ gateResults: [EXACT_PASS[1]] });
+    delete base.boardRead;
+    const result = evaluateWorkControl(base);
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.codes).toEqual(["BOARD_UNREACHABLE"]);
+    expect(result.blockers.join("\n")).toMatch(/npm test has no exact passing receipt/);
+    expect(result.blockers.join("\n")).toMatch(/BOARD_UNREACHABLE \(mark-pr-ready\)/);
+  });
+
+  it("the receipt's idea of fresh is the session hook's: BOARD_FRESH_MINUTES equals BOARD_TTL_MINUTES", () => {
+    expect(BOARD_FRESH_MINUTES).toBe(BOARD_TTL_MINUTES);
+    expect(BOARD_UNREACHABLE_CONSEQUENCES.join(" ")).toContain(`within ${BOARD_TTL_MINUTES} minutes`);
+  });
+
+  it("the push gate carries the same blocker when the open-issue list cannot be read", () => {
+    const v = leaseOverlapVerdict({ changed: ["scripts/work-control-gate.mjs"], listError: "HTTP 502" });
+    expect(v.ok).toBe(false);
+    expect(v.codes).toEqual(["BOARD_UNREACHABLE"]);
+    expect(v.structuredBlockers[0]).toMatchObject({ code: "BOARD_UNREACHABLE", transition: "push-branch", consequences: [...BOARD_UNREACHABLE_CONSEQUENCES] });
+    expect(renderLeaseOverlap(v, { changed: ["scripts/work-control-gate.mjs"] })).toContain(
+      "BOARD_UNREACHABLE (push-branch): open issues: the open-issue list could not be read: HTTP 502. Consequences:",
+    );
+    expect(leaseOverlapVerdict({ changed: ["scripts/work-control-gate.mjs"] }).codes).toEqual([]);
+  });
 });
 
 describe("the lease and proof law stays loaded in every model bootstrap", () => {

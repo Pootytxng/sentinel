@@ -23,6 +23,7 @@ import {
 import { envWindowOf, planTier, readLocalLayer, readProjectWindow, readTierRecord } from "./tier.mjs";
 import { parseWorktreeField } from "./worktree-field.mjs";
 import { declaresNone, parseScopePatterns, scopeTextFromMarkdown } from "../../scripts/lib/claim-scope.mjs";
+import { readAllPagesSync } from "../../scripts/lib/rest-pages.mjs";
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
 export const PROJECT = { number: 1, owner: "Pootytxng" };
@@ -144,6 +145,12 @@ const leaseOf = (issue, comments) => {
   return { claim: claim ? { ...claim, issue } : null, handoff, unreadable: false };
 };
 const UNREADABLE = Object.freeze({ claim: null, handoff: null, unreadable: true });
+/**
+ * A read the bound killed (#474): GitHub, or the proxy in front of it, did not answer. That is not a
+ * refusal of one transport, so it is not retried over the other: the 20 s bound is per read, and a
+ * second transport asked after a hang would hold the push for the same 20 s again.
+ */
+const hung = (e) => e?.code === "ETIMEDOUT" || e?.killed === true;
 
 /**
  * The issue's live claim, as threadLease folds it, and its newest handoff — the record guard 7 compares to.
@@ -154,8 +161,23 @@ export function readIssueThread(issue, { run = gh } = {}) {
   try {
     const raw = run(["issue", "view", String(issue), "--repo", REPO, "--json", "comments"]);
     return leaseOf(issue, JSON.parse(raw).comments);
-  } catch {
-    return { ...UNREADABLE };
+  } catch (e) {
+    if (hung(e)) return { ...UNREADABLE };
+    // #445 option 1: `gh issue view` is a GraphQL read, and the hosted lane (claude.ai/code) is
+    // refused GraphQL outright, so the same thread is read again over REST, one numbered page at a
+    // time (never `--paginate`: the numeric Link URLs it follows are refused there too). The same
+    // comments reach the same leaseOf, so a claim or a Handoff on page 2 counts either way. Only a
+    // transport that answered "no" is retried; one the bound killed is not (`hung`, above).
+    try {
+      const comments = readAllPagesSync(run, `repos/${REPO}/issues/${Number(issue)}/comments`).map((c) => ({
+        body: typeof c?.body === "string" ? c.body : "",
+        createdAt: c?.created_at,
+        ...(c?.html_url ? { url: c.html_url } : {}),
+      }));
+      return leaseOf(issue, comments);
+    } catch {
+      return { ...UNREADABLE };
+    }
   }
 }
 

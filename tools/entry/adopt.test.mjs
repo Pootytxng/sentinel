@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import * as assert from "../../.claude/hooks/session-root-assert.mjs";
-import { EXPECTED_REPO, adopt, planAdoption } from "./adopt.mjs";
+import { EXPECTED_REPO, adopt, lookupIssueViaGh, planAdoption } from "./adopt.mjs";
 import { GIT_SPAWN_TIMEOUT_MS } from "../../src/test/tree-walk-budget.ts";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
@@ -141,6 +141,43 @@ describe("adopt — the five assertions a launch makes, made by hand", () => {
   });
 });
 
+describe("adopt — the issue lookup answers over GraphQL or over REST, the same facts either way (#445 option 1)", () => {
+  const FACTS = { state: "OPEN", labels: ["work-control", "lane:claude-code"], title: "hosted-lane autonomy" };
+
+  it("takes GraphQL's answer when gh issue view answers, and never asks REST", () => {
+    const calls = [];
+    const run = (argv) => {
+      calls.push(argv);
+      return JSON.stringify({ state: "OPEN", labels: [{ name: "work-control" }, { name: "lane:claude-code" }], title: "hosted-lane autonomy" });
+    };
+    expect(lookupIssueViaGh(678, { run })).toEqual(FACTS);
+    expect(calls).toEqual([["issue", "view", "678", "--repo", "Pootytxng/sentinel", "--json", "state,labels,title"]]);
+  });
+
+  it("falls back to one read-only REST GET of this repository's issue when GraphQL answers nothing, and folds its shape", () => {
+    // The hosted lane's proxy refuses GraphQL; the push gate's own cure for a folder with no session
+    // record is `adopt`, so the cure has to read the issue there too. REST spells the state in lower
+    // case and gh's --jq flattens the labels to names: the facts come out identical.
+    const calls = [];
+    const run = (argv) => {
+      calls.push(argv);
+      if (argv[0] === "issue") return null;
+      return JSON.stringify({ state: "open", title: "hosted-lane autonomy", labels: ["work-control", "lane:claude-code"] });
+    };
+    expect(lookupIssueViaGh("678", { run })).toEqual(FACTS);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual(["api", "--method", "GET", "repos/Pootytxng/sentinel/issues/678", "--jq", "{state, title, labels: [.labels[].name]}"]);
+    expect(calls[1]).not.toContain("--paginate");
+  });
+
+  it("is null, never open, when neither transport answers or the answer is not an issue", () => {
+    expect(lookupIssueViaGh(678, { run: () => null })).toBeNull();
+    expect(lookupIssueViaGh(678, { run: (argv) => (argv[0] === "issue" ? null : "<html>502</html>") })).toBeNull();
+    expect(lookupIssueViaGh(678, { run: (argv) => (argv[0] === "issue" ? null : "[]") })).toBeNull();
+    expect(planAdoption(facts({ issueFacts: lookupIssueViaGh(678, { run: () => null }) })).code).toBe("ADOPT_ISSUE_UNREADABLE");
+  });
+});
+
 describe("adopt — the two measured deviations from the spec, pinned so they cannot drift back silently", () => {
   it("an unlabelled issue is adopted, with the missing label reported as a note", () => {
     // Spec §3a wanted `work-control` as a gate. 6 of 13 open issues carry it, #125 included in the
@@ -232,5 +269,18 @@ describe("adopt — a real adoption in a throwaway worktree is accepted by the a
     expect(verdict.ok).toBe(false);
     expect(verdict.code).toBe("WRITER_LIVE");
     expect(assert.verdictFor(verdict).exit).toBe(2); // adoption does not weaken the one-writer rule
+  });
+});
+
+describe("adopt — a read the bound killed is not retried over the other transport (#474, #445 option 1)", () => {
+  it("one hung GraphQL read answers null, and REST is never asked: the 20 s bound is paid once", () => {
+    const calls = [];
+    const run = (argv) => {
+      calls.push(argv);
+      throw Object.assign(new Error("spawnSync gh ETIMEDOUT"), { code: "ETIMEDOUT", killed: true });
+    };
+    expect(lookupIssueViaGh(678, { run })).toBeNull();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].slice(0, 2)).toEqual(["issue", "view"]);
   });
 });
