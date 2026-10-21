@@ -63,11 +63,14 @@ export function defaultRunner(command, args, options = {}) {
 
 // Mirrors Get-NpmCliInvocation in scripts/lib/native-process.ps1: run npm through its real
 // JavaScript entry point rather than the batch shim, so arguments keep array semantics.
+// The last candidate is the POSIX layout (node in <prefix>/bin, npm in <prefix>/lib/node_modules),
+// which the Windows-only PowerShell helper never needs (#672).
 export function resolveNpmCli({ execPath = process.execPath, exists = existsSync, env = process.env } = {}) {
   const candidates = [
     join(dirname(execPath), "node_modules", "npm", "bin", "npm-cli.js"),
     join(env.APPDATA ?? "", "npm", "node_modules", "npm", "bin", "npm-cli.js"),
     join(env.ProgramFiles ?? "", "nodejs", "node_modules", "npm", "bin", "npm-cli.js"),
+    join(dirname(execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
   ];
   for (const candidate of candidates) {
     if (candidate && exists(candidate)) return { command: execPath, argumentPrefix: [candidate] };

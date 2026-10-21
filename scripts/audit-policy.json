@@ -1,211 +1,204 @@
 {
   "schema_version": 1,
-  "reviewed_on": "2026-08-11",
-  "reviewed_in": "issue #35, Q4 of docs/superpowers/specs/2026-07-29-product-quality-stabilization-program.md; five npm advisories re-reviewed 2026-08-11 in claude/compy-foreground-courtesy-rebuild-60b17e",
+  "reviewed_on": "2026-10-20",
+  "reviewed_in": "issue #672: every npm and cargo acknowledgement re-reviewed against the 2026-10-20 lockfiles before the 2026-10-31 expiry; eleven npm findings remediated by targeted dev-dependency updates, the rest re-argued with fresh paths. Prior review: issue #35 (2026-08-11).",
   "shipped_target": "x86_64-pc-windows-msvc",
   "how_this_file_is_used": "scripts/supply-chain-gate.mjs re-runs both audits against the current lockfiles on every verification run. A cargo finding whose package is absent from `cargo tree --target x86_64-pc-windows-msvc --edges normal,build` is classified mechanically and needs no entry here. Everything else must be listed below with a reachability argument and a review date. An unlisted finding fails the gate; a listed finding whose review_by has passed fails the gate. Acknowledgements expire on purpose - the alternative is a permanent excuse.",
   "npm": {
-    "shipped_artifact": "The Compy installer contains the Rust executable and the Vite build output (tauri.conf.json build.frontendDist = ../dist). bundle.resources and bundle.externalBin are unset, so no node_modules content is packaged. Every npm advisory below is therefore a build-integrity or developer-workstation concern, not a concern for an installed copy of Compy - which is a reachability statement, not a dismissal: a compromised build tool would reach the installer through dist/.",
+    "shipped_artifact": "The Compy installer contains the Rust executable and the Vite build output (tauri.conf.json build.frontendDist = ../dist). bundle.resources and bundle.externalBin are unset, so no node_modules content is packaged; only code the Vite build actually imports reaches dist/. Every devDependency advisory below is therefore a build-integrity or developer-workstation concern, which is a reachability statement, not a dismissal: a compromised build tool would reach the installer through dist/. The one production-dependency entry (fflate) carries its own evidence that its code is absent from dist/.",
     "acknowledged": {
-      "postcss": {
-        "severity": "high",
-        "classification": "build-time-only",
-        "why": "Path traversal in PostCSS source-map auto-loading. Reached through vite (the frontend build) and the shadcn CLI. It processes only this repository's own CSS during a local build; no attacker-controlled source map is ever fed to it, and postcss ships nothing into the installer.",
-        "paths": [
-          "vite@7.3.5 -> postcss",
-          "shadcn@4.13.0 -> postcss"
-        ],
-        "review_by": "2026-10-31"
-      },
-      "esbuild": {
-        "severity": "low",
-        "classification": "build-time-only",
-        "why": "The advisory is against the esbuild development server, which allows any website to read responses from it. Compy's build runs `vite build`, not a served dev bundle exposed to a browsing session, and esbuild is not in the installer.",
-        "paths": [
-          "vite@7.3.5 -> esbuild"
-        ],
-        "review_by": "2026-10-31"
-      },
-      "fast-uri": {
+      "braces": {
         "severity": "high",
         "classification": "developer-tool-only",
-        "why": "Host confusion via literal backslashes, reached only through ajv inside the @modelcontextprotocol/sdk that the shadcn developer CLI depends on. It is never executed by the frontend build or by Compy at runtime.",
+        "why": "braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. This is the vulnerable package itself. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
         "paths": [
-          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> ajv -> fast-uri"
+          "shadcn@4.13.0 -> fast-glob@3.3.3 -> micromatch@4.0.8 -> braces@3.0.3"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2027-01-31"
       },
-      "brace-expansion": {
+      "micromatch": {
         "severity": "high",
         "classification": "developer-tool-only",
-        "why": "Denial of service via unbounded expansion, reached only through minimatch inside ts-morph inside the shadcn developer CLI. Not executed by the build, not in the installer.",
+        "why": "Listed only because it depends on braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
         "paths": [
-          "shadcn@4.13.0 -> ts-morph -> @ts-morph/common -> minimatch -> brace-expansion"
+          "shadcn@4.13.0 -> fast-glob@3.3.3 -> micromatch@4.0.8"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2027-01-31"
       },
-      "@hono/node-server": {
+      "fast-glob": {
+        "severity": "high",
+        "classification": "developer-tool-only",
+        "why": "Listed only because it depends on micromatch -> braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
+        "paths": [
+          "shadcn@4.13.0 -> fast-glob@3.3.3",
+          "shadcn@4.13.0 -> ts-morph@26.0.0 -> @ts-morph/common@0.27.0 -> fast-glob@3.3.3"
+        ],
+        "review_by": "2027-01-31"
+      },
+      "@ts-morph/common": {
+        "severity": "high",
+        "classification": "developer-tool-only",
+        "why": "Listed only because it depends on fast-glob -> micromatch -> braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
+        "paths": [
+          "shadcn@4.13.0 -> ts-morph@26.0.0 -> @ts-morph/common@0.27.0"
+        ],
+        "review_by": "2027-01-31"
+      },
+      "ts-morph": {
+        "severity": "high",
+        "classification": "developer-tool-only",
+        "why": "Listed only because it depends on @ts-morph/common -> fast-glob -> micromatch -> braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
+        "paths": [
+          "shadcn@4.13.0 -> ts-morph@26.0.0"
+        ],
+        "review_by": "2027-01-31"
+      },
+      "shadcn": {
+        "severity": "high",
+        "classification": "developer-tool-only",
+        "why": "Listed only because it depends on fast-glob and ts-morph, which reach braces; braces GHSA-vfj7-8cjw-p6xm: stack exhaustion when expanding a deeply nested brace pattern. The only path is the shadcn devDependency, a component-scaffolding CLI that nothing in package.json scripts, the Vite build or the test suite runs; the shadcn MCP server in .mcp.json launches its own pinned shadcn@4.19.0 through npx, not this copy. Its fast-glob calls take shadcn's own literal patterns (tsconfig.*, tailwind.config.*, **/package.json, **/*.css), and it uses ts-morph through in-memory or compilerOptions-only Projects, so no deeply nested pattern from any input reaches braces. No patched braces release exists (3.0.3 is the newest), and every shadcn release from 2.0.0 through 4.22.1 still pins ts-morph ^26 and fast-glob ^3.3.3; npm's offered fix is a downgrade to shadcn@1.0.0, which is an owner decision recorded in #672, not a lockfile change.",
+        "paths": [
+          "shadcn@4.13.0 (devDependency)"
+        ],
+        "review_by": "2027-01-31"
+      },
+      "fflate": {
         "severity": "moderate",
-        "classification": "developer-tool-only",
-        "why": "Path traversal in serve-static. Reached only through the MCP SDK that the shadcn developer CLI depends on; Compy runs no Hono server and ships none.",
+        "classification": "production-dependency-not-in-dist",
+        "why": "GHSA-px8p-9vwx-vf98: unzipSync can loop forever on a malformed ZIP64 archive. This is the one production-dependency finding: fflate 0.6.10 is nested under three-stdlib, which @react-three/drei depends on; the top-level fflate 0.8.3 is outside the vulnerable range. three-stdlib uses fflate only in its file loaders and exporters. src/ imports only Edges, Html, Grid, OrbitControls and shaderMaterial from drei and never imports three-stdlib or fflate, and the 2026-10-20 production build tree-shakes fflate out: three error strings present in fflate 0.6.10's own ESM build (invalid block type, invalid length/literal, unexpected EOF) occur nowhere in dist/. Compy also loads no ZIP, KMZ, 3MF, FBX or USDZ file at all. The patched fflate 0.6.11 is inside three-stdlib's declared ^0.6.9 range, but bumping a production dependency was outside #672's dev-only scope, so it is recommended there for a separate owner-approved change; the earlier review date reflects that a fix is available.",
         "paths": [
-          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> @hono/node-server"
+          "@react-three/drei@10.7.7 -> three-stdlib@2.36.1 -> fflate@0.6.10"
         ],
-        "review_by": "2026-10-31"
-      },
-      "@modelcontextprotocol/sdk": {
-        "severity": "moderate",
-        "classification": "developer-tool-only",
-        "why": "Listed because it depends on the vulnerable @hono/node-server range above. Same path, same reasoning: developer CLI only.",
-        "paths": [
-          "shadcn@4.13.0 -> @modelcontextprotocol/sdk"
-        ],
-        "review_by": "2026-10-31"
-      },
-      "hono": {
-        "severity": "moderate",
-        "classification": "developer-tool-only",
-        "why": "Four HTTP-server advisories (CORS ReDoS, memo() SSR cross-user disclosure, Connection-header proxy leak, Language-middleware DoS). Every one needs a running Hono server serving requests. Compy runs none: hono arrives only under the shadcn CLI, through the MCP SDK it embeds, and is never imported by src/ or by anything the Vite build emits into dist/.",
-        "paths": [
-          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> hono",
-          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> @hono/node-server -> hono"
-        ],
-        "review_by": "2026-10-31"
-      },
-      "ip-address": {
-        "severity": "high",
-        "classification": "developer-tool-only",
-        "why": "Three SSRF / trust-boundary bypasses that matter to a service classifying caller IPs. Reached only through express-rate-limit inside the shadcn CLI MCP SDK; Compy parses no addresses and ships no server, and node_modules is not packaged into the installer.",
-        "paths": [
-          "shadcn@4.13.0 -> @modelcontextprotocol/sdk -> express-rate-limit -> ip-address"
-        ],
-        "review_by": "2026-10-31"
-      },
-      "js-yaml": {
-        "severity": "high",
-        "classification": "developer-tool-only",
-        "why": "Quadratic CPU on !!omap resolution -- a denial of service against whoever parses the YAML. The only parser here is cosmiconfig reading the shadcn CLI own config on this machine, from this repository files. No Compy code path parses YAML, at build time or at runtime.",
-        "paths": [
-          "shadcn@4.13.0 -> cosmiconfig -> js-yaml"
-        ],
-        "review_by": "2026-10-31"
-      },
-      "nanoid": {
-        "severity": "high",
-        "classification": "build-time-only",
-        "why": "Infinite loop when a generator is called with a negative or zero size. Reached through postcss during the frontend build (the same path already acknowledged for postcss itself), which calls it with postcss own fixed sizes -- no repository input reaches the size argument. Nothing imports nanoid in src/, so it is not in the emitted bundle.",
-        "paths": [
-          "vite@7.3.5 -> postcss -> nanoid",
-          "shadcn@4.13.0 -> postcss -> nanoid"
-        ],
-        "review_by": "2026-10-31"
-      },
-      "undici": {
-        "severity": "high",
-        "classification": "developer-tool-only",
-        "why": "HTTP-client advisories (retry desync, cache-directive disclosure, CRLF injection, cookie-attribute injection) against a client making real requests. Compy frontend does no HTTP: undici is here as the fetch implementation inside jsdom (the vitest DOM environment) and inside dotenvx under the shadcn CLI. Neither runs in the shipped app, and the tests make no outbound requests.",
-        "paths": [
-          "jsdom@29.1.1 -> undici",
-          "shadcn@4.13.0 -> @dotenvx/dotenvx -> undici"
-        ],
-        "review_by": "2026-10-31"
+        "review_by": "2026-12-31"
       }
     }
   },
   "cargo": {
-    "note": "Compy's own Rust source references none of these crates: a repository-wide search for quick_xml, crossbeam, rayon, anyhow and downcast_mut across src-tauri/**/*.rs and the manifests returns nothing. Every entry below arrives transitively through Tauri.",
+    "note": "Compy's own Rust source references none of these crates: a case-sensitive search for quick_xml, crossbeam, rayon, anyhow and downcast_mut across the 55 .rs files under src-tauri/ and src-tauri/Cargo.toml returns nothing (re-run 2026-10-20). They arrive transitively: through Tauri and its plugins, through sysinfo (crossbeam-epoch) and through adlx (anyhow). Paths below are from `cargo tree --target x86_64-pc-windows-msvc -e normal -i <crate>` against the 2026-10-20 Cargo.lock. The rustls and rustls-webpki findings are deliberately not acknowledged: the updater reaches them on live TLS traffic and a semver-compatible Cargo.lock update fixes them (issue #672).",
     "acknowledged": {
       "RUSTSEC-2026-0194": {
         "package": "quick-xml",
         "severity": "high",
         "classification": "shipped-not-reachable-with-untrusted-input",
-        "why": "Quadratic run time when checking a start tag for duplicate attribute names - a denial of service that needs attacker-controlled XML. Both copies in the Windows build parse XML that Compy or Tauri generates: 0.37.5 through tauri-winrt-notification (toast XML the notification plugin builds itself) and 0.39.4 through plist inside tauri-utils (bundle metadata handled at build and codegen time). No user, network, or game-supplied XML reaches either. Patched at >=0.41.0, which is a Tauri-side upgrade, not ours.",
+        "why": "Quadratic run time in the duplicate-attribute check of BytesStart::attributes(), a denial of service that needs attacker-controlled XML to be parsed. Neither copy in the Windows build parses anything. 0.37.5 is used by tauri-winrt-notification 0.7.2 only through quick_xml::escape::escape, to escape text into toast XML it writes itself; it never constructs a Reader or NsReader. 0.39.4 arrives only through plist 1.9.0 in tauri-utils 2.9.2, whose sole plist use (config.rs file_associations_plist) builds a Dictionary from config, parses nothing and has no caller in tauri, tauri-build, tauri-codegen or tauri-runtime-wry; tauri's one plist parse (process.rs plist::from_file) is compiled only for macOS. Patched at >=0.41.0, a semver-major step that only tauri-winrt-notification and plist can take.",
         "paths": [
-          "quick-xml@0.37.5 <- tauri-winrt-notification <- notify-rust <- tauri-plugin-notification",
-          "quick-xml@0.39.4 <- plist <- tauri-utils <- tauri"
+          "quick-xml@0.37.5 <- tauri-winrt-notification@0.7.2 <- notify-rust@4.17.0 <- tauri-plugin-notification@2.3.3 <- compy",
+          "quick-xml@0.39.4 <- plist@1.9.0 <- tauri-utils@2.9.2 <- tauri@2.11.2 (runtime) and tauri-build@2.6.2 (build)"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2027-01-31"
       },
       "RUSTSEC-2026-0195": {
         "package": "quick-xml",
         "severity": "high",
         "classification": "shipped-not-reachable-with-untrusted-input",
-        "why": "Unbounded namespace-declaration allocation in NsReader, memory-exhaustion denial of service. Same two paths and the same reasoning as RUSTSEC-2026-0194: the XML is ours, not an attacker's.",
+        "why": "Unbounded namespace-declaration allocation in NsReader, a memory-exhaustion denial of service that needs attacker-controlled XML to be read through NsReader. Same two copies and the same evidence as RUSTSEC-2026-0194: 0.37.5 is only ever used to escape text that tauri-winrt-notification writes, and the plist path that carries 0.39.4 parses nothing on Windows, so no NsReader is constructed anywhere in the shipped build. Patched at >=0.41.0, a Tauri-side upgrade.",
         "paths": [
-          "quick-xml@0.37.5 <- tauri-winrt-notification <- notify-rust <- tauri-plugin-notification",
-          "quick-xml@0.39.4 <- plist <- tauri-utils <- tauri"
+          "quick-xml@0.37.5 <- tauri-winrt-notification@0.7.2 <- notify-rust@4.17.0 <- tauri-plugin-notification@2.3.3 <- compy",
+          "quick-xml@0.39.4 <- plist@1.9.0 <- tauri-utils@2.9.2 <- tauri@2.11.2 (runtime) and tauri-build@2.6.2 (build)"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2027-01-31"
       },
       "RUSTSEC-2026-0204": {
         "package": "crossbeam-epoch",
         "severity": "unscored",
         "classification": "shipped-not-reachable",
-        "why": "Invalid pointer dereference in the fmt::Pointer impl for Atomic and Shared. Triggering it requires formatting one of those types with {:p} while the underlying pointer is invalid. crossbeam-epoch reaches the build only through crossbeam-deque <- rayon-core; Compy declares no dependency on rayon or crossbeam and never names either type, so no Compy code can reach the formatting path.",
+        "why": "Invalid pointer dereference in the fmt::Pointer impl of Atomic and Shared (crossbeam-epoch 0.9.18 src/atomic.rs); only formatting one of them with {:p} while it holds an invalid pointer triggers it. The path changed since the last review: it now comes through sysinfo 0.33.1's rayon feature, not Tauri. {:p} and fmt::Pointer occur 0 times in crossbeam-deque 0.8.6, rayon-core 1.13.0, rayon 1.12.0 and sysinfo 0.33.1, crossbeam-deque's Debug impls print fixed placeholders, and Compy names neither crossbeam nor rayon. A fix is semver-compatible: `cargo update -p crossbeam-epoch` moves 0.9.18 -> 0.9.21 (patched >=0.9.20) with no other change; that Cargo.lock edit is outside this review's write scope and is queued with the rustls update, so this entry is short-lived.",
         "paths": [
-          "crossbeam-epoch@0.9.18 <- crossbeam-deque <- rayon-core"
+          "crossbeam-epoch@0.9.18 <- crossbeam-deque@0.8.6 <- rayon-core@1.13.0 <- rayon@1.12.0 <- sysinfo@0.33.1 <- compy"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2026-12-31"
       },
       "RUSTSEC-2026-0190": {
         "package": "anyhow",
         "severity": "unsound",
         "classification": "shipped-not-reachable",
-        "why": "Unsoundness in Error::downcast_mut(). Compy calls downcast_mut nowhere, and anyhow arrives through tauri-build, tauri-plugin and tauri-utils - predominantly build dependencies. No known exploit path, no vulnerability rating.",
+        "why": "Undefined behaviour only when Error::downcast_mut() is called on an error that had context added with Error::context. downcast_mut occurs 0 times in Compy's Rust source and 0 times in the three crates that link anyhow into the runtime build (adlx 0.0.0-alpha.1, tauri 2.11.2, tauri-utils 2.9.2); the other edges (tauri-build, tauri-plugin, and tauri-utils under the tauri-codegen/tauri-macros proc-macro) run only at compile time. No exploit path and no vulnerability rating. Patched at >=1.0.103, a semver-compatible `cargo update -p anyhow` queued with the rustls update.",
         "paths": [
-          "anyhow@1.0.102 <- tauri-build / tauri-plugin / tauri-utils"
+          "anyhow@1.0.102 <- adlx@0.0.0-alpha.1 <- compy",
+          "anyhow@1.0.102 <- tauri@2.11.2 / tauri-utils@2.9.2 (runtime)",
+          "anyhow@1.0.102 <- tauri-build@2.6.2 / tauri-plugin@2.6.2 (build only)"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2026-12-31"
+      },
+      "RUSTSEC-2026-0368": {
+        "package": "zip",
+        "severity": "unscored",
+        "classification": "shipped-reachable-only-after-signature-verification",
+        "why": "ZipArchive::extract creates symlinks whose attacker-chosen targets escape the destination (verified on macOS and Linux). zip 4.6.1 is linked only by tauri-plugin-updater 2.10.1, which on Windows reaches extract_zip from install_inner only for an archive whose bytes already passed verify_signature (minisign, against the pubkey in src-tauri/tauri.conf.json plugins.updater) inside download(); the install IPC command accepts only the bytes resource that download produced, and Compy never calls the plugin's Rust Update::install. Compy's own updater artifacts are not zips at all (bundle.createUpdaterArtifacts is true, not \"v1Compatible\"), so a malicious archive would need a signature from Compy's private release key. No fix is reachable: the newest updater (2.14.0, and 3.0.0-alpha.3) still requires zip ^4, and 4.6.1 is the newest 4.x; patched at >=9.0.0.",
+        "paths": [
+          "zip@4.6.1 <- tauri-plugin-updater@2.10.1 <- compy"
+        ],
+        "review_by": "2027-01-31"
+      },
+      "RUSTSEC-2026-0369": {
+        "package": "zip",
+        "severity": "critical",
+        "classification": "shipped-reachable-only-after-signature-verification",
+        "why": "extract() applies Unix permissions through extracted symlinks without confining the target. Unix permission bits have no effect on the Windows-only shipped build, and the only extraction (tauri-plugin-updater 2.10.1 extract_zip) runs on bytes that already passed minisign verification against Compy's updater pubkey; Compy publishes no zipped updater artifacts. Same reachability and the same absent fix as RUSTSEC-2026-0368.",
+        "paths": [
+          "zip@4.6.1 <- tauri-plugin-updater@2.10.1 <- compy"
+        ],
+        "review_by": "2027-01-31"
+      },
+      "RUSTSEC-2026-0367": {
+        "package": "zip",
+        "severity": "high",
+        "classification": "shipped-reachable-only-after-signature-verification",
+        "why": "SUID, SGID and sticky bits from an archive's external attributes survive extraction. Those bits do not exist on Windows, the only target Compy ships, and the only extraction (tauri-plugin-updater 2.10.1 extract_zip) runs on bytes that already passed minisign verification against Compy's updater pubkey; Compy publishes no zipped updater artifacts. Same reachability and the same absent fix as RUSTSEC-2026-0368.",
+        "paths": [
+          "zip@4.6.1 <- tauri-plugin-updater@2.10.1 <- compy"
+        ],
+        "review_by": "2027-01-31"
       },
       "RUSTSEC-2025-0081": {
         "package": "unic-char-property",
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
-        "why": "Unmaintained, with no advisory of a defect. Reaches the build through urlpattern <- tauri-utils. Retiring it is a Tauri-side change; it is tracked here so the warning cannot quietly become a vulnerability without a re-review.",
+        "why": "Unmaintained, with no advisory of a defect and no maintained 0.9 successor. unic-char-property is in the runtime graph through unic-ucd-ident 0.9.0 and urlpattern 0.3.0, an unconditional tauri-utils 2.9.2 dependency that Tauri uses only to parse and match the \"remote\" URL patterns of a capability (tauri-utils acl RemoteUrlPattern, matched in tauri ipc/authority.rs). Compy's four capability files under src-tauri/capabilities/ declare no \"remote\" block, so no pattern is ever parsed from Compy's configuration and no web content can feed one. Retiring it is a Tauri-side change; tracked so the warning cannot quietly turn into a vulnerability without a re-review.",
         "paths": [
-          "unic-char-property@0.9.0 <- urlpattern <- tauri-utils"
+          "unic-char-property@0.9.0 <- unic-ucd-ident@0.9.0 <- urlpattern@0.3.0 <- tauri-utils@2.9.2 <- tauri@2.11.2"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2027-01-31"
       },
       "RUSTSEC-2025-0075": {
         "package": "unic-char-range",
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
-        "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
+        "why": "Unmaintained, with no advisory of a defect and no maintained 0.9 successor. unic-char-range is in the runtime graph through unic-char-property and unic-ucd-ident 0.9.0 and urlpattern 0.3.0, an unconditional tauri-utils 2.9.2 dependency that Tauri uses only to parse and match the \"remote\" URL patterns of a capability (tauri-utils acl RemoteUrlPattern, matched in tauri ipc/authority.rs). Compy's four capability files under src-tauri/capabilities/ declare no \"remote\" block, so no pattern is ever parsed from Compy's configuration and no web content can feed one. Retiring it is a Tauri-side change; tracked so the warning cannot quietly turn into a vulnerability without a re-review.",
         "paths": [
-          "unic-char-range@0.9.0 <- urlpattern <- tauri-utils"
+          "unic-char-range@0.9.0 <- unic-char-property@0.9.0 / unic-ucd-ident@0.9.0 <- urlpattern@0.3.0 <- tauri-utils@2.9.2 <- tauri@2.11.2"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2027-01-31"
       },
       "RUSTSEC-2025-0080": {
         "package": "unic-common",
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
-        "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
+        "why": "Unmaintained, with no advisory of a defect and no maintained 0.9 successor. unic-common is in the runtime graph through unic-ucd-version and unic-ucd-ident 0.9.0 and urlpattern 0.3.0, an unconditional tauri-utils 2.9.2 dependency that Tauri uses only to parse and match the \"remote\" URL patterns of a capability (tauri-utils acl RemoteUrlPattern, matched in tauri ipc/authority.rs). Compy's four capability files under src-tauri/capabilities/ declare no \"remote\" block, so no pattern is ever parsed from Compy's configuration and no web content can feed one. Retiring it is a Tauri-side change; tracked so the warning cannot quietly turn into a vulnerability without a re-review.",
         "paths": [
-          "unic-common@0.9.0 <- urlpattern <- tauri-utils"
+          "unic-common@0.9.0 <- unic-ucd-version@0.9.0 <- unic-ucd-ident@0.9.0 <- urlpattern@0.3.0 <- tauri-utils@2.9.2 <- tauri@2.11.2"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2027-01-31"
       },
       "RUSTSEC-2025-0100": {
         "package": "unic-ucd-ident",
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
-        "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
+        "why": "Unmaintained, with no advisory of a defect and no maintained 0.9 successor. unic-ucd-ident is in the runtime graph through urlpattern 0.3.0, an unconditional tauri-utils 2.9.2 dependency that Tauri uses only to parse and match the \"remote\" URL patterns of a capability (tauri-utils acl RemoteUrlPattern, matched in tauri ipc/authority.rs). Compy's four capability files under src-tauri/capabilities/ declare no \"remote\" block, so no pattern is ever parsed from Compy's configuration and no web content can feed one. Retiring it is a Tauri-side change; tracked so the warning cannot quietly turn into a vulnerability without a re-review.",
         "paths": [
-          "unic-ucd-ident@0.9.0 <- urlpattern <- tauri-utils"
+          "unic-ucd-ident@0.9.0 <- urlpattern@0.3.0 <- tauri-utils@2.9.2 <- tauri@2.11.2"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2027-01-31"
       },
       "RUSTSEC-2025-0098": {
         "package": "unic-ucd-version",
         "severity": "unmaintained",
         "classification": "shipped-unmaintained-no-known-vulnerability",
-        "why": "Unmaintained, no known defect. Same urlpattern <- tauri-utils path as the rest of the unic family.",
+        "why": "Unmaintained, with no advisory of a defect and no maintained 0.9 successor. unic-ucd-version is in the runtime graph through unic-ucd-ident 0.9.0 and urlpattern 0.3.0, an unconditional tauri-utils 2.9.2 dependency that Tauri uses only to parse and match the \"remote\" URL patterns of a capability (tauri-utils acl RemoteUrlPattern, matched in tauri ipc/authority.rs). Compy's four capability files under src-tauri/capabilities/ declare no \"remote\" block, so no pattern is ever parsed from Compy's configuration and no web content can feed one. Retiring it is a Tauri-side change; tracked so the warning cannot quietly turn into a vulnerability without a re-review.",
         "paths": [
-          "unic-ucd-version@0.9.0 <- urlpattern <- tauri-utils"
+          "unic-ucd-version@0.9.0 <- unic-ucd-ident@0.9.0 <- urlpattern@0.3.0 <- tauri-utils@2.9.2 <- tauri@2.11.2"
         ],
-        "review_by": "2026-10-31"
+        "review_by": "2027-01-31"
       }
     }
   }
