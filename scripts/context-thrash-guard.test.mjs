@@ -187,6 +187,33 @@ describe("thrash arithmetic", () => {
     expect(appendSeries(long, 999, 60).series.length).toBe(60);
   });
 
+  // PR #679 exact-head review follow-up (2026-10-22; not reproduced there, traced here; pre-existing
+  // since merge 973be73 / PR #132, not this PR's): .claude/hooks/context-size-advisor.mjs re-emits the
+  // thrash advisory only while `rebounds.length + floorHits.length` EXCEEDS the count it saved last time,
+  // and the series it counts over is bounded (the last 60 turns). So once an episode's rebounds roll out
+  // of the window the count FALLS, and a later, genuinely new episode whose count only EQUALS the saved
+  // maximum stays silent. This pins the arithmetic the hook leans on; the hook fix (throttle on a
+  // monotonic key such as the turn index of the newest rebound, or re-arm the marker once the count
+  // drops to zero) is proposed on the PR and not shipped from it.
+  it("a bounded series makes the evidence count non-monotonic: a new episode can count no higher than an old one", () => {
+    const w = 150_000;
+    const episode = [140_000, 30_000, 140_000, 30_000, 140_000]; // two drop-and-refill rebounds, one turn each
+    const first = detectThrash(episode, w);
+    expect(first.rebounds.length).toBe(2);
+    expect(first.thrashing).toBe(true);
+
+    let raw = episode.join(",");
+    for (let i = 0; i < 70; i++) raw = appendSeries(raw, 100_000 + i * 10, 60).serialized; // quiet turns roll the episode out
+    expect(detectThrash(raw.split(",").map(Number), w).rebounds).toEqual([]);
+
+    for (const n of [30_000, 140_000, 30_000, 140_000]) raw = appendSeries(raw, n, 60).serialized; // a brand-new episode
+    const second = detectThrash(raw.split(",").map(Number), w);
+    expect(second.thrashing).toBe(true);
+    expect(second.rebounds.length).toBe(2);
+    // The hook saved 2 after the first episode and re-emits only on `count > saved`: 2 > 2 is false.
+    expect(second.rebounds.length > first.rebounds.length).toBe(false);
+  });
+
   it("keeps the thresholds inside sane ranges so the guard cannot be quietly defanged", () => {
     expect(THRASH_LIMITS.DROP_FRACTION).toBeGreaterThanOrEqual(0.5);
     expect(THRASH_LIMITS.DROP_FRACTION).toBeLessThanOrEqual(0.9);

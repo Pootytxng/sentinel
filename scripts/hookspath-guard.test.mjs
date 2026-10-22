@@ -46,8 +46,9 @@ describe("PreToolUse(Agent): an isolation worktree is refused, everything else i
 // argument, the readSharedHooksPath() result, and allows ONLY when absence is positively established:
 // the shared config file exists and `git config --get-all` exited 1 (key absent). Unknown is never
 // absent (PR #679 exact-head review, P1): null (git could not answer), undefined (no reader) and
-// `values: null` (the config could not be read) all keep the denial. Until the patch is applied
-// decideAgent.length is 1 and these cases skip; the legacy pin above keeps holding.
+// `values: null` (the config could not be read) all keep the denial, and so does a PRESENT-but-empty
+// key (`values: [""]`: present is not absent). Until the patch is applied decideAgent.length is 1 and
+// these cases skip; the legacy pin above keeps holding.
 describe("PreToolUse(Agent): a checkout with no shared hooksPath has nothing to protect (owner patch)", () => {
   const PATCHED = decideAgent.length >= 2;
   const wt = { subagent_type: "Explore", isolation: "worktree" };
@@ -75,6 +76,12 @@ describe("PreToolUse(Agent): a checkout with no shared hooksPath has nothing to 
     expect(v.reason).toMatch(/git config exit 128/);
     expect(v.reason).toMatch(/unknown is not absent/);
     expect(decideAgent(wt, { file: "x", values: null, error: "shared config file missing" }).deny).toBe(true);
+  });
+  it.skipIf(!PATCHED)("keeps the denial when the shared key is present but empty (present is not absent)", () => {
+    const v = decideAgent(wt, { file: "x", values: [""] });
+    expect(v.deny).toBe(true);
+    expect(v.reason).toMatch(/present but empty/);
+    expect(decideAgent(wt, { file: "x", values: ["", RELATIVE_HOOKS] }).deny).toBe(true);
   });
 });
 
@@ -117,9 +124,31 @@ describe("readSharedHooksPath distinguishes an absent key from a read it could n
     expect(r.values).toBeNull();
     expect(r.error).toMatch(/ENOENT/);
   });
-  it.skipIf(!PATCHED)("a successful read returns every value, one per line", () => {
-    expect(readSharedHooksPath("/x", { run: answer(`${RELATIVE_HOOKS}\nC:\\x\\.githooks\n`), exists: () => true }).values)
+  // PR #679 exact-head review (P1, 2026-10-22): the first patch split the output on newlines and dropped
+  // empty lines, so a PRESENT-but-empty key (`hooksPath =`; git prints one empty line and exits 0) read
+  // as `[]`, the one shape that allows. Pinned RED against that patch first (injected "" -> values [] /
+  // deny false; real git `core.hooksPath ""` -> values [] / deny false), then the reader moved to
+  // `--get-all -z`, where every value ends in NUL and an empty one is a lone NUL: present-empty reads
+  // [""] and denies, absent stays [] (exit 1), and a success that carries no NUL-terminated value is a
+  // read failure. Three shapes, kept apart.
+  it.skipIf(!PATCHED)("a present-but-empty key is a value ([\"\"]) that denies, never the absence that allows", () => {
+    const r = readSharedHooksPath("/x", { run: answer("\0"), exists: () => true });
+    expect(r.values).toEqual([""]);
+    const v = decideAgent(wtInput(), r);
+    expect(v.deny).toBe(true);
+    expect(v.reason).toMatch(/present but empty/);
+  });
+  it.skipIf(!PATCHED)("a success that prints no NUL-terminated value is a read failure, not an absence", () => {
+    const r = readSharedHooksPath("/x", { run: answer(""), exists: () => true });
+    expect(r.values).toBeNull();
+    expect(r.error).toMatch(/no NUL-terminated value/);
+    expect(decideAgent(wtInput(), r).deny).toBe(true);
+  });
+  it.skipIf(!PATCHED)("a successful read returns every value in order, NUL-terminated, empties kept", () => {
+    expect(readSharedHooksPath("/x", { run: answer(`${RELATIVE_HOOKS}\0C:\\x\\.githooks\0`), exists: () => true }).values)
       .toEqual([RELATIVE_HOOKS, "C:\\x\\.githooks"]);
+    expect(readSharedHooksPath("/x", { run: answer(`\0${RELATIVE_HOOKS}\0`), exists: () => true }).values)
+      .toEqual(["", RELATIVE_HOOKS]);
   });
   it.skipIf(!PATCHED)("end to end on real git: a malformed shared config reads as null and the worktree stays denied", () => {
     const dir = mkdtempSync(join(tmpdir(), "hookspath-guard-badcfg-"));
@@ -187,6 +216,17 @@ describe("PostToolUse(Agent): the shared config is restored on a real repository
     const g = fixture();
     expect(readSharedHooksPath(g.dir).values).toEqual([]);
     expect(restoreSharedHooksPath(g.dir)).toMatchObject({ restored: false, values: [] });
+  });
+
+  // The reviewer's "empty success" on real git: `git config core.hooksPath ""` writes `hooksPath =`, and
+  // `--get-all` then exits 0 with an empty value. Under the owner patch that is [""], never [].
+  it.skipIf(decideAgent.length < 2)("a present-but-empty shared key reads as [\"\"] on real git: the worktree stays denied, nothing is rewritten", { timeout: GIT_SPAWN_TIMEOUT_MS }, () => {
+    const f = fixture();
+    f.git(["config", "core.hooksPath", ""]);
+    const shared = readSharedHooksPath(f.dir);
+    expect(shared.values).toEqual([""]);
+    expect(decideAgent({ subagent_type: "Explore", isolation: "worktree" }, shared).deny).toBe(true);
+    expect(restoreSharedHooksPath(f.dir)).toMatchObject({ restored: false, values: [""] });
   });
 
   it("fails OPEN: a folder that is not a repository yields null, never a throw", () => {

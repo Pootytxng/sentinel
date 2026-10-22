@@ -1,5 +1,5 @@
 diff --git a/.claude/hooks/hookspath-guard.mjs b/.claude/hooks/hookspath-guard.mjs
-index 0ad3328..c8efa04 100644
+index 0ad3328..eb911f6 100644
 --- a/.claude/hooks/hookspath-guard.mjs
 +++ b/.claude/hooks/hookspath-guard.mjs
 @@ -21,8 +21,8 @@
@@ -13,7 +13,7 @@ index 0ad3328..c8efa04 100644
  
  export const RELATIVE_HOOKS = ".githooks";
  
-@@ -33,18 +33,33 @@ export function isAbsoluteHooksPath(value) {
+@@ -33,18 +33,37 @@ export function isAbsoluteHooksPath(value) {
    return isAbsolute(v) || /^[A-Za-z]:[\\/]/.test(v) || v.startsWith("\\\\") || v.startsWith("/");
  }
  
@@ -30,10 +30,12 @@ index 0ad3328..c8efa04 100644
 + *  established absence: git answered, the shared config file exists, and `--get-all core.hooksPath`
 + *  exited 1 (key absent), i.e. `values: []`. Every other shape keeps the refusal: `undefined` (the
 + *  pre-2026-10-21 call shape, so no caller is loosened by accident), `null` (git could not answer:
-+ *  not a repository, no git, a parse or permission failure) and `values: null` (the key could not
-+ *  be read). Unknown is never absent (PR #679 exact-head review, P1). A clone with the key unset
-+ *  is every hosted claude.ai/code container (measured 2026-10-21); there the old unconditional
-+ *  refusal only cost the lane its parallel agents. */
++ *  not a repository, no git, a parse or permission failure), `values: null` (the key could not be
++ *  read) and a PRESENT-but-empty key (`values: [""]`, from `core.hooksPath =` in the config): present
++ *  is a value the harness can still rewrite, so it is not absent either. Unknown is never absent
++ *  (PR #679 exact-head review, P1, twice: first the failed read, then the empty value). A clone with
++ *  the key unset is every hosted claude.ai/code container (measured 2026-10-21); there the old
++ *  unconditional refusal only cost the lane its parallel agents. */
 +export function decideAgent(toolInput, shared) {
    const isolation = String(toolInput?.isolation ?? "").toLowerCase();
    if (isolation !== "worktree") return { deny: false };
@@ -52,22 +54,42 @@ index 0ad3328..c8efa04 100644
 +  if (shared === null) why = " (git could not answer for this folder; unknown is not absent)";
 +  else if (shared !== undefined && !Array.isArray(shared?.values)) {
 +    why = ` (the shared config could not be read: ${shared?.error || "unknown"}; unknown is not absent)`;
++  } else if (Array.isArray(shared?.values) && shared.values.some((v) => String(v).trim() === "")) {
++    why = " (the shared core.hooksPath is present but empty; present is not absent)";
 +  }
 +  return { deny: true, reason: REFUSAL + why };
  }
  
  /** What the PostToolUse repair should do, from the values the shared config holds right now. */
-@@ -57,21 +72,28 @@ function git(args, cwd) {
-   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+@@ -53,25 +72,48 @@ export function repairPlan(values) {
+   return { absolute, fix: absolute.length > 0 };
+ }
+ 
++/** Raw stdout, untrimmed: `--get-all -z` answers are NUL-terminated and an empty value is a lone NUL,
++ *  which a trim would silently erase (that erasure was the P1: present-but-empty read as absent). */
+ function git(args, cwd) {
+-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
++  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
  }
  
 -/** Read every core.hooksPath the shared config holds. `[]` when unset; null when git cannot answer. */
 -export function readSharedHooksPath(cwd) {
++/** `git config --get-all -z` output: every value ends in NUL, so a present-but-empty value is a lone
++ *  NUL and reads as "". Anything that does not end in NUL is not a complete answer (null). */
++export function parseNulValues(out) {
++  const s = String(out ?? "");
++  if (!s.endsWith("\0")) return null;
++  return s.slice(0, -1).split("\0");
++}
++
 +/** Read every core.hooksPath the shared config holds. Three shapes, and callers keep them apart:
 + *  `{file, values: [..]}` when git answered (`[]` ONLY for a positively established absence: the config
-+ *  file exists and `git config --get-all` exited 1); `{file, values: null, error}` when the key could
-+ *  not be read (any other exit, a spawn failure, a missing config file); `null` when git cannot name
-+ *  the common dir at all. null and `values: null` mean UNKNOWN, never absent (PR #679 review, P1).
++ *  file exists and `git config --get-all` exited 1; `[""]` for a key that is PRESENT but empty, which
++ *  is a value, never an absence); `{file, values: null, error}` when the key could not be read (any
++ *  other exit, a spawn failure, a missing config file, a success that printed no NUL-terminated
++ *  value); `null` when git cannot name the common dir at all. null and `values: null` mean UNKNOWN,
++ *  never absent (PR #679 review, P1). The read is `-z` so an empty value survives: with newline
++ *  output an empty value and no value both print "\n"-or-nothing and the trim folded them together.
 + *  `run` and `exists` are injectable for failure-path tests only; the defaults are real git and fs. */
 +export function readSharedHooksPath(cwd, { run = git, exists = existsSync } = {}) {
 +  let common = "";
@@ -81,23 +103,26 @@ index 0ad3328..c8efa04 100644
 -      return { file, values: [] }; // exit 1 = key absent, which is a value, not a failure
 -    }
 -    return { file, values: out.split(/\r?\n/).filter(Boolean) };
-+    common = run(["rev-parse", "--git-common-dir"], cwd);
++    common = String(run(["rev-parse", "--git-common-dir"], cwd)).trim();
    } catch {
      return null;
    }
 +  const file = `${common}/config`;
 +  if (!exists(resolve(cwd || process.cwd(), file))) return { file, values: null, error: "shared config file missing" };
++  let out;
 +  try {
-+    const out = run(["config", "--file", file, "--get-all", "core.hooksPath"], cwd);
-+    return { file, values: out.split(/\r?\n/).filter(Boolean) };
++    out = run(["config", "--file", file, "--get-all", "-z", "core.hooksPath"], cwd);
 +  } catch (err) {
 +    if (err?.status === 1) return { file, values: [] }; // exit 1 = key absent, which is a value, not a failure
 +    return { file, values: null, error: `git config exit ${err?.status ?? err?.code ?? "unknown"}` };
 +  }
++  const values = parseNulValues(out);
++  if (values === null) return { file, values: null, error: "git config printed no NUL-terminated value" };
++  return { file, values };
  }
  
  /** Restore the shared value to the relative path. Returns what was replaced, or null on failure. */
-@@ -99,7 +121,7 @@ function main() {
+@@ -99,7 +141,7 @@ function main() {
    const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
  
    if (event === "PreToolUse") {

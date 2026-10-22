@@ -1,8 +1,8 @@
 diff --git a/.claude/hooks/session-root-assert.mjs b/.claude/hooks/session-root-assert.mjs
-index 3a26b22..33060b9 100644
+index 3a26b22..6986428 100644
 --- a/.claude/hooks/session-root-assert.mjs
 +++ b/.claude/hooks/session-root-assert.mjs
-@@ -598,6 +598,53 @@ export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKT
+@@ -598,6 +598,80 @@ export function ensureWorktreeIdentity(root, { run = gitResult, identity = WORKT
    return { action: "set", line: `compy-entry: worktree identity set to ${identity.name}`, warning: effectiveWarning() };
  }
  
@@ -14,15 +14,29 @@ index 3a26b22..33060b9 100644
 +// alone, and only in the main checkout, set a `--local` identity: the same `claude-code` name the
 +// desk worktrees use (so `mutationAuthors` stays one token) with a cloud email so `git log` tells the
 +// lanes apart. Never over an identity another executor set: the harness default and an empty value
-+// are the only things it replaces. Same isolation as the worktree step - one logged line, never the
++// are the only things it replaces, and the PAIR is what it judges - a custom email beside a default
++// name is another executor's identity as much as a custom name is (PR #679 exact-head review, P2).
++// Both halves are read before anything is written, an unreadable half is a stop (unknown is not the
++// harness default), and a failed email write puts user.name back so attribution is never left half
++// cloud, half whatever was there. Same isolation as the worktree step - one logged line, never the
 +// verdict or the exit code.
 +
 +export const CLOUD_IDENTITY = Object.freeze({ name: "claude-code", email: "claude-code@cloud.local" });
 +const HARNESS_DEFAULT_NAMES = new Set(["", "claude", "claude code"]);
++const HARNESS_DEFAULT_EMAILS = new Set(["", "noreply@anthropic.com"]);
 +
 +/** The harness's own hosted marker; nothing here guesses from paths or hostnames. */
 +export function isHostedSession(env = process.env) {
 +  return String(env?.CLAUDE_CODE_REMOTE ?? "").toLowerCase() === "true";
++}
++
++/** One --local key, three outcomes kept apart: `{value}` when set, `{value: null}` when positively
++ *  unset (`git config --get` exits 1), `{error}` when git could not say - unknown is not unset. */
++function readLocalKey(run, root, key) {
++  const r = run(root, ["config", "--local", "--get", key]);
++  if (r.ok) return { value: String(r.out ?? "").trim() };
++  if (r.status === 1) return { value: null };
++  return { error: r.out || `git config exit ${r.status ?? "unknown"}` };
 +}
 +
 +/**
@@ -39,16 +53,29 @@ index 3a26b22..33060b9 100644
 +  if (!samePath(resolve(root, gitDir.out), resolve(root, commonDir.out))) {
 +    return { action: "skipped", line: null, detail: "linked worktree" };
 +  }
-+  const current = run(root, ["config", "--local", "--get", "user.name"]);
-+  const name = current.ok ? current.out.trim() : "";
-+  if (name && !HARNESS_DEFAULT_NAMES.has(name.toLowerCase())) {
-+    return { action: "kept", line: null, detail: name };
++  const name = readLocalKey(run, root, "user.name");
++  const email = readLocalKey(run, root, "user.email");
++  const unreadable = name.error ?? email.error;
++  if (unreadable !== undefined) {
++    return { action: "failed", line: `compy-entry: hosted identity not set - local identity unreadable (${unreadable})`, detail: unreadable };
++  }
++  const customName = name.value !== null && !HARNESS_DEFAULT_NAMES.has(name.value.toLowerCase());
++  const customEmail = email.value !== null && !HARNESS_DEFAULT_EMAILS.has(email.value.toLowerCase());
++  if (customName || customEmail) {
++    return { action: "kept", line: null, detail: `${name.value ?? ""} <${email.value ?? ""}>` };
 +  }
 +  const setName = run(root, ["config", "--local", "user.name", identity.name]);
-+  const setEmail = setName.ok ? run(root, ["config", "--local", "user.email", identity.email]) : setName;
-+  if (!setName.ok || !setEmail.ok) {
-+    const failed = setName.ok ? setEmail : setName;
-+    return { action: "failed", line: `compy-entry: hosted identity not set - ${failed.out}`, detail: failed.out };
++  if (!setName.ok) {
++    return { action: "failed", line: `compy-entry: hosted identity not set - ${setName.out}`, detail: setName.out };
++  }
++  const setEmail = run(root, ["config", "--local", "user.email", identity.email]);
++  if (!setEmail.ok) {
++    // Never leave the pair half-written: put user.name back the way it was read.
++    const undo = name.value === null
++      ? run(root, ["config", "--local", "--unset", "user.name"])
++      : run(root, ["config", "--local", "user.name", name.value]);
++    const restored = undo.ok ? "user.name restored" : `user.name NOT restored (${undo.out})`;
++    return { action: "failed", line: `compy-entry: hosted identity not set - ${setEmail.out}; ${restored}`, detail: setEmail.out };
 +  }
 +  return { action: "set", line: `compy-entry: hosted identity set to ${identity.name} <${identity.email}>` };
 +}
@@ -56,7 +83,7 @@ index 3a26b22..33060b9 100644
  // ── worktree provisioning (#405) ─────────────────────────────────────────────────────────────────
  // A worktree the Claude Desktop harness made, rather than `compy-entry`, never traverses
  // `tools/entry/launch.mjs`, so `createWorktree`'s guarantees have never applied to any of them. Two
-@@ -1468,6 +1515,11 @@ export async function main() {
+@@ -1468,6 +1542,11 @@ export async function main() {
    let identity;
    try {
      identity = ensureWorktreeIdentity(result?.root ?? null);
