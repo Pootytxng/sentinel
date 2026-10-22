@@ -197,6 +197,13 @@ describe("leaseOverlapVerdict, over strings", () => {
     expect(renderLeaseOverlap(v, { changed: [A] })).toContain("expiry is an alarm, not a takeover");
   });
 
+  it("an expired claim's refusal points at the remote takeover, and still refuses (#682)", () => {
+    const threads = [{ number: 3, run: [claim("2026-01-01T00:00:00Z", "`src/a.ts`", { expires: "2026-01-01T12:00:00Z (alarm only)" })] }];
+    const v = leaseOverlapVerdict({ changed: [A], own: null, threads, now: new Date("2026-02-01T00:00:00Z") });
+    expect(v.ok).toBe(false);
+    expect(renderLeaseOverlap(v, { changed: [A] })).toContain("a remote takeover releases it (#682)");
+  });
+
   it("a live claim that declares no paths holds every path: its scope is unknown (rule 5)", () => {
     const threads = [{ number: 4, run: [claim("2026-01-01T00:00:00Z", "the home surfaces")] }];
     const v = leaseOverlapVerdict({ changed: [A], own: null, threads });

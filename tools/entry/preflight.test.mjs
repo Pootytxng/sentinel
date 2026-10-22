@@ -332,6 +332,18 @@ describe("edge cases (spec §7)", () => {
     expect(JSON.stringify(r)).not.toMatch(/git reset|--force|worktree remove/);
   });
 
+  it("expired claim → the draft names the remote takeover's conditions, and the verdict still refuses (#682)", () => {
+    const w = baseWorld();
+    w.claim = { ...w.claim, expires: "2026-07-29" };
+    w.task = { ...w.task, claimExpires: "2026-07-29" };
+    const r = reconcile(w);
+    expect(r.verdict).toBe("REFUSE");
+    expect(r.takeoverDraft).toMatch(/remote takeover/);
+    expect(r.takeoverDraft).toMatch(/12 hours past expiry with nothing posted since/);
+    expect(r.takeoverDraft).toMatch(/folder untouched/);
+    expect(r.takeoverDraft).toMatch(/`not inspected`/);
+  });
+
   it("another lane's live claim → refuse", () => {
     const w = baseWorld();
     w.claim = { ...w.claim, lane: "Codex", issue: 18 };

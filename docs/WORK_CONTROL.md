@@ -180,7 +180,9 @@ A separate worktree or clone is mandatory for every active writer. Shared checko
 5. **Unknown means locked.** Unknown folder, scope, dirty state, or live-process ownership is not a
    permission to proceed. A lane that writes nothing claims `- Write scope: none`, which holds no path (#554).
 6. **Expiry is an alarm, not a takeover.** A stale board claim never authorizes reset, stash, discard,
-   delete, force, process kill, or overwrite. Inspect actual state first and record the takeover.
+   delete, force, process kill, or overwrite. Inspect actual state first and record the takeover. Where
+   the holder's folder can't be inspected from where the executor runs, the remote takeover below
+   applies instead of a halt (owner ruling 2026-10-22, #682).
 7. **No silent process control.** Do not stop another tool's build, dev server, helper, editor, or
    session just to make a claim convenient.
 8. **No chat-only handoff.** The linked issue records evidence, remaining work, exact next action, and
@@ -227,6 +229,27 @@ For an abandoned or stale claim:
 
 No takeover may use destructive Git/filesystem cleanup as its first move. Preserve unknown work before
 reconciliation.
+
+### Remote takeover (owner ruling 2026-10-22, #682)
+
+A stale lease does not halt a startable slice just because its holder's folder is out of reach (a cloud
+container can't see the owner's PC). The owner's words: *"if this is the necessary action need to
+proceed then anything like this should have automatic approval to prevent halting the workflow."* So
+an executor that cannot inspect the holder's folder or processes takes the lease over without asking
+anyone when all of these hold:
+
+1. The lease expired at least 12 hours ago, and nothing has been posted on its thread since it expired.
+2. The executor never touches the holder's folder, branch or processes: nothing is reset, stashed,
+   deleted, force-pushed or killed, and the holder's unlanded work stays where it is.
+3. The `### Verified takeover` says `not inspected` and why on its evidence line, and its preserved-work
+   line lists every unlanded ref and patch the thread names, saying which refs origin has.
+4. The same comment ends the lease with a `### Handoff` whose `- Claim:` line releases it, and the
+   incoming executor claims its own issue before it writes.
+
+The held work is still owed. When the holder's lane resumes, it merges what landed meanwhile; nobody
+discards it. A lease that has not expired still serializes (rule 2), and an executor that can inspect
+the folder still inspects first. This ruling covers stale leases only: the owner-bound gates in
+`CLAUDE.md` stay owner-bound.
 
 ## Local folder lease is an enforcement mechanism, not authority
 
