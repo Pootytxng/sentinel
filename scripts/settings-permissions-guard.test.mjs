@@ -1,6 +1,7 @@
 // docs/superpowers/specs/2026-10-21-settings-allow-list.patch hardens the permissions of
-// .claude/settings.json for the hosted lane: an allow list of exact commands and lane-namespace globs,
-// and a deny list that closes every destructive git form the first draft of this patch let through.
+// .claude/settings.json for the hosted lane: an allow list of exact commands, lane-namespace globs
+// closed by a deny on any argument after the branch, and bounded tool globs whose residue is listed
+// below; and a deny list that closes every destructive git form the first draft of this patch let through.
 // The hosted lane cannot write .claude/settings.json (the auto-mode classifier refuses it), so until
 // the desk applies the patch this guard proves it in memory: the patch is applied by a small
 // unified-diff reader (no git spawn: the tree-walk tripwire budget), the result must be valid JSON,
@@ -12,12 +13,26 @@
 // passes through it -- `git push -u origin main -f`, `git push -u origin HEAD:main`,
 // `git push -u origin --delete claude/x`, `git push -u origin --mirror`, `git branch -a -D main` and
 // `git switch --discard-changes main` all matched an allow rule and would have run without a prompt.
-// The allow rules are now exact (`git diff`, `git branch -a`, `git switch main`) or scoped to the
-// lane's own branch namespaces (`git push -u origin claude/*`, `codex/*`), and the deny list carries
-// every destructive form under BOTH tools (Bash, PowerShell): force, `+refspec`, delete, mirror, all,
-// branches, prune, no-verify, main/HEAD/refs targets, any argument after the branch, the bare push
-// forms, discarding or forced switches and checkouts, forced adds, `--output` (git writing an
-// arbitrary file) and `--no-verify` commits.
+// The allow rules are now exact (`git diff`, `git branch -a`, `git switch main`), scoped to the
+// lane's own branch namespaces (`git push -u origin claude/*`, `codex/*`, `git switch claude/*`,
+// `git checkout -b codex/*`) with a deny on ANY argument after the branch, or bounded tool globs
+// (`git add *`, `git commit *`, `gh pr view *`) whose residue sits in RESIDUALS; and the deny list
+// carries every destructive form under BOTH tools (Bash, PowerShell): force, `+refspec`, delete,
+// mirror, all, branches, prune, no-verify, main/HEAD/refs targets, any argument after a branch, the
+// bare push forms, discarding or forced switches and checkouts, forced adds, `--output` (git writing
+// an arbitrary file) and `--no-verify` commits.
+//
+// Corrected again after the third exact-head review (2026-10-22): the switch/checkout namespace
+// globs still admitted a clustered or abbreviated flag AFTER the branch, because `git switch* -f*`
+// needs ` -f` and `*--discard-changes*` the whole word. Real git 2.43 took `git switch claude/x -qf`,
+// `git switch claude/x --discard` and `git checkout -b claude/y --forc`, each with an allow and no
+// deny, and discarded a dirty file. The deny now mirrors the push rule: any argument after the
+// branch (`git switch main *`, `git switch claude/* *`, `git switch -c claude/* *`,
+// `git checkout -b claude/* *`, codex twins) is denied, so the bare forms are the only admitted
+// ones. Known deny, accepted: a start point after the branch (`git switch -c claude/x origin/main`)
+// is denied too; create in two steps (`git switch main`, then `git switch -c claude/x`). A flag
+// BEFORE the branch (`git switch -f main`, `git push -uf origin claude/x`) matches no allow rule, so
+// it is denied or prompts as before.
 //
 // Four tables, each a claim about ONE command under the rule model the repo's own rules already
 // assume (`Bash(npm publish*)`, `Bash(gh pr merge*--delete-branch*)`): `*` matches any text, anywhere;
@@ -27,7 +42,8 @@
 //   ORDINARY        the lane's daily commands: exactly one allow rule, no deny under either tool.
 //   DENIED_FOREVER  destructive forms: at least one deny rule for Bash AND for PowerShell.
 //   CLASSIFIER      neither allowed nor denied, so the prompt decides: `branch -D`, `reset --hard`,
-//                   `clean`, tags, clustered short flags such as `-uf`, `worktree add`, core.hooksPath.
+//                   `clean`, tags, clustered short flags BEFORE a branch such as `-uf`, `worktree add`,
+//                   core.hooksPath.
 //   RESIDUALS       allowed on purpose, each with its reason, so a later tightening is a decision.
 // Known false deny, accepted: `git push* main*` also denies a branch literally named `maintenance`;
 // `git push -u origin maintenance` matches no allow rule either, so nothing is lost but a prompt.
@@ -68,6 +84,13 @@ const DENY_BODIES = [
   "git checkout*--force*",
   "git checkout* -f*",
   "git checkout* -B*",
+  "git switch main *",
+  "git switch claude/* *",
+  "git switch codex/* *",
+  "git switch -c claude/* *",
+  "git switch -c codex/* *",
+  "git checkout -b claude/* *",
+  "git checkout -b codex/* *",
   "git add* -f*",
   "git add*--force*",
   "git *--output*",
@@ -148,6 +171,17 @@ const DENIED_FOREVER = [
   "git checkout -f main",
   "git checkout --force main",
   "git checkout -B claude/x",
+  // Third review: clustered or abbreviated flags AFTER the branch (real git 2.43 accepts each one).
+  "git switch main -qf",
+  "git switch main --discard",
+  "git switch claude/x -qf",
+  "git switch claude/x --discard",
+  "git switch codex/x -qf",
+  "git switch -c claude/x -qf",
+  "git switch -c codex/x --discard",
+  "git checkout -b claude/y --forc",
+  "git checkout -b claude/z -qf",
+  "git checkout -b codex/z -qf",
   "git add -f .env",
   "git add --force .env",
   "git log --output=/tmp/x",
@@ -156,8 +190,9 @@ const DENIED_FOREVER = [
   "git commit -m x --no-verify",
 ];
 
-/** Neither allowed nor denied: the prompt decides. Clustered short flags are not modelled, so
- *  `git push -uf` is not denied, but it is not admitted either: it matches no allow rule. */
+/** Neither allowed nor denied: the prompt decides. Clustered short flags BEFORE a branch are not
+ *  modelled, so `git push -uf origin claude/x` is not denied, but it is not admitted either: it
+ *  matches no allow rule. AFTER a branch every argument is denied (DENIED_FOREVER). */
 const CLASSIFIER = [
   "git branch -D claude/x",
   "git branch -a -D claude/x",
@@ -181,6 +216,8 @@ const RESIDUALS = [
   ["git commit -n -m x", "Bash(git commit *)", "this repo has no pre-commit hook to skip; the gates run on push"],
   ["git fetch origin claude/x:refs/heads/main", "Bash(git fetch origin *)", "moves a LOCAL ref only, recoverable from the reflog; the remote is untouched"],
   ["git add -Af .env", "Bash(git add *)", "clustered short flags are not modelled; .gitignore and the push gates backstop a forced add"],
+  ["git add -vf .env", "Bash(git add *)", "clustered short flags are not modelled; .gitignore and the push gates backstop a forced add"],
+  ["git add --forc .env", "Bash(git add *)", "unique option prefixes are not modelled; .gitignore and the push gates backstop a forced add"],
   ["gh pr comment 679 --delete-last", "Bash(gh pr comment *)", "deletes the caller's own last comment only"],
 ];
 
@@ -336,6 +373,34 @@ describe("2026-10-21-settings-allow-list.patch (T0.d): exact allows for the lane
   it.each(RESIDUALS)(`${where}: %j stays allowed on purpose`, (command, rule, reason) => {
     expect(matching(allow, command), reason).toEqual([rule]);
     expect(matching(deny, command, "Bash"), reason).toEqual([]);
+  });
+
+  it(`${where}: the switch/checkout namespace globs admit the bare form only; any argument after the branch is denied`, () => {
+    for (const [command, rule] of [
+      ["git switch main", "Bash(git switch main)"],
+      ["git switch claude/x", "Bash(git switch claude/*)"],
+      ["git switch codex/x", "Bash(git switch codex/*)"],
+      ["git switch -c claude/x", "Bash(git switch -c claude/*)"],
+      ["git switch -c codex/x", "Bash(git switch -c codex/*)"],
+      ["git checkout -b claude/x", "Bash(git checkout -b claude/*)"],
+      ["git checkout -b codex/x", "Bash(git checkout -b codex/*)"],
+    ]) {
+      expect(matching(allow, command), `${command}: one allow`).toEqual([rule]);
+      expect(matching(deny, command, "Bash"), `${command}: no deny`).toEqual([]);
+      expect(matching(deny, command, "PowerShell"), `${command}: no deny`).toEqual([]);
+    }
+    // Known deny, accepted: a start point is an argument after the branch; create in two steps.
+    for (const command of [
+      "git switch -c claude/x origin/main",
+      "git switch -c codex/x main",
+      "git checkout -b claude/x origin/main",
+      "git checkout -b codex/x main",
+      "git switch claude/x -qf",
+      "git switch main -q",
+    ]) {
+      expect(matching(deny, command, "Bash"), `${command} is denied under Bash`).not.toHaveLength(0);
+      expect(matching(deny, command, "PowerShell"), `${command} is denied under PowerShell`).not.toHaveLength(0);
+    }
   });
 
   it(`${where}: the only push allows are the lane namespaces, and main is never a push target`, () => {

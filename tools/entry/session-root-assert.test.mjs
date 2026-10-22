@@ -539,6 +539,11 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
   // custom email beside a missing or default name is another executor's and is kept), reads both halves
   // before writing either, stops on an unreadable half (unknown is not the harness default), and puts
   // user.name back when the user.email write fails so attribution is never left half-written.
+  // Corrected again after the third exact-head review (2026-10-22): the second cut read the --local
+  // halves alone, so a custom identity INHERITED from the global scope (what the commit would actually
+  // carry) was overwritten. It now judges the effective pair (`git config --get`, every scope) and
+  // keeps the --local halves as the undo snapshot, so a failed email write puts back what the local
+  // file held, never an inherited value.
   // Until it is applied the export is absent and this block skips; (c) keeps holding either way.
   describe.skipIf(typeof tracked.ensureCloudIdentity !== "function")("hosted identity - --local claude-code in a hosted main checkout, nowhere else (owner patch)", () => {
     const HOSTED = { CLAUDE_CODE_REMOTE: "true" };
@@ -558,35 +563,70 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
       git(dir, "commit", "-q", "-m", "fixture");
       return dir;
     };
+    // The hook judges the EFFECTIVE identity, which the global scope feeds, so no case may depend on
+    // the host's own ~/.gitconfig: the hook's git runs against a fixture global file (GIT_CONFIG_GLOBAL)
+    // with the system file skipped, and never with the `-c user.*` the fixture helper `git` carries,
+    // which the effective read would itself take for a custom identity. Same shape as gitResult.
+    const globalConfig = (name, { name: userName, email } = {}) => {
+      const file = join(bed, `${name}.gitconfig`);
+      const lines = ["[user]"];
+      if (userName !== undefined) lines.push(`\tname = ${userName}`);
+      if (email !== undefined) lines.push(`\temail = ${email}`);
+      writeFileSync(file, `${lines.join("\n")}\n`);
+      return file;
+    };
+    const runWith = (globalFile) => (root, args) => {
+      try {
+        const out = execFileSync("git", ["-C", root, ...args], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, GIT_CONFIG_GLOBAL: globalFile, GIT_CONFIG_NOSYSTEM: "1" },
+        });
+        return { ok: true, out: String(out).trim(), status: 0 };
+      } catch (err) {
+        return {
+          ok: false,
+          out: String(err?.stderr ?? "").split(/\r?\n/)[0] ?? "",
+          status: typeof err?.status === "number" ? err.status : null,
+        };
+      }
+    };
+    /** Real git over an empty global scope: nothing inherited, the plainest hosted case. */
+    const hostedRun = () => runWith(globalConfig("empty-global"));
+    const effective = (run, dir, key) => {
+      const r = run(dir, ["config", "--get", key]);
+      return r.ok ? r.out : null;
+    };
 
     it("does nothing at all when the harness does not say hosted", () => {
       const dir = freshRepo("cloud-not-hosted");
-      const r = tracked.ensureCloudIdentity(dir, { env: {} });
+      const r = tracked.ensureCloudIdentity(dir, { env: {}, run: hostedRun() });
       expect(r.action).toBe("skipped");
       expect(localName(dir)).toBeNull();
     }, GIT_SPAWN_TIMEOUT_MS);
 
     it("sets --local claude-code in a hosted main checkout, says so once, then keeps it", () => {
       const dir = freshRepo("cloud-main");
-      const r = tracked.ensureCloudIdentity(dir, { env: HOSTED });
+      const run = hostedRun();
+      const r = tracked.ensureCloudIdentity(dir, { env: HOSTED, run });
       expect(r.action).toBe("set");
       expect(r.line).toMatch(/^compy-entry: hosted identity set to claude-code/);
       expect(localName(dir)).toBe(tracked.CLOUD_IDENTITY.name);
       expect(git(dir, "config", "--local", "user.email")).toBe(tracked.CLOUD_IDENTITY.email);
-      expect(tracked.ensureCloudIdentity(dir, { env: HOSTED }).action).toBe("kept");
+      expect(tracked.ensureCloudIdentity(dir, { env: HOSTED, run }).action).toBe("kept");
     }, GIT_SPAWN_TIMEOUT_MS);
 
     it("never overwrites another executor's identity, but does replace the harness default", () => {
       const codex = freshRepo("cloud-codex");
       git(codex, "config", "--local", "user.name", "codex");
       git(codex, "config", "--local", "user.email", "codex@desk.local");
-      expect(tracked.ensureCloudIdentity(codex, { env: HOSTED }).action).toBe("kept");
+      expect(tracked.ensureCloudIdentity(codex, { env: HOSTED, run: hostedRun() }).action).toBe("kept");
       expect(localName(codex)).toBe("codex");
 
       const harness = freshRepo("cloud-harness-default");
       git(harness, "config", "--local", "user.name", "Claude");
       git(harness, "config", "--local", "user.email", "noreply@anthropic.com");
-      expect(tracked.ensureCloudIdentity(harness, { env: HOSTED }).action).toBe("set");
+      expect(tracked.ensureCloudIdentity(harness, { env: HOSTED, run: hostedRun() }).action).toBe("set");
       expect(localName(harness)).toBe("claude-code");
     }, GIT_SPAWN_TIMEOUT_MS);
 
@@ -595,7 +635,7 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
       git(dir, "config", "extensions.worktreeConfig", "true");
       const linked = join(bed, "cloud-linked");
       git(dir, "worktree", "add", "-q", "-b", "lane/cloud", linked);
-      expect(tracked.ensureCloudIdentity(linked, { env: HOSTED }).action).toBe("skipped");
+      expect(tracked.ensureCloudIdentity(linked, { env: HOSTED, run: hostedRun() }).action).toBe("skipped");
       expect(localName(dir)).toBeNull();
       expect(tracked.ensureCloudIdentity(null, { env: HOSTED }).action).toBe("skipped");
       const plain = mkdtempSync(join(bed, "cloud-not-a-repo-"));
@@ -606,39 +646,70 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
     // beside a default name was overwritten, and a name-then-email write could stop half way.
     it("a custom email beside a missing or default name is another executor's identity: kept, untouched", () => {
       const dir = freshRepo("cloud-custom-email");
+      const run = hostedRun();
       git(dir, "config", "--local", "user.email", "grok@desk.local");
-      const r = tracked.ensureCloudIdentity(dir, { env: HOSTED });
+      const r = tracked.ensureCloudIdentity(dir, { env: HOSTED, run });
       expect(r.action).toBe("kept");
       expect(localName(dir)).toBeNull();
       expect(git(dir, "config", "--local", "user.email")).toBe("grok@desk.local");
       git(dir, "config", "--local", "user.name", "Claude");
-      expect(tracked.ensureCloudIdentity(dir, { env: HOSTED }).action).toBe("kept");
+      expect(tracked.ensureCloudIdentity(dir, { env: HOSTED, run }).action).toBe("kept");
       expect(localName(dir)).toBe("Claude");
       expect(git(dir, "config", "--local", "user.email")).toBe("grok@desk.local");
     }, GIT_SPAWN_TIMEOUT_MS);
 
-    // Injected git: every call except the one under test goes to real git, in gitResult's shape.
-    const realRun = (root, args) => {
-      try {
-        return { ok: true, out: git(root, ...args), status: 0 };
-      } catch (err) {
-        return {
-          ok: false,
-          out: String(err?.stderr ?? "").split(/\r?\n/)[0] ?? "",
-          status: typeof err?.status === "number" ? err.status : null,
-        };
-      }
-    };
+    // PR #679 third exact-head review (2026-10-22): the identity a commit carries is the EFFECTIVE
+    // pair, inherited from the global scope as much as set --local; a custom one there is kept, and
+    // only the harness default (the hosted container's own ~/.gitconfig) is replaced, --local.
+    it("a custom identity inherited from the global scope is kept: no local write, the global file untouched", () => {
+      const dir = freshRepo("cloud-inherited-pair");
+      const global = globalConfig("owner-global", { name: "Kuya", email: "kuya@desk.local" });
+      const before = readFileSync(global, "utf8");
+      const r = tracked.ensureCloudIdentity(dir, { env: HOSTED, run: runWith(global) });
+      expect(r.action).toBe("kept");
+      expect(r.detail).toBe("Kuya <kuya@desk.local>");
+      expect(localName(dir)).toBeNull();
+      expect(() => git(dir, "config", "--local", "user.email")).toThrow();
+      expect(readFileSync(global, "utf8")).toBe(before);
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("one custom half inherited from the global scope is enough: a custom name, or a custom email, beside a default", () => {
+      const nameOnly = freshRepo("cloud-inherited-name");
+      const g1 = globalConfig("name-only-global", { name: "Kuya", email: "noreply@anthropic.com" });
+      expect(tracked.ensureCloudIdentity(nameOnly, { env: HOSTED, run: runWith(g1) }).action).toBe("kept");
+      expect(localName(nameOnly)).toBeNull();
+
+      const emailOnly = freshRepo("cloud-inherited-email");
+      const g2 = globalConfig("email-only-global", { name: "Claude", email: "kuya@desk.local" });
+      expect(tracked.ensureCloudIdentity(emailOnly, { env: HOSTED, run: runWith(g2) }).action).toBe("kept");
+      expect(localName(emailOnly)).toBeNull();
+      expect(() => git(emailOnly, "config", "--local", "user.email")).toThrow();
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("the harness default inherited from the global scope (the hosted container's own case) is replaced --local, the global file untouched", () => {
+      const dir = freshRepo("cloud-inherited-default");
+      const global = globalConfig("harness-global", { name: "Claude", email: "noreply@anthropic.com" });
+      const before = readFileSync(global, "utf8");
+      const run = runWith(global);
+      expect(effective(run, dir, "user.name")).toBe("Claude");
+      const r = tracked.ensureCloudIdentity(dir, { env: HOSTED, run });
+      expect(r.action).toBe("set");
+      expect(localName(dir)).toBe(tracked.CLOUD_IDENTITY.name);
+      expect(effective(run, dir, "user.name")).toBe(tracked.CLOUD_IDENTITY.name);
+      expect(effective(run, dir, "user.email")).toBe(tracked.CLOUD_IDENTITY.email);
+      expect(readFileSync(global, "utf8")).toBe(before);
+    }, GIT_SPAWN_TIMEOUT_MS);
 
     it("an unreadable local identity is one logged line and no write (unknown is not the harness default)", () => {
       const dir = freshRepo("cloud-unreadable");
+      const real = hostedRun();
       const writes = [];
       const run = (root, args) => {
         if (args[0] === "config" && args.includes("--get") && args.includes("user.email")) {
           return { ok: false, out: "fatal: unable to read config file", status: 128 };
         }
         if (args[0] === "config" && !args.includes("--get")) writes.push(args.join(" "));
-        return realRun(root, args);
+        return real(root, args);
       };
       const r = tracked.ensureCloudIdentity(dir, { env: HOSTED, run });
       expect(r.action).toBe("failed");
@@ -647,18 +718,40 @@ describe("executor identity - the hook sets claude-code on a linked worktree it 
       expect(localName(dir)).toBeNull();
     }, GIT_SPAWN_TIMEOUT_MS);
 
-    it("a failed email write puts user.name back: an absent name is unset again, a default one is restored", () => {
+    it("an unreadable effective identity is the same stop: the --local halves alone never decide", () => {
+      const dir = freshRepo("cloud-unreadable-effective");
+      const real = hostedRun();
+      const writes = [];
+      const run = (root, args) => {
+        if (args[0] === "config" && args.includes("--get") && !args.includes("--local")) {
+          return { ok: false, out: "fatal: bad config line 3 in file /root/.gitconfig", status: 128 };
+        }
+        if (args[0] === "config" && !args.includes("--get")) writes.push(args.join(" "));
+        return real(root, args);
+      };
+      const r = tracked.ensureCloudIdentity(dir, { env: HOSTED, run });
+      expect(r.action).toBe("failed");
+      expect(r.line).toMatch(/^compy-entry: hosted identity not set - effective identity unreadable \(fatal: bad config line 3/);
+      expect(writes).toEqual([]);
+      expect(localName(dir)).toBeNull();
+    }, GIT_SPAWN_TIMEOUT_MS);
+
+    it("a failed email write puts user.name back: an absent name is unset again (never the inherited value), a default one is restored", () => {
+      // The global scope carries the harness default, so the effective name before the write is
+      // `Claude`; the undo must put back the LOCAL half (absent), not write the inherited one.
+      const real = runWith(globalConfig("harness-global-undo", { name: "Claude", email: "noreply@anthropic.com" }));
       const failEmail = (root, args) => {
         if (args.slice(0, 3).join(" ") === "config --local user.email") {
           return { ok: false, out: "fatal: could not lock config file", status: 255 };
         }
-        return realRun(root, args);
+        return real(root, args);
       };
       const absent = freshRepo("cloud-email-fails-absent");
       const r1 = tracked.ensureCloudIdentity(absent, { env: HOSTED, run: failEmail });
       expect(r1.action).toBe("failed");
       expect(r1.line).toMatch(/could not lock config file; user\.name restored$/);
       expect(localName(absent)).toBeNull();
+      expect(effective(real, absent, "user.name")).toBe("Claude");
 
       const harness = freshRepo("cloud-email-fails-default");
       git(harness, "config", "--local", "user.name", "Claude");

@@ -1,5 +1,5 @@
 diff --git a/.claude/settings.json b/.claude/settings.json
-index c62040f..d96c147 100644
+index c62040f..1a69b55 100644
 --- a/.claude/settings.json
 +++ b/.claude/settings.json
 @@ -12,10 +12,57 @@
@@ -61,7 +61,7 @@ index c62040f..d96c147 100644
        "Bash(gh project item-list *)"
      ],
      "deny": [
-@@ -26,7 +73,67 @@
+@@ -26,7 +73,81 @@
        "Bash(gh release create*)",
        "PowerShell(gh release create*)",
        "Bash(gh pr merge*--delete-branch*)",
@@ -119,6 +119,20 @@ index c62040f..d96c147 100644
 +      "PowerShell(git checkout* -f*)",
 +      "Bash(git checkout* -B*)",
 +      "PowerShell(git checkout* -B*)",
++      "Bash(git switch main *)",
++      "PowerShell(git switch main *)",
++      "Bash(git switch claude/* *)",
++      "PowerShell(git switch claude/* *)",
++      "Bash(git switch codex/* *)",
++      "PowerShell(git switch codex/* *)",
++      "Bash(git switch -c claude/* *)",
++      "PowerShell(git switch -c claude/* *)",
++      "Bash(git switch -c codex/* *)",
++      "PowerShell(git switch -c codex/* *)",
++      "Bash(git checkout -b claude/* *)",
++      "PowerShell(git checkout -b claude/* *)",
++      "Bash(git checkout -b codex/* *)",
++      "PowerShell(git checkout -b codex/* *)",
 +      "Bash(git add* -f*)",
 +      "PowerShell(git add* -f*)",
 +      "Bash(git add*--force*)",
