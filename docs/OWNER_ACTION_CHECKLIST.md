@@ -23,15 +23,8 @@
 
 ### A0. NEW 2026-07-23 — Live updater: key backup + the LAST manual send
 
-- ✅ **Updater signing key backed up OFF this machine — CLOSED 2026-08-18 (owner-reported).** The
-  owner ran `scripts/backup-updater-key.ps1`, proved the armored file opens with
-  `scripts/restore-updater-key.ps1 -Verify`, and stored the result off this PC with the passphrase in
-  his password manager. The fleet anchor (`43711DD10AAB67D7`, the pubkey pinned in
-  `src-tauri/tauri.conf.json` and `scripts/updater-trust-root-guard.test.mjs:23`) now survives a dead
-  drive. **Why it mattered:** lose it → the fleet can never receive another update; leak it → whoever
-  holds it can sign an update Compy installs silently on every install, because the updater has been
-  live since 2026-07-22. Backup/restore behaviour stays pinned by
-  `scripts/updater-key-backup-guard.test.mjs`.
+- ✅ **Updater signing key backed up OFF this machine — CLOSED 2026-08-18.** Record moved verbatim to
+  [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md) §A0; the ⏳ residual below is all that remains.
 - ⏳ **Residual (small, owner's hands): the `C:\Users\Kuya\Desktop\COMPY KEY\` copy.** It hashes
   identical to `C:\Users\Kuya\.tauri\compy-updater.key` — same secret, same disk, and a Desktop folder
   is the first place anything that ever runs on this PC looks. Now that an off-machine backup exists,
@@ -41,12 +34,9 @@
   Repo side is clean and mechanically enforced: no key material has ever been committed on any
   branch, and `scripts/secret-containment-guard.test.mjs` fails the build if key/`.env` patterns leave
   `.gitignore` or if key material ever lands in the index. Nothing for you in that half.
-- ✅ **One-tester canary — PASS (recorded 2026-07-28).** A tester completed it through Compy's
-  **normal public updater** and is **currently running v0.9.11**; **no updater failure was
-  reported.** That is the entire record — their prior version, the exact timing, and any per-step
-  detail were never captured, so nothing more can be claimed. **Nothing is pending from you on the
-  canary; do not re-run it or recruit another tester for it.** The only remaining distribution call
-  is whether/when to widen to the other invitees (§B2).
+- ✅ **One-tester canary — PASS (recorded 2026-07-28).** Record moved verbatim to
+  [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md) §A0. Nothing is pending from you on it —
+  do not re-run it; the only remaining distribution call is whether/when to widen to the other invitees (§B2).
 - ⏳ **Expanding to the remaining invitees.** Their current installs (0.9.0/0.1.0) have NO updater and
   cannot hear about updates until they install one build that does. Do **not** send the stale v0.9.3
   installer, and do **not** send the **v0.9.9** build (`664aa5e`) that previously ran on your machine
@@ -236,10 +226,8 @@ one waits on:
   needs **a legal entity + merchant-of-record (Paddle route) + shipped Pro value.** The site's "in
   the works / no price yet" card stays until Pro is purchasable.
 - **B2B licensing (Layer 4)** — parked, post-traction. No page until you ask.
-- **✅ CLOSED 2026-08-22 — the live site no longer calls Compy free.** You said *"land 193 dude"*;
-  PR [#193](https://github.com/Pootytxng/sentinel/pull/193) merged as `d5571766`. `site/llms.txt` and
-  its real source `site/generate.mjs:441` now read **"a Windows desktop app with a free tier"** — your
-  own decree's words, saying nothing about Pro's price, contents or timing.
+- **✅ CLOSED 2026-08-22 — the live site no longer calls Compy free** (PR #193 merged as `d5571766`); record
+  moved verbatim to [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md) §B6.
 - **Wordmark taste fork** — ✅ RESOLVED 2026-07-15, moved to
   [`archive/OWNER_ACTION_HISTORY.md`](archive/OWNER_ACTION_HISTORY.md).
 

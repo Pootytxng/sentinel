@@ -613,3 +613,33 @@ section is waiting on you:**
 - **You said "there's more I'm missing" + "capture it first"** — preserved here as historical evidence. This record does not ask you to reconstruct a list and does not authorize its former
   Instrument Bench build target. Current direction comes from `docs/PRODUCT_CONSTITUTION.md`; current
   sequence comes from `docs/product/ROADMAP.md`.
+
+## A0 — Updater key backup and the one-tester canary (moved from the live checklist 2026-10-22)
+
+Moved verbatim to pay the live file's byte budget (#678); the live §A0 keeps the ⏳ residual (the Desktop
+key copy) and the ⏳ distribution call. Nothing here is waiting on the owner.
+
+- ✅ **Updater signing key backed up OFF this machine — CLOSED 2026-08-18 (owner-reported).** The
+  owner ran `scripts/backup-updater-key.ps1`, proved the armored file opens with
+  `scripts/restore-updater-key.ps1 -Verify`, and stored the result off this PC with the passphrase in
+  his password manager. The fleet anchor (`43711DD10AAB67D7`, the pubkey pinned in
+  `src-tauri/tauri.conf.json` and `scripts/updater-trust-root-guard.test.mjs:23`) now survives a dead
+  drive. **Why it mattered:** lose it → the fleet can never receive another update; leak it → whoever
+  holds it can sign an update Compy installs silently on every install, because the updater has been
+  live since 2026-07-22. Backup/restore behaviour stays pinned by
+  `scripts/updater-key-backup-guard.test.mjs`.
+- ✅ **One-tester canary — PASS (recorded 2026-07-28).** A tester completed it through Compy's
+  **normal public updater** and is **currently running v0.9.11**; **no updater failure was
+  reported.** That is the entire record — their prior version, the exact timing, and any per-step
+  detail were never captured, so nothing more can be claimed. **Nothing is pending from you on the
+  canary; do not re-run it or recruit another tester for it.** The only remaining distribution call
+  is whether/when to widen to the other invitees (§B2).
+
+## B6 — The live site no longer calls Compy free (moved from the live checklist 2026-10-22)
+
+Moved verbatim to pay the live file's byte budget (#678); closed 2026-08-22, nothing here is waiting on the owner.
+
+- **✅ CLOSED 2026-08-22 — the live site no longer calls Compy free.** You said *"land 193 dude"*;
+  PR [#193](https://github.com/Pootytxng/sentinel/pull/193) merged as `d5571766`. `site/llms.txt` and
+  its real source `site/generate.mjs:441` now read **"a Windows desktop app with a free tier"** — your
+  own decree's words, saying nothing about Pro's price, contents or timing.
