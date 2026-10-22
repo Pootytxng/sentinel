@@ -125,7 +125,7 @@ export function renderLeaseOverlap(verdict, { base = "origin/main", changed = []
   if (verdict.ok) return `${head}\nOK: no other lane holds a pushed path from earlier than ${whose}${receipts}`;
   const lines = [head + receipts];
   for (const f of verdict.findings) {
-    const tags = [f.undeclared ? "its claim declares no paths, so it holds every path (collision rule 5)" : null, f.expired ? `claim expired ${f.expired}; expiry is an alarm, not a takeover (collision rule 6)` : null].filter(Boolean);
+    const tags = [f.undeclared ? "its claim declares no paths, so it holds every path (collision rule 5)" : null, f.expired ? `claim expired ${f.expired}; expiry is an alarm, not a takeover (collision rule 6); 12 hours past expiry with nothing posted since, a remote takeover releases it (#682)` : null].filter(Boolean);
     lines.push(`REFUSED: #${f.number} holds ${f.held.length} pushed path${f.held.length === 1 ? "" : "s"} — ${f.url ?? "(claim comment URL unavailable)"}${tags.length ? ` [${tags.join("; ")}]` : ""}`);
     for (const h of f.held) {
       const from = h.sinceUrl && h.sinceUrl !== f.url ? `${h.since}, ${h.sinceUrl}` : h.since;

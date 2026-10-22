@@ -87,4 +87,20 @@ describe("dynamic mutation lease control law", () => {
     expect(workControl).toMatch(/publication\/distribution/i);
     expect(workControl).toMatch(/destructive\/irreversible/i);
   });
+
+  // Owner ruling 2026-10-22 (#682): a stale lease out of the executor's reach is taken over remotely
+  // instead of halting. Every condition that keeps that safe is pinned, so none can be dropped quietly.
+  it("keeps every condition on the remote takeover of a stale lease", () => {
+    const workControl = read("docs/WORK_CONTROL.md");
+    const section = workControl.split("### Remote takeover")[1]?.split("\n## ")[0] ?? "";
+    expect(section, "the Remote takeover section is missing").not.toBe("");
+    expect(section).toMatch(/expired at least 12 hours ago, and nothing has been posted on its thread since/);
+    expect(section).toMatch(/never touches the holder's folder, branch or processes/);
+    expect(section).toMatch(/reset, stashed,\s+deleted, force-pushed or killed/);
+    expect(section).toMatch(/says `not inspected` and why/);
+    expect(section).toMatch(/every unlanded ref and patch the thread names/);
+    expect(section).toMatch(/`### Handoff` whose `- Claim:` line releases it/);
+    expect(section).toMatch(/A lease that has not expired still serializes/);
+    expect(section).toMatch(/owner-bound gates in\s+`CLAUDE.md` stay owner-bound/);
+  });
 });

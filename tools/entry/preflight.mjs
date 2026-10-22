@@ -223,7 +223,9 @@ export function reconcile(facts) {
         "- Next action:",
         "",
         "Expiry is an alarm, not a takeover. Post this only after inspecting the real worktree and",
-        "processes. No destructive Git as a first move.",
+        "processes. No destructive Git as a first move. Where they can't be inspected from here, it is a",
+        "remote takeover (WORK_CONTROL.md, #682): 12 hours past expiry with nothing posted since, the",
+        "holder's folder untouched, `not inspected` on the evidence line, and a Handoff releasing it.",
       ].join("\n");
     }
   }
@@ -234,7 +236,7 @@ export function reconcile(facts) {
       claimActual,
       claimOk,
       takeoverDraft
-        ? "The lease has expired. Inspect the folder and post a Verified takeover — never take over silently."
+        ? "The lease has expired. Inspect the folder (or, where it can't be inspected from here, take it over remotely per WORK_CONTROL.md) and post a Verified takeover — never take over silently."
         : claim && !self?.lane
           ? "Supply the actual executor identity; an unidentified caller may not assume another model's lease."
           : null,
