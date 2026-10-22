@@ -108,11 +108,17 @@ export function rowVerdict(s: ReadinessCheck["status"]): "ok" | "fix" | "unknown
 // must count once, not once per historical apply — mirrors summarize_history), then name the ones
 // that drifted off (we applied them, the live system no longer matches). Pure → unit-tested; it's
 // the core of the flag-class "name the drifted setting + fix it inline" behavior.
+//
+// Startup-app, bloat-task and service rows are not catalog recs: `apply_recommendation` has no
+// apply for them, so an inline "turn it back on" would fail. Since #620 their live read can say
+// they drifted; that still shows in History and the readiness row, with rollback, just not here.
+const NOT_REAPPLIABLE_INLINE = ["startup-entry:", "bloat-task:", "service-suspend:"];
 export function deriveReverted(changes: AppliedChangeLite[]): RevertedChange[] {
   const newestByRec = new Map<string, AppliedChangeLite>();
   for (const c of changes ?? []) newestByRec.set(c.rec_id, c); // later entries win (null-safe)
   return [...newestByRec.values()]
     .filter((c) => c.status === "applied" && !c.is_still_active)
+    .filter((c) => !NOT_REAPPLIABLE_INLINE.some((prefix) => c.rec_id.startsWith(prefix)))
     .map((c) => ({ rec_id: c.rec_id, title: c.rec_title }));
 }
 

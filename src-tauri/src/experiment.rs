@@ -1143,9 +1143,10 @@ pub(crate) fn unverified_other_changes(
 /// insufficient evidence, §9 only a verified Better keeps). Every measured verdict, a crash included,
 /// becomes `insufficient-evidence` and restores, exactly as an unreadable target does in
 /// [`guard_target_at_conclude`]: the measured delta stays as evidence and no noise band is recorded. A
-/// verdict that already says it wasn't judged keeps its own reason. Every one-click change has a live
-/// read; what can't be read back is a startup-app toggle, a session service suspend, a retired change,
-/// or a read that failed, and a setting undone in Windows reads as set back. [`unverified_start_refusal`]
+/// verdict that already says it wasn't judged keeps its own reason. Every one-click change, startup-app
+/// toggle, telemetry-task disable and session service suspend has a live read through its ledger row
+/// (#620); what can't be read back is a retired change, a row with no typed action, or a read that
+/// failed, and a setting undone in Windows reads as set back. [`unverified_start_refusal`]
 /// turns such a Trial down before it starts; this catches one that changes only by the conclude.
 pub(crate) fn with_unverified_changes(outcome: ConcludeOutcome, unverified: usize) -> ConcludeOutcome {
     if unverified == 0 || !matches!(outcome.verdict.as_str(), "improved" | "no-change" | "regressed") {
@@ -1194,10 +1195,11 @@ pub(crate) fn unverified_start_refusal(unverified: usize) -> Option<String> {
     ))
 }
 
-/// A live, read-only read of whether `rec_id`'s setting is changed; None when it can't be read or has
-/// no probe.
-fn read_back(rec_id: &str) -> Option<bool> {
-    target_verification(Some(crate::history::probe_rec_target(rec_id)))
+/// A live, read-only read of whether `rec_id`'s setting is changed, through its applied rows in
+/// `changes` (the ledger's own live re-check: a startup-app toggle's direction is on its row, not in
+/// its rec id); None when it can't be read or has no probe.
+fn read_back(changes: &[crate::history::AppliedChange], rec_id: &str) -> Option<bool> {
+    target_verification(Some(crate::history::probe_applied_setting(changes, rec_id)))
 }
 
 /// The session with this id, when there is exactly one.
@@ -1702,7 +1704,10 @@ pub(crate) fn start_experiment(
     baseline_is_current(baseline, ledger, crate::history::applied_changes_summary().active)
         .map_err(|why| format!("experiment not started — {why}"))?;
     // §3: other applied settings not confirmed in place would leave the result unjudged at conclude.
-    let unverified = rows.as_deref().map_or(0, |rows| unverified_other_changes(rows, &rec_id, read_back));
+    let unverified = match (&history, rows.as_deref()) {
+        (Ok(changes), Ok(rows)) => unverified_other_changes(rows, &rec_id, |other| read_back(changes, other)),
+        _ => 0,
+    };
     if let Some(why) = unverified_start_refusal(unverified) {
         return Err(format!("experiment not started — {why}"));
     }
@@ -2037,8 +2042,10 @@ pub(crate) fn conclude_experiment(
     };
     let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()));
     // §3: other settings Compy changed that aren't confirmed in place limit what this result can claim.
-    let read_back = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target(rec_id)));
-    let unverified = rows.as_deref().map_or(0, |rows| unverified_other_changes(rows, &rec.rec_id, read_back));
+    let unverified = match (history.as_deref(), rows.as_deref()) {
+        (Ok(changes), Some(rows)) => unverified_other_changes(rows, &rec.rec_id, |other| read_back(changes, other)),
+        _ => 0,
+    };
     let judged = with_unverified_changes(judged, unverified);
     let outcome = guard_target_at_conclude(judged, target_verification(Some(target_now)));
 
@@ -3663,6 +3670,44 @@ mod experiment_tests {
         for o in [wrong_game, confounded] {
             assert_eq!(with_compy_state(o.clone(), what.clone()), o);
         }
+    }
+
+    /// A ledger row as `history.json` holds it, with the typed action that says what to read.
+    fn ledger_change(rec_id: &str, action: Option<crate::actions::AppliedAction>) -> crate::history::AppliedChange {
+        let mut c: crate::history::AppliedChange = serde_json::from_value(serde_json::json!({
+            "id": rec_id, "rec_id": rec_id, "rec_title": "t",
+            "applied_at": "2026-10-21T09:00:00+00:00", "snapshot": {}, "status": "applied"
+        }))
+        .expect("a ledger row");
+        c.applied_action = action;
+        c
+    }
+
+    #[test]
+    fn a_readable_startup_toggle_counts_as_verified_and_an_unreadable_one_does_not() {
+        // #620: a startup-app row's rec id doesn't say which way Compy flipped the entry, so a
+        // rec-id-only read was Unrecognised and every later Trial refused to start or judge. The read
+        // goes through the row. An entry with no approval value reads as Windows' default, enabled
+        // (the name is one no machine has, and the read is KEY_READ only), so Compy's enable is in
+        // place and its disable reads as set back; a row with no typed action has nothing to read.
+        use crate::actions::AppliedAction::SetStartupEntryEnabled;
+        let name = "compy-620-trial-read-back-absent-entry";
+        let toggle = |enabled| Some(SetStartupEntryEnabled { name: name.into(), enabled });
+        let rec = format!("startup-entry:{name}");
+        let enabled = [ledger_change(&rec, toggle(true))];
+        let disabled = [ledger_change(&rec, toggle(false))];
+        let untyped = [ledger_change("startup-entry:untyped", None)];
+        for (changes, unverified, why) in [
+            (&enabled[..], 0, "in place: verified"),
+            (&disabled[..], 1, "set back: unverified"),
+            (&untyped[..], 1, "no typed action: unverified"),
+        ] {
+            let rows = ledger_rows(changes);
+            assert_eq!(unverified_other_changes(&rows, "test-rec", |other| read_back(changes, other)), unverified, "{why}");
+        }
+        // The newest applied row is the one read: enable after an earlier disable is in place.
+        let both = [disabled[0].clone(), enabled[0].clone()];
+        assert_eq!(unverified_other_changes(&ledger_rows(&both), "test-rec", |other| read_back(&both, other)), 0);
     }
 
     #[test]

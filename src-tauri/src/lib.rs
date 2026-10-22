@@ -1013,6 +1013,25 @@ pub(crate) fn startup_entries() -> Vec<StartupEntry> {
     entries
 }
 
+/// Read-only: the StartupApproved\Run value `actions::apply_startup_entry_enabled` writes for
+/// `name`, for the Trust Ledger's live re-check of a startup-app row (#620). The key is opened
+/// KEY_READ, never created. `Ok(None)` when the key or the value is absent.
+pub(crate) fn startup_approval_value(name: &str) -> std::io::Result<Option<winreg::RegValue>> {
+    use std::io::ErrorKind::NotFound;
+    let key = match RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey_with_flags(actions::STARTUP_APPROVED_RUN_KEY, winreg::enums::KEY_READ)
+    {
+        Ok(key) => key,
+        Err(e) if e.kind() == NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    match key.get_raw_value(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(e) if e.kind() == NotFound => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 // ── Phase-B preload-app removal (BUILT DARK) — read-only listing probe ──
 // Which curated preload apps are installed for this user + whether the feature is armed. The FE
 // card renders NOTHING unless armed && something installed, so the UI ships dark-safe; while the

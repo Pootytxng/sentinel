@@ -65,6 +65,18 @@ describe("deriveReverted (the flag-class drift core)", () => {
     expect(out).toEqual([{ rec_id: "gm", title: "gm title" }]);
   });
 
+  // #620: these rows now read live and can drift off, but apply_recommendation cannot re-apply
+  // them, so naming them here would put a "turn it back on" button on a call that fails.
+  it("never names a startup-app, bloat-task or service row, which has no inline re-apply", () => {
+    const out = deriveReverted([
+      mk("startup-entry:Discord"),
+      mk("bloat-task:compatibility-appraiser"),
+      mk("service-suspend:DiagTrack"),
+      mk("game-mode"),
+    ]);
+    expect(out).toEqual([{ rec_id: "game-mode", title: "game-mode title" }]);
+  });
+
   it("one entry per drifted rec, titled from rec_title", () => {
     const out = deriveReverted([mk("a", { rec_title: "Alpha" }), mk("b", { rec_title: "Beta" })]);
     expect(out).toEqual([
