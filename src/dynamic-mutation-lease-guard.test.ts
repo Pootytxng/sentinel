@@ -103,4 +103,27 @@ describe("dynamic mutation lease control law", () => {
     expect(section).toMatch(/A lease that has not expired still serializes/);
     expect(section).toMatch(/owner-bound gates in\s+`CLAUDE.md` stay owner-bound/);
   });
+
+  // Codex review 5612865429 (P1): the remote takeover proceeds while the holder's folder is unknown, so
+  // every statement that unknown ownership stays locked has to name it as the exception. Otherwise the
+  // two rules contradict each other and an executor can cite either one.
+  it("names the remote takeover wherever unknown ownership is declared locked", () => {
+    let statements = 0;
+    for (const path of BOOTSTRAPS) {
+      // The section itself is the exception, and quotes the lock it lifts; it is pinned below.
+      const text = read(path).replace(/### Remote takeover[\s\S]*?(?=\n## |$)/, "");
+      const blocks = text.split(/\n\s*\n|\n(?=\d+\. )/);
+      for (const block of blocks.filter((b) => /locked until measured|Unknown means locked/i.test(b))) {
+        statements += 1;
+        const flat = block.replace(/\s+/g, " ");
+        expect(flat, `${path}: ${flat.slice(0, 80)}`).toMatch(/remote takeover/i);
+        expect(flat, path).toMatch(/#682/);
+        expect(flat, path).toMatch(/12 hours past expiry with nothing posted since/);
+        expect(flat, path).toMatch(/untouched/);
+      }
+    }
+    expect(statements, "AGENTS.md and WORK_CONTROL.md rule 5 each state the lock").toBeGreaterThanOrEqual(2);
+    const section = read("docs/WORK_CONTROL.md").split("### Remote takeover")[1]?.split("\n## ")[0] ?? "";
+    expect(section.replace(/\s+/g, " ")).toMatch(/named exception to rule 5 and to `AGENTS.md`'s "locked until measured"/);
+  });
 });

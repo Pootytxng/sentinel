@@ -52,7 +52,7 @@ function compare(mine, theirs, files) {
  *        (absent `live`/`expired` = a live claim, which is the conservative reading); `unreadable` =
  *        its thread could not be read, so the lease is unknown
  * @param {string[]|null} f.files    the tracked paths a glob can claim; null = unavailable
- * @returns {{ok:boolean, reason:string, findings:Array<{number, lane, pairs:string[][], files:string[], stale:boolean}>, unknown:Array<{number, lane, why:string}>, stale:Array<{number, lane}>, undeclared:boolean}}
+ * @returns {{ok:boolean, reason:string, findings:Array<{number, lane, pairs:string[][], files:string[], stale:boolean, expired?:boolean}>, unknown:Array<{number, lane, why:string}>, stale:Array<{number, lane}>, undeclared:boolean}}
  */
 export function scopeOverlapVerdict({ mine = null, none = false, others = [], files = null } = {}) {
   const known = (others ?? []).filter((o) => o && Number.isFinite(Number(o.number)));
@@ -121,7 +121,7 @@ export function scopeOverlapVerdict({ mine = null, none = false, others = [], fi
     const theirs = Array.isArray(o.scope) ? o.scope.filter(Boolean) : [];
     if (theirs.length === 0) continue;
     const { pairs, shared } = compare(mine, theirs, files);
-    if (pairs.length || shared.length) findings.push({ ...ref(o), pairs, files: shared, stale: true });
+    if (pairs.length || shared.length) findings.push({ ...ref(o), pairs, files: shared, stale: true, ...(o.expired === true ? { expired: true } : {}) });
   }
 
   const ok = findings.length === 0 && unknown.length === 0;
@@ -162,6 +162,15 @@ export function overlapRemediation(verdict) {
   const staleHits = verdict.findings.filter((f) => f.stale);
   if (staleHits.length) {
     lines.push(`${staleHits.map(who).join(", ")}: the claim is not live but its declared paths overlap — renew it with a current scope if that lane is still writing, or retire it (handoff comment, board status off Active) if it is done.`);
+    // The route #682 added has to reach the executor it was made for: one blocked by another issue's
+    // expired claim never sees preflight's own takeover draft (Codex review 5612865429).
+    const expired = staleHits.filter((f) => f.expired);
+    if (expired.length) {
+      lines.push(
+        `If ${expired.map(who).join(", ")} ${expired.length === 1 ? "is" : "are"} 12 hours past expiry with nothing posted since and the holder's folder can't be inspected from here, take it over remotely (WORK_CONTROL.md, #682): ` +
+          "a `### Verified takeover` with `not inspected` on its evidence line and the holder's folder, branch and processes untouched, ending in a `### Handoff` with `- Claim: released` on that issue.",
+      );
+    }
   }
   if (verdict.findings.some((f) => f.pairs.some(([a, b]) => a.toLowerCase() === b.toLowerCase() && hasGlob(a)))) {
     lines.push("A shared glob claims every file it matches — name the one file this lane owns (its own docs/dispositions/<ref>.json, not docs/dispositions/*.json).");

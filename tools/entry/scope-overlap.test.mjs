@@ -115,6 +115,21 @@ describe("acceptance 6 — disjoint scopes are not falsely blocked", () => {
     expect(overlapRemediation(v)).toMatch(/renew .* or retire/);
   });
 
+  // Codex review 5612865429: an executor blocked by another issue's expired claim reads this line, not
+  // preflight's takeover draft, so the remote takeover (#682) has to be named here — and only for an
+  // expired claim, since a row with no live claim has no lease to take over.
+  it("names the remote takeover for an expired overlapping claim, and only for an expired one", () => {
+    const expired = scopeOverlapVerdict({ mine: ["scripts"], others: [{ number: 287, lane: "Claude Code", scope: ["scripts/x.mjs"], expired: true, expires: "2026-09-02" }], files: TRACKED });
+    const cure = overlapRemediation(expired);
+    expect(cure).toMatch(/#287 .*12 hours past expiry with nothing posted since/);
+    expect(cure).toContain("take it over remotely (WORK_CONTROL.md, #682)");
+    expect(cure).toContain("`not inspected`");
+    expect(cure).toContain("`- Claim: released`");
+    const unclaimed = scopeOverlapVerdict({ mine: ["scripts"], others: [{ number: 288, lane: "Codex", scope: ["scripts/x.mjs"], live: false }], files: TRACKED });
+    expect(unclaimed.ok).toBe(false);
+    expect(overlapRemediation(unclaimed)).not.toMatch(/remote|#682/);
+  });
+
   it("names the writers it cleared, so a PASS row says what was compared", () => {
     const v = scopeOverlapVerdict({ mine: ["docs/BACKLOG.md"], others: [{ number: 13, lane: "Codex", scope: ["docs/RELEASE_STATE.md"] }, { number: 14, lane: "Cowork", scope: ["src"] }], files: TRACKED });
     expect(v.ok).toBe(true);

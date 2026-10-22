@@ -179,6 +179,9 @@ A separate worktree or clone is mandatory for every active writer. Shared checko
    already has, and any other file there are checked like every path.
 5. **Unknown means locked.** Unknown folder, scope, dirty state, or live-process ownership is not a
    permission to proceed. A lane that writes nothing claims `- Write scope: none`, which holds no path (#554).
+   The one exception is the remote takeover below (owner ruling 2026-10-22, #682): a lease 12 hours past
+   expiry with nothing posted since ends without measuring the holder's folder; because that folder, its
+   branch and its processes are unknown, they stay untouched.
 6. **Expiry is an alarm, not a takeover.** A stale board claim never authorizes reset, stash, discard,
    delete, force, process kill, or overwrite. Inspect actual state first and record the takeover. Where
    the holder's folder can't be inspected from where the executor runs, the remote takeover below
@@ -246,10 +249,12 @@ anyone when all of these hold:
 4. The same comment ends the lease with a `### Handoff` whose `- Claim:` line releases it, and the
    incoming executor claims its own issue before it writes.
 
-The held work is still owed. When the holder's lane resumes, it merges what landed meanwhile; nobody
-discards it. A lease that has not expired still serializes (rule 2), and an executor that can inspect
-the folder still inspects first. This ruling covers stale leases only: the owner-bound gates in
-`CLAUDE.md` stay owner-bound.
+This is the named exception to rule 5 and to `AGENTS.md`'s "locked until measured". What stays unknown
+is only whether a lane silent 12 hours past its expiry still means to write; everything it holds stays
+where it is. The held work is still owed. When the holder's lane resumes, it merges what landed
+meanwhile; nobody discards it. A lease that has not expired still serializes (rule 2), and an executor
+that can inspect the folder still inspects first. This ruling covers stale leases only: the
+owner-bound gates in `CLAUDE.md` stay owner-bound.
 
 ## Local folder lease is an enforcement mechanism, not authority
 

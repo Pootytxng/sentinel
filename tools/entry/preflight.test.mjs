@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { discoverCheckouts } from "./checkouts.mjs";
+import { threadLease } from "./claim.mjs";
 import { reconcile, selectTask } from "./preflight.mjs";
 import { verdictLines } from "./render.mjs";
 import { samePath } from "./worktree-field.mjs";
@@ -342,6 +343,23 @@ describe("edge cases (spec §7)", () => {
     expect(r.takeoverDraft).toMatch(/12 hours past expiry with nothing posted since/);
     expect(r.takeoverDraft).toMatch(/folder untouched/);
     expect(r.takeoverDraft).toMatch(/`not inspected`/);
+  });
+
+  // Codex review 5612865429: the #682 draft named the Handoff in prose only, so posting it as written
+  // left the stale claim holding its paths. Fold the draft through the same reader the gates use.
+  it("expired claim → the draft, posted as written, releases the stale lease", () => {
+    const w = baseWorld();
+    w.claim = { ...w.claim, expires: "2026-07-29" };
+    w.task = { ...w.task, claimExpires: "2026-07-29" };
+    const r = reconcile(w);
+    const stale = {
+      body: ["### Ownership claim", "- Lane: Codex", "- Write scope: `docs/WORK_CONTROL.md`", "- Claim expires: 2026-07-29"].join("\n"),
+      createdAt: "2026-07-28T10:00:00Z",
+    };
+    expect(threadLease([stale]).claim).not.toBeNull();
+    const after = threadLease([stale, { body: r.takeoverDraft, createdAt: "2026-07-30T12:00:00Z" }]);
+    expect(after.claim).toBeNull();
+    expect(after.handoff.released).toBe(true);
   });
 
   it("another lane's live claim → refuse", () => {

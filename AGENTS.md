@@ -144,7 +144,10 @@ relevant live processes, and exact write scope. Never reset, stash, discard, for
 unknown work to make a lease convenient.
 
 A separate worktree/clone is mandatory for each active writer. One folder has one writer. Overlapping
-scopes serialize. Unknown scope/folder/process ownership means locked until measured.
+scopes serialize. Unknown scope/folder/process ownership means locked until measured. The one exception
+is the owner-ruled remote takeover of a lease 12 hours past expiry with nothing posted since
+(`docs/WORK_CONTROL.md`, #682): the holder's folder, branch and processes stay unmeasured, so they stay
+untouched, and the lease ends only through a posted takeover with a releasing Handoff.
 
 ## Collaboration style
 

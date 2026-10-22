@@ -11,7 +11,7 @@ import { BLOCKING_GATES, buildMenu, FALLBACK_POLICY } from "./select.mjs";
 import { LOCAL_SETTINGS_PATH } from "./tier.mjs";
 import { parseWorktreeField, samePath } from "./worktree-field.mjs";
 import { overlapRemediation, scopeOverlapVerdict } from "./scope-overlap.mjs";
-import { claimExpiry } from "./claim.mjs";
+import { claimExpiry, renderHandoff } from "./claim.mjs";
 
 export const STARTABLE_STATUS = ["Ready", "Active"];
 export { BLOCKING_GATES };
@@ -216,16 +216,27 @@ export function reconcile(facts) {
       takeoverDraft = [
         "### Verified takeover",
         `- Previous lease: ${claim.lane} on ${claim.folder} @ ${claim.branch}, expired ${claim.expires}`,
-        "- Worktree/process evidence checked: <fill from the preflight output above>",
-        "- Preserved work: <what exists in the folder right now, untouched>",
+        "- Worktree/process evidence checked: <fill from the preflight output above, or `not inspected` and why>",
+        "- Preserved work: <what exists in the folder right now, untouched; remotely, every unlanded ref and patch the thread names, and which refs origin has>",
         "- New executor/worktree/branch/scope:",
         "- New expiry:",
         "- Next action:",
         "",
+        // The release is part of the takeover, not a note about it: threadLease ends a lease only on a
+        // posted Handoff whose Claim line releases it, so a takeover without one leaves the stale claim
+        // holding its paths (Codex review 5612865429).
+        renderHandoff({
+          outcome: "stale lease taken over; the holder's unlanded work is preserved, not discarded",
+          worktreeState: "<the holder's folder and branch, untouched>",
+          processes: "<none touched>",
+          nextAction: "<the incoming executor posts its own Ownership claim before it writes>",
+          claim: "released",
+        }),
+        "",
         "Expiry is an alarm, not a takeover. Post this only after inspecting the real worktree and",
         "processes. No destructive Git as a first move. Where they can't be inspected from here, it is a",
         "remote takeover (WORK_CONTROL.md, #682): 12 hours past expiry with nothing posted since, the",
-        "holder's folder untouched, `not inspected` on the evidence line, and a Handoff releasing it.",
+        "holder's folder untouched, `not inspected` on the evidence line, and the Handoff above releasing it.",
       ].join("\n");
     }
   }
