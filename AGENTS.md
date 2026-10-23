@@ -3,6 +3,9 @@
 > Product direction is not duplicated here. Re-derive current native state before asserting any
 > identifier, claim, branch, priority, gate, completion state, or owner.
 
+> **OWNER DIRECTIVE 2026-10-23** (`docs/OWNER_DIRECTIVE_2026-10-23.md`) governs through 2026-11-22 and takes
+> precedence over this file and `docs/WORK_CONTROL.md` where they conflict. Read it first.
+
 ## Authority stack
 
 These files own different domains. Do not collapse them into one hierarchy.

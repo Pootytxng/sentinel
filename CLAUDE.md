@@ -5,6 +5,7 @@
 > native state before asserting it. Universal behavioral laws live in `~/.claude/CLAUDE.md`; do not
 > duplicate them here.
 
+> **OWNER DIRECTIVE 2026-10-23 governs through 2026-11-22:** read `docs/OWNER_DIRECTIVE_2026-10-23.md` before the files below.
 > **Authority is domain-specific, not one giant hierarchy.** Fresh session: read
 > `docs/PRODUCT_CONSTITUTION.md` first, then `docs/RELEASE_STATE.md`, `docs/WORK_CONTROL.md`, `docs/BACKLOG.md`.
 > - `docs/PRODUCT_CONSTITUTION.md` — SUPREME PRODUCT AUTHORITY.
