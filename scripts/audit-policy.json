@@ -184,6 +184,16 @@
           "unic-ucd-version@0.9.0 <- unic-ucd-ident@0.9.0 <- urlpattern@0.3.0 <- tauri-utils@2.9.2 <- tauri@2.11.2"
         ],
         "review_by": "2027-01-31"
+      },
+      "RUSTSEC-2026-0386": {
+        "package": "tokio",
+        "severity": "unsound",
+        "classification": "shipped-not-compiled-for-shipped-target",
+        "why": "RUSTSEC-2026-0386: AsyncFd::new and its sibling constructors accept a file descriptor without taking ownership, which violates I/O safety. AsyncFd exists only on Unix: tokio 1.52.3 declares src/io/async_fd.rs and tokio::io::unix inside cfg_net_unix!, which expands to #[cfg(all(unix, feature = \"net\"))], so none of the unsound code is compiled for x86_64-pc-windows-msvc. Compy's own Rust source does not depend on or name tokio (a search for tokio, AsyncFd, RawFd and OwnedFd under src-tauri/src and src-tauri/Cargo.toml returns nothing, re-run 2026-10-23). It arrives only transitively, through tauri, reqwest/hyper and tauri-plugin-updater. The fix (tokio 1.52.3 -> 1.54.1, offered by `cargo update -p tokio`) is a minor-version change to the async runtime of the shipped app. That is outside #672's scope, which keeps src-tauri/ read-only, so it is left for its own slice with cargo test and the Windows gates.",
+        "paths": [
+          "tokio@1.52.3 <- tauri@2.11.2, reqwest@0.13.4, hyper@1.10.0, hyper-util@0.1.20, hyper-rustls@0.27.9, tokio-rustls@0.26.4, tokio-util@0.7.18, tower@0.5.3, tauri-plugin-updater@2.10.1"
+        ],
+        "review_by": "2027-01-31"
       }
     }
   }
