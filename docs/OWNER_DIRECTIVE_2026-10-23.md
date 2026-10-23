@@ -55,6 +55,12 @@ tsc 0 errors, cargo 0 warnings, 29,714 tests passing. The problem is process, no
    are reviewed under rule 3; process PRs are parked, not merged.
 5. Resume Roadmap Phase 4 only after steps 1–3.
 
+## Work train (owner, 2026-10-23)
+
+Scheduled work sessions run on the owner's PC and pull, in order, from [`WORK_TRAIN.md`](WORK_TRAIN.md),
+which also holds the per-session runbook. Each session ticks what it landed there in the same commit.
+Testers are the owner and one trusted friend; there is no wider beta.
+
 ## Guard classes referenced
 
 SAFETY (keep, rule 3 full strength): outbound/case-evidence tiers, CSP, command authority, mutation
