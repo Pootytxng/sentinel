@@ -111,8 +111,11 @@ adding another isolated tweak.
   WARDOGS 1202 s, avg 244.1 / 1% low 153.5; start accepted (the #620 rows no longer refuse it); after-session
   1125 s, avg 203.5 / 1% low 125.1; verdict **"Slower — restored" (−18.5% 1% low)**, restore read back as Windows
   default (`VisualFXSetting=0`). The scene changed between sessions (AFK, new round), so the verdict is noise, not a
-  finding; the proof is the lifecycle: start → apply → measure → judge → restore. **Remaining for Phase 3 exit:** the
-  kill-mid-start-then-relaunch check.
+  finding; the proof is the lifecycle: start → apply → measure → judge → restore. **Kill-mid-start check PASSED
+  2026-10-23 09:08:** a fresh 90 s baseline, then Compy force-killed the instant the record-first `Pending` row hit
+  `experiments.json` (before the apply); `VisualFXSetting` still 0 after the kill; on relaunch Past experiments shows a
+  loud row ("Compy closed while this experiment was starting, before it recorded a change…") and the picker is free.
+  **Phase 3 owner-rig exit: met.** Open: `game-bar-disable` never offered on this rig (cause under investigation).
 ---
 
 ## P4 — Roadmap Phase 4/5: Optimization Engine + guided journey
