@@ -10,6 +10,7 @@ import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
 import { LedgerHealthNotice, knownIncomplete, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { Sparkline } from "../design/Sparkline";
+import { knownFps } from "../lib/session-metrics";
 import { useReducedMotion } from "../design/use-motion";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
@@ -335,8 +336,9 @@ export function HomeHud({
     () =>
       [...sessions]
         .sort((a, b) => a.started_at.localeCompare(b.started_at))
-        .slice(-12)
-        .map((s) => s.avg_fps),
+        .map((s) => knownFps(s.avg_fps))
+        .filter((v): v is number => v !== null)
+        .slice(-12),
     [sessions],
   );
 
@@ -350,7 +352,7 @@ export function HomeHud({
   // The fps-vs-refresh ratio — both sides measured (session avg · this display's Hz) or the
   // ring doesn't render. Same reference gradeFps grades against, so ring and ink agree.
   const ringFrac =
-    strip.kind === "data" && rig.refreshHz ? strip.avgFps / rig.refreshHz : null;
+    strip.kind === "data" && strip.avgFps != null && rig.refreshHz ? strip.avgFps / rig.refreshHz : null;
 
   // The instrument bay stage (shared by 3D and cards views).
   const stage = (
@@ -566,22 +568,31 @@ export function HomeHud({
                       className={`hud-reading hud-mono${gradeClass(fpsGrade)}`}
                       style={gradeInk(fpsGrade)}
                     >
-                      {reduced ? (
+                      {/* A session that did not measure its average shows the absent mark, never a
+                          counted-up number (#671). */}
+                      {strip.avgFps == null ? (
+                        "—"
+                      ) : reduced ? (
                         Math.round(strip.avgFps)
                       ) : (
                         <CountUp to={Math.round(strip.avgFps)} duration={0.9} />
                       )}
                     </span>
-                    <span className="hud-unit">{t("home.homeHud.ledger.fpsAvg")}</span>
+                    <span className="hud-unit">
+                      {t("home.homeHud.ledger.fpsAvg")}
+                      {strip.avgFps == null && ` · ${t("home.homeHud.ledger.notMeasured")}`}
+                    </span>
                     <span className="hud-note">
                       <Term id="one-percent-lows">{t("home.homeHud.ledger.onePercentLowLabel")}</Term>{" "}
                       <span
                         className={`hud-mono${gradeClass(low1Grade)}`}
                         style={gradeInk(low1Grade)}
                       >
-                        {Math.round(strip.low1Est)}
-                      </span>{" "}
-                      {t("home.homeHud.ledger.estimateSuffix")}
+                        {strip.low1Est != null
+                          ? Math.round(strip.low1Est)
+                          : t("home.homeHud.ledger.notMeasured")}
+                      </span>
+                      {strip.low1Est != null && ` ${t("home.homeHud.ledger.estimateSuffix")}`}
                     </span>
                   </div>
                 </div>

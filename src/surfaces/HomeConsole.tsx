@@ -810,6 +810,8 @@ export function HomeConsole({
     // Not counted (pending or unreadable) is null, so the interview cannot quote it as a 0.
     activeChanges: inEffect.kind === "counted" ? inEffect.activeNow : null,
     sessionCount: sessions.length,
+    // An unmeasured FPS reaches the interview as null (#671): it quotes the FPS only when both were
+    // measured, and still quotes the session's peak temperature either way.
     lastSession:
       strip.kind === "data"
         ? { game: strip.game, avgFps: strip.avgFps, low1: strip.low1Est, peakTempC: strip.peakTempC }

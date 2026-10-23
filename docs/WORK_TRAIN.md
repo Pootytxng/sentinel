@@ -39,6 +39,8 @@ release, sign, or touch credentials (owner territory).
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
       Process PRs (#685, #679, #654, #644, #642, #606, #605, #492, #471, #470, #464): close with a
       one-line "parked under OWNER_DIRECTIVE_2026-10-23" comment.
+      Progress 2026-10-23: process PRs closed; #673 landed (fix 88bec9ad, sparklines too).
+      Next: #666, then #661 (also fixes SessionDebrief "0"/smooth grade on unknown FPS), #627, #604.
 - [ ] **WT-prune** Remove the 17 remaining worktrees whose commits already exist on main or on GitHub;
       bundle any unique commits first (pattern: `_archive/compy-sessions/worktree-salvage-2026-10-23`).
 
