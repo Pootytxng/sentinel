@@ -590,17 +590,234 @@ pub(crate) fn gather() -> RootProbe {
 
 /// The capability the pre-existing rollback-contract suites need to keep calling `dispatch_rollback`
 /// directly. Those tests assert that a mismatched (action, snapshot) pair is REFUSED, so the root is
-/// never consulted — but the type still has to be produced, which is exactly the point.
+/// never consulted — but the type still has to be produced, which is exactly the point. It names the
+/// process's own test root (#665), not a fixed path every test process would share.
 #[cfg(test)]
 pub(crate) fn test_mutation_root() -> MutationRoot {
-    MutationRoot::for_test(std::env::temp_dir().join("compy-test-data-root"))
+    MutationRoot::for_test(decision().effective_root())
 }
 
 /// The process-wide decision. Resolved once — a decision that could change between two calls in one
 /// session would be worse than no decision at all.
+#[cfg(not(test))]
 pub(crate) fn decision() -> &'static DataRootDecision {
     static DECISION: OnceLock<DataRootDecision> = OnceLock::new();
     DECISION.get_or_init(|| resolve(&gather()))
+}
+
+/// Test-build decision (#665). An ordinary test process never resolves the environment: it gets a
+/// fresh `Compy` root it created under the temp dir, so every read wrapper (`compy_data_dir`), the
+/// gateway token and `test_mutation_root` name that one root, and no test can read or rewrite a user
+/// ledger. `resolve` itself is untouched and still proven variant by variant in the guards below.
+///
+/// The one exception is a process libtest runs with `--ignored`, which runs ONLY the `#[ignore]`d
+/// owner-present QA harnesses. Those make real Windows changes, so their receipts keep going to the
+/// real ledger, where the installed app can roll them back — exactly as before.
+///
+/// `--include-ignored` runs both kinds in one process, and no single root serves both: the owned
+/// root would strand the harnesses' rollback receipts, the real one would hand the ordinary tests
+/// the user's ledger. So that process, and any command line this cannot read the way libtest does,
+/// is refused here, before a root is chosen or created. Every data-root read and every gateway call
+/// panics with the reason instead.
+#[cfg(test)]
+pub(crate) fn decision() -> &'static DataRootDecision {
+    static DECISION: OnceLock<DataRootDecision> = OnceLock::new();
+    DECISION
+        .get_or_init(|| decide_test_root(libtest_run(std::env::args_os()), &std::env::temp_dir()))
+}
+
+/// The test-build decision for one kind of run. A refused run panics before `owned_test_root`
+/// creates anything and before `gather` reads anything.
+#[cfg(test)]
+fn decide_test_root(run: LibtestRun, temp: &Path) -> DataRootDecision {
+    match run {
+        LibtestRun::Ordinary => DataRootDecision::Canonical {
+            root: owned_test_root(temp),
+        },
+        LibtestRun::IgnoredOnly => resolve(&gather()),
+        refused => panic!("{}", refused_run(refused)),
+    }
+}
+
+#[cfg(test)]
+fn refused_run(run: LibtestRun) -> String {
+    format!(
+        "this test process has no data root ({run:?}): `--include-ignored` would run the \
+         owner-present live-Windows QA harnesses beside ordinary tests, and no one root serves \
+         both. Run the ordinary tests without it, or only the harnesses with `--ignored`."
+    )
+}
+
+/// The first statement of every `#[ignore]`d harness that files receipts (#665). Unless libtest is
+/// running the ignored harnesses alone, it panics before the harness reads or changes anything, so
+/// a refused run can never seed a Windows change it has no ledger to undo from.
+#[cfg(test)]
+pub(crate) fn require_ignored_only_run() {
+    let run = libtest_run(std::env::args_os());
+    assert!(run == LibtestRun::IgnoredOnly, "{}", refused_run(run));
+}
+
+/// What a test process's command line asks libtest for.
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LibtestRun {
+    /// No ignore flag: the ordinary tests only.
+    Ordinary,
+    /// `--ignored`: only the `#[ignore]`d harnesses.
+    IgnoredOnly,
+    /// `--include-ignored`: both at once.
+    Mixed,
+    /// A line libtest itself refuses (an unknown option, a missing value, a repeat, both ignore
+    /// flags) or one with an argument that is not Unicode.
+    Unreadable,
+}
+
+/// Reads `args` (argv[0] first) the way this toolchain's libtest does: getopts 0.2.24 over the
+/// option table in `library/test/src/cli.rs`. Free arguments are name filters wherever they
+/// appear. `--` ends the options, unless an option takes it as its value. An option that takes a
+/// value consumes the next argument whatever it looks like, so `--skip --ignored` only skips tests
+/// named like "--ignored", and `--skip -- --ignored` still asks for the ignored harnesses. Option
+/// names match exactly and case-sensitively, and a one-character long name (`--q`) is the short
+/// option. Values libtest rejects later, such as a bad `--color` or an unstable option on stable,
+/// stop the runner before any test runs, so they are not modelled here.
+#[cfg(test)]
+fn libtest_run<S: AsRef<std::ffi::OsStr>>(args: impl IntoIterator<Item = S>) -> LibtestRun {
+    const FLAGS: [&str; 17] = [
+        "include-ignored",
+        "ignored",
+        "force-run-in-process",
+        "exclude-should-panic",
+        "test",
+        "bench",
+        "list",
+        "fail-fast",
+        "help",
+        "no-capture",
+        "quiet",
+        "exact",
+        "show-output",
+        "report-time",
+        "ensure-time",
+        "shuffle",
+        "nocapture",
+    ];
+    const VALUED: [&str; 6] = [
+        "logfile",
+        "test-threads",
+        "skip",
+        "color",
+        "format",
+        "shuffle-seed",
+    ];
+    // (canonical name, takes a value)
+    fn short(c: char) -> Option<(&'static str, bool)> {
+        match c {
+            'h' => Some(("help", false)),
+            'q' => Some(("quiet", false)),
+            'Z' => Some(("Z", true)),
+            _ => None,
+        }
+    }
+    fn long(name: &str) -> Option<(&'static str, bool)> {
+        if name.len() == 1 {
+            return short(name.as_bytes()[0] as char);
+        }
+        let flag = FLAGS.iter().find(|f| **f == name).map(|f| (*f, false));
+        flag.or_else(|| VALUED.iter().find(|v| **v == name).map(|v| (*v, true)))
+    }
+
+    let Some(args) = args
+        .into_iter()
+        .skip(1)
+        .map(|a| a.as_ref().to_str().map(str::to_owned))
+        .collect::<Option<Vec<String>>>()
+    else {
+        return LibtestRun::Unreadable;
+    };
+    let mut given: Vec<&'static str> = Vec::new();
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        if arg == "--" {
+            break;
+        }
+        if arg.len() < 2 || !arg.starts_with('-') {
+            continue;
+        }
+        // The one option this argument names, and whether its value is already attached.
+        let (name, takes_value, attached) = if let Some(tail) = arg.strip_prefix("--") {
+            let (name, value) = match tail.split_once('=') {
+                Some((name, value)) => (name, Some(value)),
+                None => (tail, None),
+            };
+            let Some((name, takes_value)) = long(name) else {
+                return LibtestRun::Unreadable;
+            };
+            if value.is_some() && !takes_value {
+                return LibtestRun::Unreadable;
+            }
+            (name, takes_value, value.is_some())
+        } else {
+            // A short cluster: flags until the first option that takes a value, which takes the
+            // rest of the cluster or else the next argument.
+            let mut valued = None;
+            for (i, c) in arg.char_indices().skip(1) {
+                let Some((name, takes_value)) = short(c) else {
+                    return LibtestRun::Unreadable;
+                };
+                if takes_value {
+                    valued = Some((name, i + c.len_utf8() < arg.len()));
+                    break;
+                }
+                given.push(name);
+            }
+            match valued {
+                Some((name, attached)) => (name, true, attached),
+                None => continue,
+            }
+        };
+        if takes_value && !attached && rest.next().is_none() {
+            return LibtestRun::Unreadable;
+        }
+        given.push(name);
+    }
+    if given.iter().any(|n| *n != "skip" && given.iter().filter(|m| *m == n).count() > 1) {
+        return LibtestRun::Unreadable;
+    }
+    match (given.contains(&"ignored"), given.contains(&"include-ignored")) {
+        (false, false) => LibtestRun::Ordinary,
+        (true, false) => LibtestRun::IgnoredOnly,
+        (false, true) => LibtestRun::Mixed,
+        (true, true) => LibtestRun::Unreadable,
+    }
+}
+
+/// Create a fresh `<base>\compy-test-roots\<pid>-<nanos>-<n>\Compy` and return it. `create_dir`
+/// fails on an existing directory, so two processes (or two calls) can never be handed the same
+/// root. Panics rather than fall back: a test with no root of its own must not run at all. The
+/// empty parent also means `migrate_legacy_data_once` finds no `Sentinel` beside it to copy.
+#[cfg(test)]
+fn owned_test_root(base: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let roots = base.join("compy-test-roots");
+    std::fs::create_dir_all(&roots).unwrap_or_else(|e| panic!("cannot create {roots:?}: {e}"));
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    loop {
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let owned = roots.join(format!("{}-{nanos}-{n}", std::process::id()));
+        match std::fs::create_dir(&owned) {
+            Ok(()) => {
+                let root = owned.join("Compy");
+                std::fs::create_dir(&root).unwrap_or_else(|e| panic!("cannot create {root:?}: {e}"));
+                return root;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => panic!("cannot create {owned:?}: {e}"),
+        }
+    }
 }
 
 /// The capability token, or the plain-English reason there isn't one. Pure, so every variant's
@@ -621,10 +838,12 @@ pub(crate) fn mutation_root() -> Result<MutationRoot, String> {
 
 /// Test-build escape, and the reasoning for it.
 ///
-/// The pre-existing mutation/rollback QA suites drive the real gateways against the real
-/// `%APPDATA%\Compy` ledger, and this dev machine is *currently in the `Conflict` state this module
-/// was written to detect* — 3 receipts canonically, 61 in the packaged-Claude overlay (#130). With
-/// the shipped rule they would all refuse, which would replace a real assertion with a tautology.
+/// The pre-existing mutation/rollback suites drive the real gateways. Ordinary tests now do so
+/// against this process's own test root (#665, see the test-build `decision`). The `--ignored`
+/// owner-present QA harnesses still use the real `%APPDATA%\Compy` ledger, and this dev machine was
+/// *in the `Conflict` state this module was written to detect* — 3 receipts canonically, 61 in the
+/// packaged-Claude overlay (#130). With the shipped rule they would all refuse, which would replace
+/// a real assertion with a tautology.
 ///
 /// So in `#[cfg(test)]` only, the token is issued for the effective root, preserving exactly the
 /// behavior those suites had before this module existed. **Release builds have no such path**, and
@@ -1031,8 +1250,8 @@ mod tests {
     /// GUARD 6 — the capability itself, variant by variant.
     ///
     /// `mutation_root()` is `#[cfg(test)]`-overridden so the pre-existing mutation suites can still
-    /// drive the real gateways on a desk that is *currently* in `Conflict` (#130). That escape would
-    /// be a hole if nothing else proved the refusal, so this is the proof: the pure
+    /// drive the real gateways (the QA harnesses on a desk that was in `Conflict`, #130). That escape
+    /// would be a hole if nothing else proved the refusal, so this is the proof: the pure
     /// `mutation_root_from` is the same function the shipped build calls, exercised against every
     /// decision variant without needing a container, a rewritten environment, or a second root.
     #[test]
@@ -1075,5 +1294,256 @@ mod tests {
                 "the refusal must be the decision's own explanation: {d:?}"
             );
         }
+    }
+
+    /// GUARD 7 (#665) — an ordinary test process never resolves the environment's data root.
+    ///
+    /// Before #665 this process resolved the real `%APPDATA%\Compy`, so every refused gateway call
+    /// still re-saved the user's ledger through `begin_mutation`'s write-ahead canary. Reads, the
+    /// gateway token and the rollback-suite token must all land on ONE fresh root that this process
+    /// created under the temp dir, so no test can read or rewrite a user ledger and no two test
+    /// processes can share a root.
+    #[test]
+    fn an_ordinary_test_process_never_resolves_the_environment_data_root() {
+        let root = decision().effective_root();
+        let text = normalize(&root.to_string_lossy());
+        let under = |base: &str| {
+            let base = normalize(base);
+            text == base || text.starts_with(&format!(r"{base}\"))
+        };
+
+        // Where the environment says the user's ledger and the installed app live.
+        let mut forbidden = Vec::new();
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            forbidden.push(appdata);
+        }
+        if let Ok(home) = std::env::var("USERPROFILE") {
+            forbidden.push(format!(r"{home}\AppData\Roaming"));
+        }
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            forbidden.push(format!(r"{local}\Compy"));
+        }
+        for base in &forbidden {
+            assert!(!under(base), "a test resolved the environment's data root {base}: {root:?}");
+        }
+
+        let temp = std::env::temp_dir();
+        assert!(under(&temp.to_string_lossy()), "the test root is not under the temp dir: {root:?}");
+        let owner = root
+            .parent()
+            .and_then(Path::file_name)
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        assert!(
+            owner.starts_with(&format!("{}-", std::process::id())),
+            "the test root is not a directory this process created: {root:?}"
+        );
+
+        assert_eq!(crate::compy_data_dir(), root, "reads must use the gateways' root");
+        let token = mutation_root().expect("the test gateway token");
+        assert_eq!(token.path(), root, "the gateway token must name the test root");
+        assert_eq!(test_mutation_root().path(), root, "the rollback-suite token must too");
+    }
+
+    /// GUARD 7b (#665) — every allocation is a new, empty directory under its own owner directory.
+    /// Across processes the same holds because `create_dir` refuses a directory that already exists.
+    #[test]
+    fn every_owned_test_root_is_fresh_and_distinct() {
+        let base = owned_test_root(&std::env::temp_dir());
+        let a = owned_test_root(&base);
+        let b = owned_test_root(&base);
+        assert_ne!(a, b, "two allocations must never share a root");
+        assert_ne!(a.parent(), b.parent(), "nor the directory that owns it");
+        for r in [&a, &b] {
+            assert!(r.ends_with("Compy") && r.starts_with(&base), "unexpected layout: {r:?}");
+            assert_eq!(std::fs::read_dir(r).expect("created").count(), 0, "not fresh: {r:?}");
+        }
+    }
+
+    /// GUARD 7c (#665) — the command line is read the way libtest reads it, so only a real
+    /// `--ignored` run keeps the environment's root and `--include-ignored` is refused.
+    ///
+    /// Before R1 this was a token search: `--skip --ignored` (an ordinary run that skips one name)
+    /// resolved the user's root, `-- --ignored` (a name filter) did too, and `--include-ignored`
+    /// got the owned root, stranding the live harnesses' rollback receipts. Every earlier row is
+    /// kept; only `--include-ignored` changes verdict, from the owned root to refused. Each row's
+    /// verdict was observed on the built runner with `--list` first, which lists and never runs a
+    /// test (the #665 R1 probe); `Unreadable` rows are lines that runner refused.
+    #[test]
+    fn the_command_line_is_read_the_way_libtest_reads_it() {
+        use LibtestRun::*;
+        let rows: &[(&[&str], LibtestRun)] = &[
+            (&[], Ordinary),
+            (&["--ignored"], IgnoredOnly),
+            (&["--include-ignored"], Mixed),
+            (&["--skip", "--ignored"], Ordinary),
+            (&["--skip=--ignored"], Ordinary),
+            (&["--skip", "--include-ignored"], Ordinary),
+            (&["--skip=--include-ignored"], Ordinary),
+            (&["--", "--ignored"], Ordinary),
+            (&["--", "--include-ignored"], Ordinary),
+            (&["--skip", "--", "--ignored"], IgnoredOnly),
+            (&["--skip", "--", "--include-ignored"], Mixed),
+            (&["--ignored", "--"], IgnoredOnly),
+            (&["x", "--ignored"], IgnoredOnly),
+            (&["--ignored", "--skip", "x"], IgnoredOnly),
+            (&["--skip", "--skip", "--ignored"], IgnoredOnly),
+            (&["--skip=x", "--skip", "--ignored"], Ordinary),
+            (&["--logfile", "--ignored"], Ordinary),
+            (&["--logfile=--include-ignored"], Ordinary),
+            (&["--test-threads", "1", "--ignored"], IgnoredOnly),
+            (&["--test-threads=1", "--include-ignored"], Mixed),
+            (&["--nocapture", "--include-ignored"], Mixed),
+            (&["--no-capture", "--ignored"], IgnoredOnly),
+            (&["-q", "--ignored"], IgnoredOnly),
+            (&["--q", "--ignored"], IgnoredOnly),
+            (&["-", "--ignored"], IgnoredOnly),
+            (&["--exact", "--ignored"], IgnoredOnly),
+            (&["manual_restore_qa", "--ignored", "--nocapture"], IgnoredOnly),
+            (&["manual_restore_qa", "--ignored", "--nocapture", "--test-threads=1"], IgnoredOnly),
+            (&["data_root::tests::x", "--exact"], Ordinary),
+            (&["--test-threads", "4"], Ordinary),
+            (&["--ignored", "--ignored"], Unreadable),
+            (&["--include-ignored", "--include-ignored"], Unreadable),
+            (&["--ignored", "--include-ignored"], Unreadable),
+            (&["--ignored=1"], Unreadable),
+            (&["--include-ignored="], Unreadable),
+            (&["--ign"], Unreadable),
+            (&["--IGNORED"], Unreadable),
+            (&["--skip"], Unreadable),
+            (&["-x"], Unreadable),
+            (&["---ignored"], Unreadable),
+            (&["-qq", "--ignored"], Unreadable),
+            (&["-q", "--quiet"], Unreadable),
+        ];
+        let wrong: Vec<String> = rows
+            .iter()
+            .filter_map(|(args, want)| {
+                let got = libtest_run(std::iter::once("compy_lib.exe").chain(args.iter().copied()));
+                (got != *want).then(|| format!("{args:?}: want {want:?}, got {got:?}"))
+            })
+            .collect();
+        assert!(wrong.is_empty(), "misread command lines:\n{}", wrong.join("\n"));
+
+        // argv[0] is the program, never an option; an empty argv is an ordinary run.
+        assert_eq!(libtest_run(["--ignored"]), Ordinary);
+        assert_eq!(libtest_run(["--include-ignored", "--ignored"]), IgnoredOnly);
+        assert_eq!(libtest_run(std::iter::empty::<&str>()), Ordinary);
+        // getopts refuses an argument that is not Unicode, wherever it sits.
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStringExt;
+            let bad = std::ffi::OsString::from_wide(&[0xD800]);
+            let argv = |a: &[std::ffi::OsString]| {
+                let program = std::ffi::OsString::from("compy_lib.exe");
+                libtest_run(std::iter::once(program).chain(a.iter().cloned()))
+            };
+            assert_eq!(argv(std::slice::from_ref(&bad)), Unreadable);
+            assert_eq!(argv(&["--skip".into(), bad]), Unreadable);
+        }
+    }
+
+    /// GUARD 7d (#665) — a mixed or unreadable run is refused before any root exists: nothing is
+    /// created under the temp dir it was handed. (The environment branch is not exercised here; it
+    /// is the untouched `resolve(&gather())` that guards 1–6 prove.)
+    #[test]
+    fn a_mixed_or_unreadable_run_is_refused_before_any_root_exists() {
+        for run in [LibtestRun::Mixed, LibtestRun::Unreadable] {
+            let temp = owned_test_root(&std::env::temp_dir());
+            let refused = std::panic::catch_unwind(|| decide_test_root(run, &temp));
+            let why = refused.expect_err(&format!("{run:?} must be refused"));
+            let why = why
+                .downcast_ref::<String>()
+                .cloned()
+                .unwrap_or_default();
+            assert!(why.contains("--include-ignored"), "the refusal must say why: {why:?}");
+            assert_eq!(
+                std::fs::read_dir(&temp).expect("temp").count(),
+                0,
+                "{run:?} created a root before refusing"
+            );
+        }
+        let temp = owned_test_root(&std::env::temp_dir());
+        let ordinary = decide_test_root(LibtestRun::Ordinary, &temp);
+        assert!(ordinary.effective_root().starts_with(&temp), "ordinary runs get an owned root");
+    }
+
+    /// GUARD 7e (#665) — the live-harness precondition refuses a process that is not running the
+    /// ignored harnesses alone. This ordinary test process is one.
+    #[test]
+    #[should_panic(expected = "--include-ignored")]
+    fn the_live_harness_precondition_refuses_an_ordinary_process() {
+        require_ignored_only_run();
+    }
+
+    /// GUARD 7f (#665) — a refused run stops before any receipt-filing harness changes Windows.
+    ///
+    /// `decision()` refuses, so a harness is safe if the first thing it does reaches the data root
+    /// or checks the run itself. The `history.rs` harnesses file ledger receipts and open with
+    /// `require_ignored_only_run()`. The `gaming_orchestrator.rs` harnesses keep their session
+    /// contract under the data root and open with `require_clean()`, which reads it through
+    /// `compy_data_dir()`. This pins both, so a new harness that seeds before either fails here.
+    /// The `actions.rs` harnesses file no receipt or contract, so the root cannot strand one.
+    #[test]
+    fn every_receipt_filing_harness_checks_the_run_before_changing_windows() {
+        let history = include_str!("history.rs");
+        let go = include_str!("gaming_orchestrator.rs");
+        for (file, source, opening) in [
+            ("history.rs", history, "crate::data_root::require_ignored_only_run();"),
+            ("gaming_orchestrator.rs", go, "require_clean();"),
+        ] {
+            let harnesses = ignored_harness_openings(source);
+            assert!(!harnesses.is_empty(), "no #[ignore] harness found in {file}");
+            for (name, first) in harnesses {
+                assert_eq!(first, opening, "{file}: `{name}` must open with `{opening}`");
+            }
+        }
+        let require_clean = &go[go.find("fn require_clean()").expect("require_clean")..];
+        let body = &require_clean[..require_clean.find("\n    }").expect("its body")];
+        assert!(body.contains("load_session()"), "require_clean must read the session file");
+        let gs = include_str!("gaming_session.rs");
+        assert!(
+            gs.contains("std::fs::read_to_string(session_path())"),
+            "load_session must read the session path"
+        );
+        let qa = &go[go.find("mod gaming_mode_qa {").expect("the live QA module")..];
+        assert!(
+            !qa.contains("SessionDirOverride"),
+            "a harness that moved the session dir off the data root would skip the refusal"
+        );
+    }
+
+    /// Each `#[ignore]`d test's name and first statement, skipping `use` statements and comments.
+    fn ignored_harness_openings(source: &str) -> Vec<(String, String)> {
+        let lines: Vec<&str> = source.lines().collect();
+        let mut found = Vec::new();
+        for (i, line) in lines.iter().enumerate() {
+            if !line.trim_start().starts_with("#[ignore") {
+                continue;
+            }
+            let is_fn = |l: &&str| l.trim_start().starts_with("fn ");
+            let Some(sig) = lines[i + 1..].iter().position(is_fn) else {
+                continue;
+            };
+            let sig = i + 1 + sig;
+            let signature = &lines[sig].trim_start()[3..];
+            let name = signature.split('(').next().unwrap_or_default().to_string();
+            // A `use` may span lines; its last line ends the statement with `;`.
+            let mut in_use = false;
+            let first = lines[sig + 1..]
+                .iter()
+                .map(|l| l.trim())
+                .find(|l| {
+                    if in_use || l.starts_with("use ") {
+                        in_use = !l.ends_with(';');
+                        return false;
+                    }
+                    !l.is_empty() && !l.starts_with("//")
+                })
+                .unwrap_or_default()
+                .to_string();
+            found.push((name, first));
+        }
+        found
     }
 }

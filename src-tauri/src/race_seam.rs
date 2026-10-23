@@ -361,14 +361,13 @@ impl StoreLock {
 /// branches — a damaged ledger, a ledger that will not save — and nothing in the suite drives those
 /// branches through a locked gateway. Deleting both still leaves the suite green.
 ///
-/// They are not fixable from here without doing something worse. The one production entry point a
-/// test could reach the branch through is `begin_mutation`, and in a `#[cfg(test)]` build
-/// `data_root::mutation_root()` resolves to the machine's REAL `%APPDATA%\Compy` root, so reaching
-/// it would mean corrupting the owner's actual ledger. Entering lower, at `load_history_for` with a
-/// temp root, reaches the real `support_evidence::record`, which has no path seam and appends to the
-/// real support store — a test would be writing "your ledger was unreadable" into the record support
-/// reads to answer that exact question. Neither is worth a green tick. This is the same limitation
-/// PR #400 reported, still true, still reported as UNVERIFIED rather than dressed up.
+/// When this was written they were not fixable from here without doing something worse: the one
+/// production entry point a test could reach the branch through is `begin_mutation`, and a
+/// `#[cfg(test)]` build then resolved the machine's REAL `%APPDATA%\Compy` root, so reaching it
+/// meant corrupting the owner's actual ledger, while `support_evidence::record` appended to the real
+/// support store. Since #665 an ordinary test process resolves a root of its own, ledger and support
+/// store alike, so that reason is gone — but nothing drives these branches yet, so they are still
+/// reported as UNVERIFIED rather than dressed up (the limitation PR #400 reported).
 #[cfg(test)]
 const ALLOWED_NESTING: &[(StoreLock, StoreLock)] = &[
     (StoreLock::Comparison, StoreLock::SupportEvidence),
@@ -592,14 +591,13 @@ pub(crate) fn held_now() -> Vec<StoreLock> {
 /// failure #395's review caught in a different guard and it is not worth repeating.
 ///
 /// They do NOT drive `start_experiment`/`conclude_experiment`/`restore_experiment`, and the reason
-/// is a hard constraint rather than a shortcut. In a `#[cfg(test)]` build
-/// `data_root::mutation_root()` resolves to the machine's REAL `%APPDATA%\Compy` root; every one of
-/// those commands enters `history::apply_recommendation` or `history::rollback_change`, which read
-/// the owner's real ledger, mutate real Windows state on the success branch, and call
-/// `record_operation_failure` — a real write to the real support store — on the failure branch.
-/// There is no seam that lets a test walk that call chain without touching the owner's data, and
-/// manufacturing one would be a larger and riskier change to the mutation boundary than #398 is
-/// allowed to make.
+/// is a hard constraint rather than a shortcut. Every one of those commands enters
+/// `history::apply_recommendation` or `history::rollback_change`, which mutate real Windows state on
+/// the success branch. (When #398 landed, a `#[cfg(test)]` build also read and wrote the owner's real
+/// ledger and support store there; since #665 an ordinary test process uses a root of its own, but
+/// the Windows mutation is unchanged.) There is no seam that lets a test walk that call chain
+/// without changing the machine, and manufacturing one would be a larger and riskier change to the
+/// mutation boundary than #398 is allowed to make.
 ///
 /// So the claim is split in two, each half checked by something that can actually fail:
 ///
@@ -701,10 +699,11 @@ mod production_nesting_tests {
     ///
     /// **`benchmark::state_cache` is deliberately NOT driven here, and that is a real gap, not an
     /// oversight.** Its `OnceLock` hydrates from `load_store()` on first access, which calls
-    /// `compy_data_dir()`, which in turn can run `migrate_legacy_data_once` — a recursive COPY of
-    /// the owner's entire pre-rename `%APPDATA%\Sentinel` into `%APPDATA%\Compy`. Taking that lock
-    /// from a test would reach into the owner's real data to manufacture a green tick, which is
-    /// exactly what this lane is forbidden to do. The lock IS instrumented at all five sites and the
+    /// `compy_data_dir()`, which in turn can run `migrate_legacy_data_once` — when this was written,
+    /// a recursive COPY of the owner's entire pre-rename `%APPDATA%\Sentinel` into `%APPDATA%\Compy`,
+    /// i.e. reaching into the owner's real data to manufacture a green tick. Since #665 an ordinary
+    /// test process resolves a fresh root of its own, so that reason is gone, but this test still does
+    /// not take the lock. The lock IS instrumented at all five sites and the
     /// census in `scripts/store-lock-order-guard.test.mjs` fails if a sixth appears unrecorded; what
     /// is NOT proven at runtime is that those records fire. Recorded as UNVERIFIED COVERAGE.
     #[test]

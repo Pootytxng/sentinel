@@ -1528,7 +1528,7 @@ mod batch_apply_tests {
     #[test]
     fn elevation_failure_skips_every_deferred_item_honestly() {
         let _force = ForceElevationError::begin();
-        let before = load_history().expect("real ledger readable");
+        let before = load_history().expect("test ledger readable");
         let before_ids: std::collections::HashSet<String> =
             before.iter().map(|c| c.id.clone()).collect();
         let report = apply_recommendations_batch(vec![
@@ -1547,7 +1547,7 @@ mod batch_apply_tests {
             );
         }
         // Fail-safe: no NEW ledger entry for either elevated item.
-        let after = load_history().expect("real ledger readable");
+        let after = load_history().expect("test ledger readable");
         let new_count = after.iter().filter(|c| !before_ids.contains(&c.id)).count();
         assert_eq!(new_count, 0, "a cancelled elevation must ledger nothing");
     }
@@ -1620,6 +1620,7 @@ mod manual_elevation_qa {
     #[test]
     #[ignore = "manual §4 elevation QA — real UAC; click YES twice"]
     fn manual_qa_batch_one_prompt_receipts_and_per_item_rollback() {
+        crate::data_root::require_ignored_only_run();
         let before = load_history().expect("ledger readable").len();
         let report = apply_recommendations_batch(vec![
             qa_item("fast-startup-off", "QA · Disable Fast Startup"),
@@ -1673,6 +1674,7 @@ mod manual_elevation_qa {
     #[test]
     #[ignore = "manual §4 elevation QA — real UAC; click NO (cancel)"]
     fn manual_qa_uac_cancel_is_honest_per_item() {
+        crate::data_root::require_ignored_only_run();
         let before = load_history().expect("ledger readable").len();
         let report = apply_recommendations_batch(vec![
             qa_item("game-bar-disable", "QA · Game Bar off"), // non-elevated (HKCU)
@@ -1775,6 +1777,7 @@ mod manual_restore_qa {
     #[test]
     #[ignore = "manual leftovers-restore QA — real UAC; click YES on all 4 prompts"]
     fn manual_restore_qa_w32ps_full_loop() {
+        crate::data_root::require_ignored_only_run();
         let _qa = crate::leftovers::QaRestoreGateBypass::begin();
         // Run elevated commands under cargo test (Wave-0 seam) — without this the self-helper
         // relaunches the TEST binary elevated, which exits 101 (caught live 2026-07-16).
@@ -1840,6 +1843,7 @@ mod manual_restore_qa {
     #[test]
     #[ignore = "manual leftovers-restore QA — real UAC; click YES on all 4 prompts"]
     fn manual_restore_qa_mpo_full_loop() {
+        crate::data_root::require_ignored_only_run();
         let _qa = crate::leftovers::QaRestoreGateBypass::begin();
         let _direct = crate::actions::ForceDirectElevation::begin(); // Wave-0 seam (see w32ps loop)
         let original = read_overlay_test_mode();
@@ -1905,6 +1909,7 @@ mod manual_restore_qa {
     #[test]
     #[ignore = "manual leftovers-restore QA — real UAC ×6; OWNER FIXTURE SANCTION REQUIRED (toggles memory compression)"]
     fn manual_restore_qa_memcompress_full_loop() {
+        crate::data_root::require_ignored_only_run();
         let (state, needs_admin) = crate::leftovers::read_memory_compression_probe();
         assert!(
             state.is_none() && needs_admin,
@@ -1995,7 +2000,7 @@ mod leftover_restore_tests {
         // (W32PS — non-elevated HKLM read, succeeds on any rig) and reaches the elevation seam;
         // a forced decline there must leave ZERO receipt. No real prompt, no mutation.
         let _force = ForceElevationError::begin();
-        let before = load_history().expect("real ledger readable").len();
+        let before = load_history().expect("test ledger readable").len();
         let err = restore_leftover("win32-priority-separation", "armed decline test")
             .err()
             .expect("forced elevation decline");
@@ -2013,13 +2018,45 @@ mod leftover_restore_tests {
         // ever ran before the id check, this test declines instead of prompting.
         assert!(crate::leftovers::restore_gate(), "the production gate ships ARMED");
         let _force = ForceElevationError::begin();
-        let before = load_history().expect("real ledger readable").len();
+        let before = load_history().expect("test ledger readable").len();
         let err = restore_leftover("totally-unknown-id", "unknown id test")
             .err()
             .expect("unknown ids must refuse");
         assert!(err.contains("no restore resolver exists"), "loud allowlist refusal: {err}");
         let after = load_history().expect("readable").len();
         assert_eq!(before, after, "an unknown-id refusal must never write a receipt");
+    }
+
+    /// #665 — a refused gateway call still runs `begin_mutation`'s write-ahead canary (production
+    /// order, unchanged), and in a test build that canary must land in this process's own test
+    /// root. Before #665 it re-saved the user's real `%APPDATA%\Compy\history.json` while the
+    /// receipt-count assertions above stayed green, because a content-identical save adds nothing.
+    #[test]
+    fn a_refused_gateway_call_writes_its_canary_only_into_the_test_root() {
+        let _force = ForceElevationError::begin();
+        let before = load_history().expect("test ledger readable").len();
+        let err = restore_leftover("totally-unknown-id", "#665 canary-root guard")
+            .err()
+            .expect("unknown ids must refuse");
+        assert!(err.contains("no restore resolver exists"), "loud allowlist refusal: {err}");
+
+        let ledger = history_path();
+        assert!(ledger.exists(), "the canary must still run before the refusal: {ledger:?}");
+        assert!(
+            ledger.starts_with(std::env::temp_dir()),
+            "the canary rewrote a ledger outside the temp dir: {ledger:?}"
+        );
+        let owner = ledger
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::file_name)
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        assert!(
+            owner.starts_with(&format!("{}-", std::process::id())),
+            "the canary rewrote a ledger this process does not own: {ledger:?}"
+        );
+        assert_eq!(load_history().expect("readable").len(), before, "a refusal writes no receipt");
     }
 
     // ── Memcompress elevated-prior-read (2026-06-12, dark) — the adversarial set ──────────────
@@ -2194,7 +2231,7 @@ mod leftover_restore_tests {
         // the invariant that holds across all of them, and keep the admission proof by requiring at
         // least one resolver to actually reach the seam.
         let _force = ForceElevationError::begin();
-        let before = load_history().expect("real ledger readable").len();
+        let before = load_history().expect("test ledger readable").len();
         let mut reached_elevation = 0;
         for id in ["mpo-disabled", "core-parking-forced", "tcp-autotuning-off"] {
             let err = restore_leftover(id, "armed decline test")
@@ -2228,7 +2265,7 @@ mod leftover_restore_tests {
         // any elevation is reachable. If someone ever wires a resolver for these ids, this test
         // is the tripwire that forces a deliberate owner decision.
         let _force = ForceElevationError::begin();
-        let before = load_history().expect("real ledger readable").len();
+        let before = load_history().expect("test ledger readable").len();
         for id in ["bcdedit-timer-flags", "defender-policy-off"] {
             let err = restore_leftover(id, "excluded id test")
                 .err()
@@ -2310,7 +2347,7 @@ mod leftover_restore_tests {
         // decline stops it. Whichever this rig hits, the pinned invariant is the same:
         // NO receipt without a mutation.
         let _force = ForceElevationError::begin();
-        let before = load_history().expect("real ledger readable").len();
+        let before = load_history().expect("test ledger readable").len();
         let err = restore_leftover("pagefile-fixed", "armed decline test")
             .err()
             .expect("declined or honestly refused");
