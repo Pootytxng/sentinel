@@ -586,6 +586,18 @@ describe.each(LOCALES)("unknown FPS on the bench, Care, Tuning and Home never re
       ungraded(lowNum(c.querySelector(low)));
       expect(text(c.querySelector(avg)).replace(text(c.querySelector(unit)), "")).toBe("244");
     });
+
+    // The trend under the strip is a measurement too: an unmeasured session is no point on it.
+    it.each(cases)("sparkline: an unknown average (%s) is not plotted", (_label, v) => {
+      const c = mountFace(Face, [
+        sess({ started_at: "2026-07-17T01:00:00Z", avg_fps: 140 }),
+        sess({ started_at: "2026-07-17T02:00:00Z", avg_fps: v }),
+        sess({ started_at: "2026-07-17T03:00:00Z", avg_fps: 150 }),
+      ]).container;
+      const pts = c.querySelector(".ds-spark polyline")?.getAttribute("points") ?? "";
+      expect(pts.trim().split(/\s+/)).toHaveLength(2);
+      expect(pts).not.toMatch(/NaN|Infinity/);
+    });
   });
 
   // ── Home interview: the session it quotes as evidence ──

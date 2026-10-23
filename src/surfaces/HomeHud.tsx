@@ -10,6 +10,7 @@ import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
 import { LedgerHealthNotice, knownIncomplete, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { Sparkline } from "../design/Sparkline";
+import { knownFps } from "../lib/session-metrics";
 import { useReducedMotion } from "../design/use-motion";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
@@ -335,8 +336,9 @@ export function HomeHud({
     () =>
       [...sessions]
         .sort((a, b) => a.started_at.localeCompare(b.started_at))
-        .slice(-12)
-        .map((s) => s.avg_fps),
+        .map((s) => knownFps(s.avg_fps))
+        .filter((v): v is number => v !== null)
+        .slice(-12),
     [sessions],
   );
 
