@@ -105,12 +105,14 @@ adding another isolated tweak.
   or set back), and a start is refused up front when they already aren't; an interrupted start
   with an unreadable history is a loud record, never a hidden one; a not-comparable row gives its
   own reason.
-  All three lanes landed via PR #611 (`416a45de`, 2026-09-30). **Remaining:** owner-rig live proof
-  on `game-bar-disable`, including a kill mid-start then relaunch. Blocked on this rig: every rec is
-  already configured (`game-bar-disable` too), and recording needs an owner UAC click. The 5 applied
-  rows with no read-back that blocked every start now read back (#620); their live read on this rig
-  is unproven.
-
+  All three lanes landed via PR #611 (`416a45de`, 2026-09-30); the #620 read-back via PR #686 (`9470b437`).
+  **First owner-rig live Trial: 2026-10-23, desk build `9470b437`.** Candidate `visual-effects` (rolled back through
+  Compy first so it was un-applied; `game-bar-disable` is never offered on this rig, cause UNKNOWN, open). Baseline
+  WARDOGS 1202 s, avg 244.1 / 1% low 153.5; start accepted (the #620 rows no longer refuse it); after-session
+  1125 s, avg 203.5 / 1% low 125.1; verdict **"Slower — restored" (−18.5% 1% low)**, restore read back as Windows
+  default (`VisualFXSetting=0`). The scene changed between sessions (AFK, new round), so the verdict is noise, not a
+  finding; the proof is the lifecycle: start → apply → measure → judge → restore. **Remaining for Phase 3 exit:** the
+  kill-mid-start-then-relaunch check.
 ---
 
 ## P4 — Roadmap Phase 4/5: Optimization Engine + guided journey
