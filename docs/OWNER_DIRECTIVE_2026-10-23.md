@@ -46,7 +46,8 @@ tsc 0 errors, cargo 0 warnings, 29,714 tests passing. The problem is process, no
 
 1. Reconcile `docs/RELEASE_STATE.md` with the live desk build (`e9727c04`, installed 2026-10-20 from
    `claude/haul-609-20261016`) so `verify-release-state` is green.
-2. Run the Phase 3 live trial with the owner at the keyboard on the installed build (Roadmap Phase 3
+2. Land PR #686 (#620 read-back: the five applied rows that block every Trial start on the owner's
+   rig), desk-install it, then run the Phase 3 live trial with the owner at the keyboard (Roadmap Phase 3
    exit) and the four-screen agreement check (Phase 2 exit, #453). Record both in `BACKLOG.md`.
 3. Clear #672 before 2026-10-31.
 4. Triage: the 21 open product issues are the backlog; the 41 process-tagged issues are labelled

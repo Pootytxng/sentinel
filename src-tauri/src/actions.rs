@@ -2199,6 +2199,70 @@ pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
     }
 }
 
+/// Read-only, non-elevated, ONE PowerShell spawn: `path<TAB>name<TAB>state` for every task at every
+/// allowlisted task path. The ledger's live re-check (#620) reads it once per History / Health pass and
+/// shares it across rows, so those UI-thread reads cost one spawn however many task rows there are.
+/// Paths are FIXED enum constants, guarded by ps_safe_squoted, inside '...'; each row echoes the loop's
+/// own path, so it compares exactly. None only when PowerShell can't be started.
+pub(crate) fn known_task_listing() -> Option<String> {
+    let mut paths: Vec<&str> =
+        [KnownBloatTask::CompatibilityAppraiser, KnownBloatTask::CeipConsolidator, KnownBloatTask::CeipUsb]
+            .iter()
+            .map(|t| t.path_and_name().0)
+            .collect();
+    paths.sort_unstable();
+    paths.dedup();
+    if paths.iter().any(|p| ps_safe_squoted(p).is_err()) {
+        return None;
+    }
+    let quoted: Vec<String> = paths.iter().map(|p| format!("'{p}'")).collect();
+    let out = quiet_command("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "foreach ($p in {}) {{ Get-ScheduledTask -TaskPath $p -ErrorAction SilentlyContinue | \
+                 ForEach-Object {{ $p + [char]9 + $_.TaskName + [char]9 + $_.State }} }}",
+                quoted.join(",")
+            ),
+        ])
+        .output()
+        .ok()?;
+    // Like `resolve_task_name`, the exit code is not the read: a path that fails prints no row, and
+    // its tasks then answer None.
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Pure: from a [`known_task_listing`], is `task` disabled? Only rows at the task's own path count;
+/// the name resolves by the same [`pick_task_name`] build-drift policy as every other task read.
+pub(crate) fn task_disabled_in_known_listing(listing: &str, task: &KnownBloatTask) -> Option<bool> {
+    let (path, base) = task.path_and_name();
+    let at_path: Vec<&str> = listing
+        .lines()
+        .filter_map(|l| l.split_once('\t'))
+        .filter(|(p, _)| *p == path)
+        .map(|(_, rest)| rest)
+        .collect();
+    task_disabled_in_listing(&at_path.join("\n"), base)
+}
+
+/// Pure: from `name<TAB>state` lines, is the task `base` resolves to disabled? Disabled → true;
+/// Ready / Running / Queued → false; an unknown state, or no task by that name, → None.
+fn task_disabled_in_listing(listing: &str, base: &str) -> Option<bool> {
+    let rows: Vec<(String, String)> = listing
+        .lines()
+        .filter_map(|l| l.split_once('\t'))
+        .map(|(n, s)| (n.trim().to_string(), s.trim().to_string()))
+        .collect();
+    let names: Vec<String> = rows.iter().map(|(n, _)| n.clone()).collect();
+    let name = pick_task_name(&names, base)?;
+    match rows.iter().find(|(n, _)| *n == name)?.1.as_str() {
+        "Disabled" => Some(true),
+        "Ready" | "Running" | "Queued" => Some(false),
+        _ => None,
+    }
+}
+
 /// Disable a curated telemetry scheduled task (elevated). Snapshots prior state first so rollback
 /// re-enables only what was enabled. Reads → ONE elevated command → return (batchable / exit-free).
 pub(crate) fn apply_disable_scheduled_task(task: KnownBloatTask) -> Result<ApplyResult, String> {
@@ -2778,6 +2842,66 @@ mod bloat_task_tests {
     #[test]
     fn rollback_is_noop_when_prior_disabled() {
         assert!(rollback_enable_scheduled_task_typed(&KnownBloatTask::CeipUsb, "Disabled").is_ok());
+    }
+
+    // #620: the ledger's one-spawn live read of a bloat task. Same build-drift policy as the apply
+    // path's reader; only the four states Windows reports have an answer.
+    #[test]
+    fn a_task_listing_reads_disabled_only_for_a_known_state_of_the_resolved_task() {
+        let base = "Microsoft Compatibility Appraiser";
+        let listing = "MareBackup\tReady\r\nMicrosoft Compatibility Appraiser Exp\tDisabled\r\nStartupAppTask\tReady\r\n";
+        assert_eq!(task_disabled_in_listing(listing, base), Some(true), "build-drift name resolves");
+        let exact = "Microsoft Compatibility Appraiser\tReady\nMicrosoft Compatibility Appraiser Exp\tDisabled\n";
+        assert_eq!(task_disabled_in_listing(exact, base), Some(false), "an exact name wins over a prefix");
+        for state in ["Running", "Queued"] {
+            assert_eq!(task_disabled_in_listing(&format!("{base}\t{state}"), base), Some(false), "{state}");
+        }
+        assert_eq!(task_disabled_in_listing(&format!("{base}\tUnknown"), base), None, "unknown state");
+        assert_eq!(task_disabled_in_listing(&format!("{base}\t"), base), None, "no state");
+        assert_eq!(task_disabled_in_listing("Consolidator\tDisabled", base), None, "task absent");
+        assert_eq!(task_disabled_in_listing("", base), None, "nothing listed");
+        assert_eq!(task_disabled_in_listing(base, base), None, "a line with no state column");
+    }
+
+    #[test]
+    fn the_shared_listing_reads_each_task_only_at_its_own_path() {
+        let ae = "\\Microsoft\\Windows\\Application Experience\\";
+        let ceip = "\\Microsoft\\Windows\\Customer Experience Improvement Program\\";
+        let listing = format!(
+            "{ae}\tMicrosoft Compatibility Appraiser Exp\tDisabled\r\n{ceip}\tConsolidator\tReady\r\n{ceip}\tUsbCeip\tDisabled\r\n"
+        );
+        assert_eq!(task_disabled_in_known_listing(&listing, &KnownBloatTask::CompatibilityAppraiser), Some(true));
+        assert_eq!(task_disabled_in_known_listing(&listing, &KnownBloatTask::CeipConsolidator), Some(false));
+        assert_eq!(task_disabled_in_known_listing(&listing, &KnownBloatTask::CeipUsb), Some(true));
+        let elsewhere = format!("\\Somewhere\\Else\\\tUsbCeip\tDisabled\n{ae}\tUsbCeip\tDisabled\n");
+        assert_eq!(task_disabled_in_known_listing(&elsewhere, &KnownBloatTask::CeipUsb), None, "a same-named task at another path");
+        assert_eq!(task_disabled_in_known_listing("", &KnownBloatTask::CeipUsb), None, "nothing listed");
+    }
+
+    /// The one-spawn listing (#620) against a REAL, non-elevated powershell.exe: the script parses and
+    /// runs, and every row it prints is `path<TAB>name<TAB>state` at an allowlisted path. A broken
+    /// script prints nothing, which would read every task row as unreadable, so an empty listing fails
+    /// here. Both allowlisted folders ship with Windows, and each holds more than the curated tasks.
+    #[test]
+    fn real_powershell_lists_the_known_task_paths() {
+        let listing = known_task_listing().expect("powershell starts");
+        let known: Vec<&str> =
+            [KnownBloatTask::CompatibilityAppraiser, KnownBloatTask::CeipConsolidator, KnownBloatTask::CeipUsb]
+                .iter()
+                .map(|t| t.path_and_name().0)
+                .collect();
+        let rows: Vec<&str> = listing.lines().filter(|l| !l.trim().is_empty()).collect();
+        assert!(!rows.is_empty(), "the listing printed no task at any allowlisted path: {listing:?}");
+        for row in rows {
+            let cols: Vec<&str> = row.trim_end().split('\t').collect();
+            assert_eq!(cols.len(), 3, "a row is path, name and state: {row:?}");
+            assert!(known.contains(&cols[0]), "a row names an allowlisted path: {row:?}");
+            assert!(!cols[1].is_empty(), "a row names its task: {row:?}");
+            assert!(
+                ["Ready", "Disabled", "Running", "Queued", "Unknown"].contains(&cols[2]),
+                "a row's state is a ScheduledTask state name: {row:?}"
+            );
+        }
     }
 
     #[test]
@@ -3735,6 +3859,21 @@ pub(crate) fn compose_startup_approval_bytes(prior: Option<&[u8]>, enabled: bool
     }
     bytes[0] = flag;
     bytes
+}
+
+/// Pure, the reader's half of the byte meaning [`compose_startup_approval_bytes`] writes: does this
+/// StartupApproved\Run value say the entry may start? Only a REG_BINARY value whose byte 0 is one of
+/// the two flags Compy writes has an answer; any other type or byte is None, never a guess. An
+/// ABSENT value is the caller's case (Windows' default, enabled), not this one's.
+pub(crate) fn startup_approval_enabled(value: &winreg::RegValue) -> Option<bool> {
+    if value.vtype != winreg::enums::RegType::REG_BINARY {
+        return None;
+    }
+    match value.bytes.first() {
+        Some(&STARTUP_APPROVAL_ENABLED) => Some(true),
+        Some(&STARTUP_APPROVAL_DISABLED) => Some(false),
+        _ => None,
+    }
 }
 
 /// Explicit, dependency-free reverse map for the registry value type we captured. Anything we did
@@ -5828,5 +5967,42 @@ mod startup_approval_tests {
             &Snapshot::HwSchMode { prior: Some(1) },
         );
         assert!(err.is_err(), "a contract mismatch must never perform a rollback");
+    }
+
+    fn binary(bytes: Vec<u8>) -> winreg::RegValue {
+        winreg::RegValue { bytes, vtype: winreg::enums::RegType::REG_BINARY }
+    }
+
+    // #620: the ledger's live re-check reads a startup toggle back with the same byte meaning the
+    // writer used. Whatever the writer composes, from any prior, reads back as the direction written.
+    #[test]
+    fn whatever_the_writer_composes_the_reader_reads_back_as_the_direction_written() {
+        let mut enabled_prior = PRIOR_WITH_TIMESTAMP;
+        enabled_prior[0] = 0x02;
+        let priors: [Option<&[u8]>; 5] =
+            [None, Some(&[]), Some(&[0x03, 0x77]), Some(&PRIOR_WITH_TIMESTAMP), Some(&enabled_prior)];
+        for prior in priors {
+            for enabled in [true, false] {
+                let written = compose_startup_approval_bytes(prior, enabled);
+                assert_eq!(
+                    startup_approval_enabled(&binary(written)),
+                    Some(enabled),
+                    "prior {prior:?}, written enabled={enabled}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_unknown_byte_or_type_reads_as_unknown_never_as_a_guess() {
+        // Windows' own bytes, as literals: the round trip above shares the writer's constants, so a
+        // swapped 0x02/0x03 would pass it.
+        assert_eq!(startup_approval_enabled(&binary(vec![0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])), Some(true));
+        assert_eq!(startup_approval_enabled(&binary(vec![0x03, 0, 0, 0, 0xAB, 0xCD, 0, 0, 0, 0, 0, 0])), Some(false));
+        assert_eq!(startup_approval_enabled(&binary(vec![0x06, 0, 0, 0])), None, "unknown flag byte");
+        assert_eq!(startup_approval_enabled(&binary(vec![0x00; 12])), None, "zero flag byte");
+        assert_eq!(startup_approval_enabled(&binary(Vec::new())), None, "empty value");
+        let dword = winreg::RegValue { bytes: vec![0x02, 0, 0, 0], vtype: winreg::enums::RegType::REG_DWORD };
+        assert_eq!(startup_approval_enabled(&dword), None, "right byte, wrong type");
     }
 }

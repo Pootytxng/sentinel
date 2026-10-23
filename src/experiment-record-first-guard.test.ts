@@ -350,7 +350,7 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
 
   it("§3 at start: a Trial that could only end unjudged is refused before anything is recorded or applied", () => {
     const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
-    const count = start.indexOf("unverified_other_changes(rows, &rec_id, read_back)");
+    const count = start.indexOf("unverified_other_changes(rows, &rec_id, |other| read_back(changes, other))");
     const refuse = start.indexOf("unverified_start_refusal(unverified)");
     expect(count, "the start no longer counts other settings it can't read back").toBeGreaterThanOrEqual(0);
     expect(refuse, "the start no longer refuses on them").toBeGreaterThan(count);
@@ -364,10 +364,32 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
   it("the setting under test is never counted as another setting, at the start or the conclude", () => {
     const count = fnBody(EXPERIMENT, "pub(crate) fn unverified_other_changes(");
     expect(count, "the count excludes only this Trial's change row again").toContain("c.rec_id != own_rec");
-    expect(fnBody(EXPERIMENT, "pub(crate) fn start_experiment(")).toContain("unverified_other_changes(rows, &rec_id, read_back)");
+    expect(fnBody(EXPERIMENT, "pub(crate) fn start_experiment(")).toContain("unverified_other_changes(rows, &rec_id, |other| read_back(changes, other))");
     expect(fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(")).toContain(
-      "unverified_other_changes(rows, &rec.rec_id, read_back)",
+      "unverified_other_changes(rows, &rec.rec_id, |other| read_back(changes, other))",
     );
+  });
+
+  // #620: startup toggles, telemetry-task disables and session suspends have no catalog read, so a
+  // read of the catalog alone counted them unverified and refused every Trial start on the owner's rig.
+  it("other settings are read back through their own ledger row, not the catalog alone", () => {
+    expect(fnBody(EXPERIMENT, "fn read_back(")).toContain(
+      "target_verification(Some(crate::history::probe_applied_setting(changes, rec_id)))",
+    );
+    const check = fnBody(HISTORY, "fn check_change_state(");
+    for (const prefix of ['"startup-entry:"', '"bloat-task:"', '"service-suspend:"']) {
+      expect(check, `${prefix} rows lost their live read`).toContain(prefix);
+    }
+  });
+
+  // #620 review: one PowerShell spawn per task row, on the UI thread, froze History for each row.
+  it("a History or Health pass shares one set of live reads across its rows", () => {
+    const views = fnBody(HISTORY, "pub(crate) fn applied_change_views(");
+    expect(views).toContain("let reads = LiveReads::default();");
+    expect(views).toContain("into_view_with(c, &reads)");
+    const summary = fnBody(HISTORY, "fn summarize_history(");
+    expect(summary).toContain("let reads = LiveReads::default();");
+    expect(summary).toContain("check_change_active(c, &reads)");
   });
 
   it("launch diagnostics never call a closed interrupted start unresolved or Pending", () => {

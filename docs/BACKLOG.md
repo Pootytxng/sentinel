@@ -107,8 +107,9 @@ adding another isolated tweak.
   own reason.
   All three lanes landed via PR #611 (`416a45de`, 2026-09-30). **Remaining:** owner-rig live proof
   on `game-bar-disable`, including a kill mid-start then relaunch. Blocked on this rig: every rec is
-  already configured (`game-bar-disable` too), 5 applied rows with no read-back block every start
-  (#620), and recording needs an owner UAC click.
+  already configured (`game-bar-disable` too), and recording needs an owner UAC click. The 5 applied
+  rows with no read-back that blocked every start now read back (#620); their live read on this rig
+  is unproven.
 
 ---
 

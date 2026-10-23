@@ -22,7 +22,7 @@ use crate::{
     current_power_plan_name, eee_disabled_on_any_eligible_adapter, fast_startup_state_checked,
     game_bar_disabled, game_mode_enabled, hags_state_checked, mouse_accel_disabled,
     nagle_disabled_on_any_nic, pcie_aspm_off_on_ac_checked, reserved_storage_enabled_checked,
-    service_running_checked, usb_selective_suspend_off_on_ac_checked,
+    service_running_checked, startup_approval_value, usb_selective_suspend_off_on_ac_checked,
     visual_effects_for_best_performance,
 };
 
@@ -218,8 +218,110 @@ impl ActiveCheck {
     }
 }
 
-fn check_change_state(c: &AppliedChange) -> ActiveCheck {
+/// The live re-check of one ledger row (#620). Three kinds of row carry what to read in their typed
+/// action, not in a catalog rec id: a startup-app toggle (which way Compy flipped it), a bloat-task
+/// disable and a session service suspend (which task or service). Each reads only when its typed
+/// action agrees with its rec id, and is `Unrecognised` otherwise; every other row is
+/// [`probe_rec_target`]. Read-only, and takes no lock.
+fn check_change_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
+    let action = c.applied_action.as_ref();
+    if let Some(name) = c.rec_id.strip_prefix("startup-entry:") {
+        return startup_row_check(name, action, startup_approval_value);
+    }
+    if let Some(id) = c.rec_id.strip_prefix("bloat-task:") {
+        return task_row_check(id, action, |task| reads.task_disabled(task));
+    }
+    if let Some(svc) = c.rec_id.strip_prefix("service-suspend:") {
+        return service_row_check(svc, action, |s| service_running_checked(s.name()));
+    }
     probe_rec_target(&c.rec_id)
+}
+
+/// One pass's shared live reads (#620): every task row of a History, Health or Machine Model pass
+/// reads one [`known_task_listing`], so that pass costs one PowerShell spawn on the UI thread instead
+/// of one per row. It lives only as long as the pass that made it; nothing is cached across passes, so
+/// no read can outlive a change applied or rolled back after it.
+struct LiveReads {
+    list_tasks: fn() -> Option<String>,
+    tasks: std::cell::OnceCell<Option<String>>,
+}
+
+impl Default for LiveReads {
+    fn default() -> Self {
+        LiveReads { list_tasks: known_task_listing, tasks: std::cell::OnceCell::new() }
+    }
+}
+
+impl LiveReads {
+    fn task_disabled(&self, task: &KnownBloatTask) -> Option<bool> {
+        let listing = self.tasks.get_or_init(self.list_tasks).as_deref()?;
+        task_disabled_in_known_listing(listing, task)
+    }
+}
+
+/// Pure: a bloat-task row's live re-check. `disabled` reads whether the task is disabled now, which
+/// is Compy's change in place; it is asked only about the task the rec id names.
+fn task_row_check(
+    id: &str,
+    action: Option<&AppliedAction>,
+    disabled: impl FnOnce(&KnownBloatTask) -> Option<bool>,
+) -> ActiveCheck {
+    match action {
+        Some(AppliedAction::DisableScheduledTask { task }) if KnownBloatTask::from_id(id).as_ref() == Some(task) => {
+            ActiveCheck::from_read(disabled(task))
+        }
+        _ => ActiveCheck::Unrecognised,
+    }
+}
+
+/// Pure: a session service-suspend row's live re-check. `running` reads whether the service runs
+/// now; a stopped service is Compy's suspend in place. Asked only about the service the rec id names.
+fn service_row_check(
+    svc: &str,
+    action: Option<&AppliedAction>,
+    running: impl FnOnce(&KnownService) -> Option<bool>,
+) -> ActiveCheck {
+    match action {
+        Some(AppliedAction::SuspendKnownService { service }) if KnownService::from_name(svc).as_ref() == Some(service) => {
+            ActiveCheck::from_read(running(service).map(|r| !r))
+        }
+        _ => ActiveCheck::Unrecognised,
+    }
+}
+
+/// Pure: a startup-app row's live re-check. The rec id `startup-entry:<name>` doesn't say which way
+/// Compy flipped the entry; the typed action does, so a row without one, or whose name disagrees with
+/// its rec id, is `Unrecognised`. `read` is the registry read: an absent value is Windows' default,
+/// enabled; a value [`startup_approval_enabled`] can't interpret, or a failed read, is `Unreadable`.
+/// `On` when the entry is in the state Compy set, `Off` when it isn't.
+fn startup_row_check(
+    name: &str,
+    action: Option<&AppliedAction>,
+    read: impl FnOnce(&str) -> std::io::Result<Option<winreg::RegValue>>,
+) -> ActiveCheck {
+    let Some(AppliedAction::SetStartupEntryEnabled { name: typed, enabled }) = action else {
+        return ActiveCheck::Unrecognised;
+    };
+    if typed != name {
+        return ActiveCheck::Unrecognised;
+    }
+    let now_enabled = match read(name) {
+        Ok(None) => Some(true),
+        Ok(Some(value)) => startup_approval_enabled(&value),
+        Err(_) => None,
+    };
+    ActiveCheck::from_read(now_enabled.map(|on| on == *enabled))
+}
+
+/// Read-only: the live re-check of the setting `rec_id` names, through its newest applied row in
+/// `changes` (the ledger's own re-check, so a startup-app toggle reads the direction Compy set), or
+/// [`probe_rec_target`] when none is applied. Reads the ledger it is given, so it takes no lock.
+pub(crate) fn probe_applied_setting(changes: &[AppliedChange], rec_id: &str) -> ActiveCheck {
+    changes
+        .iter()
+        .rev()
+        .find(|c| c.rec_id == rec_id && c.status == "applied")
+        .map_or_else(|| probe_rec_target(rec_id), |c| check_change_state(c, &LiveReads::default()))
 }
 
 /// Read-only: does the live machine read as being in `rec_id`'s TARGET state right now? The same
@@ -255,8 +357,8 @@ pub(crate) fn probe_rec_target(rec_id: &str) -> ActiveCheck {
     }
 }
 
-fn check_change_active(c: &AppliedChange) -> bool {
-    check_change_state(c).legacy_active()
+fn check_change_active(c: &AppliedChange, reads: &LiveReads) -> bool {
+    check_change_state(c, reads).legacy_active()
 }
 
 /// Read-only enrichment (computed-at-read, never persisted): the "after" state Compy's change set
@@ -354,7 +456,12 @@ fn same_rig(stamp: &crate::hardware::HwFingerprint, now: &crate::hardware::HwFin
 }
 
 fn into_view(c: AppliedChange) -> AppliedChangeView {
-    let active_check = (c.status == "applied").then(|| check_change_state(&c));
+    into_view_with(c, &LiveReads::default())
+}
+
+/// [`into_view`] inside a pass that shares its [`LiveReads`] across rows.
+fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
+    let active_check = (c.status == "applied").then(|| check_change_state(&c, reads));
     let is_still_active = active_check.is_some_and(ActiveCheck::legacy_active);
     let restores_label = restores_label_from_snapshot(&c.snapshot);
     let applied_label = applied_label_from_action(&c.applied_action);
@@ -399,7 +506,8 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
 /// derivations keep exactly one definition. Callers that own their rows should keep using
 /// `get_applied_changes`; this borrows so the raw rows survive for the caller's other projections.
 pub(crate) fn applied_change_views(history: &[AppliedChange]) -> Vec<AppliedChangeView> {
-    history.iter().cloned().map(into_view).collect()
+    let reads = LiveReads::default();
+    history.iter().cloned().map(|c| into_view_with(c, &reads)).collect()
 }
 
 /// Test-only constructor for a ledger VIEW with the computed-at-read fields set directly, so a
@@ -1335,12 +1443,13 @@ fn summarize_history(history: &[AppliedChange]) -> AppliedChangesSummary {
         latest.insert(c.rec_id.as_str(), i); // later entries overwrite earlier → newest wins
     }
     let mut s = AppliedChangesSummary::default();
+    let reads = LiveReads::default();
     for &i in latest.values() {
         let c = &history[i];
         s.total += 1;
         if c.status == "rolled_back" {
             s.rolled_back += 1;
-        } else if check_change_active(c) {
+        } else if check_change_active(c, &reads) {
             s.active += 1;
         } else {
             s.externally_reverted += 1;
@@ -3136,5 +3245,142 @@ mod ledger_fuzz_tests {
             2
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
+// #620: the ledger's live re-check reads three kinds of row through their typed action. Every read
+// here is injected or KEY_READ-only on a value name no machine has, so nothing writes.
+#[cfg(test)]
+mod row_probe_tests {
+    use super::*;
+
+    fn row(rec_id: &str, status: &str, action: Option<AppliedAction>) -> AppliedChange {
+        let mut c: AppliedChange = serde_json::from_value(serde_json::json!({
+            "id": rec_id, "rec_id": rec_id, "rec_title": "t",
+            "applied_at": "2026-10-21T09:00:00+00:00", "snapshot": {}, "status": status
+        }))
+        .expect("a ledger row");
+        c.applied_action = action;
+        c
+    }
+
+    fn toggle(name: &str, enabled: bool) -> Option<AppliedAction> {
+        Some(AppliedAction::SetStartupEntryEnabled { name: name.into(), enabled })
+    }
+
+    fn approval(flag: u8) -> std::io::Result<Option<winreg::RegValue>> {
+        Ok(Some(winreg::RegValue {
+            bytes: vec![flag, 0, 0, 0, 0xAB, 0xCD, 0xEF, 0x12, 0, 0, 0, 0],
+            vtype: winreg::enums::RegType::REG_BINARY,
+        }))
+    }
+
+    fn unreadable() -> std::io::Result<Option<winreg::RegValue>> {
+        Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+    }
+
+    #[test]
+    fn a_startup_row_reads_on_off_and_unreadable_in_both_directions() {
+        use ActiveCheck::*;
+        for (enabled, in_place, set_back) in [(false, 0x03, 0x02), (true, 0x02, 0x03)] {
+            let action = toggle("App", enabled);
+            assert_eq!(startup_row_check("App", action.as_ref(), |_| approval(in_place)), On, "enabled={enabled}");
+            assert_eq!(startup_row_check("App", action.as_ref(), |_| approval(set_back)), Off, "enabled={enabled}");
+            assert_eq!(startup_row_check("App", action.as_ref(), |_| unreadable()), Unreadable, "enabled={enabled}");
+            assert_eq!(startup_row_check("App", action.as_ref(), |_| approval(0x07)), Unreadable, "unknown byte");
+            let dword = winreg::RegValue { bytes: vec![0x02, 0, 0, 0], vtype: winreg::enums::RegType::REG_DWORD };
+            assert_eq!(startup_row_check("App", action.as_ref(), |_| Ok(Some(dword))), Unreadable, "unknown type");
+        }
+    }
+
+    #[test]
+    fn a_startup_entry_whose_value_is_gone_reads_as_windows_default_enabled() {
+        let gone = |_: &str| Ok(None);
+        assert_eq!(startup_row_check("App", toggle("App", false).as_ref(), gone), ActiveCheck::Off, "a disable is set back");
+        assert_eq!(startup_row_check("App", toggle("App", true).as_ref(), gone), ActiveCheck::On, "an enable is in place");
+        // The real read, KEY_READ only, of a value name no machine has.
+        let rec = "startup-entry:compy-620-row-probe-absent-entry";
+        let name = &rec["startup-entry:".len()..];
+        let reads = LiveReads::default();
+        assert_eq!(check_change_state(&row(rec, "applied", toggle(name, true)), &reads), ActiveCheck::On);
+        assert_eq!(check_change_state(&row(rec, "applied", toggle(name, false)), &reads), ActiveCheck::Off);
+    }
+
+    #[test]
+    fn a_row_without_a_matching_typed_action_is_unrecognised_and_reads_nothing() {
+        let never = |_: &str| -> std::io::Result<Option<winreg::RegValue>> { panic!("must not read") };
+        assert_eq!(startup_row_check("App", None, never), ActiveCheck::Unrecognised, "no typed action");
+        assert_eq!(startup_row_check("App", toggle("Other", true).as_ref(), never), ActiveCheck::Unrecognised, "name disagrees");
+        let other = Some(AppliedAction::DisableGameBarAndDvr);
+        assert_eq!(startup_row_check("App", other.as_ref(), never), ActiveCheck::Unrecognised, "another action");
+        // The task and service rows read only the task or service their rec id names.
+        let task = |t| Some(AppliedAction::DisableScheduledTask { task: t });
+        for c in [
+            row("bloat-task:ceip-usb", "applied", None),
+            row("bloat-task:ceip-usb", "applied", task(KnownBloatTask::CompatibilityAppraiser)),
+            row("bloat-task:not-a-task", "applied", task(KnownBloatTask::CeipUsb)),
+            row("service-suspend:WSearch", "applied", None),
+            row("service-suspend:WSearch", "applied", Some(AppliedAction::SuspendKnownService { service: KnownService::SysMain })),
+            row("service-suspend:WSearch", "applied", Some(AppliedAction::DisableKnownService { service: KnownService::WSearch })),
+        ] {
+            assert_eq!(check_change_state(&c, &LiveReads::default()), ActiveCheck::Unrecognised, "{} {:?}", c.rec_id, c.applied_action);
+        }
+    }
+
+    #[test]
+    fn a_task_or_service_row_reads_on_off_and_unreadable_through_its_own_read() {
+        use ActiveCheck::*;
+        let task = Some(AppliedAction::DisableScheduledTask { task: KnownBloatTask::CeipUsb });
+        for (disabled, want) in [(Some(true), On), (Some(false), Off), (None, Unreadable)] {
+            assert_eq!(task_row_check("ceip-usb", task.as_ref(), |_| disabled), want, "disabled={disabled:?}");
+        }
+        // A suspend is in place while the service is NOT running.
+        let svc = Some(AppliedAction::SuspendKnownService { service: KnownService::WSearch });
+        for (running, want) in [(Some(false), On), (Some(true), Off), (None, Unreadable)] {
+            assert_eq!(service_row_check("WSearch", svc.as_ref(), |_| running), want, "running={running:?}");
+        }
+        assert_eq!(task_row_check("ceip-usb", None, |_| panic!("must not read")), Unrecognised);
+        assert_eq!(service_row_check("SysMain", svc.as_ref(), |_| panic!("must not read")), Unrecognised);
+    }
+
+    // #620 review: each task row spawned its own PowerShell on the UI thread, so a ledger with four
+    // task rows froze History for four spawns. A pass now lists the tasks once for all of them.
+    #[test]
+    fn a_pass_lists_the_tasks_once_however_many_task_rows_it_reads() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static LISTINGS: AtomicUsize = AtomicUsize::new(0);
+        fn listing() -> Option<String> {
+            LISTINGS.fetch_add(1, Ordering::SeqCst);
+            Some(concat!(
+                "\\Microsoft\\Windows\\Customer Experience Improvement Program\\\tUsbCeip\tDisabled\n",
+                "\\Microsoft\\Windows\\Customer Experience Improvement Program\\\tConsolidator\tReady\n",
+            ).to_string())
+        }
+        let reads = LiveReads { list_tasks: listing, tasks: std::cell::OnceCell::new() };
+        let task = |t| Some(AppliedAction::DisableScheduledTask { task: t });
+        let rows = [
+            row("bloat-task:ceip-usb", "applied", task(KnownBloatTask::CeipUsb)),
+            row("bloat-task:ceip-usb", "applied", task(KnownBloatTask::CeipUsb)),
+            row("bloat-task:ceip-consolidator", "applied", task(KnownBloatTask::CeipConsolidator)),
+            row("bloat-task:compatibility-appraiser", "applied", task(KnownBloatTask::CompatibilityAppraiser)),
+        ];
+        let checks: Vec<ActiveCheck> = rows.iter().map(|c| check_change_state(c, &reads)).collect();
+        use ActiveCheck::*;
+        assert_eq!(checks, [On, On, Off, Unreadable], "the appraiser is not in the listing, so it reads unknown");
+        assert_eq!(LISTINGS.load(Ordering::SeqCst), 1, "one listing for the whole pass");
+    }
+
+    #[test]
+    fn a_setting_reads_through_its_newest_applied_row() {
+        let rec = "startup-entry:compy-620-newest-row-absent-entry";
+        let name = &rec["startup-entry:".len()..];
+        let changes = [
+            row(rec, "applied", toggle(name, false)),
+            row(rec, "applied", toggle(name, true)),
+            row(rec, "rolled_back", toggle(name, false)),
+        ];
+        assert_eq!(probe_applied_setting(&changes, rec), ActiveCheck::On, "the newest applied row is the enable");
+        assert_eq!(probe_applied_setting(&changes[..1], rec), ActiveCheck::Off);
+        assert_eq!(probe_applied_setting(&changes[2..], rec), ActiveCheck::Unrecognised, "no applied row: the rec id alone");
     }
 }
