@@ -7,6 +7,7 @@ import { Term } from "../design/Term";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKeyForLanguage, type GpuVendor } from "./walkthroughs";
 import { prettyGameName } from "./game-name";
+import { knownFps } from "../lib/session-metrics";
 import { TuningGuideBody } from "./TuningGuide";
 import { TuningVerdictCard } from "./TuningVerdict";
 import "../i18n";
@@ -20,7 +21,12 @@ import "./TuningInstrument.css";
 // honest-measurement module and passed in, so this can't drift from the Play debrief's verdict.
 
 function smoothness(s: SessionSummary, t: TFunction): string {
-  const ratio = s.avg_fps > 0 ? s.low1_fps_est / s.avg_fps : 1;
+  // A grade needs both readings (#671): an unmeasured average used to grade "smooth" and an
+  // unmeasured 1% low "rough", each a verdict about a frame rate nobody measured.
+  const avg = knownFps(s.avg_fps);
+  const low = knownFps(s.low1_fps_est);
+  if (avg == null || low == null) return t("blackbook.tuningInstrument.smoothness.notMeasured");
+  const ratio = low / avg;
   if (ratio >= 0.75) return t("blackbook.tuningInstrument.smoothness.smooth");
   if (ratio >= 0.55) return t("blackbook.tuningInstrument.smoothness.someDips");
   return t("blackbook.tuningInstrument.smoothness.rough");

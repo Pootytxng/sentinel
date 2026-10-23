@@ -9,6 +9,7 @@ import type { InEffectCounts } from "../data/machine-model";
 import { deriveSystemPosture } from "./system-posture";
 import { latestSession } from "./dashboard-data";
 import { prettyGameName } from "./game-name";
+import { knownFps } from "../lib/session-metrics";
 
 // (The former `signalRing`/`SignalRing` ratio widget was retired 2026-07-14 — orphaned after Home
 // stopped rendering the ring. It read raw attention_count/unknown_count instead of the dismissed-aware
@@ -78,13 +79,15 @@ export function postureLine(
 }
 
 // The "last session" live strip. Honest empty state when no sessions exist — never fake numbers.
+// A session whose FPS was not measured (the sampler's 0, a negative, a non-finite value or nothing)
+// hands its reading on as null, so the face shows "no reading" rather than the raw value (#671).
 export type LiveStrip =
   | { kind: "empty" }
   | {
       kind: "data";
       game: string;
-      avgFps: number;
-      low1Est: number;
+      avgFps: number | null;
+      low1Est: number | null;
       peakTempC: number | null;
       startedAt: string;
     };
@@ -95,8 +98,8 @@ export function liveStrip(sessions: SessionSummary[], t: TFunction): LiveStrip {
   return {
     kind: "data",
     game: prettyGameName(s.process_name) || t("home.posture.lastSessionFallback"),
-    avgFps: s.avg_fps,
-    low1Est: s.low1_fps_est,
+    avgFps: knownFps(s.avg_fps),
+    low1Est: knownFps(s.low1_fps_est),
     peakTempC: s.peak_gpu_temp_c,
     startedAt: s.started_at,
   };

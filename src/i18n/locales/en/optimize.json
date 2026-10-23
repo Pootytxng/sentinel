@@ -395,6 +395,7 @@
     "notRecorded": "Not recorded",
     "sessionLine": {
       "main": "{{when}} · 1% low {{low1}} · avg {{avg}}",
+      "notMeasured": "not measured",
       "samplesSuffix": " · {{samples}} samples · {{minutes}}m",
       "gamingOn": " · Gaming Mode on",
       "gamingOff": " · Gaming Mode off"

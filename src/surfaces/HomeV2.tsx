@@ -439,12 +439,19 @@ export function HomeV2({
                   className={`hv2-stat-n hv2-mono${gradeClass(fpsGrade)}`}
                   style={gradeInk(fpsGrade)}
                 >
-                  {reduced ? (
+                  {/* A session that did not measure its average shows the absent mark, never a
+                      counted-up number (#671). */}
+                  {strip.avgFps == null ? (
+                    "—"
+                  ) : reduced ? (
                     Math.round(strip.avgFps)
                   ) : (
                     <CountUp to={Math.round(strip.avgFps)} duration={0.9} />
                   )}
-                  <span className="hv2-stat-unit">{t("home.homeV2.stats.fpsAvg")}</span>
+                  <span className="hv2-stat-unit">
+                    {t("home.homeV2.stats.fpsAvg")}
+                    {strip.avgFps == null && ` · ${t("home.homeV2.stats.notMeasured")}`}
+                  </span>
                 </span>
                 <span className="hv2-stat-d">
                   <Term id="one-percent-lows">{t("home.homeV2.stats.onePercentLowLabel")}</Term>{" "}
@@ -452,9 +459,11 @@ export function HomeV2({
                     className={`hv2-mono${gradeClass(low1Grade)}`}
                     style={gradeInk(low1Grade)}
                   >
-                    {Math.round(strip.low1Est)}
-                  </span>{" "}
-                  {t("home.homeV2.stats.estimateSuffix")}
+                    {strip.low1Est != null
+                      ? Math.round(strip.low1Est)
+                      : t("home.homeV2.stats.notMeasured")}
+                  </span>
+                  {strip.low1Est != null && ` ${t("home.homeV2.stats.estimateSuffix")}`}
                 </span>
                 {sparkValues.length >= 2 && (
                   <div className="hv2-spark">

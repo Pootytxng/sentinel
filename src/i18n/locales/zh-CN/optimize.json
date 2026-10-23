@@ -373,6 +373,7 @@
     "notRecorded": "未记录",
     "sessionLine": {
       "main": "{{when}} · 1% 最低帧 {{low1}} · 平均 {{avg}}",
+      "notMeasured": "未测到",
       "samplesSuffix": " · {{samples}} 个样本 · {{minutes}} 分钟",
       "gamingOn": " · 游戏模式已开启",
       "gamingOff": " · 游戏模式已关闭"

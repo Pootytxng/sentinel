@@ -14,6 +14,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import { prettyGameName } from "./game-name";
+import { knownFps } from "../lib/session-metrics";
 import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
@@ -636,6 +637,8 @@ function RunningPanel({
   const { t } = useTranslation();
   const game = prettyGameName(exp.game) || t("lab.experimentBench.yourGame");
   const legacy = !canConclude(exp);
+  const baselineAvg = knownFps(exp.baseline_avg_fps);
+  const baselineLow = knownFps(exp.baseline_low1_fps);
   return (
     <div className="exp-running" data-testid="experiment-running">
       <div className="exp-running-head">
@@ -643,8 +646,22 @@ function RunningPanel({
         <span className="exp-running-title">{t("lab.experimentBench.runningTitlePrefix")} {exp.rec_title}</span>
       </div>
       <p className="exp-running-baseline">
-        {t("lab.experimentBench.runningBaselinePre", { game })} <b>{Math.round(exp.baseline_avg_fps)}</b> {t("lab.experimentBench.baselineMid")}{" "}
-        <b>{Math.round(exp.baseline_low1_fps)}</b> {t("lab.experimentBench.fpsUnit")}
+        {baselineAvg != null && baselineLow != null ? (
+          <>
+            {t("lab.experimentBench.runningBaselinePre", { game })} <b>{Math.round(baselineAvg)}</b> {t("lab.experimentBench.baselineMid")}{" "}
+            <b>{Math.round(baselineLow)}</b> {t("lab.experimentBench.fpsUnit")}
+          </>
+        ) : (
+          // A pre-lane-2b record carries whatever the sampler wrote, unknown included (#671). Each
+          // reading says what it is, and the unit rides only with a measured number.
+          <>
+            {t("lab.experimentBench.runningBaselinePre", { game })}{" "}
+            <b>{baselineAvg != null ? Math.round(baselineAvg) : t("lab.experimentBench.notMeasured")}</b>
+            {baselineAvg != null && ` ${t("lab.experimentBench.fpsUnit")}`} {t("lab.experimentBench.lowMid")}{" "}
+            <b>{baselineLow != null ? Math.round(baselineLow) : t("lab.experimentBench.notMeasured")}</b>
+            {baselineLow != null && ` ${t("lab.experimentBench.fpsUnit")}`}
+          </>
+        )}
       </p>
       {exp.attribution_warning && <p className="exp-bench-warn">{exp.attribution_warning}</p>}
       <p className="exp-running-step">

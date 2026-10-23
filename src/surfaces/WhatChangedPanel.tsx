@@ -18,6 +18,7 @@ import { useIntelligenceFlag } from "../design/use-hud";
 import { useExpertView } from "../design/use-expert-view";
 import { SectionLabel, VerdictBand, COMPARABILITY_TONE } from "./measurement-chrome";
 import { Picker } from "../design/Picker";
+import { knownFps } from "../lib/session-metrics";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
@@ -95,6 +96,14 @@ function HypothesisBlock({ h, lead }: { h: IntelHypothesis; lead: boolean }) {
   );
 }
 
+// A session's FPS as this panel prints it: one decimal when measured, the panel's own "not measured"
+// when the record carries the sampler's 0, a negative, a non-finite value or nothing (#671). Never
+// "0.0", never "NaN", and never a throw on a missing field.
+function fpsLabel(v: unknown, t: TFunction): string {
+  const fps = knownFps(v);
+  return fps != null ? fps.toFixed(1) : t("optimize.whatChangedPanel.sessionLine.notMeasured");
+}
+
 function SessionLine({
   tag,
   r,
@@ -111,8 +120,8 @@ function SessionLine({
       <span>
         {t("optimize.whatChangedPanel.sessionLine.main", {
           when: fmtWhen(r.started_at, expert),
-          low1: r.low1_fps.toFixed(1),
-          avg: r.avg_fps.toFixed(1),
+          low1: fpsLabel(r.low1_fps, t),
+          avg: fpsLabel(r.avg_fps, t),
         })}
         {expert &&
           t("optimize.whatChangedPanel.sessionLine.samplesSuffix", {
@@ -640,8 +649,8 @@ export function SessionInvestigator({
   const optLabel = (s: SessionSummary) =>
     t("optimize.whatChangedPanel.sessionLine.main", {
       when: fmtWhen(s.started_at, expert),
-      low1: s.low1_fps_est.toFixed(1),
-      avg: s.avg_fps.toFixed(1),
+      low1: fpsLabel(s.low1_fps_est, t),
+      avg: fpsLabel(s.avg_fps, t),
     });
 
   const sameSession = shownBaseline === shownCurrent;
