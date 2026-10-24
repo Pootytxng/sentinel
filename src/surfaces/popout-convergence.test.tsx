@@ -119,6 +119,8 @@ describe("action details: the retired drawer's whole panel, inside the canonical
       snapshot: null,
       status: "applied" as const,
       is_still_active: true,
+      // The backend live-checks every applied row; "on" is what a still-active change reads (#453 fix).
+      active_check: "on" as const,
       restores_label: "Off",
     };
     render(<Fix recs={[]} {...baseProps} changes={[change]} onRollback={onRollback} view="applied" />);
