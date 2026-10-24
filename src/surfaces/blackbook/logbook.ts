@@ -59,8 +59,8 @@ export type LogbookSession = {
   avgFps: number;
   low1Fps: number;
   durationSecs: number;
-  /** How many Compy changes were active during the session (0 ⇒ no tag). */
-  changesActive: number;
+  /** How many Compy changes were active during the session (0, or null = not recorded, ⇒ no tag). */
+  changesActive: number | null;
   /** Avg-fps delta vs the nearest OLDER same-game session; null when there is no same-game prior
    *  (so a cross-game gap is never shown as a delta). */
   avgFpsDelta: number | null;

@@ -453,7 +453,11 @@ export function SessionDebrief({
           onClick={() => setCtxOpen((o) => !o)}
           aria-expanded={ctxOpen}
         >
-          <span>{t("monitor.sessionDebrief.changesActive", { count: s.compy_changes_active })}</span>
+          <span>
+            {s.compy_changes_active == null
+              ? t("monitor.sessionDebrief.changesActiveUnknown")
+              : t("monitor.sessionDebrief.changesActive", { count: s.compy_changes_active })}
+          </span>
           <span>{ctxOpen ? "▾" : "▸"}</span>
         </button>
         {ctxOpen && (
@@ -469,6 +473,9 @@ export function SessionDebrief({
             )}
             {s.compy_changes_active === 0 && (
               <div>{t("monitor.sessionDebrief.zeroChangesActive")}</div>
+            )}
+            {s.compy_changes_active == null && (
+              <div>{t("monitor.sessionDebrief.unknownChangesActive")}</div>
             )}
           </div>
         )}

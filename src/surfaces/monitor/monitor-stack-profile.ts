@@ -269,8 +269,8 @@ export type DeckDelta = {
   low1: number | null;
   /** Recorded stutter-event count delta; null when either side never recorded events. */
   spikes: number | null;
-  /** The current session's changes-on count — a recorded fact, not a claim. */
-  changesOn: number;
+  /** The current session's changes-on count — a recorded fact, not a claim; null = not recorded (#669). */
+  changesOn: number | null;
 };
 
 /** Null without a prior session (the deck renders nothing — honest empty). */

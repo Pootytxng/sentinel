@@ -1711,16 +1711,16 @@ pub(crate) fn reveal_ledger_folder() -> Result<(), String> {
     Ok(())
 }
 
-/// Count of DISTINCT recs whose LATEST ledger entry is an active apply (status "applied"). Powers the
-/// experiment engine's single-variable warning (Intelligence Phase 3 §4F): "N other Compy changes are
-/// already active". Latest-wins per rec_id (a later rollback clears an earlier apply). Read-only,
-/// additive — no enum/contract change. Corrupt/absent ledger reads 0 (fail-safe: no false warning).
-pub(crate) fn active_change_count() -> usize {
-    use std::collections::BTreeMap;
-    let history = load_history().unwrap_or_default();
+/// Count of DISTINCT recs whose LATEST ledger entry is an active apply (status "applied"), from rows
+/// the caller already loaded. Latest-wins per rec_id (a later rollback clears an earlier apply). By
+/// status alone, the count the Trust Ledger itself shows; the live-checked count a session records
+/// is `summarize_history(..).active`. It takes rows instead of loading them: an unreadable ledger has
+/// no count, and the caller that loaded it says why, instead of a 0 that reads as "no other changes"
+/// (#668: the Trial start used to re-read the ledger here and record 0 on a failed read).
+pub(crate) fn active_changes_in(history: &[AppliedChange]) -> usize {
+    let mut latest: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
     // Walk in order so the LAST entry per rec_id wins (the ledger is append-only chronological).
-    let mut latest: BTreeMap<&str, &str> = BTreeMap::new();
-    for c in &history {
+    for c in history {
         latest.insert(c.rec_id.as_str(), c.status.as_str());
     }
     latest.values().filter(|status| **status == "applied").count()
@@ -1741,10 +1741,41 @@ pub(crate) struct AppliedChangesSummary {
     pub(crate) drifted_titles: Vec<String>,
 }
 
-pub(crate) fn applied_changes_summary() -> AppliedChangesSummary {
-    // Read-only roll-up: an unreadable ledger summarizes as zeros (the preserved .corrupt
-    // file is untouchable by saves; mutating commands surface the error loudly).
-    summarize_history(&load_history().unwrap_or_default())
+/// The roll-up of one ledger read, or why it can't be trusted, in words (#669). Two losses count:
+/// the read itself failed (an AV lock, a half-written file), or the ledger was set aside as
+/// `history.json.corrupt` earlier — `load_history` fails loud only once on a damaged ledger and
+/// every later load returns a fresh, EMPTY ledger that would roll up as "0 changes"; the marker on
+/// disk is the only evidence that the silence is a loss (`set_aside` = [`ledger_was_quarantined`],
+/// as `experiment::ledger_for_one_change_checks` and `intelligence::gather` read it). Adds no
+/// write of its own and no retry; the one load it is handed may have set a damaged ledger aside.
+pub(crate) fn checked_summary(
+    loaded: Result<Vec<AppliedChange>, String>,
+    set_aside: bool,
+) -> Result<AppliedChangesSummary, String> {
+    let history = loaded?;
+    if set_aside {
+        return Err("Compy's change history was damaged earlier and set aside, so part of it is missing".into());
+    }
+    Ok(summarize_history(&history))
+}
+
+/// The active-change count a session records when it begins, from the one ledger read the session
+/// start passes in: `None` when that read failed or the ledger was set aside earlier. A session
+/// keeps this count for the rest of its life — every Trial baseline check, debrief and comparison
+/// reads it back — so a lost count must stay "not recorded", never the 0 the zero-collapsing
+/// summary would give it (#669; never claim unmeasured). Adds no write of its own and no retry.
+pub(crate) fn session_start_active_count(
+    loaded: Result<Vec<AppliedChange>, String>,
+    set_aside: bool,
+) -> Option<usize> {
+    checked_summary(loaded, set_aside).ok().map(|summary| summary.active)
+}
+
+/// The Trust Ledger roll-up that keeps a failed read or a set-aside ledger as the error it is,
+/// never summarized as zeros, for a surface that must show "can't read" rather than "0"
+/// (Game Readiness, #669). Adds no write of its own.
+pub(crate) fn applied_changes_summary_checked() -> Result<AppliedChangesSummary, String> {
+    checked_summary(load_history(), ledger_was_quarantined())
 }
 
 /// Read-only: every ledger entry's id, in on-disk (apply) order. Used by the aggregate-stack A/B
@@ -1771,7 +1802,7 @@ pub(crate) fn all_change_ids() -> Result<Vec<String>, String> {
 // below a clean readiness state with no way out (the append-only ledger never lets
 // you edit those old records). The full per-entry history still lives in the Trust
 // Ledger for audit; readiness just stops being held hostage by it.
-fn summarize_history(history: &[AppliedChange]) -> AppliedChangesSummary {
+pub(crate) fn summarize_history(history: &[AppliedChange]) -> AppliedChangesSummary {
     let mut latest: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     for (i, c) in history.iter().enumerate() {
         latest.insert(c.rec_id.as_str(), i); // later entries overwrite earlier → newest wins
@@ -3699,6 +3730,32 @@ mod history_tests {
         assert_eq!(s.externally_reverted, 0);
     }
 
+    // #669: the count a session records when it begins comes from ONE ledger read, and a read that
+    // fails at that moment records NO count — never the 0 the zero-collapsing summary would give it
+    // (a Trial started on such a baseline would read "0 then, 0 now" on a stock rig and pass).
+    #[test]
+    fn a_session_start_records_no_count_when_the_ledger_read_failed() {
+        assert_eq!(session_start_active_count(Err("sharing violation".into()), false), None);
+        assert_eq!(session_start_active_count(Ok(Vec::new()), false), Some(0));
+        let history = vec![record("unknown-x", "applied"), record("unknown-y", "rolled_back")];
+        assert_eq!(session_start_active_count(Ok(history.clone()), false), Some(1));
+        // A ledger set aside as history.json.corrupt loads EMPTY from then on (or with only the rows
+        // added since): its count is LOST, not 0 (rust-tauri-reviewer on #669, same class).
+        assert_eq!(session_start_active_count(Ok(Vec::new()), true), None);
+        assert_eq!(session_start_active_count(Ok(history), true), None);
+    }
+
+    // #669: the checked summary a surface reads instead of the zero-collapsing one keeps a failed
+    // read AND a set-aside ledger as errors — Game Readiness shows "can't read", never "0".
+    #[test]
+    fn a_checked_summary_never_summarizes_a_lost_ledger_as_zeros() {
+        assert!(checked_summary(Err("sharing violation".into()), false).is_err());
+        assert!(checked_summary(Ok(Vec::new()), true).is_err());
+        assert_eq!(checked_summary(Ok(Vec::new()), false).map(|s| s.active), Ok(0));
+        let history = vec![record("unknown-x", "applied"), record("unknown-y", "rolled_back")];
+        assert_eq!(checked_summary(Ok(history), false).map(|s| s.active), Ok(1));
+    }
+
     #[test]
     fn summary_latest_rollback_supersedes_old_applies() {
         // THE loop fix: an old "applied" entry superseded by a later rollback of
@@ -3715,6 +3772,23 @@ mod history_tests {
         assert_eq!(s.rolled_back, 1);
         assert_eq!(s.active, 0);
         assert_eq!(s.externally_reverted, 0);
+    }
+
+    // #668: the Trial start counts its active changes from the rows it already loaded, so this fold
+    // takes rows and never loads: there is no failed second read left to collapse the count to 0.
+    #[test]
+    fn active_changes_are_counted_from_rows_in_hand_latest_entry_wins() {
+        let rows = [
+            record("alpha", "applied"),
+            record("alpha", "rolled_back"), // a later undo clears the earlier apply
+            record("beta", "applied"),
+            record("beta", "applied"), // re-applied: still one setting
+            record("gamma", "rolled_back"),
+        ];
+        assert_eq!(active_changes_in(&rows), 1);
+        // No live probe exists for these ids, so the live-checked count a session records agrees.
+        assert_eq!(summarize_history(&rows).active, active_changes_in(&rows));
+        assert_eq!(active_changes_in(&[]), 0);
     }
 
     #[test]

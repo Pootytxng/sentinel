@@ -507,7 +507,9 @@ export function MonitorConsole({
                   }
                 />
                 <span className="mc-ev-changes">
-                  {t("monitor.monitorConsole.changesOn", { count: latest.compy_changes_active })}
+                  {latest.compy_changes_active == null
+                    ? t("monitor.monitorConsole.changesUnknown")
+                    : t("monitor.monitorConsole.changesOn", { count: latest.compy_changes_active })}
                 </span>
               </div>
             </>
@@ -595,7 +597,7 @@ export function MonitorConsole({
                   {t("monitor.monitorConsole.crossGameNote")}
                 </span>
               )}
-              {deck.changesOn > 0 && (
+              {deck.changesOn != null && deck.changesOn > 0 && (
                 // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
                 // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
                 // answer is the Lab's A/B benchmark, and the tooltip says so. The tooltip is the

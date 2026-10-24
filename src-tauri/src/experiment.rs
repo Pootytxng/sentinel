@@ -360,7 +360,7 @@ pub(crate) fn attribution_warning(active_changes: usize) -> Option<String> {
 }
 
 /// How many OTHER settings Compy has active, from the ledger rows the start already loaded: the latest
-/// row per setting decides (as `history::active_change_count` reads it), and the setting under test
+/// row per setting decides (as `history::active_changes_in` reads it), and the setting under test
 /// (`own_rec`) is left out. An older applied row for it, undone in Windows, leaves it testable again
 /// (see [`unverified_other_changes`]), so it is never "another change" in the start note (#628).
 pub(crate) fn other_active_changes(ledger: &[LedgerEntryRef<'_>], own_rec: &str) -> usize {
@@ -594,6 +594,42 @@ fn ledger_rows(history: &[crate::history::AppliedChange]) -> Vec<LedgerEntryRef<
             rolled_back_at: c.rolled_back_at.as_deref(),
         })
         .collect()
+}
+
+/// What a Trial start reads off the one ledger it loaded: the rows the §3 checks walk and both counts
+/// it records, all folded from those same rows. There is no second load to disagree with the first
+/// (#668): the start used to re-read the ledger for its counts, and a read that failed there (an AV
+/// lock on history.json) counted 0 changes active on a rig that had some.
+struct StartLedgerView<'a> {
+    changes: &'a [crate::history::AppliedChange],
+    rows: Vec<LedgerEntryRef<'a>>,
+    /// Active changes counted the way a session counts them (`history::summarize_history(..).active`),
+    /// for `baseline_is_current` against the baseline session's own count.
+    active_now: usize,
+    /// Active changes counted the way the Trust Ledger counts them (`history::active_changes_in`):
+    /// recorded as the Trial's `active_changes_at_start`.
+    active_changes: usize,
+}
+
+/// The start's view of the ledger it loaded, once the §3 baseline check has passed on it, or why the
+/// start is refused, in the check's own words. An unreadable ledger has no view and so no count:
+/// nothing after this can record a 0 for a ledger that didn't load.
+fn baseline_checked_view<'a>(
+    baseline: &SessionSummary,
+    history: &'a Result<Vec<crate::history::AppliedChange>, String>,
+) -> Result<StartLedgerView<'a>, String> {
+    let view = history.as_deref().map(|changes| StartLedgerView {
+        changes,
+        rows: ledger_rows(changes),
+        active_now: crate::history::summarize_history(changes).active,
+        active_changes: crate::history::active_changes_in(changes),
+    });
+    let ledger = match &view {
+        Ok(view) => Ok((view.rows.as_slice(), view.active_now)),
+        Err(e) => Err(e.as_str()),
+    };
+    baseline_is_current(baseline, ledger)?;
+    view.map_err(String::clone)
 }
 
 /// Whether any ledger entry other than `own` was applied or rolled back after `since`. A date that
@@ -1051,15 +1087,16 @@ pub(crate) fn resolve_baseline<'a>(
 /// place as now, so the before/after differs by this one change alone. Refuses when a Compy change was
 /// applied or undone after the baseline session began, when the number of active Compy changes differs
 /// from the one that session recorded (a change reverted outside Compy, or an undo too old to carry a
-/// date), and when the change history can't back the check (`ledger` is then why, in words, from
-/// [`ledger_for_one_change_checks`]). `active_now` must be counted the way a session counts it
-/// (`history::applied_changes_summary().active`).
+/// date), when the baseline session recorded no count at all (its start couldn't read the change
+/// history, #669), and when the change history can't back the check (`ledger` is then why, in words,
+/// from [`ledger_for_one_change_checks`]). A readable `ledger` is its rows AND `active_now`, counted
+/// from those same rows the way a session counts it (`history::summarize_history(..).active`); an
+/// unreadable one carries no count at all, so none can be invented for it (#668).
 pub(crate) fn baseline_is_current(
     baseline: &SessionSummary,
-    ledger: Result<&[LedgerEntryRef<'_>], &str>,
-    active_now: usize,
+    ledger: Result<(&[LedgerEntryRef<'_>], usize), &str>,
 ) -> Result<(), String> {
-    let ledger = ledger.map_err(|why| {
+    let (ledger, active_now) = ledger.map_err(|why| {
         format!("{why}, so it can't check that nothing else changed since the baseline session")
     })?;
     let replay = "so the before/after would measure more than this one change — play a new baseline \
@@ -1067,11 +1104,18 @@ pub(crate) fn baseline_is_current(
     if compy_change_moved_after(ledger, &baseline.started_at, None) {
         return Err(format!("a Compy change was applied or undone after the baseline session, {replay}"));
     }
-    if baseline.compy_changes_active != active_now {
+    // #669: a baseline whose start couldn't read the change history recorded no count, so there is
+    // nothing to compare the live count against — refuse in words, never read it as "0 then".
+    let Some(then) = baseline.compy_changes_active else {
         return Err(format!(
-            "the number of active Compy changes is different from the baseline session's ({} then, \
-             {active_now} now), {replay}",
-            baseline.compy_changes_active
+            "Compy didn't record how many of its changes were active when the baseline session began \
+             (it couldn't read its change history at the time), {replay}"
+        ));
+    };
+    if then != active_now {
+        return Err(format!(
+            "the number of active Compy changes is different from the baseline session's ({then} then, \
+             {active_now} now), {replay}"
         ));
     }
     Ok(())
@@ -1081,7 +1125,9 @@ pub(crate) fn baseline_is_current(
 /// Only this Trial's change may have been applied or undone since it started, and the after-session
 /// must have run with exactly one more active Compy change than the baseline session: this one. A
 /// session that can't be found or a ledger that can't be read is not judged here (the ledger
-/// watermark already refuses to attribute on an unreadable ledger).
+/// watermark already refuses to attribute on an unreadable ledger). A session that recorded no count
+/// (its start couldn't read the change history, #669) can't show that exactly this one change was
+/// added: it is named here, never read as a match.
 pub(crate) fn other_compy_change(
     rec: &ExperimentRecord,
     baseline: Option<&SessionSummary>,
@@ -1093,17 +1139,21 @@ pub(crate) fn other_compy_change(
         return Some("another Compy change was applied or undone during the test".into());
     }
     let (baseline, treatment) = (baseline?, treatment?);
-    let expected = baseline.compy_changes_active + 1;
+    let unrecorded = |which: &str| {
+        format!(
+            "the {which} didn't record how many Compy changes were active — Compy couldn't read its \
+             change history when it began"
+        )
+    };
+    let Some(then) = baseline.compy_changes_active else { return Some(unrecorded("baseline session")) };
+    let Some(after) = treatment.compy_changes_active else { return Some(unrecorded("after-session")) };
+    let expected = then + 1;
     let active = |n: usize| match n {
         1 => "1 active Compy change".to_string(),
         n => format!("{n} active Compy changes"),
     };
-    (treatment.compy_changes_active != expected).then(|| {
-        format!(
-            "the after-session ran with {}, not {expected} (the baseline's {} plus this one)",
-            active(treatment.compy_changes_active),
-            baseline.compy_changes_active
-        )
+    (after != expected).then(|| {
+        format!("the after-session ran with {}, not {expected} (the baseline's {then} plus this one)", active(after))
     })
 }
 
@@ -1708,18 +1758,13 @@ pub(crate) fn start_experiment(
         crate::history::load_history(),
         crate::history::ledger_was_quarantined(),
     );
-    let rows = history.as_deref().map(ledger_rows);
-    let ledger = match &rows {
-        Ok(rows) => Ok(rows.as_slice()),
-        Err(e) => Err(e.as_str()),
-    };
-    baseline_is_current(baseline, ledger, crate::history::applied_changes_summary().active)
+    // #668: every count below is folded from the rows this one load returned, never read again — a
+    // second read that failed used to record 0 changes active on a rig that had some.
+    let view = baseline_checked_view(baseline, &history)
         .map_err(|why| format!("experiment not started — {why}"))?;
+    let (changes, rows) = (view.changes, view.rows.as_slice());
     // §3: other applied settings not confirmed in place would leave the result unjudged at conclude.
-    let unverified = match (&history, rows.as_deref()) {
-        (Ok(changes), Ok(rows)) => unverified_other_changes(rows, &rec_id, |other| read_back(changes, other)),
-        _ => 0,
-    };
+    let unverified = unverified_other_changes(rows, &rec_id, |other| read_back(changes, other));
     if let Some(why) = unverified_start_refusal(unverified) {
         return Err(format!("experiment not started — {why}"));
     }
@@ -1733,8 +1778,8 @@ pub(crate) fn start_experiment(
     // Single-variable honesty context BEFORE we apply (§4F): how many changes are already active.
     // `active` is stored as the sessions count it (`baseline_is_current` / `other_compy_change` compare
     // the two); the note names only OTHER settings, never an older row for the one under test (#628).
-    let active = crate::history::active_change_count();
-    let others = rows.as_deref().map_or(active, |rows| other_active_changes(rows, &rec_id));
+    let active = view.active_changes;
+    let others = other_active_changes(rows, &rec_id);
     let warning = attribution_warning(others);
 
     // Step 0 — RECORD FIRST. Saved before the apply; a failed save stops here with nothing changed.
@@ -3262,7 +3307,7 @@ mod experiment_tests {
             peak_gpu_usage_pct: None,
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
-            compy_changes_active: 0,
+            compy_changes_active: Some(0),
             hw_fingerprint: Some(crate::hardware::HwFingerprint {
                 hash: "deadbeef".into(),
                 gpu: "Radeon RX 9070 XT".into(),
@@ -3599,7 +3644,7 @@ mod experiment_tests {
     #[test]
     fn a_baseline_counts_only_while_compy_changes_stayed_put_since_it() {
         let mut base = session(BASE_ID, 150.0);
-        base.compy_changes_active = 2;
+        base.compy_changes_active = Some(2);
         let before = "2026-09-01T09:00:00+00:00";
         let after = "2026-09-01T10:30:00+00:00";
 
@@ -3607,7 +3652,7 @@ mod experiment_tests {
         // current.
         let settled =
             [row("a", "r1", before, true), row("b", "r2", before, true), row("c", "r3", before, false)];
-        assert_eq!(baseline_is_current(&base, Ok(&settled), 2), Ok(()));
+        assert_eq!(baseline_is_current(&base, Ok((&settled, 2))), Ok(()));
 
         // An apply or an undo after it began, or a date Compy can't read, refuses (Codex r1 on #611).
         for moved in [
@@ -3616,19 +3661,19 @@ mod experiment_tests {
             vec![row("a", "r1", "not a time", true)],
             vec![undone("a", before, "not a time")],
         ] {
-            let why = baseline_is_current(&base, Ok(&moved), 2).unwrap_err();
+            let why = baseline_is_current(&base, Ok((&moved, 2))).unwrap_err();
             assert!(why.contains("applied or undone after the baseline"), "{why}");
             assert!(why.contains("play a new baseline session"), "{why}");
         }
         let garbled = SessionSummary { started_at: "not a time".into(), ..base.clone() };
-        assert!(baseline_is_current(&garbled, Ok(&settled), 2).is_err(), "an unreadable start is never assumed old");
+        assert!(baseline_is_current(&garbled, Ok((&settled, 2))).is_err(), "an unreadable start is never assumed old");
 
         // A different count of active changes (one reverted outside Compy leaves no ledger date).
-        let why = baseline_is_current(&base, Ok(&settled), 3).unwrap_err();
+        let why = baseline_is_current(&base, Ok((&settled, 3))).unwrap_err();
         assert!(why.contains("(2 then, 3 now)"), "{why}");
 
         // A history Compy can't read is refused, never assumed unchanged, and the refusal says why.
-        let why = baseline_is_current(&base, Err("Compy can't read its change history"), 2).unwrap_err();
+        let why = baseline_is_current(&base, Err("Compy can't read its change history")).unwrap_err();
         assert!(why.starts_with("Compy can't read its change history, so it can't check"), "{why}");
     }
 
@@ -3644,17 +3689,94 @@ mod experiment_tests {
         assert!(ledger_for_one_change_checks(Ok(vec!["c1"]), true).is_err());
         assert_eq!(ledger_for_one_change_checks(Ok(vec!["c1"]), false), Ok(vec!["c1"]));
 
-        let base = SessionSummary { compy_changes_active: 0, ..session(BASE_ID, 150.0) };
-        let why = baseline_is_current(&base, Err(lost.as_str()), 0).unwrap_err();
+        let base = SessionSummary { compy_changes_active: Some(0), ..session(BASE_ID, 150.0) };
+        let why = baseline_is_current(&base, Err(lost.as_str())).unwrap_err();
         assert!(why.contains("set aside") && why.contains("nothing else changed"), "{why}");
+    }
+
+    // #669: a baseline session that recorded no count (its start couldn't read the change history) is
+    // refused in words, even when the live count is 0 — never read as "0 then, 0 now".
+    #[test]
+    fn a_baseline_with_no_recorded_change_count_is_refused() {
+        let base = SessionSummary { compy_changes_active: None, ..session(BASE_ID, 150.0) };
+        let settled = [row("a", "r1", "2026-09-01T09:00:00+00:00", true)];
+        for now in [0, 1] {
+            let why = baseline_is_current(&base, Ok((&settled, now))).unwrap_err();
+            assert!(why.contains("didn't record how many of its changes were active"), "{why}");
+            assert!(why.contains("play a new baseline session"), "{why}");
+            assert!(!why.contains("0 then"), "{why}");
+        }
+        // A recorded count still compares as before.
+        let known = SessionSummary { compy_changes_active: Some(0), ..base };
+        assert_eq!(baseline_is_current(&known, Ok((&settled, 0))), Ok(()));
+    }
+
+    // #668: after the one-change check had loaded the ledger, the start read it twice more for its
+    // counts, each a `load_history().unwrap_or_default()`: a read that failed there (an AV lock on
+    // history.json) recorded 0 changes active on a rig that had some. Both counts now come from the
+    // rows the one load returned, and a ledger that didn't load has no view, so no count at all.
+    #[test]
+    fn a_start_counts_active_changes_from_the_ledger_it_loaded_never_a_second_read() {
+        let before = |mut c: crate::history::AppliedChange| {
+            c.applied_at = "2026-08-01T00:00:00+00:00".into(); // before the baseline session began
+            c
+        };
+        let mut undone = before(ledger_change("undone", None));
+        undone.status = "rolled_back".into();
+        let history: Result<Vec<crate::history::AppliedChange>, String> = Ok(vec![
+            before(ledger_change("other-a", None)),
+            before(ledger_change("other-b", None)),
+            before(ledger_change("other-b", None)), // re-applied: still one setting
+            undone,
+        ]);
+        let base = SessionSummary { compy_changes_active: Some(2), ..session(BASE_ID, 150.0) };
+        let Ok(view) = baseline_checked_view(&base, &history) else {
+            panic!("a readable ledger at the count the baseline recorded is a view")
+        };
+        assert_eq!(view.rows.len(), 4, "the one-change checks walk every row");
+        assert_eq!(view.active_changes, 2, "latest row wins: the undone setting is not active");
+        assert_eq!(view.active_now, 2, "no live probe for these ids: live-checked equals by-status");
+
+        let moved = SessionSummary { compy_changes_active: Some(1), ..base.clone() };
+        let Err(why) = baseline_checked_view(&moved, &history) else {
+            panic!("a count that moved since the baseline is never a view")
+        };
+        assert!(why.contains("(1 then, 2 now)"), "{why}");
+
+        // A ledger that didn't load is refused in words; there is no view, so no 0 to record.
+        let unread = ledger_for_one_change_checks::<crate::history::AppliedChange>(Err("sharing violation".into()), false);
+        let Err(why) = baseline_checked_view(&base, &unread) else {
+            panic!("an unreadable ledger is never a view with a count")
+        };
+        assert!(why.starts_with("Compy can't read its change history"), "{why}");
+    }
+
+    // #669: at conclude, a session that recorded no count can't show that exactly this one change was
+    // added — it is named as the reason (and confounds), never read as a match.
+    #[test]
+    fn a_session_with_no_recorded_change_count_is_named_never_matched() {
+        let rec = ExperimentRecord { applied_change_id: "own".into(), ..running() };
+        let base = SessionSummary { compy_changes_active: Some(2), ..session(BASE_ID, 150.0) };
+        let treat = SessionSummary { compy_changes_active: Some(3), ..session(TREAT_ID, 180.0) };
+        let settled = [row("own", "game-bar-disable", APPLIED, true)];
+        assert_eq!(other_compy_change(&rec, Some(&base), Some(&treat), Some(&settled)), None);
+
+        let unread = SessionSummary { compy_changes_active: None, ..treat.clone() };
+        let what = other_compy_change(&rec, Some(&base), Some(&unread), Some(&settled)).unwrap();
+        assert!(what.contains("after-session didn't record how many Compy changes were active"), "{what}");
+        assert_eq!(with_compy_state(measured(180.0), Some(what)).verdict, "confounded");
+
+        let unread_base = SessionSummary { compy_changes_active: None, ..base.clone() };
+        let what = other_compy_change(&rec, Some(&unread_base), Some(&treat), Some(&settled)).unwrap();
+        assert!(what.contains("baseline session didn't record how many Compy changes were active"), "{what}");
     }
 
     #[test]
     fn only_this_trials_change_may_move_during_the_test() {
         let rec = ExperimentRecord { applied_change_id: "own".into(), ..running() };
         let mut base = session(BASE_ID, 150.0);
-        base.compy_changes_active = 2;
-        let treat = SessionSummary { compy_changes_active: 3, ..session(TREAT_ID, 180.0) };
+        base.compy_changes_active = Some(2);
+        let treat = SessionSummary { compy_changes_active: Some(3), ..session(TREAT_ID, 180.0) };
         let before = "2026-09-01T09:00:00+00:00";
         let during = "2026-09-01T11:30:00+00:00";
         let own = row("own", "game-bar-disable", APPLIED, true);
@@ -3671,11 +3793,11 @@ mod experiment_tests {
 
         // So is an after-session that didn't run with the baseline's changes plus exactly this one.
         for n in [2, 4] {
-            let t = SessionSummary { compy_changes_active: n, ..treat.clone() };
+            let t = SessionSummary { compy_changes_active: Some(n), ..treat.clone() };
             let what = other_compy_change(&rec, Some(&base), Some(&t), Some(&settled)).unwrap();
             assert!(what.contains(&format!("{n} active Compy changes, not 3")), "{what}");
         }
-        let one = SessionSummary { compy_changes_active: 1, ..treat.clone() };
+        let one = SessionSummary { compy_changes_active: Some(1), ..treat.clone() };
         let what = other_compy_change(&rec, Some(&base), Some(&one), Some(&settled)).unwrap();
         assert!(what.contains("1 active Compy change, not 3"), "{what}");
 

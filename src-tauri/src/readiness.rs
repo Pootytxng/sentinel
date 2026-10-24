@@ -14,7 +14,7 @@ use serde::Serialize;
 
 use crate::current_power_plan_name;
 use crate::hardware::{get_hardware_info, HardwareInfo};
-use crate::history::{applied_changes_summary, AppliedChangesSummary};
+use crate::history::{applied_changes_summary_checked, AppliedChangesSummary};
 use crate::monitoring::{fps_active, uac_disabled};
 
 const ADVISORY: &str =
@@ -119,7 +119,8 @@ pub(crate) fn evaluate_readiness(
     power_plan: Option<&str>,
     fps_uac_required: bool,
     fps_running: bool,
-    hist: &AppliedChangesSummary,
+    // #669: `Err` = the change history couldn't be read right now; the row then says so, never "0".
+    hist: Result<&AppliedChangesSummary, &str>,
     // AMD FreeSync (VRR) state from the GPU poller: Some(true)=on, Some(false)=supported-but-off,
     // None=undetermined (non-AMD, unsupported/unavailable, or not yet read) → honest advisory.
     freesync: Option<bool>,
@@ -828,53 +829,63 @@ pub(crate) fn evaluate_readiness(
     // 2026-08-12 rename; these sentences kept saying "the Lab" for six days after the room stopped
     // being called that, which is what src/room-name-copy-guard.test.ts now makes impossible.
     {
-        let c = if hist.externally_reverted > 0 {
-            let detail = if hist.externally_reverted == 1 {
-                let name = hist
-                    .drifted_titles
-                    .first()
-                    .map(String::as_str)
-                    .unwrap_or("A setting");
-                format!(
-                    "“{name}” — you turned it on with Compy and it's currently off, changed \
-                     outside Compy (by Windows, another app, or you). Not an error: turn it \
-                     back on or roll it back in Test — either one clears this."
-                )
-            } else {
-                let mut names = hist.drifted_titles.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
-                if hist.drifted_titles.len() > 3 {
-                    names.push_str(&format!(" and {} more", hist.drifted_titles.len() - 3));
-                }
-                format!(
-                    "{} settings you turned on with Compy are currently off ({names}) — changed \
-                     outside Compy (by Windows, another app, or you). Not an error: turn them \
-                     back on or roll them back in Test — either one clears this.",
-                    hist.externally_reverted
-                )
-            };
-            let mut ac = check(
+        let c = match hist {
+            // #669: an unreadable ledger — a failed read, or one set aside as damaged earlier — is
+            // unknown, with no value to show: never "0 — nothing to track" (and never the raw read
+            // error; the ledger's own surface carries that).
+            Err(_) => check(
                 "applied-changes",
-                "Compy changes were turned back off",
-                ReadinessStatus::Attention,
-                detail,
-                Some(format!(
-                    "{} on / {} drifted",
-                    hist.active, hist.externally_reverted
-                )),
-            );
-            // Structured so the priorities layer can dedup these out of "not applied".
-            ac.drifted_titles = hist.drifted_titles.clone();
-            ac
-        } else if hist.total == 0 {
-            check(
+                "Applied Compy changes",
+                ReadinessStatus::Unknown,
+                "Compy can't read its change history, so it can't count its active changes.",
+                None,
+            ),
+            Ok(hist) if hist.externally_reverted > 0 => {
+                let detail = if hist.externally_reverted == 1 {
+                    let name = hist
+                        .drifted_titles
+                        .first()
+                        .map(String::as_str)
+                        .unwrap_or("A setting");
+                    format!(
+                        "“{name}” — you turned it on with Compy and it's currently off, changed \
+                         outside Compy (by Windows, another app, or you). Not an error: turn it \
+                         back on or roll it back in Test — either one clears this."
+                    )
+                } else {
+                    let mut names = hist.drifted_titles.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+                    if hist.drifted_titles.len() > 3 {
+                        names.push_str(&format!(" and {} more", hist.drifted_titles.len() - 3));
+                    }
+                    format!(
+                        "{} settings you turned on with Compy are currently off ({names}) — changed \
+                         outside Compy (by Windows, another app, or you). Not an error: turn them \
+                         back on or roll them back in Test — either one clears this.",
+                        hist.externally_reverted
+                    )
+                };
+                let mut ac = check(
+                    "applied-changes",
+                    "Compy changes were turned back off",
+                    ReadinessStatus::Attention,
+                    detail,
+                    Some(format!(
+                        "{} on / {} drifted",
+                        hist.active, hist.externally_reverted
+                    )),
+                );
+                // Structured so the priorities layer can dedup these out of "not applied".
+                ac.drifted_titles = hist.drifted_titles.clone();
+                ac
+            }
+            Ok(hist) if hist.total == 0 => check(
                 "applied-changes",
                 "Applied Compy changes",
                 ReadinessStatus::Ready,
                 "No Compy changes applied yet — nothing to track.",
                 Some("0".into()),
-            )
-        } else {
-            check(
+            ),
+            Ok(hist) => check(
                 "applied-changes",
                 "Applied Compy changes",
                 ReadinessStatus::Ready,
@@ -883,7 +894,7 @@ pub(crate) fn evaluate_readiness(
                     if hist.active == 1 { "1 setting".to_string() } else { format!("{} settings", hist.active) }
                 ),
                 Some(format!("{} active", hist.active)),
-            )
+            ),
         };
         checks.push(c);
     }
@@ -1034,7 +1045,7 @@ pub(crate) fn get_game_readiness() -> GameReadiness {
     let power_plan = current_power_plan_name();
     let fps_uac_required = !uac_disabled();
     let fps_running = fps_active().load(Ordering::Acquire);
-    let hist = applied_changes_summary();
+    let hist = applied_changes_summary_checked();
     // Ensure the AMD poller is running (lazy-start), then read its cached FreeSync state. Non-AMD
     // systems leave this None → the VRR row stays the honest advisory.
     crate::monitoring::ensure_amd_poller_started();
@@ -1044,7 +1055,7 @@ pub(crate) fn get_game_readiness() -> GameReadiness {
         power_plan.as_deref(),
         fps_uac_required,
         fps_running,
-        &hist,
+        hist.as_ref().map_err(String::as_str),
         freesync,
     );
     r.apply_dismissals(load_dismissals());
@@ -1208,7 +1219,7 @@ mod readiness_tests {
             }],
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "install-drive");
         // No game library detected and drive types unreadable → honest Unknown.
         assert_eq!(c.status, ReadinessStatus::Unknown);
@@ -1231,7 +1242,7 @@ mod readiness_tests {
             },
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "install-drive");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert!(c.detail.to_lowercase().contains("fast storage"));
@@ -1253,7 +1264,7 @@ mod readiness_tests {
             },
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "install-drive");
         assert_eq!(c.status, ReadinessStatus::Attention);
         assert!(c.detail.contains("HDD"));
@@ -1280,7 +1291,7 @@ mod readiness_tests {
             }],
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "install-drive");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert!(c.detail.to_lowercase().contains("all your storage"));
@@ -1312,7 +1323,7 @@ mod readiness_tests {
             Some("Ultimate Performance"),
             false,
             false,
-            &AppliedChangesSummary::default(),
+            Ok(&AppliedChangesSummary::default()),
             None,
         );
         assert_eq!(find(&r, "monitor-refresh").status, ReadinessStatus::Ready);
@@ -1342,7 +1353,7 @@ mod readiness_tests {
                 ..Default::default()
             }],
         );
-        let r = evaluate_readiness(&hw, Some("Balanced"), true, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, Some("Balanced"), true, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&r, "monitor-refresh").status, ReadinessStatus::Attention);
         assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Attention); // 500d > 1yr
         assert_eq!(find(&r, "power-profile").status, ReadinessStatus::Attention);
@@ -1364,14 +1375,14 @@ mod readiness_tests {
             }],
             vec![],
         );
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Advisory);
     }
 
     #[test]
     fn missing_data_is_unknown_not_fabricated() {
         let hw = hw_with(None, vec![], vec![]);
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&r, "monitor-refresh").status, ReadinessStatus::Unknown);
         assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Unknown);
         assert_eq!(find(&r, "power-profile").status, ReadinessStatus::Unknown);
@@ -1383,7 +1394,7 @@ mod readiness_tests {
     #[test]
     fn vrr_is_advisory_with_action_not_unknown() {
         let hw = hw_with(None, vec![], vec![]);
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "vrr");
         assert_eq!(c.status, ReadinessStatus::Advisory);
         assert!(c.action_uri.is_some(), "VRR advisory should offer an action link");
@@ -1406,7 +1417,7 @@ mod readiness_tests {
             vec![],
         );
         let r =
-            evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), Some(false));
+            evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), Some(false));
         let c = find(&r, "vrr");
         assert_eq!(c.status, ReadinessStatus::Attention);
         assert!(c.action_uri.is_some());
@@ -1424,7 +1435,7 @@ mod readiness_tests {
             vec![],
         );
         let mut r =
-            evaluate_readiness(&hw, Some("Balanced"), false, false, &AppliedChangesSummary::default(), None);
+            evaluate_readiness(&hw, Some("Balanced"), false, false, Ok(&AppliedChangesSummary::default()), None);
         let before = r.attention_count;
         assert!(before >= 1, "monitor-refresh below max should be Attention");
         r.apply_dismissals(vec!["monitor-refresh".to_string()]);
@@ -1435,10 +1446,27 @@ mod readiness_tests {
     #[test]
     fn freesync_on_makes_vrr_ready() {
         let hw = hw_with(None, vec![], vec![]);
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), Some(true));
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), Some(true));
         let c = find(&r, "vrr");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert_eq!(c.value.as_deref(), Some("FreeSync: on"));
+    }
+
+    // #669: an unreadable ledger renders the applied-changes row as Unknown with no value — never
+    // "0 — nothing to track", and never the raw read error.
+    #[test]
+    fn an_unreadable_ledger_leaves_applied_changes_unknown() {
+        let hw = hw_with(None, vec![], vec![]);
+        let r = evaluate_readiness(&hw, None, false, false, Err("sharing violation"), None);
+        let c = find(&r, "applied-changes");
+        assert_eq!(c.status, ReadinessStatus::Unknown);
+        assert_eq!(c.value, None);
+        assert!(c.detail.contains("can't read its change history"), "{}", c.detail);
+        assert!(!c.detail.contains("nothing to track"), "{}", c.detail);
+        assert!(!c.detail.contains("sharing violation"), "{}", c.detail);
+        let readable = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
+        assert_eq!(r.unknown_count, readable.unknown_count + 1);
+        assert_eq!(r.ready_count, readable.ready_count - 1);
     }
 
     #[test]
@@ -1451,7 +1479,7 @@ mod readiness_tests {
             externally_reverted: 1,
             drifted_titles: vec!["Enable Windows Game Mode".into()],
         };
-        let r = evaluate_readiness(&hw, None, false, false, &hist, None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&hist), None);
         let c = find(&r, "applied-changes");
         assert_eq!(c.status, ReadinessStatus::Attention);
         // flags-name-it law: the drifted setting is NAMED; no vague "setting(s)", no dead-end
@@ -1471,7 +1499,7 @@ mod readiness_tests {
     #[test]
     fn status_counts_cover_every_check() {
         let hw = hw_with(None, vec![], vec![]);
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(
             r.ready_count + r.attention_count + r.unknown_count + r.advisory_count,
             r.checks.len()
@@ -1495,7 +1523,7 @@ mod readiness_tests {
             }],
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "memory-speed");
         assert_eq!(c.status, ReadinessStatus::Attention);
         let d = c.detail.to_uppercase();
@@ -1517,7 +1545,7 @@ mod readiness_tests {
             }],
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "memory-speed");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert!(!c.detail.to_uppercase().contains("ENABLE"), "no fix prompt when already at rated");
@@ -1537,7 +1565,7 @@ mod readiness_tests {
     #[test]
     fn memory_channels_single_dimm_is_attention_to_add_a_stick() {
         let hw = HardwareInfo { memory_modules: vec![mem("DDR5")], ..Default::default() };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "memory-channels");
         assert_eq!(c.status, ReadinessStatus::Attention);
         assert!(c.detail.to_lowercase().contains("dual-channel"));
@@ -1547,7 +1575,7 @@ mod readiness_tests {
     fn memory_channels_single_soldered_lpddr_is_ready_not_a_dead_end() {
         // Soldered LPDDR can't take a second stick — advising one would be an impossible dead-end.
         let hw = HardwareInfo { memory_modules: vec![mem("LPDDR5")], ..Default::default() };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "memory-channels");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert!(c.detail.to_lowercase().contains("soldered"));
@@ -1556,14 +1584,14 @@ mod readiness_tests {
     #[test]
     fn memory_channels_two_modules_is_ready_dual_channel() {
         let hw = HardwareInfo { memory_modules: vec![mem("DDR5"), mem("DDR5")], ..Default::default() };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&r, "memory-channels").status, ReadinessStatus::Ready);
     }
 
     #[test]
     fn memory_channels_no_modules_is_unknown_never_a_scare() {
         let hw = HardwareInfo { memory_modules: vec![], ..Default::default() };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&r, "memory-channels").status, ReadinessStatus::Unknown);
     }
 
@@ -1574,7 +1602,7 @@ mod readiness_tests {
     #[test]
     fn network_connection_wired_is_ready_steadiest() {
         let hw = HardwareInfo { network_adapters: vec![nic(true, "wired", true)], ..Default::default() };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "network-connection");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert!(c.detail.to_lowercase().contains("wired ethernet"));
@@ -1584,7 +1612,7 @@ mod readiness_tests {
     fn network_connection_wifi_is_advisory_not_a_problem() {
         // Advisory keeps the readiness clean (Wi-Fi is fine) while surfacing the wired-is-steadier tip.
         let hw = HardwareInfo { network_adapters: vec![nic(true, "wifi", true)], ..Default::default() };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "network-connection");
         assert_eq!(c.status, ReadinessStatus::Advisory);
         assert!(c.detail.to_lowercase().contains("wi-fi"));
@@ -1593,7 +1621,7 @@ mod readiness_tests {
     #[test]
     fn network_connection_offline_is_unknown_never_a_scare() {
         let hw = HardwareInfo { network_adapters: vec![], ..Default::default() };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&r, "network-connection").status, ReadinessStatus::Unknown);
     }
 
@@ -1611,7 +1639,7 @@ mod readiness_tests {
             }),
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "network-connection");
         assert_eq!(c.status, ReadinessStatus::Advisory);
         assert!(c.detail.contains("5 GHz") && c.detail.contains("86% signal") && c.detail.contains("867 Mbps"));
@@ -1627,7 +1655,7 @@ mod readiness_tests {
             has_wired_ethernet_port: true,
             ..Default::default()
         };
-        let r = evaluate_readiness(&with_port, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&with_port, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = find(&r, "network-connection");
         assert_eq!(c.status, ReadinessStatus::Advisory); // still advisory, not a problem
         assert!(c.detail.contains("wired Ethernet port") && c.detail.contains("plugging it in"));
@@ -1636,7 +1664,7 @@ mod readiness_tests {
         // A port-less rig keeps the hedged copy (a cable may not be feasible).
         let no_port =
             HardwareInfo { network_adapters: vec![nic(true, "wifi", true)], ..Default::default() };
-        let r2 = evaluate_readiness(&no_port, None, false, false, &AppliedChangesSummary::default(), None);
+        let r2 = evaluate_readiness(&no_port, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c2 = find(&r2, "network-connection");
         assert!(c2.detail.contains("worth a cable if you can run one"));
     }
@@ -1659,7 +1687,7 @@ mod readiness_tests {
                 ..Default::default()
             };
             let r =
-                evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+                evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
             find(&r, "network-connection").detail.clone()
         };
 
@@ -1681,7 +1709,7 @@ mod readiness_tests {
             None,
             false,
             false,
-            &AppliedChangesSummary::default(),
+            Ok(&AppliedChangesSummary::default()),
             None,
         );
         assert!(!none.checks.iter().any(|c| c.id == "network-qos"), "no QoS row on a clean rig");
@@ -1692,7 +1720,7 @@ mod readiness_tests {
             ..Default::default()
         };
         let r =
-            evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+            evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         let c = r.checks.iter().find(|c| c.id == "network-qos").expect("QoS advisory present");
         assert_eq!(c.status, ReadinessStatus::Advisory);
         assert!(c.detail.contains("GameThrottle") && c.detail.contains("BulkDownload"));
@@ -1700,7 +1728,7 @@ mod readiness_tests {
 
     fn with_ram(bytes: u64) -> GameReadiness {
         let hw = HardwareInfo { ram_total_bytes: bytes, ..Default::default() };
-        evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None)
+        evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None)
     }
 
     #[test]
@@ -1731,7 +1759,7 @@ mod readiness_tests {
 
     fn with_cores(n: usize) -> GameReadiness {
         let hw = HardwareInfo { cpu_cores_physical: n, ..Default::default() };
-        evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None)
+        evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None)
     }
 
     #[test]
@@ -1747,7 +1775,7 @@ mod readiness_tests {
             gpus: vec![crate::hardware::GpuInfo { vram_bytes: bytes, ..Default::default() }],
             ..Default::default()
         };
-        evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None)
+        evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None)
     }
 
     #[test]
@@ -1761,7 +1789,7 @@ mod readiness_tests {
     #[test]
     fn gpu_vram_no_gpu_is_unknown() {
         let hw = HardwareInfo { gpus: vec![], ..Default::default() };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&r, "gpu-vram").status, ReadinessStatus::Unknown);
     }
 
@@ -1775,7 +1803,7 @@ mod readiness_tests {
             }],
             ..Default::default()
         };
-        let rb = evaluate_readiness(&bad, None, false, false, &AppliedChangesSummary::default(), None);
+        let rb = evaluate_readiness(&bad, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&rb, "drive-health").status, ReadinessStatus::Attention);
 
         let good = HardwareInfo {
@@ -1785,7 +1813,7 @@ mod readiness_tests {
             }],
             ..Default::default()
         };
-        let rg = evaluate_readiness(&good, None, false, false, &AppliedChangesSummary::default(), None);
+        let rg = evaluate_readiness(&good, None, false, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&rg, "drive-health").status, ReadinessStatus::Ready);
     }
 }

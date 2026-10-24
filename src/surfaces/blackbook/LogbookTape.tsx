@@ -133,7 +133,7 @@ function SessionBody({ r }: { r: LogbookSession }) {
         {/* PLAIN COPY, NOT A CHIP (03-history-approved.png). "12 changes on" sits in the same
             grey run as `avg 191 fps` with no outline: it is one more fact about the session, and
             the pill it used to wear made it read as a badge the session had EARNED. */}
-        {r.changesActive > 0 && (
+        {r.changesActive != null && r.changesActive > 0 && (
           <span className="bc-row-note">
             {t("blackbook.blackbookConsole.sessionBody.changesOn", { count: r.changesActive })}
           </span>

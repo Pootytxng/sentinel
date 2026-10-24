@@ -238,7 +238,7 @@ describe("a Trial measures one change, and says so only when it can (#611 review
   const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
 
   it("§3: the baseline must still match Compy's changes before anything is recorded or applied", () => {
-    const check = start.indexOf("baseline_is_current(baseline, ledger, crate::history::applied_changes_summary().active)");
+    const check = start.indexOf("baseline_checked_view(baseline, &history)");
     expect(check, "the start no longer checks that the baseline is current").toBeGreaterThanOrEqual(0);
     expect(check).toBeGreaterThan(start.indexOf("resolve_baseline("));
     expect(check).toBeLessThan(start.indexOf("status: ExperimentStatus::Pending"));
@@ -354,7 +354,7 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
     const refuse = start.indexOf("unverified_start_refusal(unverified)");
     expect(count, "the start no longer counts other settings it can't read back").toBeGreaterThanOrEqual(0);
     expect(refuse, "the start no longer refuses on them").toBeGreaterThan(count);
-    expect(count).toBeGreaterThan(start.indexOf("baseline_is_current("));
+    expect(count).toBeGreaterThan(start.indexOf("baseline_checked_view("));
     expect(refuse).toBeLessThan(start.indexOf("status: ExperimentStatus::Pending"));
     expect(refuse).toBeLessThan(start.indexOf("apply_recommendation("));
   });
@@ -375,7 +375,7 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
   it("the start note names only other settings; the stored count stays the sessions' count", () => {
     const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
     expect(start, "the note counts the setting under test again").toMatch(
-      /let others = rows\.as_deref\(\)\.map_or\(active, \|rows\| other_active_changes\(rows, &rec_id\)\);\s*let warning = attribution_warning\(others\);/,
+      /let others = other_active_changes\(rows, &rec_id\);\s*let warning = attribution_warning\(others\);/,
     );
     expect(start, "the stored count no longer matches what sessions record").toContain("active_changes_at_start: active,");
     expect(fnBody(EXPERIMENT, "pub(crate) fn other_active_changes(")).toContain("applied && rec != own_rec");
@@ -445,5 +445,68 @@ describe("the Trial's messages name a room that exists", () => {
     const code = EXPERIMENT.split("\n").filter((l) => !/^\s*\/\//.test(l));
     const stale = code.filter((l) => /\b(?:in|from|open) (?:the )?Fix\b|Fix surface/.test(l));
     expect(stale, stale.join("\n")).toEqual([]);
+  });
+});
+
+// #668: after the one-change check had loaded the ledger, the start read it twice more for its counts
+// (`applied_changes_summary().active`, `active_change_count()`), each a `load_history().unwrap_or_default()`.
+// A read that failed there recorded 0 changes active on a rig that had some. The pure fold is
+// Rust-tested; this pins that the live start folds every count from the one load and reads no other.
+describe("a Trial start counts its changes from the one ledger it loaded (#668)", () => {
+  const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
+
+  it("no count in the start comes from a second read of the change history", () => {
+    expect(start, "the baseline check reads the ledger again for its count").not.toContain("applied_changes_summary(");
+    expect(start, "the record's count reads the ledger again").not.toContain("active_change_count(");
+    expect(start.match(/load_history\(\)/g) ?? [], "the start loads the ledger more than once").toHaveLength(1);
+    const view = start.indexOf("let view = baseline_checked_view(baseline, &history)");
+    expect(view, "the start no longer folds its view from the loaded rows").toBeGreaterThan(
+      start.indexOf("ledger_for_one_change_checks("),
+    );
+    expect(start).toContain("let active = view.active_changes;");
+    expect(start).toContain("active_changes_at_start: active,");
+    const checked = fnBody(EXPERIMENT, "fn baseline_checked_view<'a>(");
+    expect(checked).toContain("active_now: crate::history::summarize_history(changes).active,");
+    expect(checked).toContain("active_changes: crate::history::active_changes_in(changes),");
+    expect(checked).toContain("baseline_is_current(baseline, ledger)?;");
+    // The check takes the rows AND the count as one readable ledger, or why it isn't.
+    expect(fnBody(EXPERIMENT, "pub(crate) fn baseline_is_current(")).toMatch(
+      /ledger: Result<\(&\[LedgerEntryRef<'_>\], usize\), &str>,/,
+    );
+  });
+});
+
+// #669: a session's active-change count is persisted for the rest of its life (every Trial baseline
+// check, debrief and comparison reads it back), so the one read it comes from must keep "couldn't
+// read" apart from "0". The pure seam is Rust-tested; this pins that the live session start calls it
+// with the one load it passes in, and never the zero-collapsing summary.
+describe("a session records its change count from a checked read, or no count at all (#669)", () => {
+  const MONITORING = readFileSync(join("src-tauri", "src", "monitoring.rs"), "utf8");
+
+  it("the session start takes its count from session_start_active_count(load_history(), ledger_was_quarantined())", () => {
+    // A ledger set aside as history.json.corrupt loads empty from then on; the marker is the only
+    // evidence the count is lost, so the session start must hand it in with the load.
+    expect(MONITORING.replace(/\s+/g, " ")).toContain(
+      "let active_changes = crate::history::session_start_active_count( " +
+        "crate::history::load_history(), crate::history::ledger_was_quarantined(), );",
+    );
+    expect(MONITORING, "the zero-collapsing summary is back at the session start").not.toContain(
+      "applied_changes_summary().active",
+    );
+  });
+
+  it("Game Readiness reads the checked summary, never the zero-collapsing one", () => {
+    const READINESS = readFileSync(join("src-tauri", "src", "readiness.rs"), "utf8");
+    expect(READINESS).toContain("let hist = applied_changes_summary_checked();");
+    expect(READINESS, "the zero-collapsing summary is back in Game Readiness").not.toContain(
+      "applied_changes_summary()",
+    );
+    // Nothing else pins the body it reads: reverting applied_changes_summary_checked to
+    // `load_history().map(..)` would pass every Rust test and quietly turn a set-aside ledger back
+    // into "0" here (rust-tauri-reviewer on #669, round 2).
+    const HISTORY = readFileSync(join("src-tauri", "src", "history.rs"), "utf8");
+    expect(HISTORY, "the checked summary no longer hands in the set-aside marker").toContain(
+      "checked_summary(load_history(), ledger_was_quarantined())",
+    );
   });
 });
