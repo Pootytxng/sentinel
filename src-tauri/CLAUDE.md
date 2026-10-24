@@ -30,6 +30,7 @@ Line counts drift — treat as rough and verify against current code before asse
 
 **Benchmark & Lab**
 - `benchmark.rs` (~1330), `benchmark_trial.rs` (~615), `benchmark_verdict.rs` (~580), `benchmark_scoreboard.rs` (~460), `comparison.rs` (~686) — the Lab proving-ground bench: trials, verdicts, scoreboard, A/B comparison.
+- `noise_floor.rs` (~447) — P4-noise-store: each game's own run-to-run noise on this PC, recorded by a Lab calibration (`noise_floors.json`, written through `atomic_write`) and looked up by a Trial conclude as Measured / Stale / Unmeasured. Never guesses a level it did not measure. Writes no Windows state.
 - `latency.rs` (~2255) — input/network latency probes.
 - `blackbox.rs` (~2150) — diagnostic black-box capture.
 

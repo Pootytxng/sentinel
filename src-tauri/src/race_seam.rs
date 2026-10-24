@@ -246,6 +246,10 @@ pub(crate) enum StoreLock {
     /// here is a torn `benchmark.json`. All five acquisition sites are recorded, not just the two
     /// that persist — an unrecorded site of the same mutex would make re-entrancy detection unsound.
     Benchmark,
+    /// `noise_floor::write_gate`'s `GATE` — guards `load_from` -> `upsert` -> `save_to` on
+    /// `noise_floors.json` (P4-noise-store). A leaf: nothing inside reaches another store, and its
+    /// one caller (`benchmark_trial`'s calibration thread) holds no store lock when it records.
+    NoiseFloor,
     /// Not real locks. Three synthetic ids, so the recorder's own behaviour can be pinned without
     /// borrowing a production lock's id.
     ///
@@ -277,6 +281,7 @@ impl StoreLock {
             StoreLock::Experiment => "experiment::store_write_gate",
             StoreLock::Intelligence => "intelligence::store_write_gate",
             StoreLock::Benchmark => "benchmark::state_cache",
+            StoreLock::NoiseFloor => "noise_floor::write_gate",
             StoreLock::TestOuter => "TEST_OUTER",
             StoreLock::TestMiddle => "TEST_MIDDLE",
             StoreLock::TestInner => "TEST_INNER",
@@ -711,6 +716,17 @@ mod production_nesting_tests {
         {
             let _i = crate::intelligence::lock_store().expect("intelligence gate");
             assert_eq!(held_now(), vec![StoreLock::Intelligence]);
+        }
+        assert!(held_now().is_empty(), "the stack must unwind exactly");
+    }
+
+    /// `noise_floor::write_gate` is a leaf taken alone, like the intelligence gate above: a negative
+    /// control that must stay green, and the proof that its one acquisition site is recorded.
+    #[test]
+    fn the_noise_floor_gate_is_a_leaf_taken_alone() {
+        {
+            let _n = crate::noise_floor::lock_gate();
+            assert_eq!(held_now(), vec![StoreLock::NoiseFloor]);
         }
         assert!(held_now().is_empty(), "the stack must unwind exactly");
     }

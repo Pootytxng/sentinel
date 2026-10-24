@@ -225,9 +225,18 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
   });
 
   it("§11: the noise evidence never fills in an unmeasured noise level", () => {
+    // P4-noise-store: the level comes only from this game's own calibration. Unmeasured and stale
+    // both record None; nothing else (the band, a default) may stand in for it.
     const noise = fnBody(EXPERIMENT, "pub(crate) fn noise_evidence_for(");
-    expect(noise).toContain("measured_noise_pct: None");
-    expect(fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(")).toContain("noise_evidence_for(&outcome");
+    expect(noise, "only a real measurement fills the level").toContain("NoiseLookup::Measured(pct) => (Some(*pct), None)");
+    expect(noise, "a stale measurement fills in a level again").toContain("NoiseLookup::Stale(why) => (None, Some(*why))");
+    expect(noise, "an unmeasured game gets a level again").toContain("NoiseLookup::Unmeasured => (None, None)");
+    expect(noise).toContain("NoiseEvidence { band_pct, measured_noise_pct, measured_noise_stale }");
+    const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
+    expect(conclude, "a Trial with no treatment session reads a noise level again").toContain(
+      "treatment.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session)",
+    );
+    expect(conclude).toContain("noise_evidence_for(&outcome, band_pct, &game_noise)");
   });
 });
 
@@ -350,7 +359,8 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
 
   it("§3 at start: a Trial that could only end unjudged is refused before anything is recorded or applied", () => {
     const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
-    const count = start.indexOf("unverified_other_changes(rows, &rec_id, |other| read_back(changes, other))");
+    // #686-followup: the count runs through unverified_others_live, one LiveReads for every row.
+    const count = start.indexOf("unverified_others_live(changes, rows, &rec_id, &crate::history::LiveReads::default())");
     const refuse = start.indexOf("unverified_start_refusal(unverified)");
     expect(count, "the start no longer counts other settings it can't read back").toBeGreaterThanOrEqual(0);
     expect(refuse, "the start no longer refuses on them").toBeGreaterThan(count);
@@ -364,9 +374,14 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
   it("the setting under test is never counted as another setting, at the start or the conclude", () => {
     const count = fnBody(EXPERIMENT, "pub(crate) fn unverified_other_changes(");
     expect(count, "the count excludes only this Trial's change row again").toContain("c.rec_id != own_rec");
-    expect(fnBody(EXPERIMENT, "pub(crate) fn start_experiment(")).toContain("unverified_other_changes(rows, &rec_id, |other| read_back(changes, other))");
+    expect(fnBody(EXPERIMENT, "fn unverified_others_live("), "the live count drops the setting under test").toContain(
+      "unverified_other_changes(rows, own_rec, |other| read_back(changes, other, reads))",
+    );
+    expect(fnBody(EXPERIMENT, "pub(crate) fn start_experiment(")).toContain(
+      "unverified_others_live(changes, rows, &rec_id, &crate::history::LiveReads::default())",
+    );
     expect(fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(")).toContain(
-      "unverified_other_changes(rows, &rec.rec_id, |other| read_back(changes, other))",
+      "unverified_others_live(changes, rows, &rec.rec_id, &crate::history::LiveReads::default())",
     );
   });
 
@@ -385,7 +400,10 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
   // read of the catalog alone counted them unverified and refused every Trial start on the owner's rig.
   it("other settings are read back through their own ledger row, not the catalog alone", () => {
     expect(fnBody(EXPERIMENT, "fn read_back(")).toContain(
-      "target_verification(Some(crate::history::probe_applied_setting(changes, rec_id)))",
+      "target_verification(Some(crate::history::probe_applied_setting(changes, rec_id, reads)))",
+    );
+    expect(fnBody(HISTORY, "pub(crate) fn probe_applied_setting("), "the read skips the setting's own ledger row").toContain(
+      "check_row_state(c, reads)",
     );
     const check = fnBody(HISTORY, "fn check_change_state(");
     for (const prefix of ['"startup-entry:"', '"bloat-task:"', '"service-suspend:"']) {
