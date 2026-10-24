@@ -119,8 +119,14 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       calibration, not between sessions — P4-noise must decide if that is the right floor) Store a measured noise floor per game + rig (`process_name` + `hw_fingerprint`),
       stale after a driver/Windows/game-build change; fill `measured_noise_pct` in `experiment.rs` from
       `benchmark_trial.rs` calibration. Rust unit tests. TRIAL_PROTOCOL §5, MACHINE_MODEL §4, ENGINE §10.
-- [ ] **P4-noise** "Measure this game's noise": two unchanged sessions → "varies ±X% on your PC"; Trials
-      use max(measured, 3%); the "hasn't been measured yet" line goes. Owner-rig proof. Needs P4-noise-store.
+- [x] **P4-noise** `f1c93f44`: verdict band = max(1% low range across >= 3 unchanged sessions, 3%);
+      uneven-halves grading stays on the fixed 3% (owner). An effect inside the band reads No change.
+- [ ] **P4-noise-proof** (owner) Play 3 WARDOGS sessions >= 10 min with no Compy change, Trial or Gaming
+      Mode change between them; then confirm the receipt shows the measured band. None qualify yet.
+- [ ] **P4-noise-copy** "from one session to the next" → "between any two of those sessions" (en); rename
+      `grade_baseline`'s `noise_floor_pct` param to `halves_floor_pct`; fix ExperimentBench.tsx:206 comment.
+- [ ] **453-fix** Health active count must match Optimize and History (lane running): one per change,
+      live On regardless of rig stamp; can't-confirm grouped the same on all three. Then re-run #453.
 - [x] **P4-baseline-quality** `66f1daea`. Owner 2026-10-24: warn, don't block — < 600 readings refuses;
       uneven halves (> 3%) or no trace warn and are recorded on the receipt. Blocking waits for P4-noise.
       Was: grade the baseline before a start: < 600 readings, or halves differing by more
@@ -166,6 +172,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-24 midday: guard re-anchor `18622365` (pushed), #617-f1 `29e5e67a`, #638.
 - 2026-10-24 afternoon: #622-f1 `716e0fbd`, P4-baseline-quality `66f1daea` (owner: warn, don't block).
 - 2026-10-24 afternoon: P4-sessions (too-noisy on uneven sessions).
+- 2026-10-24 12:24 #453 live run on owner rig: Health 13 vs Optimize/History 14 (row-count +
+  rig-stamp bug, see 453-fix); diagnostics agreed; startup toggle visible + rolled back everywhere;
+  CPU temp unknown with reason. P4-noise `f1c93f44`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
