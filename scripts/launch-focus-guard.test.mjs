@@ -181,6 +181,102 @@ describe("the ship path relaunches without stealing the foreground", () => {
   });
 });
 
+// ── THE LAUNCH ITSELF MUST NOT ACTIVATE (WORK_TRAIN item FOCUS, 2026-10-24) ──────────────────────
+// Windows applies the launcher's STARTUPINFO to a new process's first ShowWindow: with
+// STARTF_USESHOWWINDOW set, wShowWindow REPLACES the show command the app asked for. Measured on the
+// owner's PC: Start-Process and a ShellExecute launch hand over dwFlags=1 wShowWindow=1
+// (SW_SHOWNORMAL, activating), so Compy's own SW_SHOWNOACTIVATE was overridden on every probe launch
+// and every ship relaunch; a .NET CreateProcess launch hands over dwFlags=0 (nothing overridden).
+describe("launches hand Compy SW_SHOWNOACTIVATE, not Start-Process's SW_SHOWNORMAL (FOCUS)", () => {
+  const PROBE_TEXT = read("scripts", "lib", "foreground-probe.ps1");
+  const NATIVE = read("scripts", "lib", "native-process.ps1");
+  const LAUNCH_CS = read("scripts", "lib", "no-activate-launch.cs");
+  const code = (text) => text.split(/\r?\n/).filter((l) => !/^\s*#/.test(l)).join("\n");
+
+  it("the helper sets STARTF_USESHOWWINDOW with the caller's show command and inherits no handles", () => {
+    expect(LAUNCH_CS).toMatch(/si\.dwFlags = STARTF_USESHOWWINDOW;/);
+    expect(LAUNCH_CS).toMatch(/si\.wShowWindow = showWindow;/);
+    expect(LAUNCH_CS).toMatch(/SW_SHOWNOACTIVATE = 4;/);
+    expect(LAUNCH_CS, "bInheritHandles must be false, or the child holds the caller's pipes").toMatch(
+      /CreateProcessW\(filePath, cmd, IntPtr\.Zero, IntPtr\.Zero, false,/,
+    );
+  });
+
+  it("the probe launches through the helper, not Start-Process, and defaults to no-activate", () => {
+    expect(code(PROBE_TEXT), "Start-Process always hands over SW_SHOWNORMAL").not.toMatch(/Start-Process\b/);
+    expect(PROBE_TEXT).toMatch(/\[CompyLaunch\.NoActivate\]::Start\(\$FilePath, \$commandLine, \$null, \$launchShowWindow\)/);
+    expect(PROBE_TEXT).toMatch(/\[string\]\$LaunchShow = "noactivate"/);
+    expect(PROBE_TEXT, "the result must say how it launched").toMatch(/launchShowWindow = \[int\]\$launchShowWindow/);
+  });
+
+  it("every detached ship relaunch of Compy passes -NoActivate", () => {
+    const relaunches = SHIP.split(/\r?\n/).filter((l) => /Start-NativeProcess -Command \$exe -Detached/.test(l));
+    expect(relaunches.length).toBeGreaterThan(0);
+    for (const line of relaunches) expect(line, line.trim()).toMatch(/-NoActivate\b/);
+  });
+
+  it("Start-NativeProcess -NoActivate returns before the ShellExecute path can run", () => {
+    const fn = NATIVE.slice(NATIVE.indexOf("function Start-NativeProcess"));
+    const noActivate = fn.indexOf("[CompyLaunch.NoActivate]::Start(");
+    const shellExecute = fn.indexOf("$startInfo.UseShellExecute");
+    expect(noActivate).toBeGreaterThan(-1);
+    expect(noActivate).toBeLessThan(shellExecute);
+    expect(fn.slice(noActivate, noActivate + 200)).toMatch(/SW_SHOWNOACTIVATE\)/);
+  });
+
+  it.runIf(windows)(
+    "measured: the child really receives wShowWindow=4 from both launch paths (and Start-Process really sends 1)",
+    () => {
+      // A GUI-subsystem child that writes its own GetStartupInfo and exits: no window, no console.
+      const dir = mkdtempSync(join(tmpdir(), "compy-si-"));
+      const script = join(dir, "check.ps1");
+      const lib = join(ROOT, "scripts", "lib");
+      writeFileSync(
+        script,
+        [
+          '$ErrorActionPreference = "Stop"',
+          `$dir = '${dir}'`,
+          '$exe = Join-Path $dir "sidump.exe"',
+          "Add-Type -OutputType WindowsApplication -OutputAssembly $exe -TypeDefinition @'",
+          "using System; using System.Runtime.InteropServices;",
+          "public static class P {",
+          "  [StructLayout(LayoutKind.Sequential)] struct SI { public int cb; public IntPtr a, b, c; public int x, y, xs, ys, xc, yc, fa, flags; public short show; public short r2; public IntPtr p1, p2, p3, p4; }",
+          '  [DllImport("kernel32.dll")] static extern void GetStartupInfoW(out SI si);',
+          '  public static void Main(string[] args) { SI si; GetStartupInfoW(out si); System.IO.File.WriteAllText(args[0], si.flags + "," + si.show); }',
+          "}",
+          "'@",
+          `. '${join(lib, "native-process.ps1")}'`,
+          `Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath '${join(lib, "no-activate-launch.cs")}')`,
+          "function Read-Dump($f) { for ($i = 0; $i -lt 100 -and -not (Test-Path $f); $i++) { Start-Sleep -Milliseconds 100 }; (Get-Content $f).Trim() }",
+          '$a = Join-Path $dir "a.txt"; Start-Process -FilePath $exe -ArgumentList $a | Out-Null',
+          '$b = Join-Path $dir "b.txt"; $p = [CompyLaunch.NoActivate]::Start($exe, (\'"\' + $exe + \'" "\' + $b + \'"\'), $null, [CompyLaunch.NoActivate]::SW_SHOWNOACTIVATE)',
+          '$c = Join-Path $dir "c.txt"; $q = Start-NativeProcess -Command $exe -ArgumentList @($c) -Detached -NoActivate',
+          'Write-Output ("startprocess=" + (Read-Dump $a) + " helper=" + (Read-Dump $b) + " native=" + (Read-Dump $c))',
+        ].join("\r\n"),
+      );
+      const run = spawnSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], {
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 90_000,
+      });
+      try {
+        expect(run.status, `stderr: ${run.stderr}`).toBe(0);
+        // The control proves the dump reads what Windows really passed.
+        expect(run.stdout).toMatch(/startprocess=1,1 /);
+        expect(run.stdout).toMatch(/helper=1,4 /);
+        expect(run.stdout).toMatch(/native=1,4\b/);
+      } finally {
+        try {
+          rmSync(dir, { recursive: true, force: true });
+        } catch {
+          /* a just-exited child can hold the exe for a moment; the temp dir is not evidence */
+        }
+      }
+    },
+    90_000,
+  );
+});
+
 describe("the console browser opens quietly only when tooling started it", () => {
   it("every browser launch carries an explicit window style", () => {
     const launches = CONSOLE_START.split(/\r?\n/).filter((line) => /^\s*Start-Process\b/.test(line));
@@ -358,7 +454,14 @@ export function summarizeTrace({ events = [], launchedPid, familyPids = [], runn
     events.find((e) => e.kind === "SHOW" && e.pid === launchedPid && e.root === e.hwnd) ??
     events.find((e) => e.kind === "SHOW" && inFamily(e)) ??
     null;
-  const foreground = events.find((e) => e.kind === "FOREGROUND" && inFamily(e)) ?? null;
+  // The foreground moved to Compy only when the hook's `fgPid` (who owns the foreground window as the
+  // event arrives) is in the family -- NOT when the event merely names a family window. Recorded
+  // 2026-10-24: every launch fires EVENT_SYSTEM_FOREGROUND for its own window at its first SHOW, and
+  // on the clean runs fgPid still names the owner's game (5412, 118100) because Windows refused the
+  // activation. Counting those made a clean launch look like a raise. A trace without fgPid (older
+  // recordings) falls back to the event's own window.
+  const movedToFamily = (e) => (Number.isInteger(e.fgPid) ? family.has(e.fgPid) : inFamily(e));
+  const foreground = events.find((e) => e.kind === "FOREGROUND" && movedToFamily(e)) ?? null;
   const focusEvents = events.filter((e) => e.kind === "FOCUS" && inFamily(e));
   const window = 250; // ms either side of the foreground change that still counts as "this raise"
   const focusBefore = foreground
@@ -444,12 +547,46 @@ export function formatTrace(events = [], { limit = 40 } = {}) {
  * near it) is an ABSENCE of evidence, so it stays the hard zero. Under
  * COMPY_REQUIRE_FOREGROUND_RUNTIME_PROOF every unmeasurable verdict is a failure again.
  */
+/** STARTUPINFO wShowWindow for a launch that cannot activate (scripts/lib/no-activate-launch.cs). */
+export const SW_SHOWNOACTIVATE = 4;
+
+/**
+ * WHICH CLOCK THE VERDICT READS (WORK_TRAIN item FOCUS, 2026-10-24).
+ *
+ * The poll reads the foreground and the window at 100ms grain and in a fixed order, so its two
+ * timestamps can disagree with the machine by a whole poll. Recorded 2026-10-24, the gate rejected
+ * pushes on poll readings of "foreground 132ms, window 13ms" while the trace of the SAME run had the
+ * foreground move to Compy 1ms after its first SHOW (SHOW 34ms, FOREGROUND fgPid=compy 35ms). So when
+ * the trace has both events, the verdict times the first FOREGROUND that really moved to the family
+ * (fgPid, see summarizeTrace) against the first SHOW. The poll's timing is the fallback, never
+ * dropped: a run where the poll saw Compy own the foreground and the trace has no such event (recorded
+ * 2026-10-24 11:06, 21 samples from 2315ms) is still scored, and scored on the poll's terms.
+ *
+ * OWNERSHIP IS EITHER INSTRUMENT. A foreground the trace saw move to Compy counts even if no 100ms
+ * poll landed inside it: an exclusive-fullscreen game is minimised by any activation, however short.
+ *
+ * AND THE LAUNCH NO LONGER EXCUSES A FOREGROUND AT THE FIRST SHOW. The "unattributable-at-launch"
+ * class exists because Windows could front a fresh launch through the launcher's STARTUPINFO: the
+ * probe used Start-Process, which hands over SW_SHOWNORMAL and overrides Compy's own non-activating
+ * show. The probe now launches with SW_SHOWNOACTIVATE and reports it (`launchShowWindow`), and with
+ * that nothing about the launch can activate the window -- so a foreground at the first show is the
+ * app's own and FAILS. A reading without `launchShowWindow` (older traces) keeps the old rule.
+ */
 export function runtimeVerdict(result) {
-  const reading = classifyForegroundReading(result);
-  const { raisedBy } = summarizeTrace(result);
+  const s = summarizeTrace(result);
+  const traced = s.firstForegroundMs >= 0 && s.firstShowMs >= 0;
+  const reading = classifyForegroundReading({
+    ownedForegroundSamples: Math.max(result.ownedForegroundSamples ?? 0, s.firstForegroundMs >= 0 ? 1 : 0),
+    firstForegroundMs: traced ? s.firstForegroundMs : result.firstForegroundMs,
+    firstWindowMs: traced ? s.firstShowMs : result.firstWindowMs,
+  });
+  const { raisedBy } = s;
   if (reading === "clean") return { verdict: "clean", reading, raisedBy };
   if (raisedBy === "inherited-after-another-window-left") return { verdict: "unmeasurable", reading, raisedBy };
-  if (reading === "unattributable-at-launch") return { verdict: "unmeasurable", reading, raisedBy };
+  if (reading === "unattributable-at-launch") {
+    if (result.launchShowWindow === SW_SHOWNOACTIVATE) return { verdict: "fail", reading, raisedBy };
+    return { verdict: "unmeasurable", reading, raisedBy };
+  }
   return { verdict: "fail", reading, raisedBy };
 }
 
@@ -568,7 +705,7 @@ function keepTrace(parsed, { args = [], env = {}, grant = true, dir = traceDirFo
 }
 
 /** Run the probe and return its parsed result. Throws with the probe's own words on failure. */
-function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, grant = true }) {
+function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, grant = true, launchShow = "noactivate" }) {
   // A throwaway APPDATA so a measurement never writes to the owner's Trust Ledger, and so the
   // window-state file each launch reads is a known one rather than whatever he left behind.
   const sandbox = mkdtempSync(join(tmpdir(), "compy-fg-"));
@@ -591,6 +728,8 @@ function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, gr
       String(seconds),
       ...(args.length ? ["-ArgumentList", args.join(",")] : []),
       ...(grant ? [] : ["-NoGrant"]),
+      "-LaunchShow",
+      launchShow,
     ],
     {
       encoding: "utf8",
@@ -619,6 +758,7 @@ function measureLaunch({ args = [], env = {}, seconds = 6, savedState = null, gr
     runnerPids: parsed.runnerPids ?? [],
     parents: parsed.parents ?? {},
     rightsGranted: parsed.rightsGranted,
+    launchShowWindow: parsed.launchShowWindow,
   };
 }
 
@@ -1032,8 +1172,14 @@ describe("the trace names WHAT raised the window (#121)", () => {
       ev(310, "FOCUS"),
     ];
 
-    it("a poll that never saw Compy own the foreground is clean, whatever the trace holds", () => {
-      expect(runtimeVerdict({ ...poll(-1, 12, 0), launchedPid: 100, familyPids: [100], events: handoffTrace }).verdict).toBe("clean");
+    it("a poll that never saw Compy own the foreground is clean only if the trace agrees", () => {
+      // Refused activations -- the event names Compy's window, fgPid still names the game -- are clean.
+      const refused = [ev(38, "SHOW"), ev(39, "FOREGROUND", { fgPid: 5412 }), ev(106, "FOCUS")];
+      expect(runtimeVerdict({ ...poll(-1, 12, 0), launchedPid: 100, familyPids: [100], events: refused }).verdict).toBe("clean");
+      // A foreground that really moved to Compy between two polls is not: the game was still minimised.
+      const between = [ev(38, "SHOW"), ev(400, "FOREGROUND", { fgPid: 100 }), ev(450, "FOREGROUND", { pid: 7, proc: "game", family: false, fgPid: 7 })];
+      expect(runtimeVerdict({ ...poll(-1, 12, 0), launchedPid: 100, familyPids: [100], events: between }).verdict).toBe("fail");
+      expect(runtimeVerdict({ ...poll(-1, 12, 0), launchedPid: 100, familyPids: [100], events: handoffTrace }).verdict).toBe("unmeasurable");
     });
 
     it("a foreground the poll calls an in-process raise, that the trace shows was HANDED over, is unmeasurable by name", () => {
@@ -1059,6 +1205,65 @@ describe("the trace names WHAT raised the window (#121)", () => {
       const atLaunch = [ev(7, "FOREGROUND", { fgPid: 100 }), ev(9, "FOCUS"), ev(12, "SHOW")];
       expect(runtimeVerdict({ ...poll(7, 12), launchedPid: 100, familyPids: [100], events: atLaunch })).toEqual({ verdict: "unmeasurable", reading: "unattributable-at-launch", raisedBy: "in-process" });
       expect(runtimeVerdict({ ...poll(7, 12), launchedPid: 100, familyPids: [100], events: [] }).verdict).toBe("unmeasurable");
+    });
+  });
+
+  // WORK_TRAIN item FOCUS (2026-10-24): the gate rejected two pushes while the owner had a game in
+  // front. These are the recorded shapes, from logs/foreground-traces/, reduced to the fields read.
+  describe("the verdict times the trace, filters on fgPid, and a no-activate launch excuses nothing (FOCUS)", () => {
+    const poll = (firstForegroundMs, firstWindowMs, owned = 50) => ({ ownedForegroundSamples: owned, firstForegroundMs, firstWindowMs, samples: 55 });
+    const GAME = 118100;
+
+    it("an event that names Compy's window but leaves the foreground with the game is not a foreground", () => {
+      // 2026-10-24 10:16 (clean): SHOW 149ms, FOREGROUND for Compy's window 149ms, fgPid still the game.
+      const s = summarizeTrace({ launchedPid: 100, familyPids: [100], events: [ev(149, "SHOW"), ev(149, "FOREGROUND", { fgPid: GAME })] });
+      expect(s.firstForegroundMs).toBe(-1);
+      expect(s.raisedBy).toBe("none");
+    });
+
+    it("the owner's own game or Discord taking the foreground never counts against Compy", () => {
+      const events = [
+        ev(40, "SHOW"),
+        ev(41, "FOREGROUND", { fgPid: GAME }),
+        ev(900, "FOREGROUND", { pid: 555, proc: "Discord", family: false, cls: "Chrome_WidgetWin_1", title: "Discord", rootPid: 555, fgPid: 555 }),
+        ev(1500, "FOREGROUND", { pid: GAME, proc: "game", family: false, cls: "UnrealWindow", title: "The Game", rootPid: GAME, fgPid: GAME }),
+      ];
+      expect(summarizeTrace({ launchedPid: 100, familyPids: [100], events }).firstForegroundMs).toBe(-1);
+      expect(runtimeVerdict({ ...poll(-1, 30, 0), launchedPid: 100, familyPids: [100], events, launchShowWindow: SW_SHOWNOACTIVATE }).verdict).toBe("clean");
+    });
+
+    it("timing comes from the trace when it has both events: the 03:46 reading is AT the first show, not 119ms after", () => {
+      // Poll: foreground 132ms, window 13ms (looked like an in-process raise). Trace: SHOW 34, FOREGROUND fgPid=compy 35.
+      const events = [ev(34, "SHOW"), ev(35, "FOREGROUND", { fgPid: 100 }), ev(80, "FOCUS")];
+      const old = runtimeVerdict({ ...poll(132, 13, 55), launchedPid: 100, familyPids: [100], events });
+      expect(old).toMatchObject({ verdict: "unmeasurable", reading: "unattributable-at-launch" });
+    });
+
+    it("with a SW_SHOWNOACTIVATE launch, a foreground at the first show is Compy's own and FAILS", () => {
+      // The launcher can no longer have activated it, so the one-poll ambiguity is gone.
+      const events = [ev(34, "SHOW"), ev(35, "FOREGROUND", { fgPid: 100 }), ev(80, "FOCUS")];
+      expect(runtimeVerdict({ ...poll(132, 13, 55), launchedPid: 100, familyPids: [100], events, launchShowWindow: SW_SHOWNOACTIVATE })).toMatchObject({
+        verdict: "fail",
+        reading: "unattributable-at-launch",
+      });
+      // An activating launch (the self-test's) keeps the old, honest non-answer.
+      expect(runtimeVerdict({ ...poll(132, 13, 55), launchedPid: 100, familyPids: [100], events, launchShowWindow: 1 }).verdict).toBe("unmeasurable");
+    });
+
+    it("a raise well after the first show still fails on trace timing", () => {
+      const events = [ev(40, "SHOW"), ev(41, "FOREGROUND", { fgPid: GAME }), ev(700, "FOREGROUND", { fgPid: 100 }), ev(702, "FOCUS")];
+      expect(runtimeVerdict({ ...poll(720, 45), launchedPid: 100, familyPids: [100], events, launchShowWindow: SW_SHOWNOACTIVATE })).toMatchObject({
+        verdict: "fail",
+        reading: "in-process-raise",
+      });
+    });
+
+    it("the poll's own reading still fails when the trace has no matching event (11:06, 21 samples from 2315ms)", () => {
+      const events = [ev(47, "SHOW"), ev(48, "FOREGROUND", { fgPid: 143744 }), ev(106, "FOCUS")];
+      expect(runtimeVerdict({ ...poll(2315, 145, 21), launchedPid: 100, familyPids: [100], events, launchShowWindow: SW_SHOWNOACTIVATE })).toMatchObject({
+        verdict: "fail",
+        reading: "in-process-raise",
+      });
     });
   });
 
@@ -1209,7 +1414,9 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
         return ctx.skip();
       }
       if (unmeasurableBecauseRunning()) return ctx.skip();
-      const result = measureLaunch({ env: { COMPY_ACTIVATE: "1" } });
+      // Launched the ACTIVATING way (SW_SHOWNORMAL, the old Start-Process launch): this test must give
+      // the window every chance to come forward, or its pass proves nothing about the probe's sight.
+      const result = measureLaunch({ env: { COMPY_ACTIVATE: "1" }, launchShow: "normal" });
       expect(result.exited, `the app exited during the measurement (code ${result.exitCode})`).toBe(false);
       // Whether ANY launch can reach the foreground is decided before Compy runs. Windows only lets a
       // process activate a window if it inherited foreground rights from its launcher, so the whole
@@ -1332,14 +1539,17 @@ describe.runIf(windows && BINARY)("RUNTIME: a real launch, watched by GetForegro
         );
         return ctx.skip();
       }
+      // The launch handed over SW_SHOWNOACTIVATE, or the reading measures the launcher, not Compy.
+      expect(result.launchShowWindow, "the probe must launch with SW_SHOWNOACTIVATE in STARTUPINFO").toBe(SW_SHOWNOACTIVATE);
       expect(
-        result.ownedForegroundSamples,
+        verdict,
+        `verdict "${verdict}" (reading "${reading}", raised by ${raisedBy}). ` +
         `Compy held the foreground for ${result.ownedForegroundSamples}/${result.samples} samples ` +
           `(first at ${result.firstForegroundMs}ms, ${raise}; window at ${result.firstWindowMs}ms, ` +
           `visible=${result.sawVisibleWindow}; foreground pid before=${result.foregroundPidBefore}, ` +
           `after=${result.foregroundPidAfter}). This is the owner's game being minimised.\n` +
           describeTrace(result),
-      ).toBe(0);
+      ).toBe("clean");
       // A clean run leaves its trace too: the day the gate fails, the last green reading is the
       // baseline the red one is compared against.
       console.log(`[launch-focus-guard] quiet launch clean. ${describeTrace(result).split("\n")[0]}`);
