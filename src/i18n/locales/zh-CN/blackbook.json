@@ -59,7 +59,7 @@
     },
     "stripAriaLabel": "历史记录的内容",
     "tiles": {
-      "changesTitle": "这台电脑上的变更",
+      "changesTitle": "Compy 做过的变更",
       "changesNone": "还没有任何变更",
       "changesActive": "{{count}} 项生效中 · 每一项都可撤销",
       "changesInactive": "当前没有生效中的变更 · 但每一项都可撤销",
