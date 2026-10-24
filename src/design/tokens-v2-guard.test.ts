@@ -132,8 +132,9 @@ export function unscopedSelectors(css: string): string[] {
         // not to hide the file from the guard"); home-console.css is the first v2 sheet that
         // genuinely needed a breakpoint (issue #49: the stage floor compresses on a short viewport
         // so Health's readings clear the fold at 1280x720). Flag-off byte-identity still holds,
-        // because the inner selectors are checked exactly as depth-0 ones are.
-        if (/^@media\b/.test(sel)) {
+        // because the inner selectors are checked exactly as depth-0 ones are. @container gets the
+        // same descent (#622-f1: monitor-console.css stacks session rows on the list's own width).
+        if (/^@(media|container)\b/.test(sel)) {
           depth++;
           checkDepth++;
           buf = "";
@@ -220,6 +221,11 @@ describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
     expect(unscopedSelectors(after)).toEqual([".b"]);
 
     // The @keyframes carve-out is unchanged: its inner percentage headers are not selectors.
+    // @container descends the same way: scoped inside passes, unscoped inside is caught.
+    const cq = `@container (max-width: 599px) {\n  :root[data-v2="on"] .a { color: red; }\n}\n`;
+    expect(unscopedSelectors(cq)).toEqual([]);
+    expect(unscopedSelectors(`@container (max-width: 599px) {\n  .a { color: red; }\n}\n`)).toEqual([".a"]);
+
     const kf = `@keyframes v2-x {\n  0% { opacity: 0; }\n  100% { opacity: 1; }\n}\n`;
     expect(unscopedSelectors(kf)).toEqual([]);
   });

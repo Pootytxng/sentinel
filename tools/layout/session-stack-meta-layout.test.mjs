@@ -13,10 +13,12 @@
 //   2. the meta track stays at most 210px unless the age · duration tail alone needs more (a
 //      100-plus-days-old row in English does: "123 DAYS AGO · 12M 34S" is ~207px), and rows within
 //      the cap start their canvases at one x;
-//   3. from 560px up, no row scrolls sideways. Below that the row's "vs previous" chip already
-//      overflowed on main; that is a separate narrow-width question, not this defect.
+//   3. no row scrolls sideways at any width (#622-f1). Below 600px the "vs previous" chip used to
+//      sit beside the canvas and push the row 81–201px past its box; there the row now stacks
+//      meta / canvas / chip, and the canvas keeps a usable width there.
 // RED on 01b27929: the tail is clipped in all 48 rows (both locales, every width).
-import { readFileSync } from "node:fs";
+// RED on f7ae3854 for #622-f1: rows scroll sideways at 300, 380 and 480px in both locales.
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -24,7 +26,8 @@ import { openBundledPage, root } from "./chromium.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = root.replace(/\\/g, "/") + "/src";
-const WIDTHS = [300, 420, 560, 720, 900, 1100];
+const WIDTHS = [300, 380, 420, 480, 560, 600, 720, 900, 1100];
+const MIN_CANVAS_PX = 120;
 const LOCALES = ["en", "zh-CN"];
 const TRACK_CAP_PX = 210;
 const TOLERANCE_PX = 0.5;
@@ -153,6 +156,9 @@ window.__measure = async (lang, widths) => {
         metaWidth: m.width,
         tailWidth,
         canvasLeft: row.querySelector(".ss-canvas-wrap").getBoundingClientRect().left,
+        canvasWidth: row.querySelector(".ss-canvas-wrap").getBoundingClientRect().width,
+        rowHeight: row.getBoundingClientRect().height,
+        chip: (() => { const c = row.querySelector(".ss-chip"); if (!c) return null; const b = c.getBoundingClientRect(); return { left: b.left, top: b.top, width: b.width }; })(),
         rects, lines: mids.length, clip,
         rowOverflow: row.scrollWidth - row.clientWidth,
       });
@@ -179,7 +185,12 @@ describe("Live session rows keep age and duration whole in a real Chromium (#677
       readyExpr: "window.__compyLayoutReady === true && document.querySelectorAll('.ss-row').length === 4",
     });
     for (const lang of LOCALES) rows.push(...(await page.evaluate(`window.__measure(${JSON.stringify(lang)}, ${JSON.stringify(WIDTHS)})`)));
-    if (process.env.COMPY_LAYOUT_DUMP) console.log(JSON.stringify(rows.map(({ rects, ...r }) => r), null, 1));
+    const dump = process.env.COMPY_LAYOUT_DUMP;
+    if (dump) {
+      const json = JSON.stringify(rows.map(({ rects, ...r }) => r), null, 1);
+      if (dump.endsWith(".json")) writeFileSync(dump, json);
+      else console.log(json);
+    }
   }, 120_000);
 
   afterAll(async () => {
@@ -222,7 +233,14 @@ describe("Live session rows keep age and duration whole in a real Chromium (#677
     expect(violations).toEqual([]);
   });
 
-  it("never scrolls a row sideways from 560px up", () => {
-    expect(rows.filter((r) => r.width >= 560 && r.rowOverflow > 0).map((r) => `${where(r)}: ${r.rowOverflow}px`)).toEqual([]);
+  it("never scrolls a row sideways, 300px to 1100px (#622-f1)", () => {
+    expect(rows.filter((r) => r.rowOverflow > 0).map((r) => `${where(r)}: ${r.rowOverflow}px`)).toEqual([]);
+  });
+
+  // Below 600px only: the stacked layout must not trade the scroll for a vanished timeline. (From
+  // 600px up the three-across layout is unchanged by #622-f1; there the English chip still leaves
+  // the canvas ~27px at 600px, a separate question.)
+  it("keeps the timeline canvas at least 120px wide below 600px", () => {
+    expect(rows.filter((r) => r.width < 600 && r.canvasWidth < MIN_CANVAS_PX).map((r) => `${where(r)}: canvas ${r.canvasWidth.toFixed(1)}px`)).toEqual([]);
   });
 });

@@ -95,7 +95,7 @@
 :root[data-v2="on"] .ss-filter-btn:hover { color: var(--ix-text-1); }
 :root[data-v2="on"] .ss-filter-on { background: var(--ix-accent); color: var(--ix-accent-ink); }
 :root[data-v2="on"] .ss-rows { list-style: none; margin: 0; padding: 0; display: flex;
-  flex-direction: column; gap: 6px; }
+  flex-direction: column; gap: 6px; container-type: inline-size; }
 :root[data-v2="on"] .ss-item { min-width: 0; }
 /* The meta track's floor is its own content (#677): `min-content` here is the age · duration
    tail (the name contributes nothing, see .ss-meta-name), so at most 210px for alignment across
@@ -133,6 +133,14 @@
 :root[data-v2="on"] .ss-chip { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .08em;
   color: var(--ix-text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 :root[data-v2="on"] .ss-row-newest .ss-chip { color: var(--ix-text-1); }
+/* #622-f1: below 600px of list width, meta | canvas | chip side by side needs more than the row has
+   (the chip pushed rows 30-250px past their box and squeezed the canvas to 0). There the row stacks
+   meta / canvas / chip at full width, and the chip may wrap. Keyed to the list's own width, not the
+   window, because the sessions half spans 300-1100px across window sizes. 600px and up is untouched. */
+@container (max-width: 599px) {
+  :root[data-v2="on"] .ss-row { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  :root[data-v2="on"] .ss-chip { white-space: normal; }
+}
 :root[data-v2="on"] .ss-detail { margin: 2px 0 0; padding: 4px 12px; border-left: 2px solid var(--ix-accent);
   font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .06em; color: var(--ix-text-2);
   font-variant-numeric: tabular-nums; }
