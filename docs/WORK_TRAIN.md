@@ -52,7 +52,13 @@ release, sign, or touch credentials (owner territory).
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [ ] **#631** Rollback that ran but couldn't save reads as a failure.
-- [ ] **#616** Roll back an apply whose receipt can't be built or saved (orphan change).
+- [x] **#616** Roll back an apply whose receipt can't be built or saved (orphan change). Ported from the
+      Sep 28 branch onto main 2026-10-23 (`claude/train-616`, head 0b8eb85c): cargo test 1427/0, clippy clean,
+      ledger guards 222/222; independent review APPROVE, no blockers.
+- [ ] **#616-f1** Batch phase-2 receipt commit failure drops the collected per-item skip reasons (the
+      "check this setting in Windows" warnings); add them to the Err text (history.rs ~1398). From the #616 review.
+- [ ] **#616-f2** Test a receipt build that fails partway through a list in `commit_receipts` (distinct
+      branch from a failed save). From the #616 review.
 - [ ] **#617** Multi-write applies leave partial state on a mid-apply failure.
 - [ ] **#619 / #621** Ledger writes outside App don't refresh the other screens.
       #619 landed with PR #627 (2026-10-24). Left: #621 (ExperimentBench's three writes onto `writeLedger`).
