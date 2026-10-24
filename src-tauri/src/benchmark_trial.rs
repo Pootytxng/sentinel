@@ -119,8 +119,11 @@ pub(crate) fn start_calibration() {
             let verdict = trial.verdict();
             let noise = run_to_run_noise(&windows);
             // P4-noise-store: keep this game's noise on this PC for the Trials that follow. Only when
-            // every window came from one game; a failed save just means nothing is remembered.
-            if let Some(at) = game.as_deref().and_then(crate::noise_floor::NoiseConditions::current) {
+            // every window came from one game and the spread was measurable; a failed save just
+            // means nothing is remembered.
+            if let (Some(noise), Some(at)) =
+                (noise, game.as_deref().and_then(crate::noise_floor::NoiseConditions::current))
+            {
                 let _ = crate::noise_floor::record(
                     &at,
                     noise,
@@ -131,8 +134,11 @@ pub(crate) fn start_calibration() {
             set(|s| {
                 s.running = false;
                 s.verdict = Some(verdict);
-                s.noise_floor_pct = Some(noise);
-                s.status = format!("Calibration done — your rig varies ≈ ±{noise:.1}% run-to-run.");
+                s.noise_floor_pct = noise;
+                s.status = match noise {
+                    Some(noise) => format!("Calibration done — your rig varies ≈ ±{noise:.1}% run-to-run."),
+                    None => "Calibration done — the frame rate read as zero, so the spread couldn't be measured.".into(),
+                };
             });
         });
 }
@@ -592,17 +598,19 @@ fn collect_game_windows(n: usize, label: &str) -> (Vec<MetricWindow>, Option<Str
 }
 
 /// Run-to-run noise = coefficient of variation (%) of the 1% lows across the captured windows.
-fn run_to_run_noise(windows: &[MetricWindow]) -> f64 {
+/// `None` when it can't be measured (fewer than two windows, or a mean 1% low of zero) — never a
+/// 0 that would read as "±0%".
+fn run_to_run_noise(windows: &[MetricWindow]) -> Option<f64> {
     let xs: Vec<f64> = windows.iter().map(|w| w.p1_low_fps).collect();
     if xs.len() < 2 {
-        return 0.0;
+        return None;
     }
     let mean = xs.iter().sum::<f64>() / xs.len() as f64;
-    if mean <= 0.0 {
-        return 0.0;
+    if !mean.is_finite() || mean <= 0.0 {
+        return None;
     }
     let var = xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (xs.len() - 1) as f64;
-    var.sqrt() / mean * 100.0
+    Some(var.sqrt() / mean * 100.0)
 }
 
 #[cfg(test)]
@@ -690,14 +698,21 @@ mod trial_tests {
     #[test]
     fn noise_is_zero_for_identical_windows() {
         let ws = vec![win(100.0), win(100.0), win(100.0)];
-        assert_eq!(run_to_run_noise(&ws), 0.0);
+        assert_eq!(run_to_run_noise(&ws), Some(0.0));
+    }
+
+    #[test]
+    fn noise_is_unmeasured_not_zero_when_it_cant_be_computed() {
+        assert_eq!(run_to_run_noise(&[win(0.0), win(0.0), win(0.0)]), None, "no frame rate");
+        assert_eq!(run_to_run_noise(&[win(100.0)]), None, "one window");
+        assert_eq!(run_to_run_noise(&[]), None);
     }
 
     #[test]
     fn noise_grows_with_spread() {
         let tight = vec![win(99.0), win(100.0), win(101.0)];
         let loose = vec![win(70.0), win(100.0), win(130.0)];
-        assert!(run_to_run_noise(&loose) > run_to_run_noise(&tight));
+        assert!(run_to_run_noise(&loose).unwrap() > run_to_run_noise(&tight).unwrap());
     }
 
     // ── §2a aggregate-stack A/B guards (mutation-gate item 7 + 8) ──

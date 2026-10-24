@@ -112,11 +112,11 @@ pub(crate) struct NoiseEvidence {
     /// receipt says so instead of implying one. Never estimated.
     #[serde(default)]
     pub measured_noise_pct: Option<f64>,
-    /// This game's noise was measured on this PC, but before a driver, Windows or game update, so it
-    /// no longer describes this PC and wasn't used (`measured_noise_pct` stays `None`). Additive:
-    /// records written before P4-noise-store load as `false`.
+    /// This game's noise was measured on this PC but wasn't used (`measured_noise_pct` stays `None`):
+    /// `changed` = a driver, Windows or game update since; `unconfirmed` = Compy couldn't confirm
+    /// nothing changed (a stamp wasn't read). Additive: older records load as `None`.
     #[serde(default)]
-    pub measured_noise_stale: bool,
+    pub measured_noise_stale: Option<crate::noise_floor::StaleReason>,
 }
 
 /// How comparable the baseline and treatment sessions were (`comparability::derive` at conclude) —
@@ -1526,9 +1526,9 @@ pub(crate) fn noise_evidence_for(
 ) -> Option<NoiseEvidence> {
     use crate::noise_floor::NoiseLookup;
     let (measured_noise_pct, measured_noise_stale) = match game_noise {
-        NoiseLookup::Measured(pct) => (Some(*pct), false),
-        NoiseLookup::Stale => (None, true),
-        NoiseLookup::Unmeasured => (None, false),
+        NoiseLookup::Measured(pct) => (Some(*pct), None),
+        NoiseLookup::Stale(why) => (None, Some(*why)),
+        NoiseLookup::Unmeasured => (None, None),
     };
     judged_against_noise(outcome).then_some(NoiseEvidence { band_pct, measured_noise_pct, measured_noise_stale })
 }
@@ -2364,7 +2364,7 @@ fn build_sim_context(rec_id: &str) -> Result<SimContext, String> {
 #[cfg(test)]
 mod experiment_tests {
     use super::*;
-    use crate::noise_floor::NoiseLookup;
+    use crate::noise_floor::{NoiseLookup, StaleReason};
 
     fn rec(baseline_low1: f64, watermark: usize) -> ExperimentRecord {
         ExperimentRecord {
@@ -3604,7 +3604,7 @@ mod experiment_tests {
             assert_eq!(o.verdict, verdict);
             assert_eq!(
                 noise_evidence_for(&o, band, &NoiseLookup::Unmeasured),
-                Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: false }),
+                Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None }),
                 "{verdict} was judged against the band"
             );
         }
@@ -3628,15 +3628,15 @@ mod experiment_tests {
         let o = measured(180.0);
         assert_eq!(
             noise_evidence_for(&o, band, &NoiseLookup::Measured(1.8)),
-            Some(NoiseEvidence { band_pct: band, measured_noise_pct: Some(1.8), measured_noise_stale: false })
+            Some(NoiseEvidence { band_pct: band, measured_noise_pct: Some(1.8), measured_noise_stale: None })
         );
         assert_eq!(
-            noise_evidence_for(&o, band, &NoiseLookup::Stale),
-            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: true })
+            noise_evidence_for(&o, band, &NoiseLookup::Stale(StaleReason::Unconfirmed)),
+            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Unconfirmed) })
         );
         assert_eq!(
             noise_evidence_for(&o, band, &NoiseLookup::Unmeasured),
-            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: false })
+            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None })
         );
         let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
         assert_eq!(noise_evidence_for(&crash, band, &NoiseLookup::Measured(1.8)), None, "nothing was judged");
@@ -3653,7 +3653,13 @@ mod experiment_tests {
         new_driver.hw_fingerprint.as_mut().unwrap().gpu_driver = "25.8.1".into();
         new_driver.hw_fingerprint.as_mut().unwrap().hash = "cafef00d".into();
         let later = crate::noise_floor::NoiseConditions::of_session(&new_driver).unwrap();
-        assert_eq!(crate::noise_floor::lookup(&store, &later), NoiseLookup::Stale);
+        assert_eq!(crate::noise_floor::lookup(&store, &later), NoiseLookup::Stale(StaleReason::Changed));
+        let mut unread = session.clone();
+        if let Some(f) = unread.hw_fingerprint.as_mut() {
+            (f.gpu, f.gpu_driver, f.ram_gb) = (String::new(), String::new(), 0);
+        }
+        assert_eq!(crate::noise_floor::NoiseConditions::of_session(&unread), None, "an unread rig matches nothing");
+        assert_eq!(crate::noise_floor::lookup_for_session(&unread), NoiseLookup::Unmeasured);
         session.hw_fingerprint = None;
         assert_eq!(crate::noise_floor::NoiseConditions::of_session(&session), None, "no rig, nothing to match");
     }
@@ -3680,10 +3686,10 @@ mod experiment_tests {
             experiments: Vec<OldRecord>,
         }
         let mut stale = rec(150.0, 5);
-        stale.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: true });
+        stale.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Changed) });
         let mut measured = rec(150.0, 5);
         measured.id = "exp:2-0".into();
-        measured.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: Some(1.8), measured_noise_stale: false });
+        measured.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: Some(1.8), measured_noise_stale: None });
         let path = std::env::temp_dir().join(format!("compy-exp-noise-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let store = ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![stale, measured] };
@@ -3693,18 +3699,18 @@ mod experiment_tests {
         let read: Vec<_> = old.experiments.iter().map(|e| e.noise_evidence.as_ref().map(|n| n.measured_noise_pct)).collect();
         assert_eq!(read, [Some(None), Some(Some(1.8))], "the older build reads the stale one as unmeasured");
         let back = load_store_from(&path);
-        assert!(back.experiments[0].noise_evidence.as_ref().unwrap().measured_noise_stale);
+        assert_eq!(back.experiments[0].noise_evidence.as_ref().unwrap().measured_noise_stale, Some(StaleReason::Changed));
         assert!(path.exists(), "the file was not set aside");
         let _ = std::fs::remove_file(&path);
 
         // And a receipt written before the field existed loads here as not stale.
         let pre: NoiseEvidence = serde_json::from_str(r#"{"band_pct":3.0,"measured_noise_pct":null}"#).unwrap();
-        assert!(!pre.measured_noise_stale);
+        assert_eq!(pre.measured_noise_stale, None);
     }
 
     #[test]
     fn an_unmeasured_game_noise_is_written_as_unknown_not_guessed() {
-        let v = serde_json::to_value(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: false }).unwrap();
+        let v = serde_json::to_value(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: None }).unwrap();
         assert!(v["measured_noise_pct"].is_null(), "{v}");
         assert_eq!(v["band_pct"], 3.0);
     }

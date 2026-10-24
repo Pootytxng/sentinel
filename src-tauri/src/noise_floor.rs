@@ -4,8 +4,13 @@
 //! One record per game + rig. A record is written only by the Benchmark tab's calibration
 //! (`benchmark_trial::start_calibration`), which measures the 1% low's spread with nothing changed,
 //! and only when every captured window came from the same game. Nothing here estimates a noise
-//! level: a game Compy never calibrated on this PC reads `Unmeasured`, and a measurement taken
-//! before the GPU driver, Windows build or game build changed reads `Stale`, never as current.
+//! level: a game Compy never calibrated on this PC reads `Unmeasured`, a measurement taken before
+//! the GPU driver, Windows build or game build changed reads `Stale(Changed)`, and one whose
+//! conditions can't be confirmed reads `Stale(Unconfirmed)` — never as current.
+//!
+//! What the number is: the spread (coefficient of variation) of the 1% low across the ten 2.5 s
+//! windows of ONE ~25 s calibration, not the variation between whole sessions. Verdicts don't use
+//! it yet; they still judge against the fixed `DEFAULT_NOISE_FLOOR_PCT` (P4-noise changes that).
 //!
 //! Game builds aren't readable yet (`GameStateFingerprint::game_build` is always unknown), so a game
 //! update can't mark a measurement stale until that field is filled; the record keeps the stamp so
@@ -72,7 +77,7 @@ impl NoiseConditions {
         let gs = s.game_state.as_ref();
         let process_name = gs.and_then(|g| g.process_name.clone()).unwrap_or_else(|| s.process_name.clone());
         let hw_fingerprint = s.hw_fingerprint.clone()?;
-        if process_name.trim().is_empty() || hw_fingerprint.hash.is_empty() {
+        if process_name.trim().is_empty() || !rig_was_read(&hw_fingerprint) {
             return None;
         }
         Some(Self {
@@ -88,23 +93,40 @@ impl NoiseConditions {
         let gs = crate::game_state::GameStateFingerprint::collect_v1(process_name, "", None);
         let hw_fingerprint = crate::hardware::current_fingerprint();
         let process_name = gs.process_name.clone()?;
-        if hw_fingerprint.hash.is_empty() {
+        if !rig_was_read(&hw_fingerprint) {
             return None;
         }
         Some(Self { process_name, hw_fingerprint, windows_build: gs.windows_build, game_build: gs.game_build })
     }
 }
 
+/// Why a stored measurement wasn't used. Persisted on the Trial receipt (kebab-case).
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum StaleReason {
+    /// The GPU driver, rig, Windows build or game build is known to have changed since.
+    Changed,
+    /// Nothing is known to have changed, but a stamp (e.g. the Windows build) wasn't read on one
+    /// side, so Compy can't confirm the conditions are the same.
+    Unconfirmed,
+}
+
 /// What Compy knows about this game's noise under the given conditions.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum NoiseLookup {
-    /// Measured for this game on this rig under the same driver, Windows build and game build.
+    /// Measured for this game on this rig under the same driver and Windows build (the game build
+    /// isn't readable yet, so it is not checked).
     Measured(f64),
-    /// Measured for this game on this rig, but the driver, Windows build or game build changed
-    /// since, so the number no longer describes this PC.
-    Stale,
-    /// Never measured for this game on this rig.
+    /// Measured for this game on this rig, but not usable under these conditions.
+    Stale(StaleReason),
+    /// Never measured for this game on this rig, or the rig itself wasn't read.
     Unmeasured,
+}
+
+/// The fingerprint's hash is always 16 hex characters, even for a rig nothing could be read from,
+/// so it proves nothing on its own. A rig counts as read only when its GPU, driver and RAM were.
+pub(crate) fn rig_was_read(h: &HwFingerprint) -> bool {
+    !h.gpu.trim().is_empty() && !h.gpu_driver.trim().is_empty() && h.ram_gb > 0
 }
 
 /// Same machine, ignoring the driver: the driver is a freshness stamp, not identity.
@@ -112,30 +134,52 @@ fn same_rig(a: &HwFingerprint, b: &HwFingerprint) -> bool {
     a.gpu == b.gpu && a.ram_gb == b.ram_gb && a.display == b.display
 }
 
+/// Compare one stamp: `Some(true)` same, `Some(false)` known to differ, `None` unread on a side.
+fn stamp<T: PartialEq>(then: Option<&T>, now: Option<&T>) -> Option<bool> {
+    match (then, now) {
+        (Some(a), Some(b)) => Some(a == b),
+        (None, None) => Some(true),
+        _ => None,
+    }
+}
+
 fn same_key(r: &NoiseFloorRecord, c: &NoiseConditions) -> bool {
     r.process_name.eq_ignore_ascii_case(&c.process_name) && same_rig(&r.hw_fingerprint, &c.hw_fingerprint)
 }
 
-/// Pure: look up this game's noise under `now`. An unread Windows build on either side can't be
-/// confirmed unchanged, so it reads `Stale`, not `Measured`.
+/// Pure: look up this game's noise under `now`. A rig that wasn't read matches nothing. The Windows
+/// build must have been read at calibration: an unread one can't be confirmed unchanged.
 pub(crate) fn lookup(store: &NoiseFloorStore, now: &NoiseConditions) -> NoiseLookup {
-    let Some(r) = store.records.iter().find(|r| same_key(r, now)) else {
+    if !rig_was_read(&now.hw_fingerprint) {
+        return NoiseLookup::Unmeasured;
+    }
+    let Some(r) = store.records.iter().find(|r| same_key(r, now) && rig_was_read(&r.hw_fingerprint)) else {
         return NoiseLookup::Unmeasured;
     };
-    let fresh = r.hw_fingerprint.hash == now.hw_fingerprint.hash
-        && r.hw_fingerprint.gpu_driver == now.hw_fingerprint.gpu_driver
-        && r.windows_build.is_some()
-        && r.windows_build == now.windows_build
-        && r.game_build == now.game_build;
-    if fresh && r.noise_pct.is_finite() && r.noise_pct >= 0.0 {
-        NoiseLookup::Measured(r.noise_pct)
+    if !r.noise_pct.is_finite() || r.noise_pct <= 0.0 {
+        return NoiseLookup::Unmeasured;
+    }
+    let rig_same = r.hw_fingerprint.hash == now.hw_fingerprint.hash
+        && r.hw_fingerprint.gpu_driver == now.hw_fingerprint.gpu_driver;
+    let windows = if r.windows_build.is_none() {
+        None
     } else {
-        NoiseLookup::Stale
+        stamp(r.windows_build.as_ref(), now.windows_build.as_ref())
+    };
+    let game = stamp(r.game_build.as_ref(), now.game_build.as_ref());
+    if !rig_same || windows == Some(false) || game == Some(false) {
+        NoiseLookup::Stale(StaleReason::Changed)
+    } else if windows.is_none() || game.is_none() {
+        NoiseLookup::Stale(StaleReason::Unconfirmed)
+    } else {
+        NoiseLookup::Measured(r.noise_pct)
     }
 }
 
 /// Pure: record a calibration, replacing this game + rig's previous one (a newer measurement under
-/// a new driver supersedes the old). A non-finite or negative noise level is refused, not stored.
+/// a new driver supersedes the old). A non-finite, negative or zero noise level is refused, not
+/// stored (zero means the spread couldn't be measured, not that there was none), and so is a
+/// measurement on a rig that wasn't read.
 pub(crate) fn upsert(
     store: &mut NoiseFloorStore,
     at: &NoiseConditions,
@@ -143,7 +187,7 @@ pub(crate) fn upsert(
     windows: u32,
     measured_at: &str,
 ) -> bool {
-    if !noise_pct.is_finite() || noise_pct < 0.0 || windows < 2 {
+    if !noise_pct.is_finite() || noise_pct <= 0.0 || windows < 2 || !rig_was_read(&at.hw_fingerprint) {
         return false;
     }
     store.records.retain(|r| !same_key(r, at));
@@ -284,19 +328,70 @@ mod tests {
     fn a_driver_windows_or_game_update_makes_it_stale() {
         let mut s = NoiseFloorStore::default();
         assert!(upsert(&mut s, &at("wardogs.exe", "25.7.1", Some("26200.1")), 2.0, 10, "t"));
-        assert_eq!(lookup(&s, &at("wardogs.exe", "25.8.1", Some("26200.1"))), NoiseLookup::Stale, "driver");
-        assert_eq!(lookup(&s, &at("wardogs.exe", "25.7.1", Some("26200.2"))), NoiseLookup::Stale, "Windows");
-        assert_eq!(lookup(&s, &at("wardogs.exe", "25.7.1", None)), NoiseLookup::Stale, "unread Windows build");
+        assert_eq!(lookup(&s, &at("wardogs.exe", "25.8.1", Some("26200.1"))), NoiseLookup::Stale(StaleReason::Changed), "driver");
+        assert_eq!(lookup(&s, &at("wardogs.exe", "25.7.1", Some("26200.2"))), NoiseLookup::Stale(StaleReason::Changed), "Windows");
+        assert_eq!(lookup(&s, &at("wardogs.exe", "25.7.1", None)), NoiseLookup::Stale(StaleReason::Unconfirmed), "unread Windows build now");
         let mut patched = at("wardogs.exe", "25.7.1", Some("26200.1"));
         patched.game_build = Some("1.2".into());
-        assert_eq!(lookup(&s, &patched), NoiseLookup::Stale, "game build");
+        assert_eq!(lookup(&s, &patched), NoiseLookup::Stale(StaleReason::Unconfirmed), "game build read now, not then");
     }
 
     #[test]
     fn a_measurement_without_a_windows_build_is_never_current() {
         let mut s = NoiseFloorStore::default();
         assert!(upsert(&mut s, &at("wardogs.exe", "25.7.1", None), 2.0, 10, "t"));
-        assert_eq!(lookup(&s, &at("wardogs.exe", "25.7.1", None)), NoiseLookup::Stale);
+        assert_eq!(lookup(&s, &at("wardogs.exe", "25.7.1", None)), NoiseLookup::Stale(StaleReason::Unconfirmed));
+        assert_eq!(
+            lookup(&s, &at("wardogs.exe", "25.8.1", None)),
+            NoiseLookup::Stale(StaleReason::Changed),
+            "an observed change wins over an unconfirmed one"
+        );
+    }
+
+    #[test]
+    fn a_game_build_change_is_stale_once_builds_are_read() {
+        let mut s = NoiseFloorStore::default();
+        let mut then = at("wardogs.exe", "25.7.1", Some("26200.1"));
+        then.game_build = Some("1.1".into());
+        assert!(upsert(&mut s, &then, 2.0, 10, "t"));
+        let mut now = then.clone();
+        now.game_build = Some("1.2".into());
+        assert_eq!(lookup(&s, &now), NoiseLookup::Stale(StaleReason::Changed));
+        assert_eq!(lookup(&s, &then), NoiseLookup::Measured(2.0));
+    }
+
+    #[test]
+    fn an_unread_rig_is_never_measured() {
+        // `fingerprint_of` hashes even an all-empty rig, so the hash alone proves nothing.
+        let unread = |c: &NoiseConditions| {
+            let mut c = c.clone();
+            c.hw_fingerprint.gpu = String::new();
+            c.hw_fingerprint.gpu_driver = String::new();
+            c.hw_fingerprint.ram_gb = 0;
+            c
+        };
+        let good = at("wardogs.exe", "25.7.1", Some("26200.1"));
+        let mut s = NoiseFloorStore::default();
+        assert!(!upsert(&mut s, &unread(&good), 2.0, 10, "t"), "save path refuses an unread rig");
+        assert!(s.records.is_empty());
+        // A row on disk from an unread rig, looked up from an equally unread rig: still unmeasured.
+        s.records.push(NoiseFloorRecord {
+            process_name: "wardogs.exe".into(),
+            hw_fingerprint: unread(&good).hw_fingerprint,
+            noise_pct: 2.0,
+            windows: 10,
+            measured_at: "t".into(),
+            windows_build: Some("26200.1".into()),
+            game_build: None,
+        });
+        assert_eq!(lookup(&s, &unread(&good)), NoiseLookup::Unmeasured, "lookup path");
+        for (gpu, driver, ram) in [("", "25.7.1", 32), ("Radeon RX 9070 XT", "", 32), ("Radeon RX 9070 XT", "25.7.1", 0)] {
+            let mut c = good.clone();
+            c.hw_fingerprint.gpu = gpu.into();
+            c.hw_fingerprint.gpu_driver = driver.into();
+            c.hw_fingerprint.ram_gb = ram;
+            assert!(!rig_was_read(&c.hw_fingerprint), "{gpu:?} {driver:?} {ram}");
+        }
     }
 
     #[test]
@@ -312,7 +407,7 @@ mod tests {
     fn an_impossible_measurement_is_refused() {
         let mut s = NoiseFloorStore::default();
         let c = at("wardogs.exe", "25.7.1", Some("26200.1"));
-        for bad in [f64::NAN, f64::INFINITY, -1.0] {
+        for bad in [f64::NAN, f64::INFINITY, -1.0, 0.0] {
             assert!(!upsert(&mut s, &c, bad, 10, "t"), "{bad}");
         }
         assert!(!upsert(&mut s, &c, 1.0, 1, "t"), "one window has no spread");
@@ -335,11 +430,11 @@ mod tests {
     #[test]
     fn a_record_with_only_its_identity_still_loads() {
         // Additive: a row written before the stamps existed (or by a build that drops them) loads,
-        // and reads as Stale because its Windows build can't be confirmed.
+        // and reads as Unconfirmed because its Windows build can't be confirmed.
         let raw = r#"{"records":[{"process_name":"wardogs.exe","hw_fingerprint":{"hash":"hash-25.7.1","gpu":"Radeon RX 9070 XT","gpu_driver":"25.7.1","ram_gb":32,"display":"2560x1440@165"},"noise_pct":2.0}]}"#;
         let s: NoiseFloorStore = serde_json::from_str(raw).expect("loads");
         assert_eq!(s.records[0].windows, 0);
-        assert_eq!(lookup(&s, &at("wardogs.exe", "25.7.1", Some("26200.1"))), NoiseLookup::Stale);
+        assert_eq!(lookup(&s, &at("wardogs.exe", "25.7.1", Some("26200.1"))), NoiseLookup::Stale(StaleReason::Unconfirmed));
     }
 
     #[test]

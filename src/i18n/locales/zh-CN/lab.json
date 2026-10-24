@@ -418,8 +418,9 @@
     "runningNoTreatment": "玩一局开启监测的 {{game}} 对局,为实验提供真实的「更改后」读数。",
     "yourGame": "你的游戏",
     "noiseUnmeasured": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的自身波动尚未测量。",
-    "noiseMeasured": "按 {{band}}% 噪声下限判定。这款游戏在你电脑上的自身波动实测为 ±{{measured}}%。",
-    "noiseStale": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的波动是在驱动、Windows 或游戏更新之前测量的，因此未采用该数值。",
+    "noiseMeasured": "按 Compy 固定的 {{band}}% 噪声下限判定。在你电脑上一次 25 秒的校准中，这款游戏的 1% 低帧波动为 ±{{measured}}%。该数值暂不用于判定，且未检查游戏版本。",
+    "noiseStaleChanged": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的波动是在驱动或 Windows 更新之前测量的，因此未采用。未检查游戏版本。",
+    "noiseStaleUnconfirmed": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的波动已测量过，但 Compy 无法确认此后没有变化，因此未采用。未检查游戏版本。",
     "noiseNotRecorded_other": "标记的结果没有保存噪声下限记录。"
   }
 }
