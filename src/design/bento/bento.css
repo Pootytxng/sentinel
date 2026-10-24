@@ -7,11 +7,10 @@
      · NO color literals — no #hex, no rgb()/rgba(), no hsl(). Every colour is a --v2-* token,
        and every translucency is the `opacity` property or a token that already carries alpha.
      · font / font-family reference only var(--v2-font-*).
-     · No @media in THIS sheet — by choice, not by limitation. The grid does not collapse
-       responsively because the app is a fixed-min-width desktop window, so it costs nothing
-       today. The guard no longer forbids a breakpoint: as of issue #49 it DESCENDS into an
-       @media and holds every rule inside to the same scoping law, which is exactly the fix
-       this comment used to ask for. home-console.css was the first sheet that needed it.
+     · ONE @media, for the narrow window (#622). This sheet used to have none because the app
+       was assumed to be a fixed-min-width desktop window; it is not — the window's minWidth is
+       380. The scoping guard descends into an @media (issue #49), so the rules inside obey the
+       same laws as everything else here.
 
    WHY NO BLUR, ANYWHERE. The obvious sheet treatment is `backdrop-filter: blur()` on the
    scrim (or `filter: blur()` on the room behind it), and both are rejected on purpose: the
@@ -49,6 +48,24 @@
 }
 :root[data-v2="on"] .v2-tile-full {
   grid-column: span 12;
+}
+
+/* THE NARROW WINDOW STACKS (#622). Below 600px the rail is an icon strip (shell-v2.css) and the
+   content column is 264–388px: twelve columns there gave Findings and Last session a 30–52px content
+   box, so their titles ran past their tiles. Every tile takes the full width instead, in source
+   order, which is the order the grid already reads in. 600px and up is unchanged. The hero drops its
+   two-row span because a single column has no neighbour for it to sit beside.
+   Guard: tools/layout/health-narrow-layout.test.mjs (real Chromium). */
+@media (max-width: 599.98px) {
+  :root[data-v2="on"] .v2-bento {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :root[data-v2="on"] .v2-bento > .v2-tile {
+    grid-column: 1 / -1;
+  }
+  :root[data-v2="on"] .v2-bento > .v2-tile-hero {
+    grid-row: auto;
+  }
 }
 
 /* ── the tile ─────────────────────────────────────────────────────────────────────── */
