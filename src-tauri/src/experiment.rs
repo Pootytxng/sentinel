@@ -206,10 +206,16 @@ pub(crate) struct ExperimentRecord {
     /// while the webview supplied the numbers — such a record can't be concluded, only restored.
     #[serde(default)]
     pub baseline_session_id: Option<String>,
-    /// §2/§11 the baseline's first- and second-half average frame rate that the start graded steady.
-    /// None on records started before baselines were graded (unknown, never assumed steady).
+    /// §2/§11 the baseline's first- and second-half average frame rate, as the start graded it.
+    /// None on records started before baselines were graded, and when the baseline had no trace.
     #[serde(default)]
     pub baseline_halves: Option<BaselineHalves>,
+    /// §2/§11 how the start graded the baseline: steady, uneven or untraced. Uneven and untraced
+    /// baselines start with a warning (owner decision 2026-10-24) and the receipt keeps it, so the
+    /// result can say its baseline was uneven or unchecked. None on records started before baselines
+    /// were graded (unknown, never assumed steady).
+    #[serde(default)]
+    pub baseline_check: Option<BaselineCheck>,
     /// When the apply returned — the change was in place from here on, so only a session that started
     /// later can be the after-reading. `created_at` is stamped before the apply (record first), so a
     /// session started while the apply or its UAC prompt was pending would pass a `created_at` test.
@@ -1105,7 +1111,8 @@ pub(crate) struct BaselineHalves {
     pub second_half_fps: f64,
 }
 
-/// Trial Protocol §2: how fit a baseline session is to judge a change against. Only `Steady` starts.
+/// Trial Protocol §2: how fit a baseline session is to judge a change against. Only `TooShort` is
+/// refused; `Uneven` and `Untraced` start with a warning the record keeps ([`BaselineCheck`]).
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum BaselineGrade {
     /// Long enough, and its two halves are within the noise floor of each other.
@@ -1148,24 +1155,34 @@ pub(crate) fn grade_baseline(session: &SessionSummary, noise_floor_pct: f64) -> 
     }
 }
 
-/// The start's refusal for a baseline that isn't steady, in words, or its halves when it is.
-pub(crate) fn steady_baseline(session: &SessionSummary, noise_floor_pct: f64) -> Result<BaselineHalves, String> {
-    let replay = "record a new baseline: play another session of this game, then start";
+/// What the record keeps of a started Trial's baseline grade (a too-short baseline never starts).
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum BaselineCheck {
+    Steady,
+    /// Its halves differ by more than the noise floor: the Trial ran, but its result may be less reliable.
+    Uneven,
+    /// It had no frame-rate trace, so its steadiness couldn't be checked.
+    Untraced,
+}
+
+/// The start's view of a baseline: refused when it's too short (the same 600-reading floor a treatment
+/// session needs), otherwise the grade and halves the record keeps. An uneven or untraced baseline
+/// starts with a warning instead of being refused (owner decision 2026-10-24: "warn, don't block";
+/// with a 3% floor both of the owner's real WARDOGS baselines grade uneven, 12-16% apart). Blocking
+/// on Uneven waits for P4-noise, which supplies the per-game noise to judge the halves against.
+pub(crate) fn baseline_for_start(
+    session: &SessionSummary,
+    noise_floor_pct: f64,
+) -> Result<(BaselineCheck, Option<BaselineHalves>), String> {
     match grade_baseline(session, noise_floor_pct) {
-        BaselineGrade::Steady(h) => Ok(h),
+        BaselineGrade::Steady(h) => Ok((BaselineCheck::Steady, Some(h))),
+        BaselineGrade::Uneven(h) => Ok((BaselineCheck::Uneven, Some(h))),
+        BaselineGrade::Untraced => Ok((BaselineCheck::Untraced, None)),
         BaselineGrade::TooShort { samples } => Err(format!(
             "the baseline session is too short to compare against ({samples} of the \
-             {MIN_BASELINE_SAMPLES} frame-rate readings Compy needs, about 10 minutes of play), {replay}"
-        )),
-        BaselineGrade::Uneven(h) => Err(format!(
-            "the baseline session was too uneven to compare against (its frame rate averaged {} fps in \
-             the first half and {} fps in the second, more apart than the {noise_floor_pct}% noise \
-             floor), {replay}",
-            h.first_half_fps, h.second_half_fps
-        )),
-        BaselineGrade::Untraced => Err(format!(
-            "Compy no longer has the baseline session's frame-rate trace, so it can't check that it \
-             was steady, {replay}"
+             {MIN_BASELINE_SAMPLES} frame-rate readings Compy needs, about 10 minutes of play), \
+             record a new baseline: play another session of this game, then start"
         )),
     }
 }
@@ -1868,8 +1885,9 @@ pub(crate) fn start_experiment(
     let sessions = crate::sessions::get_session_summaries();
     let baseline = resolve_baseline(&sessions, &baseline_session_id)
         .map_err(|why| format!("experiment not started — {why}"))?;
-    // §2: a baseline too short or too uneven to judge a change against is refused, never graded up.
-    let baseline_halves = steady_baseline(baseline, DEFAULT_NOISE_FLOOR_PCT)
+    // §2: a baseline too short to judge a change against is refused; an uneven or untraced one starts
+    // and the record says so (blocking on uneven waits for P4-noise's per-game noise).
+    let (baseline_check, baseline_halves) = baseline_for_start(baseline, DEFAULT_NOISE_FLOOR_PCT)
         .map_err(|why| format!("experiment not started — {why}"))?;
     // §3: the baseline must still describe the Compy changes in place now.
     let history = ledger_for_one_change_checks(
@@ -1914,7 +1932,8 @@ pub(crate) fn start_experiment(
         baseline_avg_fps: baseline.avg_fps,
         baseline_low1_fps: baseline.low1_fps_est,
         baseline_session_id: Some(baseline.started_at.clone()),
-        baseline_halves: Some(baseline_halves),
+        baseline_halves,
+        baseline_check: Some(baseline_check),
         applied_at: None,
         session_pairing: None,
         noise_evidence: None,
@@ -2483,6 +2502,7 @@ mod experiment_tests {
             baseline_low1_fps: baseline_low1,
             baseline_session_id: None,
             baseline_halves: None,
+            baseline_check: None,
             applied_at: None,
             session_pairing: None,
             noise_evidence: None,
@@ -4349,14 +4369,19 @@ mod experiment_tests {
     }
 
     #[test]
-    fn the_afk_baseline_from_the_first_live_trial_is_too_uneven() {
+    fn the_afk_baseline_from_the_first_live_trial_is_uneven_and_starts_with_the_warning_kept() {
         let grade = grade_baseline(&traced(1172, AFK_BASELINE_FPS), DEFAULT_NOISE_FLOOR_PCT);
-        assert_eq!(grade, BaselineGrade::Uneven(BaselineHalves { first_half_fps: 259.8, second_half_fps: 227.9 }));
-        let why = steady_baseline(&traced(1172, AFK_BASELINE_FPS), DEFAULT_NOISE_FLOOR_PCT).unwrap_err();
-        assert!(why.contains("too uneven") && why.contains("259.8") && why.contains("227.9"), "{why}");
-        assert!(why.contains("record a new baseline"), "offers a re-record: {why}");
-        // Its after-session would have been just as unfit to be a baseline.
+        let halves = BaselineHalves { first_half_fps: 259.8, second_half_fps: 227.9 };
+        assert_eq!(grade, BaselineGrade::Uneven(halves.clone()));
+        // Warn, don't block (owner decision 2026-10-24): it starts, and the record keeps grade + halves.
+        let started = baseline_for_start(&traced(1172, AFK_BASELINE_FPS), DEFAULT_NOISE_FLOOR_PCT);
+        assert_eq!(started, Ok((BaselineCheck::Uneven, Some(halves))));
+        // Its after-session grades the same way.
         assert!(matches!(grade_baseline(&traced(1095, AFK_AFTER_FPS), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Uneven(_)));
+        assert!(matches!(
+            baseline_for_start(&traced(1095, AFK_AFTER_FPS), DEFAULT_NOISE_FLOOR_PCT),
+            Ok((BaselineCheck::Uneven, Some(_)))
+        ));
     }
 
     #[test]
@@ -4364,17 +4389,20 @@ mod experiment_tests {
         // The 2026-10-23 kill-mid-start check's 90 s baseline: 91 readings.
         let s = traced(91, &[275.6, 288.7, 284.8, 288.8, 278.4, 262.0, 262.4, 254.1, 263.8, 266.9]);
         assert_eq!(grade_baseline(&s, DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::TooShort { samples: 91 });
-        let why = steady_baseline(&s, DEFAULT_NOISE_FLOOR_PCT).unwrap_err();
+        let why = baseline_for_start(&s, DEFAULT_NOISE_FLOOR_PCT).unwrap_err();
         assert!(why.contains("too short") && why.contains("91 of the 600"), "{why}");
+        assert!(why.contains("record a new baseline"), "offers a re-record: {why}");
         assert!(matches!(grade_baseline(&traced(599, &[200.0; 60]), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::TooShort { .. }));
+        // Still refused when it has no trace either: the reading count is checked first.
+        assert!(baseline_for_start(&traced(599, &[]), DEFAULT_NOISE_FLOOR_PCT).is_err());
     }
 
     #[test]
     fn a_long_steady_baseline_starts_and_its_halves_are_kept() {
         let mut fps = vec![200.0; 30];
         fps.extend([204.0; 30]); // +2%: inside the 3% floor
-        let halves = steady_baseline(&traced(600, &fps), DEFAULT_NOISE_FLOOR_PCT).unwrap();
-        assert_eq!(halves, BaselineHalves { first_half_fps: 200.0, second_half_fps: 204.0 });
+        let started = baseline_for_start(&traced(600, &fps), DEFAULT_NOISE_FLOOR_PCT).unwrap();
+        assert_eq!(started, (BaselineCheck::Steady, Some(BaselineHalves { first_half_fps: 200.0, second_half_fps: 204.0 })));
         fps[30..].fill(206.2); // +3.1%: outside it
         assert!(matches!(grade_baseline(&traced(600, &fps), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Uneven(_)));
         fps[30..].fill(193.8); // a drop counts the same as a rise
@@ -4382,12 +4410,23 @@ mod experiment_tests {
     }
 
     #[test]
-    fn a_baseline_without_its_trace_is_unknown_never_steady() {
+    fn a_baseline_without_its_trace_starts_marked_untraced_never_steady() {
         // `session()` carries no fps_series, as an older session that shed it.
         assert_eq!(grade_baseline(&traced(900, &[]), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Untraced);
         assert_eq!(grade_baseline(&traced(900, &[200.0, 200.0, 200.0]), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Untraced);
-        let why = steady_baseline(&traced(900, &[]), DEFAULT_NOISE_FLOOR_PCT).unwrap_err();
-        assert!(why.contains("can't check"), "{why}");
+        assert_eq!(baseline_for_start(&traced(900, &[]), DEFAULT_NOISE_FLOOR_PCT), Ok((BaselineCheck::Untraced, None)));
+    }
+
+    #[test]
+    fn the_baseline_check_is_written_in_kebab_case_and_a_record_without_it_loads_as_unknown() {
+        let marked = ExperimentRecord { baseline_check: Some(BaselineCheck::Uneven), ..running() };
+        let mut v = serde_json::to_value(&marked).unwrap();
+        assert_eq!(v["baseline_check"], "uneven");
+        assert_eq!(serde_json::to_value(BaselineCheck::Untraced).unwrap(), "untraced");
+        // Field absent (a record started before baselines were graded): unknown, never assumed steady.
+        assert!(v.as_object_mut().unwrap().remove("baseline_check").is_some());
+        let old: ExperimentRecord = serde_json::from_value(v).unwrap();
+        assert_eq!(old.baseline_check, None);
     }
 
     #[test]
@@ -4411,6 +4450,7 @@ mod experiment_tests {
         }
         let new = ExperimentRecord {
             baseline_halves: Some(BaselineHalves { first_half_fps: 200.0, second_half_fps: 204.0 }),
+            baseline_check: Some(BaselineCheck::Uneven),
             ..running()
         };
         let text = serde_json::to_string(&ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![new] }).unwrap();

@@ -75,6 +75,10 @@ type Experiment = {
   verdict_note: string | null;
   /** Absent on records concluded before #583 lane 2b, and on verdicts the band never judged. */
   noise_evidence?: NoiseEvidence | null;
+  /** §2 how the start graded the baseline. null on records started before baselines were graded. */
+  baseline_check?: "steady" | "uneven" | "untraced" | null;
+  /** The baseline's first- and second-half average fps. null when it had no trace, and on older records. */
+  baseline_halves?: { first_half_fps: number; second_half_fps: number } | null;
 };
 
 type SimulatorReport = {
@@ -180,7 +184,9 @@ function isUsableReading(s: SessionSummary): boolean {
 }
 
 // Trial Protocol §2 — the backend's baseline grade (experiment.rs `grade_baseline`), mirrored so the
-// bench says why a baseline can't be used instead of offering a start the backend then refuses. The
+// bench says why a too-short baseline can't be used instead of offering a start the backend refuses,
+// and warns before starting on an uneven or untraced one (owner decision 2026-10-24: warn, don't
+// block; blocking on uneven waits for P4-noise's per-game noise). The
 // floor is the 3% band a new Trial is judged against (comparison.rs DEFAULT_NOISE_FLOOR_PCT); the
 // halves split the 10 s fps buckets by count, and a session without its trace is unknown, never steady.
 const MIN_BASELINE_SAMPLES = 600;
@@ -202,6 +208,18 @@ function gradeBaseline(s: SessionSummary): BaselineGrade {
   if ((Math.abs(second - first) / first) * 100 > BASELINE_NOISE_FLOOR_PCT)
     return { kind: "uneven", first: Math.round(first), second: Math.round(second) };
   return { kind: "steady" };
+}
+
+// §2 the record's own baseline grade, said on its receipt (the running panel and its history row):
+// a Trial started on an uneven or untraced baseline says so. Steady and older records say nothing.
+function baselineReceipt(x: Experiment, t: Translate): string | null {
+  if (x.baseline_check === "uneven" && x.baseline_halves)
+    return t("lab.experimentBench.receiptBaselineUneven", {
+      first: Math.round(x.baseline_halves.first_half_fps),
+      second: Math.round(x.baseline_halves.second_half_fps),
+    });
+  if (x.baseline_check === "untraced") return t("lab.experimentBench.receiptBaselineUntraced");
+  return null;
 }
 
 // A past result whose verdict reads like a measured judgment (Better / No change / Worse). Only such
@@ -504,7 +522,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const SIM_VERDICT = simVerdictCopy(t);
   const simMeta = sim ? SIM_VERDICT[sim.verdict] ?? { label: sim.verdict, blocked: false } : null;
   const grade = baseline ? gradeBaseline(baseline) : null;
-  const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && grade?.kind === "steady" && !busy;
+  const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && grade?.kind !== "too-short" && !busy;
 
   // Bento conversion (2026-08-12). span="full" is FORCED, not a taste call: this component can
   // return null (the dark experiment gate above) and this file declares no grid of its own, so
@@ -608,23 +626,25 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                     <b>{Math.round(baseline.low1_fps_est)}</b>{" "}
                     {t("lab.experimentBench.baselinePost", { when: whenLabel(baseline.started_at, t) })}
                   </p>
-                  {grade && grade.kind !== "steady" ? (
+                  {grade?.kind === "too-short" ? (
                     <p className="exp-note" data-testid="exp-baseline-unfit">
-                      {grade.kind === "too-short"
-                        ? t("lab.experimentBench.baselineTooShort", { readings: grade.samples, min: MIN_BASELINE_SAMPLES })
-                        : grade.kind === "uneven"
-                          ? t("lab.experimentBench.baselineUneven", {
-                              first: grade.first,
-                              second: grade.second,
-                              floor: BASELINE_NOISE_FLOOR_PCT,
-                            })
-                          : t("lab.experimentBench.baselineUntraced")}{" "}
+                      {t("lab.experimentBench.baselineTooShort", { readings: grade.samples, min: MIN_BASELINE_SAMPLES })}{" "}
                       {t("lab.experimentBench.baselineRerecord", {
                         game: prettyGameName(baseline.process_name) || t("lab.experimentBench.fineprintGameFallback"),
                       })}
                     </p>
                   ) : (
                   <>
+                  {grade?.kind === "uneven" && (
+                    <p className="exp-bench-warn" data-testid="exp-baseline-warn">
+                      {t("lab.experimentBench.baselineUneven", { first: grade.first, second: grade.second })}
+                    </p>
+                  )}
+                  {grade?.kind === "untraced" && (
+                    <p className="exp-bench-warn" data-testid="exp-baseline-warn">
+                      {t("lab.experimentBench.baselineUntraced")}
+                    </p>
+                  )}
                   <label className="exp-field">
                     <span className="exp-field-label">{t("lab.experimentBench.hypothesisLabel")}</span>
                     <input
@@ -681,6 +701,11 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                 )}
                 {x.stop_reason && x.status === "aborted" && (
                   <span className="exp-bench-abort">{abortReasonText(x.stop_reason)}</span>
+                )}
+                {baselineReceipt(x, t) && (
+                  <span className="exp-bench-abort" data-testid="exp-baseline-receipt">
+                    {baselineReceipt(x, t)}
+                  </span>
                 )}
               </li>
             ))}
@@ -740,6 +765,11 @@ function RunningPanel({
         )}
       </p>
       {exp.attribution_warning && <p className="exp-bench-warn">{exp.attribution_warning}</p>}
+      {baselineReceipt(exp, t) && (
+        <p className="exp-bench-warn" data-testid="exp-baseline-receipt">
+          {baselineReceipt(exp, t)}
+        </p>
+      )}
       <p className="exp-running-step">
         {legacy ? t("lab.experimentBench.runningLegacy") : t("lab.experimentBench.runningStep", { game })}
       </p>

@@ -900,8 +900,9 @@ describe("ExperimentBench (armed)", () => {
   });
 });
 
-// P4-baseline-quality (Trial Protocol §2): a baseline too short or too uneven to judge a change
-// against is said so, with a re-record, instead of offering a start the backend refuses.
+// P4-baseline-quality (Trial Protocol §2): a baseline too short to judge a change against is said
+// so, with a re-record, instead of offering a start the backend refuses; an uneven or untraced one
+// warns, starts, and its receipt keeps the warning.
 describe("the baseline is graded before a start", () => {
   // The owner rig's 2026-10-23 WARDOGS baseline (1172 readings; AFK into a new round): its 10 s fps
   // buckets as sessions.json holds them.
@@ -926,27 +927,73 @@ describe("the baseline is graded before a start", () => {
     expect(await screen.findByText("Worth testing")).toBeInTheDocument();
   }
 
-  it("the AFK baseline from the first live Trial reads too uneven and offers a re-record", async () => {
+  async function startsAndIsSent() {
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(start);
+    await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
+  }
+
+  // Owner decision 2026-10-24: warn, don't block. With a 3% floor both of the owner's real WARDOGS
+  // baselines grade uneven, so blocking would stop nearly every Trial until P4-noise.
+  it("the AFK baseline from the first live Trial warns it was uneven and still starts", async () => {
     await openStart(AFK_BASELINE);
+    const warn = await screen.findByTestId("exp-baseline-warn");
+    expect(warn).toHaveTextContent(
+      "This baseline was uneven: first half 260 fps, second half 228 fps, so this experiment's result may be less reliable.",
+    );
+    expect(screen.queryByTestId("exp-baseline-unfit")).toBeNull();
+    await startsAndIsSent();
+  });
+
+  it("a baseline under 600 readings reads too short and does not start", async () => {
+    await openStart({ ...VALORANT_SESSION, samples: 91 });
     const note = await screen.findByTestId("exp-baseline-unfit");
-    expect(note).toHaveTextContent(/too uneven/);
-    expect(note).toHaveTextContent(/260 fps in the first half and 228 fps in the second/);
-    expect(note).toHaveTextContent(/3% noise floor/);
+    expect(note).toHaveTextContent(/too short.*91 of the 600 frame-rate readings/);
     expect(note).toHaveTextContent(/Record a new baseline/);
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
   });
 
-  it("a baseline under 600 readings reads too short", async () => {
-    await openStart({ ...VALORANT_SESSION, samples: 91 });
-    const note = await screen.findByTestId("exp-baseline-unfit");
-    expect(note).toHaveTextContent(/too short.*91 of the 600 frame-rate readings/);
-    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+  it("a baseline without its frame-rate trace warns it can't be checked and still starts", async () => {
+    await openStart({ ...VALORANT_SESSION, fps_series: [] });
+    expect(await screen.findByTestId("exp-baseline-warn")).toHaveTextContent(
+      "Compy can't check this baseline's steadiness: this session has no frame-rate trace.",
+    );
+    await startsAndIsSent();
   });
 
-  it("a baseline without its frame-rate trace is unknown, never steady", async () => {
-    await openStart({ ...VALORANT_SESSION, fps_series: [] });
-    expect(await screen.findByTestId("exp-baseline-unfit")).toHaveTextContent(/can't check that the session was steady/);
-    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+  it("the receipt of a Trial started on an uneven baseline says so, running and past", async () => {
+    state.gate = true;
+    const halves = { first_half_fps: 259.8, second_half_fps: 227.9 };
+    state.experiments = [{ ...RUNNING_EXPERIMENT, baseline_check: "uneven", baseline_halves: halves }];
+    state.sessions = [VALORANT_SESSION];
+    const { unmount } = render(<ExperimentBench />);
+    await screen.findByTestId("experiment-running");
+    expect(screen.getByTestId("exp-baseline-receipt")).toHaveTextContent(
+      "This experiment's baseline was uneven: first half 260 fps, second half 228 fps, so its result may be less reliable.",
+    );
+    unmount();
+    state.experiments = [{ ...KEPT_EXPERIMENT, baseline_check: "uneven", baseline_halves: halves }];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
+    expect(screen.getByTestId("exp-baseline-receipt")).toHaveTextContent(/baseline was uneven: first half 260 fps/);
+  });
+
+  it("the receipt of a Trial started on an untraced baseline says it wasn't checked; steady and older say nothing", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, id: "a", baseline_check: "untraced", baseline_halves: null },
+      { ...KEPT_EXPERIMENT, id: "b", baseline_check: "steady", baseline_halves: { first_half_fps: 200, second_half_fps: 202 } },
+      { ...KEPT_EXPERIMENT, id: "c" }, // an older record: no grade at all
+    ];
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    const receipts = await screen.findAllByTestId("exp-baseline-receipt");
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toHaveTextContent(
+      "Compy couldn't check this experiment's baseline for steadiness: that session had no frame-rate trace.",
+    );
   });
 
   it("a long, steady baseline still starts", async () => {
@@ -954,5 +1001,6 @@ describe("the baseline is graded before a start", () => {
     const start = await screen.findByRole("button", { name: /Start experiment/ });
     await waitFor(() => expect(start).toBeEnabled());
     expect(screen.queryByTestId("exp-baseline-unfit")).toBeNull();
+    expect(screen.queryByTestId("exp-baseline-warn")).toBeNull();
   });
 });
