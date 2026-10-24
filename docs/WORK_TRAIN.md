@@ -126,7 +126,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       Was: grade the baseline before a start: < 600 readings, or halves differing by more
       than the noise floor (the 133→244 fps swing), reads "too uneven" and offers a re-record. Fixture from
       the 2026-10-23 AFK numbers. TRIAL_PROTOCOL §2.
-- [ ] **P4-sessions** "Too noisy to judge" verdict (Inconclusive, restored) when either session is uneven
+- [x] **P4-sessions** (uneven-session half only, owner approved 2026-10-24; the "effect below
+      session-to-session spread" half waits for P4-noise, which supplies that spread) "Too noisy to judge" verdict (Inconclusive, restored) when either session is uneven
       or the effect is below session-to-session spread. Test replays the −18.5% case. Needs P4-baseline-quality.
 - [ ] **P4-comparable** Leave idle/menu stretches out of the measurement; a Partial pair shows what differed
       in one line. `comparability.rs` + conclude. TRIAL_PROTOCOL §7, ENGINE §10.
@@ -164,6 +165,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-24 late morning: #686-followup `6e7792a8`, P4-noise-store `4caee92b` + `ad436c84`.
 - 2026-10-24 midday: guard re-anchor `18622365` (pushed), #617-f1 `29e5e67a`, #638.
 - 2026-10-24 afternoon: #622-f1 `716e0fbd`, P4-baseline-quality `66f1daea` (owner: warn, don't block).
+- 2026-10-24 afternoon: P4-sessions (too-noisy on uneven sessions).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
