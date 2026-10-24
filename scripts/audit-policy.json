@@ -5,7 +5,7 @@
   "shipped_target": "x86_64-pc-windows-msvc",
   "how_this_file_is_used": "scripts/supply-chain-gate.mjs re-runs both audits against the current lockfiles on every verification run. A cargo finding whose package is absent from `cargo tree --target x86_64-pc-windows-msvc --edges normal,build` is classified mechanically and needs no entry here. Everything else must be listed below with a reachability argument and a review date. An unlisted finding fails the gate; a listed finding whose review_by has passed fails the gate. Acknowledgements expire on purpose - the alternative is a permanent excuse.",
   "npm": {
-    "shipped_artifact": "The Compy installer contains the Rust executable and the Vite build output (tauri.conf.json build.frontendDist = ../dist). bundle.resources and bundle.externalBin are unset, so no node_modules content is packaged; only code the Vite build actually imports reaches dist/. Every devDependency advisory below is therefore a build-integrity or developer-workstation concern, which is a reachability statement, not a dismissal: a compromised build tool would reach the installer through dist/. The one production-dependency entry (fflate) carries its own evidence that its code is absent from dist/.",
+    "shipped_artifact": "The Compy installer contains the Rust executable and the Vite build output (tauri.conf.json build.frontendDist = ../dist). bundle.resources and bundle.externalBin are unset, so no node_modules content is packaged; only code the Vite build actually imports reaches dist/. Every devDependency advisory below is therefore a build-integrity or developer-workstation concern, which is a reachability statement, not a dismissal: a compromised build tool would reach the installer through dist/. No production dependency is acknowledged: the one former entry, fflate 0.6.10 under three-stdlib (GHSA-px8p-9vwx-vf98), was fixed by updating it to 0.6.11 in package-lock.json.",
     "acknowledged": {
       "braces": {
         "severity": "high",
@@ -67,16 +67,6 @@
           "shadcn@4.13.0 (devDependency)"
         ],
         "review_by": "2027-01-31"
-      },
-      "fflate": {
-        "severity": "moderate",
-        "classification": "production-dependency-not-in-dist",
-        "advisories": ["GHSA-px8p-9vwx-vf98"],
-        "why": "GHSA-px8p-9vwx-vf98: unzipSync can loop forever on a malformed ZIP64 archive. This is the one production-dependency finding: fflate 0.6.10 is nested under three-stdlib, which @react-three/drei depends on; the top-level fflate 0.8.3 is outside the vulnerable range. three-stdlib uses fflate only in its file loaders and exporters. src/ imports only Edges, Html, Grid, OrbitControls and shaderMaterial from drei and never imports three-stdlib or fflate, and the 2026-10-20 production build tree-shakes fflate out: three error strings present in fflate 0.6.10's own ESM build (invalid block type, invalid length/literal, unexpected EOF) occur nowhere in dist/. Compy also loads no ZIP, KMZ, 3MF, FBX or USDZ file at all. The patched fflate 0.6.11 is inside three-stdlib's declared ^0.6.9 range, but bumping a production dependency was outside #672's dev-only scope, so it is recommended there for a separate owner-approved change; the earlier review date reflects that a fix is available.",
-        "paths": [
-          "@react-three/drei@10.7.7 -> three-stdlib@2.36.1 -> fflate@0.6.10"
-        ],
-        "review_by": "2026-12-31"
       }
     }
   },
