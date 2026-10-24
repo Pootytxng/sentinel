@@ -102,13 +102,37 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 - [ ] **#686-followup** One `LiveReads` per Trial start instead of one PowerShell spawn per row.
 
 ### Then — Roadmap Phase 4: Optimization Engine v1 (`product/OPTIMIZATION_ENGINE.md`)
-- [ ] **P4-plan** Read the engine contract and Trial Protocol; write the first three slices as queue
-      items here (each one user-visible and testable on the owner rig). Outcomes in scope: Recommended /
-      Maximum FPS / Smoothest frame pacing.
-- [ ] **P4-noise** Measure this game's run-to-run noise floor on the owner rig, so Trial verdicts stop
-      using the fixed 3% default ("this game's own run-to-run noise hasn't been measured yet").
-- [ ] **P4-sessions** Trial sessions shorter than ~10 min of comparable gameplay get a "too noisy" verdict
-      instead of a Slower/Faster call.
+Planned 2026-10-24 from the spec and the code. Order is dependency order. Phase 4 exit on the owner rig:
+a current WARDOGS noise floor is used; every passing candidate is tested or skipped with a reason; an
+uneven baseline gives "too noisy", never Slower/Faster; only Better stays applied; the WARDOGS summary
+reads honest to the owner. First check: does `sessions.rs` keep per-second fps (needed by P4-baseline-quality)?
+- [x] **P4-plan** Slices written below (2026-10-24).
+- [ ] **P4-noise-store** Store a measured noise floor per game + rig (`process_name` + `hw_fingerprint`),
+      stale after a driver/Windows/game-build change; fill `measured_noise_pct` in `experiment.rs` from
+      `benchmark_trial.rs` calibration. Rust unit tests. TRIAL_PROTOCOL §5, MACHINE_MODEL §4, ENGINE §10.
+- [ ] **P4-noise** "Measure this game's noise": two unchanged sessions → "varies ±X% on your PC"; Trials
+      use max(measured, 3%); the "hasn't been measured yet" line goes. Owner-rig proof. Needs P4-noise-store.
+- [ ] **P4-baseline-quality** Grade the baseline before a start: < 600 readings, or halves differing by more
+      than the noise floor (the 133→244 fps swing), reads "too uneven" and offers a re-record. Fixture from
+      the 2026-10-23 AFK numbers. TRIAL_PROTOCOL §2.
+- [ ] **P4-sessions** "Too noisy to judge" verdict (Inconclusive, restored) when either session is uneven
+      or the effect is below session-to-session spread. Test replays the −18.5% case. Needs P4-baseline-quality.
+- [ ] **P4-comparable** Leave idle/menu stretches out of the measurement; a Partial pair shows what differed
+      in one line. `comparability.rs` + conclude. TRIAL_PROTOCOL §7, ENGINE §10.
+- [ ] **P4-candidates** "Worth testing on this PC": a pure module filters the catalog (applies / already
+      set / Compy can do it safely); the picker shows only passing ones, reasons behind a toggle. Covers
+      GB-picker. ENGINE §3.1–3.3.
+- [ ] **P4-rank** Drop candidates whose likely effect is below measured noise ("too small to measure here");
+      order the rest by benefit vs risk and test time; group interactions. Needs P4-noise, P4-candidates. ENGINE §3.4–3.7, §4.
+- [ ] **P4-recommended** First outcome, Recommended / Best Overall: Better only if the 1% low improves beyond
+      noise and the average doesn't drop; ties keep the default. Needs P4-sessions. ENGINE §2, §6.
+- [ ] **P4-maxfps-smooth** Maximum FPS (average + 1% low) and Smoothest frame pacing (frame-time spread,
+      0.1% low when samples allow) as user-picked outcomes. Needs P4-recommended. ENGINE §2.
+- [ ] **P4-next** After a Trial, propose the next ranked candidate; "Nothing else here is worth testing"
+      is a success state. Needs P4-rank. ENGINE §7.
+- [ ] **P4-exit** "We tested what mattered on this PC" per-game summary: tested/kept/restored, skipped +
+      why, noise floor used, context, what stays applied; confidence vocabulary, no fake percentages.
+      Owner-rig proof with WARDOGS. ENGINE §8–9, ROADMAP Phase 4 exit.
 
 ### Before deadlines
 - [ ] **fflate** Update to 0.6.11 (production dependency) before its acknowledgement expires 2026-12-31.
