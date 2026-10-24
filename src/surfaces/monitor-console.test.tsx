@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { MonitorConsole } from "./MonitorConsole";
@@ -304,7 +304,23 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
     const tag = container.querySelector(".mc-delta-tag")!;
     expect(tag.textContent).toBe("11 Compy changes were on · combined effect");
-    expect(tag.getAttribute("title")).toContain("one-change-at-a-time");
+    // #677: the caveat is the app's own styled tooltip, not a native `title` on a labelled span.
+    // No element in the tag carries a title; the tag's text is a real trigger that hover, focus
+    // and tap all open, and the opened tooltip is announced as the trigger's description.
+    expect(tag.getAttribute("title")).toBeNull();
+    expect(tag.querySelector("[title]")).toBeNull();
+    const trigger = tag.querySelector<HTMLButtonElement>("button.kl-term")!;
+    expect(trigger.textContent).toBe("11 Compy changes were on · combined effect");
+    expect(tag.querySelector('[role="tooltip"]')).toBeNull();
+    fireEvent.focus(trigger);
+    const tip = tag.querySelector('[role="tooltip"]')!;
+    expect(tip.textContent).toContain("one-change-at-a-time");
+    expect(tip.textContent).toContain("together");
+    expect(trigger.getAttribute("aria-describedby")).toBe(tip.id);
+    // A caveat, not a glossary entry: no "more in the library" link inside it.
+    expect(tip.querySelector("button")).toBeNull();
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(tag.querySelector('[role="tooltip"]')).toBeNull();
   });
 
   it("exactly one change on → plain tag, no combined-effect caveat", async () => {
@@ -320,6 +336,8 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     expect(tag.textContent).toBe("1 Compy change was on");
     expect(tag.textContent).not.toMatch(/combined/i);
     expect(tag.getAttribute("title")).toBeNull();
+    // One change IS attributable, so there is no caveat to open: plain text, no trigger.
+    expect(tag.querySelector("button")).toBeNull();
   });
 
   it("cross-game prior is LABELED; unrecorded spikes read em-dash, never 0", async () => {

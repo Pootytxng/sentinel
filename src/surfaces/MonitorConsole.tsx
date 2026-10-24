@@ -598,17 +598,18 @@ export function MonitorConsole({
               {deck.changesOn > 0 && (
                 // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
                 // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
-                // answer is the Lab's A/B benchmark, and the tooltip says so.
-                <span
-                  className="mc-delta-tag"
-                  title={
-                    deck.changesOn > 1
-                      ? t("monitor.monitorConsole.combinedEffectTooltip")
-                      : undefined
-                  }
-                >
-                  {t("monitor.monitorConsole.changesOn", { count: deck.changesOn })}
-                  {deck.changesOn > 1 && t("monitor.monitorConsole.combinedEffectTag")}
+                // answer is the Lab's A/B benchmark, and the tooltip says so. The tooltip is the
+                // app's own styled one (the glossary Term's), opened by hover, focus or tap — not
+                // a native `title` on an already-labelled span (#677, native-control hygiene).
+                <span className="mc-delta-tag">
+                  {deck.changesOn > 1 ? (
+                    <Term tip={t("monitor.monitorConsole.combinedEffectTooltip")}>
+                      {t("monitor.monitorConsole.changesOn", { count: deck.changesOn })}
+                      {t("monitor.monitorConsole.combinedEffectTag")}
+                    </Term>
+                  ) : (
+                    t("monitor.monitorConsole.changesOn", { count: deck.changesOn })
+                  )}
                 </span>
               )}
             </div>
