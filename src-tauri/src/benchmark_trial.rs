@@ -302,39 +302,57 @@ impl Drop for StackRollbackGuard {
         if self.change_ids.is_empty() {
             return;
         }
-        let mut failed: Vec<String> = Vec::new();
-        let mut unrecorded: Vec<String> = Vec::new();
-        for id in std::mem::take(&mut self.change_ids).into_iter().rev() {
-            match crate::history::rollback_change(id.clone()) {
-                Ok(()) => {}
-                // #631: undone on Windows, only the history save failed — not a failed rollback.
-                Err(e) if crate::history::is_unrecorded_rollback(&e) => unrecorded.push(e),
-                Err(e) => failed.push(format!("{id}: {e}")),
-            }
-        }
-        if failed.is_empty() {
-            set(|s| {
-                s.rolled_back = true;
-                s.status = "Done — the stack was measured and fully rolled back.".into();
-                if !unrecorded.is_empty() {
-                    s.error = Some(unrecorded.join(" "));
-                }
-            });
-        } else {
-            set(|s| {
-                s.rolled_back = false;
-                s.error = Some(format!(
-                    "Measurement finished, but rolling {} change(s) back FAILED: {}. Undo them \
-                     manually in the Trust Ledger.",
-                    failed.len(),
-                    failed.join("; ")
-                ));
-                s.status = "Rollback failed — see the Ledger.".into();
-            });
-        }
+        let results: Vec<(String, Result<(), String>)> = std::mem::take(&mut self.change_ids)
+            .into_iter()
+            .rev()
+            .map(|id| {
+                let r = crate::history::rollback_change(id.clone());
+                (id, r)
+            })
+            .collect();
+        set(|s| record_stack_rollback_outcome(s, results));
         // Clear `running` only after the whole stack has unwound — see RollbackGuard::drop for why
         // the armed-guard exit paths leave it true until here.
         set(|s| s.running = false);
+    }
+}
+
+/// PURE: record how the stack's rollbacks ended. A change undone on Windows but not saved to history
+/// (#631) is never counted as FAILED, and its message is always shown, even next to real failures,
+/// because its ledger row still reads "applied".
+fn record_stack_rollback_outcome(s: &mut TrialState, results: Vec<(String, Result<(), String>)>) {
+    let mut failed: Vec<String> = Vec::new();
+    let mut unrecorded: Vec<String> = Vec::new();
+    for (id, r) in results {
+        match r {
+            Ok(()) => {}
+            Err(e) if crate::history::is_unrecorded_rollback(&e) => unrecorded.push(e),
+            Err(e) => failed.push(format!("{id}: {e}")),
+        }
+    }
+    if failed.is_empty() {
+        s.rolled_back = true;
+        s.status = "Done — the stack was measured and fully rolled back.".into();
+        if !unrecorded.is_empty() {
+            s.error = Some(unrecorded.join(" "));
+        }
+    } else {
+        s.rolled_back = false;
+        let mut msg = format!(
+            "Measurement finished, but rolling {} change(s) back FAILED: {}. Undo them manually \
+             in the Trust Ledger.",
+            failed.len(),
+            failed.join("; ")
+        );
+        if !unrecorded.is_empty() {
+            msg.push_str(&format!(
+                " {} other change(s) were undone: {}",
+                unrecorded.len(),
+                unrecorded.join(" ")
+            ));
+        }
+        s.error = Some(msg);
+        s.status = "Rollback failed — see the Ledger.".into();
     }
 }
 
@@ -602,6 +620,37 @@ mod trial_tests {
         assert!(!s.rolled_back);
         assert!(s.error.unwrap_or_default().contains("FAILED: access denied"));
         assert_eq!(s.status, "Rollback failed — see the Ledger.");
+    }
+
+    #[test]
+    fn a_stack_with_failed_and_unrecorded_undos_reports_both() {
+        // #631 review: the unrecorded rows still read "applied" in the ledger, so their message
+        // must survive next to the genuine failures.
+        let unrec = format!("{} (disk full).", crate::history::ROLLBACK_UNRECORDED_LEAD);
+        let mut s = TrialState::default();
+        record_stack_rollback_outcome(
+            &mut s,
+            vec![
+                ("a".into(), Ok(())),
+                ("b".into(), Err("access denied".into())),
+                ("c".into(), Err(unrec.clone())),
+            ],
+        );
+        let err = s.error.clone().unwrap_or_default();
+        assert!(!s.rolled_back);
+        assert!(err.contains("rolling 1 change(s) back FAILED: b: access denied"), "{err}");
+        assert!(err.contains(&unrec), "{err}");
+        assert!(!err.contains("c: "), "an unrecorded undo is not listed as failed: {err}");
+    }
+
+    #[test]
+    fn a_stack_with_only_unrecorded_undos_is_rolled_back() {
+        let unrec = format!("{} (disk full).", crate::history::ROLLBACK_UNRECORDED_LEAD);
+        let mut s = TrialState::default();
+        record_stack_rollback_outcome(&mut s, vec![("a".into(), Err(unrec.clone()))]);
+        assert!(s.rolled_back);
+        assert_eq!(s.error.as_deref(), Some(unrec.as_str()));
+        assert!(!s.status.contains("failed"), "{}", s.status);
     }
 
     #[test]
