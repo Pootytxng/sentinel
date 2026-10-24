@@ -61,8 +61,11 @@ pub(crate) struct SessionSummary {
     // Renamed from `sentinel_changes_active` in the Compy rename; alias keeps pre-rename
     // sessions.json (migrated from %APPDATA%\Sentinel) parseable.
     // `None` = Compy couldn't read its change history when the session began, so no count was
-    // recorded (#669; never a fabricated 0). Every row written before this became optional carries a
-    // number and loads as `Some`; `default` lets a row without the field load as `None`.
+    // recorded (#669; never a fabricated 0). This is the in-memory and IPC shape (`null` to the UI).
+    // On disk the field stays a plain number, so an older Compy can still load the file: an unknown
+    // count is written as 0 plus `compy_changes_unrecorded: true` (see `disk_row` / `from_disk_row`).
+    // A row with no count field at all loads as `None`: no Compy build ever wrote one, so nothing
+    // says what the count was.
     #[serde(alias = "sentinel_changes_active", default)]
     pub(crate) compy_changes_active: Option<usize>, // active Compy changes during the session
     /// Rig identity at session time — groundwork for same-rig analysis. Additive: pre-fingerprint
@@ -292,12 +295,49 @@ fn sessions_path() -> PathBuf {
     compy_data_dir().join("sessions.json")
 }
 
+/// The sessions.json key that marks a row's `compy_changes_active` as not recorded (#669). The count
+/// itself stays a plain number on disk: an older Compy reads `compy_changes_active` as a required
+/// number and sets the whole file aside on a `null`, losing every session and Trial baseline.
+const UNRECORDED_KEY: &str = "compy_changes_unrecorded";
+
+/// One session as sessions.json stores it: an unknown count is written as 0 plus
+/// `compy_changes_unrecorded: true`, never as `null`. Serialized through a string first, so a value
+/// JSON can't hold (a non-finite number) still fails the save as it always did.
+fn disk_row(summary: &SessionSummary) -> Result<serde_json::Value, String> {
+    let text = serde_json::to_string(summary).map_err(|e| e.to_string())?;
+    let mut row: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    if summary.compy_changes_active.is_none() {
+        if let Some(obj) = row.as_object_mut() {
+            obj.insert("compy_changes_active".into(), 0.into());
+            obj.insert(UNRECORDED_KEY.into(), true.into());
+        }
+    }
+    Ok(row)
+}
+
+/// One sessions.json row back into a session: a row marked `compy_changes_unrecorded` has no count,
+/// whatever number sits beside the mark.
+fn from_disk_row(mut row: serde_json::Value) -> Result<SessionSummary, serde_json::Error> {
+    if let Some(obj) = row.as_object_mut() {
+        if obj.remove(UNRECORDED_KEY).and_then(|v| v.as_bool()) == Some(true) {
+            obj.remove("sentinel_changes_active");
+            obj.insert("compy_changes_active".into(), serde_json::Value::Null);
+        }
+    }
+    serde_json::from_value(row)
+}
+
+fn parse_sessions(text: &str) -> Result<Vec<SessionSummary>, serde_json::Error> {
+    let rows: Vec<serde_json::Value> = serde_json::from_str(text)?;
+    rows.into_iter().map(from_disk_row).collect()
+}
+
 fn load_sessions_from(path: &Path) -> Vec<SessionSummary> {
     if !path.exists() {
         return Vec::new();
     }
     match std::fs::read_to_string(path) {
-        Ok(s) => match serde_json::from_str(&s) {
+        Ok(s) => match parse_sessions(&s) {
             Ok(v) => v,
             Err(_) => {
                 // A corrupt sessions.json must not be silently overwritten by the next save — set
@@ -332,7 +372,8 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     for s in all.iter_mut().take(series_strip_before) {
         s.fps_series = Vec::new();
     }
-    let json = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
+    let rows = all.iter().map(disk_row).collect::<Result<Vec<_>, _>>()?;
+    let json = serde_json::to_string_pretty(&rows).map_err(|e| e.to_string())?;
     // Atomic swap (mirrors history.rs save_history_to): write beside the live file then rename it
     // in (MoveFileEx + REPLACE_EXISTING on Windows), so a crash mid-write leaves the prior valid
     // sessions.json intact plus an ignorable .tmp — never a torn half-written file.
@@ -550,7 +591,7 @@ mod session_tests {
     }
 
     // #669: a session whose start couldn't read the change history records NO count: it finalizes as
-    // None, persists as null and loads back as None. A session never records a count it didn't measure.
+    // None, reaches the UI as null and reads back as None. A session never records a count it didn't measure.
     #[test]
     fn an_unread_change_history_at_start_is_recorded_as_no_count() {
         let mut acc = SessionAccumulator::new("t".into(), None);
@@ -563,8 +604,53 @@ mod session_tests {
         assert_eq!(back.compy_changes_active, None);
     }
 
+    // #669 review: an unknown count must not break an older Compy reading the same sessions.json. The
+    // old build read `compy_changes_active` as a required number and set the whole file aside on a
+    // `null`. On disk the unknown count is 0 plus a mark the old build ignores; this build reads the
+    // mark back as unknown.
+    #[test]
+    fn an_unknown_count_on_disk_still_loads_in_an_older_compy_and_reads_back_unknown() {
+        /// SessionSummary as builds before #669 declared it: the count a required plain number.
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OldSessionSummary {
+            started_at: String,
+            duration_secs: u64,
+            process_name: String,
+            samples: u32,
+            avg_fps: f64,
+            avg_frametime_ms: f64,
+            low1_fps_est: f64,
+            peak_gpu_temp_c: Option<u32>,
+            peak_gpu_usage_pct: Option<u32>,
+            peak_ram_used_bytes: Option<u64>,
+            ram_total_bytes: Option<u64>,
+            #[serde(alias = "sentinel_changes_active")]
+            compy_changes_active: usize,
+        }
+        let path = std::env::temp_dir().join(format!("compy-sessions-unrecorded-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let session = |count: Option<usize>| {
+            let mut acc = SessionAccumulator::new("t".into(), count);
+            acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+            acc.finalize(MIN_SESSION_SECS)
+        };
+        save_session_to(&path, session(None)).unwrap();
+        save_session_to(&path, session(Some(3))).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains(r#""compy_changes_active": null"#), "{text}");
+        assert!(text.contains(r#""compy_changes_unrecorded": true"#), "{text}");
+        let old: Vec<OldSessionSummary> = serde_json::from_str(&text).expect("an older Compy loads the file");
+        assert_eq!(old.iter().map(|s| s.compy_changes_active).collect::<Vec<_>>(), [0, 3]);
+        let back = load_sessions_from(&path);
+        assert_eq!(back.iter().map(|s| s.compy_changes_active).collect::<Vec<_>>(), [None, Some(3)]);
+        assert!(path.exists(), "the file was not set aside");
+        let _ = std::fs::remove_file(&path);
+    }
+
     // #669: every sessions.json row on disk carries a number (pre-rename rows under the old name), and
-    // each loads as a KNOWN count; a row without the field loads as unknown, never as 0.
+    // each loads as a KNOWN count; a row marked unrecorded, a `null` (an unreleased dev build of #669)
+    // and a row without the field load as unknown, never as 0.
     #[test]
     fn a_recorded_count_loads_as_known_and_a_missing_one_as_unknown() {
         let row = |count: &str| {
@@ -575,11 +661,17 @@ mod session_tests {
                 "ram_total_bytes": null{count} }}]"#
             )
         };
-        let load = |json: String| serde_json::from_str::<Vec<SessionSummary>>(&json).unwrap().remove(0);
+        let load = |json: String| parse_sessions(&json).unwrap().remove(0);
         assert_eq!(load(row(r#", "compy_changes_active": 2"#)).compy_changes_active, Some(2));
         assert_eq!(load(row(r#", "sentinel_changes_active": 2"#)).compy_changes_active, Some(2));
         assert_eq!(load(row(r#", "compy_changes_active": null"#)).compy_changes_active, None);
         assert_eq!(load(row("")).compy_changes_active, None);
+        let unrecorded = r#", "compy_changes_active": 0, "compy_changes_unrecorded": true"#;
+        assert_eq!(load(row(unrecorded)).compy_changes_active, None);
+        let marked_old_name = r#", "sentinel_changes_active": 0, "compy_changes_unrecorded": true"#;
+        assert_eq!(load(row(marked_old_name)).compy_changes_active, None);
+        let recorded = r#", "compy_changes_active": 0, "compy_changes_unrecorded": false"#;
+        assert_eq!(load(row(recorded)).compy_changes_active, Some(0));
     }
 
     #[test]
