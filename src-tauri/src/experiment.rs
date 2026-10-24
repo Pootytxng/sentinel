@@ -1259,9 +1259,25 @@ pub(crate) fn unverified_start_refusal(unverified: usize) -> Option<String> {
 
 /// A live, read-only read of whether `rec_id`'s setting is changed, through its applied rows in
 /// `changes` (the ledger's own live re-check: a startup-app toggle's direction is on its row, not in
-/// its rec id); None when it can't be read or has no probe.
-fn read_back(changes: &[crate::history::AppliedChange], rec_id: &str) -> Option<bool> {
-    target_verification(Some(crate::history::probe_applied_setting(changes, rec_id)))
+/// its rec id); None when it can't be read or has no probe. `reads` is the pass this read belongs to.
+fn read_back(
+    changes: &[crate::history::AppliedChange],
+    rec_id: &str,
+    reads: &crate::history::LiveReads,
+) -> Option<bool> {
+    target_verification(Some(crate::history::probe_applied_setting(changes, rec_id, reads)))
+}
+
+/// [`unverified_other_changes`] read live through one [`crate::history::LiveReads`] for every row
+/// (#686-followup): a Trial start or conclude lists the scheduled tasks once, however many task rows
+/// the ledger holds, instead of one PowerShell spawn per row. Same reads, same verdicts.
+fn unverified_others_live(
+    changes: &[crate::history::AppliedChange],
+    rows: &[LedgerEntryRef<'_>],
+    own_rec: &str,
+    reads: &crate::history::LiveReads,
+) -> usize {
+    unverified_other_changes(rows, own_rec, |other| read_back(changes, other, reads))
 }
 
 /// The session with this id, when there is exactly one.
@@ -1764,7 +1780,7 @@ pub(crate) fn start_experiment(
         .map_err(|why| format!("experiment not started — {why}"))?;
     let (changes, rows) = (view.changes, view.rows.as_slice());
     // §3: other applied settings not confirmed in place would leave the result unjudged at conclude.
-    let unverified = unverified_other_changes(rows, &rec_id, |other| read_back(changes, other));
+    let unverified = unverified_others_live(changes, rows, &rec_id, &crate::history::LiveReads::default());
     if let Some(why) = unverified_start_refusal(unverified) {
         return Err(format!("experiment not started — {why}"));
     }
@@ -2103,7 +2119,9 @@ pub(crate) fn conclude_experiment(
     let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()));
     // §3: other settings Compy changed that aren't confirmed in place limit what this result can claim.
     let unverified = match (history.as_deref(), rows.as_deref()) {
-        (Ok(changes), Some(rows)) => unverified_other_changes(rows, &rec.rec_id, |other| read_back(changes, other)),
+        (Ok(changes), Some(rows)) => {
+            unverified_others_live(changes, rows, &rec.rec_id, &crate::history::LiveReads::default())
+        }
         _ => 0,
     };
     let judged = with_unverified_changes(judged, unverified);
@@ -3861,11 +3879,52 @@ mod experiment_tests {
             (&untyped[..], 1, "no typed action: unverified"),
         ] {
             let rows = ledger_rows(changes);
-            assert_eq!(unverified_other_changes(&rows, "test-rec", |other| read_back(changes, other)), unverified, "{why}");
+            let reads = crate::history::LiveReads::default();
+            assert_eq!(unverified_others_live(changes, &rows, "test-rec", &reads), unverified, "{why}");
         }
         // The newest applied row is the one read: enable after an earlier disable is in place.
         let both = [disabled[0].clone(), enabled[0].clone()];
-        assert_eq!(unverified_other_changes(&ledger_rows(&both), "test-rec", |other| read_back(&both, other)), 0);
+        let reads = crate::history::LiveReads::default();
+        assert_eq!(unverified_others_live(&both, &ledger_rows(&both), "test-rec", &reads), 0);
+    }
+
+    // #686-followup: a Trial start read every other applied row back with its own LiveReads, so a
+    // ledger with N telemetry-task rows spawned PowerShell N times. One pass now lists them once, and
+    // the verdicts are the same: a disabled task is in place, a re-enabled one is set back, and a task
+    // missing from the listing (or an unreadable listing) is unknown, never confirmed.
+    #[test]
+    fn a_trial_start_lists_the_tasks_once_however_many_task_rows_the_ledger_holds() {
+        use crate::actions::{AppliedAction::DisableScheduledTask, KnownBloatTask};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static SPAWNS: AtomicUsize = AtomicUsize::new(0);
+        fn listing() -> Option<String> {
+            SPAWNS.fetch_add(1, Ordering::SeqCst);
+            Some(concat!(
+                "\\Microsoft\\Windows\\Customer Experience Improvement Program\\\tUsbCeip\tDisabled\n",
+                "\\Microsoft\\Windows\\Customer Experience Improvement Program\\\tConsolidator\tReady\n",
+            ).to_string())
+        }
+        static FAILED: AtomicUsize = AtomicUsize::new(0);
+        fn failed() -> Option<String> {
+            FAILED.fetch_add(1, Ordering::SeqCst);
+            None
+        }
+        let task = |t| Some(DisableScheduledTask { task: t });
+        let changes = [
+            ledger_change("bloat-task:ceip-usb", task(KnownBloatTask::CeipUsb)),
+            ledger_change("bloat-task:ceip-consolidator", task(KnownBloatTask::CeipConsolidator)),
+            ledger_change("bloat-task:compatibility-appraiser", task(KnownBloatTask::CompatibilityAppraiser)),
+        ];
+        let rows = ledger_rows(&changes);
+        // ceip-usb reads as disabled (in place); consolidator is Ready (set back); the appraiser is not
+        // in the listing (unknown). Two can't be confirmed.
+        let reads = crate::history::LiveReads::with_task_listing(listing);
+        assert_eq!(unverified_others_live(&changes, &rows, "test-rec", &reads), 2);
+        assert_eq!(SPAWNS.load(Ordering::SeqCst), 1, "one task listing for {} task rows", changes.len());
+        // An unreadable listing leaves every task row unknown, and is still tried only once.
+        let reads = crate::history::LiveReads::with_task_listing(failed);
+        assert_eq!(unverified_others_live(&changes, &rows, "test-rec", &reads), 3);
+        assert_eq!(FAILED.load(Ordering::SeqCst), 1, "one failed listing, not one per row");
     }
 
     #[test]
