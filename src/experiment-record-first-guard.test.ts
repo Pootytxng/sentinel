@@ -370,6 +370,17 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
     );
   });
 
+  // #628: the start note counted an older applied row for the setting under test, undone in Windows,
+  // as "another Compy change already active". The persisted count stays as sessions record it.
+  it("the start note names only other settings; the stored count stays the sessions' count", () => {
+    const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
+    expect(start, "the note counts the setting under test again").toMatch(
+      /let others = rows\.as_deref\(\)\.map_or\(active, \|rows\| other_active_changes\(rows, &rec_id\)\);\s*let warning = attribution_warning\(others\);/,
+    );
+    expect(start, "the stored count no longer matches what sessions record").toContain("active_changes_at_start: active,");
+    expect(fnBody(EXPERIMENT, "pub(crate) fn other_active_changes(")).toContain("applied && rec != own_rec");
+  });
+
   // #620: startup toggles, telemetry-task disables and session suspends have no catalog read, so a
   // read of the catalog alone counted them unverified and refused every Trial start on the owner's rig.
   it("other settings are read back through their own ledger row, not the catalog alone", () => {

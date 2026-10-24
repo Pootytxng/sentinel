@@ -359,6 +359,18 @@ pub(crate) fn attribution_warning(active_changes: usize) -> Option<String> {
     ))
 }
 
+/// How many OTHER settings Compy has active, from the ledger rows the start already loaded: the latest
+/// row per setting decides (as `history::active_change_count` reads it), and the setting under test
+/// (`own_rec`) is left out. An older applied row for it, undone in Windows, leaves it testable again
+/// (see [`unverified_other_changes`]), so it is never "another change" in the start note (#628).
+pub(crate) fn other_active_changes(ledger: &[LedgerEntryRef<'_>], own_rec: &str) -> usize {
+    let mut latest: std::collections::BTreeMap<&str, bool> = std::collections::BTreeMap::new();
+    for c in ledger {
+        latest.insert(c.rec_id, c.applied);
+    }
+    latest.into_iter().filter(|&(rec, applied)| applied && rec != own_rec).count()
+}
+
 /// Build the transient `ArmedComparison` the shipped verdict machinery consumes, from a record's
 /// stored baseline. Reused so the experiment verdict is byte-identical to the session A/B verdict.
 fn armed_from(rec: &ExperimentRecord) -> ArmedComparison {
@@ -1719,8 +1731,11 @@ pub(crate) fn start_experiment(
     }
 
     // Single-variable honesty context BEFORE we apply (§4F): how many changes are already active.
+    // `active` is stored as the sessions count it (`baseline_is_current` / `other_compy_change` compare
+    // the two); the note names only OTHER settings, never an older row for the one under test (#628).
     let active = crate::history::active_change_count();
-    let warning = attribution_warning(active);
+    let others = rows.as_deref().map_or(active, |rows| other_active_changes(rows, &rec_id));
+    let warning = attribution_warning(others);
 
     // Step 0 — RECORD FIRST. Saved before the apply; a failed save stops here with nothing changed.
     let now = Utc::now();
@@ -2369,6 +2384,27 @@ mod experiment_tests {
         let many = attribution_warning(3).unwrap();
         assert!(many.contains("3 other Compy changes are already active"));
         assert!(many.contains("can't attribute"));
+    }
+
+    // #628: a Trial on a setting whose older Compy change was undone in Windows said "1 other Compy
+    // change is already active", counting that stale row for the setting under test.
+    #[test]
+    fn the_start_note_never_counts_a_stale_row_for_the_setting_under_test() {
+        const AT: &str = "2026-09-28T11:00:00+00:00";
+        let stale = [LedgerEntryRef { id: "old", rec_id: "test-rec", applied_at: AT, applied: true, rolled_back_at: None }];
+        assert_eq!(other_active_changes(&stale, "test-rec"), 0);
+        assert_eq!(attribution_warning(other_active_changes(&stale, "test-rec")), None, "no 'other change' note");
+        let ledger = [
+            stale[0],
+            LedgerEntryRef { id: "gm", rec_id: "game-mode", applied_at: AT, applied: true, rolled_back_at: None },
+            LedgerEntryRef { id: "gb1", rec_id: "game-bar-disable", applied_at: AT, applied: true, rolled_back_at: None },
+            LedgerEntryRef { id: "gb2", rec_id: "game-bar-disable", applied_at: AT, applied: false, rolled_back_at: None },
+            LedgerEntryRef { id: "s1", rec_id: "startup-entry", applied_at: AT, applied: true, rolled_back_at: None },
+            LedgerEntryRef { id: "s2", rec_id: "startup-entry", applied_at: AT, applied: true, rolled_back_at: None },
+        ];
+        assert_eq!(other_active_changes(&ledger, "test-rec"), 2, "latest row per other setting, counted once");
+        let note = attribution_warning(other_active_changes(&ledger, "test-rec")).unwrap();
+        assert!(note.contains("2 other Compy changes are already active"), "{note}");
     }
 
     // ── conclude verdict logic (§4F steps 6–8, anti-fabrication) ──
