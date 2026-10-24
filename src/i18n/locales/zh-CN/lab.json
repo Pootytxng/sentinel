@@ -410,7 +410,7 @@
     "receiptBaselineUntraced": "Compy 未能判断这次实验的基准是否平稳：那局的帧率曲线不足以检查。",
     "receiptBaselineUnevenPlain": "基准帧率不平稳：前半段 {{first}} fps,后半段 {{second}} fps。",
     "receiptAfterUneven": "测试后的那局帧率不平稳：前半段 {{first}} fps,后半段 {{second}} fps。",
-    "tooNoisyWhy": "一局游戏自身的帧率波动这么大,会掩盖这项设置带来的任何变化,所以 Compy 已恢复它,不作判定。",
+    "tooNoisyWhy": "一局游戏自身的帧率这么不平稳,无法把这项设置的影响与场景变化区分开,所以 Compy 已恢复它,不作判定。",
     "pastExperiments": "历史实验",
     "deltaSuffix": "% 1% 最低帧",
     "runningTitlePrefix": "实验进行中——",

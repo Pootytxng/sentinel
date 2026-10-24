@@ -1728,8 +1728,8 @@ pub(crate) fn with_steady_sessions(
         stop_reason: Some("uneven-session".into()),
         confidence: Confidence::Unknown,
         note: format!(
-            "Too noisy to judge: {which}. A session that swings that much on its own is bigger than \
-             anything this setting could be shown to do, so Compy restored the change and judged nothing."
+            "Too noisy to judge: {which}. That is too uneven on its own to tell this setting's effect \
+             apart from the scene, so Compy restored the change and judged nothing."
         ),
         ..outcome
     }
@@ -1974,7 +1974,8 @@ pub(crate) fn start_experiment(
         .map_err(|why| format!("experiment not started — {why}"))?;
     // §2: a baseline too short to judge a change against is refused; an uneven or untraced one starts
     // and the record says so (blocking on uneven waits for P4-noise's per-game noise).
-    let (baseline_check, baseline_halves) = baseline_for_start(baseline, DEFAULT_NOISE_FLOOR_PCT)
+    let noise_floor_pct = DEFAULT_NOISE_FLOOR_PCT; // graded on the same floor the record keeps
+    let (baseline_check, baseline_halves) = baseline_for_start(baseline, noise_floor_pct)
         .map_err(|why| format!("experiment not started — {why}"))?;
     // §3: the baseline must still describe the Compy changes in place now.
     let history = ledger_for_one_change_checks(
@@ -2028,7 +2029,7 @@ pub(crate) fn start_experiment(
         applied_change_id: String::new(),
         active_changes_at_start: active,
         attribution_warning: warning,
-        noise_floor_pct: DEFAULT_NOISE_FLOOR_PCT,
+        noise_floor_pct,
         treatment: None,
         verdict: None,
         kept: false,
@@ -2315,8 +2316,10 @@ pub(crate) fn conclude_experiment(
     let uneven_after = after_halves.as_ref().filter(|_| after_check == Some(BaselineCheck::Uneven));
     let (judged, crash_pairing) = match &resolved {
         Some((treatment, pairing)) => (
-            with_steady_sessions(
-                with_comparability(
+            // Steadiness first, so a Partial pairing appends its "not every condition could be
+            // checked" to the too-noisy note, as it does for every verdict that wasn't judged.
+            with_comparability(
+                with_steady_sessions(
                     conclude_outcome(
                         rec,
                         treatment.low1_fps_est,
@@ -2326,10 +2329,10 @@ pub(crate) fn conclude_experiment(
                         ledger_now,
                         now,
                     ),
-                    pairing,
+                    uneven_baseline.as_ref(),
+                    uneven_after,
                 ),
-                uneven_baseline.as_ref(),
-                uneven_after,
+                pairing,
             ),
             None,
         ),
@@ -4656,6 +4659,19 @@ mod experiment_tests {
     }
 
     #[test]
+    fn a_too_noisy_result_on_a_partial_pairing_still_says_what_went_unchecked() {
+        let pairing = partial_pairing();
+        let h = BaselineHalves { first_half_fps: 259.8, second_half_fps: 227.9 };
+        let o = with_comparability(with_steady_sessions(measured(180.0), Some(&h), None), &pairing);
+        assert_eq!(o.verdict, "too-noisy", "a Partial pairing never turns it back into a measured verdict");
+        assert!(o.note.starts_with("Too noisy to judge: the baseline was uneven"), "{}", o.note);
+        assert!(o.note.contains("too uneven on its own to tell this setting's effect apart from the scene"), "{}", o.note);
+        assert!(o.note.contains("Not every condition could be checked either"), "{}", o.note);
+        assert!(o.note.contains(&pairing.missing_context[0]), "{}", o.note);
+        assert_eq!(o.confidence, Confidence::Unknown);
+    }
+
+    #[test]
     fn the_baseline_grade_at_conclude_comes_from_the_start_else_from_the_session_now() {
         let uneven = traced(1172, AFK_BASELINE_FPS);
         let steady = traced(600, &[200.0; 60]);
@@ -4736,6 +4752,8 @@ mod experiment_tests {
         assert!(body.contains("uneven_baseline_at_conclude(rec, baseline)"), "the baseline is graded");
         assert!(body.contains("grade_baseline(treatment, rec.noise_floor_pct)"), "the after-session is graded");
         assert!(body.contains("with_steady_sessions("), "an uneven session makes the verdict too noisy");
+        let (steady, comparable) = (body.find("with_steady_sessions(").unwrap(), body.find("with_comparability(").unwrap());
+        assert!(comparable < steady, "steadiness is judged inside the pairing, so a Partial caveat is kept");
         assert!(body.contains("check: after_check"), "the receipt keeps the after-session's grade");
     }
 }

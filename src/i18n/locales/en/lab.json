@@ -415,7 +415,7 @@
     "receiptBaselineUntraced": "Compy couldn't tell whether this experiment's baseline was steady: that session didn't have enough of a frame-rate trace to check.",
     "receiptBaselineUnevenPlain": "The baseline was uneven: first half {{first}} fps, second half {{second}} fps.",
     "receiptAfterUneven": "The after-session was uneven: first half {{first}} fps, second half {{second}} fps.",
-    "tooNoisyWhy": "A session whose frame rate swings that much on its own hides whatever this setting did, so Compy restored it and judged nothing.",
+    "tooNoisyWhy": "A session this uneven on its own can't tell this setting's effect apart from the scene, so Compy restored it and judged nothing.",
     "pastExperiments": "Past experiments",
     "deltaSuffix": "% 1% low",
     "runningTitlePrefix": "Experiment in progress —",
