@@ -816,7 +816,8 @@ impl Made {
 /// fakes, so they never touch Windows.
 struct UndoEffects<'a> {
     rollback: &'a dyn Fn(&RollbackAction, &Snapshot) -> Result<(), String>,
-    probe: &'a dyn Fn(&str, &AppliedAction) -> ActiveCheck,
+    /// The rec id and the typed action the row carries (`None` for a legacy row without one).
+    probe: &'a dyn Fn(&str, Option<&AppliedAction>) -> ActiveCheck,
 }
 
 /// Rollback-first receipt commit (#616), the ONLY way an apply gateway records what it did.
@@ -884,7 +885,7 @@ fn undo_unrecorded(undos: &[Undo], why: &str, effects: &UndoEffects) -> String {
         .rev()
         .map(|u| {
             let undone = (effects.rollback)(&u.action, &u.snapshot);
-            let outcome = undo_outcome(&undone, (effects.probe)(&u.rec_id, &u.applied));
+            let outcome = undo_outcome(&undone, (effects.probe)(&u.rec_id, Some(&u.applied)));
             if undos.len() == 1 {
                 outcome
             } else {
@@ -960,8 +961,8 @@ fn record_receipts(
     let rollback = |a: &RollbackAction, s: &Snapshot| {
         dispatch_rollback(root, a, s).inspect_err(|_| undo_failed.set(true))
     };
-    let probe = |rec_id: &str, applied: &AppliedAction| {
-        check_change_state(rec_id, Some(applied), &LiveReads::default())
+    let probe = |rec_id: &str, applied: Option<&AppliedAction>| {
+        check_change_state(rec_id, applied, &LiveReads::default())
     };
     let effects = UndoEffects { rollback: &rollback, probe: &probe };
     commit_receipts(history, made, &save, &effects).inspect_err(|e| {
@@ -1417,17 +1418,45 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
 
 #[tauri::command]
 pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
-    let rolled = rollback_change_inner(&change_id);
     // A rollback that will not complete is the worst thing that can happen in a rollback-first
-    // product, and it is the one report support must be able to act on. The change id is a local
-    // uuid, not user data.
-    if let Err(e) = &rolled {
-        record_operation_failure(&format!("rollback:{change_id}"), "rollback_failed", e);
+    // product, and it is the one report support must be able to act on. An undo that DID reach
+    // Windows but couldn't be saved to the ledger (#631) is a different case with its own code, so
+    // support never reads it as a change still on the machine. The change id is a local uuid, not
+    // user data.
+    match rollback_change_inner(&change_id) {
+        Ok(()) => Ok(()),
+        Err(RollbackError::Failed(e)) => {
+            record_operation_failure(&format!("rollback:{change_id}"), "rollback_failed", &e);
+            Err(e)
+        }
+        Err(RollbackError::Unrecorded(e)) => {
+            record_operation_failure(&format!("rollback:{change_id}"), "rollback_unrecorded", &e);
+            Err(e)
+        }
     }
-    rolled
 }
 
-fn rollback_change_inner(change_id: &str) -> Result<(), String> {
+/// Why a user's rollback did not finish cleanly (#631).
+#[derive(Debug, PartialEq, Eq)]
+enum RollbackError {
+    /// The undo did not run, or did not finish: treat the change as still in effect.
+    Failed(String),
+    /// The undo ran on Windows, but the ledger couldn't be saved to say so. Never a failed undo.
+    Unrecorded(String),
+}
+
+impl From<String> for RollbackError {
+    fn from(e: String) -> Self {
+        RollbackError::Failed(e)
+    }
+}
+
+/// The fixed lead of every [`RollbackError::Unrecorded`] message. The frontend can key on it to
+/// tell an unrecorded undo from a failed one, so it is test-pinned.
+const ROLLBACK_UNRECORDED_LEAD: &str =
+    "The undo ran on Windows, but Compy couldn't save that to its history";
+
+fn rollback_change_inner(change_id: &str) -> Result<(), RollbackError> {
     let _lock = lock_history()?;
     // #130: prove the root before anything else — a rollback dispatched against a redirected
     // ledger would undo a change the receipt in front of us does not actually describe.
@@ -1439,23 +1468,68 @@ fn rollback_change_inner(change_id: &str) -> Result<(), String> {
         .iter()
         .position(|c| c.id == change_id)
         .ok_or_else(|| format!("change '{}' not found in history", change_id))?;
-    let change = history[idx].clone();
-    if change.status == "rolled_back" {
+    if history[idx].status == "rolled_back" {
         // NOTE: experiment::restore_already_reverted matches this exact literal to tell an
         // already-off change from a genuine restore failure — keep the two in sync (guard-tested).
-        return Err("change has already been rolled back".into());
+        return Err(RollbackError::Failed("change has already been rolled back".into()));
     }
 
-    let (action, snapshot) = resolve_rollback(&change)?;
+    let save = |h: &[AppliedChange]| save_history(&root, h);
+    let rollback = |a: &RollbackAction, s: &Snapshot| dispatch_rollback(&root, a, s);
+    let probe = |rec_id: &str, applied: Option<&AppliedAction>| {
+        check_change_state(rec_id, applied, &LiveReads::default())
+    };
+    commit_rollback(&mut history, idx, &save, &UndoEffects { rollback: &rollback, probe: &probe })
+}
 
-    dispatch_rollback(&root, &action, &snapshot)?;
+/// The user's rollback of ledger row `idx`, after the lookup: resolve its typed rollback, run it,
+/// mark the row rolled back and save the ledger. Production passes the real save, dispatch and
+/// live read; the guard tests pass fakes, so they never touch Windows.
+///
+/// If the save fails after the undo ran (#631), the undo is NOT re-applied: Windows is already back
+/// the way it was, which is what the user asked for. The row is put back as it was in memory, the
+/// setting is read live, and the error says the undo ran but couldn't be saved, never that it
+/// failed.
+fn commit_rollback(
+    history: &mut [AppliedChange],
+    idx: usize,
+    save: &dyn Fn(&[AppliedChange]) -> Result<(), String>,
+    effects: &UndoEffects,
+) -> Result<(), RollbackError> {
+    let change = history[idx].clone();
+    let (action, snapshot) = resolve_rollback(&change)?;
+    (effects.rollback)(&action, &snapshot)?;
 
     history[idx].status = "rolled_back".into();
     // Honest rollback dating (Intelligence Phase 2): stamped at the moment the rollback
     // actually dispatched. Only entries rolled back from this stamp onward carry a date.
     history[idx].rolled_back_at = Some(Utc::now().to_rfc3339());
-    save_history(&root, &history)?;
-    Ok(())
+    save(history).map_err(|why| {
+        let read = (effects.probe)(&change.rec_id, change.applied_action.as_ref());
+        history[idx] = change;
+        RollbackError::Unrecorded(rollback_unrecorded_message(&why, read))
+    })
+}
+
+/// PURE: what to tell the user when their undo ran on Windows but the ledger couldn't record it.
+/// `read` is a live read of the setting after the undo. It always leads with
+/// [`ROLLBACK_UNRECORDED_LEAD`], so it can never read as a failed undo.
+fn rollback_unrecorded_message(why: &str, read: ActiveCheck) -> String {
+    let tail = match read {
+        ActiveCheck::Off => "A live read confirms the change is no longer in effect.",
+        ActiveCheck::On => {
+            "But a live read still shows the setting as changed (it may have been set this way \
+             before Compy touched it), so check the setting in Windows."
+        }
+        ActiveCheck::Unreadable => "Compy couldn't read the setting back to confirm the result.",
+        ActiveCheck::Unrecognised => {
+            "Compy has no live read for this setting, so it can't confirm the result beyond that."
+        }
+    };
+    format!(
+        "{ROLLBACK_UNRECORDED_LEAD} ({why}), so Test → Applied & history may still list this \
+         change as applied. {tail}"
+    )
 }
 
 #[tauri::command]
@@ -1876,7 +1950,7 @@ mod receipt_commit_tests {
             seen.rollbacks.borrow_mut().push(contract(a, s));
             undo(a)
         };
-        let probe = |rec_id: &str, _: &AppliedAction| {
+        let probe = |rec_id: &str, _: Option<&AppliedAction>| {
             seen.probes.borrow_mut().push(rec_id.to_string());
             read
         };
@@ -2074,6 +2148,123 @@ mod receipt_commit_tests {
         );
     }
 
+    /// [`commit_rollback`] on row `idx` with faked effects.
+    fn roll_back(
+        history: &mut [AppliedChange],
+        idx: usize,
+        saved: Result<(), String>,
+        undo: Result<(), String>,
+        read: ActiveCheck,
+        seen: &Seen,
+    ) -> Result<(), RollbackError> {
+        let save = |h: &[AppliedChange]| {
+            seen.saves.borrow_mut().push(h.len());
+            saved.clone()
+        };
+        let rollback = |a: &RollbackAction, s: &Snapshot| {
+            seen.rollbacks.borrow_mut().push(contract(a, s));
+            undo.clone()
+        };
+        let probe = |rec_id: &str, _: Option<&AppliedAction>| {
+            seen.probes.borrow_mut().push(rec_id.to_string());
+            read
+        };
+        commit_rollback(history, idx, &save, &UndoEffects { rollback: &rollback, probe: &probe })
+    }
+
+    fn applied_fast_startup() -> AppliedChange {
+        build_applied_change("fast-startup-off", "Disable Fast Startup", fast_startup()).expect("build")
+    }
+
+    // #631: the undo reached Windows and only the ledger save failed. That must never read as a
+    // failed undo or a change that is still on, and the undo must not be re-applied.
+    #[test]
+    fn an_undo_that_ran_but_could_not_be_saved_never_reads_as_a_failed_undo() {
+        let mut texts = std::collections::HashSet::new();
+        for read in [ActiveCheck::Off, ActiveCheck::On, ActiveCheck::Unreadable, ActiveCheck::Unrecognised] {
+            let mut history = vec![earlier(), applied_fast_startup()];
+            let row = history[1].clone();
+            let seen = Seen::default();
+            let err = roll_back(&mut history, 1, Err("disk full".into()), Ok(()), read, &seen)
+                .expect_err("an unsaved rollback is not a clean success");
+            let RollbackError::Unrecorded(text) = err else {
+                panic!("{read:?}: an undo that ran must be Unrecorded, not Failed: {err:?}");
+            };
+
+            let expected = fast_startup();
+            assert_eq!(
+                *seen.rollbacks.borrow(),
+                vec![contract(&expected.rollback_action, &expected.snapshot)],
+                "{read:?}: the undo ran exactly once and was never re-applied"
+            );
+            assert_eq!(*seen.saves.borrow(), vec![2], "{read:?}: one save was attempted");
+            assert_eq!(*seen.probes.borrow(), vec!["fast-startup-off"], "{read:?}: the setting is read live");
+            assert_eq!(history[1].status, "applied", "{read:?}: the in-memory row is put back");
+            assert_eq!(history[1].rolled_back_at, None, "{read:?}");
+            assert_eq!(history[1].id, row.id, "{read:?}");
+
+            assert!(text.starts_with(ROLLBACK_UNRECORDED_LEAD), "{read:?}: {text}");
+            for phrase in ["(disk full)", "may still list this change as applied"] {
+                assert!(text.contains(phrase), "{read:?}: must say {phrase:?}: {text}");
+            }
+            for wrong in ["Undo failed", "undo failed", "still in effect", "still on", "Couldn't undo"] {
+                assert!(!text.contains(wrong), "{read:?}: must never say {wrong:?}: {text}");
+            }
+            assert_eq!(
+                text.contains("no longer in effect"),
+                read == ActiveCheck::Off,
+                "{read:?}: only a live read of OFF confirms the change is gone: {text}"
+            );
+            assert!(texts.insert(text), "{read:?}: every live read has its own text");
+        }
+    }
+
+    #[test]
+    fn the_unrecorded_rollback_lead_is_pinned_for_the_frontend() {
+        assert_eq!(
+            ROLLBACK_UNRECORDED_LEAD,
+            "The undo ran on Windows, but Compy couldn't save that to its history"
+        );
+    }
+
+    #[test]
+    fn a_failed_undo_stays_a_failed_rollback_and_saves_nothing() {
+        let mut history = vec![applied_fast_startup()];
+        let row = history[0].clone();
+        let seen = Seen::default();
+        let err = roll_back(&mut history, 0, Ok(()), Err("key locked".into()), ActiveCheck::On, &seen)
+            .expect_err("a failed undo is a failure");
+        assert_eq!(err, RollbackError::Failed("key locked".into()));
+        assert!(seen.saves.borrow().is_empty(), "nothing is saved for an undo that didn't run");
+        assert!(seen.probes.borrow().is_empty());
+        assert_eq!(history[0].status, row.status);
+        assert_eq!(history[0].rolled_back_at, None);
+    }
+
+    #[test]
+    fn a_saved_rollback_marks_the_row_rolled_back_with_its_date() {
+        let mut history = vec![earlier(), applied_fast_startup()];
+        let seen = Seen::default();
+        roll_back(&mut history, 1, Ok(()), Ok(()), ActiveCheck::Off, &seen).expect("a clean rollback");
+        assert_eq!(seen.rollbacks.borrow().len(), 1);
+        assert_eq!(*seen.saves.borrow(), vec![2]);
+        assert!(seen.probes.borrow().is_empty(), "the happy path does no extra live read");
+        assert_eq!(history[1].status, "rolled_back");
+        assert!(history[1].rolled_back_at.is_some());
+        assert_eq!(history[0].status, "applied", "other rows are untouched");
+    }
+
+    #[test]
+    fn a_row_with_no_rollback_contract_fails_before_anything_runs() {
+        let mut history = vec![applied_fast_startup()];
+        history[0].rollback_action = None;
+        history[0].rec_id = "no-such-rec".into();
+        let seen = Seen::default();
+        let err = roll_back(&mut history, 0, Ok(()), Ok(()), ActiveCheck::Off, &seen).expect_err("no contract");
+        assert!(matches!(err, RollbackError::Failed(_)), "{err:?}");
+        assert!(seen.rollbacks.borrow().is_empty() && seen.saves.borrow().is_empty());
+    }
+
     fn exit_status(code: u32) -> std::process::ExitStatus {
         use std::os::windows::process::ExitStatusExt;
         std::process::ExitStatus::from_raw(code)
@@ -2145,6 +2336,20 @@ mod receipt_commit_tests {
             ["record_receipts", "rollback_change_inner"].map(String::from).into(),
             "production undoes a change only through the user's rollback and the receipt commit"
         );
+        // #631: the user's rollback saves only through its testable core, which takes the save as
+        // an effect, and only that core can say an undo ran but wasn't recorded.
+        let core: std::collections::BTreeSet<String> = callers_of("commit_rollback").into_iter().collect();
+        assert_eq!(core, ["commit_rollback", "rollback_change_inner"].map(String::from).into());
+        let rollback = production()
+            .split_once("fn rollback_change_inner(")
+            .and_then(|(_, rest)| rest.split_once("\n}\n"))
+            .map(|(body, _)| body)
+            .expect("the rollback gateway exists");
+        assert_eq!(rollback.matches("save_history(").count(), 1, "one save, handed to the core");
+        assert!(rollback.contains("let save = |h: &[AppliedChange]| save_history(&root, h);"));
+        let unrecorded: std::collections::BTreeSet<String> =
+            callers_of("RollbackError::Unrecorded").into_iter().collect();
+        assert_eq!(unrecorded, ["commit_rollback", "rollback_change"].map(String::from).into());
 
         // The batch closes its deferral sink before any receipt commit, so an undo that needs admin
         // runs instead of being parked in the batch script, and it reads the result file whatever
