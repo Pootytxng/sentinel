@@ -198,6 +198,7 @@
     "listTruncated": "Compy's model lists only its newest {{shown}} of {{total}} recorded changes, so older changes in this window are not named here.",
     "sinceRolledBack": "(since rolled back)"
   },
+  "undoUnrecorded": "The undo worked on Windows, but Compy couldn't save it to its history, so Applied & history may still list this change. Check the setting in Windows if unsure.",
   "ledgerHealth": {
     "activeUnknown": "unknown — Compy can't read its own record",
     "activePending": "still reading Compy's record",

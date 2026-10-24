@@ -36,6 +36,7 @@ import { lsGet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
 import { setStartupEntryEnabled } from "./data/startup-toggle";
 import { writeLedger } from "./data/ledger-write";
+import { isUnrecordedUndo } from "./data/rollback-error";
 import type { LabStationKey } from "./surfaces/lab-guided-data";
 import Settings from "./surfaces/Settings";
 import {
@@ -948,7 +949,7 @@ function App() {
       // Rolling back changes the ledger too — a rec can become available again, so siblings re-derive.
       await writeLedger("rollback_change", { changeId: change.id }, refresh);
     } catch (e) {
-      fail(t("app.errors.rollbackFailed"), e);
+      fail(isUnrecordedUndo(e) ? t("common.undoUnrecorded") : t("app.errors.rollbackFailed"), e);
     } finally {
       setBusyId(null);
     }

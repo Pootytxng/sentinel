@@ -137,20 +137,8 @@ struct RollbackGuard {
 impl Drop for RollbackGuard {
     fn drop(&mut self) {
         if let Some(id) = self.change_id.take() {
-            match crate::history::rollback_change(id) {
-                Ok(()) => set(|s| {
-                    s.rolled_back = true;
-                    s.status = "Done — change measured and rolled back.".into();
-                }),
-                Err(e) => set(|s| {
-                    s.rolled_back = false;
-                    s.error = Some(format!(
-                        "Measurement finished, but rolling the change back FAILED: {e}. Undo it \
-                         manually in the Trust Ledger."
-                    ));
-                    s.status = "Rollback failed — see the Ledger.".into();
-                }),
-            }
+            let result = crate::history::rollback_change(id);
+            set(|s| record_rollback_outcome(s, result));
         }
         // Clear `running` only now — AFTER the rollback has resolved. The armed-guard exit paths
         // deliberately leave `running` true so the backend's `if s.running { return; }` start guard
@@ -158,6 +146,31 @@ impl Drop for RollbackGuard {
         // drop clobber the new trial's fields) until the machine is fully unwound. It also keeps the
         // frontend polling long enough to observe a rollback FAILURE it must surface.
         set(|s| s.running = false);
+    }
+}
+
+/// PURE: record how the trial's rollback ended. An undo that ran on Windows but couldn't be saved
+/// to history (#631) is not a failed rollback: the rig is back as it was, so it says that, and
+/// never "FAILED" or "undo it manually".
+fn record_rollback_outcome(s: &mut TrialState, result: Result<(), String>) {
+    match result {
+        Ok(()) => {
+            s.rolled_back = true;
+            s.status = "Done — change measured and rolled back.".into();
+        }
+        Err(e) if crate::history::is_unrecorded_rollback(&e) => {
+            s.rolled_back = true;
+            s.error = Some(format!("Measurement finished and the change was rolled back. {e}"));
+            s.status = "Done — rolled back, but not saved to history.".into();
+        }
+        Err(e) => {
+            s.rolled_back = false;
+            s.error = Some(format!(
+                "Measurement finished, but rolling the change back FAILED: {e}. Undo it \
+                 manually in the Trust Ledger."
+            ));
+            s.status = "Rollback failed — see the Ledger.".into();
+        }
     }
 }
 
@@ -290,15 +303,22 @@ impl Drop for StackRollbackGuard {
             return;
         }
         let mut failed: Vec<String> = Vec::new();
+        let mut unrecorded: Vec<String> = Vec::new();
         for id in std::mem::take(&mut self.change_ids).into_iter().rev() {
-            if let Err(e) = crate::history::rollback_change(id.clone()) {
-                failed.push(format!("{id}: {e}"));
+            match crate::history::rollback_change(id.clone()) {
+                Ok(()) => {}
+                // #631: undone on Windows, only the history save failed — not a failed rollback.
+                Err(e) if crate::history::is_unrecorded_rollback(&e) => unrecorded.push(e),
+                Err(e) => failed.push(format!("{id}: {e}")),
             }
         }
         if failed.is_empty() {
             set(|s| {
                 s.rolled_back = true;
                 s.status = "Done — the stack was measured and fully rolled back.".into();
+                if !unrecorded.is_empty() {
+                    s.error = Some(unrecorded.join(" "));
+                }
             });
         } else {
             set(|s| {
@@ -559,6 +579,29 @@ mod trial_tests {
             max_temp_c: 0.0,
             bg_load_flag: false,
         }
+    }
+
+    #[test]
+    fn an_unrecorded_rollback_never_reads_as_failed() {
+        // #631: the undo ran on Windows; only the history save failed.
+        let e = format!("{} (disk full), so Test → Applied & history may still list this change \
+                         as applied.", crate::history::ROLLBACK_UNRECORDED_LEAD);
+        let mut s = TrialState::default();
+        record_rollback_outcome(&mut s, Err(e));
+        let err = s.error.clone().unwrap_or_default();
+        assert!(s.rolled_back, "the rig was rolled back");
+        assert!(!err.contains("FAILED") && !err.contains("manually"), "{err}");
+        assert!(!s.status.contains("failed"), "{}", s.status);
+        assert!(err.contains(crate::history::ROLLBACK_UNRECORDED_LEAD), "{err}");
+    }
+
+    #[test]
+    fn a_genuine_rollback_failure_still_reads_as_failed() {
+        let mut s = TrialState::default();
+        record_rollback_outcome(&mut s, Err("access denied".into()));
+        assert!(!s.rolled_back);
+        assert!(s.error.unwrap_or_default().contains("FAILED: access denied"));
+        assert_eq!(s.status, "Rollback failed — see the Ledger.");
     }
 
     #[test]

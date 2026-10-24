@@ -1484,8 +1484,15 @@ impl From<String> for RollbackError {
 
 /// The fixed lead of every [`RollbackError::Unrecorded`] message. The frontend can key on it to
 /// tell an unrecorded undo from a failed one, so it is test-pinned.
-const ROLLBACK_UNRECORDED_LEAD: &str =
+/// `src/data/rollback-error.ts` mirrors it, and its test pins the two equal.
+pub(crate) const ROLLBACK_UNRECORDED_LEAD: &str =
     "The undo ran on Windows, but Compy couldn't save that to its history";
+
+/// Whether a `rollback_change` error is the unrecorded case (the undo ran, only the history save
+/// failed) rather than a failed undo.
+pub(crate) fn is_unrecorded_rollback(err: &str) -> bool {
+    err.starts_with(ROLLBACK_UNRECORDED_LEAD)
+}
 
 fn rollback_change_inner(change_id: &str) -> Result<(), RollbackError> {
     let _lock = lock_history()?;

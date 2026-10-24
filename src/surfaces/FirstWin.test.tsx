@@ -9,6 +9,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import type { AppliedChange, Recommendation } from "../types";
 import { FIRST_WIN_KEY } from "./first-win-data";
+import { ROLLBACK_UNRECORDED_LEAD } from "../data/rollback-error";
 
 // A small STATE MACHINE, not a stub bag. The whole subject of this file is whether the verdict
 // follows what the MACHINE says at the moment the button is pressed, so `machine` is what the next
@@ -18,6 +19,8 @@ const invokeMock = vi.hoisted(() => ({
   machine: null as unknown,
   readFails: false,
   rollbackFails: false,
+  /** When set, rollback_change rejects with this exact string (what Tauri hands back for an Err). */
+  rollbackError: null as string | null,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -29,6 +32,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         : Promise.resolve(invokeMock.machine);
     }
     if (cmd === "rollback_change") {
+      if (invokeMock.rollbackError) return Promise.reject(invokeMock.rollbackError);
       return invokeMock.rollbackFails
         ? Promise.reject(new Error("the machine said no"))
         : Promise.resolve(null);
@@ -81,6 +85,7 @@ beforeEach(() => {
   invokeMock.machine = null;
   invokeMock.readFails = false;
   invokeMock.rollbackFails = false;
+  invokeMock.rollbackError = null;
 });
 afterEach(cleanup);
 
@@ -225,6 +230,17 @@ describe("FirstWin — the undo is real", () => {
     expect(document.body.textContent || "").toMatch(/still on/i);
     // Nothing changed, so nothing to refresh — announcing a change that did not happen is the bug.
     expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("says the undo worked when it ran but couldn't be saved to history (#631)", async () => {
+    invokeMock.rollbackError = `${ROLLBACK_UNRECORDED_LEAD} (disk full), so Test → Applied & history may still list this change as applied.`;
+    mount([rec(true)]);
+    check();
+    fireEvent.click(await screen.findByRole("button", { name: /put it back/i }));
+    await screen.findByText(/undo worked on Windows/i);
+    const text = document.body.textContent || "";
+    expect(text).not.toMatch(/still on/i);
+    expect(text).not.toMatch(/did not finish/i);
   });
 
   it("keeps naming the same change after its own rollback empties the live set", async () => {

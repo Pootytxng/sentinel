@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
+import { isUnrecordedUndo } from "../data/rollback-error";
 import { useTranslation } from "react-i18next";
 import type { AppliedChange, Recommendation } from "../types";
 import { friendlyLabel } from "../data/friendly-labels";
@@ -101,7 +102,11 @@ export function FirstWin({
     try {
       await writeLedger("rollback_change", { changeId: change.id });
     } catch (e) {
-      setErrorMsg(t("home.firstWin.errors.undoFailed", { error: String(e), historyRoom: t("common.rail.learn") }));
+      setErrorMsg(
+        isUnrecordedUndo(e)
+          ? t("common.undoUnrecorded")
+          : t("home.firstWin.errors.undoFailed", { error: String(e), historyRoom: t("common.rail.learn") }),
+      );
       setPhase("error");
       return;
     }
