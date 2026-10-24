@@ -197,6 +197,8 @@ type BaselineGrade =
   | { kind: "uneven"; first: number; second: number }
   | { kind: "untraced" };
 
+const round1 = (x: number) => Math.round(x * 10) / 10;
+
 function gradeBaseline(s: SessionSummary): BaselineGrade {
   if (s.samples < MIN_BASELINE_SAMPLES) return { kind: "too-short", samples: s.samples };
   const fps = (s.fps_series ?? []).map(([, f]) => f).filter((f) => Number.isFinite(f) && f > 0);
@@ -206,7 +208,9 @@ function gradeBaseline(s: SessionSummary): BaselineGrade {
   const first = mean(fps.slice(0, half));
   const second = mean(fps.slice(half));
   if ((Math.abs(second - first) / first) * 100 > BASELINE_NOISE_FLOOR_PCT)
-    return { kind: "uneven", first: Math.round(first), second: Math.round(second) };
+    // The same 1-decimal halves the backend stores (experiment.rs `round1`), so the start warning and
+    // the receipt round the same numbers and can't read 259 on one screen and 260 on the other.
+    return { kind: "uneven", first: round1(first), second: round1(second) };
   return { kind: "steady" };
 }
 
@@ -629,15 +633,15 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                   {grade?.kind === "too-short" ? (
                     <p className="exp-note" data-testid="exp-baseline-unfit">
                       {t("lab.experimentBench.baselineTooShort", { readings: grade.samples, min: MIN_BASELINE_SAMPLES })}{" "}
-                      {t("lab.experimentBench.baselineRerecord", {
-                        game: prettyGameName(baseline.process_name) || t("lab.experimentBench.fineprintGameFallback"),
-                      })}
+                      {prettyGameName(baseline.process_name)
+                        ? t("lab.experimentBench.baselineRerecord", { game: prettyGameName(baseline.process_name) })
+                        : t("lab.experimentBench.baselineRerecordNoGame")}
                     </p>
                   ) : (
                   <>
                   {grade?.kind === "uneven" && (
                     <p className="exp-bench-warn" data-testid="exp-baseline-warn">
-                      {t("lab.experimentBench.baselineUneven", { first: grade.first, second: grade.second })}
+                      {t("lab.experimentBench.baselineUneven", { first: Math.round(grade.first), second: Math.round(grade.second) })}
                     </p>
                   )}
                   {grade?.kind === "untraced" && (

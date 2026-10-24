@@ -955,10 +955,24 @@ describe("the baseline is graded before a start", () => {
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
   });
 
+  it("the re-record line reads naturally when the game has no name to show", async () => {
+    await openStart({ ...VALORANT_SESSION, process_name: ".exe", samples: 91 });
+    const note = await screen.findByTestId("exp-baseline-unfit");
+    expect(note).toHaveTextContent("Record a new baseline: play another session of this game, then start.");
+  });
+
+  // The start warning and the receipt show the same numbers: both round the backend's 1-decimal halves.
+  // Raw 259.46 rounds to 259, but the record keeps 259.5, which the receipt shows as 260.
+  it("the start warning rounds the same 1-decimal halves the receipt does", async () => {
+    const fps = [...Array(30).fill(259.46), ...Array(30).fill(200)];
+    await openStart({ ...VALORANT_SESSION, samples: 600, fps_series: fps.map((f, i) => [i * 10, f] as [number, number]) });
+    expect(await screen.findByTestId("exp-baseline-warn")).toHaveTextContent(/first half 260 fps, second half 200 fps/);
+  });
+
   it("a baseline without its frame-rate trace warns it can't be checked and still starts", async () => {
     await openStart({ ...VALORANT_SESSION, fps_series: [] });
     expect(await screen.findByTestId("exp-baseline-warn")).toHaveTextContent(
-      "Compy can't check this baseline's steadiness: this session has no frame-rate trace.",
+      "Compy can't tell whether this baseline was steady: this session doesn't have enough of a frame-rate trace to check.",
     );
     await startsAndIsSent();
   });
@@ -992,7 +1006,7 @@ describe("the baseline is graded before a start", () => {
     const receipts = await screen.findAllByTestId("exp-baseline-receipt");
     expect(receipts).toHaveLength(1);
     expect(receipts[0]).toHaveTextContent(
-      "Compy couldn't check this experiment's baseline for steadiness: that session had no frame-rate trace.",
+      "Compy couldn't tell whether this experiment's baseline was steady: that session didn't have enough of a frame-rate trace to check.",
     );
   });
 
