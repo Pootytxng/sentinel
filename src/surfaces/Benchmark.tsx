@@ -73,6 +73,9 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // #629: until get_benchmark_state answers, "no baseline" is unknown, not false. A failed first read
+  // stays unknown too, so the card never offers to overwrite a baseline it could not read.
+  const [stateReadFailed, setStateReadFailed] = useState(false);
   // Inline dependency (wayfinding §2): the live-game measurement needs FPS monitoring, which used to
   // live only on another page. Track it here + offer [Start monitoring] right on the card.
   const [fpsActive, setFpsActive] = useState<boolean | null>(null);
@@ -110,10 +113,12 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
         invoke<ScoreboardView>("get_scoreboard").catch(() => null),
       ]);
       setState(s);
+      setStateReadFailed(false);
       if (t) setTrial(t);
       if (sb) setScore(sb);
     } catch {
-      /* leave prior state */
+      /* leave prior state; a first read that fails stays "unknown", never "none" (#629) */
+      setStateReadFailed(true);
     }
   }, []);
 
@@ -273,6 +278,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
 
   const running = state?.running ?? false;
   const hasBaseline = !!state?.baseline;
+  const baselineKnown = state !== null;
   // Efficacy is meaningful once a run happened AFTER the baseline was set.
   const showEfficacy =
     !!state?.efficacy && hasBaseline && !!state?.latest && state.latest_at !== state.baseline_at;
@@ -345,10 +351,12 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
       </Card>
 
       <div className="bench-actions">
-        <button className="bench-btn bench-btn-primary" onClick={run} disabled={running}>
+        <button className="bench-btn bench-btn-primary" onClick={run} disabled={running || !baselineKnown}>
           {running
             ? t("gaming.benchmark.measuringButton")
-            : hasBaseline
+            : !baselineKnown
+              ? t("gaming.benchmark.readingButton")
+              : hasBaseline
               ? t("gaming.benchmark.remeasureButton")
               : t("gaming.benchmark.runBenchmarkButton")}
         </button>
@@ -394,7 +402,13 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
 
       <Card>
         <SectionHeader title={t("gaming.benchmark.baselineLabel")} />
-        {hasBaseline ? (
+        {!baselineKnown ? (
+          <p className="bench-muted" data-testid="bench-baseline-unknown">
+            {stateReadFailed
+              ? t("gaming.benchmark.baselineReadFailed")
+              : t("gaming.benchmark.baselineReading")}
+          </p>
+        ) : hasBaseline ? (
           <>
             <p className="bench-muted">
               {t("gaming.benchmark.baselineSavedPrefix")}

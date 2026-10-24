@@ -46,8 +46,9 @@ release, sign, or touch credentials (owner territory).
       #627 landed (merge of b48bd156; Check/Fix writes now refresh the Test bench without a
       refocus; 23 files / 266 tests). #604 landed 2026-10-23 evening (8 test files, 96 tests;
       its monitor-v2 cases moved to `monitor-v2-verdict-cases.test.ts` beside the newer file on main).
-- [ ] **WT-prune** Remove the 17 remaining worktrees whose commits already exist on main or on GitHub;
-      bundle any unique commits first (pattern: `_archive/compy-sessions/worktree-salvage-2026-10-23`).
+- [x] **WT-prune** 15 worktree folders removed 2026-10-23 evening; every branch kept, detached heads
+      saved as `keep/*` branches, uncommitted edits saved as patches in
+      `_archive/compy-sessions/worktree-salvage-2026-10-23/wt-prune-2026-10-23`. The `.codex` one is left alone.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [ ] **#631** Rollback that ran but couldn't save reads as a failure.
@@ -55,10 +56,13 @@ release, sign, or touch credentials (owner territory).
 - [ ] **#617** Multi-write applies leave partial state on a mid-apply failure.
 - [ ] **#619 / #621** Ledger writes outside App don't refresh the other screens.
       #619 landed with PR #627 (2026-10-24). Left: #621 (ExperimentBench's three writes onto `writeLedger`).
-- [ ] **#629** Test → Benchmark claims no baseline while one exists.
+- [x] **#629** Test → Benchmark claims no baseline while one exists. Fixed 2026-10-23: "Reading…" until
+      the read answers, "couldn't read" on failure, no overwrite button meanwhile (guard falsified 2/3 on old code).
 - [ ] **#628** Trial start note says another change is active after a same-setting rollback.
 - [ ] **#669 / #668** Active-change and attribution counts collapse to 0 on a failed ledger read.
-- [ ] **#645 / #608 / #671** Unmeasured FPS still shown as a number anywhere (close any already fixed).
+- [x] **#645 / #608 / #671** Unmeasured FPS still shown as a number anywhere. All listed sites fixed on
+      main (#656, PR #661, PR #673); a grep finds only gated sites. Issues still open on GitHub: closing them
+      needs the owner (the session could not write to issues).
 - [ ] **#622** Health layout below ~600 px.
 - [ ] **#677** Clipped session metadata and combined-effect tooltips.
 - [ ] **#638** Phase 2 follow-ons from PR #634.
