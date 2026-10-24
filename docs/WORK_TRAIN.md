@@ -9,32 +9,53 @@ rig first; anything shipped to the friend goes through the normal updater.
 
 ## How a session runs (every scheduled run follows this)
 
-1. **Sync and check.** In `C:\Users\Kuya\code\sentinel`: `git fetch`, fast-forward `main`, `git status`
-   clean. If a `claude/train-*` worktree exists with unpushed commits, finish that item first.
-2. **Pick.** Take the first unchecked item in **Queue** whose "Needs" is met. Skip items marked
-   `owner` unless the owner is present in the conversation.
-3. **Branch.** New worktree `.claude/worktrees/train-<item>` on `claude/train-<item>` from `origin/main`.
-4. **Do it, smallest slice that proves something.** Product code and tests only (directive rule 1).
-5. **Prove it.** `npx tsc --noEmit`, `npm test`, `cargo check` (and `cargo test` when Rust changed) in the
-   worktree. UI change: screenshot it. Machine-touching change: verify on the real PC (read back the
-   setting).
-6. **Review.** Rust, privilege, rollback, or measurement changes get one independent review pass
-   (fresh agent, diff only). Two rounds maximum (rule 3). Copy-only or test-only changes skip review.
-7. **Land.** Merge to `main` locally and push (the pre-push gate is the check). Delete the branch and
-   worktree. Tick the item here in the same commit, with the commit SHA.
-8. **Report.** End the session with three lines (rule 7): what you can see now / what changed under
-   the hood / what I need from you. Keep everything else out of the report.
+**Bounds.** One session = at most **2 queue items or 60 minutes**, whichever comes first, and at most
+one item in flight. Finish or park (note the next step under the item) before stopping. Never start an
+item you cannot finish in the time left.
 
-**Stop rules.** A full-screen game is in front, or the owner is using the PC → no UI driving, no installs,
-and no pushes (the pre-push gate launches Compy); code-only work is fine. A gate fails twice on the same cause → stop, write the blocker under the item,
-move to the next item. Never change Windows settings outside Compy's own apply/rollback. Never publish a
-release, sign, or touch credentials (owner territory).
+1. **Preflight.** Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\Kuya\code\_train\preflight.ps1`
+   and obey its `MODE`:
+   - **FULL** (owner idle ≥ 10 min, no game window): everything below, including pushes and real-PC checks.
+   - **CODE-ONLY** (owner using the PC or a game is open): code, tests and local commits only. No UI
+     driving, no installs, **no pushes** (the pre-push gate launches Compy and steals focus, see FOCUS).
+   - **BUSY** (a `train-*` worktree was touched in the last 90 min): another session is mid-item. Read
+     only; report and stop.
+2. **Catch up first.** If `main` is ahead of GitHub and MODE is FULL, push it before new work. If a
+   `train-*` worktree holds unlanded commits, finish that item first.
+3. **Pick.** The first unchecked item in **Queue** whose needs are met. Items needing the owner go to
+   **Needs owner** instead. If fewer than 5 ready items remain, the session's first item is to refill the
+   queue from `product/ROADMAP.md` (next phase's smallest user-visible slices). Never queue process work.
+4. **Branch.** Worktree `.claude\worktrees\train-<item>` on `claude/train-<item>` from `origin/main`;
+   link deps with `mklink /J node_modules C:\Users\Kuya\code\sentinel\node_modules`.
+5. **Do the smallest slice that proves something.** Product code and tests only (directive rule 1).
+   Every fixed bug gets a test that fails on the old code (run it against `main` once to prove it).
+6. **Prove.** `npx tsc --noEmit`, the touched tests, `cargo check` (+ `cargo test` and
+   `cargo clippy --all-targets -- -D warnings` when Rust changed). Real-PC read-back or a screenshot when
+   the change touches the machine or the UI and MODE is FULL.
+7. **Review.** Rust, rollback, privilege or measurement changes: one independent review agent on the diff
+   only, before landing. Two rounds maximum (rule 3); SHOULD-FIX findings become new queue items.
+8. **Land.** Merge to `main` (fast-forward or `--no-ff`), tick the item here with the SHA in the same
+   commit, push if MODE is FULL. Then remove the worktree: `rmdir <worktree>\node_modules` first (it is a
+   link to the shared folder), then `git worktree remove --force`, then delete the branch.
+9. **Log and report.** Add one line to **Session log** (date, mode, items, SHAs, pushed yes/no; keep the
+   newest 14). End with three lines for the owner: what you can see now / what changed under the hood /
+   what I need from you.
+
+**Stop rules.** A gate fails twice on the same cause → write the blocker under the item and move on.
+Never change Windows settings outside Compy's own apply/rollback. Never publish a release, sign, touch
+credentials, close or edit GitHub issues (the session cannot), or edit `~/.claude/settings.json`.
+Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$vars` are stripped); use
+`git commit -F <file>` for messages with quotes; never run git writes from the remote Linux shell.
+
+## Needs owner
+- **P2-exit** (#453): 5 minutes at the PC while Compy shows Health, Test, History and Live; you confirm
+  they agree. Can also run in a FULL session with computer use if you leave Compy open and the PC idle.
+- **Close fixed issues** #645, #608, #671 on GitHub (sessions cannot write issues).
+- **Old scheduled task** "#678 check-in 1/3…" still armed; turn it off in your scheduled tasks list.
 
 ## Queue
 
 ### Now — finish what's open
-- [ ] **P2-exit** Four-screen agreement check on the owner rig (#453): Health, Test, History, Live
-      agree on machine truth. Needs: PC idle (computer use). Record in `BACKLOG.md` P2.
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
       Process PRs (#685, #679, #654, #644, #642, #606, #605, #492, #471, #470, #464): close with a
@@ -51,6 +72,10 @@ release, sign, or touch credentials (owner territory).
       `_archive/compy-sessions/worktree-salvage-2026-10-23/wt-prune-2026-10-23`. The `.codex` one is left alone.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
+- [ ] **FOCUS** (first: it blocks pushes whenever the owner is on the PC) A quiet Compy launch takes the foreground from the owner's app: `launch-focus-guard`
+      failed 3 of 4 pushes on 2026-10-23 evening with Firefox in front (54/55 samples), passed when
+      nothing was in front. Reproduce, then fix in the launch path. Until fixed: do not push while the
+      owner is using the PC (every push launches Compy).
 - [ ] **#631** Rollback that ran but couldn't save reads as a failure.
 - [x] **#616** Roll back an apply whose receipt can't be built or saved (orphan change). Ported from the
       Sep 28 branch onto main 2026-10-23 (`claude/train-616`, head 0b8eb85c): cargo test 1427/0, clippy clean,
@@ -72,10 +97,6 @@ release, sign, or touch credentials (owner territory).
 - [ ] **#622** Health layout below ~600 px.
 - [ ] **#677** Clipped session metadata and combined-effect tooltips.
 - [ ] **#638** Phase 2 follow-ons from PR #634.
-- [ ] **FOCUS** A quiet Compy launch takes the foreground from the owner's app: `launch-focus-guard`
-      failed 3 of 4 pushes on 2026-10-23 evening with Firefox in front (54/55 samples), passed when
-      nothing was in front. Reproduce, then fix in the launch path. Until fixed: do not push while the
-      owner is using the PC (every push launches Compy).
 - [ ] **GB-picker** `game-bar-disable` not offered in the Trial picker on the owner rig with both
       values = 1 (seen 2026-10-23 07:46 on a fresh Compy). Reproduce, then fix or close.
 - [ ] **#686-followup** One `LiveReads` per Trial start instead of one PowerShell spawn per row.
@@ -93,9 +114,13 @@ release, sign, or touch credentials (owner territory).
 - [ ] **fflate** Update to 0.6.11 (production dependency) before its acknowledgement expires 2026-12-31.
 - [ ] **tokio** `cargo update -p tokio` 1.52.3 → 1.54.1 with `cargo test` and a desk install.
 
-### Every Friday (scheduled separately)
-- Build `main`, desk-install via `scripts/ship-reinstall.ps1 -VerifyRuntime`, update `RELEASE_STATE.md`
-  in the same commit, and report what is visible.
+### Every Friday 4:34 PM (separate scheduled task)
+- Build `main`, desk-install via `scripts/ship-reinstall.ps1 -VerifyRuntime` (FULL mode only), update
+  `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
+
+## Session log
+- 2026-10-23 eve (interactive, CODE-ONLY late): PR #604 `86f6a697`, worktree prune, #629 `fef8dc7a`,
+  lease check retired `dad641d1`, #616 `d398a9ed`; pushed: #604 only (owner on PC).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
