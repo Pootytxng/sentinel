@@ -41,6 +41,9 @@ type NoiseEvidence = {
   band_pct: number;
   /** This game's own run-to-run noise on this PC. null = never measured (never estimated). */
   measured_noise_pct: number | null;
+  /** Measured on this PC but not used: "changed" = an update since; "unconfirmed" = Compy couldn't
+   *  confirm nothing changed. Absent/null on older records. */
+  measured_noise_stale?: "changed" | "unconfirmed" | null;
 };
 
 type Experiment = {
@@ -144,9 +147,12 @@ function confidenceCopy(t: Translate): Record<Confidence, string> {
 // this PC is known. An unmeasured noise level is said to be unmeasured, never filled in.
 function noiseLine(n: NoiseEvidence, t: Translate): string {
   const pct = (v: number) => String(Math.round(v * 10) / 10);
-  return n.measured_noise_pct == null
-    ? t("lab.experimentBench.noiseUnmeasured", { band: pct(n.band_pct) })
-    : t("lab.experimentBench.noiseMeasured", { band: pct(n.band_pct), measured: pct(n.measured_noise_pct) });
+  if (n.measured_noise_pct != null)
+    return t("lab.experimentBench.noiseMeasured", { band: pct(n.band_pct), measured: pct(n.measured_noise_pct) });
+  if (n.measured_noise_stale === "changed") return t("lab.experimentBench.noiseStaleChanged", { band: pct(n.band_pct) });
+  if (n.measured_noise_stale === "unconfirmed")
+    return t("lab.experimentBench.noiseStaleUnconfirmed", { band: pct(n.band_pct) });
+  return t("lab.experimentBench.noiseUnmeasured", { band: pct(n.band_pct) });
 }
 
 function whenLabel(iso: string, t: Translate): string {

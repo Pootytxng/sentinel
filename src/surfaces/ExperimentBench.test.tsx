@@ -561,9 +561,30 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     expect(
       await screen.findByText(
-        "Judged against a 3% noise floor. This game's own run-to-run noise on your PC measured ±1.3%.",
+        "Judged against Compy's fixed 3% noise floor. In one 25-second calibration on your PC, this game's 1% low varied by ±1.3%. That number isn't used to judge yet, and the game version isn't checked.",
       ),
     ).toBeInTheDocument();
+  });
+
+  // P4-noise-store: a calibration that isn't current isn't used, and the receipt says which reason —
+  // an observed update, or conditions Compy couldn't confirm — never "hasn't been measured yet".
+  it.each([
+    [
+      "changed",
+      "Judged against Compy's 3% noise floor. This game's spread on your PC was measured before a driver or Windows update, so it wasn't used. The game version isn't checked.",
+    ],
+    [
+      "unconfirmed",
+      "Judged against Compy's 3% noise floor. This game's spread on your PC was measured, but Compy couldn't confirm nothing changed since, so it wasn't used. The game version isn't checked.",
+    ],
+  ] as const)("says why a %s noise measurement wasn't used", async (why, line) => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: null, measured_noise_stale: why } },
+    ];
+    render(<ExperimentBench />);
+    expect(await screen.findByText(line)).toBeInTheDocument();
+    expect(screen.queryByText(/hasn't been measured yet/)).not.toBeInTheDocument();
   });
 
   // Self-review C-11 (#583 lane 2b): the same sentence under every row buries the rows. Identical
@@ -617,7 +638,7 @@ describe("ExperimentBench (armed)", () => {
     expect(document.querySelector(".exp-bench-noise-shared")).toBeNull();
     expect([...document.querySelectorAll(".exp-bench-noise")].map((el) => el.textContent)).toEqual([
       "* Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
-      "† Judged against a 3% noise floor. This game's own run-to-run noise on your PC measured ±1.3%.",
+      "† Judged against Compy's fixed 3% noise floor. In one 25-second calibration on your PC, this game's 1% low varied by ±1.3%. That number isn't used to judge yet, and the game version isn't checked.",
     ]);
     expect(rowMarks()).toEqual(["*", "†", "*", "†"]);
     expectEachNoteOnceAndOffTheRows();

@@ -44,6 +44,7 @@ mod machine_model; // Shared Machine Model v1 (Roadmap Phase 2, #385) — READ-O
                    // changed / what did Compy change / what evidence can we trust". Owns no data, probes
                    // nothing, persists nothing; `compose` is pure over borrowed inputs.
 mod monitoring;
+mod noise_floor; // P4-noise-store: this game's measured run-to-run noise per game + rig (noise_floors.json), written by Benchmark calibration, read when a Trial concludes. Stale after a driver/Windows/game-build change; never estimated.
 mod overlay_tools; // A4 read-only: detect third-party in-game overlay/OSD tools running (advisory, mutates nothing).
 mod priorities;
 mod race_seam; // Test-only deterministic race seam: holds a read-then-act window open from INSIDE a critical section so #283's lock tests fail on demand instead of once in a thousand runs. Compiled to an empty inline no-op in a release build.

@@ -423,7 +423,9 @@
     "runningNoTreatment": "Play a monitored {{game}} session to give the experiment a real after-reading.",
     "yourGame": "your game",
     "noiseUnmeasured": "Judged against Compy's {{band}}% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
-    "noiseMeasured": "Judged against a {{band}}% noise floor. This game's own run-to-run noise on your PC measured ±{{measured}}%.",
+    "noiseMeasured": "Judged against Compy's fixed {{band}}% noise floor. In one 25-second calibration on your PC, this game's 1% low varied by ±{{measured}}%. That number isn't used to judge yet, and the game version isn't checked.",
+    "noiseStaleChanged": "Judged against Compy's {{band}}% noise floor. This game's spread on your PC was measured before a driver or Windows update, so it wasn't used. The game version isn't checked.",
+    "noiseStaleUnconfirmed": "Judged against Compy's {{band}}% noise floor. This game's spread on your PC was measured, but Compy couldn't confirm nothing changed since, so it wasn't used. The game version isn't checked.",
     "noiseNotRecorded_one": "No noise-floor record was kept for this result.",
     "noiseNotRecorded_other": "No noise-floor record was kept for these results."
   }

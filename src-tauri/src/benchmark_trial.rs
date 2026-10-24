@@ -91,7 +91,7 @@ pub(crate) fn start_calibration() {
     let _ = std::thread::Builder::new()
         .name("bench-calibration".into())
         .spawn(|| {
-            let windows = collect_windows(PER_SIDE * 2, "Calibrating");
+            let (windows, game) = collect_game_windows(PER_SIDE * 2, "Calibrating");
             if cancel_flag().load(Ordering::Relaxed) {
                 set(|s| {
                     s.running = false;
@@ -118,11 +118,27 @@ pub(crate) fn start_calibration() {
             };
             let verdict = trial.verdict();
             let noise = run_to_run_noise(&windows);
+            // P4-noise-store: keep this game's noise on this PC for the Trials that follow. Only when
+            // every window came from one game and the spread was measurable; a failed save just
+            // means nothing is remembered.
+            if let (Some(noise), Some(at)) =
+                (noise, game.as_deref().and_then(crate::noise_floor::NoiseConditions::current))
+            {
+                let _ = crate::noise_floor::record(
+                    &at,
+                    noise,
+                    windows.len() as u32,
+                    &chrono::Utc::now().to_rfc3339(),
+                );
+            }
             set(|s| {
                 s.running = false;
                 s.verdict = Some(verdict);
-                s.noise_floor_pct = Some(noise);
-                s.status = format!("Calibration done — your rig varies ≈ ±{noise:.1}% run-to-run.");
+                s.noise_floor_pct = noise;
+                s.status = match noise {
+                    Some(noise) => format!("Calibration done — your rig varies ≈ ±{noise:.1}% run-to-run."),
+                    None => "Calibration done — the frame rate read as zero, so the spread couldn't be measured.".into(),
+                };
             });
         });
 }
@@ -533,6 +549,19 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
 /// Collect `n` window snapshots from the live frametime stream, `WINDOW_INTERVAL` apart. Returns
 /// fewer if the game stops presenting or the run is cancelled.
 fn collect_windows(n: usize, label: &str) -> Vec<MetricWindow> {
+    collect_game_windows(n, label).0
+}
+
+/// The one game every window came from, or `None` when the game changed mid-run or had no name —
+/// a noise level measured across two games describes neither.
+fn one_game(names: &[String]) -> Option<String> {
+    let first = names.first()?;
+    (!first.trim().is_empty() && names.iter().all(|n| n.eq_ignore_ascii_case(first))).then(|| first.clone())
+}
+
+/// [`collect_windows`], also naming the game the windows came from (see [`one_game`]).
+fn collect_game_windows(n: usize, label: &str) -> (Vec<MetricWindow>, Option<String>) {
+    let mut names = Vec::new();
     let mut out = Vec::new();
     let mut misses = 0usize;
     while out.len() < n {
@@ -540,7 +569,7 @@ fn collect_windows(n: usize, label: &str) -> Vec<MetricWindow> {
             break;
         }
         std::thread::sleep(WINDOW_INTERVAL);
-        if let Some((_proc, ft)) = crate::monitoring::latest_frametimes() {
+        if let Some((proc, ft)) = crate::monitoring::latest_frametimes() {
             // Sample the GPU's live clock + temperature alongside the frametimes so the verdict
             // engine's throttle/thermal validity gates actually engage (they no-op on a zero
             // reading). `bg_load_flag`/`input_to_photon_ms` stay unset — no honest signal is wired
@@ -549,6 +578,7 @@ fn collect_windows(n: usize, label: &str) -> Vec<MetricWindow> {
             let ctx = WindowCtx { avg_clock_mhz, max_temp_c, ..WindowCtx::default() };
             if let Some(w) = MetricWindow::from_frametimes(&ft, ctx) {
                 out.push(w);
+                names.push(proc);
                 let got = out.len();
                 set(|s| {
                     s.collected = got;
@@ -563,21 +593,24 @@ fn collect_windows(n: usize, label: &str) -> Vec<MetricWindow> {
             break;
         }
     }
-    out
+    let game = one_game(&names);
+    (out, game)
 }
 
 /// Run-to-run noise = coefficient of variation (%) of the 1% lows across the captured windows.
-fn run_to_run_noise(windows: &[MetricWindow]) -> f64 {
+/// `None` when it can't be measured (fewer than two windows, or a mean 1% low of zero) — never a
+/// 0 that would read as "±0%".
+fn run_to_run_noise(windows: &[MetricWindow]) -> Option<f64> {
     let xs: Vec<f64> = windows.iter().map(|w| w.p1_low_fps).collect();
     if xs.len() < 2 {
-        return 0.0;
+        return None;
     }
     let mean = xs.iter().sum::<f64>() / xs.len() as f64;
-    if mean <= 0.0 {
-        return 0.0;
+    if !mean.is_finite() || mean <= 0.0 {
+        return None;
     }
     let var = xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (xs.len() - 1) as f64;
-    var.sqrt() / mean * 100.0
+    Some(var.sqrt() / mean * 100.0)
 }
 
 #[cfg(test)]
@@ -654,16 +687,32 @@ mod trial_tests {
     }
 
     #[test]
+    fn calibration_names_a_game_only_when_every_window_came_from_it() {
+        let names = |xs: &[&str]| xs.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(one_game(&names(&["wardogs.exe", "WARDOGS.exe"])).as_deref(), Some("wardogs.exe"));
+        assert_eq!(one_game(&names(&["wardogs.exe", "cs2.exe"])), None, "the game changed mid-run");
+        assert_eq!(one_game(&names(&["", ""])), None, "no game named");
+        assert_eq!(one_game(&[]), None);
+    }
+
+    #[test]
     fn noise_is_zero_for_identical_windows() {
         let ws = vec![win(100.0), win(100.0), win(100.0)];
-        assert_eq!(run_to_run_noise(&ws), 0.0);
+        assert_eq!(run_to_run_noise(&ws), Some(0.0));
+    }
+
+    #[test]
+    fn noise_is_unmeasured_not_zero_when_it_cant_be_computed() {
+        assert_eq!(run_to_run_noise(&[win(0.0), win(0.0), win(0.0)]), None, "no frame rate");
+        assert_eq!(run_to_run_noise(&[win(100.0)]), None, "one window");
+        assert_eq!(run_to_run_noise(&[]), None);
     }
 
     #[test]
     fn noise_grows_with_spread() {
         let tight = vec![win(99.0), win(100.0), win(101.0)];
         let loose = vec![win(70.0), win(100.0), win(130.0)];
-        assert!(run_to_run_noise(&loose) > run_to_run_noise(&tight));
+        assert!(run_to_run_noise(&loose).unwrap() > run_to_run_noise(&tight).unwrap());
     }
 
     // ── §2a aggregate-stack A/B guards (mutation-gate item 7 + 8) ──
