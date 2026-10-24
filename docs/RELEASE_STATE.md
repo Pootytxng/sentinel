@@ -120,11 +120,11 @@ fleet path has since carried real traffic — the owner reports at least two tes
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
 | **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:595` | Flipped 2026-06-18 w/ owner sign-off. §7 QA harness passed; **GAMING_MODE_QA.md 10/10 PASSED 2026-07-14**; **owner SIGNED OFF 2026-07-14** — field-proven for 1.0. |
-| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2054` | Armed 2026-06-25. Live exact-restore + UAC-cancel=no-partial + critical-service block proven. Session start/restore ride the ONE batched elevation (T6/T6b). |
-| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2127` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. |
-| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:170` | REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
-| **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2340` | Built dark 2026-07-06. Command refuses while dark; FE renders nothing. Arming needs live remove→reinstall QA + owner sign-off. |
-| **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs:274` | Built dark 2026-07-09 (reuses audited batch path; multi-change Drop-guard rollback; corrupt-ledger read ABORTS pre-mutation). No FE surface. |
+| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2280` | Armed 2026-06-25. Live exact-restore + UAC-cancel=no-partial + critical-service block proven. Session start/restore ride the ONE batched elevation (T6/T6b). |
+| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2353` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. |
+| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:183` | REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
+| **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2566` | Built dark 2026-07-06. Command refuses while dark; FE renders nothing. Arming needs live remove→reinstall QA + owner sign-off. |
+| **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs:280` | Built dark 2026-07-09 (reuses audited batch path; multi-change Drop-guard rollback; corrupt-ledger read ABORTS pre-mutation). No FE surface. |
 | **Experiment engine + simulator (Intelligence P3)** | **ARMED** (`true`, 2026-07-17) | `experiment_gate()` — `experiment.rs:59` | Armed after owner sign-off + live apply→rollback round-trip. No new mutation primitive; resolve stays history-only; simulator reads catalog READ-ONLY. |
 | **Leftovers restore** | **ARMED** (`true`, 2026-07-16) | `restore_gate()` — `leftovers.rs:730` | Armed after owner-present live-UAC QA (3 loops PASS); receipts ride the Trust Ledger (`leftover_adopted`). |
 | **Receipts telemetry** | **DARK** (`false`) — **path BUILT 2026-08-25** | `receipts_gate()` — `receipts.rs:28` | Q9a (#217) built the Tier 2 path dark: receiver `functions/api/usage.ts` (D1 `compy_reports`, no per-row ip_hash, rate hash self-deletes in 1h), sender `receipts.rs` (`send_decision` refuses in order gate → disclosure → opt-in; `post_receipt` via the crate's one `reqwest`), consent store `receipts-consent.json`. Receiver **DEPLOYED 2026-08-25** (`compy_reports` migration 0001 applied, `IP_PEPPER` set; `/api/usage` answers GET 405, junk POST 400) and **empty** — standing it up before the arming commit is the sequence it was designed around. **Gate still hard-false — nothing sends, preview refuses.** Sharing is **opt-in, default OFF even after arming** (#207). Disclosed ahead of arming in `PRIVACY.md` v0.6. Arming = its own security review + owner sign-off. |
@@ -164,14 +164,14 @@ fleet path has since carried real traffic — the owner reports at least two tes
   registration, the declaration, the grants and the overlay's real `invoke()` sites in agreement.
   Owner GO given 2026-08-03. **Open sub-item:** the spec's per-command main-window caller check
   (defense in depth behind the ACL) is deliberately deferred — see the PR for the reasoning.
-- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:4823`).
-- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:643`).
+- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:5123`).
+- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:649`).
 - Elevation: relaunch `compy.exe --run-elevated <hex> <ticket>` (windowless), 4-way honest UAC
-  attribution (`elevation_outcome` — `actions.rs:989`); helper runs ONLY hex byte-matching the
-  one-time ticket (`mint_elevation_ticket` — `actions.rs:1174`).
+  attribution (`elevation_outcome` — `actions.rs:1100`); helper runs ONLY hex byte-matching the
+  one-time ticket (`mint_elevation_ticket` — `actions.rs:1336`).
 - Gaming-session advanced tier batches to ONE elevation per session start and per restore
   (`apply_elevated_tier` — `gaming_orchestrator.rs:202`); no-partial abort+restore contract;
-  UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1013`).
+  UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1236`).
 
 ## Release blockers
 
