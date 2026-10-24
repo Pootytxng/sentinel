@@ -190,7 +190,7 @@ export function BlackbookConsole({
   );
 }
 
-// The "Changes to this PC" tile's sub-line. The record's own states come first — an unreadable
+// The "Changes Compy made" tile's sub-line. The record's own states come first — an unreadable
 // ledger has no count at all, and an empty one has nothing to be in effect. Past those, the
 // in-effect words are the Machine Model's (#625): the same numbers Health prints, never a fold over
 // the tape, whose legacy flag read "Compy can't check this" as "still on". Not read yet ⇒ nothing,

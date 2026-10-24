@@ -63,7 +63,7 @@
     },
     "stripAriaLabel": "What History records",
     "tiles": {
-      "changesTitle": "Changes to this PC",
+      "changesTitle": "Changes Compy made",
       "changesNone": "nothing changed yet",
       "changesActive": "{{count}} still on · every one undoable",
       "changesInactive": "none active now · every one undoable",

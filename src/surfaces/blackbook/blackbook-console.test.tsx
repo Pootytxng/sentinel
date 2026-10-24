@@ -423,9 +423,20 @@ describe("BlackbookConsole — Receipts Strip filters the tape honestly", () => 
   it("a zero-count tile is disabled (an honest empty beats an empty filtered tape)", () => {
     useReduced();
     mountConsole([session()]);
-    const changeTile = screen.getByRole("button", { name: /Changes to this PC/ });
+    const changeTile = screen.getByRole("button", { name: /Changes Compy made/ });
     expect((changeTile as HTMLButtonElement).disabled).toBe(true);
     expect(changeTile.textContent).toContain("nothing changed yet");
+  });
+
+  // #638 (PR #634 follow-on): the tile counts every change in the ledger, including ones a stamp
+  // says were made on other hardware. "Changes to this PC" claimed they all happened here; the
+  // title names who made them instead, and says nothing about which machine.
+  it("the changes tile title does not claim every change was made on this PC", () => {
+    useReduced();
+    const { container } = mountConsole([change()]);
+    const title = container.querySelector(".bc-strip .bc-tile-k")!.textContent ?? "";
+    expect(title).toBe("Changes Compy made");
+    expect(title).not.toMatch(/this PC/i);
   });
 
   it("tile subs state real composition: scam flags from the records, in-effect words from the model", () => {
