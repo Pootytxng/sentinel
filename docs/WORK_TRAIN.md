@@ -72,13 +72,15 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
       `_archive/compy-sessions/worktree-salvage-2026-10-23/wt-prune-2026-10-23`. The `.codex` one is left alone.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
-- [ ] **FOCUS** (first; needs FULL mode, it launches Compy) Diagnosed 2026-10-24: not a Compy regression.
-      Compy asks for a non-activating show (focus=false → tao SW_SHOWNOACTIVATE), but the launchers
-      (`scripts/foreground-probe.ps1`, `scripts/ship-reinstall.ps1`) use Start-Process, whose STARTUPINFO
-      SW_SHOWNORMAL overrides the first ShowWindow; Windows' foreground lock then sometimes allows it
-      (traces in `logs/foreground-traces/`). Fix: (1) launch compy.exe with SW_SHOWNOACTIVATE in STARTUPINFO
-      from both scripts; (2) `launch-focus-guard` takes timing from the trace (first in-family FOREGROUND
-      event with fgPid in family vs firstShowMs) and filters FOREGROUND on fgPid. Prove with one strict run.
+- [ ] **FOCUS** (needs one Compy launch) Re-diagnosed 2026-10-24: the launcher is NOT the cause. With
+      STARTUPINFO wShowWindow=4 (SW_SHOWNOACTIVATE, measured) Compy's quiet launch still gets FOREGROUND
+      0-1 ms after first SHOW; Windows' foreground lock usually refuses it (old code passed 3/3, failed
+      2/2 earlier). No activating call found in Compy/tauri/tao 0.35.3/plugins (tao shows SW_SHOWNOACTIVATE
+      after an initial SW_HIDE). User impact: a quiet (autostart) launch can sometimes jump over a game.
+      Next: (1) probe a minimal exe, SW_HIDE+SW_SHOWNOACTIVATE vs SW_SHOWNOACTIVATE alone; (2) candidate
+      fix: quiet mode builds the window `focusable=false` (WS_EX_NOACTIVATE), `set_focusable(true)` after
+      first show; prove with launch-focus-guard. Uncommitted guard work (fgPid filter, trace timing,
+      no-activate launcher helper) sits in worktree `train-focus` - commit the guard half with the fix.
 - [x] **#631** Rollback that ran but couldn't save reads as a failure. Backend `ad7a1221`; screens +
       Benchmark trial wording `48972cd3` (2026-10-24).
 - [x] **#616** Roll back an apply whose receipt can't be built or saved (orphan change). Ported from the
