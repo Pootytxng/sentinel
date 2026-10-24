@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { AppliedChange, StartupEntry } from "../types";
@@ -127,6 +128,10 @@ type Props = {
   onApplyBatch: (recIds: string[]) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
   onOpenLibrary: (focusId: string) => void;
   vendor: GpuVendor;
+  // App's refresh, run after a ledger write this surface makes itself (telemetry-task disable,
+  // preinstalled-app removal) so App's changes/recs and the Machine Model re-read (#619). Optional:
+  // callers that never show those sections pass nothing.
+  onChanged?: () => Promise<unknown> | void;
   // Section filter (Optimize merge, spec 2026-06-21): "all" (default) = today's whole Tune surface,
   // byte-identical; "fixes" = the recs / guided / startup / refuse-pile sections only (no Trust
   // Ledger); "ledger" = BOTH ledger layers; "applied" = the "Active on this PC" layer ONLY; "history"
@@ -484,13 +489,27 @@ const DEBLOAT_TASK_KEY: Record<string, string> = {
   "ceip-usb": "ceipUsb",
 };
 
-// Self-contained: invokes the gated `disable_known_bloat_task` command directly; the applied change
-// shows in the Trust Ledger (History) where it can be rolled back (re-enables the task).
+// App's refresh after one of the two writes below. By the time it runs the change is made, recorded
+// and announced, so a refresh that fails is reported as exactly that and never as a refused change:
+// the row keeps its done state (#619). App's own refresh already raises its banner for a read that
+// fails; this is for whatever it lets through.
+const refreshAfterWrite = async (refresh?: () => Promise<unknown> | void) => {
+  try {
+    await refresh?.();
+  } catch (e) {
+    console.error("[compy fix]", "the change was made and recorded, but the refresh after it failed", e);
+  }
+};
+
+// Self-contained: runs the gated `disable_known_bloat_task` command through `writeLedger`; the applied
+// change shows in the Trust Ledger (History) where it can be rolled back (re-enables the task).
 function DebloatTasks({
   onWhatsThis,
   activeChangeFor,
+  onChanged,
 }: {
   onWhatsThis: (id: string) => void;
+  onChanged?: () => Promise<unknown> | void;
   // Derive the "Disabled" state from the Trust Ledger, not just this render's local state: an applied
   // disable lands under rec_id `bloat-task:<id>`, so a persisted (still-active, not rolled-back) change
   // means the task stays off across remount/nav. Local `state` only carries THIS session's fresh click
@@ -503,7 +522,8 @@ function DebloatTasks({
   const disable = async (id: string) => {
     setBusy(id);
     try {
-      await invoke("disable_known_bloat_task", { taskId: id });
+      // The command alone: only its own failure means nothing changed.
+      await writeLedger("disable_known_bloat_task", { taskId: id });
       setState((s) => ({ ...s, [id]: "done" }));
     } catch {
       // Plain-English, not the raw Rust string: this is an ARMED mutation, so make clear nothing changed.
@@ -511,9 +531,11 @@ function DebloatTasks({
         ...s,
         [id]: t("optimize.fix.debloatFailed"),
       }));
+      return;
     } finally {
       setBusy(null);
     }
+    await refreshAfterWrite(onChanged);
   };
   return (
     <CollapsibleSection title={t("optimize.fix.telemetryTasks")} count={DEBLOAT_TASKS.length}>
@@ -573,7 +595,7 @@ const PRELOAD_APP_KEY: Record<string, string> = {
 // Renders NOTHING unless the backend reports the feature armed AND at least one curated app is
 // installed for this user — so shipping it dark changes zero pixels (no flag needed; the gate IS
 // the switch, and the same probe lights the card up the commit the gate arms).
-function PreloadApps() {
+function PreloadApps({ onChanged }: { onChanged?: () => Promise<unknown> | void }) {
   const { t } = useTranslation();
   const [view, setView] = useState<{ armed: boolean; installed: string[] } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -589,7 +611,8 @@ function PreloadApps() {
   const remove = async (id: string) => {
     setBusy(id);
     try {
-      await invoke("remove_known_preload_app", { appId: id });
+      // The command alone: only its own failure means nothing changed.
+      await writeLedger("remove_known_preload_app", { appId: id });
       setState((s) => ({ ...s, [id]: "done" }));
     } catch {
       // Plain-English, honest: nothing changed on a refusal/failure.
@@ -597,9 +620,11 @@ function PreloadApps() {
         ...s,
         [id]: t("optimize.fix.preloadRemoveFailed"),
       }));
+      return;
     } finally {
       setBusy(null);
     }
+    await refreshAfterWrite(onChanged);
   };
   return (
     <CollapsibleSection title={t("optimize.fix.preinstalledApps")} count={rows.length}>
@@ -937,6 +962,7 @@ export default function Fix({
   onApplyBatch,
   onOpenLibrary,
   vendor,
+  onChanged,
   view = "all",
   v2Ia = false,
   reverted = [],
@@ -1582,8 +1608,8 @@ export default function Fix({
       )}
 
       {/* Telemetry-task disable (Phase B, ARMED) — curated CEIP tasks; reversible via the Trust Ledger. */}
-      <DebloatTasks onWhatsThis={onOpenLibrary} activeChangeFor={activeChangeFor} />
-      <PreloadApps />
+      <DebloatTasks onWhatsThis={onOpenLibrary} activeChangeFor={activeChangeFor} onChanged={onChanged} />
+      <PreloadApps onChanged={onChanged} />
       </>
       )}
 

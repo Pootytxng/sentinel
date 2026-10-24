@@ -42,7 +42,9 @@ release, sign, or touch credentials (owner territory).
       Progress 2026-10-23: process PRs closed; #673 landed (fix 88bec9ad, sparklines too);
       #666 landed (merge of 68e3c215, data_root 23/23 on main).
       2026-10-24: #661 landed (merge of e1cf6f96; Debrief shows "—" + Not graded for unmeasured FPS,
-      jsdom 58/58 + Chromium layout 6/6). Next: #627, #604.
+      jsdom 58/58 + Chromium layout 6/6).
+      #627 landed (merge of b48bd156; Check/Fix writes now refresh the Test bench without a
+      refocus; 23 files / 266 tests). Next: #604.
 - [ ] **WT-prune** Remove the 17 remaining worktrees whose commits already exist on main or on GitHub;
       bundle any unique commits first (pattern: `_archive/compy-sessions/worktree-salvage-2026-10-23`).
 
@@ -51,6 +53,7 @@ release, sign, or touch credentials (owner territory).
 - [ ] **#616** Roll back an apply whose receipt can't be built or saved (orphan change).
 - [ ] **#617** Multi-write applies leave partial state on a mid-apply failure.
 - [ ] **#619 / #621** Ledger writes outside App don't refresh the other screens.
+      #619 landed with PR #627 (2026-10-24). Left: #621 (ExperimentBench's three writes onto `writeLedger`).
 - [ ] **#629** Test → Benchmark claims no baseline while one exists.
 - [ ] **#628** Trial start note says another change is active after a same-setting rollback.
 - [ ] **#669 / #668** Active-change and attribution counts collapse to 0 on a failed ledger read.

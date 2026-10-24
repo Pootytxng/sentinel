@@ -31,11 +31,11 @@ import { prewarmScan } from "./surfaces/use-scan";
 import { inEffectCounts, useMachineModel } from "./data/machine-model";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
-import { LEDGER_CHANGED_EVENT } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
 import { setStartupEntryEnabled } from "./data/startup-toggle";
+import { writeLedger } from "./data/ledger-write";
 import type { LabStationKey } from "./surfaces/lab-guided-data";
 import Settings from "./surfaces/Settings";
 import {
@@ -880,15 +880,14 @@ function App() {
     setBusyId(rec.id);
     setError(null);
     try {
-      await invoke<AppliedChange>("apply_recommendation", {
-        recId: rec.id,
-        recTitle: rec.title,
-      });
-      // The ledger changed in-app — let sibling surfaces that cache ledger-derived state (e.g. the
-      // armed ExperimentBench simulator read) re-derive without waiting for an OS refocus. Additive,
-      // read-only signal; no new mutation path.
-      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
-      await refresh();
+      // writeLedger announces the ledger change before the refresh, so sibling surfaces that cache
+      // ledger-derived state (e.g. the armed ExperimentBench simulator read) re-derive without
+      // waiting for an OS refocus. Additive, read-only signal; no new mutation path.
+      await writeLedger<AppliedChange>(
+        "apply_recommendation",
+        { recId: rec.id, recTitle: rec.title },
+        refresh,
+      );
     } catch (e) {
       fail(t("app.errors.applyFailed"), e);
     } finally {
@@ -911,10 +910,15 @@ function App() {
       .map((r) => ({ recId: r.id, recTitle: r.title }));
     if (items.length === 0) return { applied: 0, skipped: [] };
     try {
-      const report = await invoke<BatchApplyReport>("apply_recommendations_batch", { items });
-      // A batch that applied anything changed the ledger — signal siblings (see apply()'s note). A
-      // batch-level refusal rejects (nothing applied) and is handled in catch, so no false signal.
-      if (report.applied > 0) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
+      // Only a batch that applied anything changed the ledger, so only that one is announced (see
+      // apply()'s note). A batch-level refusal rejects (nothing applied) and is handled in catch, so
+      // no false signal. The refresh stays in finally: it runs for a refusal too.
+      const report = await writeLedger<BatchApplyReport>(
+        "apply_recommendations_batch",
+        { items },
+        undefined,
+        (r) => r.applied > 0,
+      );
       return {
         applied: report.applied,
         skipped: report.items
@@ -941,10 +945,8 @@ function App() {
     setBusyId(change.id);
     setError(null);
     try {
-      await invoke("rollback_change", { changeId: change.id });
       // Rolling back changes the ledger too — a rec can become available again, so siblings re-derive.
-      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
-      await refresh();
+      await writeLedger("rollback_change", { changeId: change.id }, refresh);
     } catch (e) {
       fail(t("app.errors.rollbackFailed"), e);
     } finally {
