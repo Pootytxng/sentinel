@@ -106,7 +106,7 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 - [ ] **#638** Phase 2 follow-ons from PR #634.
 - [ ] **GB-picker** `game-bar-disable` not offered in the Trial picker on the owner rig with both
       values = 1 (seen 2026-10-23 07:46 on a fresh Compy). Reproduce, then fix or close.
-- [ ] **#686-followup** One `LiveReads` per Trial start instead of one PowerShell spawn per row.
+- [x] **#686-followup** One `LiveReads` per Trial start instead of one PowerShell spawn per row. `6e7792a8`.
 
 ### Then — Roadmap Phase 4: Optimization Engine v1 (`product/OPTIMIZATION_ENGINE.md`)
 Planned 2026-10-24 from the spec and the code. Order is dependency order. Phase 4 exit on the owner rig:
@@ -114,7 +114,8 @@ a current WARDOGS noise floor is used; every passing candidate is tested or skip
 uneven baseline gives "too noisy", never Slower/Faster; only Better stays applied; the WARDOGS summary
 reads honest to the owner. First check: does `sessions.rs` keep per-second fps (needed by P4-baseline-quality)?
 - [x] **P4-plan** Slices written below (2026-10-24).
-- [ ] **P4-noise-store** Store a measured noise floor per game + rig (`process_name` + `hw_fingerprint`),
+- [x] **P4-noise-store** (`4caee92b`, wording `ad436c84`; stored value = spread within one 25 s
+      calibration, not between sessions — P4-noise must decide if that is the right floor) Store a measured noise floor per game + rig (`process_name` + `hw_fingerprint`),
       stale after a driver/Windows/game-build change; fill `measured_noise_pct` in `experiment.rs` from
       `benchmark_trial.rs` calibration. Rust unit tests. TRIAL_PROTOCOL §5, MACHINE_MODEL §4, ENGINE §10.
 - [ ] **P4-noise** "Measure this game's noise": two unchanged sessions → "varies ±X% on your PC"; Trials
@@ -157,6 +158,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
   `ad7a1221` + `48972cd3`, #622/#677 `3c3e7553`, #617 `1bc030bd`; not pushed (owner on PC).
 - 2026-10-24 morning: pushed `abe0edd7`; FOCUS `713838e6`, fflate `53a1c9de`, audit `89fc1add`,
   #668/#669 `e83017a5`.
+- 2026-10-24 late morning: #686-followup `6e7792a8`, P4-noise-store `4caee92b` + `ad436c84`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
