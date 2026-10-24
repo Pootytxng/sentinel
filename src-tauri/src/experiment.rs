@@ -206,6 +206,10 @@ pub(crate) struct ExperimentRecord {
     /// while the webview supplied the numbers — such a record can't be concluded, only restored.
     #[serde(default)]
     pub baseline_session_id: Option<String>,
+    /// §2/§11 the baseline's first- and second-half average frame rate that the start graded steady.
+    /// None on records started before baselines were graded (unknown, never assumed steady).
+    #[serde(default)]
+    pub baseline_halves: Option<BaselineHalves>,
     /// When the apply returned — the change was in place from here on, so only a session that started
     /// later can be the after-reading. `created_at` is stamped before the apply (record first), so a
     /// session started while the apply or its UAC prompt was pending would pass a `created_at` test.
@@ -1088,6 +1092,84 @@ pub(crate) fn resolve_baseline<'a>(
     Ok(session)
 }
 
+/// Below this many frame-rate readings a baseline is too short to compare a change against — the
+/// same ~10 minutes of play the treatment session needs (Trial Protocol §2).
+pub(crate) const MIN_BASELINE_SAMPLES: u32 = MIN_TREATMENT_SAMPLES;
+
+/// The baseline session's average frame rate in its first and second half, read from its 10 s
+/// `fps_series` buckets (each the mean of real ~1 Hz readings; gaps in play are not buckets). Stored on
+/// the record at start so the receipt keeps the steadiness evidence after the session sheds its series.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct BaselineHalves {
+    pub first_half_fps: f64,
+    pub second_half_fps: f64,
+}
+
+/// Trial Protocol §2: how fit a baseline session is to judge a change against. Only `Steady` starts.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum BaselineGrade {
+    /// Long enough, and its two halves are within the noise floor of each other.
+    Steady(BaselineHalves),
+    /// Fewer than [`MIN_BASELINE_SAMPLES`] frame-rate readings.
+    TooShort { samples: u32 },
+    /// Its halves' average frame rates differ by more than the noise floor (relative to the first
+    /// half), so the session's own drift would swamp a change's effect.
+    Uneven(BaselineHalves),
+    /// The session no longer carries its frame-rate trace (older sessions shed it), or the trace has
+    /// fewer than two buckets per half, so steadiness can't be checked. Never read as steady.
+    Untraced,
+}
+
+fn mean(xs: &[f64]) -> f64 {
+    xs.iter().sum::<f64>() / xs.len() as f64
+}
+
+fn round1(x: f64) -> f64 {
+    (x * 10.0).round() / 10.0
+}
+
+/// Pure: grade a baseline session against `noise_floor_pct` (the band the verdict will be judged
+/// against). The halves split the trace's buckets by count, the earlier half first.
+pub(crate) fn grade_baseline(session: &SessionSummary, noise_floor_pct: f64) -> BaselineGrade {
+    if session.samples < MIN_BASELINE_SAMPLES {
+        return BaselineGrade::TooShort { samples: session.samples };
+    }
+    let fps: Vec<f64> = session.fps_series.iter().map(|&(_, f)| f).filter(|f| f.is_finite() && *f > 0.0).collect();
+    let half = fps.len() / 2;
+    if half < 2 {
+        return BaselineGrade::Untraced;
+    }
+    let (first, second) = (mean(&fps[..half]), mean(&fps[half..]));
+    let halves = BaselineHalves { first_half_fps: round1(first), second_half_fps: round1(second) };
+    if (second - first).abs() / first * 100.0 > noise_floor_pct {
+        BaselineGrade::Uneven(halves)
+    } else {
+        BaselineGrade::Steady(halves)
+    }
+}
+
+/// The start's refusal for a baseline that isn't steady, in words, or its halves when it is.
+pub(crate) fn steady_baseline(session: &SessionSummary, noise_floor_pct: f64) -> Result<BaselineHalves, String> {
+    let replay = "record a new baseline: play another session of this game, then start";
+    match grade_baseline(session, noise_floor_pct) {
+        BaselineGrade::Steady(h) => Ok(h),
+        BaselineGrade::TooShort { samples } => Err(format!(
+            "the baseline session is too short to compare against ({samples} of the \
+             {MIN_BASELINE_SAMPLES} frame-rate readings Compy needs, about 10 minutes of play), {replay}"
+        )),
+        BaselineGrade::Uneven(h) => Err(format!(
+            "the baseline session was too uneven to compare against (its frame rate averaged {} fps in \
+             the first half and {} fps in the second, more apart than the {noise_floor_pct}% noise \
+             floor), {replay}",
+            h.first_half_fps, h.second_half_fps
+        )),
+        BaselineGrade::Untraced => Err(format!(
+            "Compy no longer has the baseline session's frame-rate trace, so it can't check that it \
+             was steady, {replay}"
+        )),
+    }
+}
+
 /// §3 one variable at a time — the baseline must have been measured with the same Compy changes in
 /// place as now, so the before/after differs by this one change alone. Refuses when a Compy change was
 /// applied or undone after the baseline session began, when the number of active Compy changes differs
@@ -1786,6 +1868,9 @@ pub(crate) fn start_experiment(
     let sessions = crate::sessions::get_session_summaries();
     let baseline = resolve_baseline(&sessions, &baseline_session_id)
         .map_err(|why| format!("experiment not started — {why}"))?;
+    // §2: a baseline too short or too uneven to judge a change against is refused, never graded up.
+    let baseline_halves = steady_baseline(baseline, DEFAULT_NOISE_FLOOR_PCT)
+        .map_err(|why| format!("experiment not started — {why}"))?;
     // §3: the baseline must still describe the Compy changes in place now.
     let history = ledger_for_one_change_checks(
         crate::history::load_history(),
@@ -1829,6 +1914,7 @@ pub(crate) fn start_experiment(
         baseline_avg_fps: baseline.avg_fps,
         baseline_low1_fps: baseline.low1_fps_est,
         baseline_session_id: Some(baseline.started_at.clone()),
+        baseline_halves: Some(baseline_halves),
         applied_at: None,
         session_pairing: None,
         noise_evidence: None,
@@ -2396,6 +2482,7 @@ mod experiment_tests {
             baseline_avg_fps: 120.0,
             baseline_low1_fps: baseline_low1,
             baseline_session_id: None,
+            baseline_halves: None,
             applied_at: None,
             session_pairing: None,
             noise_evidence: None,
@@ -4244,5 +4331,94 @@ mod experiment_tests {
         assert!(thin.contains("readings") && !thin.contains("frames"), "{thin}");
         let measured = verdict_note("improved", 5000, false, GameMatch::Match);
         assert!(!measured.contains("back-to-back"), "{measured}");
+    }
+
+    // ─── P4-baseline-quality (Trial Protocol §2) ─────────────────────────
+
+    /// The owner rig's 2026-10-23 WARDOGS sessions as `sessions.json` holds them (the 10 s buckets'
+    /// mean fps, from 20 s in): the first live Trial's baseline (1202 s, 1172 readings, AFK into a new
+    /// round) and its after-session (1125 s, 1095 readings).
+    const AFK_BASELINE_FPS: &[f64] = &[142.8, 152.2, 177.9, 185.7, 180.0, 212.7, 252.2, 264.7, 319.8, 270.2, 263.9, 235.4, 224.0, 218.9, 207.8, 227.2, 231.1, 219.8, 263.2, 282.2, 337.6, 335.6, 312.8, 320.5, 328.9, 336.3, 335.1, 334.2, 330.5, 337.2, 334.4, 323.4, 330.1, 338.3, 329.2, 268.5, 155.9, 220.4, 304.7, 326.6, 327.5, 237.0, 215.5, 274.0, 223.8, 212.0, 219.5, 251.4, 259.3, 253.1, 251.1, 241.5, 242.2, 230.1, 245.3, 249.3, 220.5, 200.6, 202.0, 208.5, 206.3, 230.9, 255.6, 253.5, 255.8, 255.8, 269.1, 279.4, 265.0, 204.9, 212.1, 229.0, 235.1, 243.2, 272.1, 293.6, 263.2, 265.0, 258.6, 271.4, 276.3, 287.4, 289.1, 279.6, 269.0, 279.3, 237.8, 210.8, 204.0, 210.9, 213.5, 191.8, 183.4, 204.4, 214.0, 207.3, 205.1, 225.6, 199.7, 190.9, 180.2, 186.5, 195.1, 187.5, 202.1, 203.1, 194.5, 195.9, 200.8, 199.4, 220.2, 218.7, 216.4, 236.1, 216.1, 188.9, 209.6, 199.1, 213.0];
+    const AFK_AFTER_FPS: &[f64] = &[184.0, 181.3, 192.7, 190.0, 188.7, 163.3, 160.6, 174.7, 174.9, 172.3, 172.9, 177.7, 190.7, 209.8, 200.1, 197.2, 192.1, 183.5, 190.4, 170.7, 183.1, 189.1, 190.8, 194.2, 186.4, 189.5, 204.0, 190.9, 193.4, 192.9, 179.4, 186.2, 194.8, 199.0, 197.2, 189.4, 182.7, 186.0, 185.2, 175.9, 189.4, 206.3, 195.5, 167.8, 175.2, 172.1, 163.6, 178.3, 187.8, 186.4, 198.0, 222.9, 234.6, 221.4, 222.8, 217.5, 203.9, 202.9, 190.4, 191.7, 209.3, 195.1, 189.9, 205.9, 204.0, 183.9, 190.2, 197.4, 207.5, 195.9, 194.4, 182.6, 191.3, 197.6, 194.1, 195.2, 193.5, 200.1, 194.5, 181.6, 286.0, 320.4, 287.4, 196.0, 187.2, 189.3, 267.6, 265.7, 260.3, 230.8, 235.9, 241.6, 232.6, 242.0, 261.0, 283.3, 255.5, 256.4, 232.2, 238.3, 228.0, 219.5, 217.6, 205.2, 181.0, 188.5, 203.7, 220.7, 210.9, 226.2, 255.5];
+
+    fn traced(samples: u32, fps: &[f64]) -> SessionSummary {
+        let mut s = session(BASE_ID, 150.0);
+        s.samples = samples;
+        s.fps_series = fps.iter().enumerate().map(|(i, &f)| (20 + 10 * i as u32, f)).collect();
+        s
+    }
+
+    #[test]
+    fn the_afk_baseline_from_the_first_live_trial_is_too_uneven() {
+        let grade = grade_baseline(&traced(1172, AFK_BASELINE_FPS), DEFAULT_NOISE_FLOOR_PCT);
+        assert_eq!(grade, BaselineGrade::Uneven(BaselineHalves { first_half_fps: 259.8, second_half_fps: 227.9 }));
+        let why = steady_baseline(&traced(1172, AFK_BASELINE_FPS), DEFAULT_NOISE_FLOOR_PCT).unwrap_err();
+        assert!(why.contains("too uneven") && why.contains("259.8") && why.contains("227.9"), "{why}");
+        assert!(why.contains("record a new baseline"), "offers a re-record: {why}");
+        // Its after-session would have been just as unfit to be a baseline.
+        assert!(matches!(grade_baseline(&traced(1095, AFK_AFTER_FPS), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Uneven(_)));
+    }
+
+    #[test]
+    fn a_baseline_under_600_readings_is_too_short() {
+        // The 2026-10-23 kill-mid-start check's 90 s baseline: 91 readings.
+        let s = traced(91, &[275.6, 288.7, 284.8, 288.8, 278.4, 262.0, 262.4, 254.1, 263.8, 266.9]);
+        assert_eq!(grade_baseline(&s, DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::TooShort { samples: 91 });
+        let why = steady_baseline(&s, DEFAULT_NOISE_FLOOR_PCT).unwrap_err();
+        assert!(why.contains("too short") && why.contains("91 of the 600"), "{why}");
+        assert!(matches!(grade_baseline(&traced(599, &[200.0; 60]), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::TooShort { .. }));
+    }
+
+    #[test]
+    fn a_long_steady_baseline_starts_and_its_halves_are_kept() {
+        let mut fps = vec![200.0; 30];
+        fps.extend([204.0; 30]); // +2%: inside the 3% floor
+        let halves = steady_baseline(&traced(600, &fps), DEFAULT_NOISE_FLOOR_PCT).unwrap();
+        assert_eq!(halves, BaselineHalves { first_half_fps: 200.0, second_half_fps: 204.0 });
+        fps[30..].fill(206.2); // +3.1%: outside it
+        assert!(matches!(grade_baseline(&traced(600, &fps), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Uneven(_)));
+        fps[30..].fill(193.8); // a drop counts the same as a rise
+        assert!(matches!(grade_baseline(&traced(600, &fps), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Uneven(_)));
+    }
+
+    #[test]
+    fn a_baseline_without_its_trace_is_unknown_never_steady() {
+        // `session()` carries no fps_series, as an older session that shed it.
+        assert_eq!(grade_baseline(&traced(900, &[]), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Untraced);
+        assert_eq!(grade_baseline(&traced(900, &[200.0, 200.0, 200.0]), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Untraced);
+        let why = steady_baseline(&traced(900, &[]), DEFAULT_NOISE_FLOOR_PCT).unwrap_err();
+        assert!(why.contains("can't check"), "{why}");
+    }
+
+    #[test]
+    fn a_record_without_baseline_halves_loads_and_an_older_compy_loads_one_with_them() {
+        // New field absent (a record started before baselines were graded): loads as unknown.
+        let mut v = serde_json::to_value(running()).unwrap();
+        assert!(v.as_object_mut().unwrap().remove("baseline_halves").is_some(), "the field is written");
+        let old: ExperimentRecord = serde_json::from_value(v).unwrap();
+        assert_eq!(old.baseline_halves, None);
+        // An older Compy's record type (no such field, no deny_unknown_fields) reads a new record.
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OlderRecord {
+            id: String,
+            rec_id: String,
+            status: ExperimentStatus,
+            baseline_low1_fps: f64,
+            noise_floor_pct: f64,
+            #[serde(default)]
+            baseline_session_id: Option<String>,
+        }
+        let new = ExperimentRecord {
+            baseline_halves: Some(BaselineHalves { first_half_fps: 200.0, second_half_fps: 204.0 }),
+            ..running()
+        };
+        let text = serde_json::to_string(&ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![new] }).unwrap();
+        #[derive(Deserialize)]
+        struct OlderStore {
+            experiments: Vec<OlderRecord>,
+        }
+        let older: OlderStore = serde_json::from_str(&text).expect("an older Compy loads the file");
+        assert_eq!(older.experiments[0].baseline_session_id.as_deref(), Some(BASE_ID));
     }
 }

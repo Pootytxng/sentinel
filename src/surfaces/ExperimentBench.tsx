@@ -179,6 +179,31 @@ function isUsableReading(s: SessionSummary): boolean {
   );
 }
 
+// Trial Protocol §2 — the backend's baseline grade (experiment.rs `grade_baseline`), mirrored so the
+// bench says why a baseline can't be used instead of offering a start the backend then refuses. The
+// floor is the 3% band a new Trial is judged against (comparison.rs DEFAULT_NOISE_FLOOR_PCT); the
+// halves split the 10 s fps buckets by count, and a session without its trace is unknown, never steady.
+const MIN_BASELINE_SAMPLES = 600;
+const BASELINE_NOISE_FLOOR_PCT = 3;
+type BaselineGrade =
+  | { kind: "steady" }
+  | { kind: "too-short"; samples: number }
+  | { kind: "uneven"; first: number; second: number }
+  | { kind: "untraced" };
+
+function gradeBaseline(s: SessionSummary): BaselineGrade {
+  if (s.samples < MIN_BASELINE_SAMPLES) return { kind: "too-short", samples: s.samples };
+  const fps = (s.fps_series ?? []).map(([, f]) => f).filter((f) => Number.isFinite(f) && f > 0);
+  const half = Math.floor(fps.length / 2);
+  if (half < 2) return { kind: "untraced" };
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const first = mean(fps.slice(0, half));
+  const second = mean(fps.slice(half));
+  if ((Math.abs(second - first) / first) * 100 > BASELINE_NOISE_FLOOR_PCT)
+    return { kind: "uneven", first: Math.round(first), second: Math.round(second) };
+  return { kind: "steady" };
+}
+
 // A past result whose verdict reads like a measured judgment (Better / No change / Worse). Only such
 // a row can be mistaken for one judged against the noise floor, so only it needs saying when it wasn't.
 function looksJudged(x: Experiment): boolean {
@@ -478,7 +503,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
 
   const SIM_VERDICT = simVerdictCopy(t);
   const simMeta = sim ? SIM_VERDICT[sim.verdict] ?? { label: sim.verdict, blocked: false } : null;
-  const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && !busy;
+  const grade = baseline ? gradeBaseline(baseline) : null;
+  const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && grade?.kind === "steady" && !busy;
 
   // Bento conversion (2026-08-12). span="full" is FORCED, not a taste call: this component can
   // return null (the dark experiment gate above) and this file declares no grid of its own, so
@@ -582,6 +608,23 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                     <b>{Math.round(baseline.low1_fps_est)}</b>{" "}
                     {t("lab.experimentBench.baselinePost", { when: whenLabel(baseline.started_at, t) })}
                   </p>
+                  {grade && grade.kind !== "steady" ? (
+                    <p className="exp-note" data-testid="exp-baseline-unfit">
+                      {grade.kind === "too-short"
+                        ? t("lab.experimentBench.baselineTooShort", { readings: grade.samples, min: MIN_BASELINE_SAMPLES })
+                        : grade.kind === "uneven"
+                          ? t("lab.experimentBench.baselineUneven", {
+                              first: grade.first,
+                              second: grade.second,
+                              floor: BASELINE_NOISE_FLOOR_PCT,
+                            })
+                          : t("lab.experimentBench.baselineUntraced")}{" "}
+                      {t("lab.experimentBench.baselineRerecord", {
+                        game: prettyGameName(baseline.process_name) || t("lab.experimentBench.fineprintGameFallback"),
+                      })}
+                    </p>
+                  ) : (
+                  <>
                   <label className="exp-field">
                     <span className="exp-field-label">{t("lab.experimentBench.hypothesisLabel")}</span>
                     <input
@@ -604,6 +647,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                       game: prettyGameName(baseline.process_name) || t("lab.experimentBench.fineprintGameFallback"),
                     })}
                   </p>
+                  </>
+                  )}
                 </>
               ) : (
                 <p className="exp-note">

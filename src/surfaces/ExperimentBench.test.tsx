@@ -103,6 +103,8 @@ const VALORANT_SESSION = {
   peak_ram_used_bytes: 12_000_000_000,
   ram_total_bytes: 31_000_000_000,
   compy_changes_active: 0,
+  // A steady trace (Trial Protocol §2): a baseline is graded on its 10 s fps buckets.
+  fps_series: Array.from({ length: 180 }, (_, i) => [i * 10, 244] as [number, number]),
 };
 
 const WORTH_TESTING_SIM = {
@@ -895,5 +897,62 @@ describe("ExperimentBench (armed)", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
     expect(screen.queryByText(WORTH_TESTING_SIM.why)).toBeNull();
+  });
+});
+
+// P4-baseline-quality (Trial Protocol §2): a baseline too short or too uneven to judge a change
+// against is said so, with a re-record, instead of offering a start the backend refuses.
+describe("the baseline is graded before a start", () => {
+  // The owner rig's 2026-10-23 WARDOGS baseline (1172 readings; AFK into a new round): its 10 s fps
+  // buckets as sessions.json holds them.
+  const AFK_FPS = [142.8, 152.2, 177.9, 185.7, 180.0, 212.7, 252.2, 264.7, 319.8, 270.2, 263.9, 235.4, 224.0, 218.9, 207.8, 227.2, 231.1, 219.8, 263.2, 282.2, 337.6, 335.6, 312.8, 320.5, 328.9, 336.3, 335.1, 334.2, 330.5, 337.2, 334.4, 323.4, 330.1, 338.3, 329.2, 268.5, 155.9, 220.4, 304.7, 326.6, 327.5, 237.0, 215.5, 274.0, 223.8, 212.0, 219.5, 251.4, 259.3, 253.1, 251.1, 241.5, 242.2, 230.1, 245.3, 249.3, 220.5, 200.6, 202.0, 208.5, 206.3, 230.9, 255.6, 253.5, 255.8, 255.8, 269.1, 279.4, 265.0, 204.9, 212.1, 229.0, 235.1, 243.2, 272.1, 293.6, 263.2, 265.0, 258.6, 271.4, 276.3, 287.4, 289.1, 279.6, 269.0, 279.3, 237.8, 210.8, 204.0, 210.9, 213.5, 191.8, 183.4, 204.4, 214.0, 207.3, 205.1, 225.6, 199.7, 190.9, 180.2, 186.5, 195.1, 187.5, 202.1, 203.1, 194.5, 195.9, 200.8, 199.4, 220.2, 218.7, 216.4, 236.1, 216.1, 188.9, 209.6, 199.1, 213.0];
+  const AFK_BASELINE = {
+    ...VALORANT_SESSION,
+    process_name: "WardogsClient-Win64-Shipping.exe",
+    samples: 1172,
+    avg_fps: 244.1,
+    low1_fps_est: 153.5,
+    fps_series: AFK_FPS.map((f, i) => [20 + i * 10, f] as [number, number]),
+  };
+
+  async function openStart(session: unknown) {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [session];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    expect(await screen.findByText("Worth testing")).toBeInTheDocument();
+  }
+
+  it("the AFK baseline from the first live Trial reads too uneven and offers a re-record", async () => {
+    await openStart(AFK_BASELINE);
+    const note = await screen.findByTestId("exp-baseline-unfit");
+    expect(note).toHaveTextContent(/too uneven/);
+    expect(note).toHaveTextContent(/260 fps in the first half and 228 fps in the second/);
+    expect(note).toHaveTextContent(/3% noise floor/);
+    expect(note).toHaveTextContent(/Record a new baseline/);
+    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+  });
+
+  it("a baseline under 600 readings reads too short", async () => {
+    await openStart({ ...VALORANT_SESSION, samples: 91 });
+    const note = await screen.findByTestId("exp-baseline-unfit");
+    expect(note).toHaveTextContent(/too short.*91 of the 600 frame-rate readings/);
+    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+  });
+
+  it("a baseline without its frame-rate trace is unknown, never steady", async () => {
+    await openStart({ ...VALORANT_SESSION, fps_series: [] });
+    expect(await screen.findByTestId("exp-baseline-unfit")).toHaveTextContent(/can't check that the session was steady/);
+    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+  });
+
+  it("a long, steady baseline still starts", async () => {
+    await openStart(VALORANT_SESSION);
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    expect(screen.queryByTestId("exp-baseline-unfit")).toBeNull();
   });
 });
