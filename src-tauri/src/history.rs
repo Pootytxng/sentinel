@@ -247,18 +247,24 @@ fn check_change_state(rec_id: &str, action: Option<&AppliedAction>, reads: &Live
 /// reads one [`known_task_listing`], so that pass costs one PowerShell spawn on the UI thread instead
 /// of one per row. It lives only as long as the pass that made it; nothing is cached across passes, so
 /// no read can outlive a change applied or rolled back after it.
-struct LiveReads {
+pub(crate) struct LiveReads {
     list_tasks: fn() -> Option<String>,
     tasks: std::cell::OnceCell<Option<String>>,
 }
 
 impl Default for LiveReads {
     fn default() -> Self {
-        LiveReads { list_tasks: known_task_listing, tasks: std::cell::OnceCell::new() }
+        LiveReads::with_task_listing(known_task_listing)
     }
 }
 
 impl LiveReads {
+    /// A pass whose task rows read `list_tasks`, called at most once. Production is
+    /// [`LiveReads::default`]; tests pass a counting fake.
+    pub(crate) fn with_task_listing(list_tasks: fn() -> Option<String>) -> Self {
+        LiveReads { list_tasks, tasks: std::cell::OnceCell::new() }
+    }
+
     fn task_disabled(&self, task: &KnownBloatTask) -> Option<bool> {
         let listing = self.tasks.get_or_init(self.list_tasks).as_deref()?;
         task_disabled_in_known_listing(listing, task)
@@ -322,12 +328,14 @@ fn startup_row_check(
 /// Read-only: the live re-check of the setting `rec_id` names, through its newest applied row in
 /// `changes` (the ledger's own re-check, so a startup-app toggle reads the direction Compy set), or
 /// [`probe_rec_target`] when none is applied. Reads the ledger it is given, so it takes no lock.
-pub(crate) fn probe_applied_setting(changes: &[AppliedChange], rec_id: &str) -> ActiveCheck {
+/// `reads` is the caller's pass: a Trial start or conclude that reads every other setting shares one,
+/// so the whole read-back costs one task listing (#686-followup).
+pub(crate) fn probe_applied_setting(changes: &[AppliedChange], rec_id: &str, reads: &LiveReads) -> ActiveCheck {
     changes
         .iter()
         .rev()
         .find(|c| c.rec_id == rec_id && c.status == "applied")
-        .map_or_else(|| probe_rec_target(rec_id), |c| check_row_state(c, &LiveReads::default()))
+        .map_or_else(|| probe_rec_target(rec_id), |c| check_row_state(c, reads))
 }
 
 /// Read-only: does the live machine read as being in `rec_id`'s TARGET state right now? The same
@@ -4389,8 +4397,9 @@ mod row_probe_tests {
             row(rec, "applied", toggle(name, true)),
             row(rec, "rolled_back", toggle(name, false)),
         ];
-        assert_eq!(probe_applied_setting(&changes, rec), ActiveCheck::On, "the newest applied row is the enable");
-        assert_eq!(probe_applied_setting(&changes[..1], rec), ActiveCheck::Off);
-        assert_eq!(probe_applied_setting(&changes[2..], rec), ActiveCheck::Unrecognised, "no applied row: the rec id alone");
+        let reads = LiveReads::default();
+        assert_eq!(probe_applied_setting(&changes, rec, &reads), ActiveCheck::On, "the newest applied row is the enable");
+        assert_eq!(probe_applied_setting(&changes[..1], rec, &reads), ActiveCheck::Off);
+        assert_eq!(probe_applied_setting(&changes[2..], rec, &reads), ActiveCheck::Unrecognised, "no applied row: the rec id alone");
     }
 }
