@@ -86,7 +86,7 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 - [x] **#616-f2** (`ad7a1221`) Test a receipt build that fails partway through a list in `commit_receipts` (distinct
       branch from a failed save). From the #616 review.
 - [x] **#617** Multi-write applies leave partial state on a mid-apply failure. `1bc030bd` (2026-10-24).
-- [ ] **#617-f1** Tests: apply with a present REG_BINARY UserPreferencesMask checks snapshot bytes; F1
+- [x] **#617-f1** (`29e5e67a`) Tests: apply with a present REG_BINARY UserPreferencesMask checks snapshot bytes; F1
       test for game mode and visual effects. From the #617 review (N2).
 - [x] **#619 / #621** Ledger writes outside App don't refresh the other screens.
       #619 landed with PR #627 (2026-10-24). #621 `6afaa71b` (2026-10-24).
@@ -103,7 +103,7 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 - [x] **#677** Clipped session metadata and combined-effect tooltips. `3c3e7553`.
 - [ ] **#622-f1** Below ~560 px, Live session rows scroll sideways ("vs previous" chip); Health
       verdict panel scrolls inside itself (#225, needs its own change).
-- [ ] **#638** Phase 2 follow-ons from PR #634.
+- [x] **#638** Phase 2 follow-ons from PR #634. Lands with this log entry (Optimize can't-confirm group, History tile title).
 - [ ] **GB-picker** `game-bar-disable` not offered in the Trial picker on the owner rig with both
       values = 1 (seen 2026-10-23 07:46 on a fresh Compy). Reproduce, then fix or close.
 - [x] **#686-followup** One `LiveReads` per Trial start instead of one PowerShell spawn per row. `6e7792a8`.
@@ -159,6 +159,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-24 morning: pushed `abe0edd7`; FOCUS `713838e6`, fflate `53a1c9de`, audit `89fc1add`,
   #668/#669 `e83017a5`.
 - 2026-10-24 late morning: #686-followup `6e7792a8`, P4-noise-store `4caee92b` + `ad436c84`.
+- 2026-10-24 midday: guard re-anchor `18622365` (pushed), #617-f1 `29e5e67a`, #638.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
