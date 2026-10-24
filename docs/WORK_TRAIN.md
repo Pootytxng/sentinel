@@ -48,8 +48,6 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 `git commit -F <file>` for messages with quotes; never run git writes from the remote Linux shell.
 
 ## Needs owner
-- **P2-exit** (#453): 5 minutes at the PC while Compy shows Health, Test, History and Live; you confirm
-  they agree. Can also run in a FULL session with computer use if you leave Compy open and the PC idle.
 - **Close fixed issues** #645, #608, #671 on GitHub (sessions cannot write issues).
 - **Old scheduled task** "#678 check-in 1/3…" still armed; turn it off in your scheduled tasks list.
 
@@ -127,7 +125,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       `grade_baseline`'s `noise_floor_pct` param to `halves_floor_pct`; fix ExperimentBench.tsx:206 comment.
 - [x] **453-fix** `dce14e95`: Health, Optimize and History count one per change whose live check reads On;
       can't-confirm grouped the same on all three; shared parity fixture (Rust + TS).
-- [ ] **453-rerun** (needs a desk install of main) Re-run the #453 four-screen check; record in BACKLOG P2.
+- [x] **453-rerun** PASSED 2026-10-24 14:32–14:35 on desk build `2afd7471`: Health, History and Optimize read
+      14 → 15 (EpicGamesLauncher startup entry on, STILL ON) → 14 (ROLLED BACK); recorded in BACKLOG P2.
 - [ ] **453-f1** `history.rs` `summarize_history` is a fourth counting rule (newest row by position,
       Unreadable counts as active) feeding session receipts / Debrief / Monitor "N Compy changes active".
       Move it onto `live_change_groups`. Also: "Applied on this machine" diagnostics line still counts rows.
@@ -182,9 +181,12 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-24 afternoon: 453-fix `dce14e95`.
 - 2026-10-24 evening (scheduled, CODE-ONLY, owner in WARDOGS): P4-noise-copy (this entry's commit);
   tsc 0, ExperimentBench 54/54, cargo experiment 105/0, clippy clean; not pushed.
+- 2026-10-24 14:31 desk install of main `2afd7471` (stamp-proved, attempt 1); 14:32–14:35 #453 re-run
+  PASSED (14/15/14 on all three screens) → P2-exit met; RELEASE_STATE + BACKLOG P2 recorded.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
 - [x] Phase 3 owner-rig exit: first live Trial + kill-mid-start check — `d1a5204d`, `39b591d6`
+- [x] **P2-exit** Phase 2 owner-rig exit (#453): four screens agree live on desk build `2afd7471` (2026-10-24)
 - [x] #672 supply-chain gate (tokio RUSTSEC-2026-0386 acknowledged) — `b06c257d`

@@ -67,8 +67,15 @@ No duplicate Care-vs-Performance machine truth.
 
 **Status 2026-09-26:** screens read machine truth only through `src/data/machine-model.ts`;
 `src/machine-model-reader-guard.test.ts` fails the build on a new direct reader, and the unused
-`get_intelligence_timeline` command is retired (#453). Phase 2 exit still needs the live four-screen
-agreement proof on the owner's machine (#453).
+`get_intelligence_timeline` command is retired (#453).
+**First owner-rig live run: 2026-10-24 12:24, desk build `d4de0021` — FAILED:** Health read 13 active changes against
+14/15 elsewhere; fixed by `dce14e95` (#453 fix: Health, Optimize and History count the same active changes).
+**Re-run PASSED 2026-10-24 14:32–14:35, desk build `2afd7471`:** Health "Compy's changes on this PC", History "Undo
+any of the N changes in Test" and Test → Optimize "Active on this PC" all read 14; after one reversible startup toggle
+through Compy (Enable startup entry: EpicGamesLauncher) all three read 15 and History showed it STILL ON; after rolling
+it back through Compy all three read 14 and History showed it ROLLED BACK. Diagnostics agreed with the change list
+(Fast Startup Off, HAGS On, Ultimate Performance plan). One unknown shown with its reason: CPU temperature "No
+reading" (Compy ships no temperature driver). **Phase 2 owner-rig exit: met.**
 
 ---
 
