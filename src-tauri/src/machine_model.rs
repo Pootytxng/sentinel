@@ -578,14 +578,18 @@ pub(crate) struct CompyChangeTruth {
     /// the wire so existing readers do not break; `in_effect_other_rig` and `in_effect_rig_unknown`
     /// are subsets of it, not addends.
     pub in_effect_total: usize,
-    /// Status `"applied"` but the live check says the state is no longer in effect — something
-    /// outside Compy reverted it. Distinct from a rollback Compy performed. Spans every rig
-    /// attribution; `not_on_this_rig` and `rig_unknown` below cover the whole ledger the same way.
+    /// CHANGES (one per `rec_id`) still recorded as applied, none of whose applied rows the live
+    /// check reads as on or can't-confirm: the read came back OFF (something outside Compy reverted
+    /// it) or nothing re-checks it. Distinct from a rollback Compy performed. Per change since #453,
+    /// so `active_now + in_effect_unknown + applied_but_not_in_effect + rolled_back` is the number
+    /// of distinct changes in the ledger.
     pub applied_but_not_in_effect: usize,
     /// CHANGES (one per `rec_id`) that are applied but whose live check established nothing: the
     /// probe could not read the machine, or Compy has no probe for this kind of change. Neither in
     /// effect nor reverted — the "can't confirm" group every screen shows apart (#392, #638, #453).
     pub in_effect_unknown: usize,
+    /// CHANGES (one per `rec_id`) whose every ledger row is rolled back (#453: per change, not per
+    /// row; a change rolled back and re-applied is counted by its applied state instead).
     pub rolled_back: usize,
     /// Stamped with a fingerprint `history::same_rig` matches to today's machine. Carried so a
     /// consumer rendering rig attribution can name the on-this-PC count instead of showing only
@@ -1052,22 +1056,12 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
 /// is capped for display; the evidence pass must still cover every row the counts cover, so the
 /// full projection is handed to [`compose_evidence`] and dropped after (#385 review).
 fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<CompyChangeFact>) {
-    let mut applied_but_not_in_effect = 0usize;
-    let mut rolled_back = 0usize;
     let mut on_this_rig = 0usize;
     let mut not_on_this_rig = 0usize;
     let mut rig_unknown = 0usize;
 
+    // Rig attribution stays per ROW: it is a fact about each recorded apply.
     for c in inp.applied_changes {
-        if c.status == "rolled_back" {
-            rolled_back += 1;
-        } else if !matches!(
-            c.active_check,
-            Some(ActiveCheck::On | ActiveCheck::Unreadable | ActiveCheck::Unrecognised)
-        ) {
-            // A successful OFF read, or a row in a status nothing re-checks.
-            applied_but_not_in_effect += 1;
-        }
         tally_rig_attribution(c.on_this_rig, &mut on_this_rig, &mut not_on_this_rig, &mut rig_unknown);
     }
 
@@ -1090,6 +1084,19 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
         .iter()
         .filter(|c| c.active_check == Some(ActiveCheck::On) && c.on_this_rig.is_none())
         .count();
+    // The rest of the per-change partition (#453 review): a change with no live row is "no longer
+    // in effect" while any of its rows is still applied, and "rolled back" only when all of them are.
+    let live_recs: std::collections::HashSet<&str> = live.iter().map(|c| c.rec_id.as_str()).collect();
+    let mut applied_recs: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut all_recs: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for c in inp.applied_changes {
+        all_recs.insert(c.rec_id.as_str());
+        if c.status != "rolled_back" {
+            applied_recs.insert(c.rec_id.as_str());
+        }
+    }
+    let applied_but_not_in_effect = applied_recs.difference(&live_recs).count();
+    let rolled_back = all_recs.len() - live_recs.len() - applied_but_not_in_effect;
 
     // EVERY row, newest first — deliberately NOT the capped display list. Capping here made the
     // evidence pass walk 25 rows while the counts above walked the whole ledger, so a ledger whose
@@ -1202,10 +1209,12 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
 /// One row per change (`rec_id`) that is on or cannot be confirmed: the newest apply whose live check
 /// reads On, Unreadable or Unrecognised represents it, because that is the apply an undo targets.
 /// Mirrors `liveChangeGroups` in `src/data/live-changes.ts` (#453): same filter, same "newest wins,
-/// a tie or an unparseable time keeps the first seen" rule.
+/// a tie (to the millisecond) or an unparseable time keeps the first seen" rule.
 fn live_change_groups(rows: &[AppliedChangeView]) -> Vec<&AppliedChangeView> {
-    fn time(c: &AppliedChangeView) -> Option<chrono::DateTime<chrono::FixedOffset>> {
-        chrono::DateTime::parse_from_rfc3339(&c.applied_at).ok()
+    // Millisecond precision, truncated, because that is all `Date.parse` keeps on the TS side:
+    // two applies inside one millisecond are a tie on both sides, and a tie keeps the first seen.
+    fn time(c: &AppliedChangeView) -> Option<i64> {
+        chrono::DateTime::parse_from_rfc3339(&c.applied_at).ok().map(|t| t.timestamp_millis())
     }
     let mut order: Vec<&str> = Vec::new();
     let mut by_rec: std::collections::HashMap<&str, &AppliedChangeView> = std::collections::HashMap::new();
@@ -2240,11 +2249,10 @@ mod machine_model_tests {
         assert_eq!(t.active_now, 3, "every change whose live check reads On is active on this PC");
         assert_eq!(t.in_effect_other_rig, 1);
         assert_eq!(t.in_effect_rig_unknown, 1);
-        assert_eq!(t.in_effect_total, t.active_now);
-        assert!(
-            t.in_effect_other_rig + t.in_effect_rig_unknown <= t.active_now,
-            "attribution is a breakdown of the active changes, never an addend"
-        );
+        assert_eq!(t.in_effect_total, 3);
+        // Attribution is a breakdown of the active changes, never an addend: 1 stamped here,
+        // 1 stamped elsewhere, 1 unstamped, and together exactly the 3 active.
+        assert_eq!(t.active_now - t.in_effect_other_rig - t.in_effect_rig_unknown, 1);
         assert_eq!(t.total_recorded, 5);
         assert_eq!(t.applied_but_not_in_effect, 1);
         assert_eq!(t.rolled_back, 1);
@@ -2263,7 +2271,10 @@ mod machine_model_tests {
     /// repeatedly, pre-stamp rows that read On, an other-rig row that reads On, one change Compy
     /// cannot read) is read here for Health and by `src/live-changes-parity.test.ts` for Optimize
     /// and History. All three must print the fixture's expected numbers. On the old per-row,
-    /// stamped-only count this ledger gave 4 active where the other screens gave 7.
+    /// stamped-only count this ledger gave 4 active where the other screens gave 7. The #453 review
+    /// added a same-millisecond tie with mixed checks (first seen wins on both sides; a nanosecond
+    /// compare picked the other row), a newer rollback over an older apply that still reads on, and
+    /// an undated row.
     #[test]
     fn active_and_unknown_counts_match_the_shared_ts_fixture() {
         let fx: serde_json::Value =
@@ -2303,6 +2314,11 @@ mod machine_model_tests {
         let want = |k: &str| fx["expected"][k].as_u64().expect("expected count") as usize;
         assert_eq!(t.active_now, want("active"), "Health's 'active now' is the shared count");
         assert_eq!(t.in_effect_unknown, want("cantConfirm"), "Health's can't-confirm is the shared count");
+        // The rest of the per-change partition, and the attribution subsets of `active_now`.
+        assert_eq!(t.applied_but_not_in_effect, want("notInEffect"));
+        assert_eq!(t.rolled_back, want("rolledBack"));
+        assert_eq!(t.in_effect_other_rig, want("otherRig"));
+        assert_eq!(t.in_effect_rig_unknown, want("rigUnknown"));
         assert_eq!(t.total_recorded, fx["rows"].as_array().map_or(0, Vec::len));
     }
 
@@ -2632,7 +2648,7 @@ mod machine_model_tests {
             ("Earliest dated record", "2026-07-01T00:00:00Z"),
             (
                 "Changes Compy applied",
-                "1 recorded · 1 active on this PC · 0 rolled back · 0 no longer in effect · 0 could not be checked",
+                "1 recorded (1 ledger entry) · 1 active on this PC · 0 rolled back · 0 no longer in effect · 0 could not be checked",
             ),
             ("In effect, other or unknown PC", "0 recorded on another PC · 0 unattributed"),
             ("Applied on this machine", "1 on this PC · 0 elsewhere · 0 unknown"),

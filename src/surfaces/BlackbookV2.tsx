@@ -124,7 +124,7 @@ export function BlackbookV2({
   // The tape's and the strip's ONE shared state — see `blackbook/logbook-view.ts`. Hooks may not be
   // called conditionally, so this runs on every path; it reads nothing and costs a fold over
   // records that the disabled paths simply never render.
-  const view = useLogbookView(records, health);
+  const view = useLogbookView(records, health, changes);
 
   // THE SPLIT is the logbook face only. The field guide is a library — a search field, a category
   // tree and a grading panel — and it has no evidence column to sit beside, so it stays the linear

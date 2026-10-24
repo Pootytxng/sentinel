@@ -652,8 +652,16 @@ pub(crate) fn machine_model_section(
         value: match c.ledger_unreadable {
             Some(_) => "Unreadable".into(),
             None => format!(
-                "{} recorded · {} active on this PC · {} rolled back · {} no longer in effect · {} could not be checked",
-                c.total_recorded, c.active_now, c.rolled_back, c.applied_but_not_in_effect, c.in_effect_unknown
+                // Every count on this line is per CHANGE (one per rec_id, #453 review); the ledger
+                // row count is named as such so the two units never share a word.
+                "{} recorded ({} ledger {}) · {} active on this PC · {} rolled back · {} no longer in effect · {} could not be checked",
+                c.active_now + c.in_effect_unknown + c.applied_but_not_in_effect + c.rolled_back,
+                c.total_recorded,
+                if c.total_recorded == 1 { "entry" } else { "entries" },
+                c.active_now,
+                c.rolled_back,
+                c.applied_but_not_in_effect,
+                c.in_effect_unknown
             ),
         },
         note: Some(match c.ledger_unreadable.as_deref() {

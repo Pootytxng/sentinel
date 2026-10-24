@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import type { TFunction } from "i18next";
 import { knownIncomplete } from "../../design/LedgerHealthNotice";
-import type { LedgerHealth } from "../../types";
+import { liveChangeGroups } from "../../data/live-changes";
+import type { AppliedChange, LedgerHealth } from "../../types";
 import type { LogbookRecord } from "./logbook";
 
 // logbook-view — the Logbook's view state, hoisted out of BlackbookConsole (comp fidelity
@@ -48,7 +49,11 @@ export function manageJumpLabel(
     : t("blackbook.blackbookConsole.manageJump", { count: counts.active });
 }
 
-export function useLogbookView(records: LogbookRecord[], health: LedgerHealth | null) {
+export function useLogbookView(
+  records: LogbookRecord[],
+  health: LedgerHealth | null,
+  changes: readonly AppliedChange[],
+) {
   // The Receipts Strip's tape filter (owner pick 2026-07-13, concept A): null = the full tape.
   // Session-local by design — a filter is a glance tool, not a preference.
   const [filter, setFilter] = useState<LogbookKind | null>(null);
@@ -61,20 +66,13 @@ export function useLogbookView(records: LogbookRecord[], health: LedgerHealth | 
 
   // The changes an undo can still act on, split the way Health and Optimize split them (#453):
   // `active` is the changes whose live check reads on (the number Health prints), `cantConfirm`
-  // the ones Compy cannot read either way. The records are already one per change (C-11 collapse,
-  // the newest live apply representing it) and carry `changeLiveState` from data/live-changes.ts,
-  // the same rule `liveChangeGroups` applies for Optimize; src/live-changes-parity.test.ts pins
-  // the two to one fixture.
+  // the ones Compy cannot read either way. Counted by `liveChangeGroups` over the raw ledger rows,
+  // the one TS definition Optimize also uses, and NOT off the tape: the tape drops a row with no
+  // apply time (it cannot be placed), but an undated change that reads on is still on (#453 review).
   const undoableChanges = useMemo(() => {
-    let active = 0;
-    let cantConfirm = 0;
-    for (const r of records) {
-      if (r.kind !== "change") continue;
-      if (r.active) active++;
-      else if (r.unconfirmed) cantConfirm++;
-    }
-    return { active, cantConfirm };
-  }, [records]);
+    const g = liveChangeGroups(changes);
+    return { active: g.active.length, cantConfirm: g.cantConfirm.length };
+  }, [changes]);
   // Per-kind counts + scam flags — the strip's numbers are DERIVED from the same records the tape
   // renders (they can never disagree with it).
   const counts = useMemo(() => {

@@ -152,9 +152,11 @@ function collapseRepeats(applies: LogbookChange[]): LogbookChange[] {
     // only defensible choice: it is the apply whose snapshot an undo would restore from.
     // "Live" includes an apply Compy cannot confirm either way (#625): it may still be in place,
     // so it is still what an undo has to target.
+    // A tie (same millisecond) keeps the FIRST seen, the rule `liveChangeGroups` and the Rust
+    // `live_change_groups` use, so the tape's undo target is the apply the counts describe (#453).
     const live = g
       .filter((r) => r.active || r.unconfirmed)
-      .reduce<LogbookChange | null>((x, y) => (x && x.at > y.at ? x : y), null);
+      .reduce<LogbookChange | null>((x, y) => (x && x.at >= y.at ? x : y), null);
     const rep = live ?? newest;
     out.push({ ...rep, at: newest.at, firstAt: oldest.at, count: g.length });
   }

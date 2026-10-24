@@ -13,7 +13,7 @@ import type {
   LogbookSession,
   LogbookAutopsy,
 } from "./logbook";
-import type { SessionSummary, LedgerHealth } from "../../types";
+import type { AppliedChange, SessionSummary, LedgerHealth } from "../../types";
 import type { InEffectCounts } from "../../data/machine-model";
 
 // Guards for the Logbook console face (Console HUD Phase 4). Covers the T4 rails: honest empty
@@ -93,6 +93,27 @@ const autopsy = (over: Partial<LogbookAutopsy> = {}): LogbookAutopsy => ({
 // The Machine Model's in-effect count (#625). Default: one change on, none unconfirmed.
 const COUNTED_ONE: InEffectCounts = { kind: "counted", activeNow: 1, unknown: 0, totalRecorded: 1 };
 
+// The harness hands the view hand-built tape records; the undo route counts the ledger ROWS
+// (#453), so each record is turned back into the one applied row it stands for.
+function changesOf(records: LogbookRecord[]): AppliedChange[] {
+  return records.flatMap((r) =>
+    r.kind !== "change"
+      ? []
+      : [
+          {
+            id: r.id,
+            rec_id: r.id,
+            rec_title: r.title,
+            applied_at: new Date(r.at).toISOString(),
+            snapshot: null,
+            status: r.rolledBack ? ("rolled_back" as const) : ("applied" as const),
+            is_still_active: r.active || r.unconfirmed,
+            active_check: r.rolledBack ? null : r.active ? "on" : r.unconfirmed ? "unreadable" : "off",
+          },
+        ],
+  );
+}
+
 function Logbook({
   records,
   health = null,
@@ -104,7 +125,7 @@ function Logbook({
   health?: LedgerHealth | null;
   onReviewSession?: () => void;
 } & Partial<Omit<Parameters<typeof BlackbookConsole>[0], "view">>) {
-  const view = useLogbookView(records, health);
+  const view = useLogbookView(records, health, changesOf(records));
   const reduced = useReducedMotion();
   return (
     <>

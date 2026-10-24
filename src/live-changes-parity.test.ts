@@ -59,8 +59,19 @@ describe("Health, Optimize and History count the same active changes (#453)", ()
     expect(gameModeApplied.length).toBeGreaterThan(1);
     expect(fixture.rows.some((r) => r.active_check === "on" && r.on_this_rig === null)).toBe(true);
     expect(fixture.rows.some((r) => r.active_check === "unreadable")).toBe(true);
-    expect(ACTIVE).toBe(7);
-    expect(CANT_CONFIRM).toBe(1);
+    // #453 review: a same-millisecond tie with mixed checks, a newer rollback over an older apply
+    // that still reads on, and an undated row.
+    expect(fixture.rows.filter((r) => r.rec_id === "tie-rec").map((r) => r.active_check)).toEqual([
+      "unreadable",
+      "on",
+    ]);
+    expect(fixture.rows.filter((r) => r.rec_id === "rb-rec").map((r) => r.status)).toEqual([
+      "applied",
+      "rolled_back",
+    ]);
+    expect(fixture.rows.some((r) => r.applied_at === "")).toBe(true);
+    expect(ACTIVE).toBe(9);
+    expect(CANT_CONFIRM).toBe(2);
   });
 
   it("the shared helper: one per change, live On whatever the rig stamp, can't-confirm apart", () => {
@@ -71,12 +82,16 @@ describe("Health, Optimize and History count the same active changes (#453)", ()
         "game-mode",
         "hags-enable",
         "nagle-disable",
+        "rb-rec",
+        "undated-rec",
         "pcie-aspm-off",
         "sysmain-disable",
         "usb-selective-suspend-off",
       ].sort(),
     );
-    expect(g.cantConfirm.map((c) => c.rec_id)).toEqual(["bloat-task:ceip-usb"]);
+    expect(g.cantConfirm.map((c) => c.rec_id).sort()).toEqual(["bloat-task:ceip-usb", "tie-rec"]);
+    // A same-millisecond tie keeps the first row seen, whatever the sub-millisecond digits say.
+    expect(g.cantConfirm.find((c) => c.rec_id === "tie-rec")?.id).toBe("tie-1");
     // The newest live apply represents a repeated change: it is what an undo targets.
     expect(g.active.find((c) => c.rec_id === "game-mode")?.id).toBe("gm-5");
   });
@@ -92,7 +107,7 @@ describe("Health, Optimize and History count the same active changes (#453)", ()
 
   it("History: the undo route counts the same active changes and names the can't-confirm one apart", () => {
     const records = buildLogbook({ changes });
-    const { result } = renderHook(() => useLogbookView(records, null));
+    const { result } = renderHook(() => useLogbookView(records, null, changes));
     expect(result.current.undoableChanges).toEqual({ active: ACTIVE, cantConfirm: CANT_CONFIRM });
     const en = i18n.getFixedT("en");
     expect(manageJumpLabel(en, result.current.undoableChanges)).toBe(
