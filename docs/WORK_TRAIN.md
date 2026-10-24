@@ -72,10 +72,13 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
       `_archive/compy-sessions/worktree-salvage-2026-10-23/wt-prune-2026-10-23`. The `.codex` one is left alone.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
-- [ ] **FOCUS** (first: it blocks pushes whenever the owner is on the PC) A quiet Compy launch takes the foreground from the owner's app: `launch-focus-guard`
-      failed 3 of 4 pushes on 2026-10-23 evening with Firefox in front (54/55 samples), passed when
-      nothing was in front. Reproduce, then fix in the launch path. Until fixed: do not push while the
-      owner is using the PC (every push launches Compy).
+- [ ] **FOCUS** (first; needs FULL mode, it launches Compy) Diagnosed 2026-10-24: not a Compy regression.
+      Compy asks for a non-activating show (focus=false → tao SW_SHOWNOACTIVATE), but the launchers
+      (`scripts/foreground-probe.ps1`, `scripts/ship-reinstall.ps1`) use Start-Process, whose STARTUPINFO
+      SW_SHOWNORMAL overrides the first ShowWindow; Windows' foreground lock then sometimes allows it
+      (traces in `logs/foreground-traces/`). Fix: (1) launch compy.exe with SW_SHOWNOACTIVATE in STARTUPINFO
+      from both scripts; (2) `launch-focus-guard` takes timing from the trace (first in-family FOREGROUND
+      event with fgPid in family vs firstShowMs) and filters FOREGROUND on fgPid. Prove with one strict run.
 - [ ] **#631** Rollback that ran but couldn't save reads as a failure.
 - [x] **#616** Roll back an apply whose receipt can't be built or saved (orphan change). Ported from the
       Sep 28 branch onto main 2026-10-23 (`claude/train-616`, head 0b8eb85c): cargo test 1427/0, clippy clean,
