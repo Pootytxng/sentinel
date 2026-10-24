@@ -25,8 +25,8 @@ rig first; anything shipped to the friend goes through the normal updater.
 8. **Report.** End the session with three lines (rule 7): what you can see now / what changed under
    the hood / what I need from you. Keep everything else out of the report.
 
-**Stop rules.** A full-screen game is in front, or the owner is using the PC → no UI driving, no installs;
-code-only work is fine. A gate fails twice on the same cause → stop, write the blocker under the item,
+**Stop rules.** A full-screen game is in front, or the owner is using the PC → no UI driving, no installs,
+and no pushes (the pre-push gate launches Compy); code-only work is fine. A gate fails twice on the same cause → stop, write the blocker under the item,
 move to the next item. Never change Windows settings outside Compy's own apply/rollback. Never publish a
 release, sign, or touch credentials (owner territory).
 
@@ -66,6 +66,10 @@ release, sign, or touch credentials (owner territory).
 - [ ] **#622** Health layout below ~600 px.
 - [ ] **#677** Clipped session metadata and combined-effect tooltips.
 - [ ] **#638** Phase 2 follow-ons from PR #634.
+- [ ] **FOCUS** A quiet Compy launch takes the foreground from the owner's app: `launch-focus-guard`
+      failed 3 of 4 pushes on 2026-10-23 evening with Firefox in front (54/55 samples), passed when
+      nothing was in front. Reproduce, then fix in the launch path. Until fixed: do not push while the
+      owner is using the PC (every push launches Compy).
 - [ ] **GB-picker** `game-bar-disable` not offered in the Trial picker on the owner rig with both
       values = 1 (seen 2026-10-23 07:46 on a fresh Compy). Reproduce, then fix or close.
 - [ ] **#686-followup** One `LiveReads` per Trial start instead of one PowerShell spawn per row.
