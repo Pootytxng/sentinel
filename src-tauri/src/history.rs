@@ -1269,6 +1269,27 @@ fn elevated_item_outcome(
     }
 }
 
+/// PURE: the `Err` the batch returns when the receipts for its admin step can't be committed (so
+/// those changes were undone). `admin_outcomes` are the admin step's per-item outcomes. The items it
+/// didn't confirm aren't in that commit, and the report that would have carried their warnings
+/// ("can't be sure it changed nothing: check this setting in Windows") is dropped with the `Err`,
+/// so their reasons go in the error text instead.
+fn admin_commit_error(e: String, recorded_before_admin: bool, admin_outcomes: &[BatchItemOutcome]) -> String {
+    let mut text = e;
+    if recorded_before_admin {
+        text.push_str(" The changes made before the admin step are recorded as normal.");
+    }
+    let skipped: Vec<String> = admin_outcomes
+        .iter()
+        .filter(|o| o.status == "skipped")
+        .map(|o| format!("{}: {}", o.rec_title, o.reason.as_deref().unwrap_or("skipped.")))
+        .collect();
+    if !skipped.is_empty() {
+        text.push_str(&format!(" Not applied by the admin step: {}", skipped.join(" ")));
+    }
+    text
+}
+
 #[tauri::command]
 pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<BatchApplyReport, String> {
     // ── Validation — BEFORE the lock and before any mutation. The whole batch is refused (not
@@ -1386,6 +1407,7 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         let _ = std::fs::remove_file(&receipts_path);
         let receipts = parse_batch_receipts(&text);
         let mut made_elevated: Vec<Made> = Vec::new();
+        let first_admin_outcome = outcomes.len();
         for d in staged {
             match elevated_item_outcome(&run, &receipts, &d.rec_id) {
                 Ok(()) => {
@@ -1398,11 +1420,7 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         }
         if !made_elevated.is_empty() {
             record_receipts(&root, &mut history, made_elevated).map_err(|e| {
-                if recorded_before_admin {
-                    format!("{e} The changes made before the admin step are recorded as normal.")
-                } else {
-                    e
-                }
+                admin_commit_error(e, recorded_before_admin, &outcomes[first_admin_outcome..])
             })?;
         }
     }
@@ -2263,6 +2281,33 @@ mod receipt_commit_tests {
         let err = roll_back(&mut history, 0, Ok(()), Ok(()), ActiveCheck::Off, &seen).expect_err("no contract");
         assert!(matches!(err, RollbackError::Failed(_)), "{err:?}");
         assert!(seen.rollbacks.borrow().is_empty() && seen.saves.borrow().is_empty());
+    }
+
+    // #616 review: when the admin step's receipts can't be committed, the warnings for the items it
+    // didn't confirm must still reach the user, in the error text.
+    #[test]
+    fn a_failed_admin_commit_keeps_the_skipped_items_warnings() {
+        let warn = "No completion receipt was written for this item. The admin step also stopped with \
+                    an error (exit 1), so Compy can't be sure it changed nothing: check this setting in Windows.";
+        let outcomes = vec![
+            outcome_applied("fast-startup-off", "Disable Fast Startup"),
+            outcome_skipped("hags-enable", "Turn on HAGS", warn.to_string()),
+            outcome_skipped("pcie-aspm-off", "PCIe power saving off", "The elevated step failed.".to_string()),
+        ];
+        for before in [false, true] {
+            let text = admin_commit_error("Compy made this change but couldn't save it.".into(), before, &outcomes);
+            assert!(text.starts_with("Compy made this change but couldn't save it."), "{text}");
+            assert_eq!(text.contains("recorded as normal"), before, "{text}");
+            assert!(text.contains(&format!("Turn on HAGS: {warn}")), "{text}");
+            assert!(text.contains("PCIe power saving off: The elevated step failed."), "{text}");
+            assert!(!text.contains("Disable Fast Startup"), "an applied item is not a skip: {text}");
+        }
+        let none = admin_commit_error("e".into(), false, &outcomes[..1]);
+        assert_eq!(none, "e", "no skips, nothing added");
+        assert!(
+            callers_of("admin_commit_error").contains(&"apply_recommendations_batch".to_string()),
+            "the batch builds its admin-commit error through admin_commit_error"
+        );
     }
 
     fn exit_status(code: u32) -> std::process::ExitStatus {
