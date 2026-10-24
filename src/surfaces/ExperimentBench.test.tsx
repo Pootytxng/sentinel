@@ -812,4 +812,67 @@ describe("ExperimentBench (armed)", () => {
       window.removeEventListener(LEDGER_CHANGED_EVENT, ledger);
     }
   });
+
+  // #621: the bench's writes moved the ledger but never reached App's refresh, so the Optimize station
+  // beside it (App's recs/changes) kept showing the change as it was until a refocus. Each write now
+  // announces the change AND runs App's refresh (`onChanged`, which LabGround passes) — failed ones too,
+  // since a failed start/conclude/restore may still have applied or restored.
+  it.each([
+    ["a start", "Start experiment", undefined],
+    ["a failed start", "Start experiment", { start_experiment: "experiment aborted — Compy restored it" }],
+    ["a conclude", "Conclude with my latest", undefined],
+    ["a failed conclude", "Conclude with my latest", { conclude_experiment: "restore failed — the setting still reads changed" }],
+    ["a restore", "Restore now", undefined],
+    ["a failed restore", "Restore now", { restore_experiment: "restore failed — the setting still reads changed" }],
+  ])("announces the ledger change and refreshes App after %s", async (_what, button, refuse) => {
+    state.gate = true;
+    state.sessions = [VALORANT_SESSION];
+    if (button === "Start experiment") {
+      state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+      state.sim = WORTH_TESTING_SIM;
+    } else {
+      state.experiments = [RUNNING_EXPERIMENT];
+    }
+    const onChanged = vi.fn();
+    render(<ExperimentBench onChanged={onChanged} />);
+    await screen.findByTestId("experiment-bench");
+    if (button === "Start experiment") await pickChange("test-rec");
+    const control = await screen.findByRole("button", { name: new RegExp(button) });
+    await waitFor(() => expect(control).toBeEnabled());
+    state.refuse = refuse ?? {};
+    const order: string[] = [];
+    const ledger = vi.fn(() => order.push("announce"));
+    onChanged.mockImplementation(() => order.push("refresh"));
+    window.addEventListener(LEDGER_CHANGED_EVENT, ledger);
+    try {
+      fireEvent.click(control);
+      await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+      expect(ledger).toHaveBeenCalledTimes(1);
+      expect(order).toEqual(["announce", "refresh"]);
+      if (refuse) expect(await screen.findByRole("alert")).toBeInTheDocument();
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, ledger);
+    }
+  });
+
+  // #621: the announcement wakes the bench's own listener while the old pick is still set, starting a
+  // quiet re-simulation of it. A started experiment clears the pick; that late answer must not bring
+  // the simulator card back.
+  it("a started experiment's announcement does not bring the cleared simulator card back", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull());
+    // Let the quiet re-simulation the announcement started settle, then look again.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+    expect(screen.queryByText(WORTH_TESTING_SIM.why)).toBeNull();
+  });
 });

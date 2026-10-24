@@ -13,6 +13,7 @@ import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import { LEDGER_CHANGED_EVENT } from "../types";
+import { writeLedger } from "../data/ledger-write";
 import { prettyGameName } from "./game-name";
 import { knownFps } from "../lib/session-metrics";
 import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
@@ -217,7 +218,9 @@ function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSumma
   return candidates[0] ?? null;
 }
 
-export default function ExperimentBench() {
+/** `onChanged` is App's refresh (LabGround passes it). Every bench write moves the Trust Ledger, and
+ *  App's `recs`/`changes` (the Optimize station beside the bench) re-read only through it (#621). */
+export default function ExperimentBench({ onChanged }: { onChanged?: () => Promise<unknown> | void } = {}) {
   const { t } = useTranslation();
   const [gate, setGate] = useState(false);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
@@ -375,30 +378,60 @@ export default function ExperimentBench() {
       ? [...pickable, ...recs.filter((r) => r.id === pickId)]
       : pickable;
 
+  // Every bench write goes through writeLedger, which announces LEDGER_CHANGED_EVENT (the Machine
+  // Model, this bench's own wake listener) and then runs `settle`: the bench's re-read and App's
+  // refresh, so the Optimize station beside the bench stops showing the ledger as it was (#621).
+  const settle = async () => {
+    await reload();
+    await onChanged?.();
+  };
+
+  // A write can fail AFTER it moved the ledger (a start whose target check restored, a conclude or
+  // restore whose restore failed part-way). writeLedger announces nothing when the command rejects,
+  // so the bench announces and settles itself; when only the refresh failed, the write was already
+  // announced and the refresh is simply tried again.
+  async function runWrite(write: (refresh: () => Promise<void>) => Promise<unknown>, onWritten?: () => void) {
+    let announced = false;
+    try {
+      await write(async () => {
+        announced = true;
+        onWritten?.();
+        await settle();
+      });
+    } catch (e) {
+      // A loud restore-failed error is surfaced verbatim — never hidden (honesty rail).
+      setError(String(e));
+      if (!announced) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
+      await settle().catch(() => {});
+    }
+  }
+
   async function startExperiment() {
     if (!sim || !baseline) return;
     setBusy(true);
     setError(null);
     try {
-      await invoke<Experiment>("start_experiment", {
-        recId: sim.rec_id,
-        recTitle: sim.rec_title,
-        // By id only: the backend reads the game and the numbers from its own session store.
-        baselineSessionId: baseline.started_at,
-        hypothesis,
-      });
-      setSim(null);
-      setPickId("");
-      await reload();
-      // Starting an experiment applied its change through the audited path — the ledger changed, so
-      // sibling surfaces (Optimize's applicable list, the Trust Ledger) re-derive. See types.ts note.
-      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
-    } catch (e) {
-      // A start can fail AFTER it applied (a failed target check restores, or fails to): the record
-      // and the ledger may both have moved, so re-read and tell the siblings, as restore does.
-      setError(String(e));
-      await reload();
-      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
+      await runWrite(
+        (refresh) =>
+          writeLedger<Experiment>(
+            "start_experiment",
+            {
+              recId: sim.rec_id,
+              recTitle: sim.rec_title,
+              // By id only: the backend reads the game and the numbers from its own session store.
+              baselineSessionId: baseline.started_at,
+              hypothesis,
+            },
+            refresh,
+          ),
+        () => {
+          // The announcement just started a quiet re-simulation of the old pick (the wake listener);
+          // claim a newer sim id so its answer is dropped and the cleared card can't come back.
+          ++simReq.current;
+          setSim(null);
+          setPickId("");
+        },
+      );
     } finally {
       setBusy(false);
     }
@@ -408,22 +441,21 @@ export default function ExperimentBench() {
     setBusy(true);
     setError(null);
     try {
-      await invoke<Experiment>("conclude_experiment", {
-        experimentId: exp.id,
-        // By id only: the backend reads the session itself and refuses one that isn't comparable to
-        // the baseline, rather than trusting our same-game filter above.
-        treatmentSessionId: treatment.started_at,
-        crashed: false,
-      });
-      await reload();
-    } catch (e) {
-      // A loud restore-failed error is surfaced verbatim — never hidden (honesty rail).
-      setError(String(e));
-      await reload();
+      // A conclude that doesn't keep restores the change through the audited path.
+      await runWrite((refresh) =>
+        writeLedger<Experiment>(
+          "conclude_experiment",
+          {
+            experimentId: exp.id,
+            // By id only: the backend reads the session itself and refuses one that isn't comparable
+            // to the baseline, rather than trusting our same-game filter above.
+            treatmentSessionId: treatment.started_at,
+            crashed: false,
+          },
+          refresh,
+        ),
+      );
     } finally {
-      // Every conclude that doesn't keep restores through the audited path, and a failed one may have
-      // restored too: the ledger may have moved either way, so siblings re-derive.
-      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       setBusy(false);
     }
   }
@@ -432,15 +464,8 @@ export default function ExperimentBench() {
     setBusy(true);
     setError(null);
     try {
-      await invoke<Experiment>("restore_experiment", { experimentId: exp.id });
-      await reload();
-    } catch (e) {
-      setError(String(e));
-      await reload();
+      await runWrite((refresh) => writeLedger<Experiment>("restore_experiment", { experimentId: exp.id }, refresh));
     } finally {
-      // Restoring rolls the change back through the audited path, and a failed restore may have got
-      // part of the way — the ledger may have moved either way, so siblings re-derive.
-      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       setBusy(false);
     }
   }
