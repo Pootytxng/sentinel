@@ -209,6 +209,66 @@ describe("launches hand Compy SW_SHOWNOACTIVATE, not Start-Process's SW_SHOWNORM
     expect(PROBE_TEXT, "the result must say how it launched").toMatch(/launchShowWindow = \[int\]\$launchShowWindow/);
   });
 
+  // 2026-10-24: Start-Target declared `param([string[]]$Args, ...)`. `$Args` is PowerShell's automatic
+  // variable; a parameter of that name binds to nothing, so every probe launch dropped its argv and
+  // the "--no-activate" launch this guard measures was a plain, activating launch. That is the
+  // FOREGROUND-at-first-SHOW every trace before this date records. PowerShell names are
+  // case-insensitive, hence the `i` flag.
+  it("no probe function names a parameter $Args (PowerShell's automatic variable drops the argv)", () => {
+    expect(code(PROBE_TEXT)).not.toMatch(/\[[\w.\[\]]+\]\s*\$args\b/i);
+    expect(code(PROBE_TEXT)).not.toMatch(/-Args\s/i);
+  });
+
+  it.runIf(windows)(
+    "measured: the probe's launch really hands the child its argv",
+    () => {
+      // A GUI-subsystem child that writes its own argv next to itself and then idles until the probe
+      // kills it: no window, no console.
+      const dir = mkdtempSync(join(tmpdir(), "compy-argv-"));
+      const exe = join(dir, "argvdump.exe");
+      const out = join(dir, "argv.txt");
+      const build = join(dir, "build.ps1");
+      writeFileSync(
+        build,
+        [
+          '$ErrorActionPreference = "Stop"',
+          `Add-Type -OutputType WindowsApplication -OutputAssembly '${exe}' -TypeDefinition @'`,
+          "public static class P {",
+          "  public static void Main(string[] args) {",
+          '    string f = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "argv.txt");',
+          '    System.IO.File.WriteAllText(f, string.Join("|", args));',
+          "    System.Threading.Thread.Sleep(30000);",
+          "  }",
+          "}",
+          "'@",
+        ].join("\r\n"),
+      );
+      try {
+        const built = spawnSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", build], {
+          encoding: "utf8",
+          windowsHide: true,
+          timeout: 90_000,
+        });
+        expect(built.status, `stderr: ${built.stderr}`).toBe(0);
+        const run = spawnSync(
+          "powershell.exe",
+          ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", PROBE, "-FilePath", exe, "-ArgumentList", "--no-activate", "-NoGrant", "-DurationSeconds", "1", "-SettleMs", "0"],
+          { encoding: "utf8", windowsHide: true, timeout: 90_000 },
+        );
+        expect(run.status, `stderr: ${run.stderr}`).toBe(0);
+        expect(existsSync(out), "the child never started").toBe(true);
+        expect(readFileSync(out, "utf8")).toBe("--no-activate");
+      } finally {
+        try {
+          rmSync(dir, { recursive: true, force: true });
+        } catch {
+          /* a just-killed child can hold the exe for a moment; the temp dir is not evidence */
+        }
+      }
+    },
+    90_000,
+  );
+
   it("every detached ship relaunch of Compy passes -NoActivate", () => {
     const relaunches = SHIP.split(/\r?\n/).filter((l) => /Start-NativeProcess -Command \$exe -Detached/.test(l));
     expect(relaunches.length).toBeGreaterThan(0);
@@ -571,6 +631,12 @@ export const SW_SHOWNOACTIVATE = 4;
  * show. The probe now launches with SW_SHOWNOACTIVATE and reports it (`launchShowWindow`), and with
  * that nothing about the launch can activate the window -- so a foreground at the first show is the
  * app's own and FAILS. A reading without `launchShowWindow` (older traces) keeps the old rule.
+ *
+ * READ EVERY TRACE RECORDED BEFORE 2026-10-24 ~11:40 AS A LOUD LAUNCH. Until then the probe's
+ * Start-Target took its argv in a parameter named `$Args`, which binds to nothing, so "--no-activate"
+ * never reached Compy (see the argv tests above). The FOREGROUND at first SHOW in those traces is the
+ * activating launch an owner's click gets, refused or allowed by Windows' foreground lock. With the
+ * argv delivered, quiet launches record no FOREGROUND and no FOCUS for Compy's window at all.
  */
 export function runtimeVerdict(result) {
   const s = summarizeTrace(result);

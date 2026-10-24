@@ -157,7 +157,11 @@ function Measure-Foreground {
 }
 
 function Start-Target {
-  param([string[]]$Args, [switch]$Grant)
+  # NOT `$Args`: that is PowerShell's automatic variable, and a parameter of that name binds to
+  # nothing -- the function sees an EMPTY list whatever the caller passes. Measured 2026-10-24: every
+  # probe launch before this rename dropped its argv, so the guard's "--no-activate" launch was a
+  # plain (activating) launch, and the FOREGROUND at first SHOW it recorded was the LOUD path.
+  param([string[]]$LaunchArgs, [switch]$Grant)
   # GRANT the launch permission to come forward -- INITIAL launch only (see the -RelaunchWith note).
   # Windows refuses SetForegroundWindow from a process that has not earned foreground rights, and a
   # probe run from a hidden shell often has not. Left alone, a quiet launch could pass for the wrong
@@ -168,7 +172,7 @@ function Start-Target {
   # NOT Start-Process: it always sets STARTUPINFO to SW_SHOWNORMAL, which overrides the app's first
   # ShowWindow (WORK_TRAIN item FOCUS). CreateProcessW hands over $launchShowWindow instead.
   $commandLine = '"' + $FilePath + '"'
-  foreach ($a in @($Args)) {
+  foreach ($a in @($LaunchArgs)) {
     if ($null -eq $a -or $a -eq "") { continue }
     $commandLine += " " + $(if ($a -match '[\s"]') { '"' + ($a -replace '"', '\"') + '"' } else { $a })
   }
@@ -338,7 +342,7 @@ $hook = New-Object CompyProbe.EventHook
 $hook.Start()
 $hook.ZeroMs = $hook.Clock.ElapsedMilliseconds
 
-$started = Start-Target -Args $ArgumentList -Grant:(-not $NoGrant)
+$started = Start-Target -LaunchArgs $ArgumentList -Grant:(-not $NoGrant)
 $proc = $started.Process
 $relaunchProc = $null
 try {
@@ -347,7 +351,7 @@ try {
   $relaunch = $null
   if ($RelaunchWith -ne "none") {
     $relaunchArgs = if ($RelaunchWith -eq "quiet") { @("--no-activate") } else { @() }
-    $relaunchStart = Start-Target -Args $relaunchArgs
+    $relaunchStart = Start-Target -LaunchArgs $relaunchArgs
     $relaunchProc = $relaunchStart.Process
     # The measurement target stays the FIRST process: the second one exits almost immediately after
     # handing over its argv, and the window that may or may not come forward belongs to the first.

@@ -9,8 +9,9 @@ using System.Text;
 // STARTF_USESHOWWINDOW set, wShowWindow replaces whatever show command the app passed. Start-Process
 // and a ShellExecute launch always set it, to SW_SHOWNORMAL (an ACTIVATING show), so Compy's own
 // non-activating show (tao turns focus=false into SW_SHOWNOACTIVATE) was overridden, and Windows'
-// foreground lock then sometimes let the launch take the owner's foreground. Traces in
-// logs/foreground-traces/ show the foreground moving to Compy 1ms after its first SHOW.
+// foreground lock then decided whether the launch took the owner's foreground. (The FOREGROUND at
+// first SHOW in the 2026-10-24 traces turned out to be a different bug: the probe dropped its argv,
+// so those launches were not quiet at all. This helper still removes the STARTUPINFO override.)
 //
 // .NET cannot express this: ProcessStartInfo.WindowStyle has no no-activate value, and a
 // UseShellExecute=false launch leaves wShowWindow unset rather than set to SW_SHOWNOACTIVATE. So this
