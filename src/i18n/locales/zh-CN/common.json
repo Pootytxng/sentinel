@@ -194,6 +194,7 @@
     "listTruncated": "Compy 的模型只列出最新的 {{shown}} 项(共 {{total}} 项记录),这个区间内更早的更改不会在这里列名。",
     "sinceRolledBack": "(之后已回滚)"
   },
+  "undoUnrecorded": "撤销已在 Windows 上生效，但 Compy 没能把它记入历史记录，所以「已应用与历史记录」里可能仍显示这项更改。如不确定，请在 Windows 中检查该设置。",
   "ledgerHealth": {
     "activeUnknown": "未知 —— Compy 读不到自己的记录",
     "activePending": "仍在读取 Compy 的记录",

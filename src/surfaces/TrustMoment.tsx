@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { writeLedger } from "../data/ledger-write";
+import { isUnrecordedUndo } from "../data/rollback-error";
 import { useTranslation } from "react-i18next";
 import type { Recommendation, AppliedChange } from "../types";
 import { friendlyLabel } from "../data/friendly-labels";
@@ -91,7 +92,12 @@ export function TrustMoment({
       await writeLedger("rollback_change", { changeId: change.id });
     } catch (e) {
       // Honest, unsoftened: the change is real and still active — say exactly where to undo it.
-      setErrorMsg(t("home.trustMoment.errors.rollbackFailed", { error: String(e) }));
+      // #631: an undo that ran but couldn't be saved is not a failed undo — never say "still active".
+      setErrorMsg(
+        isUnrecordedUndo(e)
+          ? t("common.undoUnrecorded")
+          : t("home.trustMoment.errors.rollbackFailed", { error: String(e) }),
+      );
       setPhase("error");
       onChanged();
       return;
