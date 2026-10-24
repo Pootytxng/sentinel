@@ -410,10 +410,10 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
   it("the start note names only other settings; the stored count stays the sessions' count", () => {
     const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
     expect(start, "the note counts the setting under test again").toMatch(
-      /let others = other_active_changes\(rows, &rec_id\);\s*let warning = attribution_warning\(others\);/,
+      /let others = other_active_changes\(&view\.active_recs, &rec_id\);\s*let warning = attribution_warning\(others\);/,
     );
     expect(start, "the stored count no longer matches what sessions record").toContain("active_changes_at_start: active,");
-    expect(fnBody(EXPERIMENT, "pub(crate) fn other_active_changes(")).toContain("applied && rec != own_rec");
+    expect(fnBody(EXPERIMENT, "pub(crate) fn other_active_changes(")).toContain('rec.as_str() != own_rec');
   });
 
   // #620: startup toggles, telemetry-task disables and session suspends have no catalog read, so a
@@ -438,7 +438,9 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
     expect(views).toContain("into_view_with(c, &reads)");
     const summary = fnBody(HISTORY, "fn summarize_history(");
     expect(summary).toContain("let reads = LiveReads::default();");
-    expect(summary).toContain("check_change_active(c, &reads)");
+    // 453-f1: every row is read once through the same pass, then counted by the shared rule.
+    expect(summary).toContain("check_row_state(c, &reads)");
+    expect(fnBody(HISTORY, "fn summarize_checked(")).toContain("live_change_groups(&rows)");
   });
 
   it("launch diagnostics never call a closed interrupted start unresolved or Pending", () => {
@@ -501,15 +503,18 @@ describe("a Trial start counts its changes from the one ledger it loaded (#668)"
     expect(view, "the start no longer folds its view from the loaded rows").toBeGreaterThan(
       start.indexOf("ledger_for_one_change_checks("),
     );
-    expect(start).toContain("let active = view.active_changes;");
+    expect(start).toContain("let active = view.active;");
     expect(start).toContain("active_changes_at_start: active,");
     const checked = fnBody(EXPERIMENT, "fn baseline_checked_view<'a>(");
-    expect(checked).toContain("active_now: crate::history::summarize_history(changes).active,");
-    expect(checked).toContain("active_changes: crate::history::active_changes_in(changes),");
+    // 453-f1 review: one summary of the one load, by the one shared rule, feeds every count.
+    expect(checked).toContain("let summary = crate::history::summarize_history(changes);");
+    expect(checked).toContain("counts: summary.session_counts(),");
+    expect(checked).toContain("active: summary.active,");
+    expect(checked).not.toContain("active_changes_in");
     expect(checked).toContain("baseline_is_current(baseline, ledger)?;");
-    // The check takes the rows AND the count as one readable ledger, or why it isn't.
+    // The check takes the rows AND the counts as one readable ledger, or why it isn't.
     expect(fnBody(EXPERIMENT, "pub(crate) fn baseline_is_current(")).toMatch(
-      /ledger: Result<\(&\[LedgerEntryRef<'_>\], usize\), &str>,/,
+      /ledger: Result<\(&\[LedgerEntryRef<'_>\], crate::history::SessionChangeCounts\), &str>,/,
     );
   });
 });
@@ -521,11 +526,11 @@ describe("a Trial start counts its changes from the one ledger it loaded (#668)"
 describe("a session records its change count from a checked read, or no count at all (#669)", () => {
   const MONITORING = readFileSync(join("src-tauri", "src", "monitoring.rs"), "utf8");
 
-  it("the session start takes its count from session_start_active_count(load_history(), ledger_was_quarantined())", () => {
+  it("the session start takes its counts from session_start_counts(load_history(), ledger_was_quarantined())", () => {
     // A ledger set aside as history.json.corrupt loads empty from then on; the marker is the only
     // evidence the count is lost, so the session start must hand it in with the load.
     expect(MONITORING.replace(/\s+/g, " ")).toContain(
-      "let active_changes = crate::history::session_start_active_count( " +
+      "let active_changes = crate::history::session_start_counts( " +
         "crate::history::load_history(), crate::history::ledger_was_quarantined(), );",
     );
     expect(MONITORING, "the zero-collapsing summary is back at the session start").not.toContain(

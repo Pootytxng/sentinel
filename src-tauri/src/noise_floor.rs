@@ -281,8 +281,9 @@ fn unchanged_between(
     ledger: &[crate::experiment::LedgerEntryRef<'_>],
 ) -> bool {
     let pairing = crate::comparability::derive(a, b);
-    a.compy_changes_active.is_some()
-        && a.compy_changes_active == b.compy_changes_active
+    // 453-f1: both counts made the same way, and per change both the active and the can't-confirm
+    // counts equal: undoing a change Compy can't read moves only the second.
+    matches!(crate::sessions::comparable_change_counts(a, b), Ok((x, y)) if x == y)
         && a.gaming_mode_active.is_some()
         && a.gaming_mode_active == b.gaming_mode_active
         && pairing.verdict == crate::comparability::Comparability::Comparable
@@ -610,6 +611,9 @@ mod tests {
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
             compy_changes_active: Some(active),
+            compy_changes_per_change: true,
+            compy_changes_cant_confirm: Some(0),
+            compy_changes_legacy_active: None,
             hw_fingerprint: Some(HwFingerprint {
                 hash: "62f1370e0d48cfea".into(),
                 gpu: "Radeon RX 9070 XT".into(),
@@ -724,6 +728,22 @@ mod tests {
         let mut s = evening();
         s[1].compy_changes_active = None;
         assert_eq!(between_session_noise(&s[..3], &s[2], &settled()), None);
+        // 453-f1 review: undoing a change Compy can't read moves only the can't-confirm count, and
+        // that splits the sessions too.
+        let mut s = evening();
+        s[1].compy_changes_cant_confirm = Some(1);
+        assert_eq!(between_session_noise(&s[..3], &s[2], &settled()), None);
+        // A session an older Compy recorded is compared on the older rule's count: the newer
+        // sessions carry that count too, and only a match keeps the pair.
+        let mut s = evening();
+        s[0].compy_changes_per_change = false;
+        s[0].compy_changes_cant_confirm = None;
+        assert_eq!(between_session_noise(&s[..3], &s[2], &settled()), None, "no older-rule count on the newer one");
+        s[1].compy_changes_legacy_active = Some(14);
+        s[2].compy_changes_legacy_active = Some(14);
+        assert_eq!(between_session_noise(&s[..3], &s[2], &settled()).map(|n| n.sessions), Some(3));
+        s[1].compy_changes_legacy_active = Some(15);
+        assert_eq!(between_session_noise(&s[..3], &s[2], &settled()), None, "older-rule counts differ");
     }
 
     #[test]

@@ -1,5 +1,5 @@
 {
-  "_about": "#453: a ledger shaped like the owner's. Read by src/live-changes-parity.test.ts (Optimize + History) and by machine_model.rs active_and_unknown_counts_match_the_shared_ts_fixture (Health). All three must print expected.active and expected.cantConfirm.",
+  "_about": "#453: a ledger shaped like the owner's. Read by src/live-changes-parity.test.ts (Optimize + History), by machine_model.rs active_and_unknown_counts_match_the_shared_ts_fixture (Health) and by history.rs the_session_count_is_the_shared_per_change_count (the count a session records: Debrief, Monitor, Trial guards; 453-f1). All four must print expected.active and expected.cantConfirm.",
   "rows": [
     {
       "id": "gm-1",
@@ -173,6 +173,33 @@
       "on_this_rig": true
     },
     {
+      "id": "late-1",
+      "rec_id": "late-rec",
+      "rec_title": "Newest apply written before an older one",
+      "applied_at": "2026-09-08T10:00:00+00:00",
+      "status": "applied",
+      "active_check": "on",
+      "on_this_rig": true
+    },
+    {
+      "id": "late-2",
+      "rec_id": "late-rec",
+      "rec_title": "Newest apply written before an older one",
+      "applied_at": "2026-09-01T10:00:00+00:00",
+      "status": "applied",
+      "active_check": "off",
+      "on_this_rig": true
+    },
+    {
+      "id": "noprobe",
+      "rec_id": "leftover:no-probe",
+      "rec_title": "A change Compy has no live check for",
+      "applied_at": "2026-09-09T10:00:00+00:00",
+      "status": "applied",
+      "active_check": "unrecognised",
+      "on_this_rig": true
+    },
+    {
       "id": "undated",
       "rec_id": "undated-rec",
       "rec_title": "Undated apply",
@@ -183,8 +210,8 @@
     }
   ],
   "expected": {
-    "active": 9,
-    "cantConfirm": 2,
+    "active": 10,
+    "cantConfirm": 3,
     "notInEffect": 1,
     "rolledBack": 1,
     "otherRig": 1,

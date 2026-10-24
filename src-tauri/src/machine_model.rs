@@ -1207,45 +1207,19 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
 }
 
 /// One row per change (`rec_id`) that is on or cannot be confirmed: the newest apply whose live check
-/// reads On, Unreadable or Unrecognised represents it, because that is the apply an undo targets.
-/// Mirrors `liveChangeGroups` in `src/data/live-changes.ts` (#453): same filter, same "newest wins,
-/// a tie (to the millisecond) or an unparseable time keeps the first seen" rule.
+/// reads On, Unreadable or Unrecognised. The rule itself is `history::live_change_groups`, shared with
+/// the session count (453-f1) and mirrored by `liveChangeGroups` in `src/data/live-changes.ts` (#453).
 fn live_change_groups(rows: &[AppliedChangeView]) -> Vec<&AppliedChangeView> {
-    // Millisecond precision, truncated, because that is all `Date.parse` keeps on the TS side:
-    // two applies inside one millisecond are a tie on both sides, and a tie keeps the first seen.
-    fn time(c: &AppliedChangeView) -> Option<i64> {
-        chrono::DateTime::parse_from_rfc3339(&c.applied_at).ok().map(|t| t.timestamp_millis())
-    }
-    let mut order: Vec<&str> = Vec::new();
-    let mut by_rec: std::collections::HashMap<&str, &AppliedChangeView> = std::collections::HashMap::new();
-    for c in rows {
-        let live = c.status == "applied"
-            && matches!(
-                c.active_check,
-                Some(ActiveCheck::On | ActiveCheck::Unreadable | ActiveCheck::Unrecognised)
-            );
-        if !live {
-            continue;
-        }
-        match by_rec.get(c.rec_id.as_str()) {
-            None => {
-                order.push(c.rec_id.as_str());
-                by_rec.insert(c.rec_id.as_str(), c);
-            }
-            Some(prev) => {
-                // TS: `time(c) > time(prev)` with an unparseable time as -Infinity.
-                let newer = match (time(c), time(prev)) {
-                    (Some(a), Some(b)) => a > b,
-                    (Some(_), None) => true,
-                    _ => false,
-                };
-                if newer {
-                    by_rec.insert(c.rec_id.as_str(), c);
-                }
-            }
-        }
-    }
-    order.into_iter().map(|r| by_rec[r]).collect()
+    let live: Vec<crate::history::LiveRow<'_>> = rows
+        .iter()
+        .map(|c| crate::history::LiveRow {
+            rec_id: &c.rec_id,
+            status: &c.status,
+            applied_at: &c.applied_at,
+            check: c.active_check,
+        })
+        .collect();
+    crate::history::live_change_groups(&live).into_iter().map(|i| &rows[i]).collect()
 }
 
 fn tally_rig_attribution(
@@ -2651,7 +2625,7 @@ mod machine_model_tests {
                 "1 recorded (1 ledger entry) · 1 active on this PC · 0 rolled back · 0 no longer in effect · 0 could not be checked",
             ),
             ("In effect, other or unknown PC", "0 recorded on another PC · 0 unattributed"),
-            ("Applied on this machine", "1 on this PC · 0 elsewhere · 0 unknown"),
+            ("Ledger entries by PC", "1 on this PC · 0 elsewhere · 0 unknown"),
             ("Evidence not available", "1 facts"),
             ("Model built", "2026-09-06T12:00:00Z"),
         ];
@@ -2937,7 +2911,7 @@ mod machine_model_tests {
         let m = fixture_gappy_only_beyond_the_cap().model();
         let entries = rendered_entries(&m);
 
-        let (_, attribution, _) = entry_by_label(&entries, "Applied on this machine");
+        let (_, attribution, _) = entry_by_label(&entries, "Ledger entries by PC");
         assert!(
             attribution.contains("5 unknown"),
             "the attribution row reports the gaps: {attribution}"
@@ -3088,10 +3062,10 @@ mod machine_model_tests {
             "rig attribution must account for every recorded row, with no fourth bucket"
         );
 
-        // The heading says "Applied on this machine", so the value has to contain that count and
-        // not only its two complements.
+        // The heading says these are ledger entries by PC (453-f1: per entry, not per change, and
+        // labelled so), so the value has to contain the this-PC count and not only its complements.
         let entries = rendered_entries(&m);
-        let (_, value, _) = entry_by_label(&entries, "Applied on this machine");
+        let (_, value, _) = entry_by_label(&entries, "Ledger entries by PC");
         assert_eq!(value.as_str(), "2 on this PC · 1 elsewhere · 1 unknown");
     }
 

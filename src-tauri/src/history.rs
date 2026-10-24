@@ -371,10 +371,6 @@ pub(crate) fn probe_rec_target(rec_id: &str) -> ActiveCheck {
     }
 }
 
-fn check_change_active(c: &AppliedChange, reads: &LiveReads) -> bool {
-    check_row_state(c, reads).legacy_active()
-}
-
 /// Read-only enrichment (computed-at-read, never persisted): the "after" state Compy's change set
 /// things TO — the second half of the Trust-Ledger before/after pair (`restores_label` is the
 /// "before"). Derived ONLY from the typed `AppliedAction`, so it can't drift from what was actually
@@ -1719,29 +1715,25 @@ pub(crate) fn reveal_ledger_folder() -> Result<(), String> {
     Ok(())
 }
 
-/// Count of DISTINCT recs whose LATEST ledger entry is an active apply (status "applied"), from rows
-/// the caller already loaded. Latest-wins per rec_id (a later rollback clears an earlier apply). By
-/// status alone, the count the Trust Ledger itself shows; the live-checked count a session records
-/// is `summarize_history(..).active`. It takes rows instead of loading them: an unreadable ledger has
-/// no count, and the caller that loaded it says why, instead of a 0 that reads as "no other changes"
-/// (#668: the Trial start used to re-read the ledger here and record 0 on a failed read).
-pub(crate) fn active_changes_in(history: &[AppliedChange]) -> usize {
-    let mut latest: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
-    // Walk in order so the LAST entry per rec_id wins (the ledger is append-only chronological).
-    for c in history {
-        latest.insert(c.rec_id.as_str(), c.status.as_str());
-    }
-    latest.values().filter(|status| **status == "applied").count()
-}
-
 /// Read-only roll-up of the Trust Ledger for surfaces that need counts rather
-/// than the full view (e.g. Game Readiness). `active` = applied AND still active;
-/// `externally_reverted` = applied but the live system no longer matches (changed
-/// outside Compy). Computed from local history alone, like everything else here.
+/// than the full view (e.g. Game Readiness, a session's start count). `active` / `cant_confirm` are
+/// per change by the shared rule; `total` / `rolled_back` / `externally_reverted` are the newest row
+/// per rec_id by position (`externally_reverted` = the live system reads it off: changed outside
+/// Compy). Computed from local history alone, like everything else here.
 #[derive(serde::Serialize, Clone, Debug, Default)]
 pub(crate) struct AppliedChangesSummary {
     pub(crate) total: usize,
+    /// Changes whose newest live apply reads On ([`live_change_groups`]).
     pub(crate) active: usize,
+    /// Changes still applied whose live check could not read the machine or has no probe: neither
+    /// on nor off on the evidence. Never part of `active` (453-f1).
+    pub(crate) cant_confirm: usize,
+    /// The rec ids behind `active`, sorted: what a Trial start names as "other changes on".
+    pub(crate) active_recs: Vec<String>,
+    /// The count builds before 453-f1 recorded on a session (newest row per rec_id by position, not
+    /// rolled back, and not read as off — can't-confirm included). Kept only so a session an older
+    /// Compy recorded is compared like with like, never shown as "active".
+    pub(crate) legacy_active: usize,
     pub(crate) rolled_back: usize,
     pub(crate) externally_reverted: usize,
     /// The drifted settings BY NAME (rec titles, sorted for stable output) so surfaces can say
@@ -1767,16 +1759,38 @@ pub(crate) fn checked_summary(
     Ok(summarize_history(&history))
 }
 
-/// The active-change count a session records when it begins, from the one ledger read the session
-/// start passes in: `None` when that read failed or the ledger was set aside earlier. A session
-/// keeps this count for the rest of its life — every Trial baseline check, debrief and comparison
-/// reads it back — so a lost count must stay "not recorded", never the 0 the zero-collapsing
-/// summary would give it (#669; never claim unmeasured). Adds no write of its own and no retry.
-pub(crate) fn session_start_active_count(
+/// The change counts a session records when it begins (453-f1), all from one ledger read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SessionChangeCounts {
+    /// Changes whose live check reads On. `None` when every live change is can't-confirm: with
+    /// nothing confirmed either way the count is unknown, never 0 (#669, unknown-never-0).
+    pub(crate) active: Option<usize>,
+    /// Changes still applied that Compy can't confirm (unreadable, or no live check).
+    pub(crate) cant_confirm: usize,
+    /// [`AppliedChangesSummary::legacy_active`], for comparing with a session an older Compy recorded.
+    pub(crate) legacy_active: usize,
+}
+
+impl AppliedChangesSummary {
+    pub(crate) fn session_counts(&self) -> SessionChangeCounts {
+        SessionChangeCounts {
+            active: (self.active > 0 || self.cant_confirm == 0).then_some(self.active),
+            cant_confirm: self.cant_confirm,
+            legacy_active: self.legacy_active,
+        }
+    }
+}
+
+/// The change counts a session records when it begins, from the one ledger read the session start
+/// passes in: `None` when that read failed or the ledger was set aside earlier. A session keeps these
+/// for the rest of its life — every Trial baseline check, debrief and comparison reads them back — so
+/// a lost count must stay "not recorded", never the 0 the zero-collapsing summary would give it
+/// (#669; never claim unmeasured). Adds no write of its own and no retry.
+pub(crate) fn session_start_counts(
     loaded: Result<Vec<AppliedChange>, String>,
     set_aside: bool,
-) -> Option<usize> {
-    checked_summary(loaded, set_aside).ok().map(|summary| summary.active)
+) -> Option<SessionChangeCounts> {
+    checked_summary(loaded, set_aside).ok().map(|summary| summary.session_counts())
 }
 
 /// The Trust Ledger roll-up that keeps a failed read or a set-aside ledger as the error it is,
@@ -1800,31 +1814,117 @@ pub(crate) fn all_change_ids() -> Result<Vec<String>, String> {
     Ok(load_history()?.into_iter().map(|c| c.id).collect())
 }
 
-// Collapse history to the LATEST entry per rec_id, then summarize current state.
-// Readiness reflects each setting's CURRENT effective state — not every historical
-// apply/rollback — so re-applying OR rolling back a setting actually resolves it.
-//
-// Previously this counted every entry: applying one setting several times, or an
-// old "applied" entry later superseded by a rollback of the same setting, lingered
-// forever as an unclearable "externally reverted" count. That trapped the user
-// below a clean readiness state with no way out (the append-only ledger never lets
-// you edit those old records). The full per-entry history still lives in the Trust
-// Ledger for audit; readiness just stops being held hostage by it.
+/// One ledger row as the active-change rule reads it: which change it is, its status and time, and
+/// what its live check read (`None` when the row is not in the applied state, so nothing was read).
+pub(crate) struct LiveRow<'a> {
+    pub(crate) rec_id: &'a str,
+    pub(crate) status: &'a str,
+    pub(crate) applied_at: &'a str,
+    pub(crate) check: Option<ActiveCheck>,
+}
+
+/// THE rule for which changes are on or can't be confirmed (#453; 453-f1 made it the only one). One
+/// group per change (`rec_id`), in first-seen order, represented by the index of its newest apply
+/// whose live check reads On, Unreadable or Unrecognised — the apply an undo targets. A change is
+/// ACTIVE when that row reads On; Unreadable/Unrecognised is "can't confirm", counted apart. A newer
+/// rollback does not hide an older apply that is still applied. "Newest" is by `applied_at` at
+/// millisecond precision, truncated (all `Date.parse` keeps on the TS side); a tie or an
+/// unparseable time keeps the first seen. Health (`machine_model.rs`), the session count
+/// ([`summarize_history`]) and `src/data/live-changes.ts` `liveChangeGroups` (Optimize, History)
+/// all count through this rule, pinned by `src/test/fixtures/live-changes-parity.json`.
+pub(crate) fn live_change_groups(rows: &[LiveRow<'_>]) -> Vec<usize> {
+    fn time(c: &LiveRow<'_>) -> Option<i64> {
+        chrono::DateTime::parse_from_rfc3339(c.applied_at).ok().map(|t| t.timestamp_millis())
+    }
+    let mut order: Vec<&str> = Vec::new();
+    let mut by_rec: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for (i, c) in rows.iter().enumerate() {
+        let live = c.status == "applied"
+            && matches!(c.check, Some(ActiveCheck::On | ActiveCheck::Unreadable | ActiveCheck::Unrecognised));
+        if !live {
+            continue;
+        }
+        match by_rec.get(c.rec_id).copied() {
+            None => {
+                order.push(c.rec_id);
+                by_rec.insert(c.rec_id, i);
+            }
+            Some(prev) => {
+                // TS: `time(c) > time(prev)` with an unparseable time as -Infinity.
+                let newer = match (time(c), time(&rows[prev])) {
+                    (Some(a), Some(b)) => a > b,
+                    (Some(_), None) => true,
+                    _ => false,
+                };
+                if newer {
+                    by_rec.insert(c.rec_id, i);
+                }
+            }
+        }
+    }
+    order.into_iter().map(|r| by_rec[r]).collect()
+}
+
+/// The roll-up of the ledger with each row's live check read now. `active` / `cant_confirm` are the
+/// shared per-change rule ([`live_change_groups`]), so a session's recorded count, the Debrief, the
+/// Monitor line and the Trial guards agree with Health, Optimize and History (453-f1).
 pub(crate) fn summarize_history(history: &[AppliedChange]) -> AppliedChangesSummary {
+    let reads = LiveReads::default();
+    let checks: Vec<Option<ActiveCheck>> = history
+        .iter()
+        .map(|c| (c.status != "rolled_back").then(|| check_row_state(c, &reads)))
+        .collect();
+    summarize_checked(history, &checks)
+}
+
+/// [`summarize_history`] with the live checks already read, one per row (`None` for a rolled-back
+/// row). Pure, so the shared parity fixture can drive it.
+fn summarize_checked(history: &[AppliedChange], checks: &[Option<ActiveCheck>]) -> AppliedChangesSummary {
+    let mut s = AppliedChangesSummary::default();
+
+    // What is on: one count per change, the shared rule.
+    let rows: Vec<LiveRow<'_>> = history
+        .iter()
+        .zip(checks)
+        .map(|(c, check)| LiveRow {
+            rec_id: &c.rec_id,
+            status: &c.status,
+            applied_at: &c.applied_at,
+            check: *check,
+        })
+        .collect();
+    let groups = live_change_groups(&rows);
+    let live_recs: std::collections::HashSet<&str> = groups.iter().map(|&i| history[i].rec_id.as_str()).collect();
+    s.active_recs = groups
+        .iter()
+        .filter(|&&i| checks[i] == Some(ActiveCheck::On))
+        .map(|&i| history[i].rec_id.clone())
+        .collect();
+    s.active_recs.sort();
+    s.active = s.active_recs.len();
+    s.cant_confirm = groups.len() - s.active;
+
+    // Drift, for Game Readiness: the LATEST entry per rec_id by position decides, so re-applying OR
+    // rolling back a setting always clears its "changed outside Compy" flag (counting every entry
+    // trapped the user below a clean readiness state: the append-only ledger never lets you edit old
+    // records). A change the shared rule counts as on or can't-confirm is never also drifted or
+    // rolled back here: one change has one state (453-f1 review).
     let mut latest: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     for (i, c) in history.iter().enumerate() {
         latest.insert(c.rec_id.as_str(), i); // later entries overwrite earlier → newest wins
     }
-    let mut s = AppliedChangesSummary::default();
-    let reads = LiveReads::default();
     for &i in latest.values() {
         let c = &history[i];
         s.total += 1;
+        if c.status != "rolled_back" && checks[i].is_none_or(ActiveCheck::legacy_active) {
+            s.legacy_active += 1;
+        }
+        if live_recs.contains(c.rec_id.as_str()) {
+            continue;
+        }
         if c.status == "rolled_back" {
             s.rolled_back += 1;
-        } else if check_change_active(c, &reads) {
-            s.active += 1;
-        } else {
+        } else if checks[i] == Some(ActiveCheck::Off) {
             s.externally_reverted += 1;
             s.drifted_titles.push(c.rec_title.clone());
         }
@@ -3729,12 +3829,13 @@ mod history_tests {
 
     #[test]
     fn summary_collapses_multiple_applies_of_one_rec() {
-        // The same setting applied twice is ONE setting — not two "active" counts.
-        // Unknown rec_id → check_change_active defaults to active.
+        // The same setting applied twice is ONE setting — not two counts. An unknown rec_id has no
+        // probe, so it is one change Compy can't confirm: not active, and not a revert (453-f1).
         let history = vec![record("unknown-x", "applied"), record("unknown-x", "applied")];
         let s = summarize_history(&history);
         assert_eq!(s.total, 1);
-        assert_eq!(s.active, 1);
+        assert_eq!(s.active, 0);
+        assert_eq!(s.cant_confirm, 1);
         assert_eq!(s.externally_reverted, 0);
     }
 
@@ -3743,14 +3844,18 @@ mod history_tests {
     // (a Trial started on such a baseline would read "0 then, 0 now" on a stock rig and pass).
     #[test]
     fn a_session_start_records_no_count_when_the_ledger_read_failed() {
-        assert_eq!(session_start_active_count(Err("sharing violation".into()), false), None);
-        assert_eq!(session_start_active_count(Ok(Vec::new()), false), Some(0));
+        let active = |r: Result<Vec<AppliedChange>, String>, aside| session_start_counts(r, aside).map(|c| c.active);
+        assert_eq!(active(Err("sharing violation".into()), false), None);
+        assert_eq!(active(Ok(Vec::new()), false), Some(Some(0)));
         let history = vec![record("unknown-x", "applied"), record("unknown-y", "rolled_back")];
-        assert_eq!(session_start_active_count(Ok(history.clone()), false), Some(1));
+        // 453-f1: a ledger whose only live change can't be confirmed has counts, but its active
+        // count is unknown — nothing was confirmed either way, so it is never recorded as 0.
+        let counts = session_start_counts(Ok(history.clone()), false).expect("a readable ledger has counts");
+        assert_eq!((counts.active, counts.cant_confirm, counts.legacy_active), (None, 1, 1));
         // A ledger set aside as history.json.corrupt loads EMPTY from then on (or with only the rows
         // added since): its count is LOST, not 0 (rust-tauri-reviewer on #669, same class).
-        assert_eq!(session_start_active_count(Ok(Vec::new()), true), None);
-        assert_eq!(session_start_active_count(Ok(history), true), None);
+        assert_eq!(active(Ok(Vec::new()), true), None);
+        assert_eq!(active(Ok(history), true), None);
     }
 
     // #669: the checked summary a surface reads instead of the zero-collapsing one keeps a failed
@@ -3761,7 +3866,7 @@ mod history_tests {
         assert!(checked_summary(Ok(Vec::new()), true).is_err());
         assert_eq!(checked_summary(Ok(Vec::new()), false).map(|s| s.active), Ok(0));
         let history = vec![record("unknown-x", "applied"), record("unknown-y", "rolled_back")];
-        assert_eq!(checked_summary(Ok(history), false).map(|s| s.active), Ok(1));
+        assert_eq!(checked_summary(Ok(history), false).map(|s| (s.active, s.cant_confirm)), Ok((0, 1)));
     }
 
     #[test]
@@ -3777,26 +3882,95 @@ mod history_tests {
         ];
         let s = summarize_history(&history);
         assert_eq!(s.total, 1);
-        assert_eq!(s.rolled_back, 1);
         assert_eq!(s.active, 0);
         assert_eq!(s.externally_reverted, 0);
+        // 453-f1: the two older applies are still applied and have no probe, so the change is
+        // can't-confirm by the shared rule, and so not also "rolled back".
+        assert_eq!((s.cant_confirm, s.rolled_back), (1, 0));
+        // With every apply undone it is rolled back, and still never a revert.
+        let undone = summarize_history(&[record("unknown-x", "rolled_back"), record("unknown-x", "rolled_back")]);
+        assert_eq!((undone.rolled_back, undone.cant_confirm, undone.externally_reverted), (1, 0, 0));
     }
 
-    // #668: the Trial start counts its active changes from the rows it already loaded, so this fold
-    // takes rows and never loads: there is no failed second read left to collapse the count to 0.
+    // #668 / 453-f1: the Trial start's counts come from the rows it already loaded, through the
+    // shared rule: one per change, the newest live apply decides, a later undo of the only apply
+    // clears it. `active_recs` names the changes behind `active`.
     #[test]
-    fn active_changes_are_counted_from_rows_in_hand_latest_entry_wins() {
+    fn a_trial_start_counts_and_names_active_changes_by_the_shared_rule() {
         let rows = [
             record("alpha", "applied"),
-            record("alpha", "rolled_back"), // a later undo clears the earlier apply
+            record("alpha", "rolled_back"), // a second apply, undone: the first is still applied
             record("beta", "applied"),
             record("beta", "applied"), // re-applied: still one setting
             record("gamma", "rolled_back"),
         ];
-        assert_eq!(active_changes_in(&rows), 1);
-        // No live probe exists for these ids, so the live-checked count a session records agrees.
-        assert_eq!(summarize_history(&rows).active, active_changes_in(&rows));
-        assert_eq!(active_changes_in(&[]), 0);
+        let on = Some(ActiveCheck::On);
+        let s = summarize_checked(&rows, &[on, None, on, on, None]);
+        assert_eq!(s.active, 2);
+        assert_eq!(s.active_recs, ["alpha", "beta"]);
+        assert_eq!(summarize_checked(&[], &[]).active, 0);
+    }
+
+    fn parity_check(v: &serde_json::Value) -> Option<ActiveCheck> {
+        match v.as_str() {
+            Some("on") => Some(ActiveCheck::On),
+            Some("off") => Some(ActiveCheck::Off),
+            Some("unreadable") => Some(ActiveCheck::Unreadable),
+            Some("unrecognised") => Some(ActiveCheck::Unrecognised),
+            _ => None,
+        }
+    }
+
+    // 453-f1: the count a session records (and the Debrief, the Monitor line and the Trial guards
+    // read back) is the same per-change count Health, Optimize and History show, on the same shared
+    // fixture. The old session rule took the newest row by position, counted can't-confirm as active
+    // and let a newer rollback hide an older apply that still reads on: 11 here, not 10.
+    #[test]
+    fn the_session_count_is_the_shared_per_change_count() {
+        let fx: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/test/fixtures/live-changes-parity.json"))
+                .expect("parity fixture parses");
+        let rows = fx["rows"].as_array().expect("rows");
+        let s = |r: &serde_json::Value, k: &str| r[k].as_str().expect(k).to_string();
+        let history: Vec<AppliedChange> = rows
+            .iter()
+            .map(|r| AppliedChange {
+                id: s(r, "id"),
+                rec_title: s(r, "rec_title"),
+                applied_at: s(r, "applied_at"),
+                ..record(&s(r, "rec_id"), &s(r, "status"))
+            })
+            .collect();
+        let checks: Vec<Option<ActiveCheck>> = rows.iter().map(|r| parity_check(&r["active_check"])).collect();
+        let summary = summarize_checked(&history, &checks);
+        let want = |k: &str| fx["expected"][k].as_u64().expect("expected count") as usize;
+        assert_eq!(summary.active, want("active"), "the session count is the shared active count");
+        assert_eq!(summary.cant_confirm, want("cantConfirm"), "can't-confirm is counted apart, the shared count");
+        // 453-f1 review: `late-rec` is active (its newest apply by time reads on) while the row last
+        // in the file reads off. One change has one state: active, never also "changed outside
+        // Compy". The only drifted change is the one Health calls no longer in effect.
+        assert!(summary.active_recs.iter().any(|r| r == "late-rec"));
+        assert_eq!(summary.drifted_titles, ["Disable Windows Search indexer"]);
+        assert_eq!(summary.externally_reverted, want("notInEffect"));
+        assert_eq!(summary.rolled_back, want("rolledBack"), "rb-rec is active, so not also rolled back");
+    }
+
+    // 453-f1: the newest apply decides, by time, not by where the row sits in the file; and a newer
+    // rollback leaves an older apply that still reads on counted.
+    #[test]
+    fn the_session_count_reads_the_newest_apply_by_time_and_ignores_a_newer_rollback() {
+        let at = |rec: &str, status: &str, when: &str| AppliedChange { applied_at: when.into(), ..record(rec, status) };
+        let history = vec![
+            at("a", "applied", "2026-09-08T10:00:00Z"),
+            at("a", "applied", "2026-09-01T10:00:00Z"), // last in the file, older, reads off
+            at("b", "applied", "2026-09-01T10:00:00Z"),
+            at("b", "rolled_back", "2026-09-02T10:00:00Z"),
+            at("c", "applied", "2026-09-01T10:00:00Z"), // reads nothing: can't confirm
+        ];
+        let on = Some(ActiveCheck::On);
+        let checks = [on, Some(ActiveCheck::Off), on, None, Some(ActiveCheck::Unreadable)];
+        let s = summarize_checked(&history, &checks);
+        assert_eq!((s.active, s.cant_confirm), (2, 1));
     }
 
     #[test]

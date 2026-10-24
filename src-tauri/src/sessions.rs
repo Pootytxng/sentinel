@@ -68,6 +68,25 @@ pub(crate) struct SessionSummary {
     // says what the count was.
     #[serde(alias = "sentinel_changes_active", default)]
     pub(crate) compy_changes_active: Option<usize>, // active Compy changes during the session
+    /// Was `compy_changes_active` counted per change by the shared live rule
+    /// (`history::live_change_groups`: one per change, live check reads On; can't-confirm not
+    /// included)? Builds before 453-f1 counted the newest row per change and included the ones
+    /// Compy couldn't read, so their rows load `false` and their count is only compared with
+    /// another old-rule count, never with a live count today. Additive: an older Compy ignores the
+    /// key, and a row it re-saves loses it and reads back as old-rule (the cautious side).
+    #[serde(default)]
+    pub(crate) compy_changes_per_change: bool,
+    /// Changes still applied that Compy couldn't confirm on or off when the session began (no live
+    /// check, or the check read nothing). Counted apart from `compy_changes_active`, and compared
+    /// apart (453-f1 review): undoing an unprobed change moves this, not the active count. `None` on
+    /// rows an older Compy wrote and when the change history couldn't be read. Additive.
+    #[serde(default)]
+    pub(crate) compy_changes_cant_confirm: Option<usize>,
+    /// The same moment counted the way builds before 453-f1 counted it, so a session an older Compy
+    /// recorded is still compared like with like ([`comparable_change_counts`]). `None` on rows an
+    /// older Compy wrote (their `compy_changes_active` is that count). Additive.
+    #[serde(default)]
+    pub(crate) compy_changes_legacy_active: Option<usize>,
     /// Rig identity at session time — groundwork for same-rig analysis. Additive: pre-fingerprint
     /// sessions parse with this as None.
     #[serde(default)]
@@ -117,6 +136,69 @@ pub(crate) struct SessionSummary {
     pub(crate) peak_gpu_hotspot_temp_c: Option<u32>,
 }
 
+/// A session's change counts in the form another session's can be compared with (453-f1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ChangeCounts {
+    /// Counted per change by the shared live rule: on, and can't-confirm, each compared apart.
+    PerChange { active: usize, cant_confirm: usize },
+    /// Counted the way builds before 453-f1 counted (newest row, can't-confirm included).
+    Legacy(usize),
+}
+
+impl std::fmt::Display for ChangeCounts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            ChangeCounts::PerChange { active, cant_confirm: 0 } | ChangeCounts::Legacy(active) => write!(f, "{active}"),
+            ChangeCounts::PerChange { active, cant_confirm } => write!(f, "{active} (and {cant_confirm} it can't confirm)"),
+        }
+    }
+}
+
+impl SessionSummary {
+    /// This session's counts in `per_change` form, or `None` when it recorded none in that form.
+    fn change_counts(&self, per_change: bool) -> Option<ChangeCounts> {
+        if per_change {
+            if !self.compy_changes_per_change {
+                return None;
+            }
+            Some(ChangeCounts::PerChange {
+                active: self.compy_changes_active?,
+                cant_confirm: self.compy_changes_cant_confirm?,
+            })
+        } else if self.compy_changes_per_change {
+            self.compy_changes_legacy_active.map(ChangeCounts::Legacy)
+        } else {
+            self.compy_changes_active.map(ChangeCounts::Legacy)
+        }
+    }
+
+    /// Why this session has no count to compare, in words, for "didn't record how many …" lines.
+    pub(crate) fn unrecorded_changes_reason(&self) -> &'static str {
+        if self.compy_changes_per_change
+            && self.compy_changes_active.is_none()
+            && self.compy_changes_cant_confirm.is_some_and(|n| n > 0)
+        {
+            "Compy couldn't confirm whether any of its changes were on"
+        } else {
+            "Compy couldn't read its change history"
+        }
+    }
+}
+
+/// Two sessions' change counts, made the same way so they can be compared: per change when both
+/// sessions were counted per change, otherwise the older rule on both (a session this build
+/// recorded carries that count too). `Err` names the session (`a` or `b`) with no count in the form
+/// the pair needs.
+pub(crate) fn comparable_change_counts<'s>(
+    a: &'s SessionSummary,
+    b: &'s SessionSummary,
+) -> Result<(ChangeCounts, ChangeCounts), &'s SessionSummary> {
+    let per_change = a.compy_changes_per_change && b.compy_changes_per_change;
+    let ca = a.change_counts(per_change).ok_or(a)?;
+    let cb = b.change_counts(per_change).ok_or(b)?;
+    Ok((ca, cb))
+}
+
 fn round1(x: f64) -> f64 {
     (x * 10.0).round() / 10.0
 }
@@ -126,7 +208,7 @@ fn round1(x: f64) -> f64 {
 /// measured duration so it stays deterministic and testable.
 pub(crate) struct SessionAccumulator {
     started_at: String,
-    compy_changes_active: Option<usize>,
+    compy_changes: Option<crate::history::SessionChangeCounts>,
     proc_counts: HashMap<String, u32>,
     fps_sum: f64,
     frametime_sum: f64,
@@ -146,10 +228,20 @@ pub(crate) struct SessionAccumulator {
 }
 
 impl SessionAccumulator {
-    pub(crate) fn new(started_at: String, compy_changes_active: Option<usize>) -> Self {
+    /// A session whose start recorded `active` changes on, none can't-confirm (tests).
+    #[cfg(test)]
+    pub(crate) fn new(started_at: String, active: Option<usize>) -> Self {
+        Self::with_counts(
+            started_at,
+            active.map(|a| crate::history::SessionChangeCounts { active: Some(a), cant_confirm: 0, legacy_active: a }),
+        )
+    }
+
+    /// `counts` is `None` when the session start couldn't read the change history (#669).
+    pub(crate) fn with_counts(started_at: String, counts: Option<crate::history::SessionChangeCounts>) -> Self {
         Self {
             started_at,
-            compy_changes_active,
+            compy_changes: counts,
             proc_counts: HashMap::new(),
             fps_sum: 0.0,
             frametime_sum: 0.0,
@@ -275,7 +367,10 @@ impl SessionAccumulator {
             peak_gpu_usage_pct: self.peak_gpu_usage_pct,
             peak_ram_used_bytes: self.peak_ram_used_bytes,
             ram_total_bytes: self.ram_total_bytes,
-            compy_changes_active: self.compy_changes_active,
+            compy_changes_active: self.compy_changes.and_then(|c| c.active),
+            compy_changes_cant_confirm: self.compy_changes.map(|c| c.cant_confirm),
+            compy_changes_legacy_active: self.compy_changes.map(|c| c.legacy_active),
+            compy_changes_per_change: true,
             // Stamped by the monitoring loop at save time (finalize stays pure/system-free).
             hw_fingerprint: None,
             gaming_mode_active: None,
@@ -300,14 +395,36 @@ fn sessions_path() -> PathBuf {
 /// number and sets the whole file aside on a `null`, losing every session and Trial baseline.
 const UNRECORDED_KEY: &str = "compy_changes_unrecorded";
 
+/// The sessions.json key holding a per-change row's active count (453-f1). `compy_changes_active` on
+/// disk stays the count an older Compy understands: the older rule's (newest row per change,
+/// can't-confirm included). An older build ignores this key and compares its own older-rule count
+/// with that number, like with like; this build reads this key back as `compy_changes_active`.
+const ON_KEY: &str = "compy_changes_on";
+const LEGACY_KEY: &str = "compy_changes_legacy_active";
+
 /// One session as sessions.json stores it: an unknown count is written as 0 plus
-/// `compy_changes_unrecorded: true`, never as `null`. Serialized through a string first, so a value
-/// JSON can't hold (a non-finite number) still fails the save as it always did.
+/// `compy_changes_unrecorded: true`, never as `null`. A per-change row (453-f1) writes the older
+/// rule's count as `compy_changes_active` (so an older build never compares its count with a number
+/// that leaves out the changes it counts) and the per-change count under [`ON_KEY`]. Serialized
+/// through a string first, so a value JSON can't hold (a non-finite number) still fails the save as
+/// it always did.
 fn disk_row(summary: &SessionSummary) -> Result<serde_json::Value, String> {
     let text = serde_json::to_string(summary).map_err(|e| e.to_string())?;
     let mut row: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    if summary.compy_changes_active.is_none() {
-        if let Some(obj) = row.as_object_mut() {
+    let Some(obj) = row.as_object_mut() else { return Ok(row) };
+    // The number an older build reads: the older rule's count on a per-change row, else the count.
+    let older_rule_count = if summary.compy_changes_per_change {
+        obj.insert(ON_KEY.into(), summary.compy_changes_active.into());
+        obj.remove(LEGACY_KEY);
+        summary.compy_changes_legacy_active
+    } else {
+        summary.compy_changes_active
+    };
+    match older_rule_count {
+        Some(n) => {
+            obj.insert("compy_changes_active".into(), n.into());
+        }
+        None => {
             obj.insert("compy_changes_active".into(), 0.into());
             obj.insert(UNRECORDED_KEY.into(), true.into());
         }
@@ -315,13 +432,19 @@ fn disk_row(summary: &SessionSummary) -> Result<serde_json::Value, String> {
     Ok(row)
 }
 
-/// One sessions.json row back into a session: a row marked `compy_changes_unrecorded` has no count,
-/// whatever number sits beside the mark.
+/// One sessions.json row back into a session: a row marked `compy_changes_unrecorded` has no
+/// older-rule count, whatever number sits beside the mark; a per-change row's active count is
+/// [`ON_KEY`] and its `compy_changes_active` is the older rule's count.
 fn from_disk_row(mut row: serde_json::Value) -> Result<SessionSummary, serde_json::Error> {
     if let Some(obj) = row.as_object_mut() {
         if obj.remove(UNRECORDED_KEY).and_then(|v| v.as_bool()) == Some(true) {
             obj.remove("sentinel_changes_active");
             obj.insert("compy_changes_active".into(), serde_json::Value::Null);
+        }
+        if let Some(on) = obj.remove(ON_KEY) {
+            let older = obj.remove("compy_changes_active").unwrap_or(serde_json::Value::Null);
+            obj.insert(LEGACY_KEY.into(), older);
+            obj.insert("compy_changes_active".into(), on);
         }
     }
     serde_json::from_value(row)
@@ -640,6 +763,8 @@ mod session_tests {
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(!text.contains(r#""compy_changes_active": null"#), "{text}");
         assert!(text.contains(r#""compy_changes_unrecorded": true"#), "{text}");
+        // 453-f1: the rule mark is one more key the older build ignores.
+        assert!(text.contains(r#""compy_changes_per_change": true"#), "{text}");
         let old: Vec<OldSessionSummary> = serde_json::from_str(&text).expect("an older Compy loads the file");
         assert_eq!(old.iter().map(|s| s.compy_changes_active).collect::<Vec<_>>(), [0, 3]);
         let back = load_sessions_from(&path);
@@ -672,6 +797,85 @@ mod session_tests {
         assert_eq!(load(row(marked_old_name)).compy_changes_active, None);
         let recorded = r#", "compy_changes_active": 0, "compy_changes_unrecorded": false"#;
         assert_eq!(load(row(recorded)).compy_changes_active, Some(0));
+        // 453-f1: a row an older Compy wrote was counted by the old rule; this build's rows say so.
+        assert!(!load(row(r#", "compy_changes_active": 2"#)).compy_changes_per_change);
+        let per_change = r#", "compy_changes_active": 2, "compy_changes_per_change": true"#;
+        assert!(load(row(per_change)).compy_changes_per_change);
+    }
+
+    // 453-f1 review: a session records the changes Compy can't confirm apart from the active count
+    // (and the older rule's count beside them), and a start where nothing could be confirmed records
+    // the active count as unknown — on disk the downgrade-safe 0 + unrecorded mark — never as 0.
+    #[test]
+    fn a_session_records_cant_confirm_apart_and_nothing_confirmed_as_unknown() {
+        let path = std::env::temp_dir().join(format!("compy-sessions-cant-confirm-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let session = |active, cant| {
+            let counts = crate::history::SessionChangeCounts { active, cant_confirm: cant, legacy_active: 7 };
+            let mut acc = SessionAccumulator::with_counts("t".into(), Some(counts));
+            acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+            acc.finalize(MIN_SESSION_SECS)
+        };
+        save_session_to(&path, session(Some(2), 1)).unwrap();
+        save_session_to(&path, session(None, 3)).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        // Nothing confirmed: the per-change count is unknown (null under its own key), while an
+        // older build still reads its own rule's count, which is known.
+        assert!(text.contains(r#""compy_changes_on": null"#), "{text}");
+        assert!(!text.contains("compy_changes_unrecorded"), "{text}");
+        let back = load_sessions_from(&path);
+        let got: Vec<_> = back
+            .iter()
+            .map(|s| (s.compy_changes_active, s.compy_changes_cant_confirm, s.compy_changes_legacy_active))
+            .collect();
+        assert_eq!(got, [(Some(2), Some(1), Some(7)), (None, Some(3), Some(7))]);
+        assert_eq!(back[1].unrecorded_changes_reason(), "Compy couldn't confirm whether any of its changes were on");
+        assert_eq!(back[0].unrecorded_changes_reason(), "Compy couldn't read its change history");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // 453-f1 final review (downgrade): an older build (038e5606) ignores `compy_changes_per_change`
+    // and compares its own older-rule count with `compy_changes_active`. Baseline 1 on + 1 Compy
+    // can't confirm is 2 by that rule; writing the per-change 1 there let it pass a Trial after the
+    // on change was reverted (1 = 1). On disk the field stays the older rule's number.
+    #[test]
+    fn an_older_compy_reads_the_older_rule_count_from_a_per_change_row() {
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OldSessionSummary {
+            started_at: String,
+            duration_secs: u64,
+            process_name: String,
+            samples: u32,
+            avg_fps: f64,
+            avg_frametime_ms: f64,
+            low1_fps_est: f64,
+            peak_gpu_temp_c: Option<u32>,
+            peak_gpu_usage_pct: Option<u32>,
+            peak_ram_used_bytes: Option<u64>,
+            ram_total_bytes: Option<u64>,
+            #[serde(alias = "sentinel_changes_active")]
+            compy_changes_active: usize,
+        }
+        let path = std::env::temp_dir().join(format!("compy-sessions-downgrade-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let counts = crate::history::SessionChangeCounts { active: Some(1), cant_confirm: 1, legacy_active: 2 };
+        let mut acc = SessionAccumulator::with_counts("t".into(), Some(counts));
+        acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+        save_session_to(&path, acc.finalize(MIN_SESSION_SECS)).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let old: Vec<OldSessionSummary> = serde_json::from_str(&text).expect("an older Compy loads the file");
+        assert_eq!(old[0].compy_changes_active, 2, "the older build sees the older rule's number: {text}");
+        assert!(!text.contains("compy_changes_unrecorded"), "{text}");
+        // This build reads its own counts back unchanged.
+        let back = load_sessions_from(&path);
+        assert_eq!(
+            (back[0].compy_changes_active, back[0].compy_changes_cant_confirm, back[0].compy_changes_legacy_active),
+            (Some(1), Some(1), Some(2))
+        );
+        // And re-saving round-trips the same row.
+        assert_eq!(disk_row(&back[0]).unwrap(), serde_json::from_str::<Vec<serde_json::Value>>(&text).unwrap()[0]);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

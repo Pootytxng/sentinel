@@ -281,7 +281,7 @@
     "oneThingTag": "最值得关注的一点",
     "changesActive": "本次会话中：{{count}} 项 Compy 更改处于启用状态",
     "changesActiveUnknown": "本次会话中：Compy 更改启用数量 — 未记录",
-    "unknownChangesActive": "本次会话开始时 Compy 无法读取其更改历史，所以不知道当时有多少项更改处于启用状态。这次会话不能用作实验的基线。",
+    "unknownChangesActive": "本次会话开始时 Compy 无法读取其更改历史，或无法确认其任何更改是否处于启用状态，所以不知道当时有多少项更改处于启用状态。这次会话不能用作实验的基线。",
     "captureLinePre": "采集方式 · ",
     "captureLineEmph": "从游戏外部",
     "captureLinePost": "——不向其添加任何东西",

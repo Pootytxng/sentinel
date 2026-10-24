@@ -1007,13 +1007,13 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
         let started_at = chrono::Utc::now().to_rfc3339();
         // #669: ONE ledger read; a read that fails here, or a ledger set aside as damaged earlier,
         // records NO count — never a fabricated 0.
-        let active_changes = crate::history::session_start_active_count(
+        let active_changes = crate::history::session_start_counts(
             crate::history::load_history(),
             crate::history::ledger_was_quarantined(),
         );
         std::thread::spawn(move || {
             use std::sync::atomic::Ordering;
-            let mut acc = crate::sessions::SessionAccumulator::new(started_at, active_changes);
+            let mut acc = crate::sessions::SessionAccumulator::with_counts(started_at, active_changes);
             let start = std::time::Instant::now();
             // Stutter Forensics: a read-only per-second timeline (elapsed, 1% low) + a capped log of
             // signals (process starts / RAM 90% / GPU clock drop), analyzed once at finalize. Only

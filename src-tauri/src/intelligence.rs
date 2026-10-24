@@ -1811,24 +1811,28 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         for e in &ledger_events {
             h.supporting.push(e.summary.clone());
         }
-        // #669: a session that recorded no count (its start couldn't read the change history) can
-        // neither show a delta nor vouch for a match — `counts` is Some only when both sides did.
-        let counts = b.compy_changes_active.zip(c.compy_changes_active);
-        if let Some((then, now)) = counts.filter(|(then, now)| then != now) {
-            h.supporting.push(format!(
-                "Active Compy changes: {then} during the baseline vs {now} during this session (older rollbacks carry no date and show up only in this count)."
-            ));
+        // #669: a session that recorded no count (its start couldn't read the change history, or
+        // couldn't confirm any change) can neither show a delta nor vouch for a match — `counts` is Ok
+        // only when both sides did. 453-f1: both counts are made the same way (per change on both, or
+        // the older rule on both), and per change the active and can't-confirm counts compare apart.
+        let counts = crate::sessions::comparable_change_counts(b, c);
+        if let Ok((then, now)) = counts {
+            if then != now {
+                h.supporting.push(format!(
+                    "Active Compy changes: {then} during the baseline vs {now} during this session (older rollbacks carry no date and show up only in this count)."
+                ));
+            }
         }
         if h.supporting.is_empty() {
             match (ledger, counts) {
-                (LedgerHealth::Complete, Some((_, now))) => h.contradicting.push(format!(
+                (LedgerHealth::Complete, Ok((_, now))) => h.contradicting.push(format!(
                     "No Compy changes were applied or rolled back between these sessions and the active-change count matches ({now})."
                 )),
                 // A count never recorded is the ABSENCE of evidence too: the hypothesis stays open.
-                (LedgerHealth::Complete, None) => h.missing.push(
-                    "One of these sessions didn't record how many Compy changes were active (Compy couldn't read its change history when it began) — a Compy change can't be ruled in or out."
-                        .into(),
-                ),
+                (LedgerHealth::Complete, Err(missing)) => h.missing.push(format!(
+                    "One of these sessions didn't record how many Compy changes were active ({} when it began) — a Compy change can't be ruled in or out.",
+                    missing.unrecorded_changes_reason()
+                )),
                 // Silence from a ledger we could not read is the ABSENCE of evidence, not
                 // evidence of absence. Route it to `missing` so the hypothesis lands in
                 // unknowns instead of ruled_out — Compy never clears itself off a record it
@@ -2445,6 +2449,9 @@ mod tests {
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
             compy_changes_active: Some(0),
+            compy_changes_per_change: true,
+            compy_changes_cant_confirm: Some(0),
+            compy_changes_legacy_active: None,
             hw_fingerprint: None,
             gaming_mode_active: None,
             stutter_insight: None,
@@ -3415,6 +3422,37 @@ mod tests {
                 r.unknowns
             );
         }
+    }
+
+    // 453-f1 review: counts are compared made the same way. Per change, a can't-confirm count that
+    // moved is a delta even with the active count equal; a session an older Compy recorded is
+    // compared on the older rule's count, which this build records too.
+    #[test]
+    fn change_counts_are_compared_like_with_like() {
+        let (b, c) = two_sessions(100.0, 82.0);
+        let run = |b: &SessionSummary, c: &SessionSummary| {
+            let inp = WhatChangedInputs {
+                baseline: b,
+                current: c,
+                events_window: vec![],
+                events_ambiguous: vec![],
+                snapshots: &[],
+            };
+            format!("{:?}", what_changed(&inp, LedgerHealth::Complete))
+        };
+        let moved_cant = SessionSummary { compy_changes_cant_confirm: Some(1), ..c.clone() };
+        let dump = run(&b, &moved_cant);
+        assert!(dump.contains("Active Compy changes: 0 during the baseline vs 0 (and 1 it can't confirm)"), "{dump}");
+        assert!(!dump.contains("count matches"), "{dump}");
+
+        let old_b = SessionSummary { compy_changes_per_change: false, compy_changes_cant_confirm: None, ..b.clone() };
+        let dump = run(&old_b, &SessionSummary { compy_changes_legacy_active: Some(0), ..c.clone() });
+        assert!(dump.contains("count matches (0)"), "{dump}");
+        let dump = run(&old_b, &SessionSummary { compy_changes_legacy_active: Some(2), ..c.clone() });
+        assert!(dump.contains("Active Compy changes: 0 during the baseline vs 2"), "{dump}");
+        // No older-rule count on the newer session: nothing to compare, the gap is named.
+        let dump = run(&old_b, &c);
+        assert!(!dump.contains("count matches") && dump.contains("didn't record how many Compy changes"), "{dump}");
     }
 
     #[test]
