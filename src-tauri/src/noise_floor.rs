@@ -10,7 +10,9 @@
 //!
 //! What the number is: the spread (coefficient of variation) of the 1% low across the ten 2.5 s
 //! windows of ONE ~25 s calibration, not the variation between whole sessions. Verdicts don't use
-//! it yet; they still judge against the fixed `DEFAULT_NOISE_FLOOR_PCT` (P4-noise changes that).
+//! it: they judge against [`between_session_noise`] (P4-noise), the spread between whole unchanged
+//! sessions of the game read from the session store and change history, never below the fixed
+//! `DEFAULT_NOISE_FLOOR_PCT` ([`noise_band_pct`]).
 //!
 //! Game builds aren't readable yet (`GameStateFingerprint::game_build` is always unknown), so a game
 //! update can't mark a measurement stale until that field is filled; the record keeps the stamp so
@@ -204,6 +206,135 @@ pub(crate) fn upsert(
     store.records.drain(..over);
     store.schema_version = SCHEMA_VERSION;
     true
+}
+
+// ─── Between-session noise (P4-noise) ─────────────────────────────────────
+
+/// Fewest unchanged sessions of a game that count as a measurement of its session-to-session spread.
+/// TRIAL_PROTOCOL §5 asks for "credible run-to-run variation" but names no count, so this is 3: the
+/// fewest that give more than one comparison. Below it, the spread stays unmeasured.
+pub(crate) const MIN_UNCHANGED_SESSIONS: usize = 3;
+
+/// How much an unchanged game's 1% low differed between whole sessions on this PC. Persisted on the
+/// Trial record and its noise evidence (additive: older records load as `None`).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct BetweenSessionNoise {
+    /// The largest difference in the 1% low between two of the counted sessions that ran with nothing
+    /// changed between them, in percent of the lower one.
+    pub spread_pct: f64,
+    /// How many sessions were counted (at least [`MIN_UNCHANGED_SESSIONS`]).
+    pub sessions: u32,
+}
+
+/// The band a Trial is judged against: the measured between-session spread, but never below the
+/// fixed default; the fixed default when the spread isn't measured.
+pub(crate) fn noise_band_pct(measured: Option<&BetweenSessionNoise>) -> f64 {
+    let floor = crate::comparison::DEFAULT_NOISE_FLOOR_PCT;
+    measured.map_or(floor, |m| m.spread_pct.max(floor))
+}
+
+/// A session measured under `then` describes the game under `now`: same game, same rig, same driver,
+/// and the Windows build read on both sides and equal (the game build by the same stamp rule as
+/// [`lookup`]). Anything unread doesn't count.
+fn still_current(then: &NoiseConditions, now: &NoiseConditions) -> bool {
+    let rig = then.hw_fingerprint.hash == now.hw_fingerprint.hash
+        && then.hw_fingerprint.gpu_driver == now.hw_fingerprint.gpu_driver
+        && same_rig(&then.hw_fingerprint, &now.hw_fingerprint);
+    let windows = then.windows_build.is_some() && then.windows_build == now.windows_build;
+    then.process_name.eq_ignore_ascii_case(&now.process_name)
+        && rig
+        && windows
+        && stamp(then.game_build.as_ref(), now.game_build.as_ref()) == Some(true)
+}
+
+fn parse(at: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(at).ok()
+}
+
+/// When a session ended, from its start and duration. `None` when the start can't be read.
+fn ended(s: &crate::sessions::SessionSummary) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let secs = i64::try_from(s.duration_secs).ok()?;
+    Some(parse(&s.started_at)? + chrono::Duration::seconds(secs))
+}
+
+/// Whether any Compy change was applied or undone between `a` starting and `b` ending. A date that
+/// can't be read counts as inside: an unknown never passes as "nothing changed". An undo too old to
+/// carry a date can't be placed; the sessions' active-change counts are what catch it.
+fn compy_change_between(
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+    a: &crate::sessions::SessionSummary,
+    b: &crate::sessions::SessionSummary,
+) -> bool {
+    let (Some(from), Some(to)) = (parse(&a.started_at), ended(b)) else { return true };
+    let inside = |at: &str| parse(at).is_none_or(|at| at >= from && at <= to);
+    ledger.iter().any(|c| inside(c.applied_at) || c.rolled_back_at.is_some_and(inside))
+}
+
+/// Two sessions of a game, `a` before `b`, between which Compy provably changed nothing: the same
+/// number of active Compy changes recorded on both, no Compy change applied or undone from `a`'s
+/// start to `b`'s end, Gaming Mode recorded and the same on both, and the pair fully comparable with
+/// no recorded condition changed (`comparability::derive`). A pair the data can't prove unchanged
+/// doesn't count.
+fn unchanged_between(
+    a: &crate::sessions::SessionSummary,
+    b: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+) -> bool {
+    let pairing = crate::comparability::derive(a, b);
+    a.compy_changes_active.is_some()
+        && a.compy_changes_active == b.compy_changes_active
+        && a.gaming_mode_active.is_some()
+        && a.gaming_mode_active == b.gaming_mode_active
+        && pairing.verdict == crate::comparability::Comparability::Comparable
+        && pairing.changed_context.is_empty()
+        && !compy_change_between(ledger, a, b)
+}
+
+/// Pure (P4-noise): how much `now`'s game varied between whole sessions on this PC with nothing
+/// changed, from Compy's own session store and change history. Only sessions long enough to be a
+/// baseline, of the same game on the same rig under `now`'s driver and Windows build, are read. In
+/// time order, each session either continues the previous one's unchanged run ([`unchanged_between`])
+/// or starts a new run; runs of two or more are counted, and the spread is the largest 1% low
+/// difference inside one run (sessions in different runs are never compared: something changed
+/// between them). Fewer than [`MIN_UNCHANGED_SESSIONS`] counted sessions is `None`: unmeasured,
+/// never estimated.
+pub(crate) fn between_session_noise(
+    sessions: &[crate::sessions::SessionSummary],
+    now: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+) -> Option<BetweenSessionNoise> {
+    let now = NoiseConditions::of_session(now)?;
+    let mut usable: Vec<(chrono::DateTime<chrono::FixedOffset>, &crate::sessions::SessionSummary)> = sessions
+        .iter()
+        .filter(|s| s.samples >= crate::experiment::MIN_BASELINE_SAMPLES)
+        .filter(|s| s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0)
+        .filter(|s| NoiseConditions::of_session(s).is_some_and(|c| still_current(&c, &now)))
+        .filter_map(|s| Some((parse(&s.started_at)?, s)))
+        .collect();
+    usable.sort_by_key(|(at, _)| *at);
+    let mut runs: Vec<Vec<f64>> = Vec::new();
+    let mut prev: Option<&crate::sessions::SessionSummary> = None;
+    for &(_, s) in &usable {
+        match (prev, runs.last_mut()) {
+            (Some(p), Some(run)) if unchanged_between(p, s, ledger) => run.push(s.low1_fps_est),
+            _ => runs.push(vec![s.low1_fps_est]),
+        }
+        prev = Some(s);
+    }
+    let runs: Vec<&Vec<f64>> = runs.iter().filter(|r| r.len() >= 2).collect();
+    let counted: usize = runs.iter().map(|r| r.len()).sum();
+    if counted < MIN_UNCHANGED_SESSIONS {
+        return None;
+    }
+    let spread_pct = runs
+        .iter()
+        .map(|r| {
+            let (lo, hi) = r.iter().fold((f64::INFINITY, 0.0_f64), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+            (hi - lo) / lo * 100.0
+        })
+        .fold(0.0_f64, f64::max);
+    let sessions = u32::try_from(counted).ok()?;
+    spread_pct.is_finite().then_some(BetweenSessionNoise { spread_pct, sessions })
 }
 
 // ─── Persistence ──────────────────────────────────────────────────────────
@@ -455,5 +586,213 @@ mod tests {
         let raw = r#"{"schema_version":9,"future":true,"records":[{"process_name":"wardogs.exe","hw_fingerprint":{"hash":"hash-25.7.1","gpu":"Radeon RX 9070 XT","gpu_driver":"25.7.1","ram_gb":32,"display":"2560x1440@165"},"noise_pct":2.0,"windows":10,"measured_at":"t","windows_build":"26200.1","sessions":2}]}"#;
         let s: NoiseFloorStore = serde_json::from_str(raw).expect("loads");
         assert_eq!(lookup(&s, &at("wardogs.exe", "25.7.1", Some("26200.1"))), NoiseLookup::Measured(2.0));
+    }
+
+    // ─── P4-noise: between-session noise ──────────────────────────────────
+
+    use crate::experiment::LedgerEntryRef;
+    use crate::sessions::SessionSummary;
+
+    const WARDOGS: &str = "WardogsClient-Win64-Shipping.exe";
+
+    /// A fully recorded 20-minute WARDOGS session on the owner's rig, as `sessions.json` stores one.
+    fn played(started_at: &str, low1: f64, active: usize) -> SessionSummary {
+        SessionSummary {
+            started_at: started_at.into(),
+            duration_secs: 1200,
+            process_name: WARDOGS.into(),
+            samples: 1170,
+            avg_fps: 240.0,
+            avg_frametime_ms: 4.2,
+            low1_fps_est: low1,
+            peak_gpu_temp_c: None,
+            peak_gpu_usage_pct: None,
+            peak_ram_used_bytes: None,
+            ram_total_bytes: None,
+            compy_changes_active: Some(active),
+            hw_fingerprint: Some(HwFingerprint {
+                hash: "62f1370e0d48cfea".into(),
+                gpu: "Radeon RX 9070 XT".into(),
+                gpu_driver: "32.0.32015.7029".into(),
+                ram_gb: 32,
+                display: "1920x1080@250".into(),
+            }),
+            gaming_mode_active: Some(false),
+            stutter_insight: None,
+            stutter_timeline: Vec::new(),
+            stutter_events: Vec::new(),
+            fps_series: Vec::new(),
+            capture_capabilities: Some(crate::capture::CaptureCapabilities::etw_dxgi(None)),
+            game_state: Some(crate::game_state::GameStateFingerprint {
+                process_name: Some(WARDOGS.into()),
+                resolution_width: Some(1920),
+                resolution_height: Some(1080),
+                display_refresh_hz: Some(250),
+                windows_build: Some("26200.8457".into()),
+                ..Default::default()
+            }),
+            peak_cpu_temp_c: None,
+            peak_gpu_hotspot_temp_c: None,
+        }
+    }
+
+    fn change<'a>(id: &'a str, applied_at: &'a str, rolled_back_at: Option<&'a str>) -> LedgerEntryRef<'a> {
+        LedgerEntryRef { id, rec_id: id, applied_at, applied: rolled_back_at.is_none(), rolled_back_at }
+    }
+
+    /// An evening of play with nothing changed: four sessions, 1% low 150 / 156 / 147 / 153.
+    fn evening() -> Vec<SessionSummary> {
+        vec![
+            played("2026-10-25T18:00:00+00:00", 150.0, 14),
+            played("2026-10-25T18:30:00+00:00", 156.0, 14),
+            played("2026-10-25T19:00:00+00:00", 147.0, 14),
+            played("2026-10-25T19:30:00+00:00", 153.0, 14),
+        ]
+    }
+
+    /// Changes Compy made long before the evening, still applied.
+    fn settled() -> Vec<LedgerEntryRef<'static>> {
+        vec![change("game-mode", "2026-10-23T14:38:16+00:00", None)]
+    }
+
+    fn spread(lo: f64, hi: f64) -> f64 {
+        (hi - lo) / lo * 100.0
+    }
+
+    #[test]
+    fn unchanged_sessions_measure_the_games_spread_between_sessions() {
+        let s = evening();
+        let got = between_session_noise(&s, &s[3], &settled()).expect("four unchanged sessions measure it");
+        assert_eq!(got.sessions, 4);
+        assert!((got.spread_pct - spread(147.0, 156.0)).abs() < 1e-9, "{got:?}");
+        assert!((noise_band_pct(Some(&got)) - spread(147.0, 156.0)).abs() < 1e-9, "a wider spread is the band");
+    }
+
+    #[test]
+    fn fewer_than_three_unchanged_sessions_stay_unmeasured() {
+        let s = evening();
+        assert_eq!(between_session_noise(&s[..2], &s[1], &settled()), None, "two sessions are one comparison");
+        assert_eq!(noise_band_pct(None), crate::comparison::DEFAULT_NOISE_FLOOR_PCT);
+        assert_eq!(between_session_noise(&s[..3], &s[2], &settled()).map(|n| n.sessions), Some(3));
+    }
+
+    #[test]
+    fn a_spread_below_three_percent_still_judges_against_three() {
+        let s: Vec<_> = [150.0, 151.0, 150.5].iter().enumerate()
+            .map(|(i, &low1)| played(&format!("2026-10-25T1{i}:00:00+00:00"), low1, 14))
+            .collect();
+        let got = between_session_noise(&s, &s[2], &settled()).unwrap();
+        assert!(got.spread_pct < 1.0, "{got:?}");
+        assert_eq!(noise_band_pct(Some(&got)), 3.0);
+    }
+
+    #[test]
+    fn a_compy_change_between_sessions_splits_them() {
+        let s = evening();
+        // Applied between the 2nd and 3rd session: 150/156 (4.0%) and 147/153 (4.1%) are two runs of
+        // two. Four sessions count, the wider run sets the spread, and 156 → 147 is never compared.
+        let ledger = vec![change("visual-effects", "2026-10-25T18:55:00+00:00", None)];
+        let mut moved = s.clone();
+        for x in &mut moved[2..] {
+            x.compy_changes_active = Some(15);
+        }
+        let got = between_session_noise(&moved, &moved[3], &ledger).unwrap();
+        assert_eq!(got.sessions, 4);
+        assert!((got.spread_pct - spread(147.0, 153.0)).abs() < 1e-9, "{got:?}");
+
+        // Applied and undone between two sessions (counts equal again): still a change.
+        let undone = vec![change("visual-effects", "2026-10-25T18:55:00+00:00", Some("2026-10-25T18:58:00+00:00"))];
+        assert_eq!(between_session_noise(&s[1..3], &s[2], &undone), None);
+        let three = [s[0].clone(), s[1].clone(), s[2].clone()];
+        assert_eq!(between_session_noise(&three, &three[2], &undone), None, "150/156 is one run of two");
+        // Applied during a session counts too.
+        let during = vec![change("visual-effects", "2026-10-25T18:10:00+00:00", None)];
+        assert_eq!(between_session_noise(&s[..3], &s[2], &during).map(|n| n.sessions), None);
+        // An undated ledger row can't be placed, so it splits every pair.
+        let undated = vec![change("visual-effects", "not a date", None)];
+        assert_eq!(between_session_noise(&s, &s[3], &undated), None);
+    }
+
+    #[test]
+    fn a_count_change_without_a_dated_row_splits_them() {
+        // An undo too old to carry a date: only the active-change counts show it.
+        let mut s = evening();
+        s[2].compy_changes_active = Some(13);
+        s[3].compy_changes_active = Some(13);
+        assert_eq!(between_session_noise(&s[..3], &s[2], &settled()), None);
+        // A session that couldn't read its change history proves nothing.
+        let mut s = evening();
+        s[1].compy_changes_active = None;
+        assert_eq!(between_session_noise(&s[..3], &s[2], &settled()), None);
+    }
+
+    #[test]
+    fn only_comparable_sessions_of_this_game_on_this_rig_count() {
+        let base = evening();
+        let check = |what: &str, edit: &dyn Fn(&mut SessionSummary)| {
+            let mut s = base[..3].to_vec();
+            edit(&mut s[1]);
+            assert_eq!(between_session_noise(&s, &s[2], &settled()), None, "{what}");
+        };
+        check("another game", &|x| x.process_name = "cs2.exe".into());
+        check("resolution changed", &|x| x.game_state.as_mut().unwrap().resolution_width = Some(2560));
+        check("refresh unrecorded", &|x| x.game_state.as_mut().unwrap().display_refresh_hz = None);
+        check("no capture record", &|x| x.capture_capabilities = None);
+        check("gaming mode on", &|x| x.gaming_mode_active = Some(true));
+        check("gaming mode unrecorded", &|x| x.gaming_mode_active = None);
+        check("rig unread", &|x| x.hw_fingerprint.as_mut().unwrap().gpu_driver = String::new());
+        check("too short to be a baseline", &|x| x.samples = 599);
+        check("no 1% low", &|x| x.low1_fps_est = 0.0);
+        // Measured under another driver or Windows build than now: not this rig's noise any more.
+        check("older driver", &|x| x.hw_fingerprint.as_mut().unwrap().gpu_driver = "31.0".into());
+        check("Windows build unread", &|x| x.game_state.as_mut().unwrap().windows_build = None);
+    }
+
+    #[test]
+    fn the_noise_is_read_under_the_conditions_now() {
+        let s = evening();
+        let mut now = s[3].clone();
+        now.hw_fingerprint.as_mut().unwrap().gpu_driver = "33.0".into();
+        assert_eq!(between_session_noise(&s, &now, &settled()), None, "a driver update since: not measured now");
+        now = s[3].clone();
+        now.game_state.as_mut().unwrap().windows_build = None;
+        assert_eq!(between_session_noise(&s, &now, &settled()), None, "Windows build unread now");
+        // The order sessions are stored in doesn't matter.
+        let mut shuffled = s.clone();
+        shuffled.reverse();
+        assert_eq!(between_session_noise(&shuffled, &s[3], &settled()), between_session_noise(&s, &s[3], &settled()));
+    }
+
+    /// The owner's real WARDOGS sessions and ledger (2026-10-23, copied from `%APPDATA%\Compy`):
+    /// every pair had a Compy change between them (the `visual-effects` Trial applied at 15:12:25,
+    /// restored 15:32:42, applied and restored 16:08:54), and the third session is 91 readings.
+    #[test]
+    fn the_owner_rigs_wardogs_sessions_measure_nothing_yet() {
+        let mut s = vec![
+            played("2026-10-23T14:49:55.232150+00:00", 153.5, 14),
+            played("2026-10-23T15:12:49.470221700+00:00", 125.1, 15),
+            played("2026-10-23T16:06:22.472457100+00:00", 190.7, 14),
+        ];
+        s[0].duration_secs = 1202;
+        s[1].duration_secs = 1125;
+        s[2].duration_secs = 106;
+        s[2].samples = 91;
+        let ledger = vec![
+            change("game-mode", "2026-10-23T14:38:16.083695300+00:00", None),
+            change("ve-1", "2026-10-23T15:12:25.719687+00:00", Some("2026-10-23T15:32:42.252265700+00:00")),
+            change("ve-2", "2026-10-23T16:08:54.598522500+00:00", Some("2026-10-23T16:08:54.600786600+00:00")),
+        ];
+        assert_eq!(between_session_noise(&s, &s[1], &ledger), None);
+        // Even with the counts made equal, the dated Trial rows split every pair.
+        s[1].compy_changes_active = Some(14);
+        s[2].samples = 1170;
+        assert_eq!(between_session_noise(&s, &s[2], &ledger), None);
+    }
+
+    #[test]
+    fn a_between_session_measurement_round_trips_and_an_older_shape_loads() {
+        let n = BetweenSessionNoise { spread_pct: 4.2, sessions: 3 };
+        let back: BetweenSessionNoise = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
+        assert_eq!(back, n);
     }
 }

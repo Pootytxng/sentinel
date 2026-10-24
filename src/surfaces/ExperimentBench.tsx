@@ -48,6 +48,9 @@ type NoiseEvidence = {
   /** Measured on this PC but not used: "changed" = an update since; "unconfirmed" = Compy couldn't
    *  confirm nothing changed. Absent/null on older records. */
   measured_noise_stale?: "changed" | "unconfirmed" | null;
+  /** P4-noise: this game's 1% low spread between whole unchanged sessions on this PC, which set the
+   *  band (never below the fixed floor). Absent/null when too few unchanged sessions existed. */
+  between_sessions?: { spread_pct: number; sessions: number } | null;
 };
 
 type Experiment = {
@@ -154,8 +157,17 @@ function confidenceCopy(t: Translate): Record<Confidence, string> {
 
 // §11 receipt line: the band the verdict was judged against, and whether this game's own noise on
 // this PC is known. An unmeasured noise level is said to be unmeasured, never filled in.
-function noiseLine(n: NoiseEvidence, t: Translate): string {
+function noiseLine(n: NoiseEvidence, game: string, t: Translate): string {
   const pct = (v: number) => String(Math.round(v * 10) / 10);
+  const b = n.between_sessions;
+  if (b != null) {
+    const [band, measured, sessions] = [pct(n.band_pct), pct(b.spread_pct), b.sessions];
+    const name = prettyGameName(game) || game;
+    // The band is the measured spread unless that was below the fixed floor, which then judged.
+    return b.spread_pct >= n.band_pct
+      ? t("lab.experimentBench.noiseBetweenSessions", { band, measured, sessions, game: name })
+      : t("lab.experimentBench.noiseBetweenSessionsBelowFloor", { band, measured, sessions, game: name });
+  }
   if (n.measured_noise_pct != null)
     return t("lab.experimentBench.noiseMeasured", { band: pct(n.band_pct), measured: pct(n.measured_noise_pct) });
   if (n.measured_noise_stale === "changed") return t("lab.experimentBench.noiseStaleChanged", { band: pct(n.band_pct) });
@@ -423,7 +435,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   // other note — a row that LOOKS judged (Better / No change / Worse) but has no record (a crash, an
   // older result), or noise lines that differ between rows — is said once under the list, and its
   // rows carry only its mark.
-  const noiseLines = history.map((x) => (x.noise_evidence ? noiseLine(x.noise_evidence, t) : null));
+  const noiseLines = history.map((x) => (x.noise_evidence ? noiseLine(x.noise_evidence, x.game, t) : null));
   const rowNotes = history.map((x, i): RowNote | null =>
     noiseLines[i] ?? (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? x.verdict_note || null : null),
   );
