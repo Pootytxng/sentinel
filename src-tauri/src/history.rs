@@ -223,14 +223,14 @@ impl ActiveCheck {
 /// disable and a session service suspend (which task or service). Each reads only when its typed
 /// action agrees with its rec id, and is `Unrecognised` otherwise; every other row is
 /// [`probe_rec_target`]. Read-only, and takes no lock.
-fn check_change_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
-    live_check(&c.rec_id, c.applied_action.as_ref(), reads)
+fn check_row_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
+    check_change_state(&c.rec_id, c.applied_action.as_ref(), reads)
 }
 
-/// [`check_change_state`] from a rec id and its typed action, without a ledger row. The
-/// rollback-first commit (#616) reads an undone change back through this, because by then its
-/// receipt was never saved. Read-only, and takes no lock.
-fn live_check(rec_id: &str, action: Option<&AppliedAction>, reads: &LiveReads) -> ActiveCheck {
+/// [`check_row_state`] from a rec id and its typed action, without a ledger row. The rollback-first
+/// commit (#616) also reads an undone change back through this, because by then its receipt was
+/// never saved. Read-only, and takes no lock.
+fn check_change_state(rec_id: &str, action: Option<&AppliedAction>, reads: &LiveReads) -> ActiveCheck {
     if let Some(name) = rec_id.strip_prefix("startup-entry:") {
         return startup_row_check(name, action, startup_approval_value);
     }
@@ -327,7 +327,7 @@ pub(crate) fn probe_applied_setting(changes: &[AppliedChange], rec_id: &str) -> 
         .iter()
         .rev()
         .find(|c| c.rec_id == rec_id && c.status == "applied")
-        .map_or_else(|| probe_rec_target(rec_id), |c| check_change_state(c, &LiveReads::default()))
+        .map_or_else(|| probe_rec_target(rec_id), |c| check_row_state(c, &LiveReads::default()))
 }
 
 /// Read-only: does the live machine read as being in `rec_id`'s TARGET state right now? The same
@@ -364,7 +364,7 @@ pub(crate) fn probe_rec_target(rec_id: &str) -> ActiveCheck {
 }
 
 fn check_change_active(c: &AppliedChange, reads: &LiveReads) -> bool {
-    check_change_state(c, reads).legacy_active()
+    check_row_state(c, reads).legacy_active()
 }
 
 /// Read-only enrichment (computed-at-read, never persisted): the "after" state Compy's change set
@@ -467,7 +467,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
 
 /// [`into_view`] inside a pass that shares its [`LiveReads`] across rows.
 fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
-    let active_check = (c.status == "applied").then(|| check_change_state(&c, reads));
+    let active_check = (c.status == "applied").then(|| check_row_state(&c, reads));
     let is_still_active = active_check.is_some_and(ActiveCheck::legacy_active);
     let restores_label = restores_label_from_snapshot(&c.snapshot);
     let applied_label = applied_label_from_action(&c.applied_action);
@@ -810,10 +810,10 @@ impl Made {
 }
 
 /// What undoing a change needs from the machine. Production passes `actions::dispatch_rollback`
-/// (the one mutation boundary) and the ledger's own live re-check ([`live_check`], given the rec id
-/// and the typed action the apply returned, so a startup-app, bloat-task or service-suspend undo is
-/// read back as precisely as its ledger row would be); the guard tests pass fakes, so they never
-/// touch Windows.
+/// (the one mutation boundary) and the ledger's own live re-check ([`check_change_state`], given
+/// the rec id and the typed action the apply returned, so a startup-app, bloat-task or
+/// service-suspend undo is read back as precisely as its ledger row would be); the guard tests pass
+/// fakes, so they never touch Windows.
 struct UndoEffects<'a> {
     rollback: &'a dyn Fn(&RollbackAction, &Snapshot) -> Result<(), String>,
     probe: &'a dyn Fn(&str, &AppliedAction) -> ActiveCheck,
@@ -960,7 +960,9 @@ fn record_receipts(
     let rollback = |a: &RollbackAction, s: &Snapshot| {
         dispatch_rollback(root, a, s).inspect_err(|_| undo_failed.set(true))
     };
-    let probe = |rec_id: &str, applied: &AppliedAction| live_check(rec_id, Some(applied), &LiveReads::default());
+    let probe = |rec_id: &str, applied: &AppliedAction| {
+        check_change_state(rec_id, Some(applied), &LiveReads::default())
+    };
     let effects = UndoEffects { rollback: &rollback, probe: &probe };
     commit_receipts(history, made, &save, &effects).inspect_err(|e| {
         // A change that had to be undone because it couldn't be recorded, and above all one whose
@@ -3904,8 +3906,8 @@ mod row_probe_tests {
         let rec = "startup-entry:compy-620-row-probe-absent-entry";
         let name = &rec["startup-entry:".len()..];
         let reads = LiveReads::default();
-        assert_eq!(check_change_state(&row(rec, "applied", toggle(name, true)), &reads), ActiveCheck::On);
-        assert_eq!(check_change_state(&row(rec, "applied", toggle(name, false)), &reads), ActiveCheck::Off);
+        assert_eq!(check_row_state(&row(rec, "applied", toggle(name, true)), &reads), ActiveCheck::On);
+        assert_eq!(check_row_state(&row(rec, "applied", toggle(name, false)), &reads), ActiveCheck::Off);
     }
 
     #[test]
@@ -3925,7 +3927,7 @@ mod row_probe_tests {
             row("service-suspend:WSearch", "applied", Some(AppliedAction::SuspendKnownService { service: KnownService::SysMain })),
             row("service-suspend:WSearch", "applied", Some(AppliedAction::DisableKnownService { service: KnownService::WSearch })),
         ] {
-            assert_eq!(check_change_state(&c, &LiveReads::default()), ActiveCheck::Unrecognised, "{} {:?}", c.rec_id, c.applied_action);
+            assert_eq!(check_row_state(&c, &LiveReads::default()), ActiveCheck::Unrecognised, "{} {:?}", c.rec_id, c.applied_action);
         }
     }
 
@@ -3966,7 +3968,7 @@ mod row_probe_tests {
             row("bloat-task:ceip-consolidator", "applied", task(KnownBloatTask::CeipConsolidator)),
             row("bloat-task:compatibility-appraiser", "applied", task(KnownBloatTask::CompatibilityAppraiser)),
         ];
-        let checks: Vec<ActiveCheck> = rows.iter().map(|c| check_change_state(c, &reads)).collect();
+        let checks: Vec<ActiveCheck> = rows.iter().map(|c| check_row_state(c, &reads)).collect();
         use ActiveCheck::*;
         assert_eq!(checks, [On, On, Off, Unreadable], "the appraiser is not in the listing, so it reads unknown");
         assert_eq!(LISTINGS.load(Ordering::SeqCst), 1, "one listing for the whole pass");

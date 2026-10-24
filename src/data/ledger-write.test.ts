@@ -401,7 +401,8 @@ describe("the ledger-writing command list matches src-tauri", () => {
     const seeds = functionsIn(sources)
       .filter((f) => mentions(f.body, "save_history"))
       .map((f) => f.name);
-    expect(seeds).toContain("apply_recommendation_inner");
+    // Apply gateways record through the rollback-first commit (issue 616), so its save is the write site.
+    expect(seeds).toContain("record_receipts");
     expect(seeds).toContain("rollback_change_inner");
   });
 
