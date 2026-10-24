@@ -582,7 +582,7 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     expect(
       await screen.findByText(
-        "Judged against a ±5.9% noise floor: across 4 of your unchanged WardogsClient sessions on this PC, the 1% low frame rate differed by up to 5.9% from one session to the next.",
+        "Judged against a ±5.9% noise floor: across 4 of your unchanged WardogsClient sessions on this PC, the 1% low frame rate differed by up to 5.9% between any two of those sessions.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/hasn't been measured yet/)).not.toBeInTheDocument();
@@ -597,7 +597,7 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     expect(
       await screen.findByText(
-        "Judged against Compy's 3% minimum noise floor: across 3 of your unchanged Valorant sessions on this PC, the 1% low frame rate differed by up to 1.8% from one session to the next, which is less than that minimum.",
+        "Judged against Compy's 3% minimum noise floor: across 3 of your unchanged Valorant sessions on this PC, the 1% low frame rate differed by up to 1.8% between any two of those sessions, which is less than that minimum.",
       ),
     ).toBeInTheDocument();
   });

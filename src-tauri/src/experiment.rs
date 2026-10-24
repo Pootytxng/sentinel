@@ -1174,9 +1174,10 @@ pub(crate) fn halves_floor_pct(rec: &ExperimentRecord) -> f64 {
     rec.halves_floor_pct.unwrap_or(DEFAULT_NOISE_FLOOR_PCT)
 }
 
-/// Pure: grade a session's two halves (average fps) against `noise_floor_pct`, the halves threshold
-/// ([`halves_floor_pct`]). The halves split the trace's buckets by count, the earlier half first.
-pub(crate) fn grade_baseline(session: &SessionSummary, noise_floor_pct: f64) -> BaselineGrade {
+/// Pure: grade a session's two halves (average fps) against `halves_floor_pct`, the halves threshold
+/// ([`halves_floor_pct`]), never the verdict band. The halves split the trace's buckets by count,
+/// the earlier half first.
+pub(crate) fn grade_baseline(session: &SessionSummary, halves_floor_pct: f64) -> BaselineGrade {
     if session.samples < MIN_BASELINE_SAMPLES {
         return BaselineGrade::TooShort { samples: session.samples };
     }
@@ -1187,7 +1188,7 @@ pub(crate) fn grade_baseline(session: &SessionSummary, noise_floor_pct: f64) -> 
     }
     let (first, second) = (mean(&fps[..half]), mean(&fps[half..]));
     let halves = BaselineHalves { first_half_fps: round1(first), second_half_fps: round1(second) };
-    if (second - first).abs() / first * 100.0 > noise_floor_pct {
+    if (second - first).abs() / first * 100.0 > halves_floor_pct {
         BaselineGrade::Uneven(halves)
     } else {
         BaselineGrade::Steady(halves)
@@ -1212,9 +1213,9 @@ pub(crate) enum BaselineCheck {
 /// are judged against the fixed default ([`halves_floor_pct`]), not the verdict band.
 pub(crate) fn baseline_for_start(
     session: &SessionSummary,
-    noise_floor_pct: f64,
+    halves_floor_pct: f64,
 ) -> Result<(BaselineCheck, Option<BaselineHalves>), String> {
-    match grade_baseline(session, noise_floor_pct) {
+    match grade_baseline(session, halves_floor_pct) {
         BaselineGrade::Steady(h) => Ok((BaselineCheck::Steady, Some(h))),
         BaselineGrade::Uneven(h) => Ok((BaselineCheck::Uneven, Some(h))),
         BaselineGrade::Untraced => Ok((BaselineCheck::Untraced, None)),

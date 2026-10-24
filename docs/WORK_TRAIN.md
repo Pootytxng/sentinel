@@ -123,7 +123,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       uneven-halves grading stays on the fixed 3% (owner). An effect inside the band reads No change.
 - [ ] **P4-noise-proof** (owner) Play 3 WARDOGS sessions >= 10 min with no Compy change, Trial or Gaming
       Mode change between them; then confirm the receipt shows the measured band. None qualify yet.
-- [ ] **P4-noise-copy** "from one session to the next" → "between any two of those sessions" (en); rename
+- [x] **P4-noise-copy** Lands with the 2026-10-24 evening log entry. "from one session to the next" → "between any two of those sessions" (en); rename
       `grade_baseline`'s `noise_floor_pct` param to `halves_floor_pct`; fix ExperimentBench.tsx:206 comment.
 - [x] **453-fix** `dce14e95`: Health, Optimize and History count one per change whose live check reads On;
       can't-confirm grouped the same on all three; shared parity fixture (Rust + TS).
@@ -180,6 +180,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
   rig-stamp bug, see 453-fix); diagnostics agreed; startup toggle visible + rolled back everywhere;
   CPU temp unknown with reason. P4-noise `f1c93f44`.
 - 2026-10-24 afternoon: 453-fix `dce14e95`.
+- 2026-10-24 evening (scheduled, CODE-ONLY, owner in WARDOGS): P4-noise-copy (this entry's commit);
+  tsc 0, ExperimentBench 54/54, cargo experiment 105/0, clippy clean; not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)

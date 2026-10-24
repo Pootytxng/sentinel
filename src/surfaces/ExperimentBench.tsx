@@ -203,9 +203,9 @@ function isUsableReading(s: SessionSummary): boolean {
 // Trial Protocol §2 — the backend's baseline grade (experiment.rs `grade_baseline`), mirrored so the
 // bench says why a too-short baseline can't be used instead of offering a start the backend refuses,
 // and warns before starting on an uneven or untraced one (owner decision 2026-10-24: warn, don't
-// block; blocking on uneven waits for P4-noise's per-game noise). The
-// floor is the 3% band a new Trial is judged against (comparison.rs DEFAULT_NOISE_FLOOR_PCT); the
-// halves split the 10 s fps buckets by count, and a session without its trace is unknown, never steady.
+// block). The halves floor is the fixed 3% default (experiment.rs `halves_floor_pct`, comparison.rs
+// DEFAULT_NOISE_FLOOR_PCT), not the verdict band, which P4-noise measures per game; the halves split
+// the 10 s fps buckets by count, and a session without its trace is unknown, never steady.
 const MIN_BASELINE_SAMPLES = 600;
 const BASELINE_NOISE_FLOOR_PCT = 3;
 type BaselineGrade =
