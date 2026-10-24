@@ -613,18 +613,62 @@ fn reg_sz(v: &str) -> winreg::RegValue {
     v.to_reg_value()
 }
 
-fn prior_dword(v: &Option<winreg::RegValue>) -> Option<u32> {
-    use winreg::types::FromRegValue;
-    v.as_ref().and_then(|v| u32::from_reg_value(v).ok())
+/// A DWORD prior exactly as History will restore it: absent => None; a 4-byte REG_DWORD => its
+/// value. Any other type or size is Err, so the apply refuses before any write (issue 617 review):
+/// rollback writes a DWORD or deletes, and either would lose a value stored some other way.
+fn prior_dword(name: &str, v: &Option<winreg::RegValue>) -> Result<Option<u32>, String> {
+    match v {
+        None => Ok(None),
+        Some(v) if v.vtype == winreg::enums::RegType::REG_DWORD && v.bytes.len() == 4 => {
+            Ok(Some(u32::from_le_bytes([v.bytes[0], v.bytes[1], v.bytes[2], v.bytes[3]])))
+        }
+        Some(v) => Err(format!(
+            "{name} is stored as {:?} ({} bytes), not a DWORD, so it cannot be saved for undo",
+            v.vtype,
+            v.bytes.len()
+        )),
+    }
 }
 
-/// Write every value or none (see the section comment above). Err: nothing was left changed and
-/// the message says so. Ok: every write landed — or a write failed AND putting an earlier one back
-/// also failed, in which case the caller's full snapshot is recorded so History can undo it all.
-pub(crate) fn hkcu_write_all_or_restore(
+/// A REG_BINARY prior exactly as History will restore it (rollback writes REG_BINARY or deletes).
+fn prior_binary(name: &str, v: &Option<winreg::RegValue>) -> Result<Option<Vec<u8>>, String> {
+    match v {
+        None => Ok(None),
+        Some(v) if v.vtype == winreg::enums::RegType::REG_BINARY => Ok(Some(v.bytes.clone())),
+        Some(v) => Err(format!("{name} is stored as {:?}, not binary, so it cannot be saved for undo", v.vtype)),
+    }
+}
+
+/// A mouse REG_SZ prior as the snapshot stores it: absent => "" (rollback deletes). A present
+/// value must be a non-empty REG_SZ: "" would roll back as a delete of a value that existed, and
+/// rollback writes REG_SZ, so any other type would come back changed. Either is Err (refuse).
+fn prior_mouse_sz(name: &str, v: &Option<winreg::RegValue>) -> Result<String, String> {
+    use winreg::types::FromRegValue;
+    match v {
+        None => Ok(String::new()),
+        Some(v) if v.vtype == winreg::enums::RegType::REG_SZ => {
+            let s = String::from_reg_value(v)
+                .map_err(|e| format!("cannot save {name} for undo: {e}"))?;
+            if s.is_empty() {
+                Err(format!("{name} is present but empty, so it cannot be saved for undo"))
+            } else {
+                Ok(s)
+            }
+        }
+        Some(v) => Err(format!("{name} is stored as {:?}, not text, so it cannot be saved for undo", v.vtype)),
+    }
+}
+
+/// Write every value or none (see the section comment above). The priors are read ONCE, here, and
+/// handed to `snapshot`, which builds the undo snapshot from them; if `snapshot` refuses (a prior
+/// History could not restore exactly), nothing is written. Err: nothing was left changed and the
+/// message says so. Ok: every write landed — or a write failed AND putting an earlier one back also
+/// failed, in which case the full snapshot is still returned so History can undo it all (F1).
+pub(crate) fn hkcu_write_all_or_restore<T>(
     reg: &mut dyn HkcuValues,
     writes: &[HkcuWrite],
-) -> Result<(), String> {
+    snapshot: impl FnOnce(&[Option<winreg::RegValue>]) -> Result<T, String>,
+) -> Result<T, String> {
     let mut priors = Vec::with_capacity(writes.len());
     for w in writes {
         priors.push(
@@ -632,6 +676,7 @@ pub(crate) fn hkcu_write_all_or_restore(
                 .map_err(|e| format!("{e}; nothing was changed"))?,
         );
     }
+    let snap = snapshot(&priors).map_err(|e| format!("{e}; nothing was changed"))?;
     for (i, w) in writes.iter().enumerate() {
         let Err(e) = reg.write(w.subkey, w.name, &w.value) else {
             continue;
@@ -646,7 +691,7 @@ pub(crate) fn hkcu_write_all_or_restore(
         }
         if undo_failed {
             // F1: keep the receipt so History's rollback can restore every value.
-            return Ok(());
+            return Ok(snap);
         }
         return Err(if i == 0 {
             format!("{e}; nothing was changed")
@@ -654,7 +699,7 @@ pub(crate) fn hkcu_write_all_or_restore(
             format!("{e}; the {i} setting(s) already changed in this step were put back, so nothing was left changed")
         });
     }
-    Ok(())
+    Ok(snap)
 }
 
 /// One step of an elevated multi-step script for `ps_all_or_restore`. `undo` puts this step's
@@ -719,23 +764,24 @@ pub(crate) fn apply_game_mode() -> Result<ApplyResult, String> {
 }
 
 fn apply_game_mode_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, String> {
-    let prior_enabled = prior_dword(&reg.read(GAMEBAR_KEY, GAME_MODE_ENABLED_VALUE)?);
-    let prior_allow = prior_dword(&reg.read(GAMEBAR_KEY, GAME_MODE_ALLOW_VALUE)?);
     // Mirror the Settings UI: set the whole pair so Windows has nothing to reconcile away.
-    hkcu_write_all_or_restore(
+    let snapshot = hkcu_write_all_or_restore(
         reg,
         &[
             HkcuWrite { subkey: GAMEBAR_KEY, name: GAME_MODE_ALLOW_VALUE, value: reg_dword(1) },
             HkcuWrite { subkey: GAMEBAR_KEY, name: GAME_MODE_ENABLED_VALUE, value: reg_dword(1) },
         ],
+        |p| {
+            Ok(Snapshot::GameMode {
+                prior_allow: prior_dword(GAME_MODE_ALLOW_VALUE, &p[0])?,
+                prior_enabled: prior_dword(GAME_MODE_ENABLED_VALUE, &p[1])?,
+            })
+        },
     )?;
     Ok(ApplyResult {
         applied_action: AppliedAction::EnableGameMode,
         rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
-        snapshot: Snapshot::GameMode {
-            prior_enabled,
-            prior_allow,
-        },
+        snapshot,
         elevation_used: false,
     })
 }
@@ -777,10 +823,7 @@ pub(crate) fn apply_visual_effects() -> Result<ApplyResult, String> {
 }
 
 fn apply_visual_effects_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, String> {
-    let vfx_setting_prior = prior_dword(&reg.read(VFX_KEY, "VisualFXSetting")?);
-    let user_prefs_mask_prior: Option<Vec<u8>> =
-        reg.read(DESKTOP_KEY, "UserPreferencesMask")?.map(|v| v.bytes);
-    hkcu_write_all_or_restore(
+    let snapshot = hkcu_write_all_or_restore(
         reg,
         &[
             HkcuWrite { subkey: VFX_KEY, name: "VisualFXSetting", value: reg_dword(2) },
@@ -793,15 +836,18 @@ fn apply_visual_effects_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, St
                 },
             },
         ],
+        |p| {
+            Ok(Snapshot::VisualEffects {
+                vfx_setting_prior: prior_dword("VisualFXSetting", &p[0])?,
+                user_prefs_mask_prior: prior_binary("UserPreferencesMask", &p[1])?,
+            })
+        },
     )?;
 
     Ok(ApplyResult {
         applied_action: AppliedAction::SetVisualEffectsBestPerformance,
         rollback_action: RollbackAction::RestoreVisualEffectsFromSnapshot,
-        snapshot: Snapshot::VisualEffects {
-            vfx_setting_prior,
-            user_prefs_mask_prior,
-        },
+        snapshot,
         elevation_used: false,
     })
 }
@@ -3927,23 +3973,24 @@ pub(crate) fn apply_game_bar_disable() -> Result<ApplyResult, String> {
 }
 
 fn apply_game_bar_disable_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, String> {
-    let prior_capture = prior_dword(&reg.read(GAMEDVR_KEY, "AppCaptureEnabled")?);
-    let prior_enabled = prior_dword(&reg.read(GAME_CONFIG_STORE_KEY, "GameDVR_Enabled")?);
-    hkcu_write_all_or_restore(
+    let snapshot = hkcu_write_all_or_restore(
         reg,
         &[
             HkcuWrite { subkey: GAMEDVR_KEY, name: "AppCaptureEnabled", value: reg_dword(0) },
             HkcuWrite { subkey: GAME_CONFIG_STORE_KEY, name: "GameDVR_Enabled", value: reg_dword(0) },
         ],
+        |p| {
+            Ok(Snapshot::GameBar {
+                prior_capture: prior_dword("AppCaptureEnabled", &p[0])?,
+                prior_enabled: prior_dword("GameDVR_Enabled", &p[1])?,
+            })
+        },
     )?;
 
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableGameBarAndDvr,
         rollback_action: RollbackAction::RestoreGameBarFromSnapshot,
-        snapshot: Snapshot::GameBar {
-            prior_capture,
-            prior_enabled,
-        },
+        snapshot,
         elevation_used: false,
     })
 }
@@ -4527,6 +4574,7 @@ pub(crate) fn core_parking_apply_script(prior_ac: u32, prior_dc: Option<u32>) ->
     };
     ps_all_or_restore(&[
         PsStep { write: idx("ac", 0), undo: idx("ac", prior_ac), native: true },
+        // No DC prior (never read back): the DC undo writes the AC prior, as the rollback does.
         PsStep { write: idx("dc", 0), undo: idx("dc", prior_dc.unwrap_or(prior_ac)), native: true },
         PsStep {
             write: "powercfg -setactive SCHEME_CURRENT".to_string(),
@@ -4686,41 +4734,29 @@ pub(crate) fn apply_mouse_accel_off() -> Result<ApplyResult, String> {
 }
 
 fn apply_mouse_accel_off_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, String> {
-    use winreg::types::FromRegValue;
-
     // All three values are REG_SZ strings, not DWORDs. Windows is weird.
-    // Distinguish a genuinely-absent value (NotFound => "" — rollback deletes, the faithful inverse)
-    // from a value that's PRESENT but unreadable (e.g. stored as the wrong type => Err, refuse).
-    // Folding a failed read of a present value into "" would make rollback delete the user's real
-    // setting and reconstitute the default accel curve. Mirrors read_mmcss_priors' NotFound split.
-    let mut read_sz = |name: &str| -> Result<String, String> {
-        match reg.read(MOUSE_KEY, name)? {
-            None => Ok(String::new()),
-            Some(v) => String::from_reg_value(&v)
-                .map_err(|e| format!("cannot snapshot {name} for rollback: {e}")),
-        }
-    };
-    let prior_speed = read_sz("MouseSpeed")?;
-    let prior_threshold1 = read_sz("MouseThreshold1")?;
-    let prior_threshold2 = read_sz("MouseThreshold2")?;
-
-    hkcu_write_all_or_restore(
+    // The snapshot stores "" for an absent value (rollback deletes, the faithful inverse), so a
+    // present value that is empty or not REG_SZ refuses before any write (see `prior_mouse_sz`).
+    let snapshot = hkcu_write_all_or_restore(
         reg,
         &[
             HkcuWrite { subkey: MOUSE_KEY, name: "MouseSpeed", value: reg_sz("0") },
             HkcuWrite { subkey: MOUSE_KEY, name: "MouseThreshold1", value: reg_sz("0") },
             HkcuWrite { subkey: MOUSE_KEY, name: "MouseThreshold2", value: reg_sz("0") },
         ],
+        |p| {
+            Ok(Snapshot::MouseAccel {
+                prior_speed: prior_mouse_sz("MouseSpeed", &p[0])?,
+                prior_threshold1: prior_mouse_sz("MouseThreshold1", &p[1])?,
+                prior_threshold2: prior_mouse_sz("MouseThreshold2", &p[2])?,
+            })
+        },
     )?;
 
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableMouseAcceleration,
         rollback_action: RollbackAction::RestoreMouseAccelFromSnapshot,
-        snapshot: Snapshot::MouseAccel {
-            prior_speed,
-            prior_threshold1,
-            prior_threshold2,
-        },
+        snapshot,
         elevation_used: false,
     })
 }
@@ -6531,5 +6567,110 @@ mod all_or_nothing_tests {
         assert_eq!(receipts.get("item-a"), Some(&true), "failed undo -> recorded");
         assert_eq!(receipts.get("item-b"), Some(&false), "clean undo -> fail receipt");
         assert_eq!(std::fs::read_to_string(&fb).unwrap(), "old");
+    }
+
+    // ── review round 2 on issue 617: the snapshot must be exact, or the apply refuses ──
+
+    type ApplyWith = fn(&mut dyn HkcuValues) -> Result<ApplyResult, String>;
+    type HkcuApplyCase = (&'static str, ApplyWith, Vec<(&'static str, &'static str)>);
+
+    /// Every HKCU multi-write apply with the (subkey, value) pairs it snapshots.
+    fn hkcu_applies() -> Vec<HkcuApplyCase> {
+        vec![
+            (
+                "game-bar",
+                apply_game_bar_disable_with as ApplyWith,
+                vec![(GAMEDVR_KEY, "AppCaptureEnabled"), (GAME_CONFIG_STORE_KEY, "GameDVR_Enabled")],
+            ),
+            (
+                "game-mode",
+                apply_game_mode_with as ApplyWith,
+                vec![(GAMEBAR_KEY, GAME_MODE_ENABLED_VALUE), (GAMEBAR_KEY, GAME_MODE_ALLOW_VALUE)],
+            ),
+            (
+                "visual-effects",
+                apply_visual_effects_with as ApplyWith,
+                vec![(VFX_KEY, "VisualFXSetting"), (DESKTOP_KEY, "UserPreferencesMask")],
+            ),
+            (
+                "mouse",
+                apply_mouse_accel_off_with as ApplyWith,
+                vec![(MOUSE_KEY, "MouseSpeed"), (MOUSE_KEY, "MouseThreshold1"), (MOUSE_KEY, "MouseThreshold2")],
+            ),
+        ]
+    }
+
+    fn assert_refused_untouched(mut reg: FakeHkcu, apply: ApplyWith, what: &str) {
+        let before = reg.vals.clone();
+        let err = must_err(apply(&mut reg), what);
+        assert_eq!(reg.writes, 0, "{what}: nothing may be written: {err}");
+        assert!(reg.vals == before, "{what}: registry must be unchanged");
+        assert!(err.contains("nothing was changed"), "{what}: {err}");
+    }
+
+    #[test]
+    fn every_hkcu_apply_refuses_an_unreadable_prior_before_any_write() {
+        for (tag, apply, slots) in hkcu_applies() {
+            for (_, name) in &slots {
+                let reg = FakeHkcu { fail_read: Some(name), ..Default::default() };
+                assert_refused_untouched(reg, apply, &format!("{tag}/{name} unreadable"));
+            }
+        }
+    }
+
+    #[test]
+    fn a_dword_prior_of_the_wrong_type_refuses_before_any_write() {
+        let wrong = [
+            ("REG_SZ", winreg::RegValue { bytes: vec![b'1', 0, 0, 0], vtype: RegType::REG_SZ }),
+            ("QWORD", winreg::RegValue { bytes: vec![1, 0, 0, 0, 0, 0, 0, 0], vtype: RegType::REG_QWORD }),
+            ("short DWORD", winreg::RegValue { bytes: vec![1, 0], vtype: RegType::REG_DWORD }),
+        ];
+        for (tag, apply, slots) in hkcu_applies() {
+            for (subkey, name) in &slots {
+                if *name == "UserPreferencesMask" || *subkey == MOUSE_KEY {
+                    continue; // not DWORDs
+                }
+                for (kind, v) in &wrong {
+                    let v = winreg::RegValue { bytes: v.bytes.clone(), vtype: v.vtype.clone() };
+                    let reg = FakeHkcu::default().with(subkey, name, v);
+                    assert_refused_untouched(reg, apply, &format!("{tag}/{name} as {kind}"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_user_prefs_mask_that_is_not_binary_refuses_before_any_write() {
+        let reg = FakeHkcu::default().with(DESKTOP_KEY, "UserPreferencesMask", reg_dword(7));
+        assert_refused_untouched(reg, apply_visual_effects_with, "UserPreferencesMask as DWORD");
+    }
+
+    #[test]
+    fn a_mouse_prior_that_is_empty_or_not_a_string_refuses_before_any_write() {
+        for name in ["MouseSpeed", "MouseThreshold1", "MouseThreshold2"] {
+            for (kind, v) in [
+                ("present empty", reg_sz("")),
+                ("DWORD", reg_dword(1)),
+                ("EXPAND_SZ", winreg::RegValue { bytes: reg_sz("1").bytes, vtype: RegType::REG_EXPAND_SZ }),
+            ] {
+                let reg = FakeHkcu::default().with(MOUSE_KEY, name, v);
+                assert_refused_untouched(reg, apply_mouse_accel_off_with, &format!("{name} {kind}"));
+            }
+        }
+    }
+
+    #[test]
+    fn a_failed_mouse_undo_records_the_change_with_its_full_snapshot() {
+        let mut reg = FakeHkcu { fail_write: Some("MouseThreshold2"), fail_undo: true, ..Default::default() }
+            .with(MOUSE_KEY, "MouseSpeed", reg_sz("1"))
+            .with(MOUSE_KEY, "MouseThreshold1", reg_sz("6"))
+            .with(MOUSE_KEY, "MouseThreshold2", reg_sz("10"));
+        let r = apply_mouse_accel_off_with(&mut reg).expect("recorded, not Err");
+        match r.snapshot {
+            Snapshot::MouseAccel { prior_speed, prior_threshold1, prior_threshold2 } => {
+                assert_eq!((prior_speed.as_str(), prior_threshold1.as_str(), prior_threshold2.as_str()), ("1", "6", "10"));
+            }
+            _ => panic!("wrong snapshot"),
+        }
     }
 }
