@@ -530,6 +530,178 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
     }
 }
 
+// ─── All-or-nothing multi-write applies (issue 617) ───────────────────────
+//
+// Mutation-gate item 6: a failure part-way through an apply leaves ZERO partial change. Every
+// apply/restore here that writes more than one value goes through one of two helpers:
+//   * HKCU (no admin): `hkcu_write_all_or_restore` reads each value's exact prior (raw bytes and
+//     type, or "absent") before writing anything, writes in order, and on a failed write puts the
+//     finished writes back newest first (an absent prior is deleted again).
+//   * Elevated PowerShell: `ps_all_or_restore` builds ONE script that, on a failed step, undoes the
+//     finished steps newest first inside the same elevation, then rethrows. Native exes (powercfg)
+//     do not throw on a non-zero exit, so their steps check `$?` and throw themselves.
+// When every undo succeeds the apply returns Err and says nothing was left changed. When an undo
+// itself fails, the apply returns Ok with its full apply-time snapshot instead (owner decision F1
+// on issue 617, 2026-09-29), so the change is recorded and History's typed rollback can put every
+// value back: a partly-changed PC is never left without a receipt. The persisted snapshot and
+// rollback contracts are unchanged.
+// Residual (all of them): if Compy is killed between two writes, nothing runs the undo and the
+// earlier write stays with no receipt — the same window a single-write apply has between its write
+// and its receipt. A registry KEY created by the first write is left in place (empty) by an undo.
+
+/// The HKCU value store the multi-write applies go through — the real registry in production, a
+/// fake in tests (so no test ever touches the real registry).
+pub(crate) trait HkcuValues {
+    /// The value's exact prior: Ok(None) when the key or value is absent; Err when it exists but
+    /// cannot be read (the apply then refuses before writing anything).
+    fn read(&mut self, subkey: &str, name: &str) -> Result<Option<winreg::RegValue>, String>;
+    fn write(&mut self, subkey: &str, name: &str, value: &winreg::RegValue) -> Result<(), String>;
+    /// Delete the value; an already-absent value is Ok.
+    fn delete(&mut self, subkey: &str, name: &str) -> Result<(), String>;
+}
+
+pub(crate) struct RealHkcu;
+
+impl HkcuValues for RealHkcu {
+    fn read(&mut self, subkey: &str, name: &str) -> Result<Option<winreg::RegValue>, String> {
+        let key = match RegKey::predef(HKEY_CURRENT_USER).open_subkey(subkey) {
+            Ok(k) => k,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(format!("cannot read {subkey}: {e}")),
+        };
+        match key.get_raw_value(name) {
+            Ok(v) => Ok(Some(v)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(format!("cannot read {name} to snapshot it for undo: {e}")),
+        }
+    }
+    fn write(&mut self, subkey: &str, name: &str, value: &winreg::RegValue) -> Result<(), String> {
+        let (key, _) = RegKey::predef(HKEY_CURRENT_USER)
+            .create_subkey(subkey)
+            .map_err(|e| format!("cannot open {subkey}: {e}"))?;
+        key.set_raw_value(name, value)
+            .map_err(|e| format!("cannot write {name}: {e}"))
+    }
+    fn delete(&mut self, subkey: &str, name: &str) -> Result<(), String> {
+        let key = match RegKey::predef(HKEY_CURRENT_USER).open_subkey_with_flags(subkey, KEY_SET_VALUE) {
+            Ok(k) => k,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(format!("cannot open {subkey}: {e}")),
+        };
+        match key.delete_value(name) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("cannot delete {name}: {e}")),
+        }
+    }
+}
+
+/// One HKCU value write for `hkcu_write_all_or_restore`.
+pub(crate) struct HkcuWrite {
+    pub(crate) subkey: &'static str,
+    pub(crate) name: &'static str,
+    pub(crate) value: winreg::RegValue,
+}
+
+fn reg_dword(v: u32) -> winreg::RegValue {
+    use winreg::types::ToRegValue;
+    v.to_reg_value()
+}
+
+fn reg_sz(v: &str) -> winreg::RegValue {
+    use winreg::types::ToRegValue;
+    v.to_reg_value()
+}
+
+fn prior_dword(v: &Option<winreg::RegValue>) -> Option<u32> {
+    use winreg::types::FromRegValue;
+    v.as_ref().and_then(|v| u32::from_reg_value(v).ok())
+}
+
+/// Write every value or none (see the section comment above). Err: nothing was left changed and
+/// the message says so. Ok: every write landed — or a write failed AND putting an earlier one back
+/// also failed, in which case the caller's full snapshot is recorded so History can undo it all.
+pub(crate) fn hkcu_write_all_or_restore(
+    reg: &mut dyn HkcuValues,
+    writes: &[HkcuWrite],
+) -> Result<(), String> {
+    let mut priors = Vec::with_capacity(writes.len());
+    for w in writes {
+        priors.push(
+            reg.read(w.subkey, w.name)
+                .map_err(|e| format!("{e}; nothing was changed"))?,
+        );
+    }
+    for (i, w) in writes.iter().enumerate() {
+        let Err(e) = reg.write(w.subkey, w.name, &w.value) else {
+            continue;
+        };
+        let mut undo_failed = false;
+        for (done, prior) in writes[..i].iter().zip(&priors).rev() {
+            let undo = match prior {
+                Some(v) => reg.write(done.subkey, done.name, v),
+                None => reg.delete(done.subkey, done.name),
+            };
+            undo_failed |= undo.is_err();
+        }
+        if undo_failed {
+            // F1: keep the receipt so History's rollback can restore every value.
+            return Ok(());
+        }
+        return Err(if i == 0 {
+            format!("{e}; nothing was changed")
+        } else {
+            format!("{e}; the {i} setting(s) already changed in this step were put back, so nothing was left changed")
+        });
+    }
+    Ok(())
+}
+
+/// One step of an elevated multi-step script for `ps_all_or_restore`. `undo` puts this step's
+/// write back to the apply-time prior (unused for the last step: nothing runs after it). `native`
+/// marks an exe (powercfg) whose non-zero exit must be turned into a throw via `$?`.
+pub(crate) struct PsStep {
+    pub(crate) write: String,
+    pub(crate) undo: String,
+    pub(crate) native: bool,
+}
+
+/// Build ONE exit-free PowerShell script that runs the steps in order and, if one fails, undoes
+/// the finished steps newest first, then rethrows (so a single run exits non-zero and a batch item
+/// receipts `fail`). If an undo itself fails it does NOT rethrow: the apply is recorded with its
+/// full snapshot (F1, see the section comment). Every flag is reset at the start of the script, so
+/// batch items never leak state into each other.
+pub(crate) fn ps_all_or_restore(steps: &[PsStep]) -> String {
+    let check = |native: bool, what: &str| {
+        if native {
+            format!("; if (-not $?) {{ throw 'compy: {what} failed' }}")
+        } else {
+            String::new()
+        }
+    };
+    let mut s = String::from("$compyDone=0; $compyUndoFailed=$false; try { ");
+    for (i, st) in steps.iter().enumerate() {
+        let n = i + 1;
+        s.push_str(&format!(
+            "{}{}; $compyDone={n}; ",
+            st.write,
+            check(st.native, &format!("step {n}"))
+        ));
+    }
+    s.push_str("} catch { $compyErr=$_; ");
+    let finished = steps.len().saturating_sub(1);
+    for (i, st) in steps[..finished].iter().enumerate().rev() {
+        let n = i + 1;
+        s.push_str(&format!(
+            "if ($compyDone -ge {n}) {{ try {{ {}{} }} catch {{ $compyUndoFailed=$true }} }}; ",
+            st.undo,
+            check(st.native, &format!("undo {n}"))
+        ));
+    }
+    s.push_str("if (-not $compyUndoFailed) { throw $compyErr } }");
+    s
+}
+
 // Windows Game Mode lives in a PAIR of HKCU DWORDs under this key. The Settings toggle writes
 // BOTH; AllowAutoGameMode is the master the Game Bar service reconciles AutoGameModeEnabled
 // against on login, so writing only AutoGameModeEnabled gets reverted to 0 on the next reboot
@@ -540,18 +712,23 @@ pub(crate) const GAMEBAR_KEY: &str = "Software\\Microsoft\\GameBar";
 pub(crate) const GAME_MODE_ENABLED_VALUE: &str = "AutoGameModeEnabled";
 pub(crate) const GAME_MODE_ALLOW_VALUE: &str = "AllowAutoGameMode";
 
+/// Two HKCU writes, all-or-nothing via `hkcu_write_all_or_restore` (issue 617). Kill-mid-apply
+/// residual: AllowAutoGameMode may stay 1 with no receipt.
 pub(crate) fn apply_game_mode() -> Result<ApplyResult, String> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let (key, _) = hkcu
-        .create_subkey(GAMEBAR_KEY)
-        .map_err(|e| e.to_string())?;
-    let prior_enabled: Option<u32> = key.get_value(GAME_MODE_ENABLED_VALUE).ok();
-    let prior_allow: Option<u32> = key.get_value(GAME_MODE_ALLOW_VALUE).ok();
+    apply_game_mode_with(&mut RealHkcu)
+}
+
+fn apply_game_mode_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, String> {
+    let prior_enabled = prior_dword(&reg.read(GAMEBAR_KEY, GAME_MODE_ENABLED_VALUE)?);
+    let prior_allow = prior_dword(&reg.read(GAMEBAR_KEY, GAME_MODE_ALLOW_VALUE)?);
     // Mirror the Settings UI: set the whole pair so Windows has nothing to reconcile away.
-    key.set_value(GAME_MODE_ALLOW_VALUE, &1u32)
-        .map_err(|e| e.to_string())?;
-    key.set_value(GAME_MODE_ENABLED_VALUE, &1u32)
-        .map_err(|e| e.to_string())?;
+    hkcu_write_all_or_restore(
+        reg,
+        &[
+            HkcuWrite { subkey: GAMEBAR_KEY, name: GAME_MODE_ALLOW_VALUE, value: reg_dword(1) },
+            HkcuWrite { subkey: GAMEBAR_KEY, name: GAME_MODE_ENABLED_VALUE, value: reg_dword(1) },
+        ],
+    )?;
     Ok(ApplyResult {
         applied_action: AppliedAction::EnableGameMode,
         rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
@@ -590,33 +767,33 @@ pub(crate) fn rollback_game_mode_typed(
 // Documented "Best Performance" value for HKCU\Control Panel\Desktop\UserPreferencesMask
 const BEST_PERF_USER_PREFS_MASK: [u8; 8] = [0x90, 0x12, 0x03, 0x80, 0x10, 0x00, 0x00, 0x00];
 
+const VFX_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects";
+const DESKTOP_KEY: &str = "Control Panel\\Desktop";
+
+/// Two HKCU writes (DWORD + REG_BINARY), all-or-nothing via `hkcu_write_all_or_restore`
+/// (issue 617). Kill-mid-apply residual: VisualFXSetting may stay 2 with no receipt.
 pub(crate) fn apply_visual_effects() -> Result<ApplyResult, String> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    apply_visual_effects_with(&mut RealHkcu)
+}
 
-    let (vfx_key, _) = hkcu
-        .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects")
-        .map_err(|e| e.to_string())?;
-    let vfx_setting_prior: Option<u32> = vfx_key.get_value("VisualFXSetting").ok();
-    vfx_key
-        .set_value("VisualFXSetting", &2u32)
-        .map_err(|e| e.to_string())?;
-
-    let (desktop_key, _) = hkcu
-        .create_subkey("Control Panel\\Desktop")
-        .map_err(|e| e.to_string())?;
-    let user_prefs_mask_prior: Option<Vec<u8>> = desktop_key
-        .get_raw_value("UserPreferencesMask")
-        .ok()
-        .map(|v| v.bytes);
-    desktop_key
-        .set_raw_value(
-            "UserPreferencesMask",
-            &winreg::RegValue {
-                bytes: BEST_PERF_USER_PREFS_MASK.to_vec(),
-                vtype: winreg::enums::RegType::REG_BINARY,
+fn apply_visual_effects_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, String> {
+    let vfx_setting_prior = prior_dword(&reg.read(VFX_KEY, "VisualFXSetting")?);
+    let user_prefs_mask_prior: Option<Vec<u8>> =
+        reg.read(DESKTOP_KEY, "UserPreferencesMask")?.map(|v| v.bytes);
+    hkcu_write_all_or_restore(
+        reg,
+        &[
+            HkcuWrite { subkey: VFX_KEY, name: "VisualFXSetting", value: reg_dword(2) },
+            HkcuWrite {
+                subkey: DESKTOP_KEY,
+                name: "UserPreferencesMask",
+                value: winreg::RegValue {
+                    bytes: BEST_PERF_USER_PREFS_MASK.to_vec(),
+                    vtype: winreg::enums::RegType::REG_BINARY,
+                },
             },
-        )
-        .map_err(|e| e.to_string())?;
+        ],
+    )?;
 
     Ok(ApplyResult {
         applied_action: AppliedAction::SetVisualEffectsBestPerformance,
@@ -2001,6 +2178,9 @@ mod service_prior_refusal_tests {
 // Generic "disable a Windows service" — used for SysMain, NVIDIA telemetry,
 // and any future service-shaped rec. Snapshots prior state + start mode so
 // rollback returns the service to exactly where it was.
+/// Issue 617 assessment: two steps, but only `Set-Service` can fail the apply — `Stop-Service` is
+/// `-ErrorAction SilentlyContinue`, so once the startup type changed the apply always returns Ok
+/// with the full snapshot (never a partial change without a receipt).
 pub(crate) fn apply_service_disable(service: KnownService) -> Result<ApplyResult, String> {
     ps_safe(service.name())?;
     // Snapshot the prior state FIRST. If WMI can't read it (COM/MTA glitch, ACL, query error),
@@ -2988,6 +3168,10 @@ pub(crate) fn current_power_plan_guid() -> Option<String> {
     None
 }
 
+/// Issue 617 assessment: the only setting change is the one `setactive`, now exit-checked so a
+/// failed switch returns Err instead of a false receipt. `duplicatescheme` only ADDS an unused copy
+/// of the Ultimate plan; if `setactive` then fails, that copy stays in the plan list (no active
+/// setting changed). Kill-mid-apply residual: the plan may be switched with no receipt.
 pub(crate) fn apply_power_ultimate() -> Result<ApplyResult, String> {
     // Capture the EXACT plan we're switching away from. Refuse if we can't read it —
     // applying a plan switch whose prior we don't know is a switch we can't honestly roll
@@ -2999,9 +3183,9 @@ pub(crate) fn apply_power_ultimate() -> Result<ApplyResult, String> {
             .to_string()
     })?;
     let ps = "$ult = powercfg /list | Select-String 'Ultimate Performance' | Select-Object -First 1; \
-              if ($ult -match 'GUID: ([0-9a-f-]{36})') { powercfg /setactive $matches[1]; exit 0 } \
+              if ($ult -match 'GUID: ([0-9a-f-]{36})') { powercfg /setactive $matches[1]; if ($?) { exit 0 }; exit 1 } \
               $dup = powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>&1; \
-              if ($dup -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { powercfg /setactive $matches[1]; exit 0 } \
+              if ($dup -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { powercfg /setactive $matches[1]; if ($?) { exit 0 }; exit 1 } \
               exit 1";
     run_elevated_powershell(ps)?;
     Ok(ApplyResult {
@@ -3171,11 +3355,7 @@ pub(crate) fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Re
     // Apply AC = 0 only. DC stays untouched (laptop battery behavior preserved).
     ps_safe(subgroup)?;
     ps_safe(setting)?;
-    let cmd = format!(
-        "powercfg /setacvalueindex SCHEME_CURRENT {} {} 0; powercfg /setactive SCHEME_CURRENT",
-        subgroup, setting
-    );
-    run_elevated_powershell(&cmd)?;
+    run_elevated_powershell(&power_setting_apply_script(subgroup, setting, prior_ac_value))?;
 
     let applied_action = if setting == PWR_SETTING_USB_SELECTIVE_SUSPEND {
         AppliedAction::DisableUsbSelectiveSuspendOnAc
@@ -3195,6 +3375,25 @@ pub(crate) fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Re
         },
         elevation_used: true,
     })
+}
+
+/// The AC-off apply script (setacvalueindex 0, then setactive), all-or-nothing (issue 617): both
+/// powercfg steps check their exit status (a non-zero exit does not throw on its own), and a failed
+/// setactive puts the AC index back to `prior_ac` inside the same elevation. Callers pass GUIDs that
+/// already passed `ps_safe`. Kill-mid-apply residual: the AC index may stay 0 with no receipt.
+pub(crate) fn power_setting_apply_script(subgroup: &str, setting: &str, prior_ac: u32) -> String {
+    ps_all_or_restore(&[
+        PsStep {
+            write: format!("powercfg /setacvalueindex SCHEME_CURRENT {subgroup} {setting} 0"),
+            undo: format!("powercfg /setacvalueindex SCHEME_CURRENT {subgroup} {setting} {prior_ac}"),
+            native: true,
+        },
+        PsStep {
+            write: "powercfg /setactive SCHEME_CURRENT".to_string(),
+            undo: String::new(),
+            native: true,
+        },
+    ])
 }
 
 pub(crate) fn apply_usb_selective_suspend_off() -> Result<ApplyResult, String> {
@@ -3599,6 +3798,8 @@ pub(crate) fn build_eee_apply_script(targets: &[(EeeProperty, String)]) -> Strin
     ps
 }
 
+/// Issue 617 assessment: every per-NIC write is SilentlyContinue and the apply always returns Ok
+/// with the full snapshot, so any partial state is always receipted and rollback-able.
 pub(crate) fn apply_eee_disable() -> Result<ApplyResult, String> {
     let props = match resolve_eee() {
         EeeResolution::NoEligibleAdapter => {
@@ -3716,21 +3917,25 @@ pub(crate) fn rollback_fast_startup_off_typed(prior_hiberboot: Option<u32>) -> R
 
 // ─── Game Bar / Game DVR off (HKCU, no admin) ────────────────────────────
 
-pub(crate) fn apply_game_bar_disable() -> Result<ApplyResult, String> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let (gd, _) = hkcu
-        .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR")
-        .map_err(|e| e.to_string())?;
-    let prior_capture: Option<u32> = gd.get_value("AppCaptureEnabled").ok();
-    gd.set_value("AppCaptureEnabled", &0u32)
-        .map_err(|e| e.to_string())?;
+const GAMEDVR_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR";
+const GAME_CONFIG_STORE_KEY: &str = "System\\GameConfigStore";
 
-    let (gcs, _) = hkcu
-        .create_subkey("System\\GameConfigStore")
-        .map_err(|e| e.to_string())?;
-    let prior_enabled: Option<u32> = gcs.get_value("GameDVR_Enabled").ok();
-    gcs.set_value("GameDVR_Enabled", &0u32)
-        .map_err(|e| e.to_string())?;
+/// Two HKCU writes, all-or-nothing via `hkcu_write_all_or_restore` (issue 617). Kill-mid-apply
+/// residual: AppCaptureEnabled may stay 0 with no receipt.
+pub(crate) fn apply_game_bar_disable() -> Result<ApplyResult, String> {
+    apply_game_bar_disable_with(&mut RealHkcu)
+}
+
+fn apply_game_bar_disable_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, String> {
+    let prior_capture = prior_dword(&reg.read(GAMEDVR_KEY, "AppCaptureEnabled")?);
+    let prior_enabled = prior_dword(&reg.read(GAME_CONFIG_STORE_KEY, "GameDVR_Enabled")?);
+    hkcu_write_all_or_restore(
+        reg,
+        &[
+            HkcuWrite { subkey: GAMEDVR_KEY, name: "AppCaptureEnabled", value: reg_dword(0) },
+            HkcuWrite { subkey: GAME_CONFIG_STORE_KEY, name: "GameDVR_Enabled", value: reg_dword(0) },
+        ],
+    )?;
 
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableGameBarAndDvr,
@@ -3985,6 +4190,8 @@ fn set_or_remove_dword(path: &str, name: &str, value: Option<u32>) -> String {
     }
 }
 
+// The stock-value pair the apply writes; the apply itself goes through `mmcss_apply_script`.
+#[cfg(test)]
 pub(crate) fn mmcss_restore_script() -> String {
     // Windows stock: SystemResponsiveness 20 · NetworkThrottlingIndex 10.
     format!(
@@ -3992,6 +4199,31 @@ pub(crate) fn mmcss_restore_script() -> String {
         set_or_remove_dword(mmcss_path(), "SystemResponsiveness", Some(20)),
         set_or_remove_dword(mmcss_path(), "NetworkThrottlingIndex", Some(10)),
     )
+}
+/// The restore-to-stock apply script: SystemResponsiveness 20 then NetworkThrottlingIndex 10, and
+/// if the second write fails the first is put back to `prior_sr` inside the same elevation (issue
+/// 617). An absent prior is undone with a STRICT Remove-ItemProperty (no SilentlyContinue), so a
+/// failed undo is seen. Kill-mid-apply residual: SystemResponsiveness may stay 20 with no receipt.
+pub(crate) fn mmcss_apply_script(prior_sr: Option<u32>) -> String {
+    let undo_sr = match prior_sr {
+        Some(v) => set_or_remove_dword(mmcss_path(), "SystemResponsiveness", Some(v)),
+        None => format!(
+            "Remove-ItemProperty -Path '{}' -Name 'SystemResponsiveness'",
+            mmcss_path()
+        ),
+    };
+    ps_all_or_restore(&[
+        PsStep {
+            write: set_or_remove_dword(mmcss_path(), "SystemResponsiveness", Some(20)),
+            undo: undo_sr,
+            native: false,
+        },
+        PsStep {
+            write: set_or_remove_dword(mmcss_path(), "NetworkThrottlingIndex", Some(10)),
+            undo: String::new(),
+            native: false,
+        },
+    ])
 }
 pub(crate) fn mmcss_rollback_script(sr: Option<u32>, nti: Option<u32>) -> String {
     format!(
@@ -4151,7 +4383,7 @@ pub(crate) fn rollback_memory_compression_typed(prior_enabled: Option<bool>) -> 
 
 pub(crate) fn restore_mmcss_defaults() -> Result<ApplyResult, String> {
     let (sr, nti) = read_mmcss_priors()?; // refuses on an unreadable key
-    run_elevated_powershell(&mmcss_restore_script())?;
+    run_elevated_powershell(&mmcss_apply_script(sr))?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreMmcssDefaults,
         rollback_action: RollbackAction::RestoreMmcssFromSnapshot,
@@ -4284,10 +4516,31 @@ pub(crate) fn rollback_mpo_typed(prior: Option<u32>) -> Result<(), String> {
     run_elevated_powershell(&mpo_rollback_script(prior))
 }
 
+/// The restore apply script (AC 0, DC 0, setactive), all-or-nothing (issue 617): each powercfg
+/// step checks its exit status, and a failure puts the finished index writes back (DC, then AC) to
+/// the apply-time snapshot inside the same elevation. A missing DC prior is undone to the AC prior,
+/// mirroring `rollback_core_parking_typed`. The rollback script (`core_parking_script`) is unchanged.
+/// Kill-mid-apply residual: the AC (and DC) index may stay 0 with no receipt.
+pub(crate) fn core_parking_apply_script(prior_ac: u32, prior_dc: Option<u32>) -> String {
+    let idx = |side: &str, v: u32| {
+        format!("powercfg -set{side}valueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {v}")
+    };
+    ps_all_or_restore(&[
+        PsStep { write: idx("ac", 0), undo: idx("ac", prior_ac), native: true },
+        PsStep { write: idx("dc", 0), undo: idx("dc", prior_dc.unwrap_or(prior_ac)), native: true },
+        PsStep {
+            write: "powercfg -setactive SCHEME_CURRENT".to_string(),
+            undo: String::new(),
+            native: true,
+        },
+    ])
+}
+
 // ── Core parking: re-allow parking (min unparked → 0% AC+DC) so the override is lifted ──
 pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
     let (ac, dc) = read_core_parking_priors()?;
-    run_elevated_powershell(&core_parking_script(0, 0))?;
+    let prior_ac = ac.ok_or("could not parse the core-parking AC index — refusing to restore blind")?;
+    run_elevated_powershell(&core_parking_apply_script(prior_ac, dc))?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreCoreParkingDefault,
         rollback_action: RollbackAction::RestoreCoreParkingFromSnapshot,
@@ -4424,32 +4677,41 @@ pub(crate) fn rollback_tcp_autotuning_typed(prior_disabled: bool) -> Result<(), 
 
 // ─── Mouse acceleration off (HKCU, no admin) ─────────────────────────────
 
+const MOUSE_KEY: &str = "Control Panel\\Mouse";
+
+/// Three HKCU writes, all-or-nothing via `hkcu_write_all_or_restore` (issue 617). Kill-mid-apply
+/// residual: MouseSpeed (and MouseThreshold1) may stay "0" with no receipt.
 pub(crate) fn apply_mouse_accel_off() -> Result<ApplyResult, String> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let (key, _) = hkcu
-        .create_subkey("Control Panel\\Mouse")
-        .map_err(|e| e.to_string())?;
+    apply_mouse_accel_off_with(&mut RealHkcu)
+}
+
+fn apply_mouse_accel_off_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, String> {
+    use winreg::types::FromRegValue;
 
     // All three values are REG_SZ strings, not DWORDs. Windows is weird.
     // Distinguish a genuinely-absent value (NotFound => "" — rollback deletes, the faithful inverse)
     // from a value that's PRESENT but unreadable (e.g. stored as the wrong type => Err, refuse).
     // Folding a failed read of a present value into "" would make rollback delete the user's real
     // setting and reconstitute the default accel curve. Mirrors read_mmcss_priors' NotFound split.
-    let read_sz = |name: &str| -> Result<String, String> {
-        match key.get_value::<String, _>(name) {
-            Ok(v) => Ok(v),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-            Err(e) => Err(format!("cannot snapshot {name} for rollback: {e}")),
+    let mut read_sz = |name: &str| -> Result<String, String> {
+        match reg.read(MOUSE_KEY, name)? {
+            None => Ok(String::new()),
+            Some(v) => String::from_reg_value(&v)
+                .map_err(|e| format!("cannot snapshot {name} for rollback: {e}")),
         }
     };
     let prior_speed = read_sz("MouseSpeed")?;
     let prior_threshold1 = read_sz("MouseThreshold1")?;
     let prior_threshold2 = read_sz("MouseThreshold2")?;
 
-    let zero = "0".to_string();
-    key.set_value("MouseSpeed", &zero).map_err(|e| e.to_string())?;
-    key.set_value("MouseThreshold1", &zero).map_err(|e| e.to_string())?;
-    key.set_value("MouseThreshold2", &zero).map_err(|e| e.to_string())?;
+    hkcu_write_all_or_restore(
+        reg,
+        &[
+            HkcuWrite { subkey: MOUSE_KEY, name: "MouseSpeed", value: reg_sz("0") },
+            HkcuWrite { subkey: MOUSE_KEY, name: "MouseThreshold1", value: reg_sz("0") },
+            HkcuWrite { subkey: MOUSE_KEY, name: "MouseThreshold2", value: reg_sz("0") },
+        ],
+    )?;
 
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableMouseAcceleration,
@@ -4508,6 +4770,8 @@ pub(crate) fn select_nagle_targets(with_ip_guids: &[String], physical_guids_uppe
     }
 }
 
+/// Issue 617 assessment: every per-interface write is SilentlyContinue and the apply always returns
+/// Ok with the full snapshot, so any partial state is always receipted and rollback-able.
 pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
     // Snapshot (no admin): capture prior values on every Tcpip interface that has an IP...
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
@@ -6004,5 +6268,268 @@ mod startup_approval_tests {
         assert_eq!(startup_approval_enabled(&binary(Vec::new())), None, "empty value");
         let dword = winreg::RegValue { bytes: vec![0x02, 0, 0, 0], vtype: winreg::enums::RegType::REG_DWORD };
         assert_eq!(startup_approval_enabled(&dword), None, "right byte, wrong type");
+    }
+}
+
+// Issue 617 guards: a failure after the first write of a multi-write apply leaves nothing changed
+// (or, when an undo also fails, records the change with its full snapshot). The HKCU cases run on
+// an in-memory fake — no test here touches the real registry. The elevated cases check the script
+// text and run the SAME generated wrapper in a real, unelevated PowerShell with stand-in steps.
+#[cfg(test)]
+mod all_or_nothing_tests {
+    use super::*;
+    use std::collections::HashMap;
+    use winreg::enums::RegType;
+    use winreg::types::FromRegValue;
+
+    fn must_err(r: Result<ApplyResult, String>, why: &str) -> String {
+        match r {
+            Ok(_) => panic!("expected Err: {why}"),
+            Err(e) => e,
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeHkcu {
+        vals: HashMap<(String, String), (Vec<u8>, RegType)>,
+        /// The write of this value name fails.
+        fail_write: Option<&'static str>,
+        /// After the injected failure, every later write/delete (the undos) fails too.
+        fail_undo: bool,
+        /// A read of this value name fails (present but unreadable).
+        fail_read: Option<&'static str>,
+        failed: bool,
+        writes: usize,
+    }
+
+    impl FakeHkcu {
+        fn with(mut self, subkey: &str, name: &str, v: winreg::RegValue) -> Self {
+            self.vals.insert((subkey.into(), name.into()), (v.bytes, v.vtype));
+            self
+        }
+        fn get(&self, subkey: &str, name: &str) -> Option<winreg::RegValue> {
+            self.vals
+                .get(&(subkey.to_string(), name.to_string()))
+                .map(|(b, t)| winreg::RegValue { bytes: b.clone(), vtype: t.clone() })
+        }
+        fn dword(&self, subkey: &str, name: &str) -> Option<u32> {
+            self.get(subkey, name).map(|v| u32::from_reg_value(&v).expect("dword"))
+        }
+    }
+
+    impl HkcuValues for FakeHkcu {
+        fn read(&mut self, subkey: &str, name: &str) -> Result<Option<winreg::RegValue>, String> {
+            if self.fail_read == Some(name) {
+                return Err(format!("cannot read {name}"));
+            }
+            Ok(self.get(subkey, name))
+        }
+        fn write(&mut self, subkey: &str, name: &str, v: &winreg::RegValue) -> Result<(), String> {
+            if self.fail_write == Some(name) && !self.failed {
+                self.failed = true;
+                return Err(format!("injected: cannot write {name}"));
+            }
+            if self.failed && self.fail_undo {
+                return Err(format!("injected: undo of {name} failed"));
+            }
+            self.writes += 1;
+            self.vals
+                .insert((subkey.into(), name.into()), (v.bytes.clone(), v.vtype.clone()));
+            Ok(())
+        }
+        fn delete(&mut self, subkey: &str, name: &str) -> Result<(), String> {
+            if self.failed && self.fail_undo {
+                return Err(format!("injected: undo-delete of {name} failed"));
+            }
+            self.vals.remove(&(subkey.to_string(), name.to_string()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn game_bar_second_write_fails_first_is_restored() {
+        let mut reg = FakeHkcu { fail_write: Some("GameDVR_Enabled"), ..Default::default() }
+            .with(GAMEDVR_KEY, "AppCaptureEnabled", reg_dword(1));
+        let err = must_err(apply_game_bar_disable_with(&mut reg), "must fail");
+        assert_eq!(reg.dword(GAMEDVR_KEY, "AppCaptureEnabled"), Some(1), "first write put back");
+        assert_eq!(reg.get(GAME_CONFIG_STORE_KEY, "GameDVR_Enabled").map(|_| ()), None);
+        assert!(err.contains("put back") && err.contains("nothing was left changed"), "{err}");
+    }
+
+    #[test]
+    fn an_absent_prior_is_deleted_again_on_undo() {
+        let mut reg = FakeHkcu { fail_write: Some("GameDVR_Enabled"), ..Default::default() };
+        must_err(apply_game_bar_disable_with(&mut reg), "must fail");
+        assert!(reg.vals.is_empty(), "the value that did not exist before must not exist after");
+    }
+
+    #[test]
+    fn game_mode_second_write_fails_first_is_restored() {
+        let mut reg = FakeHkcu { fail_write: Some(GAME_MODE_ENABLED_VALUE), ..Default::default() }
+            .with(GAMEBAR_KEY, GAME_MODE_ALLOW_VALUE, reg_dword(0))
+            .with(GAMEBAR_KEY, GAME_MODE_ENABLED_VALUE, reg_dword(0));
+        must_err(apply_game_mode_with(&mut reg), "must fail");
+        assert_eq!(reg.dword(GAMEBAR_KEY, GAME_MODE_ALLOW_VALUE), Some(0));
+        assert_eq!(reg.dword(GAMEBAR_KEY, GAME_MODE_ENABLED_VALUE), Some(0));
+    }
+
+    #[test]
+    fn visual_effects_second_write_fails_first_is_restored() {
+        let mut reg = FakeHkcu { fail_write: Some("UserPreferencesMask"), ..Default::default() }
+            .with(VFX_KEY, "VisualFXSetting", reg_dword(0));
+        must_err(apply_visual_effects_with(&mut reg), "must fail");
+        assert_eq!(reg.dword(VFX_KEY, "VisualFXSetting"), Some(0));
+        assert!(reg.get(DESKTOP_KEY, "UserPreferencesMask").is_none());
+    }
+
+    #[test]
+    fn mouse_third_write_fails_first_two_are_restored() {
+        let mut reg = FakeHkcu { fail_write: Some("MouseThreshold2"), ..Default::default() }
+            .with(MOUSE_KEY, "MouseSpeed", reg_sz("1"))
+            .with(MOUSE_KEY, "MouseThreshold2", reg_sz("10"));
+        must_err(apply_mouse_accel_off_with(&mut reg), "must fail");
+        let sz = |r: &FakeHkcu, n: &str| r.get(MOUSE_KEY, n).map(|v| String::from_reg_value(&v).unwrap());
+        assert_eq!(sz(&reg, "MouseSpeed").as_deref(), Some("1"));
+        assert_eq!(sz(&reg, "MouseThreshold1"), None, "absent before, absent after");
+        assert_eq!(sz(&reg, "MouseThreshold2").as_deref(), Some("10"));
+    }
+
+    #[test]
+    fn a_failed_undo_records_the_change_with_its_full_snapshot() {
+        // Owner decision F1 (issue 617): never leave a partly-changed PC without a receipt.
+        let mut reg = FakeHkcu { fail_write: Some("GameDVR_Enabled"), fail_undo: true, ..Default::default() }
+            .with(GAMEDVR_KEY, "AppCaptureEnabled", reg_dword(1))
+            .with(GAME_CONFIG_STORE_KEY, "GameDVR_Enabled", reg_dword(2));
+        let r = apply_game_bar_disable_with(&mut reg).expect("recorded, not Err");
+        assert!(matches!(
+            r.snapshot,
+            Snapshot::GameBar { prior_capture: Some(1), prior_enabled: Some(2) }
+        ));
+    }
+
+    #[test]
+    fn an_unreadable_prior_refuses_before_any_write() {
+        let mut reg = FakeHkcu { fail_read: Some("MouseThreshold2"), ..Default::default() };
+        let err = must_err(apply_mouse_accel_off_with(&mut reg), "refuse");
+        assert_eq!(reg.writes, 0, "nothing may be written: {err}");
+    }
+
+    #[test]
+    fn a_clean_apply_writes_everything_and_snapshots_the_priors() {
+        let mut reg = FakeHkcu::default().with(VFX_KEY, "VisualFXSetting", reg_dword(3));
+        let r = apply_visual_effects_with(&mut reg).expect("ok");
+        assert_eq!(reg.dword(VFX_KEY, "VisualFXSetting"), Some(2));
+        assert_eq!(
+            reg.get(DESKTOP_KEY, "UserPreferencesMask").map(|v| v.bytes),
+            Some(BEST_PERF_USER_PREFS_MASK.to_vec())
+        );
+        assert!(matches!(
+            r.snapshot,
+            Snapshot::VisualEffects { vfx_setting_prior: Some(3), user_prefs_mask_prior: None }
+        ));
+    }
+
+    // ── elevated scripts: text ──
+
+    #[test]
+    fn elevated_apply_scripts_undo_from_the_snapshot_and_stay_batchable() {
+        let mm = mmcss_apply_script(Some(14));
+        assert!(mm.contains("'SystemResponsiveness' -Value 20") && mm.contains("'NetworkThrottlingIndex' -Value 10"));
+        assert!(mm.contains("if ($compyDone -ge 1) { try { Set-ItemProperty") && mm.contains("'SystemResponsiveness' -Value 14"));
+        let mm_absent = mmcss_apply_script(None);
+        assert!(mm_absent.contains("Remove-ItemProperty -Path") && !mm_absent.contains("SilentlyContinue"));
+
+        let ps = power_setting_apply_script(PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1);
+        assert!(ps.contains(&format!("{PWR_SETTING_USB_SELECTIVE_SUSPEND} 1; if (-not $?)")), "{ps}");
+        assert_eq!(ps.matches("if (-not $?)").count(), 3, "both steps and the undo are exit-checked: {ps}");
+
+        let cp = core_parking_apply_script(40, None);
+        assert!(cp.contains(&format!("setacvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 40")));
+        assert!(cp.contains(&format!("setdcvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 40")), "DC mirrors AC");
+        assert!(cp.find("if ($compyDone -ge 2)").unwrap() < cp.find("if ($compyDone -ge 1)").unwrap(), "newest first");
+
+        for s in [mm, mm_absent, ps, cp] {
+            assert!(!contains_exit_token(&s), "exit-free: {s}");
+            compose_batch_script(&[("r".to_string(), vec![s])], "x").expect("batchable");
+        }
+    }
+
+    // ── elevated scripts: the same wrapper, run for real (unelevated, temp files only) ──
+
+    fn run_ps(script: &str) -> bool {
+        super::quiet_command("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &format!("$ErrorActionPreference='Stop'; {script}")])
+            .status()
+            .expect("powershell runs")
+            .success()
+    }
+
+    fn temp_file(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("compy-617-{}-{tag}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let f = dir.join("v.txt");
+        std::fs::write(&f, "old").expect("seed");
+        f
+    }
+
+    fn file_steps(f: &std::path::Path, second: &str, second_native: bool, undo: &str) -> Vec<PsStep> {
+        let p = f.to_string_lossy().replace('\'', "''");
+        vec![
+            PsStep {
+                write: format!("Set-Content -LiteralPath '{p}' -Value 'new' -NoNewline"),
+                undo: if undo.is_empty() {
+                    format!("Set-Content -LiteralPath '{p}' -Value 'old' -NoNewline")
+                } else {
+                    undo.to_string()
+                },
+                native: false,
+            },
+            PsStep { write: second.to_string(), undo: String::new(), native: second_native },
+        ]
+    }
+
+    #[test]
+    fn real_powershell_undoes_the_first_step_when_the_second_throws_or_exits_non_zero() {
+        for (tag, second, native) in [
+            ("throw", "throw 'boom'", false),
+            ("native", "findstr.exe compy617 NUL", true),
+        ] {
+            let f = temp_file(tag);
+            let ok = run_ps(&ps_all_or_restore(&file_steps(&f, second, native, "")));
+            assert!(!ok, "{tag}: the apply must fail");
+            assert_eq!(std::fs::read_to_string(&f).unwrap(), "old", "{tag}: first step put back");
+        }
+    }
+
+    #[test]
+    fn real_powershell_a_failed_undo_exits_zero_so_the_change_is_recorded() {
+        for (tag, undo) in [("undo-throw", "throw 'undo boom'"), ("undo-native", "findstr.exe compy617 NUL")] {
+            let f = temp_file(tag);
+            let mut steps = file_steps(&f, "throw 'boom'", false, undo);
+            steps[0].native = tag == "undo-native";
+            // The first WRITE is a cmdlet; mark native only to exercise the $? check on the undo.
+            let ok = run_ps(&ps_all_or_restore(&steps));
+            assert!(ok, "{tag}: a failed undo must not rethrow (F1: record with full snapshot)");
+        }
+    }
+
+    #[test]
+    fn real_powershell_batch_items_do_not_leak_the_undo_flag() {
+        let fa = temp_file("batch-a");
+        let fb = temp_file("batch-b");
+        let rf = fa.with_file_name("receipts.txt");
+        let _ = std::fs::remove_file(&rf);
+        let a = ps_all_or_restore(&file_steps(&fa, "throw 'boom'", false, "throw 'undo boom'"));
+        let b = ps_all_or_restore(&file_steps(&fb, "throw 'boom'", false, ""));
+        let script = compose_batch_script(
+            &[("item-a".to_string(), vec![a]), ("item-b".to_string(), vec![b])],
+            rf.to_string_lossy().as_ref(),
+        )
+        .expect("compose");
+        assert!(run_ps(&script));
+        let receipts = parse_batch_receipts(&std::fs::read_to_string(&rf).unwrap());
+        assert_eq!(receipts.get("item-a"), Some(&true), "failed undo -> recorded");
+        assert_eq!(receipts.get("item-b"), Some(&false), "clean undo -> fail receipt");
+        assert_eq!(std::fs::read_to_string(&fb).unwrap(), "old");
     }
 }
