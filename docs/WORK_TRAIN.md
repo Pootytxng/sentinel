@@ -101,8 +101,9 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
       needs the owner (the session could not write to issues).
 - [x] **#622** Health layout below ~600 px. `3c3e7553` (2026-10-24).
 - [x] **#677** Clipped session metadata and combined-effect tooltips. `3c3e7553`.
-- [ ] **#622-f1** Below ~560 px, Live session rows scroll sideways ("vs previous" chip); Health
-      verdict panel scrolls inside itself (#225, needs its own change).
+- [x] **#622-f1** Live session rows stack below 600 px of list width `716e0fbd`.
+- [ ] **#622-f2** Health verdict panel scrolls inside itself in narrow windows (#225, needs its own change);
+      at exactly 600 px (en) the Live row timeline is ~27 px wide.
 - [x] **#638** Phase 2 follow-ons from PR #634. Lands with this log entry (Optimize can't-confirm group, History tile title).
 - [ ] **GB-picker** `game-bar-disable` not offered in the Trial picker on the owner rig with both
       values = 1 (seen 2026-10-23 07:46 on a fresh Compy). Reproduce, then fix or close.
@@ -120,7 +121,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       `benchmark_trial.rs` calibration. Rust unit tests. TRIAL_PROTOCOL §5, MACHINE_MODEL §4, ENGINE §10.
 - [ ] **P4-noise** "Measure this game's noise": two unchanged sessions → "varies ±X% on your PC"; Trials
       use max(measured, 3%); the "hasn't been measured yet" line goes. Owner-rig proof. Needs P4-noise-store.
-- [ ] **P4-baseline-quality** Grade the baseline before a start: < 600 readings, or halves differing by more
+- [x] **P4-baseline-quality** `66f1daea`. Owner 2026-10-24: warn, don't block — < 600 readings refuses;
+      uneven halves (> 3%) or no trace warn and are recorded on the receipt. Blocking waits for P4-noise.
+      Was: grade the baseline before a start: < 600 readings, or halves differing by more
       than the noise floor (the 133→244 fps swing), reads "too uneven" and offers a re-record. Fixture from
       the 2026-10-23 AFK numbers. TRIAL_PROTOCOL §2.
 - [ ] **P4-sessions** "Too noisy to judge" verdict (Inconclusive, restored) when either session is uneven
@@ -160,6 +163,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
   #668/#669 `e83017a5`.
 - 2026-10-24 late morning: #686-followup `6e7792a8`, P4-noise-store `4caee92b` + `ad436c84`.
 - 2026-10-24 midday: guard re-anchor `18622365` (pushed), #617-f1 `29e5e67a`, #638.
+- 2026-10-24 afternoon: #622-f1 `716e0fbd`, P4-baseline-quality `66f1daea` (owner: warn, don't block).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
