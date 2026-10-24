@@ -127,9 +127,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       can't-confirm grouped the same on all three; shared parity fixture (Rust + TS).
 - [x] **453-rerun** PASSED 2026-10-24 14:32–14:35 on desk build `2afd7471`: Health, History and Optimize read
       14 → 15 (EpicGamesLauncher startup entry on, STILL ON) → 14 (ROLLED BACK); recorded in BACKLOG P2.
-- [ ] **453-f1** `history.rs` `summarize_history` is a fourth counting rule (newest row by position,
-      Unreadable counts as active) feeding session receipts / Debrief / Monitor "N Compy changes active".
-      Move it onto `live_change_groups`. Also: "Applied on this machine" diagnostics line still counts rows.
+- [x] **453-f1** `63414c42`: sessions, Trial start, Live and Debrief use the same one-per-change rule;
+      can't-confirm stored and compared apart; sessions.json keeps the older-rule count for older builds.
 - [x] **P4-baseline-quality** `66f1daea`. Owner 2026-10-24: warn, don't block — < 600 readings refuses;
       uneven halves (> 3%) or no trace warn and are recorded on the receipt. Blocking waits for P4-noise.
       Was: grade the baseline before a start: < 600 readings, or halves differing by more
@@ -183,6 +182,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
   tsc 0, ExperimentBench 54/54, cargo experiment 105/0, clippy clean; not pushed.
 - 2026-10-24 14:31 desk install of main `2afd7471` (stamp-proved, attempt 1); 14:32–14:35 #453 re-run
   PASSED (14/15/14 on all three screens) → P2-exit met; RELEASE_STATE + BACKLOG P2 recorded.
+- 2026-10-24 evening: 453-f1 `63414c42`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
