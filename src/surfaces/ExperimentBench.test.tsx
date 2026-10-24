@@ -568,6 +568,40 @@ describe("ExperimentBench (armed)", () => {
     ).toBeInTheDocument();
   });
 
+  // P4-noise: the band came from this game's unchanged sessions on this PC, and the line says exactly
+  // what was measured: how many sessions, which game, and by how much the 1% low varied between them.
+  it("says how much the game varied across its unchanged sessions when that set the band", async () => {
+    state.gate = true;
+    state.experiments = [
+      {
+        ...KEPT_EXPERIMENT,
+        game: "WardogsClient-Win64-Shipping.exe",
+        noise_evidence: { band_pct: 5.94, measured_noise_pct: 1.25, between_sessions: { spread_pct: 5.94, sessions: 4 } },
+      },
+    ];
+    render(<ExperimentBench />);
+    expect(
+      await screen.findByText(
+        "Judged against a ±5.9% noise floor: across 4 of your unchanged WardogsClient sessions on this PC, the 1% low frame rate differed by up to 5.9% from one session to the next.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/hasn't been measured yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/25-second calibration/)).not.toBeInTheDocument();
+  });
+
+  it("says the fixed minimum judged when the game varied less than it between sessions", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: null, between_sessions: { spread_pct: 1.84, sessions: 3 } } },
+    ];
+    render(<ExperimentBench />);
+    expect(
+      await screen.findByText(
+        "Judged against Compy's 3% minimum noise floor: across 3 of your unchanged Valorant sessions on this PC, the 1% low frame rate differed by up to 1.8% from one session to the next, which is less than that minimum.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   // P4-noise-store: a calibration that isn't current isn't used, and the receipt says which reason —
   // an observed update, or conditions Compy couldn't confirm — never "hasn't been measured yet".
   it.each([

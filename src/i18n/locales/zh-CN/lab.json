@@ -379,7 +379,7 @@
       "dAgo": "{{count}} 天前"
     },
     "hypothesisMetricFallback": "1% 最低帧 FPS",
-    "hypothesisWithBaseline": "{{metric}} 应超过 3% 的噪声下限",
+    "hypothesisWithBaseline": "{{metric}} 应超过这款游戏的噪声下限（至少 3%）",
     "hypothesisWithoutBaseline": "{{metric}} 应超过噪声下限",
     "title": "只测一项更改",
     "hint": "Compy 先测基线，应用一项可撤销的更改，再实测一局，除非数据明显超过噪声，否则自动撤回这项更改。",
@@ -428,6 +428,8 @@
     "runningLatestPost": "fps · {{samples}} 次读数。",
     "runningNoTreatment": "玩一局开启监测的 {{game}} 对局,为实验提供真实的「更改后」读数。",
     "yourGame": "你的游戏",
+    "noiseBetweenSessions": "按 ±{{band}}% 的噪声下限判定：在你这台电脑上 {{sessions}} 次未作改动的 {{game}} 游戏中，1% 低帧在两次之间最多相差 {{measured}}%。",
+    "noiseBetweenSessionsBelowFloor": "按 Compy 最低 {{band}}% 的噪声下限判定：在你这台电脑上 {{sessions}} 次未作改动的 {{game}} 游戏中，1% 低帧在两次之间最多相差 {{measured}}%，低于这个最低值。",
     "noiseUnmeasured": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的自身波动尚未测量。",
     "noiseMeasured": "按 Compy 固定的 {{band}}% 噪声下限判定。在你电脑上一次 25 秒的校准中，这款游戏的 1% 低帧波动为 ±{{measured}}%。该数值暂不用于判定，且未检查游戏版本。",
     "noiseStaleChanged": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的波动是在驱动或 Windows 更新之前测量的，因此未采用。未检查游戏版本。",

@@ -231,12 +231,32 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
     expect(noise, "only a real measurement fills the level").toContain("NoiseLookup::Measured(pct) => (Some(*pct), None)");
     expect(noise, "a stale measurement fills in a level again").toContain("NoiseLookup::Stale(why) => (None, Some(*why))");
     expect(noise, "an unmeasured game gets a level again").toContain("NoiseLookup::Unmeasured => (None, None)");
-    expect(noise).toContain("NoiseEvidence { band_pct, measured_noise_pct, measured_noise_stale }");
+    expect(noise).toContain("NoiseEvidence { band_pct, measured_noise_pct, measured_noise_stale, between_sessions }");
+    // P4-noise: the between-session spread is the start's own measurement, carried, never derived here.
+    expect(noise).toContain("let between_sessions = between_sessions.cloned();");
     const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
     expect(conclude, "a Trial with no treatment session reads a noise level again").toContain(
       "treatment.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session)",
     );
-    expect(conclude).toContain("noise_evidence_for(&outcome, band_pct, &game_noise)");
+    expect(conclude).toContain("noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref())");
+  });
+
+  it("§5 (P4-noise): the verdict band is the measured between-session spread; the halves stay on the fixed floor", () => {
+    // The band is max(measured spread between unchanged sessions, 3%), computed once at start from
+    // the ledger that start loaded, and kept on the record for the verdict.
+    const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
+    const measure = start.indexOf("crate::noise_floor::between_session_noise(&sessions, baseline, &ledger_rows(changes))");
+    const band = start.indexOf("let noise_floor_pct = crate::noise_floor::noise_band_pct(between.as_ref());");
+    expect(measure, "the start no longer measures the game's between-session noise").toBeGreaterThanOrEqual(0);
+    expect(band, "the band no longer comes from the measurement").toBeGreaterThan(measure);
+    // The halves are average fps graded on the fixed 3% (owner, 2026-10-24), never on the band.
+    expect(start).toContain("let halves_floor = DEFAULT_NOISE_FLOOR_PCT;");
+    expect(start).toContain("baseline_for_start(baseline, halves_floor)");
+    expect(start).not.toContain("baseline_for_start(baseline, noise_floor_pct)");
+    expect(start).toContain("halves_floor_pct: Some(halves_floor),");
+    expect(start).not.toMatch(/let noise_floor_pct = DEFAULT_NOISE_FLOOR_PCT/);
+    expect(start).toContain("between_session_noise: between,");
+    expect(start).toMatch(/\s+noise_floor_pct,\s/);
   });
 });
 
