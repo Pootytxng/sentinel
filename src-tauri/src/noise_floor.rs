@@ -247,6 +247,19 @@ fn write_gate() -> &'static Mutex<()> {
     GATE.get_or_init(|| Mutex::new(()))
 }
 
+/// The only way this crate takes the noise-floor gate. Records the acquisition, then blocks.
+///
+/// #398: a process-wide gate around a persisted read-modify-write (`load_from` -> `upsert` ->
+/// `save_to`) is a store lock, so it is `race_seam::StoreLock::NoiseFloor`. A leaf: nothing inside
+/// reaches another store (`store_path` is resolved by the caller before the gate is taken), and the
+/// recorder panics by name if a later edit nests one in. Poison policy unchanged: the gate guards
+/// no data of its own, so a poisoned one is taken over.
+pub(crate) fn lock_gate() -> crate::race_seam::StoreGuard {
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::NoiseFloor, || {
+        write_gate().lock().unwrap_or_else(|p| p.into_inner())
+    })
+}
+
 /// Record a calibration to `path`. `Ok(false)` when the measurement was refused (see [`upsert`]).
 pub(crate) fn record_to(
     path: &Path,
@@ -255,7 +268,7 @@ pub(crate) fn record_to(
     windows: u32,
     measured_at: &str,
 ) -> Result<bool, String> {
-    let _g = write_gate().lock().unwrap_or_else(|p| p.into_inner());
+    let _g = lock_gate();
     let mut store = load_from(path);
     if !upsert(&mut store, at, noise_pct, windows, measured_at) {
         return Ok(false);

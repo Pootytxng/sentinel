@@ -687,6 +687,14 @@ const LOCK_CENSUS = {
       "reads as an in-memory cache and is not one: set_baseline and clear_baseline hold it ACROSS " +
       "save_store, so a torn window here is a torn benchmark store",
   },
+  "noise_floor::GATE: OnceLock<Mutex<()>>": {
+    class: "persistence",
+    variant: "NoiseFloor",
+    why:
+      "noise_floor::write_gate, held across load_from -> upsert -> save_to of noise_floors.json " +
+      "(P4-noise-store), so two calibrations finishing together cannot drop one. Taken only " +
+      "through noise_floor::lock_gate; a leaf that reaches no other store.",
+  },
 
   // ── out of class ───────────────────────────────────────────────────────────────────────────
   "gaming_orchestrator::SESSION_OP: Mutex<()>": {
