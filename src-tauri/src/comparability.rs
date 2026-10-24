@@ -551,7 +551,7 @@ mod tests {
             peak_gpu_usage_pct: None,
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
-            compy_changes_active: 0,
+            compy_changes_active: Some(0),
             hw_fingerprint: Some(fp("Radeon RX 9070 XT", "25.7.1", 32, "2560x1440@165")),
             gaming_mode_active: Some(false),
             stutter_insight: None,

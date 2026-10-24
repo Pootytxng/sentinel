@@ -1811,23 +1811,29 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         for e in &ledger_events {
             h.supporting.push(e.summary.clone());
         }
-        if b.compy_changes_active != c.compy_changes_active {
+        // #669: a session that recorded no count (its start couldn't read the change history) can
+        // neither show a delta nor vouch for a match — `counts` is Some only when both sides did.
+        let counts = b.compy_changes_active.zip(c.compy_changes_active);
+        if let Some((then, now)) = counts.filter(|(then, now)| then != now) {
             h.supporting.push(format!(
-                "Active Compy changes: {} during the baseline vs {} during this session (older rollbacks carry no date and show up only in this count).",
-                b.compy_changes_active, c.compy_changes_active
+                "Active Compy changes: {then} during the baseline vs {now} during this session (older rollbacks carry no date and show up only in this count)."
             ));
         }
         if h.supporting.is_empty() {
-            match ledger {
-                LedgerHealth::Complete => h.contradicting.push(format!(
-                    "No Compy changes were applied or rolled back between these sessions and the active-change count matches ({}).",
-                    c.compy_changes_active
+            match (ledger, counts) {
+                (LedgerHealth::Complete, Some((_, now))) => h.contradicting.push(format!(
+                    "No Compy changes were applied or rolled back between these sessions and the active-change count matches ({now})."
                 )),
+                // A count never recorded is the ABSENCE of evidence too: the hypothesis stays open.
+                (LedgerHealth::Complete, None) => h.missing.push(
+                    "One of these sessions didn't record how many Compy changes were active (Compy couldn't read its change history when it began) — a Compy change can't be ruled in or out."
+                        .into(),
+                ),
                 // Silence from a ledger we could not read is the ABSENCE of evidence, not
                 // evidence of absence. Route it to `missing` so the hypothesis lands in
                 // unknowns instead of ruled_out — Compy never clears itself off a record it
                 // couldn't read. Same idiom as the Windows-build gap above.
-                LedgerHealth::Incomplete => h.missing.push(
+                (LedgerHealth::Incomplete, _) => h.missing.push(
                     "Compy's own change record couldn't be read for this window — a Compy change can't be ruled in or out."
                         .into(),
                 ),
@@ -2438,7 +2444,7 @@ mod tests {
             peak_gpu_usage_pct: None,
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
-            compy_changes_active: 0,
+            compy_changes_active: Some(0),
             hw_fingerprint: None,
             gaming_mode_active: None,
             stutter_insight: None,
@@ -3005,7 +3011,7 @@ mod tests {
         let (mut b, mut c) = two_sessions(100.0, 88.0);
         b.hw_fingerprint = Some(mk_fp("25.5.1"));
         c.hw_fingerprint = Some(mk_fp("25.6.0"));
-        c.compy_changes_active = 1;
+        c.compy_changes_active = Some(1);
         let r = report(&WhatChangedInputs {
             baseline: &b,
             current: &c,
@@ -3132,8 +3138,8 @@ mod tests {
         //    all (that is exactly why it exists — undated legacy rollbacks). Sentence yes,
         //    id no.
         let (mut b, mut c) = base();
-        b.compy_changes_active = 3;
-        c.compy_changes_active = 1;
+        b.compy_changes_active = Some(3);
+        c.compy_changes_active = Some(1);
         let r = run(&b, &c, vec![]);
         let leader = r.leading_hypotheses.first().expect("has a leader");
         assert_eq!(leader.id, "compy-config-change");
@@ -3271,7 +3277,7 @@ mod tests {
         c.hw_fingerprint = Some(mk_fp("25.5.1"));
         b.gaming_mode_active = Some(false);
         c.gaming_mode_active = Some(false);
-        c.compy_changes_active = 1;
+        c.compy_changes_active = Some(1);
         let r = report(&WhatChangedInputs {
             baseline: &b,
             current: &c,
@@ -3375,6 +3381,40 @@ mod tests {
             "the unreadable ledger was never disclosed; unknowns: {:?}",
             r.unknowns
         );
+    }
+
+    // #669: a session that recorded no active-change count (its start couldn't read the change
+    // history) can't vouch for a match — the hypothesis stays open as an unknown, never ruled out, and
+    // no count delta is invented against it, whichever side is unrecorded.
+    #[test]
+    fn an_unrecorded_change_count_never_clears_or_blames_compy() {
+        let (b, c) = two_sessions(100.0, 82.0);
+        for (b, c) in [
+            (b.clone(), SessionSummary { compy_changes_active: None, ..c.clone() }),
+            (SessionSummary { compy_changes_active: None, ..b }, c),
+        ] {
+            let inp = WhatChangedInputs {
+                baseline: &b,
+                current: &c,
+                events_window: vec![],
+                events_ambiguous: vec![],
+                snapshots: &[],
+            };
+            let r = what_changed(&inp, LedgerHealth::Complete);
+            assert!(
+                !r.ruled_out.iter().any(|h| h.id == "compy-config-change"),
+                "an unrecorded count cleared Compy; ruled out: {:?}",
+                r.ruled_out.iter().map(|h| h.id.as_str()).collect::<Vec<_>>()
+            );
+            let dump = format!("{r:?}");
+            assert!(!dump.contains("count matches"), "a match was asserted from a count never recorded");
+            assert!(!dump.contains("Active Compy changes:"), "a count delta was invented");
+            assert!(
+                r.unknowns.iter().any(|u| u.contains("didn't record how many Compy changes were active")),
+                "the gap never reached the reader; unknowns: {:?}",
+                r.unknowns
+            );
+        }
     }
 
     #[test]

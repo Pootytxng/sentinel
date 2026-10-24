@@ -778,7 +778,7 @@ mod comparison_tests {
             peak_gpu_usage_pct: Some(98),
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
-            compy_changes_active: 0,
+            compy_changes_active: Some(0),
             hw_fingerprint: None,
             gaming_mode_active: None,
             stutter_insight: None,

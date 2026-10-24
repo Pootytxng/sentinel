@@ -1558,7 +1558,7 @@ mod blackbox_tests {
             peak_gpu_usage_pct: Some(97),
             peak_ram_used_bytes: Some(8_000_000_000),
             ram_total_bytes: Some(32_000_000_000),
-            compy_changes_active: 0,
+            compy_changes_active: Some(0),
             hw_fingerprint: None,
             gaming_mode_active: None,
             stutter_insight: None,

@@ -334,7 +334,8 @@ type SessionSummary = {
   peak_gpu_usage_pct: number | null;
   peak_ram_used_bytes: number | null;
   ram_total_bytes: number | null;
-  compy_changes_active: number;
+  /** null = not recorded: Compy couldn't read its change history when the session began (#669). */
+  compy_changes_active: number | null;
   hw_fingerprint?: {
     hash: string;
     gpu: string;

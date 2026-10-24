@@ -1005,7 +1005,12 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
     // presented frames (so cancelled/idle starts leave no empty record).
     {
         let started_at = chrono::Utc::now().to_rfc3339();
-        let active_changes = crate::history::applied_changes_summary().active;
+        // #669: ONE ledger read; a read that fails here, or a ledger set aside as damaged earlier,
+        // records NO count — never a fabricated 0.
+        let active_changes = crate::history::session_start_active_count(
+            crate::history::load_history(),
+            crate::history::ledger_was_quarantined(),
+        );
         std::thread::spawn(move || {
             use std::sync::atomic::Ordering;
             let mut acc = crate::sessions::SessionAccumulator::new(started_at, active_changes);

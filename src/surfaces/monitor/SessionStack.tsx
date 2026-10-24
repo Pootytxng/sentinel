@@ -274,7 +274,7 @@ export function SessionStack({
         t("monitor.sessionStack.timelineCoversFirst", { duration: fmtDur(row.coveredSecs) }),
       );
     }
-    if (s.compy_changes_active > 0) {
+    if (s.compy_changes_active != null && s.compy_changes_active > 0) {
       parts.push(
         t("monitor.sessionStack.changesOn", { count: s.compy_changes_active }),
       );

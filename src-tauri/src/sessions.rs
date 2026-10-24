@@ -60,8 +60,11 @@ pub(crate) struct SessionSummary {
     pub(crate) ram_total_bytes: Option<u64>,
     // Renamed from `sentinel_changes_active` in the Compy rename; alias keeps pre-rename
     // sessions.json (migrated from %APPDATA%\Sentinel) parseable.
-    #[serde(alias = "sentinel_changes_active")]
-    pub(crate) compy_changes_active: usize, // active Compy changes during the session
+    // `None` = Compy couldn't read its change history when the session began, so no count was
+    // recorded (#669; never a fabricated 0). Every row written before this became optional carries a
+    // number and loads as `Some`; `default` lets a row without the field load as `None`.
+    #[serde(alias = "sentinel_changes_active", default)]
+    pub(crate) compy_changes_active: Option<usize>, // active Compy changes during the session
     /// Rig identity at session time — groundwork for same-rig analysis. Additive: pre-fingerprint
     /// sessions parse with this as None.
     #[serde(default)]
@@ -120,7 +123,7 @@ fn round1(x: f64) -> f64 {
 /// measured duration so it stays deterministic and testable.
 pub(crate) struct SessionAccumulator {
     started_at: String,
-    compy_changes_active: usize,
+    compy_changes_active: Option<usize>,
     proc_counts: HashMap<String, u32>,
     fps_sum: f64,
     frametime_sum: f64,
@@ -140,7 +143,7 @@ pub(crate) struct SessionAccumulator {
 }
 
 impl SessionAccumulator {
-    pub(crate) fn new(started_at: String, compy_changes_active: usize) -> Self {
+    pub(crate) fn new(started_at: String, compy_changes_active: Option<usize>) -> Self {
         Self {
             started_at,
             compy_changes_active,
@@ -378,7 +381,7 @@ mod session_tests {
 
     #[test]
     fn accumulator_computes_averages_and_peaks() {
-        let mut acc = SessionAccumulator::new("2026-05-31T00:00:00Z".into(), 2);
+        let mut acc = SessionAccumulator::new("2026-05-31T00:00:00Z".into(), Some(2));
         acc.record_fps("game.exe", 120.0, 8.3, 90.0, 0);
         acc.record_sensors(Some(60), Some(95), Some(8_000_000_000), Some(32_000_000_000));
         acc.record_fps("game.exe", 100.0, 10.0, 70.0, 1);
@@ -393,13 +396,13 @@ mod session_tests {
         assert_eq!(s.peak_gpu_usage_pct, Some(99));
         assert_eq!(s.peak_ram_used_bytes, Some(9_000_000_000));
         assert_eq!(s.ram_total_bytes, Some(32_000_000_000));
-        assert_eq!(s.compy_changes_active, 2);
+        assert_eq!(s.compy_changes_active, Some(2));
         assert_eq!(s.process_name, "game.exe");
     }
 
     #[test]
     fn accumulator_tracks_thermal_peaks_and_never_fabricates_absent_readings() {
-        let mut acc = SessionAccumulator::new("2026-07-22T00:00:00Z".into(), 0);
+        let mut acc = SessionAccumulator::new("2026-07-22T00:00:00Z".into(), Some(0));
         acc.record_thermals(Some(58), Some(72));
         acc.record_thermals(Some(63), None); // no hotspot reading this tick — peak must hold
         acc.record_thermals(None, Some(80)); // no CPU reading this tick — peak must hold
@@ -410,7 +413,7 @@ mod session_tests {
 
     #[test]
     fn accumulator_picks_dominant_process() {
-        let mut acc = SessionAccumulator::new("t".into(), 0);
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
         acc.record_fps("alt.exe", 60.0, 16.6, 50.0, 0);
         acc.record_fps("game.exe", 60.0, 16.6, 50.0, 1);
         acc.record_fps("game.exe", 60.0, 16.6, 50.0, 2);
@@ -421,7 +424,7 @@ mod session_tests {
     fn zero_sample_accumulator_never_fabricates_averages() {
         // Edge (R2-4): a session that recorded sensors but no FPS frames must not invent
         // numbers — averages stay zero, the game name stays honestly empty, no NaN/panic.
-        let mut acc = SessionAccumulator::new("t".into(), 0);
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
         acc.record_sensors(Some(60), Some(95), Some(8_000_000_000), Some(32_000_000_000));
         assert!(!acc.has_data(), "sensors alone are not a game session");
         let s = acc.finalize(120);
@@ -434,7 +437,7 @@ mod session_tests {
 
     #[test]
     fn single_sample_session_is_exact() {
-        let mut acc = SessionAccumulator::new("t".into(), 0);
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
         acc.record_fps("game.exe", 144.0, 6.9, 120.0, 0);
         let s = acc.finalize(MIN_SESSION_SECS);
         assert_eq!(s.samples, 1);
@@ -452,13 +455,13 @@ mod session_tests {
 
     #[test]
     fn empty_accumulator_has_no_data() {
-        let acc = SessionAccumulator::new("t".into(), 0);
+        let acc = SessionAccumulator::new("t".into(), Some(0));
         assert!(!acc.has_data());
     }
 
     #[test]
     fn sensors_without_fps_is_not_a_session() {
-        let mut acc = SessionAccumulator::new("t".into(), 0);
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
         acc.record_sensors(Some(50), Some(10), Some(1), Some(2));
         assert!(!acc.has_data(), "no FPS sample means no game presented");
     }
@@ -468,7 +471,7 @@ mod session_tests {
         let path = std::env::temp_dir().join(format!("compy-sessions-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         for i in 0..(MAX_SESSIONS + 5) {
-            let mut acc = SessionAccumulator::new(format!("t{i}"), 0);
+            let mut acc = SessionAccumulator::new(format!("t{i}"), Some(0));
             acc.record_fps("g.exe", 100.0 + i as f64, 10.0, 80.0, 0);
             save_session_to(&path, acc.finalize(i as u64)).unwrap();
         }
@@ -482,7 +485,7 @@ mod session_tests {
 
     #[test]
     fn fps_series_downsamples_to_ten_second_buckets() {
-        let mut acc = SessionAccumulator::new("t".into(), 0);
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
         // 25 real 1 Hz ticks, fps = 100 + elapsed. Buckets: [0..9] [10..19] [20..24 partial].
         for e in 0u32..25 {
             acc.record_fps("g.exe", 100.0 + e as f64, 10.0, 80.0, e);
@@ -499,7 +502,7 @@ mod session_tests {
     fn fps_series_gaps_stay_gaps() {
         // A game presenting at 0–4 s and again at 30–34 s (minimized between): the empty
         // buckets emit NOTHING — a gap is a gap, never an interpolated line.
-        let mut acc = SessionAccumulator::new("t".into(), 0);
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
         for e in 0u32..5 {
             acc.record_fps("g.exe", 100.0, 10.0, 80.0, e);
         }
@@ -512,7 +515,7 @@ mod session_tests {
 
     #[test]
     fn fps_series_caps_at_max_points() {
-        let mut acc = SessionAccumulator::new("t".into(), 0);
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
         // One tick per bucket, 50 buckets past the cap — the series stops, never grows unbounded.
         for b in 0..(FPS_SERIES_MAX_POINTS + 50) {
             acc.record_fps("g.exe", 100.0, 10.0, 80.0, b as u32 * FPS_SERIES_BUCKET_SECS);
@@ -546,13 +549,46 @@ mod session_tests {
         assert!(all[0].game_state.is_none());
     }
 
+    // #669: a session whose start couldn't read the change history records NO count: it finalizes as
+    // None, persists as null and loads back as None. A session never records a count it didn't measure.
+    #[test]
+    fn an_unread_change_history_at_start_is_recorded_as_no_count() {
+        let mut acc = SessionAccumulator::new("t".into(), None);
+        acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+        let s = acc.finalize(10);
+        assert_eq!(s.compy_changes_active, None);
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(json.contains(r#""compy_changes_active":null"#), "{json}");
+        let back: SessionSummary = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.compy_changes_active, None);
+    }
+
+    // #669: every sessions.json row on disk carries a number (pre-rename rows under the old name), and
+    // each loads as a KNOWN count; a row without the field loads as unknown, never as 0.
+    #[test]
+    fn a_recorded_count_loads_as_known_and_a_missing_one_as_unknown() {
+        let row = |count: &str| {
+            format!(
+                r#"[{{ "started_at": "t", "duration_secs": 120, "process_name": "g.exe", "samples": 3,
+                "avg_fps": 100.0, "avg_frametime_ms": 10.0, "low1_fps_est": 80.0,
+                "peak_gpu_temp_c": null, "peak_gpu_usage_pct": null, "peak_ram_used_bytes": null,
+                "ram_total_bytes": null{count} }}]"#
+            )
+        };
+        let load = |json: String| serde_json::from_str::<Vec<SessionSummary>>(&json).unwrap().remove(0);
+        assert_eq!(load(row(r#", "compy_changes_active": 2"#)).compy_changes_active, Some(2));
+        assert_eq!(load(row(r#", "sentinel_changes_active": 2"#)).compy_changes_active, Some(2));
+        assert_eq!(load(row(r#", "compy_changes_active": null"#)).compy_changes_active, None);
+        assert_eq!(load(row("")).compy_changes_active, None);
+    }
+
     #[test]
     fn fps_series_persists_and_strips_past_keep_window() {
         let path = std::env::temp_dir().join(format!("compy-sessions-series-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let total = FPS_SERIES_KEEP + 5;
         for i in 0..total {
-            let mut acc = SessionAccumulator::new(format!("t{i}"), 0);
+            let mut acc = SessionAccumulator::new(format!("t{i}"), Some(0));
             acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
             save_session_to(&path, acc.finalize(90)).unwrap();
         }
