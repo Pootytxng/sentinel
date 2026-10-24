@@ -566,6 +566,22 @@ describe("ExperimentBench (armed)", () => {
     ).toBeInTheDocument();
   });
 
+  // P4-noise-store: a calibration taken before a driver/Windows/game update isn't used, and the
+  // receipt says that rather than "hasn't been measured yet" or showing the old number.
+  it("says a game's noise was measured before an update when the record marks it stale", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: null, measured_noise_stale: true } },
+    ];
+    render(<ExperimentBench />);
+    expect(
+      await screen.findByText(
+        "Judged against Compy's 3% noise floor. This game's noise on your PC was measured before a driver, Windows or game update, so that number wasn't used.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/hasn't been measured yet/)).not.toBeInTheDocument();
+  });
+
   // Self-review C-11 (#583 lane 2b): the same sentence under every row buries the rows. Identical
   // lines are said once for the list; only lines that differ stay on their rows.
   it("says an identical noise line once for the list, not under every row", async () => {
