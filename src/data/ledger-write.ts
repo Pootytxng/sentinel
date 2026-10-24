@@ -33,10 +33,8 @@ export const BACKGROUND_LEDGER_WRITERS = ["start_tweak_trial", "start_stack_tria
  *
  *  Ledger readers outside App (the Test room's experiment bench, the Machine Model) re-read only on
  *  LEDGER_CHANGED_EVENT or a window refocus, so a write that skips the announcement leaves them
- *  showing the ledger as it was (#599, #619). Every call of a LEDGER_WRITE_COMMANDS command goes
- *  through here except three still in `surfaces/ExperimentBench.tsx` (start, conclude and restore an
- *  experiment), which #621 moves: `ledger-write.test.ts` pins those three by name and fails on any
- *  other. The two BACKGROUND_LEDGER_WRITERS do not come through here, and nothing here announces
+ *  showing the ledger as it was (#599, #619, #621). Every call of a LEDGER_WRITE_COMMANDS command goes
+ *  through here, and `ledger-write.test.ts` fails on any that does not. The two BACKGROUND_LEDGER_WRITERS do not come through here, and nothing here announces
  *  them.
  *
  *  A failed command throws before anything is announced: nothing was recorded, so nothing re-reads.

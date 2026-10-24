@@ -13,9 +13,8 @@ import { writeLedger, LEDGER_WRITE_COMMANDS, BACKGROUND_LEDGER_WRITERS } from ".
 
 // #619: ledger readers outside App (the Test room's experiment bench, the Machine Model) re-read only
 // on LEDGER_CHANGED_EVENT or a refocus. This helper is where a ledger write announces. Held to it
-// below: every call of a LEDGER_WRITE_COMMANDS command except the three ExperimentBench calls in
-// EXEMPT_UNTIL_621. Not held to it: the two BACKGROUND_LEDGER_WRITERS, whose write lands after their
-// command has returned.
+// below: every call of a LEDGER_WRITE_COMMANDS command (#621 moved the bench's three onto it). Not
+// held to it: the two BACKGROUND_LEDGER_WRITERS, whose write lands after their command has returned.
 describe("writeLedger announces a ledger write, then refreshes", () => {
   const steps: string[] = [];
   const onLedger = () => steps.push("event");
@@ -152,20 +151,13 @@ function unwritten(source: string, file?: string): string[] {
 }
 
 describe("no ledger-writing command is invoked outside writeLedger", () => {
-  // #621 moves the bench onto writeLedger once #583 releases ExperimentBench.tsx; it then empties this
-  // list. Pinned exactly, so the list can neither grow nor go stale.
-  const EXEMPT_UNTIL_621 = [
-    "surfaces/ExperimentBench.tsx: conclude_experiment",
-    "surfaces/ExperimentBench.tsx: restore_experiment",
-    "surfaces/ExperimentBench.tsx: start_experiment",
-  ];
   const sources = walkTs(SRC)
     .filter((p) => rel(p) !== "data/ledger-write.ts")
     .map((p) => ({ r: rel(p), p, source: readFileSync(p, "utf8") }));
 
   it("every ledger-writing command named in code is writeLedger's first argument", () => {
     const found = sources.flatMap(({ r, p, source }) => bypasses(source, p).map((cmd) => `${r}: ${cmd}`));
-    expect(found.sort()).toEqual(EXEMPT_UNTIL_621);
+    expect(found.sort()).toEqual([]);
   });
 
   it("every writeLedger use is an import or a call that writes its command out", () => {
