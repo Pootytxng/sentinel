@@ -1285,15 +1285,21 @@ pub(crate) fn baseline_is_current(
              {active_now} now), {replay}"
         ));
     }
-    // Can't-confirm is compared apart: undoing a change Compy can't read moves only this count.
-    if let Some(cant_then) = baseline.compy_changes_cant_confirm {
-        if cant_then != now.cant_confirm {
-            return Err(format!(
-                "the number of Compy changes it can't confirm is different from the baseline session's \
-                 ({cant_then} then, {} now), {replay}",
-                now.cant_confirm
-            ));
-        }
+    // Can't-confirm is compared apart: undoing a change Compy can't read moves only this count. A
+    // per-change baseline with no can't-confirm count has nothing to compare it with, so it is
+    // refused here exactly as `other_compy_change` refuses it at conclude (453-f1 final review).
+    let Some(cant_then) = baseline.compy_changes_cant_confirm else {
+        return Err(format!(
+            "Compy didn't record how many of its changes it couldn't confirm when the baseline session \
+             began, {replay}"
+        ));
+    };
+    if cant_then != now.cant_confirm {
+        return Err(format!(
+            "the number of Compy changes it can't confirm is different from the baseline session's \
+             ({cant_then} then, {} now), {replay}",
+            now.cant_confirm
+        ));
     }
     Ok(())
 }
@@ -4157,6 +4163,14 @@ mod experiment_tests {
         let per_change = SessionSummary { compy_changes_active: Some(1), compy_changes_cant_confirm: Some(2), ..base.clone() };
         let why = baseline_is_current(&per_change, Ok((&settled, legacy(9)))).unwrap_err();
         assert!(why.contains("can't confirm is different from the baseline session's (2 then, 1 now)"), "{why}");
+        // A per-change baseline with no can't-confirm count is refused at start, as at conclude.
+        let no_cant = SessionSummary { compy_changes_active: Some(1), compy_changes_cant_confirm: None, ..base.clone() };
+        let why = baseline_is_current(&no_cant, Ok((&settled, counts_now(1)))).unwrap_err();
+        assert!(why.contains("didn't record how many of its changes it couldn't confirm"), "{why}");
+        let rec = ExperimentRecord { applied_change_id: "own".into(), ..running() };
+        let treat = SessionSummary { compy_changes_active: Some(2), ..session(TREAT_ID, 180.0) };
+        let what = other_compy_change(&rec, Some(&no_cant), Some(&treat), None).unwrap();
+        assert!(what.contains("baseline session didn't record how many Compy changes were active"), "{what}");
         // A ledger where nothing can be confirmed has no active count to match.
         let unknown = crate::history::SessionChangeCounts { active: None, cant_confirm: 1, legacy_active: 1 };
         let why = baseline_is_current(&per_change, Ok((&settled, unknown))).unwrap_err();
