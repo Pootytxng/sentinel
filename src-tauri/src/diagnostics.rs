@@ -652,8 +652,16 @@ pub(crate) fn machine_model_section(
         value: match c.ledger_unreadable {
             Some(_) => "Unreadable".into(),
             None => format!(
-                "{} recorded · {} active on this PC · {} rolled back · {} no longer in effect · {} could not be checked",
-                c.total_recorded, c.active_now, c.rolled_back, c.applied_but_not_in_effect, c.in_effect_unknown
+                // Every count on this line is per CHANGE (one per rec_id, #453 review); the ledger
+                // row count is named as such so the two units never share a word.
+                "{} recorded ({} ledger {}) · {} active on this PC · {} rolled back · {} no longer in effect · {} could not be checked",
+                c.active_now + c.in_effect_unknown + c.applied_but_not_in_effect + c.rolled_back,
+                c.total_recorded,
+                if c.total_recorded == 1 { "entry" } else { "entries" },
+                c.active_now,
+                c.rolled_back,
+                c.applied_but_not_in_effect,
+                c.in_effect_unknown
             ),
         },
         note: Some(match c.ledger_unreadable.as_deref() {
@@ -668,8 +676,10 @@ pub(crate) fn machine_model_section(
             c.in_effect_other_rig, c.in_effect_rig_unknown
         ),
         note: Some(format!(
-            "{} of {} settings that read as in effect are attributed to this PC. The live check proves the setting is in effect; only the rig stamp says Compy is who applied it here. An unattributed row is one Compy cannot place on any PC — that is a missing stamp, not evidence it was applied somewhere else.",
-            c.active_now, c.in_effect_total
+            "{} of the {} changes active on this PC are stamped for this PC. The live check reads the setting on this machine, so all {} are active here; the rig stamp only says where Compy recorded applying it. An unattributed change is one whose record predates rig stamping — that is a missing stamp, not evidence it was applied somewhere else.",
+            c.active_now - c.in_effect_other_rig - c.in_effect_rig_unknown,
+            c.active_now,
+            c.active_now
         )),
     });
     entries.push(DiagnosticEntry {

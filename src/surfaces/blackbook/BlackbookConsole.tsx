@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { BentoGrid, BentoTile } from "../../design/bento/BentoGrid";
 import type { GpuVendor } from "../walkthroughs";
 import { startHereEntries, type LogbookRecord } from "./logbook";
-import type { LogbookView } from "./logbook-view";
+import { manageJumpLabel, type LogbookView } from "./logbook-view";
 import type { InEffectCounts } from "../../data/machine-model";
 import type { LedgerHealth } from "../../types";
 import type { TFunction } from "i18next";
@@ -144,9 +144,9 @@ export function BlackbookConsole({
           {/* Undo lives in the Lab (the ONE audited undo home) — the Logbook is a read view, so an
               active change routes there rather than rolling back in-room (no second undo surface).
               It sits in the strip tile because it is a follow-on to the change COUNT above it. */}
-          {undoableChanges > 0 && (
+          {undoableChanges.active + undoableChanges.cantConfirm > 0 && (
             <button type="button" className="bc-manage" onClick={onOpenLab}>
-              <span>{t("blackbook.blackbookConsole.manageJump", { count: undoableChanges })}</span>
+              <span>{manageJumpLabel(t, undoableChanges)}</span>
               <span className="bc-chevron" aria-hidden="true">
                 ▸
               </span>

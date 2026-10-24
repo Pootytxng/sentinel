@@ -132,6 +132,7 @@
     "tapeMore_other": "Show {{count}} older records",
     "manageJump_one": "Undo the {{count}} change in Test",
     "manageJump_other": "Undo any of the {{count}} changes in Test",
+    "manageJumpSplit": "Undo in Test: {{count}} still on · {{unknown}} can't confirm",
     "library": {
       "eyebrow": "The field guide",
       "scent": "Heard a tweak online? Look it up before you try it — every claim graded.",

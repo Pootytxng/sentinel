@@ -68,6 +68,7 @@ const CHANGE: AppliedChange = {
   snapshot: null,
   status: "applied",
   is_still_active: true,
+  active_check: "on",
 };
 
 async function mountFix(changes: AppliedChange[] = []) {

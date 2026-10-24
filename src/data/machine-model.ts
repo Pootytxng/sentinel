@@ -91,16 +91,20 @@ export function factText<T>(fact: Fact<T>, format: (value: T) => string = String
 }
 
 /**
- * What the Machine Model can say about Compy's changes being in effect on THIS PC (#452).
+ * What the Machine Model can say about Compy's changes being in effect on THIS PC (#452, #453).
  *
- * The one number a screen may print as "Compy changed this and it is still that way" is
- * `active_now`. Everything else the model counts (other rig, rig unknown, live check unreadable) is
- * carried alongside so a screen can say what it does NOT know; none of it is folded into that number.
+ * The one number a screen may print as "in effect on this PC" is `active_now`: changes (one per
+ * `rec_id`, never ledger rows) whose live check, read on this machine, says the setting is on. It
+ * says the setting is in effect here, NOT that Compy applied it on this PC; which rig a recorded
+ * apply was stamped for is attribution the model carries separately. The changes whose live check
+ * could not read the setting are carried alongside so a screen can say what it does NOT know; none
+ * of them is folded into that number.
  *
  *   - `pending`    — the model has not been read yet. Print nothing: a stand-in number is a claim.
  *   - `unreadable` — the model or the Trust Ledger could not be read. Say so; never "0 changes".
- *   - `counted`    — `activeNow` changes are in effect here; `unknown` applied rows could not be
- *                    live-checked; `totalRecorded` rows exist in the ledger.
+ *   - `counted`    — `activeNow` changes are in effect on this PC; `unknown` changes are applied
+ *                    but Compy can't confirm them either way; `totalRecorded` is the number of
+ *                    ledger entries (rows), not changes.
  */
 export type InEffectCounts =
   | { kind: "pending" }

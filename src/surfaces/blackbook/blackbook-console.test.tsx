@@ -13,7 +13,7 @@ import type {
   LogbookSession,
   LogbookAutopsy,
 } from "./logbook";
-import type { SessionSummary, LedgerHealth } from "../../types";
+import type { AppliedChange, SessionSummary, LedgerHealth } from "../../types";
 import type { InEffectCounts } from "../../data/machine-model";
 
 // Guards for the Logbook console face (Console HUD Phase 4). Covers the T4 rails: honest empty
@@ -93,6 +93,27 @@ const autopsy = (over: Partial<LogbookAutopsy> = {}): LogbookAutopsy => ({
 // The Machine Model's in-effect count (#625). Default: one change on, none unconfirmed.
 const COUNTED_ONE: InEffectCounts = { kind: "counted", activeNow: 1, unknown: 0, totalRecorded: 1 };
 
+// The harness hands the view hand-built tape records; the undo route counts the ledger ROWS
+// (#453), so each record is turned back into the one applied row it stands for.
+function changesOf(records: LogbookRecord[]): AppliedChange[] {
+  return records.flatMap((r) =>
+    r.kind !== "change"
+      ? []
+      : [
+          {
+            id: r.id,
+            rec_id: r.id,
+            rec_title: r.title,
+            applied_at: new Date(r.at).toISOString(),
+            snapshot: null,
+            status: r.rolledBack ? ("rolled_back" as const) : ("applied" as const),
+            is_still_active: r.active || r.unconfirmed,
+            active_check: r.rolledBack ? null : r.active ? "on" : r.unconfirmed ? "unreadable" : "off",
+          },
+        ],
+  );
+}
+
 function Logbook({
   records,
   health = null,
@@ -104,7 +125,7 @@ function Logbook({
   health?: LedgerHealth | null;
   onReviewSession?: () => void;
 } & Partial<Omit<Parameters<typeof BlackbookConsole>[0], "view">>) {
-  const view = useLogbookView(records, health);
+  const view = useLogbookView(records, health, changesOf(records));
   const reduced = useReducedMotion();
   return (
     <>
@@ -284,8 +305,9 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
   });
 
   // #625: a change Compy cannot confirm is still in place may still be in place, so its undo
-  // stays one press away. It is counted beside the ones confirmed on.
-  it("a change Compy can't confirm still summons the jump, counted with the confirmed ones", () => {
+  // stays one press away. #453: it is named apart from the ones confirmed on, so the "still on"
+  // number in the jump is the one Health and Optimize print.
+  it("a change Compy can't confirm still summons the jump, counted apart from the confirmed ones", () => {
     useReduced();
     const onOpenLab = vi.fn();
     mountConsole(
@@ -296,7 +318,7 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
       ],
       { onOpenLab },
     );
-    fireEvent.click(screen.getByRole("button", { name: /undo any of the 2 changes in Test/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Undo in Test: 1 still on · 1 can't confirm" }));
     expect(onOpenLab).toHaveBeenCalledOnce();
   });
 });
