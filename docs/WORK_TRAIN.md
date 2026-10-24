@@ -79,26 +79,32 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
       (traces in `logs/foreground-traces/`). Fix: (1) launch compy.exe with SW_SHOWNOACTIVATE in STARTUPINFO
       from both scripts; (2) `launch-focus-guard` takes timing from the trace (first in-family FOREGROUND
       event with fgPid in family vs firstShowMs) and filters FOREGROUND on fgPid. Prove with one strict run.
-- [ ] **#631** Rollback that ran but couldn't save reads as a failure.
+- [x] **#631** Rollback that ran but couldn't save reads as a failure. Backend `ad7a1221`; screens +
+      Benchmark trial wording `48972cd3` (2026-10-24).
 - [x] **#616** Roll back an apply whose receipt can't be built or saved (orphan change). Ported from the
       Sep 28 branch onto main 2026-10-23 (`claude/train-616`, head 0b8eb85c): cargo test 1427/0, clippy clean,
       ledger guards 222/222; independent review APPROVE, no blockers.
-- [ ] **#616-f1** Batch phase-2 receipt commit failure drops the collected per-item skip reasons (the
+- [x] **#616-f1** (`ad7a1221`) Batch phase-2 receipt commit failure drops the collected per-item skip reasons (the
       "check this setting in Windows" warnings); add them to the Err text (history.rs ~1398). From the #616 review.
-- [ ] **#616-f2** Test a receipt build that fails partway through a list in `commit_receipts` (distinct
+- [x] **#616-f2** (`ad7a1221`) Test a receipt build that fails partway through a list in `commit_receipts` (distinct
       branch from a failed save). From the #616 review.
-- [ ] **#617** Multi-write applies leave partial state on a mid-apply failure.
-- [ ] **#619 / #621** Ledger writes outside App don't refresh the other screens.
-      #619 landed with PR #627 (2026-10-24). Left: #621 (ExperimentBench's three writes onto `writeLedger`).
+- [x] **#617** Multi-write applies leave partial state on a mid-apply failure. `1bc030bd` (2026-10-24).
+- [ ] **#617-f1** Tests: apply with a present REG_BINARY UserPreferencesMask checks snapshot bytes; F1
+      test for game mode and visual effects. From the #617 review (N2).
+- [x] **#619 / #621** Ledger writes outside App don't refresh the other screens.
+      #619 landed with PR #627 (2026-10-24). #621 `6afaa71b` (2026-10-24).
 - [x] **#629** Test → Benchmark claims no baseline while one exists. Fixed 2026-10-23: "Reading…" until
       the read answers, "couldn't read" on failure, no overwrite button meanwhile (guard falsified 2/3 on old code).
-- [ ] **#628** Trial start note says another change is active after a same-setting rollback.
+- [x] **#628** Trial start note says another change is active after a same-setting rollback. `2275c3e7`.
 - [ ] **#669 / #668** Active-change and attribution counts collapse to 0 on a failed ledger read.
+      Needs history.rs (#668: `active_changes_in(rows)` fold; #669 also touches sessions.rs types).
 - [x] **#645 / #608 / #671** Unmeasured FPS still shown as a number anywhere. All listed sites fixed on
       main (#656, PR #661, PR #673); a grep finds only gated sites. Issues still open on GitHub: closing them
       needs the owner (the session could not write to issues).
-- [ ] **#622** Health layout below ~600 px.
-- [ ] **#677** Clipped session metadata and combined-effect tooltips.
+- [x] **#622** Health layout below ~600 px. `3c3e7553` (2026-10-24).
+- [x] **#677** Clipped session metadata and combined-effect tooltips. `3c3e7553`.
+- [ ] **#622-f1** Below ~560 px, Live session rows scroll sideways ("vs previous" chip); Health
+      verdict panel scrolls inside itself (#225, needs its own change).
 - [ ] **#638** Phase 2 follow-ons from PR #634.
 - [ ] **GB-picker** `game-bar-disable` not offered in the Trial picker on the owner rig with both
       values = 1 (seen 2026-10-23 07:46 on a fresh Compy). Reproduce, then fix or close.
@@ -148,6 +154,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 ## Session log
 - 2026-10-23 eve (interactive, CODE-ONLY late): PR #604 `86f6a697`, worktree prune, #629 `fef8dc7a`,
   lease check retired `dad641d1`, #616 `d398a9ed`; pushed: #604 only (owner on PC).
+
+- 2026-10-24 early (interactive, CODE-ONLY, parallel lanes): #621 `6afaa71b`, #628 `2275c3e7`, #631
+  `ad7a1221` + `48972cd3`, #622/#677 `3c3e7553`, #617 `1bc030bd`; not pushed (owner on PC).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
