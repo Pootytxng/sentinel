@@ -6673,4 +6673,63 @@ mod all_or_nothing_tests {
             _ => panic!("wrong snapshot"),
         }
     }
+
+    // ── issue 617 review N2: a present REG_BINARY prior, and F1 for game mode and visual effects ──
+
+    /// A Windows-default-looking mask that differs from BEST_PERF_USER_PREFS_MASK in several bytes.
+    const PRIOR_MASK: [u8; 8] = [0x9e, 0x3e, 0x07, 0x80, 0x12, 0x00, 0x00, 0x00];
+
+    fn binary(bytes: &[u8]) -> winreg::RegValue {
+        winreg::RegValue { bytes: bytes.to_vec(), vtype: RegType::REG_BINARY }
+    }
+
+    #[test]
+    fn a_present_binary_user_prefs_mask_is_snapshotted_byte_for_byte() {
+        let mut reg = FakeHkcu::default()
+            .with(VFX_KEY, "VisualFXSetting", reg_dword(0))
+            .with(DESKTOP_KEY, "UserPreferencesMask", binary(&PRIOR_MASK));
+        let r = apply_visual_effects_with(&mut reg).expect("ok");
+        assert_eq!(
+            reg.get(DESKTOP_KEY, "UserPreferencesMask").map(|v| (v.bytes, v.vtype)),
+            Some((BEST_PERF_USER_PREFS_MASK.to_vec(), RegType::REG_BINARY))
+        );
+        match r.snapshot {
+            Snapshot::VisualEffects { vfx_setting_prior, user_prefs_mask_prior } => {
+                assert_eq!(vfx_setting_prior, Some(0));
+                assert_eq!(user_prefs_mask_prior.as_deref(), Some(&PRIOR_MASK[..]), "exactly the prior bytes");
+            }
+            _ => panic!("wrong snapshot"),
+        }
+    }
+
+    #[test]
+    fn a_failed_game_mode_undo_records_the_change_with_its_full_snapshot() {
+        let mut reg = FakeHkcu { fail_write: Some(GAME_MODE_ENABLED_VALUE), fail_undo: true, ..Default::default() }
+            .with(GAMEBAR_KEY, GAME_MODE_ALLOW_VALUE, reg_dword(0))
+            .with(GAMEBAR_KEY, GAME_MODE_ENABLED_VALUE, reg_dword(7));
+        let r = apply_game_mode_with(&mut reg).expect("recorded, not Err");
+        assert_eq!(reg.dword(GAMEBAR_KEY, GAME_MODE_ALLOW_VALUE), Some(1), "the first write stands");
+        assert!(matches!(r.applied_action, AppliedAction::EnableGameMode));
+        assert!(matches!(
+            r.snapshot,
+            Snapshot::GameMode { prior_enabled: Some(7), prior_allow: Some(0) }
+        ));
+    }
+
+    #[test]
+    fn a_failed_visual_effects_undo_records_the_change_with_its_full_snapshot() {
+        let mut reg = FakeHkcu { fail_write: Some("UserPreferencesMask"), fail_undo: true, ..Default::default() }
+            .with(VFX_KEY, "VisualFXSetting", reg_dword(3))
+            .with(DESKTOP_KEY, "UserPreferencesMask", binary(&PRIOR_MASK));
+        let r = apply_visual_effects_with(&mut reg).expect("recorded, not Err");
+        assert_eq!(reg.dword(VFX_KEY, "VisualFXSetting"), Some(2), "the first write stands");
+        assert!(matches!(r.applied_action, AppliedAction::SetVisualEffectsBestPerformance));
+        match r.snapshot {
+            Snapshot::VisualEffects { vfx_setting_prior, user_prefs_mask_prior } => {
+                assert_eq!(vfx_setting_prior, Some(3));
+                assert_eq!(user_prefs_mask_prior.as_deref(), Some(&PRIOR_MASK[..]), "exactly the prior bytes");
+            }
+            _ => panic!("wrong snapshot"),
+        }
+    }
 }
