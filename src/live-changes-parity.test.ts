@@ -70,8 +70,11 @@ describe("Health, Optimize and History count the same active changes (#453)", ()
       "rolled_back",
     ]);
     expect(fixture.rows.some((r) => r.applied_at === "")).toBe(true);
-    expect(ACTIVE).toBe(9);
-    expect(CANT_CONFIRM).toBe(2);
+    // 453-f1: the row last in the file is not the newest apply, and it reads off.
+    expect(fixture.rows.filter((r) => r.rec_id === "late-rec").map((r) => r.active_check)).toEqual(["on", "off"]);
+    expect(fixture.rows.some((r) => r.active_check === "unrecognised")).toBe(true);
+    expect(ACTIVE).toBe(10);
+    expect(CANT_CONFIRM).toBe(3);
   });
 
   it("the shared helper: one per change, live On whatever the rig stamp, can't-confirm apart", () => {
@@ -81,6 +84,7 @@ describe("Health, Optimize and History count the same active changes (#453)", ()
         "fast-startup-off",
         "game-mode",
         "hags-enable",
+        "late-rec",
         "nagle-disable",
         "rb-rec",
         "undated-rec",
@@ -89,7 +93,7 @@ describe("Health, Optimize and History count the same active changes (#453)", ()
         "usb-selective-suspend-off",
       ].sort(),
     );
-    expect(g.cantConfirm.map((c) => c.rec_id).sort()).toEqual(["bloat-task:ceip-usb", "tie-rec"]);
+    expect(g.cantConfirm.map((c) => c.rec_id).sort()).toEqual(["bloat-task:ceip-usb", "leftover:no-probe", "tie-rec"]);
     // A same-millisecond tie keeps the first row seen, whatever the sub-millisecond digits say.
     expect(g.cantConfirm.find((c) => c.rec_id === "tie-rec")?.id).toBe("tie-1");
     // The newest live apply represents a repeated change: it is what an undo targets.
@@ -126,6 +130,15 @@ describe("Health, Optimize and History count the same active changes (#453)", ()
     const rs = readFileSync(join("src-tauri", "src", "machine_model.rs"), "utf8");
     expect(rs).toContain('include_str!("../../src/test/fixtures/live-changes-parity.json")');
     expect(rs).toMatch(/fn active_and_unknown_counts_match_the_shared_ts_fixture\(\)/);
+  });
+
+  it("Sessions: the Rust session count reads this same fixture through the shared rule (453-f1)", () => {
+    const rs = readFileSync(join("src-tauri", "src", "history.rs"), "utf8");
+    expect(rs).toContain('include_str!("../../src/test/fixtures/live-changes-parity.json")');
+    expect(rs).toMatch(/fn the_session_count_is_the_shared_per_change_count\(\)/);
+    // The session count and Health's count go through one Rust helper.
+    const mm = readFileSync(join("src-tauri", "src", "machine_model.rs"), "utf8");
+    expect(mm).toMatch(/crate::history::live_change_groups\(/);
   });
 
   it("Optimize reads the shared helper and History the shared per-row rule, so they cannot drift", () => {

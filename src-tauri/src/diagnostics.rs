@@ -682,13 +682,15 @@ pub(crate) fn machine_model_section(
             c.active_now
         )),
     });
+    // Rig attribution is a fact about each recorded apply, so this line counts ledger ENTRIES, and
+    // says so: Game Mode applied eight times is eight entries here and one change above (453-f1).
     entries.push(DiagnosticEntry {
-        label: "Applied on this machine".into(),
+        label: "Ledger entries by PC".into(),
         value: format!(
             "{} on this PC · {} elsewhere · {} unknown",
             c.on_this_rig, c.not_on_this_rig, c.rig_unknown
         ),
-        note: Some("Rows written before rig stamping existed stay unknown rather than being assumed to be this machine.".into()),
+        note: Some("Counted per ledger entry, not per change: a change applied more than once has one entry for each apply. Entries written before rig stamping existed stay unknown rather than being assumed to be this machine.".into()),
     });
 
     // 4. What evidence can we trust right now?

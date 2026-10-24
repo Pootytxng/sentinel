@@ -656,6 +656,7 @@ mod tests {
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
             compy_changes_active: Some(0),
+            compy_changes_per_change: true,
             hw_fingerprint: None,
             gaming_mode_active: None,
             stutter_insight: None,

@@ -68,6 +68,14 @@ pub(crate) struct SessionSummary {
     // says what the count was.
     #[serde(alias = "sentinel_changes_active", default)]
     pub(crate) compy_changes_active: Option<usize>, // active Compy changes during the session
+    /// Was `compy_changes_active` counted per change by the shared live rule
+    /// (`history::live_change_groups`: one per change, live check reads On; can't-confirm not
+    /// included)? Builds before 453-f1 counted the newest row per change and included the ones
+    /// Compy couldn't read, so their rows load `false` and their count is only compared with
+    /// another old-rule count, never with a live count today. Additive: an older Compy ignores the
+    /// key, and a row it re-saves loses it and reads back as old-rule (the cautious side).
+    #[serde(default)]
+    pub(crate) compy_changes_per_change: bool,
     /// Rig identity at session time — groundwork for same-rig analysis. Additive: pre-fingerprint
     /// sessions parse with this as None.
     #[serde(default)]
@@ -276,6 +284,7 @@ impl SessionAccumulator {
             peak_ram_used_bytes: self.peak_ram_used_bytes,
             ram_total_bytes: self.ram_total_bytes,
             compy_changes_active: self.compy_changes_active,
+            compy_changes_per_change: true,
             // Stamped by the monitoring loop at save time (finalize stays pure/system-free).
             hw_fingerprint: None,
             gaming_mode_active: None,
@@ -640,6 +649,8 @@ mod session_tests {
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(!text.contains(r#""compy_changes_active": null"#), "{text}");
         assert!(text.contains(r#""compy_changes_unrecorded": true"#), "{text}");
+        // 453-f1: the rule mark is one more key the older build ignores.
+        assert!(text.contains(r#""compy_changes_per_change": true"#), "{text}");
         let old: Vec<OldSessionSummary> = serde_json::from_str(&text).expect("an older Compy loads the file");
         assert_eq!(old.iter().map(|s| s.compy_changes_active).collect::<Vec<_>>(), [0, 3]);
         let back = load_sessions_from(&path);
@@ -672,6 +683,10 @@ mod session_tests {
         assert_eq!(load(row(marked_old_name)).compy_changes_active, None);
         let recorded = r#", "compy_changes_active": 0, "compy_changes_unrecorded": false"#;
         assert_eq!(load(row(recorded)).compy_changes_active, Some(0));
+        // 453-f1: a row an older Compy wrote was counted by the old rule; this build's rows say so.
+        assert!(!load(row(r#", "compy_changes_active": 2"#)).compy_changes_per_change);
+        let per_change = r#", "compy_changes_active": 2, "compy_changes_per_change": true"#;
+        assert!(load(row(per_change)).compy_changes_per_change);
     }
 
     #[test]

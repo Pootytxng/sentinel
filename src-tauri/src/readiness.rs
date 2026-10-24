@@ -1475,6 +1475,7 @@ mod readiness_tests {
         let hist = AppliedChangesSummary {
             total: 3,
             active: 2,
+            cant_confirm: 0,
             rolled_back: 0,
             externally_reverted: 1,
             drifted_titles: vec!["Enable Windows Game Mode".into()],

@@ -1256,6 +1256,15 @@ pub(crate) fn baseline_is_current(
              (it couldn't read its change history at the time), {replay}"
         ));
     };
+    // 453-f1: `active_now` is counted per change by the shared live rule; a baseline recorded by an
+    // older Compy counted another way (newest row, can't-confirm included), so its number is not
+    // comparable with this one — refuse in words instead of reading a rule change as a moved change.
+    if !baseline.compy_changes_per_change {
+        return Err(format!(
+            "the baseline session was recorded by an older version of Compy that counted its active \
+             changes a different way, so its count can't be checked against today's, {replay}"
+        ));
+    }
     if then != active_now {
         return Err(format!(
             "the number of active Compy changes is different from the baseline session's ({then} then, \
@@ -1291,6 +1300,14 @@ pub(crate) fn other_compy_change(
     };
     let Some(then) = baseline.compy_changes_active else { return Some(unrecorded("baseline session")) };
     let Some(after) = treatment.compy_changes_active else { return Some(unrecorded("after-session")) };
+    if baseline.compy_changes_per_change != treatment.compy_changes_per_change {
+        return Some(
+            "the baseline session and the after-session counted Compy's active changes in different \
+             ways (one was recorded by an older version of Compy), so they can't show that exactly \
+             this one change was added"
+                .into(),
+        );
+    }
     let expected = then + 1;
     let active = |n: usize| match n {
         1 => "1 active Compy change".to_string(),
@@ -3606,6 +3623,7 @@ mod experiment_tests {
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
             compy_changes_active: Some(0),
+            compy_changes_per_change: true,
             hw_fingerprint: Some(crate::hardware::HwFingerprint {
                 hash: "deadbeef".into(),
                 gpu: "Radeon RX 9070 XT".into(),
@@ -4098,6 +4116,11 @@ mod experiment_tests {
             assert!(why.contains("play a new baseline session"), "{why}");
             assert!(!why.contains("0 then"), "{why}");
         }
+        // 453-f1: a count an older Compy recorded (newest row, can't-confirm included) is not
+        // compared with today's per-change count, even when the numbers happen to match.
+        let old_rule = SessionSummary { compy_changes_active: Some(0), compy_changes_per_change: false, ..base.clone() };
+        let why = baseline_is_current(&old_rule, Ok((&settled, 0))).unwrap_err();
+        assert!(why.contains("older version of Compy") && why.contains("play a new baseline session"), "{why}");
         // A recorded count still compares as before.
         let known = SessionSummary { compy_changes_active: Some(0), ..base };
         assert_eq!(baseline_is_current(&known, Ok((&settled, 0))), Ok(()));
@@ -4121,19 +4144,21 @@ mod experiment_tests {
             before(ledger_change("other-b", None)), // re-applied: still one setting
             undone,
         ]);
-        let base = SessionSummary { compy_changes_active: Some(2), ..session(BASE_ID, 150.0) };
+        let base = SessionSummary { compy_changes_active: Some(0), ..session(BASE_ID, 150.0) };
         let Ok(view) = baseline_checked_view(&base, &history) else {
             panic!("a readable ledger at the count the baseline recorded is a view")
         };
         assert_eq!(view.rows.len(), 4, "the one-change checks walk every row");
         assert_eq!(view.active_changes, 2, "latest row wins: the undone setting is not active");
-        assert_eq!(view.active_now, 2, "no live probe for these ids: live-checked equals by-status");
+        // 453-f1: no live probe exists for these ids, so the live count (the shared per-change rule)
+        // can't confirm them: none is active, whatever the status says.
+        assert_eq!(view.active_now, 0, "can't-confirm is never counted active");
 
         let moved = SessionSummary { compy_changes_active: Some(1), ..base.clone() };
         let Err(why) = baseline_checked_view(&moved, &history) else {
             panic!("a count that moved since the baseline is never a view")
         };
-        assert!(why.contains("(1 then, 2 now)"), "{why}");
+        assert!(why.contains("(1 then, 0 now)"), "{why}");
 
         // A ledger that didn't load is refused in words; there is no view, so no 0 to record.
         let unread = ledger_for_one_change_checks::<crate::history::AppliedChange>(Err("sharing violation".into()), false);
@@ -4152,6 +4177,11 @@ mod experiment_tests {
         let treat = SessionSummary { compy_changes_active: Some(3), ..session(TREAT_ID, 180.0) };
         let settled = [row("own", "game-bar-disable", APPLIED, true)];
         assert_eq!(other_compy_change(&rec, Some(&base), Some(&treat), Some(&settled)), None);
+
+        // 453-f1: two counts made by different rules can't show exactly this one change was added.
+        let old_rule_base = SessionSummary { compy_changes_per_change: false, ..base.clone() };
+        let what = other_compy_change(&rec, Some(&old_rule_base), Some(&treat), Some(&settled)).unwrap();
+        assert!(what.contains("counted Compy's active changes in different ways"), "{what}");
 
         let unread = SessionSummary { compy_changes_active: None, ..treat.clone() };
         let what = other_compy_change(&rec, Some(&base), Some(&unread), Some(&settled)).unwrap();

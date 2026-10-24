@@ -1813,7 +1813,10 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         }
         // #669: a session that recorded no count (its start couldn't read the change history) can
         // neither show a delta nor vouch for a match — `counts` is Some only when both sides did.
-        let counts = b.compy_changes_active.zip(c.compy_changes_active);
+        // 453-f1: a count recorded by an older Compy was counted another way, so it is compared only
+        // with another count made the same way.
+        let same_rule = b.compy_changes_per_change == c.compy_changes_per_change;
+        let counts = b.compy_changes_active.zip(c.compy_changes_active).filter(|_| same_rule);
         if let Some((then, now)) = counts.filter(|(then, now)| then != now) {
             h.supporting.push(format!(
                 "Active Compy changes: {then} during the baseline vs {now} during this session (older rollbacks carry no date and show up only in this count)."
@@ -1825,6 +1828,11 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
                     "No Compy changes were applied or rolled back between these sessions and the active-change count matches ({now})."
                 )),
                 // A count never recorded is the ABSENCE of evidence too: the hypothesis stays open.
+                (LedgerHealth::Complete, None)
+                    if !same_rule && b.compy_changes_active.is_some() && c.compy_changes_active.is_some() => h.missing.push(
+                    "One of these sessions was recorded by an older version of Compy that counted its active changes a different way, so the two counts can't be compared — a Compy change can't be ruled in or out."
+                        .into(),
+                ),
                 (LedgerHealth::Complete, None) => h.missing.push(
                     "One of these sessions didn't record how many Compy changes were active (Compy couldn't read its change history when it began) — a Compy change can't be ruled in or out."
                         .into(),
@@ -2445,6 +2453,7 @@ mod tests {
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
             compy_changes_active: Some(0),
+            compy_changes_per_change: true,
             hw_fingerprint: None,
             gaming_mode_active: None,
             stutter_insight: None,

@@ -1559,6 +1559,7 @@ mod blackbox_tests {
             peak_ram_used_bytes: Some(8_000_000_000),
             ram_total_bytes: Some(32_000_000_000),
             compy_changes_active: Some(0),
+            compy_changes_per_change: true,
             hw_fingerprint: None,
             gaming_mode_active: None,
             stutter_insight: None,

@@ -283,6 +283,8 @@ fn unchanged_between(
     let pairing = crate::comparability::derive(a, b);
     a.compy_changes_active.is_some()
         && a.compy_changes_active == b.compy_changes_active
+        // 453-f1: both counted by the same rule, or equal numbers mean nothing.
+        && a.compy_changes_per_change == b.compy_changes_per_change
         && a.gaming_mode_active.is_some()
         && a.gaming_mode_active == b.gaming_mode_active
         && pairing.verdict == crate::comparability::Comparability::Comparable
@@ -610,6 +612,7 @@ mod tests {
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
             compy_changes_active: Some(active),
+            compy_changes_per_change: true,
             hw_fingerprint: Some(HwFingerprint {
                 hash: "62f1370e0d48cfea".into(),
                 gpu: "Radeon RX 9070 XT".into(),

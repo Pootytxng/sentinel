@@ -438,7 +438,9 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
     expect(views).toContain("into_view_with(c, &reads)");
     const summary = fnBody(HISTORY, "fn summarize_history(");
     expect(summary).toContain("let reads = LiveReads::default();");
-    expect(summary).toContain("check_change_active(c, &reads)");
+    // 453-f1: every row is read once through the same pass, then counted by the shared rule.
+    expect(summary).toContain("check_row_state(c, &reads)");
+    expect(fnBody(HISTORY, "fn summarize_checked(")).toContain("live_change_groups(&rows)");
   });
 
   it("launch diagnostics never call a closed interrupted start unresolved or Pending", () => {
