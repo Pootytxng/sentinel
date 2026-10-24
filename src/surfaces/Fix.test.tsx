@@ -113,6 +113,77 @@ describe("Fix", () => {
     expect(onRollback).toHaveBeenCalled();
   });
 
+  // #638 (PR #634 follow-on): the legacy `is_still_active` stays true when the live re-check could
+  // not read the machine. History and Health say "can't confirm" for such a change; Optimize used to
+  // list it under "Active on this PC". It now sits under its own heading, rollback intact.
+  it("#638: a change Compy cannot read is not listed as active on this PC, and keeps its rollback", () => {
+    const onRollback = vi.fn();
+    const at = new Date().toISOString();
+    const ch = (id: string, rec: string, title: string, check: "on" | "unreadable" | "unrecognised") => ({
+      id,
+      rec_id: rec,
+      rec_title: title,
+      applied_at: at,
+      snapshot: null,
+      status: "applied" as const,
+      is_still_active: true,
+      active_check: check,
+    });
+    const { container } = render(
+      <Fix
+        recs={[]}
+        {...baseProps}
+        view="applied"
+        changes={[
+          ch("c1", "game-mode", "Game Mode", "on"),
+          ch("c2", "hpet", "HPET off", "unreadable"),
+          ch("c3", "nagle", "Nagle off", "unrecognised"),
+        ]}
+        onRollback={onRollback}
+      />,
+    );
+    const labels = [...container.querySelectorAll(".fix-section-label")].map((n) => n.textContent);
+    expect(labels).toContain("Active on this PC");
+    expect(labels).toContain("Applied — Compy can't confirm these are still on");
+    // each heading is followed by its own list; the "active" list holds only the change read as on
+    const lists = [...container.querySelectorAll(".fix-section-label + .fix-list")];
+    const listUnder = (label: string) => lists[labels.indexOf(label)]?.textContent ?? "";
+    expect(listUnder("Active on this PC")).toContain("Game Mode");
+    expect(listUnder("Active on this PC")).not.toContain("HPET off");
+    expect(listUnder("Active on this PC")).not.toContain("Nagle off");
+    expect(listUnder("Applied — Compy can't confirm these are still on")).toContain("HPET off");
+    expect(listUnder("Applied — Compy can't confirm these are still on")).toContain("Nagle off");
+    expect(listUnder("Applied — Compy can't confirm these are still on")).not.toMatch(/Active since/);
+    // a rollback is never hidden: all three cards keep theirs
+    expect(screen.getAllByRole("button", { name: /Roll back/ })).toHaveLength(3);
+  });
+
+  it("#638: with only unreadable changes, nothing claims 'active' and the empty line stays away", () => {
+    const { container } = render(
+      <Fix
+        recs={[]}
+        {...baseProps}
+        view="applied"
+        changes={[
+          {
+            id: "c2",
+            rec_id: "hpet",
+            rec_title: "HPET off",
+            applied_at: new Date().toISOString(),
+            snapshot: null,
+            status: "applied" as const,
+            is_still_active: true,
+            active_check: "unreadable" as const,
+          },
+        ]}
+      />,
+    );
+    const labels = [...container.querySelectorAll(".fix-section-label")].map((n) => n.textContent);
+    expect(labels).not.toContain("Active on this PC");
+    expect(screen.queryByText(/Nothing active on this PC/)).toBeNull();
+    expect(screen.getByRole("button", { name: /Roll back/ })).toBeTruthy();
+  });
+
   it("honest empty state when nothing is worth fixing", () => {
     render(<Fix recs={[rec("game-mode", true)]} {...baseProps} />);
     // Voice pass 2026-07-06: the empty line no longer restates the living subtitle's

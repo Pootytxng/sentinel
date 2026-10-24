@@ -800,6 +800,15 @@ function StartupRow({
   );
 }
 
+// #638 (PR #634 follow-on): the live re-check said it could not read this change
+// (`active_check` "unreadable"/"unrecognised"). The legacy `is_still_active` bool stays true for
+// these on purpose, so the rollback card stays reachable, but they are not "active on this PC":
+// Health and History say "can't confirm" for them, and so does this list. An absent field (an older
+// payload) keeps the old reading.
+function cantConfirmStillOn(c: Pick<AppliedChange, "active_check">): boolean {
+  return c.active_check === "unreadable" || c.active_check === "unrecognised";
+}
+
 // Ledger Layer 1 — one card per CURRENTLY-ACTIVE change ("what is Compy doing to my machine?").
 // Humanized "active since", a quiet GHOST rollback (outline; accent ink only on hover). Rollback
 // BEHAVIOR is untouched — this calls the same audited onRollback.
@@ -830,7 +839,9 @@ function ActiveChangeCard({
           )}
         </div>
         <p className="fix-row-reason">
-          {t("optimize.fix.activeSince", { when: humanizeWhen(change.applied_at, t) })}
+          {cantConfirmStillOn(change)
+            ? t("optimize.fix.appliedSinceCantConfirm", { when: humanizeWhen(change.applied_at, t) })
+            : t("optimize.fix.activeSince", { when: humanizeWhen(change.applied_at, t) })}
           {change.restores_label && change.applied_label
             ? change.restores_label === change.applied_label
               ? t("optimize.fix.alreadyNoChangeNeeded", { label: change.applied_label })
@@ -874,6 +885,7 @@ function HistoryRow({ change }: { change: AppliedChange }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const rolledBack = change.status === "rolled_back" || !change.is_still_active;
+  const unconfirmed = !rolledBack && cantConfirmStillOn(change);
   return (
     <li className={`fix-hist-row ${rolledBack ? "fix-hist-rolledback" : ""}`}>
       <button className="fix-hist-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -887,7 +899,11 @@ function HistoryRow({ change }: { change: AppliedChange }) {
         )}
         <span className="fix-hist-when">{humanizeWhen(change.applied_at, t)}</span>
         <span className="fix-hist-status">
-          {rolledBack ? t("optimize.fix.historyRolledBack") : t("optimize.fix.historyActive")}
+          {rolledBack
+            ? t("optimize.fix.historyRolledBack")
+            : unconfirmed
+              ? t("optimize.fix.historyCantConfirm")
+              : t("optimize.fix.historyActive")}
         </span>
       </button>
       {open && (
@@ -1065,14 +1081,17 @@ export default function Fix({
 
   // Ledger §2 — Layer 1: currently-active changes, deduped to the latest per rec id (so the same
   // tweak applied/rolled-back N times shows as ONE active card, not N equal rows).
-  const active = useMemo(() => {
+  // The legacy bool decides only which changes keep a rollback card; `active_check` decides which
+  // heading the card sits under (#638), so a change Compy cannot read is never "active on this PC".
+  const [active, unconfirmedActive] = useMemo(() => {
     const byRec = new Map<string, AppliedChange>();
     for (const c of changes) {
       if (!c.is_still_active) continue;
       const prev = byRec.get(c.rec_id);
       if (!prev || new Date(c.applied_at) > new Date(prev.applied_at)) byRec.set(c.rec_id, c);
     }
-    return [...byRec.values()].sort((a, b) => +new Date(b.applied_at) - +new Date(a.applied_at));
+    const all = [...byRec.values()].sort((a, b) => +new Date(b.applied_at) - +new Date(a.applied_at));
+    return [all.filter((c) => !cantConfirmStillOn(c)), all.filter(cantConfirmStillOn)];
   }, [changes]);
   // Layer 2: the full chronological trail (newest first).
   const history = useMemo(
@@ -1390,12 +1409,46 @@ export default function Fix({
         </>
       )}
 
+      {/* #638 — applied changes the live re-check could not read. Same card and same rollback as
+          above (a rollback is never hidden), under a heading that does not claim they are on. */}
+      {showActive && unconfirmedActive.length > 0 && (
+        <>
+          <div className="fix-section-label">{t("optimize.fix.activeCantConfirm")}</div>
+          <ul className="fix-list">
+            {unconfirmedActive.map((c) => (
+              <ActiveChangeCard
+                key={c.id}
+                change={c}
+                busy={busyId !== null}
+                onRollback={() => onRollback(c)}
+                onWhatsThis={onOpenLibrary}
+                onOpenDetails={
+                  dashV2
+                    ? (origin) =>
+                        setDetails({
+                          rec: { id: c.rec_id, title: c.rec_title },
+                          applied: true,
+                          origin,
+                          restoresLabel: c.restores_label,
+                          primary: () => onRollback(c),
+                        })
+                    : undefined
+                }
+              />
+            ))}
+          </ul>
+        </>
+      )}
+
       {/* Honest empty state for the ledger room (P5.5) — the Applied segment must never be a bare
           empty room; say plainly that nothing is active and where applies will land. Scoped to the
           ledger/applied views so standalone Tune (view="all") renders exactly as before.
           Withheld when the ledger is known-incomplete: "nothing active" would then be an
           affirmative claim about the machine sourced from a list Compy could not read. */}
-      {(view === "applied" || view === "ledger") && active.length === 0 && !ledgerIncomplete && (
+      {(view === "applied" || view === "ledger") &&
+        active.length === 0 &&
+        unconfirmedActive.length === 0 &&
+        !ledgerIncomplete && (
         <p className="fix-empty">
           {t("optimize.fix.nothingActiveOnThisPc")}
         </p>
