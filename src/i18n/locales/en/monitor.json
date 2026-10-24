@@ -281,7 +281,7 @@
     "oneThingTag": "THE ONE THING WORTH KNOWING",
     "changesActive": "During this session: {{count}} Compy changes active",
     "changesActiveUnknown": "During this session: Compy changes active — not recorded",
-    "unknownChangesActive": "Compy couldn't read its change history when this session began, so it doesn't know how many of its changes were on. This session can't be the baseline for a test.",
+    "unknownChangesActive": "Compy couldn't read its change history when this session began, or couldn't confirm whether any of its changes were on, so it doesn't know how many of its changes were on. This session can't be the baseline for a test.",
     "captureLinePre": "capture · ",
     "captureLineEmph": "from outside the game",
     "captureLinePost": " — nothing added to it",

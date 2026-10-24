@@ -407,16 +407,13 @@ pub(crate) fn attribution_warning(active_changes: usize) -> Option<String> {
     ))
 }
 
-/// How many OTHER settings Compy has active, from the ledger rows the start already loaded: the latest
-/// row per setting decides (as `history::active_changes_in` reads it), and the setting under test
-/// (`own_rec`) is left out. An older applied row for it, undone in Windows, leaves it testable again
-/// (see [`unverified_other_changes`]), so it is never "another change" in the start note (#628).
-pub(crate) fn other_active_changes(ledger: &[LedgerEntryRef<'_>], own_rec: &str) -> usize {
-    let mut latest: std::collections::BTreeMap<&str, bool> = std::collections::BTreeMap::new();
-    for c in ledger {
-        latest.insert(c.rec_id, c.applied);
-    }
-    latest.into_iter().filter(|&(rec, applied)| applied && rec != own_rec).count()
+/// How many OTHER settings Compy has active: the changes the shared rule counts as on
+/// (`history::AppliedChangesSummary::active_recs`, from the ledger the start already loaded), with the
+/// setting under test (`own_rec`) left out. An older applied row for it, undone in Windows, leaves it
+/// testable again (see [`unverified_other_changes`]), so it is never "another change" in the start
+/// note (#628).
+pub(crate) fn other_active_changes(active_recs: &[String], own_rec: &str) -> usize {
+    active_recs.iter().filter(|rec| rec.as_str() != own_rec).count()
 }
 
 /// Build the transient `ArmedComparison` the shipped verdict machinery consumes, from a record's
@@ -651,12 +648,13 @@ fn ledger_rows(history: &[crate::history::AppliedChange]) -> Vec<LedgerEntryRef<
 struct StartLedgerView<'a> {
     changes: &'a [crate::history::AppliedChange],
     rows: Vec<LedgerEntryRef<'a>>,
-    /// Active changes counted the way a session counts them (`history::summarize_history(..).active`),
-    /// for `baseline_is_current` against the baseline session's own count.
-    active_now: usize,
-    /// Active changes counted the way the Trust Ledger counts them (`history::active_changes_in`):
-    /// recorded as the Trial's `active_changes_at_start`.
-    active_changes: usize,
+    /// The ledger's counts by the one shared rule (`history::summarize_history`, which counts through
+    /// `history::live_change_groups`): `counts` is what `baseline_is_current` compares with the
+    /// baseline session's own counts, `active` is recorded as the Trial's `active_changes_at_start`,
+    /// and `active_recs` names those changes for the "other changes" note (453-f1 review).
+    counts: crate::history::SessionChangeCounts,
+    active: usize,
+    active_recs: Vec<String>,
 }
 
 /// The start's view of the ledger it loaded, once the §3 baseline check has passed on it, or why the
@@ -666,14 +664,18 @@ fn baseline_checked_view<'a>(
     baseline: &SessionSummary,
     history: &'a Result<Vec<crate::history::AppliedChange>, String>,
 ) -> Result<StartLedgerView<'a>, String> {
-    let view = history.as_deref().map(|changes| StartLedgerView {
-        changes,
-        rows: ledger_rows(changes),
-        active_now: crate::history::summarize_history(changes).active,
-        active_changes: crate::history::active_changes_in(changes),
+    let view = history.as_deref().map(|changes| {
+        let summary = crate::history::summarize_history(changes);
+        StartLedgerView {
+            changes,
+            rows: ledger_rows(changes),
+            counts: summary.session_counts(),
+            active: summary.active,
+            active_recs: summary.active_recs,
+        }
     });
     let ledger = match &view {
-        Ok(view) => Ok((view.rows.as_slice(), view.active_now)),
+        Ok(view) => Ok((view.rows.as_slice(), view.counts)),
         Err(e) => Err(e.as_str()),
     };
     baseline_is_current(baseline, ledger)?;
@@ -1238,9 +1240,9 @@ pub(crate) fn baseline_for_start(
 /// unreadable one carries no count at all, so none can be invented for it (#668).
 pub(crate) fn baseline_is_current(
     baseline: &SessionSummary,
-    ledger: Result<(&[LedgerEntryRef<'_>], usize), &str>,
+    ledger: Result<(&[LedgerEntryRef<'_>], crate::history::SessionChangeCounts), &str>,
 ) -> Result<(), String> {
-    let (ledger, active_now) = ledger.map_err(|why| {
+    let (ledger, now) = ledger.map_err(|why| {
         format!("{why}, so it can't check that nothing else changed since the baseline session")
     })?;
     let replay = "so the before/after would measure more than this one change — play a new baseline \
@@ -1248,28 +1250,50 @@ pub(crate) fn baseline_is_current(
     if compy_change_moved_after(ledger, &baseline.started_at, None) {
         return Err(format!("a Compy change was applied or undone after the baseline session, {replay}"));
     }
-    // #669: a baseline whose start couldn't read the change history recorded no count, so there is
-    // nothing to compare the live count against — refuse in words, never read it as "0 then".
+    // #669: a baseline whose start couldn't read the change history (or, 453-f1, couldn't confirm any
+    // of its changes) recorded no count, so there is nothing to compare against — refuse in words,
+    // never read it as "0 then".
     let Some(then) = baseline.compy_changes_active else {
+        let why = baseline.unrecorded_changes_reason();
         return Err(format!(
             "Compy didn't record how many of its changes were active when the baseline session began \
-             (it couldn't read its change history at the time), {replay}"
+             ({why} at the time), {replay}"
         ));
     };
-    // 453-f1: `active_now` is counted per change by the shared live rule; a baseline recorded by an
-    // older Compy counted another way (newest row, can't-confirm included), so its number is not
-    // comparable with this one — refuse in words instead of reading a rule change as a moved change.
+    // 453-f1: a baseline an older Compy recorded was counted by its older rule (newest row,
+    // can't-confirm included). Today's ledger is counted by that same rule too, so the two are
+    // compared like with like instead of refusing every pre-update baseline.
     if !baseline.compy_changes_per_change {
-        return Err(format!(
-            "the baseline session was recorded by an older version of Compy that counted its active \
-             changes a different way, so its count can't be checked against today's, {replay}"
-        ));
+        if then != now.legacy_active {
+            return Err(format!(
+                "the number of active Compy changes is different from the baseline session's ({then} \
+                 then, {} now, counted the way the older Compy that recorded it counted), {replay}",
+                now.legacy_active
+            ));
+        }
+        return Ok(());
     }
+    let Some(active_now) = now.active else {
+        return Err(format!(
+            "Compy can't confirm whether any of its changes are on right now, so it can't match them \
+             with the baseline session's {then}, {replay}"
+        ));
+    };
     if then != active_now {
         return Err(format!(
             "the number of active Compy changes is different from the baseline session's ({then} then, \
              {active_now} now), {replay}"
         ));
+    }
+    // Can't-confirm is compared apart: undoing a change Compy can't read moves only this count.
+    if let Some(cant_then) = baseline.compy_changes_cant_confirm {
+        if cant_then != now.cant_confirm {
+            return Err(format!(
+                "the number of Compy changes it can't confirm is different from the baseline session's \
+                 ({cant_then} then, {} now), {replay}",
+                now.cant_confirm
+            ));
+        }
     }
     Ok(())
 }
@@ -1292,28 +1316,38 @@ pub(crate) fn other_compy_change(
         return Some("another Compy change was applied or undone during the test".into());
     }
     let (baseline, treatment) = (baseline?, treatment?);
-    let unrecorded = |which: &str| {
-        format!(
-            "the {which} didn't record how many Compy changes were active — Compy couldn't read its \
-             change history when it began"
-        )
+    // 453-f1: the two counts are made the same way (per change on both, or the older rule on both),
+    // and per change, the active and can't-confirm counts are compared apart.
+    let (then, after) = match crate::sessions::comparable_change_counts(baseline, treatment) {
+        Ok(pair) => pair,
+        Err(missing) => {
+            let which = if std::ptr::eq(missing, baseline) { "baseline session" } else { "after-session" };
+            return Some(format!(
+                "the {which} didn't record how many Compy changes were active — {} when it began",
+                missing.unrecorded_changes_reason()
+            ));
+        }
     };
-    let Some(then) = baseline.compy_changes_active else { return Some(unrecorded("baseline session")) };
-    let Some(after) = treatment.compy_changes_active else { return Some(unrecorded("after-session")) };
-    if baseline.compy_changes_per_change != treatment.compy_changes_per_change {
-        return Some(
-            "the baseline session and the after-session counted Compy's active changes in different \
-             ways (one was recorded by an older version of Compy), so they can't show that exactly \
-             this one change was added"
-                .into(),
-        );
-    }
-    let expected = then + 1;
-    let active = |n: usize| match n {
-        1 => "1 active Compy change".to_string(),
-        n => format!("{n} active Compy changes"),
+    use crate::sessions::ChangeCounts::{Legacy, PerChange};
+    let plus_this_one = match (then, after) {
+        (PerChange { active: a0, cant_confirm: c0 }, PerChange { active: a1, cant_confirm: c1 }) => {
+            (a1 == a0 + 1 && c1 == c0) || (a1 == a0 && c1 == c0 + 1)
+        }
+        (Legacy(n0), Legacy(n1)) => n1 == n0 + 1,
+        _ => false,
     };
-    (after != expected).then(|| {
+    let active = |c: crate::sessions::ChangeCounts| {
+        let (n, cant) = match c {
+            PerChange { active, cant_confirm } => (active, cant_confirm),
+            Legacy(n) => (n, 0),
+        };
+        let on = if n == 1 { "1 active Compy change".to_string() } else { format!("{n} active Compy changes") };
+        if cant == 0 { on } else { format!("{on} and {cant} it can't confirm") }
+    };
+    (!plus_this_one).then(|| {
+        let expected = match then {
+            PerChange { active, .. } | Legacy(active) => active + 1,
+        };
         format!("the after-session ran with {}, not {expected} (the baseline's {then} plus this one)", active(after))
     })
 }
@@ -2057,11 +2091,11 @@ pub(crate) fn start_experiment(
         return Err(format!("experiment not started — {why}"));
     }
 
-    // Single-variable honesty context BEFORE we apply (§4F): how many changes are already active.
-    // `active` is stored as the sessions count it (`baseline_is_current` / `other_compy_change` compare
-    // the two); the note names only OTHER settings, never an older row for the one under test (#628).
-    let active = view.active_changes;
-    let others = other_active_changes(rows, &rec_id);
+    // Single-variable honesty context BEFORE we apply (§4F): how many changes are already active, by
+    // the one shared rule a session counts with (453-f1 review); the note names only OTHER settings,
+    // never an older row for the one under test (#628).
+    let active = view.active;
+    let others = other_active_changes(&view.active_recs, &rec_id);
     let warning = attribution_warning(others);
 
     // Step 0 — RECORD FIRST. Saved before the apply; a failed save stops here with nothing changed.
@@ -2744,20 +2778,14 @@ mod experiment_tests {
     // change is already active", counting that stale row for the setting under test.
     #[test]
     fn the_start_note_never_counts_a_stale_row_for_the_setting_under_test() {
-        const AT: &str = "2026-09-28T11:00:00+00:00";
-        let stale = [LedgerEntryRef { id: "old", rec_id: "test-rec", applied_at: AT, applied: true, rolled_back_at: None }];
+        // 453-f1 review: the note counts the changes the shared rule reads as on
+        // (`AppliedChangesSummary::active_recs`), never the setting under test.
+        let stale = ["test-rec".to_string()];
         assert_eq!(other_active_changes(&stale, "test-rec"), 0);
         assert_eq!(attribution_warning(other_active_changes(&stale, "test-rec")), None, "no 'other change' note");
-        let ledger = [
-            stale[0],
-            LedgerEntryRef { id: "gm", rec_id: "game-mode", applied_at: AT, applied: true, rolled_back_at: None },
-            LedgerEntryRef { id: "gb1", rec_id: "game-bar-disable", applied_at: AT, applied: true, rolled_back_at: None },
-            LedgerEntryRef { id: "gb2", rec_id: "game-bar-disable", applied_at: AT, applied: false, rolled_back_at: None },
-            LedgerEntryRef { id: "s1", rec_id: "startup-entry", applied_at: AT, applied: true, rolled_back_at: None },
-            LedgerEntryRef { id: "s2", rec_id: "startup-entry", applied_at: AT, applied: true, rolled_back_at: None },
-        ];
-        assert_eq!(other_active_changes(&ledger, "test-rec"), 2, "latest row per other setting, counted once");
-        let note = attribution_warning(other_active_changes(&ledger, "test-rec")).unwrap();
+        let on = ["game-bar-disable".to_string(), "game-mode".to_string(), "test-rec".to_string()];
+        assert_eq!(other_active_changes(&on, "test-rec"), 2, "each other change on, counted once");
+        let note = attribution_warning(other_active_changes(&on, "test-rec")).unwrap();
         assert!(note.contains("2 other Compy changes are already active"), "{note}");
     }
 
@@ -3624,6 +3652,8 @@ mod experiment_tests {
             ram_total_bytes: None,
             compy_changes_active: Some(0),
             compy_changes_per_change: true,
+            compy_changes_cant_confirm: Some(0),
+            compy_changes_legacy_active: None,
             hw_fingerprint: Some(crate::hardware::HwFingerprint {
                 hash: "deadbeef".into(),
                 gpu: "Radeon RX 9070 XT".into(),
@@ -4062,7 +4092,7 @@ mod experiment_tests {
         // current.
         let settled =
             [row("a", "r1", before, true), row("b", "r2", before, true), row("c", "r3", before, false)];
-        assert_eq!(baseline_is_current(&base, Ok((&settled, 2))), Ok(()));
+        assert_eq!(baseline_is_current(&base, Ok((&settled, counts_now(2)))), Ok(()));
 
         // An apply or an undo after it began, or a date Compy can't read, refuses (Codex r1 on #611).
         for moved in [
@@ -4071,15 +4101,15 @@ mod experiment_tests {
             vec![row("a", "r1", "not a time", true)],
             vec![undone("a", before, "not a time")],
         ] {
-            let why = baseline_is_current(&base, Ok((&moved, 2))).unwrap_err();
+            let why = baseline_is_current(&base, Ok((&moved, counts_now(2)))).unwrap_err();
             assert!(why.contains("applied or undone after the baseline"), "{why}");
             assert!(why.contains("play a new baseline session"), "{why}");
         }
         let garbled = SessionSummary { started_at: "not a time".into(), ..base.clone() };
-        assert!(baseline_is_current(&garbled, Ok((&settled, 2))).is_err(), "an unreadable start is never assumed old");
+        assert!(baseline_is_current(&garbled, Ok((&settled, counts_now(2)))).is_err(), "an unreadable start is never assumed old");
 
         // A different count of active changes (one reverted outside Compy leaves no ledger date).
-        let why = baseline_is_current(&base, Ok((&settled, 3))).unwrap_err();
+        let why = baseline_is_current(&base, Ok((&settled, counts_now(3)))).unwrap_err();
         assert!(why.contains("(2 then, 3 now)"), "{why}");
 
         // A history Compy can't read is refused, never assumed unchanged, and the refusal says why.
@@ -4111,19 +4141,33 @@ mod experiment_tests {
         let base = SessionSummary { compy_changes_active: None, ..session(BASE_ID, 150.0) };
         let settled = [row("a", "r1", "2026-09-01T09:00:00+00:00", true)];
         for now in [0, 1] {
-            let why = baseline_is_current(&base, Ok((&settled, now))).unwrap_err();
+            let why = baseline_is_current(&base, Ok((&settled, counts_now(now)))).unwrap_err();
             assert!(why.contains("didn't record how many of its changes were active"), "{why}");
             assert!(why.contains("play a new baseline session"), "{why}");
             assert!(!why.contains("0 then"), "{why}");
         }
-        // 453-f1: a count an older Compy recorded (newest row, can't-confirm included) is not
-        // compared with today's per-change count, even when the numbers happen to match.
-        let old_rule = SessionSummary { compy_changes_active: Some(0), compy_changes_per_change: false, ..base.clone() };
-        let why = baseline_is_current(&old_rule, Ok((&settled, 0))).unwrap_err();
-        assert!(why.contains("older version of Compy") && why.contains("play a new baseline session"), "{why}");
+        // 453-f1 review: a count an older Compy recorded (newest row, can't-confirm included) is
+        // compared with today's ledger counted by that same older rule, like with like — not refused.
+        let old_rule = SessionSummary { compy_changes_active: Some(2), compy_changes_per_change: false, ..base.clone() };
+        let legacy = |n| crate::history::SessionChangeCounts { active: Some(1), cant_confirm: 1, legacy_active: n };
+        assert_eq!(baseline_is_current(&old_rule, Ok((&settled, legacy(2)))), Ok(()), "1 on + 1 can't confirm = the old 2");
+        let why = baseline_is_current(&old_rule, Ok((&settled, legacy(3)))).unwrap_err();
+        assert!(why.contains("(2 then, 3 now, counted the way the older Compy"), "{why}");
+        // Per change, can't-confirm is compared apart: undoing an unprobed change moves only it.
+        let per_change = SessionSummary { compy_changes_active: Some(1), compy_changes_cant_confirm: Some(2), ..base.clone() };
+        let why = baseline_is_current(&per_change, Ok((&settled, legacy(9)))).unwrap_err();
+        assert!(why.contains("can't confirm is different from the baseline session's (2 then, 1 now)"), "{why}");
+        // A ledger where nothing can be confirmed has no active count to match.
+        let unknown = crate::history::SessionChangeCounts { active: None, cant_confirm: 1, legacy_active: 1 };
+        let why = baseline_is_current(&per_change, Ok((&settled, unknown))).unwrap_err();
+        assert!(why.contains("can't confirm whether any of its changes are on right now"), "{why}");
+        // A baseline that recorded "unknown" because nothing could be confirmed says that, not "couldn't read".
+        let unconfirmed = SessionSummary { compy_changes_active: None, compy_changes_cant_confirm: Some(3), ..base.clone() };
+        let why = baseline_is_current(&unconfirmed, Ok((&settled, counts_now(0)))).unwrap_err();
+        assert!(why.contains("couldn't confirm whether any of its changes were on"), "{why}");
         // A recorded count still compares as before.
         let known = SessionSummary { compy_changes_active: Some(0), ..base };
-        assert_eq!(baseline_is_current(&known, Ok((&settled, 0))), Ok(()));
+        assert_eq!(baseline_is_current(&known, Ok((&settled, counts_now(0)))), Ok(()));
     }
 
     // #668: after the one-change check had loaded the ledger, the start read it twice more for its
@@ -4144,21 +4188,28 @@ mod experiment_tests {
             before(ledger_change("other-b", None)), // re-applied: still one setting
             undone,
         ]);
-        let base = SessionSummary { compy_changes_active: Some(0), ..session(BASE_ID, 150.0) };
+        // 453-f1: no live probe exists for these ids, so the shared rule can't confirm them: none is
+        // active (so nothing is "other changes on"), and the active count is unknown, never 0. An
+        // older-rule baseline is matched against the older rule's 2 (undone setting not counted).
+        let base = SessionSummary {
+            compy_changes_active: Some(2),
+            compy_changes_per_change: false,
+            compy_changes_cant_confirm: None,
+            ..session(BASE_ID, 150.0)
+        };
         let Ok(view) = baseline_checked_view(&base, &history) else {
             panic!("a readable ledger at the count the baseline recorded is a view")
         };
         assert_eq!(view.rows.len(), 4, "the one-change checks walk every row");
-        assert_eq!(view.active_changes, 2, "latest row wins: the undone setting is not active");
-        // 453-f1: no live probe exists for these ids, so the live count (the shared per-change rule)
-        // can't confirm them: none is active, whatever the status says.
-        assert_eq!(view.active_now, 0, "can't-confirm is never counted active");
+        assert_eq!(view.active, 0, "can't-confirm is never counted active");
+        assert!(view.active_recs.is_empty());
+        assert_eq!(view.counts, crate::history::SessionChangeCounts { active: None, cant_confirm: 2, legacy_active: 2 });
 
         let moved = SessionSummary { compy_changes_active: Some(1), ..base.clone() };
         let Err(why) = baseline_checked_view(&moved, &history) else {
             panic!("a count that moved since the baseline is never a view")
         };
-        assert!(why.contains("(1 then, 0 now)"), "{why}");
+        assert!(why.contains("(1 then, 2 now"), "{why}");
 
         // A ledger that didn't load is refused in words; there is no view, so no 0 to record.
         let unread = ledger_for_one_change_checks::<crate::history::AppliedChange>(Err("sharing violation".into()), false);
@@ -4178,10 +4229,17 @@ mod experiment_tests {
         let settled = [row("own", "game-bar-disable", APPLIED, true)];
         assert_eq!(other_compy_change(&rec, Some(&base), Some(&treat), Some(&settled)), None);
 
-        // 453-f1: two counts made by different rules can't show exactly this one change was added.
+        // 453-f1 review: an older-rule baseline is compared with the after-session's older-rule count.
         let old_rule_base = SessionSummary { compy_changes_per_change: false, ..base.clone() };
-        let what = other_compy_change(&rec, Some(&old_rule_base), Some(&treat), Some(&settled)).unwrap();
-        assert!(what.contains("counted Compy's active changes in different ways"), "{what}");
+        let legacy_treat = |n| SessionSummary { compy_changes_legacy_active: Some(n), ..treat.clone() };
+        assert_eq!(other_compy_change(&rec, Some(&old_rule_base), Some(&legacy_treat(3)), Some(&settled)), None);
+        let what = other_compy_change(&rec, Some(&old_rule_base), Some(&legacy_treat(4)), Some(&settled)).unwrap();
+        assert!(what.contains("4 active Compy changes, not 3"), "{what}");
+        // Per change, the active and can't-confirm counts move apart: exactly one of them by one.
+        let cant = |active, cant| SessionSummary { compy_changes_active: Some(active), compy_changes_cant_confirm: Some(cant), ..treat.clone() };
+        assert_eq!(other_compy_change(&rec, Some(&base), Some(&cant(2, 1)), Some(&settled)), None, "this change, can't confirm");
+        let what = other_compy_change(&rec, Some(&base), Some(&cant(3, 1)), Some(&settled)).unwrap();
+        assert!(what.contains("3 active Compy changes and 1 it can't confirm"), "{what}");
 
         let unread = SessionSummary { compy_changes_active: None, ..treat.clone() };
         let what = other_compy_change(&rec, Some(&base), Some(&unread), Some(&settled)).unwrap();
@@ -4253,6 +4311,11 @@ mod experiment_tests {
     }
 
     /// A ledger row as `history.json` holds it, with the typed action that says what to read.
+    /// Today's ledger counts with `n` changes on and none can't-confirm (the older rule agrees).
+    fn counts_now(n: usize) -> crate::history::SessionChangeCounts {
+        crate::history::SessionChangeCounts { active: Some(n), cant_confirm: 0, legacy_active: n }
+    }
+
     fn ledger_change(rec_id: &str, action: Option<crate::actions::AppliedAction>) -> crate::history::AppliedChange {
         let mut c: crate::history::AppliedChange = serde_json::from_value(serde_json::json!({
             "id": rec_id, "rec_id": rec_id, "rec_title": "t",

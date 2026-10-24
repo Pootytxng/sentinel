@@ -76,6 +76,17 @@ pub(crate) struct SessionSummary {
     /// key, and a row it re-saves loses it and reads back as old-rule (the cautious side).
     #[serde(default)]
     pub(crate) compy_changes_per_change: bool,
+    /// Changes still applied that Compy couldn't confirm on or off when the session began (no live
+    /// check, or the check read nothing). Counted apart from `compy_changes_active`, and compared
+    /// apart (453-f1 review): undoing an unprobed change moves this, not the active count. `None` on
+    /// rows an older Compy wrote and when the change history couldn't be read. Additive.
+    #[serde(default)]
+    pub(crate) compy_changes_cant_confirm: Option<usize>,
+    /// The same moment counted the way builds before 453-f1 counted it, so a session an older Compy
+    /// recorded is still compared like with like ([`comparable_change_counts`]). `None` on rows an
+    /// older Compy wrote (their `compy_changes_active` is that count). Additive.
+    #[serde(default)]
+    pub(crate) compy_changes_legacy_active: Option<usize>,
     /// Rig identity at session time — groundwork for same-rig analysis. Additive: pre-fingerprint
     /// sessions parse with this as None.
     #[serde(default)]
@@ -125,6 +136,69 @@ pub(crate) struct SessionSummary {
     pub(crate) peak_gpu_hotspot_temp_c: Option<u32>,
 }
 
+/// A session's change counts in the form another session's can be compared with (453-f1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ChangeCounts {
+    /// Counted per change by the shared live rule: on, and can't-confirm, each compared apart.
+    PerChange { active: usize, cant_confirm: usize },
+    /// Counted the way builds before 453-f1 counted (newest row, can't-confirm included).
+    Legacy(usize),
+}
+
+impl std::fmt::Display for ChangeCounts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            ChangeCounts::PerChange { active, cant_confirm: 0 } | ChangeCounts::Legacy(active) => write!(f, "{active}"),
+            ChangeCounts::PerChange { active, cant_confirm } => write!(f, "{active} (and {cant_confirm} it can't confirm)"),
+        }
+    }
+}
+
+impl SessionSummary {
+    /// This session's counts in `per_change` form, or `None` when it recorded none in that form.
+    fn change_counts(&self, per_change: bool) -> Option<ChangeCounts> {
+        if per_change {
+            if !self.compy_changes_per_change {
+                return None;
+            }
+            Some(ChangeCounts::PerChange {
+                active: self.compy_changes_active?,
+                cant_confirm: self.compy_changes_cant_confirm?,
+            })
+        } else if self.compy_changes_per_change {
+            self.compy_changes_legacy_active.map(ChangeCounts::Legacy)
+        } else {
+            self.compy_changes_active.map(ChangeCounts::Legacy)
+        }
+    }
+
+    /// Why this session has no count to compare, in words, for "didn't record how many …" lines.
+    pub(crate) fn unrecorded_changes_reason(&self) -> &'static str {
+        if self.compy_changes_per_change
+            && self.compy_changes_active.is_none()
+            && self.compy_changes_cant_confirm.is_some_and(|n| n > 0)
+        {
+            "Compy couldn't confirm whether any of its changes were on"
+        } else {
+            "Compy couldn't read its change history"
+        }
+    }
+}
+
+/// Two sessions' change counts, made the same way so they can be compared: per change when both
+/// sessions were counted per change, otherwise the older rule on both (a session this build
+/// recorded carries that count too). `Err` names the session (`a` or `b`) with no count in the form
+/// the pair needs.
+pub(crate) fn comparable_change_counts<'s>(
+    a: &'s SessionSummary,
+    b: &'s SessionSummary,
+) -> Result<(ChangeCounts, ChangeCounts), &'s SessionSummary> {
+    let per_change = a.compy_changes_per_change && b.compy_changes_per_change;
+    let ca = a.change_counts(per_change).ok_or(a)?;
+    let cb = b.change_counts(per_change).ok_or(b)?;
+    Ok((ca, cb))
+}
+
 fn round1(x: f64) -> f64 {
     (x * 10.0).round() / 10.0
 }
@@ -134,7 +208,7 @@ fn round1(x: f64) -> f64 {
 /// measured duration so it stays deterministic and testable.
 pub(crate) struct SessionAccumulator {
     started_at: String,
-    compy_changes_active: Option<usize>,
+    compy_changes: Option<crate::history::SessionChangeCounts>,
     proc_counts: HashMap<String, u32>,
     fps_sum: f64,
     frametime_sum: f64,
@@ -154,10 +228,20 @@ pub(crate) struct SessionAccumulator {
 }
 
 impl SessionAccumulator {
-    pub(crate) fn new(started_at: String, compy_changes_active: Option<usize>) -> Self {
+    /// A session whose start recorded `active` changes on, none can't-confirm (tests).
+    #[cfg(test)]
+    pub(crate) fn new(started_at: String, active: Option<usize>) -> Self {
+        Self::with_counts(
+            started_at,
+            active.map(|a| crate::history::SessionChangeCounts { active: Some(a), cant_confirm: 0, legacy_active: a }),
+        )
+    }
+
+    /// `counts` is `None` when the session start couldn't read the change history (#669).
+    pub(crate) fn with_counts(started_at: String, counts: Option<crate::history::SessionChangeCounts>) -> Self {
         Self {
             started_at,
-            compy_changes_active,
+            compy_changes: counts,
             proc_counts: HashMap::new(),
             fps_sum: 0.0,
             frametime_sum: 0.0,
@@ -283,7 +367,9 @@ impl SessionAccumulator {
             peak_gpu_usage_pct: self.peak_gpu_usage_pct,
             peak_ram_used_bytes: self.peak_ram_used_bytes,
             ram_total_bytes: self.ram_total_bytes,
-            compy_changes_active: self.compy_changes_active,
+            compy_changes_active: self.compy_changes.and_then(|c| c.active),
+            compy_changes_cant_confirm: self.compy_changes.map(|c| c.cant_confirm),
+            compy_changes_legacy_active: self.compy_changes.map(|c| c.legacy_active),
             compy_changes_per_change: true,
             // Stamped by the monitoring loop at save time (finalize stays pure/system-free).
             hw_fingerprint: None,
@@ -687,6 +773,34 @@ mod session_tests {
         assert!(!load(row(r#", "compy_changes_active": 2"#)).compy_changes_per_change);
         let per_change = r#", "compy_changes_active": 2, "compy_changes_per_change": true"#;
         assert!(load(row(per_change)).compy_changes_per_change);
+    }
+
+    // 453-f1 review: a session records the changes Compy can't confirm apart from the active count
+    // (and the older rule's count beside them), and a start where nothing could be confirmed records
+    // the active count as unknown — on disk the downgrade-safe 0 + unrecorded mark — never as 0.
+    #[test]
+    fn a_session_records_cant_confirm_apart_and_nothing_confirmed_as_unknown() {
+        let path = std::env::temp_dir().join(format!("compy-sessions-cant-confirm-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let session = |active, cant| {
+            let counts = crate::history::SessionChangeCounts { active, cant_confirm: cant, legacy_active: 7 };
+            let mut acc = SessionAccumulator::with_counts("t".into(), Some(counts));
+            acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+            acc.finalize(MIN_SESSION_SECS)
+        };
+        save_session_to(&path, session(Some(2), 1)).unwrap();
+        save_session_to(&path, session(None, 3)).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains(r#""compy_changes_unrecorded": true"#), "{text}");
+        let back = load_sessions_from(&path);
+        let got: Vec<_> = back
+            .iter()
+            .map(|s| (s.compy_changes_active, s.compy_changes_cant_confirm, s.compy_changes_legacy_active))
+            .collect();
+        assert_eq!(got, [(Some(2), Some(1), Some(7)), (None, Some(3), Some(7))]);
+        assert_eq!(back[1].unrecorded_changes_reason(), "Compy couldn't confirm whether any of its changes were on");
+        assert_eq!(back[0].unrecorded_changes_reason(), "Compy couldn't read its change history");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

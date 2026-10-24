@@ -885,16 +885,39 @@ pub(crate) fn evaluate_readiness(
                 "No Compy changes applied yet — nothing to track.",
                 Some("0".into()),
             ),
-            Ok(hist) => check(
+            // 453-f1 review: every live change is can't-confirm — nothing reads on or off, so the
+            // count is unknown, never "0 settings active".
+            Ok(hist) if hist.active == 0 && hist.cant_confirm > 0 => check(
                 "applied-changes",
                 "Applied Compy changes",
-                ReadinessStatus::Ready,
+                ReadinessStatus::Unknown,
                 format!(
-                    "{} active and reversible from the Trust Ledger.",
-                    if hist.active == 1 { "1 setting".to_string() } else { format!("{} settings", hist.active) }
+                    "Compy can't confirm whether {} still on — its live check couldn't read {}. Each can still be undone from the Trust Ledger.",
+                    if hist.cant_confirm == 1 { "its 1 change is".to_string() } else { format!("its {} changes are", hist.cant_confirm) },
+                    if hist.cant_confirm == 1 { "it" } else { "them" }
                 ),
-                Some(format!("{} active", hist.active)),
+                Some(format!("{} can't confirm", hist.cant_confirm)),
             ),
+            Ok(hist) => {
+                let settings = |n: usize| if n == 1 { "1 setting".to_string() } else { format!("{n} settings") };
+                let (detail, value) = if hist.cant_confirm == 0 {
+                    (
+                        format!("{} active and reversible from the Trust Ledger.", settings(hist.active)),
+                        format!("{} active", hist.active),
+                    )
+                } else {
+                    (
+                        format!(
+                            "{} active and reversible from the Trust Ledger; Compy can't confirm whether {} more {} still on.",
+                            settings(hist.active),
+                            hist.cant_confirm,
+                            if hist.cant_confirm == 1 { "is" } else { "are" }
+                        ),
+                        format!("{} active · {} can't confirm", hist.active, hist.cant_confirm),
+                    )
+                };
+                check("applied-changes", "Applied Compy changes", ReadinessStatus::Ready, detail, Some(value))
+            }
         };
         checks.push(c);
     }
@@ -1469,16 +1492,36 @@ mod readiness_tests {
         assert_eq!(r.ready_count, readable.ready_count - 1);
     }
 
+    // 453-f1 review: when every change Compy applied is can't-confirm, readiness says so — never
+    // "0 settings active", and never a Ready that claims a count it didn't read.
+    #[test]
+    fn every_change_cant_confirm_is_unknown_never_zero_active() {
+        let hw = hw_with(None, vec![], vec![]);
+        let hist = AppliedChangesSummary { total: 2, cant_confirm: 2, ..AppliedChangesSummary::default() };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&hist), None);
+        let c = find(&r, "applied-changes");
+        assert_eq!(c.status, ReadinessStatus::Unknown);
+        assert!(!c.detail.contains("0 settings") && !c.detail.contains("0 active"), "{}", c.detail);
+        assert!(c.detail.contains("can't confirm whether its 2 changes are still on"), "{}", c.detail);
+        assert_eq!(c.value.as_deref(), Some("2 can't confirm"));
+        // Some on, some can't-confirm: the active count stands and the rest are named apart.
+        let mixed = AppliedChangesSummary { total: 3, active: 1, cant_confirm: 2, ..AppliedChangesSummary::default() };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&mixed), None);
+        let c = find(&r, "applied-changes");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert_eq!(c.value.as_deref(), Some("1 active · 2 can't confirm"));
+    }
+
     #[test]
     fn externally_reverted_change_raises_attention() {
         let hw = hw_with(None, vec![], vec![]);
         let hist = AppliedChangesSummary {
             total: 3,
             active: 2,
-            cant_confirm: 0,
             rolled_back: 0,
             externally_reverted: 1,
             drifted_titles: vec!["Enable Windows Game Mode".into()],
+            ..AppliedChangesSummary::default()
         };
         let r = evaluate_readiness(&hw, None, false, false, Ok(&hist), None);
         let c = find(&r, "applied-changes");
