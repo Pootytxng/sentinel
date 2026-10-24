@@ -135,10 +135,7 @@ pub(crate) fn start_calibration() {
                 s.running = false;
                 s.verdict = Some(verdict);
                 s.noise_floor_pct = noise;
-                s.status = match noise {
-                    Some(noise) => format!("Calibration done — your rig varies ≈ ±{noise:.1}% run-to-run."),
-                    None => "Calibration done — the frame rate read as zero, so the spread couldn't be measured.".into(),
-                };
+                s.status = calibration_done_status(noise, windows.len());
             });
         });
 }
@@ -613,6 +610,22 @@ fn run_to_run_noise(windows: &[MetricWindow]) -> Option<f64> {
     Some(var.sqrt() / mean * 100.0)
 }
 
+/// PURE: the status line once a calibration finishes. The number is the spread of the 1% low
+/// across the windows of ONE 25-second calibration, not a comparison between separate runs, so it
+/// says exactly that. When it is unmeasured, it names the real reason: too few windows, or a 1%
+/// low that read as zero.
+fn calibration_done_status(noise: Option<f64>, window_count: usize) -> String {
+    match noise {
+        Some(noise) => format!(
+            "Calibration done — in one 25-second calibration on your PC, the 1% low varied by ±{noise:.1}%."
+        ),
+        None if window_count < 2 => "Calibration done — fewer than two measurement windows were captured, \
+             so the spread couldn't be measured."
+            .into(),
+        None => "Calibration done — the 1% low read as zero, so the spread couldn't be measured.".into(),
+    }
+}
+
 #[cfg(test)]
 mod trial_tests {
     use super::*;
@@ -706,6 +719,26 @@ mod trial_tests {
         assert_eq!(run_to_run_noise(&[win(0.0), win(0.0), win(0.0)]), None, "no frame rate");
         assert_eq!(run_to_run_noise(&[win(100.0)]), None, "one window");
         assert_eq!(run_to_run_noise(&[]), None);
+    }
+
+    #[test]
+    fn calibration_status_names_one_calibration_not_run_to_run() {
+        let s = calibration_done_status(Some(2.04), 10);
+        assert_eq!(
+            s,
+            "Calibration done — in one 25-second calibration on your PC, the 1% low varied by ±2.0%."
+        );
+        assert!(!s.contains("run-to-run"));
+    }
+
+    #[test]
+    fn calibration_status_gives_the_real_reason_when_unmeasured() {
+        let few = calibration_done_status(run_to_run_noise(&[win(100.0)]), 1);
+        assert!(few.contains("fewer than two measurement windows"), "{few}");
+        assert!(!few.contains("zero"), "{few}");
+        let zero = calibration_done_status(run_to_run_noise(&[win(0.0), win(0.0)]), 2);
+        assert!(zero.contains("read as zero"), "{zero}");
+        assert!(!zero.contains("fewer than two"), "{zero}");
     }
 
     #[test]

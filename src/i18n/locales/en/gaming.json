@@ -126,7 +126,7 @@
     "fpsMonitoringOnMsg": "FPS monitoring is on — you're set to measure.",
     "calibrateButton": "Calibrate (measure my run-to-run noise)",
     "measureTweakExplainer": "“Measure this tweak” applies the change, measures with it on, then rolls it back — your settings end up exactly as they started. An elevated tweak asks for UAC twice (apply + undo).",
-    "runToRunNoiseLabel": "Run-to-run noise:",
+    "runToRunNoiseLabel": "In one 25-second calibration on your PC, the 1% low varied by",
     "pipelineCheckPassed": "· pipeline check passed (no phantom change across identical runs)",
     "ciLabel": "95% CI",
     "changeRolledBack": "Change rolled back — settings unchanged.",
