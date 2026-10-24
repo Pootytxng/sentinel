@@ -835,6 +835,23 @@ fn commit_receipts(
     save: &dyn Fn(&[AppliedChange]) -> Result<(), String>,
     effects: &UndoEffects,
 ) -> Result<Vec<AppliedChange>, String> {
+    let build = |m: Made| -> Result<AppliedChange, String> {
+        let mut change = build_applied_change(&m.rec_id, &m.rec_title, m.result)?;
+        change.provenance = m.provenance.map(str::to_string);
+        Ok(change)
+    };
+    commit_receipts_with(history, made, &build, save, effects)
+}
+
+/// [`commit_receipts`] with the receipt builder passed in, so a test can make a build fail part
+/// way through a list. Production builds only through [`commit_receipts`].
+fn commit_receipts_with(
+    history: &mut Vec<AppliedChange>,
+    made: Vec<Made>,
+    build: &dyn Fn(Made) -> Result<AppliedChange, String>,
+    save: &dyn Fn(&[AppliedChange]) -> Result<(), String>,
+    effects: &UndoEffects,
+) -> Result<Vec<AppliedChange>, String> {
     // Copy each undo BEFORE the receipt builder consumes its result. Once a receipt fails, this copy
     // is the only record of how to reverse what Windows now has.
     let undos: Vec<Undo> = made
@@ -850,11 +867,7 @@ fn commit_receipts(
     let before = history.len();
     let committed = made
         .into_iter()
-        .map(|m| {
-            let mut change = build_applied_change(&m.rec_id, &m.rec_title, m.result)?;
-            change.provenance = m.provenance.map(str::to_string);
-            Ok(change)
-        })
+        .map(build)
         .collect::<Result<Vec<_>, String>>()
         .and_then(|changes| {
             history.extend(changes.iter().cloned());
@@ -2308,6 +2321,68 @@ mod receipt_commit_tests {
             callers_of("admin_commit_error").contains(&"apply_recommendations_batch".to_string()),
             "the batch builds its admin-commit error through admin_commit_error"
         );
+    }
+
+    // #616 review: a receipt that can't be BUILT part way through a list is its own branch, distinct
+    // from a failed save. Every change in the list is already on Windows, so all of them are undone,
+    // including the ones whose receipts did build, and nothing is saved.
+    #[test]
+    fn a_receipt_build_that_fails_part_way_undoes_every_change_and_saves_nothing() {
+        let mut history = vec![earlier()];
+        let earlier_id = history[0].id.clone();
+        let seen = Seen::default();
+        let built = RefCell::new(Vec::new());
+        let build = |m: Made| {
+            built.borrow_mut().push(m.rec_id.clone());
+            if m.rec_id == "game-mode-on" {
+                return Err("snapshot serialize: boom".to_string());
+            }
+            build_applied_change(&m.rec_id, &m.rec_title, m.result)
+        };
+        let save = |h: &[AppliedChange]| {
+            seen.saves.borrow_mut().push(h.len());
+            Ok(())
+        };
+        let rollback = |a: &RollbackAction, s: &Snapshot| {
+            seen.rollbacks.borrow_mut().push(contract(a, s));
+            Ok(())
+        };
+        let probe = |rec_id: &str, _: Option<&AppliedAction>| {
+            seen.probes.borrow_mut().push(rec_id.to_string());
+            ActiveCheck::Off
+        };
+        let err = commit_receipts_with(
+            &mut history,
+            vec![
+                Made::new("fast-startup-off", "Disable Fast Startup", fast_startup()),
+                Made::new("game-mode-on", "Turn on Game Mode", game_mode()),
+                Made::new("fast-startup-off", "Disable Fast Startup again", fast_startup()),
+            ],
+            &build,
+            &save,
+            &UndoEffects { rollback: &rollback, probe: &probe },
+        )
+        .err()
+        .expect("a list whose receipt didn't build must not read as applied");
+
+        assert_eq!(*built.borrow(), vec!["fast-startup-off", "game-mode-on"], "building stops at the failure");
+        assert!(seen.saves.borrow().is_empty(), "nothing is saved when a receipt fails to build");
+        let (fs, gm) = (fast_startup(), game_mode());
+        assert_eq!(
+            *seen.rollbacks.borrow(),
+            vec![
+                contract(&fs.rollback_action, &fs.snapshot),
+                contract(&gm.rollback_action, &gm.snapshot),
+                contract(&fs.rollback_action, &fs.snapshot),
+            ],
+            "all three changes are undone, newest first, built or not"
+        );
+        assert_eq!(*seen.probes.borrow(), vec!["fast-startup-off", "game-mode-on", "fast-startup-off"]);
+        assert_eq!(history.len(), 1, "the ledger is left exactly as it was");
+        assert_eq!(history[0].id, earlier_id);
+        for phrase in ["made 3 changes", "snapshot serialize: boom", "Turn on Game Mode: Undone"] {
+            assert!(err.contains(phrase), "error must say {phrase:?}: {err}");
+        }
     }
 
     fn exit_status(code: u32) -> std::process::ExitStatus {
