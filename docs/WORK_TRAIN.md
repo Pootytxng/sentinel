@@ -93,7 +93,8 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 - [x] **#629** Test → Benchmark claims no baseline while one exists. Fixed 2026-10-23: "Reading…" until
       the read answers, "couldn't read" on failure, no overwrite button meanwhile (guard falsified 2/3 on old code).
 - [x] **#628** Trial start note says another change is active after a same-setting rollback. `2275c3e7`.
-- [ ] **#669 / #668** Active-change and attribution counts collapse to 0 on a failed ledger read.
+- [x] **#669 / #668** Active-change and attribution counts collapse to 0 on a failed ledger read.
+      `e83017a5` (2026-10-24): unknown stays unknown; sessions.json stays loadable by older builds.
       Needs history.rs (#668: `active_changes_in(rows)` fold; #669 also touches sessions.rs types).
 - [x] **#645 / #608 / #671** Unmeasured FPS still shown as a number anywhere. All listed sites fixed on
       main (#656, PR #661, PR #673); a grep finds only gated sites. Issues still open on GitHub: closing them
@@ -141,7 +142,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       Owner-rig proof with WARDOGS. ENGINE §8–9, ROADMAP Phase 4 exit.
 
 ### Before deadlines
-- [ ] **fflate** Update to 0.6.11 (production dependency) before its acknowledgement expires 2026-12-31.
+- [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
 - [ ] **tokio** `cargo update -p tokio` 1.52.3 → 1.54.1 with `cargo test` and a desk install.
 
 ### Every Friday 4:34 PM (separate scheduled task)
@@ -154,6 +155,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 
 - 2026-10-24 early (interactive, CODE-ONLY, parallel lanes): #621 `6afaa71b`, #628 `2275c3e7`, #631
   `ad7a1221` + `48972cd3`, #622/#677 `3c3e7553`, #617 `1bc030bd`; not pushed (owner on PC).
+- 2026-10-24 morning: pushed `abe0edd7`; FOCUS `713838e6`, fflate `53a1c9de`, audit `89fc1add`,
+  #668/#669 `e83017a5`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
