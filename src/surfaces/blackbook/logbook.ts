@@ -1,6 +1,7 @@
 import type { AppliedChange, ChangeChronology, ChronologyEntry, SessionSummary } from "../../types";
 import type { AutopsyLedgerEntry } from "../../data/autopsy-ledger";
 import { knowledgeForLanguage, type KnowledgeEntry } from "../../data/knowledge";
+import { changeLiveState } from "../../data/live-changes";
 
 // The Logbook tape builder (Console HUD Phase 4, plan 2026-07-12-console-hud-phase4-blackbook,
 // direction A "The Logbook"). A PURE builder — it does no IO itself; the surface hands it data.
@@ -161,20 +162,12 @@ function collapseRepeats(applies: LogbookChange[]): LogbookChange[] {
 }
 
 // #625 — what History may say about a change being in effect. It reads `active_check`, the live
-// re-check's own verdict, and NOT the legacy `is_still_active` bool: that bool stays true for a
-// check that read nothing (so a rollback is never hidden), and History printed it as "still on" —
-// a state nobody measured. The mapping is the Machine Model's `still_active` Fact
-// (machine_model.rs), arm for arm, so History and Health cannot disagree about one change.
-// `src/history-still-active-source-guard.test.ts` pins both sides.
-export function changeLiveState(
-  c: Pick<AppliedChange, "status" | "active_check">,
-): { active: boolean; unconfirmed: boolean } {
-  if (c.status !== "applied") return { active: false, unconfirmed: false };
-  return {
-    active: c.active_check === "on",
-    unconfirmed: c.active_check === "unreadable" || c.active_check === "unrecognised",
-  };
-}
+// re-check's own verdict, and NOT the legacy bool: that bool stays true for a check that read
+// nothing (so a rollback is never hidden), and History printed it as "still on" — a state nobody
+// measured. The mapping is the Machine Model's `still_active` Fact (machine_model.rs), arm for arm,
+// so History and Health cannot disagree about one change. It lives in `data/live-changes.ts` since
+// #453, shared with Optimize, and `src/history-still-active-source-guard.test.ts` pins both sides.
+export { changeLiveState };
 
 export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookInput): LogbookRecord[] {
   const records: LogbookRecord[] = [];

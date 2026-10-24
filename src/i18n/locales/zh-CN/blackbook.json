@@ -124,6 +124,7 @@
     },
     "tapeMore_other": "显示另外 {{count}} 条记录",
     "manageJump_other": "前往「测试」撤销这 {{count}} 项优化中的任意一项",
+    "manageJumpSplit": "前往「测试」撤销：{{count}} 项生效中 · {{unknown}} 项无法确认",
     "library": {
       "eyebrow": "指南库",
       "scent": "在网上看到什么优化技巧?先查一查再动手——每一条说法都经过评级。",

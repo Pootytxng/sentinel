@@ -1,0 +1,21 @@
+{
+  "_about": "#453: a ledger shaped like the owner's. Read by src/live-changes-parity.test.ts (Optimize + History) and by machine_model.rs active_and_unknown_counts_match_the_shared_ts_fixture (Health). All three must print expected.active and expected.cantConfirm.",
+  "rows": [
+    { "id": "gm-1", "rec_id": "game-mode", "rec_title": "Enable Windows Game Mode", "applied_at": "2026-05-28T03:03:32.310581900+00:00", "status": "rolled_back", "active_check": null, "on_this_rig": null },
+    { "id": "gm-2", "rec_id": "game-mode", "rec_title": "Enable Windows Game Mode", "applied_at": "2026-06-02T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": null },
+    { "id": "gm-3", "rec_id": "game-mode", "rec_title": "Enable Windows Game Mode", "applied_at": "2026-07-10T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": true },
+    { "id": "gm-4", "rec_id": "game-mode", "rec_title": "Enable Windows Game Mode", "applied_at": "2026-08-01T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": true },
+    { "id": "gm-5", "rec_id": "game-mode", "rec_title": "Enable Windows Game Mode", "applied_at": "2026-09-01T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": true },
+    { "id": "usb-1", "rec_id": "usb-selective-suspend-off", "rec_title": "Turn off USB selective suspend", "applied_at": "2026-06-03T10:00:00+00:00", "status": "rolled_back", "active_check": null, "on_this_rig": null },
+    { "id": "usb-2", "rec_id": "usb-selective-suspend-off", "rec_title": "Turn off USB selective suspend", "applied_at": "2026-06-04T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": null },
+    { "id": "aspm", "rec_id": "pcie-aspm-off", "rec_title": "Turn off PCIe power management", "applied_at": "2026-06-05T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": null },
+    { "id": "faststart", "rec_id": "fast-startup-off", "rec_title": "Turn off Fast Startup", "applied_at": "2026-06-06T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": null },
+    { "id": "nagle", "rec_id": "nagle-disable", "rec_title": "Disable Nagle", "applied_at": "2026-06-07T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": null },
+    { "id": "hags", "rec_id": "hags-enable", "rec_title": "Enable HAGS", "applied_at": "2026-09-02T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": true },
+    { "id": "sysmain-1", "rec_id": "sysmain-disable", "rec_title": "Disable SysMain", "applied_at": "2026-09-03T10:00:00+00:00", "status": "applied", "active_check": "on", "on_this_rig": false },
+    { "id": "ceip", "rec_id": "bloat-task:ceip-usb", "rec_title": "Disable telemetry task: CEIP USB", "applied_at": "2026-06-08T10:00:00+00:00", "status": "applied", "active_check": "unreadable", "on_this_rig": null },
+    { "id": "search", "rec_id": "windows-search-disable", "rec_title": "Disable Windows Search indexer", "applied_at": "2026-06-09T10:00:00+00:00", "status": "applied", "active_check": "off", "on_this_rig": null },
+    { "id": "ultimate", "rec_id": "power-ultimate", "rec_title": "Ultimate Performance power plan", "applied_at": "2026-09-04T10:00:00+00:00", "status": "rolled_back", "active_check": null, "on_this_rig": true }
+  ],
+  "expected": { "active": 7, "cantConfirm": 1 }
+}

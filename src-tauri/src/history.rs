@@ -137,7 +137,7 @@ pub(crate) struct AppliedChange {
 /// canonical producer.
 pub(crate) struct AppliedChangeView {
     pub(crate) id: String,
-    rec_id: String,
+    pub(crate) rec_id: String,
     pub(crate) rec_title: String,
     pub(crate) applied_at: String,
     snapshot: serde_json::Value,

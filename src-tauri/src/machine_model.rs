@@ -560,30 +560,31 @@ pub(crate) struct CompyChangeFact {
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct CompyChangeTruth {
     pub total_recorded: usize,
-    /// Status `"applied"`, still verified in effect against the live machine, AND matched to this
-    /// machine by `history::same_rig`. This is the ONLY count that may be read as "Compy changed
-    /// this on this PC and it is still that way". A row stamped for another rig, or one written
-    /// before rig stamping existed, is NOT counted here even when the state reads as in effect:
-    /// the live check proves the STATE is present, never that Compy is who applied it (#385
-    /// review).
+    /// CHANGES (one per `rec_id`, not ledger rows) whose live check on this machine reads On. This
+    /// is the ONLY count that may be read as "Compy's change is in effect on this PC now", and it is
+    /// the number Health, Optimize ("Active on this PC") and History all print (#453). The live
+    /// read is taken here, so a row stamped for another rig or written before rig stamping is
+    /// still counted when it reads On: the stamp is attribution, carried below, never a reason to
+    /// drop an active change. Counting rows and requiring a matching stamp put Health at 13 against
+    /// Optimize's 14 on the owner's PC.
     pub active_now: usize,
-    /// In effect on this machine now, but the row is stamped for a DIFFERENT rig. Compy did not
-    /// apply it here; something else put the machine in that state, or the row travelled.
+    /// Of `active_now`, the changes whose newest live row is stamped for a DIFFERENT rig. They read
+    /// On here; the stamp says the apply Compy recorded happened elsewhere.
     pub in_effect_other_rig: usize,
-    /// In effect on this machine now, but the row predates rig stamping, so which machine Compy
-    /// applied it on is unknown. Neither this rig nor another one — honestly unattributed.
+    /// Of `active_now`, the changes whose newest live row predates rig stamping, so which machine
+    /// Compy applied it on is unknown. An attribution gap, not a doubt that it is on.
     pub in_effect_rig_unknown: usize,
-    /// `active_now + in_effect_other_rig + in_effect_rig_unknown`. Carried so a consumer that
-    /// genuinely wants "in effect, whoever applied it and wherever" reads one field instead of
-    /// re-adding them and re-creating the conflation this split exists to remove.
+    /// Equal to `active_now` since #453 (in effect here, whoever applied it and wherever). Kept on
+    /// the wire so existing readers do not break; `in_effect_other_rig` and `in_effect_rig_unknown`
+    /// are subsets of it, not addends.
     pub in_effect_total: usize,
     /// Status `"applied"` but the live check says the state is no longer in effect — something
     /// outside Compy reverted it. Distinct from a rollback Compy performed. Spans every rig
     /// attribution; `not_on_this_rig` and `rig_unknown` below cover the whole ledger the same way.
     pub applied_but_not_in_effect: usize,
-    /// Status `"applied"` but the live check established nothing: the probe could not read the
-    /// machine, or Compy has no probe for this kind of change. Neither in effect nor reverted —
-    /// unknown, and never folded into either count (#392).
+    /// CHANGES (one per `rec_id`) that are applied but whose live check established nothing: the
+    /// probe could not read the machine, or Compy has no probe for this kind of change. Neither in
+    /// effect nor reverted — the "can't confirm" group every screen shows apart (#392, #638, #453).
     pub in_effect_unknown: usize,
     pub rolled_back: usize,
     /// Stamped with a fingerprint `history::same_rig` matches to today's machine. Carried so a
@@ -1051,11 +1052,7 @@ fn compose_chronology(inp: &MachineModelInputs) -> (ChangeChronology, Vec<Chrono
 /// is capped for display; the evidence pass must still cover every row the counts cover, so the
 /// full projection is handed to [`compose_evidence`] and dropped after (#385 review).
 fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<CompyChangeFact>) {
-    let mut active_now = 0usize;
-    let mut in_effect_other_rig = 0usize;
-    let mut in_effect_rig_unknown = 0usize;
     let mut applied_but_not_in_effect = 0usize;
-    let mut in_effect_unknown = 0usize;
     let mut rolled_back = 0usize;
     let mut on_this_rig = 0usize;
     let mut not_on_this_rig = 0usize;
@@ -1064,29 +1061,35 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
     for c in inp.applied_changes {
         if c.status == "rolled_back" {
             rolled_back += 1;
-            tally_rig_attribution(c.on_this_rig, &mut on_this_rig, &mut not_on_this_rig, &mut rig_unknown);
-            continue;
-        }
-        // `active_check` is what the live re-check established, not the legacy bool: that bool
-        // stays true for a probe that read nothing, and counting it here would claim a live read
-        // proved a state nobody read (#392).
-        match c.active_check {
-            Some(ActiveCheck::On) => {
-                // The live check proves the STATE is in effect here. It says nothing about who
-                // applied it or where, and `same_rig` is the only thing that does. Attribution is
-                // therefore carried, never collapsed (#385 review).
-                match c.on_this_rig {
-                    Some(true) => active_now += 1,
-                    Some(false) => in_effect_other_rig += 1,
-                    None => in_effect_rig_unknown += 1,
-                }
-            }
-            Some(ActiveCheck::Unreadable | ActiveCheck::Unrecognised) => in_effect_unknown += 1,
+        } else if !matches!(
+            c.active_check,
+            Some(ActiveCheck::On | ActiveCheck::Unreadable | ActiveCheck::Unrecognised)
+        ) {
             // A successful OFF read, or a row in a status nothing re-checks.
-            Some(ActiveCheck::Off) | None => applied_but_not_in_effect += 1,
+            applied_but_not_in_effect += 1;
         }
         tally_rig_attribution(c.on_this_rig, &mut on_this_rig, &mut not_on_this_rig, &mut rig_unknown);
     }
+
+    // What is in effect is counted per CHANGE, not per ledger row (#453). Game Mode applied eight
+    // times is one change that is on, and the owner's ledger printed it as eight. The live check is
+    // read on THIS machine, so a row that reads On is active here whatever its rig stamp says; a
+    // missing stamp (a row older than rig stamping) is an attribution gap, never a reason to drop an
+    // active change. Attribution is still carried: `in_effect_other_rig` / `in_effect_rig_unknown`
+    // say how many of the active changes were stamped for another rig or not stamped at all.
+    // `src/data/live-changes.ts` `liveChangeGroups` is the same rule for Optimize and History, and
+    // `active_and_unknown_counts_match_the_shared_ts_fixture` pins both to one fixture.
+    let live = live_change_groups(inp.applied_changes);
+    let active_now = live.iter().filter(|c| c.active_check == Some(ActiveCheck::On)).count();
+    let in_effect_unknown = live.len() - active_now;
+    let in_effect_other_rig = live
+        .iter()
+        .filter(|c| c.active_check == Some(ActiveCheck::On) && c.on_this_rig == Some(false))
+        .count();
+    let in_effect_rig_unknown = live
+        .iter()
+        .filter(|c| c.active_check == Some(ActiveCheck::On) && c.on_this_rig.is_none())
+        .count();
 
     // EVERY row, newest first — deliberately NOT the capped display list. Capping here made the
     // evidence pass walk 25 rows while the counts above walked the whole ledger, so a ledger whose
@@ -1182,7 +1185,7 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
         active_now,
         in_effect_other_rig,
         in_effect_rig_unknown,
-        in_effect_total: active_now + in_effect_other_rig + in_effect_rig_unknown,
+        in_effect_total: active_now,
         applied_but_not_in_effect,
         in_effect_unknown,
         rolled_back,
@@ -1194,6 +1197,46 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
         ledger_unreadable: inp.ledger_error.map(|e| format!("{LEDGER_UNREADABLE} ({e})")),
     };
     (truth, all_facts)
+}
+
+/// One row per change (`rec_id`) that is on or cannot be confirmed: the newest apply whose live check
+/// reads On, Unreadable or Unrecognised represents it, because that is the apply an undo targets.
+/// Mirrors `liveChangeGroups` in `src/data/live-changes.ts` (#453): same filter, same "newest wins,
+/// a tie or an unparseable time keeps the first seen" rule.
+fn live_change_groups(rows: &[AppliedChangeView]) -> Vec<&AppliedChangeView> {
+    fn time(c: &AppliedChangeView) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+        chrono::DateTime::parse_from_rfc3339(&c.applied_at).ok()
+    }
+    let mut order: Vec<&str> = Vec::new();
+    let mut by_rec: std::collections::HashMap<&str, &AppliedChangeView> = std::collections::HashMap::new();
+    for c in rows {
+        let live = c.status == "applied"
+            && matches!(
+                c.active_check,
+                Some(ActiveCheck::On | ActiveCheck::Unreadable | ActiveCheck::Unrecognised)
+            );
+        if !live {
+            continue;
+        }
+        match by_rec.get(c.rec_id.as_str()) {
+            None => {
+                order.push(c.rec_id.as_str());
+                by_rec.insert(c.rec_id.as_str(), c);
+            }
+            Some(prev) => {
+                // TS: `time(c) > time(prev)` with an unparseable time as -Infinity.
+                let newer = match (time(c), time(prev)) {
+                    (Some(a), Some(b)) => a > b,
+                    (Some(_), None) => true,
+                    _ => false,
+                };
+                if newer {
+                    by_rec.insert(c.rec_id.as_str(), c);
+                }
+            }
+        }
+    }
+    order.into_iter().map(|r| by_rec[r]).collect()
 }
 
 fn tally_rig_attribution(
@@ -1935,9 +1978,9 @@ mod machine_model_tests {
         let m = f.model();
         let t = &m.compy_changes;
         assert_eq!(t.total_recorded, 4);
-        // Rows "a" (this rig) and "c" (another rig) both read as in effect. Only "a" is Compy's
-        // change on THIS PC. Before the #385 review both were counted as `active_now`.
-        assert_eq!(t.active_now, 1);
+        // Rows "a" (this rig) and "c" (another rig) both read as in effect on THIS machine, so both
+        // are active here (#453). The other-rig stamp is carried as attribution, not subtracted.
+        assert_eq!(t.active_now, 2);
         assert_eq!(t.in_effect_other_rig, 1);
         assert_eq!(t.in_effect_rig_unknown, 0);
         assert_eq!(t.in_effect_total, 2);
@@ -2159,11 +2202,12 @@ mod machine_model_tests {
         }
     }
 
-    /// REPAIR 3. `is_still_active` re-checks the LIVE machine, so it proves a setting is in
-    /// effect here. It never proves Compy applied it here. Counting an other-rig or unstamped row
-    /// as `active_now` claimed exactly that.
+    /// #453 (replaces #385 REPAIR 3). The live check is read on THIS machine, so a change that reads
+    /// On is active here whatever its rig stamp says. Dropping other-rig and unstamped rows put
+    /// Health at 13 while Optimize and History said 14 on the owner's PC. The stamp is still carried
+    /// as attribution: `in_effect_other_rig` / `in_effect_rig_unknown` are subsets of `active_now`.
     #[test]
-    fn active_now_never_claims_an_other_rig_or_unattributed_row_was_applied_here() {
+    fn active_now_counts_every_live_on_change_and_carries_rig_attribution_apart() {
         let mut f = Fixture::new();
         f.changes = vec![
             // In effect, and same_rig matched: the one row Compy may claim for this PC.
@@ -2193,19 +2237,13 @@ mod machine_model_tests {
         ];
         let t = &f.model().compy_changes;
 
-        assert_eq!(t.active_now, 1, "only the row same_rig matched may be claimed for this PC");
+        assert_eq!(t.active_now, 3, "every change whose live check reads On is active on this PC");
         assert_eq!(t.in_effect_other_rig, 1);
         assert_eq!(t.in_effect_rig_unknown, 1);
-        assert_eq!(t.in_effect_total, 3);
-        assert_eq!(
-            t.active_now + t.in_effect_other_rig + t.in_effect_rig_unknown,
-            t.in_effect_total,
-            "the three attributions partition the in-effect rows exactly"
-        );
-        // The whole ledger still partitions: in effect + reverted outside + rolled back.
-        assert_eq!(
-            t.in_effect_total + t.applied_but_not_in_effect + t.rolled_back,
-            t.total_recorded
+        assert_eq!(t.in_effect_total, t.active_now);
+        assert!(
+            t.in_effect_other_rig + t.in_effect_rig_unknown <= t.active_now,
+            "attribution is a breakdown of the active changes, never an addend"
         );
         assert_eq!(t.total_recorded, 5);
         assert_eq!(t.applied_but_not_in_effect, 1);
@@ -2219,6 +2257,53 @@ mod machine_model_tests {
         assert_eq!(by_id("elsewhere").on_this_rig.value, Some(false));
         assert!(by_id("unstamped").on_this_rig.is_unknown());
         assert!(by_id("elsewhere").still_active.value == Some(true));
+    }
+
+    /// #453 Phase 2 four-screen check. One fixture shaped like the owner's ledger (Game Mode applied
+    /// repeatedly, pre-stamp rows that read On, an other-rig row that reads On, one change Compy
+    /// cannot read) is read here for Health and by `src/live-changes-parity.test.ts` for Optimize
+    /// and History. All three must print the fixture's expected numbers. On the old per-row,
+    /// stamped-only count this ledger gave 4 active where the other screens gave 7.
+    #[test]
+    fn active_and_unknown_counts_match_the_shared_ts_fixture() {
+        let fx: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/test/fixtures/live-changes-parity.json"))
+                .expect("parity fixture parses");
+        let mut f = Fixture::new();
+        f.changes = fx["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .map(|r| {
+                let s = |k: &str| r[k].as_str().map(str::to_string);
+                let check = match r["active_check"].as_str() {
+                    Some("on") => Some(ActiveCheck::On),
+                    Some("off") => Some(ActiveCheck::Off),
+                    Some("unreadable") => Some(ActiveCheck::Unreadable),
+                    Some("unrecognised") => Some(ActiveCheck::Unrecognised),
+                    _ => None,
+                };
+                let status = s("status").expect("status");
+                let mut v = crate::history::test_view(
+                    &s("id").expect("id"),
+                    &s("rec_id").expect("rec_id"),
+                    &s("rec_title").expect("rec_title"),
+                    &s("applied_at").expect("applied_at"),
+                    &status,
+                    check.is_some_and(|c| c != ActiveCheck::Off),
+                    r["on_this_rig"].as_bool(),
+                    None,
+                    true,
+                );
+                v.active_check = check;
+                v
+            })
+            .collect();
+        let t = &f.model().compy_changes;
+        let want = |k: &str| fx["expected"][k].as_u64().expect("expected count") as usize;
+        assert_eq!(t.active_now, want("active"), "Health's 'active now' is the shared count");
+        assert_eq!(t.in_effect_unknown, want("cantConfirm"), "Health's can't-confirm is the shared count");
+        assert_eq!(t.total_recorded, fx["rows"].as_array().map_or(0, Vec::len));
     }
 
     /// REPAIR 4. "History starts" is the earliest evidence Compy STILL RETAINS. Deriving it from
@@ -2630,10 +2715,11 @@ mod machine_model_tests {
             None, None, true,
         ));
         let m = f.model();
-        // The model itself keeps the three buckets apart; this test is about the render.
+        // All three read On on this machine, so all three are active here (#453); the model keeps
+        // the other-rig and unstamped attribution apart. This test is about the render.
         assert_eq!(
             (m.compy_changes.active_now, m.compy_changes.in_effect_other_rig, m.compy_changes.in_effect_rig_unknown),
-            (1, 1, 1)
+            (3, 1, 1)
         );
 
         let entries = rendered_entries(&m);
@@ -2655,10 +2741,11 @@ mod machine_model_tests {
             "the note does not say a missing stamp is what makes the row unattributed: {note:?}"
         );
 
-        // And the same-PC claim stays confined to the one row the rig stamp supports.
+        // The live read is taken here, so every change that reads On is active on this PC (#453).
         let (_, applied, _) = entry_by_label(&entries, "Changes Compy applied");
         assert!(applied.contains("3 recorded"), "{applied:?}");
-        assert!(applied.contains("1 active on this PC"), "{applied:?}");
+        assert!(applied.contains("3 active on this PC"), "{applied:?}");
+        assert!(note.contains("1 of the 3 changes active on this PC are stamped for this PC"), "{note:?}");
     }
 
     /// An undated ledger row alongside a dated snapshot. The boundary is computed from dated
@@ -2790,7 +2877,8 @@ mod machine_model_tests {
         // The counts, which walk the whole ledger, do see them.
         assert_eq!(m.compy_changes.total_recorded, MAX_CHANGES + 5);
         assert_eq!(m.compy_changes.rig_unknown, 5);
-        assert_eq!(m.compy_changes.in_effect_rig_unknown, 5);
+        // Five unstamped ROWS, but they are one change (`rec-old`), counted once (#453).
+        assert_eq!(m.compy_changes.in_effect_rig_unknown, 1);
 
         // So the evidence must too: five unattributed rows and five undated ones, each named.
         let unattributed: Vec<&str> = m
@@ -3674,8 +3762,9 @@ mod machine_model_tests {
             ("unread", ActiveCheck::Unreadable),
             ("unprobed", ActiveCheck::Unrecognised),
         ] {
+            // One change per check: the counts are per change since #453.
             let mut v = crate::history::test_view(
-                id, "game-mode", "Enable Game Mode", "2026-07-04T09:30:00Z", "applied",
+                id, id, "Enable Game Mode", "2026-07-04T09:30:00Z", "applied",
                 check.legacy_active(), Some(true), None, true,
             );
             v.active_check = Some(check);

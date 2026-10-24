@@ -284,8 +284,9 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
   });
 
   // #625: a change Compy cannot confirm is still in place may still be in place, so its undo
-  // stays one press away. It is counted beside the ones confirmed on.
-  it("a change Compy can't confirm still summons the jump, counted with the confirmed ones", () => {
+  // stays one press away. #453: it is named apart from the ones confirmed on, so the "still on"
+  // number in the jump is the one Health and Optimize print.
+  it("a change Compy can't confirm still summons the jump, counted apart from the confirmed ones", () => {
     useReduced();
     const onOpenLab = vi.fn();
     mountConsole(
@@ -296,7 +297,7 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
       ],
       { onOpenLab },
     );
-    fireEvent.click(screen.getByRole("button", { name: /undo any of the 2 changes in Test/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Undo in Test: 1 still on · 1 can't confirm" }));
     expect(onOpenLab).toHaveBeenCalledOnce();
   });
 });

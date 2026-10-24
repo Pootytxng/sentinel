@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { TFunction } from "i18next";
 import { knownIncomplete } from "../../design/LedgerHealthNotice";
 import type { LedgerHealth } from "../../types";
 import type { LogbookRecord } from "./logbook";
@@ -29,6 +30,24 @@ export const TAPE_CAP = 8;
 
 export type LogbookView = ReturnType<typeof useLogbookView>;
 
+/**
+ * The route to undo in Test. With nothing unconfirmed it reads as it always did ("Undo any of the
+ * N changes in Test"), N being the active count Health and Optimize print. When some can't be
+ * confirmed, the sentence names both groups instead of folding them into one "changes" number
+ * (#453: History said 14 while Health said 13 for the same ledger).
+ */
+export function manageJumpLabel(
+  t: TFunction,
+  counts: { active: number; cantConfirm: number },
+): string {
+  return counts.cantConfirm > 0
+    ? t("blackbook.blackbookConsole.manageJumpSplit", {
+        count: counts.active,
+        unknown: counts.cantConfirm,
+      })
+    : t("blackbook.blackbookConsole.manageJump", { count: counts.active });
+}
+
 export function useLogbookView(records: LogbookRecord[], health: LedgerHealth | null) {
   // The Receipts Strip's tape filter (owner pick 2026-07-13, concept A): null = the full tape.
   // Session-local by design — a filter is a glance tool, not a preference.
@@ -40,17 +59,22 @@ export function useLogbookView(records: LogbookRecord[], health: LedgerHealth | 
   // rest — nothing is hidden, only deferred behind an honest count.
   const [tapeAll, setTapeAll] = useState(false);
 
-  // How many changes an undo can still act on — on, or not confirmed off (#625). The read view
-  // routes them to the Lab. It is NOT the "still on" number: that one is the Machine Model's, handed
-  // to the strip, so History prints the same count Health does.
-  const undoableChanges = useMemo(
-    () =>
-      records.filter(
-        (r): r is typeof r & { kind: "change" } =>
-          r.kind === "change" && (r.active || r.unconfirmed),
-      ).length,
-    [records],
-  );
+  // The changes an undo can still act on, split the way Health and Optimize split them (#453):
+  // `active` is the changes whose live check reads on (the number Health prints), `cantConfirm`
+  // the ones Compy cannot read either way. The records are already one per change (C-11 collapse,
+  // the newest live apply representing it) and carry `changeLiveState` from data/live-changes.ts,
+  // the same rule `liveChangeGroups` applies for Optimize; src/live-changes-parity.test.ts pins
+  // the two to one fixture.
+  const undoableChanges = useMemo(() => {
+    let active = 0;
+    let cantConfirm = 0;
+    for (const r of records) {
+      if (r.kind !== "change") continue;
+      if (r.active) active++;
+      else if (r.unconfirmed) cantConfirm++;
+    }
+    return { active, cantConfirm };
+  }, [records]);
   // Per-kind counts + scam flags — the strip's numbers are DERIVED from the same records the tape
   // renders (they can never disagree with it).
   const counts = useMemo(() => {

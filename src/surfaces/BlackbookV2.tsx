@@ -11,7 +11,7 @@ import { readAutopsyLedger } from "../data/autopsy-ledger";
 import { blackbookVerdict } from "./blackbook-v2-data";
 import { BlackbookConsole } from "./blackbook/BlackbookConsole";
 import { LogbookTape } from "./blackbook/LogbookTape";
-import { useLogbookView } from "./blackbook/logbook-view";
+import { manageJumpLabel, useLogbookView } from "./blackbook/logbook-view";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { PatternsTile } from "./blackbook/PatternsTile";
 import { buildLogbook } from "./blackbook/logbook";
@@ -268,11 +268,9 @@ export function BlackbookV2({
              option is a whole other library reads as a tab when it is really a door. The toggle
              still renders on the guide face, which is where a way back is what you need. */
           <div className="bbv2-routes">
-            {view.undoableChanges > 0 && (
+            {view.undoableChanges.active + view.undoableChanges.cantConfirm > 0 && (
               <button type="button" className="bbv2-route" onClick={() => onOpenLab?.()}>
-                <span>
-                  {t("blackbook.blackbookConsole.manageJump", { count: view.undoableChanges })}
-                </span>
+                <span>{manageJumpLabel(t, view.undoableChanges)}</span>
                 <span className="bbv2-route-chev" aria-hidden="true">
                   ›
                 </span>

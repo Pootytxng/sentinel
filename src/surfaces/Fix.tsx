@@ -18,6 +18,7 @@ import { useDismissed } from "./dismissed";
 import { useEligibilityOverrides } from "./eligibility-override";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import { friendlyLabel } from "../data/friendly-labels";
+import { liveChangeGroups } from "../data/live-changes";
 import { expertTarget, EXPERT_TARGET_DISCLAIMER } from "../data/expert-targets";
 import { useExpertView } from "../design/use-expert-view";
 import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
@@ -1079,20 +1080,11 @@ export default function Fix({
   // the honest "re-applying won't hold" note instead of silently re-offering the apply each reboot.
   const gameModeReverted = useMemo(() => gameModeRevertedExternally(changes), [changes]);
 
-  // Ledger §2 — Layer 1: currently-active changes, deduped to the latest per rec id (so the same
-  // tweak applied/rolled-back N times shows as ONE active card, not N equal rows).
-  // The legacy bool decides only which changes keep a rollback card; `active_check` decides which
-  // heading the card sits under (#638), so a change Compy cannot read is never "active on this PC".
-  const [active, unconfirmedActive] = useMemo(() => {
-    const byRec = new Map<string, AppliedChange>();
-    for (const c of changes) {
-      if (!c.is_still_active) continue;
-      const prev = byRec.get(c.rec_id);
-      if (!prev || new Date(c.applied_at) > new Date(prev.applied_at)) byRec.set(c.rec_id, c);
-    }
-    const all = [...byRec.values()].sort((a, b) => +new Date(b.applied_at) - +new Date(a.applied_at));
-    return [all.filter((c) => !cantConfirmStillOn(c)), all.filter(cantConfirmStillOn)];
-  }, [changes]);
+  // Ledger §2 — Layer 1: currently-active changes, ONE per change (the same tweak applied/rolled
+  // back N times shows as one card, not N rows), split into on and can't-confirm (#638). The split
+  // is `liveChangeGroups`, the one definition Health's count and History's undo route share (#453),
+  // so this list's length is the number Health prints.
+  const { active, cantConfirm: unconfirmedActive } = useMemo(() => liveChangeGroups(changes), [changes]);
   // Layer 2: the full chronological trail (newest first).
   const history = useMemo(
     () => [...changes].sort((a, b) => +new Date(b.applied_at) - +new Date(a.applied_at)),

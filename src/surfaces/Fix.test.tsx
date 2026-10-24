@@ -98,6 +98,7 @@ describe("Fix", () => {
       snapshot: null,
       status: "applied" as const,
       is_still_active: true,
+      active_check: "on" as const,
     });
     // two active entries for the same rec → ONE card (deduped to latest), not two rows.
     render(
@@ -268,6 +269,9 @@ describe("Fix", () => {
     snapshot: null,
     status: "applied" as const,
     is_still_active: true,
+    // The live re-check read it on. The wire always carries this field (#453: "active on this PC"
+    // is the live read, never the legacy bool on its own).
+    active_check: "on" as const,
   };
 
   it('default view ("all") renders BOTH the fixes sections and the ledger sections (byte-identical Tune)', () => {
