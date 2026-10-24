@@ -11,16 +11,21 @@ import "./Term.css";
 // accessible. Fail-soft: an unknown id (or a non-term id) renders the children as plain text.
 export function Term({
   id,
+  tip,
   children,
   align = "start",
 }: {
-  id: string;
+  /** A glossary entry: the tooltip shows its "what" and links into the library. */
+  id?: string;
+  /** Or a plain caveat sentence, shown in the same styled tooltip with no library link (#677:
+   *  the in-app replacement for a native `title` on text that is already labelled). */
+  tip?: string;
   children: ReactNode;
   /** Tooltip anchor edge — "end" (right-anchored) for triggers near the window's right side. */
   align?: "start" | "end";
 }) {
   const { t, i18n } = useTranslation();
-  const entry = knowledgeByIdForLanguage(i18n.language).get(id);
+  const entry = id ? knowledgeByIdForLanguage(i18n.language).get(id) : undefined;
   const { openLibrary } = useLibrary();
   const [open, setOpen] = useState(false);
   const tipId = useId();
@@ -41,7 +46,7 @@ export function Term({
   };
   useEffect(() => cancelClose, []); // never fire a close after unmount
 
-  const what = entry && entry.type === "term" ? entry.what : null;
+  const what = tip || (entry && entry.type === "term" ? entry.what : null);
   if (!what) return <>{children}</>;
 
   // Focus/blur handled at the wrapper so tabbing from the trigger to the "more" link keeps it open.
@@ -81,16 +86,18 @@ export function Term({
       {open && (
         <span className={`kl-tip${align === "end" ? " kl-tip-end" : ""}`} role="tooltip" id={tipId}>
           <span className="kl-tip-what">{what}</span>
-          <button
-            type="button"
-            className="kl-tip-more"
-            onClick={() => {
-              setOpen(false);
-              openLibrary(id);
-            }}
-          >
-            {t("common.term.moreInBlackbook")}
-          </button>
+          {id && !tip && (
+            <button
+              type="button"
+              className="kl-tip-more"
+              onClick={() => {
+                setOpen(false);
+                openLibrary(id);
+              }}
+            >
+              {t("common.term.moreInBlackbook")}
+            </button>
+          )}
         </span>
       )}
     </span>

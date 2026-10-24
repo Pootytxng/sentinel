@@ -320,14 +320,18 @@ export function SessionStack({
                 aria-expanded={open}
                 onClick={() => setExpanded(open ? null : key)}
               >
+                {/* Name and when/how-long are separate boxes (#677): only the NAME truncates, so a
+                    long game label can never clip the age and duration behind it. */}
                 <span className="ss-meta">
-                  {[
-                    prettyGameName(s.process_name) || t("monitor.sessionStack.unknownGame"),
-                    relativeDay(s.started_at, now, t),
-                    fmtDur(s.duration_secs),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  <span className="ss-meta-name">
+                    {prettyGameName(s.process_name) || t("monitor.sessionStack.unknownGame")}
+                  </span>
+                  <span className="ss-meta-when">
+                    {[relativeDay(s.started_at, now, t), fmtDur(s.duration_secs)]
+                      .filter(Boolean)
+                      .map((part) => ` · ${part}`)
+                      .join("")}
+                  </span>
                 </span>
                 <RowCanvas
                   row={row}
