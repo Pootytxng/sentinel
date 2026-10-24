@@ -790,7 +790,9 @@ mod tests {
     }
 
     #[test]
-    fn a_between_session_measurement_round_trips_and_an_older_shape_loads() {
+    fn a_between_session_measurement_round_trips_through_json() {
+        // The struct is new in P4-noise; records without it load as `None` (see experiment.rs's
+        // `a_record_with_a_between_session_floor_loads_in_an_older_compy_and_an_older_record_loads_here`).
         let n = BetweenSessionNoise { spread_pct: 4.2, sessions: 3 };
         let back: BetweenSessionNoise = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
         assert_eq!(back, n);

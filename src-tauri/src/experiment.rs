@@ -26,7 +26,7 @@ use std::sync::{Mutex, OnceLock};
 use chrono::{DateTime, Utc};
 
 use crate::comparability::{Comparability, SessionComparability};
-use crate::comparison::{self, ArmedComparison, ComparisonKind};
+use crate::comparison::{self, ArmedComparison, ComparisonKind, DEFAULT_NOISE_FLOOR_PCT};
 use crate::intelligence::Confidence;
 use crate::sessions::SessionSummary;
 
@@ -171,10 +171,18 @@ pub(crate) struct ExperimentRecord {
     /// ONE new variable, holding the rest constant. Never implies attribution across combined changes.
     #[serde(default)]
     pub attribution_warning: Option<String>,
-    /// The band this Trial is judged against, set at start and used for the verdict and for grading
-    /// both sessions' halves: this game's measured between-session spread when there is one
-    /// (`between_session_noise`), never below `DEFAULT_NOISE_FLOOR_PCT`; that default otherwise.
+    /// The band the before/after verdict is judged against, set at start: this game's measured
+    /// between-session spread of the 1% low when there is one (`between_session_noise`), never below
+    /// `DEFAULT_NOISE_FLOOR_PCT`; that default otherwise. The sessions' halves are NOT graded on it
+    /// (see `halves_floor_pct`).
     pub noise_floor_pct: f64,
+    /// The threshold both sessions' first/second-half average fps were graded on: always
+    /// `DEFAULT_NOISE_FLOOR_PCT` (owner, 2026-10-24: halves differing by "> 3%" are uneven). Kept apart
+    /// from `noise_floor_pct` because the halves are average fps and the band is a 1% low spread.
+    /// `None` on records older than P4-noise, whose halves were graded on `noise_floor_pct`, which
+    /// was always that same default then.
+    #[serde(default)]
+    pub halves_floor_pct: Option<f64>,
     /// P4-noise: the between-session spread `noise_floor_pct` came from. `None` when it wasn't
     /// measured (the floor is then the fixed default), and on older records.
     #[serde(default)]
@@ -1160,8 +1168,14 @@ fn round1(x: f64) -> f64 {
     (x * 10.0).round() / 10.0
 }
 
-/// Pure: grade a baseline session against `noise_floor_pct` (the band the verdict will be judged
-/// against). The halves split the trace's buckets by count, the earlier half first.
+/// The threshold a Trial's sessions' halves are graded on (see `ExperimentRecord::halves_floor_pct`).
+/// Never the verdict band: a wide between-session spread must not loosen the uneven check.
+pub(crate) fn halves_floor_pct(rec: &ExperimentRecord) -> f64 {
+    rec.halves_floor_pct.unwrap_or(DEFAULT_NOISE_FLOOR_PCT)
+}
+
+/// Pure: grade a session's two halves (average fps) against `noise_floor_pct`, the halves threshold
+/// ([`halves_floor_pct`]). The halves split the trace's buckets by count, the earlier half first.
 pub(crate) fn grade_baseline(session: &SessionSummary, noise_floor_pct: f64) -> BaselineGrade {
     if session.samples < MIN_BASELINE_SAMPLES {
         return BaselineGrade::TooShort { samples: session.samples };
@@ -1195,8 +1209,7 @@ pub(crate) enum BaselineCheck {
 /// session needs), otherwise the grade and halves the record keeps. An uneven or untraced baseline
 /// starts with a warning instead of being refused (owner decision 2026-10-24: "warn, don't block";
 /// with a 3% floor both of the owner's real WARDOGS baselines grade uneven, 12-16% apart). The halves
-/// are judged against the Trial's band: this game's measured between-session spread when there is
-/// one (P4-noise), never below the fixed default.
+/// are judged against the fixed default ([`halves_floor_pct`]), not the verdict band.
 pub(crate) fn baseline_for_start(
     session: &SessionSummary,
     noise_floor_pct: f64,
@@ -1695,7 +1708,7 @@ pub(crate) fn uneven_baseline_at_conclude(
     rec: &ExperimentRecord,
     baseline: Option<&SessionSummary>,
 ) -> Option<BaselineHalves> {
-    let graded_now = || match baseline.map(|s| grade_baseline(s, rec.noise_floor_pct)) {
+    let graded_now = || match baseline.map(|s| grade_baseline(s, halves_floor_pct(rec))) {
         Some(BaselineGrade::Uneven(h)) => Some(h),
         _ => None,
     };
@@ -1716,7 +1729,8 @@ pub(crate) fn uneven_baseline_at_conclude(
 /// judged by the band itself: since P4-noise, `noise_floor_pct` is this game's spread between whole
 /// unchanged sessions on this PC when Compy has measured it (`noise_floor::between_session_noise`),
 /// never below the fixed default, so an effect inside it reads `no-change`, never a win. The halves
-/// here are graded on that same band.
+/// here are graded on the fixed default instead ([`halves_floor_pct`]): they are average fps, not a
+/// 1% low spread.
 ///
 /// A verdict that already says it wasn't judged (a crash, too few readings, a confound, another game)
 /// keeps its own reason. The measured delta stays as evidence; no noise band is recorded.
@@ -2003,8 +2017,10 @@ pub(crate) fn start_experiment(
         .and_then(|changes| crate::noise_floor::between_session_noise(&sessions, baseline, &ledger_rows(changes)));
     let noise_floor_pct = crate::noise_floor::noise_band_pct(between.as_ref());
     // §2: a baseline too short to judge a change against is refused; an uneven or untraced one starts
-    // and the record says so. Graded on the same floor the record keeps and the verdict uses.
-    let (baseline_check, baseline_halves) = baseline_for_start(baseline, noise_floor_pct)
+    // and the record says so. Its halves are graded on the fixed default, which the record keeps as
+    // `halves_floor_pct`, never on the verdict band (average fps vs a 1% low spread).
+    let halves_floor = DEFAULT_NOISE_FLOOR_PCT;
+    let (baseline_check, baseline_halves) = baseline_for_start(baseline, halves_floor)
         .map_err(|why| format!("experiment not started — {why}"))?;
     // #668: every count below is folded from the rows this one load returned, never read again — a
     // second read that failed used to record 0 changes active on a rig that had some.
@@ -2050,6 +2066,7 @@ pub(crate) fn start_experiment(
         session_pairing: None,
         noise_evidence: None,
         between_session_noise: between,
+        halves_floor_pct: Some(halves_floor),
         ledger_watermark: 0,
         applied_change_id: String::new(),
         active_changes_at_start: active,
@@ -2337,7 +2354,7 @@ pub(crate) fn conclude_experiment(
     let uneven_baseline = uneven_baseline_at_conclude(rec, baseline);
     let (after_check, after_halves) = resolved
         .as_ref()
-        .map_or((None, None), |(treatment, _)| session_check(grade_baseline(treatment, rec.noise_floor_pct)));
+        .map_or((None, None), |(treatment, _)| session_check(grade_baseline(treatment, halves_floor_pct(rec))));
     let uneven_after = after_halves.as_ref().filter(|_| after_check == Some(BaselineCheck::Uneven));
     let (judged, crash_pairing) = match &resolved {
         Some((treatment, pairing)) => (
@@ -2615,7 +2632,6 @@ fn build_sim_context(rec_id: &str) -> Result<SimContext, String> {
 #[cfg(test)]
 mod experiment_tests {
     use super::*;
-    use crate::comparison::DEFAULT_NOISE_FLOOR_PCT;
     use crate::noise_floor::{NoiseLookup, StaleReason};
 
     fn rec(baseline_low1: f64, watermark: usize) -> ExperimentRecord {
@@ -2636,6 +2652,7 @@ mod experiment_tests {
             session_pairing: None,
             noise_evidence: None,
             between_session_noise: None,
+            halves_floor_pct: None,
             ledger_watermark: watermark,
             applied_change_id: "change-1".into(),
             active_changes_at_start: 0,
@@ -4778,7 +4795,7 @@ mod experiment_tests {
         let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
         let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
         assert!(body.contains("uneven_baseline_at_conclude(rec, baseline)"), "the baseline is graded");
-        assert!(body.contains("grade_baseline(treatment, rec.noise_floor_pct)"), "the after-session is graded");
+        assert!(body.contains("grade_baseline(treatment, halves_floor_pct(rec))"), "the after-session is graded");
         assert!(body.contains("with_steady_sessions("), "an uneven session makes the verdict too noisy");
         let (steady, comparable) = (body.find("with_steady_sessions(").unwrap(), body.find("with_comparability(").unwrap());
         assert!(comparable < steady, "steadiness is judged inside the pairing, so a Partial caveat is kept");
@@ -4798,7 +4815,7 @@ mod experiment_tests {
     }
 
     #[test]
-    fn a_band_from_unchanged_sessions_judges_the_verdict_and_the_halves() {
+    fn a_band_from_unchanged_sessions_judges_the_verdict() {
         // A +4% 1% low after the change: a win against the fixed 3%, noise against a 5.9% spread.
         let mut r = rec(150.0, 5);
         r.noise_floor_pct = 5.9;
@@ -4806,10 +4823,22 @@ mod experiment_tests {
         assert_eq!(o.verdict, "no-change", "{}", o.note);
         r.noise_floor_pct = DEFAULT_NOISE_FLOOR_PCT;
         assert_eq!(conclude_outcome(&r, 156.0, 900, false, Some("Test"), Some(5), Utc::now()).verdict, "improved");
-        // Halves 4.5% apart: uneven on the fixed 3%, steady on the 5.9% spread.
+    }
+
+    #[test]
+    fn a_wide_between_session_band_never_loosens_the_uneven_check() {
+        // Halves 4.5% apart are uneven on the fixed 3%, whatever the verdict band is.
         let fps: Vec<f64> = [200.0; 30].into_iter().chain([209.0; 30]).collect();
-        assert!(matches!(grade_baseline(&traced(900, &fps), DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Uneven(_)));
-        assert!(matches!(grade_baseline(&traced(900, &fps), 5.9), BaselineGrade::Steady(_)));
+        let baseline = traced(900, &fps);
+        for halves in [Some(DEFAULT_NOISE_FLOOR_PCT), None] {
+            let r = ExperimentRecord { noise_floor_pct: 8.0, halves_floor_pct: halves, baseline_check: None, ..running() };
+            assert_eq!(halves_floor_pct(&r), DEFAULT_NOISE_FLOOR_PCT, "{halves:?}");
+            assert!(uneven_baseline_at_conclude(&r, Some(&baseline)).is_some(), "baseline graded on the band: {halves:?}");
+            assert!(
+                matches!(session_check(grade_baseline(&baseline, halves_floor_pct(&r))).0, Some(BaselineCheck::Uneven)),
+                "after-session graded on the band: {halves:?}"
+            );
+        }
     }
 
     #[test]
@@ -4850,9 +4879,11 @@ mod experiment_tests {
         // A record written before P4-noise loads with nothing measured between sessions.
         let mut v = serde_json::to_value(rec(150.0, 5)).unwrap();
         v.as_object_mut().unwrap().remove("between_session_noise");
+        v.as_object_mut().unwrap().remove("halves_floor_pct");
         v["noise_evidence"] = serde_json::json!({ "band_pct": 3.0, "measured_noise_pct": null });
         let back: ExperimentRecord = serde_json::from_value(v).expect("an older record loads");
         assert_eq!(back.between_session_noise, None);
+        assert_eq!((back.halves_floor_pct, halves_floor_pct(&back)), (None, DEFAULT_NOISE_FLOOR_PCT));
         assert_eq!(back.noise_evidence.unwrap().between_sessions, None);
     }
 }
