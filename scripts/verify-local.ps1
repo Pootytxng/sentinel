@@ -243,7 +243,9 @@ try {
   # issue's live lease and fails the push when a committed path since origin/main is held by another
   # issue's lease from earlier than this lane's claim on it (collision rule 2). A thread GitHub does
   # not answer within its bound is an unknown lease, and an unknown lease fails the push (rule 5).
-  Invoke-Check -Name "lease overlap (#517)" -Command $node -Arguments @("scripts/lease-overlap-gate.mjs")
+  # RETIRED from the push gate 2026-10-23 by docs/OWNER_DIRECTIVE_2026-10-23.md rule 5 (one executor at
+  # a time): it refused pushes on leases that expired weeks earlier. The script stays runnable by hand:
+  # node scripts/lease-overlap-gate.mjs
   # #522: lanes QUEUE for the heavy stages instead of starving each other. Three gates' `npm test` at
   # once each took ~15 minutes and all three failed on timeouts (2026-09-23); alone it is ~2. The
   # lock spans the suite AND the build and cargo stages after it -- see scripts/lib/gate-mutex.ps1

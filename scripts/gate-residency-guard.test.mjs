@@ -241,9 +241,8 @@ const RESIDENCY = {
     why: "The CompyUsageAudit Windows task runs it Mondays and writes docs/usage-audit/LATEST.md. It reads session transcripts outside the repo, so a commit cannot change its answer.",
   },
   "lease-overlap-gate.mjs": {
-    kind: "push-gate",
-    staticGuard: "scripts/lease-overlap-gate.test.mjs",
-    why: "The push-time check that another lane's live, earlier lease does not hold a pushed path (#517): verify-local.ps1 runs it before the test suite, and its own test pins that call. It reads GitHub, so a commit cannot fix its answer inside npm test.",
+    kind: "manual",
+    why: "Retired from verify-local.ps1 on 2026-10-23 by OWNER_DIRECTIVE_2026-10-23 rule 5 (one executor at a time); it refused pushes on long-expired leases. Kept as a hand-run check for multi-lane work (#517); its own test pins that the push gate no longer calls it.",
   },
   "scope-drift-gate.mjs": {
     kind: "push-gate",

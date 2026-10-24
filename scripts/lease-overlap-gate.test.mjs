@@ -440,20 +440,14 @@ describe("a new receipt is nobody's path (#538)", () => {
   });
 });
 
-describe("residency: verify-local.ps1 runs the gate before the test suite", () => {
+describe("residency: retired from verify-local.ps1 by OWNER_DIRECTIVE_2026-10-23 rule 5", () => {
   const gateCode = read("scripts/verify-local.ps1")
     .split(/\r?\n/)
     .filter((l) => !l.trimStart().startsWith("#"))
     .join("\n");
 
-  it("invokes scripts/lease-overlap-gate.mjs through Invoke-Check, with no argument that could narrow it", () => {
-    expect(gateCode).toMatch(/Invoke-Check -Name "lease overlap \(#517\)" -Command \$node -Arguments @\("scripts\/lease-overlap-gate\.mjs"\)\s*$/m);
-  });
-
-  it("runs it after the scope-drift gate and before the frontend tests", () => {
-    const at = gateCode.indexOf("lease-overlap-gate.mjs");
-    expect(at).toBeGreaterThan(gateCode.indexOf("scope-drift-gate.mjs"));
-    expect(at).toBeLessThan(gateCode.indexOf('"frontend tests"'));
+  it("the push gate no longer invokes it (single-executor operation; the script stays runnable by hand)", () => {
+    expect(gateCode).not.toContain("lease-overlap-gate.mjs");
   });
 
   it("the gate decides through the shared fold and the one scope parser", () => {
