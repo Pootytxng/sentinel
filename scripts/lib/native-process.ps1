@@ -808,7 +808,8 @@ function Start-NativeProcess {
     [string]$WorkingDirectory,
     [hashtable]$Environment,
     [switch]$CreateNoWindow,
-    [switch]$Detached
+    [switch]$Detached,
+    [switch]$NoActivate
   )
   # -Detached (issue #60 defect 2, 2026-08-03): launch through ShellExecute instead of
   # CreateProcess-with-inheritance. A CreateProcess launch hands the child THIS process's stdout and
@@ -825,6 +826,26 @@ function Start-NativeProcess {
     throw "Start-NativeProcess: -Detached cannot carry -Environment (ShellExecute has no child-only environment). Assert the parent's environment instead."
   }
   $resolved = Resolve-NativeExecutable $Command
+  # -NoActivate (WORK_TRAIN item FOCUS, 2026-10-24): a GUI launch whose FIRST ShowWindow cannot take
+  # the foreground. Windows applies the launcher's STARTUPINFO to a new process's first ShowWindow,
+  # and the ShellExecute route below always hands over SW_SHOWNORMAL (an activating show), which
+  # overrode Compy's own non-activating show and could minimise the owner's game. .NET has no
+  # no-activate WindowStyle, so this calls CreateProcessW with STARTF_USESHOWWINDOW and
+  # SW_SHOWNOACTIVATE (scripts/lib/no-activate-launch.cs). Handles are NOT inherited, so it keeps
+  # the property -Detached exists for (the child never holds our pipes). Detached-only by contract,
+  # for the same reason -Detached refuses -Environment: the child gets this process's environment.
+  if ($NoActivate) {
+    if (-not $Detached -or $Environment -or $CreateNoWindow) {
+      throw "Start-NativeProcess: -NoActivate is a detached GUI launch; use it with -Detached and without -Environment or -CreateNoWindow."
+    }
+    if (-not ("CompyLaunch.NoActivate" -as [type])) {
+      Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "no-activate-launch.cs"))
+    }
+    $commandLine = '"' + $resolved.FilePath + '"'
+    $argumentText = ConvertTo-NativeCommandLine $resolved $ArgumentList
+    if ($argumentText) { $commandLine += " " + $argumentText }
+    return [CompyLaunch.NoActivate]::Start($resolved.FilePath, $commandLine, $WorkingDirectory, [CompyLaunch.NoActivate]::SW_SHOWNOACTIVATE)
+  }
   $startInfo = New-Object System.Diagnostics.ProcessStartInfo
   $startInfo.FileName = $resolved.FilePath
   $startInfo.Arguments = ConvertTo-NativeCommandLine $resolved $ArgumentList

@@ -36,7 +36,15 @@ param(
   # politeness (not launch-context behaviour) launches ungranted. The steal class this guard exists
   # for -- tao's set_focus, which reaches SetForegroundWindow through AttachThreadInput and raises
   # even where the OS would not -- needs no grant to succeed, so it stays detectable.
-  [switch]$NoGrant
+  [switch]$NoGrant,
+  # WORK_TRAIN item FOCUS (2026-10-24): the show command this script hands the launched process in its
+  # STARTUPINFO. Windows applies it to the process's FIRST ShowWindow, replacing what the app asked
+  # for. The old Start-Process launch always handed over SW_SHOWNORMAL (activating), which overrode
+  # Compy's own non-activating show and let the launch itself take the foreground -- so a "quiet"
+  # reading measured the launcher, not Compy. "noactivate" (SW_SHOWNOACTIVATE) is the default: it
+  # leaves Compy's own show command as the only thing that can activate the window. "normal" keeps
+  # the old activating launch for the activation self-test, which needs every chance to come forward.
+  [ValidateSet("noactivate", "normal")][string]$LaunchShow = "noactivate"
 )
 $ErrorActionPreference = "Stop"
 
@@ -69,6 +77,10 @@ Add-Type -Namespace CompyProbe -Name Win -MemberDefinition @'
 # loop below pumps messages instead of sleeping. Events are recorded for EVERY process and filtered
 # afterwards: the WebView2 child processes' PIDs do not exist until the launch creates them.
 Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "foreground-events.cs"))
+# CreateProcessW with STARTF_USESHOWWINDOW: the only way to hand a child SW_SHOWNOACTIVATE.
+# Start-Process and ProcessStartInfo cannot (see no-activate-launch.cs).
+Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "no-activate-launch.cs"))
+$launchShowWindow = if ($LaunchShow -eq "normal") { [CompyLaunch.NoActivate]::SW_SHOWNORMAL } else { [CompyLaunch.NoActivate]::SW_SHOWNOACTIVATE }
 
 function Get-ForegroundOwner {
   $hwnd = [CompyProbe.Win]::GetForegroundWindow()
@@ -88,7 +100,7 @@ function Measure-Foreground {
   $before = Get-ForegroundOwner
   # One clock for both instruments: event stamps are relative to this loop's first sample, so an
   # event's `ms` compares directly with firstForegroundMs / firstWindowMs below. Events recorded
-  # before this point (during Start-Process) carry negative stamps and are kept.
+  # before this point (during the launch) carry negative stamps and are kept.
   $eventsFrom = $Hook.Events.Count
   $Hook.ZeroMs = $Hook.Clock.ElapsedMilliseconds
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -145,7 +157,11 @@ function Measure-Foreground {
 }
 
 function Start-Target {
-  param([string[]]$Args, [switch]$Grant)
+  # NOT `$Args`: that is PowerShell's automatic variable, and a parameter of that name binds to
+  # nothing -- the function sees an EMPTY list whatever the caller passes. Measured 2026-10-24: every
+  # probe launch before this rename dropped its argv, so the guard's "--no-activate" launch was a
+  # plain (activating) launch, and the FOREGROUND at first SHOW it recorded was the LOUD path.
+  param([string[]]$LaunchArgs, [switch]$Grant)
   # GRANT the launch permission to come forward -- INITIAL launch only (see the -RelaunchWith note).
   # Windows refuses SetForegroundWindow from a process that has not earned foreground rights, and a
   # probe run from a hidden shell often has not. Left alone, a quiet launch could pass for the wrong
@@ -153,11 +169,15 @@ function Start-Target {
   # never forces. The grant itself can be refused -- the result records whether it took, so a caller
   # can tell a strict measurement from a lenient one.
   $granted = if ($Grant) { [CompyProbe.Win]::AllowSetForegroundWindow(-1) } else { $false }
-  # Start-Process's -ArgumentList is ValidateNotNullOrEmpty, so an argument-free launch must omit the
-  # parameter rather than pass @(). Splatting keeps the two cases one call.
-  $launch = @{ FilePath = $FilePath; PassThru = $true }
-  if ($Args -and $Args.Count -gt 0) { $launch.ArgumentList = $Args }
-  return [pscustomobject]@{ Process = (Start-Process @launch); RightsGranted = $granted }
+  # NOT Start-Process: it always sets STARTUPINFO to SW_SHOWNORMAL, which overrides the app's first
+  # ShowWindow (WORK_TRAIN item FOCUS). CreateProcessW hands over $launchShowWindow instead.
+  $commandLine = '"' + $FilePath + '"'
+  foreach ($a in @($LaunchArgs)) {
+    if ($null -eq $a -or $a -eq "") { continue }
+    $commandLine += " " + $(if ($a -match '[\s"]') { '"' + ($a -replace '"', '\"') + '"' } else { $a })
+  }
+  $process = [CompyLaunch.NoActivate]::Start($FilePath, $commandLine, $null, $launchShowWindow)
+  return [pscustomobject]@{ Process = $process; RightsGranted = $granted }
 }
 
 # The launched process and everything it spawned (WebView2's browser/GPU/renderer processes are
@@ -322,7 +342,7 @@ $hook = New-Object CompyProbe.EventHook
 $hook.Start()
 $hook.ZeroMs = $hook.Clock.ElapsedMilliseconds
 
-$started = Start-Target -Args $ArgumentList -Grant:(-not $NoGrant)
+$started = Start-Target -LaunchArgs $ArgumentList -Grant:(-not $NoGrant)
 $proc = $started.Process
 $relaunchProc = $null
 try {
@@ -331,7 +351,7 @@ try {
   $relaunch = $null
   if ($RelaunchWith -ne "none") {
     $relaunchArgs = if ($RelaunchWith -eq "quiet") { @("--no-activate") } else { @() }
-    $relaunchStart = Start-Target -Args $relaunchArgs
+    $relaunchStart = Start-Target -LaunchArgs $relaunchArgs
     $relaunchProc = $relaunchStart.Process
     # The measurement target stays the FIRST process: the second one exits almost immediately after
     # handing over its argv, and the window that may or may not come forward belongs to the first.
@@ -363,6 +383,10 @@ try {
     runnerPids      = $runnerPids
     parents         = $parents
     rightsGranted   = $started.RightsGranted
+    # The wShowWindow this launch handed over (4 = SW_SHOWNOACTIVATE, 1 = SW_SHOWNORMAL). With 4,
+    # nothing about the LAUNCH can activate the window, so the guard may attribute a foreground at the
+    # first show to the app itself.
+    launchShowWindow = [int]$launchShowWindow
     initial         = $initial
     relaunch        = $relaunch
   } | ConvertTo-Json -Compress -Depth 8

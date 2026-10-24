@@ -331,6 +331,12 @@ if (-not $NoLaunch) {
   # exactly when it matters.
   $env:COMPY_NO_ACTIVATE = "1"
   $quietLaunchArgs = @("--no-activate")
+  # And the LAUNCH itself must not activate (WORK_TRAIN item FOCUS, 2026-10-24): a ShellExecute
+  # launch hands the child SW_SHOWNORMAL in its STARTUPINFO, which Windows applies to the first
+  # ShowWindow in place of Compy's own non-activating show. So the detached relaunches pass
+  # -NoActivate (CreateProcessW with SW_SHOWNOACTIVATE). The -Environment proof launch below goes
+  # through CreateProcess without STARTF_USESHOWWINDOW (measured: dwFlags=0), so nothing overrides
+  # the app's show there.
   if ($VerifyRuntime) {
     # Derive what the running app MUST report before anything is launched: a bad -ExpectedCommit
     # must never leave a release build running with a debugging port open.
@@ -374,7 +380,7 @@ if (-not $NoLaunch) {
     Wait-LoopbackPortClosed -Port $debugPort -TimeoutMs 10000
     # -Detached: this app outlives the script, so it must not inherit our stdout/stderr and strand
     # a caller's pipe (issue #60 defect 2). Port absence is proven by the assertion above.
-    $normalLaunch = Start-NativeProcess -Command $exe -Detached -ArgumentList $quietLaunchArgs  # detached-window-allow: Compy is a GUI app, and this is the launch the owner is MEANT to see.
+    $normalLaunch = Start-NativeProcess -Command $exe -Detached -NoActivate -ArgumentList $quietLaunchArgs  # detached-window-allow: Compy is a GUI app, and this is the launch the owner is MEANT to see.
     Start-Sleep -Seconds 3
     if ($normalLaunch.HasExited) {
       throw "RUNTIME PROOF FAILED: normal relaunch exited during the health window (exit $($normalLaunch.ExitCode))."
@@ -382,7 +388,7 @@ if (-not $NoLaunch) {
     $normalLaunch.Dispose()
   } else {
     # Same reason as the VerifyRuntime relaunch (issue #60 defect 2).
-    $normalLaunch = Start-NativeProcess -Command $exe -Detached -ArgumentList $quietLaunchArgs  # detached-window-allow: Compy is a GUI app, and this is the launch the owner is MEANT to see.
+    $normalLaunch = Start-NativeProcess -Command $exe -Detached -NoActivate -ArgumentList $quietLaunchArgs  # detached-window-allow: Compy is a GUI app, and this is the launch the owner is MEANT to see.
     $normalLaunch.Dispose()
   }
 }
