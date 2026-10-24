@@ -354,7 +354,8 @@
       "confounded": "另一项更改产生了干扰——已恢复,无法归因",
       "expired": "基准过旧,无法判定——已恢复",
       "insufficientEvidence": "数据不足,无法判定——已恢复",
-      "notComparable": "不可比较——已恢复"
+      "notComparable": "不可比较——已恢复",
+      "tooNoisy": "波动太大,无法判定——已恢复"
     },
     "simVerdict": {
       "worthTesting": "值得一试",
@@ -407,6 +408,9 @@
     "baselineRerecordNoGame": "请重新录制基准：再玩一局这个游戏,然后开始。",
     "receiptBaselineUneven": "这次实验的基准帧率不平稳：前半段 {{first}} fps,后半段 {{second}} fps,因此结果可能不太可靠。",
     "receiptBaselineUntraced": "Compy 未能判断这次实验的基准是否平稳：那局的帧率曲线不足以检查。",
+    "receiptBaselineUnevenPlain": "基准帧率不平稳：前半段 {{first}} fps,后半段 {{second}} fps。",
+    "receiptAfterUneven": "测试后的那局帧率不平稳：前半段 {{first}} fps,后半段 {{second}} fps。",
+    "tooNoisyWhy": "一局游戏自身的帧率波动这么大,会掩盖这项设置带来的任何变化,所以 Compy 已恢复它,不作判定。",
     "pastExperiments": "历史实验",
     "deltaSuffix": "% 1% 最低帧",
     "runningTitlePrefix": "实验进行中——",

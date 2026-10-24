@@ -34,6 +34,10 @@ type Treatment = {
   /** The session these numbers were read from (its started_at), looked up by the backend. null on
    *  records concluded before #583 lane 2b, when the webview supplied the numbers. */
   session_id?: string | null;
+  /** P4-sessions: the after-session graded on the baseline's check. null on older records. */
+  check?: "steady" | "uneven" | "untraced" | null;
+  /** Its first- and second-half average fps. null when it had no trace, and on older records. */
+  halves?: { first_half_fps: number; second_half_fps: number } | null;
 };
 
 /** §11 — the credible-noise band a verdict was judged against. Present only when it really was. */
@@ -116,6 +120,7 @@ function verdictCopy(t: Translate): Record<string, string> {
     expired: t("lab.experimentBench.verdict.expired"),
     "insufficient-evidence": t("lab.experimentBench.verdict.insufficientEvidence"),
     "not-comparable": t("lab.experimentBench.verdict.notComparable"),
+    "too-noisy": t("lab.experimentBench.verdict.tooNoisy"),
   };
 }
 
@@ -218,12 +223,23 @@ function gradeBaseline(s: SessionSummary): BaselineGrade {
 // a Trial started on an uneven or untraced baseline says so. Steady and older records say nothing.
 function baselineReceipt(x: Experiment, t: Translate): string | null {
   if (x.baseline_check === "uneven" && x.baseline_halves)
-    return t("lab.experimentBench.receiptBaselineUneven", {
+    // A "too noisy" result has no result to call less reliable: the line just says what was uneven.
+    return t(x.verdict === "too-noisy" ? "lab.experimentBench.receiptBaselineUnevenPlain" : "lab.experimentBench.receiptBaselineUneven", {
       first: Math.round(x.baseline_halves.first_half_fps),
       second: Math.round(x.baseline_halves.second_half_fps),
     });
   if (x.baseline_check === "untraced") return t("lab.experimentBench.receiptBaselineUntraced");
   return null;
+}
+
+// P4-sessions: the after-session's own grade, said on its history row when it was uneven.
+function afterReceipt(x: Experiment, t: Translate): string | null {
+  const tr = x.treatment;
+  if (tr?.check !== "uneven" || !tr.halves) return null;
+  return t("lab.experimentBench.receiptAfterUneven", {
+    first: Math.round(tr.halves.first_half_fps),
+    second: Math.round(tr.halves.second_half_fps),
+  });
 }
 
 // A past result whose verdict reads like a measured judgment (Better / No change / Worse). Only such
@@ -709,6 +725,16 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                 {baselineReceipt(x, t) && (
                   <span className="exp-bench-abort" data-testid="exp-baseline-receipt">
                     {baselineReceipt(x, t)}
+                  </span>
+                )}
+                {afterReceipt(x, t) && (
+                  <span className="exp-bench-abort" data-testid="exp-after-receipt">
+                    {afterReceipt(x, t)}
+                  </span>
+                )}
+                {x.verdict === "too-noisy" && (
+                  <span className="exp-bench-abort" data-testid="exp-too-noisy-why">
+                    {t("lab.experimentBench.tooNoisyWhy")}
                   </span>
                 )}
               </li>

@@ -359,7 +359,8 @@
       "confounded": "Another change interfered — restored, can't attribute",
       "expired": "Baseline too old to judge — restored",
       "insufficientEvidence": "Not enough data to judge — restored",
-      "notComparable": "Not comparable — restored"
+      "notComparable": "Not comparable — restored",
+      "tooNoisy": "Too noisy to judge — restored"
     },
     "simVerdict": {
       "worthTesting": "Worth testing",
@@ -412,6 +413,9 @@
     "baselineRerecordNoGame": "Record a new baseline: play another session of this game, then start.",
     "receiptBaselineUneven": "This experiment's baseline was uneven: first half {{first}} fps, second half {{second}} fps, so its result may be less reliable.",
     "receiptBaselineUntraced": "Compy couldn't tell whether this experiment's baseline was steady: that session didn't have enough of a frame-rate trace to check.",
+    "receiptBaselineUnevenPlain": "The baseline was uneven: first half {{first}} fps, second half {{second}} fps.",
+    "receiptAfterUneven": "The after-session was uneven: first half {{first}} fps, second half {{second}} fps.",
+    "tooNoisyWhy": "A session whose frame rate swings that much on its own hides whatever this setting did, so Compy restored it and judged nothing.",
     "pastExperiments": "Past experiments",
     "deltaSuffix": "% 1% low",
     "runningTitlePrefix": "Experiment in progress —",
