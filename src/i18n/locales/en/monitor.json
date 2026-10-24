@@ -264,6 +264,10 @@
       "rough": {
         "headline": "Rough — frequent stutter",
         "sub": "Your worst moments dropped to {{pct}}% of your average — that gap is felt as stutter."
+      },
+      "unmeasured": {
+        "headline": "Not graded",
+        "sub": "A smoothness verdict compares your worst moments with your average, and this session didn't measure both."
       }
     },
     "gpuLoafedInsight": "Your GPU only reached {{pct}}% at its peak while frames dipped — so the GPU probably isn't the bottleneck here. Prime suspect: a CPU or system limiter.",

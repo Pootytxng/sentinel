@@ -40,7 +40,9 @@ release, sign, or touch credentials (owner territory).
       Process PRs (#685, #679, #654, #644, #642, #606, #605, #492, #471, #470, #464): close with a
       one-line "parked under OWNER_DIRECTIVE_2026-10-23" comment.
       Progress 2026-10-23: process PRs closed; #673 landed (fix 88bec9ad, sparklines too);
-      #666 landed (merge of 68e3c215, data_root 23/23 on main). Next: #661 (also fixes SessionDebrief "0"/smooth grade on unknown FPS), #627, #604.
+      #666 landed (merge of 68e3c215, data_root 23/23 on main).
+      2026-10-24: #661 landed (merge of e1cf6f96; Debrief shows "—" + Not graded for unmeasured FPS,
+      jsdom 58/58 + Chromium layout 6/6). Next: #627, #604.
 - [ ] **WT-prune** Remove the 17 remaining worktrees whose commits already exist on main or on GitHub;
       bundle any unique commits first (pattern: `_archive/compy-sessions/worktree-salvage-2026-10-23`).
 
