@@ -5,6 +5,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 const mocks = vi.hoisted(() => ({
   benchState: { running: false, baseline: null, baseline_at: null, latest: null, latest_at: null, efficacy: null } as unknown,
   fpsActive: false,
+  trialState: null as unknown,
   // Measured specs for the A2 rig-tier band: 16 GB VRAM · 8 cores · 32 GB RAM → High.
   hw: {
     gpus: [{ vram_bytes: 16 * 1024 ** 3 }],
@@ -21,6 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "get_applied_changes":
         return Promise.resolve([]);
       case "get_trial_state":
+        return Promise.resolve(mocks.trialState);
       case "get_scoreboard":
         return Promise.resolve(null);
       case "get_recommendations":
@@ -41,7 +43,10 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { BenchmarkTab } from "./Benchmark";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.trialState = null;
+});
 
 describe("BenchmarkTab (audit M1)", () => {
   it("first run offers 'Run benchmark' (no baseline yet) and the Baseline section", async () => {
@@ -64,6 +69,21 @@ describe("BenchmarkTab (audit M1)", () => {
     render(<BenchmarkTab />);
     // The live-game measurement needs monitoring; the switch comes to the need — no page trip.
     expect(await screen.findByRole("button", { name: "Start monitoring" })).toBeInTheDocument();
+  });
+
+  it("calls the calibration number the spread within one 25-second calibration, not run-to-run", async () => {
+    mocks.benchState = { running: false, baseline: null, baseline_at: null, latest: null, latest_at: null, efficacy: null };
+    mocks.trialState = {
+      running: false,
+      kind: "calibration",
+      status: "Calibration done",
+      noise_floor_pct: 2.04,
+      verdict: null,
+    };
+    render(<BenchmarkTab />);
+    const line = await screen.findByText(/In one 25-second calibration on your PC, the 1% low varied by/);
+    expect(line.textContent).toContain("±2.0%");
+    expect(screen.queryByText(/run-to-run noise:/i)).toBeNull();
   });
 
   it("A2: segments the surface by hardware tier from measured specs (like-to-like framing)", async () => {

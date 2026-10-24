@@ -124,7 +124,7 @@
     "fpsMonitoringOnMsg": "FPS 监测已开启——可以开始测量了。",
     "calibrateButton": "校准(测量我的重复测试噪声)",
     "measureTweakExplainer": "「测量这项优化」会先应用这项更改,在开启状态下测量,然后再回滚——你的设置最终会和最初完全一致。需要提权的优化项会弹出两次 UAC 提示(应用一次、撤销一次)。",
-    "runToRunNoiseLabel": "重复测试噪声:",
+    "runToRunNoiseLabel": "在你电脑上一次 25 秒的校准中，1% 低帧波动为",
     "pipelineCheckPassed": "· 流程校验通过(相同条件下重复测试无虚假变化)",
     "ciLabel": "95% 置信区间",
     "changeRolledBack": "更改已回滚——设置未发生变化。",
