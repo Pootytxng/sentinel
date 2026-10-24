@@ -1018,3 +1018,53 @@ describe("the baseline is graded before a start", () => {
     expect(screen.queryByTestId("exp-baseline-warn")).toBeNull();
   });
 });
+
+// P4-sessions (Trial Protocol §2, §8): a Trial where either session was uneven reads "Too noisy to
+// judge — restored", never Slower/Faster, and its row says which session swung and by how much.
+describe("a Trial judged on an uneven session", () => {
+  // The first live Trial (2026-10-23, WARDOGS): −18.5% 1% low on an uneven baseline and after-session.
+  const AFK_TRIAL = {
+    ...KEPT_EXPERIMENT,
+    status: "restored",
+    kept: false,
+    baseline_avg_fps: 244.1,
+    baseline_low1_fps: 153.5,
+    baseline_check: "uneven",
+    baseline_halves: { first_half_fps: 259.8, second_half_fps: 227.9 },
+    treatment: {
+      ...KEPT_EXPERIMENT.treatment,
+      avg_fps: 203.5,
+      low1_fps: 125.1,
+      samples: 1095,
+      delta_low1_pct: -18.5,
+      check: "uneven",
+      halves: { first_half_fps: 188.7, second_half_fps: 218.5 }, // its AFK_AFTER_FPS buckets' halves
+    },
+    verdict: "too-noisy",
+    stop_reason: "uneven-session",
+  };
+
+  it("the −18.5% AFK Trial reads too noisy to judge and names both uneven sessions", async () => {
+    state.gate = true;
+    state.experiments = [AFK_TRIAL];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("Too noisy to judge — restored")).toBeInTheDocument();
+    expect(screen.queryByText("Slower — restored")).toBeNull();
+    expect(screen.getByTestId("exp-baseline-receipt")).toHaveTextContent(
+      "The baseline was uneven: first half 260 fps, second half 228 fps.",
+    );
+    expect(screen.getByTestId("exp-after-receipt")).toHaveTextContent(
+      "The after-session was uneven: first half 189 fps, second half 219 fps.",
+    );
+    expect(screen.getByTestId("exp-too-noisy-why")).toHaveTextContent(/Compy restored it and judged nothing/);
+  });
+
+  it("a measured result on steady sessions says nothing about unevenness", async () => {
+    state.gate = true;
+    state.experiments = [KEPT_EXPERIMENT];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
+    expect(screen.queryByTestId("exp-after-receipt")).toBeNull();
+    expect(screen.queryByTestId("exp-too-noisy-why")).toBeNull();
+  });
+});

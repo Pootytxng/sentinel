@@ -99,6 +99,15 @@ pub(crate) struct TreatmentRecord {
     /// `sessions.json` (#583 lane 2b). None on records concluded while the webview supplied the numbers.
     #[serde(default)]
     pub session_id: Option<String>,
+    /// P4-sessions (§2/§11): the after-session graded on the same check as the baseline, its two
+    /// halves against the noise floor. None on records concluded before sessions were graded, and on a
+    /// session too short to grade.
+    #[serde(default)]
+    pub check: Option<BaselineCheck>,
+    /// The after-session's first- and second-half average frame rate. None when it had no trace, and
+    /// on older records.
+    #[serde(default)]
+    pub halves: Option<BaselineHalves>,
 }
 
 /// §11 "what uncertainty/noise existed": the credible-noise band a verdict was judged against.
@@ -159,8 +168,9 @@ pub(crate) struct ExperimentRecord {
     pub noise_floor_pct: f64,
     #[serde(default)]
     pub treatment: Option<TreatmentRecord>,
-    /// "improved" | "no-change" | "regressed" | "confounded" | "expired" | "insufficient-evidence".
-    /// None while Running.
+    /// "improved" | "no-change" | "regressed" | "confounded" | "expired" | "insufficient-evidence" |
+    /// "not-comparable" | "too-noisy". A plain string, so an older Compy loads a verdict it doesn't
+    /// know (it shows the raw word; `trial_result` is stored beside it). None while Running.
     #[serde(default)]
     pub verdict: Option<String>,
     #[serde(default)]
@@ -242,7 +252,8 @@ pub(crate) enum TrialResult {
     Worse,
     /// Any effect is inside the noise floor — too small to justify the change.
     Negligible,
-    /// Evidence is too thin (too few readings) or conflicts (another change landed mid-Trial).
+    /// Evidence is too thin (too few readings), conflicts (another change landed mid-Trial), or one of
+    /// the two sessions was too uneven on its own to judge a change by (P4-sessions).
     Inconclusive,
     /// No defensible comparison is possible: a different game, a baseline too old to compare, or
     /// no measurement was taken at all.
@@ -251,7 +262,7 @@ pub(crate) enum TrialResult {
 
 /// Every verdict string the engine can write, in one place so the §8 mapping is tested exhaustively.
 #[cfg(test)]
-const KNOWN_VERDICTS: [&str; 7] = [
+const KNOWN_VERDICTS: [&str; 8] = [
     "improved",
     "regressed",
     "no-change",
@@ -259,6 +270,7 @@ const KNOWN_VERDICTS: [&str; 7] = [
     "confounded",
     "expired",
     "not-comparable",
+    "too-noisy",
 ];
 
 /// Map the engine's verdict string to its §8 class. An unrecognised verdict is `Unmeasurable`, which
@@ -268,7 +280,7 @@ pub(crate) fn trial_result_for(verdict: &str) -> TrialResult {
         "improved" => TrialResult::Better,
         "regressed" => TrialResult::Worse,
         "no-change" => TrialResult::Negligible,
-        "insufficient-evidence" | "confounded" => TrialResult::Inconclusive,
+        "insufficient-evidence" | "confounded" | "too-noisy" => TrialResult::Inconclusive,
         _ => TrialResult::Unmeasurable, // "expired" · "not-comparable" · anything unknown
     }
 }
@@ -1648,6 +1660,81 @@ pub(crate) fn noise_evidence_for(
     judged_against_noise(outcome).then_some(NoiseEvidence { band_pct, measured_noise_pct, measured_noise_stale })
 }
 
+/// The record's view of one session's steadiness: the grade's check and halves, `(None, None)` for a
+/// session too short to grade (that Trial is `insufficient-evidence` before steadiness matters).
+pub(crate) fn session_check(grade: BaselineGrade) -> (Option<BaselineCheck>, Option<BaselineHalves>) {
+    match grade {
+        BaselineGrade::Steady(h) => (Some(BaselineCheck::Steady), Some(h)),
+        BaselineGrade::Uneven(h) => (Some(BaselineCheck::Uneven), Some(h)),
+        BaselineGrade::Untraced => (Some(BaselineCheck::Untraced), None),
+        BaselineGrade::TooShort { .. } => (None, None),
+    }
+}
+
+/// The baseline's halves when it was uneven, at conclude: the start's grade when the record has one
+/// (the session may have shed its trace since), else the baseline session graded now (a Trial started
+/// before baselines were graded). Untraced or steady is `None`: only a measured unevenness counts.
+pub(crate) fn uneven_baseline_at_conclude(
+    rec: &ExperimentRecord,
+    baseline: Option<&SessionSummary>,
+) -> Option<BaselineHalves> {
+    let graded_now = || match baseline.map(|s| grade_baseline(s, rec.noise_floor_pct)) {
+        Some(BaselineGrade::Uneven(h)) => Some(h),
+        _ => None,
+    };
+    match rec.baseline_check {
+        Some(BaselineCheck::Uneven) => rec.baseline_halves.clone().or_else(graded_now),
+        Some(_) => None,
+        None => graded_now(),
+    }
+}
+
+/// P4-sessions (Trial Protocol §2 "if repeatability is too poor, Compy does not manufacture a
+/// verdict", §5, §8 Inconclusive): a measured verdict (improved / no-change / regressed) where either
+/// session's own two halves differ by more than the noise floor becomes `too-noisy` and restores. A
+/// session that drifts that much by itself (the 2026-10-23 AFK baseline: 259.8 → 227.9 fps) would
+/// swamp the change's effect, so the −18.5% that read "Slower" was the scene, not the setting.
+///
+/// Only the "either session is uneven" half of the queue item is applied. The other half, "the effect
+/// is below the session-to-session spread", needs a spread measured between unchanged sessions of
+/// this game, and Compy has none yet: the stored per-game noise (`noise_floor.rs`) is the spread
+/// within one 25 s calibration, and the only two sessions a Trial has are the before and after whose
+/// difference is the effect itself. P4-noise ("two unchanged sessions") supplies that spread.
+///
+/// A verdict that already says it wasn't judged (a crash, too few readings, a confound, another game)
+/// keeps its own reason. The measured delta stays as evidence; no noise band is recorded.
+pub(crate) fn with_steady_sessions(
+    outcome: ConcludeOutcome,
+    uneven_baseline: Option<&BaselineHalves>,
+    uneven_after: Option<&BaselineHalves>,
+) -> ConcludeOutcome {
+    if !judged_against_noise(&outcome) {
+        return outcome;
+    }
+    let ran = |h: &BaselineHalves| {
+        format!("{} fps in its first half and {} fps in its second", h.first_half_fps.round(), h.second_half_fps.round())
+    };
+    let which = match (uneven_baseline, uneven_after) {
+        (None, None) => return outcome,
+        (Some(b), None) => format!("the baseline was uneven ({})", ran(b)),
+        (None, Some(a)) => format!("the after-session was uneven ({})", ran(a)),
+        (Some(b), Some(a)) => {
+            format!("both sessions were uneven (the baseline ran {}; the after-session {})", ran(b), ran(a))
+        }
+    };
+    ConcludeOutcome {
+        verdict: "too-noisy".into(),
+        keep: false,
+        stop_reason: Some("uneven-session".into()),
+        confidence: Confidence::Unknown,
+        note: format!(
+            "Too noisy to judge: {which}. That is too uneven on its own to tell this setting's effect \
+             apart from the scene, so Compy restored the change and judged nothing."
+        ),
+        ..outcome
+    }
+}
+
 // ─── §4G Optimization simulator (pure, read-only advisory — never a promise) ──
 
 /// The deterministic facts the simulator reasons over. The command populates this from existing
@@ -1887,7 +1974,8 @@ pub(crate) fn start_experiment(
         .map_err(|why| format!("experiment not started — {why}"))?;
     // §2: a baseline too short to judge a change against is refused; an uneven or untraced one starts
     // and the record says so (blocking on uneven waits for P4-noise's per-game noise).
-    let (baseline_check, baseline_halves) = baseline_for_start(baseline, DEFAULT_NOISE_FLOOR_PCT)
+    let noise_floor_pct = DEFAULT_NOISE_FLOOR_PCT; // graded on the same floor the record keeps
+    let (baseline_check, baseline_halves) = baseline_for_start(baseline, noise_floor_pct)
         .map_err(|why| format!("experiment not started — {why}"))?;
     // §3: the baseline must still describe the Compy changes in place now.
     let history = ledger_for_one_change_checks(
@@ -1941,7 +2029,7 @@ pub(crate) fn start_experiment(
         applied_change_id: String::new(),
         active_changes_at_start: active,
         attribution_warning: warning,
-        noise_floor_pct: DEFAULT_NOISE_FLOOR_PCT,
+        noise_floor_pct,
         treatment: None,
         verdict: None,
         kept: false,
@@ -2220,19 +2308,31 @@ pub(crate) fn conclude_experiment(
     let rec = &store.experiments[idx];
     let baseline = found(&sessions, rec.baseline_session_id.as_deref());
     let treatment = found(&sessions, Some(&treatment_session_id));
+    // P4-sessions: each session graded on its own halves against the band the verdict is judged on.
+    let uneven_baseline = uneven_baseline_at_conclude(rec, baseline);
+    let (after_check, after_halves) = resolved
+        .as_ref()
+        .map_or((None, None), |(treatment, _)| session_check(grade_baseline(treatment, rec.noise_floor_pct)));
+    let uneven_after = after_halves.as_ref().filter(|_| after_check == Some(BaselineCheck::Uneven));
     let (judged, crash_pairing) = match &resolved {
         Some((treatment, pairing)) => (
+            // Steadiness first, so a Partial pairing appends its "not every condition could be
+            // checked" to the too-noisy note, as it does for every verdict that wasn't judged.
             with_comparability(
-            conclude_outcome(
-                rec,
-                treatment.low1_fps_est,
-                treatment.samples,
-                crashed,
-                Some(&treatment.process_name),
-                ledger_now,
-                now,
-            ),
-            pairing,
+                with_steady_sessions(
+                    conclude_outcome(
+                        rec,
+                        treatment.low1_fps_est,
+                        treatment.samples,
+                        crashed,
+                        Some(&treatment.process_name),
+                        ledger_now,
+                        now,
+                    ),
+                    uneven_baseline.as_ref(),
+                    uneven_after,
+                ),
+                pairing,
             ),
             None,
         ),
@@ -2257,6 +2357,8 @@ pub(crate) fn conclude_experiment(
         delta_low1_pct: outcome.delta_low1_pct,
         recorded_at: now.to_rfc3339(),
         session_id: Some(treatment.started_at.clone()),
+        check: after_check,
+        halves: after_halves.clone(),
     });
     store.experiments[idx].session_pairing = resolved
         .as_ref()
@@ -3013,6 +3115,7 @@ mod experiment_tests {
             ("confounded", Inconclusive, false),
             ("expired", Unmeasurable, false),
             ("not-comparable", Unmeasurable, false),
+            ("too-noisy", Inconclusive, false),
         ];
         assert_eq!(table.len(), KNOWN_VERDICTS.len(), "a new verdict needs a row in this table");
         for (verdict, class, keep) in table {
@@ -3042,6 +3145,11 @@ mod experiment_tests {
             conclude_outcome(&r, 120.0, 5000, false, None, Some(6), now), // confounded
             conclude_outcome(&r, 120.0, 5000, false, Some("Other"), Some(5), now), // other game
             conclude_outcome(&r, 120.0, 5000, false, None, Some(5), now + chrono::Duration::days(365)), // expired
+            with_steady_sessions(
+                conclude_outcome(&r, 100.0, 5000, false, None, Some(5), now),
+                Some(&BaselineHalves { first_half_fps: 259.8, second_half_fps: 227.9 }),
+                None,
+            ), // too noisy
         ];
         let mut seen: Vec<&str> = Vec::new();
         for o in &cases {
@@ -3851,6 +3959,8 @@ mod experiment_tests {
                 delta_low1_pct: 20.0,
                 recorded_at: TREAT_ID.into(),
                 session_id: Some(TREAT_ID.into()),
+                check: Some(BaselineCheck::Uneven),
+                halves: Some(BaselineHalves { first_half_fps: 180.0, second_half_fps: 200.0 }),
             }),
             ..running()
         })
@@ -3859,13 +3969,17 @@ mod experiment_tests {
         for key in ["baseline_session_id", "applied_at", "session_pairing", "noise_evidence"] {
             assert!(obj.remove(key).is_some(), "{key} is written");
         }
-        obj.get_mut("treatment").unwrap().as_object_mut().unwrap().remove("session_id");
+        let t = obj.get_mut("treatment").unwrap().as_object_mut().unwrap();
+        for key in ["session_id", "check", "halves"] {
+            assert!(t.remove(key).is_some(), "treatment.{key} is written");
+        }
         let old: ExperimentRecord = serde_json::from_value(v).unwrap();
         assert_eq!(old.baseline_session_id, None);
         assert_eq!(old.applied_at, None);
         assert_eq!(old.session_pairing, None);
         assert_eq!(old.noise_evidence, None);
-        assert_eq!(old.treatment.unwrap().session_id, None);
+        let t = old.treatment.unwrap();
+        assert_eq!((t.session_id, t.check, t.halves), (None, None, None));
     }
 
     /// A ledger row whose undo carries a date.
@@ -4460,5 +4574,186 @@ mod experiment_tests {
         }
         let older: OlderStore = serde_json::from_str(&text).expect("an older Compy loads the file");
         assert_eq!(older.experiments[0].baseline_session_id.as_deref(), Some(BASE_ID));
+    }
+
+    // ─── P4-sessions (Trial Protocol §2, §5, §8) ──────────────────────────────
+
+    /// The first live Trial (2026-10-23, WARDOGS, `visual-effects`) as `experiments.json` recorded it
+    /// at start: baseline avg 244.1 / 1% low 153.5, graded uneven (259.8 → 227.9 fps).
+    fn afk_trial() -> ExperimentRecord {
+        ExperimentRecord {
+            game: "WardogsClient-Win64-Shipping.exe".into(),
+            baseline_avg_fps: 244.1,
+            baseline_low1_fps: 153.5,
+            baseline_check: Some(BaselineCheck::Uneven),
+            baseline_halves: Some(BaselineHalves { first_half_fps: 259.8, second_half_fps: 227.9 }),
+            ..running()
+        }
+    }
+
+    fn afk_after() -> SessionSummary {
+        let mut s = traced(1095, AFK_AFTER_FPS);
+        s.started_at = TREAT_ID.into();
+        s.process_name = "WardogsClient-Win64-Shipping.exe".into();
+        s.avg_fps = 203.5;
+        s.low1_fps_est = 125.1;
+        s
+    }
+
+    #[test]
+    fn the_minus_18_5_percent_afk_trial_is_too_noisy_to_judge_not_slower() {
+        let rec = afk_trial();
+        let after = afk_after();
+        // Concluded the same day, as the owner did (a baseline weeks old would be "expired" first).
+        let concluded = DateTime::parse_from_rfc3339(APPLIED).unwrap().with_timezone(&Utc) + chrono::Duration::hours(1);
+        let judged = conclude_outcome(&rec, after.low1_fps_est, after.samples, false, Some(&after.process_name), Some(5), concluded);
+        // What the owner saw: "Slower — restored" on a −18.5% 1% low.
+        assert_eq!((judged.verdict.as_str(), judged.delta_low1_pct), ("regressed", -18.5));
+
+        let (after_check, after_halves) = session_check(grade_baseline(&after, rec.noise_floor_pct));
+        assert_eq!(after_check, Some(BaselineCheck::Uneven), "the after-session swung too");
+        assert_eq!(after_halves, Some(BaselineHalves { first_half_fps: 188.7, second_half_fps: 218.5 }));
+        let o = with_steady_sessions(judged, uneven_baseline_at_conclude(&rec, None).as_ref(), after_halves.as_ref());
+        assert_eq!(o.verdict, "too-noisy");
+        assert_eq!(trial_result_for(&o.verdict), TrialResult::Inconclusive);
+        assert!(!o.keep, "restored");
+        assert_eq!(o.delta_low1_pct, -18.5, "the measured delta stays as evidence");
+        assert_eq!(o.confidence, Confidence::Unknown);
+        assert_eq!(o.stop_reason.as_deref(), Some("uneven-session"));
+        assert!(o.note.contains("both sessions were uneven") && o.note.contains("260 fps in its first half"), "{}", o.note);
+        assert_eq!(noise_evidence_for(&o, rec.noise_floor_pct, &NoiseLookup::Unmeasured), None, "nothing was judged against the band");
+    }
+
+    #[test]
+    fn either_uneven_session_alone_makes_a_measured_verdict_too_noisy() {
+        let h = BaselineHalves { first_half_fps: 200.0, second_half_fps: 220.0 };
+        for low1 in [180.0, 150.5, 100.0] {
+            let base_only = with_steady_sessions(measured(low1), Some(&h), None);
+            assert_eq!(base_only.verdict, "too-noisy");
+            assert!(base_only.note.contains("the baseline was uneven"), "{}", base_only.note);
+            let after_only = with_steady_sessions(measured(low1), None, Some(&h));
+            assert_eq!(after_only.verdict, "too-noisy");
+            assert!(after_only.note.contains("the after-session was uneven"), "{}", after_only.note);
+            assert_eq!(with_steady_sessions(measured(low1), None, None), measured(low1), "steady sessions keep the verdict");
+        }
+        // A clean improvement on steady sessions is still kept.
+        assert!(with_steady_sessions(measured(180.0), None, None).keep);
+    }
+
+    #[test]
+    fn a_verdict_that_was_never_judged_keeps_its_own_reason() {
+        let h = BaselineHalves { first_half_fps: 200.0, second_half_fps: 240.0 };
+        let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
+        let thin = conclude_outcome(&rec(150.0, 5), 180.0, 10, false, Some("Test"), Some(5), Utc::now());
+        let confounded = conclude_outcome(&rec(150.0, 5), 180.0, 5000, false, Some("Test"), Some(6), Utc::now());
+        let wrong_game = conclude_outcome(&rec(150.0, 5), 180.0, 5000, false, Some("Other"), Some(5), Utc::now());
+        for o in [crash, thin, confounded, wrong_game] {
+            let verdict = o.verdict.clone();
+            assert_eq!(with_steady_sessions(o, Some(&h), Some(&h)).verdict, verdict);
+        }
+        // And the later guards never turn "too noisy" back into a measured verdict or a keep.
+        let noisy = with_steady_sessions(measured(180.0), Some(&h), None);
+        assert_eq!(guard_target_at_conclude(noisy.clone(), None).verdict, "too-noisy");
+        assert_eq!(with_unverified_changes(noisy.clone(), 2).verdict, "too-noisy");
+        assert_eq!(guard_target_at_conclude(noisy, Some(false)).verdict, "confounded", "a reverted setting is the stronger reason");
+    }
+
+    #[test]
+    fn a_too_noisy_result_on_a_partial_pairing_still_says_what_went_unchecked() {
+        let pairing = partial_pairing();
+        let h = BaselineHalves { first_half_fps: 259.8, second_half_fps: 227.9 };
+        let o = with_comparability(with_steady_sessions(measured(180.0), Some(&h), None), &pairing);
+        assert_eq!(o.verdict, "too-noisy", "a Partial pairing never turns it back into a measured verdict");
+        assert!(o.note.starts_with("Too noisy to judge: the baseline was uneven"), "{}", o.note);
+        assert!(o.note.contains("too uneven on its own to tell this setting's effect apart from the scene"), "{}", o.note);
+        assert!(o.note.contains("Not every condition could be checked either"), "{}", o.note);
+        assert!(o.note.contains(&pairing.missing_context[0]), "{}", o.note);
+        assert_eq!(o.confidence, Confidence::Unknown);
+    }
+
+    #[test]
+    fn the_baseline_grade_at_conclude_comes_from_the_start_else_from_the_session_now() {
+        let uneven = traced(1172, AFK_BASELINE_FPS);
+        let steady = traced(600, &[200.0; 60]);
+        // Graded at start: the record wins, whatever the session holds now (it may have shed its trace).
+        assert_eq!(
+            uneven_baseline_at_conclude(&afk_trial(), Some(&steady)),
+            Some(BaselineHalves { first_half_fps: 259.8, second_half_fps: 227.9 })
+        );
+        let started_steady = ExperimentRecord { baseline_check: Some(BaselineCheck::Steady), ..running() };
+        assert_eq!(uneven_baseline_at_conclude(&started_steady, Some(&uneven)), None);
+        let started_untraced = ExperimentRecord { baseline_check: Some(BaselineCheck::Untraced), ..running() };
+        assert_eq!(uneven_baseline_at_conclude(&started_untraced, Some(&uneven)), None, "untraced is never read as uneven");
+        // A Trial started before baselines were graded: the baseline session is graded now.
+        assert!(uneven_baseline_at_conclude(&running(), Some(&uneven)).is_some());
+        assert_eq!(uneven_baseline_at_conclude(&running(), Some(&steady)), None);
+        assert_eq!(uneven_baseline_at_conclude(&running(), None), None);
+    }
+
+    #[test]
+    fn the_after_sessions_grade_is_written_and_an_older_compy_still_loads_the_record() {
+        let mut v = serde_json::to_value(ExperimentRecord {
+            treatment: Some(TreatmentRecord {
+                avg_fps: 203.5,
+                low1_fps: 125.1,
+                samples: 1095,
+                crashed: false,
+                delta_low1_pct: -18.5,
+                recorded_at: TREAT_ID.into(),
+                session_id: Some(TREAT_ID.into()),
+                check: Some(BaselineCheck::Uneven),
+                halves: Some(BaselineHalves { first_half_fps: 188.7, second_half_fps: 218.5 }),
+            }),
+            verdict: Some("too-noisy".into()),
+            trial_result: Some(TrialResult::Inconclusive),
+            status: ExperimentStatus::Restored,
+            ..afk_trial()
+        })
+        .unwrap();
+        assert_eq!(v["treatment"]["check"], "uneven");
+        assert_eq!(v["trial_result"], "inconclusive", "an existing class: an older Compy knows it");
+        // An older Compy's types (no such fields, a plain-string verdict) load the file.
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OlderTreatment {
+            low1_fps: f64,
+            delta_low1_pct: f64,
+            #[serde(default)]
+            session_id: Option<String>,
+        }
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OlderRecord {
+            status: ExperimentStatus,
+            #[serde(default)]
+            treatment: Option<OlderTreatment>,
+            #[serde(default)]
+            verdict: Option<String>,
+            #[serde(default)]
+            trial_result: Option<TrialResult>,
+        }
+        let older: OlderRecord = serde_json::from_value(v.clone()).expect("an older Compy loads it");
+        assert_eq!(older.verdict.as_deref(), Some("too-noisy"));
+        assert_eq!(older.trial_result, Some(TrialResult::Inconclusive));
+        // And this build loads a treatment written before sessions were graded.
+        let t = v["treatment"].as_object_mut().unwrap();
+        t.remove("check");
+        t.remove("halves");
+        let back: ExperimentRecord = serde_json::from_value(v).unwrap();
+        let t = back.treatment.unwrap();
+        assert_eq!((t.check, t.halves), (None, None));
+    }
+
+    #[test]
+    fn conclude_grades_both_sessions_before_it_records_a_verdict() {
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
+        let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
+        assert!(body.contains("uneven_baseline_at_conclude(rec, baseline)"), "the baseline is graded");
+        assert!(body.contains("grade_baseline(treatment, rec.noise_floor_pct)"), "the after-session is graded");
+        assert!(body.contains("with_steady_sessions("), "an uneven session makes the verdict too noisy");
+        let (steady, comparable) = (body.find("with_steady_sessions(").unwrap(), body.find("with_comparability(").unwrap());
+        assert!(comparable < steady, "steadiness is judged inside the pairing, so a Partial caveat is kept");
+        assert!(body.contains("check: after_check"), "the receipt keeps the after-session's grade");
     }
 }
