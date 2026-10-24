@@ -125,8 +125,12 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       Mode change between them; then confirm the receipt shows the measured band. None qualify yet.
 - [ ] **P4-noise-copy** "from one session to the next" → "between any two of those sessions" (en); rename
       `grade_baseline`'s `noise_floor_pct` param to `halves_floor_pct`; fix ExperimentBench.tsx:206 comment.
-- [ ] **453-fix** Health active count must match Optimize and History (lane running): one per change,
-      live On regardless of rig stamp; can't-confirm grouped the same on all three. Then re-run #453.
+- [x] **453-fix** `dce14e95`: Health, Optimize and History count one per change whose live check reads On;
+      can't-confirm grouped the same on all three; shared parity fixture (Rust + TS).
+- [ ] **453-rerun** (needs a desk install of main) Re-run the #453 four-screen check; record in BACKLOG P2.
+- [ ] **453-f1** `history.rs` `summarize_history` is a fourth counting rule (newest row by position,
+      Unreadable counts as active) feeding session receipts / Debrief / Monitor "N Compy changes active".
+      Move it onto `live_change_groups`. Also: "Applied on this machine" diagnostics line still counts rows.
 - [x] **P4-baseline-quality** `66f1daea`. Owner 2026-10-24: warn, don't block — < 600 readings refuses;
       uneven halves (> 3%) or no trace warn and are recorded on the receipt. Blocking waits for P4-noise.
       Was: grade the baseline before a start: < 600 readings, or halves differing by more
@@ -175,6 +179,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-24 12:24 #453 live run on owner rig: Health 13 vs Optimize/History 14 (row-count +
   rig-stamp bug, see 453-fix); diagnostics agreed; startup toggle visible + rolled back everywhere;
   CPU temp unknown with reason. P4-noise `f1c93f44`.
+- 2026-10-24 afternoon: 453-fix `dce14e95`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
