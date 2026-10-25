@@ -538,6 +538,25 @@
       "recommended": "只有当 1% 最低帧的提升超出噪声范围、且平均帧率的下降没有超出它时，才保留这项更改。",
       "maxFps": "只有当平均帧率的提升超出噪声范围、且 1% 最低帧的下降没有超出它时，才保留这项更改。"
     },
+    "outcomeChoice": {
+      "label": "两个结果不一致",
+      "keeps": "{{outcome}}会保留它：{{why}}。",
+      "keepsOff": "{{outcome}}让它保持关闭：{{why}}。",
+      "reason": {
+        "lowUp": "1% 低帧提高 {{pct}}%",
+        "avgUp": "平均帧率提高 {{pct}}%",
+        "lowFell": "1% 低帧下降 {{pct}}%",
+        "avgFell": "平均帧率下降 {{pct}}%",
+        "lowFlat": "1% 低帧的提高没有超出噪声范围（{{pct}}%）",
+        "avgFlat": "平均帧率的提高没有超出噪声范围（{{pct}}%）",
+        "avgUnknown": "平均帧率无法比较"
+      },
+      "inEffect": "当前生效：{{outcome}}。",
+      "useKeep": "改用{{outcome}}：重新开启 {{change}}",
+      "useOff": "改用{{outcome}}：恢复 {{change}}",
+      "cantTell": "Compy 无法读取此更改当前是否开启，因此不提供切换。",
+      "notFound": "Compy 找不到已应用的 {{change}}，因此没有撤销任何内容。请在 测试 → 已应用与历史 中检查。"
+    },
     "pairChanged": "差异：测试前后两局之间{{changed}}有变化。",
     "pairUnrecorded": "差异：其中一局没有记录{{unrecorded}}。",
     "pairBoth": "差异：{{changed}}有变化，且其中一局没有记录{{unrecorded}}。",

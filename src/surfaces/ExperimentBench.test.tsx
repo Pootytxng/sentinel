@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   simHang: false, // when true, simulate_optimization stays pending → lets a test observe the in-flight lock
   loadGate: null as Promise<void> | null, // when set, the initial ledger reads block on it
   refuse: {} as Record<string, string>, // a lifecycle command the backend refuses, with its message
+  changes: [] as unknown[], // get_applied_changes (the P5-outcomes undo reads it)
 }));
 
 /** Hold the initial ledger reads until the returned function is called.
@@ -131,6 +132,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         return afterLoad(state.recs);
       case "get_session_summaries":
         return afterLoad(state.sessions);
+      case "get_applied_changes":
+        return Promise.resolve(state.changes);
       case "simulate_optimization":
         if (state.simHang) return new Promise(() => {}); // never resolves
         return state.sim ? Promise.resolve(state.sim) : Promise.reject("no sim");
@@ -164,6 +167,7 @@ afterEach(() => {
   state.simHang = false;
   state.loadGate = null;
   state.refuse = {};
+  state.changes = [];
 });
 
 // bug->guard (CI run 30696118350, 2026-08-01). Picking a value that has NO matching option yet is a
@@ -1870,6 +1874,126 @@ describe("P4-next-f1: the picker marks changes already tested on this game", () 
     try {
       const opts = await openPicker();
       expect(opts.find((o) => o.dataset.value === "a-rec")).toHaveTextContent("Change A · 已测试：变慢了——已恢复");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
+
+// P5-outcomes (ROADMAP Phase 5 step 6, ENGINE §5–6): one change with a Recommended and a Maximum FPS
+// result that disagree offers the choice, with the trade in one line. Acting goes through the audited
+// apply (apply_recommendation) and undo (rollback_change) paths, never a new one.
+describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
+  const VAL = "Valorant";
+  const trial = (over: Record<string, unknown>) => ({
+    ...KEPT_EXPERIMENT,
+    status: "restored",
+    kept: false,
+    verdict: "regressed",
+    verdict_confidence: "medium",
+    noise_evidence: { band_pct: 3, measured_noise_pct: null },
+    treatment: { ...KEPT_EXPERIMENT.treatment, delta_low1_pct: -4, delta_avg_pct: 6 },
+    outcome: "recommended",
+    ...over,
+  });
+  const REC_OFF = trial({ id: "exp:rec" });
+  const MAX_KEEP = trial({
+    id: "exp:max",
+    created_at: "2026-07-18T00:00:00Z",
+    status: "kept",
+    kept: true,
+    verdict: "improved",
+    treatment: { ...KEPT_EXPERIMENT.treatment, delta_low1_pct: -2, delta_avg_pct: 6 },
+    outcome: "max-fps",
+  });
+  const hags = (passes: boolean, reason: string | null) => ({
+    id: "hags",
+    title: "Hardware-accelerated GPU scheduling",
+    passes,
+    reason,
+    detail: null,
+    position: 1,
+    evidence: "not-measured",
+    risk: "low",
+  });
+
+  async function renderWith(experiments: unknown[], recs: unknown[]) {
+    state.gate = true;
+    state.experiments = experiments;
+    state.sessions = [{ ...VALORANT_SESSION, process_name: VAL }];
+    state.recs = recs;
+    render(<ExperimentBench />);
+    await screen.findByTestId("exp-summary");
+  }
+
+  it("two differing results: the choice, with the actual trade in one line", async () => {
+    await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-by-compy")]);
+    const row = await screen.findByTestId("exp-outcome-choice-row");
+    expect(row).toHaveAttribute("data-in-effect", "max-fps");
+    expect(screen.getByTestId("exp-outcome-choice-trade")).toHaveTextContent(
+      "Recommended keeps it off: 1% lows fell 4%. Maximum FPS would keep it: average up 6%.",
+    );
+    expect(screen.getByTestId("exp-outcome-choice-current")).toHaveTextContent("In effect now: Maximum FPS.");
+    const btn = screen.getByRole("button", { name: "Use Recommended: put Hardware-accelerated GPU scheduling back" });
+    expect(btn).toHaveAttribute("data-outcome", "recommended");
+    // The summary itself stays read-only.
+    expect(screen.getByTestId("exp-summary").querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("two agreeing results, or a single one: no choice", async () => {
+    await renderWith([trial({ id: "exp:rec", verdict: "improved", kept: true, treatment: { ...KEPT_EXPERIMENT.treatment, delta_low1_pct: 5, delta_avg_pct: 1 } }), MAX_KEEP], [hags(false, "already-set-by-compy")]);
+    expect(screen.queryByTestId("exp-outcome-choice")).toBeNull();
+    cleanup();
+    await renderWith([REC_OFF, trial({ id: "exp:max", outcome: "max-fps", verdict: "no-change", treatment: { ...KEPT_EXPERIMENT.treatment, delta_low1_pct: 0, delta_avg_pct: 1 } })], [hags(true, null)]);
+    expect(screen.queryByTestId("exp-outcome-choice")).toBeNull();
+    cleanup();
+    await renderWith([MAX_KEEP], [hags(false, "already-set-by-compy")]);
+    expect(screen.queryByTestId("exp-outcome-choice")).toBeNull();
+    cleanup();
+    // A Maximum FPS Trial that judged nothing is no result, so there is no keep side to offer.
+    await renderWith([REC_OFF, { ...MAX_KEEP, verdict: "too-noisy", kept: false }], [hags(true, null)]);
+    expect(screen.queryByTestId("exp-outcome-choice")).toBeNull();
+  });
+
+  it("choosing the keep side re-applies through apply_recommendation, citing the Better Trial", async () => {
+    await renderWith([REC_OFF, MAX_KEEP], [hags(true, null)]);
+    const btn = await screen.findByRole("button", { name: "Use Maximum FPS: turn Hardware-accelerated GPU scheduling back on" });
+    expect(btn).toHaveAttribute("data-trial", "exp:max");
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(btn);
+    await waitFor(() => expect(callArgs("apply_recommendation")).toEqual({ recId: "hags", recTitle: "Hardware-accelerated GPU scheduling" }));
+    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "rollback_change")).toBe(false);
+  });
+
+  it("choosing the put-back side undoes the newest live apply through rollback_change", async () => {
+    state.changes = [
+      { id: "chg-old", rec_id: "hags", rec_title: "HAGS", applied_at: "2026-07-17T00:00:00Z", status: "rolled_back", is_still_active: false, active_check: null },
+      { id: "chg-live", rec_id: "hags", rec_title: "HAGS", applied_at: "2026-07-18T00:00:00Z", status: "applied", is_still_active: true, active_check: "on" },
+      { id: "chg-other", rec_id: "game-bar-disable", rec_title: "Game Bar", applied_at: "2026-07-19T00:00:00Z", status: "applied", is_still_active: true, active_check: "on" },
+    ];
+    await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-by-compy")]);
+    const btn = await screen.findByRole("button", { name: "Use Recommended: put Hardware-accelerated GPU scheduling back" });
+    expect(btn).not.toHaveAttribute("data-trial");
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(btn);
+    await waitFor(() => expect(callArgs("rollback_change")).toEqual({ changeId: "chg-live" }));
+    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "apply_recommendation")).toBe(false);
+  });
+
+  it("can't tell what is in effect: no switch, nothing written", async () => {
+    await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-unconfirmed")]);
+    const row = await screen.findByTestId("exp-outcome-choice-row");
+    expect(row).toHaveAttribute("data-in-effect", "unknown");
+    expect(row.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("reads in Chinese too", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-by-compy")]);
+      expect(await screen.findByTestId("exp-outcome-choice-trade")).toHaveTextContent(
+        "推荐让它保持关闭：1% 低帧下降 4%。 最高帧率会保留它：平均帧率提高 6%。",
+      );
     } finally {
       await i18n.changeLanguage("en");
     }

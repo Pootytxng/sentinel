@@ -543,6 +543,25 @@
       "recommended": "Keeps the change only if the 1% low rises beyond the noise band and the average frame rate doesn't fall beyond it.",
       "maxFps": "Keeps the change only if the average frame rate rises beyond the noise band and the 1% low doesn't fall beyond it."
     },
+    "outcomeChoice": {
+      "label": "Two results that disagree",
+      "keeps": "{{outcome}} would keep it: {{why}}.",
+      "keepsOff": "{{outcome}} keeps it off: {{why}}.",
+      "reason": {
+        "lowUp": "1% lows up {{pct}}%",
+        "avgUp": "average up {{pct}}%",
+        "lowFell": "1% lows fell {{pct}}%",
+        "avgFell": "average fell {{pct}}%",
+        "lowFlat": "1% lows didn't rise beyond the noise ({{pct}}%)",
+        "avgFlat": "average didn't rise beyond the noise ({{pct}}%)",
+        "avgUnknown": "the average couldn't be compared"
+      },
+      "inEffect": "In effect now: {{outcome}}.",
+      "useKeep": "Use {{outcome}}: turn {{change}} back on",
+      "useOff": "Use {{outcome}}: put {{change}} back",
+      "cantTell": "Compy can't read whether this change is on now, so it doesn't offer to switch.",
+      "notFound": "Compy couldn't find {{change}} applied, so nothing was undone. Check it in Test → Applied & history."
+    },
     "pairChanged": "What differed: {{changed}} changed between the before and after sessions.",
     "pairUnrecorded": "What differed: one of the sessions didn't record {{unrecorded}}.",
     "pairBoth": "What differed: {{changed}} changed, and one of the sessions didn't record {{unrecorded}}.",
