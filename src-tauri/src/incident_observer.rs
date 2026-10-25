@@ -803,7 +803,7 @@ mod tests {
     }
 
     fn report(incidents: Vec<Incident>) -> BlackBoxReport {
-        BlackBoxReport { incidents, skipped_sources: Vec::new() }
+        BlackBoxReport { incidents, skipped_sources: Vec::new(), clean_judgeable_from: None }
     }
 
     // ── Seeding ─────────────────────────────────────────────────────────────────────────────────

@@ -33,7 +33,7 @@ use std::collections::HashMap;
 use crate::sessions::SessionSummary;
 
 /// Newest N incidents shown (spec cap).
-pub(crate) const MAX_INCIDENTS: usize = 25;
+const MAX_INCIDENTS: usize = 25;
 /// A crash often lands just as the game stops presenting; allow this much slack after a session's
 /// recorded end before we stop calling it "during that session". Conservative — never invents a
 /// session, only widens the match window slightly.
@@ -177,6 +177,12 @@ pub(crate) struct Incident {
 pub(crate) struct BlackBoxReport {
     pub(crate) incidents: Vec<Incident>,
     pub(crate) skipped_sources: Vec<String>,
+    /// P6-changed: how far back this scan is complete. Every capped read (an Event Log channel that
+    /// returned its full `EVENTS_PER_CHANNEL`, a full Reliability read, the `MAX_INCIDENTS` cut) can
+    /// have dropped crashes older than its oldest kept row; this is the LATEST such row, so before it
+    /// "no crash on record during that session" can't be said. `None` = no read was cut. Internal.
+    #[serde(skip)]
+    pub(crate) clean_judgeable_from: Option<DateTime<Utc>>,
 }
 
 // ─── Pure assembly pipeline ────────────────────────────────────────────────
@@ -1466,6 +1472,9 @@ fn wer_detail(event_type: &str, app: Option<&str>, module: Option<&str>, code: O
 /// Read the friendly Reliability timeline (`Win32_ReliabilityRecords`, read-only CIM). Filtered to
 /// the crash-relevant event IDs; the rest (installs, updates) are dropped at the source. A run
 /// failure → a "couldn't read" skip; an empty result on a clean machine → no skip.
+/// The Reliability read keeps the newest this many rows (`Select-Object -First 120` below).
+const RELIABILITY_MAX_ROWS: usize = 120;
+
 fn collect_reliability() -> (Vec<ReliabilityRecord>, Option<String>) {
     let script = "$ErrorActionPreference='SilentlyContinue';\
 @(Get-CimInstance -ClassName Win32_ReliabilityRecords -ErrorAction SilentlyContinue |\
@@ -1525,7 +1534,7 @@ pub(crate) fn get_crash_blackbox() -> BlackBoxReport {
     let mut report = collect_crash_blackbox();
     // P6-changed: "Changed before this" on each incident — one read-only gather for the scan. Only
     // the station asks for it; the background Care observer reads `collect_crash_blackbox` alone.
-    crate::intelligence::attach_changed_before(&mut report.incidents);
+    crate::intelligence::attach_changed_before(&mut report);
     report
 }
 
@@ -1540,10 +1549,69 @@ pub(crate) fn collect_crash_blackbox() -> BlackBoxReport {
         skipped_sources.push(note);
     }
     let sessions = crate::sessions::get_session_summaries();
+    report_from(events, wer, reliability, &sessions, skipped_sources)
+}
+
+/// Pure: the report from already-fetched rows, with the scan's truncation point computed BEFORE the
+/// rows are consumed.
+fn report_from(
+    events: Vec<RawEvent>,
+    wer: Vec<WerReport>,
+    reliability: Vec<ReliabilityRecord>,
+    sessions: &[SessionSummary],
+    skipped_sources: Vec<String>,
+) -> BlackBoxReport {
+    let read_cut = read_truncated_from(&events, &reliability);
+    let incidents = assemble_incidents(events, wer, reliability, sessions);
+    let incident_cut = (incidents.len() >= MAX_INCIDENTS)
+        .then(|| incidents.iter().filter_map(|i| parse_ts(&i.when)).map(|t| t.with_timezone(&Utc)).min())
+        .flatten();
     BlackBoxReport {
-        incidents: assemble_incidents(events, wer, reliability, &sessions),
+        incidents,
         skipped_sources,
+        clean_judgeable_from: read_cut.max(incident_cut),
     }
+}
+
+/// Pure: the latest "oldest kept row" among the capped reads that came back full. A full Event Log
+/// channel (one blue screen alone can be several System rows) or a full Reliability read may have
+/// pushed older crashes out while the incident list stays under its cap.
+fn read_truncated_from(events: &[RawEvent], reliability: &[ReliabilityRecord]) -> Option<DateTime<Utc>> {
+    let mut cuts: Vec<DateTime<Utc>> = Vec::new();
+    let mut channels: Vec<&str> = Vec::new();
+    for (channel, _, _) in EVENT_LOG_SOURCES {
+        if !channels.contains(channel) {
+            channels.push(*channel);
+        }
+    }
+    for channel in channels {
+        let rows: Vec<&RawEvent> = events
+            .iter()
+            .filter(|e| {
+                EVENT_LOG_SOURCES
+                    .iter()
+                    .any(|(c, p, _)| *c == channel && p.eq_ignore_ascii_case(e.provider.trim()))
+            })
+            .collect();
+        if rows.len() >= EVENTS_PER_CHANNEL as usize {
+            if let Some(t) = rows.iter().filter_map(|e| parse_ts(&e.time)).map(|t| t.with_timezone(&Utc)).min() {
+                cuts.push(t);
+            }
+        }
+    }
+    if reliability.len() >= RELIABILITY_MAX_ROWS {
+        if let Some(t) = reliability.iter().filter_map(|r| parse_ts(&r.time)).map(|t| t.with_timezone(&Utc)).min() {
+            cuts.push(t);
+        }
+    }
+    cuts.into_iter().max()
+}
+
+/// Test seam: raw Event Log JSON + sessions → the report, through the real pipeline (truncation
+/// point included).
+#[cfg(test)]
+pub(crate) fn report_from_event_json(json: &str, sessions: &[SessionSummary]) -> BlackBoxReport {
+    report_from(parse_events_json(json), Vec::new(), Vec::new(), sessions, Vec::new())
 }
 
 // ─── Pure-core tests (the collectors are a thin edge; logic + invariants are pinned here) ────────
@@ -2115,7 +2183,7 @@ mod blackbox_tests {
     #[test]
     fn serde_shape_is_stable_for_the_ts_contract() {
         let events = vec![ev("Microsoft-Windows-Kernel-Power", 41, "2026-06-12T21:42:00-07:00", "rebooted without cleanly shutting down", serde_json::Value::Null)];
-        let report = BlackBoxReport { incidents: from_events(events, &[]), skipped_sources: vec!["x".into()] };
+        let report = BlackBoxReport { incidents: from_events(events, &[]), skipped_sources: vec!["x".into()], clean_judgeable_from: None };
         let v = serde_json::to_value(&report).expect("serializes");
         assert!(v.get("incidents").and_then(|i| i.as_array()).is_some());
         assert!(v.get("skipped_sources").and_then(|s| s.as_array()).is_some());

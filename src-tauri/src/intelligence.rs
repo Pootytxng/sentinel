@@ -2724,13 +2724,13 @@ fn changed_before_incident_impl(
     }
 }
 
-fn attach_changed_before_from(g: &Gathered, incidents: &mut [crate::blackbox::Incident]) {
+fn attach_changed_before_from(g: &Gathered, report: &mut crate::blackbox::BlackBoxReport) {
     let asm = assemble_from(g);
+    // The scan is complete only back to its truncation point (any capped read that came back full,
+    // or the incident cut); before that, "clean" can't be judged.
+    let clean_judgeable_from = report.clean_judgeable_from;
+    let incidents = &mut report.incidents;
     let times: Vec<Option<DateTime<Utc>>> = incidents.iter().map(|i| parse_utc(&i.when)).collect();
-    // A capped scan only covers back to its oldest row; before that, "clean" can't be judged.
-    let clean_judgeable_from = (incidents.len() >= crate::blackbox::MAX_INCIDENTS)
-        .then(|| times.iter().flatten().min().copied())
-        .flatten();
     for (idx, inc) in incidents.iter_mut().enumerate() {
         let Some(at) = times[idx] else { continue };
         let others: Vec<DateTime<Utc>> = times
@@ -2752,12 +2752,12 @@ fn attach_changed_before_from(g: &Gathered, incidents: &mut [crate::blackbox::In
 
 /// Edge: one read-only gather for the whole scan, then "Changed before this" on every incident.
 /// No identity probe is started — the answer is what Compy already holds.
-pub(crate) fn attach_changed_before(incidents: &mut [crate::blackbox::Incident]) {
-    if incidents.is_empty() {
+pub(crate) fn attach_changed_before(report: &mut crate::blackbox::BlackBoxReport) {
+    if report.incidents.is_empty() {
         return;
     }
     let g = gather();
-    attach_changed_before_from(&g, incidents);
+    attach_changed_before_from(&g, report);
 }
 
 /// Home's single concise line — only when the latest session shows a meaningful delta.
@@ -4729,5 +4729,31 @@ mod tests {
         let r = changed_before_incident_impl(&g, &asm, inc, at(inc), &[], Some(at("2026-10-21T00:00:00Z")));
         assert_eq!(r.anchor_kind, "clean");
         assert_eq!(r.anchor.unwrap().started_at, "2026-10-22T10:00:00Z");
+    }
+
+    #[test]
+    fn changed_before_a_full_event_log_channel_under_the_incident_cap_cannot_call_an_older_session_clean() {
+        // Review r2: the System channel returns its newest 40 rows, and one shutdown can be several
+        // rows (Kernel-Power 41 + EventLog 6008 here). 40 rows → 20 incidents, under the 25 cap — yet
+        // anything older than the oldest row may have been pushed out, so the Sep 20 session can't
+        // be called clean. Through the real scan pipeline: JSON → report → attach.
+        let mut rows = Vec::new();
+        for h in 0..20 {
+            let t = format!("2026-10-01T{h:02}:00:00.0000000-07:00");
+            rows.push(serde_json::json!({"time": t, "id": 41, "provider": "Microsoft-Windows-Kernel-Power",
+                "message": "The system has rebooted without cleanly shutting down first.", "props": []}));
+            rows.push(serde_json::json!({"time": t, "id": 6008, "provider": "EventLog",
+                "message": "The previous system shutdown was unexpected.", "props": []}));
+        }
+        let json = serde_json::to_string(&rows).unwrap();
+        let sessions = vec![mk_session("2026-09-20T10:00:00Z", "Game.exe", 100.0, 120.0)];
+        let mut report = crate::blackbox::report_from_event_json(&json, &sessions);
+        assert!(report.incidents.len() < 25, "the scan must stay under its incident cap: {}", report.incidents.len());
+        assert_eq!(report.clean_judgeable_from, Some(at("2026-10-01T07:00:00Z")), "the full channel's oldest kept row");
+        let g = gathered_with(sessions);
+        attach_changed_before_from(&g, &mut report);
+        let cb = report.incidents[0].changed_before.as_ref().expect("attached");
+        assert_eq!(cb.anchor.as_ref().unwrap().started_at, "2026-09-20T10:00:00Z");
+        assert_eq!(cb.anchor_kind, "measured", "a session older than a truncated channel was called clean");
     }
 }
