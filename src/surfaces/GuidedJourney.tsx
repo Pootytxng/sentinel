@@ -36,6 +36,13 @@
 // sees the game, so it has to run first. Readings taken while another window is in front are already
 // left out of the session (P4-comparable).
 //
+// P5-resume (ROADMAP P5 step 5; ENGINE §7): the journey survives a restart and spans days because
+// its progress is derived from the experiments store (journey-resume.ts). While no journey runs, the
+// panel says "N of M tested · Next: <change>"; the button continues from there, reusing the newest
+// judged Trial's as-is session under P5-continue's rule; "Stop here" ends the journey for that game
+// without touching the PC and says what stays on. A Trial left Running is named on that line the same
+// way the bench's interrupted banner names it (JourneyProgressLine).
+//
 // The journey lives in a module-level store, not component state, so the owner can click around
 // Compy while he plays: leaving the room keeps it running, and the panel shows it again on return.
 // Only the window really going away (a reload, Compy closing: `pagehide` / `beforeunload`) ends it
@@ -43,7 +50,7 @@
 // stays on, its Trial Running, until the owner concludes or restores it in Test; the bench says so
 // with a banner on its next load.
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
@@ -52,6 +59,7 @@ import { writeLedger } from "../data/ledger-write";
 import { prettyGameName } from "./game-name";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { asProgress, enoughLine, setJourneyRecording, type CaptureProgress } from "./journey-enough";
+import { journeyStopped, pickUpJourney, stopJourneyHere, type JourneyProgress } from "./journey-resume";
 
 export type JourneyOutcome = "recommended" | "max-fps";
 
@@ -516,6 +524,9 @@ export function GuidedJourney({
   nextReuses = false,
   refresh,
   onFinished,
+  progress = null,
+  resumeReuses = false,
+  stillOn = [],
 }: {
   /** The detected / last-played game (the newest usable session's), or null before any session. */
   game: string | null;
@@ -534,24 +545,80 @@ export function GuidedJourney({
   refresh: () => Promise<void>;
   /** Called when the owner closes a finished journey, with the Trial it concluded (if any). */
   onFinished?: (exp: JourneyExperiment | null) => void;
+  /** P5-resume: this game's progress, derived from the experiments store (journey-resume.ts). */
+  progress?: JourneyProgress | null;
+  /** Whether `progress.asIs` is still reusable (`reusableAsIs`): continuing is one session. */
+  resumeReuses?: boolean;
+  /** The kept changes on that game whose live check reads on (`stillOnFor`). */
+  stillOn?: string[];
 }) {
   const { t } = useTranslation();
+  // "Stop here" / "Pick up" write only localStorage; this repaints the panel after either.
+  const [, repaint] = useState(0);
   const p = useJourneyPhase();
   const recorded = useJourneyProgress();
   const k = "lab.experimentBench.journey";
   const gameName = (g: string | null) => (g ? prettyGameName(g) || g : null);
 
+  // P5-resume: a journey already under way on this game (something tested there).
+  const resuming = progress != null && progress.tested > 0 && progress.unfinished == null;
+  const stopLine = (pr: JourneyProgress) =>
+    `${t(`${k}.stoppedHere`, { tested: pr.tested, total: pr.total })} ${
+      stillOn.length > 0 ? t(`${k}.stillOn`, { changes: stillOn.join(", ") }) : t(`${k}.noneOn`)
+    }`;
+
   if (p.kind === "idle") {
-    if (!change) return null;
+    if (resuming && journeyStopped(progress)) {
+      return (
+        <div className="exp-order exp-journey" data-testid="journey" data-phase="stopped-here">
+          <p className="exp-note" data-testid="journey-progress">
+            {stopLine(progress)}
+          </p>
+          {change && (
+            <button
+              type="button"
+              className="exp-cta-ghost"
+              onClick={() => {
+                pickUpJourney(progress.game);
+                repaint((n) => n + 1);
+              }}
+            >
+              {t(`${k}.pickUp`)}
+            </button>
+          )}
+        </div>
+      );
+    }
+    if (!change) {
+      if (!resuming) return null;
+      return (
+        <div className="exp-order exp-journey" data-testid="journey">
+          <p className="exp-note" data-testid="journey-progress">
+            {t(`${k}.progressDone`, { tested: progress.tested, total: progress.total })}
+          </p>
+        </div>
+      );
+    }
     const name = gameName(game);
+    // Continuing reuses the newest judged Trial's as-is session when it is still reusable.
+    const reuseId = resuming && resumeReuses ? progress.asIs : null;
     const start = () => {
       const hypothesis = t("lab.experimentBench.hypothesisWithBaseline", { metric: t("lab.experimentBench.hypothesisMetricFallback") });
-      void runJourney({ change, outcome, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, game);
+      void runJourney({ change, outcome, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, game, reuseId);
     };
     return (
       <div className="exp-order exp-journey" data-testid="journey">
+        {resuming && (
+          <p className="exp-note" data-testid="journey-progress">
+            {t(`${k}.progress`, { tested: progress.tested, total: progress.total, change: change.title })}
+          </p>
+        )}
         <p className="exp-note" data-testid="journey-plan">
-          {name ? t(`${k}.planGame`, { game: name, change: change.title }) : t(`${k}.plan`, { change: change.title })}
+          {reuseId
+            ? t(`${k}.planResume`, { game: name ?? t("lab.experimentBench.yourGame"), change: change.title })
+            : name
+              ? t(`${k}.planGame`, { game: name, change: change.title })
+              : t(`${k}.plan`, { change: change.title })}
         </p>
         <div className="exp-running-actions" role="group" aria-label={t(`${k}.aim`)}>
           {(["recommended", "max-fps"] as const).map((o) => (
@@ -569,6 +636,18 @@ export function GuidedJourney({
         <button type="button" className="exp-cta" disabled={!canStart} onClick={start}>
           {t(`${k}.button`)}
         </button>
+        {resuming && (
+          <button
+            type="button"
+            className="exp-cta-ghost"
+            onClick={() => {
+              stopJourneyHere(progress.game);
+              repaint((n) => n + 1);
+            }}
+          >
+            {t(`${k}.stopHere`)}
+          </button>
+        )}
         <p className="exp-fineprint">{t(`${k}.oneChange`)}</p>
       </div>
     );
@@ -680,6 +759,19 @@ export function GuidedJourney({
           {t(nextReuses ? `${k}.next` : `${k}.nextFresh`, { change: next.title })}
         </button>
       )}
+      {p.kind === "result" && next && (
+        // P5-resume: the owner ends the journey here; nothing is undone (ENGINE §7).
+        <button
+          type="button"
+          className="exp-cta-ghost"
+          onClick={() => {
+            stopJourneyHere(p.exp.game);
+            setPhase({ kind: "idle" });
+          }}
+        >
+          {t(`${k}.stopHere`)}
+        </button>
+      )}
       {p.kind === "result" && next === null && (
         <p className="exp-note" data-testid="journey-done">
           {t(`${k}.nothingLeft`)}
@@ -699,5 +791,23 @@ export function GuidedJourney({
         </button>
       )}
     </div>
+  );
+}
+
+/** P5-resume: the progress line while a Trial of the game is still Running, so it says what the
+ *  bench's running panel (and, after a restart, its interrupted banner) says: that change is on and
+ *  unfinished, never "Next". */
+export function JourneyProgressLine({ progress, interrupted }: { progress: JourneyProgress | null; interrupted: boolean }) {
+  const { t } = useTranslation();
+  if (!progress?.unfinished || progress.total === 0) return null;
+  const k = "lab.experimentBench.journey";
+  return (
+    <p className="exp-note" data-testid="journey-progress">
+      {t(interrupted ? `${k}.progressInterrupted` : `${k}.progressTesting`, {
+        tested: progress.tested,
+        total: progress.total,
+        change: progress.unfinished.title,
+      })}
+    </p>
   );
 }
