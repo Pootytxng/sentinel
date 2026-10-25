@@ -29,6 +29,8 @@ import {
 import { useJourneyPhase } from "./GuidedJourney";
 import { CareNextStep } from "./CareNextStep";
 import { pickCareStep, isLifted, type StutterResult } from "./care-next-step";
+import { CareHonestEnd } from "./CareHonestEnd";
+import { honestEndFor, splitSkips } from "./care-honest-end";
 import "./BlackBox.css";
 
 // Black Box v1 (Paramedic Mode) — crash/freeze evidence reader, rendered as a Lab instrument.
@@ -165,6 +167,9 @@ export function BlackBox({
   const shownIncidents = report && !scanning ? report.incidents : null;
   const careStep = useMemo(() => pickCareStep(shownIncidents, stutter), [shownIncidents, stutter]);
 
+  // P6-unknown: only some skips need admin; the rest are reader failures (a re-scan, not admin).
+  const skips = splitSkips(report);
+
   const selectedMissing =
     !!selectedIncidentId &&
     !!report &&
@@ -184,6 +189,11 @@ export function BlackBox({
         incidents={shownIncidents ?? []}
         sessions={stutter?.sessions ?? []}
         skipped={!!report && report.skipped_sources.length > 0}
+        skippedNeedsAdmin={skips.admin.length > 0}
+      />
+      {/* P6-unknown: no step → the honest end takes the slot (never both). */}
+      <CareHonestEnd
+        end={honestEndFor(careStep, shownIncidents, { admin: skips.admin.length, other: skips.other.length }, stutter)}
       />
 
       <button className="bb-scan cmp-door" onClick={scan} disabled={scanning}>
@@ -200,7 +210,11 @@ export function BlackBox({
         <div className="bb-results">
           {report.incidents.length === 0 ? (
             report.skipped_sources.length > 0 ? (
-              <p className="bb-empty">{t("gaming.blackBox.emptyWithSkipped")}</p>
+              <p className="bb-empty">
+                {skips.admin.length > 0
+                  ? t("gaming.blackBox.emptyWithSkipped")
+                  : t("gaming.blackBox.emptyWithSkippedRetry")}
+              </p>
             ) : (
               <p className="bb-empty">{t("gaming.blackBox.emptyClean")}</p>
             )
@@ -225,8 +239,19 @@ export function BlackBox({
 
           {report.skipped_sources.length > 0 && (
             <p className="bb-skipped">
-              {t("gaming.blackBox.skippedIntro", { sources: report.skipped_sources.join("; ") })}{" "}
-              {t("gaming.blackBox.skippedRunAdmin", { count: report.skipped_sources.length })}
+              {skips.admin.length > 0 && (
+                <>
+                  {t("gaming.blackBox.skippedIntro", { sources: skips.admin.join("; ") })}{" "}
+                  {t("gaming.blackBox.skippedRunAdmin", { count: skips.admin.length })}
+                </>
+              )}
+              {skips.admin.length > 0 && skips.other.length > 0 && " "}
+              {skips.other.length > 0 && (
+                <>
+                  {t("gaming.blackBox.skippedReaderIntro", { sources: skips.other.join("; ") })}{" "}
+                  {t("gaming.blackBox.skippedScanAgain")}
+                </>
+              )}
             </p>
           )}
         </div>

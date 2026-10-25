@@ -264,12 +264,13 @@ describe("the Care view renders exactly one next step at its top", () => {
     expect(container.textContent!.split("Roll back the GPU driver in the Trust Ledger").length - 1).toBe(1);
   });
 
-  it("with neither, nothing is shown", async () => {
+  it("with neither, no step is shown: the honest end takes the slot (P6-unknown)", async () => {
     h.incidents = [inc("2026-10-20T10:00:00Z", { assessed: false })];
     const { container } = render(<BlackBox />);
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
     await waitFor(() => expect(container.querySelector(".bb-list")).not.toBeNull());
     expect(container.querySelector(".bb-next")).toBeNull();
+    expect(container.querySelector(".bb-honest-unknown")!.textContent).toMatch(/Not enough evidence yet/);
   });
 });
 

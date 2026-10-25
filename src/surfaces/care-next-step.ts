@@ -48,6 +48,8 @@ export type CareStep =
       headline: string;
       detail: string;
       research: boolean;
+      /** The record's reading is beyond what Compy can safely narrow down (`beyond_us`). */
+      beyond: boolean;
       kind: string;
       /** Lower-cased faulting app for App crash / App hang; null where the kind alone is the match. */
       app: string | null;
@@ -92,6 +94,7 @@ export function pickCareStep(
       headline: a.next_step.headline,
       detail: a.next_step.detail,
       research: a.next_step.research_only,
+      beyond: !!a.beyond_us,
       kind: inc.tag,
       app,
       appLabel: app ? (inc.receipt?.faulting_app ?? null) : null,

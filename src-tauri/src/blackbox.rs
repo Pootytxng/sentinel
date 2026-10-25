@@ -177,6 +177,11 @@ pub(crate) struct Incident {
 pub(crate) struct BlackBoxReport {
     pub(crate) incidents: Vec<Incident>,
     pub(crate) skipped_sources: Vec<String>,
+    /// P6-unknown: the entries of `skipped_sources` that need administrator to read (the WER kernel
+    /// reports, the Minidump folder). The rest are reader failures, where a plain re-scan is the
+    /// honest suggestion, not "run as admin".
+    #[serde(default)]
+    pub(crate) skipped_needs_admin: Vec<String>,
     /// P6-changed: how far back this scan is complete. Every capped read (an Event Log channel that
     /// returned its full `EVENTS_PER_CHANNEL`, a full Reliability read, the WER folder cap, the
     /// `MAX_INCIDENTS` cut) can have dropped crashes older than its oldest kept row; this is the
@@ -1602,13 +1607,25 @@ pub(crate) fn collect_crash_blackbox() -> BlackBoxReport {
     let (events, ev_skip) = collect_event_log();
     let (wer, wer_skip, wer_cut) = collect_wer();
     let (reliability, rel_skip) = collect_reliability();
-    let mut skipped_sources: Vec<String> =
-        [ev_skip, wer_skip, rel_skip].into_iter().flatten().collect();
-    if let Some(note) = minidump_skip_note() {
-        skipped_sources.push(note);
-    }
+    let (skipped_sources, skipped_needs_admin) = classify_skips(ev_skip, wer_skip, rel_skip, minidump_skip_note());
     let sessions = crate::sessions::get_session_summaries();
-    report_from(events, wer, wer_cut, reliability, &sessions, skipped_sources)
+    let mut report = report_from(events, wer, wer_cut, reliability, &sessions, skipped_sources);
+    report.skipped_needs_admin = skipped_needs_admin;
+    report
+}
+
+/// Pure: every skipped source in scan order, and the subset that needs administrator. Only the WER
+/// kernel reports and the Minidump folder need admin; the Event Log and Reliability notes are
+/// "couldn't run the reader" failures, where running as admin is not the honest suggestion.
+fn classify_skips(
+    event_log: Option<String>,
+    wer: Option<String>,
+    reliability: Option<String>,
+    minidump: Option<String>,
+) -> (Vec<String>, Vec<String>) {
+    let admin: Vec<String> = [wer.clone(), minidump.clone()].into_iter().flatten().collect();
+    let all: Vec<String> = [event_log, wer, reliability, minidump].into_iter().flatten().collect();
+    (all, admin)
 }
 
 /// Pure: the report from already-fetched rows, with the scan's truncation point computed BEFORE the
@@ -1629,6 +1646,7 @@ fn report_from(
     BlackBoxReport {
         incidents,
         skipped_sources,
+        skipped_needs_admin: Vec::new(),
         clean_judgeable_from: read_cut.max(incident_cut),
         since_last_worked: None,
     }
@@ -2242,12 +2260,29 @@ mod blackbox_tests {
     }
 
     #[test]
+    fn only_wer_and_minidump_skips_need_admin() {
+        let note = |s: &str| Some(s.to_string());
+        let (all, admin) = classify_skips(
+            note("Windows Event Log (couldn't run the reader)"),
+            note("WER kernel"),
+            note("Reliability history (couldn't run the reader)"),
+            note("Minidump"),
+        );
+        assert_eq!(all.len(), 4);
+        assert_eq!(admin, vec!["WER kernel".to_string(), "Minidump".to_string()]);
+        let (all, admin) = classify_skips(note("Windows Event Log (couldn't run the reader)"), None, None, None);
+        assert_eq!(all.len(), 1);
+        assert!(admin.is_empty(), "a reader failure never asks for admin");
+    }
+
+    #[test]
     fn serde_shape_is_stable_for_the_ts_contract() {
         let events = vec![ev("Microsoft-Windows-Kernel-Power", 41, "2026-06-12T21:42:00-07:00", "rebooted without cleanly shutting down", serde_json::Value::Null)];
-        let report = BlackBoxReport { incidents: from_events(events, &[]), skipped_sources: vec!["x".into()], clean_judgeable_from: None, since_last_worked: None };
+        let report = BlackBoxReport { incidents: from_events(events, &[]), skipped_sources: vec!["x".into()], ..Default::default() };
         let v = serde_json::to_value(&report).expect("serializes");
         assert!(v.get("incidents").and_then(|i| i.as_array()).is_some());
         assert!(v.get("skipped_sources").and_then(|s| s.as_array()).is_some());
+        assert!(v.get("skipped_needs_admin").and_then(|s| s.as_array()).is_some());
         let inc = &v["incidents"][0];
         for key in ["headline", "tag", "when", "when_display", "vitals", "receipt"] {
             assert!(inc.get(key).is_some(), "missing key {key}");

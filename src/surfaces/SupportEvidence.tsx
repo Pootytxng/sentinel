@@ -24,7 +24,9 @@ const PROJECTIONS: SupportProjection[] = ["consumer", "technical", "support"];
 
 type Busy = "preview" | "export" | "clear" | null;
 
-export function SupportEvidence() {
+/** `allowClear` (default true): the Care view's "Beyond Compy" box passes false, so the permanent
+ *  delete isn't offered right where the user is about to share the record. */
+export function SupportEvidence({ allowClear = true }: { allowClear?: boolean } = {}) {
   const { t } = useTranslation();
   const [preview, setPreview] = useState<EvidencePreview | null>(null);
   const [projection, setProjection] = useState<SupportProjection>("consumer");
@@ -179,6 +181,7 @@ export function SupportEvidence() {
         </div>
       )}
 
+      {allowClear && (
       <div className="sev-clear">
         {confirmClear ? (
           <>
@@ -211,6 +214,7 @@ export function SupportEvidence() {
           </button>
         )}
       </div>
+      )}
       </div>
     </BentoTile>
   );

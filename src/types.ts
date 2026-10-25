@@ -614,6 +614,9 @@ export type BlackBoxReport = {
   skipped_sources: string[];
   /** Station scan only; absent from the background observer's report. */
   since_last_worked?: SinceLastWorked | null;
+  /** P6-unknown: the entries of `skipped_sources` that need administrator. The rest are reader
+   *  failures, where a re-scan (not "run as admin") is the honest suggestion. */
+  skipped_needs_admin?: string[];
 };
 
 // The Home card the Care observer surfaces (mirrors src-tauri/src/incident_observer.rs
