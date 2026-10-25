@@ -6,7 +6,9 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import "../i18n";
 
-const state = vi.hoisted(() => ({ phase: { kind: "idle" } as { kind: string; [k: string]: unknown } }));
+import type { JourneyPhase } from "./GuidedJourney";
+
+const state = vi.hoisted(() => ({ phase: { kind: "idle" } as unknown }));
 
 vi.mock("./GuidedJourney", async (orig) => ({
   ...(await orig<typeof import("./GuidedJourney")>()),
@@ -90,12 +92,29 @@ describe("P5-outcomes: no switch while the journey is under way", () => {
     expect(row.querySelectorAll("button")).toHaveLength(1);
   });
 
-  for (const phase of [
+  // Every non-idle JourneyPhase kind (GuidedJourney.tsx), each in its minimal valid shape.
+  const phases: JourneyPhase[] = [
     { kind: "as-is", game: "Valorant", change: "HAGS" },
     { kind: "uneven", game: "Valorant", change: "HAGS", grade: { kind: "untraced" }, final: false },
+    { kind: "stopped" },
+    { kind: "reading", change: "HAGS" },
     { kind: "with-change", game: "Valorant", change: "HAGS" },
     { kind: "judging", change: "HAGS" },
-  ]) {
+    {
+      kind: "result",
+      exp: { id: "exp:max", rec_id: "hags", rec_title: "HAGS", game: "Valorant", status: "kept", verdict: "improved" },
+      asIs: null,
+    },
+    { kind: "too-short", samples: null },
+    { kind: "wrong-game", played: "cs2.exe", planned: "Valorant" },
+    { kind: "not-started", reason: "refused" },
+    { kind: "restored", change: "HAGS", why: "error", reason: "refused" },
+    { kind: "restore-failed", change: "HAGS", reason: "refused" },
+  ];
+  it("covers every non-idle phase", () => {
+    expect(new Set(phases.map((p) => p.kind)).size).toBe(12);
+  });
+  for (const phase of phases) {
     it(`${phase.kind}: the trade shows, the switch does not`, async () => {
       state.phase = phase;
       render(<ExperimentBench />);
