@@ -357,7 +357,7 @@
       "plan": "2 sessions of about 10 min: one as-is, then one with {{change}}.",
       "planGame": "{{game}}: 2 sessions of about 10 min: one as-is, then one with {{change}}.",
       "aim": "What to aim for",
-      "oneChange": "One change per run. Compy keeps it only if it measures better, and puts it back otherwise. If Compy closes or you leave this page mid-test, the change stays on until you conclude or restore it in Test.",
+      "oneChange": "One change per run. Compy keeps it only if it measures better, and puts it back otherwise. You can use the rest of Compy while you play. If Compy closes mid-test, the change stays on until you conclude or restore it in Test.",
       "asIs": "Session 1 of 2: play {{game}} as usual for about 10 minutes. Compy stops measuring when you close the game.",
       "asIsNoGame": "Session 1 of 2: play your game as usual for about 10 minutes. Compy stops measuring when you close the game.",
       "withChange": "Session 2 of 2: {{change}} is on. Play {{game}} the same way for about 10 minutes, then close the game.",

@@ -17,11 +17,14 @@
 // sees the game, so it has to run first. Readings taken while another window is in front are already
 // left out of the session (P4-comparable).
 //
-// Leaving the room, a reload or closing Compy mid-journey ends it (`abortJourney`): the capture it
-// started is stopped and nothing is judged. A change already on stays on, its Trial Running, until
-// the owner concludes or restores it in Test; the bench says so with a banner on its next load.
+// The journey lives in a module-level store, not component state, so the owner can click around
+// Compy while he plays: leaving the room keeps it running, and the panel shows it again on return.
+// Only the window really going away (a reload, Compy closing: `pagehide` / `beforeunload`) ends it
+// early (`abortJourney`): the capture it started is stopped and nothing is judged. A change already on
+// stays on, its Trial Running, until the owner concludes or restores it in Test; the bench says so
+// with a banner on its next load.
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
@@ -114,6 +117,7 @@ export function useJourneyPhase(): JourneyPhase {
 
 /** Tests only: back to idle between cases, with short timings. */
 export function resetJourneyForTests(timing: { pollMs: number; saveWaitMs: number } = { pollMs: 2000, saveWaitMs: 8000 }) {
+  abortJourney();
   finishPlaying = null;
   stopPlaying = null;
   current = null;
@@ -204,7 +208,7 @@ type RunArgs = {
 type Run = { aborted: boolean; capturing: boolean };
 let current: Run | null = null;
 
-/** The room closed mid-journey (left, reloaded, Compy closing): stop the capture this journey started
+/** The window went away mid-journey (a reload, Compy closing): stop the capture this journey started
  *  and end the flow without judging anything. A change already on stays on, its Trial Running, and
  *  the bench says so on its next load (`interruptedJourneyId`); nothing is restored behind the owner's
  *  back and nothing is concluded from a session he didn't finish. */
@@ -247,6 +251,9 @@ async function runJourney(args: RunArgs, game: string | null) {
   const { change } = args;
   const run: Run = { aborted: false, capturing: false };
   current = run;
+  // Only a real unload ends the journey early; a room switch unmounts the panel and nothing else.
+  window.addEventListener("pagehide", abortJourney);
+  window.addEventListener("beforeunload", abortJourney);
   const left = () => run.aborted;
   // Every phase this run sets goes through here, so an aborted run never repaints the room.
   const say = (p: JourneyPhase) => {
@@ -346,6 +353,8 @@ async function runJourney(args: RunArgs, game: string | null) {
     tagRunning(null);
   } finally {
     if (current === run) current = null;
+    window.removeEventListener("pagehide", abortJourney);
+    window.removeEventListener("beforeunload", abortJourney);
   }
 }
 
@@ -377,8 +386,6 @@ export function GuidedJourney({
   const p = useJourneyPhase();
   const k = "lab.experimentBench.journey";
   const gameName = (g: string | null) => (g ? prettyGameName(g) || g : null);
-  // The room closing ends the journey and stops its capture (see `abortJourney`).
-  useEffect(() => () => abortJourney(), []);
 
   if (p.kind === "idle") {
     if (!change) return null;

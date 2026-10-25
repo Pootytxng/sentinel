@@ -293,20 +293,35 @@ describe("P5-guided: one button runs the whole Trial", () => {
     await waitFor(() => expect(calls("start_experiment")).toHaveLength(1));
   });
 
-  it("leaving mid-session 2 stops the capture, judges nothing, and the relaunch says the test was interrupted", async () => {
+  it("a room switch keeps the journey and its capture; only the window going away stops them", async () => {
     state.closesAfter = null;
     const first = render(<ExperimentBench />);
     await press();
     fireEvent.click(await screen.findByRole("button", { name: "Done playing" }));
     await screen.findByText(/Session 2 of 2: HAGS is on/);
     expect(calls("stop_fps_capture")).toHaveLength(1);
+
+    // Leaving the room unmounts the panel: the journey keeps polling, capture keeps running.
     first.unmount();
+    const readsAtLeave = state.reads;
+    await waitFor(() => expect(state.reads).toBeGreaterThan(readsAtLeave + 3));
+    expect(calls("stop_fps_capture")).toHaveLength(1);
+
+    // Coming back shows the running journey again, not the bench's running panel.
+    render(<ExperimentBench />);
+    expect(await screen.findByText(/Session 2 of 2: HAGS is on/)).toBeTruthy();
+    expect(screen.queryByTestId("experiment-running")).toBeNull();
+
+    // The window really going away (a reload, Compy closing) stops the capture and judges nothing.
+    window.dispatchEvent(new Event("pagehide"));
     expect(calls("stop_fps_capture")).toHaveLength(2);
     await new Promise((r) => setTimeout(r, 60));
     expect(calls("conclude_experiment")).toHaveLength(0);
     expect(calls("restore_experiment")).toHaveLength(0);
     expect(state.experiments[0]).toMatchObject({ status: "running" });
 
+    // What the relaunch sees: the interrupted-test banner over the running panel.
+    cleanup();
     render(<ExperimentBench />);
     const banner = await screen.findByTestId("exp-interrupted");
     expect(banner.textContent).toBe("A test was interrupted: HAGS is still on. Conclude with your latest session or put it back.");
