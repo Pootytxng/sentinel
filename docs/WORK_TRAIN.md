@@ -149,8 +149,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - [x] **P4-candidates** `e0160644`: picker shows only changes worth testing here; reasons behind a toggle.
 - [ ] **P4-rank** Drop candidates whose likely effect is below measured noise ("too small to measure here");
       order the rest by benefit vs risk and test time; group interactions. Needs P4-noise, P4-candidates. ENGINE §3.4–3.7, §4.
-- [ ] **P4-recommended** First outcome, Recommended / Best Overall: Better only if the 1% low improves beyond
-      noise and the average doesn't drop; ties keep the default. Needs P4-sessions. ENGINE §2, §6.
+- [x] **P4-recommended** `a86fbcf5`: kept only when the 1% low rises beyond the band and the average
+      doesn't fall beyond it; 1% low down beyond the band = Worse; else No change (restored).
 - [ ] **P4-maxfps-smooth** Maximum FPS (average + 1% low) and Smoothest frame pacing (frame-time spread,
       0.1% low when samples allow) as user-picked outcomes. Needs P4-recommended. ENGINE §2.
 - [ ] **P4-next** After a Trial, propose the next ranked candidate; "Nothing else here is worth testing"
@@ -192,6 +192,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
   P4-candidates `e0160644`, P4-comparable merged `99b132e0`.
 - 2026-10-24 ~17:00 desk install of main `791babf2` (stamp-proved, attempt 1; installer 5769273D…A5A19A) so the
   owner's noise-measurement sessions count under the 453-f1 rule; RELEASE_STATE recorded.
+- 2026-10-25 morning: P4-recommended `a86fbcf5`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
