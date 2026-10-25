@@ -82,6 +82,7 @@
     "allow-get-sensor-sources",
     "allow-get-session-summaries",
     "allow-get-startup-entries",
+    "allow-get-trial-candidates",
     "allow-get-trial-state",
     "allow-hide-overlay",
     "allow-latency-measure-mouse",

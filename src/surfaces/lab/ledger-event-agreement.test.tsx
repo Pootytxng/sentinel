@@ -33,6 +33,16 @@ vi.mock("@tauri-apps/api/core", () => ({
             currently_applied: backend.applied,
           },
         ]);
+      case "get_trial_candidates":
+        return Promise.resolve([
+          {
+            id: "rec-power",
+            title: "High performance plan",
+            passes: !backend.applied,
+            reason: backend.applied ? "already-set-by-compy" : null,
+            detail: null,
+          },
+        ]);
       case "get_game_readiness":
         return Promise.resolve({
           checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
@@ -101,7 +111,7 @@ const fast: LabFastPathProps = {
   vendor: "amd",
 };
 
-const NOTHING_TO_TEST = /^No changes to test right now/;
+const NOTHING_TO_TEST = /^Nothing worth testing on this PC right now/;
 
 // The same pairing LabGround renders: the station and the bench, in one window.
 function mountRoom(onChanged: () => void) {

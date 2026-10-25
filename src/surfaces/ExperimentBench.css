@@ -94,6 +94,34 @@
   color: var(--ix-text-2);
   max-width: 64ch;
 }
+/* "Show why others aren't listed": the changes the picker leaves out, each with its one reason. */
+.exp-why-toggle {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: var(--type-label);
+  color: var(--ix-text-2);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.exp-why-toggle:focus-visible {
+  outline: 1px solid var(--ix-accent);
+  outline-offset: 2px;
+}
+.exp-why-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: var(--type-label);
+  line-height: 1.5;
+  color: var(--ix-text-2);
+  max-width: 64ch;
+  overflow-wrap: anywhere;
+}
+.exp-why-title {
+  color: var(--ix-text-1);
+}
 
 /* ── Simulator read (honest advisory — never a promise) ───────────────────── */
 .exp-sim {

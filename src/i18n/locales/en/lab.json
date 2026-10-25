@@ -390,7 +390,15 @@
     "hint": "Compy measures a baseline, applies one reversible change, measures a real session, and puts the change back unless the numbers clearly beat the noise.",
     "pickLabel": "Pick a change to test",
     "chooseChange": "Choose a change…",
-    "noChangesToTest": "No changes to test right now — every applicable change is already applied, or nothing in the catalog fits this rig.",
+    "noChangesToTest": "Nothing worth testing on this PC right now.",
+    "showWhyNotListed": "Show why others aren't listed",
+    "hideWhyNotListed": "Hide why others aren't listed",
+    "skipReason": {
+      "notForThisPc": "Doesn't fit this PC's hardware.",
+      "alreadySet": "Already set this way in Windows, not by Compy.",
+      "alreadySetByCompy": "Already set. Compy applied it.",
+      "noSafeApply": "Advice only. Compy has no safe one-click change for it, so it can't be tested."
+    },
     "readingRig": "Reading your rig…",
     "forYourRig": "For your rig:",
     "watch": "Watch:",

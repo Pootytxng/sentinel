@@ -100,12 +100,23 @@ type SimulatorReport = {
   is_promise: boolean;
 };
 
-// Only the fields the picker needs — get_recommendations returns the full Recommendation.
-type RecLite = {
+// One catalog change as the Trial picker sees it (`get_trial_candidates`, trial_candidates.rs): it
+// passes "worth testing on this PC" (applies / not already set / Compy can do it safely), or it
+// carries the first filter it failed (OPTIMIZATION_ENGINE §3.1–3.3).
+type SkipReason = "not-for-this-pc" | "already-set" | "already-set-by-compy" | "no-safe-apply";
+type TrialCandidate = {
   id: string;
   title: string;
-  eligible: boolean;
-  currently_applied: boolean;
+  passes: boolean;
+  reason: SkipReason | null;
+  detail: string | null;
+};
+
+const SKIP_REASON_KEY: Record<SkipReason, string> = {
+  "not-for-this-pc": "lab.experimentBench.skipReason.notForThisPc",
+  "already-set": "lab.experimentBench.skipReason.alreadySet",
+  "already-set-by-compy": "lab.experimentBench.skipReason.alreadySetByCompy",
+  "no-safe-apply": "lab.experimentBench.skipReason.noSafeApply",
 };
 
 // A plain (key, options?) => string signature — avoids importing react-i18next's generic TFunction
@@ -305,7 +316,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const { t } = useTranslation();
   const [gate, setGate] = useState(false);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
-  const [recs, setRecs] = useState<RecLite[]>([]);
+  const [recs, setRecs] = useState<TrialCandidate[]>([]);
+  const [showWhy, setShowWhy] = useState(false);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
 
   const [pickId, setPickId] = useState<string>("");
@@ -335,7 +347,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const reload = useCallback(async () => {
     const [xs, rs, ss] = await Promise.all([
       invoke<Experiment[]>("get_experiments").catch(() => []),
-      invoke<RecLite[]>("get_recommendations").catch(() => []),
+      invoke<TrialCandidate[]>("get_trial_candidates").catch(() => []),
       invoke<SessionSummary[]>("get_session_summaries").catch(() => []),
     ]);
     setExperiments(xs ?? []);
@@ -448,8 +460,10 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
       : n;
   const rowMark = rowNotes.map((n) => (n === null || n === sharedNoise ? null : noteMark(footnotes.indexOf(n))));
 
-  // The testable universe: catalog changes this rig can use and hasn't already applied.
-  const pickable = recs.filter((r) => r.eligible && !r.currently_applied);
+  // The testable universe: catalog changes that pass "worth testing on this PC". The rest are listed,
+  // each with its reason, behind "Show why others aren't listed" — never dropped silently.
+  const pickable = recs.filter((r) => r.passes);
+  const skipped = recs.filter((r) => !r.passes);
 
   // If a refocus-refresh just re-derived the active pick as already-applied (it drops out of `pickable`),
   // keep it in the dropdown so its honest "already configured" verdict stays on screen — the selection
@@ -619,6 +633,32 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
             <p className="exp-note">
               {t("lab.experimentBench.noChangesToTest")}
             </p>
+          )}
+          {skipped.length > 0 && (
+            <div className="exp-why">
+              <button
+                type="button"
+                className="exp-why-toggle"
+                aria-expanded={showWhy}
+                aria-controls="exp-why-list"
+                onClick={() => setShowWhy((v) => !v)}
+              >
+                {showWhy ? t("lab.experimentBench.hideWhyNotListed") : t("lab.experimentBench.showWhyNotListed")}
+              </button>
+              {showWhy && (
+                <ul className="exp-why-list" id="exp-why-list">
+                  {skipped.map((r) => (
+                    <li key={r.id} data-rec={r.id}>
+                      <span className="exp-why-title">{r.title}</span>{" "}
+                      <span className="exp-why-reason">
+                        {r.reason ? t(SKIP_REASON_KEY[r.reason]) : null}
+                        {r.detail ? ` ${r.detail}` : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
 
           {simBusy && <p className="exp-note">{t("lab.experimentBench.readingRig")}</p>}
