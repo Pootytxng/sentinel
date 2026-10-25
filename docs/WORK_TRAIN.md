@@ -137,8 +137,14 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - [x] **P4-sessions** (uneven-session half only, owner approved 2026-10-24; the "effect below
       session-to-session spread" half waits for P4-noise, which supplies that spread) "Too noisy to judge" verdict (Inconclusive, restored) when either session is uneven
       or the effect is below session-to-session spread. Test replays the −18.5% case. Needs P4-baseline-quality.
-- [ ] **P4-comparable** Leave idle/menu stretches out of the measurement; a Partial pair shows what differed
-      in one line. `comparability.rs` + conclude. TRIAL_PROTOCOL §7, ENGINE §10.
+- [x] **P4-comparable** (this entry's commit): alt-tabbed seconds (helper sees the game's own window behind
+      another) stay out of every session FPS figure and are counted in `background_secs_excluded`; unknown,
+      UWP/launcher-owned windows and older helpers measured as before. A Partial pair's one-line "what
+      differed" already shipped (`experiment.rs` `with_comparability`). Menus shown in front stay measured:
+      undetectable without game introspection, which is forbidden.
+- [ ] **P4-comparable-show** Receipt/Debrief line "N s alt-tabbed left out" from `background_secs_excluded`
+      (floor: minimized non-presenting seconds aren't counted); a background-only session says why it has no
+      data. Check the overlay can't take focus (would mark play as alt-tabbed) and add a guard test. UI → FULL mode.
 - [ ] **P4-candidates** "Worth testing on this PC": a pure module filters the catalog (applies / already
       set / Compy can do it safely); the picker shows only passing ones, reasons behind a toggle. Covers
       GB-picker. ENGINE §3.1–3.3.
@@ -183,6 +189,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-24 14:31 desk install of main `2afd7471` (stamp-proved, attempt 1); 14:32–14:35 #453 re-run
   PASSED (14/15/14 on all three screens) → P2-exit met; RELEASE_STATE + BACKLOG P2 recorded.
 - 2026-10-24 evening: 453-f1 `63414c42`.
+- 2026-10-25 (scheduled, CODE-ONLY, owner in WARDOGS): P4-comparable (this entry's commit); cargo 1532/0,
+  clippy clean, tsc 0; review 1 round (MUST-FIX fixed, rest → P4-comparable-show); not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)

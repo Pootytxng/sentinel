@@ -336,6 +336,27 @@ struct FpsReport {
     /// MAX_FRAMETIME_POINTS. The UI draws this as the frametime line so
     /// individual spikes are visible, not just a smoothed average.
     recent_frametimes_ms: Vec<f64>,
+    /// Was the game's window the one in front this tick? `None` = Compy
+    /// couldn't tell (no foreground window resolvable), which readers must
+    /// treat as unknown, never as "in the background".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    foreground: Option<bool>,
+}
+
+/// What the report says about foreground. Only a resolvable foreground
+/// window lets Compy say "not in front"; otherwise it stays unknown. And only
+/// a presenter that owns a visible top-level window of its own can be "behind":
+/// a UWP game (window owned by ApplicationFrameHost) or one whose window a
+/// launcher owns would otherwise read "not in front" every tick and lose the
+/// whole session.
+fn report_foreground(fg_known: bool, ev: Option<&WindowEvidence>) -> Option<bool> {
+    if !fg_known {
+        return None;
+    }
+    match ev {
+        Some(e) if e.owns_visible_toplevel => Some(e.foreground),
+        _ => None,
+    }
 }
 
 /// CLI options parsed from the args after `--fps-capture`.
@@ -394,7 +415,9 @@ fn resolve_process_name(pid: u32) -> String {
 
 /// One EnumWindows pass → WindowEvidence per pid of interest. Read-only: no
 /// window, process, or policy state is touched.
-fn probe_window_evidence(pids: &[u32]) -> HashMap<u32, WindowEvidence> {
+/// The bool says whether a foreground window was resolvable at all; without
+/// it, `foreground == false` on every pid would be a guess, not evidence.
+fn probe_window_evidence(pids: &[u32]) -> (HashMap<u32, WindowEvidence>, bool) {
     use windows::Win32::Foundation::{HWND, LPARAM, RECT};
     use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
     use windows::Win32::Graphics::Gdi::{
@@ -467,18 +490,21 @@ fn probe_window_evidence(pids: &[u32]) -> HashMap<u32, WindowEvidence> {
     let mut ctx = Ctx {
         evidence: pids.iter().map(|&p| (p, WindowEvidence::default())).collect(),
     };
+    let mut fg_known = false;
     unsafe {
         let _ = EnumWindows(Some(enum_cb), LPARAM(&mut ctx as *mut Ctx as isize));
         let fg = GetForegroundWindow();
         if !fg.is_invalid() {
             let mut fg_pid = 0u32;
             GetWindowThreadProcessId(fg, Some(&mut fg_pid));
+            // A foreground window whose owner can't be resolved says nothing.
+            fg_known = fg_pid != 0;
             if let Some(ev) = ctx.evidence.get_mut(&fg_pid) {
                 ev.foreground = true;
             }
         }
     }
-    ctx.evidence
+    (ctx.evidence, fg_known)
 }
 
 /// Is `pid` still a live process running the image we attached to? Guards both
@@ -675,7 +701,7 @@ pub fn run_capture() {
         }
         drop(map);
         let pids: Vec<u32> = candidates.iter().map(|c| c.pid).collect();
-        let evidence = probe_window_evidence(&pids);
+        let (evidence, fg_known) = probe_window_evidence(&pids);
         for c in &mut candidates {
             c.evidence = evidence.get(&c.pid).copied().unwrap_or_default();
         }
@@ -716,7 +742,9 @@ pub fn run_capture() {
                 frametimes.clone()
             };
 
+            let foreground = report_foreground(fg_known, evidence.get(&pid));
             let report = FpsReport {
+                foreground,
                 pid,
                 process_name,
                 fps: if avg > 0.0 { 1000.0 / avg } else { 0.0 },
@@ -1168,5 +1196,48 @@ mod attachment_tests {
             state = next;
         }
         assert!(matches!(state, Attachment::Unattached { .. }));
+    }
+}
+
+#[cfg(test)]
+mod foreground_report_tests {
+    //! P4-comparable: the report says "not in front" only on real evidence, so an
+    //! alt-tabbed stretch can be left out of a measurement without guessing.
+    use super::{report_foreground, WindowEvidence};
+
+    const IN_FRONT: WindowEvidence = WindowEvidence {
+        owns_visible_toplevel: true,
+        foreground: true,
+        covers_monitor: true,
+    };
+    const BEHIND: WindowEvidence = WindowEvidence { foreground: false, ..IN_FRONT };
+
+    #[test]
+    fn known_foreground_is_reported_both_ways() {
+        assert_eq!(report_foreground(true, Some(&IN_FRONT)), Some(true));
+        assert_eq!(report_foreground(true, Some(&BEHIND)), Some(false));
+    }
+
+    #[test]
+    fn unresolvable_foreground_stays_unknown_never_false() {
+        assert_eq!(report_foreground(false, Some(&BEHIND)), None);
+        assert_eq!(report_foreground(false, Some(&IN_FRONT)), None);
+    }
+
+    #[test]
+    fn missing_evidence_stays_unknown() {
+        assert_eq!(report_foreground(true, None), None);
+    }
+
+    #[test]
+    fn a_presenter_without_its_own_window_is_never_called_behind() {
+        // UWP / launcher-owned window: the presenting pid owns no visible top-level,
+        // so "not foreground" is not evidence of alt-tab (review MUST-FIX).
+        let windowless = WindowEvidence {
+            owns_visible_toplevel: false,
+            foreground: false,
+            covers_monitor: false,
+        };
+        assert_eq!(report_foreground(true, Some(&windowless)), None);
     }
 }

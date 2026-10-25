@@ -809,6 +809,17 @@ pub(crate) struct FpsSample {
     low1_fps: f64,
     frames_last_sec: usize,
     recent_frametimes_ms: Vec<f64>,
+    /// Helper's read of whether the game window was in front. Missing (older
+    /// helper) or `None` = unknown, which is measured as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    foreground: Option<bool>,
+}
+
+/// P4-comparable: a tick is left out of the session measurement only when the
+/// helper positively saw the game behind another window (alt-tabbed). Unknown
+/// is kept, so no evidence never shrinks a measurement.
+pub(crate) fn sample_is_background(s: &FpsSample) -> bool {
+    s.foreground == Some(false)
 }
 
 #[derive(Serialize)]
@@ -1066,7 +1077,12 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                     // Parse the helper's per-tick line through the capture backend (its wire format is
                     // the backend's concern) — byte-identical to the prior inline serde_json parse.
                     if let Some(s) = crate::capture::EtwDxgiBackend.parse_sample(&txt) {
-                        if s.fps > 0.0 {
+                        if s.fps > 0.0 && sample_is_background(&s) {
+                            // Alt-tabbed: the game still presents, but those frames aren't
+                            // the play being measured. Count the second, keep it out.
+                            acc.record_background_tick();
+                            tip = Some((s.fps, s.low1_fps));
+                        } else if s.fps > 0.0 {
                             acc.record_fps(&s.process_name, s.fps, s.avg_frametime_ms, s.low1_fps, elapsed);
                             tip = Some((s.fps, s.low1_fps));
                             if s.low1_fps > 0.0 && timeline.len() < 7200 {
@@ -1449,5 +1465,29 @@ mod runtime_dir_tests {
         );
         assert!(fps_out_path().starts_with(&d));
         assert!(fps_alive_path().starts_with(&d));
+    }
+}
+
+#[cfg(test)]
+mod background_sample_tests {
+    //! P4-comparable: only a helper line that positively says "not in front" is left out.
+    use super::{sample_is_background, FpsSample};
+
+    const BASE: &str = r#""pid":1,"process_name":"game.exe","fps":120.0,"avg_frametime_ms":8.3,"low1_fps":90.0,"frames_last_sec":120,"recent_frametimes_ms":[8.3]"#;
+
+    fn parse(extra: &str) -> FpsSample {
+        serde_json::from_str(&format!("{{{BASE}{extra}}}")).expect("helper line parses")
+    }
+
+    #[test]
+    fn an_older_helper_line_without_the_field_is_measured() {
+        assert!(!sample_is_background(&parse("")));
+    }
+
+    #[test]
+    fn in_front_and_unknown_are_measured_behind_is_left_out() {
+        assert!(!sample_is_background(&parse(r#","foreground":true"#)));
+        assert!(!sample_is_background(&parse(r#","foreground":null"#)));
+        assert!(sample_is_background(&parse(r#","foreground":false"#)));
     }
 }

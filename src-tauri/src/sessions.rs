@@ -134,6 +134,15 @@ pub(crate) struct SessionSummary {
     /// cards expose. None on NVIDIA (NVML doesn't expose it) and on pre-field sessions. Additive.
     #[serde(default)]
     pub(crate) peak_gpu_hotspot_temp_c: Option<u32>,
+    /// P4-comparable: seconds the attached game kept presenting while another window was in front
+    /// (alt-tabbed). Those seconds are left out of every FPS figure above, and this says how many,
+    /// so the receipt can show what was set aside. `None` on rows an older Compy wrote (it measured
+    /// those seconds in). A menu shown in front can't be told apart from play, so it is never
+    /// counted here. A floor, not a total: only seconds where the game still presented are counted
+    /// (a minimized game that stops presenting adds nothing here), and `duration_secs` is still wall
+    /// time including these seconds. Additive.
+    #[serde(default)]
+    pub(crate) background_secs_excluded: Option<u32>,
 }
 
 /// A session's change counts in the form another session's can be compared with (453-f1).
@@ -225,6 +234,8 @@ pub(crate) struct SessionAccumulator {
     bucket_idx: Option<u32>,
     bucket_sum: f64,
     bucket_count: u32,
+    /// Ticks the game presented from behind another window, left out of the figures.
+    background_ticks: u32,
 }
 
 impl SessionAccumulator {
@@ -257,7 +268,14 @@ impl SessionAccumulator {
             bucket_idx: None,
             bucket_sum: 0.0,
             bucket_count: 0,
+            background_ticks: 0,
         }
+    }
+
+    /// One ~1 Hz tick where the attached game was seen behind another window. Nothing about the
+    /// frames is folded in; only the count is kept, for the receipt.
+    pub(crate) fn record_background_tick(&mut self) {
+        self.background_ticks = self.background_ticks.saturating_add(1);
     }
 
     /// `elapsed_secs` is real wall time into the session (the monitoring loop's own clock) —
@@ -382,6 +400,7 @@ impl SessionAccumulator {
             game_state: None,
             peak_cpu_temp_c: self.peak_cpu_temp_c,
             peak_gpu_hotspot_temp_c: self.peak_gpu_hotspot_temp_c,
+            background_secs_excluded: Some(self.background_ticks),
         }
     }
 }
@@ -542,6 +561,47 @@ pub(crate) fn get_session_summaries() -> Vec<SessionSummary> {
 #[cfg(test)]
 mod session_tests {
     use super::*;
+
+    /// P4-comparable: alt-tabbed seconds are counted but never folded into the FPS figures.
+    #[test]
+    fn background_ticks_stay_out_of_every_fps_figure() {
+        let mut played = SessionAccumulator::new("2026-10-25T00:00:00Z".into(), Some(0));
+        let mut with_break = SessionAccumulator::new("2026-10-25T00:00:00Z".into(), Some(0));
+        for t in 0..20u32 {
+            played.record_fps("game.exe", 120.0, 8.3, 90.0, t);
+            with_break.record_fps("game.exe", 120.0, 8.3, 90.0, t);
+        }
+        // 15 s behind the desktop, where the game kept presenting at a very different rate.
+        for _ in 0..15 {
+            with_break.record_background_tick();
+        }
+        let a = played.finalize(20);
+        let b = with_break.finalize(35);
+        assert_eq!(b.samples, a.samples);
+        assert_eq!(b.avg_fps, a.avg_fps);
+        assert_eq!(b.avg_frametime_ms, a.avg_frametime_ms);
+        assert_eq!(b.low1_fps_est, a.low1_fps_est);
+        assert_eq!(b.fps_series, a.fps_series);
+        assert_eq!(a.background_secs_excluded, Some(0));
+        assert_eq!(b.background_secs_excluded, Some(15));
+    }
+
+    #[test]
+    fn a_session_that_was_only_in_the_background_has_no_data() {
+        let mut acc = SessionAccumulator::new("2026-10-25T00:00:00Z".into(), Some(0));
+        acc.record_background_tick();
+        assert!(!acc.has_data());
+    }
+
+    #[test]
+    fn a_row_an_older_compy_wrote_reads_background_as_unknown() {
+        let mut acc = SessionAccumulator::new("2026-10-25T00:00:00Z".into(), Some(0));
+        acc.record_fps("game.exe", 120.0, 8.3, 90.0, 0);
+        let mut row = serde_json::to_value(acc.finalize(60)).unwrap();
+        row.as_object_mut().unwrap().remove("background_secs_excluded");
+        let back: SessionSummary = serde_json::from_value(row).unwrap();
+        assert_eq!(back.background_secs_excluded, None);
+    }
 
     #[test]
     fn accumulator_computes_averages_and_peaks() {
