@@ -20,6 +20,17 @@
 // anyway on the latest one (with the bench's own uneven warning, which the record keeps) or stop with
 // nothing changed. The manual bench keeps its warn-don't-block start (owner, 2026-10-24).
 //
+// P5-continue (ROADMAP P5 steps 5, 7; ENGINE §4, §7): a concluded journey says what it did in one
+// line ("Kept <change>: 1% low up X%" / "Put <change> back: <why>") and offers the next change
+// P4-next ranks untested on that game as one tap, until nothing is left ("Nothing else here is worth
+// testing on this PC", a success: stopping when nothing more is worth testing is the engine's own
+// stop condition). The next journey reuses the last as-is session (after a Kept change, the session
+// measured with it on, which is how the PC is now; otherwise the session before the change) when it
+// is the same game and grades steady, and lets start_experiment decide whether it is still
+// comparable, exactly as the bench does: the start refuses a baseline a Compy change moved after
+// (`baseline_is_current`) before changing anything, and then the journey asks for a new as-is
+// session. Every start, conclude and restore is the same audited call as above.
+//
 // Capture starts on the button, not on the game coming to the front: the FPS helper IS the thing that
 // sees the game, so it has to run first. Readings taken while another window is in front are already
 // left out of the session (P4-comparable).
@@ -52,6 +63,9 @@ type JourneyExperiment = {
   verdict: string | null;
   created_at?: string;
   concluded_at?: string | null;
+  outcome?: JourneyOutcome | null;
+  /** The after-session's numbers (experiment.rs `Treatment`); null while Running. */
+  treatment?: { delta_low1_pct: number; delta_avg_pct?: number | null; session_id?: string | null } | null;
 };
 
 type FpsStatusLite = {
@@ -64,15 +78,18 @@ type FpsStatusLite = {
 
 export type JourneyPhase =
   | { kind: "idle" }
-  | { kind: "as-is"; game: string | null; change: string; again?: boolean }
+  /** `refused`: the next journey's reused as-is session was refused by the start (its reason). */
+  | { kind: "as-is"; game: string | null; change: string; again?: boolean; refused?: string }
   /** Session 1 graded uneven or untraced: nothing is on yet. `final` = no more retakes, so the owner
    *  chooses between testing anyway and stopping. */
   | { kind: "uneven"; game: string; change: string; grade: UnfitGrade; final: boolean }
   | { kind: "stopped" }
   | { kind: "reading"; change: string }
-  | { kind: "with-change"; game: string; change: string }
+  /** `reused`: the before-reading is the last journey's as-is session, so this is the only session. */
+  | { kind: "with-change"; game: string; change: string; reused?: boolean }
   | { kind: "judging"; change: string }
-  | { kind: "result"; exp: JourneyExperiment }
+  /** `asIs`: the newest session measured as the PC is now, which the next journey may reuse. */
+  | { kind: "result"; exp: JourneyExperiment; asIs: string | null }
   | { kind: "too-short"; samples: number | null }
   | { kind: "wrong-game"; played: string; planned: string }
   | { kind: "not-started"; reason: string }
@@ -220,6 +237,22 @@ async function waitForSession(
   return null;
 }
 
+/** The session a next journey may reuse as its before-reading: still in the store, the same game,
+ *  a usable reading and graded steady. Whether it is still comparable is the start's to say. */
+export function reusableAsIs(sessions: SessionSummary[], id: string | null, game: string | null): SessionSummary | null {
+  const s = id == null ? undefined : sessions.find((x) => x.started_at === id);
+  if (!s || !usable(s) || (game != null && s.process_name !== game)) return null;
+  return gradeBaseline(s).kind === "steady" ? s : null;
+}
+async function reusableSession(id: string, game: string | null): Promise<SessionSummary | null> {
+  const ss = await invoke<SessionSummary[]>("get_session_summaries").catch(() => []);
+  return reusableAsIs(ss ?? [], id, game);
+}
+
+/** The start's refusal is about the before-reading (resolve_baseline / baseline_is_current /
+ *  baseline_for_start all name "the baseline session"), not about the change or another Trial. */
+export const refusesBaseline = (reason: string) => /baseline/i.test(reason);
+
 type RunArgs = {
   change: { id: string; title: string };
   outcome: JourneyOutcome;
@@ -269,11 +302,12 @@ async function recover(args: RunArgs, say: (p: JourneyPhase) => void, expId: str
     }
   }
   if (exp.status === "restored") return say({ kind: "restored", change, why: "error", reason });
-  if (exp.status === "kept" && exp.verdict === "improved") return say({ kind: "result", exp });
+  if (exp.status === "kept" && exp.verdict === "improved")
+    return say({ kind: "result", exp, asIs: exp.treatment?.session_id ?? null });
   return say({ kind: "restore-failed", change, reason });
 }
 
-async function runJourney(args: RunArgs, game: string | null) {
+async function runJourney(args: RunArgs, game: string | null, reuseId: string | null = null) {
   const { change } = args;
   const run: Run = { aborted: false, capturing: false };
   current = run;
@@ -292,66 +326,81 @@ async function runJourney(args: RunArgs, game: string | null) {
     await invoke("stop_fps_capture").catch(() => {});
   };
   try {
-    // ── Session 1: as-is, retaken while it grades uneven (P5-rebaseline) ──
-    let baseline: SessionSummary | null = null;
+    // P5-continue: a next journey starts from the last as-is session when it can be reused.
+    let baseline: SessionSummary | null = reuseId ? await reusableSession(reuseId, game) : null;
+    let reused = baseline != null;
+    let refused: string | undefined;
     let planned = game;
-    let unevenSessions = 0;
-    for (;;) {
-      say({ kind: "as-is", game: planned, change: change.title, again: unevenSessions > 0 });
-      const t0 = Date.now();
-      run.capturing = true;
-      await invoke("start_fps_capture");
-      await waitForPlay(args.captureFailed);
-      await stopCapture();
-      if (left()) return;
-      say({ kind: "reading", change: change.title });
-      // A retake never reads back the uneven session before it.
-      const s = await waitForSession(t0, null, baseline?.started_at, left);
-      if (left()) return;
-      // A session of another game can't be this game's baseline: nothing goes on, and the room can
-      // plan for the game actually played (it is now the newest session, so the bench's game).
-      if (s && planned != null && s.process_name !== planned) {
-        await args.refresh().catch(() => {});
-        return say({ kind: "wrong-game", played: s.process_name, planned });
-      }
-      if (!s || s.samples < MIN_BASELINE_SAMPLES) {
-        return say({ kind: "too-short", samples: s ? s.samples : null });
-      }
-      baseline = s;
-      planned = s.process_name;
-      const grade = gradeBaseline(s);
-      if (grade.kind === "steady" || grade.kind === "too-short") break;
-      unevenSessions += 1;
-      const final = unevenSessions >= MAX_UNEVEN_SESSIONS;
-      say({ kind: "uneven", game: s.process_name, change: change.title, grade, final });
-      const d = await waitForDecision();
-      if (left()) return;
-      if (d === "stop") return say({ kind: "stopped" });
-      if (d === "test") break;
-    }
+    let started: JourneyExperiment | null = null;
+    while (!started) {
+      // ── Session 1: as-is, retaken while it grades uneven (P5-rebaseline) ──
+      let unevenSessions = 0;
+      if (!baseline)
+        for (;;) {
+          say({ kind: "as-is", game: planned, change: change.title, again: unevenSessions > 0, refused });
+          const t0 = Date.now();
+          run.capturing = true;
+          await invoke("start_fps_capture");
+          await waitForPlay(args.captureFailed);
+          await stopCapture();
+          if (left()) return;
+          say({ kind: "reading", change: change.title });
+          // A retake never reads back the uneven session before it.
+          const s = await waitForSession(t0, null, baseline?.started_at, left);
+          if (left()) return;
+          // A session of another game can't be this game's baseline: nothing goes on, and the room can
+          // plan for the game actually played (it is now the newest session, so the bench's game).
+          if (s && planned != null && s.process_name !== planned) {
+            await args.refresh().catch(() => {});
+            return say({ kind: "wrong-game", played: s.process_name, planned });
+          }
+          if (!s || s.samples < MIN_BASELINE_SAMPLES) {
+            return say({ kind: "too-short", samples: s ? s.samples : null });
+          }
+          baseline = s;
+          planned = s.process_name;
+          const grade = gradeBaseline(s);
+          if (grade.kind === "steady" || grade.kind === "too-short") break;
+          unevenSessions += 1;
+          const final = unevenSessions >= MAX_UNEVEN_SESSIONS;
+          say({ kind: "uneven", game: s.process_name, change: change.title, grade, final });
+          const d = await waitForDecision();
+          if (left()) return;
+          if (d === "stop") return say({ kind: "stopped" });
+          if (d === "test") break;
+        }
+      if (left() || !baseline) return;
 
-    // ── The change goes on, through the audited start ──
-    if (!baseline) return;
-    let started: JourneyExperiment;
-    try {
-      started = await writeLedger<JourneyExperiment>(
-        "start_experiment",
-        {
-          recId: change.id,
-          recTitle: change.title,
-          baselineSessionId: baseline.started_at,
-          hypothesis: args.hypothesis,
-          outcome: args.outcome,
-        },
-        args.refresh,
-      );
-    } catch (e) {
-      // The start refuses before changing anything, or restores what it applied itself; either way it
-      // says which. If it somehow left this change's Trial running, put it back.
-      const xs = await invoke<JourneyExperiment[]>("get_experiments").catch(() => []);
-      const leftOn = (xs ?? []).find((x) => x.status === "running" && x.rec_id === change.id);
-      return recover(args, say, leftOn?.id ?? null, e);
+      // ── The change goes on, through the audited start ──
+      try {
+        started = await writeLedger<JourneyExperiment>(
+          "start_experiment",
+          {
+            recId: change.id,
+            recTitle: change.title,
+            baselineSessionId: baseline.started_at,
+            hypothesis: args.hypothesis,
+            outcome: args.outcome,
+          },
+          args.refresh,
+        );
+      } catch (e) {
+        // The start refuses before changing anything, or restores what it applied itself; either way it
+        // says which. If it somehow left this change's Trial running, put it back.
+        const xs = await invoke<JourneyExperiment[]>("get_experiments").catch(() => []);
+        const leftOn = (xs ?? []).find((x) => x.status === "running" && x.rec_id === change.id);
+        const reason = String(e instanceof Error ? e.message : e);
+        // A reused as-is session the start won't compare against: nothing went on, so ask for a new one.
+        if (reused && !leftOn && refusesBaseline(reason)) {
+          reused = false;
+          baseline = null;
+          refused = reason;
+          continue;
+        }
+        return recover(args, say, leftOn?.id ?? null, e);
+      }
     }
+    if (!baseline) return;
     expId = started.id;
     // Remembered so a relaunch can say this Trial was interrupted (the bench's banner).
     tagRunning(expId);
@@ -359,7 +408,7 @@ async function runJourney(args: RunArgs, game: string | null) {
     const trialGame = started.game || baseline.process_name;
 
     // ── Session 2: with the change ──
-    say({ kind: "with-change", game: trialGame, change: change.title });
+    say({ kind: "with-change", game: trialGame, change: change.title, reused });
     const t1 = Date.now();
     run.capturing = true;
     await invoke("start_fps_capture");
@@ -386,10 +435,12 @@ async function runJourney(args: RunArgs, game: string | null) {
       // Never keep a change the verdict didn't call Better.
       await writeLedger("restore_experiment", { experimentId: expId }, args.refresh);
       tagRunning(null);
-      return say({ kind: "result", exp: { ...done, status: "restored" } });
+      return say({ kind: "result", exp: { ...done, status: "restored" }, asIs: baseline.started_at });
     }
     tagRunning(null);
-    return say({ kind: "result", exp: done });
+    // The PC as it is now: with a kept change, the session measured with it; otherwise the one before.
+    const kept = done.status === "kept" && done.verdict === "improved";
+    return say({ kind: "result", exp: done, asIs: kept ? after.started_at : baseline.started_at });
   } catch (e) {
     if (left()) return;
     await stopCapture();
@@ -402,6 +453,33 @@ async function runJourney(args: RunArgs, game: string | null) {
   }
 }
 
+// The one line a concluded journey says: what it kept, or what it put back and why, in plain words.
+// Only a Better that stayed on reads as kept; every other ending put the change back (conclude restores
+// it, or the journey did above).
+const PUT_BACK_WHY: Record<string, string> = {
+  "no-change": "noChange",
+  regressed: "regressed",
+  confounded: "confounded",
+  expired: "expired",
+  "insufficient-evidence": "insufficientEvidence",
+  "not-comparable": "notComparable",
+  "too-noisy": "tooNoisy",
+};
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+function resultLine(exp: JourneyExperiment, t: Translate): string {
+  const k = "lab.experimentBench.journey";
+  const change = exp.rec_title;
+  if (exp.status === "kept" && exp.verdict === "improved") {
+    // Maximum FPS is judged on the average, Recommended on the 1% low: the line says the one it won on.
+    const maxFps = exp.outcome === "max-fps";
+    const d = maxFps ? exp.treatment?.delta_avg_pct : exp.treatment?.delta_low1_pct;
+    if (d == null || !Number.isFinite(d) || d <= 0) return t(`${k}.kept`, { change });
+    return t(maxFps ? `${k}.keptAvg` : `${k}.keptLow`, { change, pct: Math.round(d * 10) / 10 });
+  }
+  const why = PUT_BACK_WHY[exp.verdict ?? ""] ?? "other";
+  return t(`${k}.putBack`, { change, reason: t(`${k}.putBackWhy.${why}`) });
+}
+
 // ── The panel ───────────────────────────────────────────────────────────────────────────────────
 export function GuidedJourney({
   game,
@@ -409,7 +487,8 @@ export function GuidedJourney({
   canStart,
   outcome,
   onOutcome,
-  verdictLabel,
+  next,
+  nextReuses = false,
   refresh,
   onFinished,
 }: {
@@ -421,7 +500,12 @@ export function GuidedJourney({
   canStart: boolean;
   outcome: JourneyOutcome;
   onOutcome: (o: JourneyOutcome) => void;
-  verdictLabel: (verdict: string) => string;
+  /** After a concluded journey: the next change P4-next ranks untested on that game, null when
+   *  nothing is left, undefined while that isn't known yet (the candidates haven't loaded). */
+  next?: { id: string; title: string } | null;
+  /** Whether the finished journey left a reusable as-is session (`reusableAsIs`) for that next change:
+   *  one session, about 10 min; otherwise a new before-session first, about 20. */
+  nextReuses?: boolean;
   refresh: () => Promise<void>;
   /** Called when the owner closes a finished journey, with the Trial it concluded (if any). */
   onFinished?: (exp: JourneyExperiment | null) => void;
@@ -471,6 +555,7 @@ export function GuidedJourney({
     case "as-is":
       if (p.again && p.game) line = t(`${k}.asIsAgain`, { game: gameName(p.game) });
       else line = p.game ? t(`${k}.asIs`, { game: gameName(p.game) }) : t(`${k}.asIsNoGame`);
+      if (p.refused) line = `${t(`${k}.reuseRefused`, { reason: p.refused })} ${line}`;
       break;
     case "uneven": {
       const why =
@@ -484,7 +569,7 @@ export function GuidedJourney({
       line = t(`${k}.stopped`);
       break;
     case "with-change":
-      line = t(`${k}.withChange`, { game: gameName(p.game), change: p.change });
+      line = t(p.reused ? `${k}.withChangeReused` : `${k}.withChange`, { game: gameName(p.game), change: p.change });
       break;
     case "reading":
       line = t(`${k}.reading`);
@@ -493,7 +578,7 @@ export function GuidedJourney({
       line = t(`${k}.judging`);
       break;
     case "result":
-      line = t(`${k}.result`, { change: p.exp.rec_title, verdict: p.exp.verdict ? verdictLabel(p.exp.verdict) : "" });
+      line = resultLine(p.exp, t);
       break;
     case "too-short":
       line = p.samples == null ? t(`${k}.noReading`) : t(`${k}.tooShort`, { count: p.samples, min: MIN_BASELINE_SAMPLES });
@@ -548,6 +633,24 @@ export function GuidedJourney({
         <button type="button" className="exp-cta-ghost" onClick={() => setPhase({ kind: "idle" })}>
           {t(`${k}.planFor`, { game: gameName(p.played) })}
         </button>
+      )}
+      {p.kind === "result" && next && (
+        <button
+          type="button"
+          className="exp-cta"
+          disabled={!canStart}
+          onClick={() => {
+            const hypothesis = t("lab.experimentBench.hypothesisWithBaseline", { metric: t("lab.experimentBench.hypothesisMetricFallback") });
+            void runJourney({ change: next, outcome, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, p.exp.game, p.asIs);
+          }}
+        >
+          {t(nextReuses ? `${k}.next` : `${k}.nextFresh`, { change: next.title })}
+        </button>
+      )}
+      {p.kind === "result" && next === null && (
+        <p className="exp-note" data-testid="journey-done">
+          {t(`${k}.nothingLeft`)}
+        </p>
       )}
       {finished && (
         <button

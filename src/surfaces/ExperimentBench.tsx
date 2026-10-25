@@ -20,7 +20,7 @@ import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome"
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
 import { summarizeGame, type GameTestSummary, type StillApplied, type TestedChange } from "./test-summary";
-import { GuidedJourney, interruptedJourneyId, useJourneyPhase } from "./GuidedJourney";
+import { GuidedJourney, interruptedJourneyId, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import "./ExperimentBench.css";
 
@@ -715,6 +715,16 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const verdictText = verdictCopy(t);
   // P5-guided: the journey tests the top-ranked change not yet tested on that game (P4-rank order).
   const journeyChange = pickOrder.find((r) => !lastVerdict.has(r.id)) ?? null;
+  // P5-continue: after a concluded journey, P4-next's rule for its game (the change just tested counts
+  // as tested). Unknown until the candidates have loaded: an empty list then is not "nothing left".
+  const journeyTested = journey.kind === "result" ? testedOn(experiments, journey.exp.game).add(journey.exp.rec_id) : null;
+  const journeyNext =
+    journeyTested && recsLoaded
+      ? (() => {
+          const r = ranked.find((x) => !journeyTested.has(x.id));
+          return r ? { id: r.id, title: r.title } : null;
+        })()
+      : undefined;
   const optionLabel = (r: TrialCandidate) => {
     const v = lastVerdict.get(r.id);
     return v == null
@@ -852,7 +862,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
           canStart={!busy && !running}
           outcome={outcome}
           onOutcome={setOutcome}
-          verdictLabel={(v) => verdictText[v] ?? v}
+          next={journeyNext}
+          nextReuses={journey.kind === "result" && reusableAsIs(sessions, journey.asIs, journey.exp.game) != null}
           refresh={settle}
           onFinished={(exp) => {
             // The finished journey hands over to P4-next's offer of the next change to test.

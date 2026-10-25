@@ -25,6 +25,9 @@ const state = vi.hoisted(() => ({
   refuse: {} as Record<string, string>,
   startCaptureCalls: 0,
   failSecondCapture: false,
+  startCalls: 0,
+  /** start_experiment refuses these "recId|baselineId" pairs with the backend's §3 baseline refusal. */
+  refuseBaselines: [] as string[],
 }));
 
 const session = (started_at: string, samples: number, process_name = "Valorant") => ({
@@ -97,18 +100,24 @@ vi.mock("@tauri-apps/api/core", () => ({
         return Promise.resolve(null);
       }
       case "start_experiment": {
-        const r = record({ rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome });
-        state.experiments = [r];
+        if (state.refuseBaselines.includes(`${args?.recId}|${args?.baselineSessionId}`))
+          return Promise.reject(
+            "experiment not started — a Compy change was applied or undone after the baseline session, so the before/after would measure more than this one change — play a new baseline session, then start",
+          );
+        const r = record({ id: `exp:${9 + state.startCalls}-0`, rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome });
+        state.startCalls += 1;
+        state.experiments = [...state.experiments, r];
         return Promise.resolve(r);
       }
       case "conclude_experiment": {
-        const r = record(state.concludeResult ?? {});
-        state.experiments = [r];
+        const cur: Record<string, unknown> = state.experiments.find((x) => x.id === args?.experimentId) ?? record({});
+        const r: Record<string, unknown> = { ...cur, ...(state.concludeResult ?? {}), concluded_at: new Date().toISOString() };
+        state.experiments = state.experiments.map((x) => (x.id === r.id ? r : x));
         return Promise.resolve(r);
       }
       case "restore_experiment": {
-        state.experiments = state.experiments.map((x) => ({ ...x, status: "restored" }));
-        return Promise.resolve(state.experiments[0] ?? {});
+        state.experiments = state.experiments.map((x) => (x.id === args?.experimentId ? { ...x, status: "restored" } : x));
+        return Promise.resolve(state.experiments.find((x) => x.id === args?.experimentId) ?? {});
       }
       default:
         return Promise.resolve(null);
@@ -122,6 +131,7 @@ import { resetJourneyForTests } from "./GuidedJourney";
 
 const calls = (cmd: string) => vi.mocked(invoke).mock.calls.filter(([c]) => c === cmd).map(([, a]) => a as Record<string, unknown>);
 
+const TREATMENT = { avg_fps: 247, low1_fps: 190, samples: 5400, crashed: false, delta_low1_pct: 4.2, delta_avg_pct: 1.1, recorded_at: "" };
 const OLD = session("2026-10-01T10:00:00Z", 5400);
 const later = (min: number) => new Date(Date.now() + min * 60_000).toISOString();
 
@@ -139,10 +149,12 @@ beforeEach(() => {
   state.closesAfter = 2;
   state.statusAt = null;
   state.reads = 0;
-  state.concludeResult = { status: "kept", kept: true, verdict: "improved" };
+  state.concludeResult = { status: "kept", kept: true, verdict: "improved", treatment: TREATMENT };
   state.refuse = {};
   state.startCaptureCalls = 0;
   state.failSecondCapture = false;
+  state.startCalls = 0;
+  state.refuseBaselines = [];
 });
 
 afterEach(() => cleanup());
@@ -176,7 +188,7 @@ describe("P5-guided: one button runs the whole Trial", () => {
   it("happy path: measures as-is, applies the change, measures again, concludes and shows Better", async () => {
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("HAGS: Measurably faster — kept.");
+    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
     const [start] = calls("start_experiment");
     expect(start).toMatchObject({ recId: "hags", recTitle: "HAGS", outcome: "recommended" });
     // The as-is session just measured is the baseline, not the older one.
@@ -194,7 +206,7 @@ describe("P5-guided: one button runs the whole Trial", () => {
     state.concludeResult = { status: "restored", verdict: "insufficient-evidence" };
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("HAGS: Not enough data to judge — restored.");
+    expect(await finalLine()).toBe("Put HAGS back: there wasn't enough play with it on to judge.");
   });
 
   it("game exits before any reading was saved in session 2: the change is put back", async () => {
@@ -258,7 +270,7 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(calls("start_experiment")[0]).toMatchObject({ outcome: "max-fps" });
     expect(await screen.findByText(/Session 2 of 2: HAGS is on/)).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Done playing" }));
-    expect(await finalLine()).toBe("HAGS: Measurably faster — kept.");
+    expect(await finalLine()).toBe("Kept HAGS: average up 1.1%.");
   });
 
   it("a game never seen before measuring stopped is a failed start, with nothing changed", async () => {
@@ -373,7 +385,7 @@ describe("P5-rebaseline: an uneven as-is session is retaken, not tested", () => 
     expect(screen.queryByRole("button", { name: "Test anyway" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Play one more as-is session" }));
     expect(await screen.findByText(/^One more as-is session: play Valorant as usual/)).toBeTruthy();
-    expect(await finalLine()).toBe("HAGS: Measurably faster — kept.");
+    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
     expect(calls("start_experiment")).toHaveLength(1);
     expect(calls("start_experiment")[0].baselineSessionId).toBe(steady.started_at);
     expect(calls("start_fps_capture")).toHaveLength(3);
@@ -396,7 +408,7 @@ describe("P5-rebaseline: an uneven as-is session is retaken, not tested", () => 
     expect(screen.queryByRole("button", { name: "Play one more as-is session" })).toBeNull();
     expect(calls("start_experiment")).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Test anyway" }));
-    expect(await finalLine()).toBe("HAGS: Measurably faster — kept.");
+    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
     expect(calls("start_experiment")[0].baselineSessionId).toBe(second.started_at);
     expect(calls("start_fps_capture")).toHaveLength(3);
   });
@@ -431,9 +443,99 @@ describe("P5-rebaseline: an uneven as-is session is retaken, not tested", () => 
     state.saves = [first, session(later(2), 5400)];
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("HAGS: Measurably faster — kept.");
+    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
     expect(calls("start_experiment")).toHaveLength(1);
     expect(calls("start_experiment")[0].baselineSessionId).toBe(first.started_at);
     expect(calls("start_fps_capture")).toHaveLength(2);
+  });
+});
+
+// P5-continue: a concluded journey says what it did in one line and offers the next untested change
+// (P4-next) as one tap, reusing the last as-is session when the start accepts it, until nothing is left.
+const lineIs = (text: string | RegExp) =>
+  waitFor(() => expect(screen.getByTestId("journey-line").textContent).toMatch(text), { timeout: 3000 });
+
+describe("P5-continue: the journey acts on the verdict and offers the next change", () => {
+  it("kept then next: says what it kept and reuses the session measured with it as the next baseline", async () => {
+    const asIs = session(later(1), 5400);
+    const withHags = session(later(2), 5400);
+    state.saves = [asIs, withHags, session(later(3), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(calls("restore_experiment")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
+    await lineIs(/^Game Mode is on\. Compy uses your last session as the before-reading, so this is the only session: play Valorant/);
+    const [, second] = calls("start_experiment");
+    expect(second).toMatchObject({ recId: "game-mode", baselineSessionId: withHags.started_at });
+    // No new as-is session was measured for it.
+    expect(calls("start_fps_capture")).toHaveLength(3);
+    await lineIs("Kept Game Mode: 1% low up 4.2%.");
+    expect(calls("conclude_experiment")[1]).toMatchObject({ experimentId: "exp:10-0" });
+  });
+
+  it("restored then next: says why in plain words; a baseline the start refuses gets a new as-is session", async () => {
+    const asIs = session(later(1), 5400);
+    const fresh = session(later(3), 5400);
+    state.saves = [asIs, session(later(2), 5400), fresh, session(later(4), 5400)];
+    state.concludeResult = { status: "restored", verdict: "no-change", treatment: { ...TREATMENT, delta_low1_pct: 0.4 } };
+    // The rollback moved after the as-is session, so the backend won't compare against it (§3).
+    state.refuseBaselines = [`game-mode|${asIs.started_at}`];
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("Put HAGS back: it made no difference Compy could measure.");
+    fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
+    await lineIs(/^Compy can't use your last session as the before-reading \(.*baseline session.*\), so it needs a new one\. Session 1 of 2: play Valorant/);
+    await waitFor(() => expect(calls("start_experiment")).toHaveLength(3), { timeout: 3000 });
+    const starts = calls("start_experiment");
+    expect(starts[1]).toMatchObject({ recId: "game-mode", baselineSessionId: asIs.started_at });
+    expect(starts[2]).toMatchObject({ recId: "game-mode", baselineSessionId: fresh.started_at });
+    await lineIs("Put Game Mode back: it made no difference Compy could measure.");
+    expect(calls("start_fps_capture")).toHaveLength(4);
+  });
+
+  it("restored then next: the as-is session is reused when the start accepts it", async () => {
+    const asIs = session(later(1), 5400);
+    state.saves = [asIs, session(later(2), 5400), session(later(3), 5400)];
+    state.concludeResult = { status: "restored", verdict: "regressed", treatment: { ...TREATMENT, delta_low1_pct: -6 } };
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("Put HAGS back: the game ran worse with it.");
+    fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
+    await lineIs(/^Game Mode is on\. Compy uses your last session/);
+    expect(calls("start_experiment")[1]).toMatchObject({ baselineSessionId: asIs.started_at });
+    expect(calls("start_fps_capture")).toHaveLength(3);
+  });
+
+  it("next needs a new baseline when the last session was uneven, without trying to start on it", async () => {
+    const fresh = session(later(3), 5400);
+    state.saves = [session(later(1), 5400), uneven(later(2)), fresh, session(later(4), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 20 min (a new before-session first)" }));
+    await lineIs(/^Session 1 of 2: play Valorant as usual/);
+    await waitFor(() => expect(calls("start_experiment")).toHaveLength(2), { timeout: 3000 });
+    expect(calls("start_experiment")[1]).toMatchObject({ recId: "game-mode", baselineSessionId: fresh.started_at });
+  });
+
+  it("nothing left: says so as a success and offers no next change", async () => {
+    state.recs = [{ id: "hags", title: "HAGS", passes: true, reason: null, detail: null, position: 1, evidence: "not-measured", risk: "low" }];
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect((await screen.findByTestId("journey-done")).textContent).toBe("Nothing else here is worth testing on this PC.");
+    expect(screen.queryByRole("button", { name: /^Next:/ })).toBeNull();
+  });
+
+  it("a failure in the next journey still restores and says so", async () => {
+    state.saves = [session(later(1), 5400), session(later(2), 5400), session(later(3), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    state.refuse = { conclude_experiment: "experiment not concluded — the disk was full" };
+    fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
+    await lineIs(/^Something went wrong, so Compy put Game Mode back the way it was\. Nothing was kept\./);
+    expect(calls("restore_experiment")).toEqual([{ experimentId: "exp:10-0" }]);
   });
 });
