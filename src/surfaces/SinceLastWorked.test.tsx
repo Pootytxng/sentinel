@@ -75,6 +75,7 @@ const REPORT: BlackBoxReport = {
       ev({ id: "apply:1", summary: "Applied: Trim Windows visual effects", since_rolled_back: true }),
     ],
     unplaced: [],
+    open_drift: [],
   },
 };
 
@@ -92,7 +93,7 @@ async function scan(report: BlackBoxReport) {
 describe("Since it last worked (P6-timeline)", () => {
   it("lists incidents, Compy changes, drift, observed changes and sessions newest first, from the last clean session", async () => {
     const list = await scan(REPORT);
-    expect(within(list).getByText(/last session with no crash on record \(Elden Ring,/)).toBeInTheDocument();
+    expect(within(list).getByText(/What Compy recorded since your last session with no crash on record started \(Elden Ring,/)).toBeInTheDocument();
     expect(within(list).getByText(/not proven cause/)).toBeInTheDocument();
     const rows = within(list).getAllByRole("listitem");
     expect(rows.map((r) => r.getAttribute("data-kind"))).toEqual(["incident", "observed", "drift", "session", "compy"]);
@@ -105,7 +106,7 @@ describe("Since it last worked (P6-timeline)", () => {
   it("says so when no session can be called clean, and lists nothing", async () => {
     const list = await scan({
       ...REPORT,
-      since_last_worked: { anchor: null, none_reason: "none-clean", events: [], unplaced: [] },
+      since_last_worked: { anchor: null, none_reason: "none-clean", events: [], unplaced: [], open_drift: [] },
     });
     expect(list).toHaveTextContent(i18n.t("gaming.blackBox.sinceWorked.noneClean"));
     expect(within(list).queryAllByRole("listitem")).toHaveLength(0);
@@ -113,7 +114,7 @@ describe("Since it last worked (P6-timeline)", () => {
     const list2 = await scan({
       incidents: [],
       skipped_sources: [],
-      since_last_worked: { anchor: null, none_reason: "no-session", events: [], unplaced: [] },
+      since_last_worked: { anchor: null, none_reason: "no-session", events: [], unplaced: [], open_drift: [] },
     });
     expect(list2).toHaveTextContent(i18n.t("gaming.blackBox.sinceWorked.noSession"));
   });
@@ -135,6 +136,20 @@ describe("Since it last worked (P6-timeline)", () => {
     const rows = sinceRows({ ...REPORT, incidents: [], since_last_worked: { ...REPORT.since_last_worked!, events: many } });
     expect(rows).toHaveLength(MAX_SINCE_ROWS + 3);
     expect(rows![0].key).toBe(`a${MAX_SINCE_ROWS + 2}`);
+  });
+
+  it("shows every open drift even when no session worked, and apart from the dated list when one did", async () => {
+    const drift = ev({ id: "drift:old", timestamp: "2026-10-12T10:00:00Z", event_type: "readiness-drift", scope: "observed", summary: "Game Mode was found changed" });
+    const list = await scan({
+      ...REPORT,
+      since_last_worked: { anchor: null, none_reason: "none-clean", events: [], unplaced: [], open_drift: [drift] },
+    });
+    expect(list).toHaveTextContent(i18n.t("gaming.blackBox.sinceWorked.noneClean"));
+    expect(list).toHaveTextContent("Still drifted now:");
+    expect(within(list).getByText("Game Mode was found changed").closest("li")).toHaveAttribute("data-kind", "drift");
+    cleanup();
+    const list2 = await scan({ ...REPORT, since_last_worked: { ...REPORT.since_last_worked!, open_drift: [drift] } });
+    expect(list2).toHaveTextContent("Still drifted now, from before that session:");
   });
 
   it("is read-only: the list has no buttons", async () => {

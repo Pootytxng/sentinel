@@ -167,7 +167,7 @@ describe("Check", () => {
     expect(screen.getByText("SSD check")).toBeInTheDocument();
   });
 
-  it("drift banner names WHAT + WHEN but never a WHO — no 'outside Compy' (honesty guard, drift.rs:61)", async () => {
+  it("drift banner names WHAT (label + detail) and points to WHEN on the Care view, but never a WHO — no 'outside Compy' (honesty guard, drift.rs:61)", async () => {
     // A power-profile regression can be self-inflicted (rolling back the Ultimate power plan in the
     // Trust Ledger drops this same check to Attention). Drift has no vantage point to tell that from a
     // Windows Update revert — so claiming a WHO ("changed outside Compy") is sometimes a flat lie.
@@ -184,16 +184,18 @@ describe("Check", () => {
         <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
       </ConfirmProvider>,
     );
-    // WHAT drifted (the name), and where each drift is dated: the Care view's one list (P6-timeline).
-    expect(await screen.findByText(/^Power profile\. When each one changed is listed on Crash & Freeze Rescue/)).toBeInTheDocument();
+    // WHAT drifted: the name and its detail...
+    expect(await screen.findByText("Power profile: Active plan 'Balanced'.")).toBeInTheDocument();
     expect(screen.getByText("1 setting changed since it was last good")).toBeInTheDocument();
-    // The detail and the "noticed …" time are the list's to say now, not restated here.
-    expect(screen.queryByText("Active plan 'Balanced'.")).not.toBeInTheDocument();
+    // ...WHEN is no longer restated here: the card points to the Care view's list, which dates it
+    // (P6-timeline). The old relative "noticed …" line is gone from Check.
+    expect(screen.getByText(/lists each one with when Compy noticed it/)).toBeInTheDocument();
+    expect(screen.queryByText(/noticed \d|noticed just now|noticed yesterday/)).not.toBeInTheDocument();
     // ...and the banner NEVER attributes a cause. "outside Compy" is the retired false claim.
     expect(screen.queryByText(/outside Compy/i)).not.toBeInTheDocument();
   });
 
-  it("the hardware advisory keeps its actions but points to the Care view instead of listing parts (P6-timeline)", async () => {
+  it("the hardware advisory names the parts, keeps its actions, and links to the Care view (P6-timeline)", async () => {
     readinessMock.hw = { changed: true, changes: ["GPU: RX 6800 → RX 7900 XT"], baseline_recorded: true };
     const onOpenCare = vi.fn();
     render(
@@ -202,12 +204,11 @@ describe("Check", () => {
       </ConfirmProvider>,
     );
     expect(await screen.findByText("Your hardware changed since last setup")).toBeInTheDocument();
-    expect(screen.getByText(/What changed is listed on Crash & Freeze Rescue/)).toBeInTheDocument();
-    expect(screen.queryByText(/RX 7900 XT/)).not.toBeInTheDocument();
+    expect(screen.getByText(/GPU: RX 6800 → RX 7900 XT/)).toBeInTheDocument();
     // The card's own actions stay: they exist nowhere else.
     expect(screen.getByRole("button", { name: "Re-check my setup" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /This is my rig now/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "See what changed" }));
+    fireEvent.click(screen.getByRole("button", { name: "See what else changed" }));
     expect(onOpenCare).toHaveBeenCalledTimes(1);
   });
 

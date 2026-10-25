@@ -10,7 +10,8 @@ import "./SinceLastWorked.css";
 // plan, hardware), drift and sessions, newest first, from the timeline the station's scan already
 // carries (`since_last_worked`, intelligence.rs) plus the scan's own incidents. "Last worked" is the
 // last clean session by changed_before's rules, honest about how far back the crash scan reaches;
-// with none, the list says so and shows nothing. Read-only: no IPC, no write, no button that changes
+// with none, the list says so and lists no window. Every drift still open is shown either way
+// ("Still drifted now"), because Check's and Home's drift pointers lead here. Read-only: no IPC, no write, no button that changes
 // anything. Correlation in time only — the list is tagged "not proven cause".
 
 /** Rows shown before the rest collapse into "and N earlier". */
@@ -78,6 +79,7 @@ export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
   const rows = sinceRows(report);
   const shown = rows?.slice(0, MAX_SINCE_ROWS) ?? [];
   const hidden = (rows?.length ?? 0) - shown.length;
+  const openDrift = slw.open_drift ?? [];
   const stamp = (r: Pick<SinceRow, "at" | "observedBetween">) =>
     r.observedBetween
       ? t("gaming.blackBox.sinceWorked.observedBetween", {
@@ -93,7 +95,7 @@ export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
         <span className="bb-since-tag">{t("gaming.blackBox.sinceWorked.notProven")}</span>
       </div>
       {!slw.anchor ? (
-        <p className="bb-since-line">
+        <p className="bb-since-line" data-since-none={slw.none_reason ?? "no-session"}>
           {t(
             slw.none_reason === "none-clean"
               ? "gaming.blackBox.sinceWorked.noneClean"
@@ -144,6 +146,24 @@ export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
             </div>
           )}
         </>
+      )}
+      {openDrift.length > 0 && (
+        <div className="bb-since-unplaced bb-since-open-drift">
+          <p className="bb-since-line">
+            {t(slw.anchor ? "gaming.blackBox.sinceWorked.openDriftOlder" : "gaming.blackBox.sinceWorked.openDrift")}
+          </p>
+          <ul className="bb-since-list">
+            {openDrift.map((e) => (
+              <li key={e.id} className="bb-since-row bb-since-drift" data-kind="drift">
+                <span className="bb-since-kind">{t("gaming.blackBox.sinceWorked.kind.drift")}</span>
+                <span className="bb-since-text">{e.summary}</span>
+                <span className="bb-since-when">
+                  {stamp({ at: e.timestamp, observedBetween: e.observed_between })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );

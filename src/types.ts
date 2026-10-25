@@ -605,6 +605,9 @@ export type SinceLastWorked = {
   events: IntelEvent[];
   /** Observed changes whose reading window straddles the anchor's start. */
   unplaced: IntelEvent[];
+  /** Every still-open drift not already in `events`/`unplaced`, whatever its age — present even
+   *  when there is no anchor, so the drift pointers on Check and Home always land on something. */
+  open_drift: IntelEvent[];
 };
 export type BlackBoxReport = {
   incidents: CrashIncident[];

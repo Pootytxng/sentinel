@@ -305,6 +305,10 @@ export function LabConsole({
   // 9). One-shot, like the station key: read and cleared on mount, so a later ordinary visit to the
   // Lab never re-opens somebody's old crash.
   const [openIncidentId, setOpenIncidentId] = useState<string | null>(null);
+  // P6-timeline: Crash & Freeze Rescue was reached through a pointer or deep-link that promised its
+  // "Since it last worked" list, so it scans on arrival. One-shot like the incident selection: any
+  // hand-driven switch or close drops it, so a manual reopen still waits for a click.
+  const [scanOnOpen, setScanOnOpen] = useState(false);
   // "Add a part Compy can't detect" is a disclosure in the station list now (04-test-approved.png
   // draws it as the list's last row). Closed by default; the form stays mounted either way.
   const [manualOpen, setManualOpen] = useState(false);
@@ -335,11 +339,13 @@ export function LabConsole({
     openerRef.current = null;
     setOpenStation(null);
     setOpenIncidentId(null);
+    setScanOnOpen(false);
   };
   // ONE door, two handles, still ONE code path: the dominant action and the list row both land
   // here and differ only in what they record as the opener.
   const openFrom = (k: LabStationKey, opener: Opener) => {
     setOpenIncidentId(null);
+    setScanOnOpen(false);
     if (openStation === k) {
       closeStation();
       return;
@@ -349,7 +355,11 @@ export function LabConsole({
   };
   // P6-timeline: Check's drift and hardware pointers open the Care view, where "Since it last
   // worked" lists them. Recorded as opened from Optimize, so closing it returns focus there.
-  const openCare = () => openFrom("blackbox", "optimize");
+  // It lands on a populated list: the arrival scans (BlackBox `scanOnOpen`), like a deep-link does.
+  const openCare = () => {
+    openFrom("blackbox", "optimize");
+    setScanOnOpen(true);
+  };
   const onDockOpen = (key: string) => openFrom(key as LabStationKey, key as LabStationKey);
   // Station deep-link (tester J 2026-07-22, Phase 5): "Take me to Test" from the first-check
   // verdict lands here and auto-opens the Optimize station (the door to the safe-tweak toggles)
@@ -383,6 +393,9 @@ export function LabConsole({
     if (target) setOpenStation(target);
     // The incident selector only means anything at the station that can honour it.
     if (target === "blackbox" && incident) setOpenIncidentId(incident);
+    // A deep-link to the crash station (Home's drift pointer, the crash row, the palette) is the
+    // user asking what happened: scan on arrival so the list is there.
+    if (target === "blackbox") setScanOnOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount by design
   }, []);
 
@@ -484,6 +497,7 @@ export function LabConsole({
           <BlackBox
             onReport={setBbReport}
             selectedIncidentId={openIncidentId}
+            scanOnOpen={scanOnOpen}
             changes={fast.changes}
             onChanged={fast.onChanged}
             ledgerBusy={fast.busyId !== null}

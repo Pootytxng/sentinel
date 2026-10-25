@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { invoke } from "@tauri-apps/api/core";
 
 // LabConsole — the Ops Console that replaces the Instrument Bench bento (spec
 // 2026-07-09-lab-redesign-direction-proposal, Phase 1, Task 4). A real 3D hologram sits center-stage
@@ -742,5 +743,63 @@ describe("the bench reading set keeps the approved rhythm", () => {
     expect(reading(0).querySelector(".ag-v")!.textContent).not.toBe("0");
     // NO READING is the empty-state unit word, and it survived the unit trim.
     expect(document.querySelector(".lc-readings")!.textContent).toContain("no reading");
+  });
+});
+
+// P6-timeline: "See what changed" pointers promise the Care view's "Since it last worked" list, so
+// arriving there through one scans on arrival; opening the station by hand still waits for a click.
+describe("LabConsole — Crash & Freeze Rescue scans on a promised arrival (P6-timeline)", () => {
+  const report = {
+    incidents: [],
+    skipped_sources: [],
+    since_last_worked: {
+      anchor: null,
+      none_reason: "none-clean",
+      events: [],
+      unplaced: [],
+      open_drift: [
+        {
+          id: "drift:1",
+          timestamp: "2026-10-22T10:00:00Z",
+          event_type: "readiness-drift",
+          source: "drift-watch",
+          scope: "observed",
+          game: null,
+          summary: "Game Mode was found changed",
+          detail: null,
+          observed_between: null,
+          since_rolled_back: false,
+          rec_id: null,
+        },
+      ],
+    },
+  };
+  const scans = () => vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_crash_blackbox").length;
+  beforeEach(() => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) =>
+      // Sessions must be a list: this test waits long enough for the console's own session read
+      // to land, and the tuning evidence reads it as one.
+      Promise.resolve(cmd === "get_crash_blackbox" ? report : cmd === "get_session_summaries" ? [] : null)) as never);
+  });
+  afterEach(() => {
+    vi.mocked(invoke).mockImplementation((() => Promise.resolve(null)) as never);
+    vi.mocked(invoke).mockClear();
+    localStorage.clear();
+  });
+
+  it("a deep-link to the station scans on arrival and renders the list", async () => {
+    localStorage.setItem("compy_lab_open_station", "blackbox");
+    renderConsole();
+    const list = await screen.findByRole("region", { name: "Since it last worked" });
+    expect(scans()).toBe(1);
+    expect(list.textContent).toContain("Still drifted now:");
+    expect(list.textContent).toContain("Game Mode was found changed");
+  });
+
+  it("opening the station by hand does not scan until asked", async () => {
+    renderConsole();
+    fireEvent.click(stationNode(/crash/i));
+    expect(await screen.findByRole("button", { name: "Scan for recent crashes" })).toBeTruthy();
+    expect(scans()).toBe(0);
   });
 });

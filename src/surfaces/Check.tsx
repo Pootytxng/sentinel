@@ -12,7 +12,7 @@ import { walkthroughForKeyForLanguage, gpuVendor, type GpuVendor } from "./walkt
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
 import { setStartupEntryEnabled } from "../data/startup-toggle";
-import { useHardwareChange } from "../hooks/use-hardware-change";
+import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
 import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
 import { useExpertView } from "../design/use-expert-view";
 import { ScanStream } from "./ScanStream";
@@ -369,6 +369,9 @@ export default function Check({
   // never nag forever (the no-dead-end-flags law).
   const { report: hwChange, acknowledging: ackingHw, acknowledge: acknowledgeHwChange } =
     useHardwareChange();
+  // Overflow handling: on a big multi-part swap the change list can be long — cap what we render
+  // and collapse the remainder to "and N more change(s)" so the advisory never floods the card.
+  const hwSummary = summarizeHardwareChanges(hwChange?.changes ?? []);
 
   const livingPreview =
     typeof document !== "undefined" && document.documentElement.dataset.living === "on";
@@ -498,19 +501,24 @@ export default function Check({
       {/* The ranked result — appears after the rows have streamed. */}
       {phase === "verdict" && (
         <div className="check-result">
-          {/* Hardware-change advisory (A5): offers a re-check and an inline "this is my rig now" that
-              re-baselines (so it never nags). WHAT changed is listed once, on the Care view's "Since it
-              last worked" list (P6-timeline); this card points there instead of restating it. */}
+          {/* Hardware-change advisory (A5): names exactly what changed since last setup + offers a
+              re-check and an inline "this is my rig now" that re-baselines (so it never nags). Its
+              "See what changed" opens the Care view, which shows what else changed (P6-timeline). */}
           {hwChange?.changed && hwChange.changes.length > 0 && (
             <div className="check-drift check-hwchange" role="status">
               <div className="check-drift-head">
                 <span className="check-drift-label">{t("optimize.check.hwChangedLabel")}</span>
               </div>
-              <p className="check-drift-detail">{t("optimize.check.hwChangePointer")}</p>
+              <p className="check-drift-detail">
+                {[...hwSummary.visible, ...(hwSummary.overflowLabel ? [hwSummary.overflowLabel] : [])].join(
+                  " · ",
+                )}{" "}
+                {t("optimize.check.hwChangeSuffix")}
+              </p>
               <div className="check-drift-actions">
                 {onOpenCare && (
                   <button className="btn btn-small" onClick={onOpenCare}>
-                    {t("optimize.check.seeWhatChanged")}
+                    {t("optimize.check.seeWhatElseChanged")}
                   </button>
                 )}
                 <button className="btn btn-small" disabled={running} onClick={() => rerun()}>
@@ -522,9 +530,9 @@ export default function Check({
               </div>
             </div>
           )}
-          {/* Drift watch — a check that was good and has since regressed. One short pointer: the
-              names, and the way to the Care view's "Since it last worked" list, where each drift is
-              dated (P6-timeline). Never a WHO: drift can't tell a Windows Update revert from the
+          {/* Drift watch — a check that was good and has since regressed. One card for all of them:
+              each name and its detail, and the way to the Care view's "Since it last worked" list,
+              which shows every open drift with when Compy noticed it (P6-timeline). Never a WHO: drift can't tell a Windows Update revert from the
               user's own in-app rollback, so "outside Compy" would be a false claim. The
               "applied-changes" drift is EXCLUDED: the limiter card below serves it (named + inline
               "turn it back on"). */}
@@ -535,9 +543,12 @@ export default function Check({
                   {t("optimize.check.driftPointerLabel", { count: checkDrifts.length })}
                 </span>
               </div>
-              <p className="check-drift-detail">
-                {t("optimize.check.driftPointer", { names: checkDrifts.map((d) => d.label).join(" · ") })}
-              </p>
+              {checkDrifts.map((d) => (
+                <p key={d.id} className="check-drift-detail">
+                  {d.detail ? t("optimize.check.driftItem", { label: d.label, detail: d.detail }) : d.label}
+                </p>
+              ))}
+              <p className="check-drift-detail">{t("optimize.check.driftPointer")}</p>
               {onOpenCare && (
                 <div className="check-drift-actions">
                   <button className="btn btn-small" onClick={onOpenCare}>

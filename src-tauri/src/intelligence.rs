@@ -2784,6 +2784,11 @@ pub(crate) struct SinceLastWorked {
     pub events: Vec<EventRecord>,
     /// Observed changes whose reading window straddles the anchor's start: they may be older.
     pub unplaced: Vec<EventRecord>,
+    /// Newest first: every drift that is still open and isn't already in `events` or `unplaced`
+    /// (it was noticed before the anchor, or there is no anchor). Drift Watch keeps only open
+    /// drift, so this is "still drifted now", whatever its age — the one place Check's and Home's
+    /// drift pointers lead, even when no session can be called clean.
+    pub open_drift: Vec<EventRecord>,
 }
 
 fn since_last_worked_impl(
@@ -2793,11 +2798,26 @@ fn since_last_worked_impl(
     clean_judgeable_from: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
 ) -> SinceLastWorked {
+    // Stable: equal timestamps keep the assembler's tie-break order.
+    let newest_first = |v: &mut Vec<EventRecord>| {
+        v.sort_by_key(|e| std::cmp::Reverse(parse_utc(&e.timestamp)));
+    };
+    let open_drift_except = |listed: &[&EventRecord]| {
+        let mut v: Vec<EventRecord> = asm
+            .events
+            .iter()
+            .filter(|e| e.event_type == "readiness-drift" && !listed.iter().any(|l| l.id == e.id))
+            .cloned()
+            .collect();
+        newest_first(&mut v);
+        v
+    };
     let none = |reason: &str| SinceLastWorked {
         anchor: None,
         none_reason: Some(reason.into()),
         events: Vec::new(),
         unplaced: Vec::new(),
+        open_drift: open_drift_except(&[]),
     };
     let (anchor, start) = match cb_anchor(&g.sessions, now, incidents, clean_judgeable_from) {
         None => return none("no-session"),
@@ -2808,12 +2828,10 @@ fn since_last_worked_impl(
     events.extend(asm.events.iter().filter(|e| {
         e.event_type == "session" && parse_utc(&e.timestamp).is_some_and(|t| t > start && t <= now)
     }).cloned());
-    // Stable: equal timestamps keep the assembler's tie-break order.
-    let newest_first = |v: &mut Vec<EventRecord>| {
-        v.sort_by_key(|e| std::cmp::Reverse(parse_utc(&e.timestamp)));
-    };
     newest_first(&mut events);
     newest_first(&mut unplaced);
+    let listed: Vec<&EventRecord> = events.iter().chain(unplaced.iter()).collect();
+    let open_drift = open_drift_except(&listed);
     SinceLastWorked {
         anchor: Some(ChangedBeforeAnchor {
             started_at: anchor.started_at.clone(),
@@ -2822,6 +2840,7 @@ fn since_last_worked_impl(
         none_reason: None,
         events,
         unplaced,
+        open_drift,
     }
 }
 
@@ -4870,6 +4889,43 @@ mod tests {
         assert_eq!(r.none_reason.as_deref(), Some("none-clean"));
         let r = slw(&g, &[], Some("2026-10-21T00:00:00Z"), "2026-10-25T10:00:00Z");
         assert_eq!(r.anchor.unwrap().started_at, "2026-10-22T10:00:00Z");
+    }
+
+    fn mk_drift(id: &str, label: &str, last_ready_at: Option<&str>, noticed_at: &str) -> crate::drift::DriftNotice {
+        crate::drift::DriftNotice {
+            id: id.into(),
+            label: label.into(),
+            last_ready_at: last_ready_at.map(str::to_string),
+            noticed_at: noticed_at.into(),
+        }
+    }
+
+    #[test]
+    fn since_last_worked_always_carries_every_open_drift_whatever_its_age() {
+        let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        g.drift_notices = vec![
+            // Open since before the session that worked: not "since", but still drifted now.
+            mk_drift("game-mode", "Game Mode", Some("2026-10-10T10:00:00Z"), "2026-10-12T10:00:00Z"),
+            // Noticed inside the window: a dated row of the list, not repeated below it.
+            mk_drift("power-profile", "Power profile", Some("2026-10-21T10:00:00Z"), "2026-10-22T10:00:00Z"),
+        ];
+        let r = slw(&g, &[], None, "2026-10-25T10:00:00Z");
+        assert_eq!(r.anchor.as_ref().unwrap().started_at, "2026-10-20T10:00:00Z");
+        let open: Vec<&str> = r.open_drift.iter().map(|e| e.summary.as_str()).collect();
+        assert_eq!(open, [drift_summary("Game Mode").as_str()], "only the drift not already listed");
+        assert!(r.events.iter().any(|e| e.summary == drift_summary("Power profile")));
+        assert!(!r.events.iter().any(|e| e.summary == drift_summary("Game Mode")));
+
+        // No session that worked: the list is empty, the open drift is still there.
+        let r = slw(&g, &["2026-10-20T10:05:00Z"], None, "2026-10-25T10:00:00Z");
+        assert_eq!(r.none_reason.as_deref(), Some("none-clean"));
+        assert_eq!(r.open_drift.len(), 2);
+        assert_eq!(r.open_drift[0].summary, drift_summary("Power profile"), "newest first");
+        let mut g = gathered_with(vec![]);
+        g.drift_notices = vec![mk_drift("game-mode", "Game Mode", None, "2026-10-12T10:00:00Z")];
+        let r = slw(&g, &[], None, "2026-10-25T10:00:00Z");
+        assert_eq!(r.none_reason.as_deref(), Some("no-session"));
+        assert_eq!(r.open_drift.len(), 1);
     }
 
     #[test]

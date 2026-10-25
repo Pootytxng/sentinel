@@ -344,7 +344,7 @@
     "sinceWorked": {
       "title": "Since it last worked",
       "notProven": "listed by time, not proven cause",
-      "since": "Everything Compy recorded since your last session with no crash on record ({{game}}, {{date}}), newest first:",
+      "since": "What Compy recorded since your last session with no crash on record started ({{game}}, {{date}}), newest first:",
       "nothing": "Compy hasn't recorded anything since then.",
       "noSession": "Compy hasn't recorded a finished session yet, so it can't say when this PC last worked.",
       "noneClean": "Compy can't name a session that worked: every recorded session had a crash or freeze of its own, or is older than the crash records Compy read.",
@@ -355,6 +355,8 @@
         "drift": "Setting drift",
         "session": "Session"
       },
+      "openDrift": "Still drifted now:",
+      "openDriftOlder": "Still drifted now, from before that session:",
       "observedBetween": "noticed between {{from}} and {{to}}",
       "rolledBack": "since undone",
       "more_one": "And 1 earlier entry.",
