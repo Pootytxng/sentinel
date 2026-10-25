@@ -221,7 +221,7 @@ room or station picked by hand.
 - [x] **P6-stutter** (`597a76dc`) Stutter/slow on that view compares the latest session of the game with its last good one
       (`what_changed_between`), not a Monitor/benchmark hand-off; no good session = say so and offer one.
       Needs P6-door. ROADMAP P6 bullet 4; Constitution §16, §17.
-- [ ] **P6-next** The Care view shows exactly one next step (Black Box `next_step` or the what-changed next
+- [x] **P6-next** (`9708fbc6`) The Care view shows exactly one next step (Black Box `next_step` or the what-changed next
       test); after it, the measured-payoff line reports recurrence or absence. Needs P6-door. ROADMAP P6
       bullet 6; Constitution §25.
 - [x] **P6-restore** (`8f326131`) When Compy changes sit between the last good session and the problem, offer "Put back how
