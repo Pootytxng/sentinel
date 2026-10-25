@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import { LEDGER_CHANGED_EVENT } from "../types";
+import i18n from "../i18n";
 
 const state = vi.hoisted(() => ({
   gate: false,
@@ -1080,6 +1081,15 @@ describe("the baseline is graded before a start", () => {
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
   });
 
+  // P4-comparable review: a short baseline that left background time out says how much.
+  it("a too-short baseline says how much was left out with another window in front", async () => {
+    await openStart({ ...VALORANT_SESSION, samples: 400, background_secs_excluded: 1500 });
+    const note = await screen.findByTestId("exp-baseline-unfit");
+    expect(note).toHaveTextContent(
+      "Those readings are only the time the game was in front: 25 min were left out because another window was in front.",
+    );
+  });
+
   it("the re-record line reads naturally when the game has no name to show", async () => {
     await openStart({ ...VALORANT_SESSION, process_name: ".exe", samples: 91 });
     const note = await screen.findByTestId("exp-baseline-unfit");
@@ -1191,5 +1201,106 @@ describe("a Trial judged on an uneven session", () => {
     expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
     expect(screen.queryByTestId("exp-after-receipt")).toBeNull();
     expect(screen.queryByTestId("exp-too-noisy-why")).toBeNull();
+  });
+});
+
+// P4-comparable: a Partial pair says what differed in one line, in the reader's language, and each
+// session's time that wasn't play is named: background time left out, held-flat time counted.
+describe("ExperimentBench — what differed and what wasn't play", () => {
+  afterEach(async () => {
+    cleanup();
+    await i18n.changeLanguage("en");
+  });
+
+  const PARTIAL_TRIAL = {
+    ...KEPT_EXPERIMENT,
+    session_pairing: {
+      verdict: "partial",
+      missing_context: ["The graphics API wasn't recorded on one of these sessions."],
+      changed: ["resolution", "refresh"],
+      unrecorded: ["graphics-api"],
+      // Tonight's real 09:39 WARDOGS session as the after-reading: 990 s held at 120 fps.
+      baseline_stretches: { left_out_secs: 600, flat_secs: 0, flat_fps: null, traced: true },
+      after_stretches: { left_out_secs: null, flat_secs: 990, flat_fps: 120, traced: true },
+    },
+  };
+
+  it("names what differed and the stretches in one plain line each", async () => {
+    state.gate = true;
+    state.experiments = [PARTIAL_TRIAL];
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("exp-pairing-receipt")).toHaveTextContent(
+      "What differed: the resolution, the refresh rate changed, and one of the sessions didn't record the graphics API.",
+    );
+    const stretches = screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent);
+    expect(stretches).toEqual([
+      "Before session: 10 min with the game in the background was left out of the numbers.",
+      "After session: 16 min held at about 120 fps. That may be a menu, a frame cap or the game in the background; Compy can't tell, so it was counted.",
+    ]);
+  });
+
+  it("says the same in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    state.gate = true;
+    state.experiments = [PARTIAL_TRIAL];
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("exp-pairing-receipt")).toHaveTextContent(
+      "差异：分辨率、刷新率有变化，且其中一局没有记录图形 API。",
+    );
+    expect(screen.getAllByTestId("exp-stretch-receipt")[1]).toHaveTextContent("测试后的那局：有 16 分钟稳定在约 120 fps。");
+  });
+
+  it("a session that recorded focus never blames the background, and minutes are floored", async () => {
+    state.gate = true;
+    state.experiments = [
+      {
+        ...KEPT_EXPERIMENT,
+        session_pairing: {
+          verdict: "comparable",
+          baseline_stretches: { left_out_secs: 119, flat_secs: 59, flat_fps: 120, traced: true },
+          after_stretches: { left_out_secs: 0, flat_secs: 119, flat_fps: 120, traced: true },
+        },
+      },
+    ];
+    render(<ExperimentBench />);
+    await screen.findByText("Measurably faster — kept");
+    expect(screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent)).toEqual([
+      // 119 s is 1 min, not 2; 59 s held flat is under a minute and gets no line.
+      "Before session: 1 min with the game in the background was left out of the numbers.",
+      "After session: 1 min held at about 120 fps. That may be a menu or a frame cap; Compy can't tell, so it was counted.",
+    ]);
+  });
+
+  it("too few readings after background time says how much was left out", async () => {
+    state.gate = true;
+    state.experiments = [
+      {
+        ...KEPT_EXPERIMENT,
+        status: "restored",
+        kept: false,
+        verdict: "insufficient-evidence",
+        treatment: { ...KEPT_EXPERIMENT.treatment, samples: 400 },
+        session_pairing: {
+          verdict: "comparable",
+          after_stretches: { left_out_secs: 1500, flat_secs: 0, flat_fps: null, traced: true },
+        },
+      },
+    ];
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("exp-too-few-left-out")).toHaveTextContent(
+      "Only 400 readings while the game was in front: 25 min were left out because another window was in front.",
+    );
+  });
+
+  it("a comparable pair, or an older record with only English lines, adds no line", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, session_pairing: { verdict: "comparable", missing_context: [] } },
+      { ...KEPT_EXPERIMENT, id: "exp:old", session_pairing: { verdict: "partial", missing_context: ["x"] } },
+    ];
+    render(<ExperimentBench />);
+    expect(await screen.findAllByText("Measurably faster — kept")).toHaveLength(2);
+    expect(screen.queryByTestId("exp-pairing-receipt")).toBeNull();
+    expect(screen.queryByTestId("exp-stretch-receipt")).toBeNull();
   });
 });

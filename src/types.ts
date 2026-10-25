@@ -207,6 +207,9 @@ export type SessionSummary = {
   /** Peak GPU hotspot (junction) temperature — AMD-specific; null on NVIDIA (NVML doesn't expose
    *  it) and on pre-field sessions. */
   peak_gpu_hotspot_temp_c?: number | null;
+  /** P4-comparable: seconds the game presented while another window was in front, left out of every
+   *  number above. null/absent = the session didn't record focus (an older Compy). */
+  background_secs_excluded?: number | null;
 };
 
 /** Mirror of the Rust `GameStateFingerprint` (game_state.rs) — the honest conditions a session ran
@@ -683,6 +686,10 @@ export type SessionComparability = {
   confidence_limit: ConfidenceBand;
   /** What a surface may honestly conclude at this verdict — plain-language, ready to render. */
   allowed_conclusions: string[];
+  /** P4-comparable: one stable key per `changed_context` line ("resolution", "gpu-driver", …). */
+  changed_keys?: string[];
+  /** One stable key per `missing_context` line ("conditions", "rig", …). */
+  missing_keys?: string[];
 };
 
 export type WhatChangedReport = {

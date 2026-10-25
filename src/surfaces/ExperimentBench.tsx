@@ -53,6 +53,28 @@ type NoiseEvidence = {
   between_sessions?: { spread_pct: number; sessions: number } | null;
 };
 
+/** P4-comparable — what one session's records say about stretches that weren't play. */
+type SessionStretches = {
+  /** Seconds left out because the game was in the background. null = focus wasn't recorded. */
+  left_out_secs?: number | null;
+  /** Seconds the trace held flat (a menu, a frame cap or the background: Compy can't tell), counted. */
+  flat_secs?: number;
+  /** The frame rate the longest held-flat stretch sat at. */
+  flat_fps?: number | null;
+};
+
+/** How comparable the before and after sessions were (experiment.rs `SessionPairing`). */
+type SessionPairing = {
+  verdict: "comparable" | "partial" | "not-comparable" | "unknown";
+  missing_context?: string[];
+  /** Stable keys of the conditions that differed. Absent on older records. */
+  changed?: string[];
+  /** Stable keys of the conditions one session didn't record. Absent on older records. */
+  unrecorded?: string[];
+  baseline_stretches?: SessionStretches | null;
+  after_stretches?: SessionStretches | null;
+};
+
 type Experiment = {
   id: string;
   rec_id: string;
@@ -86,6 +108,8 @@ type Experiment = {
   baseline_check?: "steady" | "uneven" | "untraced" | null;
   /** The baseline's first- and second-half average fps. null when it had no trace, and on older records. */
   baseline_halves?: { first_half_fps: number; second_half_fps: number } | null;
+  /** How comparable the two sessions were. null while Running and on older records. */
+  session_pairing?: SessionPairing | null;
 };
 
 type SimulatorReport = {
@@ -275,6 +299,85 @@ function afterReceipt(x: Experiment, t: Translate): string | null {
     first: Math.round(tr.halves.first_half_fps),
     second: Math.round(tr.halves.second_half_fps),
   });
+}
+
+// P4-comparable: the backend's condition keys (comparability.rs) → their i18n names. A key this build
+// doesn't know reads as "a condition", never as nothing.
+const PAIR_CONDITION_KEY: Record<string, string> = {
+  game: "game",
+  rig: "rig",
+  resolution: "resolution",
+  refresh: "refresh",
+  "graphics-api": "graphicsApi",
+  "game-build": "gameBuild",
+  "frame-generation": "frameGeneration",
+  conditions: "conditions",
+  capture: "capture",
+  gpu: "gpu",
+  ram: "ram",
+  "display-mode": "displayMode",
+  "gpu-driver": "gpuDriver",
+  "windows-build": "windowsBuild",
+  display: "display",
+  "capture-method": "captureMethod",
+};
+
+function pairList(keys: string[], t: Translate): string {
+  const names = [...new Set(keys.map((k) => PAIR_CONDITION_KEY[k] ?? "other"))];
+  return names.map((k) => t(`lab.experimentBench.pairCondition.${k}`)).join(t("lab.experimentBench.pairListSeparator"));
+}
+
+// A Partial pair's receipt says what differed, in one line and the reader's language. An older record
+// carries only the English lines, which this line never shows in place of a translation.
+function pairingReceipt(x: Experiment, t: Translate): string | null {
+  const p = x.session_pairing;
+  if (p?.verdict !== "partial") return null;
+  const changed = p.changed ?? [];
+  const unrecorded = p.unrecorded ?? [];
+  if (changed.length > 0 && unrecorded.length > 0)
+    return t("lab.experimentBench.pairBoth", { changed: pairList(changed, t), unrecorded: pairList(unrecorded, t) });
+  if (changed.length > 0) return t("lab.experimentBench.pairChanged", { changed: pairList(changed, t) });
+  if (unrecorded.length > 0) return t("lab.experimentBench.pairUnrecorded", { unrecorded: pairList(unrecorded, t) });
+  return null;
+}
+
+// "12 min" / "45 s" — a left-out span as the backend words it (experiment.rs `left_out_clause`).
+function spanText(secs: number, t: Translate): string {
+  return secs < 60
+    ? t("lab.experimentBench.spanSeconds", { seconds: secs })
+    : t("lab.experimentBench.spanMinutes", { minutes: Math.floor(secs / 60) });
+}
+
+// A too-few-readings result whose after-session left time out says how much, so "only 400 readings"
+// from a long session is not a mystery (the backend's verdict note says the same).
+function tooFewLeftOutReceipt(x: Experiment, t: Translate): string | null {
+  const secs = x.session_pairing?.after_stretches?.left_out_secs ?? 0;
+  if (x.verdict !== "insufficient-evidence" || !x.treatment || secs <= 0) return null;
+  return t("lab.experimentBench.receiptTooFewLeftOut", { readings: x.treatment.samples, span: spanText(secs, t) });
+}
+
+// P4-comparable: what each session's records say about time that wasn't play. Background time was
+// left out of the numbers; a held-flat stretch Compy can't classify was counted, and is named so.
+// Under a full minute is not worth a line (minutes are floored, so "1 min" is at least 60 s). When the
+// session recorded focus, a held-flat stretch can't have been the game in the background.
+function stretchReceipts(x: Experiment, t: Translate): string[] {
+  const p = x.session_pairing;
+  if (!p) return [];
+  const lines: string[] = [];
+  for (const [s, label] of [
+    [p.baseline_stretches, "lab.experimentBench.stretchBefore"],
+    [p.after_stretches, "lab.experimentBench.stretchAfter"],
+  ] as const) {
+    if (!s) continue;
+    const session = t(label);
+    const leftOut = Math.floor((s.left_out_secs ?? 0) / 60);
+    if (leftOut >= 1) lines.push(t("lab.experimentBench.stretchLeftOut", { session, minutes: leftOut }));
+    const flat = Math.floor((s.flat_secs ?? 0) / 60);
+    const flatKey = s.left_out_secs != null ? "lab.experimentBench.stretchFlatFocused" : "lab.experimentBench.stretchFlat";
+    if (flat >= 1 && s.flat_fps != null)
+      lines.push(t(flatKey, { session, minutes: flat, fps: Math.round(s.flat_fps) }));
+  }
+  return lines;
 }
 
 // A past result whose verdict reads like a measured judgment (Better / No change / Worse). Only such
@@ -714,6 +817,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                   {grade?.kind === "too-short" ? (
                     <p className="exp-note" data-testid="exp-baseline-unfit">
                       {t("lab.experimentBench.baselineTooShort", { readings: grade.samples, min: MIN_BASELINE_SAMPLES })}{" "}
+                      {(baseline.background_secs_excluded ?? 0) > 0 &&
+                        `${t("lab.experimentBench.baselineTooShortLeftOut", { span: spanText(baseline.background_secs_excluded ?? 0, t) })} `}
                       {prettyGameName(baseline.process_name)
                         ? t("lab.experimentBench.baselineRerecord", { game: prettyGameName(baseline.process_name) })
                         : t("lab.experimentBench.baselineRerecordNoGame")}
@@ -797,6 +902,21 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                     {afterReceipt(x, t)}
                   </span>
                 )}
+                {tooFewLeftOutReceipt(x, t) && (
+                  <span className="exp-bench-abort" data-testid="exp-too-few-left-out">
+                    {tooFewLeftOutReceipt(x, t)}
+                  </span>
+                )}
+                {pairingReceipt(x, t) && (
+                  <span className="exp-bench-abort" data-testid="exp-pairing-receipt">
+                    {pairingReceipt(x, t)}
+                  </span>
+                )}
+                {stretchReceipts(x, t).map((line, k) => (
+                  <span key={k} className="exp-bench-abort" data-testid="exp-stretch-receipt">
+                    {line}
+                  </span>
+                ))}
                 {x.verdict === "too-noisy" && (
                   <span className="exp-bench-abort" data-testid="exp-too-noisy-why">
                     {t("lab.experimentBench.tooNoisyWhy")}
