@@ -138,13 +138,36 @@ type SkipReason =
   | "already-set-by-gaming-mode-restore-unfinished"
   | "already-set-unchecked"
   | "already-set-unconfirmed"
-  | "no-safe-apply";
+  | "no-safe-apply"
+  | "too-small-to-measure-here";
+// P4-rank (ENGINE §3.5, §3.7): the backend numbers the changes that passed in a suggested test order
+// (stronger evidence that it helps, then lower risk, then catalog order) and says why per position.
+// A change is "too small to measure here" only when the catalog states its effect AND this game's
+// band is measured; no change states one today, so every change says its effect size is unknown.
+type Evidence = "measured" | "not-measured" | "unknown";
+type Risk = "low" | "moderate" | "unknown";
 type TrialCandidate = {
   id: string;
   title: string;
   passes: boolean;
   reason: SkipReason | null;
   detail: string | null;
+  position?: number | null;
+  evidence?: Evidence;
+  risk?: Risk;
+  stated_effect_pct?: number | null;
+  too_small?: { effect_pct: number; band_pct: number } | null;
+};
+
+const EVIDENCE_KEY: Record<Evidence, string> = {
+  measured: "lab.experimentBench.rank.evidence.measured",
+  "not-measured": "lab.experimentBench.rank.evidence.notMeasured",
+  unknown: "lab.experimentBench.rank.evidence.unknown",
+};
+const RISK_KEY: Record<Risk, string> = {
+  low: "lab.experimentBench.rank.risk.low",
+  moderate: "lab.experimentBench.rank.risk.moderate",
+  unknown: "lab.experimentBench.rank.risk.unknown",
 };
 
 const SKIP_REASON_KEY: Record<SkipReason, string> = {
@@ -156,6 +179,7 @@ const SKIP_REASON_KEY: Record<SkipReason, string> = {
   "already-set-unchecked": "lab.experimentBench.skipReason.alreadySetUnchecked",
   "already-set-unconfirmed": "lab.experimentBench.skipReason.alreadySetUnconfirmed",
   "no-safe-apply": "lab.experimentBench.skipReason.noSafeApply",
+  "too-small-to-measure-here": "lab.experimentBench.skipReason.tooSmallToMeasureHere",
 };
 
 // A plain (key, options?) => string signature — avoids importing react-i18next's generic TFunction
@@ -604,7 +628,14 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
 
   // The testable universe: catalog changes that pass "worth testing on this PC". The rest are listed,
   // each with its reason, behind "Show why others aren't listed" — never dropped silently.
-  const pickable = recs.filter((r) => r.passes);
+  // In the backend's suggested order (P4-rank); a change without a position keeps its place after them.
+  const pickable = recs
+    .filter((r) => r.passes)
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => (a.r.position ?? Infinity) - (b.r.position ?? Infinity) || a.i - b.i)
+    .map(({ r }) => r);
+  const ranked = pickable.filter((r) => r.position != null && r.evidence && r.risk);
+  const effectUnknown = ranked.filter((r) => r.stated_effect_pct == null);
   // A pick kept in the dropdown after a refresh (below) is listed there only, not here as well.
   const skipped = recs.filter((r) => !r.passes && r.id !== pickId);
 
@@ -777,6 +808,30 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
               {t("lab.experimentBench.noChangesToTest")}
             </p>
           )}
+          {ranked.length > 0 && (
+            <div className="exp-order">
+              <p className="exp-order-label">{t("lab.experimentBench.rank.label")}</p>
+              <ol className="exp-order-list">
+                {ranked.map((r) => (
+                  <li key={r.id} data-rec={r.id}>
+                    <span className="exp-why-title">{r.title}</span>{" "}
+                    <span className="exp-why-reason">
+                      {t("lab.experimentBench.rank.reason", {
+                        evidence: t(EVIDENCE_KEY[r.evidence!]),
+                        risk: t(RISK_KEY[r.risk!]),
+                      })}
+                      {effectUnknown.length !== ranked.length && r.stated_effect_pct == null
+                        ? ` ${t("lab.experimentBench.rank.effectUnknownOne")}`
+                        : null}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              {effectUnknown.length === ranked.length && (
+                <p className="exp-note">{t("lab.experimentBench.rank.effectUnknownAll")}</p>
+              )}
+            </div>
+          )}
           {skipped.length > 0 && (
             <div className="exp-why">
               <button
@@ -794,7 +849,12 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                     <li key={r.id} data-rec={r.id}>
                       <span className="exp-why-title">{r.title}</span>{" "}
                       <span className="exp-why-reason">
-                        {r.reason ? t(SKIP_REASON_KEY[r.reason]) : null}
+                        {r.reason
+                          ? t(SKIP_REASON_KEY[r.reason], {
+                              effect: r.too_small?.effect_pct.toFixed(1),
+                              band: r.too_small?.band_pct.toFixed(1),
+                            })
+                          : null}
                         {r.detail ? ` ${r.detail}` : null}
                       </span>
                     </li>

@@ -1179,6 +1179,28 @@ fn has_frame_reading(s: &SessionSummary) -> bool {
     s.avg_fps.is_finite() && s.avg_fps > 0.0 && s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0
 }
 
+/// P4-rank: the band the NEXT Trial would be judged against, only when it is measured — the
+/// between-session spread of the game the bench offers as baseline (the newest session with a frame
+/// reading and a known game, the same pick `ExperimentBench` makes), never below the fixed default.
+/// `None` when that game's spread isn't measured or the change history can't be read: the fixed
+/// default is a floor, not a measurement of this game, so it never marks a change too small.
+pub(crate) fn next_trial_measured_band_pct() -> Option<f64> {
+    let sessions = crate::sessions::get_session_summaries();
+    let baseline = sessions
+        .iter()
+        .filter(|s| has_frame_reading(s) && !s.process_name.trim().is_empty())
+        .filter_map(|s| Some((chrono::DateTime::parse_from_rfc3339(&s.started_at).ok()?, s)))
+        .max_by_key(|(at, _)| *at)
+        .map(|(_, s)| s)?;
+    let history = ledger_for_one_change_checks(
+        crate::history::load_history(),
+        crate::history::ledger_was_quarantined(),
+    )
+    .ok()?;
+    let between = crate::noise_floor::between_session_noise(&sessions, baseline, &ledger_rows(&history))?;
+    Some(crate::noise_floor::noise_band_pct(Some(&between)))
+}
+
 /// §4.2 — the baseline session a start is judged against, looked up in Compy's own session store.
 /// Refuses one it can't find, one without a frame-rate reading (an unmeasured 1% low would make every
 /// later delta meaningless), and one that didn't record which game was running.

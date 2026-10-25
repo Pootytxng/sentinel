@@ -396,7 +396,24 @@
       "alreadySetByGamingModeRestoreUnfinished": "已经设置好了。是 Compy 的游戏模式设置的，但还没有改回来。请在游戏模式会话中断的提示里恢复你的设置。",
       "alreadySetUnchecked": "Windows 里已经是这个设置；Compy 无法确认这项更改是不是它做的。",
       "alreadySetUnconfirmed": "已经设置好了。Compy 之前应用过这项更改，但无法确认现在保持这个设置的是不是它的更改。",
-      "noSafeApply": "仅为建议。Compy 没有可安全一键执行的更改，所以无法测试。"
+      "noSafeApply": "仅为建议。Compy 没有可安全一键执行的更改，所以无法测试。",
+      "tooSmallToMeasureHere": "效果太小，这里测不出来。它的预期效果（{{effect}}%）不超过这款游戏实测的每次运行间波动（{{band}}%）。"
+    },
+    "rank": {
+      "label": "建议的测试顺序：",
+      "reason": "{{evidence}}；{{risk}}。",
+      "evidence": {
+        "measured": "有实测依据",
+        "notMeasured": "预计有帮助，但未实测",
+        "unknown": "没有说明有帮助的证据"
+      },
+      "risk": {
+        "low": "风险低",
+        "moderate": "风险中等",
+        "unknown": "风险未说明"
+      },
+      "effectUnknownOne": "效果有多大尚不清楚。",
+      "effectUnknownAll": "Compy 不知道这些更改的效果有多大，所以没有因为“效果太小测不出来”而排除任何一项。"
     },
     "readingRig": "正在读取你的主机…",
     "forYourRig": "针对你的主机：",

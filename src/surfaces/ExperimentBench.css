@@ -122,6 +122,21 @@
 .exp-why-title {
   color: var(--ix-text-1);
 }
+/* P4-rank: the suggested test order, one reason per position. */
+.exp-order-label {
+  margin: 0;
+  font-size: var(--type-label);
+  color: var(--ix-text-2);
+}
+.exp-order-list {
+  margin: 4px 0 0;
+  padding-left: 22px;
+  font-size: var(--type-label);
+  line-height: 1.5;
+  color: var(--ix-text-2);
+  max-width: 64ch;
+  overflow-wrap: anywhere;
+}
 
 /* ── Simulator read (honest advisory — never a promise) ───────────────────── */
 .exp-sim {
