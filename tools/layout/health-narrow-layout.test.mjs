@@ -6,8 +6,8 @@
 // scrolled sideways. jsdom has no layout engine; this measures what the engine does.
 //
 // The REAL ShellV2 + HomeConsole render under App.tsx's stylesheet chain inside `main.app.app-v2`, in
-// iframes whose viewports are the issue's widths (380 / 504 / 684, and 1099 / 1100 either side of
-// #622-f2's split breakpoint) and the wide windows whose look must
+// iframes whose viewports are the issue's widths (380 / 504 / 684, 1100, and 1230 / 1238 / 1240
+// either side of #622-f2's split breakpoint) and the wide windows whose look must
 // not change (1280 / 1500 / 1920). Read back over CDP:
 //   1. below 600px the rail is an icon-only strip (≤ 72px) that still names every room; at 600px and
 //      up it keeps the full 216px rail with visible labels;
@@ -16,10 +16,12 @@
 //   3. no tile's content box is narrower than MIN_TILE_CONTENT_PX, no tile scrolls sideways, and no
 //      descendant of a tile (title, button) paints past the tile's content edge;
 //   4. `.v2-content` never scrolls horizontally;
-//   5. below 1100px the rig panel (`.hc-panel`, #225's first viewport) never scrolls inside itself on
-//      either axis, and it sits under the verdict at the room's full width; from 1100px up the
+//   5. below 1240px the rig panel (`.hc-panel`, #225's first viewport) never scrolls inside itself on
+//      either axis, and it sits under the verdict at the room's full width; from 1240px up the
 //      verdict and the panel stay side by side (#622-f2). RED on db3a3d8c: 526px of panel content
-//      in 144 / 212 / 223 / 453px at 380 / 504 / 684 / 1099, and 17px of vertical overflow below 700.
+//      in 144 / 212 / 223 / 453 / 525px at 380 / 504 / 684 / 1100 / 1230, 17px of vertical overflow
+//      below 700. RED on 8469de31 (cutoff 1100): side by side at 1100 / 1230 / 1238, scrolling at
+//      1100 and 1230. Measured: the two-column panel first fits with no inner scroll at 1232px.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,12 +32,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = root.replace(/\\/g, "/") + "/src";
 
 const NARROW = [380, 504];
-const WIDE = [684, 1099, 1100, 1280, 1500, 1920];
+const WIDE = [684, 1100, 1230, 1238, 1240, 1280, 1500, 1920];
 const FRAMES = [...NARROW, ...WIDE];
 const RAIL_PX = 216;
 const NARROW_RAIL_MAX_PX = 72;
 /** Below this window width Health's split stacks and the rig panel must show all of itself (#622-f2). */
-const SPLIT_STACK_BELOW_PX = 1100;
+const SPLIT_STACK_BELOW_PX = 1240;
 /** No tile content box may fall to double digits (the issue measured 30–92px on main below 600). */
 const MIN_TILE_CONTENT_PX = 100;
 const TOLERANCE_PX = 0.5;
@@ -289,7 +291,7 @@ describe("Health composes at every window width in a real Chromium (#622)", () =
     expect(violations).toEqual([]);
   });
 
-  it("shows the whole rig panel with no inner scroll below 1100px, and keeps the split from 1100px up (#622-f2)", () => {
+  it("shows the whole rig panel with no inner scroll below 1240px, and keeps the split from 1240px up (#622-f2)", () => {
     const violations = [];
     for (const s of steps) {
       const p = s.panel;
