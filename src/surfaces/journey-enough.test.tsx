@@ -9,13 +9,20 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import i18n from "../i18n";
 
-const state = vi.hoisted(() => ({ fps: null as Record<string, unknown> | null, sessions: [] as unknown[] }));
+const state = vi.hoisted(() => ({ fps: null as Record<string, unknown> | null, sessions: [] as unknown[], concluded: 0 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
     if (cmd === "get_fps_status") return Promise.resolve(state.fps);
     if (cmd === "get_gpu_sensors") return Promise.resolve([]);
     if (cmd === "get_session_summaries") return Promise.resolve(state.sessions);
     if (cmd === "get_experiments") return Promise.resolve([]);
+    if (cmd === "start_experiment")
+      return Promise.resolve({ id: "exp:1-0", rec_id: "hags", rec_title: "HAGS", game: "Valorant", status: "running", verdict: null });
+    if (cmd === "conclude_experiment") {
+      state.concluded += 1;
+      // The backend's own grade of an after-session whose halves differ past the floor (experiment.rs).
+      return Promise.resolve({ id: "exp:1-0", rec_id: "hags", rec_title: "HAGS", game: "Valorant", status: "restored", verdict: "too-noisy", outcome: "recommended" });
+    }
     return Promise.resolve(null);
   }),
 }));
@@ -49,6 +56,7 @@ afterEach(() => {
   localStorage.clear();
   state.fps = null;
   state.sessions = [];
+  state.concluded = 0;
 });
 
 describe("the countdown and the enough rule", () => {
@@ -134,7 +142,7 @@ describe("P5-enough-f1: halves that never settle don't keep the line up forever"
     expect(enoughLine(prog(SETTLE_CAP_SAMPLES, 240, 250), t)).toBe(
       "The frame rate in this game keeps changing, so it may not settle. You can stop now; Compy will count this session as uneven.",
     );
-    expect(enoughLine(prog(SETTLE_CAP_SAMPLES, 240, 250), t, "overlay")).toBe("Won't settle. Stop now; it counts as uneven.");
+    expect(enoughLine(prog(SETTLE_CAP_SAMPLES, 240, 250), t, "overlay")).toBe("Keeps changing. Stop now; it counts as uneven.");
     // Steady halves past the cap are still plain "enough", never the cap line.
     expect(enoughState(prog(SETTLE_CAP_SAMPLES, 240, 245))).toEqual({ kind: "enough" });
     // No trace: never called uneven, because nothing was measured swinging.
@@ -183,11 +191,67 @@ describe("P5-enough-f1: halves that never settle don't keep the line up forever"
     expect(localStorage.getItem(JOURNEY_RECORDING_KEY)).toBeNull();
   });
 
+  /** A saved session as the capture measured it: `traced` false = no fps buckets at all. */
+  const saved = (at: number, samples: number, first: number, second: number, traced = true) => {
+    const n = samples / 10;
+    return {
+      started_at: new Date(at).toISOString(),
+      process_name: "Valorant",
+      samples,
+      avg_fps: (first + second) / 2,
+      low1_fps_est: 180,
+      avg_frametime_ms: 4.1,
+      duration_secs: samples,
+      fps_series: traced ? Array.from({ length: n }, (_, i) => [i * 10, i < n / 2 ? first : second] as [number, number]) : [],
+    };
+  };
+  const journey = () =>
+    render(
+      <GuidedJourney game="Valorant" change={{ id: "hags", title: "HAGS" }} canStart outcome="recommended" onOutcome={() => {}} refresh={async () => {}} />,
+    );
+
+  it("no trace: Stop now is offered and lands in the journey's untraced step, never called uneven", async () => {
+    const t0 = Date.now();
+    state.fps = playing({ samples: SETTLE_CAP_SAMPLES, fps_series: [] });
+    journey();
+    fireEvent.click(screen.getByRole("button", { name: "Optimize my game" }));
+    await waitFor(() => expect(screen.getByTestId("journey-enough").textContent).toMatch(/can't see enough of the frame-rate trace/));
+    expect(screen.queryByRole("button", { name: "Done playing" })).toBeNull();
+    state.sessions = [saved(t0 + 500, SETTLE_CAP_SAMPLES, 240, 240, false)];
+    fireEvent.click(screen.getByRole("button", { name: "Stop now" }));
+    await waitFor(() => expect(screen.getByTestId("journey").getAttribute("data-phase")).toBe("uneven"));
+    expect(screen.getByTestId("journey-line").textContent).toMatch(
+      /^Compy couldn't check how steady that session was, so it can't compare against it\./,
+    );
+    expect(screen.getByTestId("journey-line").textContent).not.toMatch(/swung/);
+  });
+
+  it("session 2: Stop now goes to conclude, whose too-noisy verdict puts the change back", async () => {
+    const t0 = Date.now();
+    // Session 1 is steady and enough: the owner stops it the usual way.
+    state.fps = playing(prog(900, 240, 242));
+    journey();
+    fireEvent.click(screen.getByRole("button", { name: "Optimize my game" }));
+    await waitFor(() => expect(screen.getByTestId("journey-enough").textContent).toBe("Compy has enough; you can stop."));
+    const baseline = saved(t0 + 500, 900, 240, 242);
+    state.sessions = [baseline];
+    fireEvent.click(screen.getByRole("button", { name: "Done playing" }));
+    await waitFor(() => expect(screen.getByTestId("journey").getAttribute("data-phase")).toBe("with-change"));
+    // Session 2 never settles: past the cap the same Stop now shows.
+    state.fps = playing(prog(SETTLE_CAP_SAMPLES, 240, 250));
+    await waitFor(() => expect(screen.getByTestId("journey-enough").textContent).toMatch(/keeps changing/));
+    state.sessions = [baseline, saved(Date.now() + 500, SETTLE_CAP_SAMPLES, 240, 250)];
+    fireEvent.click(screen.getByRole("button", { name: "Stop now" }));
+    await waitFor(() => expect(screen.getByTestId("journey").getAttribute("data-phase")).toBe("result"));
+    expect(state.concluded).toBe(1);
+    expect(screen.getByTestId("journey-line").textContent).toBe("Put HAGS back: the frame rate moved around too much to tell.");
+  });
+
   it("the overlay shows the short cap line", async () => {
     state.fps = playing(prog(SETTLE_CAP_SAMPLES, 240, 250));
     localStorage.setItem(JOURNEY_RECORDING_KEY, "1");
     render(<Overlay />);
-    await waitFor(() => expect(screen.getByTestId("overlay-enough").textContent).toBe("Won't settle. Stop now; it counts as uneven."));
+    await waitFor(() => expect(screen.getByTestId("overlay-enough").textContent).toBe("Keeps changing. Stop now; it counts as uneven."));
   });
 });
 

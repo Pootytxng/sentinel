@@ -368,7 +368,7 @@
       "enoughSettlingShort": "Not settled yet. Keep playing this area.",
       "enough": "Compy has enough; you can stop.",
       "enoughUnsettled": "The frame rate in this game keeps changing, so it may not settle. You can stop now; Compy will count this session as uneven.",
-      "enoughUnsettledShort": "Won't settle. Stop now; it counts as uneven.",
+      "enoughUnsettledShort": "Keeps changing. Stop now; it counts as uneven.",
       "enoughUntraced": "Compy can't see enough of the frame-rate trace to tell whether this session is steady. You can stop now.",
       "enoughUntracedShort": "Can't check if it's steady. You can stop now.",
       "stopNow": "Stop now",
