@@ -178,9 +178,9 @@ pub(crate) struct BlackBoxReport {
     pub(crate) incidents: Vec<Incident>,
     pub(crate) skipped_sources: Vec<String>,
     /// P6-changed: how far back this scan is complete. Every capped read (an Event Log channel that
-    /// returned its full `EVENTS_PER_CHANNEL`, a full Reliability read, the `MAX_INCIDENTS` cut) can
-    /// have dropped crashes older than its oldest kept row; this is the LATEST such row, so before it
-    /// "no crash on record during that session" can't be said. `None` = no read was cut. Internal.
+    /// returned its full `EVENTS_PER_CHANNEL`, a full Reliability read, the WER folder cap, the
+    /// `MAX_INCIDENTS` cut) can have dropped crashes older than its oldest kept row; this is the
+    /// LATEST such row, so before it "no crash on record during that session" can't be said. `None` = no read was cut. Internal.
     #[serde(skip)]
     pub(crate) clean_judgeable_from: Option<DateTime<Utc>>,
 }
@@ -1322,12 +1322,16 @@ pub(crate) fn assert_no_raw_json(field: &str, text: &str) {
 /// Read the WER `Report.wer` files (`ReportArchive` + `ReportQueue`). Read-only file reads, no
 /// network. App-crash/hang reports are readable non-elevated; `Kernel_*` reports are admin-only, so a
 /// PermissionDenied is reported as a *skipped* source (the elevation-honesty hard line), never errored.
-fn collect_wer() -> (Vec<WerReport>, Option<String>) {
+fn collect_wer() -> (Vec<WerReport>, Option<String>, Option<DateTime<Utc>>) {
     let mut reports = Vec::new();
     let mut needs_admin = false;
     let pd = std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".into());
-    let mut budget = 400usize; // bound the folder walk on a pathological WER dir
-    for sub in ["ReportArchive", "ReportQueue"] {
+    // P6-changed-f2: list the report folders with their modified time (the directory listing carries
+    // it — no file contents read here), then read only the newest `WER_MAX_REPORTS`, so the cap has a
+    // real time cut-point instead of stopping in folder order.
+    let mut dirs: Vec<(std::path::PathBuf, Option<DateTime<Utc>>)> = Vec::new();
+    let mut listing_cut_short = false;
+    'subs: for sub in ["ReportArchive", "ReportQueue"] {
         let base = std::path::Path::new(&pd)
             .join("Microsoft")
             .join("Windows")
@@ -1336,30 +1340,81 @@ fn collect_wer() -> (Vec<WerReport>, Option<String>) {
         let Ok(entries) = std::fs::read_dir(&base) else {
             continue; // folder missing → nothing to read here (not a skip)
         };
-        for entry in entries.flatten() {
-            if budget == 0 {
-                break;
-            }
-            budget -= 1;
-            let report = entry.path().join("Report.wer");
-            match std::fs::read(&report) {
-                Ok(bytes) => {
-                    if let Some(mut w) = parse_wer(&decode_wer_bytes(&bytes)) {
-                        // EventTime is UTC; re-stamp to the local offset so the display reads local.
-                        if let Ok(dt) = DateTime::parse_from_rfc3339(&w.when) {
-                            w.when = dt.with_timezone(&chrono::Local).to_rfc3339();
-                        }
-                        reports.push(w);
+        let complete = list_wer_entries(&mut dirs, &mut listing_cut_short, entries, |entry| {
+            let modified = entry.metadata().ok().and_then(|m| m.modified().ok()).map(DateTime::<Utc>::from);
+            (entry.path(), modified)
+        });
+        if !complete {
+            break 'subs; // listing bound hit: stop listing, refuse "clean"
+        }
+    }
+    let (chosen, cut) = select_wer_dirs(dirs, listing_cut_short);
+    for dir in chosen {
+        let report = dir.join("Report.wer");
+        match std::fs::read(&report) {
+            Ok(bytes) => {
+                if let Some(mut w) = parse_wer(&decode_wer_bytes(&bytes)) {
+                    // EventTime is UTC; re-stamp to the local offset so the display reads local.
+                    if let Ok(dt) = DateTime::parse_from_rfc3339(&w.when) {
+                        w.when = dt.with_timezone(&chrono::Local).to_rfc3339();
                     }
+                    reports.push(w);
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => needs_admin = true,
-                Err(_) => {} // missing/other → skip this one silently
             }
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => needs_admin = true,
+            Err(_) => {} // missing/other → skip this one silently
         }
     }
     let skip =
         needs_admin.then(|| "Windows Error Reporting (some kernel reports need administrator)".to_string());
-    (reports, skip)
+    (reports, skip, cut)
+}
+
+/// Most WER report folders read per scan (bounds the file reads on a pathological WER dir).
+const WER_MAX_REPORTS: usize = 400;
+/// Most WER folder entries listed (stat only) before the scan gives up on a time cut-point.
+const WER_MAX_LISTED: usize = 5000;
+
+/// Pure: add one WER folder's listing to `dirs`. An entry the OS could not list may be a dropped
+/// crash with no known time, so it sets `listing_cut_short` (refuse "clean") and the listing goes on.
+/// Returns `false` when the `WER_MAX_LISTED` bound stopped the listing (also sets the flag).
+fn list_wer_entries<T>(
+    dirs: &mut Vec<(std::path::PathBuf, Option<DateTime<Utc>>)>,
+    listing_cut_short: &mut bool,
+    entries: impl Iterator<Item = std::io::Result<T>>,
+    to_dir: impl Fn(T) -> (std::path::PathBuf, Option<DateTime<Utc>>),
+) -> bool {
+    for entry in entries {
+        if dirs.len() >= WER_MAX_LISTED {
+            *listing_cut_short = true;
+            return false;
+        }
+        match entry {
+            Ok(e) => dirs.push(to_dir(e)),
+            Err(_) => *listing_cut_short = true,
+        }
+    }
+    true
+}
+
+/// Pure (P6-changed-f2): which WER report folders to read, newest-modified first, and how far back
+/// that read is complete. A folder's modified time is never earlier than the crash its report
+/// records (the report is written after the crash), so every dropped folder's crash is at or before
+/// the NEWEST dropped folder's modified time: that is the cut. A folder with no readable time sorts
+/// as newest (always read); if one is dropped anyway, or the listing itself was cut short, no time
+/// is safe and the cut is the end of time, which refuses every "clean" anchor. `None` = nothing cut.
+fn select_wer_dirs(
+    mut dirs: Vec<(std::path::PathBuf, Option<DateTime<Utc>>)>,
+    listing_cut_short: bool,
+) -> (Vec<std::path::PathBuf>, Option<DateTime<Utc>>) {
+    let refuse = DateTime::<Utc>::MAX_UTC;
+    dirs.sort_by_key(|d| std::cmp::Reverse(d.1.unwrap_or(refuse)));
+    let dropped = dirs.split_off(dirs.len().min(WER_MAX_REPORTS));
+    let mut cut = dropped.iter().map(|(_, t)| t.unwrap_or(refuse)).max();
+    if listing_cut_short {
+        cut = Some(refuse);
+    }
+    (dirs.into_iter().map(|(p, _)| p).collect(), cut)
 }
 
 /// Decode `Report.wer` bytes: Windows writes them UTF-16 LE (BOM `FF FE`); tolerate UTF-8 (with/out
@@ -1541,7 +1596,7 @@ pub(crate) fn get_crash_blackbox() -> BlackBoxReport {
 /// The scan without the "Changed before this" layer — what the background Care observer needs.
 pub(crate) fn collect_crash_blackbox() -> BlackBoxReport {
     let (events, ev_skip) = collect_event_log();
-    let (wer, wer_skip) = collect_wer();
+    let (wer, wer_skip, wer_cut) = collect_wer();
     let (reliability, rel_skip) = collect_reliability();
     let mut skipped_sources: Vec<String> =
         [ev_skip, wer_skip, rel_skip].into_iter().flatten().collect();
@@ -1549,7 +1604,7 @@ pub(crate) fn collect_crash_blackbox() -> BlackBoxReport {
         skipped_sources.push(note);
     }
     let sessions = crate::sessions::get_session_summaries();
-    report_from(events, wer, reliability, &sessions, skipped_sources)
+    report_from(events, wer, wer_cut, reliability, &sessions, skipped_sources)
 }
 
 /// Pure: the report from already-fetched rows, with the scan's truncation point computed BEFORE the
@@ -1557,11 +1612,12 @@ pub(crate) fn collect_crash_blackbox() -> BlackBoxReport {
 fn report_from(
     events: Vec<RawEvent>,
     wer: Vec<WerReport>,
+    wer_cut: Option<DateTime<Utc>>,
     reliability: Vec<ReliabilityRecord>,
     sessions: &[SessionSummary],
     skipped_sources: Vec<String>,
 ) -> BlackBoxReport {
-    let read_cut = read_truncated_from(&events, &reliability);
+    let read_cut = read_truncated_from(&events, &reliability).max(wer_cut);
     let incidents = assemble_incidents(events, wer, reliability, sessions);
     let incident_cut = (incidents.len() >= MAX_INCIDENTS)
         .then(|| incidents.iter().filter_map(|i| parse_ts(&i.when)).map(|t| t.with_timezone(&Utc)).min())
@@ -1611,7 +1667,7 @@ fn read_truncated_from(events: &[RawEvent], reliability: &[ReliabilityRecord]) -
 /// point included).
 #[cfg(test)]
 pub(crate) fn report_from_event_json(json: &str, sessions: &[SessionSummary]) -> BlackBoxReport {
-    report_from(parse_events_json(json), Vec::new(), Vec::new(), sessions, Vec::new())
+    report_from(parse_events_json(json), Vec::new(), None, Vec::new(), sessions, Vec::new())
 }
 
 // ─── Pure-core tests (the collectors are a thin edge; logic + invariants are pinned here) ────────
@@ -2489,16 +2545,17 @@ mod blackbox_tests {
     #[ignore = "live OS read — run manually on a Windows rig"]
     fn blackbox_live_collectors_read_clean() {
         let (events, ev_skip) = collect_event_log();
-        let (wer, wer_skip) = collect_wer();
+        let (wer, wer_skip, wer_cut) = collect_wer();
         let (reliability, rel_skip) = collect_reliability();
         let incidents = assemble_incidents(events, wer, reliability, &[]);
         eprintln!(
-            "live: {} incidents | skips: ev={:?} wer={:?} rel={:?} minidump={:?}",
+            "live: {} incidents | skips: ev={:?} wer={:?} rel={:?} minidump={:?} | wer cut={:?}",
             incidents.len(),
             ev_skip,
             wer_skip,
             rel_skip,
-            minidump_skip_note()
+            minidump_skip_note(),
+            wer_cut
         );
         for i in incidents.iter().take(12) {
             eprintln!("  [{}] {}  ::  {}", i.tag, i.headline, i.receipt.source);
@@ -2795,5 +2852,85 @@ mod blackbox_tests {
         let v = serde_json::to_value(&inc).unwrap();
         assert!(v.get("assessment").is_none(), "absent assessment is omitted, not null");
         assert!(v.get("kind").is_none(), "internal kind never serializes (TS uses `tag`)");
+    }
+
+    // ── P6-changed-f2 — the WER folder cap reads newest-first and yields a time cut-point ──
+    fn wer_dirs(n: usize) -> Vec<(std::path::PathBuf, Option<DateTime<Utc>>)> {
+        let t0: DateTime<Utc> = "2026-10-01T00:00:00Z".parse().unwrap();
+        // Folder order deliberately oldest-first: the old walk kept the OLDEST 400 here.
+        (0..n).map(|i| (format!("r{i}").into(), Some(t0 + chrono::Duration::minutes(i as i64)))).collect()
+    }
+
+    #[test]
+    fn wer_cap_keeps_the_newest_folders_and_cuts_at_the_newest_dropped() {
+        let t0: DateTime<Utc> = "2026-10-01T00:00:00Z".parse().unwrap();
+        let (kept, cut) = select_wer_dirs(wer_dirs(WER_MAX_REPORTS + 2), false);
+        assert_eq!(kept.len(), WER_MAX_REPORTS);
+        assert!(kept.contains(&std::path::PathBuf::from(format!("r{}", WER_MAX_REPORTS + 1))), "newest read");
+        assert!(!kept.contains(&std::path::PathBuf::from("r0")), "oldest dropped");
+        assert_eq!(cut, Some(t0 + chrono::Duration::minutes(1)), "cut = newest dropped folder's time");
+        let (kept, cut) = select_wer_dirs(wer_dirs(WER_MAX_REPORTS), false);
+        assert_eq!((kept.len(), cut), (WER_MAX_REPORTS, None), "nothing dropped → no cut");
+    }
+
+    #[test]
+    fn wer_cap_without_a_safe_time_refuses_every_clean_anchor() {
+        let mut dirs = wer_dirs(WER_MAX_REPORTS);
+        dirs.push(("no-time".into(), None)); // unknown time sorts newest, so it is read...
+        let (kept, cut) = select_wer_dirs(dirs.clone(), false);
+        assert!(kept.contains(&std::path::PathBuf::from("no-time")));
+        assert!(cut.is_some_and(|c| c < DateTime::<Utc>::MAX_UTC), "...and the dropped one has a real time");
+        let all_unknown = (0..=WER_MAX_REPORTS).map(|i| (format!("u{i}").into(), None)).collect();
+        assert_eq!(select_wer_dirs(all_unknown, false).1, Some(DateTime::<Utc>::MAX_UTC));
+        assert_eq!(select_wer_dirs(wer_dirs(3), true).1, Some(DateTime::<Utc>::MAX_UTC), "listing cut short");
+    }
+
+    #[test]
+    fn report_clean_judgeable_from_takes_the_wer_cut() {
+        let cut: DateTime<Utc> = "2026-10-05T00:00:00Z".parse().unwrap();
+        let r = report_from(Vec::new(), Vec::new(), Some(cut), Vec::new(), &[], Vec::new());
+        assert_eq!(r.clean_judgeable_from, Some(cut), "a cut WER read limits how far back clean can be said");
+
+        // A full Application channel (EVENTS_PER_CHANNEL rows) cuts the Event Log read at its oldest
+        // row; with both cuts present the LATER one wins, whichever source it comes from.
+        let t0: DateTime<Utc> = "2026-10-01T00:00:00Z".parse().unwrap();
+        let full_channel = || -> Vec<RawEvent> {
+            (0..EVENTS_PER_CHANNEL as i64)
+                .map(|i| {
+                    let t = (t0 + chrono::Duration::minutes(i)).to_rfc3339();
+                    ev("Application Error", 1000, &t, "crash", serde_json::json!(["game.exe"]))
+                })
+                .collect()
+        };
+        let r = report_from(full_channel(), Vec::new(), Some(cut), Vec::new(), &[], Vec::new());
+        assert_eq!(r.clean_judgeable_from, Some(cut), "WER cut later than the Event Log cut wins");
+        let early_wer = t0 - chrono::Duration::days(3);
+        let r = report_from(full_channel(), Vec::new(), Some(early_wer), Vec::new(), &[], Vec::new());
+        // (the 40 crashes also fill the incident cap, whose cut is later still; never the early WER one)
+        assert!(r.clean_judgeable_from.is_some_and(|c| c >= t0), "Event Log cut later than the WER cut wins");
+    }
+
+    #[test]
+    fn wer_listing_error_refuses_clean_but_keeps_listing() {
+        let mut dirs = Vec::new();
+        let mut cut_short = false;
+        let entries: Vec<std::io::Result<&str>> =
+            vec![Ok("a"), Err(std::io::Error::other("unlistable")), Ok("b")];
+        let complete = list_wer_entries(&mut dirs, &mut cut_short, entries.into_iter(), |n| (n.into(), None));
+        assert!(complete, "an entry error does not stop the listing");
+        assert!(cut_short, "an entry error refuses every clean anchor");
+        assert_eq!(dirs.len(), 2);
+        assert_eq!(select_wer_dirs(dirs, cut_short).1, Some(DateTime::<Utc>::MAX_UTC));
+
+        let mut dirs = Vec::new();
+        let mut cut_short = false;
+        let ok: Vec<std::io::Result<&str>> = vec![Ok("a"), Ok("b")];
+        assert!(list_wer_entries(&mut dirs, &mut cut_short, ok.into_iter(), |n| (n.into(), None)));
+        assert!(!cut_short, "a clean listing is not cut short");
+
+        let mut dirs = Vec::new();
+        let many = (0..=WER_MAX_LISTED).map(|_| Ok::<_, std::io::Error>("x"));
+        assert!(!list_wer_entries(&mut dirs, &mut cut_short, many, |n| (n.into(), None)), "bound stops it");
+        assert!(cut_short && dirs.len() == WER_MAX_LISTED);
     }
 }
