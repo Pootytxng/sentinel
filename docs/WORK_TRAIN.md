@@ -143,9 +143,11 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       UWP/launcher-owned windows and older helpers measured as before. A Partial pair's one-line "what
       differed" already shipped (`experiment.rs` `with_comparability`). Menus shown in front stay measured:
       undetectable without game introspection, which is forbidden.
-- [ ] **P4-comparable-show** Receipt/Debrief line "N s alt-tabbed left out" from `background_secs_excluded`
-      (floor: minimized non-presenting seconds aren't counted); a background-only session says why it has no
-      data. Check the overlay can't take focus (would mark play as alt-tabbed) and add a guard test. UI → FULL mode.
+- [x] **P4-comparable-show** `78b908c3`: Debrief + Live list say "N s left out while another window was in front"; overlay set
+      `focusable:false` (was focusable) + guard.
+- [ ] **P4-show-f1** A session whose game was always behind another window is never saved (`has_data()` needs
+      samples > 0); save a zero-sample record that every comparison skips, so the UI can say why.
+- [ ] **P4-show-f2** (desk) Check the overlay still shows and stays click-through with `focusable:false`.
 - [x] **P4-candidates** `e0160644`: picker shows only changes worth testing here; reasons behind a toggle.
 - [x] **P4-rank** `8f1169ca`: picker ordered by evidence then risk, one reason each; "too small to measure here"
       only with a stated `expected_low1_pct` + a measured band (no catalog entry states one yet); no grouping
@@ -182,9 +184,8 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - [ ] **P5-enough** A quiet Compy toast during play: "Play the same area for about 90 s more" → "Compy has
       enough; you can stop" (>= 600 even readings). Must not take focus (FOCUS guard). Needs P5-guided.
       ROADMAP P5 step 4; Constitution §10.
-- [ ] **P5-rebaseline** When the as-is session grades uneven, the journey asks in plain words for one more
-      as-is session instead of a warning, and only then tests the change. Needs P5-guided,
-      P4-baseline-quality. ROADMAP P5 step 3; TRIAL_PROTOCOL §2.
+- [x] **P5-rebaseline** `a0da7bbb`: uneven/untraced as-is session -> one more as-is session (max 2), then test anyway or stop;
+      one shared grading helper pinned to Rust.
 - [ ] **P5-learned** End-of-journey summary in plain words: kept, restored and why, plus one lesson from this
       PC's numbers (e.g. "1% lows rose, average barely moved: steadier, not faster"); detail behind a toggle.
       Extends the P4-exit panel. Needs P5-continue. ROADMAP P5 step 8; Constitution §13, §14; ENGINE §8.
@@ -238,6 +239,8 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - 2026-10-25 afternoon: P4-exit code `e3d0420e`.
 - 2026-10-25 ~06:39 desk install of main `f6736154` (stamp-proved, attempt 1; installer 21B647B4…EDB940) so the
   owner's Phase 4 Trial runs use the new engine; RELEASE_STATE recorded.
+- 2026-10-25 morning: P5-guided `2f33cc6b`, P5-rebaseline `a0da7bbb`, P4-comparable-show `78b908c3`;
+  owner's first live Aniimo Trial (visual-effects): too noisy (baseline 293->241 fps), restored, verified.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
