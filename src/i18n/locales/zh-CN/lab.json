@@ -540,8 +540,8 @@
     },
     "outcomeChoice": {
       "label": "两个结果不一致",
-      "keeps": "{{outcome}}会保留它：{{why}}。",
-      "keepsOff": "{{outcome}}让它保持关闭：{{why}}。",
+      "keeps": "{{outcome}}保留它：{{why}}。",
+      "keepsOff": "{{outcome}}不保留此更改：{{why}}。",
       "reason": {
         "lowUp": "1% 低帧提高 {{pct}}%",
         "avgUp": "平均帧率提高 {{pct}}%",
@@ -552,10 +552,11 @@
         "avgUnknown": "平均帧率无法比较"
       },
       "inEffect": "当前生效：{{outcome}}。",
-      "useKeep": "改用{{outcome}}：重新开启 {{change}}",
-      "useOff": "改用{{outcome}}：恢复 {{change}}",
+      "useKeep": "改用{{outcome}}：重新应用 {{change}}",
+      "useOff": "改用{{outcome}}：撤销 {{change}}",
       "cantTell": "Compy 无法读取此更改当前是否开启，因此不提供切换。",
-      "notFound": "Compy 找不到已应用的 {{change}}，因此没有撤销任何内容。请在 测试 → 已应用与历史 中检查。"
+      "notFound": "Compy 无法确认 {{change}} 当前已应用，因此没有撤销任何内容。请在 测试 → 已应用与历史 中检查。",
+      "busy": "请先完成或停止正在进行的测试，再切换。"
     },
     "pairChanged": "差异：测试前后两局之间{{changed}}有变化。",
     "pairUnrecorded": "差异：其中一局没有记录{{unrecorded}}。",

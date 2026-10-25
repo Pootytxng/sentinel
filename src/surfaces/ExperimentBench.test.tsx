@@ -1931,10 +1931,10 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     const row = await screen.findByTestId("exp-outcome-choice-row");
     expect(row).toHaveAttribute("data-in-effect", "max-fps");
     expect(screen.getByTestId("exp-outcome-choice-trade")).toHaveTextContent(
-      "Recommended keeps it off: 1% lows fell 4%. Maximum FPS would keep it: average up 6%.",
+      "Recommended doesn't keep this change: 1% lows fell 4%. Maximum FPS keeps it: average up 6%.",
     );
     expect(screen.getByTestId("exp-outcome-choice-current")).toHaveTextContent("In effect now: Maximum FPS.");
-    const btn = screen.getByRole("button", { name: "Use Recommended: put Hardware-accelerated GPU scheduling back" });
+    const btn = screen.getByRole("button", { name: "Use Recommended: undo Hardware-accelerated GPU scheduling" });
     expect(btn).toHaveAttribute("data-outcome", "recommended");
     // The summary itself stays read-only.
     expect(screen.getByTestId("exp-summary").querySelectorAll("button")).toHaveLength(0);
@@ -1957,7 +1957,7 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
 
   it("choosing the keep side re-applies through apply_recommendation, citing the Better Trial", async () => {
     await renderWith([REC_OFF, MAX_KEEP], [hags(true, null)]);
-    const btn = await screen.findByRole("button", { name: "Use Maximum FPS: turn Hardware-accelerated GPU scheduling back on" });
+    const btn = await screen.findByRole("button", { name: "Use Maximum FPS: apply Hardware-accelerated GPU scheduling again" });
     expect(btn).toHaveAttribute("data-trial", "exp:max");
     vi.mocked(invoke).mockClear();
     fireEvent.click(btn);
@@ -1972,12 +1972,68 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
       { id: "chg-other", rec_id: "game-bar-disable", rec_title: "Game Bar", applied_at: "2026-07-19T00:00:00Z", status: "applied", is_still_active: true, active_check: "on" },
     ];
     await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-by-compy")]);
-    const btn = await screen.findByRole("button", { name: "Use Recommended: put Hardware-accelerated GPU scheduling back" });
+    const btn = await screen.findByRole("button", { name: "Use Recommended: undo Hardware-accelerated GPU scheduling" });
     expect(btn).not.toHaveAttribute("data-trial");
     vi.mocked(invoke).mockClear();
     fireEvent.click(btn);
     await waitFor(() => expect(callArgs("rollback_change")).toEqual({ changeId: "chg-live" }));
     expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "apply_recommendation")).toBe(false);
+  });
+
+  it("no switch while a Trial is running; the trade still shows", async () => {
+    const running = { ...RUNNING_EXPERIMENT, id: "exp:run", rec_id: "game-bar-disable", rec_title: "Turn off Game Bar" };
+    await renderWith([REC_OFF, MAX_KEEP, running], [hags(false, "already-set-by-compy")]);
+    const row = await screen.findByTestId("exp-outcome-choice-row");
+    expect(screen.getByTestId("exp-outcome-choice-trade")).toHaveTextContent("Maximum FPS keeps it: average up 6%.");
+    expect(screen.getByTestId("exp-outcome-choice-locked")).toHaveTextContent("Finish or stop the Trial in progress before switching.");
+    expect(row.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  const undoBtn = () => screen.findByRole("button", { name: "Use Recommended: undo Hardware-accelerated GPU scheduling" });
+  const notFound = "Compy couldn't confirm Hardware-accelerated GPU scheduling is applied now, so nothing was undone.";
+
+  it("put back with no applied change on record: nothing undone, says so", async () => {
+    state.changes = [];
+    await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-by-compy")]);
+    const btn = await undoBtn();
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(btn);
+    expect(await screen.findByRole("alert")).toHaveTextContent(notFound);
+    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "rollback_change")).toBe(false);
+  });
+
+  it("put back when the newest apply can't be confirmed on: nothing undone, says so", async () => {
+    state.changes = [
+      { id: "chg-old", rec_id: "hags", rec_title: "HAGS", applied_at: "2026-07-17T00:00:00Z", status: "applied", is_still_active: true, active_check: "unreadable" },
+    ];
+    await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-by-compy")]);
+    const btn = await undoBtn();
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(btn);
+    expect(await screen.findByRole("alert")).toHaveTextContent(notFound);
+    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "rollback_change")).toBe(false);
+  });
+
+  it("both writes announce LEDGER_CHANGED_EVENT", async () => {
+    vi.mocked(invoke).mockClear();
+    const heard = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, heard);
+    try {
+      await renderWith([REC_OFF, MAX_KEEP], [hags(true, null)]);
+      fireEvent.click(await screen.findByRole("button", { name: "Use Maximum FPS: apply Hardware-accelerated GPU scheduling again" }));
+      await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
+      cleanup();
+      heard.mockClear();
+      state.changes = [
+        { id: "chg-live", rec_id: "hags", rec_title: "HAGS", applied_at: "2026-07-18T00:00:00Z", status: "applied", is_still_active: true, active_check: "on" },
+      ];
+      await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-by-compy")]);
+      fireEvent.click(await undoBtn());
+      await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
+      expect(callArgs("rollback_change")).toEqual({ changeId: "chg-live" });
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, heard);
+    }
   });
 
   it("can't tell what is in effect: no switch, nothing written", async () => {
@@ -1992,7 +2048,7 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     try {
       await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-by-compy")]);
       expect(await screen.findByTestId("exp-outcome-choice-trade")).toHaveTextContent(
-        "推荐让它保持关闭：1% 低帧下降 4%。 最高帧率会保留它：平均帧率提高 6%。",
+        "推荐不保留此更改：1% 低帧下降 4%。 最高帧率保留它：平均帧率提高 6%。",
       );
     } finally {
       await i18n.changeLanguage("en");

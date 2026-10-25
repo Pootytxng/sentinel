@@ -710,6 +710,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
       .find((s) => s != null) ?? null;
   // P5-outcomes: for the summary's game, the changes whose Recommended and Maximum FPS results disagree.
   const choices = summary ? outcomeChoices(summary.game, experiments, recsLoaded ? recs : null) : [];
+  // No switch while a Trial runs or the journey is anywhere but idle (waiting, uneven, judging, …).
+  const switchLocked = running != null || journey.kind !== "idle";
 
   // If a refocus-refresh just re-derived the active pick as already-applied (it drops out of `pickable`),
   // keep it in the dropdown so its honest "already configured" verdict stays on screen — the selection
@@ -850,7 +852,9 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   // Keeping it re-applies through apply_recommendation, and only with the Trial that judged it Better
   // under that outcome; putting it back undoes its newest live apply through rollback_change.
   async function pickOutcome(c: OutcomeChoice, pick: ResultOutcome) {
-    if (busy || c.inEffect == null || c.inEffect === pick) return;
+    // Never while a Trial or the journey is under way: an undo could take back the running Trial's
+    // own apply mid-measurement, and a re-apply would confound it.
+    if (busy || switchLocked || c.inEffect == null || c.inEffect === pick) return;
     setBusy(true);
     setError(null);
     try {
@@ -1184,7 +1188,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
       )}
 
       {summary && <TestSummary s={summary} />}
-      {choices.length > 0 && <OutcomeChoices choices={choices} busy={busy} onUse={pickOutcome} />}
+      {choices.length > 0 && <OutcomeChoices choices={choices} busy={busy} locked={switchLocked} onUse={pickOutcome} />}
 
       {history.length > 0 && (
         <div className="exp-history">
@@ -1475,10 +1479,13 @@ const RESULT_OUTCOME_KEY: Record<ResultOutcome, string> = { recommended: "recomm
 function OutcomeChoices({
   choices,
   busy,
+  locked,
   onUse,
 }: {
   choices: OutcomeChoice[];
   busy: boolean;
+  /** A Trial or the journey is under way: the trade is shown, the switch is not. */
+  locked: boolean;
   onUse: (c: OutcomeChoice, pick: ResultOutcome) => void;
 }) {
   const { t } = useTranslation();
@@ -1507,6 +1514,10 @@ function OutcomeChoices({
             </p>
             {c.inEffect == null || other == null ? (
               <p className="exp-fineprint">{t("lab.experimentBench.outcomeChoice.cantTell")}</p>
+            ) : locked ? (
+              <p className="exp-fineprint" data-testid="exp-outcome-choice-locked">
+                {t("lab.experimentBench.outcomeChoice.busy")}
+              </p>
             ) : (
               <>
                 <p className="exp-fineprint" data-testid="exp-outcome-choice-current">
