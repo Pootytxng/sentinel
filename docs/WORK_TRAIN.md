@@ -185,7 +185,7 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
       P5-guided, P4-next-f1. ROADMAP P5 steps 5, 7; ENGINE §4, §7.
 - [x] **P5-enough** `b28e188c`: countdown -> "Compy has enough; you can stop" (>= 600 counted readings + steady
       halves) in the journey panel and the click-through overlay; never takes focus.
-- [ ] **P5-enough-f1** If halves never settle, the line can stay up forever; after a cap, say plainly the game keeps
+- [x] **P5-enough-f1** (`013cac22`) If halves never settle, the line can stay up forever; after a cap, say plainly the game keeps
       changing and offer stop (judged as uneven). (desk) Check the line fits the 230x150 overlay.
 - [x] **P5-rebaseline** `a0da7bbb`: uneven/untraced as-is session -> one more as-is session (max 2), then test anyway or stop;
       one shared grading helper pinned to Rust.
