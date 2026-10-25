@@ -20,6 +20,7 @@ import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome"
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
 import { summarizeGame, type GameTestSummary, type StillApplied, type TestedChange } from "./test-summary";
+import { GuidedJourney, interruptedJourneyId, useJourneyPhase } from "./GuidedJourney";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -555,6 +556,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const [outcome, setOutcome] = useState<TrialOutcome>("recommended");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // P5-guided: while the one-button journey runs, it is the bench's only panel.
+  const journey = useJourneyPhase();
 
   // Sequences simulate_optimization responses: a fast reselect must never leave `sim` pointing at a
   // rec the dropdown no longer shows — startExperiment applies the REAL change from sim.rec_id, so a
@@ -738,6 +741,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
       ? [...pickOrder, ...recs.filter((r) => r.id === pickId)]
       : pickOrder;
   const verdictText = verdictCopy(t);
+  // P5-guided: the journey tests the top-ranked change not yet tested on that game (P4-rank order).
+  const journeyChange = pickOrder.find((r) => !lastVerdict.has(r.id)) ?? null;
   const optionLabel = (r: TrialCandidate) => {
     const v = lastVerdict.get(r.id);
     return v == null
@@ -868,11 +873,30 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
         </p>
       )}
 
-      {running ? (
+      {(journey.kind !== "idle" || !running) && (
+        <GuidedJourney
+          game={pickGame}
+          change={journeyChange ? { id: journeyChange.id, title: journeyChange.title } : null}
+          canStart={!busy && !running}
+          outcome={outcome}
+          onOutcome={setOutcome}
+          verdictLabel={(v) => verdictText[v] ?? v}
+          refresh={settle}
+          onFinished={(exp) => {
+            // The finished journey hands over to P4-next's offer of the next change to test.
+            if (exp) setConcluded(experiments.find((x) => x.id === exp.id) ?? null);
+          }}
+        />
+      )}
+
+      {journey.kind !== "idle" ? null : running ? (
         // ── One experiment in flight: single-variable honesty is enforced by hiding the launcher ──
         <RunningPanel
           exp={running}
           treatment={treatmentFor(running, sessions)}
+          // P5-guided: a journey Trial still running while no journey runs was interrupted (Compy
+          // closed, a reload, the room left mid-session). Its change is still on; this says so.
+          interrupted={running.id === interruptedJourneyId()}
           busy={busy}
           onConclude={concludeExperiment}
           onRestore={restoreExperiment}
@@ -1315,12 +1339,14 @@ function TestSummary({ s }: { s: GameTestSummary }) {
 function RunningPanel({
   exp,
   treatment,
+  interrupted = false,
   busy,
   onConclude,
   onRestore,
 }: {
   exp: Experiment;
   treatment: SessionSummary | null;
+  interrupted?: boolean;
   busy: boolean;
   onConclude: (exp: Experiment, treatment: SessionSummary) => void;
   onRestore: (exp: Experiment) => void;
@@ -1332,6 +1358,11 @@ function RunningPanel({
   const baselineLow = knownFps(exp.baseline_low1_fps);
   return (
     <div className="exp-running" data-testid="experiment-running">
+      {interrupted && (
+        <p className="exp-bench-warn" data-testid="exp-interrupted" role="status">
+          {t("lab.experimentBench.journey.interrupted", { change: exp.rec_title })}
+        </p>
+      )}
       <div className="exp-running-head">
         <span className="exp-running-dot" aria-hidden />
         <span className="exp-running-title">{t("lab.experimentBench.runningTitlePrefix")} {exp.rec_title}</span>
