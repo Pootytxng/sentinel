@@ -1725,3 +1725,72 @@ describe("P4-exit: what Compy tested on this game", () => {
     }
   });
 });
+
+// P4-next-f1: the picker's own list marks a change already tested on this game (a record on it with a
+// verdict, the P4-next rule) with its last verdict and lists it after the untested ones, each group in
+// the suggested order. It stays pickable: re-testing is allowed.
+describe("P4-next-f1: the picker marks changes already tested on this game", () => {
+  const cand = (id: string, title: string, position: number) => ({
+    id, title, passes: true, reason: null, detail: null, position, evidence: "not-measured", risk: "low", stated_effect_pct: null,
+  });
+  const rec = (rec_id: string, game: string, verdict: string | null, concluded_at: string) => ({
+    ...KEPT_EXPERIMENT, id: `exp:${rec_id}-${game}-${concluded_at}`, rec_id, rec_title: rec_id, game,
+    status: verdict === "improved" ? "kept" : "restored", verdict, kept: verdict === "improved", concluded_at,
+  });
+
+  const openPicker = async () => {
+    state.gate = true;
+    state.sessions = [VALORANT_SESSION];
+    state.recs = [cand("a-rec", "Change A", 1), cand("b-rec", "Change B", 2), cand("c-rec", "Change C", 3), cand("d-rec", "Change D", 4)];
+    state.experiments = [
+      // A: tested twice on Valorant; the newer verdict is the one shown.
+      rec("a-rec", "Valorant", "improved", "2026-07-10T00:00:00Z"),
+      rec("a-rec", "Valorant", "regressed", "2026-07-12T00:00:00Z"),
+      rec("c-rec", "Valorant", "too-noisy", "2026-07-11T00:00:00Z"),
+      // B only on another game, D restored before a verdict: neither counts as tested here.
+      rec("b-rec", "cs2.exe", "improved", "2026-07-11T00:00:00Z"),
+      rec("d-rec", "Valorant", null, "2026-07-11T00:00:00Z"),
+    ];
+    state.sim = { ...WORTH_TESTING_SIM, rec_id: "a-rec", rec_title: "Change A" };
+    render(<ExperimentBench />);
+    const trigger = await screen.findByRole("combobox");
+    await waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+    return waitFor(() => {
+      const opts = [...document.querySelectorAll<HTMLElement>('[role="listbox"] [data-value]')].filter((o) => o.dataset.value);
+      expect(opts).toHaveLength(4);
+      return opts;
+    });
+  };
+
+  it("lists untested changes first, tested ones after with their last verdict, both in the suggested order", async () => {
+    const opts = await openPicker();
+    expect(opts.map((o) => o.dataset.value)).toEqual(["b-rec", "d-rec", "a-rec", "c-rec"]);
+    expect(opts.map((o) => o.textContent)).toEqual([
+      "Change B",
+      "Change D",
+      "Change A · Tested: Slower — restored",
+      "Change C · Tested: Too noisy to judge — restored",
+    ]);
+  });
+
+  it("a tested change stays pickable", async () => {
+    const opts = await openPicker();
+    const a = opts.find((o) => o.dataset.value === "a-rec")!;
+    expect(a).not.toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(a);
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("simulate_optimization", { recId: "a-rec" }),
+    );
+  });
+
+  it("reads in Chinese too", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const opts = await openPicker();
+      expect(opts.find((o) => o.dataset.value === "a-rec")).toHaveTextContent("Change A · 已测试：变慢了——已恢复");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
