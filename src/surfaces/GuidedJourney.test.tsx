@@ -347,3 +347,93 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(screen.queryByRole("button", { name: "Optimize my game" })).toBeNull();
   });
 });
+
+// P5-rebaseline: the owner's real Aniimo Trial (exp:3) ran its baseline at 293 fps in the first half
+// and 241 in the second, was tested anyway and ended "too noisy". The journey now grades session 1 the
+// backend's way and asks for one more as-is session instead of applying the change.
+const halves = (first: number, second: number) => [
+  ...Array.from({ length: 30 }, (_, i) => [i * 10, first] as [number, number]),
+  ...Array.from({ length: 30 }, (_, i) => [300 + i * 10, second] as [number, number]),
+];
+const uneven = (started_at: string) => ({ ...session(started_at, 5400), fps_series: halves(293, 241) });
+const phaseIs = (kind: string) =>
+  waitFor(() => expect(screen.getByTestId("journey")).toHaveAttribute("data-phase", kind), { timeout: 3000 });
+
+describe("P5-rebaseline: an uneven as-is session is retaken, not tested", () => {
+  it("uneven then steady: asks for one more as-is session in plain words, then tests on the steady one", async () => {
+    const steady = session(later(2), 5400);
+    state.saves = [uneven(later(1)), steady, session(later(3), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    await phaseIs("uneven");
+    expect(screen.getByTestId("journey-line").textContent).toBe(
+      "That session swung from 293 to 241 fps, too uneven to compare against. Nothing has been changed yet. Play one more as-is session of Valorant, about 10 minutes.",
+    );
+    expect(calls("start_experiment")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Test anyway" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Play one more as-is session" }));
+    expect(await screen.findByText(/^One more as-is session: play Valorant as usual/)).toBeTruthy();
+    expect(await finalLine()).toBe("HAGS: Measurably faster — kept.");
+    expect(calls("start_experiment")).toHaveLength(1);
+    expect(calls("start_experiment")[0].baselineSessionId).toBe(steady.started_at);
+    expect(calls("start_fps_capture")).toHaveLength(3);
+  });
+
+  it("uneven twice then test anyway: starts on the latest session with the bench's uneven warning", async () => {
+    const second = uneven(later(2));
+    state.saves = [uneven(later(1)), second, session(later(3), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    await phaseIs("uneven");
+    fireEvent.click(screen.getByRole("button", { name: "Play one more as-is session" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Test anyway" })).toBeTruthy(), { timeout: 3000 });
+    expect(screen.getByTestId("journey-line").textContent).toBe(
+      "That session swung from 293 to 241 fps, too uneven to compare against. Nothing has been changed yet. You can test HAGS on this session anyway, or stop here.",
+    );
+    expect(screen.getByTestId("journey-warn").textContent).toBe(
+      "This baseline was uneven: first half 293 fps, second half 241 fps, so this experiment's result may be less reliable.",
+    );
+    expect(screen.queryByRole("button", { name: "Play one more as-is session" })).toBeNull();
+    expect(calls("start_experiment")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Test anyway" }));
+    expect(await finalLine()).toBe("HAGS: Measurably faster — kept.");
+    expect(calls("start_experiment")[0].baselineSessionId).toBe(second.started_at);
+    expect(calls("start_fps_capture")).toHaveLength(3);
+  });
+
+  it("uneven twice then stop: nothing is changed and no third session is measured", async () => {
+    state.saves = [uneven(later(1)), uneven(later(2))];
+    render(<ExperimentBench />);
+    await press();
+    await phaseIs("uneven");
+    fireEvent.click(screen.getByRole("button", { name: "Play one more as-is session" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop" }, { timeout: 3000 }));
+    expect(await finalLine()).toBe("Stopped. Nothing was changed.");
+    expect(calls("start_experiment")).toHaveLength(0);
+    expect(calls("restore_experiment")).toHaveLength(0);
+    expect(calls("start_fps_capture")).toHaveLength(2);
+    expect(calls("stop_fps_capture")).toHaveLength(2);
+  });
+
+  it("a session without its frame-rate trace is retaken too, never read as steady", async () => {
+    state.saves = [{ ...session(later(1), 5400), fps_series: [] }];
+    render(<ExperimentBench />);
+    await press();
+    await phaseIs("uneven");
+    expect(screen.getByTestId("journey-line").textContent).toMatch(
+      /^Compy couldn't check how steady that session was, so it can't compare against it\. Nothing has been changed yet\./,
+    );
+    expect(calls("start_experiment")).toHaveLength(0);
+  });
+
+  it("a steady first session (halves 2.9% apart) goes straight to the change", async () => {
+    const first = { ...session(later(1), 5400), fps_series: halves(300, 291.3) };
+    state.saves = [first, session(later(2), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("HAGS: Measurably faster — kept.");
+    expect(calls("start_experiment")).toHaveLength(1);
+    expect(calls("start_experiment")[0].baselineSessionId).toBe(first.started_at);
+    expect(calls("start_fps_capture")).toHaveLength(2);
+  });
+});
