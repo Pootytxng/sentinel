@@ -75,7 +75,9 @@ pub(crate) fn build_receipt_payload(
     sessions: &Value,
     trust_ledger: &Value,
 ) -> Option<ReceiptPayload> {
-    let session = sessions.as_array().and_then(|a| a.first())?;
+    // The newest session that measured play: one behind another window the whole time has no
+    // measurement to put in a receipt (P4-show-f1).
+    let session = crate::sessions::newest_measured_row(sessions)?;
     let game_raw = session.get("process_name").and_then(Value::as_str)?;
 
     let gpu_model_raw = hardware

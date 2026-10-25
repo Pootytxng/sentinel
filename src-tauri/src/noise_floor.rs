@@ -799,6 +799,27 @@ mod tests {
         check("Windows build unread", &|x| x.game_state.as_mut().unwrap().windows_build = None);
     }
 
+    /// P4-show-f1: a session the game spent behind another window has no 1% low, so it isn't counted,
+    /// and it doesn't break the run around it either. What proves "nothing changed" is the change
+    /// history plus the two measured sessions' own records; a session with no reading adds no
+    /// evidence either way (the same as one too short to be a baseline), and a Compy change made
+    /// while it ran is still in the history and still splits the run.
+    #[test]
+    fn a_session_with_no_reading_is_skipped_without_breaking_the_run() {
+        let mut s = evening();
+        let mut behind = played("2026-10-25T18:52:00+00:00", 0.0, 15);
+        (behind.samples, behind.avg_fps, behind.avg_frametime_ms, behind.background_secs_excluded) = (0, 0.0, 0.0, Some(1500));
+        behind.gaming_mode_active = Some(true);
+        s.insert(2, behind);
+        let got = between_session_noise(&s, &s[4], &settled()).expect("the four measured sessions still count");
+        assert_eq!(got.sessions, 4);
+        assert!((got.spread_pct - spread(147.0, 156.0)).abs() < 1e-9, "one unbroken run: {got:?}");
+        // A Compy change applied while it ran still splits the measured sessions.
+        let during = vec![change("visual-effects", "2026-10-25T18:55:00+00:00", None)];
+        let got = between_session_noise(&s, &s[4], &during).expect("two runs of two");
+        assert!((got.spread_pct - spread(147.0, 153.0)).abs() < 1e-9, "{got:?}");
+    }
+
     #[test]
     fn the_noise_is_read_under_the_conditions_now() {
         let s = evening();

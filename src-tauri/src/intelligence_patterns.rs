@@ -138,6 +138,8 @@ struct GameLane<'a> {
     sessions: Vec<&'a SessionSummary>,
 }
 
+/// A session with no reading (`samples == 0`: the game was behind another window the whole time,
+/// P4-show-f1) is never comparable: its 0 1% low means "not measured", not a drop.
 fn comparable(s: &SessionSummary) -> bool {
     s.samples >= MIN_COMPARE_SAMPLES && s.low1_fps_est > 0.0 && !s.process_name.is_empty()
 }
@@ -686,6 +688,14 @@ mod tests {
             ram_gb: 32,
             display: "2560x1440@165".into(),
         }
+    }
+
+    #[test]
+    fn a_session_with_no_reading_is_never_a_pattern_input() {
+        let mut behind = mk_session("2026-07-02T10:00:00Z", "cp2077.exe", 0.0);
+        (behind.samples, behind.avg_fps, behind.background_secs_excluded) = (0, 0.0, Some(600));
+        assert!(!comparable(&behind));
+        assert_eq!(detect_patterns(&[behind]).sessions_considered, 0);
     }
 
     #[test]

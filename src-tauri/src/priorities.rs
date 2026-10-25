@@ -95,8 +95,10 @@ const SSD_LINKS: &[RetailLink] = &[
 const GPU_LIMITED_PCT: u64 = 95;
 
 /// Peak GPU usage of the most recent session, only when it crosses the GPU-limited threshold.
+/// A session behind another window the whole time is skipped (P4-show-f1): its GPU load was the
+/// game running behind, not play.
 fn gpu_limited_pct(sessions: &Value) -> Option<u64> {
-    let s = sessions.as_array().and_then(|a| a.first())?;
+    let s = crate::sessions::newest_measured_row(sessions)?;
     let gpu = s.get("peak_gpu_usage_pct").and_then(Value::as_u64)?;
     (gpu >= GPU_LIMITED_PCT).then_some(gpu)
 }
@@ -392,7 +394,7 @@ pub(crate) fn build_priorities(
 /// Conservative GPU-vs-system hint from the most recent session, or None when
 /// the signal is inconclusive. Never claims a hard CPU/GPU-bound classification.
 fn build_session_hint(sessions: &Value) -> Option<String> {
-    let s = sessions.as_array().and_then(|a| a.first())?;
+    let s = crate::sessions::newest_measured_row(sessions)?; // skips one with no reading (P4-show-f1)
     let gpu = s.get("peak_gpu_usage_pct").and_then(Value::as_u64)?;
     let avg = s.get("avg_fps").and_then(Value::as_f64).unwrap_or(0.0);
     let low1 = s.get("low1_fps_est").and_then(Value::as_f64).unwrap_or(0.0);
@@ -481,6 +483,22 @@ mod priority_tests {
         // Wrong-shaped inputs (arrays/strings/numbers where objects belong) degrade identically.
         let p = build_priorities(&json!([1, 2, 3]), &json!("nope"), &json!(42), &json!({}));
         assert!(p.limiters.is_empty());
+    }
+
+    #[test]
+    fn a_session_with_no_reading_never_sets_the_hint_or_the_upgrade_path() {
+        // The newest session was behind another window the whole time (P4-show-f1): its GPU peak
+        // is the game idling behind, so the hint reads the newest session that measured play.
+        let sessions = json!([
+            { "samples": 0, "peak_gpu_usage_pct": 40, "avg_fps": 0.0, "low1_fps_est": 0.0 },
+            { "samples": 900, "peak_gpu_usage_pct": 98, "avg_fps": 120.0, "low1_fps_est": 100.0 }
+        ]);
+        let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
+        assert!(p.session_hint.as_deref().is_some_and(|h| h.contains("GPU-limited")), "{:?}", p.session_hint);
+        assert!(build_upgrade_path(&readiness(vec![]), &sessions).is_some());
+        let only = json!([{ "samples": 0, "peak_gpu_usage_pct": 99 }]);
+        assert!(build_priorities(&readiness(vec![]), &json!([]), &json!([]), &only).session_hint.is_none());
+        assert!(build_upgrade_path(&readiness(vec![]), &only).is_none());
     }
 
     #[test]
