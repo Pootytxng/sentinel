@@ -537,7 +537,7 @@ export function GuidedJourney({
   game: string | null;
   /** The top-ranked change not yet tested on that game (P4-rank), or null when none is left. */
   change: { id: string; title: string } | null;
-  /** False while another Trial runs or the bench is busy. */
+  /** False while another Trial runs, the bench is busy, or App's shared busy flag is held. */
   canStart: boolean;
   outcome: JourneyOutcome;
   onOutcome: (o: JourneyOutcome) => void;
@@ -608,6 +608,8 @@ export function GuidedJourney({
     // Continuing reuses the newest judged Trial's as-is session when it is still reusable.
     const reuseId = resuming && resumeReuses ? progress.asIs : null;
     const start = () => {
+      // P6-restore-f1: refuse here too, not only on the disabled button.
+      if (!canStart) return;
       const hypothesis = t("lab.experimentBench.hypothesisWithBaseline", { metric: t("lab.experimentBench.hypothesisMetricFallback") });
       void runJourney({ change, outcome, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, game, reuseId);
     };
@@ -769,6 +771,7 @@ export function GuidedJourney({
           className="exp-cta"
           disabled={!canStart}
           onClick={() => {
+            if (!canStart) return;
             const hypothesis = t("lab.experimentBench.hypothesisWithBaseline", { metric: t("lab.experimentBench.hypothesisMetricFallback") });
             void runJourney({ change: next, outcome, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, p.exp.game, p.asIs);
           }}

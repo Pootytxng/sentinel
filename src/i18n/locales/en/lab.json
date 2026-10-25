@@ -516,6 +516,7 @@
     "hypothesisLabel": "Hypothesis",
     "applying": "Applying…",
     "startExperiment": "Start experiment — apply & measure next session",
+    "ledgerBusy": "Compy is still making another change, such as putting things back. You can start a Trial when it finishes.",
     "fineprint": "Applies one reversible change now, then compares your next {{game}} session. Auto-restores unless it clearly beats the noise floor.",
     "fineprintGameFallback": "game",
     "noBaselineYet": "No baseline yet — play one monitored gaming session first. Compy needs a real before-reading; it won't invent one.",
