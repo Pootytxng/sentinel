@@ -38,6 +38,9 @@ type Treatment = {
   check?: "steady" | "uneven" | "untraced" | null;
   /** Its first- and second-half average fps. null when it had no trace, and on older records. */
   halves?: { first_half_fps: number; second_half_fps: number } | null;
+  /** P4-recommended: the average fps %-delta vs baseline, judged on the same band as the 1% low.
+   *  null when an average was missing, and on records judged on the 1% low alone. */
+  delta_avg_pct?: number | null;
 };
 
 /** §11 — the credible-noise band a verdict was judged against. Present only when it really was. */
@@ -298,6 +301,30 @@ function afterReceipt(x: Experiment, t: Translate): string | null {
   return t("lab.experimentBench.receiptAfterUneven", {
     first: Math.round(tr.halves.first_half_fps),
     second: Math.round(tr.halves.second_half_fps),
+  });
+}
+
+// P4-recommended: a judged row says exactly what was compared (the 1% low and the average, on one
+// band) and why that kept or restored the change. Older rows, judged on the 1% low alone, say nothing.
+function comparedReceipt(x: Experiment, t: Translate): string | null {
+  const avg = x.treatment?.delta_avg_pct;
+  const band = x.noise_evidence?.band_pct;
+  if (!looksJudged(x) || !x.treatment || avg == null || band == null) return null;
+  const signed = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 10) / 10}`;
+  const low = x.treatment.delta_low1_pct;
+  const rule =
+    x.verdict === "improved"
+      ? "receiptRuleKept"
+      : x.verdict === "regressed"
+        ? "receiptRuleLowFell"
+        : low > band
+          ? "receiptRuleAvgFell"
+          : "receiptRuleInside";
+  return t("lab.experimentBench.receiptCompared", {
+    low: signed(low),
+    avg: signed(avg),
+    band: String(Math.round(band * 10) / 10),
+    rule: t(`lab.experimentBench.${rule}`),
   });
 }
 
@@ -905,6 +932,11 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                 {tooFewLeftOutReceipt(x, t) && (
                   <span className="exp-bench-abort" data-testid="exp-too-few-left-out">
                     {tooFewLeftOutReceipt(x, t)}
+                  </span>
+                )}
+                {comparedReceipt(x, t) && (
+                  <span className="exp-bench-abort" data-testid="exp-compared-receipt">
+                    {comparedReceipt(x, t)}
                   </span>
                 )}
                 {pairingReceipt(x, t) && (

@@ -1304,3 +1304,71 @@ describe("ExperimentBench — what differed and what wasn't play", () => {
     expect(screen.queryByTestId("exp-stretch-receipt")).toBeNull();
   });
 });
+
+// P4-recommended (ENGINE §2, §6): a judged row says exactly what was compared, the 1% low and the
+// average on one band, and why that kept or restored the change.
+describe("ExperimentBench — what the Recommended verdict compared", () => {
+  afterEach(async () => {
+    cleanup();
+    await i18n.changeLanguage("en");
+  });
+
+  const judged = (verdict: string, low: number, avg: number | null) => ({
+    ...KEPT_EXPERIMENT,
+    status: verdict === "improved" ? "kept" : "restored",
+    kept: verdict === "improved",
+    verdict,
+    treatment: { ...KEPT_EXPERIMENT.treatment, delta_low1_pct: low, delta_avg_pct: avg },
+    noise_evidence: { band_pct: 3, measured_noise_pct: null },
+  });
+
+  it("a 1% low gain beside an average that fell beyond the band reads no change, restored", async () => {
+    state.gate = true;
+    state.experiments = [judged("no-change", 20, -8.3)];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("No measurable change — restored")).toBeInTheDocument();
+    expect(screen.getByTestId("exp-compared-receipt")).toHaveTextContent(
+      "Compared with the baseline: 1% low +20%, average frame rate -8.3%, both against a ±3% band. The 1% low rose by more than the band, but the average fell by more than it, so this isn't a clear win: the default was kept and the change restored.",
+    );
+  });
+
+  it("an average that rose beside a falling 1% low reads slower, restored", async () => {
+    state.gate = true;
+    state.experiments = [judged("regressed", -6.7, 8.3)];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("Slower — restored")).toBeInTheDocument();
+    expect(screen.getByTestId("exp-compared-receipt")).toHaveTextContent(
+      "1% low -6.7%, average frame rate +8.3%, both against a ±3% band. The 1% low fell by more than the band, so the change was restored.",
+    );
+  });
+
+  it("a kept win and a tie say why", async () => {
+    state.gate = true;
+    state.experiments = [judged("improved", 11.1, 4.2), { ...judged("no-change", 2, 10), id: "exp:9-0" }];
+    render(<ExperimentBench />);
+    const lines = (await screen.findAllByTestId("exp-compared-receipt")).map((n) => n.textContent);
+    expect(lines[0]).toMatch(/1% low \+11\.1%, average frame rate \+4\.2%.*so the change was kept\.$/);
+    expect(lines[1]).toMatch(/The 1% low stayed inside the band, so the default was kept and the change restored\.$/);
+  });
+
+  it("says the same in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    state.gate = true;
+    state.experiments = [judged("no-change", 20, -8.3)];
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("exp-compared-receipt")).toHaveTextContent(
+      "与基准相比：1% 最低帧 +20%，平均帧率 -8.3%，两者都按 ±3% 的范围判定。1% 最低帧的提升超过了该范围，但平均帧率的下降也超过了它，所以不算明确的改善：保持默认，已恢复这项更改。",
+    );
+  });
+
+  it("an older row judged on the 1% low alone, and a too-noisy row, say nothing about the average", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: null } },
+      { ...judged("too-noisy", -18.5, -16.6), id: "exp:8-0", noise_evidence: null },
+    ];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
+    expect(screen.queryByTestId("exp-compared-receipt")).toBeNull();
+  });
+});
