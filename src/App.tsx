@@ -1584,6 +1584,7 @@ function App() {
                   onToggleStartup={toggleStartup}
                   onRollback={rollback}
                   onApplyBatch={applyBatch}
+                  onLedgerBusy={(b) => setBusyId(b ? "care-restore" : null)}
                   gamingEnabled={gamingEnabled}
                   activeCount={labActiveCount}
                   diagnostics={<DiagnosticsTab sections={diagnostics} />}

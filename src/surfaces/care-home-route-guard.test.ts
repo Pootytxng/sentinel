@@ -302,7 +302,8 @@ describe("both one-shot keys are consumed and cleared", () => {
   it("passes it into BlackBox as a selection, never as a filter", () => {
     // A filter would HIDE the other incidents; the user came for one row, but the rest is the
     // context that makes it readable. Selection scrolls and labels, it does not subtract.
-    expect(labConsole).toMatch(/<BlackBox onReport=\{setBbReport\} selectedIncidentId=\{openIncidentId\} \/>/);
+    // P6-restore added the ledger props after it; the selection is still passed as-is.
+    expect(labConsole).toMatch(/<BlackBox\s+onReport=\{setBbReport\}\s+selectedIncidentId=\{openIncidentId\}\s[^>]*\/>/);
     // Parameter-name-agnostic on purpose: an earlier draft of this line required the callback's
     // argument to be literally `i`, so `.filter((x) => x.incident_id === selectedIncidentId)` —
     // the exact regression it exists to catch — would have sailed through it.
