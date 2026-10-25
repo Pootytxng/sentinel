@@ -14,8 +14,9 @@
 // handshake, each CDP command before the page is ready) is bounded and releases what it was waiting
 // on, and containment is decided on the canonical target, so an in-root symlink or junction that
 // lands outside is refused. The native gate of the same head added the third: a directory whose
-// removal is refused for a moment (EPERM, holder unknown) is retried, and one that stays refused
-// fails close() loudly after every other resource is released.
+// removal is refused for a moment (EPERM, holder unknown) is retried. Since the 2026-10-25
+// parallel-suite flake, one that stays refused is left in place with a warning instead of failing
+// close(), and a busy DevToolsActivePort read is polled again under the launch deadline.
 //
 // Every resource here is FAKE. fs, child_process, http, os, esbuild, fetch and WebSocket are an
 // in-memory ledger, so each failure path runs the REAL helper's control flow without a browser, a
@@ -59,7 +60,7 @@ let processKill;
  */
 function makeWorld(knobs = {}) {
   const w = {
-    knobs: { chromium: true, bundle: "ok", write: "ok", listen: "ok", spawn: "ok", browser: "ok", mute: null, locks: {}, ...knobs },
+    knobs: { chromium: true, bundle: "ok", write: "ok", listen: "ok", spawn: "ok", browser: "ok", mute: null, locks: {}, portBusy: 0, ...knobs },
     files: new Map(), // resolved path -> Buffer | "dir"
     links: new Map(), // resolved link path -> resolved target (a symlink, or a junction when the target is a directory)
     requests: [], // { url, pending, aborted } for every debug HTTP request
@@ -67,6 +68,7 @@ function makeWorld(knobs = {}) {
     servers: [], // { handler, open, closes }
     children: [], // { child, running, kills, strayKills, exit }
     sockets: [], // { state, closes }
+    portReads: { busy: 0 }, // DevToolsActivePort reads refused with EBUSY
     spawns: [], // [exe, args]
     reads: [], // files the loopback server read to answer a request
     unhandled: [], // errors a fake emitted with nobody listening (a real emitter would crash the worker)
@@ -77,7 +79,7 @@ function makeWorld(knobs = {}) {
   };
   const portReady = () => {
     const c = w.children.at(-1);
-    return Boolean(c?.running) && !["no-port", "exits-early"].includes(w.knobs.browser);
+    return Boolean(c?.running) && !["no-port", "exits-early", "stderr-port"].includes(w.knobs.browser);
   };
 
   /** Where a path really lands once every link along it is followed, as the real fs does. */
@@ -106,7 +108,14 @@ function makeWorld(knobs = {}) {
       return path;
     },
     readFileSync: (p, encoding) => {
-      if (resolve(String(p)).endsWith(sep + PORT_FILE)) return "9222\n/devtools/browser/fake";
+      if (resolve(String(p)).endsWith(sep + PORT_FILE)) {
+        // Chromium still writing it: Windows refuses the open (seen under the parallel suite, 2026-10-25).
+        if (w.portReads.busy < w.knobs.portBusy) {
+          w.portReads.busy++;
+          throw errno("EBUSY", `resource busy or locked, open '${p}'`);
+        }
+        return "9222\n/devtools/browser/fake";
+      }
       const at = follow(p);
       const entry = w.files.get(at);
       if (entry === undefined) throw errno("ENOENT", at);
@@ -213,6 +222,7 @@ function makeWorld(knobs = {}) {
       w.children.push(record);
       if (w.knobs.spawn === "error-event") process.nextTick(() => emitOrRecord(child, "error", errno("ENOENT", `spawn ${exe}`)));
       if (w.knobs.browser === "exits-early") process.nextTick(record.exit, 1, null);
+      if (w.knobs.browser === "stderr-port") process.nextTick(() => child.stderr.emit("data", Buffer.from("\nDevTools listening on ws://127.0.0.1:9333/devtools/browser/fake-id\n")));
       return child;
     },
   };
@@ -449,19 +459,54 @@ describe("close() outlasts a removal that is refused for a moment, and reports o
     expect(overReleases()).toEqual([]);
   });
 
-  it("a profile that stays refused fails close() with the EPERM, after the browser, listener and bundle directory are released", async () => {
+  // Teardown of a throwaway temp dir must never fail a layout test whose assertions already ran: under
+  // the parallel suite (2026-10-25) a profile stayed refused past every retry and failed the file.
+  it("a profile that stays refused is left in place with a warning; close() still resolves, after the browser, listener and bundle directory are released", async () => {
     world = makeWorld({ locks: { profile: Infinity } });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const page = (await settle(openBundledPage(PAGE))).value;
     const closed = await settle(page.close());
-    expect(closed.state, "a permanent failure must be reported, and must not hang").toBe("rejected");
-    expect(closed.error.message).toMatch(/EPERM/);
+    expect(closed.state, closed.error?.message ?? "a refused removal must not hang").toBe("resolved");
     const profile = world.dirs.find((d) => d.kind === "profile");
+    expect(profile.attempts, "the removal was retried a bounded number of times").toBe(20);
+    const warned = warn.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(warned).toContain(`left temp dir ${profile.path}`);
+    expect(warned).toContain("EPERM");
     expect(leaks(), "only the refused profile is still held").toEqual([`directory ${profile.path}`]);
     expect(world.dirs.find((d) => d.kind === "outdir").removed).toBe(1);
     expect(overReleases()).toEqual([]);
     // Nothing is signalled to free the lock: its holder is unknown, and only our own browser is ours.
     expect(world.children.map((c) => c.kills)).toEqual([1]);
     expect(processKill).not.toHaveBeenCalled();
+  });
+});
+
+describe("reading the debug port survives a busy port file; a browser that never starts still fails clearly (2026-10-25 parallel-suite flake)", () => {
+  it("a DevToolsActivePort read refused with EBUSY is polled again, not thrown", async () => {
+    world = makeWorld({ portBusy: 5 });
+    const outcome = await settle(launchChromium({ exe: CHROME }));
+    expect(outcome.state, outcome.error?.message).toBe("resolved");
+    expect(world.portReads.busy, "the busy file was really in the way").toBe(5);
+    await settle(outcome.value.close());
+    expect(leaks()).toEqual([]);
+  });
+
+  it("the port is taken from Chromium's 'DevTools listening on' stderr line when the file never appears", async () => {
+    world = makeWorld({ browser: "stderr-port" });
+    const outcome = await settle(launchChromium({ exe: CHROME }));
+    expect(outcome.state, outcome.error?.message).toBe("resolved");
+    expect(world.requests.map((r) => r.url)).toContain("http://127.0.0.1:9333/json/list");
+    await settle(outcome.value.close());
+    expect(leaks()).toEqual([]);
+  });
+
+  it("a port file that stays busy is still a launch failure within the 30s deadline, with the browser and profile released", async () => {
+    world = makeWorld({ portBusy: Infinity });
+    const outcome = await settle(launchChromium({ exe: CHROME }));
+    expect(outcome.state, "a launch that never gets a port must reject, not hang").toBe("rejected");
+    expect(outcome.error.message).toMatch(/did not open its debug port within 30s/);
+    expect(world.children.map((c) => c.kills)).toEqual([1]);
+    expect(leaks()).toEqual([]);
   });
 });
 
