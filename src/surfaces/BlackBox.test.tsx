@@ -460,3 +460,102 @@ describe("BlackBox — the deep-linked incident", () => {
     ).toBeNull();
   });
 });
+
+// P6-changed: the sidump crash from the owner's real stores (src/test/fixtures/
+// incident-changed-before-453.json), as `intelligence::changed_before_incident_impl` answers it.
+function sidumpIncident(changed_before: CrashIncident["changed_before"]): CrashIncident {
+  return {
+    incident_id: "186070d78b13c37f",
+    headline: "sidump stopped working and closed — Oct 24, 4:18 AM",
+    tag: "App crash",
+    when: "2026-10-24T04:18:51.503609400-07:00",
+    when_display: "Oct 24, 4:18 AM",
+    vitals: null,
+    receipt: { source: "Application log · 1000", event_ids: [1000], faulting_app: "sidump.exe", faulting_module: null, code: null, detail: "" },
+    changed_before,
+  };
+}
+const ev = (summary: string, event_type: string) => ({
+  id: `${event_type}:${summary}`,
+  timestamp: "2026-10-23T16:08:54.598522500+00:00",
+  event_type,
+  source: "trust-ledger",
+  scope: "compy-applied" as const,
+  game: null,
+  summary,
+  detail: null,
+  observed_between: null,
+  since_rolled_back: false,
+  rec_id: "visual-effects",
+});
+const item = (category: string, status: string, extra: Record<string, unknown> = {}) => ({
+  category,
+  status,
+  events: [],
+  unknown_reason: null,
+  last_reading_at: null,
+  checked_between: null,
+  ...extra,
+}) as unknown as NonNullable<CrashIncident["changed_before"]>["items"][number];
+
+describe("BlackBox — Changed before this (P6-changed)", () => {
+  it("lists every category since the last clean session, each tagged not proven cause", async () => {
+    reportMock.value = {
+      incidents: [
+        sidumpIncident({
+          anchor_kind: "clean",
+          anchor: { started_at: "2026-10-23T16:06:22.472457100+00:00", game: "WardogsClient" },
+          window_end: "2026-10-24T04:18:51.503609400-07:00",
+          items: [
+            item("compy-changes", "changed", {
+              events: [
+                ev("Trim Windows visual effects applied (since rolled back)", "change-applied"),
+                ev("Trim Windows visual effects rolled back", "change-rolled-back"),
+              ],
+            }),
+            item("driver", "no-change", {
+              checked_between: ["2026-10-23T16:06:22.472457100+00:00", "2026-10-24T19:24:22.256501300+00:00"],
+            }),
+            item("windows-build", "unknown", { unknown_reason: "no-reading-after", last_reading_at: "2026-10-23T14:03:14.523573500+00:00" }),
+            item("power-plan", "unknown", { unknown_reason: "no-reading-after", last_reading_at: "2026-10-23T14:03:14.523573500+00:00" }),
+            item("hardware", "no-change", {
+              checked_between: ["2026-10-23T16:06:22.472457100+00:00", "2026-10-24T19:24:22.256501300+00:00"],
+            }),
+            item("drift", "unknown", { unknown_reason: "drift-not-kept" }),
+          ],
+        }),
+      ],
+      skipped_sources: [],
+    };
+    const { container } = render(<BlackBox />);
+    scan();
+    expect(await screen.findByText("Changed before this")).toBeInTheDocument();
+    expect(screen.getByText(/Since your last clean session \(WardogsClient,/)).toBeInTheDocument();
+    for (const label of ["Compy changes", "Graphics driver", "Windows build", "Power plan", "Hardware", "Setting drift"]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    const rows = container.querySelectorAll(".bb-changed-item");
+    expect(rows).toHaveLength(6);
+    rows.forEach((row) => expect(row.textContent).toContain("not proven cause"));
+    expect(screen.getByText("Trim Windows visual effects rolled back", { exact: false })).toBeInTheDocument();
+    // Unread evidence reads as unknown — never as "No change".
+    for (const cat of ["windows-build", "power-plan", "drift"]) {
+      const row = container.querySelector(`.bb-changed-item[data-category="${cat}"]`)!;
+      expect(row.textContent).toMatch(/Unknown:/);
+      expect(row.textContent).not.toMatch(/No change/);
+    }
+    expect(container.querySelector('[data-category="driver"]')!.textContent).toMatch(/No change: Compy read the same thing/);
+    expect(container.textContent).not.toMatch(/caused|because|root cause/i);
+  });
+
+  it("says so when there was no session before the incident, and lists nothing", async () => {
+    reportMock.value = {
+      incidents: [sidumpIncident({ anchor_kind: "none", anchor: null, window_end: "2026-10-24T04:18:51-07:00", items: [] })],
+      skipped_sources: [],
+    };
+    const { container } = render(<BlackBox />);
+    scan();
+    expect(await screen.findByText(/No session was recorded before this/)).toBeInTheDocument();
+    expect(container.querySelectorAll(".bb-changed-item")).toHaveLength(0);
+  });
+});

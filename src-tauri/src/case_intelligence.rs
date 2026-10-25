@@ -4117,6 +4117,7 @@ mod tests {
                 },
                 assessment: None,
                 case_intelligence: None,
+                changed_before: None,
                 kind: crate::blackbox::IncidentKind::GpuTimeout,
             }
         }

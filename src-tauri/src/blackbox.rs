@@ -37,7 +37,7 @@ const MAX_INCIDENTS: usize = 25;
 /// A crash often lands just as the game stops presenting; allow this much slack after a session's
 /// recorded end before we stop calling it "during that session". Conservative — never invents a
 /// session, only widens the match window slightly.
-const VITALS_GRACE_SECS: i64 = 90;
+pub(crate) const VITALS_GRACE_SECS: i64 = 90;
 /// How close two records must be in time to be treated as the SAME crash seen by two sources. The
 /// Event Log, WER, and Reliability all stamp the actual crash instant, so their copies of one crash
 /// land within a few seconds; 60s absorbs clock/rounding differences without hiding distinct
@@ -158,6 +158,12 @@ pub(crate) struct Incident {
     /// make it impossible for a user to tell whose word they are taking.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) case_intelligence: Option<crate::case_intelligence::CaseIntelligenceMatch>,
+    /// P6-changed: what changed between the last clean (or measured) session and this incident,
+    /// from the read-only intelligence gather (`intelligence::attach_changed_before`). Filled by the
+    /// scan's edge only; the pure assembly leaves it `None`, and `None` is omitted from the wire.
+    /// Correlation in time, never a cause — the surface tags every line "not proven cause".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) changed_before: Option<crate::intelligence::ChangedBeforeIncident>,
     /// Internal only (never serialized — the TS-facing discriminator is `tag`): the typed kind, kept so
     /// the pure `assess` pass can reason over the incident without re-parsing the tag string.
     #[serde(skip)]
@@ -229,6 +235,7 @@ fn assemble_incidents(
                 receipt: build_receipt(&p),
                 assessment: None,
                 case_intelligence: None,
+                changed_before: None,
                 kind: p.kind,
             }
         })
@@ -1515,6 +1522,15 @@ fn minidump_skip_note() -> Option<String> {
 /// return the plain-English report. Mirrors `get_diagnostics` / `get_session_summaries`.
 #[tauri::command]
 pub(crate) fn get_crash_blackbox() -> BlackBoxReport {
+    let mut report = collect_crash_blackbox();
+    // P6-changed: "Changed before this" on each incident — one read-only gather for the scan. Only
+    // the station asks for it; the background Care observer reads `collect_crash_blackbox` alone.
+    crate::intelligence::attach_changed_before(&mut report.incidents);
+    report
+}
+
+/// The scan without the "Changed before this" layer — what the background Care observer needs.
+pub(crate) fn collect_crash_blackbox() -> BlackBoxReport {
     let (events, ev_skip) = collect_event_log();
     let (wer, wer_skip) = collect_wer();
     let (reliability, rel_skip) = collect_reliability();
@@ -2086,6 +2102,17 @@ mod blackbox_tests {
     }
 
     #[test]
+    fn the_pure_assembly_leaves_changed_before_off_the_wire() {
+        // P6-changed: only the station's scan edge attaches "Changed before this"; the pure pipeline
+        // (and the background Care observer that reads it) serializes exactly as before.
+        let events = vec![ev("Application Error", 1000, "2026-06-12T21:42:00-07:00", "Faulting application name: game.exe", serde_json::Value::Null)];
+        let incidents = from_events(events, &[]);
+        assert!(incidents.iter().all(|i| i.changed_before.is_none()));
+        let v = serde_json::to_value(&incidents).expect("serializes");
+        assert!(v[0].get("changed_before").is_none(), "absent, not null");
+    }
+
+    #[test]
     fn serde_shape_is_stable_for_the_ts_contract() {
         let events = vec![ev("Microsoft-Windows-Kernel-Power", 41, "2026-06-12T21:42:00-07:00", "rebooted without cleanly shutting down", serde_json::Value::Null)];
         let report = BlackBoxReport { incidents: from_events(events, &[]), skipped_sources: vec!["x".into()] };
@@ -2465,6 +2492,7 @@ mod blackbox_tests {
             },
             assessment: None,
             case_intelligence: None,
+            changed_before: None,
             kind,
         }
     }

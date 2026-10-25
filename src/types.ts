@@ -548,6 +548,39 @@ export type CrashIncident = {
   // Absent in every shipped build: `case_intelligence_gate()` is hard-false, and the backend omits
   // the field entirely rather than sending a null, so a dark build is byte-identical to pre-Tier-1.
   case_intelligence?: CaseIntelligenceMatch | null;
+  // P6-changed (mirrors `ChangedBeforeIncident` in src-tauri/src/intelligence.rs). Absent when the
+  // backend could not anchor it; every line it carries is shown tagged "not proven cause".
+  changed_before?: ChangedBeforeIncident | null;
+};
+export type ChangedBeforeCategory =
+  | "compy-changes"
+  | "driver"
+  | "windows-build"
+  | "power-plan"
+  | "hardware"
+  | "drift";
+export type ChangedBeforeStatus = "changed" | "no-change" | "unknown";
+export type ChangedBeforeUnknownReason =
+  | "no-reading-before"
+  | "no-reading-after"
+  | "cant-place"
+  | "ledger-incomplete"
+  | "drift-not-kept";
+export type ChangedBeforeItem = {
+  category: ChangedBeforeCategory;
+  status: ChangedBeforeStatus;
+  /** "changed": the events inside the window; "unknown"+"cant-place": the unplaceable ones. */
+  events: IntelEvent[];
+  unknown_reason: ChangedBeforeUnknownReason | null;
+  last_reading_at: string | null;
+  checked_between: [string, string] | null;
+};
+export type ChangedBeforeIncident = {
+  /** "clean": no incident in that session · "measured": every earlier one had one · "none". */
+  anchor_kind: "clean" | "measured" | "none";
+  anchor: { started_at: string; game: string } | null;
+  window_end: string;
+  items: ChangedBeforeItem[];
 };
 export type BlackBoxReport = {
   incidents: CrashIncident[];

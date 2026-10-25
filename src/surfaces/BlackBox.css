@@ -159,6 +159,63 @@
   color: var(--ix-text-3);
 }
 
+/* P6-changed: "Changed before this". Every row carries the "not proven cause" tag. */
+.bb-changed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ix-text-3) 8%, transparent);
+}
+.bb-changed-head {
+  margin: 0;
+  font-size: var(--type-label);
+  font-weight: 600;
+  color: var(--ix-text-2);
+}
+.bb-changed-anchor,
+.bb-changed-line {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.5;
+}
+.bb-changed-list,
+.bb-changed-events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bb-changed-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+.bb-changed-cat {
+  color: var(--ix-text-1);
+  font-size: var(--type-label);
+  font-weight: 600;
+}
+.bb-changed-tag {
+  font-style: italic;
+  font-size: var(--type-label);
+  color: var(--ix-text-3);
+}
+.bb-changed-unknown .bb-changed-line {
+  color: var(--ix-text-3);
+}
+.bb-changed-events li {
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .bb-receipt-toggle {
   align-self: flex-start;
   background: none;

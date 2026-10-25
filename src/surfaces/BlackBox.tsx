@@ -10,6 +10,8 @@ import type {
   CrashIncident,
   CrashAssessment,
   CaseIntelligenceMatch,
+  ChangedBeforeIncident,
+  ChangedBeforeItem,
 } from "../types";
 import { resolutionFor, type HelpMark } from "../data/blackbox-resolution";
 import "./BlackBox.css";
@@ -154,6 +156,8 @@ function IncidentRow({
           <span className="bb-vitals-text">{t("gaming.blackBox.noVitalsMsg")}</span>
         </div>
       )}
+
+      {inc.changed_before && <ChangedBeforeBlock cb={inc.changed_before} />}
 
       {/* Black Box v2 (only present when blackbox_v2_gate() is ON): triage — consistent-with + a
           strength WORD (never a percentage) + the evidence + ONE reversible next step. v2.1 adds the
@@ -438,5 +442,89 @@ function ResolutionFeedback({ inc, allIncidents }: { inc: CrashIncident; allInci
         {t("gaming.blackBox.noButton")}
       </button>
     </div>
+  );
+}
+
+// P6-changed: "Changed before this" — what changed between the last clean (or measured) session and
+// this incident, from the read-only intelligence gather. Correlation in time only: EVERY line carries
+// the "not proven cause" tag, and a category Compy couldn't read says unknown, never "no change"
+// (Constitution §17, §25).
+function fmtWhen(iso: string, lang: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString(lang, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function ChangedBeforeBlock({ cb }: { cb: ChangedBeforeIncident }) {
+  const { t, i18n } = useTranslation();
+  const when = (iso: string) => fmtWhen(iso, i18n.language);
+  return (
+    <div className="bb-changed">
+      <p className="bb-changed-head">{t("gaming.blackBox.changedBefore.title")}</p>
+      {cb.anchor ? (
+        <p className="bb-changed-anchor">
+          {t(
+            cb.anchor_kind === "clean"
+              ? "gaming.blackBox.changedBefore.sinceClean"
+              : "gaming.blackBox.changedBefore.sinceMeasured",
+            { game: cb.anchor.game, date: when(cb.anchor.started_at) },
+          )}
+        </p>
+      ) : (
+        <p className="bb-changed-anchor">{t("gaming.blackBox.changedBefore.noSession")}</p>
+      )}
+      {cb.items.length > 0 && (
+        <ul className="bb-changed-list">
+          {cb.items.map((it) => (
+            <ChangedBeforeRow key={it.category} it={it} when={when} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ChangedBeforeRow({ it, when }: { it: ChangedBeforeItem; when: (iso: string) => string }) {
+  const { t } = useTranslation();
+  let line: string;
+  if (it.status === "changed") {
+    line = t("gaming.blackBox.changedBefore.status.changed", { count: it.events.length });
+  } else if (it.status === "no-change") {
+    line = it.checked_between
+      ? t("gaming.blackBox.changedBefore.status.noChangeBetween", {
+          from: when(it.checked_between[0]),
+          to: when(it.checked_between[1]),
+        })
+      : t("gaming.blackBox.changedBefore.status.noChangeLedger");
+  } else {
+    const reason = it.unknown_reason ?? "no-reading-before";
+    line =
+      reason === "no-reading-after" && it.last_reading_at
+        ? t("gaming.blackBox.changedBefore.unknown.noReadingAfterSince", { date: when(it.last_reading_at) })
+        : t(`gaming.blackBox.changedBefore.unknown.${reason}`);
+  }
+  return (
+    <li className={`bb-changed-item bb-changed-${it.status}`} data-category={it.category}>
+      <div className="bb-changed-item-head">
+        <span className="bb-changed-cat">{t(`gaming.blackBox.changedBefore.category.${it.category}`)}</span>
+        <span className="bb-changed-tag">{t("gaming.blackBox.changedBefore.notProven")}</span>
+      </div>
+      <p className="bb-changed-line">{line}</p>
+      {it.events.length > 0 && (
+        <ul className="bb-changed-events">
+          {it.events.map((e) => (
+            <li key={e.id}>
+              {e.summary}
+              {e.observed_between
+                ? ` · ${t("gaming.blackBox.changedBefore.observedBetween", {
+                    from: when(e.observed_between[0]),
+                    to: when(e.observed_between[1]),
+                  })}`
+                : ` · ${when(e.timestamp)}`}
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }

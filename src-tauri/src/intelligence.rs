@@ -2416,6 +2416,295 @@ pub(crate) fn what_changed_between(
     what_changed_between_impl(&g, &baseline_started_at, &current_started_at)
 }
 
+// ─── P6-changed: "Changed before this" for one Black Box incident ─────────
+//
+// The same gather and timeline as "What changed?", anchored on an incident's time instead of a
+// second session. The window runs from the last clean session before the incident (or, when every
+// earlier session had an incident of its own, the last measured one) up to the incident. Each of
+// six categories gets an honest status: `changed` (events inside the window), `no-change` (a
+// reading at or before the window start AND one at or after the incident, with nothing between),
+// or `unknown` with a reason code. Missing or unreadable evidence is never shown as "no change",
+// and nothing here names a cause: the surface tags every line "not proven cause" (Constitution
+// §17, §25). Read-only: no probe, no write, not even to Compy's own stores.
+
+/// The session the "Changed before this" window starts at.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct ChangedBeforeAnchor {
+    pub started_at: String,
+    pub game: String,
+}
+
+/// One category's honest answer for the window.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct ChangedBeforeItem {
+    /// "compy-changes" | "driver" | "windows-build" | "power-plan" | "hardware" | "drift"
+    pub category: String,
+    /// "changed" | "no-change" | "unknown"
+    pub status: String,
+    /// `changed`: the events inside the window. `unknown` + "cant-place": the events Compy can't
+    /// place before or after the incident. Empty otherwise.
+    pub events: Vec<EventRecord>,
+    /// Set only when `status` is "unknown": "no-reading-before" | "no-reading-after" |
+    /// "cant-place" | "ledger-incomplete" | "drift-not-kept".
+    pub unknown_reason: Option<String>,
+    /// "no-reading-after" only: the newest reading Compy has of this, before the incident.
+    pub last_reading_at: Option<String>,
+    /// "no-change" only, for observed categories: the two readings that bracket the window.
+    pub checked_between: Option<(String, String)>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct ChangedBeforeIncident {
+    /// "clean" (no incident during that session) | "measured" (every earlier session had one) |
+    /// "none" (no earlier measured session at all — `anchor` is None and `items` is empty).
+    pub anchor_kind: String,
+    pub anchor: Option<ChangedBeforeAnchor>,
+    /// The incident time the window ends at (copied from the incident).
+    pub window_end: String,
+    pub items: Vec<ChangedBeforeItem>,
+}
+
+/// One machine reading Compy holds: identity snapshots carry every field, rig fingerprints (on
+/// sessions and ledger applies) carry the GPU, its driver, RAM and display. Empty = not read.
+struct CbReading {
+    at: DateTime<Utc>,
+    at_raw: String,
+    driver: String,
+    windows: String,
+    power: String,
+    hardware: String,
+}
+
+fn cb_readings(g: &Gathered) -> Vec<CbReading> {
+    let mut out = Vec::new();
+    let hw = |gpu: &str, ram: u32, display: &str| {
+        if gpu.is_empty() {
+            String::new()
+        } else {
+            format!("{gpu}|{ram}|{display}")
+        }
+    };
+    for s in &g.snapshots {
+        if let Some(at) = parse_utc(&s.observed_at) {
+            out.push(CbReading {
+                at,
+                at_raw: s.observed_at.clone(),
+                driver: s.gpu_driver.clone(),
+                windows: s.windows_build.clone(),
+                power: s.power_plan.clone(),
+                hardware: hw(&s.gpu, s.ram_gb, &s.display),
+            });
+        }
+    }
+    let prints = g
+        .sessions
+        .iter()
+        .filter_map(|s| Some((s.started_at.as_str(), s.hw_fingerprint.as_ref()?)))
+        .chain(
+            g.applied
+                .iter()
+                .filter_map(|c| Some((c.applied_at.as_str(), c.hw_fingerprint.as_ref()?))),
+        );
+    for (raw, fp) in prints {
+        if let Some(at) = parse_utc(raw) {
+            out.push(CbReading {
+                at,
+                at_raw: raw.to_string(),
+                driver: fp.gpu_driver.clone(),
+                windows: String::new(),
+                power: String::new(),
+                hardware: hw(&fp.gpu, fp.ram_gb, &fp.display),
+            });
+        }
+    }
+    out
+}
+
+fn cb_item(category: &str, status: &str) -> ChangedBeforeItem {
+    ChangedBeforeItem {
+        category: category.into(),
+        status: status.into(),
+        events: Vec::new(),
+        unknown_reason: None,
+        last_reading_at: None,
+        checked_between: None,
+    }
+}
+
+fn cb_unknown(category: &str, reason: &str) -> ChangedBeforeItem {
+    let mut it = cb_item(category, "unknown");
+    it.unknown_reason = Some(reason.into());
+    it
+}
+
+/// The anchor session: the newest measured session that ENDED before the incident (outside the
+/// grace window Black Box uses to call a crash "during that session"), preferring one with no
+/// other recorded incident during it.
+fn cb_anchor<'a>(
+    sessions: &'a [crate::sessions::SessionSummary],
+    incident_at: DateTime<Utc>,
+    other_incidents: &[DateTime<Utc>],
+) -> Option<(&'a crate::sessions::SessionSummary, DateTime<Utc>, bool)> {
+    let grace = chrono::Duration::seconds(crate::blackbox::VITALS_GRACE_SECS);
+    let mut candidates: Vec<(DateTime<Utc>, bool, &crate::sessions::SessionSummary)> = sessions
+        .iter()
+        .filter(|s| s.samples > 0)
+        .filter_map(|s| {
+            let start = parse_utc(&s.started_at)?;
+            let end = start + chrono::Duration::seconds(i64::try_from(s.duration_secs).ok()?);
+            if end + grace >= incident_at {
+                return None; // the incident happened during (or right at the end of) this session
+            }
+            let clean = !other_incidents.iter().any(|t| *t >= start && *t <= end + grace);
+            Some((start, clean, s))
+        })
+        .collect();
+    candidates.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.2.started_at.cmp(&b.2.started_at)));
+    candidates
+        .iter()
+        .find(|(_, clean, _)| *clean)
+        .or_else(|| candidates.first())
+        .map(|(t, clean, s)| (*s, *t, *clean))
+}
+
+/// Pure: "Changed before this" for one incident at `incident_at`, over an already-gathered store
+/// and its assembled timeline. `other_incidents` are the times of every OTHER incident on record,
+/// used only to tell a clean session from one that had its own incident.
+fn changed_before_incident_impl(
+    g: &Gathered,
+    asm: &TimelineAssembly,
+    incident_raw: &str,
+    incident_at: DateTime<Utc>,
+    other_incidents: &[DateTime<Utc>],
+) -> ChangedBeforeIncident {
+    let Some((anchor, win_start, clean)) = cb_anchor(&g.sessions, incident_at, other_incidents)
+    else {
+        return ChangedBeforeIncident {
+            anchor_kind: "none".into(),
+            anchor: None,
+            window_end: incident_raw.to_string(),
+            items: Vec::new(),
+        };
+    };
+    let (inside, ambiguous) = split_window_events(&asm.events, win_start, incident_at);
+    let readings = cb_readings(g);
+    let mut items = Vec::new();
+
+    // Compy's own changes: the Trust Ledger is a complete record of what Compy did, so silence is
+    // real evidence — unless the ledger is incomplete, when it proves nothing.
+    let compy: Vec<EventRecord> =
+        inside.iter().filter(|e| e.scope == EventScope::CompyApplied).cloned().collect();
+    items.push(if !compy.is_empty() {
+        let mut it = cb_item("compy-changes", "changed");
+        it.events = compy;
+        it
+    } else if g.ledger == LedgerHealth::Complete {
+        cb_item("compy-changes", "no-change")
+    } else {
+        cb_unknown("compy-changes", "ledger-incomplete")
+    });
+
+    // Observed categories: changed / can't place / bracketed by readings / unknown.
+    type Field = fn(&CbReading) -> &str;
+    let observed: [(&str, &str, Field); 4] = [
+        ("driver", "gpu-driver-change", |r| &r.driver),
+        ("windows-build", "windows-build-change", |r| &r.windows),
+        ("power-plan", "power-plan-change", |r| &r.power),
+        ("hardware", "hardware-change", |r| &r.hardware),
+    ];
+    for (category, event_type, field) in observed {
+        let hits: Vec<EventRecord> =
+            inside.iter().filter(|e| e.event_type == event_type).cloned().collect();
+        if !hits.is_empty() {
+            let mut it = cb_item(category, "changed");
+            it.events = hits;
+            items.push(it);
+            continue;
+        }
+        let unplaced: Vec<EventRecord> =
+            ambiguous.iter().filter(|e| e.event_type == event_type).cloned().collect();
+        if !unplaced.is_empty() {
+            let mut it = cb_unknown(category, "cant-place");
+            it.events = unplaced;
+            items.push(it);
+            continue;
+        }
+        let read: Vec<&CbReading> = readings.iter().filter(|r| !field(r).is_empty()).collect();
+        let before = read.iter().filter(|r| r.at <= win_start).max_by_key(|r| r.at);
+        let after = read.iter().filter(|r| r.at >= incident_at).min_by_key(|r| r.at);
+        items.push(match (before, after) {
+            (None, _) => cb_unknown(category, "no-reading-before"),
+            (Some(_), None) => {
+                let mut it = cb_unknown(category, "no-reading-after");
+                it.last_reading_at = read
+                    .iter()
+                    .filter(|r| r.at < incident_at)
+                    .max_by_key(|r| r.at)
+                    .map(|r| r.at_raw.clone());
+                it
+            }
+            (Some(b), Some(a)) => {
+                let mut it = cb_item(category, "no-change");
+                it.checked_between = Some((b.at_raw.clone(), a.at_raw.clone()));
+                it
+            }
+        });
+    }
+
+    // Drift: Drift Watch keeps only drift that is still open, so a drift that already cleared is
+    // gone. No notice in the window is therefore unknown, never "no drift".
+    let drift: Vec<EventRecord> =
+        inside.iter().filter(|e| e.event_type == "readiness-drift").cloned().collect();
+    let drift_unplaced: Vec<EventRecord> =
+        ambiguous.iter().filter(|e| e.event_type == "readiness-drift").cloned().collect();
+    items.push(if !drift.is_empty() {
+        let mut it = cb_item("drift", "changed");
+        it.events = drift;
+        it
+    } else if !drift_unplaced.is_empty() {
+        let mut it = cb_unknown("drift", "cant-place");
+        it.events = drift_unplaced;
+        it
+    } else {
+        cb_unknown("drift", "drift-not-kept")
+    });
+
+    ChangedBeforeIncident {
+        anchor_kind: if clean { "clean" } else { "measured" }.into(),
+        anchor: Some(ChangedBeforeAnchor {
+            started_at: anchor.started_at.clone(),
+            game: pretty_game_name(&anchor.process_name),
+        }),
+        window_end: incident_raw.to_string(),
+        items,
+    }
+}
+
+fn attach_changed_before_from(g: &Gathered, incidents: &mut [crate::blackbox::Incident]) {
+    let asm = assemble_from(g);
+    let times: Vec<Option<DateTime<Utc>>> = incidents.iter().map(|i| parse_utc(&i.when)).collect();
+    for (idx, inc) in incidents.iter_mut().enumerate() {
+        let Some(at) = times[idx] else { continue };
+        let others: Vec<DateTime<Utc>> = times
+            .iter()
+            .enumerate()
+            .filter(|(j, _)| *j != idx)
+            .filter_map(|(_, t)| *t)
+            .collect();
+        inc.changed_before = Some(changed_before_incident_impl(g, &asm, &inc.when, at, &others));
+    }
+}
+
+/// Edge: one read-only gather for the whole scan, then "Changed before this" on every incident.
+/// No identity probe is started — the answer is what Compy already holds.
+pub(crate) fn attach_changed_before(incidents: &mut [crate::blackbox::Incident]) {
+    if incidents.is_empty() {
+        return;
+    }
+    let g = gather();
+    attach_changed_before_from(&g, incidents);
+}
+
 /// Home's single concise line — only when the latest session shows a meaningful delta.
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct IntelligenceHeadline {
@@ -4150,6 +4439,188 @@ mod tests {
         }
         for e in j["edges"].as_array().unwrap() {
             assert!(e["weight"].is_string(), "weight is a band, not a number");
+        }
+    }
+
+    // ── P6-changed: "Changed before this" anchored at an incident ──
+
+    fn at(s: &str) -> DateTime<Utc> {
+        parse_utc(s).expect("test timestamp parses")
+    }
+
+    fn cb(g: &Gathered, incident: &str, others: &[&str]) -> ChangedBeforeIncident {
+        let asm = assemble_from(g);
+        let others: Vec<DateTime<Utc>> = others.iter().map(|t| at(t)).collect();
+        changed_before_incident_impl(g, &asm, incident, at(incident), &others)
+    }
+
+    fn cb_cat<'a>(r: &'a ChangedBeforeIncident, category: &str) -> &'a ChangedBeforeItem {
+        r.items.iter().find(|i| i.category == category).unwrap_or_else(|| panic!("no {category} item"))
+    }
+
+    #[test]
+    fn changed_before_the_owners_sidump_crash_reads_the_real_stores() {
+        // Owner's real data (lane 453): the Care card "sidump stopped working and closed — Oct 24,
+        // 4:18 AM". Fixture = read-only copies of sessions/history/intelligence/incident-observer.
+        let fx: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/test/fixtures/incident-changed-before-453.json"))
+                .expect("fixture parses");
+        let incident = fx["incident"]["occurred_at"].as_str().unwrap().to_string();
+        assert_eq!(fx["incident"]["summary"], "sidump stopped working and closed — Oct 24, 4:18 AM");
+        let mut g = gathered_with(serde_json::from_value(fx["sessions"].clone()).expect("sessions"));
+        g.applied = serde_json::from_value(fx["history"].clone()).expect("history");
+        g.snapshots = serde_json::from_value(fx["identity_snapshots"].clone()).expect("snapshots");
+        let others: Vec<String> = serde_json::from_value(fx["other_incident_times"].clone()).unwrap();
+        let others: Vec<&str> = others.iter().map(String::as_str).collect();
+        let r = cb(&g, &incident, &others);
+
+        // Window: the last clean session before 4:18 AM PDT Oct 24 — the short WARDOGS run on Oct 23.
+        assert_eq!(r.anchor_kind, "clean");
+        let a = r.anchor.as_ref().expect("an anchor session");
+        assert_eq!(a.started_at, "2026-10-23T16:06:22.472457100+00:00");
+        assert_eq!(a.game, "WardogsClient");
+        assert_eq!(r.window_end, incident);
+        let cats: Vec<&str> = r.items.iter().map(|i| i.category.as_str()).collect();
+        assert_eq!(cats, ["compy-changes", "driver", "windows-build", "power-plan", "hardware", "drift"]);
+
+        // Compy: the visual-effects trim applied and rolled back at 16:08 sits inside the window.
+        let compy = cb_cat(&r, "compy-changes");
+        assert_eq!(compy.status, "changed");
+        let kinds: Vec<&str> = compy.events.iter().map(|e| e.event_type.as_str()).collect();
+        assert_eq!(kinds, ["change-applied", "change-rolled-back"]);
+        assert!(compy.events.iter().all(|e| e.summary.contains("Trim Windows visual effects")));
+
+        // Driver + hardware: read on the anchor session and again on the Oct 24 ledger apply — same.
+        for c in ["driver", "hardware"] {
+            let it = cb_cat(&r, c);
+            assert_eq!(it.status, "no-change", "{c}");
+            assert_eq!(
+                it.checked_between,
+                Some((
+                    "2026-10-23T16:06:22.472457100+00:00".to_string(),
+                    "2026-10-24T19:24:22.256501300+00:00".to_string()
+                )),
+                "{c}"
+            );
+        }
+        // Windows build + power plan: only identity snapshots carry them, and none since Oct 23 07:03.
+        for c in ["windows-build", "power-plan"] {
+            let it = cb_cat(&r, c);
+            assert_eq!(it.status, "unknown", "{c} must never read as no change");
+            assert_eq!(it.unknown_reason.as_deref(), Some("no-reading-after"));
+            assert_eq!(it.last_reading_at.as_deref(), Some("2026-10-23T14:03:14.523573500+00:00"));
+        }
+        let drift = cb_cat(&r, "drift");
+        assert_eq!(drift.status, "unknown");
+        assert_eq!(drift.unknown_reason.as_deref(), Some("drift-not-kept"));
+    }
+
+    #[test]
+    fn changed_before_with_no_earlier_session_says_so_and_lists_nothing() {
+        let g = gathered_with(vec![mk_session("2026-10-24T12:00:00Z", "Game.exe", 100.0, 120.0)]);
+        let r = cb(&g, "2026-10-24T11:00:00Z", &[]);
+        assert_eq!(r.anchor_kind, "none");
+        assert!(r.anchor.is_none());
+        assert!(r.items.is_empty(), "no window ⇒ no invented items");
+        // A session with no reading is no anchor either (P4-show-f1).
+        let mut s = mk_session("2026-10-24T09:00:00Z", "Game.exe", 0.0, 0.0);
+        s.samples = 0;
+        let r = cb(&gathered_with(vec![s]), "2026-10-24T11:00:00Z", &[]);
+        assert_eq!(r.anchor_kind, "none");
+    }
+
+    #[test]
+    fn changed_before_never_anchors_on_the_session_the_incident_happened_in() {
+        // mk_session runs 600 s. The crash lands 60 s after the second one ends — inside Black
+        // Box's 90 s grace, so that is the crash session, and the window starts at the first.
+        let g = gathered_with(vec![
+            mk_session("2026-10-24T08:00:00Z", "Game.exe", 100.0, 120.0),
+            mk_session("2026-10-24T10:00:00Z", "Game.exe", 100.0, 120.0),
+        ]);
+        let r = cb(&g, "2026-10-24T10:11:00Z", &[]);
+        assert_eq!(r.anchor.unwrap().started_at, "2026-10-24T08:00:00Z");
+    }
+
+    #[test]
+    fn changed_before_prefers_a_clean_session_and_falls_back_to_the_last_measured() {
+        let g = gathered_with(vec![
+            mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0),
+            mk_session("2026-10-22T10:00:00Z", "Game.exe", 100.0, 120.0),
+        ]);
+        // Another incident during the Oct 22 session: it isn't clean, so Oct 20 anchors.
+        let r = cb(&g, "2026-10-24T10:00:00Z", &["2026-10-22T10:05:00Z"]);
+        assert_eq!(r.anchor_kind, "clean");
+        assert_eq!(r.anchor.as_ref().unwrap().started_at, "2026-10-20T10:00:00Z");
+        // Every earlier session had one: the last measured session anchors, and says it isn't clean.
+        let r = cb(&g, "2026-10-24T10:00:00Z", &["2026-10-22T10:05:00Z", "2026-10-20T10:05:00Z"]);
+        assert_eq!(r.anchor_kind, "measured");
+        assert_eq!(r.anchor.as_ref().unwrap().started_at, "2026-10-22T10:00:00Z");
+    }
+
+    #[test]
+    fn changed_before_unknown_and_unreadable_evidence_is_never_no_change() {
+        // No identity reading at all, an unreadable ledger, nothing in the window: every category
+        // is unknown with a reason — not one of them may claim "no change".
+        let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        g.ledger = LedgerHealth::Incomplete;
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        assert_eq!(r.items.len(), 6);
+        for it in &r.items {
+            assert_eq!(it.status, "unknown", "{} claimed {}", it.category, it.status);
+            assert!(it.unknown_reason.is_some(), "{} has no reason", it.category);
+        }
+        assert_eq!(cb_cat(&r, "compy-changes").unknown_reason.as_deref(), Some("ledger-incomplete"));
+        assert_eq!(cb_cat(&r, "driver").unknown_reason.as_deref(), Some("no-reading-before"));
+
+        // A blank probe field is not a reading: a snapshot that read no power plan leaves it unknown.
+        let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        g.snapshots = vec![mk_snap("2026-10-19T10:00:00Z", "1", "26100", ""), mk_snap("2026-10-25T10:00:00Z", "1", "26100", "")];
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        assert_eq!(cb_cat(&r, "power-plan").status, "unknown");
+        assert_eq!(cb_cat(&r, "windows-build").status, "no-change");
+        assert_eq!(cb_cat(&r, "compy-changes").status, "no-change", "a complete, quiet ledger is evidence");
+    }
+
+    #[test]
+    fn changed_before_lists_observed_changes_and_refuses_to_place_a_straddling_one() {
+        let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        g.snapshots = vec![
+            // Read as the anchor session started, and again inside the window: a placed change.
+            mk_snap("2026-10-20T10:00:00Z", "drv-1", "26100", "Balanced"),
+            mk_snap("2026-10-22T10:00:00Z", "drv-2", "26100", "Balanced"),
+            // Read again only after the incident, and the plan differs: when it changed is unknown.
+            mk_snap("2026-10-26T10:00:00Z", "drv-2", "26100", "Ultimate Performance"),
+        ];
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        let drv = cb_cat(&r, "driver");
+        assert_eq!(drv.status, "changed");
+        assert_eq!(drv.events[0].summary, "GPU driver changed: drv-1 → drv-2");
+        let plan = cb_cat(&r, "power-plan");
+        assert_eq!(plan.status, "unknown");
+        assert_eq!(plan.unknown_reason.as_deref(), Some("cant-place"));
+        assert_eq!(plan.events.len(), 1);
+        assert_eq!(cb_cat(&r, "windows-build").status, "no-change");
+
+        // A change whose window opens BEFORE the anchor session may predate it: never listed as
+        // "changed before this", only as can't-place.
+        g.snapshots[0].observed_at = "2026-10-19T10:00:00Z".into();
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        assert_eq!(cb_cat(&r, "driver").status, "unknown");
+        assert_eq!(cb_cat(&r, "driver").unknown_reason.as_deref(), Some("cant-place"));
+    }
+
+    #[test]
+    fn changed_before_report_never_claims_a_cause() {
+        let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        g.applied = vec![mk_change("visual-effects", "Trim Windows visual effects", "2026-10-21T10:00:00Z", "applied")];
+        g.snapshots = vec![
+            mk_snap("2026-10-19T10:00:00Z", "drv-1", "26100", "Balanced"),
+            mk_snap("2026-10-25T10:00:00Z", "drv-2", "26100", "Balanced"),
+        ];
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        let wire = serde_json::to_string(&r).unwrap().to_lowercase();
+        for banned in ["caused", "because", "the cause", "root cause", "%"] {
+            assert!(!wire.contains(banned), "changed-before wire contains {banned:?}");
         }
     }
 }
