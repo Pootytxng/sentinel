@@ -347,4 +347,24 @@ describe("crash and stutter answers converge on one Care view", () => {
       expect(a.kind === "station" ? a.station : a.kind, `${id} left the Care view`).toBe("blackbox");
     }
   });
+
+  // P6-stutter: only the stutter answer arrives as a stutter, so only it runs the session comparison.
+  it.each(CARE_FINDINGS)("%s carries the stutter arrival only when it is the stutter answer", (id) => {
+    const a = find(id, RICH).action;
+    expect(a.kind === "station" ? a.arrival : undefined).toBe(id === "stutter" ? "stutter" : undefined);
+  });
+
+  it("with Intelligence off the stutter answer keeps the crash-record promise and no arrival", () => {
+    localStorage.setItem("compy_intelligence", "0");
+    try {
+      const f = find("stutter", RICH);
+      const a = f.action;
+      expect(a.kind === "station" ? a.station : a.kind).toBe("blackbox");
+      expect(a.kind === "station" ? a.arrival : undefined).toBeUndefined();
+      expect(a.label).toBe(i18n.t("home.interview.f.act.crashBehind"));
+      expect(f.sentence).not.toMatch(/last steady/);
+    } finally {
+      localStorage.removeItem("compy_intelligence");
+    }
+  });
 });

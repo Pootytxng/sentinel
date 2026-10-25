@@ -1,0 +1,49 @@
+/* P6-stutter: the latest-vs-last-good comparison on the Care view. Instrument tokens only. */
+.bb-stutter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ix-text-3) 8%, transparent);
+  min-width: 0;
+}
+.bb-stutter-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+.bb-stutter-title {
+  font-size: var(--type-label);
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.bb-stutter-tag {
+  font-style: italic;
+  font-size: var(--type-label);
+  color: var(--ix-text-3);
+}
+.bb-stutter-line {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.5;
+  max-width: 62ch;
+}
+.bb-stutter-run {
+  align-self: flex-start;
+  font-size: var(--type-label);
+  color: var(--ix-text-1);
+  background: transparent;
+  border: 1px solid var(--ix-line);
+  border-radius: var(--ix-radius);
+  padding: 7px 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.bb-stutter .wcp-cause-tag {
+  font-style: italic;
+  font-size: var(--type-label);
+  color: var(--ix-text-3);
+}
