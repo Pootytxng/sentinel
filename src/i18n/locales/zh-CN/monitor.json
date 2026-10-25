@@ -1,4 +1,8 @@
 {
+  "leftOut": {
+    "seconds": "{{seconds}} 秒",
+    "minutes": "{{minutes}} 分 {{seconds}} 秒"
+  },
   "monitor": {
     "tuningPresetsTitle": "调优预设",
     "vendorHintAmd": "——你的 AMD 显卡支持 FreeSync",
@@ -145,6 +149,8 @@
     "axisBudget": " · 预算 {{budget}} ms"
   },
   "sessionStack": {
+    "leftOut": "其他窗口在前台的 {{span}} 没有计入",
+    "allBackground": "没有记录：整个过程中其他窗口都在前台",
     "noSessionsEmpty": "暂无会话记录——开启采集后开始游玩即可生成",
     "timelineNotKept": "未保留时间线",
     "coverageNote": "仅记录了前 {{duration}}",
@@ -223,6 +229,7 @@
     "notGradedVerdict": "未评级"
   },
   "sessionDebrief": {
+    "leftOut": "其他窗口在前台的 {{span}} 没有计入数据。",
     "comparisonHeader": "对比 · {{title}} · 两次 {{game}} 会话",
     "noiseFloor": "噪声范围 ±{{pct}}%",
     "noMeasurableChange": "没有可测量的变化",
@@ -254,6 +261,10 @@
     "revertIt": "撤销它——不丢人",
     "honestTally": "诚实结论：1 次 · 虚假胜利：0 次",
     "verdict": {
+      "background": {
+        "headline": "未评级",
+        "sub": "整个会话期间其他窗口都在前台，所以这 {{span}} 全部没有计入，也没有测得任何数据。让游戏保持在前台即可得到读数。"
+      },
       "smooth": {
         "headline": "会话流畅",
         "sub": "即使是最差的瞬间也保持在你平均水平的 {{pct}}%——很稳。"
