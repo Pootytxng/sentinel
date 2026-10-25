@@ -2049,3 +2049,19 @@ The 791babf2 desk row, preserved verbatim from `544fd261:docs/RELEASE_STATE.md` 
 The f6736154 desk row, preserved verbatim from `7aa8e810:docs/RELEASE_STATE.md` except its one relative link (re-pointed at this file). Superseded by the 2026-10-25 midday desk install of `main` `7aa8e810`, after the P6-changed-f2 merge (`8204e17c`).
 
 | **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `f6736154`** — built 2026-10-25 (about 06:39 local) from `main` itself at `f6736154` (`docs(work-train): tick P4-exit code; queue P4-exit-proof`, after the P4-exit merge `e3d0420e`), in the main checkout, via `npm run tauri build` then `scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit f6736154…`. Installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`21B647B42BBC565DE4577612D8C4055C14327F62CBA4F98490F081AF13EDB940`**. **Live == build proved by the embedded stamp** — runtime proof `f6736154 · release · shell 0.9.26`, proof attempt 1 of 1; installed version 0.9.26. **Visible delta vs `791babf2`:** tokio 1.54.1 (RUSTSEC-2026-0386); the Trial picker offers only changes worth testing on this PC and says why the rest aren't listed (P4-candidates); background time is left out of a session and a Partial pair says what differed (P4-comparable); the Recommended verdict judges the average beside the 1% low (P4-recommended); a suggested test order with one reason each (P4-rank); Health stacks to one column below 1240px and the Live timeline keeps 120px (#622-f2); after a Trial the next untested change is offered, and none left is a success (P4-next); a Trial can aim for Maximum FPS, with Smoothest held until frame pacing is measured (P4-maxfps); a per-game summary of what Compy tested on the Test bench (P4-exit). Installed so the owner's Phase 4 Trial runs use the new engine. UNDISTRIBUTED, unsigned by construction (`TAURI_SIGNING_PRIVATE_KEY` absent; the build's final step errors after both bundles are written). It supersedes **`791babf2`** (installed 2026-10-24 about 17:00, after 453-f1), whose row is byte-preserved in [RELEASE_STATE_HISTORY.md](RELEASE_STATE_HISTORY.md). | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern f6736154` · HKCU uninstall `DisplayVersion` — **both from a non-containerized session only** (a packaged host sees `%LOCALAPPDATA%`/`HKCU` through an overlay) |
+
+
+## Bottom-line history moved 2026-10-25 (byte budget)
+
+Moved verbatim from the RELEASE_STATE bottom line:
+
+Further back, v0.9.12 carries the
+updater/privacy truth fix (issue #59): the absolute "nothing leaves your PC" claims are gone from
+the app, both locales, the legal documents and the marketing site, automatic update checks are now
+switchable off in Settings → About, and `src/outbound-claim-guard.test.ts` fails the build if an
+absolute offline claim ships while any outbound surface is live. The recovery provenance behind it
+is intact and unaltered: v0.9.8 (`d9ced24`) owner-installed unpublished; the failed v0.9.9 candidate
+(`2bd649d`) preserved; v0.9.9 (`664aa5e`) source-tagged, owner-installed, never in `compy-releases`;
+v0.9.10 (`92c7608`) an immutable source tag whose abandoned **release debris (private draft
+`360948018` + releases-repo tag) was deleted 2026-07-28** under owner authorization, leaving the
+source tag, recovery branches and local evidence intact.

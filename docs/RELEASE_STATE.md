@@ -73,13 +73,9 @@
 **Bottom line:** the newest **published** release and the public updater manifest are both
 **v0.9.26 (`5e64074c`)**, published 2026-08-19T09:14Z under owner GO ("the fleet-move GO"). **The
 owner's desk does NOT run those bytes.** It runs a newer, unreleased v0.9.26 desk build stamped
-**`7aa8e810`** (built and installed 2026-10-25 from `main` itself, after P6-changed-f2: the Phase 5 guided journey — one
-Optimize my game button, a steadier before-session, verdict and one-tap next test, the you-have-enough line, the kept and
-put-back summary, resume across restarts, the Recommended vs Maximum FPS choice recorded in the Trust Ledger — and the
-Phase 6 "Changed before this" crash view with newest-first crash reports, plus P4-next-f1, P4-comparable-show,
-P4-smooth-measure, P4-show-f1 and the layout harness fix; the Phase 4 Trial engine, tokio 1.54.1, #622-f2, 453-f1, the
-#453 fix and Phase 2 exit pass, the #673 unmeasured-FPS wording, the PR #686 Trial read-back and the Trial Protocol,
-Monitor, History and Health fixes are carried forward).
+**`7aa8e810`** (built and installed 2026-10-25 from `main` itself, after P6-changed-f2: the Phase 5 guided journey and the Phase 6
+"Changed before this" crash view; its full delta is in the owner-installed row above, and everything earlier is carried
+forward).
 The earlier desk rows, `f6736154`, `791babf2`, `2afd7471`, `d4de0021`, `9470b437`, `e9727c04`, `a76e4189`, `d7fed835`, `c82440a1`, `090bc58b`, `73b629ed`, `380f98ca`, `1703be9f`, `b21bc18b` and `72efd7e6`
 included, are byte-preserved in [archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTORY.md).
 **Installing is not releasing** — nothing was published). Same
@@ -97,16 +93,7 @@ attention state, the in-app What's-new list and the arc-gauge ring-overflow fix.
 desk builds were caught by LOOKING at them (v0.9.19's ring overflow, v0.9.23's undersized verdict),
 neither by a test. What is *offered* is not what is taken — no tester is known to have updated past
 0.9.12 yet, and this is a six-number jump for whoever takes it.
-Further back, v0.9.12 carries the
-updater/privacy truth fix (issue #59): the absolute "nothing leaves your PC" claims are gone from
-the app, both locales, the legal documents and the marketing site, automatic update checks are now
-switchable off in Settings → About, and `src/outbound-claim-guard.test.ts` fails the build if an
-absolute offline claim ships while any outbound surface is live. The recovery provenance behind it
-is intact and unaltered: v0.9.8 (`d9ced24`) owner-installed unpublished; the failed v0.9.9 candidate
-(`2bd649d`) preserved; v0.9.9 (`664aa5e`) source-tagged, owner-installed, never in `compy-releases`;
-v0.9.10 (`92c7608`) an immutable source tag whose abandoned **release debris (private draft
-`360948018` + releases-repo tag) was deleted 2026-07-28** under owner authorization, leaving the
-source tag, recovery branches and local evidence intact. Remote Actions execution is currently
+The v0.9.12 updater/privacy fix and the v0.9.8–v0.9.10 recovery provenance are in [archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTORY.md). Remote Actions execution is currently
 unavailable (jobs refused before runner startup under the $0 budget); the local gate is the proof
 authority, and the sandboxed publish simulation is operative. **No build has been distributed to another person by hand since the 0.9.0 link** — the
 fleet reaches every build only through the consent-first updater, and **the A0 single-tester canary
