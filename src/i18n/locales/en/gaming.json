@@ -319,13 +319,14 @@
     "emptyClean": "No crashes or freezes recorded. Either nothing went wrong, or whatever happened left no trace Windows recorded.",
     "stutter": {
       "title": "Stutters or runs slow?",
-      "runButton": "Compare my latest session with its last good one",
+      "runButton": "Compare my latest session with my last steady one",
       "comparing": "Comparing your sessions…",
       "readError": "Compy couldn't read your sessions just now. Nothing was compared.",
       "noSession": "Compy has no recorded game session yet, so there is nothing to compare. To get one, record a session in Benchmark while you play.",
-      "noGood": "Compy has no good {{game}} session to compare your latest one with. A good one is an earlier session with at least 10 minutes of steady, measured play on a comparable setup. To get one, record a session in Benchmark when the game runs well.",
-      "compared": "Your latest {{game}} session ({{latest}}) compared with its last good one ({{good}}): steady, measured, and on a comparable setup. What changed between them is listed below; none of it is a proven cause.",
-      "headline": "Your latest {{game}} session vs its last good one"
+      "noGood": "Compy has no steady {{game}} session to compare your latest one with. A steady session is an earlier one with at least 10 minutes of measured play at an even frame rate, on a setup Compy can compare. To get one, record a session in Benchmark when the game runs well.",
+      "compared": "Your latest {{game}} session ({{latest}}) compared with your last steady one ({{good}}). What changed between them is listed below; none of it is a proven cause.",
+      "headline": "Your latest {{game}} session vs your last steady one",
+      "off": "Session comparison is switched off on this PC, so Compy can't compare your sessions here."
     },
     "skippedIntro": "Skipped — needs administrator: {{sources}}.",
     "skippedRunAdmin_one": "Run Compy as admin to include this.",

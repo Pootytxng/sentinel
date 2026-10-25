@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   calls: [] as { cmd: string; args: unknown }[],
   sessions: [] as unknown[],
   verdictFor: {} as Record<string, string>,
+  throwFor: "" as string,
 }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
@@ -25,6 +26,7 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_crash_blackbox") return Promise.resolve({ incidents: [], skipped_sources: [] });
     if (cmd === "get_session_summaries") return Promise.resolve(h.sessions);
     if (cmd === "what_changed_between") {
+      if (h.throwFor === args!.baselineStartedAt) return Promise.reject(new Error("ipc down"));
       const verdict = h.verdictFor[args!.baselineStartedAt] ?? "comparable";
       return Promise.resolve(reportFor(args!.baselineStartedAt, args!.currentStartedAt, verdict as Comparability));
     }
@@ -90,6 +92,7 @@ afterEach(() => {
   h.calls = [];
   h.sessions = [];
   h.verdictFor = {};
+  h.throwFor = "";
 });
 
 const cmds = () => h.calls.map((c) => c.cmd);
@@ -139,7 +142,7 @@ describe("the Care view compares on a stutter arrival", () => {
     expect(betweenCalls()).toEqual([
       { baselineStartedAt: "2026-10-20T10:00:00Z", currentStartedAt: "2026-10-24T10:00:00Z" },
     ]);
-    expect(screen.getByText(/Your latest Valorant session vs its last good one/)).toBeInTheDocument();
+    expect(screen.getByText(/Your latest Valorant session vs your last steady one/)).toBeInTheDocument();
     expect(screen.getByText(/none of it is a proven cause/)).toBeInTheDocument();
     // The cause heading itself carries the tag, not only the section.
     const cause = screen.getByText("Most likely cause");
@@ -169,7 +172,7 @@ describe("the Care view compares on a stutter arrival", () => {
     h.sessions = [sess("2026-10-20T10:00:00Z", { fps_series: UNEVEN }), sess("2026-10-24T10:00:00Z")];
     localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
     render(<BlackBox />);
-    expect(await screen.findByText(/no good Valorant session/)).toBeInTheDocument();
+    expect(await screen.findByText(/no steady Valorant session/)).toBeInTheDocument();
     expect(screen.getByText(/record a session in Benchmark/)).toBeInTheDocument();
     expect(betweenCalls()).toEqual([]);
   });
@@ -179,7 +182,7 @@ describe("the Care view compares on a stutter arrival", () => {
     h.verdictFor = { "2026-10-20T10:00:00Z": "unknown" };
     localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
     render(<BlackBox />);
-    expect(await screen.findByText(/no good Valorant session/)).toBeInTheDocument();
+    expect(await screen.findByText(/no steady Valorant session/)).toBeInTheDocument();
     expect(screen.queryByText(/ENGINE HEADLINE/)).toBeNull();
   });
 
@@ -195,8 +198,65 @@ describe("the Care view compares on a stutter arrival", () => {
     render(<BlackBox />);
     await new Promise((r) => setTimeout(r, 0));
     expect(cmds()).toEqual([]);
-    fireEvent.click(screen.getByRole("button", { name: /compare my latest session with its last good one/i }));
+    fireEvent.click(screen.getByRole("button", { name: /compare my latest session with my last steady one/i }));
     await waitFor(() => expect(screen.getByText("ENGINE HEADLINE 2026-10-20T10:00:00Z")).toBeInTheDocument());
+  });
+});
+
+describe("review r1: partial pairs, one-shot, Intelligence off, a failing read", () => {
+  it("a partly comparable pair is used, and the line makes no comparability claim of its own", async () => {
+    h.sessions = [sess("2026-10-20T10:00:00Z"), sess("2026-10-24T10:00:00Z")];
+    h.verdictFor = { "2026-10-20T10:00:00Z": "partial" };
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    render(<BlackBox />);
+    expect(await screen.findByText("ENGINE HEADLINE 2026-10-20T10:00:00Z")).toBeInTheDocument();
+    const line = screen.getByText(/compared with your last steady one/);
+    expect(line.textContent).not.toMatch(/comparable/i);
+  });
+
+  it("is truly one-shot: a remount after an arrival does not run again", async () => {
+    h.sessions = [sess("2026-10-20T10:00:00Z"), sess("2026-10-24T10:00:00Z")];
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    render(<BlackBox />);
+    await screen.findByText("ENGINE HEADLINE 2026-10-20T10:00:00Z");
+    cleanup();
+    h.calls = [];
+    render(<BlackBox />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(cmds()).toEqual([]);
+    expect(screen.getByRole("button", { name: /compare my latest session/i })).toBeInTheDocument();
+  });
+
+  it("with Intelligence off the flag is spent, nothing runs, and the view says why", async () => {
+    localStorage.setItem("compy_intelligence", "0");
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    h.sessions = [sess("2026-10-20T10:00:00Z"), sess("2026-10-24T10:00:00Z")];
+    render(<BlackBox />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(localStorage.getItem(CARE_ARRIVAL_KEY)).toBeNull();
+    expect(cmds()).toEqual([]);
+    expect(screen.getByText(/Session comparison is switched off on this PC/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /compare my latest session/i })).toBeNull();
+    // The empty crash view still reads honestly: no stutter promise in it.
+    fireEvent.click(screen.getByRole("button", { name: /scan for recent crashes/i }));
+    const empty = await screen.findByText(/No crashes or freezes recorded/);
+    expect(empty.textContent).not.toMatch(/stutter/i);
+  });
+
+  it("a read that fails on a later candidate shows the read error and no report (pinned)", async () => {
+    h.sessions = [sess("2026-10-18T10:00:00Z"), sess("2026-10-20T10:00:00Z"), sess("2026-10-24T10:00:00Z")];
+    h.verdictFor = { "2026-10-20T10:00:00Z": "not-comparable" };
+    h.throwFor = "2026-10-18T10:00:00Z";
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    render(<BlackBox />);
+    expect(await screen.findByText(/couldn't read your sessions just now/)).toBeInTheDocument();
+    expect(screen.queryByText(/ENGINE HEADLINE/)).toBeNull();
+    expect(betweenCalls().map((a) => a.baselineStartedAt)).toEqual([
+      "2026-10-20T10:00:00Z",
+      "2026-10-18T10:00:00Z",
+    ]);
+    // The button comes back so the user can try again.
+    expect(screen.getByRole("button", { name: /compare my latest session/i })).toBeInTheDocument();
   });
 });
 

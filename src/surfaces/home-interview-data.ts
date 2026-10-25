@@ -30,6 +30,7 @@ import type { TFunction } from "i18next";
 import type { LabStationKey } from "./lab-guided-data";
 import type { HomeIntakeRoom } from "./home-intake-data";
 import { knownFps } from "../lib/session-metrics";
+import { readIntelligence } from "../design/theme";
 
 // ── The question tree ───────────────────────────────────────────────────────────────────────────
 
@@ -512,15 +513,18 @@ export function interviewFinding(
     case "stutter": {
       sessionLine();
       direct = fpsSession != null;
-      sentence = k("stutter.sentence");
+      // The comparison is one of the engine's surfaces, off under compy_intelligence "0"; then the
+      // answer promises only what the view still delivers, the crash record.
+      const compare = readIntelligence();
+      sentence = k(compare ? "stutter.sentence" : "stutter.sentenceNoCompare");
       // P6-door (ROADMAP Phase 6, Constitution §27): a hitch is a "something's wrong" answer, so
       // it lands on the SAME Care view as every crash answer and Home's one Care door — the crash
       // record and what changed before it — rather than handing the user to a room to read their
       // own session. P6-stutter: arriving with a stutter, that view compares the latest session of
       // the game with its last good one (StutterCompare.tsx), on the same station, no second door.
       {
-        const care = station("blackbox", "lab", k("act.careView"));
-        action = care.kind === "station" ? { ...care, arrival: "stutter" } : care;
+        const care = station("blackbox", "lab", k(compare ? "act.careView" : "act.crashBehind"));
+        action = care.kind === "station" && compare ? { ...care, arrival: "stutter" } : care;
       }
       break;
     }

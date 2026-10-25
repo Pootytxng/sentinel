@@ -110,12 +110,23 @@ export function StutterCompare() {
   };
 
   // Arrived from the interview's stutter answer: the user already asked, so run it once on mount.
+  // The flag is spent on every mount, even when the comparison is switched off, so it can never
+  // fire on some later visit.
   useEffect(() => {
-    if (on && takeStutterArrival()) run();
+    const arrived = takeStutterArrival();
+    if (arrived && on) run();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount by design
   }, []);
 
-  if (!on) return null;
+  // compy_intelligence "0" (the devtools failsafe) switches the engine's surfaces off. Say so in one
+  // line rather than leave a stutter arrival with nothing.
+  if (!on) {
+    return (
+      <section className="bb-stutter" aria-label={t("gaming.blackBox.stutter.title")}>
+        <p className="bb-stutter-line">{t("gaming.blackBox.stutter.off")}</p>
+      </section>
+    );
+  }
 
   return (
     <section className="bb-stutter" aria-label={t("gaming.blackBox.stutter.title")}>
@@ -140,6 +151,8 @@ export function StutterCompare() {
       {state.kind === "report" && (
         <>
           <p className="bb-stutter-line">
+            {/* No comparability claim here: the report's own banner says how comparable the pair is
+                (comparable, or partly). */}
             {t("gaming.blackBox.stutter.compared", {
               game: state.game,
               latest: fmtWhen(state.latestAt, i18n.language),

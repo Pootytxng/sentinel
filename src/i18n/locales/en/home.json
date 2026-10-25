@@ -186,7 +186,8 @@
         "fastpath_one": "Apply {{count}} safe change — one tap",
         "fastpath_other": "Apply {{count}} safe changes — one tap",
         "crashRecord": "Read the crash record",
-        "careView": "Compare with my last good session",
+        "careView": "Compare with my last steady session",
+        "crashBehind": "Check for a crash behind it",
         "diagnostics": "See what is holding it back",
         "measure": "Measure it once",
         "readSession": "Read back your last session",
@@ -219,7 +220,8 @@
         "sentence": "Slow in some games and not others is normally a settings or headroom story. One measured session is what turns that into an answer."
       },
       "stutter": {
-        "sentence": "Hitching is a worst-frames problem, not an average-FPS one — the average can look perfectly fine while it is happening. So Compy compares your latest session of the game with its last good one, and shows any crash Windows recorded."
+        "sentence": "Hitching is a worst-frames problem, not an average-FPS one — the average can look perfectly fine while it is happening. So Compy compares your latest session of the game with your last steady one, and shows any crash Windows recorded.",
+        "sentenceNoCompare": "Hitching is a worst-frames problem, not an average-FPS one — the average can look perfectly fine while it is happening. Sometimes a hitch is something crashing in the background, so the first check is whether Windows recorded one."
       },
       "slowUnsure": {
         "sentence": "No problem. The quickest way to turn a feeling into an answer is to measure it once and look at the numbers."
