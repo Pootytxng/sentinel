@@ -157,7 +157,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - [x] **P4-maxfps-smooth** `baa03405`: Maximum FPS ships (average beyond the band, 1% low held).
       Smoothest withdrawn (shown disabled): per-second data overstates the spread and a 5-pt floor sat inside
       real session variation (review).
-- [ ] **P4-smooth-measure** Store per-frame frame times (or a percentile spread) per session and measure the
+- [x] **P4-smooth-measure** `df01e252` (true per-frame p50/p99/p99.9 via a 1% log histogram, freezes capped at 1 s,
+      ~125 B/session; between-session pacing band). Store per-frame frame times (or a percentile spread) per session and measure the
       spread's session-to-session noise; then offer Smoothest.
 - [ ] **P4-smooth-offer** Offer Smoothest for a game once `between_session_pacing_noise` (p99/p50 band) is measured for it; judge against that band (ratios carry ~±1% bucket error: a spread under ~2% is at the resolution limit).
 - [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
@@ -179,7 +180,7 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
       change per run; no overlay. Needs P4-rank, P4-recommended, P4-maxfps-smooth, P4-comparable. ROADMAP P5
       steps 1, 2, 4; Constitution §4, §10; ENGINE §2.
       Deviation: capture starts on the button press, not on detection (the FPS helper is what sees the game).
-- [ ] **P5-continue** After a verdict the journey acts on it (Better kept, everything else restored, said in one
+- [x] **P5-continue** `61e7539e` (verdict line, one-tap Next with honest 10/20 min, reuses a steady baseline). After a verdict the journey acts on it (Better kept, everything else restored, said in one
       line) and offers "Next: <change>, ~10 min" as one tap, until P4-next says nothing is left. Needs
       P5-guided, P4-next-f1. ROADMAP P5 steps 5, 7; ENGINE §4, §7.
 - [ ] **P5-enough** A quiet Compy toast during play: "Play the same area for about 90 s more" → "Compy has
@@ -242,6 +243,8 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
   owner's Phase 4 Trial runs use the new engine; RELEASE_STATE recorded.
 - 2026-10-25 morning: P5-guided `2f33cc6b`, P5-rebaseline `a0da7bbb`, P4-comparable-show `78b908c3`;
   owner's first live Aniimo Trial (visual-effects): too noisy (baseline 293->241 fps), restored, verified.
+- 2026-10-25 late morning: P4-smooth-measure `df01e252`.
+- 2026-10-25 midday: P5-continue `61e7539e`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
