@@ -36,20 +36,45 @@ export function CareNextStep({
   const game = step.source === "stutter" ? step.game : "";
   const pct = step.source === "stutter" ? (anchor.baseline ?? step.baseline).noiseFloorPct.toFixed(0) : "";
 
+  // App crash / App hang name the faulting app ("No Valorant.exe crash recorded…"); other kinds,
+  // or an app Windows didn't name, keep the kind-only line. Static keys, so the guards can see them.
+  const app = step.source === "incident" ? step.appLabel : null;
+  const crash = !!app && kind === "App crash";
+  const hang = !!app && kind === "App hang";
   let line: string;
   switch (payoff.kind) {
-    case "came-back":
-      line = t("gaming.blackBox.nextStep.payoff.cameBack", { count: payoff.count, kind, first: day(payoff.firstAt) });
+    case "came-back": {
+      line = crash
+        ? t("gaming.blackBox.nextStep.payoff.crashCameBack", { count: payoff.count, kind, app, first: day(payoff.firstAt) })
+        : hang
+          ? t("gaming.blackBox.nextStep.payoff.hangCameBack", { count: payoff.count, kind, app, first: day(payoff.firstAt) })
+          : t("gaming.blackBox.nextStep.payoff.cameBack", { count: payoff.count, kind, app, first: day(payoff.firstAt) });
       break;
-    case "none-since":
-      line = t("gaming.blackBox.nextStep.payoff.noneSince", { count: payoff.days, days: payoff.days, kind });
+    }
+    case "none-since": {
+      line = crash
+        ? t("gaming.blackBox.nextStep.payoff.crashNoneSince", { count: payoff.days, days: payoff.days, kind, app })
+        : hang
+          ? t("gaming.blackBox.nextStep.payoff.hangNoneSince", { count: payoff.days, days: payoff.days, kind, app })
+          : t("gaming.blackBox.nextStep.payoff.noneSince", { count: payoff.days, days: payoff.days, kind, app });
       break;
-    case "none-since-partial":
-      line = t("gaming.blackBox.nextStep.payoff.noneSincePartial", { count: payoff.days, days: payoff.days, kind });
+    }
+    case "none-since-partial": {
+      line = crash
+        ? t("gaming.blackBox.nextStep.payoff.crashNoneSincePartial", { count: payoff.days, days: payoff.days, kind, app })
+        : hang
+          ? t("gaming.blackBox.nextStep.payoff.hangNoneSincePartial", { count: payoff.days, days: payoff.days, kind, app })
+          : t("gaming.blackBox.nextStep.payoff.noneSincePartial", { count: payoff.days, days: payoff.days, kind, app });
       break;
-    case "too-soon":
-      line = t("gaming.blackBox.nextStep.payoff.tooSoon", { kind });
+    }
+    case "too-soon": {
+      line = crash
+        ? t("gaming.blackBox.nextStep.payoff.crashTooSoon", { kind, app })
+        : hang
+          ? t("gaming.blackBox.nextStep.payoff.hangTooSoon", { kind, app })
+          : t("gaming.blackBox.nextStep.payoff.tooSoon", { kind, app });
       break;
+    }
     case "sessions-back":
       line = t("gaming.blackBox.nextStep.payoff.sessionsBack", { bad: payoff.bad, total: payoff.total, game, pct });
       break;

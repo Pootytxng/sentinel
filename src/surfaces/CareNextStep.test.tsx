@@ -38,7 +38,7 @@ const UNEVEN: [number, number][] = [[0, 140], [10, 140], [20, 100], [30, 100]];
 
 const inc = (
   when: string,
-  o: { tag?: string; step?: string; assessed?: boolean; app?: string | null } = {},
+  o: { tag?: string; step?: string; detail?: string; assessed?: boolean; app?: string | null } = {},
 ): CrashIncident => ({
   incident_id: `id-${when}`,
   headline: `Crash at ${when}`,
@@ -54,7 +54,7 @@ const inc = (
           consistent_with: "a GPU driver fault",
           strength: "partial",
           evidence: ["e"],
-          next_step: { headline: o.step ?? `STEP ${when}`, detail: "Detail text.", reversible: true, research_only: false },
+          next_step: { headline: o.step ?? `STEP ${when}`, detail: o.detail ?? "Detail text.", reversible: true, research_only: false },
           beyond_us: false,
         },
 });
@@ -220,7 +220,7 @@ describe("anchorFor: taken where recordable, else first shown", () => {
 describe("the Care view renders exactly one next step at its top", () => {
   it("after a scan, one step: the newest record's; a recurrence since it was shown is reported", async () => {
     // The step was first shown before the newest record of the same kind arrived.
-    localStorage.setItem(SHOWN_KEY, JSON.stringify({ "incident|App crash||SAME": "2026-10-15T00:00:00Z" }));
+    localStorage.setItem(SHOWN_KEY, JSON.stringify({ "incident|App crash||SAME|Detail text.": "2026-10-15T00:00:00Z" }));
     h.incidents = [inc("2026-10-10T10:00:00Z", { step: "SAME" }), inc("2026-10-20T10:00:00Z", { step: "SAME" })];
     const { container } = render(<BlackBox />);
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
@@ -238,7 +238,7 @@ describe("the Care view renders exactly one next step at its top", () => {
   });
 
   it("a scan that skipped a source never claims a full absence", async () => {
-    localStorage.setItem(SHOWN_KEY, JSON.stringify({ "incident|App crash||ONLY": "2026-10-01T00:00:00Z" }));
+    localStorage.setItem(SHOWN_KEY, JSON.stringify({ "incident|App crash||ONLY|Detail text.": "2026-10-01T00:00:00Z" }));
     h.incidents = [inc("2026-09-30T10:00:00Z", { step: "ONLY" })];
     h.skipped = ["System log"];
     const { container } = render(<BlackBox />);
@@ -270,6 +270,48 @@ describe("the Care view renders exactly one next step at its top", () => {
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
     await waitFor(() => expect(container.querySelector(".bb-list")).not.toBeNull());
     expect(container.querySelector(".bb-next")).toBeNull();
+  });
+});
+
+describe("P6-next r2: separate steps stay separate; App crash / hang name the app", () => {
+  it("a record with the same headline but a different detail keeps its own block", async () => {
+    h.incidents = [
+      inc("2026-10-10T10:00:00Z", { step: "Check the driver", detail: "Stop code A." }),
+      inc("2026-10-20T10:00:00Z", { step: "Check the driver", detail: "Stop code B." }),
+    ];
+    const { container } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
+    expect(container.querySelector(".bb-next-detail")!.textContent).toBe("Stop code B.");
+    expect(screen.getAllByText("Shown as your next step above.")).toHaveLength(1);
+    const own = container.querySelectorAll(".bb-list .bb-nextstep-detail");
+    expect([...own].map((e) => e.textContent)).toEqual(["Stop code A."]);
+    // And the two keys (so the two anchors) differ.
+    const a = pickCareStep([h.incidents[0] as CrashIncident], null)!;
+    const b = pickCareStep([h.incidents[1] as CrashIncident], null)!;
+    expect(a.key).not.toBe(b.key);
+  });
+
+  it("names the faulting app for an App crash recurrence, and for an App hang absence", async () => {
+    localStorage.setItem(SHOWN_KEY, JSON.stringify({ "incident|App crash|valorant.exe|S|Detail text.": "2026-10-15T00:00:00Z" }));
+    h.incidents = [inc("2026-10-20T10:00:00Z", { step: "S", app: "Valorant.exe" })];
+    const { container } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
+    expect(container.querySelector(".bb-next-payoff")!.textContent).toMatch(/Valorant\.exe crashed again\. 1 record since then/);
+    cleanup();
+
+    localStorage.setItem(SHOWN_KEY, JSON.stringify({ "incident|App hang|game.exe|H|Detail text.": "2026-10-01T00:00:00Z" }));
+    h.incidents = [inc("2026-09-30T10:00:00Z", { step: "H", tag: "App hang", app: "Game.exe" })];
+    const r2 = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(r2.container.querySelector(".bb-next")).not.toBeNull());
+    expect(r2.container.querySelector(".bb-next-payoff")!.textContent).toMatch(/No Game\.exe hang recorded in the \d+ days since/);
+  });
+
+  it("without a named app the kind-only line stays", () => {
+    const st = pickCareStep([inc("2026-10-20T10:00:00Z")], null)!;
+    expect(st.source === "incident" && st.appLabel).toBeNull();
   });
 });
 

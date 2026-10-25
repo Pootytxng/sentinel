@@ -51,6 +51,8 @@ export type CareStep =
       kind: string;
       /** Lower-cased faulting app for App crash / App hang; null where the kind alone is the match. */
       app: string | null;
+      /** The faulting app as Windows named it, for the copy; null where `app` is null. */
+      appLabel: string | null;
       consistentWith: string;
       incidentId: string;
       incidentWhen: string;
@@ -91,12 +93,14 @@ export function pickCareStep(
       source: "incident",
       // Keyed on the kind and the step, not the record: a later record of the same kind with the
       // same step keeps the earlier anchor, so it shows as a recurrence instead of a fresh start.
-      key: `incident|${inc.tag}|${app ?? ""}|${a.next_step.headline}`,
+      // The detail is part of the key: two stop codes can share a headline and are separate steps.
+      key: `incident|${inc.tag}|${app ?? ""}|${a.next_step.headline}|${a.next_step.detail}`,
       headline: a.next_step.headline,
       detail: a.next_step.detail,
       research: a.next_step.research_only,
       kind: inc.tag,
       app,
+      appLabel: app ? (inc.receipt?.faulting_app ?? null) : null,
       consistentWith: a.consistent_with,
       incidentId: inc.incident_id,
       incidentWhen: inc.when,
@@ -122,12 +126,15 @@ export function pickCareStep(
 }
 
 /** True for a record whose step is the one lifted to the top: the record it came from, and any
- *  other record carrying the very same step. Its row shows a pointer instead of repeating it. */
+ *  other record of the same kind (and app) carrying the very same step, headline AND detail. Its row
+ *  shows a pointer instead of repeating it; a record with a different detail keeps its own block. */
 export function isLifted(step: CareStep | null, inc: CrashIncident): boolean {
   if (!step || step.source !== "incident" || !inc.assessment) return false;
+  if (step.incidentId === inc.incident_id && step.incidentWhen === inc.when) return true;
   return (
-    (step.incidentId === inc.incident_id && step.incidentWhen === inc.when) ||
-    inc.assessment.next_step.headline === step.headline
+    sameKind(inc, step) &&
+    inc.assessment.next_step.headline === step.headline &&
+    inc.assessment.next_step.detail === step.detail
   );
 }
 

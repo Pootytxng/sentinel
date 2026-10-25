@@ -366,6 +366,14 @@
         "tooSoon": "现在下结论还太早，还不到一天。Compy 会从那时起统计新的 {{kind}} 记录。",
         "sessionsBack": "此后的 {{total}} 次 {{game}} 会话中，有 {{bad}} 次又变慢了：1% 最低帧比你那次平稳会话低了 {{pct}}% 以上。",
         "sessionsSteady": "此后的 {{total}} 次 {{game}} 会话中，1% 最低帧都保持在你那次平稳会话的 {{pct}}% 以内。这是测量结果，并不能证明原因。",
+        "crashCameBack_other": "{{app}} 又崩溃了。此后记录到 {{count}} 次，第一次在 {{first}}。",
+        "crashNoneSince_other": "此后的 {{days}} 天里没有记录到 {{app}} 崩溃。这是测量到的没有再出现，并不能证明原因。",
+        "crashNoneSincePartial_other": "此后的 {{days}} 天里，在 Compy 能读取的记录中没有发现 {{app}} 崩溃。有些记录需要管理员权限，所以这不是完整的统计。",
+        "crashTooSoon": "现在下结论还太早，还不到一天。Compy 会从那时起统计新的 {{app}} 崩溃。",
+        "hangCameBack_other": "{{app}} 又停止响应了。此后记录到 {{count}} 次，第一次在 {{first}}。",
+        "hangNoneSince_other": "此后的 {{days}} 天里没有记录到 {{app}} 停止响应。这是测量到的没有再出现，并不能证明原因。",
+        "hangNoneSincePartial_other": "此后的 {{days}} 天里，在 Compy 能读取的记录中没有发现 {{app}} 停止响应。有些记录需要管理员权限，所以这不是完整的统计。",
+        "hangTooSoon": "现在下结论还太早，还不到一天。Compy 会从那时起统计新的 {{app}} 停止响应记录。",
         "notEnoughSessions": "现在还不足以判断。此后在这台电脑上完整时长的 {{game}} 会话：{{total}} 次，Compy 至少需要 {{min}} 次。"
       }
     },
