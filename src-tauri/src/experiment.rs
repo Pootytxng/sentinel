@@ -108,6 +108,11 @@ pub(crate) struct TreatmentRecord {
     /// on older records.
     #[serde(default)]
     pub halves: Option<BaselineHalves>,
+    /// P4-recommended: the average fps %-delta vs baseline (rounded 0.1), judged beside the 1% low on
+    /// the same band: a win needs the average not to fall by more than it. None when either average
+    /// is missing, and on records concluded before the average was judged (1% low only). Additive.
+    #[serde(default)]
+    pub delta_avg_pct: Option<f64>,
 }
 
 /// §11 "what uncertainty/noise existed": the credible-noise band a verdict was judged against.
@@ -474,6 +479,16 @@ fn delta_low1_pct(baseline_low1: f64, treatment_low1: f64) -> f64 {
     }
     let raw = (treatment_low1 - baseline_low1) / baseline_low1 * 100.0;
     (raw * 10.0).round() / 10.0
+}
+
+/// P4-recommended: the average fps %-delta vs baseline (rounded 0.1). None when either average is
+/// missing (0 or less): an unknown average is never read as "didn't drop".
+pub(crate) fn delta_avg_pct(baseline_avg: f64, treatment_avg: f64) -> Option<f64> {
+    if baseline_avg <= 0.0 || treatment_avg <= 0.0 || !baseline_avg.is_finite() || !treatment_avg.is_finite() {
+        return None;
+    }
+    let raw = (treatment_avg - baseline_avg) / baseline_avg * 100.0;
+    Some((raw * 10.0).round() / 10.0)
 }
 
 // ─── Trial lifecycle integrity (#583 lane 1: record-first, one at a time, no hidden state) ──
@@ -1053,8 +1068,7 @@ fn verdict_note(verdict: &str, treatment_samples: u32, crashed: bool, game: Game
             // the test. It never claims the baseline was taken just before the change.
             format!(
                 "Baseline and treatment were captured {same_rig_and_game}, and Compy made no other \
-                 change during the test. Only the 1% low frame rate was judged, against the same \
-                 noise floor the rest of Compy uses."
+                 change during the test."
             )
         }
     }
@@ -1783,8 +1797,7 @@ pub(crate) fn with_comparability(outcome: ConcludeOutcome, pairing: &SessionComp
     let note = if judged_against_noise(&outcome) {
         format!(
             "Compy made no other change during the test, but not every condition could be checked: \
-             {unchecked} So this comparison is limited to what both sessions recorded. Only the 1% \
-             low frame rate was judged, against the same noise floor the rest of Compy uses."
+             {unchecked} So this comparison is limited to what both sessions recorded."
         )
     } else {
         format!("{} Not every condition could be checked either: {unchecked}", outcome.note)
@@ -1888,6 +1901,82 @@ pub(crate) fn with_steady_sessions(
         ),
         ..outcome
     }
+}
+
+/// A percentage for a note: "+12.5%", "-6%", "3%" style without a trailing ".0".
+fn signed_pct(x: f64) -> String {
+    let body = if x.fract() == 0.0 { format!("{}", x.abs()) } else { format!("{:.1}", x.abs()) };
+    if x > 0.0 {
+        format!("+{body}%")
+    } else if x < 0.0 {
+        format!("-{body}%")
+    } else {
+        format!("{body}%")
+    }
+}
+
+fn band_pct_text(band: f64) -> String {
+    if band.fract() == 0.0 { format!("{band}") } else { format!("{band:.1}") }
+}
+
+/// P4-recommended (ENGINE §2 `recommended`, §6 "default wins ties"; TRIAL_PROTOCOL §8/§9): the
+/// Recommended outcome of a measured verdict, judged on the same band (`noise_floor_pct`, a % of the
+/// baseline) for both numbers:
+/// - Better (`improved`, kept) only when the 1% low rose by more than the band AND the average fps
+///   did not fall by more than it;
+/// - Worse (`regressed`) when the 1% low fell by more than the band, whatever the average did;
+/// - anything else is No change (`no-change`): the default is kept and the change restored. That
+///   includes a 1% low gain beside an average that fell by more than the band, or that couldn't be
+///   compared (an unknown average is never read as "didn't drop").
+///
+/// Only a verdict judged against the band is touched ([`judged_against_noise`]); a crash, too few
+/// readings, a confound, another game or a too-noisy session keeps its own verdict and reason. It
+/// never turns a restore into a keep: a `no-change` or `regressed` stays restored. The note gains one
+/// sentence naming exactly what was compared.
+pub(crate) fn with_recommended_outcome(
+    outcome: ConcludeOutcome,
+    band_pct: f64,
+    delta_avg: Option<f64>,
+) -> ConcludeOutcome {
+    if !judged_against_noise(&outcome) {
+        return outcome;
+    }
+    let low = outcome.delta_low1_pct;
+    let avg_fell = delta_avg.is_none_or(|avg| avg < -band_pct);
+    let verdict = match outcome.verdict.as_str() {
+        "improved" if avg_fell => "no-change".to_string(),
+        v => v.to_string(),
+    };
+    let band = band_pct_text(band_pct);
+    let avg_text = delta_avg.map_or_else(
+        || "the average frame rate couldn't be compared".to_string(),
+        |avg| format!("the average frame rate {}", signed_pct(avg)),
+    );
+    let compared = format!(
+        "Compared with the baseline: the 1% low {}, {avg_text}, both against a ±{band}% band.",
+        signed_pct(low)
+    );
+    let why = match (verdict.as_str(), outcome.verdict.as_str()) {
+        ("improved", _) => {
+            "The 1% low rose by more than the band and the average didn't fall by more, so the change \
+             was kept."
+                .to_string()
+        }
+        ("no-change", "improved") if delta_avg.is_none() => {
+            "The 1% low rose by more than the band, but without the average Compy can't confirm it \
+             didn't fall, so this isn't a clear win: the default was kept and the change restored."
+                .to_string()
+        }
+        ("no-change", "improved") => {
+            "The 1% low rose by more than the band, but the average fell by more than it, so this \
+             isn't a clear win: the default was kept and the change restored."
+                .to_string()
+        }
+        ("regressed", _) => "The 1% low fell by more than the band, so the change was restored.".to_string(),
+        _ => "The 1% low stayed inside the band, so the default was kept and the change restored.".to_string(),
+    };
+    let keep = keep_rule(trial_result_for(&verdict));
+    ConcludeOutcome { verdict, keep, note: format!("{} {compared} {why}", outcome.note), ..outcome }
 }
 
 // ─── §4G Optimization simulator (pure, read-only advisory — never a promise) ──
@@ -2481,10 +2570,10 @@ pub(crate) fn conclude_experiment(
         .map_or((None, None), |(treatment, _)| session_check(grade_baseline(treatment, halves_floor_pct(rec))));
     let uneven_after = after_halves.as_ref().filter(|_| after_check == Some(BaselineCheck::Uneven));
     let (judged, crash_pairing) = match &resolved {
-        Some((treatment, pairing)) => (
+        Some((treatment, pairing)) => {
             // Steadiness first, so a Partial pairing appends its "not every condition could be
             // checked" to the too-noisy note, as it does for every verdict that wasn't judged.
-            with_comparability(
+            let paired = with_comparability(
                 with_steady_sessions(
                     with_left_out_readings(
                         conclude_outcome(
@@ -2502,9 +2591,12 @@ pub(crate) fn conclude_experiment(
                     uneven_after,
                 ),
                 pairing,
-            ),
-            None,
-        ),
+            );
+            // P4-recommended: a verdict still judged on the band is read as the Recommended outcome,
+            // the average beside the 1% low, on that same band.
+            let avg = delta_avg_pct(rec.baseline_avg_fps, treatment.avg_fps);
+            (with_recommended_outcome(paired, rec.noise_floor_pct, avg), None)
+        }
         None => crash_outcome(rec.applied_at.as_deref(), baseline, treatment),
     };
     let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()));
@@ -2517,6 +2609,7 @@ pub(crate) fn conclude_experiment(
     };
     let judged = with_unverified_changes(judged, unverified);
     let outcome = guard_target_at_conclude(judged, target_verification(Some(target_now)));
+    let rec_baseline_avg = store.experiments[idx].baseline_avg_fps;
 
     store.experiments[idx].treatment = resolved.as_ref().map(|(treatment, _)| TreatmentRecord {
         avg_fps: treatment.avg_fps,
@@ -2528,6 +2621,7 @@ pub(crate) fn conclude_experiment(
         session_id: Some(treatment.started_at.clone()),
         check: after_check,
         halves: after_halves.clone(),
+        delta_avg_pct: delta_avg_pct(rec_baseline_avg, treatment.avg_fps),
     });
     store.experiments[idx].session_pairing = resolved
         .as_ref()
@@ -4131,6 +4225,7 @@ mod experiment_tests {
                 session_id: Some(TREAT_ID.into()),
                 check: Some(BaselineCheck::Uneven),
                 halves: Some(BaselineHalves { first_half_fps: 180.0, second_half_fps: 200.0 }),
+                delta_avg_pct: None,
             }),
             ..running()
         })
@@ -5005,6 +5100,7 @@ mod experiment_tests {
                 session_id: Some(TREAT_ID.into()),
                 check: Some(BaselineCheck::Uneven),
                 halves: Some(BaselineHalves { first_half_fps: 188.7, second_half_fps: 218.5 }),
+                delta_avg_pct: Some(-16.6),
             }),
             verdict: Some("too-noisy".into()),
             trial_result: Some(TrialResult::Inconclusive),
@@ -5142,5 +5238,158 @@ mod experiment_tests {
         assert_eq!(back.between_session_noise, None);
         assert_eq!((back.halves_floor_pct, halves_floor_pct(&back)), (None, DEFAULT_NOISE_FLOOR_PCT));
         assert_eq!(back.noise_evidence.unwrap().between_sessions, None);
+    }
+
+    // ─── P4-recommended (ENGINE §2 recommended, §6 default wins ties) ─────────────
+
+    /// A measured verdict on `rec(150.0, 5)` (baseline avg 120 fps, 1% low 150, band 3%), read as the
+    /// Recommended outcome with the after-session's average.
+    fn recommended(treatment_low1: f64, treatment_avg: f64) -> ConcludeOutcome {
+        let r = rec(150.0, 5);
+        with_recommended_outcome(measured(treatment_low1), r.noise_floor_pct, delta_avg_pct(r.baseline_avg_fps, treatment_avg))
+    }
+
+    #[test]
+    fn a_1pct_low_gain_is_better_only_when_the_average_does_not_fall_beyond_the_band() {
+        // +20% 1% low, average 120 → 118 (-1.7%): inside the band, a win.
+        let kept = recommended(180.0, 118.0);
+        assert_eq!((kept.verdict.as_str(), kept.keep), ("improved", true));
+        assert_eq!(trial_result_for(&kept.verdict), TrialResult::Better);
+        // The band's edge is not beyond it: -3.0% exactly still counts as "didn't drop".
+        assert_eq!(recommended(180.0, 116.4).verdict, "improved");
+        // +20% 1% low, but the average fell 8.3%: not a clear win; the default is kept.
+        let o = recommended(180.0, 110.0);
+        assert_eq!((o.verdict.as_str(), o.keep), ("no-change", false), "old code kept this");
+        assert_eq!(trial_result_for(&o.verdict), TrialResult::Negligible);
+        assert_eq!(o.stop_reason, None, "still judged against the band, so its noise evidence is recorded");
+        assert!(o.note.contains("the 1% low +20%, the average frame rate -8.3%, both against a ±3% band"), "{}", o.note);
+        assert!(o.note.contains("the average fell by more than it"), "{}", o.note);
+        assert!(o.note.contains("default was kept and the change restored"), "{}", o.note);
+    }
+
+    #[test]
+    fn an_average_that_rises_beside_a_falling_1pct_low_is_worse() {
+        // Synthetic: 1% low 150 → 140 (-6.7%), average 120 → 130 (+8.3%).
+        let o = recommended(140.0, 130.0);
+        assert_eq!((o.verdict.as_str(), o.keep), ("regressed", false));
+        assert_eq!(trial_result_for(&o.verdict), TrialResult::Worse);
+        assert!(o.note.contains("the 1% low -6.7%, the average frame rate +8.3%, both against a ±3% band"), "{}", o.note);
+        assert!(o.note.contains("The 1% low fell by more than the band"), "{}", o.note);
+    }
+
+    #[test]
+    fn ties_keep_the_default_and_a_restore_is_never_turned_into_a_keep() {
+        // +2% 1% low with a big average gain: inside the band on the 1% low, so No change.
+        let tie = recommended(153.0, 150.0);
+        assert_eq!((tie.verdict.as_str(), tie.keep), ("no-change", false));
+        assert!(tie.note.contains("The 1% low stayed inside the band"), "{}", tie.note);
+        for (low1, avg) in [(153.0, 150.0), (140.0, 130.0), (100.0, 200.0), (147.0, 60.0)] {
+            assert!(!recommended(low1, avg).keep, "low1 {low1}, avg {avg}: a restore stays restored");
+        }
+        // An unknown average is never read as "didn't drop".
+        let r = rec(150.0, 5);
+        let unknown = with_recommended_outcome(measured(180.0), r.noise_floor_pct, None);
+        assert_eq!((unknown.verdict.as_str(), unknown.keep), ("no-change", false));
+        assert!(unknown.note.contains("the average frame rate couldn't be compared"), "{}", unknown.note);
+        assert_eq!(delta_avg_pct(0.0, 120.0), None);
+        assert_eq!(delta_avg_pct(120.0, 0.0), None);
+    }
+
+    #[test]
+    fn the_recommended_rule_uses_the_measured_band_for_both_numbers() {
+        // A 6% between-session band: a +5% 1% low is inside it, a -5% average is inside it too.
+        let r = ExperimentRecord { noise_floor_pct: 6.0, ..rec(150.0, 5) };
+        let judged = |low1: f64, avg: f64| {
+            let o = conclude_outcome(&r, low1, 5000, false, Some("Test"), Some(5), Utc::now());
+            with_recommended_outcome(o, r.noise_floor_pct, delta_avg_pct(r.baseline_avg_fps, avg))
+        };
+        assert_eq!(judged(157.5, 114.0).verdict, "no-change");
+        assert_eq!(judged(165.0, 114.0).verdict, "improved", "+10% low, -5% avg: inside a 6% band");
+        let fell = judged(165.0, 112.0);
+        assert_eq!(fell.verdict, "no-change", "-6.7% avg is beyond a 6% band");
+        assert!(fell.note.contains("±6% band"), "{}", fell.note);
+    }
+
+    #[test]
+    fn every_earlier_gate_keeps_its_verdict_ahead_of_the_recommended_rule() {
+        let h = BaselineHalves { first_half_fps: 200.0, second_half_fps: 240.0 };
+        let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
+        let thin = conclude_outcome(&rec(150.0, 5), 180.0, 10, false, Some("Test"), Some(5), Utc::now());
+        let confounded = conclude_outcome(&rec(150.0, 5), 180.0, 5000, false, Some("Test"), Some(6), Utc::now());
+        let wrong_game = conclude_outcome(&rec(150.0, 5), 180.0, 5000, false, Some("Other"), Some(5), Utc::now());
+        let noisy = with_steady_sessions(measured(180.0), Some(&h), None);
+        let changed = {
+            let mut p = partial_pairing();
+            p.changed_context = vec!["The GPU driver changed.".into()];
+            with_comparability(measured(180.0), &p)
+        };
+        for o in [crash, thin, confounded, wrong_game, noisy, changed] {
+            // An average that fell or is unknown would demote a win; a gate's verdict is left alone.
+            for avg in [None, Some(-50.0), Some(50.0)] {
+                assert_eq!(with_recommended_outcome(o.clone(), 3.0, avg), o, "{} / {avg:?}", o.verdict);
+            }
+        }
+        // A Partial pairing keeps its caveat and gains what was compared.
+        let partial = with_recommended_outcome(with_comparability(measured(180.0), &partial_pairing()), 3.0, Some(-1.0));
+        assert_eq!(partial.verdict, "improved");
+        assert!(partial.note.contains("not every condition could be checked"), "{}", partial.note);
+        assert!(partial.note.contains("the 1% low +20%, the average frame rate -1%"), "{}", partial.note);
+    }
+
+    #[test]
+    fn the_owners_minus_18_5_percent_trial_reads_too_noisy_and_on_steady_sessions_worse() {
+        let rec = afk_trial();
+        let after = afk_after();
+        let concluded = DateTime::parse_from_rfc3339(APPLIED).unwrap().with_timezone(&Utc) + chrono::Duration::hours(1);
+        let judged = conclude_outcome(&rec, after.low1_fps_est, after.samples, false, Some(&after.process_name), Some(5), concluded);
+        let avg = delta_avg_pct(rec.baseline_avg_fps, after.avg_fps);
+        assert_eq!(avg, Some(-16.6), "244.1 → 203.5 fps");
+        // As concluded: both sessions uneven, so too noisy, restored, whatever the average says.
+        let (_, after_halves) = session_check(grade_baseline(&after, halves_floor_pct(&rec)));
+        let noisy = with_steady_sessions(judged.clone(), uneven_baseline_at_conclude(&rec, None).as_ref(), after_halves.as_ref());
+        let o = with_recommended_outcome(noisy.clone(), rec.noise_floor_pct, avg);
+        assert_eq!(o, noisy);
+        assert_eq!((o.verdict.as_str(), o.keep), ("too-noisy", false));
+        // Had both sessions been steady: the 1% low fell 18.5%, beyond the band, so Worse.
+        let steady = with_recommended_outcome(judged, rec.noise_floor_pct, avg);
+        assert_eq!((steady.verdict.as_str(), steady.keep), ("regressed", false));
+        assert!(steady.note.contains("the 1% low -18.5%, the average frame rate -16.6%, both against a ±3% band"), "{}", steady.note);
+    }
+
+    #[test]
+    fn the_average_delta_is_stored_additively_and_older_records_load_without_it() {
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
+        let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
+        assert!(body.contains("with_recommended_outcome(paired, rec.noise_floor_pct, avg)"), "the verdict is read as Recommended");
+        assert!(body.contains("delta_avg_pct: delta_avg_pct(rec_baseline_avg, treatment.avg_fps)"), "the receipt keeps it");
+        let t = TreatmentRecord {
+            avg_fps: 110.0,
+            low1_fps: 180.0,
+            samples: 900,
+            crashed: false,
+            delta_low1_pct: 20.0,
+            recorded_at: TREAT_ID.into(),
+            session_id: Some(TREAT_ID.into()),
+            check: None,
+            halves: None,
+            delta_avg_pct: Some(-8.3),
+        };
+        let mut v = serde_json::to_value(ExperimentRecord { treatment: Some(t), ..running() }).unwrap();
+        assert_eq!(v["treatment"]["delta_avg_pct"], -8.3);
+        // An older Compy's treatment type (no such field) loads it.
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OlderTreatment {
+            avg_fps: f64,
+            low1_fps: f64,
+            delta_low1_pct: f64,
+        }
+        let older: OlderTreatment = serde_json::from_value(v["treatment"].clone()).expect("older shape loads");
+        assert_eq!(older.delta_low1_pct, 20.0);
+        // A treatment written before the average was judged loads as unknown.
+        assert!(v["treatment"].as_object_mut().unwrap().remove("delta_avg_pct").is_some());
+        let back: ExperimentRecord = serde_json::from_value(v).unwrap();
+        assert_eq!(back.treatment.unwrap().delta_avg_pct, None);
     }
 }
