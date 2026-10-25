@@ -195,7 +195,7 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - [x] **P5-resume** `b285dc73` (progress from the experiments store; Stop here keeps decisions). The journey survives a Compy or game restart and spans days: Optimize shows "2 of 5
       tested · Next: <change>" and a Stop-here that keeps current decisions. Needs P5-continue. ROADMAP P5
       step 5; ENGINE §7 (user ends).
-- [ ] **P5-outcomes** When a game has both a Recommended and a Maximum FPS result that differ, offer the choice
+- [x] **P5-outcomes** (`6ce1280b`) When a game has both a Recommended and a Maximum FPS result that differ, offer the choice
       with the actual trade in one sentence; one result = no choice shown. Needs P5-learned. ROADMAP P5
       step 6; ENGINE §5, §6 (default wins ties).
 - [ ] **P5-outcomes-f1** Record which Trial justified an outcome-switch keep in the Trust Ledger (needs a Rust change).
