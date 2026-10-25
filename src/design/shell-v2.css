@@ -940,3 +940,28 @@
     pointer-events: none;
   }
 }
+
+/* ── Narrow window: Health's split stacks (#622-f2) ──
+   Below 1100px the 55.26% evidence column was 146-453px wide while the readout strip under the rig
+   needs 526px, so the panel scrolled sideways inside itself (measured 526px of content in 144 / 212
+   / 223px at 380 / 504 / 684). Here the narrative and the panel stack: verdict and primary action
+   first, then the rig, then the rest. The panel loses its height cap and its own scroller (the page
+   scrolls instead), and the five readings wrap onto as many rows as the width needs, each cell at
+   its 100px floor. A window-level breakpoint for the same reason as the rail's above; 1100px and up
+   is untouched, which is the composition the approved handoff measures at 1280 / 1500 / 1920.
+   Guard: tools/layout/health-narrow-layout.test.mjs. */
+@media (max-width: 1099.98px) {
+  :root[data-v2="on"] .v2-room[data-layout="split"][data-room="home"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: "notice" "verdict" "measured" "aside" "body" "quiet" "footnote" "below" "door";
+  }
+  :root[data-v2="on"] .v2-room[data-room="home"] .hc-panel {
+    margin-top: calc(var(--v2-gap) * 2);
+    max-height: none;
+    overflow: visible;
+  }
+  :root[data-v2="on"] .v2-room[data-room="home"] .hc-readout {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  }
+}

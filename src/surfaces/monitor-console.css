@@ -100,7 +100,7 @@
 /* The meta track's floor is its own content (#677): `min-content` here is the age · duration
    tail (the name contributes nothing, see .ss-meta-name), so at most 210px for alignment across
    rows, but never narrower than what keeps the age and duration whole. */
-:root[data-v2="on"] .ss-row { display: grid; grid-template-columns: minmax(min-content, 210px) 1fr auto;
+:root[data-v2="on"] .ss-row { display: grid; grid-template-columns: minmax(min-content, 210px) minmax(120px, 1fr) auto;
   align-items: center; gap: 14px; width: 100%; padding: 6px 12px; background: transparent;
   border: 1px solid var(--ix-glass-border); color: var(--ix-text-2); cursor: pointer; text-align: left; }
 :root[data-v2="on"] .ss-row:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
@@ -130,8 +130,11 @@
   color: var(--ix-text-3); white-space: nowrap; pointer-events: none; }
 :root[data-v2="on"] .ss-canvas-partial .ss-pin-label {
   left: clamp(36px, var(--pin-x, 50%), calc(100% - 170px)); }
+/* #622-f2: the canvas track keeps a 120px floor, and the chip wraps only when that floor binds (at
+   600px of list width the English chip used to leave the timeline 27px). Where the chip fits on one
+   line the row is unchanged. */
 :root[data-v2="on"] .ss-chip { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .08em;
-  color: var(--ix-text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  color: var(--ix-text-2); white-space: normal; font-variant-numeric: tabular-nums; }
 :root[data-v2="on"] .ss-row-newest .ss-chip { color: var(--ix-text-1); }
 /* #622-f1: below 600px of list width, meta | canvas | chip side by side needs more than the row has
    (the chip pushed rows 30-250px past their box and squeezed the canvas to 0). There the row stacks
@@ -139,7 +142,6 @@
    window, because the sessions half spans 300-1100px across window sizes. 600px and up is untouched. */
 @container (max-width: 599px) {
   :root[data-v2="on"] .ss-row { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
-  :root[data-v2="on"] .ss-chip { white-space: normal; }
 }
 :root[data-v2="on"] .ss-detail { margin: 2px 0 0; padding: 4px 12px; border-left: 2px solid var(--ix-accent);
   font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .06em; color: var(--ix-text-2);
