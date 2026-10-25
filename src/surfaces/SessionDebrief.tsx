@@ -20,7 +20,7 @@ import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grad
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { readDisplayRefreshHz } from "../design/theme";
 import { useExpertView } from "../design/use-expert-view";
-import { knownFps } from "../lib/session-metrics";
+import { knownFps, leftOutSecs, allBackground, leftOutSpan } from "../lib/session-metrics";
 import "../i18n";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
@@ -269,8 +269,18 @@ export function SessionDebrief({
   // either reading unknown there is no ratio and nothing here concludes from one (#608). The old
   // fallback of 1 called an unmeasured session "Smooth"; an unknown low of 0 called it "Rough".
   const ratio = avgFps != null && lowFps != null ? Math.min(1, lowFps / avgFps) : null;
+  // P4-comparable-show: time the game spent behind another window was left out of every number,
+  // so the card says how much. A session that was behind the whole time says that is why it has no
+  // readings. No focus reading (null) says nothing.
+  const leftOut = leftOutSecs(s);
+  const backgroundOnly = allBackground(s);
   const v =
-    ratio == null
+    backgroundOnly && leftOut != null
+      ? {
+          h: t("monitor.sessionDebrief.verdict.background.headline"),
+          sub: t("monitor.sessionDebrief.verdict.background.sub", { span: leftOutSpan(leftOut, t) }),
+        }
+      : ratio == null
       ? {
           h: t("monitor.sessionDebrief.verdict.unmeasured.headline"),
           sub: t("monitor.sessionDebrief.verdict.unmeasured.sub"),
@@ -373,6 +383,11 @@ export function SessionDebrief({
 
       <h2 className="debrief-verdict">{v.h}</h2>
       <p className="debrief-sub">{v.sub}</p>
+      {leftOut != null && !backgroundOnly && (
+        <p className="debrief-sub debrief-leftout">
+          {t("monitor.sessionDebrief.leftOut", { span: leftOutSpan(leftOut, t) })}
+        </p>
+      )}
 
       <div className="debrief-tiles">
         <DebriefTile

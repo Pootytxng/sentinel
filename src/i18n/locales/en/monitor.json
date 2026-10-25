@@ -1,4 +1,8 @@
 {
+  "leftOut": {
+    "seconds": "{{seconds}} s",
+    "minutes": "{{minutes}} min {{seconds}} s"
+  },
   "monitor": {
     "tuningPresetsTitle": "Tuning presets",
     "vendorHintAmd": " — FreeSync on your AMD card",
@@ -145,6 +149,8 @@
     "axisBudget": " · budget {{budget}} ms"
   },
   "sessionStack": {
+    "leftOut": "{{span}} left out while another window was in front",
+    "allBackground": "nothing recorded: another window was in front the whole time",
     "noSessionsEmpty": "no sessions on record yet — play with capture on",
     "timelineNotKept": "timeline not kept",
     "coverageNote": "first {{duration}} recorded",
@@ -223,6 +229,7 @@
     "notGradedVerdict": "Not graded"
   },
   "sessionDebrief": {
+    "leftOut": "{{span}} left out while another window was in front.",
     "comparisonHeader": "COMPARISON · {{title}} · two {{game}} sessions",
     "noiseFloor": "noise floor ±{{pct}}%",
     "noMeasurableChange": "No measurable change",
@@ -254,6 +261,10 @@
     "revertIt": "Revert it — no shame",
     "honestTally": "honest answers: 1 · fake wins sold: 0",
     "verdict": {
+      "background": {
+        "headline": "Not graded",
+        "sub": "Another window was in front for the whole session, so all {{span}} were left out and nothing was measured. Keep the game in front to get a reading."
+      },
       "smooth": {
         "headline": "Smooth session",
         "sub": "Even your worst moments held at {{pct}}% of your average — steady."

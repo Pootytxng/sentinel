@@ -12,7 +12,7 @@ import {
   relativeDay,
   type StackRow,
 } from "./monitor-stack-profile";
-import { knownFps } from "../../lib/session-metrics";
+import { knownFps, leftOutSecs, allBackground, leftOutSpan } from "../../lib/session-metrics";
 import "../../i18n";
 
 // SessionStack — Monitor v5's sessions half (owner pick 2026-07-11: "A's top + B's stack",
@@ -173,7 +173,12 @@ function RowCanvas({
     <span className={`ss-canvas-wrap ${row.partial ? "ss-canvas-partial" : ""}`} ref={wrapRef}>
       <canvas ref={canvasRef} className="ss-canvas" aria-hidden="true" />
       {(row.fracs.length < 2 || axisMax == null) && (
-        <span className="ss-notimeline">{t("monitor.sessionStack.timelineNotKept")}</span>
+        <span className="ss-notimeline">
+          {/* A session behind another window the whole time has no line for a reason: say it. */}
+          {allBackground(row.session)
+            ? t("monitor.sessionStack.allBackground")
+            : t("monitor.sessionStack.timelineNotKept")}
+        </span>
       )}
       {/* A capped recording must SAY so — the trace spans what was RECORDED, and this states
           it, so a full-width line never claims hours it doesn't show (bug→guard). */}
@@ -273,6 +278,10 @@ export function SessionStack({
       parts.push(
         t("monitor.sessionStack.timelineCoversFirst", { duration: fmtDur(row.coveredSecs) }),
       );
+    }
+    const leftOut = leftOutSecs(s);
+    if (leftOut != null) {
+      parts.push(t("monitor.sessionStack.leftOut", { span: leftOutSpan(leftOut, t) }));
     }
     if (s.compy_changes_active != null && s.compy_changes_active > 0) {
       parts.push(
