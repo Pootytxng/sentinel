@@ -329,3 +329,22 @@ describe("the words stay the user's", () => {
     }
   });
 });
+
+// P6-door (ROADMAP Phase 6, Constitution §18/§27): every "something's wrong" answer about a crash
+// or a stutter lands on ONE Care view — the crash record with what changed before it — whatever
+// the machine has measured. The stutter answer used to open the Monitor room or the benchmark.
+describe("crash and stutter answers converge on one Care view", () => {
+  const CARE_FINDINGS: InterviewFindingId[] = [
+    "crashInGame",
+    "crashAnytime",
+    "crashBoot",
+    "crashUnsure",
+    "stutter",
+  ];
+  it.each(CARE_FINDINGS)("%s opens the blackbox station in every state of the machine", (id) => {
+    for (const facts of [BARE, RICH]) {
+      const a = find(id, facts).action;
+      expect(a.kind === "station" ? a.station : a.kind, `${id} left the Care view`).toBe("blackbox");
+    }
+  });
+});

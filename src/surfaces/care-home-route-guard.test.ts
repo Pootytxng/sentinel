@@ -21,7 +21,7 @@ import { join } from "path";
 import i18n from "../i18n";
 import { homeCareEntry } from "./home-intake-data";
 import { INTERVIEW_FINDINGS, interviewFinding } from "./home-interview-data";
-import { labStations, labRouter, LAB_STATION_ORDER, type LabStationKey } from "./lab-guided-data";
+import { labRouter, LAB_STATION_ORDER, type LabStationKey } from "./lab-guided-data";
 
 const CARE = homeCareEntry(i18n.t);
 // The interview replaced the intake band (step 3, issue #177), so the "is there a second door to
@@ -55,7 +55,8 @@ describe("the Care entry is ONE door to the crash evidence", () => {
     // What still matters, and is what actually broke things for the tester, is AGREEMENT: the same
     // felt sentence must not have two destinations. So every finding that routes to a station must
     // route to the Care entry's station whenever it is answering the crash question at all.
-    const crashFindings = FINDINGS.filter((f) => f.id.startsWith("crash"));
+    // P6-door: the stutter answer is a "something's wrong" answer too, and lands on the same view.
+    const crashFindings = FINDINGS.filter((f) => f.id.startsWith("crash") || f.id === "stutter");
     expect(crashFindings.length, "the interview no longer answers the crash symptom").toBeGreaterThan(0);
     for (const f of crashFindings) {
       expect(
@@ -96,20 +97,27 @@ describe("the Care entry is a SIGN, not a chip", () => {
   it("says the word a crashing user would actually search for", () => {
     // Same law crash-rescue-naming-guard holds over the station NAME, applied to the Home sign that
     // points at it. The tester who walked to Windows Event Viewer did so because nothing in front
-    // of him said "crash" — a label that does not say it is invisible to the person who needs it.
-    expect(
-      CARE.label.toLowerCase(),
-      `the Care entry is labelled "${CARE.label}" — nothing in it says "crash"`,
-    ).toContain("crash");
+    // of him said "crash" — a door that does not say it is invisible to the person who needs it.
+    //
+    // P6-door (ROADMAP Phase 6, Constitution §27) renamed the door to the one Care door,
+    // "Something's wrong", which now also takes the stutter answer. The door's ROW still has to say
+    // "crash" — it moved from the name to the one line under it, which is printed on the same
+    // button — and it now has to say "stutter" too, because a hitching user scans for that word.
+    const door = `${CARE.label} ${CARE.symptom}`.toLowerCase();
+    expect(door, `the Care door reads "${CARE.label} / ${CARE.symptom}" — nothing in it says "crash"`)
+      .toContain("crash");
+    expect(door, `the Care door reads "${CARE.label} / ${CARE.symptom}" — nothing in it says "stutter"`)
+      .toContain("stutter");
   });
 
-  it("uses the SAME name as the station it opens", () => {
-    // A sign that says one thing and a destination that says another is how a user decides they
-    // clicked the wrong door and goes back.
-    expect(
-      CARE.label,
-      `Home's Care entry says "${CARE.label}" but the station it opens calls itself "${labStations(i18n.t)[CARE.station].name}"`,
-    ).toBe(labStations(i18n.t)[CARE.station].name);
+  it("carries a door name, not a blank button", () => {
+    // Before P6-door this pinned the door's label to the station's name. The door is now the one
+    // Care door, "Something's wrong", and deliberately does NOT carry the station's name, so that
+    // equality is gone. What stays is that the door has a name at all; the word a crashing or
+    // hitching user scans for is held on the door's row (above), the station's own name must still
+    // say "crash" (crash-rescue-naming-guard), and every crash and stutter answer must land where
+    // the door does (the crashFindings loop at the top of this file).
+    expect(CARE.label.trim().length, "Home's Care door has no name").toBeGreaterThan(0);
   });
 
   it("does not describe itself with the room's name — the because names the ACTION", () => {
