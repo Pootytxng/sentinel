@@ -278,8 +278,8 @@
   "blackBox": {
     "changedBefore": {
       "title": "Changed before this",
-      "sinceClean": "Since your last clean session ({{game}}, {{date}}) and up to this incident:",
-      "sinceMeasured": "Since your last measured session ({{game}}, {{date}}) and up to this incident. That session had a crash or freeze of its own, so it isn't a clean one:",
+      "sinceClean": "Since your last session with no crash on record ({{game}}, {{date}}) and up to this incident:",
+      "sinceMeasured": "Since your last measured session ({{game}}, {{date}}) and up to this incident. Compy can't call that session clean: it had a crash or freeze of its own, or it's older than the crash records Compy read:",
       "noSession": "No session was recorded before this, so Compy has nothing earlier to compare against and can't say what changed.",
       "notProven": "not proven cause",
       "observedBetween": "noticed between {{from}} and {{to}}",
@@ -302,6 +302,8 @@
         "no-reading-after": "Unknown: Compy hasn't read this since before the incident.",
         "noReadingAfterSince": "Unknown: Compy hasn't read this since {{date}}, so it can't tell if it changed.",
         "cant-place": "Unknown: this changed, but Compy can't tell if it was before or after the incident.",
+        "readings-differ": "Unknown: Compy's readings from before and after don't match, and it can't tell when it changed.",
+        "unmatched-readings": "Unknown: Compy's readings from before and after came from different checks, so it can't compare them.",
         "ledger-incomplete": "Unknown: Compy's change record couldn't be read in full, so it can't say what it changed.",
         "drift-not-kept": "Unknown: Compy only keeps drift that is still open, so drift that already cleared wouldn't show here."
       }

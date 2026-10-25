@@ -2445,7 +2445,8 @@ pub(crate) struct ChangedBeforeItem {
     /// place before or after the incident. Empty otherwise.
     pub events: Vec<EventRecord>,
     /// Set only when `status` is "unknown": "no-reading-before" | "no-reading-after" |
-    /// "cant-place" | "ledger-incomplete" | "drift-not-kept".
+    /// "cant-place" | "readings-differ" | "unmatched-readings" | "ledger-incomplete" |
+    /// "drift-not-kept".
     pub unknown_reason: Option<String>,
     /// "no-reading-after" only: the newest reading Compy has of this, before the incident.
     pub last_reading_at: Option<String>,
@@ -2467,6 +2468,10 @@ pub(crate) struct ChangedBeforeIncident {
 /// One machine reading Compy holds: identity snapshots carry every field, rig fingerprints (on
 /// sessions and ledger applies) carry the GPU, its driver, RAM and display. Empty = not read.
 struct CbReading {
+    /// Which stream produced it. Readings are only ever compared within one stream: two streams
+    /// can word the same value differently, and a pair drawn from two streams has no delta scan
+    /// (so no timeline event) behind it.
+    stream: &'static str,
     at: DateTime<Utc>,
     at_raw: String,
     driver: String,
@@ -2487,6 +2492,7 @@ fn cb_readings(g: &Gathered) -> Vec<CbReading> {
     for s in &g.snapshots {
         if let Some(at) = parse_utc(&s.observed_at) {
             out.push(CbReading {
+                stream: "identity-snapshot",
                 at,
                 at_raw: s.observed_at.clone(),
                 driver: s.gpu_driver.clone(),
@@ -2508,6 +2514,7 @@ fn cb_readings(g: &Gathered) -> Vec<CbReading> {
     for (raw, fp) in prints {
         if let Some(at) = parse_utc(raw) {
             out.push(CbReading {
+                stream: "rig-fingerprint",
                 at,
                 at_raw: raw.to_string(),
                 driver: fp.gpu_driver.clone(),
@@ -2539,11 +2546,14 @@ fn cb_unknown(category: &str, reason: &str) -> ChangedBeforeItem {
 
 /// The anchor session: the newest measured session that ENDED before the incident (outside the
 /// grace window Black Box uses to call a crash "during that session"), preferring one with no
-/// other recorded incident during it.
+/// other recorded incident during it. `clean_judgeable_from`: when the scan hit its incident cap,
+/// incidents older than its oldest row may be missing, so a session that started before then can't
+/// be called clean (it can still anchor as "measured").
 fn cb_anchor<'a>(
     sessions: &'a [crate::sessions::SessionSummary],
     incident_at: DateTime<Utc>,
     other_incidents: &[DateTime<Utc>],
+    clean_judgeable_from: Option<DateTime<Utc>>,
 ) -> Option<(&'a crate::sessions::SessionSummary, DateTime<Utc>, bool)> {
     let grace = chrono::Duration::seconds(crate::blackbox::VITALS_GRACE_SECS);
     let mut candidates: Vec<(DateTime<Utc>, bool, &crate::sessions::SessionSummary)> = sessions
@@ -2555,7 +2565,8 @@ fn cb_anchor<'a>(
             if end + grace >= incident_at {
                 return None; // the incident happened during (or right at the end of) this session
             }
-            let clean = !other_incidents.iter().any(|t| *t >= start && *t <= end + grace);
+            let clean = clean_judgeable_from.is_none_or(|from| start >= from)
+                && !other_incidents.iter().any(|t| *t >= start && *t <= end + grace);
             Some((start, clean, s))
         })
         .collect();
@@ -2567,6 +2578,56 @@ fn cb_anchor<'a>(
         .map(|(t, clean, s)| (*s, *t, *clean))
 }
 
+/// "No change" for an observed category needs proof from ONE stream: its last reading at or
+/// before the window start and its first at or after the incident, holding the SAME value. A pair
+/// that differs, or readings that only bracket the window across two streams, are unknown.
+fn cb_bracket(
+    category: &str,
+    readings: &[CbReading],
+    field: fn(&CbReading) -> &str,
+    win_start: DateTime<Utc>,
+    incident_at: DateTime<Utc>,
+) -> ChangedBeforeItem {
+    let read: Vec<&CbReading> = readings.iter().filter(|r| !field(r).is_empty()).collect();
+    let mut equal: Option<(&CbReading, &CbReading)> = None;
+    let mut differ = false;
+    for stream in ["identity-snapshot", "rig-fingerprint"] {
+        let mine = read.iter().filter(|r| r.stream == stream);
+        let before = mine.clone().filter(|r| r.at <= win_start).max_by_key(|r| r.at);
+        let after = mine.filter(|r| r.at >= incident_at).min_by_key(|r| r.at);
+        if let (Some(b), Some(a)) = (before, after) {
+            if field(b) == field(a) {
+                equal = equal.or(Some((*b, *a)));
+            } else {
+                differ = true;
+            }
+        }
+    }
+    if differ {
+        return cb_unknown(category, "readings-differ");
+    }
+    if let Some((b, a)) = equal {
+        let mut it = cb_item(category, "no-change");
+        it.checked_between = Some((b.at_raw.clone(), a.at_raw.clone()));
+        return it;
+    }
+    let any_before = read.iter().any(|r| r.at <= win_start);
+    let any_after = read.iter().any(|r| r.at >= incident_at);
+    match (any_before, any_after) {
+        (false, _) => cb_unknown(category, "no-reading-before"),
+        (true, true) => cb_unknown(category, "unmatched-readings"),
+        (true, false) => {
+            let mut it = cb_unknown(category, "no-reading-after");
+            it.last_reading_at = read
+                .iter()
+                .filter(|r| r.at < incident_at)
+                .max_by_key(|r| r.at)
+                .map(|r| r.at_raw.clone());
+            it
+        }
+    }
+}
+
 /// Pure: "Changed before this" for one incident at `incident_at`, over an already-gathered store
 /// and its assembled timeline. `other_incidents` are the times of every OTHER incident on record,
 /// used only to tell a clean session from one that had its own incident.
@@ -2576,8 +2637,10 @@ fn changed_before_incident_impl(
     incident_raw: &str,
     incident_at: DateTime<Utc>,
     other_incidents: &[DateTime<Utc>],
+    clean_judgeable_from: Option<DateTime<Utc>>,
 ) -> ChangedBeforeIncident {
-    let Some((anchor, win_start, clean)) = cb_anchor(&g.sessions, incident_at, other_incidents)
+    let Some((anchor, win_start, clean)) =
+        cb_anchor(&g.sessions, incident_at, other_incidents, clean_judgeable_from)
     else {
         return ChangedBeforeIncident {
             anchor_kind: "none".into(),
@@ -2629,26 +2692,7 @@ fn changed_before_incident_impl(
             items.push(it);
             continue;
         }
-        let read: Vec<&CbReading> = readings.iter().filter(|r| !field(r).is_empty()).collect();
-        let before = read.iter().filter(|r| r.at <= win_start).max_by_key(|r| r.at);
-        let after = read.iter().filter(|r| r.at >= incident_at).min_by_key(|r| r.at);
-        items.push(match (before, after) {
-            (None, _) => cb_unknown(category, "no-reading-before"),
-            (Some(_), None) => {
-                let mut it = cb_unknown(category, "no-reading-after");
-                it.last_reading_at = read
-                    .iter()
-                    .filter(|r| r.at < incident_at)
-                    .max_by_key(|r| r.at)
-                    .map(|r| r.at_raw.clone());
-                it
-            }
-            (Some(b), Some(a)) => {
-                let mut it = cb_item(category, "no-change");
-                it.checked_between = Some((b.at_raw.clone(), a.at_raw.clone()));
-                it
-            }
-        });
+        items.push(cb_bracket(category, &readings, field, win_start, incident_at));
     }
 
     // Drift: Drift Watch keeps only drift that is still open, so a drift that already cleared is
@@ -2683,6 +2727,10 @@ fn changed_before_incident_impl(
 fn attach_changed_before_from(g: &Gathered, incidents: &mut [crate::blackbox::Incident]) {
     let asm = assemble_from(g);
     let times: Vec<Option<DateTime<Utc>>> = incidents.iter().map(|i| parse_utc(&i.when)).collect();
+    // A capped scan only covers back to its oldest row; before that, "clean" can't be judged.
+    let clean_judgeable_from = (incidents.len() >= crate::blackbox::MAX_INCIDENTS)
+        .then(|| times.iter().flatten().min().copied())
+        .flatten();
     for (idx, inc) in incidents.iter_mut().enumerate() {
         let Some(at) = times[idx] else { continue };
         let others: Vec<DateTime<Utc>> = times
@@ -2691,7 +2739,14 @@ fn attach_changed_before_from(g: &Gathered, incidents: &mut [crate::blackbox::In
             .filter(|(j, _)| *j != idx)
             .filter_map(|(_, t)| *t)
             .collect();
-        inc.changed_before = Some(changed_before_incident_impl(g, &asm, &inc.when, at, &others));
+        inc.changed_before = Some(changed_before_incident_impl(
+            g,
+            &asm,
+            &inc.when,
+            at,
+            &others,
+            clean_judgeable_from,
+        ));
     }
 }
 
@@ -4451,7 +4506,7 @@ mod tests {
     fn cb(g: &Gathered, incident: &str, others: &[&str]) -> ChangedBeforeIncident {
         let asm = assemble_from(g);
         let others: Vec<DateTime<Utc>> = others.iter().map(|t| at(t)).collect();
-        changed_before_incident_impl(g, &asm, incident, at(incident), &others)
+        changed_before_incident_impl(g, &asm, incident, at(incident), &others, None)
     }
 
     fn cb_cat<'a>(r: &'a ChangedBeforeIncident, category: &str) -> &'a ChangedBeforeItem {
@@ -4622,5 +4677,57 @@ mod tests {
         for banned in ["caused", "because", "the cause", "root cause", "%"] {
             assert!(!wire.contains(banned), "changed-before wire contains {banned:?}");
         }
+    }
+
+    #[test]
+    fn changed_before_never_says_no_change_from_readings_of_two_streams() {
+        // Review r1: a snapshot reads driver A before the window, the first rig fingerprint reads
+        // driver B after the incident. No stream saw both, so no delta scan emitted an event — the
+        // old bracket mixed the streams and said "no change". It is unknown.
+        let mut anchor = mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0);
+        anchor.hw_fingerprint = None;
+        let mut after = mk_session("2026-10-25T10:00:00Z", "Game.exe", 100.0, 120.0);
+        after.hw_fingerprint = Some(mk_fp("drv-B"));
+        let mut g = gathered_with(vec![anchor, after]);
+        g.snapshots = vec![mk_snap("2026-10-19T10:00:00Z", "drv-A", "26100", "Balanced")];
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        let drv = cb_cat(&r, "driver");
+        assert_eq!(drv.status, "unknown", "cross-stream readings claimed {}", drv.status);
+        assert_eq!(drv.unknown_reason.as_deref(), Some("unmatched-readings"));
+        assert!(drv.checked_between.is_none());
+
+        // Same stream, both ends, same value: that is the one honest "no change".
+        let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        g.snapshots = vec![
+            mk_snap("2026-10-19T10:00:00Z", "drv-A", "26100", "Balanced"),
+            mk_snap("2026-10-26T10:00:00Z", "drv-A", "26100", "Balanced"),
+        ];
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        assert_eq!(cb_cat(&r, "driver").status, "no-change");
+        assert_eq!(
+            cb_cat(&r, "driver").checked_between,
+            Some(("2026-10-19T10:00:00Z".to_string(), "2026-10-26T10:00:00Z".to_string()))
+        );
+        // A same-stream pair that differs is never "no change".
+        g.snapshots[1].gpu_driver = "drv-B".into();
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        assert_eq!(cb_cat(&r, "driver").status, "unknown");
+    }
+
+    #[test]
+    fn changed_before_a_capped_scan_cannot_call_an_older_session_clean() {
+        let g = gathered_with(vec![
+            mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0),
+            mk_session("2026-10-22T10:00:00Z", "Game.exe", 100.0, 120.0),
+        ]);
+        let asm = assemble_from(&g);
+        let inc = "2026-10-24T10:00:00Z";
+        // The scan reaches back only to Oct 21: Oct 22 can be judged clean, Oct 20 cannot.
+        let r = changed_before_incident_impl(&g, &asm, inc, at(inc), &[at("2026-10-22T10:05:00Z")], Some(at("2026-10-21T00:00:00Z")));
+        assert_eq!(r.anchor_kind, "measured", "a session older than the scan was called clean");
+        assert_eq!(r.anchor.unwrap().started_at, "2026-10-22T10:00:00Z");
+        let r = changed_before_incident_impl(&g, &asm, inc, at(inc), &[], Some(at("2026-10-21T00:00:00Z")));
+        assert_eq!(r.anchor_kind, "clean");
+        assert_eq!(r.anchor.unwrap().started_at, "2026-10-22T10:00:00Z");
     }
 }

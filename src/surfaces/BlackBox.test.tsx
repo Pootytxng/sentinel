@@ -530,7 +530,7 @@ describe("BlackBox — Changed before this (P6-changed)", () => {
     const { container } = render(<BlackBox />);
     scan();
     expect(await screen.findByText("Changed before this")).toBeInTheDocument();
-    expect(screen.getByText(/Since your last clean session \(WardogsClient,/)).toBeInTheDocument();
+    expect(screen.getByText(/Since your last session with no crash on record \(WardogsClient,/)).toBeInTheDocument();
     for (const label of ["Compy changes", "Graphics driver", "Windows build", "Power plan", "Hardware", "Setting drift"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }

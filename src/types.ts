@@ -564,6 +564,8 @@ export type ChangedBeforeUnknownReason =
   | "no-reading-before"
   | "no-reading-after"
   | "cant-place"
+  | "readings-differ"
+  | "unmatched-readings"
   | "ledger-incomplete"
   | "drift-not-kept";
 export type ChangedBeforeItem = {
@@ -576,7 +578,7 @@ export type ChangedBeforeItem = {
   checked_between: [string, string] | null;
 };
 export type ChangedBeforeIncident = {
-  /** "clean": no incident in that session · "measured": every earlier one had one · "none". */
+  /** "clean": no incident on record in that session · "measured": every earlier one had one · "none". */
   anchor_kind: "clean" | "measured" | "none";
   anchor: { started_at: string; game: string } | null;
   window_end: string;

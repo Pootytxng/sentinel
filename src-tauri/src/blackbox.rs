@@ -33,7 +33,7 @@ use std::collections::HashMap;
 use crate::sessions::SessionSummary;
 
 /// Newest N incidents shown (spec cap).
-const MAX_INCIDENTS: usize = 25;
+pub(crate) const MAX_INCIDENTS: usize = 25;
 /// A crash often lands just as the game stops presenting; allow this much slack after a session's
 /// recorded end before we stop calling it "during that session". Conservative — never invents a
 /// session, only widens the match window slightly.
