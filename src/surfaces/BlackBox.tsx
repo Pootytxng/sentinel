@@ -26,6 +26,8 @@ import {
   type RestoreResult,
 } from "./changed-before-restore";
 import { useJourneyPhase } from "./GuidedJourney";
+import { CareNextStep } from "./CareNextStep";
+import type { StutterResult } from "./care-next-step";
 import "./BlackBox.css";
 
 // Black Box v1 (Paramedic Mode) — crash/freeze evidence reader, rendered as a Lab instrument.
@@ -62,6 +64,7 @@ export function BlackBox({
   const [report, setReport] = useState<BlackBoxReport | null>(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stutter, setStutter] = useState<StutterResult | null>(null);
 
   const scan = () => {
     setScanning(true);
@@ -165,6 +168,9 @@ export function BlackBox({
         {t("gaming.blackBox.introPost")}
       </p>
 
+      {/* P6-next: exactly one next step, at the top (priority in care-next-step.ts). */}
+      <CareNextStep incidents={report && !scanning ? report.incidents : null} stutter={stutter} />
+
       <button className="bb-scan cmp-door" onClick={scan} disabled={scanning}>
         {scanning
           ? t("gaming.blackBox.scanningEllipsis")
@@ -212,7 +218,7 @@ export function BlackBox({
 
       {/* P6-stutter: a stutter or slowdown rarely leaves a crash record, so the same view also
           compares the latest session with its last good one (StutterCompare.tsx). */}
-      <StutterCompare />
+      <StutterCompare onResult={setStutter} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { BlackBox } from "./BlackBox";
 import { ConfirmProvider } from "../design/ConfirmDialog";
@@ -93,7 +93,9 @@ describe("BlackBox surface (v2 triage UI)", () => {
     expect(await screen.findByText("What this points to")).toBeInTheDocument();
     expect(screen.getByText(/your graphics driver \(amdkmdag\) repeatedly timing out/)).toBeInTheDocument();
     expect(screen.getByText("Strong signal")).toBeInTheDocument(); // strength is a word, never a %
-    expect(screen.getByText(/clean reinstall of your graphics driver/i)).toBeInTheDocument();
+    // P6-next also lifts this step to the top of the view, so it is checked inside the record itself.
+    const list = document.querySelector(".bb-list") as HTMLElement;
+    expect(within(list).getByText(/clean reinstall of your graphics driver/i)).toBeInTheDocument();
   });
 
   it("the rendered UI never asserts a cause and never shows a percentage (honesty law on screen)", async () => {

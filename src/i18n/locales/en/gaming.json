@@ -361,6 +361,24 @@
       "headline": "Your latest {{game}} session vs your last steady one",
       "off": "Session comparison is switched off on this PC, so Compy can't compare your sessions here."
     },
+    "nextStep": {
+      "title": "Your next step",
+      "fromIncident": "From your newest crash record ({{kind}}, {{date}}).",
+      "fromStutter": "From the {{game}} session comparison below.",
+      "basisTaken": "you answered \u201cDid this help?\u201d on {{date}}",
+      "basisShown": "Compy first showed this step on {{date}}",
+      "payoffLabel": "Since then:",
+      "payoff": {
+        "cameBack_one": "{{kind}} came back. 1 record since {{basis}}, on {{first}}.",
+        "cameBack_other": "{{kind}} came back. {{count}} records since {{basis}}, the first on {{first}}.",
+        "noneSince_one": "No {{kind}} recorded in the 1 day since {{basis}}. That is a measured absence, not proof of what caused it.",
+        "noneSince_other": "No {{kind}} recorded in the {{days}} days since {{basis}}. That is a measured absence, not proof of what caused it.",
+        "tooSoon": "Too soon to tell. Less than a day has passed since {{basis}}. Compy counts new {{kind}} records from then on.",
+        "sessionsBack": "The slowdown showed up again in {{bad}} of {{total}} {{game}} sessions since {{basis}}: the 1% low fell more than {{pct}}% below your steady session.",
+        "sessionsSteady": "In the {{total}} {{game}} sessions since {{basis}}, the 1% low stayed within {{pct}}% of your steady session. That is a measured result, not proof of what caused it.",
+        "notEnoughSessions": "Not enough play to tell yet. Measured {{game}} sessions since {{basis}}: {{total}}. Compy needs at least {{min}}."
+      }
+    },
     "skippedIntro": "Skipped — needs administrator: {{sources}}.",
     "skippedRunAdmin_one": "Run Compy as admin to include this.",
     "skippedRunAdmin_other": "Run Compy as admin to include these.",
