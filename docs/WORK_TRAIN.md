@@ -213,7 +213,7 @@ room or station picked by hand.
       Needs the `intelligence.rs` gather anchored at the incident time. ROADMAP P6 bullets 1, 3; Constitution §17, §25.
 - [ ] **P6-changed-f1** Localise the "Changed before this" event lines by event kind (they show Rust's English
       `summary` today, as the What-changed panel does) so zh-CN reads whole. Needs P6-changed.
-- [ ] **P6-changed-f2** The WER folder read stops at 400 entries in folder order; if hit, treat the scan as
+- [x] **P6-changed-f2** (`8204e17c`) The WER folder read stops at 400 entries in folder order; if hit, treat the scan as
       incomplete for "clean" (no time cut-point today), or read newest-first so a cut-point exists.
 - [ ] **P6-door** One Care door on Home ("Something's wrong") replaces the Crash & Freeze entry; the observer
       card and the interview crash/stutter answers all land on the same Care view. Needs P6-changed. ROADMAP P6
