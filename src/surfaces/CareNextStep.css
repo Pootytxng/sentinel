@@ -1,0 +1,45 @@
+/* P6-next: the one next step at the top of the Care view. Instrument tokens only. */
+.bb-next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ix-text-3) 8%, transparent);
+  min-width: 0;
+}
+.bb-next-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+.bb-next-title {
+  font-size: var(--type-label);
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.bb-next-tag,
+.bb-next-from {
+  font-style: italic;
+  font-size: var(--type-label);
+  color: var(--ix-text-3);
+}
+.bb-next-headline {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ix-text-1);
+  overflow-wrap: anywhere;
+}
+.bb-next-detail,
+.bb-next-from,
+.bb-next-payoff {
+  margin: 0;
+  font-size: var(--type-label);
+  color: var(--ix-text-2);
+  overflow-wrap: anywhere;
+}
+.bb-next-payoff-label {
+  font-weight: 600;
+  color: var(--ix-text-1);
+}

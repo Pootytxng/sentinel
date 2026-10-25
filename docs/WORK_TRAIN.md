@@ -228,6 +228,8 @@ room or station picked by hand.
       it was on <date>" with the list, via the existing ledger rollback; unrecorded changes say Compy can't
       restore them. Needs P6-changed. ROADMAP P6 bullet 7; Constitution §26.
 - [x] **P6-restore-f1** (`6e2f4e99`) ExperimentBench (Trial start) should respect App busyId so a Trial can't start while Put back is running.
+- [ ] **P6-next-f1** `blackbox-resolution.ts` `resolutionFor` counts any record with the same `tag` as a recurrence; for App crash / App hang it should also match `receipt.faulting_app` (case-insensitive), as `care-next-step.ts` `sameKind` does.
+- [ ] **P6-next-f2** Keep a stored stutter step (and its payoff) alive while its anchor exists, so "stayed within" can show after a good session; today the step disappears once the latest pair isn't regressed.
 - [ ] **P6-unknown** Honest ends on the Care view: "Not enough evidence yet", or "Beyond Compy" (`beyond_us`)
       with the Support evidence export one tap away. Needs P6-next. ROADMAP P6 bullet 8; Constitution §26.
 - [ ] **P6-timeline** One "Since it last worked" list on the Care view (incidents, Compy changes, drift,

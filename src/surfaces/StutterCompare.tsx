@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 // thing a test loads.
 import "../i18n";
 import type { SessionSummary, WhatChangedOutcome } from "../types";
+import type { StutterResult } from "./care-next-step";
 import { gradeBaseline } from "./baseline-grade";
 import { WhatChangedReportView } from "./WhatChangedPanel";
 import { prettyGameName } from "./game-name";
@@ -71,11 +72,21 @@ type State =
   | { kind: "error" }
   | { kind: "no-session" }
   | { kind: "no-good"; game: string }
-  | { kind: "report"; outcome: WhatChangedOutcome; game: string; latestAt: string; goodAt: string };
+  | {
+      kind: "report";
+      outcome: WhatChangedOutcome;
+      game: string;
+      latestAt: string;
+      goodAt: string;
+      /** P6-next: what the Care view's next-step payoff counts against. */
+      processName: string;
+      sessions: SessionSummary[];
+    };
 
 async function compare(): Promise<State> {
   const sessions = await invoke<SessionSummary[]>("get_session_summaries");
-  const pick = pickStutterPair(Array.isArray(sessions) ? sessions : []);
+  const all = Array.isArray(sessions) ? sessions : [];
+  const pick = pickStutterPair(all);
   if (pick.kind === "no-session") return { kind: "no-session" };
   const game = prettyGameName(pick.latest.process_name);
   for (const good of pick.candidates) {
@@ -84,7 +95,15 @@ async function compare(): Promise<State> {
       currentStartedAt: pick.latest.started_at,
     });
     if (outcome && goodPair(outcome)) {
-      return { kind: "report", outcome, game, latestAt: pick.latest.started_at, goodAt: good.started_at };
+      return {
+        kind: "report",
+        outcome,
+        game,
+        latestAt: pick.latest.started_at,
+        goodAt: good.started_at,
+        processName: pick.latest.process_name,
+        sessions: all,
+      };
     }
   }
   return { kind: "no-good", game };
@@ -96,11 +115,29 @@ function fmtWhen(iso: string, lang: string): string {
   return d.toLocaleString(lang, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export function StutterCompare() {
+export function StutterCompare({
+  onResult,
+  hideNextAction = false,
+}: {
+  /** P6-next: hands the report up so the Care view can pick its one next step. null = no report. */
+  onResult?: (r: StutterResult | null) => void;
+  /** P6-next: the report's next test is the step shown at the top of the view; don't repeat it. */
+  hideNextAction?: boolean;
+} = {}) {
   const { t, i18n } = useTranslation();
   const on = useIntelligenceFlag();
   const expert = useExpertView();
   const [state, setState] = useState<State>({ kind: "idle" });
+
+  useEffect(() => {
+    if (!onResult) return;
+    onResult(
+      on && state.kind === "report" && state.outcome.kind === "report"
+        ? { report: state.outcome, game: state.game, processName: state.processName, sessions: state.sessions }
+        : null,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- report changes only
+  }, [state, on]);
 
   const run = () => {
     setState({ kind: "busy" });
@@ -164,6 +201,7 @@ export function StutterCompare() {
             expert={expert}
             headline={t("gaming.blackBox.stutter.headline", { game: state.game })}
             causeTag={t("gaming.blackBox.changedBefore.notProven")}
+            hideNextAction={hideNextAction}
           />
         </>
       )}

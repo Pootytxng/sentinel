@@ -351,6 +351,32 @@
       "headline": "你最近一次 {{game}} 会话 vs 上一局平稳的会话",
       "off": "这台电脑上的会话比较功能已关闭，所以 Compy 无法在这里比较你的会话。"
     },
+    "nextStep": {
+      "title": "你的下一步",
+      "shownAbove": "已作为你的下一步显示在上方。",
+      "fromIncident": "来自最新一条崩溃记录（{{kind}}，{{date}}）。",
+      "fromStutter": "来自下面的 {{game}} 会话比较。",
+      "basisTaken": "你在 {{date}} 回答了\u201c这有帮助吗？\u201d。",
+      "basisShown": "Compy 从 {{date}} 起一直在跟踪这一步。",
+      "payoffLabel": "此后：",
+      "payoff": {
+        "cameBack_other": "{{kind}} 又出现了。此后记录到 {{count}} 次，第一次在 {{first}}。",
+        "noneSince_other": "此后的 {{days}} 天里没有记录到 {{kind}}。这是测量到的没有再出现，并不能证明原因。",
+        "noneSincePartial_other": "此后的 {{days}} 天里，在 Compy 能读取的记录中没有发现 {{kind}}。有些记录需要管理员权限，所以这不是完整的统计。",
+        "tooSoon": "现在下结论还太早，还不到一天。Compy 会从那时起统计新的 {{kind}} 记录。",
+        "sessionsBack": "此后的 {{total}} 次 {{game}} 会话中，有 {{bad}} 次又变慢了：1% 最低帧比你那次平稳会话低了 {{pct}}% 以上。",
+        "sessionsSteady": "此后的 {{total}} 次 {{game}} 会话中，1% 最低帧都保持在你那次平稳会话的 {{pct}}% 以内。这是测量结果，并不能证明原因。",
+        "crashCameBack_other": "{{app}} 又崩溃了。此后记录到 {{count}} 次，第一次在 {{first}}。",
+        "crashNoneSince_other": "此后的 {{days}} 天里没有记录到 {{app}} 崩溃。这是测量到的没有再出现，并不能证明原因。",
+        "crashNoneSincePartial_other": "此后的 {{days}} 天里，在 Compy 能读取的记录中没有发现 {{app}} 崩溃。有些记录需要管理员权限，所以这不是完整的统计。",
+        "crashTooSoon": "现在下结论还太早，还不到一天。Compy 会从那时起统计新的 {{app}} 崩溃。",
+        "hangCameBack_other": "{{app}} 又停止响应了。此后记录到 {{count}} 次，第一次在 {{first}}。",
+        "hangNoneSince_other": "此后的 {{days}} 天里没有记录到 {{app}} 停止响应。这是测量到的没有再出现，并不能证明原因。",
+        "hangNoneSincePartial_other": "此后的 {{days}} 天里，在 Compy 能读取的记录中没有发现 {{app}} 停止响应。有些记录需要管理员权限，所以这不是完整的统计。",
+        "hangTooSoon": "现在下结论还太早，还不到一天。Compy 会从那时起统计新的 {{app}} 停止响应记录。",
+        "notEnoughSessions": "现在还不足以判断。此后在这台电脑上完整时长的 {{game}} 会话：{{total}} 次，Compy 至少需要 {{min}} 次。"
+      }
+    },
     "skippedIntro": "已跳过——需要管理员权限:{{sources}}。",
     "skippedRunAdmin_other": "以管理员身份运行 Compy 即可将其纳入检查范围。",
     "vitalsLabel": "最后生命体征",
