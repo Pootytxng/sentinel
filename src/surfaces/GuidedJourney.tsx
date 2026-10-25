@@ -9,8 +9,9 @@
 //   5. concludes through the existing conclude_experiment, which keeps the change only when it
 //      measured Better and restores it otherwise; and shows the verdict.
 // Anything that fails after the change went on restores it through the existing restore_experiment
-// and says so in plain words. No new mutation path, no overlay, and nothing here brings a window to
-// the front. The only thing kept is the running Trial's id in this webview's localStorage, so a
+// and says so in plain words. No new mutation path, and nothing here brings a window to the front
+// (P5-enough's "enough yet?" line shows in this panel and, when it is on, in the click-through
+// overlay; see journey-enough.ts). The only thing kept is the running Trial's id in this webview's localStorage, so a
 // relaunch can say that Trial was interrupted (the experiment store already holds the Trial itself).
 //
 // P5-rebaseline (ROADMAP P5 step 3; TRIAL_PROTOCOL §2): session 1 is graded with the backend's own
@@ -50,6 +51,7 @@ import type { SessionSummary } from "../types";
 import { writeLedger } from "../data/ledger-write";
 import { prettyGameName } from "./game-name";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
+import { asProgress, enoughLine, setJourneyRecording, type CaptureProgress } from "./journey-enough";
 
 export type JourneyOutcome = "recommended" | "max-fps";
 
@@ -74,6 +76,8 @@ type FpsStatusLite = {
   sample: { process_name: string } | null;
   /** monitoring.rs `FpsStatus::game_running`. Absent on older builds = unknown. */
   game_running?: boolean | null;
+  /** monitoring.rs `FpsStatus::progress` (P5-enough). Absent on older builds. */
+  progress?: unknown;
 };
 
 export type JourneyPhase =
@@ -151,6 +155,20 @@ const subscribe = (l: () => void) => {
 };
 const getPhase = () => phase;
 
+// P5-enough: what the session being recorded has measured so far (journey-enough.ts), from the same
+// get_fps_status poll that watches for the game closing. Null when nothing is recording.
+let progress: CaptureProgress | null = null;
+const setProgress = (next: CaptureProgress | null) => {
+  if (next === progress) return;
+  progress = next;
+  for (const l of listeners) l();
+};
+const getProgress = () => progress;
+/** The recording session's progress, or null. */
+export function useJourneyProgress(): CaptureProgress | null {
+  return useSyncExternalStore(subscribe, getProgress, getProgress);
+}
+
 /** The journey's current phase; the bench hides its own panels while it isn't idle. */
 export function useJourneyPhase(): JourneyPhase {
   return useSyncExternalStore(subscribe, getPhase, getPhase);
@@ -164,6 +182,8 @@ export function resetJourneyForTests(timing: { pollMs: number; saveWaitMs: numbe
   decide = null;
   current = null;
   tagRunning(null);
+  setJourneyRecording(false);
+  progress = null;
   pollMs = timing.pollMs;
   saveWaitMs = timing.saveWaitMs;
   setPhase({ kind: "idle" });
@@ -190,17 +210,22 @@ function waitForPlay(captureFailed: string): Promise<void> {
       settled = true;
       finishPlaying = null;
       stopPlaying = null;
+      setJourneyRecording(false);
+      setProgress(null);
       if (timer) clearTimeout(timer);
       if (err) reject(err);
       else resolve();
     };
     finishPlaying = () => finish();
     stopPlaying = (err) => finish(err);
+    setJourneyRecording(true);
+    setProgress(null);
     const tick = async () => {
       if (settled) return;
       const st = await invoke<FpsStatusLite>("get_fps_status").catch(() => null);
       if (settled) return;
       if (st) {
+        setProgress(asProgress(st.progress));
         if (st.sample?.process_name || st.game_running === true) seen = true;
         if (seen && st.game_running === false) return finish();
         if (!st.active && st.status !== "starting") return seen ? finish() : finish(new Error(captureFailed));
@@ -512,6 +537,7 @@ export function GuidedJourney({
 }) {
   const { t } = useTranslation();
   const p = useJourneyPhase();
+  const recorded = useJourneyProgress();
   const k = "lab.experimentBench.journey";
   const gameName = (g: string | null) => (g ? prettyGameName(g) || g : null);
 
@@ -549,6 +575,7 @@ export function GuidedJourney({
   }
 
   const playing = p.kind === "as-is" || p.kind === "with-change";
+  const live = playing ? recorded : null;
   const finished = !playing && p.kind !== "reading" && p.kind !== "judging" && p.kind !== "uneven";
   let line: string;
   switch (p.kind) {
@@ -601,6 +628,12 @@ export function GuidedJourney({
       <p className="exp-note" data-testid="journey-line" role={finished ? "status" : undefined}>
         {line}
       </p>
+      {live && (
+        // P5-enough: quiet, in place; nothing here moves focus or brings a window forward.
+        <p className="exp-fineprint" data-testid="journey-enough" aria-live="polite">
+          {enoughLine(live, t)}
+        </p>
+      )}
       {playing && (
         <button type="button" className="exp-cta-ghost" onClick={() => finishPlaying?.()}>
           {t(`${k}.donePlaying`)}

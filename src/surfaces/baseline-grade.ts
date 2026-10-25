@@ -21,7 +21,9 @@ export type BaselineGrade =
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
 
-export function gradeBaseline(s: SessionSummary): BaselineGrade {
+/** Reads only the reading count and the fps buckets, so a capture still running (get_fps_status
+ *  `progress`, P5-enough) is graded by this same rule. */
+export function gradeBaseline(s: Pick<SessionSummary, "samples" | "fps_series">): BaselineGrade {
   if (s.samples < MIN_BASELINE_SAMPLES) return { kind: "too-short", samples: s.samples };
   const fps = (s.fps_series ?? []).map(([, f]) => f).filter((f) => Number.isFinite(f) && f > 0);
   const half = Math.floor(fps.length / 2);

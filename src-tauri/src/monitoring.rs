@@ -785,6 +785,12 @@ pub(crate) fn fps_status_slot() -> &'static Mutex<String> {
 fn lock_status() -> std::sync::MutexGuard<'static, String> {
     fps_status_slot().lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
+/// P5-enough: what the running capture has measured so far, written by the 1 Hz session recorder
+/// and read by `get_fps_status`. In memory only; a plain value, so a poisoned lock just recovers it.
+fn lock_progress() -> std::sync::MutexGuard<'static, Option<crate::sessions::CaptureProgress>> {
+    static P: OnceLock<Mutex<Option<crate::sessions::CaptureProgress>>> = OnceLock::new();
+    P.get_or_init(|| Mutex::new(None)).lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 pub(crate) fn touch_alive() {
     // The helper checks this file's mtime; the contents don't matter.
     let _ = std::fs::write(fps_alive_path(), b"alive");
@@ -833,6 +839,11 @@ pub(crate) struct FpsStatus {
     /// be checked. Additive: an older build's reader ignores it. Read-only.
     #[serde(skip_serializing_if = "Option::is_none")]
     game_running: Option<bool>,
+    /// P5-enough: the readings this capture has measured so far (background ticks never count) and
+    /// its 10 s fps buckets, so the guided journey can say when the session has enough. Absent while
+    /// capture is off or before the recorder's first tick. Additive and read-only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    progress: Option<crate::sessions::CaptureProgress>,
 }
 
 /// PURE (P5-guided): whether the game behind the helper's last line is still running. `last` is the
@@ -1085,6 +1096,8 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
         std::thread::spawn(move || {
             use std::sync::atomic::Ordering;
             let mut acc = crate::sessions::SessionAccumulator::with_counts(started_at, active_changes);
+            // P5-enough: a new capture starts from nothing, never the last capture's count.
+            *lock_progress() = None;
             let start = std::time::Instant::now();
             // Stutter Forensics: a read-only per-second timeline (elapsed, 1% low) + a capped log of
             // signals (process starts / RAM 90% / GPU clock drop), analyzed once at finalize. Only
@@ -1152,6 +1165,9 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                             // on the same ground as the tick (alt-tabbed).
                             if let Some(h) = &s.frame_hist {
                                 acc.record_frame_hist(&s.process_name, h, measured, elapsed);
+                            }
+                            if measured {
+                                *lock_progress() = Some(acc.progress());
                             }
                             tip = Some((s.fps, s.low1_fps));
                             if measured && s.low1_fps > 0.0 && timeline.len() < 7200 {
@@ -1292,6 +1308,7 @@ pub(crate) fn stop_fps_capture() {
     use std::sync::atomic::Ordering;
     fps_active().store(false, Ordering::Release);
     *lock_status() = "idle".into();
+    *lock_progress() = None;
     let _ = std::fs::remove_file(fps_alive_path());
     let _ = std::fs::remove_file(fps_out_path());
     crate::tray::set_idle();
@@ -1344,6 +1361,7 @@ pub(crate) fn get_fps_status() -> FpsStatus {
         status,
         sample: if fresh { last } else { None },
         game_running,
+        progress: if active { lock_progress().clone() } else { None },
     }
 }
 

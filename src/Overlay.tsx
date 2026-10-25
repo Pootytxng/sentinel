@@ -14,6 +14,7 @@ import {
 } from "./design/theme";
 import { gradeFps, gradeLow1, gradeColor } from "./data/metric-grade";
 import { gradeGpuTempForVendor } from "./data/gpu-sensor";
+import { asProgress, enoughLine, journeyRecording } from "./surfaces/journey-enough";
 import "./Overlay.css";
 
 // Minimal shapes — the overlay only reads a few fields from the same sensor
@@ -39,6 +40,8 @@ type FpsLite = {
     low1_fps: number;
     recent_frametimes_ms: number[];
   } | null;
+  /** P5-enough: what the running capture has measured so far (monitoring.rs `FpsStatus::progress`). */
+  progress?: unknown;
 };
 
 // compy_overlay_v2: render the re-dressed (inverted-rule) overlay. DEFAULT ON (the redesign is the
@@ -86,6 +89,8 @@ export default function Overlay() {
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   const [refreshHz, setRefreshHz] = useState<number | null>(readDisplayRefreshHz);
+  // P5-enough: the main window's guided journey is recording (journey-enough.ts flag).
+  const [journey, setJourney] = useState<boolean>(journeyRecording);
 
   // React to the main window flipping the flag / density / backdrop / relaying the monitor
   // refresh — `storage` fires in OTHER windows.
@@ -95,6 +100,7 @@ export default function Overlay() {
       setDensity(readOverlayDensity());
       setBackdrop(readOverlayBackdrop());
       setRefreshHz(readDisplayRefreshHz());
+      setJourney(journeyRecording());
     };
     window.addEventListener("storage", on);
     return () => window.removeEventListener("storage", on);
@@ -133,6 +139,14 @@ export default function Overlay() {
   }, []);
 
   const sample = fps?.sample ?? null;
+  // P5-enough: one quiet "enough yet?" line while a guided journey records. Display only, like the
+  // rest of the overlay: this window is click-through and can't take focus (overlay-focus-guard).
+  const progress = journey && fps?.active ? asProgress(fps.progress) : null;
+  const enough = progress ? (
+    <div className="ovl2-note" data-testid="overlay-enough">
+      {enoughLine(progress, t)}
+    </div>
+  ) : null;
 
   // ── v2: the inverted-rule overlay — the game is the hero. Flat near-opaque pill, mono, no glow/
   // glass/ambient; accent only on the unit + the frametime line. Three densities. ──
@@ -171,6 +185,7 @@ export default function Overlay() {
         {density === "full" && sample && sample.recent_frametimes_ms.length > 1 && (
           <Frametimeline samples={sample.recent_frametimes_ms} refreshHz={refreshHz} />
         )}
+        {enough}
       </div>
     );
   }
