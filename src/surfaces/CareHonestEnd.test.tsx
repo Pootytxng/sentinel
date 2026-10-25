@@ -7,16 +7,17 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { invoke } from "@tauri-apps/api/core";
 import { BlackBox } from "./BlackBox";
+import { SupportEvidence } from "./SupportEvidence";
 import { pickCareStep, type StutterResult } from "./care-next-step";
 import { honestEndFor } from "./care-honest-end";
 import type { CrashIncident, WhatChangedReport } from "../types";
 
-const h = vi.hoisted(() => ({ incidents: [] as unknown[], skipped: [] as string[] }));
+const h = vi.hoisted(() => ({ incidents: [] as unknown[], skipped: [] as string[], admin: [] as string[] }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
-    if (cmd === "get_crash_blackbox") return Promise.resolve({ incidents: h.incidents, skipped_sources: h.skipped });
+    if (cmd === "get_crash_blackbox") return Promise.resolve({ incidents: h.incidents, skipped_sources: h.skipped, skipped_needs_admin: h.admin });
     if (cmd === "get_session_summaries") return Promise.resolve([]);
     if (cmd === "preview_support_evidence")
       return Promise.resolve({
@@ -67,47 +68,68 @@ afterEach(() => {
   localStorage.clear();
   h.incidents = [];
   h.skipped = [];
+  h.admin = [];
   vi.mocked(invoke).mockClear();
 });
+
+const NONE = { admin: 0, other: 0 };
 
 describe("honestEndFor: the slot's honest end, only when there is no step", () => {
   it("is null whenever there is a step, whatever else is true", () => {
     const step = pickCareStep([inc("2026-10-20T10:00:00Z")], null);
     expect(step).not.toBeNull();
-    expect(honestEndFor(step, [inc("2026-10-19T10:00:00Z", { assessed: false })], 2, stutter("inconclusive", null))).toBeNull();
+    expect(honestEndFor(step, [inc("2026-10-19T10:00:00Z", { assessed: false })], { admin: 1, other: 1 }, stutter("inconclusive", null))).toBeNull();
     const beyond = pickCareStep([inc("2026-10-20T10:00:00Z", { beyond: true })], null);
-    expect(honestEndFor(beyond, [], 1, null)).toBeNull();
+    expect(honestEndFor(beyond, [], { admin: 1, other: 0 }, null)).toBeNull();
   });
   it("offers only the gaps that are true for this read", () => {
     const unassessed = [inc("2026-10-20T10:00:00Z", { assessed: false })];
-    expect(honestEndFor(null, unassessed, 0, null)?.gaps).toEqual([{ kind: "repeat" }]);
-    expect(honestEndFor(null, [], 1, null)?.gaps).toEqual([{ kind: "admin" }]);
-    expect(honestEndFor(null, null, 0, stutter("inconclusive", null))?.gaps).toEqual([{ kind: "session", game: "Valorant" }]);
-    expect(honestEndFor(null, null, 0, stutter("regressed", "x", "not-comparable"))?.gaps).toEqual([{ kind: "session", game: "Valorant" }]);
-    expect(honestEndFor(null, null, 0, stutter("regressed", null))?.gaps).toEqual([{ kind: "session", game: "Valorant" }]);
+    expect(honestEndFor(null, unassessed, NONE, null)?.gaps).toEqual([{ kind: "repeat" }]);
+    expect(honestEndFor(null, [], { admin: 1, other: 0 }, null)?.gaps).toEqual([{ kind: "admin" }]);
+    // A reader that couldn't run is not an admin matter: a plain re-scan.
+    expect(honestEndFor(null, [], { admin: 0, other: 1 }, null)?.gaps).toEqual([{ kind: "rescan" }]);
+    expect(honestEndFor(null, null, NONE, stutter("inconclusive", null))?.gaps).toEqual([{ kind: "session", game: "Valorant" }]);
+    expect(honestEndFor(null, null, NONE, stutter("regressed", "x", "not-comparable"))?.gaps).toEqual([{ kind: "session", game: "Valorant" }]);
+    expect(honestEndFor(null, null, NONE, stutter("regressed", null))?.gaps).toEqual([{ kind: "session", game: "Valorant" }]);
   });
   it("claims nothing where nothing is wrong or nothing was read", () => {
-    expect(honestEndFor(null, null, 0, null)).toBeNull(); // before a scan
-    expect(honestEndFor(null, [], 0, null)).toBeNull(); // a clean scan
-    expect(honestEndFor(null, null, 3, null)).toBeNull(); // no scan: skipped sources aren't known yet
-    expect(honestEndFor(null, [], 0, stutter("no-change", null))).toBeNull(); // a measured "no change"
-    expect(honestEndFor(null, [], 0, stutter("improved", null))).toBeNull();
+    expect(honestEndFor(null, null, NONE, null)).toBeNull(); // before a scan
+    expect(honestEndFor(null, [], NONE, null)).toBeNull(); // a clean scan
+    expect(honestEndFor(null, null, { admin: 3, other: 1 }, null)).toBeNull(); // no scan: skipped sources aren't known yet
+    expect(honestEndFor(null, [], NONE, stutter("no-change", null))).toBeNull(); // a measured "no change"
+    expect(honestEndFor(null, [], NONE, stutter("improved", null))).toBeNull();
   });
 });
 
 describe("the Care view: not enough evidence yet", () => {
   it("a record with no reading → the honest end takes the slot, at the top, with what would add evidence", async () => {
     h.incidents = [inc("2026-10-20T10:00:00Z", { assessed: false })];
-    h.skipped = ["System log"];
+    h.skipped = ["Crash dump files in \\Minidump (need administrator to read)"];
+    h.admin = [...h.skipped];
     const { container } = render(<BlackBox />);
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
     await waitFor(() => expect(container.querySelector(".bb-honest-unknown")).not.toBeNull());
     const box = container.querySelector(".bb-honest-unknown")!;
     expect(container.querySelector(".bb")!.children[1]).toBe(box);
     expect(box.textContent).toMatch(/Not enough evidence yet/);
-    expect(box.textContent).toMatch(/Run Compy as admin and scan again/);
-    expect(box.textContent).toMatch(/If it happens again, scan again/);
+    expect(box.textContent).toMatch(/start it again as administrator/);
+    expect(box.textContent).toMatch(/If it happens again, scan again\./);
+    expect(box.textContent).not.toMatch(/Scan again\. Some sources couldn't be read/);
+    expect(container.querySelector(".bb-skipped")!.textContent).toMatch(/Run Compy as admin/);
     expect(container.querySelector(".bb-next")).toBeNull(); // never both
+  });
+
+  it("a reader that couldn't run asks for a re-scan, never for admin", async () => {
+    h.skipped = ["Windows Event Log (couldn't run the reader)"];
+    h.admin = [];
+    const { container } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-honest-unknown")).not.toBeNull());
+    const box = container.querySelector(".bb-honest-unknown")!;
+    expect(box.textContent).toMatch(/Scan again\. Some sources couldn't be read this time/);
+    expect(container.querySelector(".bb-skipped")!.textContent).toMatch(/Couldn't be read this time: Windows Event Log/);
+    expect(container.querySelector(".bb-empty")!.textContent).toMatch(/scan again to try them/);
+    expect(container.textContent).not.toMatch(/admin/i);
   });
 
   it("a clean scan claims nothing", async () => {
@@ -139,12 +161,18 @@ describe("the Care view: beyond Compy", () => {
     expect(box.querySelector(".bb-next-tag")!.textContent).toBe("Beyond Compy");
     expect(box.textContent).toMatch(/beyond what Compy can safely narrow down/);
     expect(box.textContent).toMatch(/Compy sends nothing/);
+    // The receipt comes first; the support record is optional context that does not hold this crash.
+    expect(box.textContent).toMatch(/share the receipt in this record below: it has the stop code/);
+    expect(box.textContent).toMatch(/optional context.*not this crash/);
     expect(container.querySelector(".bb-honest-unknown")).toBeNull();
     // Nothing is read until the user asks.
     expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "preview_support_evidence")).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "Open the support record" }));
     expect(box.querySelector("[data-testid='support-evidence']")).not.toBeNull();
+    // No permanent delete right where the user is about to share it.
+    expect(box.querySelector(".sev-clear")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^clear/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show me what's in it" }));
     await waitFor(() => expect(screen.getByText("PLAIN PREVIEW")).toBeTruthy());
     // The same preview → local-file commands Settings uses; no other command was called.
@@ -159,6 +187,23 @@ describe("the Care view: beyond Compy", () => {
     await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
     expect(container.querySelector(".bb-next-tag")!.textContent).not.toBe("Beyond Compy");
     expect(screen.queryByRole("button", { name: "Open the support record" })).toBeNull();
+  });
+});
+
+describe("SupportEvidence keeps Clear where it lives (Settings)", () => {
+  it("shows Clear by default, and not with allowClear={false}", () => {
+    const a = render(<SupportEvidence />);
+    expect(a.container.querySelector(".sev-clear")).not.toBeNull();
+    cleanup();
+    const b = render(<SupportEvidence allowClear={false} />);
+    expect(b.container.querySelector(".sev-clear")).toBeNull();
+  });
+});
+
+describe("repeat gap copy", () => {
+  it.each(["en", "zh-CN"])("%s has no 'soon'", (loc) => {
+    const d = JSON.parse(readFileSync(join("src", "i18n", "locales", loc, "gaming.json"), "utf8"));
+    expect(d.blackBox.honestEnd.gapRepeat).not.toMatch(/soon|不久/);
   });
 });
 

@@ -360,6 +360,7 @@
     "scanButton": "扫描近期崩溃记录",
     "scanErrorMsg": "刚才未能读取崩溃日志——请稍后重试。",
     "emptyWithSkipped": "在 Compy 能读取的范围内没有发现崩溃或卡死记录。下方有些记录需要管理员权限——以管理员身份运行 Compy 即可一并检查。",
+    "emptyWithSkippedRetry": "在 Compy 能读取的范围内没有发现崩溃或卡死记录。有些来源这次没能读取，再扫描一次即可重试。",
     "emptyClean": "没有记录到任何崩溃或卡死。要么一切正常,要么发生的问题没有被 Windows 记录下痕迹。",
     "stutter": {
       "title": "卡顿或变慢？",
@@ -376,12 +377,13 @@
       "unknownTitle": "证据还不够",
       "unknownLine": "根据目前读到的内容，Compy 还无法给出下一步，也不会去猜。",
       "addLabel": "什么能补充证据",
-      "gapAdmin": "以管理员身份运行 Compy 后再扫描一次。有些来源需要管理员权限，这次没有读取。",
-      "gapRepeat": "如果再次发生，请在不久后再扫描一次。有些判断需要同一类记录出现不止一次，Compy 才会给出结论。",
+      "gapAdmin": "关闭 Compy，再以管理员身份重新启动（右键单击它，选择“以管理员身份运行”），然后再扫描一次。有些来源需要管理员权限，这次没有读取。",
+      "gapRescan": "再扫描一次。有些来源这次没能读取。",
+      "gapRepeat": "如果再次发生，请再扫描一次。有些判断需要同一类记录出现不止一次，Compy 才会给出结论。",
       "gapSession": "在这台电脑上再玩一局完整时长的 {{game}}，然后再看一下下面的比较。",
       "beyondTag": "超出 Compy 的范围",
       "beyondLine": "根据现有证据，这个问题已超出 Compy 能够安全判断的范围。诚实的下一步是交给人来看。",
-      "exportLine": "可以附上 Compy 的支持记录（Compy 自己在这台电脑上做过的事）。你会先看到里面的全部内容，然后保存为文件，由你自己附上。Compy 不会发送任何东西。",
+      "exportLine": "要寻求帮助，请分享下方这条记录里的回执：里面有停止代码和发生时间。Compy 的支持记录可以作为可选的补充一起附上：它列出的是 Compy 自己在这台电脑上做过的事，不包含这次崩溃。你会先看到里面的全部内容，然后保存为文件，由你自己附上。Compy 不会发送任何东西。",
       "exportOpen": "打开支持记录"
     },
     "nextStep": {
@@ -411,6 +413,8 @@
       }
     },
     "skippedIntro": "已跳过——需要管理员权限:{{sources}}。",
+    "skippedReaderIntro": "这次没能读取：{{sources}}。",
+    "skippedScanAgain": "再扫描一次即可重试。",
     "skippedRunAdmin_other": "以管理员身份运行 Compy 即可将其纳入检查范围。",
     "vitalsLabel": "最后生命体征",
     "noVitalsMsg": "Compy 当时没有在监测——没有生命体征数据可显示。",

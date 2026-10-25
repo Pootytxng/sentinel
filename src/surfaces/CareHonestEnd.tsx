@@ -20,9 +20,11 @@ export function CareHonestEnd({ end }: { end: HonestEnd | null }) {
           <li key={g.kind}>
             {g.kind === "admin"
               ? t("gaming.blackBox.honestEnd.gapAdmin")
-              : g.kind === "repeat"
-                ? t("gaming.blackBox.honestEnd.gapRepeat")
-                : t("gaming.blackBox.honestEnd.gapSession", { game: g.game })}
+              : g.kind === "rescan"
+                ? t("gaming.blackBox.honestEnd.gapRescan")
+                : g.kind === "repeat"
+                  ? t("gaming.blackBox.honestEnd.gapRepeat")
+                  : t("gaming.blackBox.honestEnd.gapSession", { game: g.game })}
           </li>
         ))}
       </ul>
@@ -40,7 +42,8 @@ export function CareSupportExport() {
     <div className="bb-honest-export">
       <p className="bb-honest-line">{t("gaming.blackBox.honestEnd.exportLine")}</p>
       {open ? (
-        <SupportEvidence />
+        // No Clear here: it permanently deletes the record, right when the user is about to share it.
+        <SupportEvidence allowClear={false} />
       ) : (
         <button className="set-action bb-honest-export-open" onClick={() => setOpen(true)}>
           {t("gaming.blackBox.honestEnd.exportOpen")}
