@@ -159,11 +159,43 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       spread's session-to-session noise; then offer Smoothest.
 - [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
       "Nothing else here is worth testing on this PC" as success. Tested = a verdict on this game in experiments.json.
-- [ ] **P4-next-f1** The picker's own list still offers changes already tested on this game; mark or sort them.
+- [x] **P4-next-f1** `1fc5026c`: picker marks tested changes ("· Tested: <verdict>") after untested ones.
 - [x] **P4-exit** (code) `e3d0420e`: read-only "What Compy tested on <game>" panel; "We tested what
       mattered" only when nothing untested remains. Today for WARDOGS: 1 of 16 testable changes has a result.
 - [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "We tested what mattered";
       record it in BACKLOG as the Phase 4 exit.
+
+### Then — Roadmap Phase 5: Guided Optimization Journey (`product/ROADMAP.md` Phase 5)
+Planned 2026-10-25. Order is value order. Phase 5 exit on the owner rig: from one button to the summary,
+the owner never clicks Start experiment, Start capture, Stop capture or Conclude, and never picks a setting.
+- [x] **P5-plan** Slices written below (2026-10-25).
+- [ ] **P5-guided** One "Optimize my game" button on Optimize for the detected/last-played game: defaults to
+      Recommended (Maximum FPS one tap away), says the plan and time in one line (e.g. "2 sessions of ~10 min:
+      one as-is, one with <top-ranked change>"), picks the change from P4-rank, and starts/stops capture
+      itself when `game_state` sees the game in front / closed; then concludes and shows the verdict. One
+      change per run; no overlay. Needs P4-rank, P4-recommended, P4-maxfps-smooth, P4-comparable. ROADMAP P5
+      steps 1, 2, 4; Constitution §4, §10; ENGINE §2.
+- [ ] **P5-continue** After a verdict the journey acts on it (Better kept, everything else restored, said in one
+      line) and offers "Next: <change>, ~10 min" as one tap, until P4-next says nothing is left. Needs
+      P5-guided, P4-next-f1. ROADMAP P5 steps 5, 7; ENGINE §4, §7.
+- [ ] **P5-enough** A quiet Compy toast during play: "Play the same area for about 90 s more" → "Compy has
+      enough; you can stop" (>= 600 even readings). Must not take focus (FOCUS guard). Needs P5-guided.
+      ROADMAP P5 step 4; Constitution §10.
+- [ ] **P5-rebaseline** When the as-is session grades uneven, the journey asks in plain words for one more
+      as-is session instead of a warning, and only then tests the change. Needs P5-guided,
+      P4-baseline-quality. ROADMAP P5 step 3; TRIAL_PROTOCOL §2.
+- [ ] **P5-learned** End-of-journey summary in plain words: kept, restored and why, plus one lesson from this
+      PC's numbers (e.g. "1% lows rose, average barely moved: steadier, not faster"); detail behind a toggle.
+      Extends the P4-exit panel. Needs P5-continue. ROADMAP P5 step 8; Constitution §13, §14; ENGINE §8.
+- [ ] **P5-resume** The journey survives a Compy or game restart and spans days: Optimize shows "2 of 5
+      tested · Next: <change>" and a Stop-here that keeps current decisions. Needs P5-continue. ROADMAP P5
+      step 5; ENGINE §7 (user ends).
+- [ ] **P5-outcomes** When a game has both a Recommended and a Maximum FPS result that differ, offer the choice
+      with the actual trade in one sentence; one result = no choice shown. Needs P5-learned. ROADMAP P5
+      step 6; ENGINE §5, §6 (default wins ties).
+- [ ] **P5-exit-proof** (owner, FULL) Run the journey on WARDOGS from the button to the summary with no manual
+      Trial clicks; the friend repeats it once. Record in BACKLOG as the Phase 5 exit. Needs P5-guided through
+      P5-learned. ROADMAP P5 exit.
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
