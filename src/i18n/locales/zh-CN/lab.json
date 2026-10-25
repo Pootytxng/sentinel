@@ -401,7 +401,17 @@
       "testAnyway": "仍然测试",
       "stop": "停止",
       "stopped": "已停止。没有做任何更改。",
-      "close": "好"
+      "close": "好",
+      "progress": "已测试 {{tested}}/{{total}} 项 · 下一项：{{change}}",
+      "progressDone": "已测试 {{tested}}/{{total}} 项。这台电脑上没有其他值得测试的项目了。",
+      "progressTesting": "已测试 {{tested}}/{{total}} 项 · 正在测试：{{change}}",
+      "progressInterrupted": "已测试 {{tested}}/{{total}} 项 · {{change}}的测试没有完成（见下方）",
+      "planResume": "{{game}}：1 局，约 10 分钟，开启{{change}}。你上一局原样的游戏仍可作为更改前的读数。",
+      "stopHere": "就此停止",
+      "stoppedHere": "已就此停止：已测试 {{tested}}/{{total}} 项。没有撤销任何更改。",
+      "stillOn": "仍处于开启状态：{{changes}}。",
+      "noneOn": "已测试的更改目前都没有开启。",
+      "pickUp": "从上次停下的地方继续"
     },
     "verdict": {
       "improved": "实测更快——已保留",

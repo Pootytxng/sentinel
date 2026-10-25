@@ -20,7 +20,8 @@ import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome"
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
 import { summarizeGame, type GameTestSummary, type Lesson, type LessonRule, type StillApplied, type TestedChange } from "./test-summary";
-import { GuidedJourney, interruptedJourneyId, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
+import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
+import { journeyProgress, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import "./ExperimentBench.css";
 
@@ -725,6 +726,10 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
           return r ? { id: r.id, title: r.title } : null;
         })()
       : undefined;
+  // P5-resume: the game's journey progress, derived from the experiments store, for the game a
+  // running Trial is on, else the journey's game. Unknown until the candidates have loaded.
+  const progressGame = running?.game ?? pickGame;
+  const progress = progressGame && recsLoaded ? journeyProgress(progressGame, experiments, pickable) : null;
   const optionLabel = (r: TrialCandidate) => {
     const v = lastVerdict.get(r.id);
     return v == null
@@ -865,6 +870,9 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
           next={journeyNext}
           nextReuses={journey.kind === "result" && reusableAsIs(sessions, journey.asIs, journey.exp.game) != null}
           refresh={settle}
+          progress={progress}
+          resumeReuses={progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null}
+          stillOn={progress ? stillOnFor(progress.game, experiments, recs) : []}
           onFinished={(exp) => {
             // The finished journey hands over to P4-next's offer of the next change to test.
             if (exp) setConcluded(experiments.find((x) => x.id === exp.id) ?? null);
@@ -872,6 +880,9 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
         />
       )}
 
+      {journey.kind === "idle" && running && (
+        <JourneyProgressLine progress={progress} interrupted={running.id === interruptedJourneyId()} />
+      )}
       {journey.kind !== "idle" ? null : running ? (
         // ── One experiment in flight: single-variable honesty is enforced by hiding the launcher ──
         <RunningPanel

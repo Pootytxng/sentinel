@@ -406,7 +406,17 @@
       "testAnyway": "Test anyway",
       "stop": "Stop",
       "stopped": "Stopped. Nothing was changed.",
-      "close": "OK"
+      "close": "OK",
+      "progress": "{{tested}} of {{total}} tested · Next: {{change}}",
+      "progressDone": "{{tested}} of {{total}} tested. Nothing else here is worth testing on this PC.",
+      "progressTesting": "{{tested}} of {{total}} tested · Testing now: {{change}}",
+      "progressInterrupted": "{{tested}} of {{total}} tested · {{change}} didn't finish testing (see below)",
+      "planResume": "{{game}}: 1 session of about 10 min with {{change}}. Your last as-is session still counts as the before-reading.",
+      "stopHere": "Stop here",
+      "stoppedHere": "Stopped here: {{tested}} of {{total}} tested. Nothing was undone.",
+      "stillOn": "Still on: {{changes}}.",
+      "noneOn": "None of the changes tested are on now.",
+      "pickUp": "Pick up where you left off"
     },
     "verdict": {
       "improved": "Measurably faster — kept",
