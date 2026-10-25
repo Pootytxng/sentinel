@@ -13,6 +13,13 @@
 // the front. The only thing kept is the running Trial's id in this webview's localStorage, so a
 // relaunch can say that Trial was interrupted (the experiment store already holds the Trial itself).
 //
+// P5-rebaseline (ROADMAP P5 step 3; TRIAL_PROTOCOL §2): session 1 is graded with the backend's own
+// rule (baseline-grade.ts, pinned to experiment.rs `grade_baseline`). An uneven or untraced session
+// doesn't go to start_experiment: the journey says why in plain words and asks for one more as-is
+// session, started with one tap. After MAX_UNEVEN_SESSIONS uneven sessions it offers a choice: test
+// anyway on the latest one (with the bench's own uneven warning, which the record keeps) or stop with
+// nothing changed. The manual bench keeps its warn-don't-block start (owner, 2026-10-24).
+//
 // Capture starts on the button, not on the game coming to the front: the FPS helper IS the thing that
 // sees the game, so it has to run first. Readings taken while another window is in front are already
 // left out of the session (P4-comparable).
@@ -31,6 +38,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import { writeLedger } from "../data/ledger-write";
 import { prettyGameName } from "./game-name";
+import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 
 export type JourneyOutcome = "recommended" | "max-fps";
 
@@ -56,7 +64,11 @@ type FpsStatusLite = {
 
 export type JourneyPhase =
   | { kind: "idle" }
-  | { kind: "as-is"; game: string | null; change: string }
+  | { kind: "as-is"; game: string | null; change: string; again?: boolean }
+  /** Session 1 graded uneven or untraced: nothing is on yet. `final` = no more retakes, so the owner
+   *  chooses between testing anyway and stopping. */
+  | { kind: "uneven"; game: string; change: string; grade: UnfitGrade; final: boolean }
+  | { kind: "stopped" }
   | { kind: "reading"; change: string }
   | { kind: "with-change"; game: string; change: string }
   | { kind: "judging"; change: string }
@@ -67,9 +79,10 @@ export type JourneyPhase =
   | { kind: "restored"; change: string; why: "no-reading" | "error"; reason: string }
   | { kind: "restore-failed"; change: string; reason: string };
 
-// The baseline floor start_experiment enforces (experiment.rs `grade_baseline`, MIN_BASELINE_SAMPLES).
-// Checked here first so a short first session is said in plain words, with nothing changed.
-const MIN_BASELINE_SAMPLES = 600;
+type UnfitGrade = { kind: "uneven"; first: number; second: number } | { kind: "untraced" };
+/** How many uneven as-is sessions the journey takes before it stops asking for another and offers
+ *  "test anyway" or "stop": the first asks for one more, the second offers the choice. */
+export const MAX_UNEVEN_SESSIONS = 2;
 // How often the journey reads capture state, and how long a stopped capture may take to save its
 // session (the recorder finishes on its next 1 s tick). Tests shorten both.
 let pollMs = 2000;
@@ -80,6 +93,17 @@ let phase: JourneyPhase = { kind: "idle" };
 const listeners = new Set<() => void>();
 let finishPlaying: (() => void) | null = null;
 let stopPlaying: ((err: Error) => void) | null = null;
+type Decision = "again" | "test" | "stop";
+let decide: ((d: Decision) => void) | null = null;
+/** Waits for the owner's tap on an uneven session: one more as-is session, test anyway, or stop. */
+function waitForDecision(): Promise<Decision> {
+  return new Promise((resolve) => {
+    decide = (d) => {
+      decide = null;
+      resolve(d);
+    };
+  });
+}
 
 // The running journey Trial's id, so a relaunch can tell that Trial was interrupted. Per-webview
 // convenience only: when storage is unavailable the bench simply shows its usual running panel.
@@ -120,6 +144,7 @@ export function resetJourneyForTests(timing: { pollMs: number; saveWaitMs: numbe
   abortJourney();
   finishPlaying = null;
   stopPlaying = null;
+  decide = null;
   current = null;
   tagRunning(null);
   pollMs = timing.pollMs;
@@ -218,6 +243,7 @@ export function abortJourney() {
   run.aborted = true;
   current = null;
   stopPlaying?.(new Error("journey-left"));
+  decide?.("stop");
   if (run.capturing) {
     run.capturing = false;
     void invoke("stop_fps_capture").catch(() => {});
@@ -266,28 +292,46 @@ async function runJourney(args: RunArgs, game: string | null) {
     await invoke("stop_fps_capture").catch(() => {});
   };
   try {
-    // ── Session 1: as-is ──
-    say({ kind: "as-is", game, change: change.title });
-    const t0 = Date.now();
-    run.capturing = true;
-    await invoke("start_fps_capture");
-    await waitForPlay(args.captureFailed);
-    await stopCapture();
-    if (left()) return;
-    say({ kind: "reading", change: change.title });
-    const baseline = await waitForSession(t0, null, undefined, left);
-    if (left()) return;
-    // A session of another game can't be this game's baseline: nothing goes on, and the room can plan
-    // for the game actually played (it is now the newest session, so the bench's game).
-    if (baseline && game != null && baseline.process_name !== game) {
-      await args.refresh().catch(() => {});
-      return say({ kind: "wrong-game", played: baseline.process_name, planned: game });
-    }
-    if (!baseline || baseline.samples < MIN_BASELINE_SAMPLES) {
-      return say({ kind: "too-short", samples: baseline ? baseline.samples : null });
+    // ── Session 1: as-is, retaken while it grades uneven (P5-rebaseline) ──
+    let baseline: SessionSummary | null = null;
+    let planned = game;
+    let unevenSessions = 0;
+    for (;;) {
+      say({ kind: "as-is", game: planned, change: change.title, again: unevenSessions > 0 });
+      const t0 = Date.now();
+      run.capturing = true;
+      await invoke("start_fps_capture");
+      await waitForPlay(args.captureFailed);
+      await stopCapture();
+      if (left()) return;
+      say({ kind: "reading", change: change.title });
+      // A retake never reads back the uneven session before it.
+      const s = await waitForSession(t0, null, baseline?.started_at, left);
+      if (left()) return;
+      // A session of another game can't be this game's baseline: nothing goes on, and the room can
+      // plan for the game actually played (it is now the newest session, so the bench's game).
+      if (s && planned != null && s.process_name !== planned) {
+        await args.refresh().catch(() => {});
+        return say({ kind: "wrong-game", played: s.process_name, planned });
+      }
+      if (!s || s.samples < MIN_BASELINE_SAMPLES) {
+        return say({ kind: "too-short", samples: s ? s.samples : null });
+      }
+      baseline = s;
+      planned = s.process_name;
+      const grade = gradeBaseline(s);
+      if (grade.kind === "steady" || grade.kind === "too-short") break;
+      unevenSessions += 1;
+      const final = unevenSessions >= MAX_UNEVEN_SESSIONS;
+      say({ kind: "uneven", game: s.process_name, change: change.title, grade, final });
+      const d = await waitForDecision();
+      if (left()) return;
+      if (d === "stop") return say({ kind: "stopped" });
+      if (d === "test") break;
     }
 
     // ── The change goes on, through the audited start ──
+    if (!baseline) return;
     let started: JourneyExperiment;
     try {
       started = await writeLedger<JourneyExperiment>(
@@ -421,11 +465,23 @@ export function GuidedJourney({
   }
 
   const playing = p.kind === "as-is" || p.kind === "with-change";
-  const finished = !playing && p.kind !== "reading" && p.kind !== "judging";
+  const finished = !playing && p.kind !== "reading" && p.kind !== "judging" && p.kind !== "uneven";
   let line: string;
   switch (p.kind) {
     case "as-is":
-      line = p.game ? t(`${k}.asIs`, { game: gameName(p.game) }) : t(`${k}.asIsNoGame`);
+      if (p.again && p.game) line = t(`${k}.asIsAgain`, { game: gameName(p.game) });
+      else line = p.game ? t(`${k}.asIs`, { game: gameName(p.game) }) : t(`${k}.asIsNoGame`);
+      break;
+    case "uneven": {
+      const why =
+        p.grade.kind === "uneven"
+          ? t(`${k}.unevenWhy`, { first: Math.round(p.grade.first), second: Math.round(p.grade.second) })
+          : t(`${k}.untracedWhy`);
+      line = `${why} ${p.final ? t(`${k}.unevenFinal`, { change: p.change }) : t(`${k}.unevenAgain`, { game: gameName(p.game) })}`;
+      break;
+    }
+    case "stopped":
+      line = t(`${k}.stopped`);
       break;
     case "with-change":
       line = t(`${k}.withChange`, { game: gameName(p.game), change: p.change });
@@ -464,6 +520,29 @@ export function GuidedJourney({
         <button type="button" className="exp-cta-ghost" onClick={() => finishPlaying?.()}>
           {t(`${k}.donePlaying`)}
         </button>
+      )}
+      {p.kind === "uneven" && !p.final && (
+        <button type="button" className="exp-cta" onClick={() => decide?.("again")}>
+          {t(`${k}.playAgain`)}
+        </button>
+      )}
+      {p.kind === "uneven" && p.final && (
+        <>
+          {/* The bench's own start warning: testing anyway starts on this session, and the record says so. */}
+          <p className="exp-bench-warn" data-testid="journey-warn">
+            {p.grade.kind === "uneven"
+              ? t("lab.experimentBench.baselineUneven", { first: Math.round(p.grade.first), second: Math.round(p.grade.second) })
+              : t("lab.experimentBench.baselineUntraced")}
+          </p>
+          <div className="exp-running-actions">
+            <button type="button" className="exp-cta-ghost" onClick={() => decide?.("test")}>
+              {t(`${k}.testAnyway`)}
+            </button>
+            <button type="button" className="exp-cta-ghost" onClick={() => decide?.("stop")}>
+              {t(`${k}.stop`)}
+            </button>
+          </div>
+        </>
       )}
       {p.kind === "wrong-game" && (
         <button type="button" className="exp-cta-ghost" onClick={() => setPhase({ kind: "idle" })}>

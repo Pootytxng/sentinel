@@ -375,6 +375,15 @@
       "wrongGame": "That session was {{played}}, not {{planned}}, so it can't be the before-reading. Nothing was changed.",
       "planFor": "Plan for {{game}} instead",
       "interrupted": "A test was interrupted: {{change}} is still on. Conclude with your latest session or put it back.",
+      "asIsAgain": "One more as-is session: play {{game}} as usual for about 10 minutes. Compy stops measuring when you close the game.",
+      "unevenWhy": "That session swung from {{first}} to {{second}} fps, too uneven to compare against.",
+      "untracedWhy": "Compy couldn't check how steady that session was, so it can't compare against it.",
+      "unevenAgain": "Nothing has been changed yet. Play one more as-is session of {{game}}, about 10 minutes.",
+      "unevenFinal": "Nothing has been changed yet. You can test {{change}} on this session anyway, or stop here.",
+      "playAgain": "Play one more as-is session",
+      "testAnyway": "Test anyway",
+      "stop": "Stop",
+      "stopped": "Stopped. Nothing was changed.",
       "close": "OK"
     },
     "verdict": {

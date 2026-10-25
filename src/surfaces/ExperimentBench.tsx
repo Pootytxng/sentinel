@@ -21,6 +21,7 @@ import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
 import { summarizeGame, type GameTestSummary, type StillApplied, type TestedChange } from "./test-summary";
 import { GuidedJourney, interruptedJourneyId, useJourneyPhase } from "./GuidedJourney";
+import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -291,36 +292,7 @@ function isUsableReading(s: SessionSummary): boolean {
   );
 }
 
-// Trial Protocol §2 — the backend's baseline grade (experiment.rs `grade_baseline`), mirrored so the
-// bench says why a too-short baseline can't be used instead of offering a start the backend refuses,
-// and warns before starting on an uneven or untraced one (owner decision 2026-10-24: warn, don't
-// block). The halves floor is the fixed 3% default (experiment.rs `halves_floor_pct`, comparison.rs
-// DEFAULT_NOISE_FLOOR_PCT), not the verdict band, which P4-noise measures per game; the halves split
-// the 10 s fps buckets by count, and a session without its trace is unknown, never steady.
-const MIN_BASELINE_SAMPLES = 600;
-const BASELINE_NOISE_FLOOR_PCT = 3;
-type BaselineGrade =
-  | { kind: "steady" }
-  | { kind: "too-short"; samples: number }
-  | { kind: "uneven"; first: number; second: number }
-  | { kind: "untraced" };
-
-const round1 = (x: number) => Math.round(x * 10) / 10;
-
-function gradeBaseline(s: SessionSummary): BaselineGrade {
-  if (s.samples < MIN_BASELINE_SAMPLES) return { kind: "too-short", samples: s.samples };
-  const fps = (s.fps_series ?? []).map(([, f]) => f).filter((f) => Number.isFinite(f) && f > 0);
-  const half = Math.floor(fps.length / 2);
-  if (half < 2) return { kind: "untraced" };
-  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
-  const first = mean(fps.slice(0, half));
-  const second = mean(fps.slice(half));
-  if ((Math.abs(second - first) / first) * 100 > BASELINE_NOISE_FLOOR_PCT)
-    // The same 1-decimal halves the backend stores (experiment.rs `round1`), so the start warning and
-    // the receipt round the same numbers and can't read 259 on one screen and 260 on the other.
-    return { kind: "uneven", first: round1(first), second: round1(second) };
-  return { kind: "steady" };
-}
+// Trial Protocol §2: the backend's baseline grade, shared with the guided journey (baseline-grade.ts).
 
 // §2 the record's own baseline grade, said on its receipt (the running panel and its history row):
 // a Trial started on an uneven or untraced baseline says so. Steady and older records say nothing.

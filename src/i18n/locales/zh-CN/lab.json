@@ -370,6 +370,15 @@
       "wrongGame": "这一局是{{played}}，不是{{planned}}，所以不能作为更改前的读数。没有做任何更改。",
       "planFor": "改为针对{{game}}制定计划",
       "interrupted": "有一项测试被中断：{{change}}仍处于开启状态。请用你最近的一局得出结论，或将其恢复原样。",
+      "asIsAgain": "再玩一局原样的：照常玩{{game}}约 10 分钟。关闭游戏后 Compy 会停止测量。",
+      "unevenWhy": "这一局的帧率从 {{first}} fps 变到了 {{second}} fps，波动太大，无法作为比较的基准。",
+      "untracedWhy": "Compy 无法检查这一局是否平稳，所以不能拿它来比较。",
+      "unevenAgain": "目前还没有做任何更改。请再玩一局原样的{{game}}，约 10 分钟。",
+      "unevenFinal": "目前还没有做任何更改。你可以仍用这一局测试{{change}}，或者就此停止。",
+      "playAgain": "再玩一局原样的",
+      "testAnyway": "仍然测试",
+      "stop": "停止",
+      "stopped": "已停止。没有做任何更改。",
       "close": "好"
     },
     "verdict": {
