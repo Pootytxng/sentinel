@@ -512,10 +512,12 @@ export function interviewFinding(
       sessionLine();
       direct = fpsSession != null;
       sentence = k("stutter.sentence");
-      action =
-        facts.sessionCount > 0
-          ? roomDoor("play", k("act.readSession"))
-          : station("benchmark", "lab", k("act.measure"));
+      // P6-door (ROADMAP Phase 6, Constitution §27): a hitch is a "something's wrong" answer, so
+      // it lands on the SAME Care view as every crash answer and Home's one Care door — the crash
+      // record and what changed before it — rather than handing the user to a room to read their
+      // own session. P6-stutter adds the last-good-session comparison to that view; until then the
+      // view shows what it has, which is the honest state, not a second destination.
+      action = station("blackbox", "lab", k("act.careView"));
       break;
     }
     case "slowUnsure": {

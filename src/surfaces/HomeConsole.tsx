@@ -1470,7 +1470,10 @@ export function HomeConsole({
             rendered OUTSIDE the intake band's gate on purpose. A user whose PC just crashed is the
             least likely person to go turn a Settings band back on to find help, and the tester who
             walked to Event Viewer (SESSION_HANDOFF §4) is the evidence for what happens when this
-            sign is not in front of them. It lands ON the evidence station, never the Lab dock. */}
+            sign is not in front of them. It lands ON the evidence station, never the Lab dock.
+            P6-door (ROADMAP Phase 6): this is Home's ONE Care door, "Something's wrong". The
+            observer's card above and the interview's crash and stutter answers land on the same
+            view it opens; there is no second door and no separate stutter room. */}
         {/* THE CARE OBSERVER'S CARD (Tier 1 task 9, #222) — the one thing on Home the user did not
             come looking for. It appears only when the observer has seen a NEW hard incident
             (`incident_observer.rs`), it is the authority rather than the toast (notifications off

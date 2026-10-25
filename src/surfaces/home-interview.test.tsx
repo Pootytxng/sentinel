@@ -506,6 +506,24 @@ describe("Crash & Freeze Rescue — every door lands ON the evidence (§4)", () 
     }
   });
 
+  it("the stutter answer lands on that same station too (P6-door), not on a room", () => {
+    // ROADMAP Phase 6 exit / Constitution §27: "my game stutters" must reach the same Care view
+    // as "it crashed", without the user picking a room. It used to open the Monitor room.
+    const onOpenLabStation = vi.fn();
+    const onNavigate = vi.fn();
+    renderHome({ rooms: liveRooms, onOpenLabStation, onNavigate });
+    openInterview();
+    const slow = Q.start.choices.find((c) => c.id === "slow")!;
+    const stutter = Q.slow.choices.find((c) => c.id === "stutter")!;
+    fireEvent.click(answerNamed(slow.label));
+    fireEvent.click(answerNamed(stutter.label));
+    fireEvent.click(action() as HTMLElement);
+    expect(onOpenLabStation, "the stutter answer did not land on the Care view").toHaveBeenCalledWith(
+      HOME_CARE_ENTRY.station,
+    );
+    expect(onNavigate, "the stutter answer fired a bare room nav").not.toHaveBeenCalled();
+  });
+
   it("falls back to something real when the rail has no Lab to send them to (law 1)", () => {
     // No dead ends means no dead ends even on a stripped rail: the finding degrades to the
     // read-only check, which needs no room at all.

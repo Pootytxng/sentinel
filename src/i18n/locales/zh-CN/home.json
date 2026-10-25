@@ -4,7 +4,7 @@
       "eyebrow": "主机诊断"
     },
     "care": {
-      "label": "崩溃与卡死救援",
+      "label": "出了问题",
       "open": "打开",
       "notice": {
         "aria": "Compy 注意到的情况",
@@ -17,7 +17,7 @@
     "intake": {
       "rows": {
         "crashedFroze": {
-          "symptom": "系统崩溃或卡死了,但我不知道为什么",
+          "symptom": "它崩溃、卡死或一顿一顿的，但我不知道为什么",
           "because": "用大白话读取 Windows 自身的崩溃与卡死记录"
         }
       },
@@ -176,6 +176,7 @@
         "check": "重新检查一次",
         "fastpath_other": "应用 {{count}} 项安全改动——一键完成",
         "crashRecord": "读取崩溃记录",
+        "careView": "查看崩溃与改动记录",
         "diagnostics": "看看是什么在拖后腿",
         "measure": "实测一次",
         "readSession": "回看你上一次的会话",

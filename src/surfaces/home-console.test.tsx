@@ -1402,9 +1402,10 @@ describe("HomeConsole — the symptom cards and the rescue row match the comp", 
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     const entry = c.querySelector(".hc-care-entry")!;
     expect(entry.querySelector(".hc-care-ico svg"), "the life ring is missing").not.toBeNull();
-    expect(entry.querySelector(".hc-care-label")!.textContent).toBe("Crash & Freeze Rescue");
+    // P6-door: the one Care door is named for the user's situation, not for the station.
+    expect(entry.querySelector(".hc-care-label")!.textContent).toBe("Something's wrong");
     expect(entry.querySelector(".hc-care-symptom")!.textContent).toBe(
-      "It crashed or froze and I don't know why",
+      "It crashed, froze or stutters and I don't know why",
     );
     expect(entry.querySelector(".hc-care-open")!.textContent).toContain("Open");
     // The comp draws ONE description line. `because` ("reads Windows' own crash & freeze record in

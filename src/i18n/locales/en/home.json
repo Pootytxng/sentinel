@@ -4,7 +4,7 @@
       "eyebrow": "Rig diagnostic"
     },
     "care": {
-      "label": "Crash & Freeze Rescue",
+      "label": "Something's wrong",
       "open": "Open",
       "notice": {
         "aria": "Something Compy noticed",
@@ -17,7 +17,7 @@
     "intake": {
       "rows": {
         "crashedFroze": {
-          "symptom": "It crashed or froze and I don't know why",
+          "symptom": "It crashed, froze or stutters and I don't know why",
           "because": "reads Windows' own crash & freeze record in plain English"
         }
       },
@@ -134,7 +134,7 @@
         "changed": "I changed something — did it help?",
         "unsure": "I am not sure — just look it over",
         "unsureHint": "Something feels off, but I'm not sure what.",
-        "groupWrong": "Something is wrong",
+        "groupWrong": "Something's wrong",
         "groupGoal": "Nothing is wrong — I just want more out of it",
         "heatHint": "Hot to the touch, or the fans never settle.",
         "changedHint": "You or Compy changed a setting recently.",
@@ -186,6 +186,7 @@
         "fastpath_one": "Apply {{count}} safe change — one tap",
         "fastpath_other": "Apply {{count}} safe changes — one tap",
         "crashRecord": "Read the crash record",
+        "careView": "See the crash and change record",
         "diagnostics": "See what is holding it back",
         "measure": "Measure it once",
         "readSession": "Read back your last session",
