@@ -218,7 +218,7 @@ room or station picked by hand.
 - [x] **P6-door** (`bac31375`) One Care door on Home ("Something's wrong") replaces the Crash & Freeze entry; the observer
       card and the interview crash/stutter answers all land on the same Care view. Needs P6-changed. ROADMAP P6
       exit; Constitution §18, §27.
-- [ ] **P6-stutter** Stutter/slow on that view compares the latest session of the game with its last good one
+- [x] **P6-stutter** (`597a76dc`) Stutter/slow on that view compares the latest session of the game with its last good one
       (`what_changed_between`), not a Monitor/benchmark hand-off; no good session = say so and offer one.
       Needs P6-door. ROADMAP P6 bullet 4; Constitution §16, §17.
 - [ ] **P6-next** The Care view shows exactly one next step (Black Box `next_step` or the what-changed next
