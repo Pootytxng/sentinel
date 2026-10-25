@@ -796,6 +796,35 @@ describe("LabConsole — Crash & Freeze Rescue scans on a promised arrival (P6-t
     expect(list.textContent).toContain("Game Mode was found changed");
   });
 
+  it("Check's drift pointer inside Optimize opens the station, which scans once and shows the list", async () => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
+      if (cmd === "get_crash_blackbox") return Promise.resolve(report);
+      if (cmd === "get_session_summaries") return Promise.resolve([]);
+      if (cmd === "get_game_readiness")
+        return Promise.resolve({
+          checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
+          ready_count: 1,
+          attention_count: 0,
+          unknown_count: 0,
+          advisory_count: 0,
+          advisory: "",
+          dismissed_ids: [],
+          drifts: [{ id: "game-mode", label: "Game Mode", detail: "Off.", noticed_at: "2026-10-22T10:00:00Z" }],
+        });
+      if (cmd === "get_priorities" || cmd === "priorities_from")
+        return Promise.resolve({ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null });
+      return Promise.resolve(null);
+    }) as never);
+    renderConsole();
+    fireEvent.click(stationNode(/optimize/i));
+    const pointer = await screen.findByRole("button", { name: "See what changed" }, { timeout: 5000 });
+    expect(scans()).toBe(0);
+    fireEvent.click(pointer);
+    const list = await screen.findByRole("region", { name: "Since it last worked" });
+    expect(scans()).toBe(1);
+    expect(list.textContent).toContain("Still drifted now:");
+  });
+
   it("opening the station by hand does not scan until asked", async () => {
     renderConsole();
     fireEvent.click(stationNode(/crash/i));
