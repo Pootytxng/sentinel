@@ -41,6 +41,23 @@ type Treatment = {
   /** P4-recommended: the average fps %-delta vs baseline, judged on the same band as the 1% low.
    *  null when an average was missing, and on records judged on the 1% low alone. */
   delta_avg_pct?: number | null;
+  /** P4-maxfps-smooth: the frame-time spread before and after (% of the average frame time) and the
+   *  fixed floor, in points, it was judged on. null when a session lacked a reading, and on older records. */
+  frame_spread?: { baseline_pct: number; after_pct: number; floor_pts: number } | null;
+};
+
+/** P4-maxfps-smooth: what the user asked a Trial to aim for (experiment.rs `TrialOutcome`). */
+type TrialOutcome = "recommended" | "max-fps" | "smoothest";
+
+/** The fixed floor a Smoothest verdict is judged on, in points of frame-time spread. Mirrors
+ *  experiment.rs `SPREAD_FLOOR_PTS`; only the pre-start description reads it, a receipt reads the
+ *  floor the record carries. */
+const SPREAD_FLOOR_PTS = 5;
+
+const OUTCOME_KEY: Record<TrialOutcome, string> = {
+  recommended: "recommended",
+  "max-fps": "maxFps",
+  smoothest: "smoothest",
 };
 
 /** §11 — the credible-noise band a verdict was judged against. Present only when it really was. */
@@ -113,6 +130,8 @@ type Experiment = {
   baseline_halves?: { first_half_fps: number; second_half_fps: number } | null;
   /** How comparable the two sessions were. null while Running and on older records. */
   session_pairing?: SessionPairing | null;
+  /** P4-maxfps-smooth: the outcome picked at start. Absent on older records, which read as Recommended. */
+  outcome?: TrialOutcome;
 };
 
 type SimulatorReport = {
@@ -336,6 +355,46 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
   if (!looksJudged(x) || !x.treatment || avg == null || band == null) return null;
   const signed = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 10) / 10}`;
   const low = x.treatment.delta_low1_pct;
+  const one = (v: number) => String(Math.round(v * 10) / 10);
+  // P4-maxfps-smooth: a Maximum FPS row leads with the average; a Smoothest row with the spread.
+  if (x.outcome === "max-fps") {
+    const rule =
+      x.verdict === "improved"
+        ? "receiptRuleMaxKept"
+        : x.verdict === "regressed"
+          ? avg < -band
+            ? "receiptRuleMaxAvgFell"
+            : "receiptRuleLowFell"
+          : "receiptRuleMaxInside";
+    return t("lab.experimentBench.receiptComparedMaxFps", {
+      avg: signed(avg),
+      low: signed(low),
+      band: one(band),
+      rule: t(`lab.experimentBench.${rule}`),
+    });
+  }
+  if (x.outcome === "smoothest") {
+    const sp = x.treatment.frame_spread;
+    if (!sp) return null;
+    const moved = Math.round((sp.after_pct - sp.baseline_pct) * 10) / 10;
+    const rule =
+      x.verdict === "improved"
+        ? "receiptRuleSmoothKept"
+        : x.verdict === "regressed"
+          ? "receiptRuleSmoothWider"
+          : moved < -sp.floor_pts
+            ? "receiptRuleSmoothAvgFell"
+            : "receiptRuleSmoothInside";
+    return t("lab.experimentBench.receiptComparedSmoothest", {
+      before: one(sp.baseline_pct),
+      after: one(sp.after_pct),
+      moved: signed(moved),
+      floor: one(sp.floor_pts),
+      avg: signed(avg),
+      band: one(band),
+      rule: t(`lab.experimentBench.${rule}`),
+    });
+  }
   const rule =
     x.verdict === "improved"
       ? "receiptRuleKept"
@@ -504,6 +563,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const [sim, setSim] = useState<SimulatorReport | null>(null);
   const [simBusy, setSimBusy] = useState(false);
   const [hypothesis, setHypothesis] = useState<string>("");
+  const [outcome, setOutcome] = useState<TrialOutcome>("recommended");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -711,6 +771,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
               // By id only: the backend reads the game and the numbers from its own session store.
               baselineSessionId: baseline.started_at,
               hypothesis,
+              outcome,
             },
             refresh,
           ),
@@ -996,6 +1057,25 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                       onChange={(e) => setHypothesis(e.target.value)}
                     />
                   </label>
+                  <div className="exp-field">
+                    <span className="exp-field-label" id="exp-outcome-label">
+                      {t("lab.experimentBench.outcomeLabel")}
+                    </span>
+                    <Picker
+                      className="exp-select"
+                      labelledBy="exp-outcome-label"
+                      value={outcome}
+                      disabled={busy}
+                      onChange={(v) => setOutcome(v as TrialOutcome)}
+                      options={(Object.keys(OUTCOME_KEY) as TrialOutcome[]).map((o) => ({
+                        value: o,
+                        label: t(`lab.experimentBench.outcome.${OUTCOME_KEY[o]}`),
+                      }))}
+                    />
+                  </div>
+                  <p className="exp-fineprint" data-testid="exp-outcome-why">
+                    {t(`lab.experimentBench.outcomeWhy.${OUTCOME_KEY[outcome]}`, { floor: SPREAD_FLOOR_PTS })}
+                  </p>
                   <button
                     className="exp-cta"
                     disabled={!canStart}

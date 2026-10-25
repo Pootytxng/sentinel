@@ -610,6 +610,7 @@ describe("ExperimentBench (armed)", () => {
       recTitle: "Test tweak",
       baselineSessionId: VALORANT_SESSION.started_at,
       hypothesis: expect.any(String),
+      outcome: "recommended",
     });
   });
 
@@ -1423,6 +1424,119 @@ describe("ExperimentBench — what the Recommended verdict compared", () => {
     render(<ExperimentBench />);
     expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
     expect(screen.queryByTestId("exp-compared-receipt")).toBeNull();
+  });
+});
+
+// P4-maxfps-smooth (ENGINE §2): the user picks what a Trial aims for; Recommended is the default. A
+// judged row says what that outcome compared.
+describe("ExperimentBench — Maximum FPS and Smoothest", () => {
+  afterEach(async () => {
+    cleanup();
+    await i18n.changeLanguage("en");
+  });
+
+  it("offers Recommended, Maximum FPS and Smoothest, and starts with the pick", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    const why = screen.getByTestId("exp-outcome-why");
+    expect(why).toHaveTextContent("Keeps the change only if the 1% low rises beyond the noise band");
+    const trigger = screen.getAllByRole("combobox")[1];
+    expect(trigger).toHaveTextContent("Recommended");
+    fireEvent.click(trigger);
+    const labels = [...document.querySelectorAll('[role="listbox"] [data-value]')].map((n) => n.textContent);
+    expect(labels).toEqual(["Recommended", "Maximum FPS", "Smoothest"]);
+    fireEvent.click(document.querySelector('[role="listbox"] [data-value="smoothest"]') as HTMLElement);
+    await waitFor(() => expect(trigger).toHaveTextContent("Smoothest"));
+    expect(why).toHaveTextContent(
+      "the gap between the slowest 1% of frames and the average frame shrinks by more than 5 points, and the average frame rate doesn't fall beyond the noise band. The 0.1% low isn't used: Compy doesn't keep individual frame times.",
+    );
+
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(start);
+    await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
+    expect(callArgs("start_experiment")).toMatchObject({ outcome: "smoothest" });
+  });
+
+  const judged = (outcome: string, verdict: string, low: number, avg: number, spread?: [number, number]) => ({
+    ...KEPT_EXPERIMENT,
+    outcome,
+    status: verdict === "improved" ? "kept" : "restored",
+    kept: verdict === "improved",
+    verdict,
+    treatment: {
+      ...KEPT_EXPERIMENT.treatment,
+      delta_low1_pct: low,
+      delta_avg_pct: avg,
+      frame_spread: spread ? { baseline_pct: spread[0], after_pct: spread[1], floor_pts: 5 } : null,
+    },
+    noise_evidence: { band_pct: 3, measured_noise_pct: null },
+  });
+
+  it("a Maximum FPS row leads with the average and says why it was kept or restored", async () => {
+    state.gate = true;
+    state.experiments = [
+      judged("max-fps", "improved", 0, 8.3),
+      { ...judged("max-fps", "no-change", 20, 2), id: "exp:9-0" },
+      { ...judged("max-fps", "regressed", 20, -8.3), id: "exp:8-0" },
+    ];
+    render(<ExperimentBench />);
+    const lines = (await screen.findAllByTestId("exp-compared-receipt")).map((n) => n.textContent);
+    expect(lines[0]).toBe(
+      "Judged for Maximum FPS. Compared with the baseline: average frame rate +8.3%, 1% low 0%, both against a ±3% band. The average rose by more than the band and the 1% low didn't fall by more, so the change was kept.",
+    );
+    expect(lines[1]).toMatch(/1% low \+20%.*The average stayed inside the band, so the default was kept and the change restored\.$/);
+    expect(lines[2]).toMatch(/The average fell by more than the band, so the change was restored\.$/);
+  });
+
+  it("a Smoothest row states the spread, the fixed floor and that no 0.1% low was compared", async () => {
+    state.gate = true;
+    state.experiments = [
+      judged("smoothest", "improved", 13.3, 0, [33.3, 17.6]),
+      { ...judged("smoothest", "regressed", 0, 15, [33.3, 53.3]), id: "exp:9-0" },
+      { ...judged("smoothest", "no-change", 6.7, -10, [33.3, 12.5]), id: "exp:8-0" },
+      { ...judged("smoothest", "no-change", 3.3, 0, [33.3, 29]), id: "exp:7-0" },
+    ];
+    render(<ExperimentBench />);
+    const lines = (await screen.findAllByTestId("exp-compared-receipt")).map((n) => n.textContent);
+    expect(lines[0]).toBe(
+      "Judged for Smoothest. Compared with the baseline: the slowest 1% of frames took 33.3% longer than the average frame before and 17.6% after (-15.7 points), against a fixed ±5-point floor, because Compy hasn't measured how much this spread moves between unchanged sessions; average frame rate 0% against a ±3% band. No 0.1% low was compared: Compy doesn't keep individual frame times. The spread tightened by more than the floor and the average didn't fall by more than the band, so the change was kept.",
+    );
+    expect(lines[1]).toMatch(/\(\+20 points\).*The spread widened by more than the floor, so the change was restored\.$/);
+    expect(lines[2]).toMatch(/but the average fell by more than the band, so this isn't a clear win/);
+    expect(lines[3]).toMatch(/The spread stayed inside the floor, so the default was kept and the change restored\.$/);
+  });
+
+  it("says the same in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    state.gate = true;
+    state.experiments = [judged("smoothest", "improved", 13.3, 0, [33.3, 17.6]), { ...judged("max-fps", "improved", 0, 8.3), id: "exp:9-0" }];
+    render(<ExperimentBench />);
+    const lines = (await screen.findAllByTestId("exp-compared-receipt")).map((n) => n.textContent);
+    expect(lines[0]).toBe(
+      "按“最流畅”判定。与基准相比：最慢的 1% 帧比平均帧多用的时间，之前为 33.3%，之后为 17.6%（变化 -15.7 个百分点），按固定的 ±5 个百分点下限判定，因为 Compy 尚未测量这一差距在未更改的游戏局之间会波动多少；平均帧率 0%，按 ±3% 的范围判定。没有比较 0.1% 最低帧：Compy 不保存每一帧的帧时间。差距的缩小超过了该下限，且平均帧率的下降没有超过该范围，所以保留了这项更改。",
+    );
+    expect(lines[1]).toBe(
+      "按“最高帧率”判定。与基准相比：平均帧率 +8.3%，1% 最低帧 0%，两者都按 ±3% 的范围判定。平均帧率的提升超过了该范围，且 1% 最低帧的下降没有超过它，所以保留了这项更改。",
+    );
+  });
+
+  it("a Smoothest row without a recorded spread, and an older row with no pick, keep their old wording", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...judged("smoothest", "no-change", 2, 0), id: "exp:9-0" },
+      { ...judged("recommended", "no-change", 2, 10), outcome: undefined },
+    ];
+    render(<ExperimentBench />);
+    const lines = (await screen.findAllByTestId("exp-compared-receipt")).map((n) => n.textContent);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^Compared with the baseline: 1% low \+2%, average frame rate \+10%.*The 1% low stayed inside the band/);
   });
 });
 
