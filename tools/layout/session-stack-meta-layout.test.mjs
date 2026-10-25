@@ -15,9 +15,12 @@
 //      the cap start their canvases at one x;
 //   3. no row scrolls sideways at any width (#622-f1). Below 600px the "vs previous" chip used to
 //      sit beside the canvas and push the row 81–201px past its box; there the row now stacks
-//      meta / canvas / chip, and the canvas keeps a usable width there.
+//      meta / canvas / chip, and the canvas keeps a usable width there;
+//   4. the timeline canvas is at least 120px wide at every width (#622-f2): from 600px up the chip
+//      wraps rather than squeeze it.
 // RED on 01b27929: the tail is clipped in all 48 rows (both locales, every width).
 // RED on f7ae3854 for #622-f1: rows scroll sideways at 300, 380 and 480px in both locales.
+// RED on db3a3d8c for #622-f2: the English canvas is 27 / 67 / 107px at 600 / 640 / 680px.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +29,7 @@ import { openBundledPage, root } from "./chromium.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = root.replace(/\\/g, "/") + "/src";
-const WIDTHS = [300, 380, 420, 480, 560, 600, 720, 900, 1100];
+const WIDTHS = [300, 380, 420, 480, 560, 600, 640, 680, 720, 900, 1100];
 const MIN_CANVAS_PX = 120;
 const LOCALES = ["en", "zh-CN"];
 const TRACK_CAP_PX = 210;
@@ -237,10 +240,10 @@ describe("Live session rows keep age and duration whole in a real Chromium (#677
     expect(rows.filter((r) => r.rowOverflow > 0).map((r) => `${where(r)}: ${r.rowOverflow}px`)).toEqual([]);
   });
 
-  // Below 600px only: the stacked layout must not trade the scroll for a vanished timeline. (From
-  // 600px up the three-across layout is unchanged by #622-f1; there the English chip still leaves
-  // the canvas ~27px at 600px, a separate question.)
-  it("keeps the timeline canvas at least 120px wide below 600px", () => {
-    expect(rows.filter((r) => r.width < 600 && r.canvasWidth < MIN_CANVAS_PX).map((r) => `${where(r)}: canvas ${r.canvasWidth.toFixed(1)}px`)).toEqual([]);
+  // Every width (#622-f1 below 600px, #622-f2 from 600px up): neither the stacked layout nor the
+  // three-across one may trade the scroll for a vanished timeline. At exactly 600px the English
+  // "vs previous" chip used to take 309px and leave the canvas 27px.
+  it("keeps the timeline canvas at least 120px wide at every width", () => {
+    expect(rows.filter((r) => r.canvasWidth < MIN_CANVAS_PX).map((r) => `${where(r)}: canvas ${r.canvasWidth.toFixed(1)}px`)).toEqual([]);
   });
 });
