@@ -125,6 +125,30 @@ pub(crate) struct AppliedChange {
     /// timeline emits a dated rollback event only when this stamp genuinely exists.
     #[serde(default)]
     pub(crate) rolled_back_at: Option<String>,
+    /// P5-outcomes-f1: the Trial that justified this apply, when it came from the Trial bench's
+    /// outcome switch (Recommended vs Maximum FPS). Checked against the experiment store before
+    /// the apply runs. Additive + optional: every older entry, and every apply made anywhere else,
+    /// loads as None.
+    #[serde(default)]
+    pub(crate) justified_by_experiment: Option<TrialLink>,
+    /// P5-outcomes-f1: the Trial that justified undoing this entry through the outcome switch,
+    /// stamped with `rolled_back_at`. Additive + optional, None for every other undo.
+    #[serde(default)]
+    pub(crate) rollback_justified_by_experiment: Option<TrialLink>,
+}
+
+/// P5-outcomes-f1: which Trial an outcome-switch apply or undo was based on, as the Trust Ledger
+/// records it. Copied from the experiment record at write time, so the row still says which Trial
+/// it was if `experiments.json` is later lost.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TrialLink {
+    pub(crate) experiment_id: String,
+    /// The outcome that Trial was judged under: "recommended" or "max-fps" (the experiment store's
+    /// own spelling). A plain string so this module names no experiment type.
+    pub(crate) outcome: String,
+    /// When that Trial concluded. None if its record had no stamp.
+    #[serde(default)]
+    pub(crate) concluded_at: Option<String>,
 }
 
 // AppliedChange + a freshly-computed `is_still_active` flag. We never persist
@@ -177,6 +201,12 @@ pub(crate) struct AppliedChangeView {
     // Pass-through of the persisted rollback stamp. None = still applied, or rolled back
     // before the stamp existed — the UI must render that as "date unknown", never a guess.
     pub(crate) rolled_back_at: Option<String>,
+    // P5-outcomes-f1 pass-through: the Trial behind an outcome-switch apply / undo. Omitted when
+    // None, so every row that isn't from the outcome switch keeps its existing wire shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    justified_by_experiment: Option<TrialLink>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rollback_justified_by_experiment: Option<TrialLink>,
 }
 
 impl AppliedChangeView {
@@ -501,6 +531,8 @@ fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
         hw_fingerprint: c.hw_fingerprint,
         on_this_rig,
         rolled_back_at: c.rolled_back_at,
+        justified_by_experiment: c.justified_by_experiment,
+        rollback_justified_by_experiment: c.rollback_justified_by_experiment,
     }
 }
 
@@ -560,6 +592,8 @@ pub(crate) fn test_view(
         hw_fingerprint: None,
         on_this_rig,
         rolled_back_at,
+        justified_by_experiment: None,
+        rollback_justified_by_experiment: None,
     }
 }
 
@@ -795,6 +829,8 @@ fn build_applied_change(
         // records the hardware it was applied on. Local-only.
         hw_fingerprint: Some(crate::hardware::current_fingerprint()),
         rolled_back_at: None,
+        justified_by_experiment: None,
+        rollback_justified_by_experiment: None,
     })
 }
 
@@ -804,12 +840,20 @@ struct Made {
     rec_id: String,
     rec_title: String,
     provenance: Option<&'static str>,
+    /// P5-outcomes-f1: the Trial an outcome-switch apply cites (None everywhere else).
+    justified_by: Option<TrialLink>,
     result: ApplyResult,
 }
 
 impl Made {
     fn new(rec_id: &str, rec_title: &str, result: ApplyResult) -> Self {
-        Made { rec_id: rec_id.to_string(), rec_title: rec_title.to_string(), provenance: None, result }
+        Made {
+            rec_id: rec_id.to_string(),
+            rec_title: rec_title.to_string(),
+            provenance: None,
+            justified_by: None,
+            result,
+        }
     }
 }
 
@@ -842,6 +886,7 @@ fn commit_receipts(
     let build = |m: Made| -> Result<AppliedChange, String> {
         let mut change = build_applied_change(&m.rec_id, &m.rec_title, m.result)?;
         change.provenance = m.provenance.map(str::to_string);
+        change.justified_by_experiment = m.justified_by;
         Ok(change)
     };
     commit_receipts_with(history, made, &build, save, effects)
@@ -1077,14 +1122,34 @@ fn record_operation_failure(operation: &str, code: &str, err: &str) {
 
 #[tauri::command]
 pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChangeView, String> {
-    let applied = apply_recommendation_inner(&rec_id, &rec_title);
+    apply_reported(&rec_id, &rec_title, None)
+}
+
+/// P5-outcomes-f1: [`apply_recommendation`] for the Trial bench's outcome switch, recording the
+/// Trial that justified it. Same audited apply and receipt; the only difference is the link on the
+/// row. The caller (`experiment::apply_outcome_choice`) has already checked the Trial against its
+/// own store, so this module never reads the experiment store.
+pub(crate) fn apply_recommendation_citing(
+    rec_id: &str,
+    rec_title: &str,
+    link: TrialLink,
+) -> Result<AppliedChangeView, String> {
+    apply_reported(rec_id, rec_title, Some(link))
+}
+
+fn apply_reported(rec_id: &str, rec_title: &str, link: Option<TrialLink>) -> Result<AppliedChangeView, String> {
+    let applied = apply_recommendation_inner(rec_id, rec_title, link);
     if let Err(e) = &applied {
         record_operation_failure(&format!("apply:{rec_id}"), "apply_failed", e);
     }
     applied
 }
 
-fn apply_recommendation_inner(rec_id: &str, rec_title: &str) -> Result<AppliedChangeView, String> {
+fn apply_recommendation_inner(
+    rec_id: &str,
+    rec_title: &str,
+    justified_by: Option<TrialLink>,
+) -> Result<AppliedChangeView, String> {
     let _lock = lock_history()?;
     // Load BEFORE dispatching (H1): if the ledger can't record a receipt, the change must not
     // happen at all — never mutate what can't be written down. Same audited dispatch + receipt
@@ -1095,7 +1160,7 @@ fn apply_recommendation_inner(rec_id: &str, rec_title: &str) -> Result<AppliedCh
     let (root, mut history) = begin_mutation()?;
     let result = dispatch_apply(&root, rec_id)?;
     // Rollback-first (#616): a receipt that can't be saved undoes the change it describes.
-    record_receipt(&root, &mut history, Made::new(rec_id, rec_title, result))
+    record_receipt(&root, &mut history, Made { justified_by, ..Made::new(rec_id, rec_title, result) })
 }
 
 /// Session-scoped service SUSPEND (Services module, BUILT DARK). Gated by `service_suspend_gate()` —
@@ -1453,12 +1518,27 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
 
 #[tauri::command]
 pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
+    rollback_reported(&change_id, None)
+}
+
+/// What an outcome-switch undo cites: given the ledger row's rec id, the checked Trial link, or why
+/// that Trial can't justify undoing this change (then nothing is undone).
+pub(crate) type CiteTrial<'a> = &'a dyn Fn(&str) -> Result<TrialLink, String>;
+
+/// P5-outcomes-f1: [`rollback_change`] for the Trial bench's outcome switch. `cite` is checked
+/// against the row's change before the undo runs, and its link is saved on the row with
+/// `rolled_back_at`. Same audited undo; `cite` reads the experiment store without a lock.
+pub(crate) fn rollback_change_citing(change_id: &str, cite: CiteTrial) -> Result<(), String> {
+    rollback_reported(change_id, Some(cite))
+}
+
+fn rollback_reported(change_id: &str, cite: Option<CiteTrial>) -> Result<(), String> {
     // A rollback that will not complete is the worst thing that can happen in a rollback-first
     // product, and it is the one report support must be able to act on. An undo that DID reach
     // Windows but couldn't be saved to the ledger (#631) is a different case with its own code, so
     // support never reads it as a change still on the machine. The change id is a local uuid, not
     // user data.
-    match rollback_change_inner(&change_id) {
+    match rollback_change_inner(change_id, cite) {
         Ok(()) => Ok(()),
         Err(RollbackError::Failed(e)) => {
             record_operation_failure(&format!("rollback:{change_id}"), "rollback_failed", &e);
@@ -1498,7 +1578,7 @@ pub(crate) fn is_unrecorded_rollback(err: &str) -> bool {
     err.starts_with(ROLLBACK_UNRECORDED_LEAD)
 }
 
-fn rollback_change_inner(change_id: &str) -> Result<(), RollbackError> {
+fn rollback_change_inner(change_id: &str, cite: Option<CiteTrial>) -> Result<(), RollbackError> {
     let _lock = lock_history()?;
     // #130: prove the root before anything else — a rollback dispatched against a redirected
     // ledger would undo a change the receipt in front of us does not actually describe.
@@ -1515,13 +1595,15 @@ fn rollback_change_inner(change_id: &str) -> Result<(), RollbackError> {
         // already-off change from a genuine restore failure — keep the two in sync (guard-tested).
         return Err(RollbackError::Failed("change has already been rolled back".into()));
     }
+    // P5-outcomes-f1: a cited Trial must fit this row's change. Checked before the undo runs.
+    let justified_by = cite.map(|cite| cite(&history[idx].rec_id)).transpose()?;
 
     let save = |h: &[AppliedChange]| save_history(&root, h);
     let rollback = |a: &RollbackAction, s: &Snapshot| dispatch_rollback(&root, a, s);
     let probe = |rec_id: &str, applied: Option<&AppliedAction>| {
         check_change_state(rec_id, applied, &LiveReads::default())
     };
-    commit_rollback(&mut history, idx, &save, &UndoEffects { rollback: &rollback, probe: &probe })
+    commit_rollback(&mut history, idx, justified_by, &save, &UndoEffects { rollback: &rollback, probe: &probe })
 }
 
 /// The user's rollback of ledger row `idx`, after the lookup: resolve its typed rollback, run it,
@@ -1535,6 +1617,7 @@ fn rollback_change_inner(change_id: &str) -> Result<(), RollbackError> {
 fn commit_rollback(
     history: &mut [AppliedChange],
     idx: usize,
+    justified_by: Option<TrialLink>,
     save: &dyn Fn(&[AppliedChange]) -> Result<(), String>,
     effects: &UndoEffects,
 ) -> Result<(), RollbackError> {
@@ -1546,6 +1629,7 @@ fn commit_rollback(
     // Honest rollback dating (Intelligence Phase 2): stamped at the moment the rollback
     // actually dispatched. Only entries rolled back from this stamp onward carry a date.
     history[idx].rolled_back_at = Some(Utc::now().to_rfc3339());
+    history[idx].rollback_justified_by_experiment = justified_by;
     save(history).map_err(|why| {
         let read = (effects.probe)(&change.rec_id, change.applied_action.as_ref());
         history[idx] = change;
@@ -2334,6 +2418,19 @@ mod receipt_commit_tests {
         read: ActiveCheck,
         seen: &Seen,
     ) -> Result<(), RollbackError> {
+        roll_back_citing(history, idx, None, saved, undo, read, seen)
+    }
+
+    /// [`roll_back`] with the Trial an outcome-switch undo cites.
+    fn roll_back_citing(
+        history: &mut [AppliedChange],
+        idx: usize,
+        link: Option<TrialLink>,
+        saved: Result<(), String>,
+        undo: Result<(), String>,
+        read: ActiveCheck,
+        seen: &Seen,
+    ) -> Result<(), RollbackError> {
         let save = |h: &[AppliedChange]| {
             seen.saves.borrow_mut().push(h.len());
             saved.clone()
@@ -2346,11 +2443,83 @@ mod receipt_commit_tests {
             seen.probes.borrow_mut().push(rec_id.to_string());
             read
         };
-        commit_rollback(history, idx, &save, &UndoEffects { rollback: &rollback, probe: &probe })
+        commit_rollback(history, idx, link, &save, &UndoEffects { rollback: &rollback, probe: &probe })
     }
 
     fn applied_fast_startup() -> AppliedChange {
         build_applied_change("fast-startup-off", "Disable Fast Startup", fast_startup()).expect("build")
+    }
+
+    // ── P5-outcomes-f1: the Trial behind an outcome-switch apply or undo ──
+
+    fn trial(id: &str, outcome: &str) -> TrialLink {
+        TrialLink {
+            experiment_id: id.into(),
+            outcome: outcome.into(),
+            concluded_at: Some("2026-10-24T20:00:00+00:00".into()),
+        }
+    }
+
+    #[test]
+    fn an_older_ledger_without_trial_links_still_loads() {
+        // A row as every Compy before P5-outcomes-f1 wrote it: no trial-link keys at all.
+        let raw = r#"[{"id":"fast-startup-off-1","rec_id":"fast-startup-off","rec_title":"Disable Fast Startup",
+            "applied_at":"2026-10-01T09:00:00+00:00","snapshot":{},"status":"rolled_back",
+            "rolled_back_at":"2026-10-02T09:00:00+00:00"}]"#;
+        let rows: Vec<AppliedChange> = serde_json::from_str(raw).expect("an older ledger loads");
+        assert_eq!(rows[0].justified_by_experiment, None);
+        assert_eq!(rows[0].rollback_justified_by_experiment, None);
+        let view = serde_json::to_value(into_view(rows[0].clone())).expect("view");
+        assert_eq!(view["justified_by_experiment"], serde_json::Value::Null);
+        assert_eq!(view["rollback_justified_by_experiment"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn a_trial_link_round_trips_through_the_ledger_and_reaches_the_view() {
+        let mut row = applied_fast_startup();
+        row.justified_by_experiment = Some(trial("exp:max", "max-fps"));
+        row.rollback_justified_by_experiment = Some(trial("exp:rec", "recommended"));
+        let json = serde_json::to_string(&vec![row.clone()]).expect("save");
+        assert!(json.contains("\"outcome\":\"max-fps\""), "{json}");
+        let back: Vec<AppliedChange> = serde_json::from_str(&json).expect("load");
+        assert_eq!(back[0].justified_by_experiment, row.justified_by_experiment);
+        assert_eq!(back[0].rollback_justified_by_experiment, row.rollback_justified_by_experiment);
+        let view = serde_json::to_value(into_view(back[0].clone())).expect("view");
+        assert_eq!(view["justified_by_experiment"]["experiment_id"], "exp:max");
+        assert_eq!(view["rollback_justified_by_experiment"]["outcome"], "recommended");
+    }
+
+    #[test]
+    fn an_apply_from_the_outcome_switch_records_its_trial_and_others_record_none() {
+        let mut history = vec![earlier()];
+        let seen = Seen::default();
+        let link = trial("exp:max", "max-fps");
+        let made = vec![
+            Made { justified_by: Some(link.clone()), ..Made::new("fast-startup-off", "Disable Fast Startup", fast_startup()) },
+            Made::new("game-mode-on", "Turn on Game Mode", game_mode()),
+        ];
+        let rows = commit(&mut history, made, Ok(()), |_| Ok(()), ActiveCheck::On, &seen).expect("committed");
+        assert_eq!(rows[0].justified_by_experiment, Some(link.clone()));
+        assert_eq!(rows[1].justified_by_experiment, None, "a plain apply cites no Trial");
+        assert_eq!(history[1].justified_by_experiment, Some(link), "and it is what the ledger saved");
+        assert_eq!(history[0].justified_by_experiment, None);
+    }
+
+    #[test]
+    fn an_undo_from_the_outcome_switch_records_its_trial_and_an_unsaved_one_records_nothing() {
+        let link = trial("exp:rec", "recommended");
+        let mut history = vec![earlier(), applied_fast_startup()];
+        let seen = Seen::default();
+        roll_back_citing(&mut history, 1, Some(link.clone()), Ok(()), Ok(()), ActiveCheck::Off, &seen)
+            .expect("rolled back");
+        assert_eq!(history[1].status, "rolled_back");
+        assert_eq!(history[1].rollback_justified_by_experiment, Some(link.clone()));
+        assert_eq!(history[1].justified_by_experiment, None, "the apply side is untouched");
+
+        let mut history = vec![earlier(), applied_fast_startup()];
+        let seen = Seen::default();
+        let _ = roll_back_citing(&mut history, 1, Some(link), Err("disk full".into()), Ok(()), ActiveCheck::Off, &seen);
+        assert_eq!(history[1].rollback_justified_by_experiment, None, "a failed save leaves the row as it was");
     }
 
     // #631: the undo reached Windows and only the ledger save failed. That must never read as a
@@ -2615,7 +2784,9 @@ mod receipt_commit_tests {
         assert!(rollback.contains("let save = |h: &[AppliedChange]| save_history(&root, h);"));
         let unrecorded: std::collections::BTreeSet<String> =
             callers_of("RollbackError::Unrecorded").into_iter().collect();
-        assert_eq!(unrecorded, ["commit_rollback", "rollback_change"].map(String::from).into());
+        // `rollback_reported` is the one reporting wrapper behind `rollback_change` and the outcome
+        // switch's `rollback_change_citing` (P5-outcomes-f1).
+        assert_eq!(unrecorded, ["commit_rollback", "rollback_reported"].map(String::from).into());
 
         // The batch closes its deferral sink before any receipt commit, so an undo that needs admin
         // runs instead of being parked in the batch script, and it reads the result file whatever
@@ -3465,6 +3636,8 @@ mod history_tests {
             provenance: None,
             hw_fingerprint: None,
             rolled_back_at: None,
+            justified_by_experiment: None,
+            rollback_justified_by_experiment: None,
         }
     }
 
@@ -4313,6 +4486,8 @@ mod ledger_fuzz_tests {
             provenance: if rng.flag() { Some(hostile_string(rng, 1)) } else { None },
             hw_fingerprint: hw,
             rolled_back_at: if rng.flag() { Some(hostile_string(rng, 1)) } else { None },
+            justified_by_experiment: None,
+            rollback_justified_by_experiment: None,
         }
     }
 

@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import type { AppliedChange, StartupEntry } from "../types";
+import type { AppliedChange, StartupEntry, TrialLink } from "../types";
 import {
   LedgerHealthNotice,
   knownIncomplete,
@@ -880,6 +880,28 @@ function rigLabel(f: NonNullable<AppliedChange["hw_fingerprint"]>, t: TFunction)
   return t("optimize.fix.rigLabelFormat", { gpu, ramGb: f.ram_gb });
 }
 
+// P5-outcomes-f1: "Applied/Undone because of your <outcome> Trial, <when>" for a row made from the
+// Trial bench's outcome switch. Nothing for every other row.
+function TrialReason({ link, kind }: { link?: TrialLink | null; kind: "applied" | "undone" }) {
+  const { t } = useTranslation();
+  if (!link) return null;
+  const outcome = t(link.outcome === "max-fps" ? "lab.experimentBench.outcome.maxFps" : "lab.experimentBench.outcome.recommended");
+  const when = link.concluded_at ? humanizeWhen(link.concluded_at, t) : null;
+  const text =
+    kind === "applied"
+      ? when
+        ? t("optimize.fix.historyAppliedByTrial", { outcome, when })
+        : t("optimize.fix.historyAppliedByTrialUndated", { outcome })
+      : when
+        ? t("optimize.fix.historyUndoneByTrial", { outcome, when })
+        : t("optimize.fix.historyUndoneByTrialUndated", { outcome });
+  return (
+    <div className="fix-hist-trial" data-testid={`fix-hist-trial-${kind}`}>
+      {text}
+    </div>
+  );
+}
+
 // Ledger Layer 2 — the full chronological audit trail (active + rolled-back + superseded), muted,
 // each row expands to its typed receipt. Click to expand.
 function HistoryRow({ change }: { change: AppliedChange }) {
@@ -959,6 +981,8 @@ function HistoryRow({ change }: { change: AppliedChange }) {
               <PayoffMeter label={change.payoff_label} />
             </div>
           )}
+          <TrialReason link={change.justified_by_experiment} kind="applied" />
+          {rolledBack && <TrialReason link={change.rollback_justified_by_experiment} kind="undone" />}
           <div className="fix-hist-id">{change.rec_id}</div>
         </div>
       )}

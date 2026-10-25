@@ -1380,6 +1380,8 @@ pub fn run() {
             experiment::start_experiment,
             experiment::conclude_experiment,
             experiment::restore_experiment,
+            experiment::apply_outcome_choice,
+            experiment::undo_outcome_choice,
             trial_candidates::get_trial_candidates,
         ])
         .on_window_event(|window, event| {
@@ -1790,6 +1792,8 @@ mod safety_tests {
             provenance: None,
             hw_fingerprint: None,
             rolled_back_at: None,
+            justified_by_experiment: None,
+            rollback_justified_by_experiment: None,
         }
     }
 
@@ -1864,6 +1868,8 @@ mod safety_tests {
             provenance: None,
             hw_fingerprint: None,
             rolled_back_at: None,
+            justified_by_experiment: None,
+            rollback_justified_by_experiment: None,
         };
         let back: AppliedChange =
             serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();

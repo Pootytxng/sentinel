@@ -438,6 +438,28 @@ describe("Fix", () => {
     fireEvent.click(screen.getByText("Change legacy"));
     expect(screen.queryByText(/Applied on|Last seen working on/)).toBeNull();
   });
+
+  // P5-outcomes-f1: a row made from the Trial bench's outcome switch names the Trial behind it.
+  it("an outcome-switch row says which Trial it was applied and undone because of; other rows say nothing", () => {
+    const changes = [
+      histEntry("switched", {
+        justified_by_experiment: { experiment_id: "exp:max", outcome: "max-fps", concluded_at: "2026-06-01T09:00:00Z" },
+        rollback_justified_by_experiment: { experiment_id: "exp:rec", outcome: "recommended", concluded_at: null },
+      }),
+      histEntry("plain", {}),
+    ];
+    render(<Fix recs={[]} {...baseProps} changes={changes} view="history" />);
+    fireEvent.click(screen.getByText("History"));
+    fireEvent.click(screen.getByText("Change switched"));
+    expect(screen.getByTestId("fix-hist-trial-applied").textContent).toMatch(
+      /^Applied because of your Maximum FPS Trial, .+/,
+    );
+    expect(screen.getByTestId("fix-hist-trial-undone")).toHaveTextContent("Undone because of your Recommended Trial");
+    fireEvent.click(screen.getByText("Change switched"));
+    fireEvent.click(screen.getByText("Change plain"));
+    expect(screen.queryByTestId("fix-hist-trial-applied")).toBeNull();
+    expect(screen.queryByTestId("fix-hist-trial-undone")).toBeNull();
+  });
 });
 
 // Advisory "Needs your call" cards are DOORS (tester J 2026-07-22: clicked the card, nothing

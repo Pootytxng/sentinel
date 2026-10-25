@@ -1881,8 +1881,9 @@ describe("P4-next-f1: the picker marks changes already tested on this game", () 
 });
 
 // P5-outcomes (ROADMAP Phase 5 step 6, ENGINE §5–6): one change with a Recommended and a Maximum FPS
-// result that disagree offers the choice, with the trade in one line. Acting goes through the audited
-// apply (apply_recommendation) and undo (rollback_change) paths, never a new one.
+// result that disagree offers the choice, with the trade in one line. Acting goes through
+// apply_outcome_choice / undo_outcome_choice, which reuse the audited apply (apply_recommendation) and
+// undo (rollback_change) paths and record the Trial behind them on the ledger row (P5-outcomes-f1).
 describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
   const VAL = "Valorant";
   const trial = (over: Record<string, unknown>) => ({
@@ -1961,11 +1962,12 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     expect(btn).toHaveAttribute("data-trial", "exp:max");
     vi.mocked(invoke).mockClear();
     fireEvent.click(btn);
-    await waitFor(() => expect(callArgs("apply_recommendation")).toEqual({ recId: "hags", recTitle: "Hardware-accelerated GPU scheduling" }));
-    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "rollback_change")).toBe(false);
+    await waitFor(() => expect(callArgs("apply_outcome_choice")).toEqual({ recId: "hags", recTitle: "Hardware-accelerated GPU scheduling", experimentId: "exp:max" }));
+    // P5-outcomes-f1: the Trust Ledger row records the Trial that justified it.
+    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "rollback_change" || c === "undo_outcome_choice")).toBe(false);
   });
 
-  it("choosing the put-back side undoes the newest live apply through rollback_change", async () => {
+  it("choosing the put-back side undoes the newest live apply through rollback_change, citing the Trial that put it back", async () => {
     state.changes = [
       { id: "chg-old", rec_id: "hags", rec_title: "HAGS", applied_at: "2026-07-17T00:00:00Z", status: "rolled_back", is_still_active: false, active_check: null },
       { id: "chg-live", rec_id: "hags", rec_title: "HAGS", applied_at: "2026-07-18T00:00:00Z", status: "applied", is_still_active: true, active_check: "on" },
@@ -1976,8 +1978,8 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     expect(btn).not.toHaveAttribute("data-trial");
     vi.mocked(invoke).mockClear();
     fireEvent.click(btn);
-    await waitFor(() => expect(callArgs("rollback_change")).toEqual({ changeId: "chg-live" }));
-    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "apply_recommendation")).toBe(false);
+    await waitFor(() => expect(callArgs("undo_outcome_choice")).toEqual({ changeId: "chg-live", experimentId: "exp:rec" }));
+    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "apply_recommendation" || c === "apply_outcome_choice")).toBe(false);
   });
 
   it("no switch while a Trial is running; the trade still shows", async () => {
@@ -1999,7 +2001,7 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     vi.mocked(invoke).mockClear();
     fireEvent.click(btn);
     expect(await screen.findByRole("alert")).toHaveTextContent(notFound);
-    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "rollback_change")).toBe(false);
+    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "rollback_change" || c === "undo_outcome_choice")).toBe(false);
   });
 
   it("put back when the newest apply can't be confirmed on: nothing undone, says so", async () => {
@@ -2011,7 +2013,7 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     vi.mocked(invoke).mockClear();
     fireEvent.click(btn);
     expect(await screen.findByRole("alert")).toHaveTextContent(notFound);
-    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "rollback_change")).toBe(false);
+    expect(vi.mocked(invoke).mock.calls.some(([c]) => c === "rollback_change" || c === "undo_outcome_choice")).toBe(false);
   });
 
   it("both writes announce LEDGER_CHANGED_EVENT", async () => {
@@ -2030,7 +2032,7 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
       await renderWith([REC_OFF, MAX_KEEP], [hags(false, "already-set-by-compy")]);
       fireEvent.click(await undoBtn());
       await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
-      expect(callArgs("rollback_change")).toEqual({ changeId: "chg-live" });
+      expect(callArgs("undo_outcome_choice")).toEqual({ changeId: "chg-live", experimentId: "exp:rec" });
     } finally {
       window.removeEventListener(LEDGER_CHANGED_EVENT, heard);
     }

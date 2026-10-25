@@ -21,6 +21,7 @@ use std::process::Command;
 const APP_COMMANDS: &[&str] = &[
     "acknowledge_hardware_changes",
     "acknowledge_receipts_disclosure",
+    "apply_outcome_choice",
     "apply_recommendation",
     "apply_recommendations_batch",
     "arm_comparison",
@@ -124,6 +125,7 @@ const APP_COMMANDS: &[&str] = &[
     "stop_fps_capture",
     "stop_gaming_session",
     "suspend_known_service",
+    "undo_outcome_choice",
     "what_changed_between",
     "what_changed_for_session",
 ];
