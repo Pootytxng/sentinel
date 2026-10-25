@@ -186,7 +186,15 @@ describe("the observer stays local", () => {
 
   it("reads its evidence through the existing local Black Box path", () => {
     expect(prod, "the observer no longer sources its evidence from the local crash reader")
-      .toMatch(/crate::blackbox::get_crash_blackbox\(\)/);
+      .toMatch(/crate::blackbox::collect_crash_blackbox\(\)/);
+  });
+
+  it("reads the scan without the station-only \"Changed before this\" layer", () => {
+    // P6-changed: only the Rescue station pays for the intelligence gather. The background observer
+    // must not reach it, directly or through the station's command.
+    for (const name of ["attach_changed_before", "get_crash_blackbox"]) {
+      expect(prod.includes(name), `the observer calls ${name}`).toBe(false);
+    }
   });
 
   it("mints no identity of any kind", () => {

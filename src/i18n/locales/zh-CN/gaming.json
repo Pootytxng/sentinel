@@ -273,6 +273,37 @@
     "whyLabel": "原因"
   },
   "blackBox": {
+    "changedBefore": {
+      "title": "此前发生的变化",
+      "sinceClean": "从你上一次没有崩溃记录的会话({{game}},{{date}})到这次事件为止:",
+      "sinceMeasured": "从你上一次测量过的会话({{game}},{{date}})到这次事件为止。Compy 无法确认那次会话是正常的:它本身出现过崩溃或卡死,或者早于 Compy 读取到的崩溃记录:",
+      "noSession": "这之前没有记录到任何会话,Compy 没有更早的数据可以对比,无法说明发生了什么变化。",
+      "notProven": "未证实是原因",
+      "observedBetween": "在 {{from}} 到 {{to}} 之间发现",
+      "category": {
+        "compy-changes": "Compy 的更改",
+        "driver": "显卡驱动",
+        "windows-build": "Windows 版本",
+        "power-plan": "电源计划",
+        "hardware": "硬件",
+        "drift": "设置偏离"
+      },
+      "status": {
+        "changed_other": "有变化:这段时间内有 {{count}} 项变化。",
+        "noChangeBetween": "无变化:Compy 在 {{from}} 和 {{to}} 读到的结果相同。",
+        "noChangeLedger": "无变化:这段时间内 Compy 没有做任何更改。"
+      },
+      "unknown": {
+        "no-reading-before": "未知:Compy 没有这段时间之前的读数。",
+        "no-reading-after": "未知:从事件发生前到现在,Compy 都没有再读取过这一项。",
+        "noReadingAfterSince": "未知:Compy 自 {{date}} 以来没有再读取过这一项,无法判断是否有变化。",
+        "cant-place": "未知:这一项发生过变化,但 Compy 无法判断是在事件之前还是之后。",
+        "readings-differ": "未知:Compy 前后两次的读数不一致,无法判断是什么时候变的。",
+        "unmatched-readings": "未知:Compy 前后两次的读数来自不同的检查,无法相互比较。",
+        "ledger-incomplete": "未知:Compy 的更改记录无法完整读取,因此无法说明它做过哪些更改。",
+        "drift-not-kept": "未知:Compy 只保留仍未恢复的偏离,已经恢复的偏离不会显示在这里。"
+      }
+    },
     "introPre": "「崩溃与卡死」会读取 Windows 已经记录的崩溃与卡死证据,并叠加显示 Compy 自己的",
     "introEmph": "最后生命体征",
     "introPost": "来自当时正在运行的任意会话。它只如实报告已记录的内容——绝不猜测原因。",

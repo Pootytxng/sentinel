@@ -276,6 +276,38 @@
     "whyLabel": "Why"
   },
   "blackBox": {
+    "changedBefore": {
+      "title": "Changed before this",
+      "sinceClean": "Since your last session with no crash on record ({{game}}, {{date}}) and up to this incident:",
+      "sinceMeasured": "Since your last measured session ({{game}}, {{date}}) and up to this incident. Compy can't call that session clean: it had a crash or freeze of its own, or it's older than the crash records Compy read:",
+      "noSession": "No session was recorded before this, so Compy has nothing earlier to compare against and can't say what changed.",
+      "notProven": "not proven cause",
+      "observedBetween": "noticed between {{from}} and {{to}}",
+      "category": {
+        "compy-changes": "Compy changes",
+        "driver": "Graphics driver",
+        "windows-build": "Windows build",
+        "power-plan": "Power plan",
+        "hardware": "Hardware",
+        "drift": "Setting drift"
+      },
+      "status": {
+        "changed_one": "Changed: 1 change in this window.",
+        "changed_other": "Changed: {{count}} changes in this window.",
+        "noChangeBetween": "No change: Compy read the same thing on {{from}} and on {{to}}.",
+        "noChangeLedger": "No change: Compy made no changes in this window."
+      },
+      "unknown": {
+        "no-reading-before": "Unknown: Compy has no reading of this from before the window.",
+        "no-reading-after": "Unknown: Compy hasn't read this since before the incident.",
+        "noReadingAfterSince": "Unknown: Compy hasn't read this since {{date}}, so it can't tell if it changed.",
+        "cant-place": "Unknown: this changed, but Compy can't tell if it was before or after the incident.",
+        "readings-differ": "Unknown: Compy's readings from before and after don't match, and it can't tell when it changed.",
+        "unmatched-readings": "Unknown: Compy's readings from before and after came from different checks, so it can't compare them.",
+        "ledger-incomplete": "Unknown: Compy's change record couldn't be read in full, so it can't say what it changed.",
+        "drift-not-kept": "Unknown: Compy only keeps drift that is still open, so drift that already cleared wouldn't show here."
+      }
+    },
     "introPre": "Crash & Freeze reads the crash and freeze evidence Windows already recorded, and overlays Compy's own",
     "introEmph": "last vitals",
     "introPost": "from any session that was running at the time. It only reports what was logged — it makes no guesses about the cause.",

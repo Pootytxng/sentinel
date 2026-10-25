@@ -683,7 +683,7 @@ fn scan_now(trigger: ScanTrigger) {
     // Gathering evidence happens with NO lock held. It spawns PowerShell and queries WMI — seconds —
     // and the user may well be clicking dismiss on the card throughout. The lock is taken only for
     // the read-modify-write below, which is microseconds.
-    let report = crate::blackbox::get_crash_blackbox();
+    let report = crate::blackbox::collect_crash_blackbox();
     let now = Utc::now();
     let toast = with_state(|state| observe(&report, now, state).toast);
 
@@ -797,12 +797,13 @@ mod tests {
             },
             assessment: None,
             case_intelligence: None,
+            changed_before: None,
             kind,
         }
     }
 
     fn report(incidents: Vec<Incident>) -> BlackBoxReport {
-        BlackBoxReport { incidents, skipped_sources: Vec::new() }
+        BlackBoxReport { incidents, skipped_sources: Vec::new(), clean_judgeable_from: None }
     }
 
     // ── Seeding ─────────────────────────────────────────────────────────────────────────────────
