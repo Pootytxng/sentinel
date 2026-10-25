@@ -390,6 +390,7 @@
     "hint": "Compy measures a baseline, applies one reversible change, measures a real session, and puts the change back unless the numbers clearly beat the noise.",
     "pickLabel": "Pick a change to test",
     "chooseChange": "Choose a change…",
+    "pickTested": "{{title}} · Tested: {{verdict}}",
     "noChangesToTest": "Nothing worth testing on this PC right now.",
     "showWhyNotListed": "Show why others aren't listed",
     "hideWhyNotListed": "Hide why others aren't listed",

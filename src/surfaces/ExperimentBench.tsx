@@ -504,7 +504,21 @@ function canConclude(exp: Experiment): exp is Experiment & { applied_at: string;
 // before a verdict was never judged, so it doesn't count. The store is this PC's own file, so "on
 // this rig" is the PC the store lives on. Pure.
 function testedOn(experiments: Experiment[], game: string): Set<string> {
-  return new Set(experiments.filter((x) => x.game === game && x.verdict != null).map((x) => x.rec_id));
+  return new Set(lastVerdictOn(experiments, game).keys());
+}
+
+// P4-next-f1: each change tested on `game` (the same rule as testedOn), with the verdict of its newest
+// judged Trial there, so the picker can say "Tested: <verdict>" beside it. Pure.
+function lastVerdictOn(experiments: Experiment[], game: string): Map<string, string> {
+  const when = (x: Experiment) => {
+    const t = Date.parse(x.concluded_at ?? x.created_at);
+    return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
+  };
+  const last = new Map<string, string>();
+  for (const x of experiments.filter((x) => x.game === game && x.verdict != null).sort((a, b) => when(a) - when(b))) {
+    last.set(x.rec_id, x.verdict as string);
+  }
+  return last;
 }
 
 function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSummary | null {
@@ -710,10 +724,26 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   // If a refocus-refresh just re-derived the active pick as already-applied (it drops out of `pickable`),
   // keep it in the dropdown so its honest "already configured" verdict stays on screen — the selection
   // must not silently vanish while its simulator card is still showing.
+  // P4-next-f1: in the picker, a change already tested on the game this Trial would run on (the
+  // baseline's, else the one just tested) is marked with its last verdict and listed after the untested
+  // ones, each group in the suggested order. It stays pickable: testing it again is allowed.
+  const pickGame = baseline?.process_name ?? concluded?.game ?? null;
+  const lastVerdict = pickGame ? lastVerdictOn(experiments, pickGame) : new Map<string, string>();
+  const pickOrder = [
+    ...pickable.filter((r) => !lastVerdict.has(r.id)),
+    ...pickable.filter((r) => lastVerdict.has(r.id)),
+  ];
   const options =
     pickId && !pickable.some((r) => r.id === pickId)
-      ? [...pickable, ...recs.filter((r) => r.id === pickId)]
-      : pickable;
+      ? [...pickOrder, ...recs.filter((r) => r.id === pickId)]
+      : pickOrder;
+  const verdictText = verdictCopy(t);
+  const optionLabel = (r: TrialCandidate) => {
+    const v = lastVerdict.get(r.id);
+    return v == null
+      ? r.title
+      : t("lab.experimentBench.pickTested", { title: r.title, verdict: verdictText[v] ?? v });
+  };
 
   // Every bench write goes through writeLedger, which announces LEDGER_CHANGED_EVENT (the Machine
   // Model, this bench's own wake listener) and then runs `settle`: the bench's re-read and App's
@@ -870,7 +900,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
               // a one-way door where the old control had a door (caught in review, 2026-08-18).
               options={[
                 { value: "", label: t("lab.experimentBench.chooseChange") },
-                ...options.map((r) => ({ value: r.id, label: r.title })),
+                ...options.map((r) => ({ value: r.id, label: optionLabel(r) })),
               ]}
             />
           </div>
