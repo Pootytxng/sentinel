@@ -15,12 +15,16 @@ export function CareNextStep({
   incidents,
   sessions,
   skipped,
+  skippedNeedsAdmin = true,
 }: {
   step: CareStep | null;
   incidents: CrashIncident[];
   sessions: SessionSummary[];
-  /** The scan skipped a source (needs admin): an absence is never claimed in full. */
+  /** The scan skipped a source: an absence is never claimed in full. */
   skipped: boolean;
+  /** P6-unknown: at least one skip needs admin. False → the skips were reader failures, and the
+   *  partial line says some sources couldn't be read this time, not "need administrator". */
+  skippedNeedsAdmin?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the anchor belongs to the step's identity
@@ -62,11 +66,17 @@ export function CareNextStep({
       break;
     }
     case "none-since-partial": {
-      line = crash
-        ? t("gaming.blackBox.nextStep.payoff.crashNoneSincePartial", { count: payoff.days, days: payoff.days, kind, app })
-        : hang
-          ? t("gaming.blackBox.nextStep.payoff.hangNoneSincePartial", { count: payoff.days, days: payoff.days, kind, app })
-          : t("gaming.blackBox.nextStep.payoff.noneSincePartial", { count: payoff.days, days: payoff.days, kind, app });
+      line = skippedNeedsAdmin
+        ? crash
+          ? t("gaming.blackBox.nextStep.payoff.crashNoneSincePartial", { count: payoff.days, days: payoff.days, kind, app })
+          : hang
+            ? t("gaming.blackBox.nextStep.payoff.hangNoneSincePartial", { count: payoff.days, days: payoff.days, kind, app })
+            : t("gaming.blackBox.nextStep.payoff.noneSincePartial", { count: payoff.days, days: payoff.days, kind, app })
+        : crash
+          ? t("gaming.blackBox.nextStep.payoff.crashNoneSincePartialRetry", { count: payoff.days, days: payoff.days, kind, app })
+          : hang
+            ? t("gaming.blackBox.nextStep.payoff.hangNoneSincePartialRetry", { count: payoff.days, days: payoff.days, kind, app })
+            : t("gaming.blackBox.nextStep.payoff.noneSincePartialRetry", { count: payoff.days, days: payoff.days, kind, app });
       break;
     }
     case "too-soon": {

@@ -189,6 +189,7 @@ export function BlackBox({
         incidents={shownIncidents ?? []}
         sessions={stutter?.sessions ?? []}
         skipped={!!report && report.skipped_sources.length > 0}
+        skippedNeedsAdmin={skips.admin.length > 0}
       />
       {/* P6-unknown: no step → the honest end takes the slot (never both). */}
       <CareHonestEnd

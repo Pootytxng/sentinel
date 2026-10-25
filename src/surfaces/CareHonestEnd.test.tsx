@@ -151,6 +151,39 @@ describe("the Care view: not enough evidence yet", () => {
   });
 });
 
+describe("the payoff's partial line names the right reason (P6-unknown r2)", () => {
+  // Resolution-anchored: the user answered "Did this help?" on the record, well past the minimum.
+  const answered = (when: string) =>
+    localStorage.setItem("compy_bb_feedback", JSON.stringify([
+      { when, consistent_with: "a GPU driver fault", vote: "yes", at: "2026-09-01T09:00:00Z" },
+    ]));
+
+  it("a reader-only skip keeps 'not a full count' and never mentions admin", async () => {
+    h.incidents = [inc("2026-08-30T10:00:00Z")];
+    answered("2026-08-30T10:00:00Z");
+    h.skipped = ["Windows Event Log (couldn't run the reader)"];
+    h.admin = [];
+    const { container } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-next-payoff")).not.toBeNull());
+    const line = container.querySelector(".bb-next-payoff")!.textContent!;
+    expect(line).toMatch(/You answered/);
+    expect(line).toMatch(/couldn't be read this time, so this is not a full count/);
+    expect(container.querySelector(".bb-next")!.textContent).not.toMatch(/admin/i);
+  });
+
+  it("an admin skip still says some records need administrator", async () => {
+    h.incidents = [inc("2026-08-30T10:00:00Z")];
+    answered("2026-08-30T10:00:00Z");
+    h.skipped = ["Crash dump files in \\Minidump (need administrator to read)"];
+    h.admin = [...h.skipped];
+    const { container } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-next-payoff")).not.toBeNull());
+    expect(container.querySelector(".bb-next-payoff")!.textContent).toMatch(/need administrator, so this is not a full count/);
+  });
+});
+
 describe("the Care view: beyond Compy", () => {
   it("says so plainly and puts the existing local support record one tap away", async () => {
     h.incidents = [inc("2026-10-20T10:00:00Z", { beyond: true })];
