@@ -117,9 +117,12 @@ function fmtWhen(iso: string, lang: string): string {
 
 export function StutterCompare({
   onResult,
+  hideNextAction = false,
 }: {
   /** P6-next: hands the report up so the Care view can pick its one next step. null = no report. */
   onResult?: (r: StutterResult | null) => void;
+  /** P6-next: the report's next test is the step shown at the top of the view; don't repeat it. */
+  hideNextAction?: boolean;
 } = {}) {
   const { t, i18n } = useTranslation();
   const on = useIntelligenceFlag();
@@ -198,6 +201,7 @@ export function StutterCompare({
             expert={expert}
             headline={t("gaming.blackBox.stutter.headline", { game: state.game })}
             causeTag={t("gaming.blackBox.changedBefore.notProven")}
+            hideNextAction={hideNextAction}
           />
         </>
       )}

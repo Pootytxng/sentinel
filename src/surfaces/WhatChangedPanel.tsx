@@ -306,6 +306,7 @@ export function WhatChangedReportView({
   activeChangeFor,
   onRollback,
   busy = false,
+  hideNextAction = false,
 }: {
   outcome: WhatChangedOutcome;
   expert: boolean;
@@ -320,6 +321,9 @@ export function WhatChangedReportView({
   activeChangeFor?: (recId: string) => AppliedChange | undefined;
   onRollback?: (c: AppliedChange) => Promise<void>;
   busy?: boolean;
+  /** P6-next: the next-test sentence is shown as the Care view's one next step, above; it is not
+   *  repeated here. The rollback affordance (when resolvable) stays. Absent = unchanged. */
+  hideNextAction?: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -383,12 +387,14 @@ export function WhatChangedReportView({
         </>
       )}
 
-      {r.next_action && (
+      {r.next_action && (!hideNextAction || rollbackTarget) && (
         <div className="wcp-next-block">
-          <p className="wcp-next">
-            <SectionLabel>{t("optimize.whatChangedPanel.nextTest")}</SectionLabel>{" "}
-            {r.next_action}
-          </p>
+          {!hideNextAction && (
+            <p className="wcp-next">
+              <SectionLabel>{t("optimize.whatChangedPanel.nextTest")}</SectionLabel>{" "}
+              {r.next_action}
+            </p>
+          )}
           {rollbackTarget && (
             <button
               type="button"

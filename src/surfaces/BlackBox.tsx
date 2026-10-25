@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -27,7 +27,7 @@ import {
 } from "./changed-before-restore";
 import { useJourneyPhase } from "./GuidedJourney";
 import { CareNextStep } from "./CareNextStep";
-import type { StutterResult } from "./care-next-step";
+import { pickCareStep, isLifted, type StutterResult } from "./care-next-step";
 import "./BlackBox.css";
 
 // Black Box v1 (Paramedic Mode) — crash/freeze evidence reader, rendered as a Lab instrument.
@@ -155,6 +155,11 @@ export function BlackBox({
   // station SAYS so rather than silently showing a list and letting the user assume they misread
   // the card — "the thing you clicked is not here" is information, and hiding it is the dead-end
   // this product exists to avoid.
+  // P6-next: the one step is picked here so its source (a record, or the stutter report) points to
+  // the top instead of repeating it.
+  const shownIncidents = report && !scanning ? report.incidents : null;
+  const careStep = useMemo(() => pickCareStep(shownIncidents, stutter), [shownIncidents, stutter]);
+
   const selectedMissing =
     !!selectedIncidentId &&
     !!report &&
@@ -169,7 +174,12 @@ export function BlackBox({
       </p>
 
       {/* P6-next: exactly one next step, at the top (priority in care-next-step.ts). */}
-      <CareNextStep incidents={report && !scanning ? report.incidents : null} stutter={stutter} />
+      <CareNextStep
+        step={careStep}
+        incidents={shownIncidents ?? []}
+        sessions={stutter?.sessions ?? []}
+        skipped={!!report && report.skipped_sources.length > 0}
+      />
 
       <button className="bb-scan cmp-door" onClick={scan} disabled={scanning}>
         {scanning
@@ -198,6 +208,7 @@ export function BlackBox({
                   allIncidents={report.incidents}
                   selected={!!selectedIncidentId && inc.incident_id === selectedIncidentId}
                   restore={restore}
+                  lifted={isLifted(careStep, inc)}
                 />
               ))}
             </ul>
@@ -218,7 +229,7 @@ export function BlackBox({
 
       {/* P6-stutter: a stutter or slowdown rarely leaves a crash record, so the same view also
           compares the latest session with its last good one (StutterCompare.tsx). */}
-      <StutterCompare onResult={setStutter} />
+      <StutterCompare onResult={setStutter} hideNextAction={careStep?.source === "stutter"} />
     </div>
   );
 }
@@ -228,10 +239,13 @@ function IncidentRow({
   allIncidents,
   selected = false,
   restore,
+  lifted = false,
 }: {
   inc: CrashIncident;
   allIncidents: CrashIncident[];
   restore?: RestoreCtx;
+  /** P6-next: this record's step is the one shown at the top; the row points there. */
+  lifted?: boolean;
   /** This is the exact incident the user was routed here to see. Marked, and scrolled into view —
    *  a deep-link that lands the user in a list of twenty-five rows has not actually arrived. */
   selected?: boolean;
@@ -269,7 +283,7 @@ function IncidentRow({
       {/* Black Box v2 (only present when blackbox_v2_gate() is ON): triage — consistent-with + a
           strength WORD (never a percentage) + the evidence + ONE reversible next step. v2.1 adds the
           measured-absence line under a step the user marked helpful. */}
-      {inc.assessment && <AssessmentBlock inc={inc} allIncidents={allIncidents} />}
+      {inc.assessment && <AssessmentBlock inc={inc} allIncidents={allIncidents} lifted={lifted} />}
 
       {/* Compy Care Tier 1 (only present when case_intelligence_gate() is ON and the SIGNED catalog
           matched): somebody else's published write-up, carried verbatim. A separate section from the
@@ -323,7 +337,15 @@ function IncidentRow({
 // Black Box v2 triage block. "Consistent with…" framing only — never "the cause is…". Shows the exact
 // evidence it fired on and ONE reversible next step (research-only steps are clearly marked, never "do
 // this" for anything irreversible). Rendered only when the backend gate populated `assessment`.
-function AssessmentBlock({ inc, allIncidents }: { inc: CrashIncident; allIncidents: CrashIncident[] }) {
+function AssessmentBlock({
+  inc,
+  allIncidents,
+  lifted = false,
+}: {
+  inc: CrashIncident;
+  allIncidents: CrashIncident[];
+  lifted?: boolean;
+}) {
   const { t } = useTranslation();
   const a = inc.assessment as CrashAssessment; // only rendered when present
   const research = a.next_step.research_only;
@@ -354,13 +376,17 @@ function AssessmentBlock({ inc, allIncidents }: { inc: CrashIncident; allInciden
           <li key={i}>{e}</li>
         ))}
       </ul>
-      <div className={`bb-nextstep${research ? " bb-nextstep-research" : ""}`}>
-        <span className="bb-nextstep-tag">
-          {research ? t("gaming.blackBox.worthResearching") : t("gaming.blackBox.safeNextStep")}
-        </span>
-        <p className="bb-nextstep-headline">{a.next_step.headline}</p>
-        <p className="bb-nextstep-detail">{a.next_step.detail}</p>
-      </div>
+      {lifted ? (
+        <p className="bb-nextstep-pointer">{t("gaming.blackBox.nextStep.shownAbove")}</p>
+      ) : (
+        <div className={`bb-nextstep${research ? " bb-nextstep-research" : ""}`}>
+          <span className="bb-nextstep-tag">
+            {research ? t("gaming.blackBox.worthResearching") : t("gaming.blackBox.safeNextStep")}
+          </span>
+          <p className="bb-nextstep-headline">{a.next_step.headline}</p>
+          <p className="bb-nextstep-detail">{a.next_step.detail}</p>
+        </div>
+      )}
       <ResolutionFeedback inc={inc} allIncidents={allIncidents} />
     </div>
   );
