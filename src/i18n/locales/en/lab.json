@@ -459,6 +459,21 @@
     "receiptRuleAvgFell": "The 1% low rose by more than the band, but the average fell by more than it, so this isn't a clear win: the default was kept and the change restored.",
     "receiptRuleLowFell": "The 1% low fell by more than the band, so the change was restored.",
     "receiptRuleInside": "The 1% low stayed inside the band, so the default was kept and the change restored.",
+    "receiptComparedMaxFps": "Judged for Maximum FPS. Compared with the baseline: average frame rate {{avg}}%, 1% low {{low}}%, both against a ±{{band}}% band. {{rule}}",
+    "receiptRuleMaxKept": "The average rose by more than the band and the 1% low didn't fall by more, so the change was kept.",
+    "receiptRuleMaxAvgFell": "The average fell by more than the band, so the change was restored.",
+    "receiptRuleMaxInside": "The average stayed inside the band, so the default was kept and the change restored.",
+    "outcomeLabel": "What to aim for",
+    "outcomeSmoothestUnavailable": "Smoothest needs Compy to measure frame pacing more precisely than it does today, so it isn't offered yet.",
+    "outcome": {
+      "recommended": "Recommended",
+      "maxFps": "Maximum FPS",
+      "smoothest": "Smoothest"
+    },
+    "outcomeWhy": {
+      "recommended": "Keeps the change only if the 1% low rises beyond the noise band and the average frame rate doesn't fall beyond it.",
+      "maxFps": "Keeps the change only if the average frame rate rises beyond the noise band and the 1% low doesn't fall beyond it."
+    },
     "pairChanged": "What differed: {{changed}} changed between the before and after sessions.",
     "pairUnrecorded": "What differed: one of the sessions didn't record {{unrecorded}}.",
     "pairBoth": "What differed: {{changed}} changed, and one of the sessions didn't record {{unrecorded}}.",

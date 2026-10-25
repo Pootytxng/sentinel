@@ -610,6 +610,7 @@ describe("ExperimentBench (armed)", () => {
       recTitle: "Test tweak",
       baselineSessionId: VALORANT_SESSION.started_at,
       hypothesis: expect.any(String),
+      outcome: "recommended",
     });
   });
 
@@ -1423,6 +1424,131 @@ describe("ExperimentBench — what the Recommended verdict compared", () => {
     render(<ExperimentBench />);
     expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
     expect(screen.queryByTestId("exp-compared-receipt")).toBeNull();
+  });
+});
+
+// P4-maxfps-smooth (ENGINE §2): the user picks what a Trial aims for; Recommended is the default and
+// Smoothest is shown but not offered yet. A judged Maximum FPS row says what it compared.
+describe("ExperimentBench — Maximum FPS, and Smoothest held", () => {
+  afterEach(async () => {
+    cleanup();
+    await i18n.changeLanguage("en");
+  });
+
+  const openOutcomePicker = async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    await waitFor(() => expect(start).toBeEnabled());
+    const trigger = screen.getAllByRole("combobox")[1];
+    fireEvent.click(trigger);
+    return { start, trigger };
+  };
+
+  it("offers Recommended and Maximum FPS, and starts with the pick", async () => {
+    const { start, trigger } = await openOutcomePicker();
+    const why = screen.getByTestId("exp-outcome-why");
+    expect(trigger).toHaveTextContent("Recommended");
+    expect(why).toHaveTextContent("Keeps the change only if the 1% low rises beyond the noise band");
+    const labels = [...document.querySelectorAll('[role="listbox"] [data-value]')].map((n) => n.textContent);
+    expect(labels).toEqual(["Recommended", "Maximum FPS", "Smoothest"]);
+    fireEvent.click(document.querySelector('[role="listbox"] [data-value="max-fps"]') as HTMLElement);
+    await waitFor(() => expect(trigger).toHaveTextContent("Maximum FPS"));
+    expect(why).toHaveTextContent(
+      "Keeps the change only if the average frame rate rises beyond the noise band and the 1% low doesn't fall beyond it.",
+    );
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(start);
+    await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
+    expect(callArgs("start_experiment")).toMatchObject({ outcome: "max-fps" });
+  });
+
+  it("shows Smoothest disabled with its reason, and it can't be picked", async () => {
+    const { trigger } = await openOutcomePicker();
+    const smooth = document.querySelector('[role="listbox"] [data-value="smoothest"]') as HTMLElement;
+    expect(smooth).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByTestId("exp-outcome-smoothest")).toHaveTextContent(
+      "Smoothest needs Compy to measure frame pacing more precisely than it does today, so it isn't offered yet.",
+    );
+    fireEvent.click(smooth);
+    expect(trigger).toHaveTextContent("Recommended");
+    cleanup();
+    await i18n.changeLanguage("zh-CN");
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    expect(await screen.findByTestId("exp-outcome-smoothest")).toHaveTextContent("“最流畅”需要 Compy 比现在更精确地测量帧节奏，所以暂不提供。");
+  });
+
+  it("the picker's outcome names are the backend's", async () => {
+    const { readFileSync } = await import("fs");
+    const rs = readFileSync("src-tauri/src/experiment.rs", "utf8");
+    const tsx = readFileSync("src/surfaces/ExperimentBench.tsx", "utf8");
+    expect(tsx).toContain('const OUTCOME_OPTIONS = ["recommended", "max-fps", "smoothest"] as const;');
+    // What the backend starts with, and the one it refuses.
+    expect(rs).toContain('None | Some("recommended") => Ok(TrialOutcome::Recommended),');
+    expect(rs).toContain('Some("max-fps") => Ok(TrialOutcome::MaxFps),');
+    expect(rs).toContain('Some("smoothest") => Err(format!("experiment not started — {SMOOTHEST_UNAVAILABLE}")),');
+    // The disabled line says what the backend's refusal says.
+    const en = (await import("../i18n/locales/en/lab.json")).default as { experimentBench: Record<string, unknown> };
+    expect(rs).toContain(`"${en.experimentBench.outcomeSmoothestUnavailable}"`);
+  });
+
+  const judged = (verdict: string, low: number, avg: number) => ({
+    ...KEPT_EXPERIMENT,
+    outcome: "max-fps",
+    status: verdict === "improved" ? "kept" : "restored",
+    kept: verdict === "improved",
+    verdict,
+    treatment: { ...KEPT_EXPERIMENT.treatment, delta_low1_pct: low, delta_avg_pct: avg },
+    noise_evidence: { band_pct: 3, measured_noise_pct: null },
+  });
+
+  it("a Maximum FPS row leads with the average and says why it was kept or restored", async () => {
+    state.gate = true;
+    state.experiments = [
+      judged("improved", 0, 8.3),
+      { ...judged("no-change", 20, 2), id: "exp:9-0" },
+      { ...judged("regressed", 20, -8.3), id: "exp:8-0" },
+      { ...judged("regressed", -6.7, 8.3), id: "exp:7-0" },
+    ];
+    render(<ExperimentBench />);
+    const lines = (await screen.findAllByTestId("exp-compared-receipt")).map((n) => n.textContent);
+    expect(lines[0]).toBe(
+      "Judged for Maximum FPS. Compared with the baseline: average frame rate +8.3%, 1% low 0%, both against a ±3% band. The average rose by more than the band and the 1% low didn't fall by more, so the change was kept.",
+    );
+    expect(lines[1]).toMatch(/1% low \+20%.*The average stayed inside the band, so the default was kept and the change restored\.$/);
+    expect(lines[2]).toMatch(/The average fell by more than the band, so the change was restored\.$/);
+    expect(lines[3]).toMatch(/The 1% low fell by more than the band, so the change was restored\.$/);
+  });
+
+  it("says the same in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    state.gate = true;
+    state.experiments = [judged("improved", 0, 8.3)];
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("exp-compared-receipt")).toHaveTextContent(
+      "按“最高帧率”判定。与基准相比：平均帧率 +8.3%，1% 最低帧 0%，两者都按 ±3% 的范围判定。平均帧率的提升超过了该范围，且 1% 最低帧的下降没有超过它，所以保留了这项更改。",
+    );
+  });
+
+  it("an older row with no pick, or a stored pick this build doesn't judge, keeps the Recommended wording", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...judged("no-change", 2, 10), outcome: undefined },
+      { ...judged("no-change", 2, 10), outcome: "smoothest", id: "exp:9-0" },
+    ];
+    render(<ExperimentBench />);
+    const lines = (await screen.findAllByTestId("exp-compared-receipt")).map((n) => n.textContent);
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(line).toMatch(/^Compared with the baseline: 1% low \+2%, average frame rate \+10%.*The 1% low stayed inside the band/);
+    }
   });
 });
 

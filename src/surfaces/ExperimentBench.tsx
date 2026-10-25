@@ -43,6 +43,19 @@ type Treatment = {
   delta_avg_pct?: number | null;
 };
 
+/** P4-maxfps-smooth: what the user asked a Trial to aim for (experiment.rs `TrialOutcome`, its serde
+ *  names). Smoothest is shown but not offered: Compy doesn't measure frame pacing precisely enough
+ *  yet, and the backend refuses it (`start_outcome`). */
+type TrialOutcome = "recommended" | "max-fps";
+
+const OUTCOME_KEY: Record<TrialOutcome, string> = {
+  recommended: "recommended",
+  "max-fps": "maxFps",
+};
+
+/** The picker's entries, in order. Smoothest is listed disabled, with its reason beside the picker. */
+const OUTCOME_OPTIONS = ["recommended", "max-fps", "smoothest"] as const;
+
 /** §11 — the credible-noise band a verdict was judged against. Present only when it really was. */
 type NoiseEvidence = {
   band_pct: number;
@@ -113,6 +126,8 @@ type Experiment = {
   baseline_halves?: { first_half_fps: number; second_half_fps: number } | null;
   /** How comparable the two sessions were. null while Running and on older records. */
   session_pairing?: SessionPairing | null;
+  /** P4-maxfps-smooth: the outcome picked at start. Absent on older records, which read as Recommended. */
+  outcome?: TrialOutcome | null;
 };
 
 type SimulatorReport = {
@@ -336,6 +351,24 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
   if (!looksJudged(x) || !x.treatment || avg == null || band == null) return null;
   const signed = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 10) / 10}`;
   const low = x.treatment.delta_low1_pct;
+  const one = (v: number) => String(Math.round(v * 10) / 10);
+  // P4-maxfps-smooth: a Maximum FPS row leads with the average.
+  if (x.outcome === "max-fps") {
+    const rule =
+      x.verdict === "improved"
+        ? "receiptRuleMaxKept"
+        : x.verdict === "regressed"
+          ? avg < -band
+            ? "receiptRuleMaxAvgFell"
+            : "receiptRuleLowFell"
+          : "receiptRuleMaxInside";
+    return t("lab.experimentBench.receiptComparedMaxFps", {
+      avg: signed(avg),
+      low: signed(low),
+      band: one(band),
+      rule: t(`lab.experimentBench.${rule}`),
+    });
+  }
   const rule =
     x.verdict === "improved"
       ? "receiptRuleKept"
@@ -504,6 +537,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const [sim, setSim] = useState<SimulatorReport | null>(null);
   const [simBusy, setSimBusy] = useState(false);
   const [hypothesis, setHypothesis] = useState<string>("");
+  const [outcome, setOutcome] = useState<TrialOutcome>("recommended");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -711,6 +745,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
               // By id only: the backend reads the game and the numbers from its own session store.
               baselineSessionId: baseline.started_at,
               hypothesis,
+              outcome,
             },
             refresh,
           ),
@@ -996,6 +1031,29 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                       onChange={(e) => setHypothesis(e.target.value)}
                     />
                   </label>
+                  <div className="exp-field">
+                    <span className="exp-field-label" id="exp-outcome-label">
+                      {t("lab.experimentBench.outcomeLabel")}
+                    </span>
+                    <Picker
+                      className="exp-select"
+                      labelledBy="exp-outcome-label"
+                      value={outcome}
+                      disabled={busy}
+                      onChange={(v) => setOutcome(v as TrialOutcome)}
+                      options={OUTCOME_OPTIONS.map((o) =>
+                        o === "smoothest"
+                          ? { value: o, label: t("lab.experimentBench.outcome.smoothest"), disabled: true }
+                          : { value: o, label: t(`lab.experimentBench.outcome.${OUTCOME_KEY[o]}`) },
+                      )}
+                    />
+                  </div>
+                  <p className="exp-fineprint" data-testid="exp-outcome-why">
+                    {t(`lab.experimentBench.outcomeWhy.${OUTCOME_KEY[outcome]}`)}
+                  </p>
+                  <p className="exp-fineprint" data-testid="exp-outcome-smoothest">
+                    {t("lab.experimentBench.outcomeSmoothestUnavailable")}
+                  </p>
                   <button
                     className="exp-cta"
                     disabled={!canStart}
