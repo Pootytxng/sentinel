@@ -1,0 +1,121 @@
+[
+  {
+    "event_type": "session",
+    "parts": {
+      "duration_secs": 600,
+      "fps": [
+        "120",
+        "100"
+      ],
+      "game": "EldenRing",
+      "kind": "session"
+    },
+    "since_rolled_back": false,
+    "summary": "EldenRing session — 10 min · 120 avg FPS · 100 1% low"
+  },
+  {
+    "event_type": "change-applied",
+    "parts": {
+      "kind": "applied",
+      "title": "Trim Windows visual effects"
+    },
+    "since_rolled_back": false,
+    "summary": "Trim Windows visual effects applied"
+  },
+  {
+    "event_type": "change-applied",
+    "parts": {
+      "kind": "applied",
+      "title": "Turn on Game Mode"
+    },
+    "since_rolled_back": true,
+    "summary": "Turn on Game Mode applied (since rolled back)"
+  },
+  {
+    "event_type": "change-rolled-back",
+    "parts": {
+      "kind": "rolled-back",
+      "title": "Turn on Game Mode"
+    },
+    "since_rolled_back": false,
+    "summary": "Turn on Game Mode rolled back"
+  },
+  {
+    "event_type": "session",
+    "parts": {
+      "duration_secs": 45,
+      "fps": null,
+      "game": "Palworld",
+      "kind": "session"
+    },
+    "since_rolled_back": false,
+    "summary": "Palworld session — 45s · nothing measured: another window was in front the whole time"
+  },
+  {
+    "event_type": "readiness-drift",
+    "parts": {
+      "kind": "drift",
+      "label": "Game Mode"
+    },
+    "since_rolled_back": false,
+    "summary": "No longer ready: Game Mode"
+  },
+  {
+    "event_type": "gpu-driver-change",
+    "parts": {
+      "from": "32.0.15.6094",
+      "kind": "gpu-driver",
+      "to": "32.0.15.6614"
+    },
+    "since_rolled_back": false,
+    "summary": "GPU driver changed: 32.0.15.6094 → 32.0.15.6614"
+  },
+  {
+    "event_type": "hardware-change",
+    "parts": {
+      "changes": [
+        {
+          "from": "16 GB",
+          "part": "ram",
+          "to": "32 GB"
+        },
+        {
+          "from": "2560x1440@165",
+          "part": "display",
+          "to": "3440x1440@144"
+        }
+      ],
+      "kind": "hardware"
+    },
+    "since_rolled_back": false,
+    "summary": "Hardware changed — RAM: 16 GB → 32 GB · Display: 2560x1440@165 → 3440x1440@144"
+  },
+  {
+    "event_type": "windows-build-change",
+    "parts": {
+      "from": "26100.4061 (24H2)",
+      "kind": "windows-build",
+      "to": "26100.4202 (24H2)"
+    },
+    "since_rolled_back": false,
+    "summary": "Windows updated: 26100.4061 (24H2) → 26100.4202 (24H2)"
+  },
+  {
+    "event_type": "power-plan-change",
+    "parts": {
+      "from": "Balanced",
+      "kind": "power-plan",
+      "to": "Ultimate Performance"
+    },
+    "since_rolled_back": false,
+    "summary": "Power plan changed: Balanced → Ultimate Performance"
+  },
+  {
+    "event_type": "benchmark-baseline",
+    "parts": {
+      "kind": "benchmark-baseline"
+    },
+    "since_rolled_back": false,
+    "summary": "Lab baseline recorded"
+  }
+]

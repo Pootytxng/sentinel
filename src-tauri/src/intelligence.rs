@@ -126,8 +126,9 @@ pub(crate) enum EventParts {
     Hardware { changes: Vec<HardwarePartChange> },
     /// `readiness-drift`: the readiness check's own label.
     Drift { label: String },
-    /// `session`: `fps` is `None` when nothing was measured (samples == 0).
-    Session { game: String, duration_secs: u64, fps: Option<(f64, f64)> },
+    /// `session`: `fps` is (avg, 1% low) already rounded exactly as the summary rounds them
+    /// (`{:.0}`), so both languages show the same numbers; `None` when nothing was measured.
+    Session { game: String, duration_secs: u64, fps: Option<(String, String)> },
     /// `benchmark-baseline`.
     BenchmarkBaseline,
 }
@@ -851,7 +852,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             parts: Some(EventParts::Session {
                 game: pretty_game_name(&s.process_name),
                 duration_secs: s.duration_secs,
-                fps: (s.samples != 0).then_some((s.avg_fps, s.low1_fps_est)),
+                fps: (s.samples != 0).then(|| (format!("{:.0}", s.avg_fps), format!("{:.0}", s.low1_fps_est))),
             }),
         });
     }
@@ -4861,7 +4862,92 @@ mod tests {
         let sess = asm.events.iter().find(|e| e.event_type == "session").unwrap();
         assert_eq!(
             serde_json::to_value(sess).unwrap()["parts"],
-            serde_json::json!({ "kind": "session", "game": sess.game.clone().unwrap(), "duration_secs": 600, "fps": [120.0, 100.0] })
+            serde_json::json!({ "kind": "session", "game": sess.game.clone().unwrap(), "duration_secs": 600, "fps": ["120", "100"] })
+        );
+    }
+
+    // ── Golden fixture: summary ↔ parts (P6-changed-f1) ───────────────────
+    //
+    // `src/surfaces/event-text.test.tsx` loads this fixture and asserts the English `eventText`
+    // equals `summary` for every entry, so the frontend's templates are checked against what the
+    // REAL builders emit, not against strings a test author typed. This half pins that the fixture
+    // is exactly what `assemble_timeline` produces today. To regenerate deliberately, run
+    // `COMPY_PRINT_EVENT_PARTS_FIXTURE=1 cargo test --lib event_parts_fixture -- --nocapture` and
+    // save the JSON printed between the markers.
+
+    const EVENT_PARTS_FIXTURE: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../src/test/fixtures/timeline-event-parts.json");
+
+    #[test]
+    fn event_parts_fixture_matches_what_the_builders_emit() {
+        let mut kept = mk_change("visual-effects", "Trim Windows visual effects", "2026-10-21T10:00:00Z", "applied");
+        kept.rec_id = "visual-effects".into();
+        let mut undone = mk_change("game-mode", "Turn on Game Mode", "2026-10-21T11:00:00Z", "rolled_back");
+        undone.rolled_back_at = Some("2026-10-21T12:00:00Z".into());
+        let applied = vec![kept, undone];
+        // An avg and 1% low ending in .5: the rounding must be Rust's, on both sides.
+        let measured = mk_session("2026-10-20T10:00:00Z", "EldenRing.exe", 99.5, 120.5);
+        let mut unmeasured = mk_session("2026-10-22T10:00:00Z", "Palworld-Win64-Shipping.exe", 0.0, 0.0);
+        unmeasured.samples = 0;
+        unmeasured.duration_secs = 45;
+        let sessions = vec![measured, unmeasured];
+        let mut a = mk_snap("2026-10-19T10:00:00Z", "32.0.15.6094", "26100", "Balanced");
+        let mut b = mk_snap("2026-10-23T10:00:00Z", "32.0.15.6614", "26100", "Ultimate Performance");
+        b.windows_ubr = Some(4202);
+        // Hardware: GPU unchanged (a GPU swap suppresses the driver event), RAM and display changed.
+        a.ram_gb = 16;
+        b.display = "3440x1440@144".into();
+        let snapshots = vec![a, b];
+        let drift = vec![crate::drift::DriftNotice {
+            id: "game-mode".into(),
+            label: "Game Mode".into(),
+            last_ready_at: Some("2026-10-20T10:00:00Z".into()),
+            noticed_at: "2026-10-22T12:00:00Z".into(),
+        }];
+        let mut inp = empty_inputs(&applied, &sessions, &snapshots);
+        inp.drift_notices = &drift;
+        inp.benchmark_baseline_at = Some("2026-10-24T10:00:00Z".into());
+        let asm = assemble_timeline(&inp);
+
+        let rows: Vec<serde_json::Value> = asm
+            .events
+            .iter()
+            .filter(|e| e.parts.is_some())
+            .map(|e| {
+                serde_json::json!({
+                    "event_type": e.event_type,
+                    "summary": e.summary,
+                    "since_rolled_back": e.since_rolled_back,
+                    "parts": e.parts,
+                })
+            })
+            .collect();
+        let kinds: std::collections::BTreeSet<&str> =
+            rows.iter().map(|r| r["parts"]["kind"].as_str().unwrap()).collect();
+        assert_eq!(
+            kinds.into_iter().collect::<Vec<_>>(),
+            [
+                "applied", "benchmark-baseline", "drift", "gpu-driver", "hardware", "power-plan",
+                "rolled-back", "session", "windows-build"
+            ],
+            "every kind with parts is in the fixture"
+        );
+        assert!(rows.iter().any(|r| r["parts"]["kind"] == "applied" && r["since_rolled_back"] == true));
+        assert!(rows.iter().any(|r| r["parts"]["kind"] == "applied" && r["since_rolled_back"] == false));
+        assert!(rows.iter().any(|r| r["parts"]["kind"] == "session" && r["parts"]["fps"].is_null()));
+        assert!(rows.iter().any(|r| r["summary"].as_str().unwrap().contains("120 avg FPS · 100 1% low")));
+
+        let emitted = serde_json::to_string_pretty(&rows).expect("rows serialize") + "\n";
+        if std::env::var_os("COMPY_PRINT_EVENT_PARTS_FIXTURE").is_some() {
+            println!("----- BEGIN timeline-event-parts.json -----\n{emitted}----- END -----");
+        }
+        let on_disk = std::fs::read_to_string(EVENT_PARTS_FIXTURE)
+            .expect("src/test/fixtures/timeline-event-parts.json is missing")
+            .replace("\r\n", "\n");
+        assert!(
+            on_disk == emitted,
+            "the timeline event summaries or parts changed. Update src/surfaces/event-text.ts and the \
+             locale templates, then regenerate the fixture with COMPY_PRINT_EVENT_PARTS_FIXTURE=1"
         );
     }
 

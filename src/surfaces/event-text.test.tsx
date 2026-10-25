@@ -4,6 +4,7 @@ import { BlackBox } from "./BlackBox";
 import { WhatChangedPanel } from "./WhatChangedPanel";
 import { eventText } from "./event-text";
 import i18n from "../i18n";
+import fixture from "../test/fixtures/timeline-event-parts.json";
 import type { BlackBoxReport, CrashIncident, IntelEvent, WhatChangedOutcome } from "../types";
 
 // P6-changed-f1: timeline event lines were Rust's English `summary`, so zh-CN read English inside
@@ -68,7 +69,7 @@ const SESSION = ev({
   source: "sessions",
   scope: "measurement",
   summary: "Elden Ring session — 10 min · 120 avg FPS · 100 1% low",
-  parts: { kind: "session", game: "Elden Ring", duration_secs: 600, fps: [120, 100] },
+  parts: { kind: "session", game: "Elden Ring", duration_secs: 600, fps: ["120", "100"] },
 });
 const HARDWARE = ev({
   id: "hw:1",
@@ -95,16 +96,16 @@ const DRIFT = ev({
 });
 
 describe("eventText", () => {
-  it("in English reads exactly as the backend's summary for the same facts", () => {
+  it("in English reads exactly as the backend's summary, for every event the real builders emit", () => {
+    // intelligence.rs `event_parts_fixture_matches_what_the_builders_emit` keeps this fixture equal
+    // to what assemble_timeline produces, so these summaries are Rust's own, not typed here.
     const t = i18n.getFixedT("en");
-    const more = [
-      ev({ summary: "Trim Windows visual effects rolled back", parts: { kind: "rolled-back", title: "Trim Windows visual effects" } }),
-      ev({ summary: "Windows updated: 26100.4061 (24H2) → 26100.4202 (24H2)", parts: { kind: "windows-build", from: "26100.4061 (24H2)", to: "26100.4202 (24H2)" } }),
-      ev({ summary: "Power plan changed: Balanced → Ultimate Performance", parts: { kind: "power-plan", from: "Balanced", to: "Ultimate Performance" } }),
-      ev({ summary: "Palworld session — 45s · nothing measured: another window was in front the whole time", parts: { kind: "session", game: "Palworld", duration_secs: 45, fps: null } }),
-      ev({ summary: "Lab baseline recorded", parts: { kind: "benchmark-baseline" } }),
-    ];
-    for (const e of [DRIVER, APPLIED, SESSION, HARDWARE, DRIFT, ...more]) expect(eventText(e, t)).toBe(e.summary);
+    const rows = fixture as { event_type: string; summary: string; since_rolled_back: boolean; parts: IntelEvent["parts"] }[];
+    expect(new Set(rows.map((r) => r.parts!.kind)).size).toBe(9);
+    for (const r of rows) {
+      const e = ev({ event_type: r.event_type, summary: r.summary, since_rolled_back: r.since_rolled_back, parts: r.parts });
+      expect(eventText(e, t)).toBe(r.summary);
+    }
   });
 
   it("falls back to the summary for old data and kinds this build doesn't know", () => {
@@ -154,14 +155,14 @@ describe("zh-CN reads whole on the Care view and the What-changed panel (P6-chan
     await screen.findByRole("region", { name: i18n.t("gaming.blackBox.sinceWorked.title") });
 
     const changed = [...container.querySelectorAll(".bb-changed-events li")].map((li) => li.textContent ?? "");
-    expect(changed.some((s) => s.startsWith("已应用Trim Windows visual effects(之后已撤销)"))).toBe(true);
+    expect(changed.some((s) => s.startsWith("已应用 Trim Windows visual effects(之后已撤销)"))).toBe(true);
     expect(changed.some((s) => s.startsWith("显卡驱动已变更:32.0.15.6094 → 32.0.15.6614"))).toBe(true);
 
     const since = [...container.querySelectorAll(".bb-since-text")].map((s) => s.textContent ?? "");
     expect(since).toEqual(
       expect.arrayContaining([
         "显卡驱动已变更:32.0.15.6094 → 32.0.15.6614",
-        expect.stringMatching(/^已应用Trim Windows visual effects\(之后已撤销\)/),
+        expect.stringMatching(/^已应用 Trim Windows visual effects\(之后已撤销\)/),
         "Elden Ring 会话——10 分钟 · 平均 120 FPS · 1% 最低帧 100",
         "硬件已变更——显卡:GPU A → GPU B · 内存:16 GB → 32 GB",
         "不再就绪:Game Mode",
@@ -207,6 +208,6 @@ describe("zh-CN reads whole on the Care view and the What-changed panel (P6-chan
     await waitFor(() => expect(container.querySelectorAll(".wcp-between li")).toHaveLength(2));
     const lines = [...container.querySelectorAll(".wcp-between li")].map((li) => li.textContent ?? "");
     expect(lines[0]).toMatch(/^显卡驱动已变更:32\.0\.15\.6094 → 32\.0\.15\.6614/);
-    expect(lines[1]).toMatch(/^已应用Trim Windows visual effects\(之后已撤销\)/);
+    expect(lines[1]).toMatch(/^已应用 Trim Windows visual effects\(之后已撤销\)/);
   });
 });

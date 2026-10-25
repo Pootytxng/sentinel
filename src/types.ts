@@ -694,7 +694,7 @@ export type IntelEventParts =
   | { kind: "power-plan"; from: string; to: string }
   | { kind: "hardware"; changes: { part: "gpu" | "ram" | "display"; from: string; to: string }[] }
   | { kind: "drift"; label: string }
-  | { kind: "session"; game: string; duration_secs: number; fps: [number, number] | null }
+  | { kind: "session"; game: string; duration_secs: number; fps: [string, string] | null }
   | { kind: "benchmark-baseline" };
 
 export type IntelSessionRef = {

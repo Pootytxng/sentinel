@@ -46,8 +46,9 @@ export function eventText(e: IntelEvent, t: TFunction): string {
         ? t("common.timelineEvent.session", {
             game: p.game,
             duration,
-            avg: p.fps[0].toFixed(0),
-            low: p.fps[1].toFixed(0),
+            // Already rounded by the backend, exactly as its summary rounds them.
+            avg: p.fps[0],
+            low: p.fps[1],
           })
         : t("common.timelineEvent.sessionUnmeasured", { game: p.game, duration });
     }

@@ -210,9 +210,9 @@
     "revealFolder": "打开 Compy 文件夹"
   },
   "timelineEvent": {
-    "applied": "已应用{{title}}",
-    "appliedRolledBack": "已应用{{title}}(之后已撤销)",
-    "rolledBack": "已撤销{{title}}",
+    "applied": "已应用 {{title}}",
+    "appliedRolledBack": "已应用 {{title}}(之后已撤销)",
+    "rolledBack": "已撤销 {{title}}",
     "gpuDriver": "显卡驱动已变更:{{from}} → {{to}}",
     "windowsBuild": "Windows 已更新:{{from}} → {{to}}",
     "powerPlan": "电源计划已变更:{{from}} → {{to}}",
@@ -227,6 +227,6 @@
     "sessionUnmeasured": "{{game}} 会话——{{duration}} · 没有测到数据:整段时间都有其他窗口在前台",
     "durationMinutes": "{{minutes}} 分钟",
     "durationSeconds": "{{seconds}} 秒",
-    "benchmarkBaseline": "已记录实验室基线"
+    "benchmarkBaseline": "已记录测试基线"
   }
 }
