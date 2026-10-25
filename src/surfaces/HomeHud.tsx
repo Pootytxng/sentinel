@@ -60,6 +60,9 @@ type Props = {
   onSeeInFix: () => void;
   /** Where the "See in …" buttons land: "Lab" on the proving-ground rail, "Optimize" classic. */
   fixRoomLabel?: string;
+  /** App's station deep-link. The drift module's pointer opens the Care view ("blackbox"), whose
+   *  "Since it last worked" list names and dates each drift (P6-timeline). Absent → text only. */
+  onOpenLabStation?: (station: string) => void;
 };
 
 const fmtGB1 = (b: number) => (b / 1024 ** 3).toFixed(1);
@@ -155,6 +158,7 @@ export function HomeHud({
   onSeeInFix,
   // "Lab" — the Optimize room was deleted in the 2026-08-06 generation prune.
   fixRoomLabel = "Lab",
+  onOpenLabStation,
 }: Props) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
@@ -323,12 +327,13 @@ export function HomeHud({
   const activeWithdrawn = ledgerBlank || inEffect.kind === "unreadable";
 
   const drifts = readiness?.drifts ?? [];
-  const driftNames =
-    drifts
-      .slice(0, 2)
-      .map((d) => d.label)
-      .join(" · ") +
-    (drifts.length > 2 ? t("home.homeHud.ledger.driftMore", { count: drifts.length - 2 }) : "");
+  // P6-timeline: the drift module counts and points; the Care view's "Since it last worked" list
+  // is the one place each drift is named and dated.
+  const seeWhatChanged = onOpenLabStation && (
+    <button type="button" className="hud-inline-link" onClick={() => onOpenLabStation("blackbox")}>
+      {t("home.homeHud.ledger.seeWhatChanged")}
+    </button>
+  );
   const smartDrives = (hw.disk_health ?? []).filter((d) => d.health !== "Unknown");
   const flaggedDrives = smartDrives.filter((d) => d.health !== "Healthy");
 
@@ -669,7 +674,9 @@ export function HomeHud({
             ) : (
               <span className="hud-note hud-note-warn">
                 <span className="hud-led hud-led-warn" aria-hidden="true" />{" "}
-                {t("home.homeHud.ledger.driftCount", { count: drifts.length, names: driftNames })}
+                {t("home.homeHud.ledger.driftCount", { count: drifts.length })}
+                {" · "}
+                {seeWhatChanged ?? t("home.homeHud.ledger.driftWhere")}
               </span>
             )}
           </Module>

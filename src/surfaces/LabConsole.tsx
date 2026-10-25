@@ -347,6 +347,9 @@ export function LabConsole({
     openerRef.current = opener;
     setOpenStation(k);
   };
+  // P6-timeline: Check's drift and hardware pointers open the Care view, where "Since it last
+  // worked" lists them. Recorded as opened from Optimize, so closing it returns focus there.
+  const openCare = () => openFrom("blackbox", "optimize");
   const onDockOpen = (key: string) => openFrom(key as LabStationKey, key as LabStationKey);
   // Station deep-link (tester J 2026-07-22, Phase 5): "Take me to Test" from the first-check
   // verdict lands here and auto-opens the Optimize station (the door to the safe-tweak toggles)
@@ -857,7 +860,7 @@ export function LabConsole({
             {openStation === "optimize" && (
               <p className="lc-detail-note">{t("lab.labConsole.optimizeReassurance")}</p>
             )}
-            {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation!)}
+            {openStation === "optimize" ? <OptimizeStation {...fast} onOpenCare={openCare} /> : stationBody(openStation!)}
           </div>
         </div>
       ) : hud ? (
@@ -1090,7 +1093,7 @@ export function LabConsole({
                 {t("lab.labConsole.optimizeReassurance")}
               </p>
             )}
-            {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation)}
+            {openStation === "optimize" ? <OptimizeStation {...fast} onOpenCare={openCare} /> : stationBody(openStation)}
           </div>
         </BentoTile>
       )}

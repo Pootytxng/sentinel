@@ -595,9 +595,22 @@ export type ChangedBeforeIncident = {
   window_end: string;
   items: ChangedBeforeItem[];
 };
+// P6-timeline (mirrors `SinceLastWorked` in src-tauri/src/intelligence.rs): the Care view's one
+// "Since it last worked" list. "Worked" = the last clean session, by the same rules as changed_before.
+export type SinceLastWorked = {
+  anchor: { started_at: string; game: string } | null;
+  /** Set exactly when `anchor` is null. */
+  none_reason: "no-session" | "none-clean" | null;
+  /** Newest first: Compy changes, observed changes, drift and sessions after the anchor started. */
+  events: IntelEvent[];
+  /** Observed changes whose reading window straddles the anchor's start. */
+  unplaced: IntelEvent[];
+};
 export type BlackBoxReport = {
   incidents: CrashIncident[];
   skipped_sources: string[];
+  /** Station scan only; absent from the background observer's report. */
+  since_last_worked?: SinceLastWorked | null;
 };
 
 // The Home card the Care observer surfaces (mirrors src-tauri/src/incident_observer.rs

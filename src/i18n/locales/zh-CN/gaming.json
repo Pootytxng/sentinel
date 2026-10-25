@@ -331,6 +331,25 @@
         }
       }
     },
+    "sinceWorked": {
+      "title": "自上次正常以来",
+      "notProven": "按时间列出,未证实是原因",
+      "since": "自你上一次没有崩溃记录的会话({{game}},{{date}})以来,Compy 记录到的所有事项,最新的在前:",
+      "nothing": "从那以后 Compy 没有记录到任何事项。",
+      "noSession": "Compy 还没有记录到一次结束的会话,所以无法说明这台电脑上次正常是什么时候。",
+      "noneClean": "Compy 找不到一次正常的会话:记录到的每次会话都有自己的崩溃或卡死,或者比 Compy 读到的崩溃记录还要早。",
+      "kind": {
+        "incident": "崩溃或卡死",
+        "compy": "Compy 的更改",
+        "observed": "发现的变化",
+        "drift": "设置偏离",
+        "session": "会话"
+      },
+      "observedBetween": "在 {{from}} 到 {{to}} 之间发现",
+      "rolledBack": "已撤销",
+      "more_other": "还有 {{count}} 条更早的记录。",
+      "unplaced": "以下事项大约在那时发生了变化,但 Compy 无法判断是在那次会话之前还是之后:"
+    },
     "introPre": "「崩溃与卡死」会读取 Windows 已经记录的崩溃与卡死证据,并叠加显示 Compy 自己的",
     "introEmph": "最后生命体征",
     "introPost": "来自当时正在运行的任意会话。它只如实报告已记录的内容——绝不猜测原因。",

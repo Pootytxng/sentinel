@@ -183,6 +183,10 @@ pub(crate) struct BlackBoxReport {
     /// LATEST such row, so before it "no crash on record during that session" can't be said. `None` = no read was cut. Internal.
     #[serde(skip)]
     pub(crate) clean_judgeable_from: Option<DateTime<Utc>>,
+    /// P6-timeline: the Care view's "Since it last worked" list (`intelligence::attach_changed_before`).
+    /// Filled by the station's scan only; `None` is omitted from the wire.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) since_last_worked: Option<crate::intelligence::SinceLastWorked>,
 }
 
 // ─── Pure assembly pipeline ────────────────────────────────────────────────
@@ -1626,6 +1630,7 @@ fn report_from(
         incidents,
         skipped_sources,
         clean_judgeable_from: read_cut.max(incident_cut),
+        since_last_worked: None,
     }
 }
 
@@ -2239,7 +2244,7 @@ mod blackbox_tests {
     #[test]
     fn serde_shape_is_stable_for_the_ts_contract() {
         let events = vec![ev("Microsoft-Windows-Kernel-Power", 41, "2026-06-12T21:42:00-07:00", "rebooted without cleanly shutting down", serde_json::Value::Null)];
-        let report = BlackBoxReport { incidents: from_events(events, &[]), skipped_sources: vec!["x".into()], clean_judgeable_from: None };
+        let report = BlackBoxReport { incidents: from_events(events, &[]), skipped_sources: vec!["x".into()], clean_judgeable_from: None, since_last_worked: None };
         let v = serde_json::to_value(&report).expect("serializes");
         assert!(v.get("incidents").and_then(|i| i.as_array()).is_some());
         assert!(v.get("skipped_sources").and_then(|s| s.as_array()).is_some());

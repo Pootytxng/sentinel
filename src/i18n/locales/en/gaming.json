@@ -341,6 +341,26 @@
         }
       }
     },
+    "sinceWorked": {
+      "title": "Since it last worked",
+      "notProven": "listed by time, not proven cause",
+      "since": "Everything Compy recorded since your last session with no crash on record ({{game}}, {{date}}), newest first:",
+      "nothing": "Compy hasn't recorded anything since then.",
+      "noSession": "Compy hasn't recorded a finished session yet, so it can't say when this PC last worked.",
+      "noneClean": "Compy can't name a session that worked: every recorded session had a crash or freeze of its own, or is older than the crash records Compy read.",
+      "kind": {
+        "incident": "Crash or freeze",
+        "compy": "Compy change",
+        "observed": "Noticed change",
+        "drift": "Setting drift",
+        "session": "Session"
+      },
+      "observedBetween": "noticed between {{from}} and {{to}}",
+      "rolledBack": "since undone",
+      "more_one": "And 1 earlier entry.",
+      "more_other": "And {{count}} earlier entries.",
+      "unplaced": "These changed around then, but Compy can't tell if it was before or after that session:"
+    },
     "introPre": "Crash & Freeze reads the crash and freeze evidence Windows already recorded, and overlays Compy's own",
     "introEmph": "last vitals",
     "introPost": "from any session that was running at the time. It only reports what was logged — it makes no guesses about the cause.",
