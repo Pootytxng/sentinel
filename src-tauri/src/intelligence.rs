@@ -98,6 +98,47 @@ pub(crate) struct EventRecord {
     /// or maps free text onto the catalog. That is the whole point: the alternative
     /// (prose → rec) would be fabrication.
     pub rec_id: Option<String>,
+    /// P6-changed-f1: the same facts as `summary`, as data, so the frontend composes the
+    /// line in the viewer's language instead of showing this English sentence. Values (driver
+    /// versions, plan names, change titles, game names) stay as recorded; only the words around
+    /// them are translated. `None` for kinds without structured parts, and for rows built
+    /// before the field existed: the frontend then shows `summary`, which stays the fallback.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parts: Option<EventParts>,
+}
+
+/// The structured facts behind an [`EventRecord`]'s `summary`, by event kind. Built at the
+/// same place, from the same values, as the sentence; never parsed back out of it.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub(crate) enum EventParts {
+    /// `change-applied`; the rolled-back state is the record's `since_rolled_back`.
+    Applied { title: String },
+    /// `change-rolled-back`.
+    RolledBack { title: String },
+    /// `gpu-driver-change`.
+    GpuDriver { from: String, to: String },
+    /// `windows-build-change`; `from`/`to` are the build strings as shown today.
+    WindowsBuild { from: String, to: String },
+    /// `power-plan-change`.
+    PowerPlan { from: String, to: String },
+    /// `hardware-change`: one entry per part that changed, in the summary's order.
+    Hardware { changes: Vec<HardwarePartChange> },
+    /// `readiness-drift`: the readiness check's own label.
+    Drift { label: String },
+    /// `session`: `fps` is `None` when nothing was measured (samples == 0).
+    Session { game: String, duration_secs: u64, fps: Option<(f64, f64)> },
+    /// `benchmark-baseline`.
+    BenchmarkBaseline,
+}
+
+/// One hardware part in a `hardware-change` event.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct HardwarePartChange {
+    /// "gpu" | "ram" | "display".
+    pub part: &'static str,
+    pub from: String,
+    pub to: String,
 }
 
 // ─── Identity snapshots (decision 3 — honest from-now-on persistence) ────
@@ -457,6 +498,7 @@ impl IdentityDeltaScan {
     ) {
         let emitted_before = out.len();
         let mut hw_changes: Vec<String> = Vec::new();
+        let mut hw_parts: Vec<HardwarePartChange> = Vec::new();
         let mut hw_from_at: Option<String> = None;
         let mut gpu_swapped = false;
 
@@ -464,6 +506,7 @@ impl IdentityDeltaScan {
             if let Some((prev, prev_at)) = &self.last_gpu {
                 if prev != gpu {
                     hw_changes.push(format!("GPU: {prev} → {gpu}"));
+                    hw_parts.push(HardwarePartChange { part: "gpu", from: prev.clone(), to: gpu.to_string() });
                     hw_from_at.get_or_insert_with(|| prev_at.clone());
                     gpu_swapped = true;
                 }
@@ -474,6 +517,7 @@ impl IdentityDeltaScan {
             if let Some((prev, prev_at)) = &self.last_ram {
                 if *prev != ram_gb {
                     hw_changes.push(format!("RAM: {prev} GB → {ram_gb} GB"));
+                    hw_parts.push(HardwarePartChange { part: "ram", from: format!("{prev} GB"), to: format!("{ram_gb} GB") });
                     hw_from_at.get_or_insert_with(|| prev_at.clone());
                 }
             }
@@ -483,6 +527,7 @@ impl IdentityDeltaScan {
             if let Some((prev, prev_at)) = &self.last_display {
                 if prev != display {
                     hw_changes.push(format!("Display: {prev} → {display}"));
+                    hw_parts.push(HardwarePartChange { part: "display", from: prev.clone(), to: display.to_string() });
                     hw_from_at.get_or_insert_with(|| prev_at.clone());
                 }
             }
@@ -506,6 +551,7 @@ impl IdentityDeltaScan {
                     observed_between: Some((from_at, at.to_string())),
                     since_rolled_back: false,
                     rec_id: None,
+                    parts: Some(EventParts::Hardware { changes: hw_parts }),
                 },
             });
         }
@@ -534,6 +580,7 @@ impl IdentityDeltaScan {
                             observed_between: Some((prev_at.clone(), at.to_string())),
                             since_rolled_back: false,
                             rec_id: None,
+                            parts: Some(EventParts::GpuDriver { from: prev.clone(), to: driver.to_string() }),
                         },
                     });
                 }
@@ -570,6 +617,10 @@ impl IdentityDeltaScan {
                                 observed_between: Some((prev_at.clone(), at.to_string())),
                                 since_rolled_back: false,
                                 rec_id: None,
+                                parts: Some(EventParts::WindowsBuild {
+                                    from: fmt(&prev.0, &prev.1, &prev.2),
+                                    to: fmt(&cur.0, &cur.1, &cur.2),
+                                }),
                             },
                         });
                     }
@@ -597,6 +648,7 @@ impl IdentityDeltaScan {
                             observed_between: Some((prev_at.clone(), at.to_string())),
                             since_rolled_back: false,
                             rec_id: None,
+                            parts: Some(EventParts::PowerPlan { from: prev.clone(), to: power.to_string() }),
                         },
                     });
                 }
@@ -706,6 +758,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             observed_between: None,
             since_rolled_back: rolled_back,
             rec_id: Some(c.rec_id.clone()),
+            parts: Some(EventParts::Applied { title: c.rec_title.clone() }),
         });
         if let Some(rb) = &c.rolled_back_at {
             if parse_utc(rb).is_none() {
@@ -723,6 +776,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                     observed_between: None,
                     since_rolled_back: false,
                     rec_id: Some(c.rec_id.clone()),
+                    parts: Some(EventParts::RolledBack { title: c.rec_title.clone() }),
                 });
             }
         }
@@ -757,6 +811,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             observed_between: window,
             since_rolled_back: false,
             rec_id: None,
+            parts: Some(EventParts::Drift { label: n.label.clone() }),
         });
     }
 
@@ -793,6 +848,11 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+            parts: Some(EventParts::Session {
+                game: pretty_game_name(&s.process_name),
+                duration_secs: s.duration_secs,
+                fps: (s.samples != 0).then_some((s.avg_fps, s.low1_fps_est)),
+            }),
         });
     }
 
@@ -812,6 +872,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 observed_between: None,
                 since_rolled_back: false,
                 rec_id: None,
+                parts: None,
             });
         } else {
             dropped += 1;
@@ -839,6 +900,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         });
     }
 
@@ -857,6 +919,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 observed_between: None,
                 since_rolled_back: false,
                 rec_id: None,
+                parts: Some(EventParts::BenchmarkBaseline),
             });
         } else {
             dropped += 1;
@@ -878,6 +941,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 observed_between: None,
                 since_rolled_back: false,
                 rec_id: None,
+                parts: None,
             });
         } else {
             dropped += 1;
@@ -3006,6 +3070,7 @@ mod tests {
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         }
     }
 
@@ -3520,6 +3585,7 @@ mod tests {
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         }
     }
 
@@ -3536,6 +3602,7 @@ mod tests {
             observed_between: None,
             since_rolled_back: rolled_back,
             rec_id: Some(rec_id.into()),
+            parts: None,
         }
     }
 
@@ -3661,6 +3728,7 @@ mod tests {
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         }
     }
 
@@ -4139,6 +4207,7 @@ mod tests {
             )),
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         };
         let r = report(&WhatChangedInputs {
             baseline: &b,
@@ -4171,6 +4240,7 @@ mod tests {
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         };
         let all = vec![
             mk_ev("before", "2026-07-09T09:59:00Z", "change-applied", EventScope::CompyApplied),
@@ -4760,6 +4830,55 @@ mod tests {
         let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
         assert_eq!(cb_cat(&r, "driver").status, "unknown");
         assert_eq!(cb_cat(&r, "driver").unknown_reason.as_deref(), Some("cant-place"));
+    }
+
+    #[test]
+    fn changed_before_events_carry_their_facts_as_data_for_the_frontend_to_word() {
+        // P6-changed-f1: zh-CN read Rust's English `summary` inside translated blocks. Each kind
+        // the Care view lists now also carries its values as data, built beside the sentence.
+        let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        g.applied = vec![mk_change("visual-effects", "Trim Windows visual effects", "2026-10-21T10:00:00Z", "applied")];
+        g.snapshots = vec![
+            mk_snap("2026-10-20T10:00:00Z", "drv-1", "26100", "Balanced"),
+            mk_snap("2026-10-22T10:00:00Z", "drv-2", "26100", "Ultimate Performance"),
+        ];
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        let wire = |cat: &str| serde_json::to_value(&cb_cat(&r, cat).events[0]).unwrap()["parts"].clone();
+        assert_eq!(wire("driver"), serde_json::json!({ "kind": "gpu-driver", "from": "drv-1", "to": "drv-2" }));
+        assert_eq!(
+            wire("power-plan"),
+            serde_json::json!({ "kind": "power-plan", "from": "Balanced", "to": "Ultimate Performance" })
+        );
+        assert_eq!(
+            wire("compy-changes"),
+            serde_json::json!({ "kind": "applied", "title": "Trim Windows visual effects" })
+        );
+        // The English sentence stays as the fallback for old data and unknown kinds.
+        assert_eq!(cb_cat(&r, "driver").events[0].summary, "GPU driver changed: drv-1 → drv-2");
+
+        // Sessions and hardware too (the "Since it last worked" list shows both).
+        let asm = assemble_from(&g);
+        let sess = asm.events.iter().find(|e| e.event_type == "session").unwrap();
+        assert_eq!(
+            serde_json::to_value(sess).unwrap()["parts"],
+            serde_json::json!({ "kind": "session", "game": sess.game.clone().unwrap(), "duration_secs": 600, "fps": [120.0, 100.0] })
+        );
+    }
+
+    #[test]
+    fn hardware_change_parts_name_each_part_in_summary_order() {
+        let mut scan = IdentityDeltaScan::new();
+        let mut out = Vec::new();
+        scan.feed(&mut out, "2026-10-20T10:00:00Z", "t", "t", "GPU A", "d", 16, "1080p", None, "");
+        scan.feed(&mut out, "2026-10-21T10:00:00Z", "t", "t", "GPU B", "d", 32, "1080p", None, "");
+        let hw = out.iter().find(|c| c.ev.event_type == "hardware-change").unwrap();
+        assert_eq!(
+            serde_json::to_value(&hw.ev).unwrap()["parts"],
+            serde_json::json!({ "kind": "hardware", "changes": [
+                { "part": "gpu", "from": "GPU A", "to": "GPU B" },
+                { "part": "ram", "from": "16 GB", "to": "32 GB" },
+            ] })
+        );
     }
 
     #[test]

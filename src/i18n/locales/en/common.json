@@ -213,5 +213,25 @@
     "attributionUnknown": "Compy can't read its own record, so it can't say whether any of its changes are part of this result.",
     "revealFile": "Show me the file Compy set aside",
     "revealFolder": "Open the Compy folder"
+  },
+  "timelineEvent": {
+    "applied": "{{title}} applied",
+    "appliedRolledBack": "{{title}} applied (since rolled back)",
+    "rolledBack": "{{title}} rolled back",
+    "gpuDriver": "GPU driver changed: {{from}} → {{to}}",
+    "windowsBuild": "Windows updated: {{from}} → {{to}}",
+    "powerPlan": "Power plan changed: {{from}} → {{to}}",
+    "hardware": "Hardware changed — {{changes}}",
+    "hardwarePart": {
+      "gpu": "GPU: {{from}} → {{to}}",
+      "ram": "RAM: {{from}} → {{to}}",
+      "display": "Display: {{from}} → {{to}}"
+    },
+    "drift": "No longer ready: {{label}}",
+    "session": "{{game}} session — {{duration}} · {{avg}} avg FPS · {{low}} 1% low",
+    "sessionUnmeasured": "{{game}} session — {{duration}} · nothing measured: another window was in front the whole time",
+    "durationMinutes": "{{minutes}} min",
+    "durationSeconds": "{{seconds}}s",
+    "benchmarkBaseline": "Lab baseline recorded"
   }
 }

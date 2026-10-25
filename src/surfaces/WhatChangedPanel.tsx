@@ -22,6 +22,7 @@ import { knownFps } from "../lib/session-metrics";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
+import { eventText } from "./event-text";
 
 // Intelligence Phase 1 — the "What changed?" panel (Monitor session debrief slot). Renders the
 // deterministic Rust engine's verdict for THIS session vs the previous session of the same game:
@@ -470,7 +471,7 @@ export function WhatChangedReportView({
               <ul>
                 {r.events_between.map((ev) => (
                   <li key={ev.id}>
-                    {ev.summary}
+                    {eventText(ev, t)}
                     <span className="wcp-between-when">
                       {" "}
                       · {ev.observed_between ? t("optimize.whatChangedPanel.observedByPrefix") : ""}

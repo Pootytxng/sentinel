@@ -208,5 +208,25 @@
     "attributionUnknown": "Compy 读不到自己的记录,因此无法判断这个结果里是否包含它做过的更改。",
     "revealFile": "看看 Compy 挪走的那个文件",
     "revealFolder": "打开 Compy 文件夹"
+  },
+  "timelineEvent": {
+    "applied": "已应用{{title}}",
+    "appliedRolledBack": "已应用{{title}}(之后已撤销)",
+    "rolledBack": "已撤销{{title}}",
+    "gpuDriver": "显卡驱动已变更:{{from}} → {{to}}",
+    "windowsBuild": "Windows 已更新:{{from}} → {{to}}",
+    "powerPlan": "电源计划已变更:{{from}} → {{to}}",
+    "hardware": "硬件已变更——{{changes}}",
+    "hardwarePart": {
+      "gpu": "显卡:{{from}} → {{to}}",
+      "ram": "内存:{{from}} → {{to}}",
+      "display": "显示器:{{from}} → {{to}}"
+    },
+    "drift": "不再就绪:{{label}}",
+    "session": "{{game}} 会话——{{duration}} · 平均 {{avg}} FPS · 1% 最低帧 {{low}}",
+    "sessionUnmeasured": "{{game}} 会话——{{duration}} · 没有测到数据:整段时间都有其他窗口在前台",
+    "durationMinutes": "{{minutes}} 分钟",
+    "durationSeconds": "{{seconds}} 秒",
+    "benchmarkBaseline": "已记录实验室基线"
   }
 }

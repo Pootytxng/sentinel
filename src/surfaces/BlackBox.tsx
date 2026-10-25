@@ -17,6 +17,7 @@ import type {
 import { resolutionFor, type HelpMark } from "../data/blackbox-resolution";
 import { StutterCompare } from "./StutterCompare";
 import { SinceLastWorked } from "./SinceLastWorked";
+import { eventText } from "./event-text";
 import { writeLedger } from "../data/ledger-write";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { LEDGER_CHANGED_EVENT } from "../types";
@@ -839,7 +840,7 @@ function ChangedBeforeRow({ it, when }: { it: ChangedBeforeItem; when: (iso: str
         <ul className="bb-changed-events">
           {it.events.map((e) => (
             <li key={e.id}>
-              {e.summary}
+              {eventText(e, t)}
               {e.observed_between
                 ? ` · ${t("gaming.blackBox.changedBefore.observedBetween", {
                     from: when(e.observed_between[0]),

@@ -1774,6 +1774,7 @@ mod machine_model_tests {
             )),
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         });
         let m = f.model();
         let e = &m.chronology.entries[0];
@@ -2319,6 +2320,7 @@ mod machine_model_tests {
             observed_between: None,
             since_rolled_back: false,
             rec_id: Some("game-mode".into()),
+            parts: None,
         });
         let m = f.model();
 
@@ -2464,7 +2466,7 @@ mod machine_model_tests {
                     id: "scoped-identity".into(), timestamp: "2026-08-20T00:00:00Z".into(),
                     event_type: "gpu-driver-change".into(), source: "identity-snapshot".into(),
                     scope: EventScope::Observed, game: None, summary: "GPU driver changed".into(),
-                    detail: None, observed_between: None, since_rolled_back: false, rec_id: None,
+                    detail: None, observed_between: None, since_rolled_back: false, rec_id: None, parts: None,
                 });
             }
             let m = f.model();
@@ -2845,6 +2847,7 @@ mod machine_model_tests {
             observed_between: None,
             since_rolled_back: false,
             rec_id: Some("rec-new".into()),
+            parts: None,
         });
         f
     }
@@ -3233,6 +3236,7 @@ mod machine_model_tests {
                 observed_between: None,
                 since_rolled_back: false,
                 rec_id: None,
+                parts: None,
             })
             .collect();
         let m = f.model();
@@ -3285,6 +3289,7 @@ mod machine_model_tests {
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         };
         let over_cap = MAX_CHRONOLOGY + 5;
         f.timeline = (0..over_cap)
@@ -3598,6 +3603,7 @@ mod machine_model_tests {
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         };
         let over = MAX_OBSERVED_CHRONOLOGY + 3;
         let applied = MAX_CHRONOLOGY + 2;
@@ -3719,6 +3725,7 @@ mod machine_model_tests {
             observed_between: None,
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         });
         let m = f.model();
         assert!(m
@@ -3897,6 +3904,7 @@ mod machine_model_tests {
             )),
             since_rolled_back: false,
             rec_id: None,
+            parts: None,
         });
         f.model()
     }

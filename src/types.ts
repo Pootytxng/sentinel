@@ -679,7 +679,23 @@ export type IntelEvent = {
   /** Trust-Ledger events only: the catalog rec id, copied verbatim off the ledger row.
    *  `null` for every other source, which has no rec behind it. */
   rec_id: string | null;
+  /** P6-changed-f1: the facts behind `summary` as data, so the line is worded in the viewer's
+   *  language (event-text.ts). Absent for kinds without parts and for older data: show `summary`. */
+  parts?: IntelEventParts | null;
 };
+
+/** By event kind (intelligence.rs `EventParts`). Values stay as recorded; only the words around
+ *  them are translated. */
+export type IntelEventParts =
+  | { kind: "applied"; title: string }
+  | { kind: "rolled-back"; title: string }
+  | { kind: "gpu-driver"; from: string; to: string }
+  | { kind: "windows-build"; from: string; to: string }
+  | { kind: "power-plan"; from: string; to: string }
+  | { kind: "hardware"; changes: { part: "gpu" | "ram" | "display"; from: string; to: string }[] }
+  | { kind: "drift"; label: string }
+  | { kind: "session"; game: string; duration_secs: number; fps: [number, number] | null }
+  | { kind: "benchmark-baseline" };
 
 export type IntelSessionRef = {
   started_at: string;
