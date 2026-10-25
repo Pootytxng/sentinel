@@ -144,7 +144,7 @@ export default function Overlay() {
   const progress = journey && fps?.active ? asProgress(fps.progress) : null;
   const enough = progress ? (
     <div className="ovl2-note" data-testid="overlay-enough">
-      {enoughLine(progress, t)}
+      {enoughLine(progress, t, "overlay")}
     </div>
   ) : null;
 

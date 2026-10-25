@@ -59,7 +59,7 @@ import { allBackground } from "../lib/session-metrics";
 import { writeLedger } from "../data/ledger-write";
 import { prettyGameName } from "./game-name";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
-import { asProgress, enoughLine, setJourneyRecording, type CaptureProgress } from "./journey-enough";
+import { asProgress, enoughLine, enoughState, setJourneyRecording, type CaptureProgress } from "./journey-enough";
 import { journeyStopped, pickUpJourney, stopJourneyHere, type JourneyProgress } from "./journey-resume";
 
 export type JourneyOutcome = "recommended" | "max-fps";
@@ -660,6 +660,7 @@ export function GuidedJourney({
 
   const playing = p.kind === "as-is" || p.kind === "with-change";
   const live = playing ? recorded : null;
+  const unsettled = live != null && enoughState(live).kind === "unsettled";
   const finished = !playing && p.kind !== "reading" && p.kind !== "judging" && p.kind !== "uneven";
   let line: string;
   switch (p.kind) {
@@ -728,8 +729,10 @@ export function GuidedJourney({
         </p>
       )}
       {playing && (
-        <button type="button" className="exp-cta-ghost" onClick={() => finishPlaying?.()}>
-          {t(`${k}.donePlaying`)}
+        // P5-enough-f1: past the settle cap the line offers to stop, and this is that stop: the same
+        // "Done playing" path, so the saved session is graded by the journey's usual steps.
+        <button type="button" className={unsettled ? "exp-cta" : "exp-cta-ghost"} onClick={() => finishPlaying?.()}>
+          {t(unsettled ? `${k}.stopNow` : `${k}.donePlaying`)}
         </button>
       )}
       {p.kind === "uneven" && !p.final && (
