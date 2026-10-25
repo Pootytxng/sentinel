@@ -190,6 +190,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
   clippy clean, tsc 0; review 1 round (MUST-FIX fixed, rest → P4-comparable-show); not pushed.
 - 2026-10-25 early (interactive): 3 WARDOGS sessions recorded for P4-noise; tokio `fcc64291`,
   P4-candidates `e0160644`, P4-comparable merged `99b132e0`.
+- 2026-10-24 ~17:00 desk install of main `791babf2` (stamp-proved, attempt 1; installer 5769273D…A5A19A) so the
+  owner's noise-measurement sessions count under the 453-f1 rule; RELEASE_STATE recorded.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
