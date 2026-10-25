@@ -958,6 +958,13 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
       return Promise.resolve(state.sessions as T);
     case "get_recommendations":
       return Promise.resolve(RECS as T);
+    // The bench's picker reads the same two changes through the Trial filter; one more, already set
+    // in Windows, so the "why others aren't listed" toggle has a row to review.
+    case "get_trial_candidates":
+      return Promise.resolve([
+        ...RECS.map((r) => ({ id: r.id, title: r.title, passes: true, reason: null, detail: null })),
+        { id: "fixture-rec-3", title: "Turn off mouse acceleration", passes: false, reason: "already-set", detail: null },
+      ] as T);
     // camelCase on purpose — the bench calls this with `{ recId }`, and the arg is echoed back so
     // the preview shows the sim for whichever rec the picker has selected.
     case "simulate_optimization":

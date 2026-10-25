@@ -223,7 +223,7 @@ impl ActiveCheck {
 /// disable and a session service suspend (which task or service). Each reads only when its typed
 /// action agrees with its rec id, and is `Unrecognised` otherwise; every other row is
 /// [`probe_rec_target`]. Read-only, and takes no lock.
-fn check_row_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
+pub(crate) fn check_row_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
     check_change_state(&c.rec_id, c.applied_action.as_ref(), reads)
 }
 

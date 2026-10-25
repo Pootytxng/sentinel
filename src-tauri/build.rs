@@ -84,6 +84,7 @@ const APP_COMMANDS: &[&str] = &[
     "get_sensor_sources",
     "get_session_summaries",
     "get_startup_entries",
+    "get_trial_candidates",
     "get_trial_state",
     "hide_overlay",
     "latency_measure_mouse",

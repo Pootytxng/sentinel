@@ -29,7 +29,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         return Promise.resolve(true);
       case "get_experiments":
         return Promise.resolve(harness.experiments);
-      case "get_recommendations":
+      case "get_trial_candidates":
         return Promise.resolve(harness.recs);
       case "get_session_summaries":
         return Promise.resolve(harness.sessions);
@@ -108,7 +108,7 @@ const RUNNING = {
 };
 /** A pre-lane-2b record: no baseline session id, no apply time, and nothing guarantees its numbers. */
 const LEGACY = { ...RUNNING, baseline_session_id: null, applied_at: null };
-const REC = { id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false };
+const REC = { id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null };
 const SIM = {
   rec_id: "test-rec",
   rec_title: "Test tweak",

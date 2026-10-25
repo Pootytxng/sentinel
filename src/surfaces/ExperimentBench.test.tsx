@@ -126,7 +126,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         return Promise.resolve(state.gate);
       case "get_experiments":
         return afterLoad(state.gate ? state.experiments : []);
-      case "get_recommendations":
+      case "get_trial_candidates":
         return afterLoad(state.recs);
       case "get_session_summaries":
         return afterLoad(state.sessions);
@@ -170,7 +170,7 @@ afterEach(() => {
 // anywhere reports a problem.
 //
 // Every test here used to fire straight at whatever `findByRole("combobox")` returned. That resolves
-// the moment the control exists — but the OPTIONS arrive separately, from get_recommendations. On a
+// the moment the control exists — but the OPTIONS arrive separately, from get_trial_candidates. On a
 // fast desk both land in the same microtask flush, so it worked ~always. On a loaded CI runner the
 // recs landed after the change event, the pick evaporated, and the failure surfaced three lines
 // down as "Unable to find an element with the text: Worth testing" — accusing the assertion instead
@@ -268,7 +268,7 @@ describe("ExperimentBench (armed)", () => {
 
   it("picking a change runs the simulator and offers Start against the real baseline", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
     render(<ExperimentBench />);
@@ -296,13 +296,102 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.getByText(/244/)).toBeInTheDocument(); // baseline avg fps
   });
 
+  // P4-candidates / GB-picker (owner rig, 2026-10-23): `game-bar-disable` was never offered and the
+  // picker said nothing about why. On that rig Windows already had Game Bar capture and Game DVR off
+  // (AppCaptureEnabled = 0, GameDVR_Enabled = 0, no Compy row), so leaving it out was right; the
+  // reason was missing. The picker now offers only changes worth testing on this PC and lists the
+  // rest, each with its reason, behind a toggle. Advice-only changes (no one-click apply) used to be
+  // offered too and dead-ended at Start.
+  it("offers only changes worth testing on this PC and says why the others aren't listed", async () => {
+    state.gate = true;
+    state.recs = [
+      { id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null },
+      { id: "game-bar-disable", title: "Disable Game Bar and Game DVR", passes: false, reason: "already-set", detail: null },
+      { id: "game-mode", title: "Enable Windows Game Mode", passes: false, reason: "already-set-by-compy", detail: null },
+      { id: "hdr-advisory", title: "Check HDR", passes: false, reason: "no-safe-apply", detail: null },
+      { id: "sysmain-disable", title: "Disable SysMain", passes: false, reason: "already-set-by-gaming-mode", detail: null },
+      { id: "mouse-accel-off", title: "Turn off mouse acceleration", passes: false, reason: "already-set-unchecked", detail: null },
+      { id: "nagle-disable", title: "Disable Nagle", passes: false, reason: "already-set-unconfirmed", detail: null },
+      {
+        id: "game-mode-stuck",
+        title: "Windows Game Mode",
+        passes: false,
+        reason: "already-set-by-gaming-mode-restore-unfinished",
+        detail: null,
+      },
+      {
+        id: "eee-disable",
+        title: "Turn off Energy-Efficient Ethernet",
+        passes: false,
+        reason: "not-for-this-pc",
+        detail: "No wired Ethernet port.",
+      },
+    ];
+    render(<ExperimentBench />);
+    const trigger = await screen.findByRole("combobox");
+    await waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+    await waitFor(() =>
+      expect(document.querySelector('[role="listbox"] [data-value="test-rec"]')).not.toBeNull(),
+    );
+    const offered = [...document.querySelectorAll('[role="listbox"] [data-value]')]
+      .map((el) => el.getAttribute("data-value"))
+      .filter((v) => v);
+    expect(offered).toEqual(["test-rec"]);
+    fireEvent.click(trigger); // close the menu
+
+    // The reasons sit behind the toggle, closed by default.
+    const toggle = screen.getByRole("button", { name: "Show why others aren't listed" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector(".exp-why-list")).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Hide why others aren't listed" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    const row = (id: string) => document.querySelector(`.exp-why-list [data-rec="${id}"]`)?.textContent ?? "";
+    expect(row("game-bar-disable")).toBe(
+      "Disable Game Bar and Game DVR Already set this way in Windows, not by Compy.",
+    );
+    expect(row("game-mode")).toContain("Already set. Compy applied it.");
+    expect(row("hdr-advisory")).toContain("Advice only.");
+    expect(row("sysmain-disable")).toContain("Compy's Gaming Mode set it for this session");
+    expect(row("mouse-accel-off")).toContain("Compy couldn't check whether it made this change.");
+    expect(row("nagle-disable")).toContain("Compy applied this earlier but can't confirm");
+    expect(row("nagle-disable")).not.toContain("not by Compy");
+    expect(row("game-mode-stuck")).toContain("hasn't finished putting it back");
+    expect(row("game-mode-stuck")).not.toContain("when the session ends");
+    expect(row("eee-disable")).toContain("Doesn't fit this PC's hardware. No wired Ethernet port.");
+    expect(row("test-rec")).toBe("");
+  });
+
+  it("shows no reasons toggle when every change is worth testing", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
+    render(<ExperimentBench />);
+    await screen.findByRole("combobox");
+    await waitFor(() => expect(screen.queryByText("Nothing worth testing on this PC right now.")).toBeNull());
+    expect(screen.queryByRole("button", { name: /why others aren't listed/ })).toBeNull();
+  });
+
+  it("with nothing worth testing, says so and still offers the reasons", async () => {
+    state.gate = true;
+    state.recs = [
+      { id: "game-bar-disable", title: "Disable Game Bar and Game DVR", passes: false, reason: "already-set", detail: null },
+    ];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("Nothing worth testing on this PC right now.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show why others aren't listed" }));
+    expect(screen.getByText("Already set this way in Windows, not by Compy.")).toBeInTheDocument();
+  });
+
   // bug->guard (independent review, 2026-08-18): the C-10 port first carried the empty entry as the
   // Picker's `placeholder`, which is not an option and so cannot be chosen. That silently removed
   // the `<select>`'s blank `<option value="">` — the only way back out of a pick — and no test
   // noticed, because every test only ever picks FORWARD. This one goes back.
   it("the empty entry is re-selectable, and choosing it clears the pick and the simulator card", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
     render(<ExperimentBench />);
@@ -330,7 +419,7 @@ describe("ExperimentBench (armed)", () => {
   // and this test died on "Worth testing"; the assertion below only holds if the interaction waited.
   it("picks correctly even when the initial ledger reads land LATE (the loaded-CI-runner case)", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
     const landTheReads = holdInitialLoad(); // nothing loads until this test says so
@@ -360,8 +449,8 @@ describe("ExperimentBench (armed)", () => {
   it("locks the change picker while a simulation is in flight (no reselect race at the apply boundary)", async () => {
     state.gate = true;
     state.recs = [
-      { id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false },
-      { id: "other-rec", title: "Other tweak", eligible: true, currently_applied: false },
+      { id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null },
+      { id: "other-rec", title: "Other tweak", passes: true, reason: null, detail: null },
     ];
     state.sessions = [VALORANT_SESSION];
     state.simHang = true; // simulate_optimization stays pending so we can observe the in-flight lock
@@ -380,7 +469,7 @@ describe("ExperimentBench (armed)", () => {
   // must stay visible (resolving to "already configured") rather than silently vanishing.
   it("re-derives the active pick from the live ledger on refocus (no stale 'worth-testing' after a sibling apply)", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
     render(<ExperimentBench />);
@@ -391,7 +480,7 @@ describe("ExperimentBench (armed)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Start experiment/ })).toBeEnabled());
 
     // A sibling Optimize apply lands: the same rec is now applied and the sim re-reads as already-configured.
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: true }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: false, reason: "already-set", detail: null }];
     state.sim = { ...WORTH_TESTING_SIM, verdict: "already-configured" };
     fireEvent.focus(window);
 
@@ -411,7 +500,7 @@ describe("ExperimentBench (armed)", () => {
   // ledger WITHOUT any refocus. Same honest outcome: "Already configured", no Start, pick stays visible.
   it("re-derives the active pick on an in-app ledger-changed event (sibling apply, same window, no refocus)", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
     render(<ExperimentBench />);
@@ -422,7 +511,7 @@ describe("ExperimentBench (armed)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Start experiment/ })).toBeEnabled());
 
     // A sibling Optimize apply lands in the same window — no focus/visibilitychange, just the event.
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: true }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: false, reason: "already-set", detail: null }];
     state.sim = { ...WORTH_TESTING_SIM, verdict: "already-configured" };
     fireEvent(window, new Event(LEDGER_CHANGED_EVENT));
 
@@ -430,6 +519,8 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.queryByText("Worth testing")).toBeNull();
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
     expect(screen.getByRole("combobox")).toHaveTextContent("Test tweak");
+    // The kept pick is said once: in the dropdown, not again under "why others aren't listed".
+    expect(screen.queryByRole("button", { name: /why others aren't listed/ })).toBeNull();
   });
 
   it("with a running experiment: shows the running panel with conclude + restore", async () => {
@@ -448,7 +539,7 @@ describe("ExperimentBench (armed)", () => {
   // The webview names a session; it never hands over the game or a frame rate to be trusted.
   it("starts against the baseline by session id, never by frame rates it supplies", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
     render(<ExperimentBench />);
@@ -504,7 +595,7 @@ describe("ExperimentBench (armed)", () => {
 
   it("never offers a session without a 1% low reading as the baseline (the backend would refuse it)", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [{ ...VALORANT_SESSION, low1_fps_est: 0 }];
     state.sim = WORTH_TESTING_SIM;
     render(<ExperimentBench />);
@@ -803,7 +894,7 @@ describe("ExperimentBench (armed)", () => {
 
   it("shows a refused start and starts nothing", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
     state.refuse = { start_experiment: "the baseline session is no longer in your session history" };
@@ -822,7 +913,7 @@ describe("ExperimentBench (armed)", () => {
   // disagrees with what is applied on the PC.
   it("re-reads and signals the ledger when a start fails after applying", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
     state.refuse = { start_experiment: "experiment aborted — the setting didn't read back as changed; Compy restored it" };
@@ -885,7 +976,7 @@ describe("ExperimentBench (armed)", () => {
     state.gate = true;
     state.sessions = [VALORANT_SESSION];
     if (button === "Start experiment") {
-      state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+      state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
       state.sim = WORTH_TESTING_SIM;
     } else {
       state.experiments = [RUNNING_EXPERIMENT];
@@ -917,7 +1008,7 @@ describe("ExperimentBench (armed)", () => {
   // the simulator card back.
   it("a started experiment's announcement does not bring the cleared simulator card back", async () => {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
     render(<ExperimentBench />);
@@ -952,7 +1043,7 @@ describe("the baseline is graded before a start", () => {
 
   async function openStart(session: unknown) {
     state.gate = true;
-    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [session];
     state.sim = WORTH_TESTING_SIM;
     render(<ExperimentBench />);
