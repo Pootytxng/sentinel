@@ -125,6 +125,17 @@ export type AppliedChange = {
   // Read-only, computed-at-read: stamped rig == today's rig, compared on stable identity fields only
   // (gpu · ram · display — deliberately driver-insensitive). null = legacy entry, honest "rig unknown".
   on_this_rig?: boolean | null;
+  // P5-outcomes-f1: the Trial behind an apply or undo made from the Trial bench's outcome switch.
+  // Additive, #[serde(default)] on the Rust side; absent/null for every other apply and undo.
+  justified_by_experiment?: TrialLink | null;
+  rollback_justified_by_experiment?: TrialLink | null;
+};
+
+/** Which Trial an outcome-switch apply or undo was based on, copied into the Trust Ledger row. */
+export type TrialLink = {
+  experiment_id: string;
+  outcome: "recommended" | "max-fps";
+  concluded_at?: string | null;
 };
 
 /** Whether the AppliedChange[] above is the whole story — `get_ledger_health`.

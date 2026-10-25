@@ -462,7 +462,8 @@ fn store_write_gate() -> &'static Mutex<()> {
 ///
 /// #398: this gate is the OUTERMOST lock the crate takes. The three lifecycle commands hold it and
 /// then enter `HISTORY_LOCK` — `start_experiment` through `history::apply_recommendation`,
-/// `conclude_experiment` and `restore_experiment` through `history::rollback_change` — so it is the
+/// `conclude_experiment` and `restore_experiment` through `history::rollback_change`, and the outcome
+/// switch's `apply_outcome_choice` / `undo_outcome_choice` through their `_citing` forms — so it is the
 /// outer half of `Experiment -> History` and, on the failure branches that record support evidence,
 /// of `Experiment -> SupportEvidence`. Until this helper existed the three sites open-coded
 /// `.lock()` with no record at all, which meant the recorder saw an empty stack on entering the
@@ -2293,6 +2294,123 @@ pub(crate) fn get_experiments() -> Vec<ExperimentRecord> {
     load_store().experiments.into_iter().filter(|e| e.status != ExperimentStatus::Pending).collect()
 }
 
+/// P5-outcomes-f1: the Trial bench's outcome switch, "keep" side. Re-applies `rec_id` through the
+/// audited `history` apply, and the Trust Ledger row records `experiment_id` as the Trial that
+/// justified it. The id comes from the webview, so it is checked against this module's own store
+/// first: it must be a Trial of this change judged Better. Refused while a Trial is starting or
+/// running (a re-apply would confound it), like the switch itself.
+///
+/// Holds the store gate across the check AND the apply, as `start_experiment` does, so a start
+/// can't write its Pending record between the two (the Experiment -> History nesting is declared
+/// in `race_seam::ALLOWED_NESTING`). No new mutation primitive; any elevation is the existing apply's.
+#[tauri::command]
+pub(crate) fn apply_outcome_choice(
+    rec_id: String,
+    rec_title: String,
+    experiment_id: String,
+) -> Result<crate::history::AppliedChangeView, String> {
+    if !experiment_gate() {
+        return Err("Trials aren't enabled in this build.".to_string());
+    }
+    let _g = lock_store()?;
+    let records = load_store().experiments;
+    keep_outcome_locked(&records, &rec_id, &experiment_id, |link| {
+        crate::history::apply_recommendation_citing(&rec_id, &rec_title, link)
+    })
+}
+
+/// P5-outcomes-f1: the outcome switch's "put back" side. Undoes ledger row `change_id` through the
+/// audited `history` rollback, and the row records `experiment_id` as the Trial that justified the
+/// undo. That Trial must be one of the row's change judged not worth keeping. Same refusals, and the
+/// same store gate held across the check and the undo, as [`apply_outcome_choice`].
+#[tauri::command]
+pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> Result<(), String> {
+    if !experiment_gate() {
+        return Err("Trials aren't enabled in this build.".to_string());
+    }
+    let _g = lock_store()?;
+    let records = load_store().experiments;
+    undo_outcome_locked(&records, &experiment_id, |cite| {
+        crate::history::rollback_change_citing(&change_id, cite)
+    })
+}
+
+/// The keep side's decision, run under the store gate: refuse while a Trial starts or runs, check
+/// the cited Trial, and only then call `apply` with its link.
+fn keep_outcome_locked<T>(
+    records: &[ExperimentRecord],
+    rec_id: &str,
+    experiment_id: &str,
+    apply: impl FnOnce(crate::history::TrialLink) -> Result<T, String>,
+) -> Result<T, String> {
+    outcome_switch_open(records)?;
+    apply(trial_link_in(records, experiment_id, rec_id, true)?)
+}
+
+/// The put-back side's decision, run under the store gate: refuse while a Trial starts or runs,
+/// then hand `rollback` the check for the row's change.
+fn undo_outcome_locked(
+    records: &[ExperimentRecord],
+    experiment_id: &str,
+    rollback: impl FnOnce(crate::history::CiteTrial) -> Result<(), String>,
+) -> Result<(), String> {
+    outcome_switch_open(records)?;
+    rollback(&|rec_id: &str| trial_link_in(records, experiment_id, rec_id, false))
+}
+
+/// PURE: the switch is closed while any Trial is starting or running.
+fn outcome_switch_open(records: &[ExperimentRecord]) -> Result<(), String> {
+    if records
+        .iter()
+        .any(|x| matches!(x.status, ExperimentStatus::Pending | ExperimentStatus::Running))
+    {
+        return Err("Finish or stop the Trial in progress before switching. Nothing was changed.".to_string());
+    }
+    Ok(())
+}
+
+/// PURE: the Trial an outcome-switch apply (`keep`) or undo cites, checked and copied for the
+/// Trust Ledger. A keep needs a Trial of this change judged Better (`improved`);
+/// an undo needs one judged not worth keeping (`no-change` or `regressed`). Anything else (unknown
+/// id, another change, a Trial still running or not measured) refuses, and nothing is changed.
+fn trial_link_in(
+    records: &[ExperimentRecord],
+    experiment_id: &str,
+    rec_id: &str,
+    keep: bool,
+) -> Result<crate::history::TrialLink, String> {
+    let x = records
+        .iter()
+        .find(|x| x.id == experiment_id && x.status != ExperimentStatus::Pending)
+        .ok_or_else(|| "Compy couldn't find the Trial this choice is based on, so nothing was changed.".to_string())?;
+    if x.rec_id != rec_id {
+        return Err("That Trial tested a different change, so nothing was changed.".to_string());
+    }
+    let verdict = x.verdict.as_deref();
+    let fits = if keep {
+        verdict == Some("improved")
+    } else {
+        matches!(verdict, Some("no-change") | Some("regressed"))
+    };
+    if !fits {
+        return Err(if keep {
+            "That Trial didn't judge this change Better, so it can't be the reason to apply it. Nothing was changed."
+        } else {
+            "That Trial didn't find this change not worth keeping, so it can't be the reason to undo it. Nothing was changed."
+        }
+        .to_string());
+    }
+    Ok(crate::history::TrialLink {
+        experiment_id: x.id.clone(),
+        outcome: match x.outcome {
+            TrialOutcome::MaxFps => "max-fps",
+            TrialOutcome::Recommended => "recommended",
+        }
+        .to_string(),
+        concluded_at: x.concluded_at.clone(),
+    })
+}
+
 /// §4G — estimate whether a change is worth a controlled test. Refuses while dark. Read-only; NEVER
 /// a promise of gain.
 #[tauri::command]
@@ -3591,6 +3709,116 @@ mod experiment_tests {
         assert_eq!(back.target_verified, None, "and its target as unverified");
         assert!(!back.prior_state_verified, "its prior state was never read");
         assert_eq!(back.final_state_verified, None, "nor its final state");
+    }
+
+    // ── P5-outcomes-f1: the Trial an outcome switch cites ──
+
+    fn judged(id: &str, rec_id: &str, verdict: &str, outcome: TrialOutcome) -> ExperimentRecord {
+        let mut r = rec(90.0, 5);
+        r.id = id.into();
+        r.rec_id = rec_id.into();
+        r.status = if verdict == "improved" { ExperimentStatus::Kept } else { ExperimentStatus::Restored };
+        r.verdict = Some(verdict.into());
+        r.outcome = outcome;
+        r.concluded_at = Some("2026-10-24T20:00:00+00:00".into());
+        r
+    }
+
+    #[test]
+    fn a_keep_cites_only_a_trial_of_this_change_judged_better() {
+        let store = [
+            judged("exp:max", "hags-on", "improved", TrialOutcome::MaxFps),
+            judged("exp:rec", "hags-on", "no-change", TrialOutcome::Recommended),
+            judged("exp:other", "game-mode-on", "improved", TrialOutcome::Recommended),
+        ];
+        let link = trial_link_in(&store, "exp:max", "hags-on", true).expect("a Better Trial justifies a keep");
+        assert_eq!(link.experiment_id, "exp:max");
+        assert_eq!(link.outcome, "max-fps");
+        assert_eq!(link.concluded_at.as_deref(), Some("2026-10-24T20:00:00+00:00"));
+        assert!(trial_link_in(&store, "exp:rec", "hags-on", true).is_err(), "no-change can't justify a keep");
+        assert!(trial_link_in(&store, "exp:other", "hags-on", true).is_err(), "another change's Trial");
+        assert!(trial_link_in(&store, "exp:missing", "hags-on", true).is_err(), "an unknown id");
+    }
+
+    #[test]
+    fn the_outcome_switch_is_closed_while_a_trial_starts_or_runs() {
+        let done = judged("exp:rec", "hags-on", "no-change", TrialOutcome::Recommended);
+        assert!(outcome_switch_open(std::slice::from_ref(&done)).is_ok());
+        for status in [ExperimentStatus::Pending, ExperimentStatus::Running] {
+            let mut busy = judged("exp:run", "game-mode-on", "no-change", TrialOutcome::Recommended);
+            busy.status = status;
+            assert!(outcome_switch_open(&[done.clone(), busy]).is_err());
+        }
+    }
+
+    #[test]
+    fn a_switch_call_is_refused_while_a_pending_or_running_trial_exists_and_changes_nothing() {
+        let keep = judged("exp:max", "hags-on", "improved", TrialOutcome::MaxFps);
+        let off = judged("exp:rec", "hags-on", "no-change", TrialOutcome::Recommended);
+        for status in [ExperimentStatus::Pending, ExperimentStatus::Running] {
+            let mut busy = judged("exp:new", "game-mode-on", "no-change", TrialOutcome::Recommended);
+            busy.status = status;
+            busy.verdict = None;
+            let store = [keep.clone(), off.clone(), busy];
+            let applied = keep_outcome_locked(&store, "hags-on", "exp:max", |_| -> Result<(), String> {
+                panic!("{status:?}: the apply must not run")
+            });
+            assert!(applied.is_err(), "{status:?}");
+            let undone = undo_outcome_locked(&store, "exp:rec", |_| panic!("{status:?}: the undo must not run"));
+            assert!(undone.is_err(), "{status:?}");
+        }
+        // With nothing in progress, both sides reach the ledger with the checked link.
+        let store = [keep, off];
+        let link = keep_outcome_locked(&store, "hags-on", "exp:max", Ok).expect("keep");
+        assert_eq!(link.experiment_id, "exp:max");
+        let mut cited = None;
+        undo_outcome_locked(&store, "exp:rec", |cite| {
+            cited = Some(cite("hags-on"));
+            Ok(())
+        })
+        .expect("undo");
+        assert_eq!(cited.expect("cited").expect("fits").experiment_id, "exp:rec");
+    }
+
+    #[test]
+    fn the_outcome_switch_commands_hold_the_store_gate_across_the_check_and_the_ledger_write() {
+        // No seam reaches these commands without the real data root, so the ordering is pinned on
+        // the source: the gate is taken before the store is read, and the ledger call sits after it
+        // in the same body (start_experiment's shape).
+        let src = include_str!("experiment.rs");
+        for (sig, call) in [
+            ("pub(crate) fn apply_outcome_choice(", "crate::history::apply_recommendation_citing("),
+            ("pub(crate) fn undo_outcome_choice(", "crate::history::rollback_change_citing("),
+        ] {
+            let body = src.split_once(sig).and_then(|(_, r)| r.split_once("\n}\n")).map(|(b, _)| b).expect(sig);
+            let gate = body.find("let _g = lock_store()?;").expect("the gate is taken");
+            let read = body.find("load_store()").expect("the store is read");
+            let write = body.find(call).expect("the ledger is written");
+            assert!(gate < read && read < write, "{sig}: gate, then read, then write");
+        }
+    }
+
+    #[test]
+    fn an_undo_cites_only_a_trial_of_this_change_judged_not_worth_keeping() {
+        let mut running = judged("exp:run", "hags-on", "no-change", TrialOutcome::Recommended);
+        running.verdict = None;
+        running.status = ExperimentStatus::Running;
+        let mut pending = judged("exp:pend", "hags-on", "no-change", TrialOutcome::Recommended);
+        pending.status = ExperimentStatus::Pending;
+        let store = [
+            judged("exp:max", "hags-on", "improved", TrialOutcome::MaxFps),
+            judged("exp:rec", "hags-on", "no-change", TrialOutcome::Recommended),
+            judged("exp:reg", "hags-on", "regressed", TrialOutcome::Recommended),
+            judged("exp:noisy", "hags-on", "too-noisy", TrialOutcome::Recommended),
+            running,
+            pending,
+        ];
+        let link = trial_link_in(&store, "exp:rec", "hags-on", false).expect("no-change justifies an undo");
+        assert_eq!(link.outcome, "recommended");
+        assert!(trial_link_in(&store, "exp:reg", "hags-on", false).is_ok());
+        for id in ["exp:max", "exp:noisy", "exp:run", "exp:pend"] {
+            assert!(trial_link_in(&store, id, "hags-on", false).is_err(), "{id} can't justify an undo");
+        }
     }
 
     // ── Record-first lifecycle integrity (#583 lane 1) ──

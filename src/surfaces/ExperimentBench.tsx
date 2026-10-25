@@ -849,8 +849,10 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   }
 
   // P5-outcomes: switch one change to the other outcome's result, only through the audited paths.
-  // Keeping it re-applies through apply_recommendation, and only with the Trial that judged it Better
-  // under that outcome; putting it back undoes its newest live apply through rollback_change.
+  // Keeping it re-applies through apply_outcome_choice (the apply_recommendation path, plus the Trial
+  // that judged it Better under that outcome, recorded on the ledger row); putting it back undoes its
+  // newest live apply through undo_outcome_choice (the rollback_change path, plus the Trial that
+  // didn't keep it).
   async function pickOutcome(c: OutcomeChoice, pick: ResultOutcome) {
     // Never while a Trial or the journey is under way: an undo could take back the running Trial's
     // own apply mid-measurement, and a re-apply would confound it.
@@ -863,7 +865,11 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
           (x) => x.id === c.keepTrialId && x.rec_id === c.recId && x.verdict === "improved" && (x.outcome === "max-fps" ? "max-fps" : "recommended") === pick,
         );
         if (!better) return; // no Trial judged it Better under this outcome: there is no keep
-        await runWrite((refresh) => writeLedger("apply_recommendation", { recId: c.recId, recTitle: c.title }, refresh));
+        // P5-outcomes-f1: the same audited apply, and the ledger row records which Trial justified
+        // it. The backend checks that Trial against its own store before anything changes.
+        await runWrite((refresh) =>
+          writeLedger("apply_outcome_choice", { recId: c.recId, recTitle: c.title, experimentId: better.id }, refresh),
+        );
       } else {
         // The undo targets the newest apply of this change that reads on (the shared #453 rule).
         const rows = await invoke<AppliedChange[]>("get_applied_changes").catch(() => null);
@@ -872,7 +878,11 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
           setError(t("lab.experimentBench.outcomeChoice.notFound", { change: c.title }));
           return;
         }
-        await runWrite((refresh) => writeLedger("rollback_change", { changeId: live.id }, refresh));
+        // The Trial under the picked outcome that didn't keep it is the reason for the undo.
+        const because = pick === "max-fps" ? c.maxFps : c.recommended;
+        await runWrite((refresh) =>
+          writeLedger("undo_outcome_choice", { changeId: live.id, experimentId: because.trialId }, refresh),
+        );
       }
     } finally {
       setBusy(false);

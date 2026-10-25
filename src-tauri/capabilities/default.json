@@ -19,6 +19,7 @@
     },
     "allow-acknowledge-hardware-changes",
     "allow-acknowledge-receipts-disclosure",
+    "allow-apply-outcome-choice",
     "allow-apply-recommendation",
     "allow-apply-recommendations-batch",
     "allow-arm-comparison",
@@ -122,6 +123,7 @@
     "allow-stop-fps-capture",
     "allow-stop-gaming-session",
     "allow-suspend-known-service",
+    "allow-undo-outcome-choice",
     "allow-what-changed-between",
     "allow-what-changed-for-session"
   ]
