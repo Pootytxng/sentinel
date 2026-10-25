@@ -484,6 +484,7 @@ export function LabConsole({
             changes={fast.changes}
             onChanged={fast.onChanged}
             ledgerBusy={fast.busyId !== null}
+            onLedgerBusy={fast.onLedgerBusy}
           />
         );
     }

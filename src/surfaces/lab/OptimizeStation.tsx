@@ -47,6 +47,9 @@ export type LabFastPathProps = {
   ) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
   onOpenLibrary: (focusId?: string) => void;
   onChanged: () => void;
+  /** P6-restore: a Care "Put back" holds App's busy flag for its whole run, so every other ledger
+   *  control stays disabled until it finishes. Optional so non-App callers (tests) pass nothing. */
+  onLedgerBusy?: (busy: boolean) => void;
   sessions: SessionSummary[];
   gpus: { name: string; driver_age_days: number | null }[];
   vendor: GpuVendor;

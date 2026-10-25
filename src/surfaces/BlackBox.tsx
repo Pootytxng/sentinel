@@ -19,7 +19,13 @@ import { StutterCompare } from "./StutterCompare";
 import { writeLedger } from "../data/ledger-write";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { LEDGER_CHANGED_EVENT } from "../types";
-import { restorePlan, runRestore, type RestoreResult } from "./changed-before-restore";
+import {
+  restorePlan,
+  runRestore,
+  trialInProgress,
+  type RestoreResult,
+} from "./changed-before-restore";
+import { useJourneyPhase } from "./GuidedJourney";
 import "./BlackBox.css";
 
 // Black Box v1 (Paramedic Mode) — crash/freeze evidence reader, rendered as a Lab instrument.
@@ -34,6 +40,7 @@ export function BlackBox({
   changes,
   onChanged,
   ledgerBusy = false,
+  onLedgerBusy,
 }: {
   // Feeds the scan result up (V2 Lab's latest-readings strip) — same read, no second IPC.
   onReport?: (r: BlackBoxReport) => void;
@@ -48,6 +55,8 @@ export function BlackBox({
   onChanged?: () => Promise<unknown> | void;
   /** Another apply or undo is in flight elsewhere: one ledger write at a time. */
   ledgerBusy?: boolean;
+  /** Tells App a "Put back" is running, so its own busy flag holds every other ledger control. */
+  onLedgerBusy?: (busy: boolean) => void;
 } = {}) {
   const { t } = useTranslation();
   const [report, setReport] = useState<BlackBoxReport | null>(null);
@@ -75,6 +84,61 @@ export function BlackBox({
         onReport?.(r);
       })
       .catch(() => undefined);
+
+  // P6-restore's shared state: one "Put back" at a time across every incident, and none while a
+  // Trial is in progress (the outcome switch's rule: an undo could take back the running Trial's
+  // own apply mid-measurement). The Trial read happens when a report could offer something, and
+  // again at the click.
+  const journey = useJourneyPhase();
+  const journeyIdle = journey.kind === "idle";
+  const [restoring, setRestoring] = useState(false);
+  const [experiments, setExperiments] = useState<{ status: string }[] | null | undefined>(undefined);
+  const readExperiments = () =>
+    invoke<{ status: string }[]>("get_experiments")
+      .then((xs) => (Array.isArray(xs) ? xs : null))
+      .catch(() => null);
+  const mayOffer =
+    !!changes &&
+    !!report?.incidents.some((i) =>
+      i.changed_before?.items.some((it) => it.category === "compy-changes" && it.status === "changed"),
+    );
+  useEffect(() => {
+    if (!mayOffer) return;
+    let live = true;
+    void readExperiments().then((xs) => {
+      if (live) setExperiments(xs);
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read per report, not per render
+  }, [mayOffer, report]);
+  const restore: RestoreCtx | undefined = changes
+    ? {
+        changes,
+        busy: ledgerBusy || restoring,
+        trial: experiments === undefined ? "checking" : trialInProgress(experiments, journeyIdle),
+        begin: async () => {
+          const xs = await readExperiments();
+          setExperiments(xs);
+          if (trialInProgress(xs, journeyIdle) !== "none") return false;
+          setRestoring(true);
+          onLedgerBusy?.(true);
+          return true;
+        },
+        end: async (ran) => {
+          try {
+            if (ran) {
+              await onChanged?.();
+              await rescan();
+            }
+          } finally {
+            setRestoring(false);
+            onLedgerBusy?.(false);
+          }
+        },
+      }
+    : undefined;
 
   // Arrive-and-scan, once, only on a deep-link. The scan itself is the SAME on-demand read a click
   // makes — no watcher, no cadence, no second IPC shape.
@@ -127,12 +191,7 @@ export function BlackBox({
                   inc={inc}
                   allIncidents={report.incidents}
                   selected={!!selectedIncidentId && inc.incident_id === selectedIncidentId}
-                  changes={changes}
-                  ledgerBusy={ledgerBusy}
-                  onRestored={async () => {
-                    await onChanged?.();
-                    await rescan();
-                  }}
+                  restore={restore}
                 />
               ))}
             </ul>
@@ -162,15 +221,11 @@ function IncidentRow({
   inc,
   allIncidents,
   selected = false,
-  changes,
-  ledgerBusy = false,
-  onRestored,
+  restore,
 }: {
   inc: CrashIncident;
   allIncidents: CrashIncident[];
-  changes?: AppliedChange[];
-  ledgerBusy?: boolean;
-  onRestored?: () => Promise<void>;
+  restore?: RestoreCtx;
   /** This is the exact incident the user was routed here to see. Marked, and scrolled into view —
    *  a deep-link that lands the user in a list of twenty-five rows has not actually arrived. */
   selected?: boolean;
@@ -202,12 +257,7 @@ function IncidentRow({
       )}
 
       {inc.changed_before && (
-        <ChangedBeforeBlock
-          cb={inc.changed_before}
-          changes={changes}
-          ledgerBusy={ledgerBusy}
-          onRestored={onRestored}
-        />
+        <ChangedBeforeBlock cb={inc.changed_before} restore={restore} />
       )}
 
       {/* Black Box v2 (only present when blackbox_v2_gate() is ON): triage — consistent-with + a
@@ -506,17 +556,7 @@ function fmtWhen(iso: string, lang: string): string {
   return d.toLocaleString(lang, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function ChangedBeforeBlock({
-  cb,
-  changes,
-  ledgerBusy = false,
-  onRestored,
-}: {
-  cb: ChangedBeforeIncident;
-  changes?: AppliedChange[];
-  ledgerBusy?: boolean;
-  onRestored?: () => Promise<void>;
-}) {
+function ChangedBeforeBlock({ cb, restore }: { cb: ChangedBeforeIncident; restore?: RestoreCtx }) {
   const { t, i18n } = useTranslation();
   const when = (iso: string) => fmtWhen(iso, i18n.language);
   return (
@@ -541,116 +581,153 @@ function ChangedBeforeBlock({
           ))}
         </ul>
       )}
-      <RestoreOffer cb={cb} changes={changes} ledgerBusy={ledgerBusy} onRestored={onRestored} when={when} />
+      {restore && <RestoreOffer cb={cb} restore={restore} when={when} />}
     </div>
   );
 }
+
+/** What every "Put back" shares: the ledger rows, one-at-a-time busy, the Trial lock, and the
+ *  start/finish of a run (which hold App's busy flag and refresh the views). */
+type RestoreCtx = {
+  changes: AppliedChange[];
+  busy: boolean;
+  trial: "checking" | "none" | "running" | "unknown";
+  /** Re-checks for a Trial and takes the shared busy flag; false = refused, nothing ran. */
+  begin: () => Promise<boolean>;
+  end: (ran: boolean) => Promise<void>;
+};
 
 // P6-restore: "Put back how it was on <date>". Lists the changes, confirms, then undoes them one at
 // a time, newest first, and says what happened to each. It never says this fixes the problem.
 function RestoreOffer({
   cb,
-  changes,
-  ledgerBusy,
-  onRestored,
+  restore,
   when,
 }: {
   cb: ChangedBeforeIncident;
-  changes?: AppliedChange[];
-  ledgerBusy: boolean;
-  onRestored?: () => Promise<void>;
+  restore: RestoreCtx;
   when: (iso: string) => string;
 }) {
   const { t } = useTranslation();
   const confirm = useConfirmOptional();
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<RestoreResult[] | null>(null);
-  const plan = restorePlan(cb, changes);
+  const [refused, setRefused] = useState(false);
+  const plan = restorePlan(cb, restore.changes);
   if (!plan && !results) return null;
   const date = plan ? when(plan.date) : "";
-  const offer = plan?.offer ?? [];
+  const groups = plan?.groups ?? [];
+  const dest = (label: string | null) => (label ? t("app.dialogs.rollbackDest", { label }) : "");
+  const locked = restore.trial === "running" || restore.trial === "unknown";
 
   const go = async () => {
-    if (!confirm || offer.length === 0) return;
-    const titles = offer.map((c) => c.rec_title).join("; ");
+    if (!confirm || !plan || plan.steps.length === 0) return;
+    const items = groups
+      .map((g) =>
+        t("gaming.blackBox.changedBefore.restore.confirmItem", { title: g.title, count: g.rows.length, dest: dest(g.restoresLabel) }),
+      )
+      .join(" ");
     const ok = await confirm({
       title: t("gaming.blackBox.changedBefore.restore.confirmTitle", { date }),
-      body: t("gaming.blackBox.changedBefore.restore.confirmBody", { count: offer.length, titles }),
+      body: t("gaming.blackBox.changedBefore.restore.confirmBody", { count: groups.length, items }),
       confirmLabel: t("gaming.blackBox.changedBefore.restore.confirmLabel"),
     });
     if (!ok) return;
+    if (!(await restore.begin())) {
+      setRefused(true);
+      return;
+    }
+    setRefused(false);
     setRunning(true);
     let announced = false;
-    const out = await runRestore(offer, async (c) => {
-      await writeLedger("rollback_change", { changeId: c.id });
-      announced = true;
-    });
-    // An undo that ran but couldn't be saved changed Windows too: every ledger reader re-reads.
-    const ran = out.some((r) => r.outcome === "undone" || r.outcome === "unrecorded");
-    if (ran && !announced) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
-    setResults(out);
-    if (ran) await onRestored?.();
-    setRunning(false);
+    let out: RestoreResult[] = [];
+    try {
+      out = await runRestore(plan.steps, async (c) => {
+        await writeLedger("rollback_change", { changeId: c.id });
+        announced = true;
+      });
+    } finally {
+      // An undo that ran but couldn't be saved changed Windows too: every ledger reader re-reads.
+      const ran = out.some((r) => r.outcome === "undone" || r.outcome === "unrecorded");
+      if (ran && !announced) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
+      setResults(out);
+      await restore.end(ran);
+      setRunning(false);
+    }
   };
 
-  const done = results?.filter((r) => r.outcome === "undone" || r.outcome === "unrecorded").length ?? 0;
+  // A change undone in more than one apply shows each apply's time, so the rows can be told apart.
+  const repeated = new Set(groups.filter((g) => g.rows.length > 1).map((g) => g.recId));
+  const label = (r: RestoreResult) => (repeated.has(r.recId) ? `${r.title} (${when(r.appliedAt)})` : r.title);
+  const undone = results?.filter((r) => r.outcome === "undone").length ?? 0;
+  const unsaved = results?.filter((r) => r.outcome === "unrecorded").length ?? 0;
   return (
     <div className="bb-restore">
-      {plan && offer.length > 0 && !results && (
+      {plan && groups.length > 0 && !results && (
         <>
-          <p className="bb-restore-intro">
-            {t("gaming.blackBox.changedBefore.restore.intro", { count: offer.length })}
-          </p>
+          <p className="bb-restore-intro">{t("gaming.blackBox.changedBefore.restore.intro", { count: groups.length })}</p>
           <ul className="bb-restore-list">
-            {offer.map((c) => (
-              <li key={c.id}>{c.rec_title}</li>
+            {groups.map((g) => (
+              <li key={g.recId}>
+                {g.rows.length > 1 ? t("gaming.blackBox.changedBefore.restore.offerItemRepeat", { title: g.title, count: g.rows.length }) : g.title}
+              </li>
             ))}
           </ul>
           <p className="bb-restore-maybe">{t("gaming.blackBox.changedBefore.restore.maybeNotCause")}</p>
+          {(locked || refused) && (
+            <p className="bb-restore-locked" role="status">
+              {restore.trial === "unknown" ? t("gaming.blackBox.changedBefore.restore.trialUnknown") : t("gaming.blackBox.changedBefore.restore.trialRunning")}
+            </p>
+          )}
           {confirm && (
             <button
               type="button"
               className="bb-restore-btn"
               onClick={go}
-              disabled={running || ledgerBusy}
+              disabled={running || restore.busy || restore.trial !== "none"}
             >
-              {running
-                ? t("gaming.blackBox.changedBefore.restore.running")
-                : t("gaming.blackBox.changedBefore.restore.button", { date })}
+              {running ? t("gaming.blackBox.changedBefore.restore.running") : t("gaming.blackBox.changedBefore.restore.button", { date })}
             </button>
           )}
         </>
       )}
-      {plan && plan.notLive.length > 0 && !results && (
-        <p className="bb-restore-notlive">
-          {t("gaming.blackBox.changedBefore.restore.notLive", { titles: plan.notLive.join("; ") })}
+      {plan && plan.turnedOnAgain.length > 0 && !results && (
+        <p className="bb-restore-notlive" data-reason="turned-on-again">
+          {t("gaming.blackBox.changedBefore.restore.turnedOnAgain", { titles: plan.turnedOnAgain.join("; ") })}
+        </p>
+      )}
+      {plan && plan.unconfirmed.length > 0 && !results && (
+        <p className="bb-restore-notlive" data-reason="unconfirmed">
+          {t("gaming.blackBox.changedBefore.restore.notLive", { titles: plan.unconfirmed.join("; ") })}
         </p>
       )}
       {results && (
         <div className="bb-restore-results" role="status">
-          <p className="bb-restore-summary">
-            {done === 0
-              ? t("gaming.blackBox.changedBefore.restore.summaryNone")
-              : done === results.length
-              ? t("gaming.blackBox.changedBefore.restore.summaryAll", { count: done })
-              : t("gaming.blackBox.changedBefore.restore.summaryPartial", { done, total: results.length })}
-          </p>
+          {(undone > 0 || unsaved === 0) && (
+            <p className="bb-restore-summary">
+              {undone === 0
+                ? t("gaming.blackBox.changedBefore.restore.summaryNone")
+                : undone === results.length
+                ? t("gaming.blackBox.changedBefore.restore.summaryAll", { count: undone })
+                : t("gaming.blackBox.changedBefore.restore.summaryPartial", { done: undone, total: results.length })}
+            </p>
+          )}
+          {unsaved > 0 && <p className="bb-restore-summary">{t("gaming.blackBox.changedBefore.restore.summaryUnsaved", { count: unsaved })}</p>}
           <ul className="bb-restore-list">
             {results.map((r) => (
               <li key={r.id} data-outcome={r.outcome}>
                 {r.outcome === "undone"
-                  ? t("gaming.blackBox.changedBefore.restore.result.undone", { title: r.title })
+                  ? t("gaming.blackBox.changedBefore.restore.result.undone", { title: label(r) })
                   : r.outcome === "unrecorded"
-                  ? t("gaming.blackBox.changedBefore.restore.result.unrecorded", { title: r.title })
+                  ? t("gaming.blackBox.changedBefore.restore.result.unrecorded", { title: label(r) })
                   : r.outcome === "failed"
-                  ? t("gaming.blackBox.changedBefore.restore.result.failed", { title: r.title })
-                  : t("gaming.blackBox.changedBefore.restore.result.notTried", { title: r.title })}
+                  ? t("gaming.blackBox.changedBefore.restore.result.failed", { title: label(r) })
+                  : t("gaming.blackBox.changedBefore.restore.result.notTried", { title: label(r) })}
+                {r.liveRead && <span className="bb-restore-liveread"> {r.liveRead}</span>}
               </li>
             ))}
           </ul>
-          {done > 0 && (
-            <p className="bb-restore-maybe">{t("gaming.blackBox.changedBefore.restore.maybeNotCause")}</p>
-          )}
+          {undone + unsaved > 0 && <p className="bb-restore-maybe">{t("gaming.blackBox.changedBefore.restore.maybeNotCause")}</p>}
         </div>
       )}
     </div>

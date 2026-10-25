@@ -2450,6 +2450,36 @@ mod receipt_commit_tests {
         build_applied_change("fast-startup-off", "Disable Fast Startup", fast_startup()).expect("build")
     }
 
+    #[test]
+    fn undoing_an_older_apply_of_a_change_restores_that_rows_own_snapshot() {
+        // P6-restore undoes every in-window apply of one change, newest first. The second apply
+        // snapshotted the already-changed setting (0), so only the older row's undo gets back to
+        // how it was before (1). Both rows must be accepted, each restoring from its own snapshot.
+        let mut older = applied_fast_startup();
+        older.id = "fast-startup-off-1".into();
+        let mut newer = build_applied_change(
+            "fast-startup-off",
+            "Disable Fast Startup",
+            ApplyResult { snapshot: Snapshot::FastStartup { prior_hiberboot: Some(0) }, ..fast_startup() },
+        )
+        .expect("build");
+        newer.id = "fast-startup-off-2".into();
+        let mut history = vec![older, newer];
+        let seen = Seen::default();
+        roll_back(&mut history, 1, Ok(()), Ok(()), ActiveCheck::Off, &seen).expect("the newest apply undoes");
+        roll_back(&mut history, 0, Ok(()), Ok(()), ActiveCheck::Off, &seen).expect("the older apply is accepted too");
+        let undo = RollbackAction::RestoreFastStartupFromSnapshot;
+        assert_eq!(
+            *seen.rollbacks.borrow(),
+            vec![
+                contract(&undo, &Snapshot::FastStartup { prior_hiberboot: Some(0) }),
+                contract(&undo, &Snapshot::FastStartup { prior_hiberboot: Some(1) }),
+            ],
+            "each undo must restore its own row's snapshot, the older one last"
+        );
+        assert!(history.iter().all(|c| c.status == "rolled_back"));
+    }
+
     // ── P5-outcomes-f1: the Trial behind an outcome-switch apply or undo ──
 
     fn trial(id: &str, outcome: &str) -> TrialLink {
