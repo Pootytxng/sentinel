@@ -415,6 +415,15 @@
       "effectUnknownOne": "效果有多大尚不清楚。",
       "effectUnknownAll": "Compy 不知道这些更改的效果有多大，所以没有因为“效果太小测不出来”而排除任何一项。"
     },
+    "next": {
+      "label": "{{game}} 下一项可测试：",
+      "why": "按建议的测试顺序，它排在下一位：{{evidence}}；{{risk}}。",
+      "setUp": "准备这项测试",
+      "offerOnly": "在你开始测试之前，什么都不会改动。",
+      "none": "这台主机上没有其他值得测试的更改了。",
+      "noneWhy": "Compy 列为值得在这里测试的每一项更改，都已在 {{game}} 上测试过。",
+      "noneEffectUnknown": "Compy 不知道任何一项更改的效果会有多大，所以这份列表依据的是更改是否适用于这里、是否已设置、能否安全撤销，而不是效果大小。"
+    },
     "readingRig": "正在读取你的主机…",
     "forYourRig": "针对你的主机：",
     "watch": "关注：",
