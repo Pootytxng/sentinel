@@ -103,8 +103,8 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 - [ ] **#622-f2** Health verdict panel scrolls inside itself in narrow windows (#225, needs its own change);
       at exactly 600 px (en) the Live row timeline is ~27 px wide.
 - [x] **#638** Phase 2 follow-ons from PR #634. Lands with this log entry (Optimize can't-confirm group, History tile title).
-- [ ] **GB-picker** `game-bar-disable` not offered in the Trial picker on the owner rig with both
-      values = 1 (seen 2026-10-23 07:46 on a fresh Compy). Reproduce, then fix or close.
+- [x] **GB-picker** `e0160644`: not a bug — Game Bar already off in Windows (AppCaptureEnabled=0, GameDVR_Enabled=0),
+      now shown as "Already set this way in Windows, not by Compy".
 - [x] **#686-followup** One `LiveReads` per Trial start instead of one PowerShell spawn per row. `6e7792a8`.
 
 ### Then — Roadmap Phase 4: Optimization Engine v1 (`product/OPTIMIZATION_ENGINE.md`)
@@ -137,7 +137,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - [x] **P4-sessions** (uneven-session half only, owner approved 2026-10-24; the "effect below
       session-to-session spread" half waits for P4-noise, which supplies that spread) "Too noisy to judge" verdict (Inconclusive, restored) when either session is uneven
       or the effect is below session-to-session spread. Test replays the −18.5% case. Needs P4-baseline-quality.
-- [x] **P4-comparable** (this entry's commit): alt-tabbed seconds (helper sees the game's own window behind
+- [x] **P4-comparable** `4dd3b46e` + `99b132e0` (merged with the interactive lane: flat stretches named,
+      What-differed keys, too-few-readings wording; one field `background_secs_excluded`): alt-tabbed seconds (helper sees the game's own window behind
       another) stay out of every session FPS figure and are counted in `background_secs_excluded`; unknown,
       UWP/launcher-owned windows and older helpers measured as before. A Partial pair's one-line "what
       differed" already shipped (`experiment.rs` `with_comparability`). Menus shown in front stay measured:
@@ -145,9 +146,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - [ ] **P4-comparable-show** Receipt/Debrief line "N s alt-tabbed left out" from `background_secs_excluded`
       (floor: minimized non-presenting seconds aren't counted); a background-only session says why it has no
       data. Check the overlay can't take focus (would mark play as alt-tabbed) and add a guard test. UI → FULL mode.
-- [ ] **P4-candidates** "Worth testing on this PC": a pure module filters the catalog (applies / already
-      set / Compy can do it safely); the picker shows only passing ones, reasons behind a toggle. Covers
-      GB-picker. ENGINE §3.1–3.3.
+- [x] **P4-candidates** `e0160644`: picker shows only changes worth testing here; reasons behind a toggle.
 - [ ] **P4-rank** Drop candidates whose likely effect is below measured noise ("too small to measure here");
       order the rest by benefit vs risk and test time; group interactions. Needs P4-noise, P4-candidates. ENGINE §3.4–3.7, §4.
 - [ ] **P4-recommended** First outcome, Recommended / Best Overall: Better only if the 1% low improves beyond
@@ -162,9 +161,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
-- [ ] **tokio** `cargo update -p tokio` 1.52.3 → 1.54.1 with `cargo test` and a desk install.
-
-### Every Friday 4:34 PM (separate scheduled task)
+- [x] **tokio** `fcc64291` (1.54.1; only tokio's lock entry changed). Desk install at the next ship.
 - Build `main`, desk-install via `scripts/ship-reinstall.ps1 -VerifyRuntime` (FULL mode only), update
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
@@ -191,6 +188,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-24 evening: 453-f1 `63414c42`.
 - 2026-10-25 (scheduled, CODE-ONLY, owner in WARDOGS): P4-comparable (this entry's commit); cargo 1532/0,
   clippy clean, tsc 0; review 1 round (MUST-FIX fixed, rest → P4-comparable-show); not pushed.
+- 2026-10-25 early (interactive): 3 WARDOGS sessions recorded for P4-noise; tokio `fcc64291`,
+  P4-candidates `e0160644`, P4-comparable merged `99b132e0`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
