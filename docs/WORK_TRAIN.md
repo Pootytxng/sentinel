@@ -100,8 +100,8 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 - [x] **#622** Health layout below ~600 px. `3c3e7553` (2026-10-24).
 - [x] **#677** Clipped session metadata and combined-effect tooltips. `3c3e7553`.
 - [x] **#622-f1** Live session rows stack below 600 px of list width `716e0fbd`.
-- [ ] **#622-f2** Health verdict panel scrolls inside itself in narrow windows (#225, needs its own change);
-      at exactly 600 px (en) the Live row timeline is ~27 px wide.
+- [x] **#622-f2** `4edfbb0e`: Health single column below 1240 px (two-column panel first fits at 1232); Live row
+      timeline >= 120 px. Measured at 720 px tall only.
 - [x] **#638** Phase 2 follow-ons from PR #634. Lands with this log entry (Optimize can't-confirm group, History tile title).
 - [x] **GB-picker** `e0160644`: not a bug — Game Bar already off in Windows (AppCaptureEnabled=0, GameDVR_Enabled=0),
       now shown as "Already set this way in Windows, not by Compy".
@@ -147,8 +147,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       (floor: minimized non-presenting seconds aren't counted); a background-only session says why it has no
       data. Check the overlay can't take focus (would mark play as alt-tabbed) and add a guard test. UI → FULL mode.
 - [x] **P4-candidates** `e0160644`: picker shows only changes worth testing here; reasons behind a toggle.
-- [ ] **P4-rank** Drop candidates whose likely effect is below measured noise ("too small to measure here");
-      order the rest by benefit vs risk and test time; group interactions. Needs P4-noise, P4-candidates. ENGINE §3.4–3.7, §4.
+- [x] **P4-rank** `8f1169ca`: picker ordered by evidence then risk, one reason each; "too small to measure here"
+      only with a stated `expected_low1_pct` + a measured band (no catalog entry states one yet); no grouping
+      (catalog has no interaction data).
 - [x] **P4-recommended** `a86fbcf5`: kept only when the 1% low rises beyond the band and the average
       doesn't fall beyond it; 1% low down beyond the band = Worse; else No change (restored).
 - [ ] **P4-maxfps-smooth** Maximum FPS (average + 1% low) and Smoothest frame pacing (frame-time spread,
@@ -193,6 +194,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-24 ~17:00 desk install of main `791babf2` (stamp-proved, attempt 1; installer 5769273D…A5A19A) so the
   owner's noise-measurement sessions count under the 453-f1 rule; RELEASE_STATE recorded.
 - 2026-10-25 morning: P4-recommended `a86fbcf5`.
+- 2026-10-25 morning: P4-rank `8f1169ca`, #622-f2 `4edfbb0e`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
