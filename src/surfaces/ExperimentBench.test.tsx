@@ -309,6 +309,8 @@ describe("ExperimentBench (armed)", () => {
       { id: "game-bar-disable", title: "Disable Game Bar and Game DVR", passes: false, reason: "already-set", detail: null },
       { id: "game-mode", title: "Enable Windows Game Mode", passes: false, reason: "already-set-by-compy", detail: null },
       { id: "hdr-advisory", title: "Check HDR", passes: false, reason: "no-safe-apply", detail: null },
+      { id: "sysmain-disable", title: "Disable SysMain", passes: false, reason: "already-set-by-gaming-mode", detail: null },
+      { id: "mouse-accel-off", title: "Turn off mouse acceleration", passes: false, reason: "already-set-unchecked", detail: null },
       {
         id: "eee-disable",
         title: "Turn off Energy-Efficient Ethernet",
@@ -345,6 +347,8 @@ describe("ExperimentBench (armed)", () => {
     );
     expect(row("game-mode")).toContain("Already set. Compy applied it.");
     expect(row("hdr-advisory")).toContain("Advice only.");
+    expect(row("sysmain-disable")).toContain("Compy's Gaming Mode set it for this session");
+    expect(row("mouse-accel-off")).toContain("Compy couldn't check whether it made this change.");
     expect(row("eee-disable")).toContain("Doesn't fit this PC's hardware. No wired Ethernet port.");
     expect(row("test-rec")).toBe("");
   });
@@ -503,6 +507,8 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.queryByText("Worth testing")).toBeNull();
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
     expect(screen.getByRole("combobox")).toHaveTextContent("Test tweak");
+    // The kept pick is said once: in the dropdown, not again under "why others aren't listed".
+    expect(screen.queryByRole("button", { name: /why others aren't listed/ })).toBeNull();
   });
 
   it("with a running experiment: shows the running panel with conclude + restore", async () => {

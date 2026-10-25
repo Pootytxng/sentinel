@@ -397,6 +397,8 @@
       "notForThisPc": "Doesn't fit this PC's hardware.",
       "alreadySet": "Already set this way in Windows, not by Compy.",
       "alreadySetByCompy": "Already set. Compy applied it.",
+      "alreadySetByGamingMode": "Already set. Compy's Gaming Mode set it for this session and puts it back when the session ends.",
+      "alreadySetUnchecked": "Already set this way in Windows; Compy couldn't check whether it made this change.",
       "noSafeApply": "Advice only. Compy has no safe one-click change for it, so it can't be tested."
     },
     "readingRig": "Reading your rig…",

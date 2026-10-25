@@ -103,7 +103,13 @@ type SimulatorReport = {
 // One catalog change as the Trial picker sees it (`get_trial_candidates`, trial_candidates.rs): it
 // passes "worth testing on this PC" (applies / not already set / Compy can do it safely), or it
 // carries the first filter it failed (OPTIMIZATION_ENGINE §3.1–3.3).
-type SkipReason = "not-for-this-pc" | "already-set" | "already-set-by-compy" | "no-safe-apply";
+type SkipReason =
+  | "not-for-this-pc"
+  | "already-set"
+  | "already-set-by-compy"
+  | "already-set-by-gaming-mode"
+  | "already-set-unchecked"
+  | "no-safe-apply";
 type TrialCandidate = {
   id: string;
   title: string;
@@ -116,6 +122,8 @@ const SKIP_REASON_KEY: Record<SkipReason, string> = {
   "not-for-this-pc": "lab.experimentBench.skipReason.notForThisPc",
   "already-set": "lab.experimentBench.skipReason.alreadySet",
   "already-set-by-compy": "lab.experimentBench.skipReason.alreadySetByCompy",
+  "already-set-by-gaming-mode": "lab.experimentBench.skipReason.alreadySetByGamingMode",
+  "already-set-unchecked": "lab.experimentBench.skipReason.alreadySetUnchecked",
   "no-safe-apply": "lab.experimentBench.skipReason.noSafeApply",
 };
 
@@ -463,7 +471,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   // The testable universe: catalog changes that pass "worth testing on this PC". The rest are listed,
   // each with its reason, behind "Show why others aren't listed" — never dropped silently.
   const pickable = recs.filter((r) => r.passes);
-  const skipped = recs.filter((r) => !r.passes);
+  // A pick kept in the dropdown after a refresh (below) is listed there only, not here as well.
+  const skipped = recs.filter((r) => !r.passes && r.id !== pickId);
 
   // If a refocus-refresh just re-derived the active pick as already-applied (it drops out of `pickable`),
   // keep it in the dropdown so its honest "already configured" verdict stays on screen — the selection

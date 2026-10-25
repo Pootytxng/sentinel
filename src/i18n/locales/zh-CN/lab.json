@@ -385,13 +385,15 @@
     "hint": "Compy 先测基线，应用一项可撤销的更改，再实测一局，除非数据明显超过噪声，否则自动撤回这项更改。",
     "pickLabel": "选择要测试的更改",
     "chooseChange": "选择一项更改…",
-    "noChangesToTest": "目前这台电脑上没有值得测试的更改。",
+    "noChangesToTest": "目前这台主机上没有值得测试的更改。",
     "showWhyNotListed": "显示其他更改未列出的原因",
     "hideWhyNotListed": "隐藏其他更改未列出的原因",
     "skipReason": {
-      "notForThisPc": "不适合这台电脑的硬件。",
+      "notForThisPc": "不适合这台主机的硬件。",
       "alreadySet": "Windows 里已经是这个设置，不是 Compy 改的。",
       "alreadySetByCompy": "已经设置好了，是 Compy 应用的。",
+      "alreadySetByGamingMode": "已经设置好了，是 Compy 的游戏模式为本次会话设置的，会话结束时会改回来。",
+      "alreadySetUnchecked": "Windows 里已经是这个设置；Compy 无法确认这项更改是不是它做的。",
       "noSafeApply": "仅为建议。Compy 没有可安全一键执行的更改，所以无法测试。"
     },
     "readingRig": "正在读取你的主机…",
