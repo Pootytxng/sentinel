@@ -793,6 +793,7 @@ mod comparison_tests {
             peak_cpu_temp_c: None,
             peak_gpu_hotspot_temp_c: None,
             background_secs_excluded: None,
+            frame_pacing: None,
         }
     }
 

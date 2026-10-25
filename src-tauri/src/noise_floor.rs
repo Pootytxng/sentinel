@@ -304,21 +304,50 @@ pub(crate) fn between_session_noise(
     now: &crate::sessions::SessionSummary,
     ledger: &[crate::experiment::LedgerEntryRef<'_>],
 ) -> Option<BetweenSessionNoise> {
+    unchanged_spread(sessions, now, ledger, |s| (s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0).then_some(s.low1_fps_est))
+}
+
+/// Pure (P4-smooth-measure): how much `now`'s game's frame pacing varied between whole unchanged
+/// sessions on this PC: the same sessions, runs and [`MIN_UNCHANGED_SESSIONS`] as
+/// [`between_session_noise`], read on each session's `frame_pacing` p99 / p50 ratio instead of its
+/// 1% low. Unit: `spread_pct` is the largest difference in that ratio between two sessions of one
+/// unchanged run, in percent of the lower ratio (a ratio of 1.40 against 1.47 is 5%). Sessions
+/// recorded without frame pacing (an older Compy or helper) aren't counted. `None` = unmeasured.
+/// Resolution: each ratio carries about ±1% bucket error (`FramePacing::p99_over_p50`), so a
+/// spread under ~2% is at the limit of what the histogram can resolve; a band that small must not
+/// be read as "this game is that steady".
+/// Measured only; nothing offers Smoothest from it yet (P4-smooth-offer).
+#[cfg_attr(not(test), allow(dead_code))] // wired by P4-smooth-offer.
+pub(crate) fn between_session_pacing_noise(
+    sessions: &[crate::sessions::SessionSummary],
+    now: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+) -> Option<BetweenSessionNoise> {
+    unchanged_spread(sessions, now, ledger, |s| s.frame_pacing.as_ref().and_then(|p| p.p99_over_p50()))
+}
+
+/// The shared measurement behind both spreads: `metric` reads one positive number off a session, or
+/// `None` to leave the session out.
+fn unchanged_spread(
+    sessions: &[crate::sessions::SessionSummary],
+    now: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+    metric: impl Fn(&crate::sessions::SessionSummary) -> Option<f64>,
+) -> Option<BetweenSessionNoise> {
     let now = NoiseConditions::of_session(now)?;
-    let mut usable: Vec<(chrono::DateTime<chrono::FixedOffset>, &crate::sessions::SessionSummary)> = sessions
+    let mut usable: Vec<(chrono::DateTime<chrono::FixedOffset>, &crate::sessions::SessionSummary, f64)> = sessions
         .iter()
         .filter(|s| s.samples >= crate::experiment::MIN_BASELINE_SAMPLES)
-        .filter(|s| s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0)
         .filter(|s| NoiseConditions::of_session(s).is_some_and(|c| still_current(&c, &now)))
-        .filter_map(|s| Some((parse(&s.started_at)?, s)))
+        .filter_map(|s| Some((parse(&s.started_at)?, s, metric(s).filter(|x| x.is_finite() && *x > 0.0)?)))
         .collect();
-    usable.sort_by_key(|(at, _)| *at);
+    usable.sort_by_key(|(at, _, _)| *at);
     let mut runs: Vec<Vec<f64>> = Vec::new();
     let mut prev: Option<&crate::sessions::SessionSummary> = None;
-    for &(_, s) in &usable {
+    for &(_, s, x) in &usable {
         match (prev, runs.last_mut()) {
-            (Some(p), Some(run)) if unchanged_between(p, s, ledger) => run.push(s.low1_fps_est),
-            _ => runs.push(vec![s.low1_fps_est]),
+            (Some(p), Some(run)) if unchanged_between(p, s, ledger) => run.push(x),
+            _ => runs.push(vec![x]),
         }
         prev = Some(s);
     }
@@ -638,6 +667,7 @@ mod tests {
             peak_cpu_temp_c: None,
             peak_gpu_hotspot_temp_c: None,
             background_secs_excluded: None,
+            frame_pacing: None,
         }
     }
 
@@ -808,6 +838,39 @@ mod tests {
         s[1].compy_changes_active = Some(14);
         s[2].samples = 1170;
         assert_eq!(between_session_noise(&s, &s[2], &ledger), None);
+    }
+
+    fn paced(mut s: SessionSummary, p50: f64, p99: f64) -> SessionSummary {
+        s.frame_pacing = Some(crate::sessions::FramePacing { frames: 280_000, p50_ms: p50, p99_ms: p99, p999_ms: Some(p99 * 2.0) });
+        s
+    }
+
+    /// P4-smooth-measure: the same unchanged sessions measure how much the frame pacing (p99 / p50)
+    /// varied between them, in percent of the lower ratio.
+    #[test]
+    fn unchanged_sessions_measure_the_pacing_spread_between_sessions() {
+        let e = evening();
+        // p99/p50: 1.40, 1.47, 1.43, 1.45
+        let s = vec![
+            paced(e[0].clone(), 4.00, 5.60),
+            paced(e[1].clone(), 4.00, 5.88),
+            paced(e[2].clone(), 4.00, 5.72),
+            paced(e[3].clone(), 4.00, 5.80),
+        ];
+        let got = between_session_pacing_noise(&s, &s[3], &settled()).expect("four unchanged sessions measure it");
+        assert_eq!(got.sessions, 4);
+        assert!((got.spread_pct - spread(1.40, 1.47)).abs() < 1e-9, "{got:?}");
+        // The 1% low band is read as before, untouched by frame pacing.
+        assert_eq!(between_session_noise(&s, &s[3], &settled()), between_session_noise(&e, &e[3], &settled()));
+        // Older sessions without frame pacing aren't counted: two left is unmeasured.
+        let mut old = s.clone();
+        old[0].frame_pacing = None;
+        old[1].frame_pacing = None;
+        assert_eq!(between_session_pacing_noise(&old, &old[3], &settled()), None);
+        assert_eq!(between_session_pacing_noise(&e, &e[3], &settled()), None, "nothing recorded pacing");
+        // A Compy change between sessions splits them, exactly as for the 1% low.
+        let ledger = vec![change("ve", "2026-10-25T18:45:00+00:00", Some("2026-10-25T18:50:00+00:00"))];
+        assert_eq!(between_session_pacing_noise(&s[..3], &s[2], &ledger), None);
     }
 
     #[test]
