@@ -511,6 +511,7 @@
     "hypothesisLabel": "假设",
     "applying": "应用中…",
     "startExperiment": "开始实验——应用并测量下一局",
+    "ledgerBusy": "Compy 还在进行另一项更改(例如恢复之前的状态)。完成后即可开始测试。",
     "fineprint": "现在应用一项可撤销的更改,并与你下一局 {{game}} 对局进行比较。除非明显超过噪声下限,否则将自动恢复。",
     "fineprintGameFallback": "对局",
     "noBaselineYet": "目前还没有基准——请先玩一局开启监测的对局。Compy 需要一份真实的「更改前」读数,绝不会凭空捏造。",

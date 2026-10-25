@@ -618,6 +618,56 @@ describe("ExperimentBench (armed)", () => {
     });
   });
 
+  // P6-restore-f1: while the Care view's "Put back how it was" runs, App's busyId is "care-restore"
+  // and LabGround passes ledgerBusy. Neither the bench's Start nor the guided journey's start may
+  // begin a Trial then, and the bench says why in one line. Old code ignored App's flag entirely.
+  it("starts no Trial while App's shared busy flag is held (Put back running), and says why", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    const { rerender } = render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+    await pickChange("test-rec");
+    // Reach the terminal state first (both starts enabled), so "disabled" below can only be the flag.
+    const start = await screen.findByRole("button", { name: /Start experiment/ });
+    const journeyStart = screen.getByRole("button", { name: "Optimize my game" });
+    await waitFor(() => expect(start).toBeEnabled());
+    expect(journeyStart).toBeEnabled();
+    expect(screen.queryByTestId("exp-ledger-busy")).toBeNull();
+
+    // Put back starts: App's busyId becomes "care-restore" and LabGround passes ledgerBusy.
+    rerender(<ExperimentBench ledgerBusy />);
+    expect(start).toBeDisabled();
+    expect(journeyStart).toBeDisabled();
+    expect(screen.getByTestId("exp-ledger-busy")).toHaveTextContent(
+      "Compy is still making another change, such as putting things back. You can start a Trial when it finishes.",
+    );
+
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(start);
+    fireEvent.click(journeyStart);
+    await Promise.resolve();
+    expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === "start_experiment")).toHaveLength(0);
+
+    // The flag clears: both starts come back and the reason goes away.
+    rerender(<ExperimentBench ledgerBusy={false} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /Start experiment/ })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Optimize my game" })).toBeEnabled();
+    expect(screen.queryByTestId("exp-ledger-busy")).toBeNull();
+  });
+
+  it("the busy line is in zh-CN too", async () => {
+    state.gate = true;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      render(<ExperimentBench ledgerBusy />);
+      expect(await screen.findByTestId("exp-ledger-busy")).toHaveTextContent("Compy 还在进行另一项更改");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   // Codex r1 on #611: the backend times the after-session from when the apply returned, so a session
   // begun while the apply (or its UAC prompt) was pending is never offered as the after-reading.
   it("offers only a session that started after the change took effect", async () => {

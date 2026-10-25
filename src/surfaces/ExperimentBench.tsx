@@ -520,8 +520,13 @@ function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSumma
 }
 
 /** `onChanged` is App's refresh (LabGround passes it). Every bench write moves the Trust Ledger, and
- *  App's `recs`/`changes` (the Optimize station beside the bench) re-read only through it (#621). */
-export default function ExperimentBench({ onChanged }: { onChanged?: () => Promise<unknown> | void } = {}) {
+ *  App's `recs`/`changes` (the Optimize station beside the bench) re-read only through it (#621).
+ *  `ledgerBusy` is App's shared busy flag (`busyId !== null`): while another write runs (e.g. the
+ *  Care view's "Put back how it was", busyId "care-restore"), no Trial may start (P6-restore-f1). */
+export default function ExperimentBench({
+  onChanged,
+  ledgerBusy = false,
+}: { onChanged?: () => Promise<unknown> | void; ledgerBusy?: boolean } = {}) {
   const { t } = useTranslation();
   const [gate, setGate] = useState(false);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
@@ -782,7 +787,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   }
 
   async function startExperiment() {
-    if (!sim || !baseline) return;
+    // P6-restore-f1: the handler refuses too, not just the button, while another write holds the flag.
+    if (!sim || !baseline || ledgerBusy || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -892,7 +898,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const SIM_VERDICT = simVerdictCopy(t);
   const simMeta = sim ? SIM_VERDICT[sim.verdict] ?? { label: sim.verdict, blocked: false } : null;
   const grade = baseline ? gradeBaseline(baseline) : null;
-  const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && grade?.kind !== "too-short" && !busy;
+  const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && grade?.kind !== "too-short" && !busy && !ledgerBusy;
 
   // Bento conversion (2026-08-12). span="full" is FORCED, not a taste call: this component can
   // return null (the dark experiment gate above) and this file declares no grid of its own, so
@@ -917,11 +923,17 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
         </p>
       )}
 
+      {ledgerBusy && !running && (
+        <p className="exp-fineprint" data-testid="exp-ledger-busy" role="status">
+          {t("lab.experimentBench.ledgerBusy")}
+        </p>
+      )}
+
       {(journey.kind !== "idle" || !running) && (
         <GuidedJourney
           game={pickGame}
           change={journeyChange ? { id: journeyChange.id, title: journeyChange.title } : null}
-          canStart={!busy && !running}
+          canStart={!busy && !running && !ledgerBusy}
           outcome={outcome}
           onOutcome={setOutcome}
           next={journeyNext}

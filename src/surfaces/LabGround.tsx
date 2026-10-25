@@ -125,7 +125,7 @@ export function LabGround(props: LabFastPathProps & {
           {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator.
               ARMED 2026-07-17 (owner-signed); still fails dark (renders NOTHING) if the gate ever
               reads false. */}
-          <ExperimentBench onChanged={rest.onChanged} />
+          <ExperimentBench onChanged={rest.onChanged} ledgerBusy={rest.busyId !== null} />
         </>
       }
     />
