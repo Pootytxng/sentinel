@@ -29,22 +29,54 @@ function within(promise, ms, what) {
   return Promise.race([promise, late]).finally(() => clearTimeout(timer));
 }
 
+/** Windows refusals that mean "some process still has a file here open", which pass on their own. */
+const TRANSIENT = ["EPERM", "EBUSY", "ENOTEMPTY"];
+
 /**
- * Remove a temp tree this harness created. Windows can refuse that for a moment (EPERM, EBUSY,
- * ENOTEMPTY) while some process still has a file in it open, and the error does not say which. Node's
- * own `maxRetries` did not retry the refusal (Node 24, win32: EPERM after 0 ms against a held file), so
- * retry here, without blocking the event loop, for about 5s; a refusal that outlasts that is thrown,
- * so the caller's close() reports it.
+ * Remove a temp tree this harness created, best effort. Windows can refuse that for a moment (EPERM,
+ * EBUSY, ENOTEMPTY) while some process still has a file in it open, and the error does not say which;
+ * with several layout files launching browsers in parallel the refusal can outlast any short wait.
+ * Node's own `maxRetries` did not retry the refusal (Node 24, win32: EPERM after 0 ms against a held
+ * file), so retry here, without blocking the event loop, for about 5s. A tree that is still refused
+ * after that (or that fails for any other reason) is left in the OS temp dir with a warning: teardown
+ * of a throwaway directory must never fail the layout assertions that already ran. Returns whether
+ * the tree is gone.
  */
 export async function removeDir(dir) {
   for (let attempt = 1; ; attempt++) {
     try {
       rmSync(dir, { recursive: true, force: true });
-      return;
+      return true;
     } catch (error) {
-      if (attempt >= 20 || !["EPERM", "EBUSY", "ENOTEMPTY"].includes(error.code)) throw error;
-      await sleep(250);
+      if (attempt < 20 && TRANSIENT.includes(error.code)) {
+        await sleep(250);
+        continue;
+      }
+      console.warn(`[layout] left temp dir ${dir} in place after ${attempt} attempt(s): ${error.code ?? ""} ${error.message}`);
+      return false;
     }
+  }
+}
+
+/** The port in Chromium's own "DevTools listening on ws://host:PORT/..." stderr line, or 0. */
+export function portFromStderr(stderr) {
+  const m = /DevTools listening on ws:\/\/[^\s/]*:(\d+)\//.exec(stderr);
+  return m ? Number(m[1]) : 0;
+}
+
+/**
+ * The port in the profile's DevToolsActivePort file, or 0 while it is not there yet. Chromium writes
+ * that file while the harness polls it, and Windows refuses a read of a file being written (EBUSY,
+ * EPERM): that is "not yet", polled again by the caller under its own deadline, never a failure.
+ */
+function portFromFile(portFile) {
+  try {
+    if (!existsSync(portFile)) return 0;
+    const [first] = readFileSync(portFile, "utf8").split(/\r?\n/);
+    return Number(first) > 0 ? Number(first) : 0;
+  } catch (error) {
+    if (TRANSIENT.includes(error.code) || error.code === "ENOENT") return 0;
+    throw error;
   }
 }
 
@@ -265,9 +297,10 @@ export function connectCdp(wsUrl) {
 }
 
 /**
- * Launch a headless Chromium with a throwaway profile and attach to its first page. Returns the CDP
- * client and a `close()` that kills the browser and removes the profile. A launch that fails releases
- * the browser and profile itself; `close()` may be called any number of times.
+ * Launch a headless Chromium with a throwaway profile (a fresh mkdtemp directory per launch, so
+ * parallel files never share one) and attach to its first page. Returns the CDP client and a
+ * `close()` that kills the browser and removes the profile (best effort, see removeDir). A launch
+ * that fails releases the browser and profile itself; `close()` may be called any number of times.
  */
 export async function launchChromium({ exe = findChromium(), width = 1600, height = 1000 } = {}) {
   const profile = mkdtempSync(join(tmpdir(), "compy-layout-"));
@@ -315,6 +348,8 @@ export async function launchChromium({ exe = findChromium(), width = 1600, heigh
     child.stderr.on("data", (d) => (stderr += d));
     exited = new Promise((r) => child.once("exit", r));
 
+    // The port comes from Chromium's stderr line when it prints one, else from the profile's port
+    // file. Either source being late or busy is only "not yet"; the deadline is what fails a launch.
     const portFile = join(profile, "DevToolsActivePort");
     const deadline = Date.now() + 30_000;
     let port = 0;
@@ -322,10 +357,7 @@ export async function launchChromium({ exe = findChromium(), width = 1600, heigh
       if (spawnError) throw new Error(`Chromium could not be started (${exe}): ${spawnError.message}`);
       if (child.exitCode !== null) throw new Error(`Chromium exited (${child.exitCode}) before opening its debug port:\n${stderr}`);
       if (Date.now() > deadline) throw new Error(`Chromium did not open its debug port within 30s:\n${stderr}`);
-      if (existsSync(portFile)) {
-        const [first] = readFileSync(portFile, "utf8").split(/\r?\n/);
-        if (Number(first) > 0) port = Number(first);
-      }
+      port = portFromStderr(stderr) || portFromFile(portFile);
       if (!port) await sleep(50);
     }
 
