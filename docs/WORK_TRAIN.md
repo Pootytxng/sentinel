@@ -152,8 +152,11 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       (catalog has no interaction data).
 - [x] **P4-recommended** `a86fbcf5`: kept only when the 1% low rises beyond the band and the average
       doesn't fall beyond it; 1% low down beyond the band = Worse; else No change (restored).
-- [ ] **P4-maxfps-smooth** Maximum FPS (average + 1% low) and Smoothest frame pacing (frame-time spread,
-      0.1% low when samples allow) as user-picked outcomes. Needs P4-recommended. ENGINE §2.
+- [x] **P4-maxfps-smooth** `baa03405`: Maximum FPS ships (average beyond the band, 1% low held).
+      Smoothest withdrawn (shown disabled): per-second data overstates the spread and a 5-pt floor sat inside
+      real session variation (review).
+- [ ] **P4-smooth-measure** Store per-frame frame times (or a percentile spread) per session and measure the
+      spread's session-to-session noise; then offer Smoothest.
 - [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
       "Nothing else here is worth testing on this PC" as success. Tested = a verdict on this game in experiments.json.
 - [ ] **P4-next-f1** The picker's own list still offers changes already tested on this game; mark or sort them.
@@ -197,6 +200,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-25 morning: P4-recommended `a86fbcf5`.
 - 2026-10-25 morning: P4-rank `8f1169ca`, #622-f2 `4edfbb0e`.
 - 2026-10-25 midday: P4-next `abd4c883`.
+- 2026-10-25 midday: P4-maxfps `baa03405` (Smoothest held).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
