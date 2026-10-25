@@ -1340,13 +1340,12 @@ fn collect_wer() -> (Vec<WerReport>, Option<String>, Option<DateTime<Utc>>) {
         let Ok(entries) = std::fs::read_dir(&base) else {
             continue; // folder missing → nothing to read here (not a skip)
         };
-        for entry in entries.flatten() {
-            if dirs.len() >= WER_MAX_LISTED {
-                listing_cut_short = true; // pathological WER dir: stop listing, refuse "clean"
-                break 'subs;
-            }
+        let complete = list_wer_entries(&mut dirs, &mut listing_cut_short, entries, |entry| {
             let modified = entry.metadata().ok().and_then(|m| m.modified().ok()).map(DateTime::<Utc>::from);
-            dirs.push((entry.path(), modified));
+            (entry.path(), modified)
+        });
+        if !complete {
+            break 'subs; // listing bound hit: stop listing, refuse "clean"
         }
     }
     let (chosen, cut) = select_wer_dirs(dirs, listing_cut_short);
@@ -1375,6 +1374,28 @@ fn collect_wer() -> (Vec<WerReport>, Option<String>, Option<DateTime<Utc>>) {
 const WER_MAX_REPORTS: usize = 400;
 /// Most WER folder entries listed (stat only) before the scan gives up on a time cut-point.
 const WER_MAX_LISTED: usize = 5000;
+
+/// Pure: add one WER folder's listing to `dirs`. An entry the OS could not list may be a dropped
+/// crash with no known time, so it sets `listing_cut_short` (refuse "clean") and the listing goes on.
+/// Returns `false` when the `WER_MAX_LISTED` bound stopped the listing (also sets the flag).
+fn list_wer_entries<T>(
+    dirs: &mut Vec<(std::path::PathBuf, Option<DateTime<Utc>>)>,
+    listing_cut_short: &mut bool,
+    entries: impl Iterator<Item = std::io::Result<T>>,
+    to_dir: impl Fn(T) -> (std::path::PathBuf, Option<DateTime<Utc>>),
+) -> bool {
+    for entry in entries {
+        if dirs.len() >= WER_MAX_LISTED {
+            *listing_cut_short = true;
+            return false;
+        }
+        match entry {
+            Ok(e) => dirs.push(to_dir(e)),
+            Err(_) => *listing_cut_short = true,
+        }
+    }
+    true
+}
 
 /// Pure (P6-changed-f2): which WER report folders to read, newest-modified first, and how far back
 /// that read is complete. A folder's modified time is never earlier than the crash its report
@@ -2869,5 +2890,47 @@ mod blackbox_tests {
         let cut: DateTime<Utc> = "2026-10-05T00:00:00Z".parse().unwrap();
         let r = report_from(Vec::new(), Vec::new(), Some(cut), Vec::new(), &[], Vec::new());
         assert_eq!(r.clean_judgeable_from, Some(cut), "a cut WER read limits how far back clean can be said");
+
+        // A full Application channel (EVENTS_PER_CHANNEL rows) cuts the Event Log read at its oldest
+        // row; with both cuts present the LATER one wins, whichever source it comes from.
+        let t0: DateTime<Utc> = "2026-10-01T00:00:00Z".parse().unwrap();
+        let full_channel = || -> Vec<RawEvent> {
+            (0..EVENTS_PER_CHANNEL as i64)
+                .map(|i| {
+                    let t = (t0 + chrono::Duration::minutes(i)).to_rfc3339();
+                    ev("Application Error", 1000, &t, "crash", serde_json::json!(["game.exe"]))
+                })
+                .collect()
+        };
+        let r = report_from(full_channel(), Vec::new(), Some(cut), Vec::new(), &[], Vec::new());
+        assert_eq!(r.clean_judgeable_from, Some(cut), "WER cut later than the Event Log cut wins");
+        let early_wer = t0 - chrono::Duration::days(3);
+        let r = report_from(full_channel(), Vec::new(), Some(early_wer), Vec::new(), &[], Vec::new());
+        // (the 40 crashes also fill the incident cap, whose cut is later still; never the early WER one)
+        assert!(r.clean_judgeable_from.is_some_and(|c| c >= t0), "Event Log cut later than the WER cut wins");
+    }
+
+    #[test]
+    fn wer_listing_error_refuses_clean_but_keeps_listing() {
+        let mut dirs = Vec::new();
+        let mut cut_short = false;
+        let entries: Vec<std::io::Result<&str>> =
+            vec![Ok("a"), Err(std::io::Error::other("unlistable")), Ok("b")];
+        let complete = list_wer_entries(&mut dirs, &mut cut_short, entries.into_iter(), |n| (n.into(), None));
+        assert!(complete, "an entry error does not stop the listing");
+        assert!(cut_short, "an entry error refuses every clean anchor");
+        assert_eq!(dirs.len(), 2);
+        assert_eq!(select_wer_dirs(dirs, cut_short).1, Some(DateTime::<Utc>::MAX_UTC));
+
+        let mut dirs = Vec::new();
+        let mut cut_short = false;
+        let ok: Vec<std::io::Result<&str>> = vec![Ok("a"), Ok("b")];
+        assert!(list_wer_entries(&mut dirs, &mut cut_short, ok.into_iter(), |n| (n.into(), None)));
+        assert!(!cut_short, "a clean listing is not cut short");
+
+        let mut dirs = Vec::new();
+        let many = (0..=WER_MAX_LISTED).map(|_| Ok::<_, std::io::Error>("x"));
+        assert!(!list_wer_entries(&mut dirs, &mut cut_short, many, |n| (n.into(), None)), "bound stops it");
+        assert!(cut_short && dirs.len() == WER_MAX_LISTED);
     }
 }
