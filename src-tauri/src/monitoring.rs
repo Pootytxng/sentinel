@@ -821,6 +821,67 @@ pub(crate) struct FpsStatus {
     active: bool,
     status: String,
     sample: Option<FpsSample>,
+    /// P5-guided: is the game Compy last measured still running? `Some(true)` while its readings are
+    /// fresh, or while they have stopped but its process is still there (paused, minimised, a menu
+    /// that presents nothing); `Some(false)` only when that process is gone (or its id now belongs to
+    /// another program). `None` = unknown: nothing measured yet this capture, or the process couldn't
+    /// be checked. Additive: an older build's reader ignores it. Read-only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    game_running: Option<bool>,
+}
+
+/// PURE (P5-guided): whether the game behind the helper's last line is still running. `last` is the
+/// last line the helper wrote this capture (fresh or not), `fresh` whether it is under 3 s old, and
+/// `probe` checks a pid against the process name it was measured as. A fresh line is a running game
+/// without asking; a line with no pid or name says nothing.
+fn game_running_from(
+    last: Option<&FpsSample>,
+    fresh: bool,
+    probe: impl Fn(u32, &str) -> Option<bool>,
+) -> Option<bool> {
+    let s = last?;
+    if fresh {
+        return Some(true);
+    }
+    if s.pid == 0 || s.process_name.trim().is_empty() {
+        return None;
+    }
+    probe(s.pid, &s.process_name)
+}
+
+/// Read-only: is `pid` still a live process whose image is `expected_name`? `Some(false)` when the
+/// pid no longer exists, has exited, or now runs another image (Windows reuses pids); `None` when
+/// Windows refused to say (access denied), which must never read as "the game closed".
+fn pid_running_as(pid: u32, expected_name: &str) -> Option<bool> {
+    use windows::core::PWSTR;
+    use windows::Win32::Foundation::{CloseHandle, ERROR_INVALID_PARAMETER, STILL_ACTIVE};
+    use windows::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    unsafe {
+        let handle = match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+            Ok(h) => h,
+            // No such process id: the game is gone.
+            Err(e) if e.code() == ERROR_INVALID_PARAMETER.to_hresult() => return Some(false),
+            Err(_) => return None,
+        };
+        let mut code = 0u32;
+        let exited = GetExitCodeProcess(handle, &mut code).is_ok() && code != STILL_ACTIVE.0 as u32;
+        let mut buf = [0u16; 260];
+        let mut size = buf.len() as u32;
+        let named = QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut size).is_ok();
+        let _ = CloseHandle(handle);
+        if exited {
+            return Some(false);
+        }
+        if !named {
+            return Some(true);
+        }
+        let full = String::from_utf16_lossy(&buf[..size as usize]);
+        let name = full.rsplit(['\\', '/']).next().unwrap_or(&full);
+        Some(name.eq_ignore_ascii_case(expected_name))
+    }
 }
 
 // Support evidence for the FPS helper (spec §12). The helper is the one part of Compy that can
@@ -1251,9 +1312,10 @@ pub(crate) fn get_fps_status() -> FpsStatus {
     use std::sync::atomic::Ordering;
     let active = fps_active().load(Ordering::Acquire);
     let status = lock_status().clone();
-    // Only surface a sample if it's fresh (< 3 s old) — otherwise the helper
-    // has stalled or the game stopped presenting.
-    let sample = (|| {
+    // The helper's last line this capture (start and stop both delete the file) and whether it is
+    // fresh (< 3 s old). Only a fresh sample is surfaced — otherwise the helper has stalled or the
+    // game stopped presenting; a stale one still names the game, so P5-guided can ask if it closed.
+    let (last, fresh) = (|| {
         let path = fps_out_path();
         let meta = std::fs::metadata(&path).ok()?;
         let fresh = meta
@@ -1262,16 +1324,16 @@ pub(crate) fn get_fps_status() -> FpsStatus {
             .and_then(|m| m.elapsed().ok())
             .map(|e| e < std::time::Duration::from_secs(3))
             .unwrap_or(false);
-        if !fresh {
-            return None;
-        }
         let bytes = std::fs::read(&path).ok()?;
-        serde_json::from_slice::<FpsSample>(&bytes).ok()
-    })();
+        Some((serde_json::from_slice::<FpsSample>(&bytes).ok(), fresh))
+    })()
+    .unwrap_or((None, false));
+    let game_running = if active { game_running_from(last.as_ref(), fresh, pid_running_as) } else { None };
     FpsStatus {
         active,
         status,
-        sample,
+        sample: if fresh { last } else { None },
+        game_running,
     }
 }
 
@@ -1463,6 +1525,63 @@ mod runtime_dir_tests {
         );
         assert!(fps_out_path().starts_with(&d));
         assert!(fps_alive_path().starts_with(&d));
+    }
+}
+
+#[cfg(test)]
+mod game_running_tests {
+    //! P5-guided: "the game closed" is said only when its process is gone, never from silence alone.
+    use super::{game_running_from, pid_running_as, FpsSample};
+
+    fn sample(pid: u32, name: &str) -> FpsSample {
+        serde_json::from_str(&format!(
+            r#"{{"pid":{pid},"process_name":"{name}","fps":120.0,"avg_frametime_ms":8.3,"low1_fps":90.0,"frames_last_sec":120,"recent_frametimes_ms":[8.3]}}"#
+        ))
+        .expect("helper line parses")
+    }
+
+    #[test]
+    fn nothing_measured_yet_is_unknown() {
+        assert_eq!(game_running_from(None, false, |_, _| Some(false)), None);
+    }
+
+    #[test]
+    fn a_fresh_line_is_a_running_game_without_asking() {
+        let s = sample(42, "game.exe");
+        assert_eq!(game_running_from(Some(&s), true, |_, _| panic!("no probe for a fresh line")), Some(true));
+    }
+
+    #[test]
+    fn a_stale_line_asks_the_process_and_says_what_it_answers() {
+        let s = sample(42, "game.exe");
+        assert_eq!(game_running_from(Some(&s), false, |p, n| { assert_eq!((p, n), (42, "game.exe")); Some(false) }), Some(false));
+        assert_eq!(game_running_from(Some(&s), false, |_, _| Some(true)), Some(true), "paused or minimised");
+        assert_eq!(game_running_from(Some(&s), false, |_, _| None), None, "access denied is unknown");
+    }
+
+    #[test]
+    fn a_line_without_a_pid_or_name_says_nothing() {
+        assert_eq!(game_running_from(Some(&sample(0, "game.exe")), false, |_, _| Some(false)), None);
+        assert_eq!(game_running_from(Some(&sample(42, " ")), false, |_, _| Some(false)), None);
+    }
+
+    #[test]
+    fn the_probe_reads_this_process_as_running_and_another_name_as_not() {
+        let me = std::process::id();
+        let exe = std::env::current_exe().expect("own exe");
+        let name = exe.file_name().and_then(|n| n.to_str()).expect("exe name");
+        assert_eq!(pid_running_as(me, name), Some(true));
+        assert_eq!(pid_running_as(me, "surely-not-this.exe"), Some(false), "a reused pid is not the game");
+    }
+
+    #[test]
+    fn the_probe_reads_an_exited_process_as_closed() {
+        let mut child = std::process::Command::new("cmd").args(["/C", "exit 0"]).spawn().expect("spawn cmd");
+        let pid = child.id();
+        child.wait().expect("cmd exits");
+        drop(child);
+        // The pid is gone, or (while a handle lingers) reads as exited, or is reused by another image.
+        assert_eq!(pid_running_as(pid, "cmd.exe"), Some(false));
     }
 }
 

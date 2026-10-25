@@ -352,6 +352,28 @@
     }
   },
   "experimentBench": {
+    "journey": {
+      "button": "Optimize my game",
+      "plan": "2 sessions of about 10 min: one as-is, then one with {{change}}.",
+      "planGame": "{{game}}: 2 sessions of about 10 min: one as-is, then one with {{change}}.",
+      "aim": "What to aim for",
+      "oneChange": "One change per run. Compy keeps it only if it measures better, and puts it back otherwise.",
+      "asIs": "Session 1 of 2: play {{game}} as usual for about 10 minutes. Compy stops measuring when you close the game.",
+      "asIsNoGame": "Session 1 of 2: play your game as usual for about 10 minutes. Compy stops measuring when you close the game.",
+      "withChange": "Session 2 of 2: {{change}} is on. Play {{game}} the same way for about 10 minutes, then close the game.",
+      "donePlaying": "Done playing",
+      "reading": "Reading your session…",
+      "judging": "Comparing the two sessions…",
+      "result": "{{change}}: {{verdict}}.",
+      "tooShort": "That session had {{count}} readings, and Compy needs {{min}} (about 10 minutes of play). Nothing was changed.",
+      "noReading": "Compy didn't get a reading from that session. Nothing was changed.",
+      "notStarted": "Compy didn't start the test, and nothing was changed: {{reason}}",
+      "restoredNoReading": "The game closed before Compy had a reading, so Compy put {{change}} back the way it was. Nothing was kept.",
+      "restoredError": "Something went wrong, so Compy put {{change}} back the way it was. Nothing was kept. ({{reason}})",
+      "restoreFailed": "Something went wrong, and Compy couldn't confirm {{change}} was put back. Check it in Test → Applied & history and undo it there. ({{reason}})",
+      "captureFailed": "Compy couldn't start measuring. If Windows asked for permission, allow it and try again.",
+      "close": "OK"
+    },
     "verdict": {
       "improved": "Measurably faster — kept",
       "noChange": "No measurable change — restored",
