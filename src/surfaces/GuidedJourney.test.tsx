@@ -513,7 +513,7 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     render(<ExperimentBench />);
     await press();
     expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
-    fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 20 min (a new before-session first)" }));
     await lineIs(/^Session 1 of 2: play Valorant as usual/);
     await waitFor(() => expect(calls("start_experiment")).toHaveLength(2), { timeout: 3000 });
     expect(calls("start_experiment")[1]).toMatchObject({ recId: "game-mode", baselineSessionId: fresh.started_at });

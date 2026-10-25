@@ -20,7 +20,7 @@ import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome"
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
 import { summarizeGame, type GameTestSummary, type StillApplied, type TestedChange } from "./test-summary";
-import { GuidedJourney, interruptedJourneyId, useJourneyPhase } from "./GuidedJourney";
+import { GuidedJourney, interruptedJourneyId, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import "./ExperimentBench.css";
 
@@ -863,6 +863,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
           outcome={outcome}
           onOutcome={setOutcome}
           next={journeyNext}
+          nextReuses={journey.kind === "result" && reusableAsIs(sessions, journey.asIs, journey.exp.game) != null}
           refresh={settle}
           onFinished={(exp) => {
             // The finished journey hands over to P4-next's offer of the next change to test.

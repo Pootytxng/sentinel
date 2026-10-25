@@ -239,16 +239,19 @@ async function waitForSession(
 
 /** The session a next journey may reuse as its before-reading: still in the store, the same game,
  *  a usable reading and graded steady. Whether it is still comparable is the start's to say. */
-async function reusableSession(id: string, game: string | null): Promise<SessionSummary | null> {
-  const ss = await invoke<SessionSummary[]>("get_session_summaries").catch(() => []);
-  const s = (ss ?? []).find((x) => x.started_at === id);
+export function reusableAsIs(sessions: SessionSummary[], id: string | null, game: string | null): SessionSummary | null {
+  const s = id == null ? undefined : sessions.find((x) => x.started_at === id);
   if (!s || !usable(s) || (game != null && s.process_name !== game)) return null;
   return gradeBaseline(s).kind === "steady" ? s : null;
+}
+async function reusableSession(id: string, game: string | null): Promise<SessionSummary | null> {
+  const ss = await invoke<SessionSummary[]>("get_session_summaries").catch(() => []);
+  return reusableAsIs(ss ?? [], id, game);
 }
 
 /** The start's refusal is about the before-reading (resolve_baseline / baseline_is_current /
  *  baseline_for_start all name "the baseline session"), not about the change or another Trial. */
-const refusesBaseline = (reason: string) => /baseline/i.test(reason);
+export const refusesBaseline = (reason: string) => /baseline/i.test(reason);
 
 type RunArgs = {
   change: { id: string; title: string };
@@ -485,6 +488,7 @@ export function GuidedJourney({
   outcome,
   onOutcome,
   next,
+  nextReuses = false,
   refresh,
   onFinished,
 }: {
@@ -499,6 +503,9 @@ export function GuidedJourney({
   /** After a concluded journey: the next change P4-next ranks untested on that game, null when
    *  nothing is left, undefined while that isn't known yet (the candidates haven't loaded). */
   next?: { id: string; title: string } | null;
+  /** Whether the finished journey left a reusable as-is session (`reusableAsIs`) for that next change:
+   *  one session, about 10 min; otherwise a new before-session first, about 20. */
+  nextReuses?: boolean;
   refresh: () => Promise<void>;
   /** Called when the owner closes a finished journey, with the Trial it concluded (if any). */
   onFinished?: (exp: JourneyExperiment | null) => void;
@@ -637,7 +644,7 @@ export function GuidedJourney({
             void runJourney({ change: next, outcome, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, p.exp.game, p.asIs);
           }}
         >
-          {t(`${k}.next`, { change: next.title })}
+          {t(nextReuses ? `${k}.next` : `${k}.nextFresh`, { change: next.title })}
         </button>
       )}
       {p.kind === "result" && next === null && (

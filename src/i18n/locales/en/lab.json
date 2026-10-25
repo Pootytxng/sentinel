@@ -379,6 +379,7 @@
         "other": "it didn't measure better"
       },
       "next": "Next: {{change}}, about 10 min",
+      "nextFresh": "Next: {{change}}, about 20 min (a new before-session first)",
       "nothingLeft": "Nothing else here is worth testing on this PC.",
       "withChangeReused": "{{change}} is on. Compy uses your last session as the before-reading, so this is the only session: play {{game}} the same way for about 10 minutes, then close the game.",
       "reuseRefused": "Compy can't use your last session as the before-reading ({{reason}}), so it needs a new one.",
