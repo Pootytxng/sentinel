@@ -1405,7 +1405,7 @@ describe("HomeConsole — the symptom cards and the rescue row match the comp", 
     // P6-door: the one Care door is named for the user's situation, not for the station.
     expect(entry.querySelector(".hc-care-label")!.textContent).toBe("Something's wrong");
     expect(entry.querySelector(".hc-care-symptom")!.textContent).toBe(
-      "It crashed, froze or stutters and I don't know why",
+      "It crashes, freezes or stutters and I don't know why",
     );
     expect(entry.querySelector(".hc-care-open")!.textContent).toContain("Open");
     // The comp draws ONE description line. `because` ("reads Windows' own crash & freeze record in

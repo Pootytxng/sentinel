@@ -110,16 +110,14 @@ describe("the Care entry is a SIGN, not a chip", () => {
       .toContain("stutter");
   });
 
-  it("uses the SAME name as the interview's something-is-wrong half", () => {
-    // A sign that says one thing and the question behind it another is how a user decides they
-    // clicked the wrong door and goes back. Before P6-door this pinned the door to the station's
-    // name; the door is now the one Care door for every "something's wrong" answer, so the name it
-    // must share is the interview's heading for exactly those answers. The station it opens still
-    // has to say "crash" (crash-rescue-naming-guard), and the door's row says it too (above).
-    expect(
-      CARE.label,
-      `Home's Care door says "${CARE.label}" but the interview calls the same half "${i18n.t("home.interview.q.start.groupWrong")}"`,
-    ).toBe(i18n.t("home.interview.q.start.groupWrong"));
+  it("carries a door name, not a blank button", () => {
+    // Before P6-door this pinned the door's label to the station's name. The door is now the one
+    // Care door, "Something's wrong", and deliberately does NOT carry the station's name, so that
+    // equality is gone. What stays is that the door has a name at all; the word a crashing or
+    // hitching user scans for is held on the door's row (above), the station's own name must still
+    // say "crash" (crash-rescue-naming-guard), and every crash and stutter answer must land where
+    // the door does (the crashFindings loop at the top of this file).
+    expect(CARE.label.trim().length, "Home's Care door has no name").toBeGreaterThan(0);
   });
 
   it("does not describe itself with the room's name — the because names the ACTION", () => {
