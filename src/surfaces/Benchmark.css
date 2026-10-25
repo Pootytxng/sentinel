@@ -257,6 +257,10 @@
   color: var(--ready, #46d98a);
 }
 
+.bench-eff-delta.is-attention {
+  color: var(--status-attention);
+}
+
 .bench-eff-delta.is-danger {
   color: var(--danger, #f3716f);
 }

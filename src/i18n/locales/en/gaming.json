@@ -172,6 +172,7 @@
     "trialVerdict": {
       "helped": "Helped",
       "hurtReverted": "Hurt — reverted",
+      "hurtStillApplied": "Hurt — still applied",
       "noChange": "No measurable change"
     },
     "trialReason": {
