@@ -3,8 +3,17 @@
 // WARDOGS sessions, 2026-10-25).
 import { describe, expect, it } from "vitest";
 import fixture from "../test/fixtures/wardogs-p4-exit.json";
+import today from "../test/fixtures/p5-learned-today.json";
 import type { SessionSummary } from "../types";
-import { stillAppliedFrom, summarizeGame, type SummaryCandidate, type SummaryExperiment } from "./test-summary";
+import {
+  LESSON_RULES,
+  lessonFor,
+  stillAppliedFrom,
+  summarizeGame,
+  type SummaryCandidate,
+  type SummaryExperiment,
+  type TestedChange,
+} from "./test-summary";
 
 const GAME = "WardogsClient-Win64-Shipping.exe";
 const experiments = fixture.experiments as unknown as SummaryExperiment[];
@@ -101,5 +110,95 @@ describe("P4-exit summary on the owner's WARDOGS records", () => {
 
   it("a game with no judged Trial has no summary", () => {
     expect(summarizeGame("cs2.exe", experiments, [VFX], sessions)).toBeNull();
+  });
+});
+
+// P5-learned (ROADMAP Phase 5 step 8): kept / put back and why, and at most one lesson from the
+// documented rule table, on the owner's records as of 2026-10-25 15:28 (src/test/fixtures/
+// p5-learned-today.json: today's Aniimo too-noisy Trial and the WARDOGS visual-effects Trial).
+
+describe("P5-learned on the owner's records today", () => {
+  const ex = today.experiments as unknown as SummaryExperiment[];
+  const ss = today.sessions as unknown as SessionSummary[];
+
+  it("WARDOGS: visual effects put back as Slower; lesson: less steady, average not compared", () => {
+    const s = summarizeGame(GAME, ex, [VFX], ss)!;
+    expect(s.kept).toEqual([]);
+    expect(s.putBack.map((r) => [r.recId, r.verdict])).toEqual([["visual-effects", "regressed"]]);
+    expect(s.lesson).toEqual({
+      rule: "less-steady",
+      recId: "visual-effects",
+      title: "Trim Windows visual effects",
+      confidence: "medium",
+      low1Pct: -18.5,
+      avgPct: null,
+      bandPct: 3.0,
+    });
+  });
+
+  it("Aniimo: put back as too noisy; lesson: the game swings between sessions, confidence unknown", () => {
+    const s = summarizeGame("Aniimo.exe", ex, [VFX], ss)!;
+    expect(s.putBack.map((r) => [r.recId, r.verdict])).toEqual([["visual-effects", "too-noisy"]]);
+    // Its stored deltas (-15.5% / -16%) are never read: a too-noisy Trial judged nothing.
+    expect(s.lesson).toEqual({
+      rule: "too-noisy",
+      recId: "visual-effects",
+      title: "Trim Windows visual effects",
+      confidence: "unknown",
+      low1Pct: null,
+      avgPct: null,
+      bandPct: null,
+    });
+  });
+});
+
+describe("P5-learned lesson rules", () => {
+  const row = (over: Partial<TestedChange>): TestedChange => ({
+    recId: "x",
+    title: "X",
+    verdict: "improved",
+    kept: true,
+    confidence: "medium",
+    stillApplied: "on",
+    noise: { band_pct: 3, measured_noise_pct: null },
+    trials: 1,
+    sameContext: null,
+    deltaLow1Pct: 0,
+    deltaAvgPct: 0,
+    at: "2026-10-25T10:00:00Z",
+    ...over,
+  });
+  const v = (d: string): number | null => (d === "up" ? 5 : d === "down" ? -5 : d === "flat" ? 1 : null);
+
+  it("each documented rule fires on exactly its condition", () => {
+    for (const [key, rule] of Object.entries(LESSON_RULES)) {
+      const [l, a] = key.split("/");
+      expect(lessonFor([row({ deltaLow1Pct: v(l), deltaAvgPct: v(a) })])?.rule).toBe(rule);
+    }
+    expect(Object.keys(LESSON_RULES)).toHaveLength(10);
+  });
+
+  it("'steadier, not faster': 1% low up beyond the band, average within it", () => {
+    expect(lessonFor([row({ deltaLow1Pct: 4.2, deltaAvgPct: 0.8 })])?.rule).toBe("steadier-not-faster");
+    // Exactly at the band is within it, not beyond.
+    expect(lessonFor([row({ deltaLow1Pct: 3, deltaAvgPct: 0.8 })])).toBeNull();
+  });
+
+  it("no rule, no lesson: nothing moved, or the verdict judged nothing, or no band was recorded", () => {
+    expect(lessonFor([row({ deltaLow1Pct: 1, deltaAvgPct: -1 })])).toBeNull();
+    expect(lessonFor([row({ deltaLow1Pct: 2, deltaAvgPct: null })])).toBeNull();
+    for (const verdict of ["confounded", "expired", "insufficient-evidence", "not-comparable"])
+      expect(lessonFor([row({ verdict, deltaLow1Pct: 20, deltaAvgPct: 0 })])).toBeNull();
+    expect(lessonFor([row({ noise: null, deltaLow1Pct: 20, deltaAvgPct: 0 })])).toBeNull();
+    expect(lessonFor([row({ deltaLow1Pct: null, deltaAvgPct: 20 })])).toBeNull();
+    expect(lessonFor([])).toBeNull();
+  });
+
+  it("one lesson: measured rules newest first, then too noisy", () => {
+    const older = row({ recId: "a", deltaLow1Pct: 6, deltaAvgPct: 6, at: "2026-10-20T00:00:00Z" });
+    const newer = row({ recId: "b", deltaLow1Pct: -6, deltaAvgPct: 0, at: "2026-10-24T00:00:00Z" });
+    const noisy = row({ recId: "c", verdict: "too-noisy", noise: null, at: "2026-10-25T00:00:00Z" });
+    expect(lessonFor([older, newer, noisy])).toMatchObject({ recId: "b", rule: "less-steady-not-slower" });
+    expect(lessonFor([noisy, row({ recId: "d", deltaLow1Pct: 0, deltaAvgPct: 0 })])).toMatchObject({ recId: "c", rule: "too-noisy" });
   });
 });

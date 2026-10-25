@@ -20,6 +20,32 @@
 //
 // "We tested what mattered" is said only when the picker's list was read and every change on it has a
 // judged Trial on this game; otherwise the summary counts what is left (or says it couldn't tell).
+//
+// P5-learned (ROADMAP Phase 5 step 8, Constitution §13–14, ENGINE §8): the end-of-journey summary
+// also says what was kept, what was put back and why (the record's own `kept` and verdict), and at
+// most ONE lesson drawn from this PC's numbers. The lesson comes only from a fixed rule table over
+// stored verdicts and deltas; it never names a cause, and when no rule applies there is no lesson.
+//
+// LESSON RULES. b = the noise band the Trial was judged on (`noise_evidence.band_pct`); L = the
+// stored 1% low %-delta (`treatment.delta_low1_pct`); A = the stored average %-delta
+// (`treatment.delta_avg_pct`, null = the average wasn't compared). Each delta reads "up" when > +b,
+// "down" when < -b, otherwise "flat" (within the band). A measured rule applies only to a Trial whose
+// verdict is improved, no-change or regressed and that recorded both b and L:
+//   L up,   A flat    -> steadier-not-faster       ("1% lows rose, average barely moved")
+//   L up,   A up      -> faster-and-steadier
+//   L flat, A up      -> faster-not-steadier
+//   L up,   A down    -> steadier-but-slower
+//   L down, A up      -> faster-but-less-steady
+//   L down, A flat    -> less-steady-not-slower
+//   L down, A down    -> slower-and-less-steady
+//   L flat, A down    -> slower-not-less-steady
+//   L up,   A unknown -> steadier                  (average not compared)
+//   L down, A unknown -> less-steady               (average not compared)
+//   (L flat with A flat or unknown: no rule; that is the verdict itself, not a lesson)
+// The too-noisy rule: the newest Trial of a change is "too-noisy" -> too-noisy ("this game swings a lot
+// between sessions on your PC; Compy needs steadier sessions to judge").
+// Order: the measured rules over the tested changes newest Trial first, then the too-noisy rule. The
+// first match is the lesson; it carries that verdict's own confidence band, never a number.
 
 import type { SessionSummary } from "../types";
 
@@ -44,6 +70,8 @@ export type SummaryExperiment = {
   verdict_confidence?: SummaryConfidence | null;
   noise_evidence?: SummaryNoise | null;
   baseline_session_id?: string | null;
+  /** The stored after-session deltas. null while running and on records that never measured one. */
+  treatment?: { delta_low1_pct: number; delta_avg_pct?: number | null } | null;
 };
 
 /** The Trial picker fields the summary reads (trial_candidates.rs `TrialCandidate`). */
@@ -95,7 +123,81 @@ export type TestedChange = {
   /** Its Trial's baseline ran under the same graphics driver and Windows build as the newest session.
    *  null when either side didn't record them. */
   sameContext: boolean | null;
+  /** The newest judged Trial's stored deltas (null when it recorded none) and when it started. */
+  deltaLow1Pct: number | null;
+  deltaAvgPct: number | null;
+  at: string;
 };
+
+export type LessonRule =
+  | "steadier-not-faster"
+  | "faster-and-steadier"
+  | "faster-not-steadier"
+  | "steadier-but-slower"
+  | "faster-but-less-steady"
+  | "less-steady-not-slower"
+  | "slower-and-less-steady"
+  | "slower-not-less-steady"
+  | "steadier"
+  | "less-steady"
+  | "too-noisy";
+
+type Dir = "up" | "flat" | "down";
+
+/** The measured rules, keyed `${L}/${A}` (A "unknown" = the average wasn't compared). */
+export const LESSON_RULES: Readonly<Record<string, LessonRule>> = {
+  "up/flat": "steadier-not-faster",
+  "up/up": "faster-and-steadier",
+  "flat/up": "faster-not-steadier",
+  "up/down": "steadier-but-slower",
+  "down/up": "faster-but-less-steady",
+  "down/flat": "less-steady-not-slower",
+  "down/down": "slower-and-less-steady",
+  "flat/down": "slower-not-less-steady",
+  "up/unknown": "steadier",
+  "down/unknown": "less-steady",
+};
+
+const MEASURED_VERDICTS = new Set(["improved", "no-change", "regressed"]);
+
+export type Lesson = {
+  rule: LessonRule;
+  /** The change whose Trial the lesson is drawn from. */
+  recId: string;
+  title: string;
+  confidence: SummaryConfidence | null;
+  /** The numbers the rule read (null for too-noisy, which reads only the verdict). */
+  low1Pct: number | null;
+  avgPct: number | null;
+  bandPct: number | null;
+};
+
+const dirOf = (v: number, band: number): Dir => (v > band ? "up" : v < -band ? "down" : "flat");
+
+/** The one lesson for these tested changes, by the rule table above; null when no rule applies. */
+export function lessonFor(tested: readonly TestedChange[]): Lesson | null {
+  const newest = [...tested].sort((a, b) => time(b.at) - time(a.at));
+  for (const r of newest) {
+    const band = r.noise?.band_pct;
+    if (!MEASURED_VERDICTS.has(r.verdict) || band == null || r.deltaLow1Pct == null) continue;
+    const key = `${dirOf(r.deltaLow1Pct, band)}/${r.deltaAvgPct == null ? "unknown" : dirOf(r.deltaAvgPct, band)}`;
+    const rule = LESSON_RULES[key];
+    if (rule)
+      return {
+        rule,
+        recId: r.recId,
+        title: r.title,
+        confidence: r.confidence,
+        low1Pct: r.deltaLow1Pct,
+        avgPct: r.deltaAvgPct,
+        bandPct: band,
+      };
+  }
+  const noisy = newest.find((r) => r.verdict === "too-noisy");
+  return noisy
+    ? { rule: "too-noisy", recId: noisy.recId, title: noisy.title, confidence: noisy.confidence, low1Pct: null, avgPct: null, bandPct: null }
+    : null;
+}
 
 export type SummaryContext = {
   gpu: string | null;
@@ -118,6 +220,12 @@ export type GameTestSummary = {
   /** Tested changes Compy applied whose live check can't be read now. */
   cantConfirm: TestedChange[];
   context: SummaryContext | null;
+  /** P5-learned: tested changes whose newest Trial kept them, and those it put back (each with its
+   *  verdict as the why), in first-tested order. */
+  kept: TestedChange[];
+  putBack: TestedChange[];
+  /** At most one lesson from this PC's numbers (`lessonFor`); null when no rule applies. */
+  lesson: Lesson | null;
 };
 
 const time = (iso: string | null | undefined): number => {
@@ -181,6 +289,9 @@ export function summarizeGame(
       noise: x.noise_evidence ?? null,
       trials: runs.length,
       sameContext: sameContext(x),
+      deltaLow1Pct: x.treatment?.delta_low1_pct ?? null,
+      deltaAvgPct: x.treatment?.delta_avg_pct ?? null,
+      at: x.created_at,
     };
   });
 
@@ -202,5 +313,8 @@ export function summarizeGame(
     staysApplied: tested.filter((r) => r.stillApplied === "on"),
     cantConfirm: tested.filter((r) => r.stillApplied === "cant-confirm"),
     context,
+    kept: tested.filter((r) => r.kept),
+    putBack: tested.filter((r) => !r.kept),
+    lesson: lessonFor(tested),
   };
 }

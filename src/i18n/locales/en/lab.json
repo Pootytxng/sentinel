@@ -616,7 +616,44 @@
       "readOnly": "This summary only reads Compy's own records. It changes nothing.",
       "row": "{{title}}: {{text}}",
       "stillSetNotByCompy": "Set now in Windows, but not by Compy's change.",
-      "stillGamingMode": "Set now by Compy's Gaming Mode for this session."
+      "stillGamingMode": "Set now by Compy's Gaming Mode for this session.",
+      "happenedLabel": "What happened:",
+      "keptBetter": "Kept {{change}}: it measured better.",
+      "keptPlain": "Kept {{change}}.",
+      "putBack": "Put {{change}} back: {{reason}}.",
+      "putBackByYou": "you chose to put it back",
+      "lessonLabel": "What Compy learned on this PC:",
+      "lesson": {
+        "steadierNotFaster": "With {{change}}, 1% lows rose and the average barely moved: {{game}} got steadier, not faster.",
+        "fasterAndSteadier": "With {{change}}, both the average and the 1% lows rose: {{game}} got faster and steadier.",
+        "fasterNotSteadier": "With {{change}}, the average rose and the 1% lows barely moved: {{game}} got faster, not steadier.",
+        "steadierButSlower": "With {{change}}, 1% lows rose but the average fell: {{game}} got steadier but slower.",
+        "fasterButLessSteady": "With {{change}}, the average rose but 1% lows fell: {{game}} got faster but less steady.",
+        "lessSteadyNotSlower": "With {{change}}, 1% lows fell and the average barely moved: {{game}} got less steady, not slower.",
+        "slowerAndLessSteady": "With {{change}}, both the average and the 1% lows fell: {{game}} got slower and less steady.",
+        "slowerNotLessSteady": "With {{change}}, the average fell and the 1% lows barely moved: {{game}} got slower, not less steady.",
+        "steadier": "With {{change}}, 1% lows rose: {{game}} got steadier. The average wasn't compared.",
+        "lessSteady": "With {{change}}, 1% lows fell: {{game}} got less steady. The average wasn't compared.",
+        "tooNoisy": "{{game}} swings a lot between sessions on your PC; Compy needs steadier sessions to judge."
+      },
+      "lessonDetailToggle": "How Compy worked this out",
+      "lessonDetail": "From the Trial of {{change}}: 1% low {{low}}%, average {{avg}}, against a {{band}}% noise band. Rule used: {{rule}}",
+      "lessonAvgNotCompared": "not compared",
+      "lessonDetailNoisy": "The newest Trial of {{change}} was judged too noisy, so Compy compared no numbers. Rule used: {{rule}}",
+      "lessonRulesNote": "Compy draws a lesson only from a fixed set of rules over its own stored results, never from guesses about causes. When no rule fits, it shows none.",
+      "rule": {
+        "steadierNotFaster": "the 1% low rose beyond the band and the average stayed within it.",
+        "fasterAndSteadier": "the 1% low and the average both rose beyond the band.",
+        "fasterNotSteadier": "the average rose beyond the band and the 1% low stayed within it.",
+        "steadierButSlower": "the 1% low rose beyond the band and the average fell beyond it.",
+        "fasterButLessSteady": "the average rose beyond the band and the 1% low fell beyond it.",
+        "lessSteadyNotSlower": "the 1% low fell beyond the band and the average stayed within it.",
+        "slowerAndLessSteady": "the 1% low and the average both fell beyond the band.",
+        "slowerNotLessSteady": "the average fell beyond the band and the 1% low stayed within it.",
+        "steadier": "the 1% low rose beyond the band; the average wasn't compared.",
+        "lessSteady": "the 1% low fell beyond the band; the average wasn't compared.",
+        "tooNoisy": "the newest Trial's verdict was too noisy to judge."
+      }
     }
   }
 }

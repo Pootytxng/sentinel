@@ -1689,8 +1689,9 @@ describe("P4-exit: what Compy tested on this game", () => {
     expect(screen.getByTestId("exp-summary-context")).toHaveTextContent(
       "WardogsClient · AMD Radeon RX 9070 XT · driver 32.0.32015.7029 · Windows build 26200.8457 · 1920x1080@250",
     );
-    // No percentage Compy didn't measure: the only one is the stated 3% minimum band.
-    expect(panel.textContent!.match(/[\d.]+\s*%/g)).toEqual(["3%"]);
+    // No percentage Compy didn't measure: the stated 3% minimum band and (P5-learned, behind the
+    // lesson's toggle) the Trial's own stored 1% low delta. "1% low" is the metric's name.
+    expect(panel.textContent!.replace(/1% lows?/g, "").match(/[\d.]+\s*%/g)).toEqual(["18.5%", "3%", "3%"]);
     // Read-only: the panel has no button.
     expect(panel.querySelectorAll("button")).toHaveLength(0);
   });
@@ -1720,6 +1721,86 @@ describe("P4-exit: what Compy tested on this game", () => {
       await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
       expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("值得测试的都已测试过");
       expect(screen.getByTestId("exp-summary-tested")).toHaveTextContent("目前未应用。");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
+
+// P5-learned (ROADMAP Phase 5 step 8): the summary says what was kept, what was put back and why, and
+// at most one lesson from the documented rules, its numbers behind a toggle. On the owner's records.
+describe("P5-learned: what Compy learned on this PC", () => {
+  const pass = (id: string, title: string, position: number) => ({ id, title, passes: true, reason: null, detail: null, position, evidence: "not-measured", risk: "low" });
+
+  const fixtures = {
+    "wardogs-p4-exit": () => import("../test/fixtures/wardogs-p4-exit.json"),
+    "p5-learned-today": () => import("../test/fixtures/p5-learned-today.json"),
+  };
+  async function renderWith(fixture: keyof typeof fixtures) {
+    const f = (await fixtures[fixture]()).default;
+    state.gate = true;
+    state.experiments = f.experiments;
+    state.sessions = f.sessions;
+    state.recs = [pass("visual-effects", "Trim Windows visual effects", 1)];
+    render(<ExperimentBench />);
+    return screen.findByTestId("exp-summary");
+  }
+
+  it("WARDOGS: put back because it ran worse; lesson: less steady, average not compared", async () => {
+    const panel = await renderWith("wardogs-p4-exit");
+    expect(screen.getByTestId("exp-summary-happened")).toHaveTextContent(
+      "Put Trim Windows visual effects back: the game ran worse with it.",
+    );
+    const lesson = screen.getByTestId("exp-summary-lesson");
+    expect(lesson).toHaveAttribute("data-rule", "less-steady");
+    expect(lesson).toHaveTextContent(
+      "With Trim Windows visual effects, 1% lows fell: WardogsClient got less steady. The average wasn't compared. · confidence: medium",
+    );
+    const detail = screen.getByTestId("exp-summary-lesson-detail");
+    expect(detail.tagName).toBe("DETAILS");
+    expect(detail).not.toHaveAttribute("open");
+    expect(detail).toHaveTextContent(
+      "From the Trial of Trim Windows visual effects: 1% low -18.5%, average not compared, against a 3% noise band. Rule used: the 1% low fell beyond the band; the average wasn't compared.",
+    );
+    expect(panel.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("Aniimo today: put back as too noisy; lesson: the game swings between sessions", async () => {
+    const panel = await renderWith("p5-learned-today");
+    expect(panel).toHaveTextContent("What Compy tested on Aniimo");
+    expect(screen.getByTestId("exp-summary-happened")).toHaveTextContent(
+      "Put Trim Windows visual effects back: the frame rate moved around too much to tell.",
+    );
+    expect(screen.getByTestId("exp-summary-lesson")).toHaveTextContent(
+      "Aniimo swings a lot between sessions on your PC; Compy needs steadier sessions to judge. · confidence: unknown",
+    );
+    // A too-noisy Trial judged nothing, so none of its stored deltas is shown.
+    expect(panel).not.toHaveTextContent("15.5");
+    expect(panel).not.toHaveTextContent("16%");
+    expect(panel.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("no rule, no lesson", async () => {
+    const f = (await import("../test/fixtures/wardogs-p4-exit.json")).default;
+    state.gate = true;
+    // Same record, but the 1% low stayed inside the band: nothing to learn beyond the verdict.
+    state.experiments = f.experiments.map((x: Record<string, unknown>, i: number) =>
+      i === 0 ? { ...x, verdict: "no-change", treatment: { ...(x.treatment as object), delta_low1_pct: -1.2 } } : x,
+    );
+    state.sessions = f.sessions;
+    state.recs = [pass("visual-effects", "Trim Windows visual effects", 1)];
+    render(<ExperimentBench />);
+    await screen.findByTestId("exp-summary");
+    expect(screen.getByTestId("exp-summary-happened")).toHaveTextContent("it made no difference Compy could measure");
+    expect(screen.queryByTestId("exp-summary-lesson")).toBeNull();
+  });
+
+  it("reads in Chinese too", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      await renderWith("p5-learned-today");
+      expect(screen.getByTestId("exp-summary-happened")).toHaveTextContent("已恢复 Trim Windows visual effects：帧率波动太大，无法判断。");
+      expect(screen.getByTestId("exp-summary-lesson")).toHaveTextContent("每局之间的波动很大");
     } finally {
       await i18n.changeLanguage("en");
     }
