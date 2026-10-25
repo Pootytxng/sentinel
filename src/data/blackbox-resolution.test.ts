@@ -115,3 +115,38 @@ describe("Black Box v2.1 — measured-absence resolution", () => {
     expect(oneDay!.text).not.toContain("1 days");
   });
 });
+
+// P6-next-f1: "App crash" / "App hang" cover every app, so a recurrence must also be the same faulting
+// app (case-insensitive), as care-next-step.ts `sameKind` does.
+describe("Black Box v2.1 — app kinds match the faulting app", () => {
+  const withApp = (tag: string, when: string, app: string | null): CrashIncident => {
+    const i = inc(tag, when);
+    return { ...i, incident_id: `${tag}-${when}-${app}`, receipt: { ...i.receipt!, faulting_app: app } };
+  };
+
+  for (const tag of ["App crash", "App hang"]) {
+    it(`${tag}: another app after the mark is NOT a recurrence, and the line names the app`, () => {
+      const target = withApp(tag, "2026-06-07T11:00:00Z", "Wardogs.exe");
+      const browser = withApp(tag, "2026-06-10T09:30:00Z", "msedge.exe");
+      const r = resolutionFor(target, [target, browser], yes(sixDaysBefore), NOW);
+      expect(r!.status).toBe("none-since");
+      expect(r!.text).toBe(`No ${tag} (Wardogs.exe) recorded in the 6 days since.`);
+    });
+
+    it(`${tag}: the same app (any case) after the mark IS a recurrence`, () => {
+      const target = withApp(tag, "2026-06-07T11:00:00Z", "Wardogs.exe");
+      const again = withApp(tag, "2026-06-10T09:30:00Z", "WARDOGS.EXE");
+      const r = resolutionFor(target, [target, again], yes(sixDaysBefore), NOW);
+      expect(r!.status).toBe("recurred");
+      expect(r!.text).toMatch(new RegExp(`^${tag} \\(Wardogs\\.exe\\) happened again on `));
+    });
+
+    it(`${tag}: no faulting app on the marked incident falls back to the tag alone`, () => {
+      const target = withApp(tag, "2026-06-07T11:00:00Z", null);
+      const other = withApp(tag, "2026-06-10T09:30:00Z", "msedge.exe");
+      const r = resolutionFor(target, [target, other], yes(sixDaysBefore), NOW);
+      expect(r!.status).toBe("recurred");
+      expect(r!.text).toMatch(new RegExp(`^${tag} happened again on `));
+    });
+  }
+});

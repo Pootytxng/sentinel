@@ -22,7 +22,7 @@
 //     within"; else not enough play.
 //   No outcome says it is fixed: an absence is a measurement, not proof of the cause.
 import type { CrashIncident, SessionSummary, WhatChangedReport } from "../types";
-import { RESOLUTION_MIN_DAYS } from "../data/blackbox-resolution";
+import { APP_KINDS, RESOLUTION_MIN_DAYS, appOf } from "../data/blackbox-resolution";
 import { MIN_BASELINE_SAMPLES } from "./baseline-grade";
 
 export { RESOLUTION_MIN_DAYS };
@@ -67,12 +67,6 @@ export type CareStep =
     };
 
 const ms = (iso: string) => Date.parse(iso);
-const APP_KINDS = new Set(["App crash", "App hang"]);
-
-function appOf(i: CrashIncident): string | null {
-  return APP_KINDS.has(i.tag) ? (i.receipt?.faulting_app ?? "").toLowerCase() || null : null;
-}
-
 /** Same kind as the step: same tag, and for app kinds the same faulting app. */
 export function sameKind(i: CrashIncident, step: { kind: string; app: string | null }): boolean {
   if (i.tag !== step.kind) return false;
