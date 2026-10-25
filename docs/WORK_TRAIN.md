@@ -282,6 +282,8 @@ room or station picked by hand.
 - 2026-10-25 midday: P5-continue `61e7539e`.
 - 2026-10-25 afternoon: layout harness flake fix `f904c658`, P5-enough `b28e188c`.
 - 2026-10-25 afternoon: P5-learned `a5836783`, P5-resume `b285dc73`.
+- 2026-10-25 ~11:55 desk install of main `7aa8e810` (stamp-proved, attempt 1; installer 02AC5E76…F21814) so the
+  owner gets the Phase 5 guided journey and the Phase 6 "Changed before this" crash view; RELEASE_STATE recorded.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
