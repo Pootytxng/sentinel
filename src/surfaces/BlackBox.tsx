@@ -14,6 +14,7 @@ import type {
   ChangedBeforeItem,
 } from "../types";
 import { resolutionFor, type HelpMark } from "../data/blackbox-resolution";
+import { StutterCompare } from "./StutterCompare";
 import "./BlackBox.css";
 
 // Black Box v1 (Paramedic Mode) — READ-ONLY crash/freeze evidence reader, rendered as a Lab
@@ -116,6 +117,10 @@ export function BlackBox({
           )}
         </div>
       )}
+
+      {/* P6-stutter: a stutter or slowdown rarely leaves a crash record, so the same view also
+          compares the latest session with its last good one (StutterCompare.tsx). */}
+      <StutterCompare />
     </div>
   );
 }

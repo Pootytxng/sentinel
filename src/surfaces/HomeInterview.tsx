@@ -11,6 +11,7 @@ import {
   type InterviewFacts,
   type InterviewStep,
 } from "./home-interview-data";
+import { markStutterArrival } from "./care-arrival";
 import "./home-interview.css";
 
 // THE INTERVIEW, rendered (design foundation step ③, decision 2; issue #177). The taxonomy, the
@@ -109,6 +110,8 @@ export function HomeInterview({
       return;
     }
     if (a.kind === "station") {
+      // Written before the station opens, and read once by the view it names (P6-stutter).
+      if (a.arrival === "stutter") markStutterArrival();
       onOpenStation(a.station, a.room);
       onClose();
       return;

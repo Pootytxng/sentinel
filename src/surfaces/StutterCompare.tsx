@@ -1,0 +1,159 @@
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
+// Side-effect import, as in BlackBox.tsx: the i18next singleton is ready even when this is the first
+// thing a test loads.
+import "../i18n";
+import type { SessionSummary, WhatChangedOutcome } from "../types";
+import { gradeBaseline } from "./baseline-grade";
+import { WhatChangedReportView } from "./WhatChangedPanel";
+import { prettyGameName } from "./game-name";
+import { useIntelligenceFlag } from "../design/use-hud";
+import { useExpertView } from "../design/use-expert-view";
+import { takeStutterArrival } from "./care-arrival";
+import "./StutterCompare.css";
+
+// P6-stutter (ROADMAP Phase 6, Constitution §16/§17): "it stutters / runs slow" on the Care view
+// compares the game's LATEST session with its LAST GOOD one, through the existing engine
+// (`what_changed_between`) and its existing report view. No hand-off to Monitor or the benchmark.
+//
+// "Good" is graded only by rules Compy already has, never by a new threshold:
+//   * measured   - it has readings (`samples > 0`); a session behind another window the whole time
+//                  (P4-show-f1) is skipped here as everywhere else, for "latest" too;
+//   * steady     - the Trial's baseline grade says steady (baseline-grade.ts, pinned to
+//                  experiment.rs `grade_baseline`);
+//   * comparable - the engine's own comparability gate (comparability.rs `derive`) reads the pair as
+//                  comparable or partially comparable. A not-comparable or unjudgeable pair is not a
+//                  good baseline, and the next steady candidate is tried.
+// Whatever the report lists changed between the two; none of it is a proven cause, and the
+// section says so.
+
+/** Steady earlier sessions tried, newest first, before Compy says it has no good one. Each try is
+ *  one read-only engine call; the cap keeps a long run of steady sessions the engine can't compare
+ *  from turning one tap into dozens of reads. */
+export const MAX_GOOD_CANDIDATES = 5;
+
+export type StutterPick =
+  | { kind: "no-session" }
+  | { kind: "pick"; latest: SessionSummary; candidates: SessionSummary[] };
+
+const when = (s: SessionSummary) => Date.parse(s.started_at);
+const measured = (s: SessionSummary) =>
+  s.samples > 0 && !!s.process_name && Number.isFinite(when(s));
+
+/** Pure: the latest measured session, and the steady, measured, earlier sessions of the same game
+ *  that could be its last good one (newest first, capped). Comparability is the engine's to say. */
+export function pickStutterPair(sessions: SessionSummary[]): StutterPick {
+  const usable = sessions.filter(measured);
+  if (usable.length === 0) return { kind: "no-session" };
+  const latest = usable.reduce((a, b) => (when(b) > when(a) ? b : a));
+  const game = latest.process_name.toLowerCase();
+  const candidates = usable
+    .filter(
+      (s) =>
+        s.process_name.toLowerCase() === game &&
+        when(s) < when(latest) &&
+        gradeBaseline(s).kind === "steady",
+    )
+    .sort((a, b) => when(b) - when(a))
+    .slice(0, MAX_GOOD_CANDIDATES);
+  return { kind: "pick", latest, candidates };
+}
+
+/** The engine's comparability verdicts that make an earlier steady session a good baseline. */
+const goodPair = (o: WhatChangedOutcome) =>
+  o.kind === "report" &&
+  (o.comparability.verdict === "comparable" || o.comparability.verdict === "partial");
+
+type State =
+  | { kind: "idle" }
+  | { kind: "busy" }
+  | { kind: "error" }
+  | { kind: "no-session" }
+  | { kind: "no-good"; game: string }
+  | { kind: "report"; outcome: WhatChangedOutcome; game: string; latestAt: string; goodAt: string };
+
+async function compare(): Promise<State> {
+  const sessions = await invoke<SessionSummary[]>("get_session_summaries");
+  const pick = pickStutterPair(Array.isArray(sessions) ? sessions : []);
+  if (pick.kind === "no-session") return { kind: "no-session" };
+  const game = prettyGameName(pick.latest.process_name);
+  for (const good of pick.candidates) {
+    const outcome = await invoke<WhatChangedOutcome>("what_changed_between", {
+      baselineStartedAt: good.started_at,
+      currentStartedAt: pick.latest.started_at,
+    });
+    if (outcome && goodPair(outcome)) {
+      return { kind: "report", outcome, game, latestAt: pick.latest.started_at, goodAt: good.started_at };
+    }
+  }
+  return { kind: "no-good", game };
+}
+
+function fmtWhen(iso: string, lang: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString(lang, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+export function StutterCompare() {
+  const { t, i18n } = useTranslation();
+  const on = useIntelligenceFlag();
+  const expert = useExpertView();
+  const [state, setState] = useState<State>({ kind: "idle" });
+
+  const run = () => {
+    setState({ kind: "busy" });
+    compare()
+      .then(setState)
+      .catch(() => setState({ kind: "error" })); // never a fabricated comparison
+  };
+
+  // Arrived from the interview's stutter answer: the user already asked, so run it once on mount.
+  useEffect(() => {
+    if (on && takeStutterArrival()) run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount by design
+  }, []);
+
+  if (!on) return null;
+
+  return (
+    <section className="bb-stutter" aria-label={t("gaming.blackBox.stutter.title")}>
+      <div className="bb-stutter-head">
+        <span className="bb-stutter-title">{t("gaming.blackBox.stutter.title")}</span>
+        <span className="bb-stutter-tag">{t("gaming.blackBox.changedBefore.notProven")}</span>
+      </div>
+
+      {(state.kind === "idle" || state.kind === "error") && (
+        <button type="button" className="bb-stutter-run" onClick={run}>
+          {t("gaming.blackBox.stutter.runButton")}
+        </button>
+      )}
+      {state.kind === "busy" && <p className="bb-stutter-line">{t("gaming.blackBox.stutter.comparing")}</p>}
+      {state.kind === "error" && <p className="bb-stutter-line">{t("gaming.blackBox.stutter.readError")}</p>}
+      {state.kind === "no-session" && (
+        <p className="bb-stutter-line">{t("gaming.blackBox.stutter.noSession")}</p>
+      )}
+      {state.kind === "no-good" && (
+        <p className="bb-stutter-line">{t("gaming.blackBox.stutter.noGood", { game: state.game })}</p>
+      )}
+      {state.kind === "report" && (
+        <>
+          <p className="bb-stutter-line">
+            {t("gaming.blackBox.stutter.compared", {
+              game: state.game,
+              latest: fmtWhen(state.latestAt, i18n.language),
+              good: fmtWhen(state.goodAt, i18n.language),
+            })}
+          </p>
+          <WhatChangedReportView
+            outcome={state.outcome}
+            expert={expert}
+            headline={t("gaming.blackBox.stutter.headline", { game: state.game })}
+            causeTag={t("gaming.blackBox.changedBefore.notProven")}
+          />
+        </>
+      )}
+    </section>
+  );
+}

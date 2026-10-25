@@ -322,8 +322,9 @@ export type InterviewAction =
   | { kind: "fastpath"; label: string }
   /** Re-run the readiness check. Read-only. */
   | { kind: "check"; label: string }
-  /** Land ON an instrument, never on a room's dock. */
-  | { kind: "station"; label: string; station: LabStationKey; room: HomeIntakeRoom }
+  /** Land ON an instrument, never on a room's dock. `arrival` says what the user came with, for a
+   *  station that answers it differently (P6-stutter: the Care view runs its session comparison). */
+  | { kind: "station"; label: string; station: LabStationKey; room: HomeIntakeRoom; arrival?: "stutter" }
   /** A whole room, when the room itself is the answer. */
   | { kind: "room"; label: string; room: HomeIntakeRoom };
 
@@ -515,9 +516,12 @@ export function interviewFinding(
       // P6-door (ROADMAP Phase 6, Constitution §27): a hitch is a "something's wrong" answer, so
       // it lands on the SAME Care view as every crash answer and Home's one Care door — the crash
       // record and what changed before it — rather than handing the user to a room to read their
-      // own session. P6-stutter adds the last-good-session comparison to that view; until then the
-      // view shows what it has, which is the honest state, not a second destination.
-      action = station("blackbox", "lab", k("act.careView"));
+      // own session. P6-stutter: arriving with a stutter, that view compares the latest session of
+      // the game with its last good one (StutterCompare.tsx), on the same station, no second door.
+      {
+        const care = station("blackbox", "lab", k("act.careView"));
+        action = care.kind === "station" ? { ...care, arrival: "stutter" } : care;
+      }
       break;
     }
     case "slowUnsure": {

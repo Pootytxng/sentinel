@@ -498,6 +498,7 @@ describe("Crash & Freeze Rescue — every door lands ON the evidence (§4)", () 
       fireEvent.click(answerNamed(leaf.label));
       fireEvent.click(action() as HTMLElement);
       expect(onOpenLabStation, `crash answer "${leaf.id}"`).toHaveBeenCalledWith("blackbox");
+      expect(localStorage.getItem("compy_care_arrival"), `crash answer "${leaf.id}" arrived as a stutter`).toBeNull();
       expect(onNavigate, `crash answer "${leaf.id}" fired a bare room nav`).not.toHaveBeenCalled();
       // Acting closes the sheet — the user is looking at the instrument, not at a panel over it.
       expect(document.querySelector(".hi-question")).toBeNull();
@@ -522,6 +523,10 @@ describe("Crash & Freeze Rescue — every door lands ON the evidence (§4)", () 
       HOME_CARE_ENTRY.station,
     );
     expect(onNavigate, "the stutter answer fired a bare room nav").not.toHaveBeenCalled();
+    // P6-stutter: the view it opens is told the user came with a stutter (a one-shot key).
+    expect(localStorage.getItem("compy_care_arrival"), "the stutter arrival was not handed to the Care view").toBe(
+      "stutter",
+    );
   });
 
   it("falls back to something real when the rail has no Lab to send them to (law 1)", () => {

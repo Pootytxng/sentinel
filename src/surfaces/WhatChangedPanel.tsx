@@ -296,11 +296,13 @@ function ComparabilityDetail({ c, expert }: { c: SessionComparability; expert: b
 // The full report render, shared by the auto for-this-session panel and the investigator's
 // good-vs-bad comparison. `outcome` is the engine's own union — unavailable renders the honest
 // one-line reason, a report renders the verdict + working. No fabrication path: both faces come
-// straight from persisted records.
-function WhatChangedReportView({
+// straight from persisted records. Exported for the Care view's stutter comparison (P6-stutter,
+// StutterCompare.tsx), which reuses it rather than drawing a second report.
+export function WhatChangedReportView({
   outcome,
   expert,
   headline,
+  causeTag,
   activeChangeFor,
   onRollback,
   busy = false,
@@ -309,6 +311,9 @@ function WhatChangedReportView({
   expert: boolean;
   /** Overrides the "vs your previous X session" head line — the investigator names both picks. */
   headline?: string;
+  /** P6-stutter: a tag set beside each cause heading ("not proven cause"), so a surface that must
+   *  not read as a diagnosis can say so on the cause itself. Absent = unchanged. */
+  causeTag?: string;
   /** BACKLOG:236 — resolves `next_action_rec_id` against the LIVE ledger. All three below are
    *  optional together: absent (or no live row) → the next-test sentence renders alone, exactly as
    *  before. The engine's own doc comment fixes the destination: the Trust Ledger, never the bench. */
@@ -373,6 +378,7 @@ function WhatChangedReportView({
       {showLeader && (
         <>
           <SectionLabel>{t("optimize.whatChangedPanel.mostLikelyCause")}</SectionLabel>
+          {causeTag && <span className="wcp-cause-tag">{causeTag}</span>}
           <HypothesisBlock h={leader} lead />
         </>
       )}
@@ -473,6 +479,7 @@ function WhatChangedReportView({
           {others.length > 0 && (
             <div className="wcp-others">
               <SectionLabel>{t("optimize.whatChangedPanel.alsoPossible")}</SectionLabel>
+              {causeTag && <span className="wcp-cause-tag">{causeTag}</span>}
               {others.map((h) => (
                 <HypothesisBlock h={h} key={h.id} lead={false} />
               ))}
