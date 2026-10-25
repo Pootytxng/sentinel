@@ -16,6 +16,7 @@ import type {
 } from "../types";
 import { resolutionFor, type HelpMark } from "../data/blackbox-resolution";
 import { StutterCompare } from "./StutterCompare";
+import { SinceLastWorked } from "./SinceLastWorked";
 import { writeLedger } from "../data/ledger-write";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { LEDGER_CHANGED_EVENT } from "../types";
@@ -39,6 +40,7 @@ import "./BlackBox.css";
 export function BlackBox({
   onReport,
   selectedIncidentId,
+  scanOnOpen = false,
   changes,
   onChanged,
   ledgerBusy = false,
@@ -50,6 +52,9 @@ export function BlackBox({
    *  When present the station scans on mount instead of waiting for a click — a user who followed
    *  "Find out why" already asked the question, and making them press Scan is asking it twice. */
   selectedIncidentId?: string | null;
+  /** P6-timeline: the user followed a "See what changed" pointer here, so scan on arrival — the
+   *  "Since it last worked" list they were promised needs a scan to exist. */
+  scanOnOpen?: boolean;
   /** Every Trust Ledger row (App's list). Without it the station offers no "Put back": it can't
    *  tell which of Compy's changes are still on. */
   changes?: AppliedChange[];
@@ -146,7 +151,7 @@ export function BlackBox({
   // Arrive-and-scan, once, only on a deep-link. The scan itself is the SAME on-demand read a click
   // makes — no watcher, no cadence, no second IPC shape.
   useEffect(() => {
-    if (selectedIncidentId) scan();
+    if (selectedIncidentId || scanOnOpen) scan();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount by design
   }, []);
 
@@ -226,6 +231,8 @@ export function BlackBox({
           )}
         </div>
       )}
+
+      <SinceLastWorked report={scanning ? null : report} />
 
       {/* P6-stutter: a stutter or slowdown rarely leaves a crash record, so the same view also
           compares the latest session with its last good one (StutterCompare.tsx). */}

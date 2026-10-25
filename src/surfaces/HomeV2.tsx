@@ -55,6 +55,9 @@ type Props = {
   onSeeInFix: () => void;
   /** Where the "See in …" buttons land: "Lab" on the proving-ground rail, "Optimize" classic. */
   fixRoomLabel?: string;
+  /** App's station deep-link. The drift module's pointer opens the Care view ("blackbox"), whose
+   *  "Since it last worked" list names and dates each drift (P6-timeline). Absent → text only. */
+  onOpenLabStation?: (station: string) => void;
 };
 
 const fmtGB1 = (b: number) => (b / 1024 ** 3).toFixed(1);
@@ -128,6 +131,7 @@ export function HomeV2({
   onSeeInFix,
   // "Lab" — the Optimize room was deleted in the 2026-08-06 generation prune.
   fixRoomLabel = "Lab",
+  onOpenLabStation,
 }: Props) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
@@ -244,12 +248,13 @@ export function HomeV2({
   // ── Glanceable fill (spec 2026-07-05) — measured-only sources for the two glance cards ──
   // Drift watch: the A5 drift signal, surfaced on Home for the first time (no one-mention clash).
   const drifts = readiness?.drifts ?? [];
-  const driftNames =
-    drifts
-      .slice(0, 2)
-      .map((d) => d.label)
-      .join(" · ") +
-    (drifts.length > 2 ? t("home.homeV2.stats.driftMore", { count: drifts.length - 2 }) : "");
+  // P6-timeline: the drift module counts and points; the Care view's "Since it last worked" list
+  // is the one place each drift is named and dated.
+  const seeWhatChanged = onOpenLabStation && (
+    <button type="button" className="hv2-inline-link" onClick={() => onOpenLabStation("blackbox")}>
+      {t("home.homeV2.stats.seeWhatChanged")}
+    </button>
+  );
   // Drive health: SMART reads only — a drive with no reading is omitted from the count, never guessed.
   const smartDrives = (hw.disk_health ?? []).filter((d) => d.health !== "Unknown");
   const flaggedDrives = smartDrives.filter((d) => d.health !== "Healthy");
@@ -555,7 +560,7 @@ export function HomeV2({
                   <span className="hv2-led hv2-led-warn" aria-hidden="true" />
                   {t("home.homeV2.stats.driftCount", { count: drifts.length })}
                 </span>
-                <span className="hv2-stat-d">{driftNames}</span>
+                <span className="hv2-stat-d">{seeWhatChanged ?? t("home.homeV2.stats.driftWhere")}</span>
               </>
             )}
           </SpotlightCard>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup, act, screen } from "@testing-library/react";
+import { render, cleanup, act, screen, fireEvent } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 import i18n from "../i18n";
@@ -209,5 +209,27 @@ describe("HomeHud header text never runs together (#513)", () => {
       '<span>Sep 22, 2026</span><h1>Monitor below max refresh</h1>' +
       "<div><span>checks 16/16 measured</span> <span>attention 3</span></div>";
     expect(welds(fixed)).toEqual([]);
+  });
+});
+
+describe("HomeHud drift module points to the Care view (P6-timeline)", () => {
+  const drifted = {
+    ...readiness,
+    drifts: [{ id: "game-mode", label: "Game Mode", detail: "Off.", noticed_at: "2026-10-20T10:00:00Z" }],
+  } as unknown as GameReadiness;
+
+  it("counts the drift and opens Crash & Freeze Rescue instead of restating its name", () => {
+    const open = vi.fn();
+    const c = render(<HomeRoom {...props} readiness={drifted} onOpenLabStation={open} />).container;
+    expect(c.querySelector("[data-hud-home]")).not.toBeNull();
+    expect(screen.getByText(/1 setting drifted off/)).toBeTruthy();
+    expect(screen.queryByText(/Game Mode/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "see what changed" }));
+    expect(open).toHaveBeenCalledWith("blackbox");
+  });
+
+  it("without the deep-link, still names where the list is", () => {
+    render(<HomeRoom {...props} readiness={drifted} />);
+    expect(screen.getByText(/1 setting drifted off · listed on Crash & Freeze Rescue/)).toBeTruthy();
   });
 });

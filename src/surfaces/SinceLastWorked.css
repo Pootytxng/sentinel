@@ -1,0 +1,76 @@
+/* P6-timeline: the Care view's one "Since it last worked" list. Instrument tokens only. */
+.bb-since {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ix-text-3) 8%, transparent);
+  min-width: 0;
+}
+.bb-since-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+.bb-since-title {
+  font-size: var(--type-label);
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.bb-since-tag {
+  font-style: italic;
+  font-size: var(--type-label);
+  color: var(--ix-text-3);
+}
+.bb-since-line,
+.bb-since-more {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.5;
+}
+.bb-since-more {
+  color: var(--ix-text-3);
+}
+.bb-since-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bb-since-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  font-size: var(--type-label);
+  line-height: 1.5;
+  min-width: 0;
+}
+.bb-since-kind {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.bb-since-incident .bb-since-kind {
+  color: var(--ix-warn);
+}
+.bb-since-text {
+  flex: 1 1 16ch;
+  min-width: 0;
+  color: var(--ix-text-2);
+  overflow-wrap: anywhere;
+}
+.bb-since-when {
+  flex: 0 0 auto;
+  color: var(--ix-text-3);
+}
+.bb-since-unplaced {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

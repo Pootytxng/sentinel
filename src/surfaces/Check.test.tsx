@@ -14,6 +14,8 @@ const leftoversMock = vi.hoisted(() => ({
 // Settable Drift Watch payload — a check that was good and has since regressed. Default: none.
 const readinessMock = vi.hoisted(() => ({
   drifts: [] as { id: string; label: string; detail: string; noticed_at: string }[],
+  // P6-timeline: the hardware-change advisory's payload (hwchange.rs). Default: no change.
+  hw: null as null | { changed: boolean; changes: string[]; baseline_recorded: boolean },
 }));
 
 // Settable priorities payload (R3 Lane B: upgrade_path arrives on this existing command).
@@ -71,6 +73,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         dismissed_ids: [],
         drifts: readinessMock.drifts,
       });
+    if (cmd === "get_hardware_changes") return Promise.resolve(readinessMock.hw);
     if (cmd === "get_priorities") return Promise.resolve(prioritiesMock.payload);
     // useScan/refresh now rank via priorities_from (pure) instead of re-running get_priorities.
     if (cmd === "priorities_from") return Promise.resolve(prioritiesMock.payload);
@@ -90,6 +93,7 @@ import { KNOWLEDGE_BY_ID } from "../data/knowledge";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { fireEvent } from "@testing-library/react";
 import { LEDGER_CHANGED_EVENT, type SessionSummary } from "../types";
+import { invalidateProbe } from "../data/probe-cache";
 
 afterEach(() => {
   cleanup();
@@ -102,6 +106,8 @@ afterEach(() => {
   applyMock.fails = false;
   applyMock.applied = [];
   readinessMock.drifts = [];
+  readinessMock.hw = null;
+  invalidateProbe();
   prioritiesMock.payload = {
     limiters: [],
     already_fine: [],
@@ -161,7 +167,7 @@ describe("Check", () => {
     expect(screen.getByText("SSD check")).toBeInTheDocument();
   });
 
-  it("drift banner names WHAT + WHEN but never a WHO — no 'outside Compy' (honesty guard, drift.rs:61)", async () => {
+  it("drift banner names WHAT (label + detail) and points to WHEN on the Care view, but never a WHO — no 'outside Compy' (honesty guard, drift.rs:61)", async () => {
     // A power-profile regression can be self-inflicted (rolling back the Ultimate power plan in the
     // Trust Ledger drops this same check to Attention). Drift has no vantage point to tell that from a
     // Windows Update revert — so claiming a WHO ("changed outside Compy") is sometimes a flat lie.
@@ -178,13 +184,50 @@ describe("Check", () => {
         <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
       </ConfirmProvider>,
     );
-    // WHAT drifted (the label) + its detail render...
-    expect(await screen.findByText("Power profile")).toBeInTheDocument();
-    expect(screen.getByText("Active plan 'Balanced'.")).toBeInTheDocument();
-    // ...WHEN we noticed it (relative, honest)...
-    expect(screen.getByText(/changed since it was last good · noticed/)).toBeInTheDocument();
-    // ...but the banner NEVER attributes a cause. "outside Compy" is the retired false claim.
+    // WHAT drifted: the name and its detail...
+    expect(await screen.findByText("Power profile: Active plan 'Balanced'.")).toBeInTheDocument();
+    expect(screen.getByText("1 setting changed since it was last good")).toBeInTheDocument();
+    // ...WHEN is no longer restated here: the card points to the Care view's list, which dates it
+    // (P6-timeline). The old relative "noticed …" line is gone from Check.
+    expect(screen.getByText(/lists each one with when Compy noticed it/)).toBeInTheDocument();
+    expect(screen.queryByText(/noticed \d|noticed just now|noticed yesterday/)).not.toBeInTheDocument();
+    // ...and the banner NEVER attributes a cause. "outside Compy" is the retired false claim.
     expect(screen.queryByText(/outside Compy/i)).not.toBeInTheDocument();
+  });
+
+  it("the hardware advisory names the parts, keeps its actions, and links to the Care view (P6-timeline)", async () => {
+    readinessMock.hw = { changed: true, changes: ["GPU: RX 6800 → RX 7900 XT"], baseline_recorded: true };
+    const onOpenCare = vi.fn();
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" onOpenCare={onOpenCare} />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Your hardware changed since last setup")).toBeInTheDocument();
+    expect(screen.getByText(/GPU: RX 6800 → RX 7900 XT/)).toBeInTheDocument();
+    // The card's own actions stay: they exist nowhere else.
+    expect(screen.getByRole("button", { name: "Re-check my setup" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /This is my rig now/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "See what else changed" }));
+    expect(onOpenCare).toHaveBeenCalledTimes(1);
+  });
+
+  it("the drift pointer opens the Care view when the Lab wires it (P6-timeline)", async () => {
+    readinessMock.drifts = [
+      { id: "power-profile", label: "Power profile", detail: "Active plan 'Balanced'.", noticed_at: new Date().toISOString() },
+      { id: "game-mode", label: "Game Mode", detail: "Off.", noticed_at: new Date().toISOString() },
+    ];
+    const onOpenCare = vi.fn();
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" onOpenCare={onOpenCare} />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("2 settings changed since they were last good")).toBeInTheDocument();
+    // One pointer for every drift, not one card each.
+    expect(document.querySelectorAll(".check-drift").length).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "See what changed" }));
+    expect(onOpenCare).toHaveBeenCalledTimes(1);
   });
 
   it("shows the tuning nudge ONLY when an AMD rig has run sustained-warm, linking to the guide", async () => {

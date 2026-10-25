@@ -2753,11 +2753,107 @@ fn attach_changed_before_from(g: &Gathered, report: &mut crate::blackbox::BlackB
 /// Edge: one read-only gather for the whole scan, then "Changed before this" on every incident.
 /// No identity probe is started — the answer is what Compy already holds.
 pub(crate) fn attach_changed_before(report: &mut crate::blackbox::BlackBoxReport) {
-    if report.incidents.is_empty() {
-        return;
-    }
     let g = gather();
-    attach_changed_before_from(&g, report);
+    if !report.incidents.is_empty() {
+        attach_changed_before_from(&g, report);
+    }
+    // P6-timeline: the Care view's one "Since it last worked" list, from the same gather.
+    attach_since_last_worked_from(&g, report, Utc::now());
+}
+
+// ─── P6-timeline: "Since it last worked" ─────────────────────────────────
+//
+// One list on the Care view: what happened after the last session that worked. "Worked" means
+// exactly what "Changed before this" calls clean (`cb_anchor` with the incident time set to now):
+// a measured session that has ended, with no incident on record during it, inside the span the
+// crash scan read in full (`clean_judgeable_from`). No such session → no list, and the view says
+// so; it never falls back to a session it can't call clean. The list itself is the assembled
+// timeline after that session started: Compy's changes, observed changes (driver, Windows build,
+// power plan, hardware), drift, and sessions. Incidents come from the scan the report already
+// holds. Read-only, like the rest of this file's Care path.
+
+/// The Care view's "Since it last worked" answer.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct SinceLastWorked {
+    /// The last clean session. `None` exactly when `none_reason` is set.
+    pub anchor: Option<ChangedBeforeAnchor>,
+    /// Why there's no anchor: "no-session" (nothing measured has ended yet) or "none-clean"
+    /// (every ended session had an incident, or is older than the crash records Compy read).
+    pub none_reason: Option<String>,
+    /// Newest first: Compy changes, observed changes, drift and sessions after the anchor started.
+    pub events: Vec<EventRecord>,
+    /// Observed changes whose reading window straddles the anchor's start: they may be older.
+    pub unplaced: Vec<EventRecord>,
+    /// Newest first: every drift that is still open and isn't already in `events` or `unplaced`
+    /// (it was noticed before the anchor, or there is no anchor). Drift Watch keeps only open
+    /// drift, so this is "still drifted now", whatever its age — the one place Check's and Home's
+    /// drift pointers lead, even when no session can be called clean.
+    pub open_drift: Vec<EventRecord>,
+}
+
+fn since_last_worked_impl(
+    g: &Gathered,
+    asm: &TimelineAssembly,
+    incidents: &[DateTime<Utc>],
+    clean_judgeable_from: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> SinceLastWorked {
+    // Stable: equal timestamps keep the assembler's tie-break order.
+    let newest_first = |v: &mut Vec<EventRecord>| {
+        v.sort_by_key(|e| std::cmp::Reverse(parse_utc(&e.timestamp)));
+    };
+    let open_drift_except = |listed: &[&EventRecord]| {
+        let mut v: Vec<EventRecord> = asm
+            .events
+            .iter()
+            .filter(|e| e.event_type == "readiness-drift" && !listed.iter().any(|l| l.id == e.id))
+            .cloned()
+            .collect();
+        newest_first(&mut v);
+        v
+    };
+    let none = |reason: &str| SinceLastWorked {
+        anchor: None,
+        none_reason: Some(reason.into()),
+        events: Vec::new(),
+        unplaced: Vec::new(),
+        open_drift: open_drift_except(&[]),
+    };
+    let (anchor, start) = match cb_anchor(&g.sessions, now, incidents, clean_judgeable_from) {
+        None => return none("no-session"),
+        Some((_, _, false)) => return none("none-clean"),
+        Some((s, start, true)) => (s, start),
+    };
+    let (mut events, mut unplaced) = split_window_events(&asm.events, start, now);
+    events.extend(asm.events.iter().filter(|e| {
+        e.event_type == "session" && parse_utc(&e.timestamp).is_some_and(|t| t > start && t <= now)
+    }).cloned());
+    newest_first(&mut events);
+    newest_first(&mut unplaced);
+    let listed: Vec<&EventRecord> = events.iter().chain(unplaced.iter()).collect();
+    let open_drift = open_drift_except(&listed);
+    SinceLastWorked {
+        anchor: Some(ChangedBeforeAnchor {
+            started_at: anchor.started_at.clone(),
+            game: pretty_game_name(&anchor.process_name),
+        }),
+        none_reason: None,
+        events,
+        unplaced,
+        open_drift,
+    }
+}
+
+fn attach_since_last_worked_from(
+    g: &Gathered,
+    report: &mut crate::blackbox::BlackBoxReport,
+    now: DateTime<Utc>,
+) {
+    let asm = assemble_from(g);
+    let incidents: Vec<DateTime<Utc>> =
+        report.incidents.iter().filter_map(|i| parse_utc(&i.when)).collect();
+    report.since_last_worked =
+        Some(since_last_worked_impl(g, &asm, &incidents, report.clean_judgeable_from, now));
 }
 
 /// Home's single concise line — only when the latest session shows a meaningful delta.
@@ -4731,6 +4827,118 @@ mod tests {
         let r = changed_before_incident_impl(&g, &asm, inc, at(inc), &[], Some(at("2026-10-21T00:00:00Z")));
         assert_eq!(r.anchor_kind, "clean");
         assert_eq!(r.anchor.unwrap().started_at, "2026-10-22T10:00:00Z");
+    }
+
+    // ── P6-timeline: "Since it last worked" ──
+
+    fn slw(g: &Gathered, incidents: &[&str], cjf: Option<&str>, now: &str) -> SinceLastWorked {
+        let asm = assemble_from(g);
+        let incidents: Vec<DateTime<Utc>> = incidents.iter().map(|t| at(t)).collect();
+        since_last_worked_impl(g, &asm, &incidents, cjf.map(at), at(now))
+    }
+
+    #[test]
+    fn since_last_worked_lists_what_happened_after_the_last_clean_session_newest_first() {
+        let mut g = gathered_with(vec![
+            mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0),
+            mk_session("2026-10-22T10:00:00Z", "Game.exe", 100.0, 120.0),
+        ]);
+        g.applied = vec![mk_change("visual-effects", "Trim Windows visual effects", "2026-10-21T10:00:00Z", "applied")];
+        g.snapshots = vec![
+            mk_snap("2026-10-20T10:00:00Z", "drv-1", "26100", "Balanced"),
+            mk_snap("2026-10-23T10:00:00Z", "drv-2", "26100", "Balanced"),
+        ];
+        // The Oct 22 session had a crash, so the last one that worked is Oct 20.
+        let r = slw(&g, &["2026-10-22T10:05:00Z"], None, "2026-10-25T10:00:00Z");
+        assert_eq!(r.none_reason, None);
+        let anchor = r.anchor.as_ref().expect("a clean session");
+        assert_eq!(anchor.started_at, "2026-10-20T10:00:00Z");
+        let types: Vec<&str> = r.events.iter().map(|e| e.event_type.as_str()).collect();
+        assert_eq!(types, ["gpu-driver-change", "session", "change-applied"], "newest first: {types:?}");
+        assert!(
+            !r.events.iter().any(|e| e.id == "session:2026-10-20T10:00:00Z"),
+            "the session that worked is the anchor, not a row"
+        );
+        assert!(r.unplaced.is_empty());
+
+        // A reading window that opens before the anchor may predate it: unplaced, never listed.
+        g.snapshots[0].observed_at = "2026-10-19T10:00:00Z".into();
+        let r = slw(&g, &["2026-10-22T10:05:00Z"], None, "2026-10-25T10:00:00Z");
+        assert!(!r.events.iter().any(|e| e.event_type == "gpu-driver-change"));
+        assert_eq!(r.unplaced.len(), 1);
+        assert_eq!(r.unplaced[0].event_type, "gpu-driver-change");
+    }
+
+    #[test]
+    fn since_last_worked_says_so_when_no_session_can_be_called_clean() {
+        // Nothing measured yet.
+        assert_eq!(slw(&gathered_with(vec![]), &[], None, "2026-10-25T10:00:00Z").none_reason.as_deref(), Some("no-session"));
+        // A session still running (or just ended, inside the 90 s grace) hasn't "worked" yet.
+        let g = gathered_with(vec![mk_session("2026-10-25T09:55:00Z", "Game.exe", 100.0, 120.0)]);
+        assert_eq!(slw(&g, &[], None, "2026-10-25T10:05:30Z").none_reason.as_deref(), Some("no-session"));
+        // Every ended session had an incident: none of them worked, and there's no fallback.
+        let g = gathered_with(vec![
+            mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0),
+            mk_session("2026-10-22T10:00:00Z", "Game.exe", 100.0, 120.0),
+        ]);
+        let r = slw(&g, &["2026-10-20T10:05:00Z", "2026-10-22T10:05:00Z"], None, "2026-10-25T10:00:00Z");
+        assert_eq!(r.none_reason.as_deref(), Some("none-clean"));
+        assert!(r.anchor.is_none() && r.events.is_empty() && r.unplaced.is_empty());
+        // The crash scan only reaches back to Oct 23: an older session can't be called clean.
+        let r = slw(&g, &[], Some("2026-10-23T00:00:00Z"), "2026-10-25T10:00:00Z");
+        assert_eq!(r.none_reason.as_deref(), Some("none-clean"));
+        let r = slw(&g, &[], Some("2026-10-21T00:00:00Z"), "2026-10-25T10:00:00Z");
+        assert_eq!(r.anchor.unwrap().started_at, "2026-10-22T10:00:00Z");
+    }
+
+    fn mk_drift(id: &str, label: &str, last_ready_at: Option<&str>, noticed_at: &str) -> crate::drift::DriftNotice {
+        crate::drift::DriftNotice {
+            id: id.into(),
+            label: label.into(),
+            last_ready_at: last_ready_at.map(str::to_string),
+            noticed_at: noticed_at.into(),
+        }
+    }
+
+    #[test]
+    fn since_last_worked_always_carries_every_open_drift_whatever_its_age() {
+        let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        g.drift_notices = vec![
+            // Open since before the session that worked: not "since", but still drifted now.
+            mk_drift("game-mode", "Game Mode", Some("2026-10-10T10:00:00Z"), "2026-10-12T10:00:00Z"),
+            // Noticed inside the window: a dated row of the list, not repeated below it.
+            mk_drift("power-profile", "Power profile", Some("2026-10-21T10:00:00Z"), "2026-10-22T10:00:00Z"),
+        ];
+        let r = slw(&g, &[], None, "2026-10-25T10:00:00Z");
+        assert_eq!(r.anchor.as_ref().unwrap().started_at, "2026-10-20T10:00:00Z");
+        let open: Vec<&str> = r.open_drift.iter().map(|e| e.summary.as_str()).collect();
+        assert_eq!(open, [drift_summary("Game Mode").as_str()], "only the drift not already listed");
+        assert!(r.events.iter().any(|e| e.summary == drift_summary("Power profile")));
+        assert!(!r.events.iter().any(|e| e.summary == drift_summary("Game Mode")));
+
+        // No session that worked: the list is empty, the open drift is still there.
+        let r = slw(&g, &["2026-10-20T10:05:00Z"], None, "2026-10-25T10:00:00Z");
+        assert_eq!(r.none_reason.as_deref(), Some("none-clean"));
+        assert_eq!(r.open_drift.len(), 2);
+        assert_eq!(r.open_drift[0].summary, drift_summary("Power profile"), "newest first");
+        let mut g = gathered_with(vec![]);
+        g.drift_notices = vec![mk_drift("game-mode", "Game Mode", None, "2026-10-12T10:00:00Z")];
+        let r = slw(&g, &[], None, "2026-10-25T10:00:00Z");
+        assert_eq!(r.none_reason.as_deref(), Some("no-session"));
+        assert_eq!(r.open_drift.len(), 1);
+    }
+
+    #[test]
+    fn since_last_worked_rides_the_report_even_with_no_incident() {
+        let g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        let mut report = crate::blackbox::BlackBoxReport::default();
+        attach_since_last_worked_from(&g, &mut report, at("2026-10-25T10:00:00Z"));
+        let wire = serde_json::to_value(&report).unwrap();
+        assert_eq!(wire["since_last_worked"]["anchor"]["started_at"], "2026-10-20T10:00:00Z");
+        assert!(wire["since_last_worked"]["none_reason"].is_null());
+        // The background observer's scan never carries it.
+        let bare = serde_json::to_value(crate::blackbox::BlackBoxReport::default()).unwrap();
+        assert!(bare.get("since_last_worked").is_none());
     }
 
     #[test]

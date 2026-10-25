@@ -107,17 +107,6 @@ function driverFreshness(
 // outside-Compy is detected. Self-contained via useScan + its own apply (existing command); onChanged
 // lets App re-sync its other surfaces. Zero new IPC.
 
-function ago(iso: string, t: TFunction): string {
-  const then = new Date(iso).getTime();
-  if (!then) return t("optimize.check.agoRecently");
-  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
-  if (mins < 60) return mins <= 1 ? t("optimize.check.agoJustNow") : t("optimize.check.agoMinAgo", { mins });
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return t("optimize.check.agoHoursAgo", { hrs });
-  const days = Math.round(hrs / 24);
-  return days === 1 ? t("optimize.check.agoYesterday") : t("optimize.check.agoDaysAgo", { days });
-}
-
 export default function Check({
   isAppliable,
   onOpenLibrary,
@@ -129,6 +118,7 @@ export default function Check({
   onExport,
   exporting = false,
   v2Ia = false,
+  onOpenCare,
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
@@ -150,6 +140,9 @@ export default function Check({
   // moves to the Applied segment (a record, not an action), driver freshness renders ONLY when
   // there is actually something stale to say, and the upgrade path is labeled early.
   v2Ia?: boolean;
+  /** P6-timeline: opens the Care view (Crash & Freeze Rescue), whose "Since it last worked" list is
+   *  the one place drift and hardware changes are listed. Absent → the pointer is text only. */
+  onOpenCare?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   // cache: true — Optimize/Fixes is the PERMANENT surface (vs the first-run FirstCheck/Tour arcs), so
@@ -312,7 +305,7 @@ export default function Check({
     : allLimiters;
   const alreadyFine = priorities?.already_fine ?? [];
   const notWorth = priorities?.not_worth_touching ?? [];
-  const drifts = readiness?.drifts ?? [];
+  const checkDrifts = (readiness?.drifts ?? []).filter((d) => d.id !== "applied-changes");
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
   // Advisory tuning nudge (spec 2026-06-08) — appears ONLY when recent sessions ran sustained-warm
@@ -509,7 +502,8 @@ export default function Check({
       {phase === "verdict" && (
         <div className="check-result">
           {/* Hardware-change advisory (A5): names exactly what changed since last setup + offers a
-              re-check and an inline "this is my rig now" that re-baselines (so it never nags). */}
+              re-check and an inline "this is my rig now" that re-baselines (so it never nags). Its
+              "See what changed" opens the Care view, which shows what else changed (P6-timeline). */}
           {hwChange?.changed && hwChange.changes.length > 0 && (
             <div className="check-drift check-hwchange" role="status">
               <div className="check-drift-head">
@@ -522,6 +516,11 @@ export default function Check({
                 {t("optimize.check.hwChangeSuffix")}
               </p>
               <div className="check-drift-actions">
+                {onOpenCare && (
+                  <button className="btn btn-small" onClick={onOpenCare}>
+                    {t("optimize.check.seeWhatElseChanged")}
+                  </button>
+                )}
                 <button className="btn btn-small" disabled={running} onClick={() => rerun()}>
                   {t("optimize.check.recheckMySetup")}
                 </button>
@@ -531,25 +530,34 @@ export default function Check({
               </div>
             </div>
           )}
-          {/* Drift watch — a check that was good and has since regressed. We state WHAT + WHEN
-              only, never WHO: drift can't tell a Windows Update revert from the user's own in-app
-              rollback (e.g. rolling back the Ultimate power plan regresses "power-profile"), so
-              "outside Compy" would be a false claim in the self-rollback case. The
-              "applied-changes" drift is EXCLUDED here: it's served (named + inline "turn it back on")
-              by the limiter card below, so this vague banner would just duplicate it. */}
-          {drifts
-            .filter((d) => d.id !== "applied-changes")
-            .map((d) => (
-            <div key={d.id} className="check-drift">
+          {/* Drift watch — a check that was good and has since regressed. One card for all of them:
+              each name and its detail, and the way to the Care view's "Since it last worked" list,
+              which shows every open drift with when Compy noticed it (P6-timeline). Never a WHO: drift can't tell a Windows Update revert from the
+              user's own in-app rollback, so "outside Compy" would be a false claim. The
+              "applied-changes" drift is EXCLUDED: the limiter card below serves it (named + inline
+              "turn it back on"). */}
+          {checkDrifts.length > 0 && (
+            <div className="check-drift" role="status">
               <div className="check-drift-head">
-                <span className="check-drift-label">{d.label}</span>
-                <span className="check-drift-when">
-                  {t("optimize.check.driftChangedNoticed", { when: ago(d.noticed_at, t) })}
+                <span className="check-drift-label">
+                  {t("optimize.check.driftPointerLabel", { count: checkDrifts.length })}
                 </span>
               </div>
-              <p className="check-drift-detail">{d.detail}</p>
+              {checkDrifts.map((d) => (
+                <p key={d.id} className="check-drift-detail">
+                  {d.detail ? t("optimize.check.driftItem", { label: d.label, detail: d.detail }) : d.label}
+                </p>
+              ))}
+              <p className="check-drift-detail">{t("optimize.check.driftPointer")}</p>
+              {onOpenCare && (
+                <div className="check-drift-actions">
+                  <button className="btn btn-small" onClick={onOpenCare}>
+                    {t("optimize.check.seeWhatChanged")}
+                  </button>
+                </div>
+              )}
             </div>
-          ))}
+          )}
 
           {/* Advisory tuning nudge — bathroom law: only when the GPU's been running warm. */}
           {hot && tuningGuide && (

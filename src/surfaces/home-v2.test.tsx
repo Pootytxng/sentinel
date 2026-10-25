@@ -266,9 +266,11 @@ describe("HomeV2 — glance cards (fill pass)", () => {
     expect(screen.getByText("no check Compy watches has slipped since last time")).toBeTruthy();
   });
 
-  it("N drifts → honest count + names ≤2 with 'and N more' (warn)", () => {
+  it("N drifts → honest count, then a pointer to the Care view's list, never the names restated (P6-timeline)", () => {
     useReduced();
+    const open = vi.fn();
     mount({
+      onOpenLabStation: open,
       readiness: {
         ...readiness,
         drifts: [
@@ -279,7 +281,14 @@ describe("HomeV2 — glance cards (fill pass)", () => {
       },
     });
     expect(screen.getByText("3 settings drifted off")).toBeTruthy();
-    expect(screen.getByText("Game Mode · Power plan · and 1 more")).toBeTruthy();
+    expect(screen.queryByText(/Game Mode/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "see what changed" }));
+    expect(open).toHaveBeenCalledWith("blackbox");
+    cleanup();
+    // Without the deep-link the pointer is text that still names where the list is.
+    mount({ readiness: { ...readiness, drifts: [{ id: "d1", label: "Game Mode", detail: "", noticed_at: "2026-07-04T10:00:00Z" }] } });
+    expect(screen.getByText("listed on Crash & Freeze Rescue")).toBeTruthy();
+    expect(screen.queryByText(/Game Mode/)).toBeNull();
   });
 
   it("readiness unresolved → drift card claims nothing", () => {

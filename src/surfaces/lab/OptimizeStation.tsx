@@ -58,6 +58,9 @@ export type LabFastPathProps = {
   // service-suspend as read-first, apply-behind-confirm, reversible changes you can prove right in
   // the Lab. Optional so non-App callers (tests) pass nothing; the bay just doesn't render.
   gamingEnabled?: boolean;
+  /** P6-timeline: opens the Care view, where Check's drift and hardware pointers lead. Optional;
+   *  without it those pointers are text only. */
+  onOpenCare?: () => void;
 };
 
 // The hero gauge ring geometry (a static SVG circle swept by stroke-dashoffset).
@@ -246,6 +249,7 @@ export function OptimizeStation(props: LabFastPathProps) {
             vendor={props.vendor}
             sessions={props.sessions}
             gpus={props.gpus}
+            onOpenCare={props.onOpenCare}
           />
         </div>
       </details>
