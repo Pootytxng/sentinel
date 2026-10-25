@@ -278,6 +278,17 @@ fn round1(x: f64) -> f64 {
 /// Pure aggregator. `record_fps` is called once per tick a game is presenting;
 /// `record_sensors` once per tick for peak tracking. `finalize` is given the
 /// measured duration so it stays deterministic and testable.
+/// P5-enough: what the running capture has measured so far (`SessionAccumulator::progress`). Read-only,
+/// in memory only; `get_fps_status` hands it to the UI while capture is active.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct CaptureProgress {
+    /// The session's own start, so a finishing recorder clears only its own progress.
+    #[serde(skip)]
+    pub(crate) started_at: String,
+    pub(crate) samples: u32,
+    pub(crate) fps_series: Vec<(u32, f64)>,
+}
+
 pub(crate) struct SessionAccumulator {
     started_at: String,
     compy_changes: Option<crate::history::SessionChangeCounts>,
@@ -496,6 +507,19 @@ impl SessionAccumulator {
 
     pub(crate) fn has_data(&self) -> bool {
         self.samples > 0
+    }
+
+    /// P5-enough: the session so far, for the guided journey's "enough yet?" line. `samples` is the
+    /// measured readings only (a background tick never counts), and the series includes the open
+    /// bucket's mean the same way `finalize` flushes it, so the live grade and the saved one agree.
+    pub(crate) fn progress(&self) -> CaptureProgress {
+        let mut fps_series = self.fps_series.clone();
+        if let Some(b) = self.bucket_idx {
+            if self.bucket_count > 0 && fps_series.len() < FPS_SERIES_MAX_POINTS {
+                fps_series.push((b * FPS_SERIES_BUCKET_SECS, round1(self.bucket_sum / self.bucket_count as f64)));
+            }
+        }
+        CaptureProgress { started_at: self.started_at.clone(), samples: self.samples, fps_series }
     }
 
     pub(crate) fn finalize(mut self, duration_secs: u64) -> SessionSummary {
@@ -1001,6 +1025,25 @@ mod session_tests {
             vec![(0, 104.5), (10, 114.5), (20, 122.0)],
             "each point is the bucket's mean of REAL samples; the trailing partial bucket flushes at finalize"
         );
+    }
+
+    /// P5-enough: the live progress counts measured readings only (a background tick never counts)
+    /// and its series includes the open bucket exactly as `finalize` will save it.
+    #[test]
+    fn progress_counts_measured_readings_and_matches_finalize() {
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        for i in 0..15u32 {
+            acc.record_tick("g.exe", 100.0 + f64::from(i / 10) * 10.0, 10.0, 80.0, i, Some(true));
+        }
+        for i in 15..20u32 {
+            assert!(!acc.record_tick("g.exe", 500.0, 2.0, 400.0, i, Some(false)));
+        }
+        let p = acc.progress();
+        assert_eq!(p.samples, 15, "the 5 alt-tabbed ticks are not readings that count");
+        assert_eq!(p.fps_series, vec![(0, 100.0), (10, 110.0)], "the open bucket is included");
+        assert_eq!(p.started_at, "t");
+        let s = acc.finalize(20);
+        assert_eq!((s.samples, s.fps_series), (p.samples, p.fps_series), "live and saved agree");
     }
 
     #[test]

@@ -145,6 +145,13 @@ html.overlay-mode #root::after {
   display: block;
   margin-top: 1px;
 }
+/* P5-enough: the guided journey's "enough yet?" line; wraps inside the 230 px window. */
+.ovl2-note {
+  max-width: 200px;
+  font-size: var(--type-label);
+  line-height: 1.3;
+  color: #ccd5de;
+}
 
 /* Backdrop OFF (owner option, 2026-06-11): no plate at all — text floats on the game, carrying
    its own readability via the same RTSS-style black outline the classic overlay shipped with.
