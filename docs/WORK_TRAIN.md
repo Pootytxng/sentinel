@@ -145,7 +145,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       undetectable without game introspection, which is forbidden.
 - [x] **P4-comparable-show** `78b908c3`: Debrief + Live list say "N s left out while another window was in front"; overlay set
       `focusable:false` (was focusable) + guard.
-- [ ] **P4-show-f1** A session whose game was always behind another window is never saved (`has_data()` needs
+- [x] **P4-show-f1** `97313e21` (saved as a zero-reading row; every reader skips it; deck, receipts, detail windows fixed). A session whose game was always behind another window is never saved (`has_data()` needs
       samples > 0); save a zero-sample record that every comparison skips, so the UI can say why.
 - [ ] **P4-show-f2** (desk) Check the overlay still shows and stays click-through with `focusable:false`.
 - [x] **P4-candidates** `e0160644`: picker shows only changes worth testing here; reasons behind a toggle.
@@ -201,6 +201,35 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - [ ] **P5-exit-proof** (owner, FULL) Run the journey on WARDOGS from the button to the summary with no manual
       Trial clicks; the friend repeats it once. Record in BACKLOG as the Phase 5 exit. Needs P5-guided through
       P5-learned. ROADMAP P5 exit.
+
+### Then — Roadmap Phase 6: Care Journey convergence (`product/ROADMAP.md` Phase 6)
+Planned 2026-10-25. Order is value order. Converge, don't add rooms. Phase 6 exit on the owner rig: from Home,
+"my game crashed" or "it stutters" reaches one next step or an honest "we don't know" in one place, with no
+room or station picked by hand.
+- [x] **P6-plan** Slices written below (2026-10-25).
+- [ ] **P6-changed** Each incident in Crash & Freeze Rescue shows "Changed before this": Compy changes, driver,
+      Windows build, power plan, hardware and drift since the last clean session, tagged "not proven cause".
+      Needs the `intelligence.rs` gather anchored at the incident time. ROADMAP P6 bullets 1, 3; Constitution §17, §25.
+- [ ] **P6-door** One Care door on Home ("Something's wrong") replaces the Crash & Freeze entry; the observer
+      card and the interview crash/stutter answers all land on the same Care view. Needs P6-changed. ROADMAP P6
+      exit; Constitution §18, §27.
+- [ ] **P6-stutter** Stutter/slow on that view compares the latest session of the game with its last good one
+      (`what_changed_between`), not a Monitor/benchmark hand-off; no good session = say so and offer one.
+      Needs P6-door. ROADMAP P6 bullet 4; Constitution §16, §17.
+- [ ] **P6-next** The Care view shows exactly one next step (Black Box `next_step` or the what-changed next
+      test); after it, the measured-payoff line reports recurrence or absence. Needs P6-door. ROADMAP P6
+      bullet 6; Constitution §25.
+- [ ] **P6-restore** When Compy changes sit between the last good session and the problem, offer "Put back how
+      it was on <date>" with the list, via the existing ledger rollback; unrecorded changes say Compy can't
+      restore them. Needs P6-changed. ROADMAP P6 bullet 7; Constitution §26.
+- [ ] **P6-unknown** Honest ends on the Care view: "Not enough evidence yet", or "Beyond Compy" (`beyond_us`)
+      with the Support evidence export one tap away. Needs P6-next. ROADMAP P6 bullet 8; Constitution §26.
+- [ ] **P6-timeline** One "Since it last worked" list on the Care view (incidents, Compy changes, drift,
+      hardware changes, sessions); the duplicate drift/hardware notices in Check, HomeHud and HomeV2 point
+      there. Needs P6-door. ROADMAP P6 bullet 2; Constitution §16, §27.
+- [ ] **P6-exit-proof** (owner, FULL) From Home, follow a real (or past) WARDOGS crash and a stutter to a next
+      step or honest unknown without picking a room; the friend repeats it once. Record in BACKLOG as the
+      Phase 6 exit. Needs P6-changed through P6-unknown. ROADMAP P6 exit.
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
