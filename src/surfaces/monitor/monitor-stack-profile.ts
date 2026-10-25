@@ -1,6 +1,6 @@
 import type { TFunction } from "i18next";
 import type { SessionSummary } from "../../types";
-import { knownFps } from "../../lib/session-metrics";
+import { knownFps, allBackground } from "../../lib/session-metrics";
 
 // Monitor v5 "Flight Deck + Session Stack" pure math (plan 2026-07-11-monitor-v5-deck-stack,
 // T1). Everything here is flat 2D over REAL measured series — the v3→v4 chain law: no
@@ -274,7 +274,10 @@ export type DeckDelta = {
 };
 
 /** Null without a prior session (the deck renders nothing — honest empty). */
-export function deckDeltaFrom(sessions: SessionSummary[]): DeckDelta | null {
+export function deckDeltaFrom(all: SessionSummary[]): DeckDelta | null {
+  // P4-show-f1: a session behind another window the whole time measured nothing (its empty stutter
+  // list is not "no spikes"), so neither side of the delta is ever one.
+  const sessions = all.filter((s) => !allBackground(s));
   const current = sessions[0];
   if (!current || sessions.length < 2) return null;
   let prev: SessionSummary | null = null;

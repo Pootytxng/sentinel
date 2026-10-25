@@ -680,10 +680,11 @@ fn load_sessions_from(path: &Path) -> Vec<SessionSummary> {
 fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     let mut all = load_sessions_from(path);
     all.push(summary);
-    // Keep at most MAX_SESSIONS rows (`machine_model`'s headroom counts on it). P4-show-f1: a row
-    // that measured nothing (`samples == 0`) is let go before any measured one, oldest first, so a
-    // run of alt-tabbed sessions never pushes out a Trial baseline. The row just saved stays, so
-    // the newest such session is still shown; once the history is full it costs at most one slot.
+    // Keep at most MAX_SESSIONS rows (`machine_model`'s headroom counts on it). P4-show-f1: when a
+    // save goes over, a row that measured nothing (`samples == 0`) is let go before any measured
+    // one, oldest first, and the row just saved always stays. So a measured row is let go for an
+    // unmeasured one only when the one just saved is the only unmeasured row left; while the
+    // history isn't full, unmeasured rows simply take free slots.
     while all.len() > MAX_SESSIONS {
         let newest = all.len() - 1;
         let drop = all[..newest].iter().position(|s| s.samples == 0).unwrap_or(0);
@@ -691,15 +692,19 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     }
     // Keep the (large) frametime timeline only for the 5 most-recent sessions; older sessions retain
     // the insight + events but shed the per-second series so sessions.json + exports stay small.
-    let strip_before = all.len().saturating_sub(5);
-    for s in all.iter_mut().take(strip_before) {
-        s.stutter_timeline = Vec::new();
-    }
     // The downsampled fps series is ~10× smaller per hour, so it survives a wider window (the
-    // free Sessions view's 20) before it too is shed.
-    let series_strip_before = all.len().saturating_sub(FPS_SERIES_KEEP);
-    for s in all.iter_mut().take(series_strip_before) {
-        s.fps_series = Vec::new();
+    // free Sessions view's 20) before it too is shed. P4-show-f1: both windows count measured
+    // sessions only; a row that measured nothing has neither, so alt-tabbed sessions never strip
+    // the last measured session's detail.
+    let mut measured = 0usize;
+    for s in all.iter_mut().rev().filter(|s| s.samples > 0) {
+        measured += 1;
+        if measured > 5 {
+            s.stutter_timeline = Vec::new();
+        }
+        if measured > FPS_SERIES_KEEP {
+            s.fps_series = Vec::new();
+        }
     }
     let rows = all.iter().map(disk_row).collect::<Result<Vec<_>, _>>()?;
     let json = serde_json::to_string_pretty(&rows).map_err(|e| e.to_string())?;
@@ -719,6 +724,13 @@ pub(crate) fn newest_measured_row(sessions: &serde_json::Value) -> Option<&serde
     sessions.as_array()?.iter().find(|s| s.get("samples").and_then(serde_json::Value::as_u64) != Some(0))
 }
 
+/// Does saving a session with `samples` readings trigger a Tier 2 receipt? Not when it measured
+/// nothing (P4-show-f1): the receipt is built from the newest measured session, so an armed build
+/// would re-send an older session's receipt.
+fn sends_receipt(samples: u32) -> bool {
+    samples > 0
+}
+
 /// Returns `Ok(true)` if a real session was saved, `Ok(false)` if it was dropped as too short — the
 /// caller uses this to decide whether to fire the debrief toast.
 pub(crate) fn save_session(summary: SessionSummary) -> Result<bool, String> {
@@ -730,13 +742,16 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<bool, String> {
     std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
     // M4: if a comparison was armed for this game, compute the cross-session delta now.
     crate::comparison::on_session_finalized(&summary);
+    let measured_samples = summary.samples;
     save_session_to(&sessions_path(), summary)?;
     // Tier 2 receipts (Q9a, #217): a finalized session is the ONLY thing that produces a receipt,
     // so this is the only trigger. Inert in every shipped build — it returns on receipts_gate()
     // before it reads consent, spawns anything, or touches the network. The call site lands in the
     // dark commit on purpose, so arming stays a one-line owner-signed flip rather than a
     // behavioural diff nobody reviewed.
-    crate::receipts::on_session_finalized();
+    if sends_receipt(measured_samples) {
+        crate::receipts::on_session_finalized();
+    }
     // Care trigger 3 of 3 (Tier 1 task 9): a session that just ended is the likeliest moment for a
     // crash to have been recorded, so the observer gets one targeted look. Throttled like the
     // foreground trigger, off-thread, and it cannot fail this save — `scan_async` swallows
@@ -1041,6 +1056,42 @@ mod session_tests {
         assert_eq!(all.len(), MAX_SESSIONS);
         assert!(all.iter().all(|s| s.samples > 0) && all[0].started_at == "m0");
         std::fs::remove_file(&path).ok();
+    }
+
+    /// Review (P4-show-f1): the 5-session timeline window and the fps-series window count measured
+    /// sessions only, so a run of alt-tabbed sessions can't strip the last measured one's detail.
+    #[test]
+    fn rows_that_measured_nothing_never_strip_measured_detail() {
+        let path = std::env::temp_dir().join(format!("compy-sessions-zdetail-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        for i in 0..FPS_SERIES_KEEP + 1 {
+            let mut acc = SessionAccumulator::new(format!("m{i:02}"), Some(0));
+            for t in 0..20u32 {
+                acc.record_fps("g.exe", 100.0, 10.0, 80.0, t);
+            }
+            let mut s = acc.finalize(600);
+            s.stutter_timeline = vec![(0, 80.0)];
+            save_session_to(&path, s).unwrap();
+        }
+        for i in 0..FPS_SERIES_KEEP {
+            save_session_to(&path, behind_the_whole_time(&format!("z{i:02}")).finalize(90)).unwrap();
+        }
+        let all = load_sessions_from(&path);
+        std::fs::remove_file(&path).ok();
+        let measured: Vec<&SessionSummary> = all.iter().filter(|s| s.samples > 0).collect();
+        let n = measured.len();
+        assert!(measured[n - 5..].iter().all(|s| !s.stutter_timeline.is_empty()), "the 5 newest measured keep their timeline");
+        assert!(measured[n - 6].stutter_timeline.is_empty());
+        assert!(measured[n - FPS_SERIES_KEEP..].iter().all(|s| !s.fps_series.is_empty()), "the 20 newest measured keep their series");
+        assert!(measured[0].fps_series.is_empty());
+    }
+
+    /// Review (P4-show-f1): saving a session that measured nothing never triggers a receipt, which
+    /// would be built from (and re-send) the newest measured session instead.
+    #[test]
+    fn a_session_that_measured_nothing_sends_no_receipt() {
+        assert!(!sends_receipt(0));
+        assert!(sends_receipt(1));
     }
 
     #[test]
