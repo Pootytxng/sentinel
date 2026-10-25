@@ -383,6 +383,18 @@
       "headline": "Your latest {{game}} session vs your last steady one",
       "off": "Session comparison is switched off on this PC, so Compy can't compare your sessions here."
     },
+    "honestEnd": {
+      "unknownTitle": "Not enough evidence yet",
+      "unknownLine": "Compy can't name a next step from what it has read so far, and it won't guess.",
+      "addLabel": "What would add evidence",
+      "gapAdmin": "Run Compy as admin and scan again. Some sources need admin and weren't read this time.",
+      "gapRepeat": "If it happens again, scan again soon after. Some readings need the same kind of record more than once before Compy says anything.",
+      "gapSession": "Play another full-length session of {{game}} on this PC, then check the comparison below again.",
+      "beyondTag": "Beyond Compy",
+      "beyondLine": "This one is beyond what Compy can safely narrow down from the evidence. The honest next move is to take it to a person.",
+      "exportLine": "Compy's support record (what Compy itself did on this PC) can go with it. You see exactly what's in it first, then save it as a file and attach it yourself. Compy sends nothing.",
+      "exportOpen": "Open the support record"
+    },
     "nextStep": {
       "title": "Your next step",
       "shownAbove": "Shown as your next step above.",

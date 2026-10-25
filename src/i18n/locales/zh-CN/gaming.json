@@ -372,6 +372,18 @@
       "headline": "你最近一次 {{game}} 会话 vs 上一局平稳的会话",
       "off": "这台电脑上的会话比较功能已关闭，所以 Compy 无法在这里比较你的会话。"
     },
+    "honestEnd": {
+      "unknownTitle": "证据还不够",
+      "unknownLine": "根据目前读到的内容，Compy 还无法给出下一步，也不会去猜。",
+      "addLabel": "什么能补充证据",
+      "gapAdmin": "以管理员身份运行 Compy 后再扫描一次。有些来源需要管理员权限，这次没有读取。",
+      "gapRepeat": "如果再次发生，请在不久后再扫描一次。有些判断需要同一类记录出现不止一次，Compy 才会给出结论。",
+      "gapSession": "在这台电脑上再玩一局完整时长的 {{game}}，然后再看一下下面的比较。",
+      "beyondTag": "超出 Compy 的范围",
+      "beyondLine": "根据现有证据，这个问题已超出 Compy 能够安全判断的范围。诚实的下一步是交给人来看。",
+      "exportLine": "可以附上 Compy 的支持记录（Compy 自己在这台电脑上做过的事）。你会先看到里面的全部内容，然后保存为文件，由你自己附上。Compy 不会发送任何东西。",
+      "exportOpen": "打开支持记录"
+    },
     "nextStep": {
       "title": "你的下一步",
       "shownAbove": "已作为你的下一步显示在上方。",

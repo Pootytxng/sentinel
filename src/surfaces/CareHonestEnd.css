@@ -1,0 +1,40 @@
+/* P6-unknown: the honest end in the Care view's next-step slot. Instrument tokens only. */
+.bb-honest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ix-text-3) 8%, transparent);
+  min-width: 0;
+}
+.bb-honest-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.bb-honest-line,
+.bb-honest-gaps {
+  margin: 0;
+  font-size: var(--type-label);
+  color: var(--ix-text-2);
+  overflow-wrap: anywhere;
+}
+.bb-honest-gaps {
+  padding-left: 18px;
+}
+.bb-honest-sublabel {
+  font-size: var(--type-label);
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.bb-honest-export {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.bb-honest-export > .v2-tile {
+  align-self: stretch;
+}

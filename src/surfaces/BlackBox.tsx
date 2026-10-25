@@ -29,6 +29,8 @@ import {
 import { useJourneyPhase } from "./GuidedJourney";
 import { CareNextStep } from "./CareNextStep";
 import { pickCareStep, isLifted, type StutterResult } from "./care-next-step";
+import { CareHonestEnd } from "./CareHonestEnd";
+import { honestEndFor } from "./care-honest-end";
 import "./BlackBox.css";
 
 // Black Box v1 (Paramedic Mode) — crash/freeze evidence reader, rendered as a Lab instrument.
@@ -185,6 +187,8 @@ export function BlackBox({
         sessions={stutter?.sessions ?? []}
         skipped={!!report && report.skipped_sources.length > 0}
       />
+      {/* P6-unknown: no step → the honest end takes the slot (never both). */}
+      <CareHonestEnd end={honestEndFor(careStep, shownIncidents, report?.skipped_sources.length ?? 0, stutter)} />
 
       <button className="bb-scan cmp-door" onClick={scan} disabled={scanning}>
         {scanning

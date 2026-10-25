@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import type { CrashIncident, SessionSummary } from "../types";
 import { anchorFor, payoffFor, MIN_PAYOFF_SESSIONS, type CareStep, type Payoff } from "./care-next-step";
+import { CareSupportExport } from "./CareHonestEnd";
 import "./CareNextStep.css";
 
 // P6-next: the ONE next step at the top of the Care view, and its measured payoff. BlackBox picks the
 // step (pickCareStep, priority documented in care-next-step.ts) so the record or report it came from
-// can point here instead of repeating it; this only renders. Read-only: no button, no action.
+// can point here instead of repeating it; this only renders. Read-only: no action. Its one button
+// (beyond Compy only) opens the existing local support record panel.
 export function CareNextStep({
   step,
   incidents,
@@ -89,14 +91,21 @@ export function CareNextStep({
   }
 
   const research = step.source === "incident" && step.research;
+  // P6-unknown: a record beyond Compy says so plainly, and puts the local support record one tap away.
+  const beyond = step.source === "incident" && step.beyond;
   return (
     <section className="bb-next" aria-label={t("gaming.blackBox.nextStep.title")} data-source={step.source}>
       <div className="bb-next-head">
         <span className="bb-next-title">{t("gaming.blackBox.nextStep.title")}</span>
         <span className="bb-next-tag">
-          {research ? t("gaming.blackBox.worthResearching") : t("gaming.blackBox.safeNextStep")}
+          {beyond
+            ? t("gaming.blackBox.honestEnd.beyondTag")
+            : research
+              ? t("gaming.blackBox.worthResearching")
+              : t("gaming.blackBox.safeNextStep")}
         </span>
       </div>
+      {beyond && <p className="bb-next-detail bb-next-beyond">{t("gaming.blackBox.honestEnd.beyondLine")}</p>}
       <p className="bb-next-headline">{step.headline}</p>
       {step.source === "incident" && <p className="bb-next-detail">{step.detail}</p>}
       <p className="bb-next-from">
@@ -108,6 +117,7 @@ export function CareNextStep({
         <span className="bb-next-payoff-label">{t("gaming.blackBox.nextStep.payoffLabel")}</span>{" "}
         {basis} {line}
       </p>
+      {beyond && <CareSupportExport />}
     </section>
   );
 }
