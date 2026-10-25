@@ -19,7 +19,7 @@ import { knownFps } from "../lib/session-metrics";
 import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
-import { summarizeGame, type GameTestSummary, type StillApplied, type TestedChange } from "./test-summary";
+import { summarizeGame, type GameTestSummary, type Lesson, type LessonRule, type StillApplied, type TestedChange } from "./test-summary";
 import { GuidedJourney, interruptedJourneyId, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import "./ExperimentBench.css";
@@ -1212,6 +1212,71 @@ const STILL_APPLIED_KEY: Record<StillApplied, string> = {
   unknown: "lab.experimentBench.summary.stillUnknown",
 };
 
+// P5-learned: the lesson's copy key, and the reason a put-back row says (the journey's own words).
+const LESSON_KEY: Record<LessonRule, string> = {
+  "steadier-not-faster": "steadierNotFaster",
+  "faster-and-steadier": "fasterAndSteadier",
+  "faster-not-steadier": "fasterNotSteadier",
+  "steadier-but-slower": "steadierButSlower",
+  "faster-but-less-steady": "fasterButLessSteady",
+  "less-steady-not-slower": "lessSteadyNotSlower",
+  "slower-and-less-steady": "slowerAndLessSteady",
+  "slower-not-less-steady": "slowerNotLessSteady",
+  steadier: "steadier",
+  "less-steady": "lessSteady",
+  "too-noisy": "tooNoisy",
+};
+const PUT_BACK_WHY: Record<string, string> = {
+  "no-change": "noChange",
+  regressed: "regressed",
+  confounded: "confounded",
+  expired: "expired",
+  "insufficient-evidence": "insufficientEvidence",
+  "not-comparable": "notComparable",
+  "too-noisy": "tooNoisy",
+};
+
+function putBackReason(verdict: string, t: Translate): string {
+  // An improved Trial is put back only when the user chose to.
+  if (verdict === "improved") return t("lab.experimentBench.summary.putBackByYou");
+  return t(`lab.experimentBench.journey.putBackWhy.${PUT_BACK_WHY[verdict] ?? "other"}`);
+}
+
+// One lesson, its verdict's confidence band beside it, and the numbers and rule behind a toggle.
+function LessonBlock({ lesson, game }: { lesson: Lesson; game: string }) {
+  const { t } = useTranslation();
+  const key = LESSON_KEY[lesson.rule];
+  const one = (v: number) => String(Math.round(v * 10) / 10);
+  const signed = (v: number) => `${v > 0 ? "+" : ""}${one(v)}`;
+  const rule = t(`lab.experimentBench.summary.rule.${key}`);
+  const detail =
+    lesson.rule === "too-noisy" || lesson.low1Pct == null || lesson.bandPct == null
+      ? t("lab.experimentBench.summary.lessonDetailNoisy", { change: lesson.title, rule })
+      : t("lab.experimentBench.summary.lessonDetail", {
+          change: lesson.title,
+          low: signed(lesson.low1Pct),
+          avg: lesson.avgPct == null ? t("lab.experimentBench.summary.lessonAvgNotCompared") : `${signed(lesson.avgPct)}%`,
+          band: one(lesson.bandPct),
+          rule,
+        });
+  return (
+    <>
+      <p className="exp-order-label">{t("lab.experimentBench.summary.lessonLabel")}</p>
+      <p className="exp-note" data-testid="exp-summary-lesson" data-rule={lesson.rule}>
+        {[
+          t(`lab.experimentBench.summary.lesson.${key}`, { change: lesson.title, game }),
+          confidenceCopy(t)[lesson.confidence ?? "unknown"],
+        ].join(t("lab.experimentBench.summary.contextSeparator"))}
+      </p>
+      <details className="exp-why" data-testid="exp-summary-lesson-detail">
+        <summary className="exp-why-toggle">{t("lab.experimentBench.summary.lessonDetailToggle")}</summary>
+        <p className="exp-fineprint">{detail}</p>
+        <p className="exp-fineprint">{t("lab.experimentBench.summary.lessonRulesNote")}</p>
+      </details>
+    </>
+  );
+}
+
 // P4-exit (ROADMAP Phase 4 exit): "We tested what mattered on this PC" for one game. Read-only: every
 // line comes from test-summary.ts over records Compy already keeps. Confidence is the verdict's own
 // band (unknown/low/medium/high); the only percentages are noise bands Compy measured or its stated
@@ -1267,6 +1332,26 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             ? t("lab.experimentBench.summary.stillWorth", { count: s.leftToTest.length, game })
             : t("lab.experimentBench.summary.unknownLeft")}
       </p>
+      {(s.kept.length > 0 || s.putBack.length > 0) && (
+        <>
+          <p className="exp-order-label">{t("lab.experimentBench.summary.happenedLabel")}</p>
+          <ul className="exp-why-list" data-testid="exp-summary-happened">
+            {s.kept.map((r) => (
+              <li key={r.recId} data-rec={r.recId} data-outcome="kept">
+                {t(r.verdict === "improved" ? "lab.experimentBench.summary.keptBetter" : "lab.experimentBench.summary.keptPlain", {
+                  change: r.title,
+                })}
+              </li>
+            ))}
+            {s.putBack.map((r) => (
+              <li key={r.recId} data-rec={r.recId} data-outcome="put-back">
+                {t("lab.experimentBench.summary.putBack", { change: r.title, reason: putBackReason(r.verdict, t) })}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {s.lesson && <LessonBlock lesson={s.lesson} game={game} />}
       <p className="exp-order-label">{t("lab.experimentBench.summary.testedLabel")}</p>
       <ul className="exp-why-list" data-testid="exp-summary-tested">
         {s.tested.map((r) => (

@@ -604,7 +604,44 @@
       "readOnly": "这份总结只读取 Compy 自己的记录，不会改动任何东西。",
       "row": "{{title}}：{{text}}",
       "stillSetNotByCompy": "Windows 里目前是这个设置，但不是 Compy 的更改设置的。",
-      "stillGamingMode": "目前由 Compy 的游戏模式为本次会话设置。"
+      "stillGamingMode": "目前由 Compy 的游戏模式为本次会话设置。",
+      "happenedLabel": "结果：",
+      "keptBetter": "保留了 {{change}}：测得的结果更好。",
+      "keptPlain": "保留了 {{change}}。",
+      "putBack": "已恢复 {{change}}：{{reason}}。",
+      "putBackByYou": "你选择了恢复它",
+      "lessonLabel": "Compy 在这台电脑上学到的：",
+      "lesson": {
+        "steadierNotFaster": "开启 {{change}} 后，1% 低帧提高了，平均帧率几乎没变：{{game}} 变得更稳，而不是更快。",
+        "fasterAndSteadier": "开启 {{change}} 后，平均帧率和 1% 低帧都提高了：{{game}} 变得更快也更稳。",
+        "fasterNotSteadier": "开启 {{change}} 后，平均帧率提高了，1% 低帧几乎没变：{{game}} 变得更快，而不是更稳。",
+        "steadierButSlower": "开启 {{change}} 后，1% 低帧提高了，但平均帧率下降了：{{game}} 变得更稳，但更慢。",
+        "fasterButLessSteady": "开启 {{change}} 后，平均帧率提高了，但 1% 低帧下降了：{{game}} 变得更快，但不那么稳。",
+        "lessSteadyNotSlower": "开启 {{change}} 后，1% 低帧下降了，平均帧率几乎没变：{{game}} 变得不那么稳，而不是更慢。",
+        "slowerAndLessSteady": "开启 {{change}} 后，平均帧率和 1% 低帧都下降了：{{game}} 变得更慢也更不稳。",
+        "slowerNotLessSteady": "开启 {{change}} 后，平均帧率下降了，1% 低帧几乎没变：{{game}} 变得更慢，而不是更不稳。",
+        "steadier": "开启 {{change}} 后，1% 低帧提高了：{{game}} 变得更稳。没有比较平均帧率。",
+        "lessSteady": "开启 {{change}} 后，1% 低帧下降了：{{game}} 变得不那么稳。没有比较平均帧率。",
+        "tooNoisy": "在你的电脑上，{{game}} 每局之间的波动很大；Compy 需要更平稳的几局才能判断。"
+      },
+      "lessonDetailToggle": "Compy 是怎么得出这个结论的",
+      "lessonDetail": "来自 {{change}} 的测试：1% 低帧 {{low}}%，平均帧率 {{avg}}，对照 {{band}}% 的噪声范围。所用规则：{{rule}}",
+      "lessonAvgNotCompared": "未比较",
+      "lessonDetailNoisy": "{{change}} 最近一次测试被判定为波动太大，所以 Compy 没有比较任何数字。所用规则：{{rule}}",
+      "lessonRulesNote": "Compy 只根据一组固定规则和它自己保存的结果得出结论，从不猜测原因。没有规则适用时，就不显示结论。",
+      "rule": {
+        "steadierNotFaster": "1% 低帧的提高超出了噪声范围，平均帧率的变化在范围之内。",
+        "fasterAndSteadier": "1% 低帧和平均帧率的提高都超出了噪声范围。",
+        "fasterNotSteadier": "平均帧率的提高超出了噪声范围，1% 低帧的变化在范围之内。",
+        "steadierButSlower": "1% 低帧的提高超出了噪声范围，平均帧率的下降也超出了范围。",
+        "fasterButLessSteady": "平均帧率的提高超出了噪声范围，1% 低帧的下降也超出了范围。",
+        "lessSteadyNotSlower": "1% 低帧的下降超出了噪声范围，平均帧率的变化在范围之内。",
+        "slowerAndLessSteady": "1% 低帧和平均帧率的下降都超出了噪声范围。",
+        "slowerNotLessSteady": "平均帧率的下降超出了噪声范围，1% 低帧的变化在范围之内。",
+        "steadier": "1% 低帧的提高超出了噪声范围；没有比较平均帧率。",
+        "lessSteady": "1% 低帧的下降超出了噪声范围；没有比较平均帧率。",
+        "tooNoisy": "最近一次测试的结论是波动太大，无法判断。"
+      }
     }
   }
 }
