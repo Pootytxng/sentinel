@@ -183,15 +183,16 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - [x] **P5-continue** `61e7539e` (verdict line, one-tap Next with honest 10/20 min, reuses a steady baseline). After a verdict the journey acts on it (Better kept, everything else restored, said in one
       line) and offers "Next: <change>, ~10 min" as one tap, until P4-next says nothing is left. Needs
       P5-guided, P4-next-f1. ROADMAP P5 steps 5, 7; ENGINE §4, §7.
-- [ ] **P5-enough** A quiet Compy toast during play: "Play the same area for about 90 s more" → "Compy has
-      enough; you can stop" (>= 600 even readings). Must not take focus (FOCUS guard). Needs P5-guided.
-      ROADMAP P5 step 4; Constitution §10.
+- [x] **P5-enough** `b28e188c`: countdown -> "Compy has enough; you can stop" (>= 600 counted readings + steady
+      halves) in the journey panel and the click-through overlay; never takes focus.
+- [ ] **P5-enough-f1** If halves never settle, the line can stay up forever; after a cap, say plainly the game keeps
+      changing and offer stop (judged as uneven). (desk) Check the line fits the 230x150 overlay.
 - [x] **P5-rebaseline** `a0da7bbb`: uneven/untraced as-is session -> one more as-is session (max 2), then test anyway or stop;
       one shared grading helper pinned to Rust.
-- [ ] **P5-learned** End-of-journey summary in plain words: kept, restored and why, plus one lesson from this
+- [x] **P5-learned** `a5836783` (kept/put-back + why, one lesson from a documented rule table, detail behind a toggle). End-of-journey summary in plain words: kept, restored and why, plus one lesson from this
       PC's numbers (e.g. "1% lows rose, average barely moved: steadier, not faster"); detail behind a toggle.
       Extends the P4-exit panel. Needs P5-continue. ROADMAP P5 step 8; Constitution §13, §14; ENGINE §8.
-- [ ] **P5-resume** The journey survives a Compy or game restart and spans days: Optimize shows "2 of 5
+- [x] **P5-resume** `b285dc73` (progress from the experiments store; Stop here keeps decisions). The journey survives a Compy or game restart and spans days: Optimize shows "2 of 5
       tested · Next: <change>" and a Stop-here that keeps current decisions. Needs P5-continue. ROADMAP P5
       step 5; ENGINE §7 (user ends).
 - [ ] **P5-outcomes** When a game has both a Recommended and a Maximum FPS result that differ, offer the choice
@@ -245,6 +246,8 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
   owner's first live Aniimo Trial (visual-effects): too noisy (baseline 293->241 fps), restored, verified.
 - 2026-10-25 late morning: P4-smooth-measure `df01e252`.
 - 2026-10-25 midday: P5-continue `61e7539e`.
+- 2026-10-25 afternoon: layout harness flake fix `f904c658`, P5-enough `b28e188c`.
+- 2026-10-25 afternoon: P5-learned `a5836783`, P5-resume `b285dc73`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
