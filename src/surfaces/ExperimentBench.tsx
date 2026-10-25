@@ -20,7 +20,7 @@ import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome"
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
 import { summarizeGame, type GameTestSummary, type StillApplied, type TestedChange } from "./test-summary";
-import { GuidedJourney, useJourneyPhase } from "./GuidedJourney";
+import { GuidedJourney, interruptedJourneyId, useJourneyPhase } from "./GuidedJourney";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -894,6 +894,9 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
         <RunningPanel
           exp={running}
           treatment={treatmentFor(running, sessions)}
+          // P5-guided: a journey Trial still running while no journey runs was interrupted (Compy
+          // closed, a reload, the room left mid-session). Its change is still on; this says so.
+          interrupted={running.id === interruptedJourneyId()}
           busy={busy}
           onConclude={concludeExperiment}
           onRestore={restoreExperiment}
@@ -1336,12 +1339,14 @@ function TestSummary({ s }: { s: GameTestSummary }) {
 function RunningPanel({
   exp,
   treatment,
+  interrupted = false,
   busy,
   onConclude,
   onRestore,
 }: {
   exp: Experiment;
   treatment: SessionSummary | null;
+  interrupted?: boolean;
   busy: boolean;
   onConclude: (exp: Experiment, treatment: SessionSummary) => void;
   onRestore: (exp: Experiment) => void;
@@ -1353,6 +1358,11 @@ function RunningPanel({
   const baselineLow = knownFps(exp.baseline_low1_fps);
   return (
     <div className="exp-running" data-testid="experiment-running">
+      {interrupted && (
+        <p className="exp-bench-warn" data-testid="exp-interrupted" role="status">
+          {t("lab.experimentBench.journey.interrupted", { change: exp.rec_title })}
+        </p>
+      )}
       <div className="exp-running-head">
         <span className="exp-running-dot" aria-hidden />
         <span className="exp-running-title">{t("lab.experimentBench.runningTitlePrefix")} {exp.rec_title}</span>

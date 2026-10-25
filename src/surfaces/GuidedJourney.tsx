@@ -9,17 +9,19 @@
 //   5. concludes through the existing conclude_experiment, which keeps the change only when it
 //      measured Better and restores it otherwise; and shows the verdict.
 // Anything that fails after the change went on restores it through the existing restore_experiment
-// and says so in plain words. No new mutation path, no overlay, nothing persisted (the experiment
-// store already holds the running Trial), and nothing here brings a window to the front.
+// and says so in plain words. No new mutation path, no overlay, and nothing here brings a window to
+// the front. The only thing kept is the running Trial's id in this webview's localStorage, so a
+// relaunch can say that Trial was interrupted (the experiment store already holds the Trial itself).
 //
 // Capture starts on the button, not on the game coming to the front: the FPS helper IS the thing that
 // sees the game, so it has to run first. Readings taken while another window is in front are already
 // left out of the session (P4-comparable).
 //
-// The journey lives in a module-level store, not component state, so leaving the room mid-session
-// doesn't drop it: the flow keeps polling and finishes, and the room shows it again on return.
+// Leaving the room, a reload or closing Compy mid-journey ends it (`abortJourney`): the capture it
+// started is stopped and nothing is judged. A change already on stays on, its Trial Running, until
+// the owner concludes or restores it in Test; the bench says so with a banner on its next load.
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
@@ -57,6 +59,7 @@ export type JourneyPhase =
   | { kind: "judging"; change: string }
   | { kind: "result"; exp: JourneyExperiment }
   | { kind: "too-short"; samples: number | null }
+  | { kind: "wrong-game"; played: string; planned: string }
   | { kind: "not-started"; reason: string }
   | { kind: "restored"; change: string; why: "no-reading" | "error"; reason: string }
   | { kind: "restore-failed"; change: string; reason: string };
@@ -73,6 +76,27 @@ let saveWaitMs = 8000;
 let phase: JourneyPhase = { kind: "idle" };
 const listeners = new Set<() => void>();
 let finishPlaying: (() => void) | null = null;
+let stopPlaying: ((err: Error) => void) | null = null;
+
+// The running journey Trial's id, so a relaunch can tell that Trial was interrupted. Per-webview
+// convenience only: when storage is unavailable the bench simply shows its usual running panel.
+const RUNNING_KEY = "compy.journey.running";
+function tagRunning(id: string | null) {
+  try {
+    if (id) localStorage.setItem(RUNNING_KEY, id);
+    else localStorage.removeItem(RUNNING_KEY);
+  } catch {
+    /* storage unavailable: no banner, nothing else changes */
+  }
+}
+/** The id of the Trial a journey started and never finished, if this webview remembers one. */
+export function interruptedJourneyId(): string | null {
+  try {
+    return localStorage.getItem(RUNNING_KEY);
+  } catch {
+    return null;
+  }
+}
 const setPhase = (next: JourneyPhase) => {
   phase = next;
   for (const l of listeners) l();
@@ -91,6 +115,9 @@ export function useJourneyPhase(): JourneyPhase {
 /** Tests only: back to idle between cases, with short timings. */
 export function resetJourneyForTests(timing: { pollMs: number; saveWaitMs: number } = { pollMs: 2000, saveWaitMs: 8000 }) {
   finishPlaying = null;
+  stopPlaying = null;
+  current = null;
+  tagRunning(null);
   pollMs = timing.pollMs;
   saveWaitMs = timing.saveWaitMs;
   setPhase({ kind: "idle" });
@@ -116,11 +143,13 @@ function waitForPlay(captureFailed: string): Promise<void> {
       if (settled) return;
       settled = true;
       finishPlaying = null;
+      stopPlaying = null;
       if (timer) clearTimeout(timer);
       if (err) reject(err);
       else resolve();
     };
     finishPlaying = () => finish();
+    stopPlaying = (err) => finish(err);
     const tick = async () => {
       if (settled) return;
       const st = await invoke<FpsStatusLite>("get_fps_status").catch(() => null);
@@ -138,9 +167,14 @@ function waitForPlay(captureFailed: string): Promise<void> {
 
 /** The newest usable session (of `game`, when given) that started at or after `since`, once saved —
  *  never the session `not` names (session 2 must never read back the baseline). */
-async function waitForSession(since: number, game: string | null, not?: string): Promise<SessionSummary | null> {
+async function waitForSession(
+  since: number,
+  game: string | null,
+  not?: string,
+  gone: () => boolean = () => false,
+): Promise<SessionSummary | null> {
   const tries = Math.max(1, Math.ceil(saveWaitMs / pollMs));
-  for (let i = 0; i < tries; i++) {
+  for (let i = 0; i < tries && !gone(); i++) {
     const ss = await invoke<SessionSummary[]>("get_session_summaries").catch(() => []);
     const found = (ss ?? [])
       .filter(
@@ -165,49 +199,85 @@ type RunArgs = {
   captureFailed: string;
 };
 
+/** One run's own flags: whether the room it was started from has gone (`aborted`), and whether it
+ *  holds a capture it must stop. */
+type Run = { aborted: boolean; capturing: boolean };
+let current: Run | null = null;
+
+/** The room closed mid-journey (left, reloaded, Compy closing): stop the capture this journey started
+ *  and end the flow without judging anything. A change already on stays on, its Trial Running, and
+ *  the bench says so on its next load (`interruptedJourneyId`); nothing is restored behind the owner's
+ *  back and nothing is concluded from a session he didn't finish. */
+export function abortJourney() {
+  const run = current;
+  if (!run || run.aborted) return;
+  run.aborted = true;
+  current = null;
+  stopPlaying?.(new Error("journey-left"));
+  if (run.capturing) {
+    run.capturing = false;
+    void invoke("stop_fps_capture").catch(() => {});
+  }
+  setPhase({ kind: "idle" });
+}
+
 /** After a failure: if the journey's change is still on (its Trial is still running), restore it
  *  through restore_experiment and say so; a Trial that already ended says how it ended. */
-async function recover(args: RunArgs, expId: string | null, err: unknown) {
+async function recover(args: RunArgs, say: (p: JourneyPhase) => void, expId: string | null, err: unknown) {
   const reason = String(err instanceof Error ? err.message : err);
   const change = args.change.title;
-  if (expId == null) return setPhase({ kind: "not-started", reason });
+  if (expId == null) return say({ kind: "not-started", reason });
   const xs = await invoke<JourneyExperiment[]>("get_experiments").catch(() => null);
   const exp = xs?.find((x) => x.id === expId) ?? null;
   // Unknown (the read failed) is treated as still running: the restore refuses harmlessly if it isn't.
   if (exp == null || exp.status === "running") {
     try {
       await writeLedger("restore_experiment", { experimentId: expId }, args.refresh);
-      return setPhase({ kind: "restored", change, why: "error", reason });
+      return say({ kind: "restored", change, why: "error", reason });
     } catch (e) {
-      return setPhase({ kind: "restore-failed", change, reason: String(e) });
+      return say({ kind: "restore-failed", change, reason: String(e) });
     }
   }
-  if (exp.status === "restored") return setPhase({ kind: "restored", change, why: "error", reason });
-  if (exp.status === "kept" && exp.verdict === "improved") return setPhase({ kind: "result", exp });
-  return setPhase({ kind: "restore-failed", change, reason });
+  if (exp.status === "restored") return say({ kind: "restored", change, why: "error", reason });
+  if (exp.status === "kept" && exp.verdict === "improved") return say({ kind: "result", exp });
+  return say({ kind: "restore-failed", change, reason });
 }
 
 async function runJourney(args: RunArgs, game: string | null) {
   const { change } = args;
-  let capturing = false;
+  const run: Run = { aborted: false, capturing: false };
+  current = run;
+  const left = () => run.aborted;
+  // Every phase this run sets goes through here, so an aborted run never repaints the room.
+  const say = (p: JourneyPhase) => {
+    if (!run.aborted) setPhase(p);
+  };
   let expId: string | null = null;
   const stopCapture = async () => {
-    if (!capturing) return;
-    capturing = false;
+    if (!run.capturing) return;
+    run.capturing = false;
     await invoke("stop_fps_capture").catch(() => {});
   };
   try {
     // ── Session 1: as-is ──
-    setPhase({ kind: "as-is", game, change: change.title });
+    say({ kind: "as-is", game, change: change.title });
     const t0 = Date.now();
-    capturing = true;
+    run.capturing = true;
     await invoke("start_fps_capture");
     await waitForPlay(args.captureFailed);
     await stopCapture();
-    setPhase({ kind: "reading", change: change.title });
-    const baseline = await waitForSession(t0, null);
+    if (left()) return;
+    say({ kind: "reading", change: change.title });
+    const baseline = await waitForSession(t0, null, undefined, left);
+    if (left()) return;
+    // A session of another game can't be this game's baseline: nothing goes on, and the room can plan
+    // for the game actually played (it is now the newest session, so the bench's game).
+    if (baseline && game != null && baseline.process_name !== game) {
+      await args.refresh().catch(() => {});
+      return say({ kind: "wrong-game", played: baseline.process_name, planned: game });
+    }
     if (!baseline || baseline.samples < MIN_BASELINE_SAMPLES) {
-      return setPhase({ kind: "too-short", samples: baseline ? baseline.samples : null });
+      return say({ kind: "too-short", samples: baseline ? baseline.samples : null });
     }
 
     // ── The change goes on, through the audited start ──
@@ -228,25 +298,31 @@ async function runJourney(args: RunArgs, game: string | null) {
       // The start refuses before changing anything, or restores what it applied itself; either way it
       // says which. If it somehow left this change's Trial running, put it back.
       const xs = await invoke<JourneyExperiment[]>("get_experiments").catch(() => []);
-      const left = (xs ?? []).find((x) => x.status === "running" && x.rec_id === change.id);
-      return recover(args, left?.id ?? null, e);
+      const leftOn = (xs ?? []).find((x) => x.status === "running" && x.rec_id === change.id);
+      return recover(args, say, leftOn?.id ?? null, e);
     }
     expId = started.id;
+    // Remembered so a relaunch can say this Trial was interrupted (the bench's banner).
+    tagRunning(expId);
+    if (left()) return;
     const trialGame = started.game || baseline.process_name;
 
     // ── Session 2: with the change ──
-    setPhase({ kind: "with-change", game: trialGame, change: change.title });
+    say({ kind: "with-change", game: trialGame, change: change.title });
     const t1 = Date.now();
-    capturing = true;
+    run.capturing = true;
     await invoke("start_fps_capture");
     await waitForPlay(args.captureFailed);
     await stopCapture();
-    setPhase({ kind: "judging", change: change.title });
-    const after = await waitForSession(t1, trialGame, baseline.started_at);
+    if (left()) return;
+    say({ kind: "judging", change: change.title });
+    const after = await waitForSession(t1, trialGame, baseline.started_at, left);
+    if (left()) return;
     if (!after) {
       // The game closed before Compy saved a reading: nothing to judge, so the change goes back.
       await writeLedger("restore_experiment", { experimentId: expId }, args.refresh);
-      return setPhase({ kind: "restored", change: change.title, why: "no-reading", reason: "" });
+      tagRunning(null);
+      return say({ kind: "restored", change: change.title, why: "no-reading", reason: "" });
     }
 
     // ── Verdict: conclude keeps only Better and restores everything else ──
@@ -258,12 +334,18 @@ async function runJourney(args: RunArgs, game: string | null) {
     if (done.status === "kept" && done.verdict !== "improved") {
       // Never keep a change the verdict didn't call Better.
       await writeLedger("restore_experiment", { experimentId: expId }, args.refresh);
-      return setPhase({ kind: "result", exp: { ...done, status: "restored" } });
+      tagRunning(null);
+      return say({ kind: "result", exp: { ...done, status: "restored" } });
     }
-    return setPhase({ kind: "result", exp: done });
+    tagRunning(null);
+    return say({ kind: "result", exp: done });
   } catch (e) {
+    if (left()) return;
     await stopCapture();
-    return recover(args, expId, e);
+    await recover(args, say, expId, e);
+    tagRunning(null);
+  } finally {
+    if (current === run) current = null;
   }
 }
 
@@ -295,6 +377,8 @@ export function GuidedJourney({
   const p = useJourneyPhase();
   const k = "lab.experimentBench.journey";
   const gameName = (g: string | null) => (g ? prettyGameName(g) || g : null);
+  // The room closing ends the journey and stops its capture (see `abortJourney`).
+  useEffect(() => () => abortJourney(), []);
 
   if (p.kind === "idle") {
     if (!change) return null;
@@ -351,6 +435,9 @@ export function GuidedJourney({
     case "too-short":
       line = p.samples == null ? t(`${k}.noReading`) : t(`${k}.tooShort`, { count: p.samples, min: MIN_BASELINE_SAMPLES });
       break;
+    case "wrong-game":
+      line = t(`${k}.wrongGame`, { played: gameName(p.played), planned: gameName(p.planned) });
+      break;
     case "not-started":
       line = t(`${k}.notStarted`, { reason: p.reason });
       break;
@@ -369,6 +456,11 @@ export function GuidedJourney({
       {playing && (
         <button type="button" className="exp-cta-ghost" onClick={() => finishPlaying?.()}>
           {t(`${k}.donePlaying`)}
+        </button>
+      )}
+      {p.kind === "wrong-game" && (
+        <button type="button" className="exp-cta-ghost" onClick={() => setPhase({ kind: "idle" })}>
+          {t(`${k}.planFor`, { game: gameName(p.played) })}
         </button>
       )}
       {finished && (

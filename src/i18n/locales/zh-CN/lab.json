@@ -352,7 +352,7 @@
       "plan": "2 局，每局约 10 分钟：一局保持原样，一局开启{{change}}。",
       "planGame": "{{game}}：2 局，每局约 10 分钟：一局保持原样，一局开启{{change}}。",
       "aim": "优化目标",
-      "oneChange": "每次只测一项更改。只有测得更好时 Compy 才会保留，否则会恢复原样。",
+      "oneChange": "每次只测一项更改。只有测得更好时 Compy 才会保留，否则会恢复原样。如果测试中途 Compy 关闭或你离开此页面，该更改会保持开启，直到你在“测试”中得出结论或恢复它。",
       "asIs": "第 1 局（共 2 局）：照常玩{{game}}约 10 分钟。关闭游戏后 Compy 会停止测量。",
       "asIsNoGame": "第 1 局（共 2 局）：照常玩你的游戏约 10 分钟。关闭游戏后 Compy 会停止测量。",
       "withChange": "第 2 局（共 2 局）：{{change}}已开启。用同样的方式玩{{game}}约 10 分钟，然后关闭游戏。",
@@ -367,6 +367,9 @@
       "restoredError": "出了点问题，所以 Compy 已把{{change}}恢复原样。没有保留任何更改。（{{reason}}）",
       "restoreFailed": "出了点问题，Compy 无法确认{{change}}已恢复。请在“测试 → 已应用与历史”中检查并撤销。（{{reason}}）",
       "captureFailed": "Compy 无法开始测量。如果 Windows 请求权限，请允许后重试。",
+      "wrongGame": "这一局是{{played}}，不是{{planned}}，所以不能作为更改前的读数。没有做任何更改。",
+      "planFor": "改为针对{{game}}制定计划",
+      "interrupted": "有一项测试被中断：{{change}}仍处于开启状态。请用你最近的一局得出结论，或将其恢复原样。",
       "close": "好"
     },
     "verdict": {

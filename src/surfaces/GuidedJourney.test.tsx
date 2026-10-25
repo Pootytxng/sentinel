@@ -18,6 +18,8 @@ const state = vi.hoisted(() => ({
   /** What get_fps_status answers while capturing; `closesAfter` reads later read the game as closed. */
   playing: { active: true, status: "running", sample: { process_name: "Valorant" }, game_running: true } as Status,
   closesAfter: 2 as number | null,
+  /** When set, get_fps_status answers this for read n (from 1) instead of `playing`/`closesAfter`. */
+  statusAt: null as ((n: number) => Status) | null,
   reads: 0,
   concludeResult: null as Record<string, unknown> | null,
   refuse: {} as Record<string, string>,
@@ -25,10 +27,10 @@ const state = vi.hoisted(() => ({
   failSecondCapture: false,
 }));
 
-const session = (started_at: string, samples: number) => ({
+const session = (started_at: string, samples: number, process_name = "Valorant") => ({
   started_at,
   duration_secs: samples,
-  process_name: "Valorant",
+  process_name,
   samples,
   avg_fps: 244,
   avg_frametime_ms: 4.1,
@@ -85,6 +87,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         return Promise.resolve(null);
       case "get_fps_status": {
         state.reads += 1;
+        if (state.statusAt) return Promise.resolve(state.statusAt(state.reads));
         const closed = state.closesAfter != null && state.reads > state.closesAfter;
         return Promise.resolve(closed ? { ...state.playing, sample: null, game_running: false } : state.playing);
       }
@@ -134,6 +137,7 @@ beforeEach(() => {
   state.saves = [session(later(1), 5400), session(later(2), 5400)];
   state.playing = { active: true, status: "running", sample: { process_name: "Valorant" }, game_running: true };
   state.closesAfter = 2;
+  state.statusAt = null;
   state.reads = 0;
   state.concludeResult = { status: "kept", kept: true, verdict: "improved" };
   state.refuse = {};
@@ -149,10 +153,16 @@ const press = async () => {
   fireEvent.click(btn);
 };
 
-const finalLine = async () => {
-  const line = await screen.findByRole("status", {}, { timeout: 3000 });
-  return line.textContent ?? "";
-};
+/** The journey's closing line, once it has one (only a finished journey's line is a status). */
+const finalLine = () =>
+  waitFor(
+    () => {
+      const el = screen.getByTestId("journey-line");
+      expect(el.getAttribute("role")).toBe("status");
+      return el.textContent ?? "";
+    },
+    { timeout: 3000 },
+  );
 
 describe("P5-guided: one button runs the whole Trial", () => {
   it("says the plan and time in one line for the last-played game and the top-ranked change", async () => {
@@ -257,6 +267,62 @@ describe("P5-guided: one button runs the whole Trial", () => {
     await press();
     expect(await finalLine()).toMatch(/didn't start the test, and nothing was changed: Compy couldn't start measuring/);
     expect(calls("start_experiment")).toHaveLength(0);
+  });
+
+  it("a session of another game is not used as the baseline, and the room can plan for that game", async () => {
+    state.saves = [session(later(1), 5400, "Foo.exe")];
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toMatch(/^That session was Foo.*, not Valorant, so it can't be the before-reading\. Nothing was changed\.$/);
+    expect(calls("start_experiment")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: /^Plan for Foo.* instead$/ }));
+    await waitFor(() => expect(screen.getByTestId("journey-plan").textContent).toMatch(/^Foo.*: 2 sessions/));
+  });
+
+  it("an unknown game_running never ends a session; only Done playing does", async () => {
+    state.statusAt = (n) =>
+      n === 1
+        ? { active: true, status: "running", sample: { process_name: "Valorant" }, game_running: true }
+        : { active: true, status: "running", sample: null, game_running: null };
+    render(<ExperimentBench />);
+    await press();
+    await waitFor(() => expect(state.reads).toBeGreaterThan(10));
+    expect(screen.getByTestId("journey")).toHaveAttribute("data-phase", "as-is");
+    expect(calls("stop_fps_capture")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Done playing" }));
+    await waitFor(() => expect(calls("start_experiment")).toHaveLength(1));
+  });
+
+  it("leaving mid-session 2 stops the capture, judges nothing, and the relaunch says the test was interrupted", async () => {
+    state.closesAfter = null;
+    const first = render(<ExperimentBench />);
+    await press();
+    fireEvent.click(await screen.findByRole("button", { name: "Done playing" }));
+    await screen.findByText(/Session 2 of 2: HAGS is on/);
+    expect(calls("stop_fps_capture")).toHaveLength(1);
+    first.unmount();
+    expect(calls("stop_fps_capture")).toHaveLength(2);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(calls("conclude_experiment")).toHaveLength(0);
+    expect(calls("restore_experiment")).toHaveLength(0);
+    expect(state.experiments[0]).toMatchObject({ status: "running" });
+
+    render(<ExperimentBench />);
+    const banner = await screen.findByTestId("exp-interrupted");
+    expect(banner.textContent).toBe("A test was interrupted: HAGS is still on. Conclude with your latest session or put it back.");
+    expect(screen.getByRole("button", { name: "Restore now" })).toBeTruthy();
+  });
+
+  it("the interrupted banner names only a Trial a journey started", async () => {
+    localStorage.setItem("compy.journey.running", "exp:1-0");
+    state.experiments = [record({ id: "exp:1-0" })];
+    render(<ExperimentBench />);
+    expect((await screen.findByTestId("exp-interrupted")).textContent).toMatch(/^A test was interrupted: HAGS is still on\./);
+    cleanup();
+    state.experiments = [record({ id: "exp:2-0" })];
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-running");
+    expect(screen.queryByTestId("exp-interrupted")).toBeNull();
   });
 
   it("hides the button while another Trial is running", async () => {

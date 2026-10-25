@@ -175,6 +175,7 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
       itself when `game_state` sees the game in front / closed; then concludes and shows the verdict. One
       change per run; no overlay. Needs P4-rank, P4-recommended, P4-maxfps-smooth, P4-comparable. ROADMAP P5
       steps 1, 2, 4; Constitution §4, §10; ENGINE §2.
+      Deviation: capture starts on the button press, not on detection (the FPS helper is what sees the game).
 - [ ] **P5-continue** After a verdict the journey acts on it (Better kept, everything else restored, said in one
       line) and offers "Next: <change>, ~10 min" as one tap, until P4-next says nothing is left. Needs
       P5-guided, P4-next-f1. ROADMAP P5 steps 5, 7; ENGINE §4, §7.
