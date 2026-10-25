@@ -241,6 +241,75 @@ room or station picked by hand.
       step or honest unknown without picking a room; the friend repeats it once. Record in BACKLOG as the
       Phase 6 exit. Needs P6-changed through P6-unknown. ROADMAP P6 exit.
 
+### Then — Roadmap Phase 7: Contextual UX and education convergence (`product/ROADMAP.md` Phase 7)
+Planned 2026-10-25. Order is value order. Converge, don't add rooms, consoles or guards (directive rule 1:
+product guards frozen for additions; slice tests sit beside the code). Phase 7 exit on the owner rig: the
+friend goes from Home to an answer on "more FPS", "it stutters" and "it crashed" without asking what a word
+means, and the owner opens the technical layer on each and sees the exact setting, measurement and source.
+Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touches; the rest run in order.
+- [x] **P7-plan** Slices written below (2026-10-25).
+- [ ] **P7-route** Home interview answers land on the journey that answers them, not a bare station:
+      "I want more FPS" opens the Optimize station with the P5 guided journey ready (today `wantFps` runs the
+      fast path / Diagnostics and claims frames "are usually taken by things running alongside your game");
+      "I changed something — did it help?" opens "What Compy tested" or "Since it last worked", not Benchmark.
+      `home-interview-data.ts`, `App.tsx` `openLabStation`, `LabConsole.tsx` mount effect, a one-shot arrival
+      key beside `care-arrival.ts`, `GuidedJourney.tsx`. ROADMAP P7 bullet 1; Constitution §3, §11, §27.
+- [ ] **P7-depth** One shared Answer / Explanation / Technical receipt block in `src/design/` (answer always
+      shown; explanation one tap; receipt one more tap, or open by default under Expert view via
+      `use-expert-view.ts`). First adopter: `CareNextStep.tsx` + `CareHonestEnd.tsx`. No new data.
+      ROADMAP P7 bullet 2; Constitution §13. Parallel-safe (new component + Care files only).
+- [ ] **P7-depth-verdicts** Put the Trial / journey verdict (`GuidedJourney.tsx`, ExperimentBench summary and
+      `test-summary.ts` output) and `SessionDebrief.tsx` on the P7-depth block: raw deltas, noise band,
+      registry/API names and sample counts move to the receipt layer. Needs P7-depth, P7-route (both touch
+      GuidedJourney). ROADMAP P7 bullet 2; Constitution §13, §25.
+- [ ] **P7-jargon** Default-face copy sweep of Home, the journey, the Care view and the Debrief (en + zh-CN):
+      "noise floor" (25 en strings), "frametime" (10) and bare "1% low" (67) get plain words or a `Term`
+      gloss on the answer and explanation layers; exact terms stay in the receipt. Locale JSON + call sites;
+      no new guard. Needs P7-depth-verdicts. ROADMAP P7 exit; Constitution §3, §13.
+- [ ] **P7-confidence** One user-facing confidence vocabulary from Constitution §25: Known / Measured / Likely
+      / Expected / Unknown, one helper in `src/data/` with en + zh-CN keys. Replace the six
+      "{{level}} confidence" tags that print raw high/medium/low (`home.json` ×3, `optimize.json` ×2,
+      `gaming.json` `confidenceSuffix`, `blackbook.json` `confidenceLabel`) and the interview's
+      measured/likely/unknown chip; map from each producer's own field (`Provenance`, `PriorityItem.confidence`,
+      `ConfidenceBand`, `FindingLevel`), never a percentage. HomeConsole/HomeHud/HomeV2 limiter rows,
+      `OptimizeStation.tsx`, `HardwareGrid.tsx`, `PatternsTile.tsx`, `HomeInterview.tsx`. ROADMAP P7 bullet 6;
+      Constitution §25, §26.
+- [ ] **P7-severity** A Trial that hurt and was put back is not red "Critical": `trialVerdictTone` /
+      `verdictTone` (`benchmark-view.ts`) use `danger` for "Hurt — reverted" and "regressed"; danger stays for
+      a harmful state still on the machine; check `status.ts` "Critical" has no other user. `Benchmark.tsx`,
+      `TwoFutures.tsx`. ROADMAP P7 bullet 7; Constitution §34, §26. Parallel-safe.
+- [ ] **P7-score** The Home/Lab readiness ring counts unreadable checks as failures (`readinessScore` subtracts
+      `unknown_count`) and grades < 70 "NEEDS WORK": leave unknowns out of the ratio and say "N couldn't be
+      read"; calm grade words; the formula line stays. `HomeConsole.tsx` ~624-660, `command-center-data.ts`,
+      LabConsole's same derivation, `home.json` `readinessGrade`. Needs P7-confidence (HomeConsole).
+      ROADMAP P7 bullet 8; Constitution §34, §26.
+- [ ] **P7-notify** The session-end toast fires for every saved session ("Your <game> debrief is ready").
+      Fire it only when the session settles a decision or a state change (a Trial/journey verdict, a
+      regression against the last good session); otherwise stay silent and leave the debrief in the app.
+      `lib.rs` `notify_debrief_ready`, `monitoring.rs` ~1286, `sessions.rs` `save_session`; Rust unit tests.
+      Care incident toast (`incident_observer.rs`) already follows the rule: leave it. ROADMAP P7 bullet 3;
+      Constitution §15, §33. Parallel-safe (Rust only). Review: one agent (Rust).
+- [ ] **P7-teach** After personal evidence only: the Debrief and the Care stutter comparison show at most one
+      lesson from the P5-learned rule table (`test-summary.ts` `LESSON_RULES` / `lessonFor`), with a link to
+      the matching Library entry (`libraryApi.openLibrary`); no rule = no lesson. `SessionDebrief.tsx`,
+      `StutterCompare.tsx`. Needs P7-depth-verdicts (Debrief). ROADMAP P7 bullet 5; Constitution §14.
+- [ ] **P7-palette** The command palette understands plain problems ("it stutters", "it crashed", "more fps",
+      "what changed"): intent items reuse the interview finding actions from P7-route, so typing a symptom
+      lands on the same journey as answering it. `command-palette-data.ts`, `CommandPalette.tsx`. Needs
+      P7-route. ROADMAP P7 bullet 1; Constitution §27.
+- [ ] **P7-rig-limiter** The Home rig picks out the part the answer is about: the #1 limiter maps to a rig part
+      kind (`rig-parts.ts`), `RigHologram` highlights it through its existing `selectedId`; a limiter that is a
+      setting or software dims the parts and says the evidence points away from hardware. `HomeConsole.tsx`
+      stage, `rig-parts.ts`, `RigHologram.tsx`. Needs P7-score (HomeConsole). ROADMAP P7 bullet 4;
+      Constitution §24.
+- [ ] **P7-rig-care** Same on the Care station: the incident's faulting part (GPU driver -> GPU, memory error ->
+      RAM, app crash with no hardware sign -> "not hardware") drives the Lab rig (`LabConsole.tsx`
+      `RigViewer`). Needs P7-rig-limiter. ROADMAP P7 bullet 4; Constitution §24, §25.
+- [ ] **P7-exit-proof** (owner, FULL) The friend goes from Home to an answer on "more FPS", "it stutters" and
+      "it crashed" without asking what a word means; the owner opens the technical layer on each and finds the
+      exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
+      P7-teach; P7-palette and the rig slices do not block it. ROADMAP P7 exit.
+
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
 - [x] **tokio** `fcc64291` (1.54.1; only tokio's lock entry changed). Desk install at the next ship.
