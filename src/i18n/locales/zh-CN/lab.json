@@ -458,12 +458,8 @@
     "receiptRuleMaxKept": "平均帧率的提升超过了该范围，且 1% 最低帧的下降没有超过它，所以保留了这项更改。",
     "receiptRuleMaxAvgFell": "平均帧率的下降超过了该范围，所以已恢复这项更改。",
     "receiptRuleMaxInside": "平均帧率的变化没有超出该范围，所以保持默认，已恢复这项更改。",
-    "receiptComparedSmoothest": "按“最流畅”判定。与基准相比：最慢的 1% 帧比平均帧多用的时间，之前为 {{before}}%，之后为 {{after}}%（变化 {{moved}} 个百分点），按固定的 ±{{floor}} 个百分点下限判定，因为 Compy 尚未测量这一差距在未更改的游戏局之间会波动多少；平均帧率 {{avg}}%，按 ±{{band}}% 的范围判定。没有比较 0.1% 最低帧：Compy 不保存每一帧的帧时间。{{rule}}",
-    "receiptRuleSmoothKept": "差距的缩小超过了该下限，且平均帧率的下降没有超过该范围，所以保留了这项更改。",
-    "receiptRuleSmoothWider": "差距的扩大超过了该下限，所以已恢复这项更改。",
-    "receiptRuleSmoothAvgFell": "差距的缩小超过了该下限，但平均帧率的下降超过了该范围，所以不算明确的改善：保持默认，已恢复这项更改。",
-    "receiptRuleSmoothInside": "差距的变化没有超出该下限，所以保持默认，已恢复这项更改。",
     "outcomeLabel": "测试目标",
+    "outcomeSmoothestUnavailable": "“最流畅”需要 Compy 比现在更精确地测量帧节奏，所以暂不提供。",
     "outcome": {
       "recommended": "推荐",
       "maxFps": "最高帧率",
@@ -471,8 +467,7 @@
     },
     "outcomeWhy": {
       "recommended": "只有当 1% 最低帧的提升超出噪声范围、且平均帧率的下降没有超出它时，才保留这项更改。",
-      "maxFps": "只有当平均帧率的提升超出噪声范围、且 1% 最低帧的下降没有超出它时，才保留这项更改。",
-      "smoothest": "只有当帧节奏变得更均匀时才保留这项更改：最慢的 1% 帧与平均帧之间的差距缩小超过 {{floor}} 个百分点，且平均帧率的下降没有超出噪声范围。不使用 0.1% 最低帧：Compy 不保存每一帧的帧时间。"
+      "maxFps": "只有当平均帧率的提升超出噪声范围、且 1% 最低帧的下降没有超出它时，才保留这项更改。"
     },
     "pairChanged": "差异：测试前后两局之间{{changed}}有变化。",
     "pairUnrecorded": "差异：其中一局没有记录{{unrecorded}}。",

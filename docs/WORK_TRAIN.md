@@ -154,6 +154,8 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       doesn't fall beyond it; 1% low down beyond the band = Worse; else No change (restored).
 - [ ] **P4-maxfps-smooth** Maximum FPS (average + 1% low) and Smoothest frame pacing (frame-time spread,
       0.1% low when samples allow) as user-picked outcomes. Needs P4-recommended. ENGINE §2.
+- [ ] **P4-smooth-measure** Store per-frame frame times (or a percentile spread) per session and measure the
+      spread's session-to-session noise; then offer Smoothest.
 - [ ] **P4-next** After a Trial, propose the next ranked candidate; "Nothing else here is worth testing"
       is a success state. Needs P4-rank. ENGINE §7.
 - [ ] **P4-exit** "We tested what mattered on this PC" per-game summary: tested/kept/restored, skipped +

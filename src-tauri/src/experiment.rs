@@ -113,16 +113,13 @@ pub(crate) struct TreatmentRecord {
     /// is missing, and on records concluded before the average was judged (1% low only). Additive.
     #[serde(default)]
     pub delta_avg_pct: Option<f64>,
-    /// P4-maxfps-smooth: the frame-time spread before and after (see [`frame_spread_pct`]) and the
-    /// fixed floor it was judged on. None when either session lacked an average or a 1% low, and on
-    /// records concluded before the spread was read. Additive.
-    #[serde(default)]
-    pub frame_spread: Option<FrameSpread>,
 }
 
 /// P4-maxfps-smooth (ENGINE §2): the outcome the user picked when starting a Trial. Persisted
 /// (kebab-case); older records carry no `outcome` and load as `Recommended`, the default.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+/// Smoothest is not an outcome yet: sessions don't measure frame pacing precisely enough to judge it
+/// (see [`SMOOTHEST_UNAVAILABLE`]), so `start_experiment` refuses it and nothing judges it.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum TrialOutcome {
     /// The 1% low beside the average (`with_recommended_outcome`).
@@ -130,17 +127,36 @@ pub(crate) enum TrialOutcome {
     Recommended,
     /// The average beside the 1% low (`with_max_fps_outcome`).
     MaxFps,
-    /// The frame-time spread beside the average (`with_smoothest_outcome`).
-    Smoothest,
 }
 
-/// The frame-time spread of the two sessions a Smoothest verdict compared, in percent of the average
-/// frame time, and the floor (in percentage points) the change between them was judged on.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub(crate) struct FrameSpread {
-    pub baseline_pct: f64,
-    pub after_pct: f64,
-    pub floor_pts: f64,
+impl<'de> Deserialize<'de> for TrialOutcome {
+    /// Only "max-fps" reads as Maximum FPS. Any other value (null, an older or unknown pick,
+    /// "smoothest" included) reads as Recommended, so an unknown pick never fails the store's load and
+    /// is never judged as something this build doesn't judge.
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = serde_json::Value::deserialize(d)?;
+        Ok(if v.as_str() == Some("max-fps") { TrialOutcome::MaxFps } else { TrialOutcome::Recommended })
+    }
+}
+
+/// Why Smoothest isn't offered (owner review 2026-10-25): sessions keep the mean of per-second
+/// averages and per-second 1% lows, not frame times, so the frame-time spread they support is only
+/// rough, and its session-to-session noise isn't measured. Queue item P4-smooth-measure.
+pub(crate) const SMOOTHEST_UNAVAILABLE: &str =
+    "Smoothest needs Compy to measure frame pacing more precisely than it does today, so it isn't offered yet.";
+
+/// The outcome a start asked for, read at the webview trust boundary: none means Recommended,
+/// "smoothest" and anything unknown are refused before anything is recorded or changed.
+pub(crate) fn start_outcome(picked: Option<&str>) -> Result<TrialOutcome, String> {
+    match picked {
+        None | Some("recommended") => Ok(TrialOutcome::Recommended),
+        Some("max-fps") => Ok(TrialOutcome::MaxFps),
+        Some("smoothest") => Err(format!("experiment not started — {SMOOTHEST_UNAVAILABLE}")),
+        Some(other) => {
+            let other: String = other.chars().take(40).collect();
+            Err(format!("experiment not started — Compy doesn't know the outcome \"{other}\"."))
+        }
+    }
 }
 
 /// §11 "what uncertainty/noise existed": the credible-noise band a verdict was judged against.
@@ -2033,45 +2049,6 @@ pub(crate) fn with_recommended_outcome(
     ConcludeOutcome { verdict, keep, note: format!("{} {compared} {why}", outcome.note), ..outcome }
 }
 
-/// P4-maxfps-smooth: the fixed floor, in percentage points of the frame-time spread, that a
-/// Smoothest verdict is judged on. Compy's noise band (`noise_floor_pct`) is a % of the 1% low, a
-/// different unit, and nothing measures how much this spread moves between unchanged sessions yet,
-/// so this is a stated floor, not a measurement: the receipt says so. Conservative, owner-tunable.
-pub(crate) const SPREAD_FLOOR_PTS: f64 = 5.0;
-
-// P4-maxfps-smooth, the 0.1% low: it needs the session's individual frame times, at least 10,000 of
-// them, so the 0.1% low rests on 10 or more frames rather than one or two. Sessions store no frame
-// times today (only ~1 Hz averages and the helper's per-second 1% low), so no session meets that
-// threshold and a Smoothest verdict never claims a 0.1% low. A later capture that keeps frame times
-// adds it here, only above that threshold.
-
-/// The frame-time spread a session's stored numbers support: how much longer the slowest 1% of frames
-/// took than the average frame, in percent of the average frame time (rounded 0.1). Read from the
-/// average and the 1% low (the mean of the helper's per-second 1% lows, which come from real frame
-/// times): 1% low frame time ÷ average frame time − 1 = average fps ÷ 1% low − 1. None when either
-/// number is missing. A smaller spread is more even frame pacing.
-pub(crate) fn frame_spread_pct(avg_fps: f64, low1_fps: f64) -> Option<f64> {
-    if avg_fps <= 0.0 || low1_fps <= 0.0 || !avg_fps.is_finite() || !low1_fps.is_finite() {
-        return None;
-    }
-    let raw = (avg_fps / low1_fps - 1.0) * 100.0;
-    Some((raw * 10.0).round() / 10.0)
-}
-
-/// The spread of both sessions, with the floor it is judged on.
-pub(crate) fn frame_spread_of(
-    baseline_avg: f64,
-    baseline_low1: f64,
-    after_avg: f64,
-    after_low1: f64,
-) -> Option<FrameSpread> {
-    Some(FrameSpread {
-        baseline_pct: frame_spread_pct(baseline_avg, baseline_low1)?,
-        after_pct: frame_spread_pct(after_avg, after_low1)?,
-        floor_pts: SPREAD_FLOOR_PTS,
-    })
-}
-
 fn rebuilt(outcome: ConcludeOutcome, verdict: &str, note: String) -> ConcludeOutcome {
     let keep = keep_rule(trial_result_for(verdict));
     ConcludeOutcome { verdict: verdict.to_string(), keep, note, ..outcome }
@@ -2129,81 +2106,6 @@ pub(crate) fn with_max_fps_outcome(outcome: ConcludeOutcome, band_pct: f64, delt
         outcome.note,
         signed_pct(avg),
         signed_pct(low)
-    );
-    rebuilt(outcome, verdict, note)
-}
-
-/// P4-maxfps-smooth (ENGINE §2 `smoothness`: minimize frame-time variance subject to acceptable FPS):
-/// the Smoothest outcome of a measured verdict, judged on the frame-time spread ([`frame_spread_pct`])
-/// against the fixed [`SPREAD_FLOOR_PTS`] floor (points of spread, the spread's own unit), and on the
-/// average against the band (a % of the baseline, the average's unit):
-/// - Better (`improved`, kept) only when the spread tightened by more than the floor AND the average
-///   did not fall by more than the band;
-/// - Worse (`regressed`) when the spread widened by more than the floor;
-/// - anything else is No change, restored. An unknown spread or average is never a win.
-///
-/// No 0.1% low is judged: sessions don't store frame times (see the 0.1% low note above). Same
-/// precedence as [`with_recommended_outcome`].
-pub(crate) fn with_smoothest_outcome(
-    outcome: ConcludeOutcome,
-    band_pct: f64,
-    delta_avg: Option<f64>,
-    spread: Option<&FrameSpread>,
-) -> ConcludeOutcome {
-    if !judged_against_noise(&outcome) {
-        return outcome;
-    }
-    let band = band_pct_text(band_pct);
-    let Some(sp) = spread else {
-        let note = format!(
-            "{} Judged for Smoothest. The frame-time spread couldn't be read from both sessions, so the \
-             default was kept and the change restored.",
-            outcome.note
-        );
-        return rebuilt(outcome, "no-change", note);
-    };
-    let moved = ((sp.after_pct - sp.baseline_pct) * 10.0).round() / 10.0;
-    let floor = band_pct_text(sp.floor_pts);
-    let avg_fell = delta_avg.is_none_or(|avg| avg < -band_pct);
-    let (verdict, why) = if moved > sp.floor_pts {
-        ("regressed", "The spread widened by more than the floor, so the change was restored.".to_string())
-    } else if moved < -sp.floor_pts && !avg_fell {
-        (
-            "improved",
-            "The spread tightened by more than the floor and the average didn't fall by more than the band, \
-             so the change was kept."
-                .to_string(),
-        )
-    } else if moved < -sp.floor_pts && delta_avg.is_none() {
-        (
-            "no-change",
-            "The spread tightened by more than the floor, but without the average Compy can't confirm it \
-             didn't fall, so the default was kept and the change restored."
-                .to_string(),
-        )
-    } else if moved < -sp.floor_pts {
-        (
-            "no-change",
-            "The spread tightened by more than the floor, but the average fell by more than the band, so \
-             this isn't a clear win: the default was kept and the change restored."
-                .to_string(),
-        )
-    } else {
-        ("no-change", "The spread stayed inside the floor, so the default was kept and the change restored.".to_string())
-    };
-    let avg_text = delta_avg.map_or_else(
-        || "the average frame rate couldn't be compared".to_string(),
-        |avg| format!("the average frame rate {} against a ±{band}% band", signed_pct(avg)),
-    );
-    let note = format!(
-        "{} Judged for Smoothest. Compared with the baseline: the slowest 1% of frames took {}% longer \
-         than the average frame before and {}% after ({} points), against a fixed ±{floor}-point floor \
-         (Compy hasn't measured how much this spread moves between unchanged sessions); {avg_text}. No \
-         0.1% low was compared: Compy doesn't keep individual frame times. {why}",
-        outcome.note,
-        band_pct_text(sp.baseline_pct),
-        band_pct_text(sp.after_pct),
-        signed_pct(moved).trim_end_matches('%'),
     );
     rebuilt(outcome, verdict, note)
 }
@@ -2407,11 +2309,13 @@ pub(crate) fn start_experiment(
     rec_title: String,
     baseline_session_id: String,
     hypothesis: String,
-    outcome: Option<TrialOutcome>,
+    outcome: Option<String>,
 ) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
     }
+    // P4-maxfps-smooth: an outcome this build can't judge is refused before anything happens.
+    let outcome = start_outcome(outcome.as_deref())?;
     let _g = lock_store()?;
 
     // Cap the persisted free-text at the trust boundary (see MAX_TEXT_LEN). Truncate, don't reject.
@@ -2526,8 +2430,8 @@ pub(crate) fn start_experiment(
         target_verified: None,
         prior_state_verified: true,
         final_state_verified: None,
-        // P4-maxfps-smooth: a webview that sends no pick asks for the default.
-        outcome: outcome.unwrap_or_default(),
+        // P4-maxfps-smooth: a webview that sends no pick asks for the default (`start_outcome`).
+        outcome,
     });
     let idx = store.experiments.len() - 1;
     save_store(&store)?;
@@ -2831,10 +2735,6 @@ pub(crate) fn conclude_experiment(
             let picked = match rec.outcome {
                 TrialOutcome::Recommended => with_recommended_outcome(paired, rec.noise_floor_pct, avg),
                 TrialOutcome::MaxFps => with_max_fps_outcome(paired, rec.noise_floor_pct, avg),
-                TrialOutcome::Smoothest => {
-                    let spread = frame_spread_of(rec.baseline_avg_fps, rec.baseline_low1_fps, treatment.avg_fps, treatment.low1_fps_est);
-                    with_smoothest_outcome(paired, rec.noise_floor_pct, avg, spread.as_ref())
-                }
             };
             (picked, None)
         }
@@ -2851,7 +2751,6 @@ pub(crate) fn conclude_experiment(
     let judged = with_unverified_changes(judged, unverified);
     let outcome = guard_target_at_conclude(judged, target_verification(Some(target_now)));
     let rec_baseline_avg = store.experiments[idx].baseline_avg_fps;
-    let rec_baseline_low1 = store.experiments[idx].baseline_low1_fps;
 
     store.experiments[idx].treatment = resolved.as_ref().map(|(treatment, _)| TreatmentRecord {
         avg_fps: treatment.avg_fps,
@@ -2864,7 +2763,6 @@ pub(crate) fn conclude_experiment(
         check: after_check,
         halves: after_halves.clone(),
         delta_avg_pct: delta_avg_pct(rec_baseline_avg, treatment.avg_fps),
-        frame_spread: frame_spread_of(rec_baseline_avg, rec_baseline_low1, treatment.avg_fps, treatment.low1_fps_est),
     });
     store.experiments[idx].session_pairing = resolved
         .as_ref()
@@ -4470,7 +4368,6 @@ mod experiment_tests {
                 check: Some(BaselineCheck::Uneven),
                 halves: Some(BaselineHalves { first_half_fps: 180.0, second_half_fps: 200.0 }),
                 delta_avg_pct: None,
-                frame_spread: None,
             }),
             ..running()
         })
@@ -5346,7 +5243,6 @@ mod experiment_tests {
                 check: Some(BaselineCheck::Uneven),
                 halves: Some(BaselineHalves { first_half_fps: 188.7, second_half_fps: 218.5 }),
                 delta_avg_pct: Some(-16.6),
-                frame_spread: None,
             }),
             verdict: Some("too-noisy".into()),
             trial_result: Some(TrialResult::Inconclusive),
@@ -5620,7 +5516,6 @@ mod experiment_tests {
             check: None,
             halves: None,
             delta_avg_pct: Some(-8.3),
-            frame_spread: None,
         };
         let mut v = serde_json::to_value(ExperimentRecord { treatment: Some(t), ..running() }).unwrap();
         assert_eq!(v["treatment"]["delta_avg_pct"], -8.3);
@@ -5640,7 +5535,7 @@ mod experiment_tests {
         assert_eq!(back.treatment.unwrap().delta_avg_pct, None);
     }
 
-    // ─── P4-maxfps-smooth (ENGINE §2 max_fps / smoothness) ─────────────
+    // ─── P4-maxfps-smooth (ENGINE §2 max_fps; Smoothest held until frame pacing is measured) ──
 
     /// A measured verdict on `rec(150.0, 5)` (baseline avg 120 fps, 1% low 150, band 3%), read as the
     /// Maximum FPS outcome.
@@ -5676,66 +5571,21 @@ mod experiment_tests {
         assert!(unknown.note.contains("the average frame rate couldn't be compared"), "{}", unknown.note);
     }
 
-    /// Baseline avg 200 fps, 1% low 150: the slowest 1% of frames took 33.3% longer than the average.
-    fn smooth_rec() -> ExperimentRecord {
-        ExperimentRecord { baseline_avg_fps: 200.0, baseline_low1_fps: 150.0, ..rec(150.0, 5) }
-    }
-
-    fn smoothest(treatment_low1: f64, treatment_avg: f64) -> ConcludeOutcome {
-        let r = smooth_rec();
-        let o = conclude_outcome(&r, treatment_low1, 5000, false, Some("Test"), Some(5), Utc::now());
-        let spread = frame_spread_of(r.baseline_avg_fps, r.baseline_low1_fps, treatment_avg, treatment_low1);
-        with_smoothest_outcome(o, r.noise_floor_pct, delta_avg_pct(r.baseline_avg_fps, treatment_avg), spread.as_ref())
+    #[test]
+    fn maximum_fps_with_both_numbers_inside_the_band_is_no_change() {
+        // Average +2% (120 → 122.4), 1% low -2% (150 → 147): both inside ±3%.
+        let o = max_fps(147.0, 122.4);
+        assert_eq!((o.verdict.as_str(), o.keep), ("no-change", false));
+        assert_eq!(trial_result_for(&o.verdict), TrialResult::Negligible);
+        assert_eq!(o.stop_reason, None, "still judged against the band");
+        assert!(o.note.contains("the average frame rate +2%, the 1% low -2%, both against a ±3% band"), "{}", o.note);
+        assert!(o.note.contains("The average stayed inside the band, so the default was kept and the change restored."), "{}", o.note);
+        // The band's edges are inside it, on both numbers.
+        assert_eq!(max_fps(145.5, 123.6).verdict, "no-change", "+3.0% avg, -3.0% 1% low");
     }
 
     #[test]
-    fn the_frame_time_spread_is_read_from_the_stored_average_and_1pct_low() {
-        assert_eq!(frame_spread_pct(200.0, 150.0), Some(33.3));
-        assert_eq!(frame_spread_pct(200.0, 170.0), Some(17.6));
-        assert_eq!(frame_spread_pct(0.0, 150.0), None);
-        assert_eq!(frame_spread_pct(200.0, 0.0), None);
-        assert_eq!(frame_spread_pct(f64::NAN, 150.0), None);
-        let s = frame_spread_of(200.0, 150.0, 200.0, 170.0).unwrap();
-        assert_eq!((s.baseline_pct, s.after_pct, s.floor_pts), (33.3, 17.6, SPREAD_FLOOR_PTS));
-        assert_eq!(frame_spread_of(200.0, 150.0, 200.0, 0.0), None);
-    }
-
-    #[test]
-    fn smoothest_keeps_a_tighter_spread_only_when_the_average_holds() {
-        // Spread 33.3% → 17.6% at the same average: kept.
-        let kept = smoothest(170.0, 200.0);
-        assert_eq!((kept.verdict.as_str(), kept.keep), ("improved", true));
-        assert!(
-            kept.note.contains(
-                "Judged for Smoothest. Compared with the baseline: the slowest 1% of frames took 33.3% longer \
-                 than the average frame before and 17.6% after (-15.7 points), against a fixed ±5-point floor \
-                 (Compy hasn't measured how much this spread moves between unchanged sessions); the average \
-                 frame rate 0% against a ±3% band. No 0.1% low was compared: Compy doesn't keep individual \
-                 frame times."
-            ),
-            "{}",
-            kept.note
-        );
-        // A big average gain that widens the spread (33.3% → 53.3%): Worse, though Maximum FPS would like it.
-        let wider = smoothest(150.0, 230.0);
-        assert_eq!((wider.verdict.as_str(), wider.keep), ("regressed", false));
-        assert!(wider.note.contains("The spread widened by more than the floor"), "{}", wider.note);
-        // Tighter (12.5%) but the average fell 10%: not a clear win.
-        let slower = smoothest(160.0, 180.0);
-        assert_eq!((slower.verdict.as_str(), slower.keep), ("no-change", false));
-        assert!(slower.note.contains("the average fell by more than the band"), "{}", slower.note);
-        // 33.3% → 29%: inside the floor.
-        let inside = smoothest(155.0, 200.0);
-        assert_eq!((inside.verdict.as_str(), inside.keep), ("no-change", false));
-        assert!(inside.note.contains("The spread stayed inside the floor"), "{}", inside.note);
-        // No spread, no win.
-        let none = with_smoothest_outcome(measured(180.0), 3.0, Some(0.0), None);
-        assert_eq!((none.verdict.as_str(), none.keep), ("no-change", false));
-        assert!(none.note.contains("couldn't be read from both sessions"), "{}", none.note);
-    }
-
-    #[test]
-    fn every_earlier_gate_keeps_its_verdict_ahead_of_the_picked_outcome() {
+    fn every_earlier_gate_keeps_its_verdict_ahead_of_maximum_fps() {
         let h = BaselineHalves { first_half_fps: 200.0, second_half_fps: 240.0 };
         let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
         let thin = conclude_outcome(&rec(150.0, 5), 180.0, 10, false, Some("Test"), Some(5), Utc::now());
@@ -5747,14 +5597,36 @@ mod experiment_tests {
             p.changed_context = vec!["The GPU driver changed.".into()];
             with_comparability(measured(180.0), &p)
         };
-        let tight = FrameSpread { baseline_pct: 40.0, after_pct: 10.0, floor_pts: SPREAD_FLOOR_PTS };
         for o in [crash, thin, confounded, wrong_game, noisy, changed] {
             for avg in [None, Some(-50.0), Some(50.0)] {
                 assert_eq!(with_max_fps_outcome(o.clone(), 3.0, avg), o, "{} / {avg:?}", o.verdict);
-                assert_eq!(with_smoothest_outcome(o.clone(), 3.0, avg, Some(&tight)), o, "{} / {avg:?}", o.verdict);
-                assert_eq!(with_smoothest_outcome(o.clone(), 3.0, avg, None), o, "{} / {avg:?}", o.verdict);
             }
         }
+    }
+
+    #[test]
+    fn a_start_refuses_smoothest_and_any_outcome_this_build_does_not_judge() {
+        assert_eq!(start_outcome(None), Ok(TrialOutcome::Recommended));
+        assert_eq!(start_outcome(Some("recommended")), Ok(TrialOutcome::Recommended));
+        assert_eq!(start_outcome(Some("max-fps")), Ok(TrialOutcome::MaxFps));
+        assert_eq!(
+            start_outcome(Some("smoothest")),
+            Err("experiment not started — Smoothest needs Compy to measure frame pacing more precisely than it does today, so it isn't offered yet.".to_string())
+        );
+        let unknown = start_outcome(Some(&"x".repeat(500))).unwrap_err();
+        assert!(unknown.starts_with("experiment not started — Compy doesn't know the outcome"), "{unknown}");
+        assert!(unknown.len() < 120, "a long pick is capped: {unknown}");
+        // The refusal comes before the store is locked, read or written.
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let refuse = start.find("let outcome = start_outcome(outcome.as_deref())?;").expect("start reads the pick");
+        assert!(refuse < start.find("lock_store()").unwrap(), "refused before anything is touched");
+        assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        outcome,\n"));
+        // Nothing judges as Smoothest: a stored "smoothest" or unknown pick reads as Recommended.
+        for v in ["smoothest", "turbo", ""] {
+            assert_eq!(serde_json::from_value::<TrialOutcome>(v.into()).unwrap(), TrialOutcome::Recommended, "{v}");
+        }
+        assert_eq!(serde_json::from_value::<TrialOutcome>(serde_json::Value::Null).unwrap(), TrialOutcome::Recommended);
     }
 
     #[test]
@@ -5763,62 +5635,120 @@ mod experiment_tests {
         let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
         let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
         assert!(body.contains("TrialOutcome::MaxFps => with_max_fps_outcome(paired, rec.noise_floor_pct, avg)"));
-        assert!(body.contains("with_smoothest_outcome(paired, rec.noise_floor_pct, avg, spread.as_ref())"));
-        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
-        assert!(start[..start.find("save_store(&store)?").unwrap()].contains("outcome: outcome.unwrap_or_default()"));
 
         let t = TreatmentRecord {
-            avg_fps: 200.0,
-            low1_fps: 170.0,
+            avg_fps: 130.0,
+            low1_fps: 150.0,
             samples: 900,
             crashed: false,
-            delta_low1_pct: 13.3,
+            delta_low1_pct: 0.0,
             recorded_at: TREAT_ID.into(),
             session_id: Some(TREAT_ID.into()),
-            check: None,
-            halves: None,
-            delta_avg_pct: Some(0.0),
-            frame_spread: frame_spread_of(200.0, 150.0, 200.0, 170.0),
+            check: Some(BaselineCheck::Steady),
+            halves: Some(BaselineHalves { first_half_fps: 129.0, second_half_fps: 131.0 }),
+            delta_avg_pct: Some(8.3),
         };
-        let r = ExperimentRecord { outcome: TrialOutcome::Smoothest, treatment: Some(t), ..smooth_rec() };
+        let r = ExperimentRecord {
+            outcome: TrialOutcome::MaxFps,
+            treatment: Some(t),
+            verdict: Some("improved".into()),
+            trial_result: Some(TrialResult::Better),
+            status: ExperimentStatus::Kept,
+            kept: true,
+            ..rec(150.0, 5)
+        };
         let mut v = serde_json::to_value(ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![r] }).unwrap();
-        assert_eq!(v["experiments"][0]["outcome"], "smoothest");
-        assert_eq!(v["experiments"][0]["treatment"]["frame_spread"]["floor_pts"], SPREAD_FLOOR_PTS);
-        // An older Compy's record and treatment types (no such fields) load the file.
+        assert_eq!(v["experiments"][0]["outcome"], "max-fps");
+        // The previous Compy's record and treatment types, field for field (abd4c883, before the pick
+        // existed), load the file.
         #[derive(Deserialize)]
         #[allow(dead_code)]
-        struct OldTreatment {
+        struct PrevTreatment {
             avg_fps: f64,
             low1_fps: f64,
+            samples: u32,
+            crashed: bool,
             delta_low1_pct: f64,
+            recorded_at: String,
+            #[serde(default)]
+            session_id: Option<String>,
+            #[serde(default)]
+            check: Option<BaselineCheck>,
+            #[serde(default)]
+            halves: Option<BaselineHalves>,
             #[serde(default)]
             delta_avg_pct: Option<f64>,
         }
         #[derive(Deserialize)]
         #[allow(dead_code)]
-        struct OldRecord {
+        struct PrevRecord {
             id: String,
+            rec_id: String,
+            rec_title: String,
+            game: String,
+            hypothesis: String,
+            created_at: String,
+            status: ExperimentStatus,
+            baseline_avg_fps: f64,
+            baseline_low1_fps: f64,
+            ledger_watermark: usize,
+            applied_change_id: String,
+            #[serde(default)]
+            active_changes_at_start: usize,
+            #[serde(default)]
+            attribution_warning: Option<String>,
             noise_floor_pct: f64,
             #[serde(default)]
-            treatment: Option<OldTreatment>,
+            halves_floor_pct: Option<f64>,
+            #[serde(default)]
+            between_session_noise: Option<crate::noise_floor::BetweenSessionNoise>,
+            #[serde(default)]
+            treatment: Option<PrevTreatment>,
+            #[serde(default)]
+            verdict: Option<String>,
+            #[serde(default)]
+            kept: bool,
+            #[serde(default)]
+            stop_reason: Option<String>,
+            #[serde(default)]
+            concluded_at: Option<String>,
+            #[serde(default)]
+            verdict_confidence: Option<Confidence>,
+            #[serde(default)]
+            verdict_note: Option<String>,
+            #[serde(default)]
+            trial_result: Option<TrialResult>,
+            #[serde(default)]
+            target_verified: Option<bool>,
+            #[serde(default)]
+            prior_state_verified: bool,
+            #[serde(default)]
+            final_state_verified: Option<bool>,
+            #[serde(default)]
+            baseline_session_id: Option<String>,
+            #[serde(default)]
+            baseline_halves: Option<BaselineHalves>,
+            #[serde(default)]
+            baseline_check: Option<BaselineCheck>,
+            #[serde(default)]
+            applied_at: Option<String>,
+            #[serde(default)]
+            session_pairing: Option<SessionPairing>,
+            #[serde(default)]
+            noise_evidence: Option<NoiseEvidence>,
         }
         #[derive(Deserialize)]
-        struct OldStore {
-            experiments: Vec<OldRecord>,
+        struct PrevStore {
+            experiments: Vec<PrevRecord>,
         }
-        let old: OldStore = serde_json::from_value(v.clone()).expect("an older Compy loads the file");
-        assert_eq!(old.experiments[0].treatment.as_ref().map(|t| t.low1_fps), Some(170.0));
-        // Each pick round-trips by its stable name.
-        for (o, name) in [(TrialOutcome::Recommended, "recommended"), (TrialOutcome::MaxFps, "max-fps"), (TrialOutcome::Smoothest, "smoothest")] {
-            assert_eq!(serde_json::to_value(o).unwrap(), name);
-            assert_eq!(serde_json::from_value::<TrialOutcome>(name.into()).unwrap(), o);
-        }
-        // A record written before the pick existed loads as Recommended, with no spread.
+        let old: PrevStore = serde_json::from_value(v.clone()).expect("the previous Compy loads the file");
+        let o = &old.experiments[0];
+        assert_eq!((o.verdict.as_deref(), o.kept, o.status), (Some("improved"), true, ExperimentStatus::Kept));
+        assert_eq!(o.treatment.as_ref().and_then(|t| t.delta_avg_pct), Some(8.3));
+        // A record written before the pick existed loads as Recommended.
         let rec_v = &mut v["experiments"][0];
         assert!(rec_v.as_object_mut().unwrap().remove("outcome").is_some());
-        assert!(rec_v["treatment"].as_object_mut().unwrap().remove("frame_spread").is_some());
         let back: ExperimentRecord = serde_json::from_value(rec_v.clone()).unwrap();
         assert_eq!(back.outcome, TrialOutcome::Recommended);
-        assert_eq!(back.treatment.unwrap().frame_spread, None);
     }
 }

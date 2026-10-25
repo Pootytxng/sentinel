@@ -463,12 +463,8 @@
     "receiptRuleMaxKept": "The average rose by more than the band and the 1% low didn't fall by more, so the change was kept.",
     "receiptRuleMaxAvgFell": "The average fell by more than the band, so the change was restored.",
     "receiptRuleMaxInside": "The average stayed inside the band, so the default was kept and the change restored.",
-    "receiptComparedSmoothest": "Judged for Smoothest. Compared with the baseline: the slowest 1% of frames took {{before}}% longer than the average frame before and {{after}}% after ({{moved}} points), against a fixed ±{{floor}}-point floor, because Compy hasn't measured how much this spread moves between unchanged sessions; average frame rate {{avg}}% against a ±{{band}}% band. No 0.1% low was compared: Compy doesn't keep individual frame times. {{rule}}",
-    "receiptRuleSmoothKept": "The spread tightened by more than the floor and the average didn't fall by more than the band, so the change was kept.",
-    "receiptRuleSmoothWider": "The spread widened by more than the floor, so the change was restored.",
-    "receiptRuleSmoothAvgFell": "The spread tightened by more than the floor, but the average fell by more than the band, so this isn't a clear win: the default was kept and the change restored.",
-    "receiptRuleSmoothInside": "The spread stayed inside the floor, so the default was kept and the change restored.",
     "outcomeLabel": "What to aim for",
+    "outcomeSmoothestUnavailable": "Smoothest needs Compy to measure frame pacing more precisely than it does today, so it isn't offered yet.",
     "outcome": {
       "recommended": "Recommended",
       "maxFps": "Maximum FPS",
@@ -476,8 +472,7 @@
     },
     "outcomeWhy": {
       "recommended": "Keeps the change only if the 1% low rises beyond the noise band and the average frame rate doesn't fall beyond it.",
-      "maxFps": "Keeps the change only if the average frame rate rises beyond the noise band and the 1% low doesn't fall beyond it.",
-      "smoothest": "Keeps the change only if frame pacing gets more even: the gap between the slowest 1% of frames and the average frame shrinks by more than {{floor}} points, and the average frame rate doesn't fall beyond the noise band. The 0.1% low isn't used: Compy doesn't keep individual frame times."
+      "maxFps": "Keeps the change only if the average frame rate rises beyond the noise band and the 1% low doesn't fall beyond it."
     },
     "pairChanged": "What differed: {{changed}} changed between the before and after sessions.",
     "pairUnrecorded": "What differed: one of the sessions didn't record {{unrecorded}}.",

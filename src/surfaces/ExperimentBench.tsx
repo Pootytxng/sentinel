@@ -41,24 +41,20 @@ type Treatment = {
   /** P4-recommended: the average fps %-delta vs baseline, judged on the same band as the 1% low.
    *  null when an average was missing, and on records judged on the 1% low alone. */
   delta_avg_pct?: number | null;
-  /** P4-maxfps-smooth: the frame-time spread before and after (% of the average frame time) and the
-   *  fixed floor, in points, it was judged on. null when a session lacked a reading, and on older records. */
-  frame_spread?: { baseline_pct: number; after_pct: number; floor_pts: number } | null;
 };
 
-/** P4-maxfps-smooth: what the user asked a Trial to aim for (experiment.rs `TrialOutcome`). */
-type TrialOutcome = "recommended" | "max-fps" | "smoothest";
-
-/** The fixed floor a Smoothest verdict is judged on, in points of frame-time spread. Mirrors
- *  experiment.rs `SPREAD_FLOOR_PTS`; only the pre-start description reads it, a receipt reads the
- *  floor the record carries. */
-const SPREAD_FLOOR_PTS = 5;
+/** P4-maxfps-smooth: what the user asked a Trial to aim for (experiment.rs `TrialOutcome`, its serde
+ *  names). Smoothest is shown but not offered: Compy doesn't measure frame pacing precisely enough
+ *  yet, and the backend refuses it (`start_outcome`). */
+type TrialOutcome = "recommended" | "max-fps";
 
 const OUTCOME_KEY: Record<TrialOutcome, string> = {
   recommended: "recommended",
   "max-fps": "maxFps",
-  smoothest: "smoothest",
 };
+
+/** The picker's entries, in order. Smoothest is listed disabled, with its reason beside the picker. */
+const OUTCOME_OPTIONS = ["recommended", "max-fps", "smoothest"] as const;
 
 /** §11 — the credible-noise band a verdict was judged against. Present only when it really was. */
 type NoiseEvidence = {
@@ -131,7 +127,7 @@ type Experiment = {
   /** How comparable the two sessions were. null while Running and on older records. */
   session_pairing?: SessionPairing | null;
   /** P4-maxfps-smooth: the outcome picked at start. Absent on older records, which read as Recommended. */
-  outcome?: TrialOutcome;
+  outcome?: TrialOutcome | null;
 };
 
 type SimulatorReport = {
@@ -356,7 +352,7 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
   const signed = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 10) / 10}`;
   const low = x.treatment.delta_low1_pct;
   const one = (v: number) => String(Math.round(v * 10) / 10);
-  // P4-maxfps-smooth: a Maximum FPS row leads with the average; a Smoothest row with the spread.
+  // P4-maxfps-smooth: a Maximum FPS row leads with the average.
   if (x.outcome === "max-fps") {
     const rule =
       x.verdict === "improved"
@@ -369,28 +365,6 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
     return t("lab.experimentBench.receiptComparedMaxFps", {
       avg: signed(avg),
       low: signed(low),
-      band: one(band),
-      rule: t(`lab.experimentBench.${rule}`),
-    });
-  }
-  if (x.outcome === "smoothest") {
-    const sp = x.treatment.frame_spread;
-    if (!sp) return null;
-    const moved = Math.round((sp.after_pct - sp.baseline_pct) * 10) / 10;
-    const rule =
-      x.verdict === "improved"
-        ? "receiptRuleSmoothKept"
-        : x.verdict === "regressed"
-          ? "receiptRuleSmoothWider"
-          : moved < -sp.floor_pts
-            ? "receiptRuleSmoothAvgFell"
-            : "receiptRuleSmoothInside";
-    return t("lab.experimentBench.receiptComparedSmoothest", {
-      before: one(sp.baseline_pct),
-      after: one(sp.after_pct),
-      moved: signed(moved),
-      floor: one(sp.floor_pts),
-      avg: signed(avg),
       band: one(band),
       rule: t(`lab.experimentBench.${rule}`),
     });
@@ -1067,14 +1041,18 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
                       value={outcome}
                       disabled={busy}
                       onChange={(v) => setOutcome(v as TrialOutcome)}
-                      options={(Object.keys(OUTCOME_KEY) as TrialOutcome[]).map((o) => ({
-                        value: o,
-                        label: t(`lab.experimentBench.outcome.${OUTCOME_KEY[o]}`),
-                      }))}
+                      options={OUTCOME_OPTIONS.map((o) =>
+                        o === "smoothest"
+                          ? { value: o, label: t("lab.experimentBench.outcome.smoothest"), disabled: true }
+                          : { value: o, label: t(`lab.experimentBench.outcome.${OUTCOME_KEY[o]}`) },
+                      )}
                     />
                   </div>
                   <p className="exp-fineprint" data-testid="exp-outcome-why">
-                    {t(`lab.experimentBench.outcomeWhy.${OUTCOME_KEY[outcome]}`, { floor: SPREAD_FLOOR_PTS })}
+                    {t(`lab.experimentBench.outcomeWhy.${OUTCOME_KEY[outcome]}`)}
+                  </p>
+                  <p className="exp-fineprint" data-testid="exp-outcome-smoothest">
+                    {t("lab.experimentBench.outcomeSmoothestUnavailable")}
                   </p>
                   <button
                     className="exp-cta"
