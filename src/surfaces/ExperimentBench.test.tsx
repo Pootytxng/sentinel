@@ -311,6 +311,7 @@ describe("ExperimentBench (armed)", () => {
       { id: "hdr-advisory", title: "Check HDR", passes: false, reason: "no-safe-apply", detail: null },
       { id: "sysmain-disable", title: "Disable SysMain", passes: false, reason: "already-set-by-gaming-mode", detail: null },
       { id: "mouse-accel-off", title: "Turn off mouse acceleration", passes: false, reason: "already-set-unchecked", detail: null },
+      { id: "nagle-disable", title: "Disable Nagle", passes: false, reason: "already-set-unconfirmed", detail: null },
       {
         id: "eee-disable",
         title: "Turn off Energy-Efficient Ethernet",
@@ -349,6 +350,8 @@ describe("ExperimentBench (armed)", () => {
     expect(row("hdr-advisory")).toContain("Advice only.");
     expect(row("sysmain-disable")).toContain("Compy's Gaming Mode set it for this session");
     expect(row("mouse-accel-off")).toContain("Compy couldn't check whether it made this change.");
+    expect(row("nagle-disable")).toContain("Compy applied this earlier but can't confirm");
+    expect(row("nagle-disable")).not.toContain("not by Compy");
     expect(row("eee-disable")).toContain("Doesn't fit this PC's hardware. No wired Ethernet port.");
     expect(row("test-rec")).toBe("");
   });

@@ -40,6 +40,10 @@ pub(crate) enum SkipReason {
     /// §3.2: already set, but the ledger or the session contract couldn't be read, so Compy can't
     /// say whether it made the change.
     AlreadySetUnchecked,
+    /// §3.2: already set, and the ledger has a live apply of it, but that apply's own check can't be
+    /// read (the shared rule's can't-confirm group): Compy did apply it, it just can't confirm its
+    /// change is the one keeping it set. Never "not by Compy".
+    AlreadySetUnconfirmed,
     /// §3.3: Compy has no audited one-click change for it (advice only), so it can't be tested.
     NoSafeApply,
 }
@@ -67,6 +71,9 @@ pub(crate) struct CatalogEntry<'a> {
 pub(crate) struct WhoSetIt {
     /// Changes the ledger's shared active-change rule reads On.
     pub ledger_on: Option<HashSet<String>>,
+    /// Changes the same rule puts in its can't-confirm group (a live apply whose check is
+    /// Unreadable/Unrecognised). Empty when the ledger couldn't be read (`ledger_on` is `None`).
+    pub ledger_cant_confirm: HashSet<String>,
     /// Changes the live Gaming Mode session contract holds (empty when no session is running).
     pub gaming_mode: Option<HashSet<String>>,
 }
@@ -77,6 +84,7 @@ impl WhoSetIt {
         match (has(&self.gaming_mode), has(&self.ledger_on)) {
             (Some(true), _) => SkipReason::AlreadySetByGamingMode,
             (_, Some(true)) => SkipReason::AlreadySetByCompy,
+            _ if self.ledger_cant_confirm.contains(id) => SkipReason::AlreadySetUnconfirmed,
             (Some(false), Some(false)) => SkipReason::AlreadySet,
             // One of the two records couldn't be read and the other doesn't name it.
             _ => SkipReason::AlreadySetUnchecked,
@@ -133,9 +141,18 @@ pub(crate) fn screen_catalog(
 /// The changes the shared active-change rule (`history::live_change_groups`, 453-f1) reads On —
 /// the same set Health, Optimize, History and the session count use. Pure over the rows' live checks.
 pub(crate) fn ledger_on_recs(rows: &[LiveRow<'_>]) -> HashSet<String> {
+    ledger_groups(rows, true)
+}
+
+/// The same rule's can't-confirm group: a live apply whose check reads Unreadable/Unrecognised.
+pub(crate) fn ledger_cant_confirm_recs(rows: &[LiveRow<'_>]) -> HashSet<String> {
+    ledger_groups(rows, false)
+}
+
+fn ledger_groups(rows: &[LiveRow<'_>], on: bool) -> HashSet<String> {
     crate::history::live_change_groups(rows)
         .into_iter()
-        .filter(|&i| rows[i].check == Some(ActiveCheck::On))
+        .filter(|&i| (rows[i].check == Some(ActiveCheck::On)) == on)
         .map(|i| rows[i].rec_id.to_string())
         .collect()
 }
@@ -175,7 +192,7 @@ pub(crate) fn session_change_rec(c: &SessionChange) -> Option<&'static str> {
     })
 }
 
-fn read_ledger_on() -> Option<HashSet<String>> {
+fn read_ledger() -> Option<(HashSet<String>, HashSet<String>)> {
     let history = crate::history::load_history().ok()?;
     let reads = crate::history::LiveReads::default();
     let checks: Vec<Option<ActiveCheck>> = history
@@ -187,7 +204,7 @@ fn read_ledger_on() -> Option<HashSet<String>> {
         .zip(&checks)
         .map(|(c, check)| LiveRow { rec_id: &c.rec_id, status: &c.status, applied_at: &c.applied_at, check: *check })
         .collect();
-    Some(ledger_on_recs(&rows))
+    Some((ledger_on_recs(&rows), ledger_cant_confirm_recs(&rows)))
 }
 
 fn read_gaming_mode() -> Option<HashSet<String>> {
@@ -206,7 +223,11 @@ fn read_gaming_mode() -> Option<HashSet<String>> {
 #[tauri::command]
 pub(crate) fn get_trial_candidates() -> Vec<TrialCandidate> {
     let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).unwrap_or(Value::Null);
-    let who = WhoSetIt { ledger_on: read_ledger_on(), gaming_mode: read_gaming_mode() };
+    let (ledger_on, ledger_cant_confirm) = match read_ledger() {
+        Some((on, cant)) => (Some(on), cant),
+        None => (None, HashSet::new()),
+    };
+    let who = WhoSetIt { ledger_on, ledger_cant_confirm, gaming_mode: read_gaming_mode() };
     screen_catalog(&catalog, &crate::history::is_appliable, &who)
 }
 
@@ -222,7 +243,7 @@ mod tests {
         Some(ids.iter().map(|s| s.to_string()).collect())
     }
     fn who(ledger: Option<HashSet<String>>, gaming: Option<HashSet<String>>) -> WhoSetIt {
-        WhoSetIt { ledger_on: ledger, gaming_mode: gaming }
+        WhoSetIt { ledger_on: ledger, ledger_cant_confirm: HashSet::new(), gaming_mode: gaming }
     }
     fn nobody() -> WhoSetIt {
         who(set(&[]), set(&[]))
@@ -305,6 +326,27 @@ mod tests {
             row("nagle-disable", "applied", "2026-10-20T10:00:00Z", Some(ActiveCheck::Unreadable)),
         ];
         assert!(ledger_on_recs(&rows).is_empty());
+        assert_eq!(ledger_cant_confirm_recs(&rows), set(&["nagle-disable"]).unwrap());
+    }
+
+    // Review r1 gap: Compy applied it, its own check can't be read, and Windows reads it as set.
+    // That is never "not by Compy" — whatever the session record says.
+    #[test]
+    fn a_cant_confirm_compy_apply_never_reads_not_by_compy() {
+        let rows = [row("nagle-disable", "applied", "2026-10-20T10:00:00Z", Some(ActiveCheck::Unrecognised))];
+        let w = WhoSetIt {
+            ledger_on: Some(ledger_on_recs(&rows)),
+            ledger_cant_confirm: ledger_cant_confirm_recs(&rows),
+            gaming_mode: set(&[]),
+        };
+        let c = screen(&entry("nagle-disable", true, true), true, &w);
+        assert_eq!(c.reason, Some(SkipReason::AlreadySetUnconfirmed));
+        assert_eq!(serde_json::to_value(&c).unwrap()["reason"], "already-set-unconfirmed");
+        // With the session record unreadable too, it is still Compy's earlier apply, not unknown.
+        let w = WhoSetIt { gaming_mode: None, ..w };
+        assert_eq!(screen(&entry("nagle-disable", true, true), true, &w).reason, Some(SkipReason::AlreadySetUnconfirmed));
+        // A change outside that group, with the session record unreadable, reads "couldn't check".
+        assert_eq!(screen(&entry("game-mode", true, true), true, &w).reason, Some(SkipReason::AlreadySetUnchecked));
     }
 
     #[test]

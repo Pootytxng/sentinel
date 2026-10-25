@@ -109,6 +109,7 @@ type SkipReason =
   | "already-set-by-compy"
   | "already-set-by-gaming-mode"
   | "already-set-unchecked"
+  | "already-set-unconfirmed"
   | "no-safe-apply";
 type TrialCandidate = {
   id: string;
@@ -124,6 +125,7 @@ const SKIP_REASON_KEY: Record<SkipReason, string> = {
   "already-set-by-compy": "lab.experimentBench.skipReason.alreadySetByCompy",
   "already-set-by-gaming-mode": "lab.experimentBench.skipReason.alreadySetByGamingMode",
   "already-set-unchecked": "lab.experimentBench.skipReason.alreadySetUnchecked",
+  "already-set-unconfirmed": "lab.experimentBench.skipReason.alreadySetUnconfirmed",
   "no-safe-apply": "lab.experimentBench.skipReason.noSafeApply",
 };
 
