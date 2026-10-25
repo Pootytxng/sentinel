@@ -477,7 +477,15 @@ export function LabConsole({
           />
         ) : null;
       case "blackbox":
-        return <BlackBox onReport={setBbReport} selectedIncidentId={openIncidentId} />;
+        return (
+          <BlackBox
+            onReport={setBbReport}
+            selectedIncidentId={openIncidentId}
+            changes={fast.changes}
+            onChanged={fast.onChanged}
+            ledgerBusy={fast.busyId !== null}
+          />
+        );
     }
   };
 

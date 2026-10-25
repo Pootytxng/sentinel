@@ -302,6 +302,26 @@
         "unmatched-readings": "未知:Compy 前后两次的读数来自不同的检查,无法相互比较。",
         "ledger-incomplete": "未知:Compy 的更改记录无法完整读取,因此无法说明它做过哪些更改。",
         "drift-not-kept": "未知:Compy 只保留仍未恢复的偏离,已经恢复的偏离不会显示在这里。"
+      },
+      "restore": {
+        "intro_other": "这段时间内 Compy 做了 {{count}} 项更改,目前仍然生效。Compy 可以从最新的开始逐项撤销:",
+        "maybeNotCause": "这只是把 Compy 做的更改改回去;它们不一定是问题的原因。",
+        "button": "恢复到 {{date}} 时的状态",
+        "running": "正在撤销 Compy 的更改…",
+        "confirmTitle": "恢复到 {{date}} 时的状态?",
+        "confirmBody_other": "Compy 会从最新的开始,逐项撤销它做的 {{count}} 项更改:{{titles}}。这只是把 Compy 做的更改改回去;它们不一定是问题的原因。",
+        "confirmLabel": "撤销这些更改",
+        "notLive": "未列出:{{titles}}。Compy 无法确认这些更改仍然生效,因此不会在这里撤销它们。",
+        "notRecorded": "这项变化不是 Compy 做的,Compy 也没有记录原来的状态,因此无法恢复。",
+        "summaryAll_other": "已撤销 Compy 的全部 {{count}} 项更改。",
+        "summaryPartial": "已撤销 Compy 的 {{total}} 项更改中的 {{done}} 项。Compy 在下面出问题的那一项停了下来;没有撤销的更改仍然生效,你可以在「已应用与历史记录」中撤销。",
+        "summaryNone": "没有撤销任何更改。Compy 的更改仍然生效,你可以在「已应用与历史记录」中撤销。",
+        "result": {
+          "undone": "已撤销:{{title}}",
+          "unrecorded": "{{title}}:撤销已在 Windows 上完成,但 Compy 无法把它保存到历史记录中。如不确定,请在 Windows 中检查该设置。",
+          "failed": "无法撤销 {{title}}。它仍然生效。",
+          "notTried": "未尝试:{{title}}。Compy 在上面出问题后停了下来。"
+        }
       }
     },
     "introPre": "「崩溃与卡死」会读取 Windows 已经记录的崩溃与卡死证据,并叠加显示 Compy 自己的",

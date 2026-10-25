@@ -215,6 +215,63 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+.bb-changed-norestore {
+  margin: 0;
+  color: var(--ix-text-3);
+  font-size: var(--type-label);
+  line-height: 1.5;
+}
+
+/* P6-restore: "Put back how it was on <date>" — Compy's own still-live changes from the window. */
+.bb-restore {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bb-restore:empty {
+  display: none;
+}
+.bb-restore-intro,
+.bb-restore-maybe,
+.bb-restore-notlive,
+.bb-restore-summary {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.5;
+}
+.bb-restore-maybe,
+.bb-restore-notlive {
+  color: var(--ix-text-3);
+}
+.bb-restore-list {
+  margin: 0;
+  padding: 0 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ix-text-2);
+  font-size: var(--type-label);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.bb-restore-btn {
+  align-self: flex-start;
+  max-width: 100%;
+  font-size: var(--type-label);
+  font-weight: 600;
+  color: var(--ix-accent-text);
+  background: none;
+  border: 1px solid var(--ix-border);
+  border-radius: var(--ix-radius);
+  padding: 6px 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.bb-restore-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 
 .bb-receipt-toggle {
   align-self: flex-start;

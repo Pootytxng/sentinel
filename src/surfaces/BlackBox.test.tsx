@@ -2,7 +2,9 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { BlackBox } from "./BlackBox";
-import type { BlackBoxReport, CrashIncident, CaseIntelligenceMatch } from "../types";
+import { ConfirmProvider } from "../design/ConfirmDialog";
+import { LEDGER_CHANGED_EVENT } from "../types";
+import type { AppliedChange, BlackBoxReport, CrashIncident, CaseIntelligenceMatch } from "../types";
 
 // Settable per-test scan response (vi.mock factories are hoisted — this must be too).
 const reportMock = vi.hoisted(() => ({
@@ -14,9 +16,15 @@ const reportMock = vi.hoisted(() => ({
 const openUrlMock = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: openUrlMock }));
 
+// P6-restore: how the ledger undo answers, per change id (default: it works).
+const rollbackMock = vi.hoisted(() => ({
+  answer: (_id: string): Promise<unknown> => Promise.resolve(null),
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn((cmd: string) => {
+  invoke: vi.fn((cmd: string, args?: { changeId?: string }) => {
     if (cmd === "get_crash_blackbox") return Promise.resolve(reportMock.value);
+    if (cmd === "rollback_change") return rollbackMock.answer(args?.changeId ?? "");
     return Promise.resolve(null);
   }),
 }));
@@ -65,6 +73,7 @@ afterEach(() => {
   openUrlMock.mockReset();
   openUrlMock.mockResolvedValue(undefined);
   reportMock.value = { incidents: [], skipped_sources: [] };
+  rollbackMock.answer = () => Promise.resolve(null);
 });
 
 const scan = () => fireEvent.click(screen.getByRole("button", { name: /scan for recent crashes/i }));
@@ -557,5 +566,175 @@ describe("BlackBox — Changed before this (P6-changed)", () => {
     scan();
     expect(await screen.findByText(/No session was recorded before this/)).toBeInTheDocument();
     expect(container.querySelectorAll(".bb-changed-item")).toHaveLength(0);
+  });
+});
+
+// P6-restore: "Put back how it was on <date>". The window holds three of Compy's applies (newest
+// last here, as the timeline orders them); the ledger says which are still on.
+describe("BlackBox — Put back how it was (P6-restore)", () => {
+  const apply = (id: string, title: string, at: string, rolledBack = false) => ({
+    id: `apply:${id}`,
+    timestamp: at,
+    event_type: "change-applied",
+    source: "trust-ledger",
+    scope: "compy-applied" as const,
+    game: null,
+    summary: rolledBack ? `${title} applied (since rolled back)` : `${title} applied`,
+    detail: null,
+    observed_between: null,
+    since_rolled_back: rolledBack,
+    rec_id: id,
+  });
+  const row = (id: string, title: string, at: string, extra: Partial<AppliedChange> = {}): AppliedChange => ({
+    id,
+    rec_id: `rec-${id}`,
+    rec_title: title,
+    applied_at: at,
+    snapshot: null,
+    status: "applied",
+    is_still_active: true,
+    active_check: "on",
+    ...extra,
+  });
+  const incident = () =>
+    sidumpIncident({
+      anchor_kind: "clean",
+      anchor: { started_at: "2026-10-23T16:06:22.472457100+00:00", game: "WardogsClient" },
+      window_end: "2026-10-24T04:18:51.503609400-07:00",
+      items: [
+        item("compy-changes", "changed", {
+          events: [
+            apply("c-old", "Game Mode", "2026-10-23T17:00:00+00:00"),
+            apply("c-unsure", "Power throttling off", "2026-10-23T18:00:00+00:00"),
+            apply("c-new", "Visual effects trimmed", "2026-10-23T19:00:00+00:00"),
+            apply("c-gone", "Xbox Game Bar off", "2026-10-23T19:30:00+00:00", true),
+          ],
+        }),
+        item("driver", "changed", {
+          events: [{ ...ev("Graphics driver 31.0 → 32.0", "gpu-driver-change"), scope: "observed", source: "identity-snapshot", rec_id: null }],
+        }),
+      ],
+    });
+  const ledger = (): AppliedChange[] => [
+    row("c-old", "Game Mode", "2026-10-23T17:00:00+00:00"),
+    row("c-unsure", "Power throttling off", "2026-10-23T18:00:00+00:00", { active_check: "unreadable" }),
+    row("c-new", "Visual effects trimmed", "2026-10-23T19:00:00+00:00"),
+    row("c-gone", "Xbox Game Bar off", "2026-10-23T19:30:00+00:00", { status: "rolled_back", active_check: null }),
+    // On now, but applied before the last good session: outside the window, never offered.
+    row("c-before", "HPET off", "2026-10-20T10:00:00+00:00"),
+  ];
+  const mount = (onChanged = vi.fn()) => {
+    reportMock.value = { incidents: [incident()], skipped_sources: [] };
+    const view = render(
+      <ConfirmProvider>
+        <BlackBox changes={ledger()} onChanged={onChanged} />
+      </ConfirmProvider>,
+    );
+    scan();
+    return view;
+  };
+  const rollbackCalls = () =>
+    vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "rollback_change").map(([, a]) => (a as { changeId: string }).changeId);
+  const putBack = async () => fireEvent.click(await screen.findByRole("button", { name: /Put back how it was on/ }));
+
+  it("offers only Compy's still-on changes inside the window, newest first, and never calls it a fix", async () => {
+    const { container } = mount();
+    await putBack().then(() => fireEvent.click(screen.getByRole("button", { name: "Cancel" })));
+    const offered = [...container.querySelectorAll(".bb-restore-list li")].map((li) => li.textContent);
+    expect(offered).toEqual(["Visual effects trimmed", "Game Mode"]);
+    expect(container.querySelector(".bb-restore")!.textContent).toContain(
+      "This puts Compy's changes back; it may or may not be the cause.",
+    );
+    // Not confirmed on: named, not offered. Rolled back and outside the window: not mentioned at all.
+    expect(container.querySelector(".bb-restore-notlive")!.textContent).toMatch(/Not offered: Power throttling off\./);
+    expect(container.querySelector(".bb-restore")!.textContent).not.toMatch(/Xbox Game Bar|HPET/);
+    expect(container.textContent).not.toMatch(/\bfix(es|ed)?\b|caused|root cause/i);
+    expect(rollbackCalls(), "cancel undid something").toEqual([]);
+  });
+
+  it("asks first, listing every change, then undoes them one at a time newest first and refreshes", async () => {
+    const onChanged = vi.fn();
+    const heard = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, heard);
+    const { container } = mount(onChanged);
+    await putBack();
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/Put back how it was on .*\?/);
+    expect(dialog.textContent).toContain("Compy will undo 2 changes it made, one at a time, newest first: Visual effects trimmed; Game Mode.");
+    expect(dialog.textContent).toContain("it may or may not be the cause");
+    expect(rollbackCalls(), "something ran before the user confirmed").toEqual([]);
+    const scans = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_crash_blackbox").length;
+    fireEvent.click(screen.getByRole("button", { name: "Undo these changes" }));
+    expect(await screen.findByText("Put back all 2 of Compy's changes.")).toBeInTheDocument();
+    expect(rollbackCalls()).toEqual(["c-new", "c-old"]);
+    expect([...container.querySelectorAll(".bb-restore-results li")].map((li) => li.textContent)).toEqual([
+      "Undone: Visual effects trimmed",
+      "Undone: Game Mode",
+    ]);
+    expect(heard).toHaveBeenCalled();
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_crash_blackbox").length).toBe(scans + 1);
+    window.removeEventListener(LEDGER_CHANGED_EVENT, heard);
+  });
+
+  it("stops at a failed undo, says which one is still on, and does not try the rest", async () => {
+    rollbackMock.answer = (id) => (id === "c-new" ? Promise.resolve(null) : Promise.reject("snapshot missing"));
+    const extra = row("c-oldest", "Startup delay off", "2026-10-23T16:30:00+00:00");
+    reportMock.value = { incidents: [incident()], skipped_sources: [] };
+    const inc = reportMock.value.incidents[0];
+    inc.changed_before!.items[0].events.unshift(apply("c-oldest", "Startup delay off", "2026-10-23T16:30:00+00:00"));
+    const { container } = render(
+      <ConfirmProvider>
+        <BlackBox changes={[...ledger(), extra]} />
+      </ConfirmProvider>,
+    );
+    scan();
+    await putBack();
+    fireEvent.click(screen.getByRole("button", { name: "Undo these changes" }));
+    expect(await screen.findByText(/Put back 1 of 3 of Compy's changes\. Compy stopped/)).toBeInTheDocument();
+    expect(rollbackCalls()).toEqual(["c-new", "c-old"]);
+    expect([...container.querySelectorAll(".bb-restore-results li")].map((li) => li.textContent)).toEqual([
+      "Undone: Visual effects trimmed",
+      "Couldn't undo Game Mode. It's still on.",
+      "Not tried: Startup delay off. Compy stopped after the problem above.",
+    ]);
+  });
+
+  it("counts an undo that ran but couldn't be saved as put back, never as failed", async () => {
+    rollbackMock.answer = (id) =>
+      id === "c-new"
+        ? Promise.reject("The undo ran on Windows, but Compy couldn't save that to its history (disk full)")
+        : Promise.resolve(null);
+    const heard = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, heard);
+    const { container } = mount();
+    await putBack();
+    fireEvent.click(screen.getByRole("button", { name: "Undo these changes" }));
+    const first = await screen.findByText(/Visual effects trimmed: the undo ran on Windows/);
+    expect(first.getAttribute("data-outcome")).toBe("unrecorded");
+    expect(container.querySelector('[data-outcome="not-tried"]')!.textContent).toMatch(/Game Mode/);
+    expect(heard, "an undo reached Windows but no ledger reader was told").toHaveBeenCalled();
+    window.removeEventListener(LEDGER_CHANGED_EVENT, heard);
+  });
+
+  it("says plainly that a change Compy didn't make can't be put back", async () => {
+    const { container } = mount();
+    await screen.findByText("Changed before this");
+    expect(container.querySelector('[data-category="driver"] .bb-changed-norestore')!.textContent).toBe(
+      "Compy didn't make or record this change, so it can't put it back.",
+    );
+    expect(container.querySelector('[data-category="compy-changes"] .bb-changed-norestore')).toBeNull();
+  });
+
+  it("offers nothing without the ledger rows, since it can't tell what is still on", async () => {
+    reportMock.value = { incidents: [incident()], skipped_sources: [] };
+    const { container } = render(
+      <ConfirmProvider>
+        <BlackBox />
+      </ConfirmProvider>,
+    );
+    scan();
+    await screen.findByText("Changed before this");
+    expect(container.querySelector(".bb-restore")).toBeNull();
   });
 });

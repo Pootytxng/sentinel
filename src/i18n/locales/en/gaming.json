@@ -306,6 +306,29 @@
         "unmatched-readings": "Unknown: Compy's readings from before and after came from different checks, so it can't compare them.",
         "ledger-incomplete": "Unknown: Compy's change record couldn't be read in full, so it can't say what it changed.",
         "drift-not-kept": "Unknown: Compy only keeps drift that is still open, so drift that already cleared wouldn't show here."
+      },
+      "restore": {
+        "intro_one": "Compy made 1 change in this window that is still on. It can undo it:",
+        "intro_other": "Compy made {{count}} changes in this window that are still on. It can undo them, newest first:",
+        "maybeNotCause": "This puts Compy's changes back; it may or may not be the cause.",
+        "button": "Put back how it was on {{date}}",
+        "running": "Putting Compy's changes back…",
+        "confirmTitle": "Put back how it was on {{date}}?",
+        "confirmBody_one": "Compy will undo 1 change it made: {{titles}}. This puts Compy's changes back; it may or may not be the cause.",
+        "confirmBody_other": "Compy will undo {{count}} changes it made, one at a time, newest first: {{titles}}. This puts Compy's changes back; it may or may not be the cause.",
+        "confirmLabel": "Undo these changes",
+        "notLive": "Not offered: {{titles}}. Compy can't confirm these are still on, so it won't undo them from here.",
+        "notRecorded": "Compy didn't make or record this change, so it can't put it back.",
+        "summaryAll_one": "Put back 1 of Compy's changes.",
+        "summaryAll_other": "Put back all {{count}} of Compy's changes.",
+        "summaryPartial": "Put back {{done}} of {{total}} of Compy's changes. Compy stopped at the problem below; anything not undone is still on, and you can undo it from Applied & history.",
+        "summaryNone": "Nothing was undone. Compy's changes are still on, and you can undo them from Applied & history.",
+        "result": {
+          "undone": "Undone: {{title}}",
+          "unrecorded": "{{title}}: the undo ran on Windows, but Compy couldn't save it to its history. Check the setting in Windows if unsure.",
+          "failed": "Couldn't undo {{title}}. It's still on.",
+          "notTried": "Not tried: {{title}}. Compy stopped after the problem above."
+        }
       }
     },
     "introPre": "Crash & Freeze reads the crash and freeze evidence Windows already recorded, and overlays Compy's own",

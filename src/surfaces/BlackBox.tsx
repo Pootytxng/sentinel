@@ -6,6 +6,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
 import type {
+  AppliedChange,
   BlackBoxReport,
   CrashIncident,
   CrashAssessment,
@@ -15,15 +16,24 @@ import type {
 } from "../types";
 import { resolutionFor, type HelpMark } from "../data/blackbox-resolution";
 import { StutterCompare } from "./StutterCompare";
+import { writeLedger } from "../data/ledger-write";
+import { useConfirmOptional } from "../design/ConfirmDialog";
+import { LEDGER_CHANGED_EVENT } from "../types";
+import { restorePlan, runRestore, type RestoreResult } from "./changed-before-restore";
 import "./BlackBox.css";
 
-// Black Box v1 (Paramedic Mode) — READ-ONLY crash/freeze evidence reader, rendered as a Lab
-// instrument. On-demand scan only (no background watcher in v1). It reports the evidence Windows
-// recorded + Compy's own "last vitals" — and makes ZERO causal claims. The receipt expander holds
-// the raw IDs/module/code; plain English up top (Sarah & Caleb bar).
+// Black Box v1 (Paramedic Mode) — crash/freeze evidence reader, rendered as a Lab instrument.
+// On-demand scan only (no background watcher in v1). It reports the evidence Windows recorded +
+// Compy's own "last vitals" — and makes ZERO causal claims. The receipt expander holds the raw
+// IDs/module/code; plain English up top (Sarah & Caleb bar). Its one write is P6-restore's "Put
+// back how it was": Compy's own still-live changes from the window, undone after a confirm through
+// the same audited ledger undo the Trust Ledger uses.
 export function BlackBox({
   onReport,
   selectedIncidentId,
+  changes,
+  onChanged,
+  ledgerBusy = false,
 }: {
   // Feeds the scan result up (V2 Lab's latest-readings strip) — same read, no second IPC.
   onReport?: (r: BlackBoxReport) => void;
@@ -31,6 +41,13 @@ export function BlackBox({
    *  When present the station scans on mount instead of waiting for a click — a user who followed
    *  "Find out why" already asked the question, and making them press Scan is asking it twice. */
   selectedIncidentId?: string | null;
+  /** Every Trust Ledger row (App's list). Without it the station offers no "Put back": it can't
+   *  tell which of Compy's changes are still on. */
+  changes?: AppliedChange[];
+  /** App's refresh, run after anything was undone so the ledger lists re-read. */
+  onChanged?: () => Promise<unknown> | void;
+  /** Another apply or undo is in flight elsewhere: one ledger write at a time. */
+  ledgerBusy?: boolean;
 } = {}) {
   const { t } = useTranslation();
   const [report, setReport] = useState<BlackBoxReport | null>(null);
@@ -48,6 +65,16 @@ export function BlackBox({
       .catch(() => setError(t("gaming.blackBox.scanErrorMsg")))
       .finally(() => setScanning(false));
   };
+
+  // Re-read after a "Put back" without the scanning state, so the rows (and the result the user is
+  // reading) stay mounted. A failed re-read keeps the last report rather than blanking it.
+  const rescan = () =>
+    invoke<BlackBoxReport>("get_crash_blackbox")
+      .then((r) => {
+        setReport(r);
+        onReport?.(r);
+      })
+      .catch(() => undefined);
 
   // Arrive-and-scan, once, only on a deep-link. The scan itself is the SAME on-demand read a click
   // makes — no watcher, no cadence, no second IPC shape.
@@ -100,6 +127,12 @@ export function BlackBox({
                   inc={inc}
                   allIncidents={report.incidents}
                   selected={!!selectedIncidentId && inc.incident_id === selectedIncidentId}
+                  changes={changes}
+                  ledgerBusy={ledgerBusy}
+                  onRestored={async () => {
+                    await onChanged?.();
+                    await rescan();
+                  }}
                 />
               ))}
             </ul>
@@ -129,9 +162,15 @@ function IncidentRow({
   inc,
   allIncidents,
   selected = false,
+  changes,
+  ledgerBusy = false,
+  onRestored,
 }: {
   inc: CrashIncident;
   allIncidents: CrashIncident[];
+  changes?: AppliedChange[];
+  ledgerBusy?: boolean;
+  onRestored?: () => Promise<void>;
   /** This is the exact incident the user was routed here to see. Marked, and scrolled into view —
    *  a deep-link that lands the user in a list of twenty-five rows has not actually arrived. */
   selected?: boolean;
@@ -162,7 +201,14 @@ function IncidentRow({
         </div>
       )}
 
-      {inc.changed_before && <ChangedBeforeBlock cb={inc.changed_before} />}
+      {inc.changed_before && (
+        <ChangedBeforeBlock
+          cb={inc.changed_before}
+          changes={changes}
+          ledgerBusy={ledgerBusy}
+          onRestored={onRestored}
+        />
+      )}
 
       {/* Black Box v2 (only present when blackbox_v2_gate() is ON): triage — consistent-with + a
           strength WORD (never a percentage) + the evidence + ONE reversible next step. v2.1 adds the
@@ -460,7 +506,17 @@ function fmtWhen(iso: string, lang: string): string {
   return d.toLocaleString(lang, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function ChangedBeforeBlock({ cb }: { cb: ChangedBeforeIncident }) {
+function ChangedBeforeBlock({
+  cb,
+  changes,
+  ledgerBusy = false,
+  onRestored,
+}: {
+  cb: ChangedBeforeIncident;
+  changes?: AppliedChange[];
+  ledgerBusy?: boolean;
+  onRestored?: () => Promise<void>;
+}) {
   const { t, i18n } = useTranslation();
   const when = (iso: string) => fmtWhen(iso, i18n.language);
   return (
@@ -484,6 +540,118 @@ function ChangedBeforeBlock({ cb }: { cb: ChangedBeforeIncident }) {
             <ChangedBeforeRow key={it.category} it={it} when={when} />
           ))}
         </ul>
+      )}
+      <RestoreOffer cb={cb} changes={changes} ledgerBusy={ledgerBusy} onRestored={onRestored} when={when} />
+    </div>
+  );
+}
+
+// P6-restore: "Put back how it was on <date>". Lists the changes, confirms, then undoes them one at
+// a time, newest first, and says what happened to each. It never says this fixes the problem.
+function RestoreOffer({
+  cb,
+  changes,
+  ledgerBusy,
+  onRestored,
+  when,
+}: {
+  cb: ChangedBeforeIncident;
+  changes?: AppliedChange[];
+  ledgerBusy: boolean;
+  onRestored?: () => Promise<void>;
+  when: (iso: string) => string;
+}) {
+  const { t } = useTranslation();
+  const confirm = useConfirmOptional();
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState<RestoreResult[] | null>(null);
+  const plan = restorePlan(cb, changes);
+  if (!plan && !results) return null;
+  const date = plan ? when(plan.date) : "";
+  const offer = plan?.offer ?? [];
+
+  const go = async () => {
+    if (!confirm || offer.length === 0) return;
+    const titles = offer.map((c) => c.rec_title).join("; ");
+    const ok = await confirm({
+      title: t("gaming.blackBox.changedBefore.restore.confirmTitle", { date }),
+      body: t("gaming.blackBox.changedBefore.restore.confirmBody", { count: offer.length, titles }),
+      confirmLabel: t("gaming.blackBox.changedBefore.restore.confirmLabel"),
+    });
+    if (!ok) return;
+    setRunning(true);
+    let announced = false;
+    const out = await runRestore(offer, async (c) => {
+      await writeLedger("rollback_change", { changeId: c.id });
+      announced = true;
+    });
+    // An undo that ran but couldn't be saved changed Windows too: every ledger reader re-reads.
+    const ran = out.some((r) => r.outcome === "undone" || r.outcome === "unrecorded");
+    if (ran && !announced) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
+    setResults(out);
+    if (ran) await onRestored?.();
+    setRunning(false);
+  };
+
+  const done = results?.filter((r) => r.outcome === "undone" || r.outcome === "unrecorded").length ?? 0;
+  return (
+    <div className="bb-restore">
+      {plan && offer.length > 0 && !results && (
+        <>
+          <p className="bb-restore-intro">
+            {t("gaming.blackBox.changedBefore.restore.intro", { count: offer.length })}
+          </p>
+          <ul className="bb-restore-list">
+            {offer.map((c) => (
+              <li key={c.id}>{c.rec_title}</li>
+            ))}
+          </ul>
+          <p className="bb-restore-maybe">{t("gaming.blackBox.changedBefore.restore.maybeNotCause")}</p>
+          {confirm && (
+            <button
+              type="button"
+              className="bb-restore-btn"
+              onClick={go}
+              disabled={running || ledgerBusy}
+            >
+              {running
+                ? t("gaming.blackBox.changedBefore.restore.running")
+                : t("gaming.blackBox.changedBefore.restore.button", { date })}
+            </button>
+          )}
+        </>
+      )}
+      {plan && plan.notLive.length > 0 && !results && (
+        <p className="bb-restore-notlive">
+          {t("gaming.blackBox.changedBefore.restore.notLive", { titles: plan.notLive.join("; ") })}
+        </p>
+      )}
+      {results && (
+        <div className="bb-restore-results" role="status">
+          <p className="bb-restore-summary">
+            {done === 0
+              ? t("gaming.blackBox.changedBefore.restore.summaryNone")
+              : done === results.length
+              ? t("gaming.blackBox.changedBefore.restore.summaryAll", { count: done })
+              : t("gaming.blackBox.changedBefore.restore.summaryPartial", { done, total: results.length })}
+          </p>
+          <ul className="bb-restore-list">
+            {results.map((r) => (
+              <li key={r.id} data-outcome={r.outcome}>
+                {r.outcome === "undone"
+                  ? t("gaming.blackBox.changedBefore.restore.result.undone", { title: r.title })
+                  : r.outcome === "unrecorded"
+                  ? t("gaming.blackBox.changedBefore.restore.result.unrecorded", { title: r.title })
+                  : r.outcome === "failed"
+                  ? t("gaming.blackBox.changedBefore.restore.result.failed", { title: r.title })
+                  : t("gaming.blackBox.changedBefore.restore.result.notTried", { title: r.title })}
+              </li>
+            ))}
+          </ul>
+          {done > 0 && (
+            <p className="bb-restore-maybe">{t("gaming.blackBox.changedBefore.restore.maybeNotCause")}</p>
+          )}
+        </div>
       )}
     </div>
   );
@@ -515,6 +683,9 @@ function ChangedBeforeRow({ it, when }: { it: ChangedBeforeItem; when: (iso: str
         <span className="bb-changed-tag">{t("gaming.blackBox.changedBefore.notProven")}</span>
       </div>
       <p className="bb-changed-line">{line}</p>
+      {it.category !== "compy-changes" && it.events.length > 0 && (
+        <p className="bb-changed-norestore">{t("gaming.blackBox.changedBefore.restore.notRecorded")}</p>
+      )}
       {it.events.length > 0 && (
         <ul className="bb-changed-events">
           {it.events.map((e) => (
