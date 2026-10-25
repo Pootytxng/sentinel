@@ -524,6 +524,34 @@
     "noiseMeasured": "按 Compy 固定的 {{band}}% 噪声下限判定。在你电脑上一次 25 秒的校准中，这款游戏的 1% 低帧波动为 ±{{measured}}%。该数值暂不用于判定，且未检查游戏版本。",
     "noiseStaleChanged": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的波动是在驱动或 Windows 更新之前测量的，因此未采用。未检查游戏版本。",
     "noiseStaleUnconfirmed": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的波动已测量过，但 Compy 无法确认此后没有变化，因此未采用。未检查游戏版本。",
-    "noiseNotRecorded_other": "标记的结果没有保存噪声下限记录。"
+    "noiseNotRecorded_other": "标记的结果没有保存噪声下限记录。",
+    "summary": {
+      "label": "Compy 在 {{game}} 上测试过的内容",
+      "testedWhatMattered": "在这台主机上，{{game}} 值得测试的都已测试过：Compy 列为值得在这里测试的每一项更改都有了结果。",
+      "stillWorth_other": "{{game}} 上还有 {{count}} 项更改值得测试，所以还没有测完。",
+      "unknownLeft": "Compy 无法读取哪些更改仍值得测试，所以无法判断是否还有剩余。",
+      "testedLabel": "已测试：",
+      "trials_other": "测试了 {{count}} 次",
+      "stillOn": "目前已应用。",
+      "stillCantConfirm": "Compy 之前应用过，但无法确认现在是否仍然生效。",
+      "stillOff": "目前未应用。",
+      "stillUnknown": "无法读取目前是否已应用。",
+      "contextChanged": "测试时的显卡驱动或 Windows 版本与现在不同，这个结果可能已不再成立。",
+      "staysLabel": "这些测试中保留应用的更改：",
+      "staysNone": "这些测试中没有保留应用的更改。",
+      "cantConfirmList": "无法确认以下更改是否仍然生效：",
+      "leftLabel": "仍值得测试：",
+      "skippedLabel": "未测试的更改及原因（{{count}}）",
+      "noiseLabel": "噪声范围：",
+      "contextLabel": "测量环境：",
+      "contextDriver": "驱动 {{driver}}",
+      "contextWindows": "Windows 版本 {{build}}",
+      "contextSeparator": " · ",
+      "contextUnknown": "Compy 没有 {{game}} 记录的硬件信息。",
+      "readOnly": "这份总结只读取 Compy 自己的记录，不会改动任何东西。",
+      "row": "{{title}}：{{text}}",
+      "stillSetNotByCompy": "Windows 里目前是这个设置，但不是 Compy 的更改设置的。",
+      "stillGamingMode": "目前由 Compy 的游戏模式为本次会话设置。"
+    }
   }
 }

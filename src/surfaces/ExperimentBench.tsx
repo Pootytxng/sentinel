@@ -19,6 +19,7 @@ import { knownFps } from "../lib/session-metrics";
 import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
+import { summarizeGame, type GameTestSummary, type StillApplied, type TestedChange } from "./test-summary";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -694,6 +695,18 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const nextUp = nextTested ? ranked.find((r) => !nextTested.has(r.id)) ?? null : null;
   const noEffectStated = recs.every((r) => r.stated_effect_pct == null);
 
+  // P4-exit: the per-game summary, for the game just tested, else the bench's baseline game, else the
+  // newest game with a judged Trial. Only a game with a judged Trial has one.
+  const summaryGames = [
+    concluded?.game,
+    baseline?.process_name,
+    ...[...history].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).map((x) => x.game),
+  ].filter((g): g is string => !!g);
+  const summary =
+    summaryGames
+      .map((g) => summarizeGame(g, experiments, recsLoaded ? recs : null, sessions))
+      .find((s) => s != null) ?? null;
+
   // If a refocus-refresh just re-derived the active pick as already-applied (it drops out of `pickable`),
   // keep it in the dropdown so its honest "already configured" verdict stays on screen — the selection
   // must not silently vanish while its simulator card is still showing.
@@ -1079,6 +1092,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
         </div>
       )}
 
+      {summary && <TestSummary s={summary} />}
+
       {history.length > 0 && (
         <div className="exp-history">
           <SectionLabel>{t("lab.experimentBench.pastExperiments")}</SectionLabel>
@@ -1148,6 +1163,122 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
       )}
       </div>
     </BentoTile>
+  );
+}
+
+const STILL_APPLIED_KEY: Record<StillApplied, string> = {
+  on: "lab.experimentBench.summary.stillOn",
+  "cant-confirm": "lab.experimentBench.summary.stillCantConfirm",
+  off: "lab.experimentBench.summary.stillOff",
+  "set-not-by-compy": "lab.experimentBench.summary.stillSetNotByCompy",
+  "gaming-mode": "lab.experimentBench.summary.stillGamingMode",
+  unknown: "lab.experimentBench.summary.stillUnknown",
+};
+
+// P4-exit (ROADMAP Phase 4 exit): "We tested what mattered on this PC" for one game. Read-only: every
+// line comes from test-summary.ts over records Compy already keeps. Confidence is the verdict's own
+// band (unknown/low/medium/high); the only percentages are noise bands Compy measured or its stated
+// minimum.
+function TestSummary({ s }: { s: GameTestSummary }) {
+  const { t } = useTranslation();
+  const game = prettyGameName(s.game) || s.game;
+  const verdicts = verdictCopy(t);
+  const conf = confidenceCopy(t);
+  const sep = t("lab.experimentBench.summary.contextSeparator");
+  const list = t("lab.experimentBench.pairListSeparator");
+  const noiseLines = [...new Set(s.tested.filter((r) => r.noise).map((r) => noiseLine(r.noise!, s.game, t)))];
+  const unjudged = s.tested.filter((r) => !r.noise).length;
+  const names = (rows: { title: string }[]) => rows.map((r) => r.title).join(list);
+  const ctx = s.context;
+  const ctxParts = ctx
+    ? [
+        game,
+        ctx.gpu,
+        ctx.driver && t("lab.experimentBench.summary.contextDriver", { driver: ctx.driver }),
+        ctx.windowsBuild && t("lab.experimentBench.summary.contextWindows", { build: ctx.windowsBuild }),
+        ctx.display,
+      ].filter((p): p is string => !!p)
+    : [];
+  // Each line is ONE string: the bench's own rows above and below say the same titles and noise
+  // sentences, and a summary line is a summary, not a second copy of those rows.
+  const testedLine = (r: TestedChange) =>
+    [
+      t("lab.experimentBench.summary.row", { title: r.title, text: verdicts[r.verdict] ?? r.verdict }),
+      conf[r.confidence ?? "unknown"],
+      ...(r.trials > 1 ? [t("lab.experimentBench.summary.trials", { count: r.trials })] : []),
+    ].join(sep) +
+    ` ${t(STILL_APPLIED_KEY[r.stillApplied])}` +
+    (r.sameContext === false ? ` ${t("lab.experimentBench.summary.contextChanged")}` : "");
+  const skippedLine = (r: GameTestSummary["skipped"][number]) => {
+    const why =
+      r.reason && r.reason in SKIP_REASON_KEY
+        ? t(SKIP_REASON_KEY[r.reason as SkipReason], {
+            effect: r.too_small?.effect_pct.toFixed(1),
+            band: r.too_small?.band_pct.toFixed(1),
+          })
+        : "";
+    const text = [why, r.detail ?? ""].filter((x) => x !== "").join(" ");
+    return t("lab.experimentBench.summary.row", { title: r.title, text });
+  };
+  return (
+    <div className="exp-order exp-summary" data-testid="exp-summary" data-headline={s.headline}>
+      <SectionLabel>{t("lab.experimentBench.summary.label", { game })}</SectionLabel>
+      <p className="exp-note" data-testid="exp-summary-headline">
+        {s.headline === "tested-what-mattered"
+          ? t("lab.experimentBench.summary.testedWhatMattered", { game })
+          : s.headline === "still-worth-testing"
+            ? t("lab.experimentBench.summary.stillWorth", { count: s.leftToTest.length, game })
+            : t("lab.experimentBench.summary.unknownLeft")}
+      </p>
+      <p className="exp-order-label">{t("lab.experimentBench.summary.testedLabel")}</p>
+      <ul className="exp-why-list" data-testid="exp-summary-tested">
+        {s.tested.map((r) => (
+          <li key={r.recId} data-rec={r.recId} data-still={r.stillApplied}>
+            {testedLine(r)}
+          </li>
+        ))}
+      </ul>
+      <p className="exp-note" data-testid="exp-summary-stays">
+        {s.staysApplied.length > 0
+          ? `${t("lab.experimentBench.summary.staysLabel")} ${names(s.staysApplied)}`
+          : t("lab.experimentBench.summary.staysNone")}
+      </p>
+      {s.cantConfirm.length > 0 && (
+        <p className="exp-note">{`${t("lab.experimentBench.summary.cantConfirmList")} ${names(s.cantConfirm)}`}</p>
+      )}
+      {s.leftToTest.length > 0 && (
+        <p className="exp-note" data-testid="exp-summary-left">
+          {`${t("lab.experimentBench.summary.leftLabel")} ${names(s.leftToTest)}`}
+        </p>
+      )}
+      {s.skipped.length > 0 && (
+        <details className="exp-why" data-testid="exp-summary-skipped">
+          <summary className="exp-why-toggle">
+            {t("lab.experimentBench.summary.skippedLabel", { count: s.skipped.length })}
+          </summary>
+          <ul className="exp-why-list">
+            {s.skipped.map((r) => (
+              <li key={r.id} data-rec={r.id}>
+                {skippedLine(r)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <p className="exp-fineprint" data-testid="exp-summary-noise">
+        {[
+          t("lab.experimentBench.summary.noiseLabel"),
+          ...noiseLines,
+          ...(unjudged > 0 ? [t("lab.experimentBench.noiseNotRecorded", { count: unjudged })] : []),
+        ].join(" ")}
+      </p>
+      <p className="exp-fineprint" data-testid="exp-summary-context">
+        {`${t("lab.experimentBench.summary.contextLabel")} ${
+          ctxParts.length > 0 ? ctxParts.join(sep) : t("lab.experimentBench.summary.contextUnknown", { game })
+        }`}
+      </p>
+      <p className="exp-fineprint">{t("lab.experimentBench.summary.readOnly")}</p>
+    </div>
   );
 }
 

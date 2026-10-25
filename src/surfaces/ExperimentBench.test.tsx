@@ -1650,3 +1650,78 @@ describe("ExperimentBench — the next change to test after a Trial", () => {
     expect(screen.queryByTestId("exp-next")).toBeNull();
   });
 });
+
+// P4-exit (ROADMAP Phase 4 exit): the per-game summary on the bench, on the owner's real WARDOGS
+// records. It reads; it never offers a write.
+describe("P4-exit: what Compy tested on this game", () => {
+  const owner = async () => (await import("../test/fixtures/wardogs-p4-exit.json")).default;
+  const pass = (id: string, title: string, position: number) => ({ id, title, passes: true, reason: null, detail: null, position, evidence: "not-measured", risk: "low" });
+
+  async function renderOwner(recs: unknown[]) {
+    const f = await owner();
+    state.gate = true;
+    state.experiments = f.experiments;
+    state.sessions = f.sessions;
+    state.recs = recs;
+    render(<ExperimentBench />);
+    return screen.findByTestId("exp-summary");
+  }
+
+  it("on the owner's WARDOGS data: Slower, restored, medium confidence, not applied; one more worth testing", async () => {
+    const panel = await renderOwner([
+      pass("mouse-accel-off", "Turn off mouse acceleration", 1),
+      pass("visual-effects", "Trim Windows visual effects", 2),
+      { id: "game-bar-disable", title: "Turn off Game Bar", passes: false, reason: "already-set", detail: null },
+    ]);
+    expect(panel).toHaveTextContent("What Compy tested on WardogsClient");
+    expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent(
+      "1 more change is still worth testing on WardogsClient, so this isn't finished yet.",
+    );
+    expect(panel).not.toHaveTextContent("We tested what mattered");
+    const tested = screen.getByTestId("exp-summary-tested");
+    expect(tested).toHaveTextContent("Trim Windows visual effects: Slower — restored · confidence: medium Not applied now.");
+    expect(screen.getByTestId("exp-summary-stays")).toHaveTextContent("Nothing from these tests stays applied.");
+    expect(screen.getByTestId("exp-summary-left")).toHaveTextContent("Turn off mouse acceleration");
+    expect(screen.getByTestId("exp-summary-skipped")).toHaveTextContent("Turn off Game Bar: Already set this way in Windows, not by Compy.");
+    expect(screen.getByTestId("exp-summary-noise")).toHaveTextContent(
+      "Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
+    );
+    expect(screen.getByTestId("exp-summary-context")).toHaveTextContent(
+      "WardogsClient · AMD Radeon RX 9070 XT · driver 32.0.32015.7029 · Windows build 26200.8457 · 1920x1080@250",
+    );
+    // No percentage Compy didn't measure: the only one is the stated 3% minimum band.
+    expect(panel.textContent!.match(/[\d.]+\s*%/g)).toEqual(["3%"]);
+    // Read-only: the panel has no button.
+    expect(panel.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("says 'We tested what mattered' only when the picker has nothing untested left", async () => {
+    const panel = await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
+    expect(panel).toHaveAttribute("data-headline", "tested-what-mattered");
+    expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("We tested what mattered on this PC for WardogsClient");
+  });
+
+  it("never claims it when the picker's list couldn't be read, nor 'not applied' without it", async () => {
+    const f = await owner();
+    state.gate = true;
+    state.experiments = f.experiments;
+    state.sessions = f.sessions;
+    state.recs = null as unknown as unknown[];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    expect(panel).toHaveAttribute("data-headline", "unknown");
+    expect(panel).not.toHaveTextContent("We tested what mattered");
+    expect(screen.getByTestId("exp-summary-tested")).toHaveTextContent("Couldn't read whether it's applied now.");
+  });
+
+  it("reads in Chinese too", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
+      expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("值得测试的都已测试过");
+      expect(screen.getByTestId("exp-summary-tested")).toHaveTextContent("目前未应用。");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});

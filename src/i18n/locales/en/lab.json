@@ -530,6 +530,36 @@
     "noiseStaleChanged": "Judged against Compy's {{band}}% noise floor. This game's spread on your PC was measured before a driver or Windows update, so it wasn't used. The game version isn't checked.",
     "noiseStaleUnconfirmed": "Judged against Compy's {{band}}% noise floor. This game's spread on your PC was measured, but Compy couldn't confirm nothing changed since, so it wasn't used. The game version isn't checked.",
     "noiseNotRecorded_one": "No noise-floor record was kept for this result.",
-    "noiseNotRecorded_other": "No noise-floor record was kept for these results."
+    "noiseNotRecorded_other": "No noise-floor record was kept for these results.",
+    "summary": {
+      "label": "What Compy tested on {{game}}",
+      "testedWhatMattered": "We tested what mattered on this PC for {{game}}: every change Compy lists as worth testing here has a result.",
+      "stillWorth_one": "{{count}} more change is still worth testing on {{game}}, so this isn't finished yet.",
+      "stillWorth_other": "{{count}} more changes are still worth testing on {{game}}, so this isn't finished yet.",
+      "unknownLeft": "Compy couldn't read which changes are still worth testing, so it can't say whether anything is left.",
+      "testedLabel": "Tested:",
+      "trials_one": "tested {{count}} time",
+      "trials_other": "tested {{count}} times",
+      "stillOn": "Applied now.",
+      "stillCantConfirm": "Compy applied it earlier and can't confirm it's still on.",
+      "stillOff": "Not applied now.",
+      "stillUnknown": "Couldn't read whether it's applied now.",
+      "contextChanged": "Tested under a different graphics driver or Windows build than now, so this result may no longer hold.",
+      "staysLabel": "Stays applied from these tests:",
+      "staysNone": "Nothing from these tests stays applied.",
+      "cantConfirmList": "Can't confirm whether these are still on:",
+      "leftLabel": "Still worth testing:",
+      "skippedLabel": "Not tested, and why ({{count}})",
+      "noiseLabel": "Noise band:",
+      "contextLabel": "Measured on:",
+      "contextDriver": "driver {{driver}}",
+      "contextWindows": "Windows build {{build}}",
+      "contextSeparator": " · ",
+      "contextUnknown": "Compy has no recorded rig details for {{game}}.",
+      "readOnly": "This summary only reads Compy's own records. It changes nothing.",
+      "row": "{{title}}: {{text}}",
+      "stillSetNotByCompy": "Set now in Windows, but not by Compy's change.",
+      "stillGamingMode": "Set now by Compy's Gaming Mode for this session."
+    }
   }
 }
