@@ -38,6 +38,7 @@ describe("the journey's baseline-refusal match is pinned to experiment.rs", () =
       resolve_baseline: [
         "the baseline session isn't in your session history any more — play a monitored session, then try again",
         "two sessions in your history share that baseline's start time, so Compy can't tell which one to use",
+        "the baseline session measured nothing: another window was in front the whole time — play a session with the game in front, then try again",
         "the baseline session has no frame-rate reading, so there's nothing to compare the change against",
         "the baseline session didn't record which game was running, so there's no game to measure the change in",
       ],

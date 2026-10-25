@@ -218,6 +218,24 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(calls("conclude_experiment")).toHaveLength(0);
   });
 
+  it("a session behind another window the whole time says so, as-is or with the change (P4-show-f1)", async () => {
+    const behind = (at: string) => ({ ...session(at, 0), avg_fps: 0, low1_fps_est: 0, fps_series: [], background_secs_excluded: 900 });
+    state.saves = [behind(later(1))];
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe(
+      "Compy didn't get a reading from that session: another window was in front the whole time. Nothing was changed.",
+    );
+    expect(calls("start_experiment")).toHaveLength(0);
+    cleanup();
+    resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+    state.saves = [session(later(3), 5400), behind(later(4))];
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toMatch(/another window was in front the whole time, so Compy put HAGS back/);
+    expect(calls("conclude_experiment")).toHaveLength(0);
+  });
+
   it("a too-short as-is session changes nothing", async () => {
     state.saves = [session(later(1), 200)];
     render(<ExperimentBench />);

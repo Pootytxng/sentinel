@@ -32,6 +32,13 @@ describe("computeSessionTrends", () => {
     expect(t.trend).toBeNull();
   });
 
+  it("skips a session that was behind another window the whole time (P4-show-f1)", () => {
+    const behind = { ...s("game.exe", 1), samples: 0, avg_fps: 0, low1_fps_est: 0, background_secs_excluded: 900 } as SessionSummary;
+    const t = computeSessionTrends([behind, s("game.exe", 150), s("game.exe", 120)]);
+    expect(t.total).toBe(2);
+    expect(t.games[0]).toMatchObject({ sessions: 2, lastAvgFps: 150 });
+  });
+
   it("groups per game, keeps the best avg and the most-recent (first) avg", () => {
     // newest-first
     const t = computeSessionTrends([s("game.exe", 150), s("game.exe", 120), s("other.exe", 90)]);

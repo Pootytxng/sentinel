@@ -178,4 +178,10 @@ describe("liveStrip (real last session or honest empty)", () => {
       expect(s.peakTempC).toBe(71);
     }
   });
+
+  it("never quotes a GPU peak from a session behind another window the whole time (P4-show-f1)", () => {
+    const behind = { ...session("2026-06-05T10:00:00Z", 1), samples: 0, avg_fps: 0, low1_fps_est: 0, background_secs_excluded: 900 };
+    const s = liveStrip([session("2026-06-01T10:00:00Z", 120), behind]);
+    expect(s.kind === "data" && [s.avgFps, s.low1Est, s.peakTempC]).toEqual([null, null, null]);
+  });
 });

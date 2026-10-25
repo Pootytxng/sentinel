@@ -1261,7 +1261,7 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                     prev_procs = Some(names);
                 }
             }
-            if acc.has_data() {
+            if acc.worth_saving() {
                 let mut summary = acc.finalize(start.elapsed().as_secs());
                 summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
                 summary.gaming_mode_active = Some(gaming_mode_seen);

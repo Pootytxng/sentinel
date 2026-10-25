@@ -55,6 +55,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
+import { allBackground } from "../lib/session-metrics";
 import { writeLedger } from "../data/ledger-write";
 import { prettyGameName } from "./game-name";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
@@ -102,10 +103,10 @@ export type JourneyPhase =
   | { kind: "judging"; change: string }
   /** `asIs`: the newest session measured as the PC is now, which the next journey may reuse. */
   | { kind: "result"; exp: JourneyExperiment; asIs: string | null }
-  | { kind: "too-short"; samples: number | null }
+  | { kind: "too-short"; samples: number | null; behind?: boolean }
   | { kind: "wrong-game"; played: string; planned: string }
   | { kind: "not-started"; reason: string }
-  | { kind: "restored"; change: string; why: "no-reading" | "error"; reason: string }
+  | { kind: "restored"; change: string; why: "no-reading" | "behind" | "error"; reason: string }
   | { kind: "restore-failed"; change: string; reason: string };
 
 type UnfitGrade = { kind: "uneven"; first: number; second: number } | { kind: "untraced" };
@@ -258,7 +259,9 @@ async function waitForSession(
     const found = (ss ?? [])
       .filter(
         (s) =>
-          usable(s) &&
+          // P4-show-f1: a session behind another window the whole time is returned too, so the
+          // journey can say why it has no reading.
+          (usable(s) || allBackground(s)) &&
           s.started_at !== not &&
           Date.parse(s.started_at) >= since - 1000 &&
           (game == null || s.process_name === game),
@@ -387,6 +390,7 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
             await args.refresh().catch(() => {});
             return say({ kind: "wrong-game", played: s.process_name, planned });
           }
+          if (s && allBackground(s)) return say({ kind: "too-short", samples: null, behind: true });
           if (!s || s.samples < MIN_BASELINE_SAMPLES) {
             return say({ kind: "too-short", samples: s ? s.samples : null });
           }
@@ -451,11 +455,12 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
     say({ kind: "judging", change: change.title });
     const after = await waitForSession(t1, trialGame, baseline.started_at, left);
     if (left()) return;
-    if (!after) {
-      // The game closed before Compy saved a reading: nothing to judge, so the change goes back.
+    if (!after || allBackground(after)) {
+      // The game closed before Compy saved a reading, or was behind another window the whole time:
+      // nothing to judge, so the change goes back.
       await writeLedger("restore_experiment", { experimentId: expId }, args.refresh);
       tagRunning(null);
-      return say({ kind: "restored", change: change.title, why: "no-reading", reason: "" });
+      return say({ kind: "restored", change: change.title, why: after ? "behind" : "no-reading", reason: "" });
     }
 
     // ── Verdict: conclude keeps only Better and restores everything else ──
@@ -687,7 +692,11 @@ export function GuidedJourney({
       line = resultLine(p.exp, t);
       break;
     case "too-short":
-      line = p.samples == null ? t(`${k}.noReading`) : t(`${k}.tooShort`, { count: p.samples, min: MIN_BASELINE_SAMPLES });
+      line = p.behind
+        ? t(`${k}.noReadingBehind`)
+        : p.samples == null
+          ? t(`${k}.noReading`)
+          : t(`${k}.tooShort`, { count: p.samples, min: MIN_BASELINE_SAMPLES });
       break;
     case "wrong-game":
       line = t(`${k}.wrongGame`, { played: gameName(p.played), planned: gameName(p.planned) });
@@ -696,7 +705,12 @@ export function GuidedJourney({
       line = t(`${k}.notStarted`, { reason: p.reason });
       break;
     case "restored":
-      line = p.why === "no-reading" ? t(`${k}.restoredNoReading`, { change: p.change }) : t(`${k}.restoredError`, { change: p.change, reason: p.reason });
+      line =
+        p.why === "no-reading"
+          ? t(`${k}.restoredNoReading`, { change: p.change })
+          : p.why === "behind"
+            ? t(`${k}.restoredBehind`, { change: p.change })
+            : t(`${k}.restoredError`, { change: p.change, reason: p.reason });
       break;
     case "restore-failed":
       line = t(`${k}.restoreFailed`, { change: p.change, reason: p.reason });

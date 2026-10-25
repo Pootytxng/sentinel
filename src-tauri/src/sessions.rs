@@ -244,6 +244,14 @@ impl SessionSummary {
         }
     }
 
+    /// P4-show-f1: the session measured nothing because the game was behind another window for
+    /// every tick (no reading, and seconds left out on that ground). Saved so the session list and
+    /// the Debrief can say why it has no numbers; every comparison, Trial, noise band, pattern and
+    /// hint skips it (`samples == 0`), since its averages are 0 standing for "not measured".
+    pub(crate) fn behind_the_whole_time(&self) -> bool {
+        self.samples == 0 && self.background_secs_excluded.is_some_and(|n| n > 0)
+    }
+
     /// Why this session has no count to compare, in words, for "didn't record how many …" lines.
     pub(crate) fn unrecorded_changes_reason(&self) -> &'static str {
         if self.compy_changes_per_change
@@ -310,6 +318,9 @@ pub(crate) struct SessionAccumulator {
     bucket_count: u32,
     /// Ticks the game presented with another window in front; `None` until the helper reports focus.
     background_secs_excluded: Option<u32>,
+    /// P4-show-f1: those ticks per presenting process, so a session that was behind another window
+    /// the whole time still names its game. Never folded into any measured number.
+    background_proc_counts: HashMap<String, u32>,
     /// P4-smooth-measure: each chain's last cumulative histogram reading, by histogram id: when it
     /// was read (session seconds) and one count per bucket, so the next reading of that chain adds
     /// only the frames since. Kept per chain so a report that flips between chains still counts;
@@ -350,6 +361,7 @@ impl SessionAccumulator {
             bucket_sum: 0.0,
             bucket_count: 0,
             background_secs_excluded: None,
+            background_proc_counts: HashMap::new(),
             hist_prev: HashMap::new(),
             pacing: HashMap::new(),
         }
@@ -409,6 +421,9 @@ impl SessionAccumulator {
         match foreground {
             Some(false) => {
                 *self.background_secs_excluded.get_or_insert(0) += 1;
+                if !process_name.is_empty() {
+                    *self.background_proc_counts.entry(process_name.to_string()).or_insert(0) += 1;
+                }
                 false
             }
             Some(true) => {
@@ -522,15 +537,22 @@ impl SessionAccumulator {
         CaptureProgress { started_at: self.started_at.clone(), samples: self.samples, fps_series }
     }
 
+    /// Is this session saved? When it measured play ([`Self::has_data`]), and also (P4-show-f1)
+    /// when capture ran, the game was found, and every tick was behind another window: a row with
+    /// no readings whose left-out seconds say why. Sensors alone, or a game that was never named,
+    /// still save nothing.
+    pub(crate) fn worth_saving(&self) -> bool {
+        self.has_data()
+            || (self.background_secs_excluded.is_some_and(|n| n > 0) && !self.background_proc_counts.is_empty())
+    }
+
     pub(crate) fn finalize(mut self, duration_secs: u64) -> SessionSummary {
         self.flush_bucket(); // the trailing partial bucket is real samples too
         let n = self.samples.max(1) as f64;
-        let process_name = self
-            .proc_counts
-            .into_iter()
-            .max_by_key(|(_, c)| *c)
-            .map(|(p, _)| p)
-            .unwrap_or_default();
+        let dominant = |m: HashMap<String, u32>| m.into_iter().max_by_key(|(_, c)| *c).map(|(p, _)| p);
+        // A session with no reading is named by the game that was behind the other window.
+        let background = if self.samples == 0 { dominant(self.background_proc_counts) } else { None };
+        let process_name = dominant(self.proc_counts).or(background).unwrap_or_default();
         let frame_pacing = self.pacing.get(&process_name).and_then(|c| FramePacing::from_counts(c));
         SessionSummary {
             started_at: self.started_at,
@@ -658,21 +680,31 @@ fn load_sessions_from(path: &Path) -> Vec<SessionSummary> {
 fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     let mut all = load_sessions_from(path);
     all.push(summary);
-    let len = all.len();
-    if len > MAX_SESSIONS {
-        all.drain(0..len - MAX_SESSIONS); // keep the most recent MAX_SESSIONS
+    // Keep at most MAX_SESSIONS rows (`machine_model`'s headroom counts on it). P4-show-f1: when a
+    // save goes over, a row that measured nothing (`samples == 0`) is let go before any measured
+    // one, oldest first, and the row just saved always stays. So a measured row is let go for an
+    // unmeasured one only when the one just saved is the only unmeasured row left; while the
+    // history isn't full, unmeasured rows simply take free slots.
+    while all.len() > MAX_SESSIONS {
+        let newest = all.len() - 1;
+        let drop = all[..newest].iter().position(|s| s.samples == 0).unwrap_or(0);
+        all.remove(drop);
     }
     // Keep the (large) frametime timeline only for the 5 most-recent sessions; older sessions retain
     // the insight + events but shed the per-second series so sessions.json + exports stay small.
-    let strip_before = all.len().saturating_sub(5);
-    for s in all.iter_mut().take(strip_before) {
-        s.stutter_timeline = Vec::new();
-    }
     // The downsampled fps series is ~10× smaller per hour, so it survives a wider window (the
-    // free Sessions view's 20) before it too is shed.
-    let series_strip_before = all.len().saturating_sub(FPS_SERIES_KEEP);
-    for s in all.iter_mut().take(series_strip_before) {
-        s.fps_series = Vec::new();
+    // free Sessions view's 20) before it too is shed. P4-show-f1: both windows count measured
+    // sessions only; a row that measured nothing has neither, so alt-tabbed sessions never strip
+    // the last measured session's detail.
+    let mut measured = 0usize;
+    for s in all.iter_mut().rev().filter(|s| s.samples > 0) {
+        measured += 1;
+        if measured > 5 {
+            s.stutter_timeline = Vec::new();
+        }
+        if measured > FPS_SERIES_KEEP {
+            s.fps_series = Vec::new();
+        }
     }
     let rows = all.iter().map(disk_row).collect::<Result<Vec<_>, _>>()?;
     let json = serde_json::to_string_pretty(&rows).map_err(|e| e.to_string())?;
@@ -682,6 +714,21 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+/// The newest row that measured play in `get_session_summaries` output serialized to JSON (newest
+/// first), for readers that take "the most recent session": a row with `samples: 0` (P4-show-f1,
+/// the game was behind another window the whole time) has no numbers to read, so it is skipped. A
+/// row without the key counts as measured.
+pub(crate) fn newest_measured_row(sessions: &serde_json::Value) -> Option<&serde_json::Value> {
+    sessions.as_array()?.iter().find(|s| s.get("samples").and_then(serde_json::Value::as_u64) != Some(0))
+}
+
+/// Does saving a session with `samples` readings trigger a Tier 2 receipt? Not when it measured
+/// nothing (P4-show-f1): the receipt is built from the newest measured session, so an armed build
+/// would re-send an older session's receipt.
+fn sends_receipt(samples: u32) -> bool {
+    samples > 0
 }
 
 /// Returns `Ok(true)` if a real session was saved, `Ok(false)` if it was dropped as too short — the
@@ -695,13 +742,16 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<bool, String> {
     std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
     // M4: if a comparison was armed for this game, compute the cross-session delta now.
     crate::comparison::on_session_finalized(&summary);
+    let measured_samples = summary.samples;
     save_session_to(&sessions_path(), summary)?;
     // Tier 2 receipts (Q9a, #217): a finalized session is the ONLY thing that produces a receipt,
     // so this is the only trigger. Inert in every shipped build — it returns on receipts_gate()
     // before it reads consent, spawns anything, or touches the network. The call site lands in the
     // dark commit on purpose, so arming stays a one-line owner-signed flip rather than a
     // behavioural diff nobody reviewed.
-    crate::receipts::on_session_finalized();
+    if sends_receipt(measured_samples) {
+        crate::receipts::on_session_finalized();
+    }
     // Care trigger 3 of 3 (Tier 1 task 9): a session that just ended is the likeliest moment for a
     // crash to have been recorded, so the observer gets one targeted look. Throttled like the
     // foreground trigger, off-thread, and it cannot fail this save — `scan_async` swallows
@@ -891,11 +941,166 @@ mod session_tests {
         assert_eq!(b.background_secs_excluded, Some(15));
     }
 
+    /// A session spent behind another window, as the monitoring loop would build it: 90 ticks of the
+    /// game presenting with the browser in front.
+    fn behind_the_whole_time(started_at: &str) -> SessionAccumulator {
+        let mut acc = SessionAccumulator::new(started_at.into(), Some(0));
+        for t in 0..90u32 {
+            // Never a measured tick, so the recorder publishes no P5-enough progress for it.
+            assert!(!acc.record_tick("game.exe", 30.0, 33.3, 20.0, t, Some(false)));
+            acc.record_sensors(Some(55), Some(40), None, None);
+        }
+        assert_eq!(acc.progress().samples, 0);
+        acc
+    }
+
+    /// P4-show-f1: a session whose game was behind another window for every tick has no reading, but
+    /// it is saved, named by its game, so the session list and Debrief can say why it is empty.
     #[test]
-    fn a_session_that_was_only_in_the_background_has_no_data() {
-        let mut acc = SessionAccumulator::new("2026-10-25T00:00:00Z".into(), Some(0));
-        acc.record_tick("game.exe", 120.0, 8.3, 90.0, 0, Some(false));
-        assert!(!acc.has_data());
+    fn a_session_behind_another_window_the_whole_time_is_saved_with_no_readings() {
+        let acc = behind_the_whole_time("2026-10-25T00:00:00Z");
+        assert!(!acc.has_data(), "nothing was measured");
+        assert!(acc.worth_saving(), "but it is saved, so the UI can say why");
+        let s = acc.finalize(90);
+        assert_eq!(s.process_name, "game.exe", "named by the game that was behind the other window");
+        assert_eq!((s.samples, s.background_secs_excluded), (0, Some(90)));
+        assert_eq!((s.avg_fps, s.low1_fps_est, s.avg_frametime_ms), (0.0, 0.0, 0.0), "no number from the background");
+        assert!(s.fps_series.is_empty() && s.frame_pacing.is_none());
+        assert!(s.behind_the_whole_time());
+        // Without a named game, or without a focus reading, there is still nothing to save.
+        let mut unnamed = SessionAccumulator::new("t".into(), Some(0));
+        unnamed.record_tick("", 30.0, 33.3, 20.0, 0, Some(false));
+        assert!(!unnamed.worth_saving());
+        let mut sensors = SessionAccumulator::new("t".into(), Some(0));
+        sensors.record_sensors(Some(55), Some(40), None, None);
+        assert!(!sensors.worth_saving());
+        // A session with play is named by the played game, never by one only seen behind.
+        let mut mixed = SessionAccumulator::new("t".into(), Some(0));
+        for t in 0..5u32 {
+            mixed.record_tick("other.exe", 30.0, 33.3, 20.0, t, Some(false));
+        }
+        mixed.record_tick("game.exe", 120.0, 8.3, 90.0, 5, Some(true));
+        let m = mixed.finalize(10);
+        assert_eq!(m.process_name, "game.exe");
+        assert!(!m.behind_the_whole_time());
+    }
+
+    /// An older Compy reads the zero-sample row like any other: every number it requires is there and
+    /// finite, so it neither fails to load sessions.json nor sets it aside as corrupt.
+    #[test]
+    fn an_older_compy_loads_a_zero_sample_row() {
+        let path = std::env::temp_dir().join(format!("compy-sessions-zero-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let mut played = SessionAccumulator::new("2026-10-24T00:00:00Z".into(), Some(0));
+        played.record_tick("game.exe", 120.0, 8.3, 90.0, 0, Some(true));
+        save_session_to(&path, played.finalize(600)).unwrap();
+        save_session_to(&path, behind_the_whole_time("2026-10-25T00:00:00Z").finalize(90)).unwrap();
+        // The shape a build from before focus readings (0.9.x) declares: every field it requires.
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OlderRow {
+            started_at: String,
+            duration_secs: u64,
+            process_name: String,
+            samples: u32,
+            avg_fps: f64,
+            avg_frametime_ms: f64,
+            low1_fps_est: f64,
+            peak_gpu_temp_c: Option<u32>,
+            peak_gpu_usage_pct: Option<u32>,
+            peak_ram_used_bytes: Option<u64>,
+            ram_total_bytes: Option<u64>,
+            compy_changes_active: usize,
+            #[serde(default)]
+            stutter_timeline: Vec<(u32, f64)>,
+            #[serde(default)]
+            fps_series: Vec<(u32, f64)>,
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        let older: Vec<OlderRow> = serde_json::from_str(&text).expect("an older Compy loads the file");
+        assert_eq!(older.len(), 2);
+        assert_eq!((older[1].samples, older[1].avg_fps, older[1].process_name.as_str()), (0, 0.0, "game.exe"));
+        // And this build reads it back unchanged, file kept.
+        let back = load_sessions_from(&path);
+        assert_eq!(back.len(), 2);
+        assert!(back[1].behind_the_whole_time());
+        assert!(path.exists() && !path.with_extension("json.corrupt").exists());
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// The 100-row cap: a row that measured nothing goes before any measured one, oldest first, and
+    /// the one just saved stays. A run of alt-tabbed sessions can't push out a baseline.
+    #[test]
+    fn rows_that_measured_nothing_never_push_out_measured_sessions() {
+        let path = std::env::temp_dir().join(format!("compy-sessions-zcap-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let measured = |i: usize| {
+            let mut acc = SessionAccumulator::new(format!("m{i}"), Some(0));
+            acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+            acc.finalize(600)
+        };
+        for i in 0..MAX_SESSIONS - 1 {
+            save_session_to(&path, measured(i)).unwrap();
+        }
+        for i in 0..5 {
+            save_session_to(&path, behind_the_whole_time(&format!("z{i}")).finalize(90)).unwrap();
+        }
+        let all = load_sessions_from(&path);
+        assert_eq!(all.len(), MAX_SESSIONS);
+        assert_eq!(all.iter().filter(|s| s.samples > 0).count(), MAX_SESSIONS - 1, "every measured session kept");
+        let kept: Vec<&str> = all.iter().filter(|s| s.samples == 0).map(|s| s.started_at.as_str()).collect();
+        assert_eq!(kept, ["z4"], "only the newest unmeasured row stays");
+        // A measured session saved into a full history lets the unmeasured row go first.
+        save_session_to(&path, measured(500)).unwrap();
+        let all = load_sessions_from(&path);
+        assert_eq!(all.len(), MAX_SESSIONS);
+        assert!(all.iter().all(|s| s.samples > 0) && all[0].started_at == "m0");
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// Review (P4-show-f1): the 5-session timeline window and the fps-series window count measured
+    /// sessions only, so a run of alt-tabbed sessions can't strip the last measured one's detail.
+    #[test]
+    fn rows_that_measured_nothing_never_strip_measured_detail() {
+        let path = std::env::temp_dir().join(format!("compy-sessions-zdetail-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        for i in 0..FPS_SERIES_KEEP + 1 {
+            let mut acc = SessionAccumulator::new(format!("m{i:02}"), Some(0));
+            for t in 0..20u32 {
+                acc.record_fps("g.exe", 100.0, 10.0, 80.0, t);
+            }
+            let mut s = acc.finalize(600);
+            s.stutter_timeline = vec![(0, 80.0)];
+            save_session_to(&path, s).unwrap();
+        }
+        for i in 0..FPS_SERIES_KEEP {
+            save_session_to(&path, behind_the_whole_time(&format!("z{i:02}")).finalize(90)).unwrap();
+        }
+        let all = load_sessions_from(&path);
+        std::fs::remove_file(&path).ok();
+        let measured: Vec<&SessionSummary> = all.iter().filter(|s| s.samples > 0).collect();
+        let n = measured.len();
+        assert!(measured[n - 5..].iter().all(|s| !s.stutter_timeline.is_empty()), "the 5 newest measured keep their timeline");
+        assert!(measured[n - 6].stutter_timeline.is_empty());
+        assert!(measured[n - FPS_SERIES_KEEP..].iter().all(|s| !s.fps_series.is_empty()), "the 20 newest measured keep their series");
+        assert!(measured[0].fps_series.is_empty());
+    }
+
+    /// Review (P4-show-f1): saving a session that measured nothing never triggers a receipt, which
+    /// would be built from (and re-send) the newest measured session instead.
+    #[test]
+    fn a_session_that_measured_nothing_sends_no_receipt() {
+        assert!(!sends_receipt(0));
+        assert!(sends_receipt(1));
+    }
+
+    #[test]
+    fn newest_measured_row_skips_rows_that_measured_nothing() {
+        let rows = serde_json::json!([{ "samples": 0, "avg_fps": 0.0 }, { "samples": 900, "avg_fps": 120.0 }]);
+        assert_eq!(newest_measured_row(&rows).unwrap()["avg_fps"], 120.0);
+        let keyless = serde_json::json!([{ "avg_fps": 90.0 }]);
+        assert_eq!(newest_measured_row(&keyless).unwrap()["avg_fps"], 90.0, "no key reads as measured");
+        assert!(newest_measured_row(&serde_json::json!([{ "samples": 0 }])).is_none());
     }
 
     #[test]

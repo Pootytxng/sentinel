@@ -323,6 +323,18 @@ pub(crate) fn build_markdown_report(
     }
     for s in sess {
         let dur = vu64(s, "duration_secs").map(fmt_duration).unwrap_or_else(|| "—".into());
+        // P4-show-f1: a session with no reading has no numbers; its 0s mean "not measured".
+        if vu64(s, "samples") == Some(0) {
+            let _ = writeln!(
+                o,
+                "- **{}** · {dur} · nothing measured: another window was in front the whole time",
+                {
+                    let p = vstr(s, "process_name");
+                    if p == "—" { "Unknown game".to_string() } else { p }
+                },
+            );
+            continue;
+        }
         let fps = vf64(s, "avg_fps").map(|n| format!("{n:.1}")).unwrap_or_else(|| "—".into());
         let ft = vf64(s, "avg_frametime_ms").map(|n| format!("{n:.1} ms")).unwrap_or_else(|| "—".into());
         let low = vf64(s, "low1_fps_est").map(|n| format!("{n:.1}")).unwrap_or_else(|| "—".into());
@@ -1098,6 +1110,15 @@ mod export_tests {
         assert!(md.contains("—")); // missing values degrade gracefully
         assert!(md.contains("No changes applied yet."));
         assert!(md.contains("No game sessions recorded yet."));
+    }
+
+    #[test]
+    fn a_session_with_no_reading_is_listed_without_numbers() {
+        let sessions = json!([{ "process_name": "game.exe", "duration_secs": 900, "samples": 0,
+            "avg_fps": 0.0, "avg_frametime_ms": 0.0, "low1_fps_est": 0.0, "background_secs_excluded": 880 }]);
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, &json!([]), "embedded", "2026-10-25 12:00", None);
+        let line = md.lines().find(|l| l.starts_with("- **game.exe**")).expect("listed");
+        assert!(line.contains("another window was in front the whole time") && !line.contains("fps"), "{line}");
     }
 
     #[test]

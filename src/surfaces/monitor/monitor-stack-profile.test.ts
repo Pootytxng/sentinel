@@ -312,6 +312,17 @@ describe("deckDeltaFrom — the Flight Deck's session-scoped delta row", () => {
     expect(noRecord.spikes).toBeNull();
   });
 
+  it("skips a session behind another window the whole time on either side (P4-show-f1)", () => {
+    const withEvents = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ at_secs: i, kind: "x", label: `e${i}` }));
+    const behind = sess({ samples: 0, avg_fps: 0, low1_fps_est: 0, stutter_events: [], background_secs_excluded: 900 });
+    const d = deckDeltaFrom([behind, sess({ stutter_events: withEvents(2) }), behind, sess({ stutter_events: withEvents(5) })])!;
+    expect(d.current.samples).toBeGreaterThan(0);
+    expect(d.prev.samples).toBeGreaterThan(0);
+    expect(d.spikes).toBe(-3);
+    expect(deckDeltaFrom([behind, val1])).toBeNull();
+  });
+
   it("carries the current session's changes-on count (a recorded fact, not a claim)", () => {
     const d = deckDeltaFrom([sess({ compy_changes_active: 3 }), val2])!;
     expect(d.changesOn).toBe(3);

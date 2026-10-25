@@ -1269,6 +1269,11 @@ pub(crate) fn resolve_baseline<'a>(
         }
         SessionLookup::Found(s) => s,
     };
+    if session.behind_the_whole_time() {
+        return Err("the baseline session measured nothing: another window was in front the whole \
+                    time — play a session with the game in front, then try again"
+            .into());
+    }
     if !has_frame_reading(session) {
         return Err("the baseline session has no frame-rate reading, so there's nothing to compare \
                     the change against"
@@ -1683,6 +1688,12 @@ pub(crate) fn resolve_treatment<'a>(
         }
         SessionLookup::Found(s) => s,
     };
+    if treatment.behind_the_whole_time() {
+        return Err(format!(
+            "that session measured nothing: another window was in front the whole time — play a \
+             {game} session with the game in front, then conclude"
+        ));
+    }
     if !has_frame_reading(treatment) {
         return Err("that session has no frame-rate reading to judge".into());
     }
@@ -4035,6 +4046,23 @@ mod experiment_tests {
 
         let why = resolve_baseline(&[session(BASE_ID, 150.0), session(BASE_ID, 140.0)], BASE_ID).unwrap_err();
         assert!(why.contains("share"), "two sessions with one id are refused, never guessed: {why}");
+    }
+
+    /// P4-show-f1: a session the game spent behind another window has no reading; it is refused as a
+    /// baseline and as an after-reading, and the refusal says why rather than "no reading".
+    #[test]
+    fn a_session_behind_another_window_the_whole_time_is_never_a_baseline_or_treatment() {
+        let behind = |id: &str| {
+            let mut s = session(id, 0.0);
+            (s.samples, s.avg_fps, s.avg_frametime_ms, s.background_secs_excluded) = (0, 0.0, 0.0, Some(1200));
+            s
+        };
+        let why = resolve_baseline(&[behind(BASE_ID)], BASE_ID).unwrap_err();
+        assert!(why.contains("another window was in front the whole time"), "{why}");
+        let why = treatment_err(&running(), &[session(BASE_ID, 150.0), behind(TREAT_ID)], TREAT_ID);
+        assert!(why.contains("another window was in front the whole time"), "{why}");
+        // Nor does it set the band the next Trial is judged on: the bench's baseline pick skips it.
+        assert!(!has_frame_reading(&behind(TREAT_ID)));
     }
 
     #[test]

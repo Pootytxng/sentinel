@@ -1,4 +1,5 @@
 import type { SessionSummary, ArmedComparison, ComparisonResult } from "../types";
+import { allBackground } from "../lib/session-metrics";
 
 // THE honest-measurement verdict for a tuning baseline (spec 2026-06-08) — ONE pure source shared by
 // the Lab Tuning instrument and the Play debrief so the verdict can't drift. It is a function of
@@ -44,7 +45,8 @@ export function gpuRunningHot(
   const windowMs = TUNING_HOT_WINDOW_DAYS * 24 * 3600 * 1000;
   const temps = sessions
     .filter((s) => {
-      if (typeof s.peak_gpu_temp_c !== "number") return false;
+      // P4-show-f1: a session behind another window the whole time is not a monitored play session.
+      if (allBackground(s) || typeof s.peak_gpu_temp_c !== "number") return false;
       const started = Date.parse(s.started_at);
       return Number.isFinite(started) && now - started <= windowMs;
     })
@@ -70,7 +72,7 @@ export function gpuSustainedNearLimit(
   const windowMs = TUNING_HOT_WINDOW_DAYS * 24 * 3600 * 1000;
   const usages = sessions
     .filter((s) => {
-      if (typeof s.peak_gpu_usage_pct !== "number") return false;
+      if (allBackground(s) || typeof s.peak_gpu_usage_pct !== "number") return false;
       const started = Date.parse(s.started_at);
       return Number.isFinite(started) && now - started <= windowMs;
     })
@@ -158,7 +160,9 @@ function fmtPlaytime(secs: number): string {
   return `${m}m`;
 }
 
-/** Same-game sessions that started strictly after the tune was armed (newest-first preserved). */
+/** Same-game sessions that started strictly after the tune was armed (newest-first preserved). A
+ *  session behind another window the whole time (P4-show-f1) is left out: its 1% low of 0 means
+ *  "not measured", and read as a reading it would be a -100% regression. */
 export function postTuneSessions(
   baseline: ArmedComparison,
   sessions: SessionSummary[],
@@ -166,6 +170,7 @@ export function postTuneSessions(
   const armedAt = Date.parse(baseline.armed_at);
   return sessions.filter(
     (s) =>
+      !allBackground(s) &&
       s.process_name === baseline.game &&
       Number.isFinite(Date.parse(s.started_at)) &&
       Date.parse(s.started_at) >= armedAt,

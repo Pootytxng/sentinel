@@ -446,6 +446,11 @@ fn on_session_finalized_at(
     if s.process_name.is_empty() || armed.game != s.process_name {
         return;
     }
+    // P4-show-f1: a session behind another window the whole time measured nothing (its 0s are
+    // "not measured"), so it neither settles nor disarms the comparison; the arm waits for play.
+    if s.samples == 0 {
+        return;
+    }
     let result = build_result(
         &armed,
         s,
@@ -983,6 +988,31 @@ mod comparison_race_tests {
             on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None))
         });
         assert_survived(left, "session finalize");
+    }
+
+    /// P4-show-f1: a session that measured nothing (the game was behind another window the whole time)
+    /// would otherwise read as a 1% low of 0, a -100% regression. It writes no result and leaves a
+    /// one-shot Fix arm in place for the next session that measures play.
+    #[test]
+    fn a_session_that_measured_nothing_never_settles_a_comparison() {
+        // No other test's armed seam may fire inside this one's finalizes.
+        let _exclusive = crate::race_seam::exclusive();
+        let dir = scratch("unmeasured");
+        let (armed, result) = (
+            dir.join("compy_comparison.json"),
+            dir.join("compy_comparison_result.json"),
+        );
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "waiting")).unwrap();
+        let mut behind = super::comparison_tests::session_fixture(0.0, Some(55));
+        behind.samples = 0;
+        behind.avg_fps = 0.0;
+        behind.avg_frametime_ms = 0.0;
+        behind.background_secs_excluded = Some(900);
+        on_session_finalized_at(&armed, &result, &behind);
+        assert!(!result.exists(), "no result from a session with no reading");
+        assert_eq!(load_armed_from(&armed).map(|a| a.rec_id), Some("waiting".to_string()), "the arm waits");
+        on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None));
+        assert!(result.exists() && load_armed_from(&armed).is_none(), "the next measured session settles it");
     }
 
     /// `report_tuning_crash` is a load-modify-save on the armed store — the classic lost update. An

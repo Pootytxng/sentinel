@@ -4,6 +4,7 @@
 
 import type { SessionSummary } from "../types";
 import { prettyGameName } from "../surfaces/game-name";
+import { allBackground } from "../lib/session-metrics";
 
 export type GameTrend = {
   game: string; // pretty name (no .exe)
@@ -23,7 +24,9 @@ export type SessionTrendsData = {
 // Display grouping key = the pretty name (prettyGameName also strips Unreal/GDK
 // "-Win64-Shipping" wrappers, so the same game's binaries aggregate as one row).
 
-export function computeSessionTrends(sessions: SessionSummary[]): SessionTrendsData {
+export function computeSessionTrends(all: SessionSummary[]): SessionTrendsData {
+  // P4-show-f1: a session behind another window the whole time has no frame rate to trend.
+  const sessions = all.filter((s) => !allBackground(s));
   const total = sessions.length;
   // Per game (sessions are newest-first, so the first one seen per game is the most recent).
   const byGame = new Map<string, GameTrend>();

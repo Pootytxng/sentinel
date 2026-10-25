@@ -773,13 +773,22 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             source: "sessions".into(),
             scope: EventScope::Measurement,
             game: Some(pretty_game_name(&s.process_name)),
-            summary: format!(
-                "{} session — {} · {:.0} avg FPS · {:.0} 1% low",
-                pretty_game_name(&s.process_name),
-                fmt_minutes(s.duration_secs),
-                s.avg_fps,
-                s.low1_fps_est
-            ),
+            // P4-show-f1: a session with no reading has no FPS to state; its 0s mean "not measured".
+            summary: if s.samples == 0 {
+                format!(
+                    "{} session — {} · nothing measured: another window was in front the whole time",
+                    pretty_game_name(&s.process_name),
+                    fmt_minutes(s.duration_secs),
+                )
+            } else {
+                format!(
+                    "{} session — {} · {:.0} avg FPS · {:.0} 1% low",
+                    pretty_game_name(&s.process_name),
+                    fmt_minutes(s.duration_secs),
+                    s.avg_fps,
+                    s.low1_fps_est
+                )
+            },
             detail: None,
             observed_between: None,
             since_rolled_back: false,
@@ -2270,24 +2279,33 @@ fn assemble_from(g: &Gathered) -> TimelineAssembly {
     })
 }
 
+/// P4-show-f1: why a session with no reading can't be compared.
+const NOTHING_MEASURED: &str =
+    "That session measured nothing: another window was in front the whole time, so there's nothing to compare.";
+
 fn what_changed_impl(g: &Gathered, started_at: &str) -> WhatChangedOutcome {
     let Some(current) = g.sessions.iter().find(|s| s.started_at == started_at) else {
         return WhatChangedOutcome::Unavailable {
             reason: "Session not found — it may have been pruned from the session history.".into(),
         };
     };
+    if current.samples == 0 {
+        return WhatChangedOutcome::Unavailable { reason: NOTHING_MEASURED.into() };
+    }
     let Some(ct) = parse_utc(&current.started_at) else {
         return WhatChangedOutcome::Unavailable {
             reason: "This session's timestamp is unreadable — Compy won't guess at the order.".into(),
         };
     };
-    // Baseline = the most recent EARLIER session of the same game (adjacent comparison).
+    // Baseline = the most recent EARLIER session of the same game that measured play (adjacent
+    // comparison; a session behind another window the whole time has nothing to compare, P4-show-f1).
     let baseline = g
         .sessions
         .iter()
         .filter(|s| {
             s.process_name.eq_ignore_ascii_case(&current.process_name)
                 && s.started_at != current.started_at
+                && s.samples > 0
         })
         .filter_map(|s| parse_utc(&s.started_at).map(|t| (t, s)))
         .filter(|(t, _)| *t < ct)
@@ -2344,6 +2362,9 @@ fn what_changed_between_impl(
         return WhatChangedOutcome::Unavailable {
             reason: "Those are the same session — pick two different sessions to compare.".into(),
         };
+    }
+    if baseline.samples == 0 || current.samples == 0 {
+        return WhatChangedOutcome::Unavailable { reason: NOTHING_MEASURED.into() };
     }
     // Like-for-like only: a game's 1% low is only meaningful against itself. Comparing two
     // different games would look like a verdict but measure nothing honest.
@@ -2411,6 +2432,7 @@ pub(crate) fn get_intelligence_headline() -> Option<IntelligenceHeadline> {
     let latest = g
         .sessions
         .iter()
+        .filter(|s| s.samples > 0) // the newest session that measured play (P4-show-f1)
         .filter_map(|s| parse_utc(&s.started_at).map(|t| (t, s)))
         .max_by_key(|(t, _)| *t)
         .map(|(_, s)| s)?;
@@ -3851,6 +3873,33 @@ mod tests {
         assert_eq!(r.current.started_at, "2026-07-03T10:00:00Z");
         // 100 → 80 in the 1% low is a clear regression, well past the 3% noise floor.
         assert_eq!(r.verdict, "regressed", "{}", r.headline);
+    }
+
+    /// P4-show-f1: a session behind another window the whole time is never a "what changed" side:
+    /// the auto-pick skips it as the earlier session, it can't be investigated itself, the explicit
+    /// pick refuses it, the headline reads past it, and the timeline row says nothing was measured.
+    #[test]
+    fn a_session_with_no_reading_is_never_compared() {
+        let mut behind = mk_session("2026-07-02T10:00:00Z", "cp2077.exe", 0.0, 0.0);
+        (behind.samples, behind.background_secs_excluded) = (0, Some(600));
+        let g = gathered_with(vec![
+            mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0, 140.0),
+            behind.clone(),
+            mk_session("2026-07-03T10:00:00Z", "cp2077.exe", 80.0, 120.0),
+        ]);
+        let WhatChangedOutcome::Report(r) = what_changed_impl(&g, "2026-07-03T10:00:00Z") else {
+            panic!("expected a report against the last measured session");
+        };
+        assert_eq!(r.baseline.started_at, "2026-07-01T10:00:00Z", "skips the session with no reading");
+        assert_eq!(r.verdict, "regressed", "{}", r.headline);
+        let out = what_changed_impl(&g, "2026-07-02T10:00:00Z");
+        assert!(unavailable_reason(&out).contains("another window was in front"), "{out:?}");
+        let out = what_changed_between_impl(&g, "2026-07-01T10:00:00Z", "2026-07-02T10:00:00Z");
+        assert!(unavailable_reason(&out).contains("another window was in front"), "{out:?}");
+        let sessions = vec![behind];
+        let a = assemble_timeline(&empty_inputs(&[], &sessions, &[]));
+        let row = a.events.iter().find(|e| e.event_type == "session").unwrap();
+        assert!(row.summary.contains("nothing measured") && !row.summary.contains("FPS"), "{}", row.summary);
     }
 
     #[test]

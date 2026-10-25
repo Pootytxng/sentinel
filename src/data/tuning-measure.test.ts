@@ -75,6 +75,18 @@ describe("measureTuning", () => {
     expect(postTuneSessions(baseline(), sessions)).toHaveLength(1);
   });
 
+  it("skips a session behind another window the whole time: its 0 is not a regression (P4-show-f1)", () => {
+    const behind = sess({ started_at: "2026-06-08T19:00:00Z", samples: 0, avg_fps: 0, low1_fps_est: 0, background_secs_excluded: 3500 });
+    const sessions = [behind, ...threeGoodSessions()];
+    expect(postTuneSessions(baseline(), sessions)).toHaveLength(3);
+    expect(measureTuning(baseline(), sessions)!.fpsRegressed).toBe(false);
+    const hot = (t: number, extra = {}) => sess({ peak_gpu_temp_c: t, peak_gpu_usage_pct: 99, ...extra });
+    const now = Date.parse("2026-06-08T20:00:00Z");
+    const behindHot = hot(90, { samples: 0, background_secs_excluded: 3500 });
+    expect(gpuRunningHot([behindHot, hot(84), hot(82)], now)).toBeNull();
+    expect(gpuSustainedNearLimit([behindHot, hot(84), hot(82)], now)).toBeNull();
+  });
+
   it("HOLDING: ≥3 sessions, ~3h, temp dropped ≥3 °C, frames held, no crash", () => {
     const m = measureTuning(baseline(), threeGoodSessions())!;
     expect(m.verdict).toBe("holding");
