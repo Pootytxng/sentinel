@@ -215,7 +215,7 @@ room or station picked by hand.
       `summary` today, as the What-changed panel does) so zh-CN reads whole. Needs P6-changed.
 - [x] **P6-changed-f2** (`8204e17c`) The WER folder read stops at 400 entries in folder order; if hit, treat the scan as
       incomplete for "clean" (no time cut-point today), or read newest-first so a cut-point exists.
-- [ ] **P6-door** One Care door on Home ("Something's wrong") replaces the Crash & Freeze entry; the observer
+- [x] **P6-door** (`bac31375`) One Care door on Home ("Something's wrong") replaces the Crash & Freeze entry; the observer
       card and the interview crash/stutter answers all land on the same Care view. Needs P6-changed. ROADMAP P6
       exit; Constitution §18, §27.
 - [ ] **P6-stutter** Stutter/slow on that view compares the latest session of the game with its last good one
