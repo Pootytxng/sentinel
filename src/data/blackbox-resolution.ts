@@ -27,15 +27,14 @@ export function appOf(i: CrashIncident): string | null {
 /** A locally-stored "Did this help?" mark for one incident (vote + the time it was cast). */
 export type HelpMark = { vote: string; at: string };
 
-export type IncidentResolution = {
-  status: "none-since" | "recurred";
-  /** The factual line shown to the user. Guaranteed free of "fixed"/"solved"/"worked" causal claims. */
-  text: string;
-};
-
-function fmtDay(ms: number): string {
-  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
+/** The measured-absence / recurrence facts for one incident, as data. P6-next-f3: the line itself is
+ *  worded by BlackBox's ResolutionFeedback from en / zh-CN locale keys, so a zh-CN viewer reads it in
+ *  Chinese. The copy there never says "fixed" / "solved" / "worked". `kind` is the incident's English
+ *  `tag`: the app has no localised tag label table yet, so it stays as recorded. `app` is the faulting
+ *  app as Windows named it, only for App crash / App hang. */
+export type IncidentResolution =
+  | { status: "none-since"; kind: string; app: string | null; days: number }
+  | { status: "recurred"; kind: string; app: string | null; /** epoch ms of the first recurrence */ date: number };
 
 /**
  * Compute the measured-absence / recurrence line for an incident the user marked helpful, or `null` when
@@ -44,8 +43,8 @@ function fmtDay(ms: number): string {
  *  - no mark, or the mark isn't a "yes" → null
  *  - a malformed/empty mark timestamp → null (an old untimed mark can't anchor a "since")
  *  - a NEW incident of the SAME kind (matched on `tag`, and for App crash / App hang also on the faulting
- *    app, case-insensitive) recorded AFTER the mark → "happened again on …"
- *  - otherwise, once ≥ RESOLUTION_MIN_DAYS have elapsed → "No {kind} recorded in the {N} days since."
+ *    app, case-insensitive) recorded AFTER the mark → "recurred" with the first recurrence's date
+ *  - otherwise, once ≥ RESOLUTION_MIN_DAYS have elapsed → "none-since" with the whole days elapsed
  *  - too little time elapsed and no recurrence → null (no fabricated reassurance)
  *
  * `now` is injectable for deterministic tests.
@@ -67,21 +66,18 @@ export function resolutionFor(
   // crash is not the game's crash coming back). If Windows named no faulting app on the marked
   // incident, there is nothing to match on, so it falls back to the tag alone (the old behaviour).
   const app = appOf(incident);
-  const label = app ? `${incident.tag} (${incident.receipt?.faulting_app})` : incident.tag;
+  const appName = app ? (incident.receipt?.faulting_app ?? null) : null;
   const recurrences = allIncidents
     .filter((i) => i.tag === incident.tag && (app === null || appOf(i) === app))
     .map((i) => Date.parse(i.when))
     .filter((t) => !Number.isNaN(t) && t > markedAt)
     .sort((a, b) => a - b);
   if (recurrences.length > 0) {
-    return { status: "recurred", text: `${label} happened again on ${fmtDay(recurrences[0])}.` };
+    return { status: "recurred", kind: incident.tag, app: appName, date: recurrences[0] };
   }
 
   const days = Math.floor((now.getTime() - markedAt) / 86_400_000);
   if (days < RESOLUTION_MIN_DAYS) return null; // too soon to be a meaningful measured absence
 
-  return {
-    status: "none-since",
-    text: `No ${label} recorded in the ${days} ${days === 1 ? "day" : "days"} since.`,
-  };
+  return { status: "none-since", kind: incident.tag, app: appName, days };
 }

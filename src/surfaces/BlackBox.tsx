@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
@@ -14,7 +15,7 @@ import type {
   ChangedBeforeIncident,
   ChangedBeforeItem,
 } from "../types";
-import { resolutionFor, type HelpMark } from "../data/blackbox-resolution";
+import { resolutionFor, type HelpMark, type IncidentResolution } from "../data/blackbox-resolution";
 import { StutterCompare } from "./StutterCompare";
 import { SinceLastWorked } from "./SinceLastWorked";
 import { eventText } from "./event-text";
@@ -567,8 +568,32 @@ function readHelpMark(incidentKey: string, voteKey: string): HelpMark | null {
 // marked "yes", v2.1 reports a measured ABSENCE from the log ("No {kind} recorded in N days since") or an
 // honest recurrence — it NEVER claims the fix worked (that's an unproven causal claim; resolutionFor
 // guarantees the copy stays factual). A thumbs-down is how a wrong rule surfaces later (local feedback log).
+// P6-next-f3: the measured line is worded here from locale keys (resolutionFor returns the facts),
+// so zh-CN reads Chinese. App crash / App hang with a named app say "{app} crashed / stopped
+// responding"; other kinds name the tag, which stays English (no localised tag labels exist yet).
+// Static keys with inline bags, so the locale-parity guard can grade them.
+function resolutionLine(res: IncidentResolution, t: TFunction, lang: string): string {
+  const app = res.app;
+  const kind = res.kind;
+  const crash = !!app && kind === "App crash";
+  const hang = !!app && kind === "App hang";
+  if (res.status === "recurred") {
+    const date = new Date(res.date).toLocaleDateString(lang, { month: "short", day: "numeric" });
+    return crash
+      ? t("gaming.blackBox.resolution.crashRecurred", { app, date })
+      : hang
+        ? t("gaming.blackBox.resolution.hangRecurred", { app, date })
+        : t("gaming.blackBox.resolution.recurred", { kind, date });
+  }
+  return crash
+    ? t("gaming.blackBox.resolution.crashNoneSince", { count: res.days, days: res.days, app })
+    : hang
+      ? t("gaming.blackBox.resolution.hangNoneSince", { count: res.days, days: res.days, app })
+      : t("gaming.blackBox.resolution.noneSince", { count: res.days, days: res.days, kind });
+}
+
 function ResolutionFeedback({ inc, allIncidents }: { inc: CrashIncident; allIncidents: CrashIncident[] }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const incidentKey = inc.when;
   const voteKey = `compy_bb_helpful_${incidentKey}`;
   const [mark, setMark] = useState<HelpMark | null>(() => readHelpMark(incidentKey, voteKey));
@@ -591,7 +616,9 @@ function ResolutionFeedback({ inc, allIncidents }: { inc: CrashIncident; allInci
     return (
       <div className="bb-resolved">
         <span className="bb-resolved-mark">{t("gaming.blackBox.resolvedMark")}</span>
-        {res && <span className={`bb-resolved-since bb-resolved-${res.status}`}>{res.text}</span>}
+        {res && (
+          <span className={`bb-resolved-since bb-resolved-${res.status}`}>{resolutionLine(res, t, i18n.language)}</span>
+        )}
       </div>
     );
   }
