@@ -313,6 +313,13 @@ describe("ExperimentBench (armed)", () => {
       { id: "mouse-accel-off", title: "Turn off mouse acceleration", passes: false, reason: "already-set-unchecked", detail: null },
       { id: "nagle-disable", title: "Disable Nagle", passes: false, reason: "already-set-unconfirmed", detail: null },
       {
+        id: "game-mode-stuck",
+        title: "Windows Game Mode",
+        passes: false,
+        reason: "already-set-by-gaming-mode-restore-unfinished",
+        detail: null,
+      },
+      {
         id: "eee-disable",
         title: "Turn off Energy-Efficient Ethernet",
         passes: false,
@@ -352,6 +359,8 @@ describe("ExperimentBench (armed)", () => {
     expect(row("mouse-accel-off")).toContain("Compy couldn't check whether it made this change.");
     expect(row("nagle-disable")).toContain("Compy applied this earlier but can't confirm");
     expect(row("nagle-disable")).not.toContain("not by Compy");
+    expect(row("game-mode-stuck")).toContain("hasn't finished putting it back");
+    expect(row("game-mode-stuck")).not.toContain("when the session ends");
     expect(row("eee-disable")).toContain("Doesn't fit this PC's hardware. No wired Ethernet port.");
     expect(row("test-rec")).toBe("");
   });

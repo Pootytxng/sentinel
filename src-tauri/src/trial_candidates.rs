@@ -22,7 +22,7 @@ use serde_json::Value;
 use std::collections::HashSet;
 
 use crate::actions::{KnownService, RollbackAction, Snapshot, PWR_SUBGROUP_PCIE, PWR_SUBGROUP_USB};
-use crate::gaming_session::SessionChange;
+use crate::gaming_session::{SessionChange, SessionStatus};
 use crate::history::{ActiveCheck, LiveRow};
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +37,9 @@ pub(crate) enum SkipReason {
     /// §3.2: already set, and the live Gaming Mode session contract holds it (Compy set it for the
     /// session and puts it back when the session ends).
     AlreadySetByGamingMode,
+    /// §3.2: already set by a Gaming Mode session whose restore is pending or failed — Compy set it
+    /// and has not finished putting it back, so no "puts it back when the session ends" promise.
+    AlreadySetByGamingModeRestoreUnfinished,
     /// §3.2: already set, but the ledger or the session contract couldn't be read, so Compy can't
     /// say whether it made the change.
     AlreadySetUnchecked,
@@ -76,12 +79,17 @@ pub(crate) struct WhoSetIt {
     pub ledger_cant_confirm: HashSet<String>,
     /// Changes the live Gaming Mode session contract holds (empty when no session is running).
     pub gaming_mode: Option<HashSet<String>>,
+    /// That session's restore is pending or failed (`session_restore_unfinished`).
+    pub gaming_mode_restore_unfinished: bool,
 }
 
 impl WhoSetIt {
     fn already_set_reason(&self, id: &str) -> SkipReason {
         let has = |s: &Option<HashSet<String>>| s.as_ref().map(|s| s.contains(id));
         match (has(&self.gaming_mode), has(&self.ledger_on)) {
+            (Some(true), _) if self.gaming_mode_restore_unfinished => {
+                SkipReason::AlreadySetByGamingModeRestoreUnfinished
+            }
             (Some(true), _) => SkipReason::AlreadySetByGamingMode,
             (_, Some(true)) => SkipReason::AlreadySetByCompy,
             _ if self.ledger_cant_confirm.contains(id) => SkipReason::AlreadySetUnconfirmed,
@@ -188,8 +196,28 @@ pub(crate) fn session_change_rec(c: &SessionChange) -> Option<&'static str> {
             }
             _ => return None,
         },
-        _ => return None,
+        // No Trial-able catalog change stands for these. Named one by one, no catch-all, so a
+        // rollback action added later fails to compile here until someone decides where it goes.
+        RollbackAction::RestoreStartupApprovalFromSnapshot
+        | RollbackAction::RestoreMemoryCompressionFromSnapshot
+        | RollbackAction::RestoreMmcssFromSnapshot
+        | RollbackAction::RestorePrioritySeparationFromSnapshot
+        | RollbackAction::RestoreMpoFromSnapshot
+        | RollbackAction::RestoreCoreParkingFromSnapshot
+        | RollbackAction::RestoreTcpAutotuningFromSnapshot
+        | RollbackAction::RestorePagefileFromSnapshot
+        | RollbackAction::EnableScheduledTask { .. }
+        | RollbackAction::ReinstallPreloadApp { .. } => return None,
     })
+}
+
+/// A session whose restore is pending or failed has not put its changes back; an active or ending
+/// one still will. Exhaustive, so a new status has to be decided here. Pure.
+pub(crate) fn session_restore_unfinished(status: SessionStatus) -> bool {
+    match status {
+        SessionStatus::Active | SessionStatus::Ending => false,
+        SessionStatus::RestorePending | SessionStatus::RestoreFailed => true,
+    }
 }
 
 fn read_ledger() -> Option<(HashSet<String>, HashSet<String>)> {
@@ -207,14 +235,16 @@ fn read_ledger() -> Option<(HashSet<String>, HashSet<String>)> {
     Some((ledger_on_recs(&rows), ledger_cant_confirm_recs(&rows)))
 }
 
-fn read_gaming_mode() -> Option<HashSet<String>> {
+/// The live session's changes and whether its restore is unfinished. `None` = couldn't be read.
+fn read_gaming_mode() -> Option<(HashSet<String>, bool)> {
     use crate::gaming_session::{load_session, read_session_slot, SessionSlot};
     match read_session_slot() {
-        SessionSlot::Empty => Some(HashSet::new()),
+        SessionSlot::Empty => Some((HashSet::new(), false)),
         SessionSlot::Unreadable => None,
         SessionSlot::Loaded => {
             let f = load_session()?;
-            Some(f.changes.iter().filter_map(session_change_rec).map(str::to_string).collect())
+            let recs = f.changes.iter().filter_map(session_change_rec).map(str::to_string).collect();
+            Some((recs, session_restore_unfinished(f.status)))
         }
     }
 }
@@ -227,7 +257,11 @@ pub(crate) fn get_trial_candidates() -> Vec<TrialCandidate> {
         Some((on, cant)) => (Some(on), cant),
         None => (None, HashSet::new()),
     };
-    let who = WhoSetIt { ledger_on, ledger_cant_confirm, gaming_mode: read_gaming_mode() };
+    let (gaming_mode, gaming_mode_restore_unfinished) = match read_gaming_mode() {
+        Some((recs, unfinished)) => (Some(recs), unfinished),
+        None => (None, false),
+    };
+    let who = WhoSetIt { ledger_on, ledger_cant_confirm, gaming_mode, gaming_mode_restore_unfinished };
     screen_catalog(&catalog, &crate::history::is_appliable, &who)
 }
 
@@ -243,7 +277,12 @@ mod tests {
         Some(ids.iter().map(|s| s.to_string()).collect())
     }
     fn who(ledger: Option<HashSet<String>>, gaming: Option<HashSet<String>>) -> WhoSetIt {
-        WhoSetIt { ledger_on: ledger, ledger_cant_confirm: HashSet::new(), gaming_mode: gaming }
+        WhoSetIt {
+            ledger_on: ledger,
+            ledger_cant_confirm: HashSet::new(),
+            gaming_mode: gaming,
+            gaming_mode_restore_unfinished: false,
+        }
     }
     fn nobody() -> WhoSetIt {
         who(set(&[]), set(&[]))
@@ -293,6 +332,32 @@ mod tests {
         assert_eq!(r(&who(set(&["game-bar-disable"]), None)), Some(SkipReason::AlreadySetByCompy));
     }
 
+    // A Gaming Mode session stuck in restore (pending or failed) must not promise it puts the change
+    // back when the session ends; an active or ending one still does.
+    #[test]
+    fn a_stuck_gaming_mode_restore_makes_no_put_back_promise() {
+        let e = entry("sysmain-disable", true, true);
+        for (status, want) in [
+            (SessionStatus::Active, SkipReason::AlreadySetByGamingMode),
+            (SessionStatus::Ending, SkipReason::AlreadySetByGamingMode),
+            (SessionStatus::RestorePending, SkipReason::AlreadySetByGamingModeRestoreUnfinished),
+            (SessionStatus::RestoreFailed, SkipReason::AlreadySetByGamingModeRestoreUnfinished),
+        ] {
+            let w = WhoSetIt {
+                gaming_mode_restore_unfinished: session_restore_unfinished(status),
+                ..who(set(&[]), set(&["sysmain-disable"]))
+            };
+            assert_eq!(screen(&e, true, &w).reason, Some(want), "{status:?}");
+        }
+        let w = WhoSetIt { gaming_mode_restore_unfinished: true, ..who(set(&[]), set(&["sysmain-disable"])) };
+        assert_eq!(
+            serde_json::to_value(screen(&e, true, &w)).unwrap()["reason"],
+            "already-set-by-gaming-mode-restore-unfinished"
+        );
+        // A change the stuck session doesn't hold is unaffected by its status.
+        assert_eq!(screen(&entry("game-mode", true, true), true, &w).reason, Some(SkipReason::AlreadySet));
+    }
+
     #[test]
     fn advice_only_change_fails_the_safety_filter() {
         let c = screen(&entry("hdr-advisory", true, false), false, &nobody());
@@ -338,6 +403,7 @@ mod tests {
             ledger_on: Some(ledger_on_recs(&rows)),
             ledger_cant_confirm: ledger_cant_confirm_recs(&rows),
             gaming_mode: set(&[]),
+            gaming_mode_restore_unfinished: false,
         };
         let c = screen(&entry("nagle-disable", true, true), true, &w);
         assert_eq!(c.reason, Some(SkipReason::AlreadySetUnconfirmed));

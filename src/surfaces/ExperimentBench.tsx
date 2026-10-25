@@ -108,6 +108,7 @@ type SkipReason =
   | "already-set"
   | "already-set-by-compy"
   | "already-set-by-gaming-mode"
+  | "already-set-by-gaming-mode-restore-unfinished"
   | "already-set-unchecked"
   | "already-set-unconfirmed"
   | "no-safe-apply";
@@ -124,6 +125,7 @@ const SKIP_REASON_KEY: Record<SkipReason, string> = {
   "already-set": "lab.experimentBench.skipReason.alreadySet",
   "already-set-by-compy": "lab.experimentBench.skipReason.alreadySetByCompy",
   "already-set-by-gaming-mode": "lab.experimentBench.skipReason.alreadySetByGamingMode",
+  "already-set-by-gaming-mode-restore-unfinished": "lab.experimentBench.skipReason.alreadySetByGamingModeRestoreUnfinished",
   "already-set-unchecked": "lab.experimentBench.skipReason.alreadySetUnchecked",
   "already-set-unconfirmed": "lab.experimentBench.skipReason.alreadySetUnconfirmed",
   "no-safe-apply": "lab.experimentBench.skipReason.noSafeApply",
