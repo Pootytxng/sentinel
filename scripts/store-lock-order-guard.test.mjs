@@ -890,7 +890,8 @@ describe("#398: the source half of the Experiment -> History claim", () => {
     return sections;
   };
 
-  // The three lifecycle sections (start, conclude, restore) enter HISTORY_LOCK; the fourth is the
+  // The three lifecycle sections (start, conclude, restore) and the two outcome-switch commands
+  // (apply_outcome_choice, undo_outcome_choice, P5-outcomes-f1) enter HISTORY_LOCK; the sixth is the
   // launch reconcile (#583), which only READS the ledger through load_history under the gate (via
   // reconcile_pending_locked, which start_experiment also calls) — an Experiment -> SupportEvidence
   // path on a corrupt ledger, never Experiment -> History.
@@ -902,8 +903,8 @@ describe("#398: the source half of the Experiment -> History claim", () => {
     return end === -1 ? rest : rest.slice(0, end);
   };
 
-  it("all four experiment gate sections take the gate through the recorded helper", () => {
-    expect(experimentGateSections()).toHaveLength(4);
+  it("all six experiment gate sections take the gate through the recorded helper", () => {
+    expect(experimentGateSections()).toHaveLength(6);
     expect(fnBody(code("experiment"), "fn reconcile_interrupted_starts()")).toMatch(
       /let\s+_g\s*=\s*lock_store\(\)\?;/,
     );
@@ -916,7 +917,7 @@ describe("#398: the source half of the Experiment -> History claim", () => {
 
   it("each of those sections still enters the Trust Ledger under the gate", () => {
     const entering = experimentGateSections().filter((s) =>
-      /crate::history::(apply_recommendation|rollback_change)\s*\(/.test(s),
+      /crate::history::(apply_recommendation|rollback_change)(?:_citing)?\s*\(/.test(s),
     );
     for (const sig of ["fn reconcile_interrupted_starts()", "fn reconcile_pending_locked("]) {
       expect(
@@ -930,6 +931,6 @@ describe("#398: the source half of the Experiment -> History claim", () => {
         "race_seam::production_nesting_tests, but no experiment section reaches history any more. " +
         "Either the call moved (re-derive it), or the nesting is gone (delete the pair and the " +
         "tests that assert it).",
-    ).toHaveLength(3);
+    ).toHaveLength(5);
   });
 });
