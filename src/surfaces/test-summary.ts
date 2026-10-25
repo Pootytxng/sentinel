@@ -60,6 +60,7 @@ export type SummaryNoise = {
 
 /** The experiment fields the summary reads (experiment.rs `ExperimentRecord`). */
 export type SummaryExperiment = {
+  id: string;
   rec_id: string;
   rec_title: string;
   game: string;
@@ -72,6 +73,8 @@ export type SummaryExperiment = {
   baseline_session_id?: string | null;
   /** The stored after-session deltas. null while running and on records that never measured one. */
   treatment?: { delta_low1_pct: number; delta_avg_pct?: number | null } | null;
+  /** The outcome the Trial was judged for. Absent on older records, which were judged as Recommended. */
+  outcome?: "recommended" | "max-fps" | "smoothest" | null;
 };
 
 /** The Trial picker fields the summary reads (trial_candidates.rs `TrialCandidate`). */
@@ -317,4 +320,116 @@ export function summarizeGame(
     putBack: tested.filter((r) => !r.kept),
     lesson: lessonFor(tested),
   };
+}
+
+// P5-outcomes (ROADMAP Phase 5 step 6, ENGINE §5–6): when one change on one game has both a
+// Recommended and a Maximum FPS result and they disagree on keeping it, the user may pick which one
+// stands. READ-ONLY here: this only derives the choice; acting on it is the bench's, through the
+// existing audited apply and undo commands.
+//
+//   - a result is the newest Trial of that change on that game judged for that outcome with a
+//     measured verdict (improved / no-change / regressed), its noise band and its stored 1% low
+//     delta. A too-noisy, confounded or otherwise unjudged Trial is not a result;
+//   - the two results differ only when exactly one of them judged the change Better (`improved`, the
+//     §9 keep rule). Both Better, or neither, agree: no choice. One result alone: no choice;
+//   - the keep side always names the Trial that judged it Better under that outcome; there is no
+//     keep side without one;
+//   - which side is in effect comes from the Trial picker's live answer (`stillAppliedFrom`): on =
+//     the keep side, off = the other. Anything else is unknown and nothing offers to switch;
+//   - ENGINE §6, the default wins ties: an agreeing pair, or a result inside the band, keeps the
+//     default the Trials already chose. Nothing here reopens a tie.
+
+export type ResultOutcome = "recommended" | "max-fps";
+
+/** Why a result kept or put back the change, in the words of its own outcome's rule. */
+export type ResultReason = "low-up" | "avg-up" | "low-fell" | "avg-fell" | "low-flat" | "avg-flat" | "avg-unknown";
+
+export type OutcomeResult = {
+  outcome: ResultOutcome;
+  /** The Trial (experiment record id) this result comes from. */
+  trialId: string;
+  /** It judged the change Better under this outcome. */
+  keeps: boolean;
+  reason: ResultReason;
+  /** The delta the reason names (null only for avg-unknown). */
+  pct: number | null;
+};
+
+export type OutcomeChoice = {
+  recId: string;
+  title: string;
+  recommended: OutcomeResult;
+  maxFps: OutcomeResult;
+  /** The side that keeps the change, and the Trial that judged it Better under that outcome. */
+  keepOutcome: ResultOutcome;
+  keepTrialId: string;
+  /** Which side is in effect now; null when the live check can't tell. */
+  inEffect: ResultOutcome | null;
+};
+
+const outcomeOf = (x: SummaryExperiment): ResultOutcome => (x.outcome === "max-fps" ? "max-fps" : "recommended");
+
+/** The reason a measured Trial gives, by its outcome's own rule (experiment.rs
+ *  `with_recommended_outcome` / `with_max_fps_outcome`). */
+function resultOf(x: SummaryExperiment): OutcomeResult | null {
+  const band = x.noise_evidence?.band_pct;
+  const low = x.treatment?.delta_low1_pct;
+  if (!x.verdict || !MEASURED_VERDICTS.has(x.verdict) || band == null || low == null) return null;
+  const avg = x.treatment?.delta_avg_pct ?? null;
+  const outcome = outcomeOf(x);
+  const keeps = x.verdict === "improved";
+  const r = (reason: ResultReason, pct: number | null): OutcomeResult => ({ outcome, trialId: x.id, keeps, reason, pct });
+  if (outcome === "recommended") {
+    if (keeps) return r("low-up", low);
+    if (x.verdict === "regressed") return r("low-fell", low);
+    if (low > band && avg == null) return r("avg-unknown", null);
+    if (low > band && avg != null && avg < -band) return r("avg-fell", avg);
+    return r("low-flat", low);
+  }
+  if (keeps) return avg == null ? null : r("avg-up", avg);
+  if (x.verdict === "regressed") return avg != null && avg < -band ? r("avg-fell", avg) : r("low-fell", low);
+  return avg == null ? r("avg-unknown", null) : r("avg-flat", avg);
+}
+
+/** The changes on `game` whose Recommended and Maximum FPS results disagree, in first-tested order.
+ *  `candidates` null = the picker's list couldn't be read (nothing is then known to be in effect). */
+export function outcomeChoices(
+  game: string,
+  experiments: readonly SummaryExperiment[],
+  candidates: readonly SummaryCandidate[] | null,
+): OutcomeChoice[] {
+  const newest = new Map<string, { title: string; first: number; recommended?: OutcomeResult; "max-fps"?: OutcomeResult; at: Record<string, number> }>();
+  for (const x of experiments) {
+    if (x.game !== game) continue;
+    const res = resultOf(x);
+    if (!res) continue;
+    const at = time(x.created_at);
+    const row = newest.get(x.rec_id) ?? { title: x.rec_title, first: at, at: {} };
+    row.first = Math.min(row.first, at);
+    if (row[res.outcome] == null || at > row.at[res.outcome]) {
+      row[res.outcome] = res;
+      row.at[res.outcome] = at;
+      row.title = x.rec_title;
+    }
+    newest.set(x.rec_id, row);
+  }
+  const out: { first: number; choice: OutcomeChoice }[] = [];
+  for (const [recId, row] of newest) {
+    const rec = row.recommended;
+    const max = row["max-fps"];
+    if (!rec || !max || rec.keeps === max.keeps) continue;
+    const keep = rec.keeps ? rec : max;
+    const other = rec.keeps ? max : rec;
+    const live = stillAppliedFrom(candidates?.find((c) => c.id === recId));
+    out.push({ first: row.first, choice: {
+      recId,
+      title: row.title,
+      recommended: rec,
+      maxFps: max,
+      keepOutcome: keep.outcome,
+      keepTrialId: keep.trialId,
+      inEffect: live === "on" ? keep.outcome : live === "off" ? other.outcome : null,
+    } });
+  }
+  return out.sort((a, b) => a.first - b.first).map((o) => o.choice);
 }

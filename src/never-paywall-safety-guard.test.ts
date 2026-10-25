@@ -64,7 +64,8 @@ describe("#195 §5 — safety is never behind Pro", () => {
   const safety = FILES.filter((f) => SAFETY_IPC.test(f.raw));
 
   it("finds a real safety surface to guard (the derivation is not silently empty)", () => {
-    // 18 files on 2026-10-24 (17 on 2026-09-29): 15 on 2026-08-26 (14 + FirstWin.tsx, which offers the undo on a
+    // 19 files on 2026-10-25 (+ surfaces/ExperimentBench.tsx, whose P5-outcomes choice re-applies or undoes a
+    // change through apply_recommendation / rollback_change). 18 files on 2026-10-24 (17 on 2026-09-29): 15 on 2026-08-26 (14 + FirstWin.tsx, which offers the undo on a
     // user's first live change and so is squarely on the path this rule protects), then
     // data/startup-toggle.ts, the one owner of the startup-toggle mutation since #599, then
     // data/ledger-write.ts, the helper the guarded ledger writes run through since #619, then
@@ -75,7 +76,7 @@ describe("#195 §5 — safety is never behind Pro", () => {
     expect(
       safety.map((f) => f.path),
       "the mutation/rollback surface shrank — either a refactor renamed the commands (update SAFETY_IPC) or the match is broken",
-    ).toHaveLength(18);
+    ).toHaveLength(19);
   });
 
   it("no file that applies, rolls back, or reads the Trust Ledger touches the Pro gate", () => {

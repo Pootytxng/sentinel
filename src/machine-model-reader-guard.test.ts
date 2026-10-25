@@ -340,6 +340,8 @@ const EXCEPTIONS: Record<string, string> = {
     "The Benchmark rig tier band needs max VRAM, physical cores and total RAM from the full HardwareInfo struct, which the model's identity facts do not carry.",
   [`${join("src", "surfaces", "Latency.tsx")}|get_hardware_info`]:
     "The Latency network-readiness pills read hw.network_pills, a live network signal from hardware.rs that the machine model does not carry.",
+  [`${join("src", "surfaces", "ExperimentBench.tsx")}|get_applied_changes`]:
+    "P5-outcomes puts a change back through rollback_change, which needs the id of that change's newest live apply (liveChangeGroups over every row); the model's change list is capped for display.",
   [`${join("src", "surfaces", "use-scan.ts")}|get_applied_changes`]:
     "The scan names changes the ledger still marks applied that are no longer active on the machine (deriveReverted) to offer an inline 'turn it back on'; that needs every row with its rec_id, and the model's change list is capped for display.",
 };

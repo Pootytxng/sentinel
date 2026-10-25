@@ -198,6 +198,7 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - [ ] **P5-outcomes** When a game has both a Recommended and a Maximum FPS result that differ, offer the choice
       with the actual trade in one sentence; one result = no choice shown. Needs P5-learned. ROADMAP P5
       step 6; ENGINE §5, §6 (default wins ties).
+- [ ] **P5-outcomes-f1** Record which Trial justified an outcome-switch keep in the Trust Ledger (needs a Rust change).
 - [ ] **P5-exit-proof** (owner, FULL) Run the journey on WARDOGS from the button to the summary with no manual
       Trial clicks; the friend repeats it once. Record in BACKLOG as the Phase 5 exit. Needs P5-guided through
       P5-learned. ROADMAP P5 exit.

@@ -11,15 +11,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
-import type { SessionSummary } from "../types";
+import type { AppliedChange, SessionSummary } from "../types";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import { writeLedger } from "../data/ledger-write";
+import { liveChangeGroups } from "../data/live-changes";
 import { prettyGameName } from "./game-name";
 import { knownFps } from "../lib/session-metrics";
 import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
-import { summarizeGame, type GameTestSummary, type Lesson, type LessonRule, type StillApplied, type TestedChange } from "./test-summary";
+import {
+  outcomeChoices,
+  summarizeGame,
+  type GameTestSummary,
+  type Lesson,
+  type LessonRule,
+  type OutcomeChoice,
+  type OutcomeResult,
+  type ResultOutcome,
+  type StillApplied,
+  type TestedChange,
+} from "./test-summary";
 import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
 import { journeyProgress, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
@@ -696,6 +708,10 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
     summaryGames
       .map((g) => summarizeGame(g, experiments, recsLoaded ? recs : null, sessions))
       .find((s) => s != null) ?? null;
+  // P5-outcomes: for the summary's game, the changes whose Recommended and Maximum FPS results disagree.
+  const choices = summary ? outcomeChoices(summary.game, experiments, recsLoaded ? recs : null) : [];
+  // No switch while a Trial runs or the journey is anywhere but idle (waiting, uneven, judging, …).
+  const switchLocked = running != null || journey.kind !== "idle";
 
   // If a refocus-refresh just re-derived the active pick as already-applied (it drops out of `pickable`),
   // keep it in the dropdown so its honest "already configured" verdict stays on screen — the selection
@@ -827,6 +843,37 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
     setError(null);
     try {
       await runWrite((refresh) => writeLedger<Experiment>("restore_experiment", { experimentId: exp.id }, refresh));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // P5-outcomes: switch one change to the other outcome's result, only through the audited paths.
+  // Keeping it re-applies through apply_recommendation, and only with the Trial that judged it Better
+  // under that outcome; putting it back undoes its newest live apply through rollback_change.
+  async function pickOutcome(c: OutcomeChoice, pick: ResultOutcome) {
+    // Never while a Trial or the journey is under way: an undo could take back the running Trial's
+    // own apply mid-measurement, and a re-apply would confound it.
+    if (busy || switchLocked || c.inEffect == null || c.inEffect === pick) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (pick === c.keepOutcome) {
+        const better = experiments.find(
+          (x) => x.id === c.keepTrialId && x.rec_id === c.recId && x.verdict === "improved" && (x.outcome === "max-fps" ? "max-fps" : "recommended") === pick,
+        );
+        if (!better) return; // no Trial judged it Better under this outcome: there is no keep
+        await runWrite((refresh) => writeLedger("apply_recommendation", { recId: c.recId, recTitle: c.title }, refresh));
+      } else {
+        // The undo targets the newest apply of this change that reads on (the shared #453 rule).
+        const rows = await invoke<AppliedChange[]>("get_applied_changes").catch(() => null);
+        const live = rows ? liveChangeGroups(rows).active.find((r) => r.rec_id === c.recId) : undefined;
+        if (!live) {
+          setError(t("lab.experimentBench.outcomeChoice.notFound", { change: c.title }));
+          return;
+        }
+        await runWrite((refresh) => writeLedger("rollback_change", { changeId: live.id }, refresh));
+      }
     } finally {
       setBusy(false);
     }
@@ -1141,6 +1188,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
       )}
 
       {summary && <TestSummary s={summary} />}
+      {choices.length > 0 && <OutcomeChoices choices={choices} busy={busy} locked={switchLocked} onUse={pickOutcome} />}
 
       {history.length > 0 && (
         <div className="exp-history">
@@ -1411,6 +1459,88 @@ function TestSummary({ s }: { s: GameTestSummary }) {
         }`}
       </p>
       <p className="exp-fineprint">{t("lab.experimentBench.summary.readOnly")}</p>
+    </div>
+  );
+}
+
+// P5-outcomes (ROADMAP Phase 5 step 6, ENGINE §5–6): one change, two results that disagree. The trade
+// in one line, then the switch to the side not in effect. One result, or two that agree, shows nothing.
+const RESULT_REASON_KEY: Record<OutcomeResult["reason"], string> = {
+  "low-up": "lowUp",
+  "avg-up": "avgUp",
+  "low-fell": "lowFell",
+  "avg-fell": "avgFell",
+  "low-flat": "lowFlat",
+  "avg-flat": "avgFlat",
+  "avg-unknown": "avgUnknown",
+};
+const RESULT_OUTCOME_KEY: Record<ResultOutcome, string> = { recommended: "recommended", "max-fps": "maxFps" };
+
+function OutcomeChoices({
+  choices,
+  busy,
+  locked,
+  onUse,
+}: {
+  choices: OutcomeChoice[];
+  busy: boolean;
+  /** A Trial or the journey is under way: the trade is shown, the switch is not. */
+  locked: boolean;
+  onUse: (c: OutcomeChoice, pick: ResultOutcome) => void;
+}) {
+  const { t } = useTranslation();
+  const name = (o: ResultOutcome) => t(`lab.experimentBench.outcome.${RESULT_OUTCOME_KEY[o]}`);
+  const one = (v: number) => String(Math.round(v * 10) / 10);
+  const why = (r: OutcomeResult) => {
+    const flat = r.reason === "low-flat" || r.reason === "avg-flat";
+    const pct = r.pct == null ? "" : flat ? `${r.pct > 0 ? "+" : ""}${one(r.pct)}` : one(Math.abs(r.pct));
+    return t(`lab.experimentBench.outcomeChoice.reason.${RESULT_REASON_KEY[r.reason]}`, { pct });
+  };
+  const side = (r: OutcomeResult) =>
+    t(r.keeps ? "lab.experimentBench.outcomeChoice.keeps" : "lab.experimentBench.outcomeChoice.keepsOff", {
+      outcome: name(r.outcome),
+      why: why(r),
+    });
+  return (
+    <div className="exp-order exp-outcome-choice" data-testid="exp-outcome-choice">
+      <SectionLabel>{t("lab.experimentBench.outcomeChoice.label")}</SectionLabel>
+      {choices.map((c) => {
+        const other: ResultOutcome | null = c.inEffect == null ? null : c.inEffect === "recommended" ? "max-fps" : "recommended";
+        return (
+          <div key={c.recId} data-testid="exp-outcome-choice-row" data-rec={c.recId} data-in-effect={c.inEffect ?? "unknown"}>
+            <p className="exp-order-label">{c.title}</p>
+            <p className="exp-note" data-testid="exp-outcome-choice-trade">
+              {`${side(c.recommended)} ${side(c.maxFps)}`}
+            </p>
+            {c.inEffect == null || other == null ? (
+              <p className="exp-fineprint">{t("lab.experimentBench.outcomeChoice.cantTell")}</p>
+            ) : locked ? (
+              <p className="exp-fineprint" data-testid="exp-outcome-choice-locked">
+                {t("lab.experimentBench.outcomeChoice.busy")}
+              </p>
+            ) : (
+              <>
+                <p className="exp-fineprint" data-testid="exp-outcome-choice-current">
+                  {t("lab.experimentBench.outcomeChoice.inEffect", { outcome: name(c.inEffect) })}
+                </p>
+                <button
+                  type="button"
+                  className="exp-cta-ghost"
+                  disabled={busy}
+                  data-outcome={other}
+                  data-trial={other === c.keepOutcome ? c.keepTrialId : undefined}
+                  onClick={() => onUse(c, other)}
+                >
+                  {t(other === c.keepOutcome ? "lab.experimentBench.outcomeChoice.useKeep" : "lab.experimentBench.outcomeChoice.useOff", {
+                    outcome: name(other),
+                    change: c.title,
+                  })}
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
