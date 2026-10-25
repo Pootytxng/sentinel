@@ -235,6 +235,8 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - 2026-10-25 midday: P4-next `abd4c883`.
 - 2026-10-25 midday: P4-maxfps `baa03405` (Smoothest held).
 - 2026-10-25 afternoon: P4-exit code `e3d0420e`.
+- 2026-10-25 ~06:39 desk install of main `f6736154` (stamp-proved, attempt 1; installer 21B647B4…EDB940) so the
+  owner's Phase 4 Trial runs use the new engine; RELEASE_STATE recorded.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
