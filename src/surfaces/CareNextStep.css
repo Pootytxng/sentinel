@@ -43,3 +43,7 @@
   font-weight: 600;
   color: var(--ix-text-1);
 }
+/* P6-next-f2: "Stop tracking this step" on a stored stutter step. */
+.bb-next-dismiss {
+  align-self: flex-start;
+}

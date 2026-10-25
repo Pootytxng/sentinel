@@ -391,6 +391,8 @@
       "shownAbove": "已作为你的下一步显示在上方。",
       "fromIncident": "来自最新一条崩溃记录（{{kind}}，{{date}}）。",
       "fromStutter": "来自下面的 {{game}} 会话比较。",
+      "fromStutterStored": "来自之前一次测出变慢的 {{game}} 会话比较。Compy 会继续用当时那次平稳会话来衡量之后的 {{game}} 会话。",
+      "stopTracking": "停止跟踪这一步",
       "basisTaken": "你在 {{date}} 回答了\u201c这有帮助吗？\u201d。",
       "basisShown": "Compy 从 {{date}} 起一直在跟踪这一步。",
       "payoffLabel": "此后：",

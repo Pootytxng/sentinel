@@ -402,6 +402,8 @@
       "shownAbove": "Shown as your next step above.",
       "fromIncident": "From your newest crash record ({{kind}}, {{date}}).",
       "fromStutter": "From the {{game}} session comparison below.",
+      "fromStutterStored": "From an earlier {{game}} session comparison that measured a slowdown. Compy keeps counting new {{game}} sessions against the steady session from then.",
+      "stopTracking": "Stop tracking this step",
       "basisTaken": "You answered \u201cDid this help?\u201d on {{date}}.",
       "basisShown": "Compy has tracked this step since {{date}}.",
       "payoffLabel": "Since then:",

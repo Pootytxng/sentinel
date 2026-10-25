@@ -11,6 +11,9 @@ import {
   pickCareStep,
   payoffFor,
   anchorFor,
+  storedStutterStep,
+  dismissStoredStep,
+  STORED_STEP_END_SESSIONS,
   SHOWN_KEY,
   MIN_PAYOFF_SESSIONS,
   type StutterResult,
@@ -19,7 +22,7 @@ import {
 import type { CrashIncident, SessionSummary, WhatChangedReport } from "../types";
 
 const h = vi.hoisted(() => ({
-  incidents: [] as unknown[], sessions: [] as unknown[], nextAction: "", skipped: [] as string[],
+  incidents: [] as unknown[], sessions: [] as unknown[], nextAction: "", skipped: [] as string[], verdict: "",
 }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
@@ -28,7 +31,7 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_crash_blackbox") return Promise.resolve({ incidents: h.incidents, skipped_sources: h.skipped });
     if (cmd === "get_session_summaries") return Promise.resolve(h.sessions);
     if (cmd === "what_changed_between")
-      return Promise.resolve({ kind: "report", ...report(args!.baselineStartedAt, h.nextAction || null) });
+      return Promise.resolve({ kind: "report", ...report(args!.baselineStartedAt, h.nextAction || null, h.verdict || "regressed") });
     return Promise.resolve(null);
   }),
 }));
@@ -98,6 +101,7 @@ afterEach(() => {
   h.sessions = [];
   h.nextAction = "";
   h.skipped = [];
+  h.verdict = "";
 });
 
 describe("pickCareStep: one step, by the documented priority", () => {
@@ -321,5 +325,87 @@ describe("payoff copy never claims a fix", () => {
     const d = JSON.parse(readFileSync(join("src", "i18n", "locales", loc, "gaming.json"), "utf8"));
     const text = JSON.stringify(d.blackBox.nextStep);
     expect(text).not.toMatch(/\b(fixed|solved|resolved|cured)\b|修复|解决/i);
+  });
+});
+
+// P6-next-f2: a stutter step shown once stays the step (with its payoff) while its stored anchor
+// lives, so "stayed within" can show after good sessions. It ends, or is retired, honestly.
+describe("P6-next-f2: the stored stutter step outlives a good session", () => {
+  const KEY = "stutter|valorant.exe|Roll back the GPU driver";
+  const base = { low1: 80, noiseFloorPct: 3, startedAt: "2026-10-20T10:00:00Z", hwHash: "hw1" };
+  const store = (extra: Record<string, unknown> = {}) =>
+    localStorage.setItem(SHOWN_KEY, JSON.stringify({ [KEY]: { at: "2026-10-21T00:00:00Z", baseline: base }, ...extra }));
+  const entry = (k = KEY) => JSON.parse(localStorage.getItem(SHOWN_KEY)!)[k];
+  const fp = (hash: string) => ({ hash, gpu: "", gpu_driver: "", ram_gb: 16, display: "" });
+  const good = (n: number) =>
+    Array.from({ length: n }, (_, i) => sess(`2026-10-${String(22 + i).padStart(2, "0")}T10:00:00Z`));
+  const notRegressed = (sessions: SessionSummary[], game = "Valorant.exe"): StutterResult => ({
+    report: report("2026-10-20T10:00:00Z", null, "no-change"), game: "Valorant", processName: game, sessions,
+  });
+
+  it("after good sessions the stored step still shows, with a hedged 'stayed within' payoff", async () => {
+    store();
+    h.sessions = [sess("2026-10-20T10:00:00Z"), ...good(2)];
+    h.verdict = "no-change";
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    const { container } = render(<BlackBox />);
+    await waitFor(() => expect(container.querySelectorAll(".bb-next")).toHaveLength(1));
+    const box = container.querySelector(".bb-next")!;
+    expect(box.getAttribute("data-source")).toBe("stutter");
+    expect(box.querySelector(".bb-next-headline")!.textContent).toBe("Roll back the GPU driver");
+    expect(box.querySelector(".bb-next-from")!.textContent).toMatch(/From an earlier Valorant session comparison/);
+    const pay = box.querySelector(".bb-next-payoff")!;
+    expect(pay.className).toContain("bb-next-payoff-sessions-steady");
+    expect(pay.textContent).toMatch(/In the 2 Valorant sessions since then, the 1% low stayed within 3%.*not proof/);
+    // The user can stop tracking it: it is retired and the slot no longer shows it.
+    fireEvent.click(screen.getByRole("button", { name: "Stop tracking this step" }));
+    await waitFor(() => expect(container.querySelector(".bb-next")).toBeNull());
+    expect(entry().retired).toBe("dismissed");
+  });
+
+  it("is only for its own game, and never over an assessed crash record", () => {
+    store();
+    expect(storedStutterStep(notRegressed(good(2), "Other.exe"))).toBeNull();
+    const st = storedStutterStep(notRegressed(good(2)));
+    expect(st).toMatchObject({ source: "stutter", stored: true, headline: "Roll back the GPU driver" });
+    expect(pickCareStep([inc("2026-10-24T10:00:00Z")], notRegressed(good(2)), st)?.source).toBe("incident");
+    expect(pickCareStep(null, notRegressed(good(2)), st)?.key).toBe(KEY);
+  });
+
+  it("ends after STORED_STEP_END_SESSIONS steady sessions (the comparison's own look-back)", () => {
+    expect(STORED_STEP_END_SESSIONS).toBe(5);
+    store();
+    const five = storedStutterStep(notRegressed(good(5)))!;
+    expect(payoffFor(five, anchorFor(five), [], good(5))).toEqual({ kind: "sessions-steady", total: 5 });
+    expect(storedStutterStep(notRegressed(good(6)))).toBeNull();
+    expect(entry().retired).toBe("ended");
+    // Ended for good: fewer sessions on a later read do not bring it back.
+    expect(storedStutterStep(notRegressed(good(2)))).toBeNull();
+  });
+
+  it("is retired when the rig changes", () => {
+    store();
+    expect(storedStutterStep(notRegressed([...good(2), sess("2026-10-25T10:00:00Z", { hw_fingerprint: fp("hw2") })]))).toBeNull();
+    expect(entry().retired).toBe("rig");
+  });
+
+  it("is retired when a new regressed step for another cause is shown, which then stays itself", () => {
+    store();
+    const fresh = pickCareStep(null, stutter("Turn off the overlay"), storedStutterStep(stutter("Turn off the overlay")))!;
+    expect(fresh).toMatchObject({ stored: false, headline: "Turn off the overlay" });
+    anchorFor(fresh, [], new Date("2026-10-24T00:00:00Z"));
+    expect(entry().retired).toBe("replaced");
+    expect(storedStutterStep(notRegressed(good(2)))?.headline).toBe("Turn off the overlay");
+  });
+
+  it("a retired step that regresses again starts a fresh anchor; dismiss without storage is harmless", () => {
+    store();
+    dismissStoredStep(KEY);
+    const again = pickCareStep(null, stutter("Roll back the GPU driver"))!;
+    const a = anchorFor(again, [], new Date("2026-10-26T00:00:00Z"));
+    expect(a.at).toBe(Date.parse("2026-10-26T00:00:00Z"));
+    expect(entry().retired).toBeUndefined();
+    localStorage.clear();
+    expect(() => dismissStoredStep(KEY)).not.toThrow();
   });
 });
