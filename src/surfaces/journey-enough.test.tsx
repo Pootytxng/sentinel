@@ -9,19 +9,21 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import i18n from "../i18n";
 
-const state = vi.hoisted(() => ({ fps: null as Record<string, unknown> | null }));
+const state = vi.hoisted(() => ({ fps: null as Record<string, unknown> | null, sessions: [] as unknown[] }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
     if (cmd === "get_fps_status") return Promise.resolve(state.fps);
     if (cmd === "get_gpu_sensors") return Promise.resolve([]);
-    if (cmd === "get_session_summaries" || cmd === "get_experiments") return Promise.resolve([]);
+    if (cmd === "get_session_summaries") return Promise.resolve(state.sessions);
+    if (cmd === "get_experiments") return Promise.resolve([]);
     return Promise.resolve(null);
   }),
 }));
 
 import Overlay from "../Overlay";
 import { GuidedJourney, resetJourneyForTests } from "./GuidedJourney";
-import { enoughLine, enoughState, JOURNEY_RECORDING_KEY, type CaptureProgress } from "./journey-enough";
+import { enoughLine, enoughState, JOURNEY_RECORDING_KEY, SETTLE_CAP_SAMPLES, type CaptureProgress } from "./journey-enough";
+import { MIN_BASELINE_SAMPLES } from "./baseline-grade";
 
 const t = i18n.t.bind(i18n);
 /** `samples` readings that count; buckets every 10 s at `first` fps, then `second` fps for the later half. */
@@ -46,6 +48,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   state.fps = null;
+  state.sessions = [];
 });
 
 describe("the countdown and the enough rule", () => {
@@ -118,6 +121,73 @@ describe("the overlay shows it only while a journey records", () => {
       await new Promise((r) => setTimeout(r, 30));
     });
     expect(screen.queryByTestId("overlay-enough")).toBeNull();
+  });
+});
+
+describe("P5-enough-f1: halves that never settle don't keep the line up forever", () => {
+  it("caps 'hasn't settled' at twice the minimum counted readings, then says so plainly", () => {
+    expect(SETTLE_CAP_SAMPLES).toBe(2 * MIN_BASELINE_SAMPLES);
+    expect(enoughState(prog(SETTLE_CAP_SAMPLES - 1, 240, 250))).toEqual({ kind: "settling" });
+    expect(enoughLine(prog(SETTLE_CAP_SAMPLES - 1, 240, 250), t, "overlay")).toBe("Not settled yet. Keep playing this area.");
+    expect(enoughState(prog(SETTLE_CAP_SAMPLES, 240, 250))).toEqual({ kind: "unsettled", untraced: false });
+    expect(enoughState(prog(5400, 240, 300))).toEqual({ kind: "unsettled", untraced: false });
+    expect(enoughLine(prog(SETTLE_CAP_SAMPLES, 240, 250), t)).toBe(
+      "The frame rate in this game keeps changing, so it may not settle. You can stop now; Compy will count this session as uneven.",
+    );
+    expect(enoughLine(prog(SETTLE_CAP_SAMPLES, 240, 250), t, "overlay")).toBe("Won't settle. Stop now; it counts as uneven.");
+    // Steady halves past the cap are still plain "enough", never the cap line.
+    expect(enoughState(prog(SETTLE_CAP_SAMPLES, 240, 245))).toEqual({ kind: "enough" });
+    // No trace: never called uneven, because nothing was measured swinging.
+    expect(enoughState({ samples: SETTLE_CAP_SAMPLES, fps_series: [] })).toEqual({ kind: "unsettled", untraced: true });
+    expect(enoughLine({ samples: SETTLE_CAP_SAMPLES, fps_series: [] }, t)).not.toMatch(/uneven/);
+    expect(enoughLine({ samples: SETTLE_CAP_SAMPLES, fps_series: [] }, t, "overlay")).toBe("Can't check if it's steady. You can stop now.");
+  });
+
+  it("has zh-CN copy for every cap line", async () => {
+    await i18n.changeLanguage("zh-CN");
+    expect(enoughLine(prog(SETTLE_CAP_SAMPLES, 240, 250), t)).toBe("这个游戏的帧率一直在变，可能稳定不下来。你现在可以停下；Compy 会把这一局记为不平稳。");
+    expect(enoughLine(prog(SETTLE_CAP_SAMPLES, 240, 250), t, "overlay")).toBe("帧率一直在变。可以停下；这局记为不平稳。");
+    expect(enoughLine({ samples: SETTLE_CAP_SAMPLES, fps_series: [] }, t, "overlay")).toBe("无法判断是否稳定。你现在可以停下。");
+  });
+
+  it("offers Stop now in the panel, and stopping lands in the journey's own uneven step", async () => {
+    const t0 = Date.now();
+    state.fps = playing(prog(900, 240, 250));
+    render(
+      <GuidedJourney game="Valorant" change={{ id: "hags", title: "HAGS" }} canStart outcome="recommended" onOutcome={() => {}} refresh={async () => {}} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Optimize my game" }));
+    await waitFor(() => expect(screen.getByTestId("journey-enough").textContent).toMatch(/hasn't settled/));
+    expect(screen.queryByRole("button", { name: "Stop now" })).toBeNull();
+    state.fps = playing(prog(SETTLE_CAP_SAMPLES, 240, 250));
+    await waitFor(() => expect(screen.getByTestId("journey-enough").textContent).toMatch(/keeps changing/));
+    expect(screen.queryByRole("button", { name: "Done playing" })).toBeNull();
+    // The saved session is the one the capture measured: graded by the shared rule, not by this line.
+    const n = SETTLE_CAP_SAMPLES / 10;
+    state.sessions = [
+      {
+        started_at: new Date(t0 + 500).toISOString(),
+        process_name: "Valorant",
+        samples: SETTLE_CAP_SAMPLES,
+        avg_fps: 245,
+        low1_fps_est: 180,
+        avg_frametime_ms: 4.1,
+        duration_secs: SETTLE_CAP_SAMPLES,
+        fps_series: Array.from({ length: n }, (_, i) => [i * 10, i < n / 2 ? 240 : 250] as [number, number]),
+      },
+    ];
+    fireEvent.click(screen.getByRole("button", { name: "Stop now" }));
+    await waitFor(() => expect(screen.getByTestId("journey").getAttribute("data-phase")).toBe("uneven"));
+    expect(screen.getByTestId("journey-line").textContent).toMatch(/swung from 240 to 250 fps, too uneven/);
+    expect(screen.queryByTestId("journey-enough")).toBeNull();
+    expect(localStorage.getItem(JOURNEY_RECORDING_KEY)).toBeNull();
+  });
+
+  it("the overlay shows the short cap line", async () => {
+    state.fps = playing(prog(SETTLE_CAP_SAMPLES, 240, 250));
+    localStorage.setItem(JOURNEY_RECORDING_KEY, "1");
+    render(<Overlay />);
+    await waitFor(() => expect(screen.getByTestId("overlay-enough").textContent).toBe("Won't settle. Stop now; it counts as uneven."));
   });
 });
 
