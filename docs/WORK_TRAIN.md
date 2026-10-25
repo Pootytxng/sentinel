@@ -171,7 +171,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 Planned 2026-10-25. Order is value order. Phase 5 exit on the owner rig: from one button to the summary,
 the owner never clicks Start experiment, Start capture, Stop capture or Conclude, and never picks a setting.
 - [x] **P5-plan** Slices written below (2026-10-25).
-- [ ] **P5-guided** One "Optimize my game" button on Optimize for the detected/last-played game: defaults to
+- [x] **P5-guided** `2f33cc6b` (capture starts on the button press; ends on game exit or Done). One "Optimize my game" button on Optimize for the detected/last-played game: defaults to
       Recommended (Maximum FPS one tap away), says the plan and time in one line (e.g. "2 sessions of ~10 min:
       one as-is, one with <top-ranked change>"), picks the change from P4-rank, and starts/stops capture
       itself when `game_state` sees the game in front / closed; then concludes and shows the verdict. One
