@@ -208,11 +208,13 @@ Planned 2026-10-25. Order is value order. Converge, don't add rooms. Phase 6 exi
 "my game crashed" or "it stutters" reaches one next step or an honest "we don't know" in one place, with no
 room or station picked by hand.
 - [x] **P6-plan** Slices written below (2026-10-25).
-- [ ] **P6-changed** Each incident in Crash & Freeze Rescue shows "Changed before this": Compy changes, driver,
+- [x] **P6-changed** (`3216a6b2`) Each incident in Crash & Freeze Rescue shows "Changed before this": Compy changes, driver,
       Windows build, power plan, hardware and drift since the last clean session, tagged "not proven cause".
       Needs the `intelligence.rs` gather anchored at the incident time. ROADMAP P6 bullets 1, 3; Constitution §17, §25.
 - [ ] **P6-changed-f1** Localise the "Changed before this" event lines by event kind (they show Rust's English
       `summary` today, as the What-changed panel does) so zh-CN reads whole. Needs P6-changed.
+- [ ] **P6-changed-f2** The WER folder read stops at 400 entries in folder order; if hit, treat the scan as
+      incomplete for "clean" (no time cut-point today), or read newest-first so a cut-point exists.
 - [ ] **P6-door** One Care door on Home ("Something's wrong") replaces the Crash & Freeze entry; the observer
       card and the interview crash/stutter answers all land on the same Care view. Needs P6-changed. ROADMAP P6
       exit; Constitution §18, §27.
