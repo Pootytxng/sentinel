@@ -401,7 +401,24 @@
       "alreadySetByGamingModeRestoreUnfinished": "Already set. Compy's Gaming Mode set it and hasn't finished putting it back. Restore your settings from the interrupted Gaming Mode session notice.",
       "alreadySetUnchecked": "Already set this way in Windows; Compy couldn't check whether it made this change.",
       "alreadySetUnconfirmed": "Already set. Compy applied this earlier but can't confirm its change is the one keeping it set.",
-      "noSafeApply": "Advice only. Compy has no safe one-click change for it, so it can't be tested."
+      "noSafeApply": "Advice only. Compy has no safe one-click change for it, so it can't be tested.",
+      "tooSmallToMeasureHere": "Too small to measure here. Its expected effect ({{effect}}%) is no bigger than this game's measured run-to-run noise ({{band}}%)."
+    },
+    "rank": {
+      "label": "Suggested order to test:",
+      "reason": "{{evidence}}; {{risk}}.",
+      "evidence": {
+        "measured": "backed by measurements",
+        "notMeasured": "expected to help, not measured",
+        "unknown": "no stated evidence it helps"
+      },
+      "risk": {
+        "low": "low risk",
+        "moderate": "moderate risk",
+        "unknown": "risk not stated"
+      },
+      "effectUnknownOne": "How big its effect is isn't known.",
+      "effectUnknownAll": "Compy doesn't know how big any of these effects are, so none was left out as too small to measure here."
     },
     "readingRig": "Reading your rig…",
     "forYourRig": "For your rig:",

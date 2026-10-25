@@ -366,6 +366,52 @@ describe("ExperimentBench (armed)", () => {
     expect(row("test-rec")).toBe("");
   });
 
+  // P4-rank (ENGINE §3.5, §3.7, §4): the picker used to offer changes in catalog order with no
+  // reason for the order. It now follows the backend's suggested order (stronger evidence, then lower
+  // risk), shows one reason per position, says when no effect size is known, and names a change too
+  // small to measure here with the numbers that decided it.
+  it("offers changes in the suggested test order, one reason each, and names a too-small change", async () => {
+    state.gate = true;
+    state.recs = [
+      { id: "late", title: "Unmeasured tweak", passes: true, reason: null, detail: null,
+        position: 2, evidence: "not-measured", risk: "moderate", stated_effect_pct: null, too_small: null },
+      { id: "early", title: "Measured tweak", passes: true, reason: null, detail: null,
+        position: 1, evidence: "measured", risk: "low", stated_effect_pct: null, too_small: null },
+      { id: "tiny", title: "Tiny tweak", passes: false, reason: "too-small-to-measure-here", detail: null,
+        position: null, evidence: "measured", risk: "low", stated_effect_pct: 1.5,
+        too_small: { effect_pct: 1.5, band_pct: 4.2 } },
+    ];
+    render(<ExperimentBench />);
+    const trigger = await screen.findByRole("combobox");
+    await waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+    await waitFor(() =>
+      expect(document.querySelector('[role="listbox"] [data-value="late"]')).not.toBeNull(),
+    );
+    const offered = [...document.querySelectorAll('[role="listbox"] [data-value]')]
+      .map((el) => el.getAttribute("data-value"))
+      .filter((v) => v);
+    expect(offered).toEqual(["early", "late"]);
+    fireEvent.click(trigger);
+
+    const order = [...document.querySelectorAll(".exp-order-list li")].map((li) => li.textContent);
+    expect(order).toEqual([
+      "Measured tweak backed by measurements; low risk.",
+      "Unmeasured tweak expected to help, not measured; moderate risk.",
+    ]);
+    expect(screen.getByText("Suggested order to test:")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Compy doesn't know how big any of these effects are, so none was left out as too small to measure here.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show why others aren't listed" }));
+    expect(document.querySelector('.exp-why-list [data-rec="tiny"]')?.textContent).toBe(
+      "Tiny tweak Too small to measure here. Its expected effect (1.5%) is no bigger than this game's measured run-to-run noise (4.2%).",
+    );
+  });
+
   it("shows no reasons toggle when every change is worth testing", async () => {
     state.gate = true;
     state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
