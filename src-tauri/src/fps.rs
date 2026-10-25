@@ -348,7 +348,10 @@ struct FpsReport {
 /// a presenter that owns a visible top-level window of its own can be "behind":
 /// a UWP game (window owned by ApplicationFrameHost) or one whose window a
 /// launcher owns would otherwise read "not in front" every tick and lose the
-/// whole session.
+/// whole session. Any window another process owns counts as "not in front",
+/// including ones that take focus without the player leaving the game: the
+/// GeForce overlay (Alt+Z), Xbox Game Bar, a clicked Discord window. An
+/// in-process overlay (Steam's) belongs to the game and stays in front.
 fn report_foreground(fg_known: bool, ev: Option<&WindowEvidence>) -> Option<bool> {
     if !fg_known {
         return None;
@@ -496,9 +499,10 @@ fn probe_window_evidence(pids: &[u32]) -> (HashMap<u32, WindowEvidence>, bool) {
         let fg = GetForegroundWindow();
         if !fg.is_invalid() {
             let mut fg_pid = 0u32;
-            GetWindowThreadProcessId(fg, Some(&mut fg_pid));
-            // A foreground window whose owner can't be resolved says nothing.
-            fg_known = fg_pid != 0;
+            // A foreground window whose owner can't be resolved (a zero thread id or pid) says
+            // nothing: unknown, never "someone else is in front". No foreground window at all
+            // (mid-switch, a UAC prompt, the lock screen) leaves `fg_known` false too.
+            fg_known = GetWindowThreadProcessId(fg, Some(&mut fg_pid)) != 0 && fg_pid != 0;
             if let Some(ev) = ctx.evidence.get_mut(&fg_pid) {
                 ev.foreground = true;
             }
@@ -1222,6 +1226,13 @@ mod foreground_report_tests {
     fn unresolvable_foreground_stays_unknown_never_false() {
         assert_eq!(report_foreground(false, Some(&BEHIND)), None);
         assert_eq!(report_foreground(false, Some(&IN_FRONT)), None);
+    }
+
+    #[test]
+    fn another_process_in_front_is_behind() {
+        // Alt+Z, Game Bar or a clicked Discord window own the foreground: the game reads behind.
+        let ev = WindowEvidence { foreground: false, ..IN_FRONT };
+        assert_eq!(report_foreground(true, Some(&ev)), Some(false));
     }
 
     #[test]

@@ -81,7 +81,18 @@ pub(crate) struct SessionComparability {
     pub(crate) confidence_limit: Confidence,
     /// What a surface may honestly conclude at this verdict — plain-language, ready to render.
     pub(crate) allowed_conclusions: Vec<String>,
+    /// P4-comparable: one stable key per `changed_context` line, in the same order ("resolution",
+    /// "refresh", "gpu-driver", …), so a surface can say what differed in the reader's language
+    /// instead of showing the English line. Additive: older payloads load empty.
+    #[serde(default)]
+    pub(crate) changed_keys: Vec<String>,
+    /// One stable key per `missing_context` line, in the same order ("conditions", "rig", …).
+    #[serde(default)]
+    pub(crate) missing_keys: Vec<String>,
 }
+
+/// A context line plus the stable key a surface translates it by (see `changed_keys`).
+type Keyed = (&'static str, String);
 
 /// Both-known-and-differ helper: `Some(true)` only when both sides carry a value and they differ.
 /// `None` when either side is unknown (→ caller records missing context, never "equal").
@@ -97,8 +108,8 @@ fn differs<T: PartialEq>(a: Option<&T>, b: Option<&T>) -> Option<bool> {
 /// (later) one; order affects only wording, never the verdict.
 pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparability {
     let mut reasons: Vec<String> = Vec::new();
-    let mut changed: Vec<String> = Vec::new();
-    let mut missing: Vec<String> = Vec::new();
+    let mut changed: Vec<Keyed> = Vec::new();
+    let mut missing: Vec<Keyed> = Vec::new();
     let mut candidates: Vec<String> = Vec::new();
 
     // ── Gate 0: same game. A game's frame timing is only meaningful against itself. A different
@@ -119,11 +130,12 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             );
         }
         (Some(_), Some(_)) => {} // same game — proceed
-        _ => missing.push(
+        _ => missing.push((
+            "game",
             "The presenting game wasn't recorded on one of these sessions — Compy can't confirm they're \
              the same game."
                 .into(),
-        ),
+        )),
     }
 
     // Start optimistic; each check can only hold or lower the verdict.
@@ -150,7 +162,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             have_rig_context = true;
             // GPU change → the entire measurement basis differs. NotComparable + candidate cause.
             if fa.gpu != fb.gpu {
-                changed.push(format!("GPU: {} → {}", fa.gpu, fb.gpu));
+                changed.push(("gpu", format!("GPU: {} → {}", fa.gpu, fb.gpu)));
                 candidates.push(format!(
                     "The GPU changed ({} → {}) — a different GPU is a different measurement basis, not a \
                      tuning result.",
@@ -164,7 +176,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             }
             // RAM change → real but not basis-invalidating: Partial + candidate cause.
             if fa.ram_gb != fb.ram_gb {
-                changed.push(format!("RAM: {} GB → {} GB", fa.ram_gb, fb.ram_gb));
+                changed.push(("ram", format!("RAM: {} GB → {} GB", fa.ram_gb, fb.ram_gb)));
                 candidates.push(format!(
                     "Installed memory changed ({} GB → {} GB) — a candidate explanation, not a proven cause.",
                     fa.ram_gb, fb.ram_gb
@@ -176,7 +188,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             // changes the workload — a delta can't be isolated to anything else. Partial. (game_state
             // below gives the finer-grained wording when present.)
             if fa.display != fb.display {
-                changed.push(format!("Display mode: {} → {}", fa.display, fb.display));
+                changed.push(("display-mode", format!("Display mode: {} → {}", fa.display, fb.display)));
                 reasons.push(
                     "The display resolution or refresh changed — that changes the workload, so a \
                      difference can't be isolated to a single cause."
@@ -187,7 +199,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             // Driver change → KEEP comparable for regression detection, but flag as the first
             // candidate to check. Correlation, never automatic cause.
             if fa.gpu_driver != fb.gpu_driver && fa.gpu == fb.gpu {
-                changed.push(format!("GPU driver: {} → {}", fa.gpu_driver, fb.gpu_driver));
+                changed.push(("gpu-driver", format!("GPU driver: {} → {}", fa.gpu_driver, fb.gpu_driver)));
                 candidates.push(format!(
                     "The GPU driver changed ({} → {}) — a candidate explanation to check first, not a \
                      proven cause.",
@@ -195,11 +207,12 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                 ));
             }
         }
-        _ => missing.push(
+        _ => missing.push((
+            "rig",
             "The PC's hardware wasn't recorded on one of these sessions — Compy can't confirm they ran on \
              the same rig."
                 .into(),
-        ),
+        )),
     }
 
     // ── Conditions: from the game-state fingerprint (Task E). Each field is compared only when BOTH
@@ -215,7 +228,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             Some(true) => {
                 let (wa, ha) = res_a.unwrap();
                 let (wb, hb) = res_b.unwrap();
-                changed.push(format!("Resolution: {wa}×{ha} → {wb}×{hb}"));
+                changed.push(("resolution", format!("Resolution: {wa}×{ha} → {wb}×{hb}")));
                 reasons.push(
                     "The display resolution changed — that changes how hard the PC is working, so a \
                      difference can't be attributed to anything else on its own."
@@ -224,12 +237,13 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                 lower(Comparability::Partial, &mut verdict);
             }
             None if res_a.is_none() || res_b.is_none() => missing
-                .push("The resolution wasn't recorded on one of these sessions.".into()),
+                .push(("resolution", "The resolution wasn't recorded on one of these sessions.".into())),
             _ => {}
         }
 
         // Refresh — a cap on the achievable frame rate.
         condition_check(
+            "refresh",
             ga.display_refresh_hz.as_ref(),
             gb.display_refresh_hz.as_ref(),
             |x, y| format!("Refresh: {x} Hz → {y} Hz"),
@@ -246,6 +260,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
 
         // Graphics API — a DX11↔DX12 (etc.) change is a workload change.
         condition_check(
+            "graphics-api",
             ga.graphics_api.as_ref(),
             gb.graphics_api.as_ref(),
             |x, y| format!("Graphics API: {x} → {y}"),
@@ -267,7 +282,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                     ga.game_build.clone().unwrap_or_default(),
                     gb.game_build.clone().unwrap_or_default(),
                 );
-                changed.push(format!("Game build: {x} → {y}"));
+                changed.push(("game-build", format!("Game build: {x} → {y}")));
                 candidates.push(
                     "The game updated between these sessions — a regression could be the update itself, \
                      not a change on your PC."
@@ -280,13 +295,14 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                 lower(Comparability::Partial, &mut verdict);
             }
             None if ga.game_build.is_some() != gb.game_build.is_some() => {
-                missing.push("The game's build wasn't recorded on one of these sessions.".into());
+                missing.push(("game-build", "The game's build wasn't recorded on one of these sessions.".into()));
             }
             _ => {}
         }
 
         // Frame-generation state — a blended real+generated FPS is not the same metric as a real one.
         condition_check(
+            "frame-generation",
             ga.frame_generation_state.as_ref(),
             gb.frame_generation_state.as_ref(),
             |x, y| format!("Frame generation: {x} → {y}"),
@@ -307,7 +323,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                 ga.windows_build.clone().unwrap_or_default(),
                 gb.windows_build.clone().unwrap_or_default(),
             );
-            changed.push(format!("Windows build: {x} → {y}"));
+            changed.push(("windows-build", format!("Windows build: {x} → {y}")));
             candidates.push(format!(
                 "Windows updated ({x} → {y}) — a candidate explanation to consider, not a proven cause."
             ));
@@ -321,16 +337,17 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                 ga.active_display_identity.clone().unwrap_or_default(),
                 gb.active_display_identity.clone().unwrap_or_default(),
             );
-            changed.push(format!("Display: {x} → {y}"));
+            changed.push(("display", format!("Display: {x} → {y}")));
             reasons.push("A different monitor was active between these sessions.".into());
             lower(Comparability::Partial, &mut verdict);
         }
     } else {
-        missing.push(
+        missing.push((
+            "conditions",
             "The conditions one of these sessions ran under weren't recorded — Compy can't confirm the \
              resolution, refresh, or graphics settings matched."
                 .into(),
-        );
+        ));
     }
 
     // ── Capture method + shared metrics: only metrics BOTH backends captured may be compared. ─────
@@ -338,9 +355,12 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
     match (a.capture_capabilities.as_ref(), b.capture_capabilities.as_ref()) {
         (Some(ca), Some(cb)) => {
             if !ca.same_method_as(cb) {
-                changed.push(format!(
-                    "Capture method: {} v{} → {} v{}",
-                    ca.backend_id, ca.backend_version, cb.backend_id, cb.backend_version
+                changed.push((
+                    "capture-method",
+                    format!(
+                        "Capture method: {} v{} → {} v{}",
+                        ca.backend_id, ca.backend_version, cb.backend_id, cb.backend_version
+                    ),
                 ));
                 if shared_metrics.is_empty() {
                     reasons.push(
@@ -359,11 +379,12 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                 }
             }
         }
-        _ => missing.push(
+        _ => missing.push((
+            "capture",
             "What the capture could measure wasn't recorded on one of these sessions — Compy can't \
              confirm they were measured the same way."
                 .into(),
-        ),
+        )),
     }
 
     // ── No recorded context on either side to judge comparability at all → Unknown (never equal). ─
@@ -401,6 +422,73 @@ fn shared_metrics_of(a: &SessionSummary, b: &SessionSummary) -> Vec<String> {
     }
 }
 
+/// A held-flat stretch is at least this many consecutive 10 s trace buckets (one minute).
+const FLAT_MIN_BUCKETS: usize = 6;
+/// Buckets within this many fps of each other count as held flat. Real play wanders by more than
+/// this from one 10 s bucket to the next; a frame cap, a menu or a backgrounded game does not.
+const FLAT_SPREAD_FPS: f64 = 2.0;
+
+/// P4-comparable (Trial Protocol §7 "the workload becomes incomparable"): the stretches of one
+/// session that weren't play, as far as the session's own records can tell. Additive on the
+/// experiment record; every field defaults so older records load.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub(crate) struct SessionStretches {
+    /// Seconds left out of the session's numbers because the game wasn't the window in front
+    /// (`SessionSummary::background_secs_excluded`). `None` = the session didn't record focus, so nothing
+    /// was left out on that ground.
+    #[serde(default)]
+    pub left_out_secs: Option<u32>,
+    /// Seconds the frame-rate trace held flat (within `FLAT_SPREAD_FPS` for at least a minute):
+    /// maybe a menu, a frame cap or the game in the background. Compy can't tell which, so these
+    /// stretches stay in the numbers and are only named. 0 when none, or when there was no trace.
+    #[serde(default)]
+    pub flat_secs: u32,
+    /// The frame rate the longest held-flat stretch sat at. `None` when there was none.
+    #[serde(default)]
+    pub flat_fps: Option<f64>,
+    /// Whether the session still carried its frame-rate trace, so flat stretches could be looked for.
+    #[serde(default)]
+    pub traced: bool,
+}
+
+/// Pure: what `session`'s own records say about stretches that weren't play. Never classifies a
+/// held-flat stretch as idle: it can't tell a menu from a frame cap, so it only measures it.
+pub(crate) fn stretches_of(session: &SessionSummary) -> SessionStretches {
+    let series = &session.fps_series;
+    let step = crate::sessions::FPS_SERIES_BUCKET_SECS;
+    let (mut flat_buckets, mut longest): (usize, Option<(usize, f64)>) = (0, None);
+    let mut i = 0;
+    while i < series.len() {
+        let (mut lo, mut hi) = (series[i].1, series[i].1);
+        let mut j = i + 1;
+        while j < series.len() && series[j].0 == series[j - 1].0 + step {
+            let f = series[j].1;
+            if f.max(hi) - f.min(lo) > FLAT_SPREAD_FPS {
+                break;
+            }
+            (lo, hi) = (f.min(lo), f.max(hi));
+            j += 1;
+        }
+        let len = j - i;
+        if len >= FLAT_MIN_BUCKETS {
+            flat_buckets += len;
+            let held = series[i..j].iter().map(|&(_, f)| f).sum::<f64>() / len as f64;
+            if longest.is_none_or(|(n, _)| len > n) {
+                longest = Some((len, (held * 10.0).round() / 10.0));
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    SessionStretches {
+        left_out_secs: session.background_secs_excluded,
+        flat_secs: flat_buckets as u32 * step,
+        flat_fps: longest.map(|(_, f)| f),
+        traced: !series.is_empty(),
+    }
+}
+
 fn non_empty(s: &str) -> Option<&str> {
     let t = s.trim();
     (!t.is_empty()).then_some(t)
@@ -410,14 +498,15 @@ fn non_empty(s: &str) -> Option<&str> {
 /// lowers the verdict — the repeated shape for refresh / graphics-api / frame-gen.
 #[allow(clippy::too_many_arguments)]
 fn condition_check<T: PartialEq + std::fmt::Display>(
+    key: &'static str,
     a: Option<&T>,
     b: Option<&T>,
     changed_line: impl Fn(&T, &T) -> String,
     changed_reason: &str,
     missing_reason: &str,
     on_change: Comparability,
-    changed: &mut Vec<String>,
-    missing: &mut Vec<String>,
+    changed: &mut Vec<Keyed>,
+    missing: &mut Vec<Keyed>,
     reasons: &mut Vec<String>,
     verdict: &mut Comparability,
     lower: &mut impl FnMut(Comparability, &mut Comparability),
@@ -425,12 +514,12 @@ fn condition_check<T: PartialEq + std::fmt::Display>(
     match (a, b) {
         (Some(x), Some(y)) => {
             if x != y {
-                changed.push(changed_line(x, y));
+                changed.push((key, changed_line(x, y)));
                 reasons.push(changed_reason.into());
                 lower(on_change, verdict);
             }
         }
-        (Some(_), None) | (None, Some(_)) => missing.push(missing_reason.into()),
+        (Some(_), None) | (None, Some(_)) => missing.push((key, missing_reason.into())),
         (None, None) => {}
     }
 }
@@ -440,8 +529,8 @@ fn condition_check<T: PartialEq + std::fmt::Display>(
 fn finish(
     verdict: Comparability,
     mut reasons: Vec<String>,
-    changed: Vec<String>,
-    missing: Vec<String>,
+    changed: Vec<Keyed>,
+    missing: Vec<Keyed>,
     candidates: Vec<String>,
     shared_metrics: Vec<String>,
 ) -> SessionComparability {
@@ -481,11 +570,15 @@ fn finish(
             "Same game, same PC, same capture method, and no changed condition detected.".into(),
         );
     }
+    let (changed_keys, changed_context) = changed.into_iter().map(|(k, s)| (k.to_string(), s)).unzip();
+    let (missing_keys, missing_context) = missing.into_iter().map(|(k, s)| (k.to_string(), s)).unzip();
     SessionComparability {
         verdict,
         reasons,
-        changed_context: changed,
-        missing_context: missing,
+        changed_context,
+        missing_context,
+        changed_keys,
+        missing_keys,
         candidate_causes: candidates,
         shared_metrics,
         confidence_limit,
@@ -496,7 +589,7 @@ fn finish(
 /// Terminal NotComparable (different game / no common metric) — skips the condition machinery.
 fn not_comparable(
     reason: String,
-    changed: Vec<String>,
+    changed: Vec<Keyed>,
     shared_metrics: Vec<String>,
 ) -> SessionComparability {
     finish(
@@ -729,5 +822,112 @@ mod tests {
         let json = serde_json::to_string(&c).unwrap();
         let back: SessionComparability = serde_json::from_str(&json).unwrap();
         assert_eq!(c, back);
+    }
+
+    #[test]
+    fn every_context_line_carries_its_key_in_the_same_order() {
+        // P4-comparable: a surface says what differed from the keys, so each line needs its key.
+        let a = session();
+        let mut b = session();
+        if let Some(g) = b.game_state.as_mut() {
+            g.resolution_width = Some(1920);
+            g.resolution_height = Some(1080);
+            g.graphics_api = None;
+        }
+        let c = derive(&a, &b);
+        assert_eq!(c.verdict, Comparability::Partial);
+        assert_eq!(c.changed_keys, vec!["resolution"]);
+        assert_eq!(c.missing_keys, vec!["graphics-api"]);
+        assert_eq!(c.changed_keys.len(), c.changed_context.len());
+        assert_eq!(c.missing_keys.len(), c.missing_context.len());
+
+        let mut bare = session();
+        bare.hw_fingerprint = None;
+        bare.game_state = None;
+        let c = derive(&a, &bare);
+        assert_eq!(c.missing_keys, vec!["rig", "conditions"]);
+        assert_eq!(c.missing_keys.len(), c.missing_context.len());
+
+        let mut newer = session();
+        if let Some(f) = newer.hw_fingerprint.as_mut() {
+            f.gpu_driver = "25.8.1".into();
+            f.ram_gb = 16;
+        }
+        assert_eq!(derive(&a, &newer).changed_keys, vec!["ram", "gpu-driver"]);
+    }
+
+    #[test]
+    fn a_comparability_payload_without_keys_still_loads() {
+        // Additive: a payload written before P4-comparable carries no keys and loads with none.
+        let mut v = serde_json::to_value(derive(&session(), &session())).unwrap();
+        let obj = v.as_object_mut().unwrap();
+        assert!(obj.remove("changed_keys").is_some() && obj.remove("missing_keys").is_some());
+        let old: SessionComparability = serde_json::from_value(v).unwrap();
+        assert!(old.changed_keys.is_empty() && old.missing_keys.is_empty());
+    }
+
+    /// The owner's real WARDOGS session of 2026-10-25T09:39 UTC (1697 s, 1688 readings), its 10 s
+    /// frame-rate trace exactly as sessions.json recorded it. From 700 s on it sits at 120 fps: the
+    /// owner was away from the game, but nothing recorded says whether it was a menu or the game in
+    /// the background.
+    const WARDOGS_0939_FPS: [f64; 170] = [
+        206.0, 185.4, 199.9, 185.5, 192.6, 196.0, 193.7, 208.3, 215.3, 214.8, 189.4, 185.2, 182.7, 184.8,
+        197.5, 193.7, 199.6, 184.9, 189.7, 179.6, 191.1, 193.4, 201.6, 202.6, 199.5, 202.7, 217.1, 212.3,
+        218.1, 208.5, 204.1, 211.9, 209.7, 225.1, 220.5, 229.4, 217.8, 212.6, 207.1, 205.4, 208.8, 215.7,
+        202.0, 225.6, 239.7, 230.3, 230.7, 234.0, 233.1, 230.8, 228.3, 221.0, 217.1, 226.3, 227.9, 235.8,
+        229.6, 234.3, 224.7, 219.0, 208.9, 211.1, 209.7, 209.2, 208.9, 193.3, 187.3, 196.3, 183.4, 149.3,
+        120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0,
+        120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0,
+        120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0,
+        120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0,
+        120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0,
+        120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0,
+        120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0, 120.0,
+        120.0, 116.3,    ];
+
+    fn traced(fps: &[f64]) -> SessionSummary {
+        let mut s = session();
+        s.fps_series = fps.iter().enumerate().map(|(i, &f)| (i as u32 * 10, f)).collect();
+        s
+    }
+
+    #[test]
+    fn a_held_flat_stretch_is_named_and_kept_never_left_out() {
+        let st = stretches_of(&traced(&WARDOGS_0939_FPS));
+        assert_eq!(st.flat_secs, 990, "700 s to the end held at 120 fps");
+        assert_eq!(st.flat_fps, Some(120.0));
+        // This session didn't record focus, so nothing was left out on that ground.
+        assert_eq!(st.left_out_secs, None);
+        assert!(st.traced);
+        // The first 700 s were real play (185-220 fps, wandering): not one held-flat minute there.
+        assert_eq!(stretches_of(&traced(&WARDOGS_0939_FPS[..70])).flat_secs, 0);
+    }
+
+    #[test]
+    fn held_flat_needs_a_full_minute_with_no_gap() {
+        // Five flat buckets (50 s) are not a stretch; six are.
+        let mut five = vec![200.0, 230.0];
+        five.extend([120.0; 5]);
+        five.push(250.0);
+        assert_eq!(stretches_of(&traced(&five)).flat_secs, 0);
+        let six: Vec<f64> = [120.0; 6].to_vec();
+        assert_eq!(stretches_of(&traced(&six)).flat_secs, 60);
+        // A gap in the trace (no reading) splits a run: two 30 s halves are not a minute.
+        let mut s = traced(&six);
+        for p in s.fps_series.iter_mut().skip(3) {
+            p.0 += 100;
+        }
+        assert_eq!(stretches_of(&s).flat_secs, 0);
+        // A session that shed its trace says it couldn't be looked at, not that it was clean.
+        let st = stretches_of(&session());
+        assert!(!st.traced);
+        assert_eq!(st.flat_secs, 0);
+    }
+
+    #[test]
+    fn background_time_rides_along_from_the_session() {
+        let mut s = traced(&WARDOGS_0939_FPS[..70]);
+        s.background_secs_excluded = Some(600);
+        assert_eq!(stretches_of(&s).left_out_secs, Some(600));
     }
 }

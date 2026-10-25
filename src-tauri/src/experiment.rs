@@ -143,6 +143,40 @@ pub(crate) struct SessionPairing {
     /// What Compy couldn't check because one of the sessions didn't record it. Empty when Comparable.
     #[serde(default)]
     pub missing_context: Vec<String>,
+    /// P4-comparable: the stable keys of the conditions that differed ("resolution", "gpu-driver",
+    /// …; `comparability::SessionComparability::changed_keys`), so the receipt says what differed
+    /// in the reader's language. Additive: older records load empty.
+    #[serde(default)]
+    pub changed: Vec<String>,
+    /// The stable keys of the conditions one session didn't record (`missing_keys`). Additive.
+    #[serde(default)]
+    pub unrecorded: Vec<String>,
+    /// What each session's records say about stretches that weren't play: time left out because the
+    /// game was in the background, and held-flat time Compy counted because it can't tell a menu
+    /// from a frame cap. `None` when that session couldn't be read, and on older records.
+    #[serde(default)]
+    pub baseline_stretches: Option<crate::comparability::SessionStretches>,
+    #[serde(default)]
+    pub after_stretches: Option<crate::comparability::SessionStretches>,
+}
+
+impl SessionPairing {
+    /// The receipt's view of a pairing, with what the two sessions' records say about their
+    /// stretches that weren't play.
+    pub(crate) fn of(
+        pairing: &SessionComparability,
+        baseline: Option<&SessionSummary>,
+        after: Option<&SessionSummary>,
+    ) -> Self {
+        SessionPairing {
+            verdict: pairing.verdict,
+            missing_context: pairing.missing_context.clone(),
+            changed: pairing.changed_keys.clone(),
+            unrecorded: pairing.missing_keys.clone(),
+            baseline_stretches: baseline.map(crate::comparability::stretches_of),
+            after_stretches: after.map(crate::comparability::stretches_of),
+        }
+    }
 }
 
 /// One full experiment record, persisted to `experiments.json`. Every optional is `#[serde(default)]`
@@ -949,6 +983,37 @@ fn verdict_confidence(verdict: &str, treatment_samples: u32, crashed: bool) -> C
     }
 }
 
+/// P4-comparable: how much of a session was left out because another window was in front, as a
+/// clause for "too few readings" reasons: "while the game was in front (12 min were left out
+/// because another window was in front)". Empty when nothing was left out or focus wasn't recorded.
+pub(crate) fn left_out_clause(session: &SessionSummary) -> String {
+    match session.background_secs_excluded {
+        Some(secs) if secs > 0 => {
+            let span = if secs < 60 { format!("{secs} s") } else { format!("{} min", secs / 60) };
+            format!(" while the game was in front ({span} were left out because another window was in front)")
+        }
+        _ => String::new(),
+    }
+}
+
+/// A too-few-readings result on a session that left time out says the readings were counted while the
+/// game was in front, and how much was left out, so "only 400 readings" from a 40-minute session is
+/// not a mystery.
+fn with_left_out_readings(outcome: ConcludeOutcome, treatment: &SessionSummary) -> ConcludeOutcome {
+    let clause = left_out_clause(treatment);
+    if clause.is_empty() || outcome.stop_reason.as_deref() != Some("insufficient-samples") {
+        return outcome;
+    }
+    let note = format!(
+        "Only {} frame-rate readings (about one a second) were captured{clause} — below the \
+         {MIN_TREATMENT_SAMPLES} (about 10 minutes of play) Compy needs for a fair before/after. That \
+         is not enough comparable evidence to judge this change, so it was restored and the result is \
+         left as unknown.",
+        treatment.samples
+    );
+    ConcludeOutcome { note, ..outcome }
+}
+
 /// The plain-language "what supports / limits this verdict" line (Task F) — the experiment's
 /// methodology in one sentence, in product language (single-variable, comparable-evidence,
 /// direct-comparison-limited). Never a numeric confidence.
@@ -1223,8 +1288,9 @@ pub(crate) fn baseline_for_start(
         BaselineGrade::Untraced => Ok((BaselineCheck::Untraced, None)),
         BaselineGrade::TooShort { samples } => Err(format!(
             "the baseline session is too short to compare against ({samples} of the \
-             {MIN_BASELINE_SAMPLES} frame-rate readings Compy needs, about 10 minutes of play), \
-             record a new baseline: play another session of this game, then start"
+             {MIN_BASELINE_SAMPLES} frame-rate readings Compy needs, about 10 minutes of play{}), \
+             record a new baseline: play another session of this game, then start",
+            left_out_clause(session)
         )),
     }
 }
@@ -2420,14 +2486,17 @@ pub(crate) fn conclude_experiment(
             // checked" to the too-noisy note, as it does for every verdict that wasn't judged.
             with_comparability(
                 with_steady_sessions(
-                    conclude_outcome(
-                        rec,
-                        treatment.low1_fps_est,
-                        treatment.samples,
-                        crashed,
-                        Some(&treatment.process_name),
-                        ledger_now,
-                        now,
+                    with_left_out_readings(
+                        conclude_outcome(
+                            rec,
+                            treatment.low1_fps_est,
+                            treatment.samples,
+                            crashed,
+                            Some(&treatment.process_name),
+                            ledger_now,
+                            now,
+                        ),
+                        treatment,
                     ),
                     uneven_baseline.as_ref(),
                     uneven_after,
@@ -2464,7 +2533,7 @@ pub(crate) fn conclude_experiment(
         .as_ref()
         .map(|(_, pairing)| pairing)
         .or(crash_pairing.as_ref())
-        .map(|pairing| SessionPairing { verdict: pairing.verdict, missing_context: pairing.missing_context.clone() });
+        .map(|pairing| SessionPairing::of(pairing, baseline, treatment));
     // §11: the band this verdict was judged against, when it was.
     let band_pct = store.experiments[idx].noise_floor_pct;
     let between = store.experiments[idx].between_session_noise.clone();
@@ -4081,6 +4150,85 @@ mod experiment_tests {
         assert_eq!(old.noise_evidence, None);
         let t = old.treatment.unwrap();
         assert_eq!((t.session_id, t.check, t.halves), (None, None, None));
+    }
+
+    // P4-comparable: the receipt keeps what differed as keys a surface can translate, and what each
+    // session's records say about time that wasn't play.
+    #[test]
+    fn a_partial_pairing_receipt_keeps_what_differed_and_the_stretches() {
+        let base = session(BASE_ID, 150.0);
+        let mut after = session(TREAT_ID, 180.0);
+        after.game_state.as_mut().unwrap().resolution_width = Some(1920);
+        after.game_state.as_mut().unwrap().graphics_api = None;
+        after.background_secs_excluded = Some(420);
+        after.fps_series = (0..80).map(|i| (i * 10, if i < 20 { 200.0 + (i % 7) as f64 * 3.0 } else { 120.0 })).collect();
+        let pairing = crate::comparability::derive(&base, &after);
+        assert_eq!(pairing.verdict, Comparability::Partial);
+        let receipt = SessionPairing::of(&pairing, Some(&base), Some(&after));
+        assert_eq!(receipt.changed, vec!["resolution"]);
+        assert_eq!(receipt.unrecorded, vec!["graphics-api"]);
+        let after_st = receipt.after_stretches.clone().unwrap();
+        assert_eq!((after_st.left_out_secs, after_st.flat_secs, after_st.flat_fps), (Some(420), 600, Some(120.0)));
+        let base_st = receipt.baseline_stretches.clone().unwrap();
+        assert_eq!((base_st.left_out_secs, base_st.flat_secs, base_st.traced), (None, 0, false));
+        // A session Compy couldn't read has no stretches, never an empty "clean" one.
+        assert_eq!(SessionPairing::of(&pairing, None, Some(&after)).baseline_stretches, None);
+
+        // Older-build safety, both ways: a pairing written before P4-comparable loads with nothing,
+        // and one written now loads in the older shape (verdict + missing_context only).
+        let old: SessionPairing = serde_json::from_str(r#"{"verdict":"partial","missing_context":["x"]}"#).unwrap();
+        assert!(old.changed.is_empty() && old.unrecorded.is_empty());
+        assert_eq!((old.baseline_stretches, old.after_stretches), (None, None));
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OlderPairing {
+            verdict: Comparability,
+            #[serde(default)]
+            missing_context: Vec<String>,
+        }
+        let older: OlderPairing = serde_json::from_value(serde_json::to_value(&receipt).unwrap()).unwrap();
+        assert_eq!(older.verdict, Comparability::Partial);
+    }
+
+    // P4-comparable review: "only 400 readings" from a long session must say the rest was left out
+    // because another window was in front, at conclude and at start.
+    #[test]
+    fn too_few_readings_after_background_time_says_what_was_left_out() {
+        let judge = |after: &SessionSummary| {
+            with_left_out_readings(
+                conclude_outcome(&rec(150.0, 5), 180.0, after.samples, false, Some("Test"), Some(5), Utc::now()),
+                after,
+            )
+        };
+        let mut after = session(TREAT_ID, 180.0);
+        after.samples = 400;
+        after.background_secs_excluded = Some(1500);
+        let o = judge(&after);
+        assert_eq!(o.verdict, "insufficient-evidence");
+        assert!(
+            o.note.contains("Only 400 frame-rate readings (about one a second) were captured while the game was in \
+                             front (25 min were left out because another window was in front)"),
+            "{}",
+            o.note
+        );
+        // Focus not recorded, or nothing left out: the plain reason, no claim about focus.
+        for secs in [None, Some(0)] {
+            after.background_secs_excluded = secs;
+            assert!(!judge(&after).note.contains("in front"), "{secs:?}");
+        }
+        // Enough readings: a judged verdict never carries the clause.
+        after.samples = 5000;
+        after.background_secs_excluded = Some(1500);
+        assert!(!judge(&after).note.contains("left out"));
+
+        // The start's refusal of a short baseline says the same.
+        let mut base = session(BASE_ID, 150.0);
+        base.samples = 400;
+        base.background_secs_excluded = Some(45);
+        let why = baseline_for_start(&base, DEFAULT_NOISE_FLOOR_PCT).unwrap_err();
+        assert!(why.contains("400 of the 600") && why.contains("(45 s were left out because another window was in front)"), "{why}");
+        base.background_secs_excluded = None;
+        assert!(!baseline_for_start(&base, DEFAULT_NOISE_FLOOR_PCT).unwrap_err().contains("in front"));
     }
 
     /// A ledger row whose undo carries a date.

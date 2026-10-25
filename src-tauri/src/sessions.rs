@@ -31,7 +31,7 @@ const MIN_SESSION_SECS: u64 = 60;
 /// FPS-series downsampling: one point per this many seconds of real elapsed time. Each point is
 /// the MEAN of the real ~1 Hz FPS samples that landed in the bucket — a real aggregate of real
 /// samples, never an interpolation.
-const FPS_SERIES_BUCKET_SECS: u32 = 10;
+pub(crate) const FPS_SERIES_BUCKET_SECS: u32 = 10;
 /// Series length cap: 6 h at 1 point/10 s. Past this the series just stops (its last x value
 /// states its own coverage — same honesty contract as `stutter_timeline`'s 7200-tick cap).
 const FPS_SERIES_MAX_POINTS: usize = 2160;
@@ -134,13 +134,16 @@ pub(crate) struct SessionSummary {
     /// cards expose. None on NVIDIA (NVML doesn't expose it) and on pre-field sessions. Additive.
     #[serde(default)]
     pub(crate) peak_gpu_hotspot_temp_c: Option<u32>,
-    /// P4-comparable: seconds the attached game kept presenting while another window was in front
-    /// (alt-tabbed). Those seconds are left out of every FPS figure above, and this says how many,
-    /// so the receipt can show what was set aside. `None` on rows an older Compy wrote (it measured
-    /// those seconds in). A menu shown in front can't be told apart from play, so it is never
-    /// counted here. A floor, not a total: only seconds where the game still presented are counted
-    /// (a minimized game that stops presenting adds nothing here), and `duration_secs` is still wall
-    /// time including these seconds. Additive.
+    /// P4-comparable: seconds the game presented frames while another window was in front (the
+    /// player alt-tabbed away). Those readings are left out of every measured number above
+    /// (`samples`, the averages, the 1% low, `fps_series`), so a verdict or a noise band never
+    /// judges time nobody was playing. `None` = this session never got a focus reading (an older
+    /// Compy or helper, or a game whose window Compy can't attribute, e.g. UWP or launcher-owned),
+    /// so nothing was left out on that ground and nothing says it was in front either. A menu shown
+    /// in front can't be told apart from play, so it is never counted here. A floor, not a total:
+    /// only seconds where the game still presented are counted (a minimized game that stops
+    /// presenting adds nothing), and `duration_secs` is still wall time including these seconds.
+    /// Additive: an older Compy ignores the key.
     #[serde(default)]
     pub(crate) background_secs_excluded: Option<u32>,
 }
@@ -234,8 +237,8 @@ pub(crate) struct SessionAccumulator {
     bucket_idx: Option<u32>,
     bucket_sum: f64,
     bucket_count: u32,
-    /// Ticks the game presented from behind another window, left out of the figures.
-    background_ticks: u32,
+    /// Ticks the game presented with another window in front; `None` until the helper reports focus.
+    background_secs_excluded: Option<u32>,
 }
 
 impl SessionAccumulator {
@@ -268,14 +271,38 @@ impl SessionAccumulator {
             bucket_idx: None,
             bucket_sum: 0.0,
             bucket_count: 0,
-            background_ticks: 0,
+            background_secs_excluded: None,
         }
     }
 
-    /// One ~1 Hz tick where the attached game was seen behind another window. Nothing about the
-    /// frames is folded in; only the count is kept, for the receipt.
-    pub(crate) fn record_background_tick(&mut self) {
-        self.background_ticks = self.background_ticks.saturating_add(1);
+    /// One helper tick with its focus reading (P4-comparable). `foreground` is whether the game's
+    /// window was the one in front: `Some(false)` (alt-tabbed away) is counted as background time
+    /// and left out of the measurement; `Some(true)` and `None` (a helper that doesn't report focus)
+    /// are measured as before. Returns whether the tick was measured.
+    pub(crate) fn record_tick(
+        &mut self,
+        process_name: &str,
+        fps: f64,
+        frametime_ms: f64,
+        low1_fps: f64,
+        elapsed_secs: u32,
+        foreground: Option<bool>,
+    ) -> bool {
+        match foreground {
+            Some(false) => {
+                *self.background_secs_excluded.get_or_insert(0) += 1;
+                false
+            }
+            Some(true) => {
+                self.background_secs_excluded.get_or_insert(0);
+                self.record_fps(process_name, fps, frametime_ms, low1_fps, elapsed_secs);
+                true
+            }
+            None => {
+                self.record_fps(process_name, fps, frametime_ms, low1_fps, elapsed_secs);
+                true
+            }
+        }
     }
 
     /// `elapsed_secs` is real wall time into the session (the monitoring loop's own clock) —
@@ -400,7 +427,7 @@ impl SessionAccumulator {
             game_state: None,
             peak_cpu_temp_c: self.peak_cpu_temp_c,
             peak_gpu_hotspot_temp_c: self.peak_gpu_hotspot_temp_c,
-            background_secs_excluded: Some(self.background_ticks),
+            background_secs_excluded: self.background_secs_excluded,
         }
     }
 }
@@ -568,12 +595,12 @@ mod session_tests {
         let mut played = SessionAccumulator::new("2026-10-25T00:00:00Z".into(), Some(0));
         let mut with_break = SessionAccumulator::new("2026-10-25T00:00:00Z".into(), Some(0));
         for t in 0..20u32 {
-            played.record_fps("game.exe", 120.0, 8.3, 90.0, t);
-            with_break.record_fps("game.exe", 120.0, 8.3, 90.0, t);
+            played.record_tick("game.exe", 120.0, 8.3, 90.0, t, Some(true));
+            with_break.record_tick("game.exe", 120.0, 8.3, 90.0, t, Some(true));
         }
         // 15 s behind the desktop, where the game kept presenting at a very different rate.
-        for _ in 0..15 {
-            with_break.record_background_tick();
+        for t in 20..35u32 {
+            with_break.record_tick("game.exe", 30.0, 33.3, 20.0, t, Some(false));
         }
         let a = played.finalize(20);
         let b = with_break.finalize(35);
@@ -589,7 +616,7 @@ mod session_tests {
     #[test]
     fn a_session_that_was_only_in_the_background_has_no_data() {
         let mut acc = SessionAccumulator::new("2026-10-25T00:00:00Z".into(), Some(0));
-        acc.record_background_tick();
+        acc.record_tick("game.exe", 120.0, 8.3, 90.0, 0, Some(false));
         assert!(!acc.has_data());
     }
 
@@ -771,6 +798,66 @@ mod session_tests {
         // today's backend or back-filled with fabricated conditions.
         assert!(all[0].capture_capabilities.is_none());
         assert!(all[0].game_state.is_none());
+    }
+
+    // P4-comparable: a tick the game presented behind another window is not play, so it stays out of
+    // every number a verdict or a noise band reads, and is counted apart.
+    #[test]
+    fn ticks_with_the_game_in_the_background_are_left_out_of_the_numbers() {
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        for e in 0..10 {
+            assert!(acc.record_tick("g.exe", 200.0, 5.0, 150.0, e, Some(true)));
+        }
+        // Alt-tabbed away: the game throttles to 120 fps behind the browser.
+        for e in 10..30 {
+            assert!(!acc.record_tick("g.exe", 120.0, 8.3, 110.0, e, Some(false)));
+        }
+        let s = acc.finalize(30);
+        assert_eq!(s.samples, 10);
+        assert_eq!((s.avg_fps, s.avg_frametime_ms, s.low1_fps_est), (200.0, 5.0, 150.0));
+        assert_eq!(s.fps_series, vec![(0, 200.0)], "background buckets stay gaps");
+        assert_eq!(s.background_secs_excluded, Some(20));
+    }
+
+    #[test]
+    fn focus_in_front_all_session_records_zero_left_out_and_no_reading_records_none() {
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        acc.record_tick("g.exe", 200.0, 5.0, 150.0, 0, Some(true));
+        assert_eq!(acc.finalize(10).background_secs_excluded, Some(0));
+        // A helper that doesn't report focus: every tick is measured, and nothing claims none was
+        // in the background.
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        for e in 0..5 {
+            assert!(acc.record_tick("g.exe", 120.0, 8.3, 110.0, e, None));
+        }
+        let s = acc.finalize(10);
+        assert_eq!((s.samples, s.background_secs_excluded), (5, None));
+    }
+
+    #[test]
+    fn background_secs_is_additive_both_ways() {
+        // An older row has no key and loads as "focus not recorded".
+        let old = r#"[{"started_at": "t", "duration_secs": 120, "process_name": "g.exe", "samples": 3,
+            "avg_fps": 100.0, "avg_frametime_ms": 10.0, "low1_fps_est": 80.0, "peak_gpu_temp_c": null,
+            "peak_gpu_usage_pct": null, "peak_ram_used_bytes": null, "ram_total_bytes": null,
+            "compy_changes_active": 0}]"#;
+        assert_eq!(parse_sessions(old).unwrap()[0].background_secs_excluded, None);
+        // A row this build writes still loads in a build that has never heard of the key.
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OlderRow {
+            samples: u32,
+            avg_fps: f64,
+            low1_fps_est: f64,
+        }
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        acc.record_tick("g.exe", 200.0, 5.0, 150.0, 0, Some(true));
+        acc.record_tick("g.exe", 120.0, 8.3, 110.0, 1, Some(false));
+        let row = disk_row(&acc.finalize(MIN_SESSION_SECS)).unwrap();
+        assert_eq!(row["background_secs_excluded"], 1);
+        let older: OlderRow = serde_json::from_value(row.clone()).unwrap();
+        assert_eq!((older.samples, older.avg_fps), (1, 200.0));
+        assert_eq!(from_disk_row(row).unwrap().background_secs_excluded, Some(1));
     }
 
     // #669: a session whose start couldn't read the change history records NO count: it finalizes as
