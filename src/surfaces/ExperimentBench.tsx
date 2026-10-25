@@ -464,6 +464,15 @@ function canConclude(exp: Experiment): exp is Experiment & { applied_at: string;
 // that started AFTER the change took effect and carries real frames. Never fabricated — if none exists
 // the owner simply hasn't played a qualifying session yet. Timed as the backend times it: from when
 // the apply returned, since a session begun while the apply was pending can't measure the change.
+// P4-next (ENGINE §7): a change counts as TESTED on a game when this PC's experiments store holds a
+// record of it on that game whose after-session was judged (it carries a verdict), whatever the
+// verdict was: kept, restored, too noisy, not comparable. A Trial ended by the user's own restore
+// before a verdict was never judged, so it doesn't count. The store is this PC's own file, so "on
+// this rig" is the PC the store lives on. Pure.
+function testedOn(experiments: Experiment[], game: string): Set<string> {
+  return new Set(experiments.filter((x) => x.game === game && x.verdict != null).map((x) => x.rec_id));
+}
+
 function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSummary | null {
   if (!canConclude(exp)) return null;
   const started = new Date(exp.applied_at).getTime();
@@ -483,6 +492,11 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const [gate, setGate] = useState(false);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [recs, setRecs] = useState<TrialCandidate[]>([]);
+  // Whether get_trial_candidates has answered. Until it has (or when it failed), nothing may say
+  // there is nothing worth testing: an empty list before the load is not an empty catalog.
+  const [recsLoaded, setRecsLoaded] = useState(false);
+  // P4-next: the Trial this visit just concluded, whose result offers the next change to test.
+  const [concluded, setConcluded] = useState<Experiment | null>(null);
   const [showWhy, setShowWhy] = useState(false);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
 
@@ -513,11 +527,12 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   const reload = useCallback(async () => {
     const [xs, rs, ss] = await Promise.all([
       invoke<Experiment[]>("get_experiments").catch(() => []),
-      invoke<TrialCandidate[]>("get_trial_candidates").catch(() => []),
+      invoke<TrialCandidate[]>("get_trial_candidates").catch(() => null),
       invoke<SessionSummary[]>("get_session_summaries").catch(() => []),
     ]);
     setExperiments(xs ?? []);
     setRecs(rs ?? []);
+    if (rs != null) setRecsLoaded(true);
     setSessions(ss ?? []);
   }, []);
 
@@ -639,6 +654,12 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
   // A pick kept in the dropdown after a refresh (below) is listed there only, not here as well.
   const skipped = recs.filter((r) => !r.passes && r.id !== pickId);
 
+  // P4-next (ENGINE §7): after a Trial, the next change in the suggested order not yet tested on that
+  // game here. An offer only: choosing it sets the test up, and nothing changes until Start.
+  const nextTested = concluded ? testedOn(experiments, concluded.game).add(concluded.rec_id) : null;
+  const nextUp = nextTested ? ranked.find((r) => !nextTested.has(r.id)) ?? null : null;
+  const noEffectStated = recs.every((r) => r.stated_effect_pct == null);
+
   // If a refocus-refresh just re-derived the active pick as already-applied (it drops out of `pickable`),
   // keep it in the dropdown so its honest "already configured" verdict stays on screen — the selection
   // must not silently vanish while its simulator card is still showing.
@@ -699,6 +720,7 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
           ++simReq.current;
           setSim(null);
           setPickId("");
+          setConcluded(null);
         },
       );
     } finally {
@@ -711,8 +733,8 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
     setError(null);
     try {
       // A conclude that doesn't keep restores the change through the audited path.
-      await runWrite((refresh) =>
-        writeLedger<Experiment>(
+      await runWrite(async (refresh) => {
+        const done = await writeLedger<Experiment>(
           "conclude_experiment",
           {
             experimentId: exp.id,
@@ -722,8 +744,9 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
             crashed: false,
           },
           refresh,
-        ),
-      );
+        );
+        setConcluded(done?.id ? done : exp);
+      });
     } finally {
       setBusy(false);
     }
@@ -803,7 +826,48 @@ export default function ExperimentBench({ onChanged }: { onChanged?: () => Promi
               ]}
             />
           </div>
-          {options.length === 0 && (
+          {concluded && recsLoaded && (
+            <div className="exp-order exp-next" data-testid="exp-next">
+              {nextUp ? (
+                <>
+                  <p className="exp-order-label">
+                    {t("lab.experimentBench.next.label", { game: prettyGameName(concluded.game) || concluded.game })}{" "}
+                    <span className="exp-why-title">{nextUp.title}</span>
+                  </p>
+                  <p className="exp-note">
+                    {t("lab.experimentBench.next.why", {
+                      evidence: t(EVIDENCE_KEY[nextUp.evidence!]),
+                      risk: t(RISK_KEY[nextUp.risk!]),
+                    })}
+                    {nextUp.stated_effect_pct == null ? ` ${t("lab.experimentBench.rank.effectUnknownOne")}` : null}
+                  </p>
+                  <button
+                    type="button"
+                    className="exp-cta-ghost"
+                    disabled={busy || simBusy}
+                    onClick={() => {
+                      setConcluded(null);
+                      runSim(nextUp.id);
+                    }}
+                  >
+                    {t("lab.experimentBench.next.setUp")}
+                  </button>
+                  <p className="exp-fineprint">{t("lab.experimentBench.next.offerOnly")}</p>
+                </>
+              ) : (
+                <>
+                  <p className="exp-note" data-testid="exp-next-done">
+                    {t("lab.experimentBench.next.none")}
+                  </p>
+                  <p className="exp-fineprint">
+                    {t("lab.experimentBench.next.noneWhy", { game: prettyGameName(concluded.game) || concluded.game })}
+                    {noEffectStated ? ` ${t("lab.experimentBench.next.noneEffectUnknown")}` : null}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+          {recsLoaded && options.length === 0 && !concluded && (
             <p className="exp-note">
               {t("lab.experimentBench.noChangesToTest")}
             </p>

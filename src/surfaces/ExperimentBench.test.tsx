@@ -421,14 +421,21 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.queryByRole("button", { name: /why others aren't listed/ })).toBeNull();
   });
 
+  // bug->guard (P4-next, 2026-10-25): this flaked because "Nothing worth testing" rendered from the
+  // EMPTY list before get_trial_candidates answered, so findByText won and the reasons button wasn't
+  // there yet. An empty list before the load is not an empty catalog: the line waits for the load.
   it("with nothing worth testing, says so and still offers the reasons", async () => {
     state.gate = true;
     state.recs = [
       { id: "game-bar-disable", title: "Disable Game Bar and Game DVR", passes: false, reason: "already-set", detail: null },
     ];
+    const open = holdInitialLoad();
     render(<ExperimentBench />);
+    await screen.findByRole("combobox");
+    expect(screen.queryByText("Nothing worth testing on this PC right now.")).toBeNull();
+    open();
     expect(await screen.findByText("Nothing worth testing on this PC right now.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Show why others aren't listed" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show why others aren't listed" }));
     expect(screen.getByText("Already set this way in Windows, not by Compy.")).toBeInTheDocument();
   });
 
@@ -1416,5 +1423,104 @@ describe("ExperimentBench — what the Recommended verdict compared", () => {
     render(<ExperimentBench />);
     expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
     expect(screen.queryByTestId("exp-compared-receipt")).toBeNull();
+  });
+});
+
+// P4-next (ENGINE §7): after a Trial concludes, its result offers the next change in the suggested
+// order not yet tested on that game here, as an offer only; with none left it says so as a success.
+// "Tested" = a record of the change on that game in this PC's experiments store with a verdict.
+describe("ExperimentBench — the next change to test after a Trial", () => {
+  const cand = (id: string, title: string, position: number, evidence = "not-measured") => ({
+    id,
+    title,
+    passes: true,
+    reason: null,
+    detail: null,
+    position,
+    evidence,
+    risk: "low",
+    stated_effect_pct: null,
+  });
+  const rec = (rec_id: string, game: string, verdict: string | null, status = "restored") => ({
+    ...KEPT_EXPERIMENT,
+    id: `exp:${rec_id}-${game}`,
+    rec_id,
+    rec_title: rec_id,
+    game,
+    status,
+    verdict,
+    kept: status === "kept",
+  });
+
+  /** Render a running Trial, let the store hold `after` once it concludes, and conclude it. */
+  const concludeInto = async (after: unknown[]) => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    render(<ExperimentBench />);
+    const conclude = await screen.findByRole("button", { name: /Conclude with my latest/ });
+    state.experiments = after;
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(conclude);
+    return screen.findByTestId("exp-next");
+  };
+
+  it("offers the next untested change with one line saying why, and never starts it", async () => {
+    state.recs = [
+      cand("a-rec", "Change A", 1, "measured"),
+      cand("b-rec", "Change B", 2),
+      cand("c-rec", "Change C", 3),
+    ];
+    state.sim = { ...WORTH_TESTING_SIM, rec_id: "b-rec", rec_title: "Change B" };
+    // A was tested on Valorant (too noisy still counts); B only on another game, so B is next.
+    const next = await concludeInto([
+      rec("hags", "Valorant", "no-change"),
+      rec("a-rec", "Valorant", "too-noisy"),
+      rec("b-rec", "cs2.exe", "improved", "kept"),
+    ]);
+    expect(next).toHaveTextContent(/Next to test on Valorant: Change B/);
+    expect(next).toHaveTextContent(
+      "It's next in the suggested order: expected to help, not measured; low risk. How big its effect is isn't known.",
+    );
+    expect(next).toHaveTextContent("Nothing changes until you start it.");
+    expect(next).not.toHaveTextContent("Change A");
+    fireEvent.click(screen.getByRole("button", { name: "Set up this test" }));
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("simulate_optimization", { recId: "b-rec" }),
+    );
+    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("start_experiment", expect.anything());
+  });
+
+  it("a Trial the user restored before a verdict doesn't count as tested", async () => {
+    state.recs = [cand("a-rec", "Change A", 1)];
+    const next = await concludeInto([rec("hags", "Valorant", "no-change"), rec("a-rec", "Valorant", null)]);
+    expect(next).toHaveTextContent(/Next to test on Valorant: Change A/);
+  });
+
+  it.each([
+    ["kept", "improved", "kept"],
+    ["restored", "no-change", "restored"],
+    ["too noisy", "too-noisy", "restored"],
+  ])("with none left after a %s result, says so as a success, not a warning", async (_n, verdict, status) => {
+    state.recs = [
+      cand("a-rec", "Change A", 1),
+      { id: "hags", title: "HAGS", passes: false, reason: "already-set-by-compy", detail: null },
+    ];
+    const next = await concludeInto([rec("hags", "Valorant", verdict, status), rec("a-rec", "Valorant", "regressed")]);
+    const done = screen.getByTestId("exp-next-done");
+    expect(done).toHaveTextContent("Nothing else here is worth testing on this PC.");
+    expect(done.closest(".exp-bench-warn, [role=alert]")).toBeNull();
+    expect(next).toHaveTextContent("Every change Compy lists as worth testing here has been tested on Valorant.");
+    expect(next).toHaveTextContent("Compy doesn't know how big any change's effect would be");
+    expect(screen.queryByRole("button", { name: "Set up this test" })).toBeNull();
+  });
+
+  it("offers nothing before a Trial concludes in this visit", async () => {
+    state.gate = true;
+    state.recs = [cand("a-rec", "Change A", 1)];
+    state.experiments = [KEPT_EXPERIMENT];
+    render(<ExperimentBench />);
+    await screen.findByText("Suggested order to test:");
+    expect(screen.queryByTestId("exp-next")).toBeNull();
   });
 });

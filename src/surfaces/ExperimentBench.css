@@ -122,6 +122,12 @@
 .exp-why-title {
   color: var(--ix-text-1);
 }
+/* P4-next: after a Trial, the next change to test, or the success line when none is left. */
+.exp-next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 /* P4-rank: the suggested test order, one reason per position. */
 .exp-order-label {
   margin: 0;

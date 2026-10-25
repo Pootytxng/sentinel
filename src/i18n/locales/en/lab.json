@@ -420,6 +420,15 @@
       "effectUnknownOne": "How big its effect is isn't known.",
       "effectUnknownAll": "Compy doesn't know how big any of these effects are, so none was left out as too small to measure here."
     },
+    "next": {
+      "label": "Next to test on {{game}}:",
+      "why": "It's next in the suggested order: {{evidence}}; {{risk}}.",
+      "setUp": "Set up this test",
+      "offerOnly": "Nothing changes until you start it.",
+      "none": "Nothing else here is worth testing on this PC.",
+      "noneWhy": "Every change Compy lists as worth testing here has been tested on {{game}}.",
+      "noneEffectUnknown": "Compy doesn't know how big any change's effect would be, so that list is by whether a change applies here, is already set and can be safely undone, not by size."
+    },
     "readingRig": "Reading your rig…",
     "forYourRig": "For your rig:",
     "watch": "Watch:",
