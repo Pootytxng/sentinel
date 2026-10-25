@@ -154,8 +154,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       doesn't fall beyond it; 1% low down beyond the band = Worse; else No change (restored).
 - [ ] **P4-maxfps-smooth** Maximum FPS (average + 1% low) and Smoothest frame pacing (frame-time spread,
       0.1% low when samples allow) as user-picked outcomes. Needs P4-recommended. ENGINE §2.
-- [ ] **P4-next** After a Trial, propose the next ranked candidate; "Nothing else here is worth testing"
-      is a success state. Needs P4-rank. ENGINE §7.
+- [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
+      "Nothing else here is worth testing on this PC" as success. Tested = a verdict on this game in experiments.json.
+- [ ] **P4-next-f1** The picker's own list still offers changes already tested on this game; mark or sort them.
 - [ ] **P4-exit** "We tested what mattered on this PC" per-game summary: tested/kept/restored, skipped +
       why, noise floor used, context, what stays applied; confidence vocabulary, no fake percentages.
       Owner-rig proof with WARDOGS. ENGINE §8–9, ROADMAP Phase 4 exit.
@@ -195,6 +196,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
   owner's noise-measurement sessions count under the 453-f1 rule; RELEASE_STATE recorded.
 - 2026-10-25 morning: P4-recommended `a86fbcf5`.
 - 2026-10-25 morning: P4-rank `8f1169ca`, #622-f2 `4edfbb0e`.
+- 2026-10-25 midday: P4-next `abd4c883`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
