@@ -624,7 +624,15 @@ function RestoreOffer({
     if (!confirm || !plan || plan.steps.length === 0) return;
     const items = groups
       .map((g) =>
-        t("gaming.blackBox.changedBefore.restore.confirmItem", { title: g.title, count: g.rows.length, dest: dest(g.restoresLabel) }),
+        // Chosen on the row count, not by plural: Chinese has one plural form, so a `count` plural
+        // would put the "applied N times" wording on a single apply.
+        g.rows.length > 1
+          ? t("gaming.blackBox.changedBefore.restore.confirmItemRepeat", {
+              title: g.title,
+              count: g.rows.length,
+              dest: dest(g.restoresLabel),
+            })
+          : t("gaming.blackBox.changedBefore.restore.confirmItem", { title: g.title, dest: dest(g.restoresLabel) }),
       )
       .join(" ");
     const ok = await confirm({

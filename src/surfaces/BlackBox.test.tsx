@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import { invoke } from "@tauri-apps/api/core";
 import { BlackBox } from "./BlackBox";
 import { ConfirmProvider } from "../design/ConfirmDialog";
+import i18n from "../i18n";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import type { AppliedChange, BlackBoxReport, CrashIncident, CaseIntelligenceMatch } from "../types";
 
@@ -807,6 +808,35 @@ describe("BlackBox — Put back how it was (P6-restore)", () => {
     expect(container.querySelector('[data-outcome="not-tried"]')!.textContent).toMatch(/Game Mode/);
     expect(heard, "an undo reached Windows but no ledger reader was told").toHaveBeenCalled();
     window.removeEventListener(LEDGER_CHANGED_EVENT, heard);
+  });
+
+  it("in zh-CN, names a single apply plainly and keeps the repeat wording for a change applied twice", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const rows = [
+        ...ledger(),
+        row("c-old-2", "Game Mode", "2026-10-23T18:30:00+00:00", { rec_id: "rec-c-old", restores_label: "On" }),
+      ];
+      const applies = [...baseApplies(), apply("c-old-2", "Game Mode", "2026-10-23T18:30:00+00:00")];
+      reportMock.value = { incidents: [incident(applies)], skipped_sources: [] };
+      const { container } = render(
+        <ConfirmProvider>
+          <BlackBox changes={rows} />
+        </ConfirmProvider>,
+      );
+      fireEvent.click(container.querySelector(".bb-scan")!); // the English-named scan() helper can't find it
+      const b = await screen.findByRole("button", { name: /恢复到 .* 时的状态/ });
+      await waitFor(() => expect(b).not.toBeDisabled());
+      fireEvent.click(b);
+      const body = screen.getByRole("alertdialog").textContent ?? "";
+      // One apply: no "applied N times" line. Two applies: the repeat line, once.
+      expect(body).toContain("Visual effects trimmed。将恢复为 Let Windows decide。");
+      expect(body).not.toContain("Visual effects trimmed(这里应用了");
+      expect(body).toContain("Game Mode(这里应用了 2 次,会逐次撤销)。将恢复为 Off。");
+      expect(body.match(/这里应用了/g)).toHaveLength(1);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("says plainly that a change Compy didn't make can't be put back", async () => {
