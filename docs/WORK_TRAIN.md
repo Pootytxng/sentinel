@@ -160,9 +160,10 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
       "Nothing else here is worth testing on this PC" as success. Tested = a verdict on this game in experiments.json.
 - [ ] **P4-next-f1** The picker's own list still offers changes already tested on this game; mark or sort them.
-- [ ] **P4-exit** "We tested what mattered on this PC" per-game summary: tested/kept/restored, skipped +
-      why, noise floor used, context, what stays applied; confidence vocabulary, no fake percentages.
-      Owner-rig proof with WARDOGS. ENGINE §8–9, ROADMAP Phase 4 exit.
+- [x] **P4-exit** (code) `e3d0420e`: read-only "What Compy tested on <game>" panel; "We tested what
+      mattered" only when nothing untested remains. Today for WARDOGS: 1 of 16 testable changes has a result.
+- [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "We tested what mattered";
+      record it in BACKLOG as the Phase 4 exit.
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
@@ -201,6 +202,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - 2026-10-25 morning: P4-rank `8f1169ca`, #622-f2 `4edfbb0e`.
 - 2026-10-25 midday: P4-next `abd4c883`.
 - 2026-10-25 midday: P4-maxfps `baa03405` (Smoothest held).
+- 2026-10-25 afternoon: P4-exit code `e3d0420e`.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
