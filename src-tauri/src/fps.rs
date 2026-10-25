@@ -41,7 +41,7 @@ use ferrisetw::provider::Provider;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::UserTrace;
 use ferrisetw::EventRecord;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 // Microsoft-Windows-DXGI provider GUID and the PresentStart event id.
 // (PresentMon's Microsoft_Windows_DXGI::Present_Start::Id == 42.)
@@ -280,6 +280,11 @@ struct Sample {
 struct Tracker {
     last_qpc: i64,
     samples: Vec<Sample>,
+    /// P4-smooth-measure: every frame this chain has presented since the tracker was created,
+    /// counted once into fixed buckets (`frame_hist`). Cumulative, so a reader that misses a report
+    /// loses nothing; `hist_id` tells a reader when the count restarted (a new tracker).
+    hist_id: u64,
+    hist: Vec<u64>,
 }
 
 impl Tracker {
@@ -287,6 +292,22 @@ impl Tracker {
         Tracker {
             last_qpc: 0,
             samples: Vec::new(),
+            hist_id: frame_hist::next_id(),
+            hist: vec![0; frame_hist::BUCKETS],
+        }
+    }
+
+    /// The cumulative histogram as the report ships it: only non-empty buckets.
+    fn hist_wire(&self) -> FrameHistWire {
+        FrameHistWire {
+            id: self.hist_id,
+            counts: self
+                .hist
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| **c > 0)
+                .map(|(i, c)| (i as u16, *c))
+                .collect(),
         }
     }
 
@@ -299,6 +320,11 @@ impl Tracker {
         if self.last_qpc != 0 && qpc > self.last_qpc {
             let dt_ms = (qpc - self.last_qpc) as f64 * 1000.0 / freq;
             // Ignore absurd intervals: 0 (duplicate timestamp) or > 1 s (idle / alt-tabbed).
+            // A freeze of a second or more still counts in the pacing histogram (its overflow
+            // bucket): it is exactly what smoothness should see. The live figures keep the cap.
+            if dt_ms > 0.0 {
+                self.hist[frame_hist::bucket(dt_ms)] += 1;
+            }
             if dt_ms > 0.0 && dt_ms < 1000.0 {
                 self.samples.push(Sample {
                     at,
@@ -312,6 +338,98 @@ impl Tracker {
         }
         self.last_qpc = qpc;
     }
+}
+
+/// P4-smooth-measure: a fixed-bucket histogram of frame times, so a whole session's true per-frame
+/// percentiles are kept without storing a single frame. Bucket `i` holds frame times in
+/// `[LO_MS * RATIO^i, LO_MS * RATIO^(i+1))`; a percentile reads as its bucket's geometric middle, so
+/// it is within half a bucket (0.5%) of the real frame time. Every frame is counted: a freeze of
+/// [`OVERFLOW_MS`] or more lands in the last ([`OVERFLOW`]) bucket and reads as exactly
+/// `OVERFLOW_MS`, so a percentile that falls on a freeze over 1 s is capped there (a floor, never
+/// an overstatement). The helper counts, the app diffs
+/// consecutive cumulative snapshots (`SessionAccumulator::record_frame_hist`), and only four numbers
+/// reach sessions.json (`sessions::FramePacing`).
+pub(crate) mod frame_hist {
+    /// Frame times under this land in bucket 0 (4000 fps); none that short are real game frames.
+    pub(crate) const LO_MS: f64 = 0.25;
+    /// Each bucket is 1% wider than the one before.
+    pub(crate) const RATIO: f64 = 1.01;
+    /// Frame times from here up are freezes, all counted in the [`OVERFLOW`] bucket.
+    pub(crate) const OVERFLOW_MS: f64 = 1000.0;
+    /// The regular buckets reach just past `OVERFLOW_MS` (834 of them); the freeze bucket follows.
+    pub(crate) const OVERFLOW: usize = 834;
+    pub(crate) const BUCKETS: usize = OVERFLOW + 1;
+
+    pub(crate) fn bucket(ms: f64) -> usize {
+        if ms.is_nan() || ms <= LO_MS {
+            return 0;
+        }
+        if ms >= OVERFLOW_MS {
+            return OVERFLOW;
+        }
+        (((ms / LO_MS).ln() / RATIO.ln()).floor() as usize).min(OVERFLOW - 1)
+    }
+
+    /// The frame time a bucket stands for: its geometric middle, or `OVERFLOW_MS` for a freeze.
+    pub(crate) fn bucket_ms(i: usize) -> f64 {
+        if i >= OVERFLOW {
+            return OVERFLOW_MS;
+        }
+        LO_MS * RATIO.powf(i as f64 + 0.5).min(OVERFLOW_MS / LO_MS)
+    }
+
+    /// The `q` percentile (0..1) of the frames counted in `counts` (one count per bucket), by the
+    /// same rank rule as the helper's live 1% low: the frame at rank ceil(q·n). `None` when empty.
+    pub(crate) fn percentile(counts: &[u64], q: f64) -> Option<f64> {
+        let n: u64 = counts.iter().sum();
+        if n == 0 {
+            return None;
+        }
+        let rank = ((n as f64 * q).ceil() as u64).clamp(1, n);
+        let mut seen = 0u64;
+        for (i, c) in counts.iter().enumerate() {
+            seen += c;
+            if seen >= rank {
+                return Some(bucket_ms(i));
+            }
+        }
+        None
+    }
+
+    /// A process-unique start for tracker ids, so a restarted helper's first tracker never reuses
+    /// the id the app last saw.
+    pub(crate) fn next_id() -> u64 {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        use std::sync::OnceLock;
+        static BASE: OnceLock<u64> = OnceLock::new();
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let base = *BASE.get_or_init(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(1)
+        });
+        base.wrapping_add(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+/// The reported chain's cumulative frame-time histogram (P4-smooth-measure): `(bucket, count)` for
+/// each non-empty bucket of [`frame_hist`], counted since `id`'s tracker was created. Additive on
+/// the wire: an older app ignores it, and an older helper's line has none.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct FrameHistWire {
+    pub id: u64,
+    pub counts: Vec<(u16, u64)>,
+}
+
+/// PURE: which of the tick's chains the report came from. `chains` are the tick's candidates as
+/// (pid, swapchain, recent frames); the report's frames are that chain's `recent` unchanged, so the
+/// chain is the one of the reported pid whose frames are the reported ones.
+pub(crate) fn reported_chain(chains: &[(u32, u64, Vec<f64>)], pid: u32, frames: &[f64]) -> Option<u64> {
+    chains
+        .iter()
+        .find(|(p, _, recent)| *p == pid && recent.as_slice() == frames)
+        .map(|(_, sc, _)| *sc)
 }
 
 // Cap on the number of per-frame frametimes shipped in each report. At a few
@@ -341,6 +459,9 @@ struct FpsReport {
     /// treat as unknown, never as "in the background".
     #[serde(skip_serializing_if = "Option::is_none")]
     foreground: Option<bool>,
+    /// P4-smooth-measure: the reported chain's cumulative frame-time histogram ([`FrameHistWire`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frame_hist: Option<FrameHistWire>,
 }
 
 /// What the report says about foreground. Only a resolvable foreground
@@ -704,6 +825,8 @@ pub fn run_capture() {
             });
         }
         drop(map);
+        let chains: Vec<(u32, u64, Vec<f64>)> =
+            candidates.iter().map(|c| (c.pid, c.swapchain, c.recent.clone())).collect();
         let pids: Vec<u32> = candidates.iter().map(|c| c.pid).collect();
         let (evidence, fg_known) = probe_window_evidence(&pids);
         for c in &mut candidates {
@@ -747,8 +870,12 @@ pub fn run_capture() {
             };
 
             let foreground = report_foreground(fg_known, evidence.get(&pid));
+            let frame_hist = reported_chain(&chains, pid, &frametimes).and_then(|sc| {
+                state.lock().ok().and_then(|m| m.get(&(pid, sc)).map(Tracker::hist_wire))
+            });
             let report = FpsReport {
                 foreground,
+                frame_hist,
                 pid,
                 process_name,
                 fps: if avg > 0.0 { 1000.0 / avg } else { 0.0 },
@@ -1250,5 +1377,90 @@ mod foreground_report_tests {
             covers_monitor: false,
         };
         assert_eq!(report_foreground(true, Some(&windowless)), None);
+    }
+}
+
+#[cfg(test)]
+mod frame_hist_tests {
+    //! P4-smooth-measure: the helper counts every frame once, and a percentile read off the buckets
+    //! is the real per-frame percentile to within half a bucket.
+    use super::{frame_hist, reported_chain, Tracker};
+    use std::time::Instant;
+
+    fn close(a: f64, b: f64) -> bool {
+        (a - b).abs() / b < 0.006
+    }
+
+    #[test]
+    fn every_bucket_holds_its_own_frame_times() {
+        for ms in [0.3, 1.0, 4.17, 6.94, 16.67, 33.3, 250.0, 999.0] {
+            assert!(close(frame_hist::bucket_ms(frame_hist::bucket(ms)), ms), "{ms} ms");
+        }
+        assert_eq!(frame_hist::bucket(0.0), 0);
+        assert_eq!(frame_hist::bucket(f64::NAN), 0);
+        assert_eq!(frame_hist::bucket(5000.0), frame_hist::OVERFLOW);
+        assert_eq!(frame_hist::bucket(f64::INFINITY), frame_hist::OVERFLOW);
+        assert!(frame_hist::LO_MS * frame_hist::RATIO.powi(frame_hist::OVERFLOW as i32) > 1000.0);
+        assert!(frame_hist::bucket(999.9) < frame_hist::OVERFLOW);
+        assert!(frame_hist::bucket_ms(frame_hist::OVERFLOW - 1) <= 1000.0);
+    }
+
+    /// Freezes count: a 3 s hang is a frame the session saw, read back capped at 1000 ms.
+    #[test]
+    fn a_freeze_over_a_second_is_counted_and_capped_at_one_second() {
+        let freq = 10_000_000.0;
+        let mut t = Tracker::new();
+        let now = Instant::now();
+        let mut qpc = 1i64;
+        t.record(qpc, freq, now);
+        for n in 0..999 {
+            qpc += if n == 500 { 30_000_000 } else { 41_700 }; // one 3 s freeze
+            t.record(qpc, freq, now);
+        }
+        assert_eq!(t.hist[frame_hist::OVERFLOW], 1, "the freeze is in the histogram");
+        assert_eq!(t.samples.len(), 998, "the live figures still leave it out");
+        assert_eq!(t.hist.iter().sum::<u64>(), 999);
+        assert_eq!(frame_hist::percentile(&t.hist, 1.0), Some(frame_hist::OVERFLOW_MS));
+        assert!(close(frame_hist::percentile(&t.hist, 0.99).unwrap(), 4.17));
+        // The slowest of 999 frames is their 99.9th percentile: the freeze, read as 1000 ms.
+        assert_eq!(frame_hist::percentile(&t.hist, 0.999), Some(frame_hist::OVERFLOW_MS));
+    }
+
+    #[test]
+    fn percentiles_are_per_frame_not_per_second() {
+        // 9850 frames at 4 ms, 130 at 10 ms, 20 hitches at 50 ms.
+        let mut counts = vec![0u64; frame_hist::BUCKETS];
+        counts[frame_hist::bucket(4.0)] = 9850;
+        counts[frame_hist::bucket(10.0)] = 130;
+        counts[frame_hist::bucket(50.0)] = 20;
+        assert!(close(frame_hist::percentile(&counts, 0.50).unwrap(), 4.0));
+        assert!(close(frame_hist::percentile(&counts, 0.99).unwrap(), 10.0));
+        assert!(close(frame_hist::percentile(&counts, 0.999).unwrap(), 50.0));
+        assert_eq!(frame_hist::percentile(&vec![0; frame_hist::BUCKETS], 0.5), None);
+    }
+
+    #[test]
+    fn the_helper_counts_each_frame_once_and_ships_only_used_buckets() {
+        let freq = 10_000_000.0;
+        let mut t = Tracker::new();
+        let now = Instant::now();
+        let mut qpc = 0i64;
+        for n in 0..=500i64 {
+            qpc += if n % 100 == 99 { 200_000 } else { 41_700 }; // 4.17 ms, every 100th 20 ms
+            t.record(qpc, freq, now);
+        }
+        let wire = t.hist_wire();
+        assert_eq!(wire.id, t.hist_id);
+        assert_eq!(wire.counts.iter().map(|(_, c)| c).sum::<u64>(), 500, "first present has no interval");
+        assert_eq!(wire.counts.len(), 2);
+        assert_ne!(Tracker::new().hist_id, t.hist_id, "a new tracker restarts under a new id");
+    }
+
+    #[test]
+    fn the_report_reads_the_histogram_of_the_chain_it_reported() {
+        let chains = vec![(7, 0xA, vec![4.0, 4.1]), (7, 0xB, vec![1.0, 1.1, 1.2]), (8, 0xA, vec![4.0, 4.1])];
+        assert_eq!(reported_chain(&chains, 7, &[4.0, 4.1]), Some(0xA));
+        assert_eq!(reported_chain(&chains, 7, &[1.0, 1.1, 1.2]), Some(0xB));
+        assert_eq!(reported_chain(&chains, 9, &[4.0, 4.1]), None);
     }
 }

@@ -159,6 +159,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       real session variation (review).
 - [ ] **P4-smooth-measure** Store per-frame frame times (or a percentile spread) per session and measure the
       spread's session-to-session noise; then offer Smoothest.
+- [ ] **P4-smooth-offer** Offer Smoothest for a game once `between_session_pacing_noise` (p99/p50 band) is measured for it; judge against that band (ratios carry ~±1% bucket error: a spread under ~2% is at the resolution limit).
 - [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
       "Nothing else here is worth testing on this PC" as success. Tested = a verdict on this game in experiments.json.
 - [x] **P4-next-f1** `1fc5026c`: picker marks tested changes ("· Tested: <verdict>") after untested ones.

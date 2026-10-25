@@ -5,7 +5,8 @@
 //!
 //! Metrics are LIVE ESTIMATES sampled ~1×/sec while monitoring is active — not
 //! benchmark-grade proof. The session "1% low" is an estimate (the mean of the
-//! FPS helper's per-second 1%-low figures), not a true all-frametime percentile.
+//! FPS helper's per-second 1%-low figures), not a true all-frametime percentile. The true per-frame
+//! percentiles are `frame_pacing` (P4-smooth-measure), counted from every frame the helper saw.
 //!
 //! The aggregation math lives in the pure `SessionAccumulator` so it's
 //! unit-testable; the monitoring loop feeds it primitive readings and persists
@@ -39,6 +40,60 @@ const FPS_SERIES_MAX_POINTS: usize = 2160;
 /// older sessions shed it on save — same policy as `stutter_timeline`'s 5, wider because the
 /// series is ~10× smaller per hour.
 const FPS_SERIES_KEEP: usize = 20;
+
+/// Fewest frames a session's `frame_pacing` is computed from (its median and 99th percentile:
+/// the 99th is then at least the 10th-slowest frame). Below this the session records none.
+pub(crate) const MIN_PACING_FRAMES: u64 = 1000;
+/// Fewest frames for a 99.9th percentile: below this it is only the slowest frame or few, so
+/// `p999_ms` stays `None` while the median and 99th are still recorded.
+pub(crate) const MIN_P999_FRAMES: u64 = 10_000;
+/// A histogram reading more than this many seconds after the chain's last one only sets a new
+/// starting point: the frames in between (helper silent, readings stale) can't be placed in time,
+/// so they can't be shown to be measured play rather than time spent alt-tabbed.
+pub(crate) const MAX_HIST_GAP_SECS: u32 = 2;
+
+/// P4-smooth-measure: a session's TRUE per-frame frame-time percentiles, from every frame the FPS
+/// helper saw of the session's game while it was measured (alt-tabbed seconds left out, as for
+/// every other number). Counted in fixed 1% buckets (`fps::frame_hist`), so each figure is within
+/// 0.5% of the real frame time; no frame is stored. A freeze of 1 s or more counts as a frame but
+/// reads as 1000 ms, so a percentile that lands on one is capped there. Times in ms, rounded to
+/// 0.001 ms (finer than the bucket error at any frame rate up to 4000 fps).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct FramePacing {
+    /// How many frames the percentiles are taken over.
+    pub(crate) frames: u64,
+    pub(crate) p50_ms: f64,
+    pub(crate) p99_ms: f64,
+    /// `None` under [`MIN_P999_FRAMES`] frames.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) p999_ms: Option<f64>,
+}
+
+impl FramePacing {
+    /// From one bucket count per `fps::frame_hist` bucket. `None` below [`MIN_PACING_FRAMES`].
+    pub(crate) fn from_counts(counts: &[u64]) -> Option<Self> {
+        let frames: u64 = counts.iter().sum();
+        if frames < MIN_PACING_FRAMES {
+            return None;
+        }
+        let at = |q| crate::fps::frame_hist::percentile(counts, q).map(round3);
+        let p999_ms = if frames >= MIN_P999_FRAMES { Some(at(0.999)?) } else { None };
+        Some(Self { frames, p50_ms: at(0.50)?, p99_ms: at(0.99)?, p999_ms })
+    }
+
+    /// How uneven the session's frames were: the 99th-percentile frame time over the median, a
+    /// plain ratio (1.0 = every frame alike). Each side carries the 0.5% bucket error, so the ratio
+    /// is good to about ±1%. `None` when either isn't a positive number.
+    #[cfg_attr(not(test), allow(dead_code))] // read by noise_floor; offered by P4-smooth-offer.
+    pub(crate) fn p99_over_p50(&self) -> Option<f64> {
+        let r = self.p99_ms / self.p50_ms;
+        (self.p50_ms > 0.0 && r.is_finite() && r > 0.0).then_some(r)
+    }
+}
+
+fn round3(x: f64) -> f64 {
+    (x * 1000.0).round() / 1000.0
+}
 
 /// Pure: is a session long enough to be worth keeping?
 fn meets_min_duration(secs: u64) -> bool {
@@ -146,6 +201,11 @@ pub(crate) struct SessionSummary {
     /// Additive: an older Compy ignores the key.
     #[serde(default)]
     pub(crate) background_secs_excluded: Option<u32>,
+    /// P4-smooth-measure: true per-frame percentiles ([`FramePacing`]). `None` on rows an older Compy
+    /// wrote, with an older helper, or with fewer than [`MIN_PACING_FRAMES`] measured frames.
+    /// Additive: written only when present, and an older Compy ignores the key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) frame_pacing: Option<FramePacing>,
 }
 
 /// A session's change counts in the form another session's can be compared with (453-f1).
@@ -239,6 +299,13 @@ pub(crate) struct SessionAccumulator {
     bucket_count: u32,
     /// Ticks the game presented with another window in front; `None` until the helper reports focus.
     background_secs_excluded: Option<u32>,
+    /// P4-smooth-measure: each chain's last cumulative histogram reading, by histogram id: when it
+    /// was read (session seconds) and one count per bucket, so the next reading of that chain adds
+    /// only the frames since. Kept per chain so a report that flips between chains still counts;
+    /// entries older than [`MAX_HIST_GAP_SECS`] are dropped (they could only reset anyway).
+    hist_prev: HashMap<u64, (u32, Vec<u64>)>,
+    /// Measured frames per bucket, per presenting process.
+    pacing: HashMap<String, Vec<u64>>,
 }
 
 impl SessionAccumulator {
@@ -272,6 +339,46 @@ impl SessionAccumulator {
             bucket_sum: 0.0,
             bucket_count: 0,
             background_secs_excluded: None,
+            hist_prev: HashMap::new(),
+            pacing: HashMap::new(),
+        }
+    }
+
+    /// P4-smooth-measure: one helper reading of its cumulative frame-time histogram at
+    /// `elapsed_secs` into the session. The frames added since the previous reading of the same
+    /// histogram are counted for `process_name`, but only when `measured` (the tick's own
+    /// `record_tick` result: alt-tabbed frames stay out). A first reading of a chain, one more than
+    /// [`MAX_HIST_GAP_SECS`] after that chain's last, or a count that went down (a restarted helper)
+    /// only sets the starting point, so no frame is counted twice and no unplaced gap leaks in; the
+    /// cost is at most one reading's frames.
+    pub(crate) fn record_frame_hist(
+        &mut self,
+        process_name: &str,
+        hist: &crate::fps::FrameHistWire,
+        measured: bool,
+        elapsed_secs: u32,
+    ) {
+        let mut now = vec![0u64; crate::fps::frame_hist::BUCKETS];
+        for &(i, c) in &hist.counts {
+            if let Some(slot) = now.get_mut(usize::from(i)) {
+                *slot = c;
+            }
+        }
+        let prev = self.hist_prev.insert(hist.id, (elapsed_secs, now));
+        self.hist_prev.retain(|_, (at, _)| elapsed_secs.saturating_sub(*at) <= MAX_HIST_GAP_SECS);
+        let (Some((prev_at, prev)), Some((_, now))) = (prev, self.hist_prev.get(&hist.id)) else { return };
+        if elapsed_secs.saturating_sub(prev_at) > MAX_HIST_GAP_SECS || now.iter().zip(&prev).any(|(n, p)| n < p) {
+            return;
+        }
+        if !measured || process_name.is_empty() {
+            return;
+        }
+        let into = self
+            .pacing
+            .entry(process_name.to_string())
+            .or_insert_with(|| vec![0; crate::fps::frame_hist::BUCKETS]);
+        for ((slot, n), p) in into.iter_mut().zip(now).zip(&prev) {
+            *slot += n - p;
         }
     }
 
@@ -400,6 +507,7 @@ impl SessionAccumulator {
             .max_by_key(|(_, c)| *c)
             .map(|(p, _)| p)
             .unwrap_or_default();
+        let frame_pacing = self.pacing.get(&process_name).and_then(|c| FramePacing::from_counts(c));
         SessionSummary {
             started_at: self.started_at,
             duration_secs,
@@ -428,6 +536,7 @@ impl SessionAccumulator {
             peak_cpu_temp_c: self.peak_cpu_temp_c,
             peak_gpu_hotspot_temp_c: self.peak_gpu_hotspot_temp_c,
             background_secs_excluded: self.background_secs_excluded,
+            frame_pacing,
         }
     }
 }
@@ -588,6 +697,151 @@ pub(crate) fn get_session_summaries() -> Vec<SessionSummary> {
 #[cfg(test)]
 mod session_tests {
     use super::*;
+
+    use crate::fps::{frame_hist, FrameHistWire};
+
+    /// A helper's cumulative histogram: `frames` of (frame time ms, how many so far).
+    fn wire(id: u64, frames: &[(f64, u64)]) -> FrameHistWire {
+        let mut counts = vec![0u64; frame_hist::BUCKETS];
+        for &(ms, n) in frames {
+            counts[frame_hist::bucket(ms)] += n;
+        }
+        FrameHistWire {
+            id,
+            counts: counts.iter().enumerate().filter(|(_, c)| **c > 0).map(|(i, c)| (i as u16, *c)).collect(),
+        }
+    }
+
+    fn near(a: f64, b: f64) -> bool {
+        (a - b).abs() / b < 0.006
+    }
+
+    /// P4-smooth-measure: the session's percentiles are taken over every frame the helper saw, from
+    /// its cumulative histogram, not from per-second figures. Per-second 1% lows here would all read
+    /// the same 4 ms second; the true p99.9 is the 50 ms hitches.
+    #[test]
+    fn frame_pacing_is_the_true_per_frame_percentiles_of_the_session() {
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        // First reading sets the starting point: frames before it aren't this session's.
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 0, Some(true));
+        acc.record_frame_hist("g.exe", &wire(7, &[(4.0, 500)]), true, 0);
+        // Ten seconds of play, read every second: 985 frames at 4 ms, 13 at 10 ms, 2 at 50 ms each.
+        for t in 1..=10u64 {
+            acc.record_tick("g.exe", 240.0, 4.2, 230.0, t as u32, Some(true));
+            acc.record_frame_hist("g.exe", &wire(7, &[(4.0, 500 + 985 * t), (10.0, 13 * t), (50.0, 2 * t)]), true, t as u32);
+        }
+        let p = acc.finalize(10).frame_pacing.expect("10 000 frames measured");
+        assert_eq!(p.frames, 10_000);
+        assert!(near(p.p50_ms, 4.0) && near(p.p99_ms, 10.0) && near(p.p999_ms.unwrap(), 50.0), "{p:?}");
+        assert!(near(p.p99_over_p50().unwrap(), 2.5));
+    }
+
+    #[test]
+    fn alt_tabbed_frames_and_restarted_counts_are_never_counted() {
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        acc.record_frame_hist("g.exe", &wire(1, &[]), true, 0);
+        acc.record_frame_hist("g.exe", &wire(1, &[(4.0, 1000)]), true, 1);
+        // Alt-tabbed: 600 frames at 33 ms behind the browser stay out.
+        let behind = acc.record_tick("g.exe", 30.0, 33.0, 28.0, 2, Some(false));
+        acc.record_frame_hist("g.exe", &wire(1, &[(4.0, 1000), (33.0, 600)]), behind, 2);
+        // A count that went down (a restarted helper reusing nothing) only sets a new start.
+        acc.record_frame_hist("g.exe", &wire(1, &[(4.0, 10)]), true, 3);
+        acc.record_frame_hist("g.exe", &wire(1, &[(4.0, 310)]), true, 4);
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 4, Some(true));
+        let p = acc.finalize(10).frame_pacing.expect("1300 frames at 4 ms");
+        assert_eq!((p.frames, p.p999_ms), (1300, None));
+        assert!(near(p.p99_ms, 4.0), "no alt-tabbed or double-counted frame: {p:?}");
+    }
+
+    /// Readings that stopped for more than 2 s (stale helper file) can't place the frames in
+    /// between, so they only set a new start: 2000 frames presented while nobody could tell whether
+    /// the game was in front never reach the numbers.
+    #[test]
+    fn a_gap_between_readings_resets_the_start() {
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 0, Some(true));
+        acc.record_frame_hist("g.exe", &wire(1, &[]), true, 0);
+        acc.record_frame_hist("g.exe", &wire(1, &[(4.0, 1000)]), true, 2);
+        acc.record_frame_hist("g.exe", &wire(1, &[(4.0, 1000), (40.0, 2000)]), true, 10);
+        acc.record_frame_hist("g.exe", &wire(1, &[(4.0, 1300), (40.0, 2000)]), true, 11);
+        let p = acc.finalize(12).frame_pacing.expect("1300 frames");
+        assert_eq!(p.frames, 1300);
+        assert!(near(p.p99_ms, 4.0), "{p:?}");
+    }
+
+    /// A report that flips between two chains every tick still counts each chain's own frames.
+    #[test]
+    fn a_report_that_flips_between_chains_still_counts() {
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 0, Some(true));
+        for t in 0..=20u64 {
+            let (id, ms) = if t % 2 == 0 { (1, 4.0) } else { (2, 8.0) };
+            acc.record_frame_hist("g.exe", &wire(id, &[(ms, 200 * t)]), true, t as u32);
+        }
+        // Chain 1 read at 0, 2, .., 20 (+4000 since its first), chain 2 at 1, 3, .., 19 (+3600).
+        let p = acc.finalize(20).frame_pacing.expect("both chains counted");
+        assert_eq!(p.frames, 7600);
+    }
+
+    #[test]
+    fn too_few_frames_or_an_older_helper_records_no_frame_pacing() {
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 0, Some(true));
+        acc.record_frame_hist("g.exe", &wire(1, &[]), true, 0);
+        acc.record_frame_hist("g.exe", &wire(1, &[(4.0, MIN_PACING_FRAMES - 1)]), true, 1);
+        assert_eq!(acc.finalize(10).frame_pacing, None);
+        // Enough for the median and the 99th, not for the 99.9th.
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 0, Some(true));
+        acc.record_frame_hist("g.exe", &wire(1, &[]), true, 0);
+        acc.record_frame_hist("g.exe", &wire(1, &[(4.0, MIN_P999_FRAMES - 1)]), true, 1);
+        let p = acc.finalize(10).frame_pacing.expect("p50 and p99 recorded");
+        assert_eq!(p.p999_ms, None);
+        // An older helper sends no histogram at all.
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 0, None);
+        assert_eq!(acc.finalize(10).frame_pacing, None);
+        // Only the session's own game's frames count.
+        let mut acc = SessionAccumulator::new("t".into(), Some(0));
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 0, Some(true));
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 1, Some(true));
+        acc.record_frame_hist("other.exe", &wire(1, &[]), true, 0);
+        acc.record_frame_hist("other.exe", &wire(1, &[(4.0, 5000)]), true, 1);
+        assert_eq!(acc.finalize(10).frame_pacing, None);
+    }
+
+    /// Additive both ways: a row an older Compy wrote reads as no frame pacing; a row without it is
+    /// written without the key; and a row with it still loads in an older Compy (whose struct has no
+    /// such field and denies no unknown keys, like this one).
+    #[test]
+    fn frame_pacing_is_additive_and_small_on_disk() {
+        let mut acc = SessionAccumulator::new("2026-10-25T00:00:00Z".into(), Some(0));
+        acc.record_tick("g.exe", 240.0, 4.2, 230.0, 0, Some(true));
+        let without = acc.finalize(120);
+        let row = disk_row(&without).unwrap();
+        assert!(row.get("frame_pacing").is_none(), "absent, not null");
+        assert_eq!(from_disk_row(row).unwrap().frame_pacing, None);
+
+        let mut with = without.clone();
+        with.frame_pacing = Some(FramePacing { frames: 1_234_567, p50_ms: 4.172, p99_ms: 11.834, p999_ms: Some(26.051) });
+        let row = disk_row(&with).unwrap();
+        assert_eq!(from_disk_row(row.clone()).unwrap(), with);
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct OlderRow {
+            started_at: String,
+            samples: u32,
+            background_secs_excluded: Option<u32>,
+        }
+        let older: OlderRow = serde_json::from_value(row).expect("an older Compy still loads the row");
+        assert_eq!(older.samples, with.samples);
+
+        // What a session costs in sessions.json (pretty-printed, as saved).
+        let bytes = |s: &SessionSummary| serde_json::to_string_pretty(&vec![disk_row(s).unwrap()]).unwrap().len();
+        let added = bytes(&with) - bytes(&without);
+        eprintln!("frame_pacing adds {added} bytes per session");
+        assert!(added <= 140, "{added} bytes");
+    }
 
     /// P4-comparable: alt-tabbed seconds are counted but never folded into the FPS figures.
     #[test]

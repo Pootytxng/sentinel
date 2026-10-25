@@ -210,6 +210,9 @@ export type SessionSummary = {
   /** P4-comparable: seconds the game presented while another window was in front, left out of every
    *  number above. null/absent = the session didn't record focus (an older Compy). */
   background_secs_excluded?: number | null;
+  /** P4-smooth-measure: true per-frame frame-time percentiles (ms) over `frames` measured frames.
+   *  Absent on older sessions, with an older helper, or under 1000 frames. Not shown yet. */
+  frame_pacing?: { frames: number; p50_ms: number; p99_ms: number; p999_ms: number } | null;
 };
 
 /** Mirror of the Rust `GameStateFingerprint` (game_state.rs) — the honest conditions a session ran

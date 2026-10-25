@@ -814,6 +814,11 @@ pub(crate) struct FpsSample {
     /// (`SessionAccumulator::record_tick`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     foreground: Option<bool>,
+    /// P4-smooth-measure: the helper's cumulative frame-time histogram for the reported chain.
+    /// Missing on an older helper's line (the session then records no frame pacing). Read by the
+    /// session recorder only; never sent on to the UI (`skip_serializing`), which has no use for it.
+    #[serde(default, skip_serializing)]
+    frame_hist: Option<crate::fps::FrameHistWire>,
 }
 
 #[derive(Serialize)]
@@ -1143,6 +1148,11 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                                 elapsed,
                                 s.foreground,
                             );
+                            // P4-smooth-measure: every frame since the last reading, left out
+                            // on the same ground as the tick (alt-tabbed).
+                            if let Some(h) = &s.frame_hist {
+                                acc.record_frame_hist(&s.process_name, h, measured, elapsed);
+                            }
                             tip = Some((s.fps, s.low1_fps));
                             if measured && s.low1_fps > 0.0 && timeline.len() < 7200 {
                                 timeline.push((elapsed, s.low1_fps));
@@ -1613,5 +1623,17 @@ mod background_sample_tests {
         assert!(sample_is_measured(&parse(r#","foreground":true"#)));
         assert!(sample_is_measured(&parse(r#","foreground":null"#)));
         assert!(!sample_is_measured(&parse(r#","foreground":false"#)));
+    }
+
+    /// P4-smooth-measure: the histogram is read from a new helper's line, missing from an older
+    /// helper's, and never forwarded to the UI.
+    #[test]
+    fn the_frame_histogram_is_read_but_never_sent_to_the_ui() {
+        assert_eq!(parse("").frame_hist, None);
+        let s = parse(r#","frame_hist":{"id":9,"counts":[[143,250],[300,2]]}"#);
+        let h = s.frame_hist.clone().expect("histogram read");
+        assert_eq!((h.id, h.counts), (9, vec![(143, 250), (300, 2)]));
+        let ui = serde_json::to_value(&s).unwrap();
+        assert!(ui.get("frame_hist").is_none(), "{ui}");
     }
 }
