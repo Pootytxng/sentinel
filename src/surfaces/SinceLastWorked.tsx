@@ -2,7 +2,9 @@ import { useTranslation } from "react-i18next";
 // Side-effect import, as in BlackBox.tsx: the i18next singleton is ready even when this is the first
 // thing a test loads.
 import "../i18n";
+import type { TFunction } from "i18next";
 import type { BlackBoxReport, CrashIncident, IntelEvent } from "../types";
+import { eventText } from "./event-text";
 import "./SinceLastWorked.css";
 
 // P6-timeline (ROADMAP Phase 6 bullet 2, Constitution §16, §17, §27): ONE "Since it last worked"
@@ -38,8 +40,9 @@ function kindOf(e: IntelEvent): SinceRowKind {
   return e.scope === "compy-applied" ? "compy" : "observed";
 }
 
-/** Pure: the list's rows, newest first. Incidents count only after the anchor session started. */
-export function sinceRows(report: BlackBoxReport): SinceRow[] | null {
+/** Pure: the list's rows, newest first. Incidents count only after the anchor session started.
+ *  With `t`, event rows are worded in the viewer's language (event-text.ts); without, `summary`. */
+export function sinceRows(report: BlackBoxReport, t?: TFunction): SinceRow[] | null {
   const slw = report.since_last_worked;
   if (!slw?.anchor) return null;
   const from = ms(slw.anchor.started_at);
@@ -47,7 +50,7 @@ export function sinceRows(report: BlackBoxReport): SinceRow[] | null {
     key: e.id,
     kind: kindOf(e),
     at: e.timestamp,
-    text: e.summary,
+    text: t ? eventText(e, t) : e.summary,
     observedBetween: e.observed_between,
     rolledBack: e.since_rolled_back,
   }));
@@ -76,7 +79,7 @@ export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
   const slw = report?.since_last_worked;
   if (!report || !slw) return null;
   const when = (iso: string) => fmtWhen(iso, i18n.language);
-  const rows = sinceRows(report);
+  const rows = sinceRows(report, t);
   const shown = rows?.slice(0, MAX_SINCE_ROWS) ?? [];
   const hidden = (rows?.length ?? 0) - shown.length;
   const openDrift = slw.open_drift ?? [];
@@ -136,7 +139,7 @@ export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
                 {slw.unplaced.map((e) => (
                   <li key={e.id} className="bb-since-row" data-kind={kindOf(e)}>
                     <span className="bb-since-kind">{t(`gaming.blackBox.sinceWorked.kind.${kindOf(e)}`)}</span>
-                    <span className="bb-since-text">{e.summary}</span>
+                    <span className="bb-since-text">{eventText(e, t)}</span>
                     <span className="bb-since-when">
                       {stamp({ at: e.timestamp, observedBetween: e.observed_between })}
                     </span>
@@ -156,7 +159,7 @@ export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
             {openDrift.map((e) => (
               <li key={e.id} className="bb-since-row bb-since-drift" data-kind="drift">
                 <span className="bb-since-kind">{t("gaming.blackBox.sinceWorked.kind.drift")}</span>
-                <span className="bb-since-text">{e.summary}</span>
+                <span className="bb-since-text">{eventText(e, t)}</span>
                 <span className="bb-since-when">
                   {stamp({ at: e.timestamp, observedBetween: e.observed_between })}
                 </span>
