@@ -306,6 +306,14 @@ export type InterviewFacts = {
   gpuTempC: number | null;
   /** The rooms the rail ACTUALLY renders right now — the no-dead-end filter (law 1). */
   rooms: HomeIntakeRoom[];
+  /**
+   * P7-route: the Trial bench, read when the interview opens (`get_experiment_gate` +
+   * `get_experiments`). `armed` is the bench's own gate — dark means no journey and no test
+   * summary render, so nothing may route to them. `judged` counts Trials with a verdict, the
+   * records "What Compy tested" is built from. Absent or null = not read (or the read failed),
+   * which routes the way a dark bench does: never to a panel that may not be there.
+   */
+  trials?: { armed: boolean; judged: number } | null;
 };
 
 // ── The finding card ────────────────────────────────────────────────────────────────────────────
@@ -324,10 +332,19 @@ export type InterviewAction =
   /** Re-run the readiness check. Read-only. */
   | { kind: "check"; label: string }
   /** Land ON an instrument, never on a room's dock. `arrival` says what the user came with, for a
-   *  station that answers it differently (P6-stutter: the Care view runs its session comparison). */
-  | { kind: "station"; label: string; station: LabStationKey; room: HomeIntakeRoom; arrival?: "stutter" }
-  /** A whole room, when the room itself is the answer. */
-  | { kind: "room"; label: string; room: HomeIntakeRoom };
+   *  station that answers it differently (P6-stutter: the Care view runs its session comparison;
+   *  P7-route: "since" brings the Care view's "Since it last worked" into view). */
+  | {
+      kind: "station";
+      label: string;
+      station: LabStationKey;
+      room: HomeIntakeRoom;
+      arrival?: "stutter" | "since";
+    }
+  /** A whole room, when the room itself is the answer. P7-route: `arrival` names the panel of the
+   *  Test room's overview that answers (the guided journey, or "What Compy tested"), see
+   *  lab-arrival.ts. */
+  | { kind: "room"; label: string; room: HomeIntakeRoom; arrival?: "journey" | "tested" };
 
 export type InterviewFinding = {
   id: InterviewFindingId;
@@ -387,6 +404,12 @@ export function interviewFinding(
         }),
       );
   };
+  // P7-route: only a judged Trial on an armed bench is a tested change; anything else is not quoted.
+  const testedCount = facts.trials?.armed ? facts.trials.judged : 0;
+  const benchArmed = facts.trials?.armed === true;
+  const testedLine = () => {
+    if (testedCount > 0) ev.push(k("ev.tested", { count: testedCount }));
+  };
   const sessionCountLine = () => {
     if (facts.sessionCount > 0) ev.push(k("ev.sessionCount", { count: facts.sessionCount }));
   };
@@ -433,11 +456,22 @@ export function interviewFinding(
     // symptom, so there is nothing to be `direct` about unless Compy already holds the reading
     // that answers them — which is exactly why the level chip is derived rather than written.
     case "wantFps": {
+      // P7-route (ROADMAP P7 bullet 1, Constitution §3, §11, §27): "more FPS" is a goal Compy can
+      // TEST on this PC, so the answer is the guided journey (one change, measured before and
+      // after, kept only if it helped), on the Test room where it lives. It no longer claims where
+      // frames go, which Compy never measured. With the bench dark or unread, it says only what the
+      // Optimize station delivers: the safe changes, unmeasured on the user's game.
       stackLine();
       readinessLine();
+      testedLine();
       direct = facts.recsLoaded;
-      sentence = k("wantFps.sentence");
-      action = fastPathOr(station("diagnostics", "lab", k("act.diagnostics")));
+      if (benchArmed && reachable("lab", facts)) {
+        sentence = k("wantFps.sentence");
+        action = { kind: "room", label: k("act.journey"), room: "lab", arrival: "journey" };
+      } else {
+        sentence = k("wantFps.sentenceNoJourney");
+        action = station("optimize", "lab", k("act.optimize"));
+      }
       break;
     }
     case "wantMonitor": {
@@ -544,11 +578,21 @@ export function interviewFinding(
       break;
     }
     case "didItHelp": {
+      // P7-route: answered by what Compy already recorded, not by a fresh benchmark. A judged Trial
+      // is a measured answer, so "What Compy tested" opens; with none, Compy can only line up what
+      // changed and when, which is "Since it last worked" on the Care view (time order, not cause).
       changesLine();
       sessionCountLine();
-      direct = facts.activeChanges != null && facts.activeChanges > 0 && facts.sessionCount > 0;
-      sentence = k("didItHelp.sentence");
-      action = station("benchmark", "lab", k("act.beforeAfter"));
+      testedLine();
+      direct = testedCount > 0;
+      if (testedCount > 0 && reachable("lab", facts)) {
+        sentence = k("didItHelp.sentenceTested");
+        action = { kind: "room", label: k("act.whatTested"), room: "lab", arrival: "tested" };
+      } else {
+        sentence = k("didItHelp.sentenceSince");
+        const since = station("blackbox", "lab", k("act.sinceWorked"));
+        action = since.kind === "station" ? { ...since, arrival: "since" } : since;
+      }
       break;
     }
   }

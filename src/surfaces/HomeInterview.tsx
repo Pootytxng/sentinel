@@ -12,6 +12,7 @@ import {
   type InterviewStep,
 } from "./home-interview-data";
 import { markStutterArrival } from "./care-arrival";
+import { markBenchArrival, markSinceArrival } from "./lab-arrival";
 import "./home-interview.css";
 
 // THE INTERVIEW, rendered (design foundation step ③, decision 2; issue #177). The taxonomy, the
@@ -112,10 +113,13 @@ export function HomeInterview({
     if (a.kind === "station") {
       // Written before the station opens, and read once by the view it names (P6-stutter).
       if (a.arrival === "stutter") markStutterArrival();
+      if (a.arrival === "since") markSinceArrival();
       onOpenStation(a.station, a.room);
       onClose();
       return;
     }
+    // P7-route: the Test room reads this once and lands on the journey or the tested list.
+    if (a.arrival) markBenchArrival(a.arrival);
     onOpenRoom(a.room);
     onClose();
   }, [finding, onFastPath, onRunCheck, onOpenStation, onOpenRoom, onClose]);

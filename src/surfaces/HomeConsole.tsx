@@ -43,6 +43,7 @@ import { BentoGrid, BentoTile, Sheet, useSheet } from "../design/bento";
 import { headlineFit } from "../design/headline-fit";
 import { homeCareEntry, fastPathReadyHeadline, fastPathApplyLabel } from "./home-intake-data";
 import { HomeInterview } from "./HomeInterview";
+import { isMeasuredVerdict, type SummaryExperiment } from "./test-summary";
 import {
   INTERVIEW_ROOT,
   interviewQuestions,
@@ -430,6 +431,34 @@ export function HomeConsole({
   // pressed rather than fading in from nowhere.
   const [interviewOrigin, setInterviewOrigin] = useState<DOMRect | null>(null);
   const [interviewOpen, setInterviewOpen] = useState(false);
+  // P7-route: whether the Trial bench is armed and how many changes it has MEASURED (a result
+  // verdict, P4-exit-truth), read only while the interview is open so the answer can land on the
+  // journey or "What Compy tested". Any failure stays null — the interview then speaks as if
+  // nothing was measured, never inventing a count.
+  const [interviewTrials, setInterviewTrials] = useState<InterviewFacts["trials"]>(null);
+  useEffect(() => {
+    if (!interviewOpen) return;
+    let live = true;
+    (async () => {
+      try {
+        const armed = await invoke<boolean>("get_experiment_gate");
+        if (!armed) {
+          if (live) setInterviewTrials({ armed: false, judged: 0 });
+          return;
+        }
+        const exps = await invoke<SummaryExperiment[]>("get_experiments");
+        const judged = new Set(
+          (exps ?? []).filter((e) => isMeasuredVerdict(e.verdict)).map((e) => e.rec_id),
+        ).size;
+        if (live) setInterviewTrials({ armed: true, judged });
+      } catch {
+        if (live) setInterviewTrials(null);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [interviewOpen]);
   // Which step the interview opens ON (issue #49). The primary button opens it at the root, exactly
   // as before; a quick-symptom row opens it one answer in. It is a full path, not a cursor, so the
   // interview's own breadcrumb and Back button keep working with no change to how they read state.
@@ -798,8 +827,8 @@ export function HomeConsole({
   const care = homeCareEntry(t);
   const careRenders = !!rooms?.some((rm) => rm.key === care.room);
   // The live readings the interview is allowed to speak from. Every field is something this room
-  // ALREADY holds and already renders somewhere else on screen - the interview opens no probe, adds
-  // no IPC, and quotes nothing it was not handed.
+  // ALREADY holds and already renders somewhere else on screen - the interview opens no probe and
+  // quotes nothing it was not handed. Its one read-only IPC is the Trial count above (P7-route).
   const interviewRooms = (["play", "learn", "lab"] as const).filter((k) =>
     rooms?.some((rm) => rm.key === k),
   );
@@ -828,6 +857,7 @@ export function HomeConsole({
       : null,
     gpuTempC: gpuTemp,
     rooms: [...interviewRooms],
+    trials: interviewTrials,
   };
 
   // Option C's apply — mirrors FirstCheck's honest inline-apply idiom: confirm names the rollback

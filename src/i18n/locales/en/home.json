@@ -178,6 +178,8 @@
         "lastSession": "Last recorded session — {{game}}: {{avg}} FPS average, {{low}} FPS at its worst.",
         "sessionCount_one": "{{count}} recorded session to compare against.",
         "sessionCount_other": "{{count}} recorded sessions to compare against.",
+        "tested_one": "Compy has measured {{count}} change on this PC with a before-and-after Trial.",
+        "tested_other": "Compy has measured {{count}} changes on this PC with a before-and-after Trial.",
         "gpuTemp": "Your graphics card is reading {{temp}}°C right now.",
         "peakTemp": "It peaked at {{temp}}°C during your last recorded session."
       },
@@ -192,7 +194,10 @@
         "measure": "Measure it once",
         "readSession": "Read back your last session",
         "heat": "Check heat and fan headroom",
-        "beforeAfter": "Run a before-and-after",
+        "journey": "Find what helps my game",
+        "optimize": "See the safe changes",
+        "whatTested": "See what Compy tested",
+        "sinceWorked": "See what changed since it last worked",
         "undo": "Compy saves the old setting first, so you can undo any of this later from Applied.",
         "watchLive": "Put my FPS on screen",
         "seeScores": "Open the benchmark",
@@ -230,10 +235,12 @@
         "sentence": "Heat and fan noise track the same thing: how hard the parts are working, and how well the case moves air."
       },
       "didItHelp": {
-        "sentence": "The only honest answer is a before-and-after measured on this PC, graded against the noise floor."
+        "sentenceTested": "Compy already measured some changes before and after on this PC. Here is what each one did to your game.",
+        "sentenceSince": "Compy has not measured a change before and after yet, so it cannot say whether one helped. It can line up what changed and when, which shows timing, not cause."
       },
       "wantFps": {
-        "sentence": "Frames are usually taken by things running alongside your game, not by the game itself. Compy can hand back what it is sure about, and show you the rest."
+        "sentence": "Compy can test that on this PC: one session as it is now, one with a single change, and the change stays only if your game measured better.",
+        "sentenceNoJourney": "Compy can show you the safe changes it knows about. It has not measured them on your game, so any gain is expected, not proven."
       },
       "wantMonitor": {
         "sentence": "Compy can put your frame rate on screen while you play and keep a summary of the run, so “it felt smoother” becomes a number you can check."

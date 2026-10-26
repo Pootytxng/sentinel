@@ -169,6 +169,7 @@
         "changes_other": "Compy 已对这台电脑做了 {{count}} 项改动，每一项都仍可撤销。",
         "lastSession": "最近一次记录的会话——{{game}}：平均 {{avg}} FPS，最差 {{low}} FPS。",
         "sessionCount_other": "有 {{count}} 次已记录的会话可供对比。",
+        "tested_other": "Compy 已在这台电脑上用前后对比试验实测了 {{count}} 项改动。",
         "gpuTemp": "你的显卡当前读数为 {{temp}}°C。",
         "peakTemp": "最近一次记录的会话中峰值为 {{temp}}°C。"
       },
@@ -182,7 +183,10 @@
         "measure": "实测一次",
         "readSession": "回看你上一次的会话",
         "heat": "检查散热与风扇余量",
-        "beforeAfter": "做一次前后对比",
+        "journey": "找出对我的游戏有用的改动",
+        "optimize": "查看安全改动",
+        "whatTested": "查看 Compy 测过什么",
+        "sinceWorked": "看看上次正常以来改了什么",
         "undo": "Compy 会先保存原设置，之后你可以在“已应用”里撤销其中任何一项。",
         "watchLive": "把帧率显示在屏幕上",
         "seeScores": "打开跑分",
@@ -220,10 +224,12 @@
         "sentence": "温度和风扇噪音反映的是同一件事：部件的负载有多重，以及机箱的风道有多顺畅。"
       },
       "didItHelp": {
-        "sentence": "唯一诚实的答案，是在这台电脑上做一次前后对比，并对照噪声基准来评级。"
+        "sentenceTested": "Compy 已经在这台电脑上前后实测过一些改动。这里是每一项对你游戏的影响。",
+        "sentenceSince": "Compy 还没有前后实测过任何改动，所以说不出哪一项有没有帮助。它可以按时间列出改了什么，这只说明先后，不说明原因。"
       },
       "wantFps": {
-        "sentence": "帧率通常是被游戏旁边运行的东西拿走的，而不是游戏本身。Compy 可以先交还它有把握的部分，其余的展示给你看。"
+        "sentence": "Compy 可以在这台电脑上实测：一局保持现状，一局只改一项，只有你的游戏实测变好才保留这项改动。",
+        "sentenceNoJourney": "Compy 可以给你看它知道的安全改动。它们还没在你的游戏上实测过，所以任何提升都只是预期，未经证实。"
       },
       "wantMonitor": {
         "sentence": "Compy 可以在你游戏时把帧率显示在屏幕上，并保留一份总结，让“感觉更顺了”变成你能核对的数字。"

@@ -56,6 +56,7 @@ const RICH: InterviewFacts = {
   readiness: { passed: 3, total: 3, attention: 0 },
   gpuTempC: 62,
   rooms: [...ALL_ROOMS],
+  trials: { armed: true, judged: 2 },
 };
 
 const find = (id: InterviewFindingId, facts: InterviewFacts = BARE) =>
@@ -227,6 +228,7 @@ describe("LAW 3 — evidence is quoted, never synthesised", () => {
       // #452: a count the Machine Model could not give (pending or unreadable) is not a 0 to quote.
       ["unread applied changes", { activeChanges: null }, "still undoable"],
       ["gpu temperature", { gpuTempC: null }, "reading"],
+      ["measured Trials", { trials: null }, "before-and-after Trial"],
     ];
     for (const [name, patch, fragment] of probes) {
       const withFact = INTERVIEW_FINDINGS.map((id) => find(id, RICH).evidence.join(" ")).join(" ");
@@ -242,10 +244,14 @@ describe("LAW 3 — evidence is quoted, never synthesised", () => {
     }
   });
 
-  it("an unread change count cannot make 'did it help' a measured answer", () => {
-    // RICH has changes and sessions on record, so the answer is direct; without a count it is not.
+  it("only a measured Trial makes 'did it help' a measured answer (P7-route)", () => {
+    // Changes and sessions on record show timing, not cause: without a judged before-and-after
+    // Trial the answer is never "measured", however much else the machine has recorded.
     expect(find("didItHelp", RICH).level).toBe("measured");
-    expect(find("didItHelp", { ...RICH, activeChanges: null }).level).not.toBe("measured");
+    expect(find("didItHelp", { ...RICH, trials: null }).level).not.toBe("measured");
+    expect(find("didItHelp", { ...RICH, trials: { armed: true, judged: 0 } }).level).not.toBe("measured");
+    // A count the dark bench reports is not a count to quote.
+    expect(find("didItHelp", { ...RICH, trials: { armed: false, judged: 4 } }).level).not.toBe("measured");
   });
 
   it("quotes the reading it was handed, not a rounded-up version of it", () => {
@@ -365,6 +371,39 @@ describe("crash and stutter answers converge on one Care view", () => {
       expect(f.sentence).not.toMatch(/last steady/);
     } finally {
       localStorage.removeItem("compy_intelligence");
+    }
+  });
+});
+
+// P7-route (ROADMAP Phase 7 bullet 1): an answer lands on the journey that answers it. "I want more
+// FPS" opens the guided Trial only when the bench is armed (otherwise the safe changes, worded as
+// expected-not-proven); "did it help?" opens what Compy measured only when something was measured
+// (otherwise "Since it last worked", which shows timing, not cause).
+describe("answers land on the journey that answers them", () => {
+  it("'I want more FPS' opens the guided journey only on an armed bench", () => {
+    const armed = find("wantFps", RICH);
+    expect(armed.action).toMatchObject({ kind: "room", room: "lab", arrival: "journey" });
+    expect(armed.sentence).toBe(t("home.interview.f.wantFps.sentence"));
+    for (const trials of [null, { armed: false, judged: 0 }]) {
+      const f = find("wantFps", { ...RICH, trials });
+      expect(f.action.kind === "station" ? f.action.station : f.action.kind).toBe("optimize");
+      expect(f.sentence).toMatch(/expected, not proven/);
+    }
+  });
+
+  it("'did it help?' opens what Compy tested only when a Trial measured something", () => {
+    expect(find("didItHelp", RICH).action).toMatchObject({ kind: "room", room: "lab", arrival: "tested" });
+    for (const trials of [null, { armed: true, judged: 0 }, { armed: false, judged: 3 }]) {
+      const a = find("didItHelp", { ...RICH, trials }).action;
+      expect(a.kind === "station" ? [a.station, a.arrival] : [a.kind]).toEqual(["blackbox", "since"]);
+    }
+  });
+
+  it("never sends either answer to a room the rail does not render", () => {
+    const noLab = { ...RICH, rooms: ["play", "learn"] as HomeIntakeRoom[] };
+    for (const id of ["wantFps", "didItHelp"] as const) {
+      const a = find(id, noLab).action;
+      expect(a.kind === "room" || a.kind === "station" ? a.room : null).not.toBe("lab");
     }
   });
 });

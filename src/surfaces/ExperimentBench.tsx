@@ -35,6 +35,7 @@ import {
 import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
 import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
+import { takeBenchArrival, type BenchArrival } from "./lab-arrival";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -641,6 +642,25 @@ export default function ExperimentBench({
       window.removeEventListener(LEDGER_CHANGED_EVENT, onWake);
     };
   }, [gate, pickId, reload, runSim]);
+
+  // P7-route: an interview answer ("I want more FPS" / "Did it help?") lands here once, on the
+  // journey or on "What Compy tested". Taken on mount (one-shot, like care-arrival), then landed on
+  // the first render where its target exists. A target that never renders simply never lands.
+  const arrival = useRef<BenchArrival | null>(null);
+  useEffect(() => {
+    arrival.current = takeBenchArrival();
+  }, []);
+  useEffect(() => {
+    const a = arrival.current;
+    if (!gate || !a) return;
+    const el = document.querySelector<HTMLElement>(
+      a === "journey" ? '[data-testid="journey"]' : '[data-testid="exp-summary"]',
+    );
+    if (!el) return;
+    arrival.current = null;
+    el.scrollIntoView?.({ block: "start" });
+    if (a === "journey") el.querySelector<HTMLElement>("button:not([disabled])")?.focus({ preventScroll: true });
+  });
 
   if (!gate) return null;
 

@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { takeSinceArrival } from "./lab-arrival";
 // Side-effect import, as in BlackBox.tsx: the i18next singleton is ready even when this is the first
 // thing a test loads.
 import "../i18n";
@@ -77,6 +79,18 @@ function fmtWhen(iso: string, lang: string): string {
 export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
   const { t, i18n } = useTranslation();
   const slw = report?.since_last_worked;
+  // P7-route: "Did it help?" with nothing measured lands here once. Taken on mount (one-shot, like
+  // care-arrival), scrolled to on the first render where the section exists.
+  const arrived = useRef(false);
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    arrived.current = takeSinceArrival();
+  }, []);
+  useEffect(() => {
+    if (!arrived.current || !ref.current) return;
+    arrived.current = false;
+    ref.current.scrollIntoView?.({ block: "start" });
+  });
   if (!report || !slw) return null;
   const when = (iso: string) => fmtWhen(iso, i18n.language);
   const rows = sinceRows(report, t);
@@ -92,7 +106,7 @@ export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
       : when(r.at);
 
   return (
-    <section className="bb-since" aria-label={t("gaming.blackBox.sinceWorked.title")}>
+    <section ref={ref} className="bb-since" aria-label={t("gaming.blackBox.sinceWorked.title")}>
       <div className="bb-since-head">
         <span className="bb-since-title">{t("gaming.blackBox.sinceWorked.title")}</span>
         <span className="bb-since-tag">{t("gaming.blackBox.sinceWorked.notProven")}</span>
