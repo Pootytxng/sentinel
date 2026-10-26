@@ -1,4 +1,4 @@
-// P4-exit: the per-game "We tested what mattered on this PC" summary, on the owner's real WARDOGS
+// P4-exit: the per-game "What Compy tested on this PC" summary, on the owner's real WARDOGS
 // records (src/test/fixtures/wardogs-p4-exit.json: read-only copies of experiments.json and the
 // WARDOGS sessions, 2026-10-25).
 import { describe, expect, it } from "vitest";
@@ -62,13 +62,13 @@ describe("P4-exit summary on the owner's WARDOGS records", () => {
     });
   });
 
-  it("says 'tested what mattered' only when nothing the picker offers is untested here", () => {
+  it("says it finished the supported tests only when nothing the picker offers is untested here", () => {
     const left = summarizeGame(GAME, experiments, [cand("visual-effects", true, null, 2), cand("mouse-accel-off", true, null, 1)], sessions)!;
     expect(left.headline).toBe("still-worth-testing");
     expect(left.leftToTest.map((c) => c.id)).toEqual(["mouse-accel-off"]);
 
     const done = summarizeGame(GAME, experiments, [VFX, cand("game-bar-disable", false, "already-set")], sessions)!;
-    expect(done.headline).toBe("tested-what-mattered");
+    expect(done.headline).toBe("finished-supported-tests");
     expect(done.skipped.map((c) => [c.id, c.reason])).toEqual([["game-bar-disable", "already-set"]]);
 
     // The picker's list couldn't be read: never "tested what mattered", and "applied now" unknown.
@@ -99,7 +99,7 @@ describe("P4-exit summary on the owner's WARDOGS records", () => {
   it("a tested change the picker now leaves out is listed as tested, not as skipped", () => {
     const s = summarizeGame(GAME, experiments, [cand("visual-effects", false, "already-set-by-compy")], sessions)!;
     expect(s.skipped).toEqual([]);
-    expect(s.headline).toBe("tested-what-mattered");
+    expect(s.headline).toBe("finished-supported-tests");
   });
 
   it("flags a Trial run under a different graphics driver than now", () => {
@@ -157,6 +157,8 @@ describe("P5-learned lesson rules", () => {
     recId: "x",
     title: "X",
     verdict: "improved",
+    measured: true,
+    inconclusiveRuns: 0,
     kept: true,
     confidence: "medium",
     stillApplied: "on",
@@ -200,5 +202,89 @@ describe("P5-learned lesson rules", () => {
     const noisy = row({ recId: "c", verdict: "too-noisy", noise: null, at: "2026-10-25T00:00:00Z" });
     expect(lessonFor([older, newer, noisy])).toMatchObject({ recId: "b", rule: "less-steady-not-slower" });
     expect(lessonFor([noisy, row({ recId: "d", deltaLow1Pct: 0, deltaAvgPct: 0 })])).toMatchObject({ recId: "c", rule: "too-noisy" });
+  });
+});
+
+// TRUTHFUL COMPLETION (critical review 2026-10-26 §4, reproduced on the owner's WARDOGS records):
+// a journey counted "too noisy to judge" as a finished test, and a result judged under an older
+// driver and Windows build still read "We tested what mattered". An attempt is not a result; a stale
+// result is not a result that still holds. Each case below fails on the code before this fix.
+describe("truthful completion: attempts and stale results are not finished tests", () => {
+  const judged = experiments.find((x) => x.verdict != null)!;
+  const noisy = (over: Partial<SummaryExperiment> = {}): SummaryExperiment => ({
+    ...judged,
+    status: "restored",
+    kept: false,
+    verdict: "too-noisy",
+    verdict_confidence: "low",
+    ...over,
+  } as SummaryExperiment);
+  // The reviewer's second input: a newer WARDOGS session under a different driver and Windows build.
+  const newerContext: SessionSummary = {
+    ...sessions[sessions.length - 1],
+    started_at: "2026-10-26T00:00:00Z",
+    hw_fingerprint: { ...sessions[0].hw_fingerprint!, gpu_driver: "33.0.1" },
+    game_state: { ...(sessions[0].game_state ?? {}), windows_build: "26200.9000" },
+  } as SessionSummary;
+
+  it("one inconclusive attempt the picker still offers is 'worth another run', never finished", () => {
+    const s = summarizeGame(GAME, [noisy()], [VFX], sessions)!;
+    expect(s.tested).toHaveLength(1);
+    expect(s.tested[0]).toMatchObject({ recId: "visual-effects", measured: false, inconclusiveRuns: 1 });
+    expect(s.headline).toBe("worth-retesting");
+    expect(s.inconclusive.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.unjudged).toEqual([]);
+    expect(s.leftToTest).toEqual([]);
+  });
+
+  it("a measured result judged under an older driver and Windows build is stale, never finished", () => {
+    const s = summarizeGame(GAME, experiments, [VFX], [...sessions, newerContext])!;
+    expect(s.tested[0]).toMatchObject({ measured: true, sameContext: false });
+    expect(s.headline).toBe("worth-retesting");
+    expect(s.stale.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+  });
+
+  it("the reviewer's exact pair: inconclusive AND the context changed is still not finished", () => {
+    const s = summarizeGame(GAME, [noisy()], [VFX], [...sessions, newerContext])!;
+    expect(s.headline).toBe("worth-retesting");
+    // An inconclusive attempt is never a stale result: it was never a result.
+    expect(s.stale).toEqual([]);
+    expect(s.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+  });
+
+  it("untested changes come before retests, and a stale result the picker no longer offers blocks 'finished'", () => {
+    const left = summarizeGame(GAME, [noisy()], [VFX, cand("mouse-accel-off", true, null, 2)], sessions)!;
+    expect(left.headline).toBe("still-worth-testing");
+    expect(left.leftToTest.map((c) => c.id)).toEqual(["mouse-accel-off"]);
+    expect(left.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+    const keptStale = experiments.map((x) => (x.id === judged.id ? { ...x, verdict: "improved", kept: true } : x));
+    const s = summarizeGame(GAME, keptStale, [cand("visual-effects", false, "already-set-by-compy")], [...sessions, newerContext])!;
+    expect(s.headline).toBe("worth-retesting");
+    expect(s.stale.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.retest).toEqual([]); // the picker can't offer it while it is set
+  });
+
+  it("two inconclusive runs in a row: this PC gives up on that change, honestly, and may then finish", () => {
+    const twice = [noisy({ id: "exp:1-a", created_at: "2026-10-24T10:00:00Z", concluded_at: "2026-10-24T11:00:00Z" }), noisy({ id: "exp:1-b", created_at: "2026-10-25T10:00:00Z", concluded_at: "2026-10-25T11:00:00Z" })];
+    const s = summarizeGame(GAME, twice, [VFX], sessions)!;
+    expect(s.tested[0]).toMatchObject({ measured: false, inconclusiveRuns: 2, trials: 2 });
+    expect(s.unjudged.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.retest).toEqual([]);
+    expect(s.headline).toBe("finished-supported-tests");
+    // A measured result after an inconclusive one resets the count: that change has a result.
+    const thenMeasured = [...twice, { ...judged, id: "exp:1-c", created_at: "2026-10-26T10:00:00Z", concluded_at: "2026-10-26T11:00:00Z" }];
+    const m = summarizeGame(GAME, thenMeasured, [VFX], sessions)!;
+    expect(m.tested[0]).toMatchObject({ measured: true, inconclusiveRuns: 0, trials: 3 });
+    expect(m.headline).toBe("finished-supported-tests");
+  });
+
+  it("unknown context stays unknown: a Trial that recorded no driver or build is never stale", () => {
+    const bare = sessions.map((s) => ({ ...s, hw_fingerprint: null, game_state: null })) as SessionSummary[];
+    const s = summarizeGame(GAME, experiments, [VFX], bare)!;
+    expect(s.tested[0].sameContext).toBeNull();
+    expect(s.stale).toEqual([]);
+    expect(s.headline).toBe("finished-supported-tests");
   });
 });

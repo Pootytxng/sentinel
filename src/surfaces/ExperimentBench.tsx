@@ -33,7 +33,7 @@ import {
   type TestedChange,
 } from "./test-summary";
 import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
-import { journeyProgress, stillOnFor } from "./journey-resume";
+import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import "./ExperimentBench.css";
 
@@ -484,17 +484,11 @@ function canConclude(exp: Experiment): exp is Experiment & { applied_at: string;
 // that started AFTER the change took effect and carries real frames. Never fabricated — if none exists
 // the owner simply hasn't played a qualifying session yet. Timed as the backend times it: from when
 // the apply returned, since a session begun while the apply was pending can't measure the change.
-// P4-next (ENGINE §7): a change counts as TESTED on a game when this PC's experiments store holds a
-// record of it on that game whose after-session was judged (it carries a verdict), whatever the
-// verdict was: kept, restored, too noisy, not comparable. A Trial ended by the user's own restore
-// before a verdict was never judged, so it doesn't count. The store is this PC's own file, so "on
-// this rig" is the PC the store lives on. Pure.
-function testedOn(experiments: Experiment[], game: string): Set<string> {
-  return new Set(lastVerdictOn(experiments, game).keys());
-}
-
-// P4-next-f1: each change tested on `game` (the same rule as testedOn), with the verdict of its newest
-// judged Trial there, so the picker can say "Tested: <verdict>" beside it. Pure.
+// P4-next-f1: each change with a judged Trial on `game` (a Trial ended by the user's own restore before
+// a verdict was never judged, so it doesn't count), with the verdict of its newest judged Trial there,
+// so the picker can say "Tested: <verdict>" beside it. The store is this PC's own file, so "on this
+// rig" is the PC the store lives on. Which of these count as TESTED (a measured result) and which are
+// worth another run is journey-resume.ts `nextToTest`'s rule, shared with the P4-exit summary. Pure.
 function lastVerdictOn(experiments: Experiment[], game: string): Map<string, string> {
   const when = (x: Experiment) => {
     const t = Date.parse(x.concluded_at ?? x.created_at);
@@ -697,9 +691,16 @@ export default function ExperimentBench({
   const skipped = recs.filter((r) => !r.passes && r.id !== pickId);
 
   // P4-next (ENGINE §7): after a Trial, the next change in the suggested order not yet tested on that
-  // game here. An offer only: choosing it sets the test up, and nothing changes until Start.
-  const nextTested = concluded ? testedOn(experiments, concluded.game).add(concluded.rec_id) : null;
-  const nextUp = nextTested ? ranked.find((r) => !nextTested.has(r.id)) ?? null : null;
+  // game here, else one worth another run (journey-resume.ts `nextToTest`: an inconclusive attempt
+  // under the retest cap, or a result judged under an older driver or Windows build). An offer only:
+  // choosing it sets the test up, and nothing changes until Start. The Trial just concluded counts
+  // with its own verdict even before the store re-reads it: it replaces the store's copy of itself
+  // (which may still read Running), never only fills a gap.
+  const withJudged = (just: { id: string; verdict?: string | null } | null): Experiment[] =>
+    just == null || just.verdict == null // not a judged copy (a conclude that answered no record): the store decides
+      ? experiments
+      : [...experiments.filter((x) => x.id !== just.id), { ...(experiments.find((x) => x.id === just.id) ?? {}), ...just } as Experiment];
+  const nextUp = concluded ? nextToTest(concluded.game, withJudged(concluded), ranked, sessions) : null;
   const noEffectStated = recs.every((r) => r.stated_effect_pct == null);
 
   // P4-exit: the per-game summary, for the game just tested, else the bench's baseline game, else the
@@ -735,22 +736,21 @@ export default function ExperimentBench({
       ? [...pickOrder, ...recs.filter((r) => r.id === pickId)]
       : pickOrder;
   const verdictText = verdictCopy(t);
-  // P5-guided: the journey tests the top-ranked change not yet tested on that game (P4-rank order).
-  const journeyChange = pickOrder.find((r) => !lastVerdict.has(r.id)) ?? null;
-  // P5-continue: after a concluded journey, P4-next's rule for its game (the change just tested counts
-  // as tested). Unknown until the candidates have loaded: an empty list then is not "nothing left".
-  const journeyTested = journey.kind === "result" ? testedOn(experiments, journey.exp.game).add(journey.exp.rec_id) : null;
+  // P5-guided: the journey tests the top-ranked change not yet tested on that game (P4-rank order),
+  // else one worth another run (`nextToTest`), never a change with a result that still holds.
+  const journeyChange = pickGame
+    ? nextToTest(pickGame, experiments, pickable, sessions)
+    : pickOrder[0]
+      ? { ...pickOrder[0], retest: null }
+      : null;
+  // P5-continue: after a concluded journey, P4-next's rule for its game (the Trial just judged counts
+  // with its verdict). Unknown until the candidates have loaded: an empty list then is not "nothing left".
   const journeyNext =
-    journeyTested && recsLoaded
-      ? (() => {
-          const r = ranked.find((x) => !journeyTested.has(x.id));
-          return r ? { id: r.id, title: r.title } : null;
-        })()
-      : undefined;
+    journey.kind === "result" && recsLoaded ? nextToTest(journey.exp.game, withJudged(journey.exp), ranked, sessions) : undefined;
   // P5-resume: the game's journey progress, derived from the experiments store, for the game a
   // running Trial is on, else the journey's game. Unknown until the candidates have loaded.
   const progressGame = running?.game ?? pickGame;
-  const progress = progressGame && recsLoaded ? journeyProgress(progressGame, experiments, pickable) : null;
+  const progress = progressGame && recsLoaded ? journeyProgress(progressGame, experiments, pickable, sessions) : null;
   const optionLabel = (r: TrialCandidate) => {
     const v = lastVerdict.get(r.id);
     return v == null
@@ -932,7 +932,7 @@ export default function ExperimentBench({
       {(journey.kind !== "idle" || !running) && (
         <GuidedJourney
           game={pickGame}
-          change={journeyChange ? { id: journeyChange.id, title: journeyChange.title } : null}
+          change={journeyChange ? { id: journeyChange.id, title: journeyChange.title, retest: journeyChange.retest } : null}
           canStart={!busy && !running && !ledgerBusy}
           outcome={outcome}
           onOutcome={setOutcome}
@@ -1000,11 +1000,13 @@ export default function ExperimentBench({
                     <span className="exp-why-title">{nextUp.title}</span>
                   </p>
                   <p className="exp-note">
-                    {t("lab.experimentBench.next.why", {
-                      evidence: t(EVIDENCE_KEY[nextUp.evidence!]),
-                      risk: t(RISK_KEY[nextUp.risk!]),
-                    })}
-                    {nextUp.stated_effect_pct == null ? ` ${t("lab.experimentBench.rank.effectUnknownOne")}` : null}
+                    {nextUp.retest
+                      ? t(`lab.experimentBench.journey.retestWhy.${nextUp.retest}`, { change: nextUp.title })
+                      : t("lab.experimentBench.next.why", {
+                          evidence: t(EVIDENCE_KEY[nextUp.evidence!]),
+                          risk: t(RISK_KEY[nextUp.risk!]),
+                        })}
+                    {!nextUp.retest && nextUp.stated_effect_pct == null ? ` ${t("lab.experimentBench.rank.effectUnknownOne")}` : null}
                   </p>
                   <button
                     type="button"
@@ -1026,6 +1028,9 @@ export default function ExperimentBench({
                   </p>
                   <p className="exp-fineprint">
                     {t("lab.experimentBench.next.noneWhy", { game: prettyGameName(concluded.game) || concluded.game })}
+                    {summary?.game === concluded.game && summary.staleKept.length > 0
+                      ? ` ${t("lab.experimentBench.journey.progressStaleKept", { count: summary.staleKept.length })}`
+                      : null}
                     {noEffectStated ? ` ${t("lab.experimentBench.next.noneEffectUnknown")}` : null}
                   </p>
                 </>
@@ -1407,11 +1412,13 @@ function TestSummary({ s }: { s: GameTestSummary }) {
     <div className="exp-order exp-summary" data-testid="exp-summary" data-headline={s.headline}>
       <SectionLabel>{t("lab.experimentBench.summary.label", { game })}</SectionLabel>
       <p className="exp-note" data-testid="exp-summary-headline">
-        {s.headline === "tested-what-mattered"
-          ? t("lab.experimentBench.summary.testedWhatMattered", { game })
+        {s.headline === "finished-supported-tests"
+          ? t(s.unjudged.length > 0 ? "lab.experimentBench.summary.finishedSupportedTestsUnjudged" : "lab.experimentBench.summary.finishedSupportedTests", { game })
           : s.headline === "still-worth-testing"
             ? t("lab.experimentBench.summary.stillWorth", { count: s.leftToTest.length, game })
-            : t("lab.experimentBench.summary.unknownLeft")}
+            : s.headline === "worth-retesting"
+              ? t("lab.experimentBench.summary.worthRetesting", { count: new Set([...s.retest, ...s.stale].map((r) => r.recId)).size, game })
+              : t("lab.experimentBench.summary.unknownLeft")}
       </p>
       {(s.kept.length > 0 || s.putBack.length > 0) && (
         <>
@@ -1452,6 +1459,23 @@ function TestSummary({ s }: { s: GameTestSummary }) {
       {s.leftToTest.length > 0 && (
         <p className="exp-note" data-testid="exp-summary-left">
           {`${t("lab.experimentBench.summary.leftLabel")} ${names(s.leftToTest)}`}
+        </p>
+      )}
+      {s.retest.length > 0 && (
+        <p className="exp-note" data-testid="exp-summary-retest">
+          {`${t("lab.experimentBench.summary.retestLabel")} ${s.retest
+            .map((r) => t("lab.experimentBench.summary.retestRow", { title: r.title, why: t(`lab.experimentBench.summary.retestWhy.${r.measured ? "stale" : "inconclusive"}`) }))
+            .join(list)}`}
+        </p>
+      )}
+      {s.staleKept.length > 0 && (
+        <p className="exp-note" data-testid="exp-summary-stale-kept">
+          {`${t("lab.experimentBench.summary.staleKeptLabel", { count: s.staleKept.length })} ${names(s.staleKept)}`}
+        </p>
+      )}
+      {s.unjudged.length > 0 && (
+        <p className="exp-note" data-testid="exp-summary-unjudged">
+          {`${t("lab.experimentBench.summary.unjudgedLabel", { count: s.unjudged.length })} ${names(s.unjudged)}`}
         </p>
       )}
       {s.skipped.length > 0 && (

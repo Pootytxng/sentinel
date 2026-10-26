@@ -385,6 +385,10 @@
       },
       "next": "下一项：{{change}}，约 10 分钟",
       "nextFresh": "下一项：{{change}}，约 20 分钟（先玩一局新的更改前对照）",
+      "retestWhy": {
+        "inconclusive": "{{change}}之前试过，但帧率波动太大无法判断。这次再试一遍。",
+        "stale": "{{change}}的结果来自更旧的显卡驱动或 Windows 版本，Compy 无法确定它是否仍然成立。这次再核对一遍。"
+      },
       "nothingLeft": "这台电脑上没有其他值得测试的项目了。",
       "withChangeReused": "{{change}}已开启。Compy 会用你上一局作为更改前的读数，所以只需这一局：用同样的方式玩{{game}}约 10 分钟，然后关闭游戏。",
       "reuseRefused": "Compy 不能用你上一局作为更改前的读数（{{reason}}），所以需要新的一局。",
@@ -411,6 +415,10 @@
       "stopped": "已停止。没有做任何更改。",
       "close": "好",
       "progress": "已测试 {{tested}}/{{total}} 项 · 下一项：{{change}}",
+      "progressRetest": "已测试 {{tested}}/{{total}} 项 · 再测一次：{{change}}",
+      "progressUnjudged_other": "{{count}} 次尝试无法判断。",
+      "progressStale_other": "{{count}} 项结果来自更旧的显卡驱动或 Windows 版本。",
+      "progressStaleKept_other": "其中 {{count}} 项是已保留的更改：先撤回，再重新测试。",
       "progressDone": "已测试 {{tested}}/{{total}} 项。这台电脑上没有其他值得测试的项目了。",
       "progressTesting": "已测试 {{tested}}/{{total}} 项 · 正在测试：{{change}}",
       "progressInterrupted": "已测试 {{tested}}/{{total}} 项 · {{change}}的测试没有完成（见下方）",
@@ -496,7 +504,7 @@
       "setUp": "准备这项测试",
       "offerOnly": "在你开始测试之前，什么都不会改动。",
       "none": "这台主机上没有其他值得测试的更改了。",
-      "noneWhy": "Compy 列为值得在这里测试的每一项更改，都已在 {{game}} 上测试过。",
+      "noneWhy": "Compy 列为值得在这里测试的每一项更改在 {{game}} 上都有了结果，或者跑了两次仍无法判断。",
       "noneEffectUnknown": "Compy 不知道任何一项更改的效果会有多大，所以这份列表依据的是更改是否适用于这里、是否已设置、能否安全撤销，而不是效果大小。"
     },
     "readingRig": "正在读取你的主机…",
@@ -623,7 +631,9 @@
     "noiseNotRecorded_other": "标记的结果没有保存噪声下限记录。",
     "summary": {
       "label": "Compy 在 {{game}} 上测试过的内容",
-      "testedWhatMattered": "在这台主机上，{{game}} 值得测试的都已测试过：Compy 列为值得在这里测试的每一项更改都有了结果。",
+      "finishedSupportedTests": "Compy 已在这台主机上完成 {{game}} 的受支持测试：它列为值得在这里测试的每一项更改都有了测得的结果。",
+      "finishedSupportedTestsUnjudged": "Compy 已在这台主机上完成 {{game}} 的受支持测试：它列为值得在这里测试的每一项更改都有了测得的结果，除了这台电脑无法判断的那些（见下方）。",
+      "worthRetesting_other": "{{game}} 上有 {{count}} 项结果需要再跑一次才算数：当时噪音太大无法判断，或是在更旧的显卡驱动或 Windows 版本下测的。",
       "stillWorth_other": "{{game}} 上还有 {{count}} 项更改值得测试，所以还没有测完。",
       "unknownLeft": "Compy 无法读取哪些更改仍值得测试，所以无法判断是否还有剩余。",
       "testedLabel": "已测试：",
@@ -637,6 +647,14 @@
       "staysNone": "这些测试中没有保留应用的更改。",
       "cantConfirmList": "无法确认以下更改是否仍然生效：",
       "leftLabel": "仍值得测试：",
+      "retestLabel": "值得再跑一次：",
+      "retestRow": "{{title}}（{{why}}）",
+      "retestWhy": {
+        "inconclusive": "上次噪音太大，无法判断",
+        "stale": "在更旧的显卡驱动或 Windows 版本下测的"
+      },
+      "unjudgedLabel_other": "这台电脑跑了两次仍无法判断的更改（{{count}} 项）：",
+      "staleKeptLabel_other": "在更旧的显卡驱动或 Windows 版本下判定、现已保留的更改（{{count}} 项；先撤回，再重新测试）：",
       "skippedLabel": "未测试的更改及原因（{{count}}）",
       "noiseLabel": "噪声范围：",
       "contextLabel": "测量环境：",

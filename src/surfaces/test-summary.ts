@@ -18,8 +18,19 @@
 //   - context (§9): the game, rig, graphics driver and Windows build its newest session recorded, and
 //     per tested change whether its Trial ran under the same driver and Windows build.
 //
-// "We tested what mattered" is said only when the picker's list was read and every change on it has a
-// judged Trial on this game; otherwise the summary counts what is left (or says it couldn't tell).
+// TRUTHFUL COMPLETION (review 2026-10-26, ENGINE §7 and §10). A judged Trial is an ATTEMPT; only a
+// MEASURED verdict (improved / no-change / regressed) is a RESULT. The summary keeps them apart:
+//   - inconclusive: the change's newest judged Trial carries any other verdict (too-noisy, confounded,
+//     not-comparable, expired, insufficient-evidence…). It was tried, nothing was learned;
+//   - stale: a measured result whose Trial ran under a different graphics driver or Windows build
+//     than the game's newest session (`sameContext === false`). It was a result; it may not hold now;
+//   - retest: an inconclusive or stale change the picker still offers (`passes`), so it can be run
+//     again, except an inconclusive one already judged inconclusive `RETEST_CAP` times in a row (§7:
+//     repeatability is insufficient, stop). Those are `unjudged`: tried, and this PC can't judge them;
+//   - unknown context stays unknown: a Trial or session that recorded no driver/build is never stale.
+// "Compy finished the supported tests" is said only when the picker's list was read, nothing on it is
+// untested, and nothing is worth another run. Exhausting the picker's list is a bounded claim about
+// the changes Compy lists for this PC, never "everything that could matter".
 //
 // P5-learned (ROADMAP Phase 5 step 8, Constitution §13–14, ENGINE §8): the end-of-journey summary
 // also says what was kept, what was put back and why (the record's own `kept` and verdict), and at
@@ -116,6 +127,11 @@ export type TestedChange = {
   recId: string;
   title: string;
   verdict: string;
+  /** The newest judged Trial reached a measured verdict (improved / no-change / regressed). */
+  measured: boolean;
+  /** Judged Trials of this change, newest first, that were inconclusive before a measured one (0 when
+   *  the newest is measured). `RETEST_CAP` of them in a row and this PC stops offering another run. */
+  inconclusiveRuns: number;
   kept: boolean;
   confidence: SummaryConfidence | null;
   stillApplied: StillApplied;
@@ -162,6 +178,19 @@ export const LESSON_RULES: Readonly<Record<string, LessonRule>> = {
 };
 
 const MEASURED_VERDICTS = new Set(["improved", "no-change", "regressed"]);
+
+/** A verdict that is a RESULT (the Trial compared before and after beyond its band), as opposed to
+ *  an attempt that judged nothing (too-noisy, confounded, not-comparable, expired, insufficient…). */
+export const isMeasuredVerdict = (verdict: string | null | undefined): boolean =>
+  verdict != null && MEASURED_VERDICTS.has(verdict);
+
+/** Inconclusive attempts in a row on one change before Compy stops offering another run (ENGINE §7:
+ *  benchmark repeatability is insufficient; stopping early is success). The picker still allows
+ *  testing it by hand. */
+export const RETEST_CAP = 2;
+
+/** Why a change is offered another run. */
+export type RetestReason = "inconclusive" | "stale";
 
 export type Lesson = {
   rule: LessonRule;
@@ -212,10 +241,24 @@ export type SummaryContext = {
 export type GameTestSummary = {
   game: string;
   tested: TestedChange[];
-  /** "tested-what-mattered" only when the picker's list was read and nothing on it is untested here. */
-  headline: "tested-what-mattered" | "still-worth-testing" | "unknown";
+  /** "finished-supported-tests" only when the picker's list was read, nothing on it is untested here
+   *  and nothing is worth another run; "worth-retesting" when nothing is untested but a result is
+   *  inconclusive or stale. */
+  headline: "finished-supported-tests" | "still-worth-testing" | "worth-retesting" | "unknown";
   /** Changes the picker offers that have no judged Trial on this game, in its suggested order. */
   leftToTest: SummaryCandidate[];
+  /** Tested changes worth another run: inconclusive (under `RETEST_CAP`) or stale, and still offered
+   *  by the picker. In the picker's order. */
+  retest: TestedChange[];
+  /** Tested changes whose newest judged Trial reached no measured verdict. */
+  inconclusive: TestedChange[];
+  /** Inconclusive changes judged inconclusive `RETEST_CAP` times in a row: this PC can't judge them. */
+  unjudged: TestedChange[];
+  /** Measured results whose Trial ran under a different driver or Windows build than now. */
+  stale: TestedChange[];
+  /** Stale results the picker no longer offers (the change is set now): testing again means putting
+   *  it back first. Said apart, so a stale kept result is never a silent dead end. */
+  staleKept: TestedChange[];
   /** Changes the picker leaves out, each with its reason. Empty when the list couldn't be read. */
   skipped: SummaryCandidate[];
   /** Tested changes whose live check reads On now. */
@@ -236,6 +279,11 @@ const time = (iso: string | null | undefined): number => {
   return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
 };
 
+/** When a judged Trial was judged (ms): its `concluded_at`, else its `created_at`; -Infinity when
+ *  neither parses. The ONE comparator for "newest judged Trial" (test-summary and journey-resume). */
+export const judgedAt = (x: { concluded_at?: string | null; created_at?: string | null }): number =>
+  time(x.concluded_at ?? x.created_at);
+
 const text = (s: string | null | undefined): string | null => (s && s.trim() !== "" ? s : null);
 
 function contextOf(s: SessionSummary | undefined): SummaryContext | null {
@@ -248,6 +296,34 @@ function contextOf(s: SessionSummary | undefined): SummaryContext | null {
     display: text(hw?.display),
   };
   return Object.values(ctx).some((v) => v != null) ? ctx : null;
+}
+
+/** The context (§9) of `game`'s newest session that recorded one, and a check of whether a Trial's
+ *  baseline session ran under the same graphics driver and Windows build: true, false, or null when
+ *  either side recorded neither (unknown stays unknown, never stale). Pure. */
+export function contextCheckFor(
+  game: string,
+  sessions: readonly SessionSummary[],
+): { context: SummaryContext | null; sameContext: (baselineSessionId: string | null | undefined) => boolean | null } {
+  const ofGame = sessions
+    .filter((s) => s.process_name === game)
+    .sort((a, b) => time(b.started_at) - time(a.started_at));
+  const context = contextOf(ofGame.find((s) => contextOf(s) != null));
+  return {
+    context,
+    sameContext: (baselineSessionId) => {
+      const then = contextOf(sessions.find((s) => s.started_at === baselineSessionId));
+      if (!then?.driver || !then.windowsBuild || !context?.driver || !context.windowsBuild) return null;
+      return then.driver === context.driver && then.windowsBuild === context.windowsBuild;
+    },
+  };
+}
+
+/** How many judged Trials of one change, newest first, judged nothing before one that did. */
+export function inconclusiveRunsOf(judgedOldestFirst: readonly { verdict: string | null }[]): number {
+  let n = 0;
+  for (let i = judgedOldestFirst.length - 1; i >= 0 && !isMeasuredVerdict(judgedOldestFirst[i].verdict); i--) n++;
+  return n;
 }
 
 /**
@@ -265,19 +341,11 @@ export function summarizeGame(
 
   const stillApplied = (recId: string): StillApplied => stillAppliedFrom(candidates?.find((c) => c.id === recId));
 
-  const ofGame = sessions
-    .filter((s) => s.process_name === game)
-    .sort((a, b) => time(b.started_at) - time(a.started_at));
-  const context = contextOf(ofGame.find((s) => contextOf(s) != null));
-  const sameContext = (x: SummaryExperiment): boolean | null => {
-    const then = contextOf(sessions.find((s) => s.started_at === x.baseline_session_id));
-    if (!then?.driver || !then.windowsBuild || !context?.driver || !context.windowsBuild) return null;
-    return then.driver === context.driver && then.windowsBuild === context.windowsBuild;
-  };
+  const { context, sameContext } = contextCheckFor(game, sessions);
 
-  // One row per change, from its newest judged Trial, in first-tested order.
+  // One row per change, from its newest judged Trial (`judgedAt` order), in first-judged order.
   const byRec = new Map<string, SummaryExperiment[]>();
-  for (const x of [...judged].sort((a, b) => time(a.created_at) - time(b.created_at))) {
+  for (const x of [...judged].sort((a, b) => judgedAt(a) - judgedAt(b))) {
     byRec.set(x.rec_id, [...(byRec.get(x.rec_id) ?? []), x]);
   }
   const tested: TestedChange[] = [...byRec.values()].map((runs) => {
@@ -286,12 +354,14 @@ export function summarizeGame(
       recId: x.rec_id,
       title: x.rec_title,
       verdict: x.verdict as string,
+      measured: isMeasuredVerdict(x.verdict),
+      inconclusiveRuns: inconclusiveRunsOf(runs),
       kept: x.kept,
       confidence: x.verdict_confidence ?? null,
       stillApplied: stillApplied(x.rec_id),
       noise: x.noise_evidence ?? null,
       trials: runs.length,
-      sameContext: sameContext(x),
+      sameContext: sameContext(x.baseline_session_id),
       deltaLow1Pct: x.treatment?.delta_low1_pct ?? null,
       deltaAvgPct: x.treatment?.delta_avg_pct ?? null,
       at: x.created_at,
@@ -299,19 +369,41 @@ export function summarizeGame(
   });
 
   const testedIds = new Set(tested.map((r) => r.recId));
-  const leftToTest = (candidates ?? [])
-    .filter((c) => c.passes && !testedIds.has(c.id))
-    .map((c, i) => ({ c, i }))
-    .sort((a, b) => (a.c.position ?? Infinity) - (b.c.position ?? Infinity) || a.i - b.i)
-    .map(({ c }) => c);
+  const inPickerOrder = (cs: SummaryCandidate[]) =>
+    cs
+      .map((c, i) => ({ c, i }))
+      .sort((a, b) => (a.c.position ?? Infinity) - (b.c.position ?? Infinity) || a.i - b.i)
+      .map(({ c }) => c);
+  const leftToTest = inPickerOrder((candidates ?? []).filter((c) => c.passes && !testedIds.has(c.id)));
   // A tested change the picker now leaves out (a kept change reads "already set") is listed as tested.
   const skipped = (candidates ?? []).filter((c) => !c.passes && !testedIds.has(c.id));
+
+  const inconclusive = tested.filter((r) => !r.measured);
+  const unjudged = inconclusive.filter((r) => r.inconclusiveRuns >= RETEST_CAP);
+  const stale = tested.filter((r) => r.measured && r.sameContext === false);
+  const retestIds = new Set([...inconclusive.filter((r) => r.inconclusiveRuns < RETEST_CAP), ...stale].map((r) => r.recId));
+  const retest = inPickerOrder((candidates ?? []).filter((c) => c.passes && retestIds.has(c.id)))
+    .map((c) => tested.find((r) => r.recId === c.id))
+    .filter((r): r is TestedChange => r != null);
+  const staleKept = stale.filter((r) => !retest.some((x) => x.recId === r.recId));
 
   return {
     game,
     tested,
-    headline: candidates == null ? "unknown" : leftToTest.length === 0 ? "tested-what-mattered" : "still-worth-testing",
+    headline:
+      candidates == null
+        ? "unknown"
+        : leftToTest.length > 0
+          ? "still-worth-testing"
+          : retest.length > 0 || stale.length > 0
+            ? "worth-retesting"
+            : "finished-supported-tests",
     leftToTest,
+    retest,
+    inconclusive,
+    unjudged,
+    stale,
+    staleKept,
     skipped,
     staysApplied: tested.filter((r) => r.stillApplied === "on"),
     cantConfirm: tested.filter((r) => r.stillApplied === "cant-confirm"),

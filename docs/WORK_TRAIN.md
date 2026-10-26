@@ -166,8 +166,21 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - [x] **P4-next-f1** `1fc5026c`: picker marks tested changes ("· Tested: <verdict>") after untested ones.
 - [x] **P4-exit** (code) `e3d0420e`: read-only "What Compy tested on <game>" panel; "We tested what
       mattered" only when nothing untested remains. Today for WARDOGS: 1 of 16 testable changes has a result.
-- [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "We tested what mattered";
-      record it in BACKLOG as the Phase 4 exit.
+- [x] **P4-exit-truth** (this entry's commit; from the 2026-10-26 critical review §4, reproduced on the owner's
+      WARDOGS records) The journey counted "too noisy to judge" as a finished test, and a result judged under an
+      older driver/Windows build still read "We tested what mattered". Now only a measured verdict (improved /
+      no-change / regressed) is a result; other verdicts are inconclusive attempts; a result whose Trial ran
+      under a different driver or Windows build than the game's newest session is stale; inconclusive (under 2
+      runs in a row, ENGINE §7) or stale changes the picker still offers are "worth another run", offered after
+      the untested ones (`nextToTest`, one rule for P4-next, P5-continue and P5-resume); the claim is bounded:
+      "Compy finished the supported tests for <game> on this PC". Unknown context stays unknown. Tests fail on
+      the old code (test-summary 8, journey-resume 5, bench 1). Review (1 round, all fixed in the same commit):
+      an as-is session from an older driver/build is never reused (`reusableAsIs`), so a stale retest records a
+      fresh before-reading; a stale result is counted apart from tested, and a kept one is listed with "put it
+      back, then test again"; the just-judged Trial replaces the store's running copy of itself; journey and
+      summary share one newest-Trial comparator (`judgedAt`). Decision to overrule if wanted: the two-run cap.
+- [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
+      tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
 
 ### Then — Roadmap Phase 5: Guided Optimization Journey (`product/ROADMAP.md` Phase 5)
 Planned 2026-10-25. Order is value order. Phase 5 exit on the owner rig: from one button to the summary,
@@ -336,6 +349,9 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   owner can run the Phase 6 exit proof; RELEASE_STATE recorded.
 - 2026-10-26 (scheduled, CODE-ONLY, owner on PC): P7-severity `2ba1f70c`, P6-next-f2 `142b769b`
   (review fixes `aa762687`; new tests fail on the old code); tsc 0, vitest 152/152; not pushed.
+- 2026-10-26 ~12:20–13:10 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth (this entry's
+  commit; the 2026-10-26 critical review's reproduced completion/staleness defect); tsc 0, vitest 255/255 across
+  13 files on the desk; one review round, all findings fixed (details under the item); not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
