@@ -34,9 +34,10 @@ describe("verdict", () => {
     expect(verdictLabel("no-measurable-change")).toBe("No measurable change");
     expect(verdictLabel("regressed")).toBe("Regressed");
   });
-  it("tones: improved=ready, regressed=danger, no-change=neutral(info)", () => {
+  it("tones: improved=ready, regressed=attention (never red Critical), no-change=neutral(info)", () => {
     expect(verdictTone("improved")).toBe("ready");
-    expect(verdictTone("regressed")).toBe("danger");
+    expect(verdictTone("regressed")).toBe("attention");
+    expect(verdictTone("regressed")).not.toBe("danger");
     expect(verdictTone("no-measurable-change")).toBe("info");
   });
 });
@@ -106,9 +107,22 @@ describe("trial verdict", () => {
     expect(trialVerdictLabel(keep)).toBe("Helped");
     expect(trialVerdictTone(keep)).toBe("ready");
     expect(trialVerdictLabel(revert)).toBe("Hurt — reverted");
-    expect(trialVerdictTone(revert)).toBe("danger");
+    expect(trialVerdictTone(revert)).toBe("info");
     expect(trialVerdictLabel(noChange)).toBe("No measurable change");
     expect(trialVerdictTone(noChange)).toBe("info");
+  });
+  it("P7-severity: a hurt change that was put back is calm; danger only while it is still applied", () => {
+    // Rolled back: still reported as having hurt, but not red "Critical".
+    expect(trialVerdictTone(revert, true)).toBe("info");
+    expect(trialVerdictLabel(revert, undefined, true)).toBe("Hurt — reverted");
+    // Rollback failed: the harmful change is still on the machine, so danger stays and the
+    // label must not claim it was reverted.
+    expect(trialVerdictTone(revert, false)).toBe("danger");
+    expect(trialVerdictLabel(revert, undefined, false)).toBe("Hurt — still applied");
+    // The flag never changes the other verdicts.
+    expect(trialVerdictTone(keep, false)).toBe("ready");
+    expect(trialVerdictLabel(keep, undefined, false)).toBe("Helped");
+    expect(trialVerdictTone(noChange, false)).toBe("info");
   });
   it("explains inconclusive reasons", () => {
     expect(trialReasonText("within-noise")).toMatch(/noise/);

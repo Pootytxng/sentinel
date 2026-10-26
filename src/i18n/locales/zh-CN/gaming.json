@@ -170,6 +170,7 @@
     "trialVerdict": {
       "helped": "有帮助",
       "hurtReverted": "变差——已回滚",
+      "hurtStillApplied": "变差——仍在生效",
       "noChange": "无可测量的变化"
     },
     "trialReason": {

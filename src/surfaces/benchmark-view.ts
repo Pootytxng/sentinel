@@ -31,10 +31,12 @@ export function verdictLabel(v: Verdict, t?: TFunction): string {
 
 /** Map an efficacy verdict to a status-pill tone. "No measurable change" is neutral
  * INFO on purpose — it's the honest non-result (a determined finding), never dressed up
- * as a win and never an alarm. */
+ * as a win and never an alarm. "Regressed" is ATTENTION, not danger (P7-severity,
+ * Constitution §34): a benchmark that measured worse is worth a look and an undo, not a red
+ * "Critical" alarm. The label still says "Regressed". */
 export function verdictTone(v: Verdict): Status {
   if (v === "improved") return "ready";
-  if (v === "regressed") return "danger";
+  if (v === "regressed") return "attention";
   return "info";
 }
 
@@ -46,17 +48,36 @@ export function fmtDelta(pct: number): string {
 }
 
 // ── Live trial (game-frametime) verdict — Keep / Revert / Inconclusive ──
-export function trialVerdictLabel(v: TrialVerdict, t?: TFunction): string {
+/** `rolledBack` is the trial's `rolled_back` flag. A "revert" verdict whose rollback failed must
+ * not claim "reverted": the change that hurt is still on the machine. */
+export function trialVerdictLabel(v: TrialVerdict, t?: TFunction, rolledBack = true): string {
+  const stillApplied = v.verdict === "revert" && !rolledBack;
   const fallback =
-    v.verdict === "keep" ? "Helped" : v.verdict === "revert" ? "Hurt — reverted" : "No measurable change";
+    v.verdict === "keep"
+      ? "Helped"
+      : v.verdict === "revert"
+        ? stillApplied
+          ? "Hurt — still applied"
+          : "Hurt — reverted"
+        : "No measurable change";
   if (!t) return fallback;
-  const key = v.verdict === "keep" ? "helped" : v.verdict === "revert" ? "hurtReverted" : "noChange";
+  const key =
+    v.verdict === "keep"
+      ? "helped"
+      : v.verdict === "revert"
+        ? stillApplied
+          ? "hurtStillApplied"
+          : "hurtReverted"
+        : "noChange";
   return t(`gaming.benchmark.trialVerdict.${key}`, { defaultValue: fallback });
 }
 
-export function trialVerdictTone(v: TrialVerdict): Status {
+/** P7-severity (Constitution §34): danger is only for a harmful state still on the machine. A
+ * Trial that hurt and was put back is a calm, determined result (INFO; the label still says
+ * "Hurt"). Only a hurt change whose rollback failed stays danger. */
+export function trialVerdictTone(v: TrialVerdict, rolledBack = true): Status {
   if (v.verdict === "keep") return "ready";
-  if (v.verdict === "revert") return "danger";
+  if (v.verdict === "revert") return rolledBack ? "info" : "danger";
   return "info"; // "no measurable change" — a determined null, neutral not amber
 }
 

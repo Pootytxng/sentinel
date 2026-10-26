@@ -520,8 +520,8 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
         {!trial?.running && trial?.kind === "tweak" && trial?.verdict && (
           <p className="bench-stat">
             <StatusPill
-              status={trialVerdictTone(trial.verdict)}
-              label={trialVerdictLabel(trial.verdict, t)}
+              status={trialVerdictTone(trial.verdict, trial.rolled_back)}
+              label={trialVerdictLabel(trial.verdict, t, trial.rolled_back)}
             />{" "}
             {trial.verdict.verdict === "inconclusive" ? (
               <>— {trialReasonText(trial.verdict.reason, t)}.</>
