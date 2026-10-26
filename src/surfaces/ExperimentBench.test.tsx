@@ -1690,7 +1690,7 @@ describe("ExperimentBench — the next change to test after a Trial", () => {
     const done = screen.getByTestId("exp-next-done");
     expect(done).toHaveTextContent("Nothing else here is worth testing on this PC.");
     expect(done.closest(".exp-bench-warn, [role=alert]")).toBeNull();
-    expect(next).toHaveTextContent("Every change Compy lists as worth testing here has been tested on Valorant.");
+    expect(next).toHaveTextContent("Every change Compy lists as worth testing here has a result on Valorant, or couldn't be judged after two runs.");
     expect(next).toHaveTextContent("Compy doesn't know how big any change's effect would be");
     expect(screen.queryByRole("button", { name: "Set up this test" })).toBeNull();
   });
@@ -1731,7 +1731,7 @@ describe("P4-exit: what Compy tested on this game", () => {
     expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent(
       "1 more change is still worth testing on WardogsClient, so this isn't finished yet.",
     );
-    expect(panel).not.toHaveTextContent("We tested what mattered");
+    expect(panel).not.toHaveTextContent("finished the supported tests");
     const tested = screen.getByTestId("exp-summary-tested");
     expect(tested).toHaveTextContent("Trim Windows visual effects: Slower — restored · confidence: medium Not applied now.");
     expect(screen.getByTestId("exp-summary-stays")).toHaveTextContent("Nothing from these tests stays applied.");
@@ -1750,10 +1750,30 @@ describe("P4-exit: what Compy tested on this game", () => {
     expect(panel.querySelectorAll("button")).toHaveLength(0);
   });
 
-  it("says 'We tested what mattered' only when the picker has nothing untested left", async () => {
+  it("says it finished the supported tests only when the picker has nothing untested or worth another run", async () => {
     const panel = await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
-    expect(panel).toHaveAttribute("data-headline", "tested-what-mattered");
-    expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("We tested what mattered on this PC for WardogsClient");
+    expect(panel).toHaveAttribute("data-headline", "finished-supported-tests");
+    expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent(
+      "Compy finished the supported tests for WardogsClient on this PC: every change it lists as worth testing here has a measured result.",
+    );
+    expect(screen.queryByTestId("exp-summary-retest")).toBeNull();
+  });
+
+  // TRUTHFUL COMPLETION (critical review 2026-10-26 §4): an attempt is not a result.
+  it("a 'too noisy' attempt reads as worth another run, never as finished", async () => {
+    const f = await owner();
+    state.gate = true;
+    state.experiments = f.experiments.map((x) => (x.verdict ? { ...x, verdict: "too-noisy", status: "restored", kept: false } : x));
+    state.sessions = f.sessions;
+    state.recs = [pass("visual-effects", "Trim Windows visual effects", 1)];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    expect(panel).toHaveAttribute("data-headline", "worth-retesting");
+    expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent(
+      "1 result on WardogsClient needs another run before it counts: it was too noisy to judge, or it was judged under an older graphics driver or Windows build.",
+    );
+    expect(screen.getByTestId("exp-summary-retest")).toHaveTextContent("Worth another run: Trim Windows visual effects (too noisy to judge last time)");
+    expect(panel).not.toHaveTextContent("finished the supported tests");
   });
 
   it("never claims it when the picker's list couldn't be read, nor 'not applied' without it", async () => {
@@ -1765,7 +1785,7 @@ describe("P4-exit: what Compy tested on this game", () => {
     render(<ExperimentBench />);
     const panel = await screen.findByTestId("exp-summary");
     expect(panel).toHaveAttribute("data-headline", "unknown");
-    expect(panel).not.toHaveTextContent("We tested what mattered");
+    expect(panel).not.toHaveTextContent("finished the supported tests");
     expect(screen.getByTestId("exp-summary-tested")).toHaveTextContent("Couldn't read whether it's applied now.");
   });
 
@@ -1773,7 +1793,7 @@ describe("P4-exit: what Compy tested on this game", () => {
     await i18n.changeLanguage("zh-CN");
     try {
       await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
-      expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("值得测试的都已测试过");
+      expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("已在这台主机上完成 WardogsClient 的受支持测试");
       expect(screen.getByTestId("exp-summary-tested")).toHaveTextContent("目前未应用。");
     } finally {
       await i18n.changeLanguage("en");

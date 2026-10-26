@@ -61,6 +61,7 @@ import { prettyGameName } from "./game-name";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { asProgress, enoughLine, enoughState, setJourneyRecording, type CaptureProgress } from "./journey-enough";
 import { journeyStopped, pickUpJourney, stopJourneyHere, type JourneyProgress } from "./journey-resume";
+import { contextCheckFor, type RetestReason } from "./test-summary";
 
 export type JourneyOutcome = "recommended" | "max-fps";
 
@@ -274,10 +275,14 @@ async function waitForSession(
 }
 
 /** The session a next journey may reuse as its before-reading: still in the store, the same game,
- *  a usable reading and graded steady. Whether it is still comparable is the start's to say. */
+ *  a usable reading, graded steady, and not recorded under a different graphics driver or Windows
+ *  build than the game's newest session (P4-exit-truth review, MUST-FIX 1: reusing an old-context
+ *  as-is session would keep a stale result stale, run after run; unknown context is not stale).
+ *  Whether it is otherwise still comparable is the start's to say. */
 export function reusableAsIs(sessions: SessionSummary[], id: string | null, game: string | null): SessionSummary | null {
   const s = id == null ? undefined : sessions.find((x) => x.started_at === id);
   if (!s || !usable(s) || (game != null && s.process_name !== game)) return null;
+  if (contextCheckFor(game ?? s.process_name, sessions).sameContext(s.started_at) === false) return null;
   return gradeBaseline(s).kind === "steady" ? s : null;
 }
 async function reusableSession(id: string, game: string | null): Promise<SessionSummary | null> {
@@ -535,15 +540,18 @@ export function GuidedJourney({
 }: {
   /** The detected / last-played game (the newest usable session's), or null before any session. */
   game: string | null;
-  /** The top-ranked change not yet tested on that game (P4-rank), or null when none is left. */
-  change: { id: string; title: string } | null;
+  /** The top-ranked change not yet tested on that game (P4-rank), else one worth another run
+   *  (`retest` says why: an inconclusive attempt, or a result judged under an older driver or Windows
+   *  build), or null when none is left. */
+  change: { id: string; title: string; retest?: RetestReason | null } | null;
   /** False while another Trial runs, the bench is busy, or App's shared busy flag is held. */
   canStart: boolean;
   outcome: JourneyOutcome;
   onOutcome: (o: JourneyOutcome) => void;
-  /** After a concluded journey: the next change P4-next ranks untested on that game, null when
-   *  nothing is left, undefined while that isn't known yet (the candidates haven't loaded). */
-  next?: { id: string; title: string } | null;
+  /** After a concluded journey: the next change P4-next ranks untested on that game, else one worth
+   *  another run (`retest`), null when nothing is left, undefined while that isn't known yet (the
+   *  candidates haven't loaded). */
+  next?: { id: string; title: string; retest?: RetestReason | null } | null;
   /** Whether the finished journey left a reusable as-is session (`reusableAsIs`) for that next change:
    *  one session, about 10 min; otherwise a new before-session first, about 20. */
   nextReuses?: boolean;
@@ -565,8 +573,8 @@ export function GuidedJourney({
   const k = "lab.experimentBench.journey";
   const gameName = (g: string | null) => (g ? prettyGameName(g) || g : null);
 
-  // P5-resume: a journey already under way on this game (something tested there).
-  const resuming = progress != null && progress.tested > 0 && progress.unfinished == null;
+  // P5-resume: a journey already under way on this game (something tested or tried there).
+  const resuming = progress != null && progress.tested + progress.inconclusive + progress.stale > 0 && progress.unfinished == null;
   const stopLine = (pr: JourneyProgress) =>
     `${t(`${k}.stoppedHere`, { tested: pr.tested, total: pr.total })} ${
       stillOn.length > 0 ? t(`${k}.stillOn`, { changes: stillOn.join(", ") }) : t(`${k}.noneOn`)
@@ -599,7 +607,7 @@ export function GuidedJourney({
       return (
         <div className="exp-order exp-journey" data-testid="journey">
           <p className="exp-note" data-testid="journey-progress">
-            {t(`${k}.progressDone`, { tested: progress.tested, total: progress.total })}
+            {[t(`${k}.progressDone`, { tested: progress.tested, total: progress.total }), ...progressNotes(progress, t)].join(" ")}
           </p>
         </div>
       );
@@ -617,7 +625,7 @@ export function GuidedJourney({
       <div className="exp-order exp-journey" data-testid="journey">
         {resuming && (
           <p className="exp-note" data-testid="journey-progress">
-            {t(`${k}.progress`, { tested: progress.tested, total: progress.total, change: change.title })}
+            {progressLine(progress, change, t)}
           </p>
         )}
         <p className="exp-note" data-testid="journey-plan">
@@ -627,6 +635,11 @@ export function GuidedJourney({
               ? t(`${k}.planGame`, { game: name, change: change.title })
               : t(`${k}.plan`, { change: change.title })}
         </p>
+        {change.retest && (
+          <p className="exp-fineprint" data-testid="journey-retest-why">
+            {t(`${k}.retestWhy.${change.retest}`, { change: change.title })}
+          </p>
+        )}
         <div className="exp-running-actions" role="group" aria-label={t(`${k}.aim`)}>
           {(["recommended", "max-fps"] as const).map((o) => (
             <button
@@ -779,6 +792,11 @@ export function GuidedJourney({
           {t(nextReuses ? `${k}.next` : `${k}.nextFresh`, { change: next.title })}
         </button>
       )}
+      {p.kind === "result" && next?.retest && (
+        <p className="exp-fineprint" data-testid="journey-retest-why">
+          {t(`${k}.retestWhy.${next.retest}`, { change: next.title })}
+        </p>
+      )}
       {p.kind === "result" && next && (
         // P5-resume: the owner ends the journey here; nothing is undone (ENGINE §7).
         <button
@@ -794,7 +812,7 @@ export function GuidedJourney({
       )}
       {p.kind === "result" && next === null && (
         <p className="exp-note" data-testid="journey-done">
-          {t(`${k}.nothingLeft`)}
+          {[t(`${k}.nothingLeft`), ...(progress?.game === p.exp.game ? progressNotes(progress, t) : [])].join(" ")}
         </p>
       )}
       {finished && (
@@ -812,6 +830,29 @@ export function GuidedJourney({
       )}
     </div>
   );
+}
+
+/** P5-resume: "{tested} of {total} tested · Next: X", or "· Retest: X" for a change worth another
+ *  run, plus how many attempts judged nothing. Only a measured result counts as tested. */
+function progressLine(
+  progress: JourneyProgress,
+  change: { title: string; retest?: RetestReason | null },
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const k = "lab.experimentBench.journey";
+  const line = t(change.retest ? `${k}.progressRetest` : `${k}.progress`, { tested: progress.tested, total: progress.total, change: change.title });
+  return [line, ...progressNotes(progress, t)].join(" ");
+}
+
+/** What the count line owes besides the count: attempts that judged nothing, results from an older
+ *  driver or Windows build, and kept results among those (put back to test again). */
+function progressNotes(progress: JourneyProgress, t: (key: string, opts?: Record<string, unknown>) => string): string[] {
+  const k = "lab.experimentBench.journey";
+  return [
+    ...(progress.inconclusive > 0 ? [t(`${k}.progressUnjudged`, { count: progress.inconclusive })] : []),
+    ...(progress.stale > 0 ? [t(`${k}.progressStale`, { count: progress.stale })] : []),
+    ...(progress.staleKept > 0 ? [t(`${k}.progressStaleKept`, { count: progress.staleKept })] : []),
+  ];
 }
 
 /** P5-resume: the progress line while a Trial of the game is still Running, so it says what the

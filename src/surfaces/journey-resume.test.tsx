@@ -28,6 +28,8 @@ const state = vi.hoisted(() => ({
   startCalls: 0,
   /** start_experiment refuses these "recId|baselineId" pairs with the backend's §3 baseline refusal. */
   refuseBaselines: [] as string[],
+  /** When set, get_experiments still reads this record as Running (the store's re-read lags a conclude). */
+  lagsConclude: null as string | null,
 }));
 
 const session = (started_at: string, samples: number, process_name = "Valorant") => ({
@@ -78,7 +80,9 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "get_experiment_gate":
         return Promise.resolve(true);
       case "get_experiments":
-        return Promise.resolve(state.experiments);
+        return Promise.resolve(
+          state.experiments.map((x) => (x.id === state.lagsConclude ? { ...x, status: "running", verdict: null, concluded_at: null } : x)),
+        );
       case "get_trial_candidates":
         return Promise.resolve(state.recs);
       case "get_session_summaries":
@@ -156,6 +160,7 @@ beforeEach(() => {
   state.failSecondCapture = false;
   state.startCalls = 0;
   state.refuseBaselines = [];
+  state.lagsConclude = null;
 });
 
 afterEach(() => cleanup());
@@ -347,5 +352,141 @@ describe("P5-resume: an interrupted Trial and the progress line agree", () => {
     render(<ExperimentBench />);
     expect(await progressLine()).toBe("2 of 5 tested · Testing now: Power plan");
     expect(screen.queryByTestId("exp-interrupted")).toBeNull();
+  });
+});
+
+// TRUTHFUL COMPLETION (critical review 2026-10-26 §4): the reviewer ran the journey's progress with
+// one "too noisy to judge" Trial and a newer session under a different driver and Windows build, and
+// got "1 of 1 tested · next: none · context still matches: false". An attempt is not a test; a stale
+// result is not one that still holds. These fail on the code before the fix.
+import { journeyProgress, nextToTest } from "./journey-resume";
+import type { SessionSummary } from "../types";
+
+describe("truthful completion: the journey never counts an attempt or a stale result as finished", () => {
+  const ctx = (s: ReturnType<typeof session>, driver: string, build: string) =>
+    ({ ...s, hw_fingerprint: { gpu: "GPU", gpu_driver: driver }, game_state: { gpu_driver: driver, windows_build: build } }) as unknown as SessionSummary;
+  const BEFORE = ctx(session("2026-10-20T10:00:00Z", 5400), "32.0.1", "26200.8457");
+  const AFTER = ctx(session("2026-10-20T11:00:00Z", 5400), "32.0.1", "26200.8457");
+  const NEWER = ctx(session("2026-10-26T10:00:00Z", 5400), "33.0.1", "26200.9000");
+  const noisy = (id: string, at: string) =>
+    record({ id, status: "restored", kept: false, verdict: "too-noisy", baseline_session_id: BEFORE.started_at, created_at: at, concluded_at: at });
+  const measured = (id: string, at: string, verdict = "no-change") =>
+    record({ id, status: "restored", kept: false, verdict, baseline_session_id: BEFORE.started_at, created_at: at, concluded_at: at, treatment: { ...TREATMENT, session_id: AFTER.started_at } });
+  const HAGS = cand("hags", "HAGS", 1);
+
+  it("the reviewer's input: one inconclusive attempt + a changed context is 0 tested, next = retest", () => {
+    const p = journeyProgress("Valorant", [noisy("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER, NEWER]);
+    expect(p).toMatchObject({ tested: 0, inconclusive: 1, total: 1, next: { id: "hags", retest: "inconclusive" } });
+  });
+
+  it("a measured result judged under an older driver and Windows build is offered again as stale", () => {
+    const p = journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER, NEWER]);
+    expect(p).toMatchObject({ tested: 0, stale: 1, inconclusive: 0, total: 1, next: { id: "hags", retest: "stale" } });
+    // The same result with no newer context, or no context at all, still holds: nothing is next.
+    expect(journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER]).next).toBeNull();
+    expect(journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS]).next).toBeNull();
+  });
+
+  it("untested changes come first; two inconclusive runs in a row stop the offer", () => {
+    const GM = cand("game-mode", "Game Mode", 2);
+    const one = [noisy("exp:1-0", "2026-10-20T12:00:00Z")];
+    expect(nextToTest("Valorant", one, [HAGS, GM])).toMatchObject({ id: "game-mode", retest: null });
+    const two = [...one, noisy("exp:2-0", "2026-10-21T12:00:00Z")];
+    expect(nextToTest("Valorant", two, [HAGS])).toBeNull();
+    expect(journeyProgress("Valorant", two, [HAGS])).toMatchObject({ tested: 0, inconclusive: 1, total: 1, next: null });
+    // A measured result after the two attempts is a result: tested, and not offered again.
+    const then = [...two, measured("exp:3-0", "2026-10-22T12:00:00Z")];
+    expect(journeyProgress("Valorant", then, [HAGS])).toMatchObject({ tested: 1, inconclusive: 0, next: null });
+  });
+
+  it("Optimize says a retest is a retest, and how many tries judged nothing", async () => {
+    state.experiments = [noisy("exp:1-0", "2026-10-20T12:00:00Z")];
+    state.recs = [HAGS];
+    state.sessions = [BEFORE, AFTER];
+    render(<ExperimentBench />);
+    expect(await progressLine()).toBe("0 of 1 tested · Retest: HAGS 1 try couldn't be judged.");
+    expect(screen.getByTestId("journey-retest-why").textContent).toBe(
+      "HAGS was tried before, but the frame rate moved around too much to judge. This run tries it again.",
+    );
+    expect(screen.getByRole("button", { name: "Optimize my game" })).toBeTruthy();
+  });
+
+  it("after two tries judged nothing, Optimize says so instead of 'nothing else is worth testing'", async () => {
+    state.experiments = [noisy("exp:1-0", "2026-10-20T12:00:00Z"), noisy("exp:2-0", "2026-10-21T12:00:00Z")];
+    state.recs = [HAGS];
+    state.sessions = [BEFORE, AFTER];
+    render(<ExperimentBench />);
+    expect(await progressLine()).toBe("0 of 1 tested. Nothing else here is worth testing on this PC. 1 try couldn't be judged.");
+  });
+});
+
+// Review round 1 of P4-exit-truth (2026-10-26).
+import { reusableAsIs } from "./GuidedJourney";
+
+describe("truthful completion, review round 1", () => {
+  const ctx = (s: ReturnType<typeof session>, driver: string, build: string) =>
+    ({ ...s, hw_fingerprint: { gpu: "GPU", gpu_driver: driver }, game_state: { gpu_driver: driver, windows_build: build } }) as unknown as SessionSummary;
+  const BEFORE = ctx(session("2026-10-20T10:00:00Z", 5400), "32.0.1", "26200.8457");
+  const AFTER = ctx(session("2026-10-20T11:00:00Z", 5400), "32.0.1", "26200.8457");
+  const NEWER = ctx(session("2026-10-26T10:00:00Z", 5400), "33.0.1", "26200.9000");
+  const HAGS = cand("hags", "HAGS", 1);
+  const measured = (id: string, at: string, over: Record<string, unknown> = {}) =>
+    record({ id, status: "restored", kept: false, verdict: "no-change", baseline_session_id: BEFORE.started_at, created_at: at, concluded_at: at, treatment: { ...TREATMENT, session_id: AFTER.started_at }, ...over });
+
+  it("MUST-FIX 1: an as-is session from an older driver or Windows build is never reused, so a stale retest records a fresh before-reading", () => {
+    // Steady, usable, the same game: reusable while the context matches, never once it changed.
+    expect(reusableAsIs([BEFORE, AFTER], BEFORE.started_at, "Valorant")).not.toBeNull();
+    expect(reusableAsIs([BEFORE, AFTER, NEWER], BEFORE.started_at, "Valorant")).toBeNull();
+    // Unknown context stays unknown: a session with no driver or build recorded is still reusable.
+    const bare = session("2026-10-27T10:00:00Z", 5400) as unknown as SessionSummary;
+    expect(reusableAsIs([BEFORE, AFTER, NEWER, bare], bare.started_at, "Valorant")).not.toBeNull();
+    // The journey's own asIs for a stale journey is that old-context session: the bench reads it as not reusable.
+    const p = journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER, NEWER]);
+    expect(p.next).toMatchObject({ id: "hags", retest: "stale" });
+    expect(reusableAsIs([BEFORE, AFTER, NEWER], p.asIs, "Valorant")).toBeNull();
+  });
+
+  it("NIT + SHOULD-FIX 2: a stale result is counted apart from tested, and a kept one says to put it back", () => {
+    const stale = journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER, NEWER]);
+    expect(stale).toMatchObject({ tested: 0, stale: 1, staleKept: 0, inconclusive: 0, total: 1 });
+    // Kept and set now: the picker no longer offers it, so nothing is next, and the count says why.
+    const kept = journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z", { status: "kept", kept: true, verdict: "improved" })], [], [BEFORE, AFTER, NEWER]);
+    expect(kept).toMatchObject({ tested: 0, stale: 1, staleKept: 1, next: null, total: 1 });
+  });
+
+  it("SHOULD-FIX 4: journey and summary agree on which Trial is newest when concluded order differs from start order", () => {
+    // Started first, judged last: it is the newest judged Trial of HAGS, so its (inconclusive) verdict rules.
+    const startedFirstJudgedLast = record({ id: "exp:a", status: "restored", kept: false, verdict: "too-noisy", baseline_session_id: BEFORE.started_at, created_at: "2026-10-20T09:00:00Z", concluded_at: "2026-10-22T12:00:00Z" });
+    const p = journeyProgress("Valorant", [measured("exp:b", "2026-10-21T12:00:00Z"), startedFirstJudgedLast], [HAGS], [BEFORE, AFTER]);
+    expect(p).toMatchObject({ tested: 0, inconclusive: 1, next: { id: "hags", retest: "inconclusive" } });
+  });
+
+  it("Optimize says a kept result is stale and how to test it again", async () => {
+    state.experiments = [measured("exp:1-0", "2026-10-20T12:00:00Z", { status: "kept", kept: true, verdict: "improved" })];
+    state.recs = [{ ...HAGS, passes: false, reason: "already-set-by-compy" }];
+    state.sessions = [BEFORE, AFTER, NEWER];
+    render(<ExperimentBench />);
+    expect(await progressLine()).toBe(
+      "0 of 1 tested. Nothing else here is worth testing on this PC. 1 result is from an older graphics driver or Windows build. 1 of those is a kept change: put it back to test it again.",
+    );
+    expect((await screen.findByTestId("exp-summary-stale-kept")).textContent).toBe(
+      "1 kept change was judged under an older graphics driver or Windows build (put it back, then test again): HAGS",
+    );
+    expect(screen.getByTestId("exp-summary")).toHaveAttribute("data-headline", "worth-retesting");
+  });
+
+  it("SHOULD-FIX 3: the Trial just judged counts over a store copy that still reads Running", async () => {
+    // HAGS is top-ranked and untested; the journey tests it. The store's re-read lags the conclude.
+    state.experiments = [];
+    state.recs = [cand("hags", "HAGS", 1), cand("game-mode", "Game Mode", 2)];
+    state.sessions = [OLD];
+    state.concludeResult = { status: "restored", kept: false, verdict: "no-change", treatment: { ...TREATMENT, delta_low1_pct: 0.3 } };
+    state.lagsConclude = "exp:9-0";
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    // Next is Game Mode, never HAGS again as if untested.
+    const next = await screen.findByRole("button", { name: /^Next: / });
+    expect(next.textContent).toMatch(/^Next: Game Mode/);
   });
 });
