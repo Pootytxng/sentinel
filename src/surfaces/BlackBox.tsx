@@ -169,8 +169,10 @@ export function BlackBox({
   const shownIncidents = report && !scanning ? report.incidents : null;
   // P6-next-f2: the stored stutter step stays the step after a good session (until it ends or is retired).
   const [retired, setRetired] = useState(0);
+  // One id per Care view: a stored step's final read shows in this view and retires in the next.
+  const [viewId] = useState(() => `${Date.now()}-${Math.random()}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `retired` re-reads storage after a dismiss
-  const stored = useMemo(() => storedStutterStep(stutter), [stutter, retired]);
+  const stored = useMemo(() => storedStutterStep(stutter, new Date(), viewId), [stutter, retired]);
   const careStep = useMemo(() => pickCareStep(shownIncidents, stutter, stored), [shownIncidents, stutter, stored]);
 
   // P6-unknown: only some skips need admin; the rest are reader failures (a re-scan, not admin).
@@ -271,8 +273,7 @@ export function BlackBox({
 
       {/* P6-stutter: a stutter or slowdown rarely leaves a crash record, so the same view also
           compares the latest session with its last good one (StutterCompare.tsx). */}
-      <StutterCompare onResult={setStutter} hideNextAction={careStep?.source === "stutter" && careStep.headline === stutter?.report.next_action}
-      />
+      <StutterCompare onResult={setStutter} hideNextAction={careStep?.source === "stutter"} />
     </div>
   );
 }

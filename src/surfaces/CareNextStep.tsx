@@ -133,6 +133,9 @@ export function CareNextStep({
         <span className="bb-next-payoff-label">{t("gaming.blackBox.nextStep.payoffLabel")}</span>{" "}
         {basis} {line}
       </p>
+      {step.source === "stutter" && step.final && (
+        <p className="bb-next-detail bb-next-final">{t("gaming.blackBox.nextStep.finalRead")}</p>
+      )}
       {beyond && <CareSupportExport />}
       {step.source === "stutter" && step.stored && onDismiss && (
         <button type="button" className="set-action bb-next-dismiss" onClick={() => onDismiss(step.key)}>

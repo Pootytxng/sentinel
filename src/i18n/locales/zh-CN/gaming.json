@@ -392,6 +392,7 @@
       "fromIncident": "来自最新一条崩溃记录（{{kind}}，{{date}}）。",
       "fromStutter": "来自下面的 {{game}} 会话比较。",
       "fromStutterStored": "来自之前一次测出变慢的 {{game}} 会话比较。Compy 会继续用当时那次平稳会话来衡量之后的 {{game}} 会话。",
+      "finalRead": "这是这一步的最后一次读数：下次打开这个页面时，Compy 将停止跟踪它。新的比较仍可能给出新的一步。",
       "stopTracking": "停止跟踪这一步",
       "basisTaken": "你在 {{date}} 回答了\u201c这有帮助吗？\u201d。",
       "basisShown": "Compy 从 {{date}} 起一直在跟踪这一步。",

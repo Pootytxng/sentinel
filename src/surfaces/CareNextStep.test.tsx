@@ -175,11 +175,13 @@ describe("payoffFor: measured recurrence or absence, never a verdict", () => {
     expect(payoffFor(st, a, [], [before, ok1, ok2, other], now)).toEqual({ kind: "sessions-steady", total: 2 });
     expect(payoffFor(st, a, [], [before, ok1], now)).toEqual({ kind: "not-enough-sessions", total: 1 });
     expect(MIN_PAYOFF_SESSIONS).toBe(2);
-    // Short sessions and another rig are not counted.
+    // Short sessions and another rig (gpu, ram or display) are not counted; a driver update
+    // (new hash, same gpu/ram/display) is the same rig.
+    const onRig = { ...st, baseline: { ...(st as Extract<CareStep, { source: "stutter" }>).baseline, rig: { gpu: "GPU A", ram_gb: 16, display: "" } } } as CareStep;
     const short = sess("2026-10-24T10:00:00Z", { low1_fps_est: 10, samples: MIN_BASELINE_SAMPLES - 1 });
-    const rig = sess("2026-10-24T12:00:00Z", { low1_fps_est: 10, hw_fingerprint: { hash: "hw2", gpu: "", gpu_driver: "", ram_gb: 16, display: "" } });
-    const same = sess("2026-10-24T13:00:00Z", { low1_fps_est: 79, hw_fingerprint: { hash: "hw1", gpu: "", gpu_driver: "", ram_gb: 16, display: "" } });
-    expect(payoffFor(st, a, [], [ok1, short, rig, same], now)).toEqual({ kind: "sessions-steady", total: 2 });
+    const rig = sess("2026-10-24T12:00:00Z", { low1_fps_est: 10, hw_fingerprint: { hash: "hw2", gpu: "GPU B", gpu_driver: "", ram_gb: 16, display: "" } });
+    const driver = sess("2026-10-24T13:00:00Z", { low1_fps_est: 79, hw_fingerprint: { hash: "hw9", gpu: "GPU A", gpu_driver: "new", ram_gb: 16, display: "" } });
+    expect(payoffFor(onRig, a, [], [ok1, short, rig, driver], now)).toEqual({ kind: "sessions-steady", total: 2 });
   });
   it("stutter: later reads measure against the baseline STORED at first show", () => {
     const first = pickCareStep(null, stutter("Roll back the driver"))!;
@@ -336,7 +338,7 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
   const store = (extra: Record<string, unknown> = {}) =>
     localStorage.setItem(SHOWN_KEY, JSON.stringify({ [KEY]: { at: "2026-10-21T00:00:00Z", baseline: base }, ...extra }));
   const entry = (k = KEY) => JSON.parse(localStorage.getItem(SHOWN_KEY)!)[k];
-  const fp = (hash: string) => ({ hash, gpu: "", gpu_driver: "", ram_gb: 16, display: "" });
+  const fp = (hash: string, gpu = "") => ({ hash, gpu, gpu_driver: "", ram_gb: 16, display: "" });
   const good = (n: number) =>
     Array.from({ length: n }, (_, i) => sess(`2026-10-${String(22 + i).padStart(2, "0")}T10:00:00Z`));
   const notRegressed = (sessions: SessionSummary[], game = "Valorant.exe"): StutterResult => ({
@@ -377,7 +379,13 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     store();
     const five = storedStutterStep(notRegressed(good(5)))!;
     expect(payoffFor(five, anchorFor(five), [], good(5))).toEqual({ kind: "sessions-steady", total: 5 });
-    expect(storedStutterStep(notRegressed(good(6)))).toBeNull();
+    expect(five.source === "stutter" && five.final).toBeFalsy();
+    // Past the end: the final read shows (and keeps showing) in the view that reached it...
+    expect(storedStutterStep(notRegressed(good(6)), undefined, "v1")).toMatchObject({ stored: true, final: true });
+    expect(storedStutterStep(notRegressed(good(6)), undefined, "v1")).toMatchObject({ final: true });
+    expect(entry().retired).toBeUndefined();
+    // ...and the step retires in the next Care view.
+    expect(storedStutterStep(notRegressed(good(6)), undefined, "v2")).toBeNull();
     expect(entry().retired).toBe("ended");
     // Ended for good: fewer sessions on a later read do not bring it back.
     expect(storedStutterStep(notRegressed(good(2)))).toBeNull();
@@ -385,7 +393,11 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
 
   it("is retired when the rig changes", () => {
     store();
-    expect(storedStutterStep(notRegressed([...good(2), sess("2026-10-25T10:00:00Z", { hw_fingerprint: fp("hw2") })]))).toBeNull();
+    const steady = sess("2026-10-20T10:00:00Z", { hw_fingerprint: fp("hw1", "GPU A") });
+    // A driver update (new hash, same gpu/ram/display) is not a rig change.
+    expect(storedStutterStep(notRegressed([steady, ...good(2), sess("2026-10-25T10:00:00Z", { hw_fingerprint: fp("hw9", "GPU A") })]))).not.toBeNull();
+    expect(entry().retired).toBeUndefined();
+    expect(storedStutterStep(notRegressed([steady, ...good(2), sess("2026-10-25T10:00:00Z", { hw_fingerprint: fp("hw2", "GPU B") })]))).toBeNull();
     expect(entry().retired).toBe("rig");
   });
 
