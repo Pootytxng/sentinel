@@ -486,6 +486,17 @@
     "assessLinePostBeyond": "— beyond what Compy can safely narrow down.",
     "worthResearching": "Worth researching",
     "safeNextStep": "Safe next step",
+    "resolution": {
+      "noneSince_one": "No {{kind}} recorded in the 1 day since.",
+      "noneSince_other": "No {{kind}} recorded in the {{days}} days since.",
+      "crashNoneSince_one": "No {{app}} crash recorded in the 1 day since.",
+      "crashNoneSince_other": "No {{app}} crash recorded in the {{days}} days since.",
+      "hangNoneSince_one": "No {{app}} hang recorded in the 1 day since.",
+      "hangNoneSince_other": "No {{app}} hang recorded in the {{days}} days since.",
+      "recurred": "{{kind}} happened again on {{date}}.",
+      "crashRecurred": "{{app}} crashed again on {{date}}.",
+      "hangRecurred": "{{app}} stopped responding again on {{date}}."
+    },
     "resolvedMark": "✓ You marked this pointed you the right way",
     "thanksNoted": "Thanks — noted; we'd rather stay quiet than guess wrong.",
     "didThisHelpQuestion": "Did this point you the right way?",

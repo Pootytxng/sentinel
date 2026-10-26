@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { resolutionFor, RESOLUTION_MIN_DAYS, type HelpMark } from "./blackbox-resolution";
 import type { CrashIncident, CrashAssessment } from "../types";
+import enGaming from "../i18n/locales/en/gaming.json";
 
 // A minimal assessment so the incident counts as "assessed" (gate ON). Content is irrelevant here.
 const ASSESS: CrashAssessment = {
@@ -35,8 +36,7 @@ describe("Black Box v2.1 — measured-absence resolution", () => {
     const target = inc("GPU timeout", "2026-06-07T11:00:00Z"); // crash, then marked helpful at 12:00
     const r = resolutionFor(target, [target], yes(sixDaysBefore), NOW);
     expect(r).not.toBeNull();
-    expect(r!.status).toBe("none-since");
-    expect(r!.text).toBe("No GPU timeout recorded in the 6 days since.");
+    expect(r).toEqual({ status: "none-since", kind: "GPU timeout", app: null, days: 6 });
   });
 
   it("reports a recurrence plainly (never hides it) when the same kind happened again after the mark", () => {
@@ -44,8 +44,7 @@ describe("Black Box v2.1 — measured-absence resolution", () => {
     const again = inc("GPU timeout", "2026-06-10T09:30:00Z"); // 3 days after the mark
     const r = resolutionFor(target, [target, again], yes(sixDaysBefore), NOW);
     expect(r).not.toBeNull();
-    expect(r!.status).toBe("recurred");
-    expect(r!.text).toMatch(/^GPU timeout happened again on /);
+    expect(r).toEqual({ status: "recurred", kind: "GPU timeout", app: null, date: Date.parse("2026-06-10T09:30:00Z") });
   });
 
   it("a DIFFERENT kind after the mark is NOT a recurrence", () => {
@@ -79,40 +78,31 @@ describe("Black Box v2.1 — measured-absence resolution", () => {
     expect(resolutionFor(target, [target], { vote: "yes", at: "" }, NOW)).toBeNull();
   });
 
-  it("the surfaced copy NEVER makes a causal 'it's solved' claim", () => {
-    const target = inc("GPU timeout", "2026-06-07T11:00:00Z");
-    const again = inc("GPU timeout", "2026-06-10T09:30:00Z");
-    const banned = /\b(fixed|solved|worked|cured|because|caused|resolved|guaranteed)\b/i;
-    for (const ctx of [[target], [target, again]]) {
-      const r = resolutionFor(target, ctx, yes(sixDaysBefore), NOW);
-      expect(r, "a resolution should exist for this case").not.toBeNull();
-      expect(r!.text, `causal claim leaked: "${r!.text}"`).not.toMatch(banned);
-    }
+  it("the resolution copy NEVER makes a causal 'it's solved' claim (every en locale line)", () => {
+    // P6-next-f3: the words live in the locale files now; resolutionFor returns only facts.
+    const banned = /\b(fixed|solved|worked|cured|because|caused|resolved|guaranteed|proven|definitely)\b/i;
+    const lines = Object.values(enGaming.blackBox.resolution);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect(line, `causal claim: ${line}`).not.toMatch(banned);
   });
 
-  it("makes NO causal 'solved' claim for ANY incident kind (none-since or recurred)", () => {
-    // Sweep every kind through both branches — the measured-absence line must stay factual, never "fixed".
-    const banned = /\b(fixed|solved|worked|cured|because|caused|resolved|guaranteed|proven|definitely)\b/i;
+  it("every kind resolves through both branches (none-since and recurred)", () => {
     const tags = ["GPU timeout", "App crash", "App hang", "Unexpected shutdown / hard freeze", "Blue screen", "Hardware-logged error"];
     for (const tag of tags) {
       const target = inc(tag, "2026-06-07T11:00:00Z");
       const again = inc(tag, "2026-06-10T09:30:00Z");
-      for (const ctx of [[target], [target, again]]) {
-        const r = resolutionFor(target, ctx, yes(sixDaysBefore), NOW);
-        expect(r, `${tag} should resolve`).not.toBeNull();
-        expect(r!.text, `causal claim for ${tag}: ${r!.text}`).not.toMatch(banned);
-      }
+      expect(resolutionFor(target, [target], yes(sixDaysBefore), NOW)?.status, tag).toBe("none-since");
+      expect(resolutionFor(target, [target, again], yes(sixDaysBefore), NOW)?.status, tag).toBe("recurred");
     }
   });
 
-  it("singular day reads 'day', plural reads 'days'", () => {
+  it("counts whole days: under a day is nothing, 26 hours is 1 day", () => {
     const target = inc("Blue screen", "2026-06-11T11:00:00Z");
     // NOW = 06-13T12:00Z. Mark 16h before → floor(0.67) = 0 days → too soon → null.
     expect(resolutionFor(target, [target], yes("2026-06-12T20:00:00Z"), NOW)).toBeNull();
-    // Mark 26h before → floor(1.08) = 1 day → "1 day since" (singular).
+    // Mark 26h before → floor(1.08) = 1 day.
     const oneDay = resolutionFor(target, [target], yes("2026-06-12T10:00:00Z"), NOW);
-    expect(oneDay!.text).toContain("1 day since");
-    expect(oneDay!.text).not.toContain("1 days");
+    expect(oneDay).toEqual({ status: "none-since", kind: "Blue screen", app: null, days: 1 });
   });
 });
 
@@ -129,24 +119,21 @@ describe("Black Box v2.1 — app kinds match the faulting app", () => {
       const target = withApp(tag, "2026-06-07T11:00:00Z", "Wardogs.exe");
       const browser = withApp(tag, "2026-06-10T09:30:00Z", "msedge.exe");
       const r = resolutionFor(target, [target, browser], yes(sixDaysBefore), NOW);
-      expect(r!.status).toBe("none-since");
-      expect(r!.text).toBe(`No ${tag} (Wardogs.exe) recorded in the 6 days since.`);
+      expect(r).toEqual({ status: "none-since", kind: tag, app: "Wardogs.exe", days: 6 });
     });
 
     it(`${tag}: the same app (any case) after the mark IS a recurrence`, () => {
       const target = withApp(tag, "2026-06-07T11:00:00Z", "Wardogs.exe");
       const again = withApp(tag, "2026-06-10T09:30:00Z", "WARDOGS.EXE");
       const r = resolutionFor(target, [target, again], yes(sixDaysBefore), NOW);
-      expect(r!.status).toBe("recurred");
-      expect(r!.text).toMatch(new RegExp(`^${tag} \\(Wardogs\\.exe\\) happened again on `));
+      expect(r).toEqual({ status: "recurred", kind: tag, app: "Wardogs.exe", date: Date.parse("2026-06-10T09:30:00Z") });
     });
 
     it(`${tag}: no faulting app on the marked incident falls back to the tag alone`, () => {
       const target = withApp(tag, "2026-06-07T11:00:00Z", null);
       const other = withApp(tag, "2026-06-10T09:30:00Z", "msedge.exe");
       const r = resolutionFor(target, [target, other], yes(sixDaysBefore), NOW);
-      expect(r!.status).toBe("recurred");
-      expect(r!.text).toMatch(new RegExp(`^${tag} happened again on `));
+      expect(r).toEqual({ status: "recurred", kind: tag, app: null, date: Date.parse("2026-06-10T09:30:00Z") });
     });
   }
 });

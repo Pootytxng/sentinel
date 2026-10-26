@@ -462,6 +462,14 @@
     "assessLinePostBeyond": "——已超出 Compy 能够安全判断的范围。",
     "worthResearching": "值得进一步研究",
     "safeNextStep": "安全的下一步",
+    "resolution": {
+      "noneSince_other": "此后的 {{days}} 天里没有记录到 {{kind}}。",
+      "crashNoneSince_other": "此后的 {{days}} 天里没有记录到 {{app}} 崩溃。",
+      "hangNoneSince_other": "此后的 {{days}} 天里没有记录到 {{app}} 停止响应。",
+      "recurred": "{{kind}} 在 {{date}} 又出现了。",
+      "crashRecurred": "{{app}} 在 {{date}} 又崩溃了。",
+      "hangRecurred": "{{app}} 在 {{date}} 又停止响应了。"
+    },
     "resolvedMark": "✓ 你标记了这一步指对了方向",
     "thanksNoted": "谢谢,已记录;比起瞎猜,我们更愿意保持沉默。",
     "didThisHelpQuestion": "这一步是否指对了方向?",
