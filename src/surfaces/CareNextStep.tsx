@@ -9,13 +9,15 @@ import "./CareNextStep.css";
 // P6-next: the ONE next step at the top of the Care view, and its measured payoff. BlackBox picks the
 // step (pickCareStep, priority documented in care-next-step.ts) so the record or report it came from
 // can point here instead of repeating it; this only renders. Read-only: no action. Its one button
-// (beyond Compy only) opens the existing local support record panel.
+// (beyond Compy only) opens the existing local support record panel; a STORED stutter step
+// (P6-next-f2) instead has one "Stop tracking this step" button, which only retires the local anchor.
 export function CareNextStep({
   step,
   incidents,
   sessions,
   skipped,
   skippedNeedsAdmin = true,
+  onDismiss,
 }: {
   step: CareStep | null;
   incidents: CrashIncident[];
@@ -25,6 +27,8 @@ export function CareNextStep({
   /** P6-unknown: at least one skip needs admin. False → the skips were reader failures, and the
    *  partial line says some sources couldn't be read this time, not "need administrator". */
   skippedNeedsAdmin?: boolean;
+  /** P6-next-f2: the user stopped tracking a stored stutter step (BlackBox retires it). */
+  onDismiss?: (key: string) => void;
 }) {
   const { t, i18n } = useTranslation();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the anchor belongs to the step's identity
@@ -121,13 +125,23 @@ export function CareNextStep({
       <p className="bb-next-from">
         {step.source === "incident"
           ? t("gaming.blackBox.nextStep.fromIncident", { kind: step.kind, date: day(Date.parse(step.incidentWhen)) })
-          : t("gaming.blackBox.nextStep.fromStutter", { game: step.game })}
+          : step.stored
+            ? t("gaming.blackBox.nextStep.fromStutterStored", { game: step.game })
+            : t("gaming.blackBox.nextStep.fromStutter", { game: step.game })}
       </p>
       <p className={`bb-next-payoff bb-next-payoff-${payoff.kind}`}>
         <span className="bb-next-payoff-label">{t("gaming.blackBox.nextStep.payoffLabel")}</span>{" "}
         {basis} {line}
       </p>
+      {step.source === "stutter" && step.final && (
+        <p className="bb-next-detail bb-next-final">{t("gaming.blackBox.nextStep.finalRead")}</p>
+      )}
       {beyond && <CareSupportExport />}
+      {step.source === "stutter" && step.stored && onDismiss && (
+        <button type="button" className="set-action bb-next-dismiss" onClick={() => onDismiss(step.key)}>
+          {t("gaming.blackBox.nextStep.stopTracking")}
+        </button>
+      )}
     </section>
   );
 }

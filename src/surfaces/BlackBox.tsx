@@ -30,7 +30,7 @@ import {
 } from "./changed-before-restore";
 import { useJourneyPhase } from "./GuidedJourney";
 import { CareNextStep } from "./CareNextStep";
-import { pickCareStep, isLifted, type StutterResult } from "./care-next-step";
+import { pickCareStep, isLifted, storedStutterStep, dismissStoredStep, type StutterResult } from "./care-next-step";
 import { CareHonestEnd } from "./CareHonestEnd";
 import { honestEndFor, splitSkips } from "./care-honest-end";
 import "./BlackBox.css";
@@ -167,7 +167,13 @@ export function BlackBox({
   // P6-next: the one step is picked here so its source (a record, or the stutter report) points to
   // the top instead of repeating it.
   const shownIncidents = report && !scanning ? report.incidents : null;
-  const careStep = useMemo(() => pickCareStep(shownIncidents, stutter), [shownIncidents, stutter]);
+  // P6-next-f2: the stored stutter step stays the step after a good session (until it ends or is retired).
+  const [retired, setRetired] = useState(0);
+  // One id per Care view: a stored step's final read shows in this view and retires in the next.
+  const [viewId] = useState(() => `${Date.now()}-${Math.random()}`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `retired` re-reads storage after a dismiss
+  const stored = useMemo(() => storedStutterStep(stutter, new Date(), viewId), [stutter, retired]);
+  const careStep = useMemo(() => pickCareStep(shownIncidents, stutter, stored), [shownIncidents, stutter, stored]);
 
   // P6-unknown: only some skips need admin; the rest are reader failures (a re-scan, not admin).
   const skips = splitSkips(report);
@@ -192,6 +198,10 @@ export function BlackBox({
         sessions={stutter?.sessions ?? []}
         skipped={!!report && report.skipped_sources.length > 0}
         skippedNeedsAdmin={skips.admin.length > 0}
+        onDismiss={(key) => {
+          dismissStoredStep(key);
+          setRetired((n) => n + 1);
+        }}
       />
       {/* P6-unknown: no step → the honest end takes the slot (never both). */}
       <CareHonestEnd

@@ -5,7 +5,10 @@
 //   1. the NEWEST crash record that carries a Black Box assessment: its `next_step`;
 //   2. otherwise the stutter comparison's next test (the what-changed report's `next_action`), and
 //      only when that report measured a regression on a pair that isn't "not comparable";
-//   3. otherwise nothing. Never two. The record or report the step came from shows a pointer to the
+//   3. otherwise a STORED stutter step (P6-next-f2): the step this game was last shown with, still
+//      measured against the anchor stored when it was first shown (see storedStutterStep), so its
+//      payoff, including "stayed within", can show after the user plays good sessions;
+//   4. otherwise nothing. Never two. The record or report the step came from shows a pointer to the
 //      top instead of repeating it.
 //
 // PAYOFF (measured, never a verdict):
@@ -24,10 +27,17 @@
 import type { CrashIncident, SessionSummary, WhatChangedReport } from "../types";
 import { APP_KINDS, RESOLUTION_MIN_DAYS, appOf } from "../data/blackbox-resolution";
 import { MIN_BASELINE_SAMPLES } from "./baseline-grade";
+import { MAX_GOOD_CANDIDATES } from "./StutterCompare";
 
 export { RESOLUTION_MIN_DAYS };
 /** Measured sessions of the game needed before "it stayed within" is said at all. */
 export const MIN_PAYOFF_SESSIONS = 2;
+/** P6-next-f2: a stored stutter step ends once MORE than this many sessions (steady or not) have been
+ *  counted since its anchor; that final read shows once, and the step retires on the next Care view. It is the comparison's own look-back (StutterCompare MAX_GOOD_CANDIDATES): past
+ *  that many newer steady sessions, the comparison would never reach back to the session this step
+ *  was measured against, so the old baseline has aged out of what Compy itself compares with. Up to
+ *  and including it, "stayed within" shows (from MIN_PAYOFF_SESSIONS on). */
+export const STORED_STEP_END_SESSIONS = MAX_GOOD_CANDIDATES;
 
 /** What StutterCompare hands up once it has a report (null when it has none). */
 export type StutterResult = {
@@ -39,7 +49,28 @@ export type StutterResult = {
 
 /** The stutter baseline a step was shown against; stored with the anchor so later reads measure
  *  against the same numbers even if a later comparison picks another steady session. */
-export type StutterBaseline = { low1: number; noiseFloorPct: number; startedAt: string; hwHash: string | null };
+export type StutterBaseline = {
+  low1: number;
+  noiseFloorPct: number;
+  startedAt: string;
+  hwHash: string | null;
+  /** P6-next-f2: the steady session's rig as the engine compares it (gpu, ram, display; never the
+   *  hash, which includes the driver). Null/absent where unknown; then read from that session. */
+  rig?: Rig | null;
+};
+export type Rig = { gpu: string; ram_gb: number; display: string };
+
+const rigOf = (s: SessionSummary | undefined): Rig | null => {
+  const f = s?.hw_fingerprint;
+  return f ? { gpu: f.gpu, ram_gb: f.ram_gb, display: f.display } : null;
+};
+/** Same rig the way the engine says it (intelligence.rs): gpu, ram and display. A driver update is
+ *  the same rig, so following a "roll back / update the driver" test never reads as a rig change. */
+const sameRig = (a: Rig, b: Rig) => a.gpu === b.gpu && a.ram_gb === b.ram_gb && a.display === b.display;
+/** The baseline's rig: stored with it, else the steady session's own fingerprint, else unknown. */
+function baselineRig(base: StutterBaseline, sessions: SessionSummary[]): Rig | null {
+  return base.rig ?? rigOf(sessions.find((s) => s.started_at === base.startedAt));
+}
 
 export type CareStep =
   | {
@@ -66,6 +97,10 @@ export type CareStep =
       game: string;
       processName: string;
       baseline: StutterBaseline;
+      /** P6-next-f2: shown from its stored anchor; the newest comparison did not pick it itself. */
+      stored: boolean;
+      /** P6-next-f2: its end is reached; this is the last read shown before it retires. */
+      final?: boolean;
     };
 
 const ms = (iso: string) => Date.parse(iso);
@@ -79,6 +114,8 @@ export function sameKind(i: CrashIncident, step: { kind: string; app: string | n
 export function pickCareStep(
   incidents: CrashIncident[] | null | undefined,
   stutter: StutterResult | null | undefined,
+  /** P6-next-f2: the stored stutter step for this game (storedStutterStep), or null. */
+  stored: CareStep | null = null,
 ): CareStep | null {
   const withStep = (incidents ?? []).filter((i) => i.assessment && Number.isFinite(ms(i.when)));
   if (withStep.length > 0) {
@@ -116,10 +153,12 @@ export function pickCareStep(
         noiseFloorPct: r.noise_floor_pct,
         startedAt: r.baseline.started_at,
         hwHash: r.baseline.hw_hash ?? null,
+        rig: rigOf(stutter!.sessions.find((s) => s.started_at === r.baseline.started_at)),
       },
+      stored: false,
     };
   }
-  return null;
+  return stored && stored.source === "stutter" ? stored : null;
 }
 
 /** True for a record whose step is the one lifted to the top: the record it came from, and any
@@ -169,15 +208,16 @@ export function payoffFor(
   }
   const base = anchor.baseline ?? step.baseline;
   const game = step.processName.toLowerCase();
+  const baseRig = baselineRig(base, sessions);
   const since = sessions.filter((s) => {
-    const rig = s.hw_fingerprint?.hash ?? null;
+    const rig = rigOf(s);
     return (
       s.samples >= MIN_BASELINE_SAMPLES &&
       (s.process_name ?? "").toLowerCase() === game &&
       Number.isFinite(ms(s.started_at)) &&
       ms(s.started_at) > anchor.at &&
       Number.isFinite(s.low1_fps_est) &&
-      (!rig || !base.hwHash || rig === base.hwHash)
+      (!rig || !baseRig || sameRig(rig, baseRig))
     );
   });
   const floor = base.low1 * (1 - base.noiseFloorPct / 100);
@@ -191,7 +231,16 @@ export function payoffFor(
 export const SHOWN_KEY = "compy_care_step_shown";
 const FEEDBACK_LOG_KEY = "compy_bb_feedback"; // BlackBox.tsx ResolutionFeedback's log
 
-type ShownEntry = { at: string; baseline?: StutterBaseline };
+/** Why a stored stutter step stopped showing (P6-next-f2). A retired entry is never shown again; a
+ *  NEW regression with the same cause starts a fresh anchor over it. */
+export type Retired = "ended" | "dismissed" | "replaced" | "rig";
+type ShownEntry = {
+  at: string;
+  baseline?: StutterBaseline;
+  retired?: Retired;
+  /** The Care view (BlackBox mount) that showed the final read; another view retires it. */
+  finalView?: string;
+};
 
 function readShown(): Map<string, ShownEntry | string> {
   const raw = localStorage.getItem(SHOWN_KEY);
@@ -233,7 +282,9 @@ export function anchorFor(step: CareStep, incidents: CrashIncident[] = [], now: 
   }
   try {
     const map = readShown();
-    const prior = map.get(step.key);
+    const found = map.get(step.key);
+    // A retired stutter step that regressed again is a fresh step: new anchor, new baseline.
+    const prior = typeof found === "object" && found.retired ? undefined : found;
     const priorAt = typeof prior === "string" ? ms(prior) : prior && typeof prior.at === "string" ? ms(prior.at) : NaN;
     if (Number.isFinite(priorAt)) {
       const stored = typeof prior === "object" && prior.baseline ? prior.baseline : undefined;
@@ -245,6 +296,16 @@ export function anchorFor(step: CareStep, incidents: CrashIncident[] = [], now: 
     }
     const entry: ShownEntry =
       step.source === "stutter" ? { at: now.toISOString(), baseline: step.baseline } : { at: now.toISOString() };
+    // P6-next-f2: a new stutter step for this game replaces the one stored before it.
+    if (step.source === "stutter") {
+      const game = stutterGameOf(step.key);
+      for (const [k, v] of map) {
+        if (k !== step.key && stutterGameOf(k) === game && typeof v === "object" && !v.retired) {
+          map.set(k, { ...v, retired: "replaced" });
+        }
+      }
+    }
+    map.delete(step.key); // re-inserted last, so the cap below keeps it
     map.set(step.key, entry);
     // Capped so an old step list can't grow without end.
     localStorage.setItem(SHOWN_KEY, JSON.stringify(Object.fromEntries([...map.entries()].slice(-50))));
@@ -252,4 +313,104 @@ export function anchorFor(step: CareStep, incidents: CrashIncident[] = [], now: 
     /* storage unavailable: the anchor is simply now */
   }
   return { at: now.getTime(), basis: "shown", baseline: step.source === "stutter" ? step.baseline : undefined };
+}
+
+// ── P6-next-f2: the stored stutter step ──
+/** The game part of a stutter step key (`stutter|<process lower>|<next test>`), else null. */
+function stutterGameOf(key: string): string | null {
+  if (!key.startsWith("stutter|")) return null;
+  const end = key.indexOf("|", 8);
+  return end > 8 ? key.slice(8, end) : null;
+}
+
+function writeShown(map: Map<string, ShownEntry | string>) {
+  localStorage.setItem(SHOWN_KEY, JSON.stringify(Object.fromEntries([...map.entries()].slice(-50))));
+}
+
+/** The newest full-length session of the game: the rig it was played on now. */
+function newestRigOf(sessions: SessionSummary[], game: string): Rig | null {
+  const full = sessions.filter(
+    (s) =>
+      s.samples >= MIN_BASELINE_SAMPLES &&
+      (s.process_name ?? "").toLowerCase() === game &&
+      Number.isFinite(ms(s.started_at)),
+  );
+  if (full.length === 0) return null;
+  return rigOf(full.reduce((a, b) => (ms(b.started_at) > ms(a.started_at) ? b : a)));
+}
+
+/** The stutter step this game was last shown with, still alive: its stored anchor (first shown,
+ *  steady 1% low, noise floor, steady session, rig) exists, it is not retired, and the comparison has
+ *  sessions of the same game to count. It is retired here, for good, when:
+ *    * the rig changed: the game's newest full-length session is on another rig (gpu, ram or
+ *      display; a driver update is not a rig change) than the anchor's steady session;
+ *    * it ended: more than STORED_STEP_END_SESSIONS sessions counted since the anchor, whatever they
+ *      measured. The final read is shown (`final`) in the Care view `view` that first reached it,
+ *      and the step retires in the next one, so the end is seen, never silent.
+ *  None of this applies while the newest comparison itself picks this step (fresh): its anchor
+ *  stays as it is. (Dismissed: dismissStoredStep; replaced: anchorFor when a new step for this game
+ *  is first shown.) Storage missing or unreadable → null: nothing stored is shown. */
+export function storedStutterStep(
+  stutter: StutterResult | null | undefined,
+  now: Date = new Date(),
+  view = "",
+): CareStep | null {
+  if (!stutter) return null;
+  const game = stutter.processName.toLowerCase();
+  try {
+    const map = readShown();
+    let best: { key: string; at: number; baseline: StutterBaseline } | null = null;
+    for (const [k, v] of map) {
+      if (stutterGameOf(k) !== game || typeof v !== "object" || v.retired || !v.baseline) continue;
+      const at = ms(v.at);
+      if (Number.isFinite(at) && (!best || at > best.at)) best = { key: k, at, baseline: v.baseline };
+    }
+    if (!best) return null;
+    const step: CareStep = {
+      source: "stutter",
+      key: best.key,
+      headline: best.key.slice(8 + game.length + 1),
+      game: stutter.game,
+      processName: stutter.processName,
+      baseline: best.baseline,
+      stored: true,
+    };
+    const fresh = pickCareStep(null, stutter);
+    if (fresh && fresh.key === best.key) return step;
+    const retire = (why: Retired) => {
+      map.set(best!.key, { ...(map.get(best!.key) as ShownEntry), retired: why });
+      writeShown(map);
+      return null;
+    };
+    const now_ = newestRigOf(stutter.sessions, game);
+    const then = baselineRig(best.baseline, stutter.sessions);
+    if (now_ && then && !sameRig(now_, then)) return retire("rig");
+    const p = payoffFor(step, { at: best.at, basis: "shown", baseline: best.baseline }, [], stutter.sessions, now);
+    if ("total" in p && p.total > STORED_STEP_END_SESSIONS) {
+      const e = map.get(best.key) as ShownEntry;
+      if (e.finalView !== undefined && e.finalView !== view) return retire("ended");
+      if (e.finalView === undefined) {
+        map.set(best.key, { ...e, finalView: view });
+        writeShown(map);
+      }
+      return { ...step, final: true };
+    }
+    return step;
+  } catch {
+    return null;
+  }
+}
+
+/** The user's "Stop tracking this step": the stored step is retired and never shown again. */
+export function dismissStoredStep(key: string): void {
+  try {
+    const map = readShown();
+    const v = map.get(key);
+    if (v && typeof v === "object") {
+      map.set(key, { ...v, retired: "dismissed" });
+      writeShown(map);
+    }
+  } catch {
+    /* storage unavailable: nothing to retire */
+  }
 }
