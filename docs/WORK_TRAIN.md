@@ -166,7 +166,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - [x] **P4-next-f1** `1fc5026c`: picker marks tested changes ("· Tested: <verdict>") after untested ones.
 - [x] **P4-exit** (code) `e3d0420e`: read-only "What Compy tested on <game>" panel; "We tested what
       mattered" only when nothing untested remains. Today for WARDOGS: 1 of 16 testable changes has a result.
-- [x] **P4-exit-truth** (this entry's commit; from the 2026-10-26 critical review §4, reproduced on the owner's
+- [x] **P4-exit-truth** (`8e8370a0`, fix `0c27d141`; from the 2026-10-26 critical review §4, reproduced on the owner's
       WARDOGS records) The journey counted "too noisy to judge" as a finished test, and a result judged under an
       older driver/Windows build still read "We tested what mattered". Now only a measured verdict (improved /
       no-change / regressed) is a result; other verdicts are inconclusive attempts; a result whose Trial ran
@@ -349,9 +349,9 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   owner can run the Phase 6 exit proof; RELEASE_STATE recorded.
 - 2026-10-26 (scheduled, CODE-ONLY, owner on PC): P7-severity `2ba1f70c`, P6-next-f2 `142b769b`
   (review fixes `aa762687`; new tests fail on the old code); tsc 0, vitest 152/152; not pushed.
-- 2026-10-26 ~12:20–13:10 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth (this entry's
-  commit; the 2026-10-26 critical review's reproduced completion/staleness defect); tsc 0, vitest 255/255 across
-  13 files on the desk; one review round, all findings fixed (details under the item); not pushed.
+- 2026-10-26 ~12:20–13:15 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth `8e8370a0` (the
+  2026-10-26 critical review's reproduced completion/staleness defect); tsc 0, vitest 255/255 across 13 files
+  on the desk; one review round, all findings fixed (details under the item); not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
