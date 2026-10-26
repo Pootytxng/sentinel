@@ -229,7 +229,7 @@ room or station picked by hand.
       restore them. Needs P6-changed. ROADMAP P6 bullet 7; Constitution §26.
 - [x] **P6-restore-f1** (`6e2f4e99`) ExperimentBench (Trial start) should respect App busyId so a Trial can't start while Put back is running.
 - [x] **P6-next-f1** (`dc674a14`) `blackbox-resolution.ts` `resolutionFor` counts any record with the same `tag` as a recurrence; for App crash / App hang it should also match `receipt.faulting_app` (case-insensitive), as `care-next-step.ts` `sameKind` does.
-- [ ] **P6-next-f2** Keep a stored stutter step (and its payoff) alive while its anchor exists, so "stayed within" can show after a good session; today the step disappears once the latest pair isn't regressed.
+- [x] **P6-next-f2** (`142b769b`; owner visual check of the final read at the next FULL session) Keep a stored stutter step (and its payoff) alive while its anchor exists, so "stayed within" can show after a good session; today the step disappears once the latest pair isn't regressed.
 - [x] **P6-next-f3** (`43abf86a`) The Black Box "Did this help?" resolution line (`blackbox-resolution.ts`) is built in English in TS;
       move it to en/zh-CN locale keys.
 - [x] **P6-unknown** (`1c09b476`) Honest ends on the Care view: "Not enough evidence yet", or "Beyond Compy" (`beyond_us`)
@@ -248,7 +248,7 @@ friend goes from Home to an answer on "more FPS", "it stutters" and "it crashed"
 means, and the owner opens the technical layer on each and sees the exact setting, measurement and source.
 Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touches; the rest run in order.
 - [x] **P7-plan** Slices written below (2026-10-25).
-- [ ] **P7-route** Home interview answers land on the journey that answers them, not a bare station:
+- [ ] **P7-route** (parked: uncommitted 2026-10-25 work in `train-p7route`; resume there) Home interview answers land on the journey that answers them, not a bare station:
       "I want more FPS" opens the Optimize station with the P5 guided journey ready (today `wantFps` runs the
       fast path / Diagnostics and claims frames "are usually taken by things running alongside your game");
       "I changed something — did it help?" opens "What Compy tested" or "Since it last worked", not Benchmark.
@@ -274,7 +274,7 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       `ConfidenceBand`, `FindingLevel`), never a percentage. HomeConsole/HomeHud/HomeV2 limiter rows,
       `OptimizeStation.tsx`, `HardwareGrid.tsx`, `PatternsTile.tsx`, `HomeInterview.tsx`. ROADMAP P7 bullet 6;
       Constitution §25, §26.
-- [ ] **P7-severity** A Trial that hurt and was put back is not red "Critical": `trialVerdictTone` /
+- [x] **P7-severity** (`2ba1f70c`; visual check at the next FULL session) A Trial that hurt and was put back is not red "Critical": `trialVerdictTone` /
       `verdictTone` (`benchmark-view.ts`) use `danger` for "Hurt — reverted" and "regressed"; danger stays for
       a harmful state still on the machine; check `status.ts` "Critical" has no other user. `Benchmark.tsx`,
       `TwoFutures.tsx`. ROADMAP P7 bullet 7; Constitution §34, §26. Parallel-safe.
@@ -283,7 +283,7 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       read"; calm grade words; the formula line stays. `HomeConsole.tsx` ~624-660, `command-center-data.ts`,
       LabConsole's same derivation, `home.json` `readinessGrade`. Needs P7-confidence (HomeConsole).
       ROADMAP P7 bullet 8; Constitution §34, §26.
-- [ ] **P7-notify** The session-end toast fires for every saved session ("Your <game> debrief is ready").
+- [ ] **P7-notify** (parked: uncommitted 2026-10-25 Rust work in `train-p7notify`; resume there) The session-end toast fires for every saved session ("Your <game> debrief is ready").
       Fire it only when the session settles a decision or a state change (a Trial/journey verdict, a
       regression against the last good session); otherwise stay silent and leave the debrief in the app.
       `lib.rs` `notify_debrief_ready`, `monitoring.rs` ~1286, `sessions.rs` `save_session`; Rust unit tests.
@@ -317,32 +317,6 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-23 eve (interactive, CODE-ONLY late): PR #604 `86f6a697`, worktree prune, #629 `fef8dc7a`,
-  lease check retired `dad641d1`, #616 `d398a9ed`; pushed: #604 only (owner on PC).
-
-- 2026-10-24 early (interactive, CODE-ONLY, parallel lanes): #621 `6afaa71b`, #628 `2275c3e7`, #631
-  `ad7a1221` + `48972cd3`, #622/#677 `3c3e7553`, #617 `1bc030bd`; not pushed (owner on PC).
-- 2026-10-24 morning: pushed `abe0edd7`; FOCUS `713838e6`, fflate `53a1c9de`, audit `89fc1add`,
-  #668/#669 `e83017a5`.
-- 2026-10-24 late morning: #686-followup `6e7792a8`, P4-noise-store `4caee92b` + `ad436c84`.
-- 2026-10-24 midday: guard re-anchor `18622365` (pushed), #617-f1 `29e5e67a`, #638.
-- 2026-10-24 afternoon: #622-f1 `716e0fbd`, P4-baseline-quality `66f1daea` (owner: warn, don't block).
-- 2026-10-24 afternoon: P4-sessions (too-noisy on uneven sessions).
-- 2026-10-24 12:24 #453 live run on owner rig: Health 13 vs Optimize/History 14 (row-count +
-  rig-stamp bug, see 453-fix); diagnostics agreed; startup toggle visible + rolled back everywhere;
-  CPU temp unknown with reason. P4-noise `f1c93f44`.
-- 2026-10-24 afternoon: 453-fix `dce14e95`.
-- 2026-10-24 evening (scheduled, CODE-ONLY, owner in WARDOGS): P4-noise-copy (this entry's commit);
-  tsc 0, ExperimentBench 54/54, cargo experiment 105/0, clippy clean; not pushed.
-- 2026-10-24 14:31 desk install of main `2afd7471` (stamp-proved, attempt 1); 14:32–14:35 #453 re-run
-  PASSED (14/15/14 on all three screens) → P2-exit met; RELEASE_STATE + BACKLOG P2 recorded.
-- 2026-10-24 evening: 453-f1 `63414c42`.
-- 2026-10-25 (scheduled, CODE-ONLY, owner in WARDOGS): P4-comparable (this entry's commit); cargo 1532/0,
-  clippy clean, tsc 0; review 1 round (MUST-FIX fixed, rest → P4-comparable-show); not pushed.
-- 2026-10-25 early (interactive): 3 WARDOGS sessions recorded for P4-noise; tokio `fcc64291`,
-  P4-candidates `e0160644`, P4-comparable merged `99b132e0`.
-- 2026-10-24 ~17:00 desk install of main `791babf2` (stamp-proved, attempt 1; installer 5769273D…A5A19A) so the
-  owner's noise-measurement sessions count under the 453-f1 rule; RELEASE_STATE recorded.
 - 2026-10-25 morning: P4-recommended `a86fbcf5`.
 - 2026-10-25 morning: P4-rank `8f1169ca`, #622-f2 `4edfbb0e`.
 - 2026-10-25 midday: P4-next `abd4c883`.
@@ -360,6 +334,8 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   owner gets the Phase 5 guided journey and the Phase 6 "Changed before this" crash view; RELEASE_STATE recorded.
 - 2026-10-25 ~14:45 desk install of main `9712572d` (stamp-proved, attempt 1; installer D945743C…F3D6FC) so the
   owner can run the Phase 6 exit proof; RELEASE_STATE recorded.
+- 2026-10-26 (scheduled, CODE-ONLY, owner on PC): P7-severity `2ba1f70c`, P6-next-f2 `142b769b`
+  (review fixes `aa762687`; new tests fail on the old code); tsc 0, vitest 152/152; not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
