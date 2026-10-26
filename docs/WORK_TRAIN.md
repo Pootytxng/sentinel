@@ -261,7 +261,9 @@ friend goes from Home to an answer on "more FPS", "it stutters" and "it crashed"
 means, and the owner opens the technical layer on each and sees the exact setting, measurement and source.
 Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touches; the rest run in order.
 - [x] **P7-plan** Slices written below (2026-10-25).
-- [ ] **P7-route** (parked: uncommitted 2026-10-25 work in `train-p7route`; resume there) Home interview answers land on the journey that answers them, not a bare station:
+- [x] **P7-route** — `9fefbf6d` (2026-10-26; tsc 0, full vitest 521 files / 9312 passed). Still owed: the
+      visual self-review of the interview → bench/Blackbox landing (CODE-ONLY run, no UI driving); do it at
+      the next desk-free session before any install claims it live. Home interview answers land on the journey that answers them, not a bare station:
       "I want more FPS" opens the Optimize station with the P5 guided journey ready (today `wantFps` runs the
       fast path / Diagnostics and claims frames "are usually taken by things running alongside your game");
       "I changed something — did it help?" opens "What Compy tested" or "Since it last worked", not Benchmark.
@@ -352,6 +354,8 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
 - 2026-10-26 ~12:20–13:15 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth `8e8370a0` (the
   2026-10-26 critical review's reproduced completion/staleness defect); tsc 0, vitest 255/255 across 13 files
   on the desk; one review round, all findings fixed (details under the item); not pushed.
+- 2026-10-26 afternoon (scheduled, CODE-ONLY, owner on PC): P7-route `9fefbf6d` (resumed parked worktree;
+  TS-only, no Rust); tsc 0, full vitest 521 files / 9312 passed; visual self-review owed; not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
