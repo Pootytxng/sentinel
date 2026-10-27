@@ -32,6 +32,7 @@
     "placeholder": "Type a room, an instrument, or what's wrong…",
     "settingsLabel": "Settings",
     "settingsHint": "language, updates, and what Compy is allowed to do",
+    "intentHint": "Compy answers from this PC's own readings",
     "emptyTitle": "Nothing matches \"{{query}}\"",
     "emptyHint": "Try what's wrong in plain words — \"stutter\", \"crashed\", \"loud\".",
     "footMove": "move",

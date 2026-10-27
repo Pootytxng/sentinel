@@ -29,6 +29,7 @@ import { useJarvisActive } from "./jarvis/use-jarvis";
 import { useRoomIdentityFlag, useHudFrameFlag, useCommandPaletteFlag } from "./use-hud";
 import { CommandPalette } from "./CommandPalette";
 import type { LabStationKey } from "../surfaces/lab-guided-data";
+import type { InterviewFindingId } from "../surfaces/home-interview-data";
 import { RoomAccentPicker } from "./RoomAccentPicker";
 import { PICKABLE_ROOMS, type PickableRoom } from "./room-identity";
 import { LenisSpine } from "./jarvis/LenisSpine";
@@ -69,6 +70,7 @@ export function ShellV2({
   onOpenStation,
   onOpenEntry,
   onOpenSettings,
+  onOpenIntent,
   children,
 }: {
   items: HomeRailItem[];
@@ -81,6 +83,8 @@ export function ShellV2({
   onOpenStation?: (station: LabStationKey) => void;
   onOpenEntry?: (entryId: string) => void;
   onOpenSettings?: () => void;
+  /** P7-palette: a plain problem typed here opens the Home interview at its finding's card. */
+  onOpenIntent?: (finding: InterviewFindingId) => void;
   // Real hardware line for the HUD-frame readout ("CPU · GPU" from the probe); null until the
   // probe resolves — the readout omits the segment, never fabricates one.
   rig?: string | null;
@@ -424,6 +428,7 @@ export function ShellV2({
             onOpenStation={onOpenStation}
             onOpenEntry={onOpenEntry}
             onOpenSettings={onOpenSettings}
+            onOpenIntent={onOpenIntent}
           />
         )}
       </div>

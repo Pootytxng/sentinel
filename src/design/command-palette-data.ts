@@ -22,16 +22,19 @@
 import type { HomeRailId, HomeRailItem } from "./homeRail";
 import type { LabStationKey, LabStationInfo } from "../surfaces/lab-guided-data";
 import type { KnowledgeEntry } from "../data/knowledge";
+import type { InterviewFindingId, PaletteIntent } from "../surfaces/home-interview-data";
 
 /** Where an item sends you. Each kind maps to an EXISTING single writer in App.tsx — the palette
- *  introduces no new navigation path (see CommandPalette's docblock). */
+ *  introduces no new navigation path (see CommandPalette's docblock). `intent` (P7-palette) opens
+ *  the Home interview at that finding's card — the same journey answering the interview lands on. */
 export type PaletteAction =
   | { kind: "room"; room: HomeRailId }
   | { kind: "station"; station: LabStationKey }
   | { kind: "entry"; entryId: string }
-  | { kind: "settings" };
+  | { kind: "settings" }
+  | { kind: "intent"; finding: InterviewFindingId };
 
-export type PaletteGroup = "room" | "station" | "app" | "entry";
+export type PaletteGroup = "intent" | "room" | "station" | "app" | "entry";
 
 export type PaletteItem = {
   /** Stable unique key — also the DOM id for aria-activedescendant. */
@@ -53,6 +56,11 @@ export type PaletteItem = {
 
 /** Group ordering + base weight. Rooms and instruments outrank the corpus — see rule 1 above. */
 const GROUP_WEIGHT: Record<PaletteGroup, number> = {
+  // P7-palette: an intent sits between rooms and instruments. With no query the map (rooms) still
+  // comes first; once a word matches, an intent's label hit (+60/+100) carries it past an
+  // instrument's keyword hit (+30) and a room's hint hit (+15), so typing a problem lands on its
+  // answer rather than on a door — rule 2 above, taken to the interview.
+  intent: 350,
   room: 400,
   station: 300,
   app: 200,
@@ -60,6 +68,7 @@ const GROUP_WEIGHT: Record<PaletteGroup, number> = {
 };
 
 export const GROUP_LABEL: Record<PaletteGroup, string> = {
+  intent: "Ask Compy",
   room: "Rooms",
   station: "Test instruments",
   app: "App",
@@ -67,7 +76,7 @@ export const GROUP_LABEL: Record<PaletteGroup, string> = {
 };
 
 /** Rooms are ordered by the rail; everything else follows the group order. */
-export const GROUP_ORDER: PaletteGroup[] = ["room", "station", "app", "entry"];
+export const GROUP_ORDER: PaletteGroup[] = ["intent", "room", "station", "app", "entry"];
 
 /**
  * Build the searchable index.
@@ -85,8 +94,27 @@ export function buildPaletteIndex(input: {
   entries?: KnowledgeEntry[];
   settingsLabel?: string;
   settingsHint?: string;
+  /** P7-palette: the interview's answers as plain problems. Omitted → not indexed (a caller that
+   *  cannot open the interview must not offer it). */
+  intents?: PaletteIntent[];
+  /** The one line under every intent: where it goes (the interview's card for it). */
+  intentHint?: string;
 }): PaletteItem[] {
   const items: PaletteItem[] = [];
+
+  // Intents first in index order so, at equal score, the interview's own order holds; the group
+  // weight keeps rooms ahead of them while nothing is typed.
+  for (const intent of input.intents ?? []) {
+    items.push({
+      key: `intent:${intent.finding}`,
+      label: intent.label,
+      hint: input.intentHint ?? "",
+      group: "intent",
+      keywords: intent.keywords,
+      order: items.length,
+      action: { kind: "intent", finding: intent.finding },
+    });
+  }
 
   for (const item of input.rail) {
     items.push({
@@ -188,11 +216,14 @@ export function scoreItem(item: PaletteItem, words: string[]): number {
 /**
  * Rank and cut. An empty query shows the navigable destinations only (rooms, instruments, Settings)
  * — opening the palette should show you the map, not dump 190 articles at someone who has not typed
- * anything yet. `limit` caps the list so the overlay never becomes its own scrolling haystack.
+ * anything yet. Intents (P7-palette) wait for a typed word too: they answer a problem someone
+ * states, and thirteen of them above the map would bury it. `limit` caps the list so the overlay
+ * never becomes its own scrolling haystack.
  */
 export function filterPalette(items: PaletteItem[], query: string, limit = 12): PaletteItem[] {
   const words = queryWords(query);
-  const pool = words.length === 0 ? items.filter((i) => i.group !== "entry") : items;
+  const pool =
+    words.length === 0 ? items.filter((i) => i.group !== "entry" && i.group !== "intent") : items;
 
   return pool
     .map((item) => ({ item, score: scoreItem(item, words) }))

@@ -99,6 +99,59 @@ describe("it routes through the host's writers — never its own navigation", ()
   });
 });
 
+// P7-palette (ROADMAP P7 bullet 1, Constitution §27): a plain problem typed here lands on the
+// interview's answer for it, above the instrument whose symptom line merely mentions the word.
+// The palette fires no action of its own: it hands the finding to the host, which opens the
+// interview at that card. Fails on the code before this slice (no intent rows).
+describe("P7-palette: plain problems land on the interview's answer", () => {
+  it("'stutter' ranks the stutter answer first and hands its finding to the host, after closing", () => {
+    const order: string[] = [];
+    const onOpenIntent = vi.fn(() => order.push("intent"));
+    const p = setup({ onOpenIntent, onClose: vi.fn(() => order.push("close")) });
+    type("stutter");
+    expect(rows()[0].textContent).toContain("It stutters");
+    expect(rows()[0].textContent).toContain("Compy answers from this PC's own readings");
+    fireEvent.click(rows()[0]);
+    expect(onOpenIntent).toHaveBeenCalledWith("stutter");
+    expect(order).toEqual(["close", "intent"]);
+    expect(p.onOpenStation).not.toHaveBeenCalled();
+  });
+
+  it("'crashed', 'more fps' and 'what changed' each land on their answer, not a door", () => {
+    const onOpenIntent = vi.fn();
+    setup({ onOpenIntent });
+    type("crashed");
+    expect(rows()[0].textContent).toContain("It crashed in a game");
+    type("more fps");
+    expect(rows()[0].textContent).toContain("I want more FPS");
+    type("what changed");
+    expect(rows()[0].textContent).toContain("What changed");
+    fireEvent.click(rows()[0]);
+    expect(onOpenIntent).toHaveBeenCalledWith("didItHelp");
+  });
+
+  it("with nothing typed the map still comes first: no intent row in the default view", () => {
+    setup({ onOpenIntent: vi.fn() });
+    expect(rows()[0].textContent).toContain("Health");
+    expect(rows().some((r) => r.textContent?.includes("It stutters"))).toBe(false);
+  });
+
+  it("the instrument is still offered under the answer, so a reader who wants the tool finds it", () => {
+    setup({ onOpenIntent: vi.fn() });
+    type("crashed");
+    expect(rows()[0].textContent).toContain("It crashed in a game");
+    // The crash instrument (its "reach for it when" line says "crashed") still appears below the
+    // answer — the row ids are the index keys.
+    expect(rows().slice(1).some((r) => r.id === "cp-station:blackbox")).toBe(true);
+  });
+
+  it("omits every intent when the host cannot open the interview", () => {
+    setup({ onOpenIntent: undefined });
+    type("stutter");
+    expect(rows().some((r) => r.textContent?.includes("It stutters"))).toBe(false);
+  });
+});
+
 describe("no dead doors", () => {
   it("omits instruments, entries and Settings when the host cannot open them", () => {
     setup({ onOpenStation: undefined, onOpenEntry: undefined, onOpenSettings: undefined });

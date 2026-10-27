@@ -19,6 +19,7 @@ import { ShellV2 } from "./design/ShellV2";
 import { fmtGB } from "./surfaces/hardware-format";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { HomeRoom } from "./surfaces/HomeRoom";
+import { markInterviewArrival } from "./surfaces/home-arrival";
 import { TrustMoment } from "./surfaces/TrustMoment";
 import { FirstWin } from "./surfaces/FirstWin";
 import { MonitorV2 } from "./surfaces/MonitorV2";
@@ -1450,6 +1451,13 @@ function App() {
           onOpenStation={(s) => openLabStation(s)}
           onOpenEntry={(id) => libraryApi.openLibrary(id)}
           onOpenSettings={() => setShowSettings(true)}
+          // P7-palette: a typed problem lands on the interview's card for it — the arrival is
+          // written BEFORE Home is navigated to (the same order every station deep-link keeps), and
+          // the Home console reads it once, on mount or on the arrival event when it is already up.
+          onOpenIntent={(finding) => {
+            markInterviewArrival(finding);
+            navHome("home");
+          }}
         >
           {/* The OptimizeV2 keepalive stood here until the generation prune (2026-08-06). There is no
               Optimize ROOM any more — the rail has no `fix` door and the Optimize station lives inside

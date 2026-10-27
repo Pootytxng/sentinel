@@ -47,9 +47,11 @@ import { isMeasuredVerdict, type SummaryExperiment } from "./test-summary";
 import {
   INTERVIEW_ROOT,
   interviewQuestions,
+  pathToFinding,
   type InterviewFacts,
   type InterviewStep,
 } from "./home-interview-data";
+import { INTERVIEW_ARRIVAL_EVENT, takeInterviewArrival } from "./home-arrival";
 import "./home-console.css";
 import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
@@ -473,6 +475,26 @@ export function HomeConsole({
   // interview's own breadcrumb and Back button keep working with no change to how they read state.
   const INTERVIEW_START: InterviewStep[] = [{ kind: "question", id: INTERVIEW_ROOT }];
   const [interviewPath, setInterviewPath] = useState<InterviewStep[]>(INTERVIEW_START);
+  // P7-palette: a plain problem typed into the command palette arrives here as a one-shot key and
+  // opens the interview AT that finding's card, along the same full path answering would have taken
+  // (breadcrumb and Back read as usual). Read once on mount, and again on the arrival event — Home
+  // is usually already up when the palette is used, so a mount-only read would miss it. No origin
+  // rect: the sheet grows from nowhere in particular, exactly as if there were no door to grow from.
+  useEffect(() => {
+    const land = () => {
+      const finding = takeInterviewArrival();
+      if (!finding) return;
+      const path = pathToFinding(finding, interviewQuestions(t));
+      if (!path) return; // the tree doesn't reach it: stay put rather than open a card out of nowhere
+      setInterviewOrigin(null);
+      setInterviewPath(path);
+      setInterviewOpen(true);
+    };
+    land();
+    window.addEventListener(INTERVIEW_ARRIVAL_EVENT, land);
+    return () => window.removeEventListener(INTERVIEW_ARRIVAL_EVENT, land);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `t` is stable per language; the key is one-shot
+  }, []);
   // Whether the one-tap safe stack has already been applied in THIS visit. The finding card reads
   // it to stop offering an apply that has landed, instead of re-offering work that is done.
   // The receipt is a RESULT, not a boolean. J (2026-07-22): the fast path once reported only a
