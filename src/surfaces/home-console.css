@@ -400,6 +400,26 @@
   padding: 20px;
 }
 
+/* P7-rig-limiter: what the rig's highlight or dim means, in one quiet line along the stage's bottom
+   padding. Absolutely positioned on purpose: an in-flow child would take a grid row from the rig,
+   whose height this stage resolves for the canvas (the circularity note above). Never interactive,
+   so drag-orbit under it never fights. */
+:root[data-v2="on"] .hc-rig-note {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 4px;
+  max-width: calc(100% - 40px);
+  margin: 0 auto;
+  text-align: center;
+  font-size: var(--type-label);
+  line-height: 1.35;
+  color: var(--v2-muted);
+  /* It sits over the canvas: a soft shadow keeps it legible over a lit part without a box. */
+  text-shadow: 0 1px 6px var(--v2-bg, rgba(0, 0, 0, 0.85)), 0 0 2px var(--v2-bg, rgba(0, 0, 0, 0.85));
+  pointer-events: none;
+}
+
 :root[data-v2="on"] .hc-rig {
   width: 100%;
   /* No height of its own, and no percentage either — a percentage needs a definite parent, which

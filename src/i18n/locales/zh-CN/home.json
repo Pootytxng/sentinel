@@ -114,6 +114,10 @@
       "label": "Compy 在这台电脑上的更改",
       "active_other": "当前生效 {{count}} 项",
       "unconfirmed_other": "{{count}} 项无法确认是否仍然生效"
+    },
+    "rigFocus": {
+      "part": "已高亮：{{part}} — Compy 标出的头号事项与这个部件有关。",
+      "away": "Compy 标出的头号事项是设置或软件，不是某个部件。"
     }
   },
   "interview": {
