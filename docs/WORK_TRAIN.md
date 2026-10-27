@@ -343,7 +343,18 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       shown; explanation one tap; receipt one more tap, or open by default under Expert view via
       `use-expert-view.ts`). First adopter: `CareNextStep.tsx` + `CareHonestEnd.tsx`. No new data.
       ROADMAP P7 bullet 2; Constitution §13. Parallel-safe (new component + Care files only).
-- [ ] **P7-depth-verdicts** Put the Trial / journey verdict (`GuidedJourney.tsx`, ExperimentBench summary and
+- [x] **P7-depth-verdicts** (`a0c008bd`, feat `e43ffe78`; visual self-review owed at the next FULL session)
+      Journey result: the line stays the answer; explanation = the keep rule it was judged by (Recommended /
+      Maximum FPS, with the band figure only when the record holds the judged band; a no-result attempt says
+      the sessions could not be compared fairly); receipt = the record's numbers verbatim (change, outcome,
+      verdict, confidence, before/after average and 1% low with stored deltas, band or floor as recorded,
+      measured noise, samples, session ids, trial id). Bench summary: noise-band line, last-recorded-context
+      line and a per-change delta row move to the receipt; no explanation door. Debrief comparison card:
+      verdict + keep/revert stay the answer; delta line and "what a null result means" are the explanation;
+      before/after readings, noise-floor chip and exact fields the receipt. One `receiptPct`/`receiptBand`
+      helper for every receipt (no "-0.0%"). Review (1 round, APPROVE + 4 SHOULD-FIX, all taken). Guards:
+      journey 3, bench 2 adapted + receipt row, Debrief 1, helper 1; 5 fail on the old code. Proof: tsc 0;
+      touched suites 87 files / 1015; full desk suite under the landing. Put the Trial / journey verdict (`GuidedJourney.tsx`, ExperimentBench summary and
       `test-summary.ts` output) and `SessionDebrief.tsx` on the P7-depth block: raw deltas, noise band,
       registry/API names and sample counts move to the receipt layer. Needs P7-depth, P7-route (both touch
       GuidedJourney). ROADMAP P7 bullet 2; Constitution §13, §25.
@@ -459,6 +470,9 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   parked worktree onto `379ac51b`; cargo test --lib 1644/0, clippy -D warnings clean; Rust review 2 rounds,
   1 MUST-FIX + 3 SHOULD-FIX taken in-item, round 2 PASS. Stale non-worktree folders train-p6nextf2,
   train-p7route, train-p7severity left untouched (items already landed). Not pushed.
+- 2026-10-27 ~11:35–12:45 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-depth-verdicts `a0c008bd`
+  (feat `e43ffe78`); tsc 0; FULL vitest on the desk 522 files / 10032 tests, exit 0; one review round
+  (APPROVE + 4 SHOULD-FIX taken); visual self-review owed (FULL). Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
