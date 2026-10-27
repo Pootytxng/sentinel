@@ -196,7 +196,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       `reusableAsIs` reads `matchOf`; a null `get_experiments` answer is unknown, not zero. Two UNVERIFIED
       items checked and found not defects: CareNextStep renders whenever it has a step, and
       `storedStutterStep` already compares rigs via `newestRigOf` before the final read.
-- [x] **P4-exit-truth-f2** (this entry's commit; the third review's four remaining gaps, one bounded pass) §1 "now"
+- [x] **P4-exit-truth-f2** (38e31fa0, fix c9580298; the third review's four remaining gaps, one bounded pass) §1 "now"
       is the NEWEST session, never an older one found by searching back: a newest session with no context
       leaves results unverified (last-known context is still shown). §2 completion is worded from what EVERY
       change holds (`stop` counts): one measured change never speaks for another's unjudged attempt; "finished"
@@ -392,8 +392,8 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
 - 2026-10-26 ~19:35–20:40 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f1 2af5f7e2
   (the follow-up review's five findings); tsc 0, vitest 21 files / 466 passed on the desk; one review
   round, all SHOULD-FIXes taken; not pushed.
-- 2026-10-27 ~00:05–01:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f2 (this entry's
-  commit; the third review's four gaps + combination matrix); tsc 0, vitest 21 files / 475 passed on the desk;
+- 2026-10-27 ~00:05–01:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f2 38e31fa0
+  (the third review's four gaps + combination matrix); tsc 0, vitest 21 files / 475 passed on the desk;
   one review round, MUST-FIX + SHOULD-FIXes taken; not pushed.
 
 ## Done
