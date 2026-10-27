@@ -24,8 +24,8 @@ import {
   outcomeChoices,
   summarizeGame,
   type GameTestSummary,
+  LESSON_KEY,
   type Lesson,
-  type LessonRule,
   type OutcomeChoice,
   type OutcomeResult,
   type ResultOutcome,
@@ -1349,20 +1349,8 @@ const STILL_APPLIED_KEY: Record<StillApplied, string> = {
   unknown: "lab.experimentBench.summary.stillUnknown",
 };
 
-// P5-learned: the lesson's copy key, and the reason a put-back row says (the journey's own words).
-const LESSON_KEY: Record<LessonRule, string> = {
-  "steadier-not-faster": "steadierNotFaster",
-  "faster-and-steadier": "fasterAndSteadier",
-  "faster-not-steadier": "fasterNotSteadier",
-  "steadier-but-slower": "steadierButSlower",
-  "faster-but-less-steady": "fasterButLessSteady",
-  "less-steady-not-slower": "lessSteadyNotSlower",
-  "slower-and-less-steady": "slowerAndLessSteady",
-  "slower-not-less-steady": "slowerNotLessSteady",
-  steadier: "steadier",
-  "less-steady": "lessSteady",
-  "too-noisy": "tooNoisy",
-};
+// P5-learned: the reason a put-back row says (the journey's own words). The lesson's copy key is the
+// shared `LESSON_KEY` (test-summary.ts) since P7-teach taught the Debrief and Care from the same rules.
 const PUT_BACK_WHY: Record<string, string> = {
   "no-change": "noChange",
   regressed: "regressed",

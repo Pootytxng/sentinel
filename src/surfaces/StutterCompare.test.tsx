@@ -7,7 +7,8 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import { readFileSync } from "fs";
 import { join } from "path";
 import { BlackBox } from "./BlackBox";
-import { pickStutterPair, MAX_GOOD_CANDIDATES } from "./StutterCompare";
+import { pickStutterPair, stutterLessonRule, MAX_GOOD_CANDIDATES } from "./StutterCompare";
+import { LibraryContext } from "./library-context";
 import { CARE_ARRIVAL_KEY } from "./care-arrival";
 import { MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import type { SessionSummary, WhatChangedOutcome, Comparability } from "../types";
@@ -17,6 +18,8 @@ const h = vi.hoisted(() => ({
   sessions: [] as unknown[],
   verdictFor: {} as Record<string, string>,
   throwFor: "" as string,
+  /** P7-teach: the current session's stored 1% low in the engine's report (baseline stays 80). */
+  currentLow1: 80 as number,
 }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
@@ -51,14 +54,14 @@ const sess = (started_at: string, o: Partial<SessionSummary> = {}): SessionSumma
   }) as SessionSummary;
 
 function reportFor(baseline: string, current: string, verdict: Comparability): WhatChangedOutcome {
-  const ref = (started_at: string) => ({
-    started_at, game: "Valorant", duration_secs: 1200, samples: 700, avg_fps: 120, low1_fps: 80,
+  const ref = (started_at: string, low1_fps = 80) => ({
+    started_at, game: "Valorant", duration_secs: 1200, samples: 700, avg_fps: 120, low1_fps,
     gaming_mode_active: null, hw_hash: "hw1",
   });
   return {
     kind: "report",
     baseline: ref(baseline),
-    current: ref(current),
+    current: ref(current, h.currentLow1),
     game: "Valorant",
     verdict: "regressed",
     headline: `ENGINE HEADLINE ${baseline}`,
@@ -93,6 +96,7 @@ afterEach(() => {
   h.sessions = [];
   h.verdictFor = {};
   h.throwFor = "";
+  h.currentLow1 = 80;
 });
 
 const cmds = () => h.calls.map((c) => c.cmd);
@@ -257,6 +261,65 @@ describe("review r1: partial pairs, one-shot, Intelligence off, a failing read",
     ]);
     // The button comes back so the user can try again.
     expect(screen.getByRole("button", { name: /compare my latest session/i })).toBeInTheDocument();
+  });
+});
+
+// P7-teach (Constitution §14): after this pair's own readings, at most one lesson from the P5-learned
+// rule table, worded for two sessions of one game, linking the Library entry it reads from. The
+// stored verdict wins over the re-derived direction. Fails on the code before this slice.
+describe("P7-teach: the stutter comparison teaches one lesson from this pair's own readings", () => {
+  const report = (over: Record<string, unknown>) =>
+    ({ ...(reportFor("b", "c", "comparable") as unknown as Record<string, unknown>), ...over }) as unknown as Parameters<typeof stutterLessonRule>[0];
+  const refs = (bLow: number, cLow: number, bAvg = 120, cAvg = 120) => ({
+    baseline: { started_at: "b", game: "Valorant", duration_secs: 1, samples: 1, avg_fps: bAvg, low1_fps: bLow, gaming_mode_active: null, hw_hash: null },
+    current: { started_at: "c", game: "Valorant", duration_secs: 1, samples: 1, avg_fps: cAvg, low1_fps: cLow, gaming_mode_active: null, hw_hash: null },
+  });
+
+  it("reads the rule from the stored readings against the report's floor", () => {
+    expect(stutterLessonRule(report({ verdict: "regressed", ...refs(80, 70) }))).toBe("less-steady-not-slower");
+    expect(stutterLessonRule(report({ verdict: "regressed", ...refs(80, 70, 120, 110) }))).toBe("slower-and-less-steady");
+    expect(stutterLessonRule(report({ verdict: "improved", ...refs(80, 90) }))).toBe("steadier-not-faster");
+    expect(stutterLessonRule(report({ verdict: "no-change", ...refs(80, 81, 120, 130) }))).toBe("faster-not-steadier");
+  });
+
+  it("no lesson when the verdict is inconclusive, a baseline reading is missing, or the deltas sit inside the floor", () => {
+    expect(stutterLessonRule(report({ verdict: "inconclusive", ...refs(80, 70) }))).toBeNull();
+    expect(stutterLessonRule(report({ verdict: "regressed", ...refs(0, 70) }))).toBeNull();
+    expect(stutterLessonRule(report({ verdict: "regressed", ...refs(80, 70, 0, 110) }))).toBeNull();
+    expect(stutterLessonRule(report({ verdict: "no-change", ...refs(80, 81) }))).toBeNull();
+  });
+
+  it("the stored verdict wins: a re-derived 1% low direction that disagrees with it teaches nothing", () => {
+    // The engine said regressed, the stored readings read flat on the 1% low: no lesson, never a
+    // lesson that contradicts the verdict.
+    expect(stutterLessonRule(report({ verdict: "regressed", ...refs(80, 80, 120, 130) }))).toBeNull();
+    expect(stutterLessonRule(report({ verdict: "improved", ...refs(80, 70) }))).toBeNull();
+  });
+
+  it("renders the one lesson after the report, with the Library link, and none when no rule fits", async () => {
+    h.currentLow1 = 70;
+    h.sessions = [sess("2026-10-20T10:00:00Z"), sess("2026-10-24T10:00:00Z", { fps_series: UNEVEN })];
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    const openLibrary = vi.fn();
+    render(
+      <LibraryContext.Provider value={{ openLibrary }}>
+        <BlackBox />
+      </LibraryContext.Provider>,
+    );
+    await screen.findByText("ENGINE HEADLINE 2026-10-20T10:00:00Z");
+    const lesson = screen.getByTestId("stutter-lesson");
+    expect(lesson.getAttribute("data-rule")).toBe("less-steady-not-slower");
+    expect(lesson.textContent).toContain("Between these two sessions, 1% lows fell and the average barely moved: Valorant got less steady, not slower.");
+    expect(screen.getAllByTestId("stutter-lesson")).toHaveLength(1);
+    fireEvent.click(lesson.querySelector("button")!);
+    expect(openLibrary).toHaveBeenCalledWith("one-percent-lows");
+
+    cleanup();
+    h.currentLow1 = 80; // the verdict says regressed but the readings read flat: nothing taught
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    render(<BlackBox />);
+    await screen.findByText("ENGINE HEADLINE 2026-10-20T10:00:00Z");
+    expect(screen.queryByTestId("stutter-lesson")).toBeNull();
   });
 });
 

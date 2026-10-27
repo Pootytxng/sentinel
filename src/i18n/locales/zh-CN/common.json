@@ -144,6 +144,22 @@
     "why": "为什么对这台电脑推荐这一步",
     "receipt": "技术回执"
   },
+  "lesson": {
+    "label": "Compy 在这台电脑上学到的：",
+    "sessions": {
+      "steadierNotFaster": "这两局之间，1% 低帧提高了，平均帧率几乎没变：{{game}} 变得更稳，而不是更快。",
+      "fasterAndSteadier": "这两局之间，平均帧率和 1% 低帧都提高了：{{game}} 变得更快也更稳。",
+      "fasterNotSteadier": "这两局之间，平均帧率提高了，1% 低帧几乎没变：{{game}} 变得更快，而不是更稳。",
+      "steadierButSlower": "这两局之间，1% 低帧提高了，但平均帧率下降了：{{game}} 变得更稳，但更慢。",
+      "fasterButLessSteady": "这两局之间，平均帧率提高了，但 1% 低帧下降了：{{game}} 变得更快，但不那么稳。",
+      "lessSteadyNotSlower": "这两局之间，1% 低帧下降了，平均帧率几乎没变：{{game}} 变得不那么稳，而不是更慢。",
+      "slowerAndLessSteady": "这两局之间，平均帧率和 1% 低帧都下降了：{{game}} 变得更慢也更不稳。",
+      "slowerNotLessSteady": "这两局之间，平均帧率下降了，1% 低帧几乎没变：{{game}} 变得更慢，而不是更不稳。",
+      "steadier": "这两局之间，1% 低帧提高了：{{game}} 变得更稳。没有比较平均帧率。",
+      "lessSteady": "这两局之间，1% 低帧下降了：{{game}} 变得不那么稳。没有比较平均帧率。",
+      "tooNoisy": "在你的电脑上，{{game}} 每局之间的波动很大；Compy 需要更平稳的几局才能判断。"
+    }
+  },
   "whatsThis": {
     "trigger": "这是什么?",
     "more": "在历史中查看更多 →"

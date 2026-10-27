@@ -21,6 +21,8 @@ import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { readDisplayRefreshHz } from "../design/theme";
 import { useExpertView } from "../design/use-expert-view";
 import { Depth, ReceiptRow, receiptPct } from "../design/Depth";
+import { LessonLine } from "../design/LessonLine";
+import { LESSON_KEY, lessonRuleFor } from "./test-summary";
 import { knownFps, leftOutSecs, allBackground, leftOutSpan } from "../lib/session-metrics";
 import "../i18n";
 
@@ -90,6 +92,11 @@ function ComparisonCard({
   // before/after readings and the exact fields the verdict was judged on. No new data.
   const rk = (k: string) => t(`monitor.sessionDebrief.receipt.${k}`);
   const one = (n: number) => n.toFixed(1);
+  // P7-teach (Constitution §14): after this PC's own result, at most one lesson from the P5-learned
+  // rule table over the stored verdict and deltas (the same rules the Trial summary teaches with),
+  // worded for a Trial of this change. No rule = no lesson. It sits in the explanation: the answer
+  // stays the verdict and the choice.
+  const lessonRule = lessonRuleFor(r.verdict, r.delta_low1_pct, r.delta_avg_pct, r.noise_floor_pct);
   return (
     <div className={`cmp cmp-${r.verdict}`} data-testid="cmp-card">
       <Depth
@@ -182,6 +189,16 @@ function ComparisonCard({
                   <strong>{t("monitor.sessionDebrief.noChangeMeansEmph", { title: r.rec_title.toLowerCase() })}</strong>
                   {t("monitor.sessionDebrief.noChangeMeansPost")}
                 </div>
+              )}
+              {lessonRule && (
+                <LessonLine
+                  rule={lessonRule}
+                  testId="cmp-lesson"
+                  sentence={t(`lab.experimentBench.summary.lesson.${LESSON_KEY[lessonRule]}`, {
+                    change: r.rec_title,
+                    game: prettyGameName(r.game),
+                  })}
+                />
               )}
             </>
           ) : undefined

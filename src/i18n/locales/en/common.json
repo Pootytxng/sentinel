@@ -146,6 +146,22 @@
     "why": "Why this, for this PC",
     "receipt": "Technical receipt"
   },
+  "lesson": {
+    "label": "What Compy learned on this PC:",
+    "sessions": {
+      "steadierNotFaster": "Between these two sessions, 1% lows rose and the average barely moved: {{game}} got steadier, not faster.",
+      "fasterAndSteadier": "Between these two sessions, both the average and the 1% lows rose: {{game}} got faster and steadier.",
+      "fasterNotSteadier": "Between these two sessions, the average rose and the 1% lows barely moved: {{game}} got faster, not steadier.",
+      "steadierButSlower": "Between these two sessions, 1% lows rose but the average fell: {{game}} got steadier but slower.",
+      "fasterButLessSteady": "Between these two sessions, the average rose but 1% lows fell: {{game}} got faster but less steady.",
+      "lessSteadyNotSlower": "Between these two sessions, 1% lows fell and the average barely moved: {{game}} got less steady, not slower.",
+      "slowerAndLessSteady": "Between these two sessions, both the average and the 1% lows fell: {{game}} got slower and less steady.",
+      "slowerNotLessSteady": "Between these two sessions, the average fell and the 1% lows barely moved: {{game}} got slower, not less steady.",
+      "steadier": "Between these two sessions, 1% lows rose: {{game}} got steadier. The average wasn't compared.",
+      "lessSteady": "Between these two sessions, 1% lows fell: {{game}} got less steady. The average wasn't compared.",
+      "tooNoisy": "{{game}} swings a lot between sessions on your PC; Compy needs steadier sessions to judge."
+    }
+  },
   "whatsThis": {
     "trigger": "What's this?",
     "more": "More in History →"

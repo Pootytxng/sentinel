@@ -234,15 +234,67 @@ export type Lesson = {
 
 const dirOf = (v: number, band: number): Dir => (v > band ? "up" : v < -band ? "down" : "flat");
 
+/** P7-teach: the measured rule for ONE result, shared by every surface that teaches from personal
+ *  evidence (the Trial summary, the Debrief's comparison card, the Care stutter comparison). null =
+ *  no rule, so no lesson: the verdict wasn't a measured result, the band or the 1% low delta is
+ *  missing, or both deltas sit inside the band (that is the verdict itself, not a lesson). */
+export function lessonRuleFor(
+  verdict: string | null | undefined,
+  low1Pct: number | null | undefined,
+  avgPct: number | null | undefined,
+  bandPct: number | null | undefined,
+): LessonRule | null {
+  if (!isMeasuredVerdict(verdict) || bandPct == null || low1Pct == null) return null;
+  if (!Number.isFinite(low1Pct) || !Number.isFinite(bandPct) || (avgPct != null && !Number.isFinite(avgPct))) return null;
+  return LESSON_RULES[`${dirOf(low1Pct, bandPct)}/${avgPct == null ? "unknown" : dirOf(avgPct, bandPct)}`] ?? null;
+}
+
+/** The directions a measured rule read (its key in `LESSON_RULES`); null for too-noisy. */
+export function lessonDirs(rule: LessonRule): { low1: Dir; avg: Dir | "unknown" } | null {
+  const key = Object.keys(LESSON_RULES).find((k) => LESSON_RULES[k] === rule);
+  if (!key) return null;
+  const [low1, avg] = key.split("/") as [Dir, Dir | "unknown"];
+  return { low1, avg };
+}
+
+/** The lesson's copy key (`…lesson.<key>`, `…rule.<key>`), one per rule. */
+export const LESSON_KEY: Readonly<Record<LessonRule, string>> = {
+  "steadier-not-faster": "steadierNotFaster",
+  "faster-and-steadier": "fasterAndSteadier",
+  "faster-not-steadier": "fasterNotSteadier",
+  "steadier-but-slower": "steadierButSlower",
+  "faster-but-less-steady": "fasterButLessSteady",
+  "less-steady-not-slower": "lessSteadyNotSlower",
+  "slower-and-less-steady": "slowerAndLessSteady",
+  "slower-not-less-steady": "slowerNotLessSteady",
+  steadier: "steadier",
+  "less-steady": "lessSteady",
+  "too-noisy": "tooNoisy",
+};
+
+/** The Library (History) entry each lesson teaches from (Constitution §14): every measured rule reads
+ *  the 1% low against the band, so it links the 1% low entry; too-noisy is about the band itself. */
+export const LESSON_LIBRARY_ID: Readonly<Record<LessonRule, string>> = {
+  "steadier-not-faster": "one-percent-lows",
+  "faster-and-steadier": "one-percent-lows",
+  "faster-not-steadier": "one-percent-lows",
+  "steadier-but-slower": "one-percent-lows",
+  "faster-but-less-steady": "one-percent-lows",
+  "less-steady-not-slower": "one-percent-lows",
+  "slower-and-less-steady": "one-percent-lows",
+  "slower-not-less-steady": "one-percent-lows",
+  steadier: "one-percent-lows",
+  "less-steady": "one-percent-lows",
+  "too-noisy": "noise-floor",
+};
+
 /** The one lesson for these tested changes, by the rule table above; null when no rule applies. */
 export function lessonFor(tested: readonly TestedChange[]): Lesson | null {
   const newest = [...tested].sort((a, b) => time(b.at) - time(a.at));
   for (const r of newest) {
     const band = r.noise?.band_pct;
-    if (!MEASURED_VERDICTS.has(r.verdict) || band == null || r.deltaLow1Pct == null) continue;
-    const key = `${dirOf(r.deltaLow1Pct, band)}/${r.deltaAvgPct == null ? "unknown" : dirOf(r.deltaAvgPct, band)}`;
-    const rule = LESSON_RULES[key];
-    if (rule)
+    const rule = lessonRuleFor(r.verdict, r.deltaLow1Pct, r.deltaAvgPct, band);
+    if (rule && band != null && r.deltaLow1Pct != null)
       return {
         rule,
         recId: r.recId,

@@ -7,6 +7,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(nul
 
 import { SessionDebrief } from "./SessionDebrief";
 import { ConfirmProvider } from "../design/ConfirmDialog";
+import { LibraryContext } from "./library-context";
 
 afterEach(cleanup);
 
@@ -134,6 +135,52 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
       Verdict: "no-change",
     });
     expect(card.querySelector(".cmp-nf")!.textContent).toBe("noise floor ±3%");
+    // P7-teach: both deltas inside the floor is the verdict itself, not a lesson.
+    expect(card.querySelector('[data-testid="cmp-lesson"]')).toBeNull();
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+
+  // P7-teach (Constitution §14): after this PC's own result, at most one lesson from the P5-learned
+  // rule table, behind the Why door, linking the Library entry it reads from. Fails on the code before
+  // this slice (the card taught nothing).
+  it("a measured result teaches one lesson in the explanation, with a link into the Library", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const won = { ...comparison, after_low1_fps: 118.9, delta_low1_pct: 7.9, after_avg_fps: 141.6, delta_avg_pct: 0.9, verdict: "improved" as const };
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? won : null));
+    const openLibrary = vi.fn();
+    render(
+      <LibraryContext.Provider value={{ openLibrary }}>
+        <ConfirmProvider>
+          <SessionDebrief {...baseProps} />
+        </ConfirmProvider>
+      </LibraryContext.Provider>,
+    );
+    const card = await screen.findByTestId("cmp-card");
+    // Answer face: the verdict and the choice; the lesson waits behind the Why door.
+    expect(card.querySelector('[data-testid="cmp-lesson"]')).toBeNull();
+    fireEvent.click(card.querySelector('[data-testid="cmp-depth-why"] > summary')!);
+    const lesson = card.querySelector('[data-testid="cmp-lesson"]')!;
+    expect(lesson.getAttribute("data-rule")).toBe("steadier-not-faster");
+    expect(lesson.textContent).toContain("What Compy learned on this PC:");
+    expect(lesson.textContent).toContain("With Game Mode, 1% lows rose and the average barely moved: eldenring got steadier, not faster.");
+    expect(card.querySelectorAll('[data-testid="cmp-lesson"]')).toHaveLength(1);
+    fireEvent.click(lesson.querySelector("button")!);
+    expect(openLibrary).toHaveBeenCalledWith("one-percent-lows");
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+
+  it("a confounded comparison teaches nothing: no rule, no lesson", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const confounded = { ...comparison, delta_low1_pct: 9, delta_avg_pct: 0.2, verdict: "confounded" as const };
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? confounded : null));
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    const card = await screen.findByTestId("cmp-card");
+    expect(card.querySelector('[data-testid="cmp-lesson"]')).toBeNull();
+    expect(card.textContent).not.toMatch(/What Compy learned/);
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
   });
 });
