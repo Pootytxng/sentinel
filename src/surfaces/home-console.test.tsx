@@ -55,7 +55,13 @@ vi.mock("../design/use-motion", () => ({ useReducedMotion: () => true }));
 
 // RigHologram pulls in the ~600KB three.js bundle lazily — stub it so this stays a DOM test.
 vi.mock("./rig/RigHologram", () => ({
-  RigHologram: () => <div data-testid="rig-hologram" />,
+  // P7-rig-limiter: the stub reports the two props the limiter drives, so the rig's highlight / dim
+  // is testable without three.js.
+  RigHologram: (p: { selectedId?: string | null; dimmed?: boolean; onSelect?: (id: string, w: null) => void }) => (
+    <div data-testid="rig-hologram" data-selected={p.selectedId ?? ""} data-dimmed={p.dimmed ? "1" : "0"}>
+      <button type="button" data-testid="rig-pick-cpu" onClick={() => p.onSelect?.("cpu", null)} />
+    </div>
+  ),
 }));
 
 beforeAll(() => {
@@ -1540,5 +1546,65 @@ describe("HomeConsole — the Care notice", () => {
       "Something Compy noticed",
     );
     expect(notice.getAttribute("role"), "the notice became an alert").toBeNull();
+  });
+});
+
+// P7-rig-limiter (ROADMAP P7 bullet 4, Constitution §24): the rig picks out what the #1 limiter is
+// about. A drive limiter with one drive highlights it; a setting/software limiter dims the rig and
+// says the evidence points away from the parts; ambiguous or unknown → the rig is left alone. The
+// user's own pick takes over. Fails on the code before this slice (the rig ignored the limiter).
+describe("P7-rig-limiter: the Home rig shows what the top limiter is about", () => {
+  const limiter = (id: string, status: "attention" | "unknown" = "attention") =>
+    ({ ...priorities, limiters: [{ id, title: `Limiter ${id}`, reason: "r", linked: null, confidence: "high", status }] }) as Priorities;
+  const rig = () => screen.getByTestId("rig-hologram");
+  const note = () => document.querySelector('[data-testid="hc-rig-note"]');
+
+  it("a setting/software limiter dims the rig and says so", async () => {
+    mount({ ...props, priorities: limiter("startup-load") });
+    await screen.findByTestId("rig-hologram");
+    expect(rig().getAttribute("data-dimmed")).toBe("1");
+    expect(rig().getAttribute("data-selected")).toBe("");
+    expect(note()!.getAttribute("data-focus")).toBe("away");
+    expect(note()!.textContent).toBe(i18n.t("home.homeConsole.rigFocus.away"));
+  });
+
+  it("the slow-install-drive limiter highlights the one drive, until the user picks a part", async () => {
+    mount({ ...props, priorities: limiter("install-drive") });
+    await screen.findByTestId("rig-hologram");
+    expect(rig().getAttribute("data-selected")).toBe("vol-0");
+    expect(rig().getAttribute("data-dimmed")).toBe("0");
+    expect(note()!.getAttribute("data-focus")).toBe("part");
+    expect(note()!.textContent).toMatch(/C:/);
+    fireEvent.click(screen.getByTestId("rig-pick-cpu"));
+    expect(rig().getAttribute("data-selected")).toBe("cpu");
+    expect(note()).toBeNull();
+  });
+
+  it("with two drives it points at neither (which one is not in these readings)", async () => {
+    const twoDrives = {
+      ...hw,
+      physical_disks: [
+        { friendly_name: "Drive A", size_bytes: 1e12, media_type: "SSD", bus_type: "NVMe" },
+        { friendly_name: "Drive B", size_bytes: 2e12, media_type: "HDD", bus_type: "SATA" },
+      ],
+    } as unknown as HardwareInfo;
+    mount({ ...props, hw: twoDrives, priorities: limiter("install-drive") });
+    await screen.findByTestId("rig-hologram");
+    expect(rig().getAttribute("data-selected")).toBe("");
+    expect(rig().getAttribute("data-dimmed")).toBe("0");
+    expect(note()).toBeNull();
+  });
+
+  it("an unknown id, or a limiter that is not an attention, leaves the rig alone", async () => {
+    mount({ ...props, priorities: limiter("disk") });
+    await screen.findByTestId("rig-hologram");
+    expect(rig().getAttribute("data-dimmed")).toBe("0");
+    expect(rig().getAttribute("data-selected")).toBe("");
+    expect(note()).toBeNull();
+    cleanup();
+    mount({ ...props, priorities: limiter("startup-load", "unknown") });
+    await screen.findByTestId("rig-hologram");
+    expect(rig().getAttribute("data-dimmed")).toBe("0");
+    expect(note()).toBeNull();
   });
 });

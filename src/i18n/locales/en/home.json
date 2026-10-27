@@ -121,6 +121,10 @@
       "active_other": "{{count}} active now",
       "unconfirmed_one": "{{count}} change Compy can't confirm is still in place",
       "unconfirmed_other": "{{count}} changes Compy can't confirm are still in place"
+    },
+    "rigFocus": {
+      "part": "Highlighted: {{part}} — the top thing holding this PC back is on this part.",
+      "away": "The top thing holding this PC back is a setting or software, so the evidence points away from the parts."
     }
   },
   "interview": {

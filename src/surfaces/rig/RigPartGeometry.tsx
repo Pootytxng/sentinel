@@ -108,8 +108,10 @@ export function RigPartGeometry({
   color: string;
   active: boolean;
   detected: boolean;
-  /** Measured-emphasis glow multiplier (1 = neutral; only Two Futures passes ≠1, and only
-      from a per-component efficacy row — never implied without data). */
+  /** Measured-emphasis glow multiplier (1 = neutral). Two hosts pass ≠1, each only from data:
+      Two Futures from a per-component efficacy row, and the Home rig's dim (RigHologram
+      `dimmed`, P7-rig-limiter) when the #1 limiter is a setting or software. Never implied
+      without data. */
   glow?: number;
   /** This part stands between the camera and a real, detected one, so the geometry that covers it
       must let the pointer through — drawn exactly as before, just not raycast. Only the mounting

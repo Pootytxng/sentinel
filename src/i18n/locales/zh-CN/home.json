@@ -114,6 +114,10 @@
       "label": "Compy 在这台电脑上的更改",
       "active_other": "当前生效 {{count}} 项",
       "unconfirmed_other": "{{count}} 项无法确认是否仍然生效"
+    },
+    "rigFocus": {
+      "part": "已高亮：{{part}} — 拖慢这台电脑的头号因素就在这个部件上。",
+      "away": "拖慢这台电脑的头号因素是设置或软件，所以证据指向的不是这些硬件。"
     }
   },
   "interview": {

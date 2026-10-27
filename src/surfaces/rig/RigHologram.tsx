@@ -25,6 +25,7 @@ import { useRigColors, partColor, FAN_COLOR } from "./use-rig-colors";
 import { useReducedMotion } from "../../design/use-motion";
 import { useDocumentVisible } from "../../data/use-document-visible";
 import { fitCameraDistance } from "./camera-fit";
+import { rigGlow } from "./limiter-part";
 import { RigCase } from "./RigCase";
 import { RigPart } from "./RigPart";
 import { RigFan, type FanInfo } from "./RigFan";
@@ -113,6 +114,11 @@ interface Props {
       becomes transparent to the pointer. Off everywhere else: the Gaming rig viewer keeps its
       controls, so the ghosts stay selectable there and nothing about it changes. */
   evidenceMap?: boolean;
+  /** P7-rig-limiter: true → the #1 limiter is a setting or software, so every part's glow drops
+      (the existing `glow` multiplier, DIMMED_GLOW) and the host says the evidence points away from
+      the hardware. Hover and selection still light a part up over the dim. Default false — every
+      other host is untouched. */
+  dimmed?: boolean;
 }
 
 // Memoized: parents re-render on live polls (HomeHud's 5s mem/GPU tick), and ANY re-render
@@ -134,10 +140,13 @@ export const RigHologram = memo(function RigHologram({
   cameraDist = 9.5,
   cameraTargetY = 0.2,
   evidenceMap = false,
+  dimmed = false,
 }: Props) {
   const { t } = useTranslation();
   const colors = useRigColors();
   const parts = useMemo(() => buildRigParts(hw, t), [hw, t]);
+  // P7-rig-limiter: a dimmed rig keeps whatever the user points at fully lit.
+  const glowFor = (id: string) => rigGlow(dimmed, id, selectedId, hoveredId);
   const reduced = useReducedMotion();
   const visible = useDocumentVisible();
   const [gameActive, setGameActive] = useState(false);
@@ -439,6 +448,7 @@ export const RigHologram = memo(function RigHologram({
             pointerThrough={clickThrough.has(p.id)}
             cardOnSelect={!evidenceMap}
             suppressCard={cardsSuppressed}
+            glow={glowFor(p.id)}
           />
         ))}
         {manualRigParts.map((p, i) => (
@@ -456,6 +466,7 @@ export const RigHologram = memo(function RigHologram({
             pointerThrough={clickThrough.has(p.id)}
             cardOnSelect={!evidenceMap}
             suppressCard={cardsSuppressed}
+            glow={glowFor(p.id)}
           />
         ))}
         {fanPlacements.map((fp) => (
