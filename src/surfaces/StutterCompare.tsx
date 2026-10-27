@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import type { SessionSummary, WhatChangedOutcome, WhatChangedReport } from "../types";
 import type { StutterResult } from "./care-next-step";
-import { LESSON_KEY, lessonDirs, lessonRuleFor, type LessonRule } from "./test-summary";
+import { LESSON_KEY, lessonRuleForVerdict, type LessonRule } from "./test-summary";
 import { LessonLine } from "../design/LessonLine";
 import { gradeBaseline } from "./baseline-grade";
 import { WhatChangedReportView } from "./WhatChangedPanel";
@@ -68,18 +68,20 @@ export function pickStutterPair(sessions: SessionSummary[]): StutterPick {
  *  arithmetic over the report's own `baseline` / `current` refs against its `noise_floor_pct`; no new
  *  data. The engine judged the verdict on the 1% low against that floor, so a rule whose 1% low
  *  direction disagrees with the verdict is dropped: the stored verdict wins over a re-derived number,
- *  never the other way (honest measurement). null = no rule, no lesson (inconclusive, a zero or
- *  missing baseline reading, or both deltas inside the floor). */
+ *  never the other way (honest measurement). null = no rule, no lesson: inconclusive, confounded
+ *  (two or more change families moved, so no single reading is a lesson), a zero or missing baseline
+ *  reading, a zero floor, or both deltas inside the floor. A partly comparable pair still teaches:
+ *  the report's own comparability banner says how far the pair may be compared. The average is
+ *  always compared here, so the "average wasn't compared" rules (steadier / less-steady) and
+ *  too-noisy can't fire from this surface. */
 export function stutterLessonRule(r: WhatChangedReport): LessonRule | null {
   const b = r.baseline;
   const c = r.current;
+  if (r.confounded || !(r.noise_floor_pct > 0)) return null;
   if (!(b.low1_fps > 0) || !(b.avg_fps > 0) || !Number.isFinite(c.low1_fps) || !Number.isFinite(c.avg_fps)) return null;
   const low1Pct = ((c.low1_fps - b.low1_fps) / b.low1_fps) * 100;
   const avgPct = ((c.avg_fps - b.avg_fps) / b.avg_fps) * 100;
-  const rule = lessonRuleFor(r.verdict, low1Pct, avgPct, r.noise_floor_pct);
-  if (!rule) return null;
-  const want = r.verdict === "improved" ? "up" : r.verdict === "regressed" ? "down" : "flat";
-  return lessonDirs(rule)?.low1 === want ? rule : null;
+  return lessonRuleForVerdict(r.verdict, low1Pct, avgPct, r.noise_floor_pct);
 }
 
 /** The engine's comparability verdicts that make an earlier steady session a good baseline. */

@@ -249,6 +249,22 @@ export function lessonRuleFor(
   return LESSON_RULES[`${dirOf(low1Pct, bandPct)}/${avgPct == null ? "unknown" : dirOf(avgPct, bandPct)}`] ?? null;
 }
 
+/** `lessonRuleFor`, plus the verdict-wins guard for a result judged on the 1% low against its floor
+ *  (the Debrief's comparison, the Care stutter comparison): a rule whose 1% low direction disagrees
+ *  with the stored verdict is dropped, never shown. The stored verdict wins over a re-derived or
+ *  re-read number (honest measurement). */
+export function lessonRuleForVerdict(
+  verdict: string | null | undefined,
+  low1Pct: number | null | undefined,
+  avgPct: number | null | undefined,
+  bandPct: number | null | undefined,
+): LessonRule | null {
+  const rule = lessonRuleFor(verdict, low1Pct, avgPct, bandPct);
+  if (!rule) return null;
+  const want = verdict === "improved" ? "up" : verdict === "regressed" ? "down" : "flat";
+  return lessonDirs(rule)?.low1 === want ? rule : null;
+}
+
 /** The directions a measured rule read (its key in `LESSON_RULES`); null for too-noisy. */
 export function lessonDirs(rule: LessonRule): { low1: Dir; avg: Dir | "unknown" } | null {
   const key = Object.keys(LESSON_RULES).find((k) => LESSON_RULES[k] === rule);

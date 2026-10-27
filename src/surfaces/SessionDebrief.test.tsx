@@ -169,6 +169,34 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
   });
 
+  it("the stored verdict wins: a null verdict with the average above the floor teaches 'faster, not steadier'; contradicting readings teach nothing", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const avgUp = { ...comparison, after_avg_fps: 151.6, delta_avg_pct: 8, verdict: "no-change" as const };
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? avgUp : null));
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    let card = await screen.findByTestId("cmp-card");
+    fireEvent.click(card.querySelector('[data-testid="cmp-depth-why"] > summary')!);
+    expect(card.querySelector('[data-testid="cmp-lesson"]')!.getAttribute("data-rule")).toBe("faster-not-steadier");
+    cleanup();
+    // The engine said no-change, but the stored 1% low delta reads beyond the floor: the verdict wins.
+    const contradicts = { ...comparison, delta_low1_pct: 9, delta_avg_pct: 0.2, verdict: "no-change" as const };
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? contradicts : null));
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    card = await screen.findByTestId("cmp-card");
+    fireEvent.click(card.querySelector('[data-testid="cmp-depth-why"] > summary')!);
+    expect(card.querySelector(".cmp-delta")).not.toBeNull();
+    expect(card.querySelector('[data-testid="cmp-lesson"]')).toBeNull();
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+
   it("a confounded comparison teaches nothing: no rule, no lesson", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     const confounded = { ...comparison, delta_low1_pct: 9, delta_avg_pct: 0.2, verdict: "confounded" as const };

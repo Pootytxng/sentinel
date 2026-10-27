@@ -2,6 +2,8 @@
 // records (src/test/fixtures/wardogs-p4-exit.json: read-only copies of experiments.json and the
 // WARDOGS sessions, 2026-10-25).
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import fixture from "../test/fixtures/wardogs-p4-exit.json";
 import today from "../test/fixtures/p5-learned-today.json";
 import type { SessionSummary } from "../types";
@@ -13,6 +15,7 @@ import {
   lessonDirs,
   lessonFor,
   lessonRuleFor,
+  lessonRuleForVerdict,
   outcomeChoices,
   stillAppliedFrom,
   summarizeGame,
@@ -230,6 +233,30 @@ describe("P5-learned lesson rules", () => {
       expect(lessonRuleFor("improved", 20, 0, null)).toBeNull();
       expect(lessonRuleFor("improved", Number.NaN, 0, 3)).toBeNull();
       expect(lessonRuleFor("improved", 20, Number.POSITIVE_INFINITY, 3)).toBeNull();
+    });
+    it("lessonRuleForVerdict drops a rule whose 1% low direction disagrees with the stored verdict", () => {
+      expect(lessonRuleForVerdict("improved", 7.9, 0.9, 3)).toBe("steadier-not-faster");
+      expect(lessonRuleForVerdict("regressed", -12.5, -0.8, 3)).toBe("less-steady-not-slower");
+      // The verdict is judged on the 1% low; the average may still move beyond the floor.
+      expect(lessonRuleForVerdict("no-change", 0.7, 8, 3)).toBe("faster-not-steadier");
+      // Contradictions: the stored verdict wins, so nothing is taught.
+      expect(lessonRuleForVerdict("no-change", 5, 5, 3)).toBeNull();
+      expect(lessonRuleForVerdict("improved", -12.5, 0, 3)).toBeNull();
+      expect(lessonRuleForVerdict("regressed", 0, 8, 3)).toBeNull();
+      expect(lessonRuleForVerdict("confounded", 20, 0, 3)).toBeNull();
+    });
+    it("every rule's copy exists where the Debrief and the stutter comparison read it (en + zh-CN)", () => {
+      const load = (lang: string, area: string) =>
+        JSON.parse(readFileSync(join("src", "i18n", "locales", lang, `${area}.json`), "utf8"));
+      for (const lang of ["en", "zh-CN"]) {
+        const lab = load(lang, "lab") as { experimentBench: { summary: { lesson: Record<string, string> } } };
+        const common = load(lang, "common") as { lesson: { label: string; sessions: Record<string, string> } };
+        expect(common.lesson.label, lang).toBeTruthy();
+        for (const key of Object.values(LESSON_KEY)) {
+          expect(lab.experimentBench.summary.lesson[key], `${lang} lab ${key}`).toBeTruthy();
+          expect(common.lesson.sessions[key], `${lang} common ${key}`).toBeTruthy();
+        }
+      }
     });
     it("lessonDirs recovers each measured rule's directions; too-noisy has none", () => {
       for (const [key, rule] of Object.entries(LESSON_RULES)) {

@@ -287,6 +287,11 @@ describe("P7-teach: the stutter comparison teaches one lesson from this pair's o
     expect(stutterLessonRule(report({ verdict: "regressed", ...refs(0, 70) }))).toBeNull();
     expect(stutterLessonRule(report({ verdict: "regressed", ...refs(80, 70, 0, 110) }))).toBeNull();
     expect(stutterLessonRule(report({ verdict: "no-change", ...refs(80, 81) }))).toBeNull();
+    // Confounded (two or more change families moved) and a zero floor teach nothing either.
+    expect(stutterLessonRule(report({ verdict: "regressed", confounded: true, ...refs(80, 70) }))).toBeNull();
+    expect(stutterLessonRule(report({ verdict: "regressed", noise_floor_pct: 0, ...refs(80, 70) }))).toBeNull();
+    // A current 1% low of 0 is a real reading (-100%), not a missing one.
+    expect(stutterLessonRule(report({ verdict: "regressed", ...refs(80, 0) }))).toBe("less-steady-not-slower");
   });
 
   it("the stored verdict wins: a re-derived 1% low direction that disagrees with it teaches nothing", () => {

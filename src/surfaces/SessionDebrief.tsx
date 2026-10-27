@@ -22,7 +22,7 @@ import { readDisplayRefreshHz } from "../design/theme";
 import { useExpertView } from "../design/use-expert-view";
 import { Depth, ReceiptRow, receiptPct } from "../design/Depth";
 import { LessonLine } from "../design/LessonLine";
-import { LESSON_KEY, lessonRuleFor } from "./test-summary";
+import { LESSON_KEY, lessonRuleForVerdict } from "./test-summary";
 import { knownFps, leftOutSecs, allBackground, leftOutSpan } from "../lib/session-metrics";
 import "../i18n";
 
@@ -94,9 +94,10 @@ function ComparisonCard({
   const one = (n: number) => n.toFixed(1);
   // P7-teach (Constitution §14): after this PC's own result, at most one lesson from the P5-learned
   // rule table over the stored verdict and deltas (the same rules the Trial summary teaches with),
-  // worded for a Trial of this change. No rule = no lesson. It sits in the explanation: the answer
-  // stays the verdict and the choice.
-  const lessonRule = lessonRuleFor(r.verdict, r.delta_low1_pct, r.delta_avg_pct, r.noise_floor_pct);
+  // worded for a Trial of this change. No rule = no lesson, and the stored verdict wins: a rule whose
+  // 1% low direction disagrees with it is never shown. It sits in the explanation: the answer stays
+  // the verdict and the choice.
+  const lessonRule = lessonRuleForVerdict(r.verdict, r.delta_low1_pct, r.delta_avg_pct, r.noise_floor_pct);
   return (
     <div className={`cmp cmp-${r.verdict}`} data-testid="cmp-card">
       <Depth
