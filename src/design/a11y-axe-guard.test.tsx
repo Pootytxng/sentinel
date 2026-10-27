@@ -29,6 +29,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { RoomAccentPicker } from "./RoomAccentPicker";
 import { Walkthrough } from "./Walkthrough";
 import { WalkthroughDisclosure } from "./WalkthroughDisclosure";
+import { Depth, ReceiptRow } from "./Depth";
 import { Term, GlossText } from "./Term";
 import { ConfirmProvider, useConfirm } from "./ConfirmDialog";
 import { LibraryContext } from "../surfaces/library-context";
@@ -251,6 +252,26 @@ describe("axe · provider-backed and interactive components", () => {
     );
     await expectNoAxeViolations(container);
     fireEvent.click(within(container).getByText("Show me how"));
+    await expectNoAxeViolations(container);
+  });
+
+  it("Depth (answer, then explanation and receipt opened)", async () => {
+    const { container } = render(
+      <Depth
+        testId="d"
+        answer={<p>Leave this setting alone.</p>}
+        explanation={<p>Your current configuration is already appropriate for this CPU.</p>}
+        receipt={
+          <dl>
+            <ReceiptRow label="Setting" value="HKCU\\...\\GameDVR_Enabled" />
+            <ReceiptRow label="Measured" value="+0.4 fps avg" />
+          </dl>
+        }
+      />,
+    );
+    await expectNoAxeViolations(container);
+    fireEvent.click(within(container).getByText("Why this, for this PC"));
+    fireEvent.click(within(container).getByText("Technical receipt"));
     await expectNoAxeViolations(container);
   });
 

@@ -1,0 +1,75 @@
+/* P7-depth: Answer (always) → Explanation (one tap) → Technical receipt (one more tap). The two
+   doors keep the room's door grammar (a rotating caret, quiet text; see .lab-optimize-more-summary)
+   but sit INSIDE a conclusion, so they are lighter: no boxed border, one hairline above each. */
+.depth {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.depth-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.depth-layer {
+  border-top: 1px solid var(--v2-line, var(--ix-glass-border, rgba(255, 255, 255, 0.08)));
+  padding-top: 4px;
+}
+.depth-layer > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: var(--type-label);
+  color: var(--ix-text-3);
+  transition: color 0.15s ease;
+}
+.depth-layer > summary:hover {
+  color: var(--ix-text-1, #ffffff);
+}
+/* The summary is a focusable control, so it declares its own focus mark. */
+.depth-layer > summary:focus-visible {
+  outline: 2px solid var(--ix-accent, var(--v2-accent, #6aa6ff));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.depth-layer > summary::-webkit-details-marker {
+  display: none;
+}
+.depth-layer > summary::before {
+  content: "▸" / "";
+  font-size: var(--type-label);
+  transition: transform 0.15s ease;
+}
+.depth-layer[open] > summary::before {
+  transform: rotate(90deg);
+}
+.depth-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0 6px;
+  min-width: 0;
+}
+/* The receipt is a definition list: exact field (a label, in the text face), exact value (a machine
+   value, in the mono face — mono law C-17: mono is for machine values only). */
+.depth-receipt dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 12px;
+  margin: 0;
+  font-size: var(--type-label);
+}
+.depth-receipt dt {
+  color: var(--ix-text-3);
+}
+.depth-receipt dd {
+  margin: 0;
+  font-family: var(--ix-mono);
+  color: var(--ix-text-2);
+  overflow-wrap: anywhere;
+}

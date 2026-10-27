@@ -126,6 +126,10 @@
     "schematicNote": "示意图——菜单可能因版本略有不同。",
     "openIt": "打开"
   },
+  "depth": {
+    "why": "为什么对这台电脑推荐这一步",
+    "receipt": "技术回执"
+  },
   "whatsThis": {
     "trigger": "这是什么?",
     "more": "在历史中查看更多 →"
