@@ -1967,9 +1967,14 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     outcome: "recommended",
     ...over,
   });
-  const REC_OFF = trial({ id: "exp:rec" });
+  // Round 2 of the 2026-10-26 follow-up review: a keep is offered only on a MATCHING context, so the
+  // happy-path fixtures record a driver and Windows build on both the baseline and the newest session.
+  const CTX = { hw_fingerprint: { gpu: "GPU", gpu_driver: "32.0.1" }, game_state: { gpu_driver: "32.0.1", windows_build: "26200.8457" } };
+  const VAL_SESSION = { ...VALORANT_SESSION, process_name: VAL, ...CTX };
+  const REC_OFF = trial({ id: "exp:rec", baseline_session_id: VAL_SESSION.started_at });
   const MAX_KEEP = trial({
     id: "exp:max",
+    baseline_session_id: VAL_SESSION.started_at,
     created_at: "2026-07-18T00:00:00Z",
     status: "kept",
     kept: true,
@@ -1988,10 +1993,10 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     risk: "low",
   });
 
-  async function renderWith(experiments: unknown[], recs: unknown[]) {
+  async function renderWith(experiments: unknown[], recs: unknown[], sessions: unknown[] = [VAL_SESSION]) {
     state.gate = true;
     state.experiments = experiments;
-    state.sessions = [{ ...VALORANT_SESSION, process_name: VAL }];
+    state.sessions = sessions;
     state.recs = recs;
     render(<ExperimentBench />);
     await screen.findByTestId("exp-summary");
@@ -2024,6 +2029,39 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     // A Maximum FPS Trial that judged nothing is no result, so there is no keep side to offer.
     await renderWith([REC_OFF, { ...MAX_KEEP, verdict: "too-noisy", kept: false }], [hags(true, null)]);
     expect(screen.queryByTestId("exp-outcome-choice")).toBeNull();
+  });
+
+  // Follow-up review 2026-10-26 §1: the summary calls a result stale after a driver change; the
+  // switch must not offer that same Trial as proof to re-apply the change. Fails on the old code.
+  it("never offers the keep side when its Trial ran under a changed graphics driver or Windows build", async () => {
+    const newer = { ...VAL_SESSION, started_at: "2026-10-26T00:00:00Z", hw_fingerprint: { gpu: "GPU", gpu_driver: "33.0.1" }, game_state: { gpu_driver: "33.0.1", windows_build: "26200.9000" } };
+    await renderWith([REC_OFF, MAX_KEEP], [hags(true, null)], [VAL_SESSION, newer]);
+    const row = await screen.findByTestId("exp-outcome-choice-row");
+    expect(row).toHaveAttribute("data-in-effect", "recommended");
+    // The trade is still shown as history …
+    expect(screen.getByTestId("exp-outcome-choice-trade")).toHaveTextContent("Maximum FPS keeps it: average up 6%.");
+    // … but the keep side is not offered; the reason is said in its place.
+    expect(screen.queryByRole("button", { name: /Use Maximum FPS/ })).toBeNull();
+    expect(screen.getByTestId("exp-outcome-choice-stale")).toHaveTextContent(
+      "The result that kept Hardware-accelerated GPU scheduling under Maximum FPS came from a different graphics card, driver or Windows build. Test it again before Compy applies it on that basis.",
+    );
+    // And the summary agrees: that result is stale.
+    expect(screen.getByTestId("exp-summary")).toHaveAttribute("data-headline", "worth-retesting");
+  });
+
+  // Round 2 of the follow-up review: an unverified context is not proof either. The keep side is
+  // withheld with its own reason, and the summary says the result can't be tied to this PC.
+  it("never offers the keep side when its Trial's context can't be verified against this PC", async () => {
+    // A newest session that records no driver or build: the keep Trial's context can't be verified.
+    await renderWith([REC_OFF, MAX_KEEP], [hags(true, null)], [{ ...VALORANT_SESSION, process_name: VAL }]);
+    const row = await screen.findByTestId("exp-outcome-choice-row");
+    expect(row).toHaveAttribute("data-in-effect", "recommended");
+    expect(screen.queryByRole("button", { name: /Use Maximum FPS/ })).toBeNull();
+    const why = screen.getByTestId("exp-outcome-choice-stale");
+    expect(why).toHaveAttribute("data-context", "unverified");
+    expect(why).toHaveTextContent("can't be tied to this PC as it is now");
+    expect(screen.getByTestId("exp-summary")).toHaveAttribute("data-headline", "results-unverified");
+    expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("can't be tied to this PC as it is now");
   });
 
   it("choosing the keep side re-applies through apply_recommendation, citing the Better Trial", async () => {

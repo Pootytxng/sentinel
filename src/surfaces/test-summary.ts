@@ -140,8 +140,10 @@ export type TestedChange = {
   /** How many judged Trials of this change on this game. */
   trials: number;
   /** Its Trial's baseline ran under the same graphics driver and Windows build as the newest session.
-   *  null when either side didn't record them. */
+   *  null when either side didn't record them. Derived from `context`. */
   sameContext: boolean | null;
+  /** The three-way class behind `sameContext` (GPU, driver, Windows build). */
+  context: ContextMatch;
   /** The newest judged Trial's stored deltas (null when it recorded none) and when it started. */
   deltaLow1Pct: number | null;
   deltaAvgPct: number | null;
@@ -241,10 +243,17 @@ export type SummaryContext = {
 export type GameTestSummary = {
   game: string;
   tested: TestedChange[];
-  /** "finished-supported-tests" only when the picker's list was read, nothing on it is untested here
-   *  and nothing is worth another run; "worth-retesting" when nothing is untested but a result is
-   *  inconclusive or stale. */
-  headline: "finished-supported-tests" | "still-worth-testing" | "worth-retesting" | "unknown";
+  /** "finished-supported-tests" only when the picker's list was read, nothing on it is untested here,
+   *  nothing is worth another run, and at least one change has a measured result whose context still
+   *  matches; "worth-retesting" when nothing is untested but a result is inconclusive or stale;
+   *  "nothing-testable-now" when nothing is untested or worth another run but nothing was measured
+   *  (every attempt judged nothing); "results-unverified" when nothing is left but at least one
+   *  measured result can't be tied to this PC as it is now (its Trial or the newest session recorded
+   *  no driver or build): Compy has nothing to do next, and says what it has without claiming a
+   *  current measurement (follow-up §2, §3). */
+  headline: "finished-supported-tests" | "still-worth-testing" | "worth-retesting" | "results-unverified" | "nothing-testable-now" | "unknown";
+  /** Measured results whose context is unverified (neither matching nor changed). */
+  unverified: TestedChange[];
   /** Changes the picker offers that have no judged Trial on this game, in its suggested order. */
   leftToTest: SummaryCandidate[];
   /** Tested changes worth another run: inconclusive (under `RETEST_CAP`) or stale, and still offered
@@ -298,31 +307,66 @@ function contextOf(s: SessionSummary | undefined): SummaryContext | null {
   return Object.values(ctx).some((v) => v != null) ? ctx : null;
 }
 
-/** The context (§9) of `game`'s newest session that recorded one, and a check of whether a Trial's
- *  baseline session ran under the same graphics driver and Windows build: true, false, or null when
- *  either side recorded neither (unknown stays unknown, never stale). Pure. */
+/** How a Trial's context (§9: GPU, graphics driver, Windows build) relates to the game's newest
+ *  session (review 2026-10-26 follow-up §2: three classes, never two):
+ *  - "matching": every part both sides recorded is the same, and both recorded at least the driver
+ *    and the Windows build;
+ *  - "changed": some part both sides recorded differs (a different GPU with the same driver is
+ *    changed, not matching);
+ *  - "unverified": a side recorded too little to compare. Unverified is not stale, but it is not
+ *    proof that an old result applies now either, and nothing is "finished" on it. */
+export type ContextMatch = "matching" | "changed" | "unverified";
+
+/** The context (§9) of `game`'s newest session that recorded one, and the ONE classifier every
+ *  reader of a Trial's context uses: the summary, the journey, the as-is reuse and the outcome
+ *  switch (follow-up §1: one definition of evidence validity). Pure. */
 export function contextCheckFor(
   game: string,
   sessions: readonly SessionSummary[],
-): { context: SummaryContext | null; sameContext: (baselineSessionId: string | null | undefined) => boolean | null } {
+): {
+  context: SummaryContext | null;
+  /** The class of a Trial's baseline session against the game's newest. */
+  matchOf: (baselineSessionId: string | null | undefined) => ContextMatch;
+  /** `matchOf` as a tri-state: true matching, false changed, null unverified. */
+  sameContext: (baselineSessionId: string | null | undefined) => boolean | null;
+} {
   const ofGame = sessions
     .filter((s) => s.process_name === game)
     .sort((a, b) => time(b.started_at) - time(a.started_at));
   const context = contextOf(ofGame.find((s) => contextOf(s) != null));
+  const matchOf = (baselineSessionId: string | null | undefined): ContextMatch => {
+    const then = contextOf(sessions.find((s) => s.started_at === baselineSessionId));
+    if (!then || !context) return "unverified";
+    // Any part both sides recorded that differs: changed. GPU included.
+    for (const k of ["gpu", "driver", "windowsBuild"] as const) {
+      if (then[k] != null && context[k] != null && then[k] !== context[k]) return "changed";
+    }
+    // Matching needs at least the driver and the Windows build on both sides.
+    return then.driver && then.windowsBuild && context.driver && context.windowsBuild ? "matching" : "unverified";
+  };
   return {
     context,
-    sameContext: (baselineSessionId) => {
-      const then = contextOf(sessions.find((s) => s.started_at === baselineSessionId));
-      if (!then?.driver || !then.windowsBuild || !context?.driver || !context.windowsBuild) return null;
-      return then.driver === context.driver && then.windowsBuild === context.windowsBuild;
+    matchOf,
+    sameContext: (id) => {
+      const m = matchOf(id);
+      return m === "unverified" ? null : m === "matching";
     },
   };
 }
 
-/** How many judged Trials of one change, newest first, judged nothing before one that did. */
-export function inconclusiveRunsOf(judgedOldestFirst: readonly { verdict: string | null }[]): number {
+/** How many judged Trials of one change, newest first, judged nothing before one that did, counting
+ *  only attempts whose context is not "changed" against now (follow-up §2: old attempts under a
+ *  different driver, build or GPU don't exhaust the retest cap; an unverified one still counts, since
+ *  nothing says it differed). `matchOf` absent = count every attempt. */
+export function inconclusiveRunsOf(
+  judgedOldestFirst: readonly { verdict: string | null; baseline_session_id?: string | null }[],
+  matchOf?: (baselineSessionId: string | null | undefined) => ContextMatch,
+): number {
   let n = 0;
-  for (let i = judgedOldestFirst.length - 1; i >= 0 && !isMeasuredVerdict(judgedOldestFirst[i].verdict); i--) n++;
+  for (let i = judgedOldestFirst.length - 1; i >= 0 && !isMeasuredVerdict(judgedOldestFirst[i].verdict); i--) {
+    if (matchOf && matchOf(judgedOldestFirst[i].baseline_session_id) === "changed") continue;
+    n++;
+  }
   return n;
 }
 
@@ -341,7 +385,7 @@ export function summarizeGame(
 
   const stillApplied = (recId: string): StillApplied => stillAppliedFrom(candidates?.find((c) => c.id === recId));
 
-  const { context, sameContext } = contextCheckFor(game, sessions);
+  const { context, matchOf, sameContext } = contextCheckFor(game, sessions);
 
   // One row per change, from its newest judged Trial (`judgedAt` order), in first-judged order.
   const byRec = new Map<string, SummaryExperiment[]>();
@@ -355,13 +399,14 @@ export function summarizeGame(
       title: x.rec_title,
       verdict: x.verdict as string,
       measured: isMeasuredVerdict(x.verdict),
-      inconclusiveRuns: inconclusiveRunsOf(runs),
+      inconclusiveRuns: inconclusiveRunsOf(runs, matchOf),
       kept: x.kept,
       confidence: x.verdict_confidence ?? null,
       stillApplied: stillApplied(x.rec_id),
       noise: x.noise_evidence ?? null,
       trials: runs.length,
       sameContext: sameContext(x.baseline_session_id),
+      context: matchOf(x.baseline_session_id),
       deltaLow1Pct: x.treatment?.delta_low1_pct ?? null,
       deltaAvgPct: x.treatment?.delta_avg_pct ?? null,
       at: x.created_at,
@@ -386,6 +431,8 @@ export function summarizeGame(
     .map((c) => tested.find((r) => r.recId === c.id))
     .filter((r): r is TestedChange => r != null);
   const staleKept = stale.filter((r) => !retest.some((x) => x.recId === r.recId));
+  const holds = tested.filter((r) => r.measured && r.context === "matching");
+  const unverified = tested.filter((r) => r.measured && r.context === "unverified");
 
   return {
     game,
@@ -397,13 +444,18 @@ export function summarizeGame(
           ? "still-worth-testing"
           : retest.length > 0 || stale.length > 0
             ? "worth-retesting"
-            : "finished-supported-tests",
+            : unverified.length > 0
+              ? "results-unverified"
+              : holds.length > 0
+                ? "finished-supported-tests"
+                : "nothing-testable-now",
     leftToTest,
     retest,
     inconclusive,
     unjudged,
     stale,
     staleKept,
+    unverified,
     skipped,
     staysApplied: tested.filter((r) => r.stillApplied === "on"),
     cantConfirm: tested.filter((r) => r.stillApplied === "cant-confirm"),
@@ -429,7 +481,10 @@ export function summarizeGame(
 //   - which side is in effect comes from the Trial picker's live answer (`stillAppliedFrom`): on =
 //     the keep side, off = the other. Anything else is unknown and nothing offers to switch;
 //   - ENGINE §6, the default wins ties: an agreeing pair, or a result inside the band, keeps the
-//     default the Trials already chose. Nothing here reopens a tie.
+//     default the Trials already chose. Nothing here reopens a tie;
+//   - follow-up review 2026-10-26 §1: a keep side whose Trial ran under a changed context (GPU,
+//     driver or Windows build) is `keepStale`: the trade stays visible as history, but it is not
+//     offered as current proof to re-apply the change. One validity rule, the summary's.
 
 export type ResultOutcome = "recommended" | "max-fps";
 
@@ -455,6 +510,12 @@ export type OutcomeChoice = {
   /** The side that keeps the change, and the Trial that judged it Better under that outcome. */
   keepOutcome: ResultOutcome;
   keepTrialId: string;
+  /** The keep Trial's context against the game's newest session (`contextCheckFor`). */
+  keepContext: ContextMatch;
+  /** The keep Trial's context is not known to match now (changed, or unverified): shown as
+   *  history, never offered as proof to re-apply the change (review follow-up §1, round 2: the
+   *  same rule the summary's "finished" uses, matching only). */
+  keepStale: boolean;
   /** Which side is in effect now; null when the live check can't tell. */
   inEffect: ResultOutcome | null;
 };
@@ -489,7 +550,10 @@ export function outcomeChoices(
   game: string,
   experiments: readonly SummaryExperiment[],
   candidates: readonly SummaryCandidate[] | null,
+  sessions: readonly SessionSummary[] = [],
 ): OutcomeChoice[] {
+  const { matchOf } = contextCheckFor(game, sessions);
+  const baselineOf = new Map(experiments.map((x) => [x.id, x.baseline_session_id ?? null]));
   const newest = new Map<string, { title: string; first: number; recommended?: OutcomeResult; "max-fps"?: OutcomeResult; at: Record<string, number> }>();
   for (const x of experiments) {
     if (x.game !== game) continue;
@@ -513,6 +577,7 @@ export function outcomeChoices(
     const keep = rec.keeps ? rec : max;
     const other = rec.keeps ? max : rec;
     const live = stillAppliedFrom(candidates?.find((c) => c.id === recId));
+    const keepContext = matchOf(baselineOf.get(keep.trialId));
     out.push({ first: row.first, choice: {
       recId,
       title: row.title,
@@ -520,6 +585,8 @@ export function outcomeChoices(
       maxFps: max,
       keepOutcome: keep.outcome,
       keepTrialId: keep.trialId,
+      keepContext,
+      keepStale: keepContext !== "matching",
       inEffect: live === "on" ? keep.outcome : live === "off" ? other.outcome : null,
     } });
   }

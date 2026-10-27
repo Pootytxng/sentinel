@@ -24,15 +24,18 @@ export function CareNextStep({
   sessions: SessionSummary[];
   /** The scan skipped a source: an absence is never claimed in full. */
   skipped: boolean;
-  /** P6-unknown: at least one skip needs admin. False → the skips were reader failures, and the
+  /** P6-unknown: at least one skip needs admin. False â†’ the skips were reader failures, and the
    *  partial line says some sources couldn't be read this time, not "need administrator". */
   skippedNeedsAdmin?: boolean;
   /** P6-next-f2: the user stopped tracking a stored stutter step (BlackBox retires it). */
   onDismiss?: (key: string) => void;
 }) {
   const { t, i18n } = useTranslation();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- the anchor belongs to the step's identity
-  const anchor = useMemo(() => (step ? anchorFor(step, incidents) : null), [step?.key]);
+  // The anchor belongs to the step's identity: its key, and for a stutter step the baseline it was
+  // judged on (follow-up review 2026-10-26 Â§4: the same advice judged on another rig re-anchors).
+  const baselineId = step?.source === "stutter" ? `${step.baseline.startedAt}|${step.baseline.rig?.gpu ?? ""}|${step.baseline.rig?.ram_gb ?? ""}|${step.baseline.rig?.display ?? ""}` : "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the anchor belongs to the step identity above
+  const anchor = useMemo(() => (step ? anchorFor(step, incidents) : null), [step?.key, baselineId]);
   if (!step || !anchor) return null;
 
   const day = (n: number) =>
@@ -46,7 +49,7 @@ export function CareNextStep({
   const game = step.source === "stutter" ? step.game : "";
   const pct = step.source === "stutter" ? (anchor.baseline ?? step.baseline).noiseFloorPct.toFixed(0) : "";
 
-  // App crash / App hang name the faulting app ("No Valorant.exe crash recorded…"); other kinds,
+  // App crash / App hang name the faulting app ("No Valorant.exe crash recordedâ€¦"); other kinds,
   // or an app Windows didn't name, keep the kind-only line. Static keys, so the guards can see them.
   const app = step.source === "incident" ? step.appLabel : null;
   const crash = !!app && kind === "App crash";

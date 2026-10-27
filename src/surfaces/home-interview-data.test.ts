@@ -399,6 +399,26 @@ describe("answers land on the journey that answers them", () => {
     }
   });
 
+  // Follow-up review 2026-10-26 §5: "you haven't measured this" and "I couldn't read your
+  // measurements" are different statements. A failed record read must say the second. Fails on the
+  // code before this fix (it said "has not measured a change before and after yet").
+  it("'did it help?' with unreadable Trial records says it couldn't read them, never that nothing was measured", () => {
+    const unread = find("didItHelp", { ...RICH, trials: { armed: true, judged: null } });
+    expect(unread.level).not.toBe("measured");
+    expect(unread.sentence).toBe(t("home.interview.f.didItHelp.sentenceUnread"));
+    expect(unread.sentence).toMatch(/couldn't read/);
+    expect(unread.sentence).not.toMatch(/has not measured/);
+    // It opens the panel that reads the records itself; no count is quoted.
+    expect(unread.action).toMatchObject({ kind: "room", room: "lab", arrival: "tested" });
+    expect(unread.evidence.some((e) => /before-and-after/.test(e))).toBe(false);
+    // Without the Lab room, the honest fallback still says "couldn't read" and lines up the timeline.
+    const noLab = find("didItHelp", { ...RICH, rooms: ["play", "learn"] as HomeIntakeRoom[], trials: { armed: true, judged: null } });
+    expect(noLab.sentence).toBe(t("home.interview.f.didItHelp.sentenceUnreadSince"));
+    expect(noLab.sentence).toMatch(/couldn't read/);
+    // A read that answered zero still says "not measured yet": that one IS an existence claim Compy can make.
+    expect(find("didItHelp", { ...RICH, trials: { armed: true, judged: 0 } }).sentence).toBe(t("home.interview.f.didItHelp.sentenceSince"));
+  });
+
   it("never sends either answer to a room the rail does not render", () => {
     const noLab = { ...RICH, rooms: ["play", "learn"] as HomeIntakeRoom[] };
     for (const id of ["wantFps", "didItHelp"] as const) {

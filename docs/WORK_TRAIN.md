@@ -179,6 +179,23 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       fresh before-reading; a stale result is counted apart from tested, and a kept one is listed with "put it
       back, then test again"; the just-judged Trial replaces the store's running copy of itself; journey and
       summary share one newest-Trial comparator (`judgedAt`). Decision to overrule if wanted: the two-run cap.
+- [x] **P4-exit-truth-f1** (this entry's commit; the 2026-10-26 follow-up review's five findings, one bounded
+      pass) §1 one validity rule: `contextCheckFor(...).matchOf` (GPU + driver + Windows build → matching /
+      changed / unverified) now serves the summary, the journey, as-is reuse AND the outcome switch, which
+      withholds a keep whose Trial ran under a changed context (`keepStale`; trade still shown as history).
+      §2 unverified is neither matching nor changed and never "finished"; the two-run retest cap counts only
+      attempts under comparable conditions. §3 nothing untested, nothing to retry, nothing measured →
+      "nothing testable now", never "finished". §4 Care: the same advice judged on another rig re-anchors
+      (stored baseline retired as `rig`); a stored step's final read counts as shown only when BlackBox
+      renders it (`markFinalShown`), not when a crash card won the pick. §5 Home "did it help?": a failed
+      Trial-records read says "couldn't read", never "has not measured" (`trials.judged: null`). en + zh-CN.
+      Guards fail on the old code: test-summary 7, bench 1, Care 3, Home 1. Review (1 round, APPROVE +
+      7 SHOULD-FIX, all taken in the same commit): a keep is offered only on a MATCHING context (unverified
+      is withheld with its own line, same as changed); a measured result with unverified context gets its
+      own headline ("can't be tied to this PC as it is now"), never "nothing measured", and blocks "finished";
+      `reusableAsIs` reads `matchOf`; a null `get_experiments` answer is unknown, not zero. Two UNVERIFIED
+      items checked and found not defects: CareNextStep renders whenever it has a step, and
+      `storedStutterStep` already compares rigs via `newestRigOf` before the final read.
 - [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
       tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
 
@@ -356,6 +373,9 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   on the desk; one review round, all findings fixed (details under the item); not pushed.
 - 2026-10-26 afternoon (scheduled, CODE-ONLY, owner on PC): P7-route `9fefbf6d` (resumed parked worktree;
   TS-only, no Rust); tsc 0, full vitest 521 files / 9312 passed; visual self-review owed; not pushed.
+- 2026-10-26 ~19:35–20:40 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f1 (this entry's
+  commit; the follow-up review's five findings); tsc 0, vitest 21 files / 466 passed on the desk; one review
+  round, all SHOULD-FIXes taken; not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)

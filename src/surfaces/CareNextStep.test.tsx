@@ -13,6 +13,7 @@ import {
   anchorFor,
   storedStutterStep,
   dismissStoredStep,
+  markFinalShown,
   STORED_STEP_END_SESSIONS,
   SHOWN_KEY,
   MIN_PAYOFF_SESSIONS,
@@ -380,10 +381,15 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     const five = storedStutterStep(notRegressed(good(5)))!;
     expect(payoffFor(five, anchorFor(five), [], good(5))).toEqual({ kind: "sessions-steady", total: 5 });
     expect(five.source === "stutter" && five.final).toBeFalsy();
-    // Past the end: the final read shows (and keeps showing) in the view that reached it...
+    // Past the end: the final read is offered (and keeps being offered) until a view SHOWS it...
     expect(storedStutterStep(notRegressed(good(6)), undefined, "v1")).toMatchObject({ stored: true, final: true });
-    expect(storedStutterStep(notRegressed(good(6)), undefined, "v1")).toMatchObject({ final: true });
+    expect(storedStutterStep(notRegressed(good(6)), undefined, "v2")).toMatchObject({ final: true });
     expect(entry().retired).toBeUndefined();
+    expect(entry().finalView).toBeUndefined();
+    // ...the view that renders it says so (BlackBox, once pickCareStep chose it)...
+    markFinalShown(KEY, "v1");
+    expect(entry().finalView).toBe("v1");
+    expect(storedStutterStep(notRegressed(good(6)), undefined, "v1")).toMatchObject({ final: true });
     // ...and the step retires in the next Care view.
     expect(storedStutterStep(notRegressed(good(6)), undefined, "v2")).toBeNull();
     expect(entry().retired).toBe("ended");
@@ -408,6 +414,49 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     anchorFor(fresh, [], new Date("2026-10-24T00:00:00Z"));
     expect(entry().retired).toBe("replaced");
     expect(storedStutterStep(notRegressed(good(2)))?.headline).toBe("Turn off the overlay");
+  });
+
+  // Follow-up review 2026-10-26 §4 (two Care lifecycle defects). Both fail on the code before the fix.
+  it("the same advice judged on different hardware is a fresh step: the old rig's baseline is not reused", () => {
+    // Stored: judged on GPU A. Now: the same headline, judged on GPU B.
+    localStorage.setItem(SHOWN_KEY, JSON.stringify({ [KEY]: { at: "2026-10-21T00:00:00Z", baseline: { ...base, rig: { gpu: "GPU A", ram_gb: 16, display: "" } } } }));
+    const steadyB = sess("2026-10-26T10:00:00Z", { low1_fps_est: 50, hw_fingerprint: fp("hw2", "GPU B") });
+    const onB: StutterResult = { ...stutter("Roll back the GPU driver", [steadyB]), report: report(steadyB.started_at, "Roll back the GPU driver", "regressed") };
+    const step = pickCareStep(null, onB)!;
+    expect(step).toMatchObject({ source: "stutter", key: KEY, baseline: { rig: { gpu: "GPU B" } } });
+    const a = anchorFor(step, [], new Date("2026-10-27T00:00:00Z"));
+    // Anchored now, against GPU B's own numbers; the GPU A entry is retired as a rig change.
+    expect(a.at).toBe(Date.parse("2026-10-27T00:00:00Z"));
+    expect(a.baseline).toMatchObject({ startedAt: steadyB.started_at, rig: { gpu: "GPU B" } });
+    expect(entry().retired).toBeUndefined(); // re-inserted fresh under the same key
+    expect(entry().baseline.rig.gpu).toBe("GPU B");
+    // A driver update alone (same gpu/ram/display, new hash) keeps the anchor.
+    localStorage.setItem(SHOWN_KEY, JSON.stringify({ [KEY]: { at: "2026-10-21T00:00:00Z", baseline: { ...base, rig: { gpu: "GPU B", ram_gb: 16, display: "" } } } }));
+    expect(anchorFor(step, [], new Date("2026-10-27T00:00:00Z")).at).toBe(Date.parse("2026-10-21T00:00:00Z"));
+  });
+
+  it("a final read hidden behind a crash card is not 'shown': the step survives to the next view", async () => {
+    store();
+    h.sessions = [sess("2026-10-20T10:00:00Z"), ...good(6)];
+    h.verdict = "no-change";
+    // A crash record with a step wins the pick; the stutter step's final read is prepared but not rendered.
+    h.incidents = [inc("2026-10-28T10:00:00Z")];
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    const { container, unmount } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-next")?.getAttribute("data-source")).toBe("incident"));
+    // The stutter step's final read was prepared (6 steady sessions) but a crash card is what shows.
+    expect(entry().finalView).toBeUndefined();
+    expect(entry().retired).toBeUndefined();
+    unmount();
+    // The next view, with the crash gone: the final read shows, and only now counts as shown.
+    h.incidents = [];
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    const second = render(<BlackBox />);
+    await waitFor(() => expect(second.container.querySelector(".bb-next")?.getAttribute("data-source")).toBe("stutter"));
+    await waitFor(() => expect(entry().finalView).toBeDefined());
+    expect(second.container.querySelector(".bb-next-final")).not.toBeNull();
+    expect(entry().retired).toBeUndefined();
   });
 
   it("a retired step that regresses again starts a fresh anchor; dismiss without storage is harmless", () => {

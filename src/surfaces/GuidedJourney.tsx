@@ -282,7 +282,7 @@ async function waitForSession(
 export function reusableAsIs(sessions: SessionSummary[], id: string | null, game: string | null): SessionSummary | null {
   const s = id == null ? undefined : sessions.find((x) => x.started_at === id);
   if (!s || !usable(s) || (game != null && s.process_name !== game)) return null;
-  if (contextCheckFor(game ?? s.process_name, sessions).sameContext(s.started_at) === false) return null;
+  if (contextCheckFor(game ?? s.process_name, sessions).matchOf(s.started_at) === "changed") return null;
   return gradeBaseline(s).kind === "steady" ? s : null;
 }
 async function reusableSession(id: string, game: string | null): Promise<SessionSummary | null> {

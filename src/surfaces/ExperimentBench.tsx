@@ -735,7 +735,7 @@ export default function ExperimentBench({
       .map((g) => summarizeGame(g, experiments, recsLoaded ? recs : null, sessions))
       .find((s) => s != null) ?? null;
   // P5-outcomes: for the summary's game, the changes whose Recommended and Maximum FPS results disagree.
-  const choices = summary ? outcomeChoices(summary.game, experiments, recsLoaded ? recs : null) : [];
+  const choices = summary ? outcomeChoices(summary.game, experiments, recsLoaded ? recs : null, sessions) : [];
   // No switch while a Trial runs or the journey is anywhere but idle (waiting, uneven, judging, …).
   const switchLocked = running != null || journey.kind !== "idle";
 
@@ -883,6 +883,9 @@ export default function ExperimentBench({
     // Never while a Trial or the journey is under way: an undo could take back the running Trial's
     // own apply mid-measurement, and a re-apply would confound it.
     if (busy || switchLocked || c.inEffect == null || c.inEffect === pick) return;
+    // Follow-up review §1: a keep Trial judged under a changed GPU, driver or Windows build is
+    // history, not proof. The summary already calls it stale; the switch may not re-apply on it.
+    if (pick === c.keepOutcome && c.keepStale) return;
     setBusy(true);
     setError(null);
     try {
@@ -1438,7 +1441,11 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             ? t("lab.experimentBench.summary.stillWorth", { count: s.leftToTest.length, game })
             : s.headline === "worth-retesting"
               ? t("lab.experimentBench.summary.worthRetesting", { count: new Set([...s.retest, ...s.stale].map((r) => r.recId)).size, game })
-              : t("lab.experimentBench.summary.unknownLeft")}
+              : s.headline === "nothing-testable-now"
+                ? t("lab.experimentBench.summary.nothingTestableNow", { game })
+                : s.headline === "results-unverified"
+                  ? t("lab.experimentBench.summary.resultsUnverified", { count: s.unverified.length, game })
+                  : t("lab.experimentBench.summary.unknownLeft")}
       </p>
       {(s.kept.length > 0 || s.putBack.length > 0) && (
         <>
@@ -1583,6 +1590,14 @@ function OutcomeChoices({
             ) : locked ? (
               <p className="exp-fineprint" data-testid="exp-outcome-choice-locked">
                 {t("lab.experimentBench.outcomeChoice.busy")}
+              </p>
+            ) : other === c.keepOutcome && c.keepStale ? (
+              // The keep side's Trial ran under a changed context: say so instead of offering it.
+              <p className="exp-fineprint" data-testid="exp-outcome-choice-stale" data-context={c.keepContext}>
+                {t(c.keepContext === "unverified" ? "lab.experimentBench.outcomeChoice.keepUnverified" : "lab.experimentBench.outcomeChoice.keepStale", {
+                  outcome: name(other),
+                  change: c.title,
+                })}
               </p>
             ) : (
               <>

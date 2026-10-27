@@ -30,7 +30,7 @@ import {
 } from "./changed-before-restore";
 import { useJourneyPhase } from "./GuidedJourney";
 import { CareNextStep } from "./CareNextStep";
-import { pickCareStep, isLifted, storedStutterStep, dismissStoredStep, type StutterResult } from "./care-next-step";
+import { pickCareStep, isLifted, storedStutterStep, dismissStoredStep, markFinalShown, type StutterResult } from "./care-next-step";
 import { CareHonestEnd } from "./CareHonestEnd";
 import { honestEndFor, splitSkips } from "./care-honest-end";
 import "./BlackBox.css";
@@ -174,6 +174,11 @@ export function BlackBox({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `retired` re-reads storage after a dismiss
   const stored = useMemo(() => storedStutterStep(stutter, new Date(), viewId), [stutter, retired]);
   const careStep = useMemo(() => pickCareStep(shownIncidents, stutter, stored), [shownIncidents, stutter, stored]);
+  // Follow-up review 2026-10-26 §4: the stored step's final read counts as shown only when THIS view
+  // renders it (a crash card may win the pick instead); then the next view retires it.
+  useEffect(() => {
+    if (careStep?.source === "stutter" && careStep.stored && careStep.final) markFinalShown(careStep.key, viewId);
+  }, [careStep, viewId]);
 
   // P6-unknown: only some skips need admin; the rest are reader failures (a re-scan, not admin).
   const skips = splitSkips(report);
