@@ -421,6 +421,16 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
 - 2026-10-27 ~03:30 (interactive from Claude HQ, CODE-ONLY, owner on PC): verification receipt for the
   final tree `ac58379a` (fifth review asked for one clean full-suite run, no code): tsc exit 0; FULL vitest
   521 files / 10020 tests passed, exit 0, 157 s; clean checkout. Not pushed.
+- 2026-10-27 ~06:50–07:20 (interactive from Claude HQ; owner waived the FULL idle rule for this run and
+  left the desk free): catch-up push `cdf0c2d8..71b8e1b9` (pre-push gate passed); `npm run tauri build`;
+  `scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit 71b8e1b9…` → runtime proof
+  `71b8e1b9 · release · shell 0.9.26`, attempt 1, installer SHA-256 A7E858DA…80EBE, one installer on the
+  Desktop; self-review on the installed app (CDP capture 1620×867, midnight/#a78bfa): VERDICT PASS — headline
+  "1 result on Aniimo needs another run before it counts: couldn't be judged last time.", retest row agrees,
+  context line "Last recorded context (10/25/2026): …"; no raw keys, no mojibake, nothing clipped; debug
+  port put back (no-debug-port CLEAN). Not seen live: the dark-bench Home sentence (this PC's bench is
+  armed; unit-tested only). Noted, not changed: display mode shows "@250" without a Hz unit (pre-existing).
+  RELEASE_STATE row + anchors updated (verify-release-state: 0 state-drift). Walkthrough-ready; pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
