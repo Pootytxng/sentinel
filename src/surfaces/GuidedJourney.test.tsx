@@ -216,11 +216,15 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(journey.querySelector(".journey-why")).toBeNull();
     expect(journey.querySelector(".journey-receipt")).toBeNull();
     fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
+    await waitFor(() => expect(journey.querySelector(".journey-why")).not.toBeNull());
     // The harness record holds a noise FLOOR but not the judged band, so no band figure is named.
     expect(journey.querySelector(".journey-why")!.textContent).toBe(
       "Recommended keeps a change only when the frame rate in your worst moments (the 1% low) improved beyond the normal run-to-run wobble (the noise band) and the average did not fall beyond it; otherwise the change goes back.",
     );
-    fireEvent.click(journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!);
+    const door1 = journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!;
+    fireEvent.click(door1);
+    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+    await waitFor(() => expect(door1.parentElement!.children.length).toBeGreaterThan(1));
     const rows = Object.fromEntries(
       [...journey.querySelectorAll(".journey-receipt dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]),
     );
@@ -248,7 +252,10 @@ describe("P5-guided: one button runs the whole Trial", () => {
     await press();
     expect(await finalLine()).toBe("Put HAGS back: there wasn't enough play with it on to judge.");
     const journey = screen.getByTestId("journey");
-    fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
+    const door2 = journey.querySelector('[data-testid="journey-depth-why"] > summary')!;
+    fireEvent.click(door2);
+    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+    await waitFor(() => expect(door2.parentElement!.children.length).toBeGreaterThan(1));
     expect(journey.querySelector(".journey-why")!.textContent).toMatch(/could not be compared fairly, so nothing was judged/);
     expect(journey.querySelector(".journey-why")!.textContent).not.toMatch(/keeps a change/);
     // Review SHOULD-FIX 1: the why never asserts the change "went back" — the line above owns that claim.
@@ -263,11 +270,17 @@ describe("P5-guided: one button runs the whole Trial", () => {
     await press();
     expect(await finalLine()).toBe("Kept HAGS: average up 1.1%.");
     const journey = screen.getByTestId("journey");
-    fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
+    const door3 = journey.querySelector('[data-testid="journey-depth-why"] > summary')!;
+    fireEvent.click(door3);
+    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+    await waitFor(() => expect(door3.parentElement!.children.length).toBeGreaterThan(1));
     expect(journey.querySelector(".journey-why")!.textContent).toBe(
       "Maximum FPS keeps a change only when the average improved beyond the ±5.9% normal run-to-run wobble (the noise band) and the frame rate in your worst moments (the 1% low) held; otherwise the change goes back.",
     );
-    fireEvent.click(journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!);
+    const door4 = journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!;
+    fireEvent.click(door4);
+    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+    await waitFor(() => expect(door4.parentElement!.children.length).toBeGreaterThan(1));
     const rows = Object.fromEntries(
       [...journey.querySelectorAll(".journey-receipt dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]),
     );

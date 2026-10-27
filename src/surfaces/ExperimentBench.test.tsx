@@ -1754,7 +1754,10 @@ describe("P4-exit: what Compy tested on this game", () => {
     expect(panel.textContent!.replace(/1% lows?/g, "").match(/[\d.]+\s*%/g)).toEqual(["18.5%", "3%"]);
     // Read-only: the panel has no button.
     expect(panel.querySelectorAll("button")).toHaveLength(0);
-    fireEvent.click(panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!);
+    const door1 = panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
+    fireEvent.click(door1);
+    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+    await waitFor(() => expect(door1.parentElement!.children.length).toBeGreaterThan(1));
     expect(screen.getByTestId("exp-summary-noise")).toHaveTextContent(
       "Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
     );
@@ -2104,7 +2107,10 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("too noisy");
     expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("older graphics driver");
     // And with no context recorded at all, the context line (in the receipt) says so without a date.
-    fireEvent.click(screen.getByTestId("exp-summary").querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!);
+    const door2 = screen.getByTestId("exp-summary").querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
+    fireEvent.click(door2);
+    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+    await waitFor(() => expect(door2.parentElement!.children.length).toBeGreaterThan(1));
     expect(screen.getByTestId("exp-summary-context")).toHaveTextContent("Last recorded context: Compy has no recorded rig details for Valorant.");
     expect(screen.getByTestId("exp-summary-context")).not.toHaveAttribute("data-context-at");
   });

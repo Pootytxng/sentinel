@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import type { SessionSummary } from "../types";
 
 // The debrief loads its comparison via invoke on mount; resolve null = no armed comparison.
@@ -37,6 +37,20 @@ const baseProps = {
   changes: [],
   rollback: vi.fn(),
 };
+
+// The Depth door is per-mount state. A late async re-render can swap the card
+// node after findByTestId, leaving a held reference detached with its door shut
+// (the r23 full-gate flake). Re-query the live card and open its door until the
+// explanation is there; clicking only a shut door keeps this idempotent.
+async function openWhy(): Promise<HTMLElement> {
+  await waitFor(() => {
+    const live = screen.getByTestId("cmp-card");
+    const door = live.querySelector<HTMLDetailsElement>('[data-testid="cmp-depth-why"]')!;
+    if (!door.open) fireEvent.click(door.querySelector("summary")!);
+    expect(live.querySelector(".cmp-delta")).not.toBeNull();
+  });
+  return screen.getByTestId("cmp-card");
+}
 
 describe("SessionDebrief (audit M1)", () => {
   it("renders the session receipt: game, tiles, and the 1%-low ESTIMATE label", async () => {
@@ -111,17 +125,22 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
         <SessionDebrief {...baseProps} />
       </ConfirmProvider>,
     );
-    const card = await screen.findByTestId("cmp-card");
+    let card = await screen.findByTestId("cmp-card");
     expect(card.textContent).toMatch(/No measurable change/);
     expect(screen.getByRole("button", { name: /Revert|Take it back|put it back/i })).toBeInTheDocument();
     // Answer face: no FPS number, no noise-floor figure, no "inside the noise floor" line yet.
     expect(card.querySelector(".cmp-delta")).toBeNull();
     expect(card.querySelector(".cmp-receipts")).toBeNull();
     expect(card.textContent).not.toMatch(/140|141|110|111|±3%/);
-    fireEvent.click(card.querySelector('[data-testid="cmp-depth-why"] > summary')!);
+    card = await openWhy();
+    // Depth mounts the explanation on the details' toggle, which jsdom delivers on a later task:
+    // wait for it instead of reading in the same tick (full-suite flake under load, r23 2026-10-27).
     expect(card.querySelector(".cmp-delta")!.textContent).toMatch(/inside the ±3% normal run-to-run wobble \(the noise floor\)/);
     expect(card.querySelector(".cmp-means")!.textContent).toMatch(/your dips aren't game mode/);
-    fireEvent.click(card.querySelector('[data-testid="cmp-depth-receipt"] > summary')!);
+    const door1 = card.querySelector('[data-testid="cmp-depth-receipt"] > summary')!;
+    fireEvent.click(door1);
+    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+    await waitFor(() => expect(door1.parentElement!.children.length).toBeGreaterThan(1));
     const rows = Object.fromEntries(
       [...card.querySelectorAll(".cmp-receipt-fields dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]),
     );
@@ -155,10 +174,12 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
         </ConfirmProvider>
       </LibraryContext.Provider>,
     );
-    const card = await screen.findByTestId("cmp-card");
+    let card = await screen.findByTestId("cmp-card");
     // Answer face: the verdict and the choice; the lesson waits behind the Why door.
     expect(card.querySelector('[data-testid="cmp-lesson"]')).toBeNull();
-    fireEvent.click(card.querySelector('[data-testid="cmp-depth-why"] > summary')!);
+    card = await openWhy();
+    // Depth mounts the explanation on the details' toggle, which jsdom delivers on a later task:
+    // wait for it instead of reading in the same tick (full-suite flake under load, r23 2026-10-27).
     const lesson = card.querySelector('[data-testid="cmp-lesson"]')!;
     expect(lesson.getAttribute("data-rule")).toBe("steadier-not-faster");
     expect(lesson.textContent).toContain("What Compy learned on this PC:");
@@ -179,7 +200,9 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
       </ConfirmProvider>,
     );
     let card = await screen.findByTestId("cmp-card");
-    fireEvent.click(card.querySelector('[data-testid="cmp-depth-why"] > summary')!);
+    card = await openWhy();
+    // Depth mounts the explanation on the details' toggle, which jsdom delivers on a later task:
+    // wait for it instead of reading in the same tick (full-suite flake under load, r23 2026-10-27).
     expect(card.querySelector('[data-testid="cmp-lesson"]')!.getAttribute("data-rule")).toBe("faster-not-steadier");
     cleanup();
     // The engine said no-change, but the stored 1% low delta reads beyond the floor: the verdict wins.
@@ -191,7 +214,9 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
       </ConfirmProvider>,
     );
     card = await screen.findByTestId("cmp-card");
-    fireEvent.click(card.querySelector('[data-testid="cmp-depth-why"] > summary')!);
+    card = await openWhy();
+    // Depth mounts the explanation on the details' toggle, which jsdom delivers on a later task:
+    // wait for it instead of reading in the same tick (full-suite flake under load, r23 2026-10-27).
     expect(card.querySelector(".cmp-delta")).not.toBeNull();
     expect(card.querySelector('[data-testid="cmp-lesson"]')).toBeNull();
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
@@ -206,7 +231,7 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
         <SessionDebrief {...baseProps} />
       </ConfirmProvider>,
     );
-    const card = await screen.findByTestId("cmp-card");
+    let card = await screen.findByTestId("cmp-card");
     expect(card.querySelector('[data-testid="cmp-lesson"]')).toBeNull();
     expect(card.textContent).not.toMatch(/What Compy learned/);
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
