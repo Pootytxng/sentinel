@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -25,6 +25,8 @@ import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeCpuTempC, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
+import { buildRigParts } from "./rig/rig-parts";
+import { hddPartIds, limiterFocus } from "./rig/limiter-part";
 import { HardwareGrid } from "./HardwareGrid";
 import { inEffectCounts, useMachineModel, type InEffectCounts } from "../data/machine-model";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
@@ -655,7 +657,20 @@ export function HomeConsole({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   // Stable handler: an inline arrow here breaks RigHologram's memo, letting every 5s live-poll
   // re-render re-commit mesh handlers and repaint the resting bay (the T1.5 idle-repaint class).
-  const onRigSelect = useCallback((id: string) => setSelectedId(id || null), []);
+  // P7-rig-limiter: the first time the user picks (or clears) a part themselves, the limiter's
+  // highlight steps aside for this visit — the answer points, it never fights the user. Derived at
+  // render (never re-asserted in an effect), so a live poll can't take the rig back.
+  const [rigUserPicked, setRigUserPicked] = useState(false);
+  const onRigSelect = useCallback((id: string) => {
+    setRigUserPicked(true);
+    setSelectedId(id || null);
+  }, []);
+  // The same parts the hologram draws (buildRigParts over the same `hw`), plus which physical drives
+  // report HDD — read here only to map the #1 limiter to one of them (limiter-part.ts).
+  const rigParts = useMemo(() => {
+    const hdd = hddPartIds(hw.physical_disks);
+    return buildRigParts(hw, t).map((p) => ({ ...p, hdd: hdd.has(p.id) }));
+  }, [hw, t]);
   const { parts: manualParts } = useManualParts();
 
   // ── measured derivations (all real, all honestly empty when absent — HomeHud's exact logic) ──
@@ -808,6 +823,15 @@ export function HomeConsole({
   const verdictNamesLimiter =
     rawTopLimiter != null && (headNormFull === limNorm || headNormFull.startsWith(`${limNorm} and `));
   const topLimiter = verdictNamesLimiter ? null : rawTopLimiter;
+  // P7-rig-limiter (ROADMAP P7 bullet 4, Constitution §24): the rig picks out what the #1 limiter
+  // is about — the RAW top limiter, whether or not the verdict line already names it (the rig is a
+  // second way of saying the same answer, not a second answer). Only an attention limiter counts.
+  const rigFocus = useMemo(
+    () => (rawTopLimiter?.status === "attention" ? limiterFocus(rawTopLimiter.id, rigParts) : null),
+    [rawTopLimiter?.status, rawTopLimiter?.id, rigParts],
+  );
+  const rigSelectedId = !rigUserPicked && rigFocus?.kind === "part" ? rigFocus.partId : selectedId;
+  const rigDimmed = rigFocus?.kind === "away";
 
   // The Dock IS this room's doors — when it renders, RoomShell's own ForwardDoor would be a
   // second "go to Lab" affordance stacked right under it (self-reviewer catch 2026-07-10,
@@ -1069,13 +1093,14 @@ export function HomeConsole({
                       hw={hw}
                       exploded={exploded}
                       autoRotate={autoRotate}
-                      selectedId={selectedId}
+                      selectedId={rigSelectedId}
                       hoveredId={hoveredId}
                       onSelect={onRigSelect}
                       onHover={setHoveredId}
                       manualParts={manualParts}
                       cameraDist={HEALTH_CAMERA_DIST}
                       cameraTargetY={HEALTH_CAMERA_TARGET_Y}
+                      dimmed={rigDimmed}
                     />
                   </Suspense>
                 ) : (
@@ -1084,6 +1109,16 @@ export function HomeConsole({
                   </div>
                 )}
               </div>
+              {/* P7-rig-limiter: the rig's highlight or dim, said in words, while it is the limiter
+                  speaking (the user's own pick takes the rig over, and the line stands down with it).
+                  Shown with the 3D rig only — the card view highlights nothing to explain. */}
+              {rig3d && rigFocus && !(rigFocus.kind === "part" && rigUserPicked) && (
+                <p className="hc-rig-note" data-testid="hc-rig-note" data-focus={rigFocus.kind}>
+                  {rigFocus.kind === "part"
+                    ? t("home.homeConsole.rigFocus.part", { part: rigFocus.partName })
+                    : t("home.homeConsole.rigFocus.away")}
+                </p>
+              )}
               {rig3d && (
                 <>
                   {/* Instrument annotations — the parallax plane (Task 4). The whole plane is

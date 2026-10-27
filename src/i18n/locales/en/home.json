@@ -123,8 +123,8 @@
       "unconfirmed_other": "{{count}} changes Compy can't confirm are still in place"
     },
     "rigFocus": {
-      "part": "Highlighted: {{part}} — the top thing holding this PC back is on this part.",
-      "away": "The top thing holding this PC back is a setting or software, so the evidence points away from the parts."
+      "part": "Highlighted: {{part}} — the top thing Compy flagged is about this part.",
+      "away": "The top thing Compy flagged is a setting or software, not a part."
     }
   },
   "interview": {

@@ -1568,34 +1568,38 @@ describe("P7-rig-limiter: the Home rig shows what the top limiter is about", () 
     expect(note()!.textContent).toBe(i18n.t("home.homeConsole.rigFocus.away"));
   });
 
-  it("the slow-install-drive limiter highlights the one drive, until the user picks a part", async () => {
-    mount({ ...props, priorities: limiter("install-drive") });
+  const drives = (...media: string[]) =>
+    ({
+      ...hw,
+      physical_disks: media.map((m, i) => ({ friendly_name: `${m} drive ${i}`, size_bytes: 1e12, media_type: m, bus_type: "SATA" })),
+    }) as unknown as HardwareInfo;
+
+  it("the slow-install-drive limiter highlights the one spinning drive, until the user picks a part", async () => {
+    mount({ ...props, hw: drives("SSD", "HDD"), priorities: limiter("install-drive") });
     await screen.findByTestId("rig-hologram");
-    expect(rig().getAttribute("data-selected")).toBe("vol-0");
+    expect(rig().getAttribute("data-selected")).toBe("disk-1");
     expect(rig().getAttribute("data-dimmed")).toBe("0");
     expect(note()!.getAttribute("data-focus")).toBe("part");
-    expect(note()!.textContent).toMatch(/C:/);
+    expect(note()!.textContent).toBe(i18n.t("home.homeConsole.rigFocus.part", { part: "HDD drive 1" }));
     fireEvent.click(screen.getByTestId("rig-pick-cpu"));
     expect(rig().getAttribute("data-selected")).toBe("cpu");
     expect(note()).toBeNull();
   });
 
-  it("with two drives it points at neither (which one is not in these readings)", async () => {
-    const twoDrives = {
-      ...hw,
-      physical_disks: [
-        { friendly_name: "Drive A", size_bytes: 1e12, media_type: "SSD", bus_type: "NVMe" },
-        { friendly_name: "Drive B", size_bytes: 2e12, media_type: "HDD", bus_type: "SATA" },
-      ],
-    } as unknown as HardwareInfo;
-    mount({ ...props, hw: twoDrives, priorities: limiter("install-drive") });
-    await screen.findByTestId("rig-hologram");
-    expect(rig().getAttribute("data-selected")).toBe("");
-    expect(rig().getAttribute("data-dimmed")).toBe("0");
-    expect(note()).toBeNull();
+  // Review r1 MUST-FIX 2: an SSD is not the slow drive, a volume has no media type, and with two
+  // spinning drives the readings don't say which holds the game — no part is claimed in any of them.
+  it("points at no drive unless exactly one drawn drive reports HDD", async () => {
+    for (const h of [drives("SSD"), hw /* volume fallback */, drives("HDD", "HDD")]) {
+      mount({ ...props, hw: h, priorities: limiter("install-drive") });
+      await screen.findByTestId("rig-hologram");
+      expect(rig().getAttribute("data-selected")).toBe("");
+      expect(rig().getAttribute("data-dimmed")).toBe("0");
+      expect(note()).toBeNull();
+      cleanup();
+    }
   });
 
-  it("an unknown id, or a limiter that is not an attention, leaves the rig alone", async () => {
+  it("an unknown id leaves the rig alone; so would a non-attention row (defensive: priorities.rs never ranks one)", async () => {
     mount({ ...props, priorities: limiter("disk") });
     await screen.findByTestId("rig-hologram");
     expect(rig().getAttribute("data-dimmed")).toBe("0");

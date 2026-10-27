@@ -409,11 +409,14 @@
   left: 20px;
   right: 20px;
   bottom: 4px;
-  margin: 0;
+  max-width: calc(100% - 40px);
+  margin: 0 auto;
   text-align: center;
   font-size: var(--type-label);
   line-height: 1.35;
-  color: var(--muted, var(--fg-2));
+  color: var(--v2-muted);
+  /* It sits over the canvas: a soft shadow keeps it legible over a lit part without a box. */
+  text-shadow: 0 1px 6px var(--v2-bg, rgba(0, 0, 0, 0.85)), 0 0 2px var(--v2-bg, rgba(0, 0, 0, 0.85));
   pointer-events: none;
 }
 

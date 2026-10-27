@@ -115,9 +115,9 @@ interface Props {
       controls, so the ghosts stay selectable there and nothing about it changes. */
   evidenceMap?: boolean;
   /** P7-rig-limiter: true → the #1 limiter is a setting or software, so every part's glow drops
-      (the existing `glow` multiplier, DIMMED_GLOW) and the host says the evidence points away from
-      the hardware. Hover and selection still light a part up over the dim. Default false — every
-      other host is untouched. */
+      (the existing `glow` multiplier, DIMMED_GLOW; fans excepted, see below) and the host says the
+      top item is not a part. Hover and selection still light a part up over the dim. Default
+      false — every other host is untouched. */
   dimmed?: boolean;
 }
 
@@ -469,6 +469,9 @@ export const RigHologram = memo(function RigHologram({
             glow={glowFor(p.id)}
           />
         ))}
+        {/* Fans are not dimmed by `dimmed`: they are live sensor read-outs (spinning at their
+            measured speed), not parts a limiter points at, and RigFan has no glow multiplier to
+            borrow. Dimming them would also mute the one moving signal in the bay. */}
         {fanPlacements.map((fp) => (
           <RigFan
             key={fp.fan.id}

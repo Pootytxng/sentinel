@@ -5,30 +5,42 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { DIMMED_GLOW, LIMITER_AWAY, LIMITER_PART_KIND, limiterFocus, rigGlow } from "./limiter-part";
+import { DIMMED_GLOW, LIMITER_AWAY, LIMITER_PART_KIND, hddPartIds, limiterFocus, rigGlow } from "./limiter-part";
 import type { RigPartKind } from "./rig-parts";
 
-const part = (id: string, kind: RigPartKind, name = id, detected = true) => ({ id, kind, name, detected });
+const part = (id: string, kind: RigPartKind, name = id, detected = true, hdd = false) => ({ id, kind, name, detected, hdd });
 const RIG = [part("board", "board"), part("cpu", "cpu"), part("gpu-0", "gpu"), part("ram", "ram")];
 
 describe("limiterFocus", () => {
-  it("points at the one drive when the slow-install-drive limiter has exactly one to point at", () => {
-    expect(limiterFocus("install-drive", [...RIG, part("disk-0", "storage", "Samsung 990 PRO")])).toEqual({
-      kind: "part",
-      partId: "disk-0",
-      partName: "Samsung 990 PRO",
-    });
+  it("points at the one spinning drive when the slow-install-drive limiter fires", () => {
+    expect(
+      limiterFocus("install-drive", [...RIG, part("disk-0", "storage", "Samsung 990 PRO"), part("disk-1", "storage", "WD Blue 2TB", true, true)]),
+    ).toEqual({ kind: "part", partId: "disk-1", partName: "WD Blue 2TB" });
   });
 
-  it("points at no drive when there are two (which one the game is on is not in these readings)", () => {
-    expect(limiterFocus("install-drive", [...RIG, part("disk-0", "storage"), part("disk-1", "storage")])).toBeNull();
+  // Review r1 MUST-FIX 2: the only drive drawn is not therefore the drive the check is about.
+  it("points at no drive when none drawn is an HDD (an SSD is not the slow drive), or two are", () => {
+    expect(limiterFocus("install-drive", [...RIG, part("disk-0", "storage", "NVMe SSD")])).toBeNull();
+    expect(limiterFocus("install-drive", [...RIG, part("vol-0", "storage", "Volume C:")])).toBeNull(); // no media type
+    expect(
+      limiterFocus("install-drive", [...RIG, part("disk-0", "storage", "A", true, true), part("disk-1", "storage", "B", true, true)]),
+    ).toBeNull();
     expect(limiterFocus("install-drive", RIG)).toBeNull(); // no drive drawn at all
   });
 
   it("ignores a ghost (undetected) part when counting", () => {
     expect(
-      limiterFocus("install-drive", [...RIG, part("disk-0", "storage"), part("ghost-ssd", "storage", "SSD", false)]),
+      limiterFocus("install-drive", [...RIG, part("disk-0", "storage", "HDD", true, true), part("ghost", "storage", "HDD", false, true)]),
     ).toMatchObject({ kind: "part", partId: "disk-0" });
+  });
+
+  it("hddPartIds reads each physical drive's own media type, keyed like buildRigParts", () => {
+    expect([...hddPartIds([{ media_type: "SSD" }, { media_type: "HDD" }, { media_type: " hdd " }, { media_type: "Unspecified" }, {}])]).toEqual([
+      "disk-1",
+      "disk-2",
+    ]);
+    expect(hddPartIds(undefined).size).toBe(0);
+    expect(hddPartIds(null).size).toBe(0);
   });
 
   it("a setting or software limiter points away from the parts", () => {
